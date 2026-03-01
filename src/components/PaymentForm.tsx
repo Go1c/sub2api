@@ -3,11 +3,17 @@
 import { useState } from 'react';
 import { PAYMENT_TYPE_META } from '@/lib/pay-utils';
 
+export interface MethodLimitInfo {
+  available: boolean;
+  remaining: number | null;
+}
+
 interface PaymentFormProps {
   userId: number;
   userName?: string;
   userBalance?: number;
   enabledPaymentTypes: string[];
+  methodLimits?: Record<string, MethodLimitInfo>;
   minAmount: number;
   maxAmount: number;
   onSubmit: (amount: number, paymentType: string) => Promise<void>;
@@ -27,6 +33,7 @@ export default function PaymentForm({
   userName,
   userBalance,
   enabledPaymentTypes,
+  methodLimits,
   minAmount,
   maxAmount,
   onSubmit,
@@ -63,7 +70,8 @@ export default function PaymentForm({
   };
 
   const selectedAmount = amount || 0;
-  const isValid = selectedAmount >= minAmount && selectedAmount <= maxAmount && hasValidCentPrecision(selectedAmount);
+  const isMethodAvailable = !methodLimits || (methodLimits[paymentType]?.available !== false);
+  const isValid = selectedAmount >= minAmount && selectedAmount <= maxAmount && hasValidCentPrecision(selectedAmount) && isMethodAvailable;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,36 +223,59 @@ export default function PaymentForm({
           {enabledPaymentTypes.map((type) => {
             const meta = PAYMENT_TYPE_META[type];
             const isSelected = paymentType === type;
+            const limitInfo = methodLimits?.[type];
+            const isUnavailable = limitInfo !== undefined && !limitInfo.available;
+
             return (
               <button
                 key={type}
                 type="button"
-                onClick={() => setPaymentType(type)}
-                className={`flex h-[58px] flex-1 items-center justify-center rounded-lg border px-3 transition-all ${
-                  isSelected
-                    ? `${meta?.selectedBorder || 'border-blue-500'} ${meta?.selectedBg || 'bg-blue-50'} text-slate-900 shadow-sm`
-                    : dark
-                      ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
-                      : 'border-gray-300 bg-white text-slate-700 hover:border-gray-400'
-                }`}
+                disabled={isUnavailable}
+                onClick={() => !isUnavailable && setPaymentType(type)}
+                title={isUnavailable ? '今日充值额度已满，请使用其他支付方式' : undefined}
+                className={[
+                  'relative flex h-[58px] flex-1 flex-col items-center justify-center rounded-lg border px-3 transition-all',
+                  isUnavailable
+                    ? dark
+                      ? 'cursor-not-allowed border-slate-700 bg-slate-800/50 opacity-50'
+                      : 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-50'
+                    : isSelected
+                      ? `${meta?.selectedBorder || 'border-blue-500'} ${meta?.selectedBg || 'bg-blue-50'} text-slate-900 shadow-sm`
+                      : dark
+                        ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
+                        : 'border-gray-300 bg-white text-slate-700 hover:border-gray-400',
+                ].join(' ')}
               >
                 <span className="flex items-center gap-2">
                   {renderPaymentIcon(type)}
                   <span className="flex flex-col items-start leading-none">
                     <span className="text-xl font-semibold tracking-tight">{meta?.label || type}</span>
-                    {meta?.sublabel && (
+                    {isUnavailable ? (
+                      <span className="text-[10px] tracking-wide text-red-400">今日额度已满</span>
+                    ) : meta?.sublabel ? (
                       <span
                         className={`text-[10px] tracking-wide ${dark && !isSelected ? 'text-slate-400' : 'text-slate-600'}`}
                       >
                         {meta.sublabel}
                       </span>
-                    )}
+                    ) : null}
                   </span>
                 </span>
               </button>
             );
           })}
         </div>
+
+        {/* 当前选中渠道额度不足时的提示 */}
+        {(() => {
+          const limitInfo = methodLimits?.[paymentType];
+          if (!limitInfo || limitInfo.available) return null;
+          return (
+            <p className={['mt-2 text-xs', dark ? 'text-amber-300' : 'text-amber-600'].join(' ')}>
+              所选支付方式今日额度已满，请切换到其他支付方式
+            </p>
+          );
+        })()}
       </div>
 
       {/* Submit */}

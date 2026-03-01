@@ -8,6 +8,7 @@ import OrderStatus from '@/components/OrderStatus';
 import PayPageLayout from '@/components/PayPageLayout';
 import MobileOrderList from '@/components/MobileOrderList';
 import { detectDeviceIsMobile, type UserInfo, type MyOrder } from '@/lib/pay-utils';
+import type { MethodLimitInfo } from '@/components/PaymentForm';
 
 interface OrderResult {
   orderId: string;
@@ -25,6 +26,7 @@ interface AppConfig {
   minAmount: number;
   maxAmount: number;
   maxDailyAmount: number;
+  methodLimits?: Record<string, MethodLimitInfo>;
 }
 
 function PayContent() {
@@ -54,7 +56,7 @@ function PayContent() {
   const [config, setConfig] = useState<AppConfig>({
     enabledPaymentTypes: ['alipay', 'wxpay', 'stripe'],
     minAmount: 1,
-    maxAmount: 10000,
+    maxAmount: 1000,
     maxDailyAmount: 0,
   });
 
@@ -90,7 +92,13 @@ function PayContent() {
       if (cfgRes.ok) {
         const cfgData = await cfgRes.json();
         if (cfgData.config) {
-          setConfig(cfgData.config);
+          setConfig({
+            enabledPaymentTypes: cfgData.config.enabledPaymentTypes ?? ['alipay', 'wxpay'],
+            minAmount: cfgData.config.minAmount ?? 1,
+            maxAmount: cfgData.config.maxAmount ?? 1000,
+            maxDailyAmount: cfgData.config.maxDailyAmount ?? 0,
+            methodLimits: cfgData.config.methodLimits,
+          });
         }
       }
 
@@ -212,6 +220,7 @@ function PayContent() {
           TOO_MANY_PENDING: '您有过多待支付订单，请先完成或取消现有订单后再试',
           USER_NOT_FOUND: '用户不存在，请检查链接是否正确',
           DAILY_LIMIT_EXCEEDED: data.error,
+          METHOD_DAILY_LIMIT_EXCEEDED: data.error,
           PAYMENT_GATEWAY_ERROR: data.error,
         };
         setError(codeMessages[data.code] || data.error || '创建订单失败');
@@ -350,6 +359,7 @@ function PayContent() {
                 userName={userInfo?.username}
                 userBalance={userInfo?.balance}
                 enabledPaymentTypes={config.enabledPaymentTypes}
+                methodLimits={config.methodLimits}
                 minAmount={config.minAmount}
                 maxAmount={config.maxAmount}
                 onSubmit={handleSubmit}

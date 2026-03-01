@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/sub2api/client';
 import { getEnv } from '@/lib/config';
+import { queryMethodLimits } from '@/lib/order/limits';
 
 export async function GET(request: NextRequest) {
   const userId = Number(request.nextUrl.searchParams.get('user_id'));
@@ -10,7 +11,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const env = getEnv();
-    const user = await getUser(userId);
+    const [user, methodLimits] = await Promise.all([
+      getUser(userId),
+      queryMethodLimits(env.ENABLED_PAYMENT_TYPES),
+    ]);
 
     return NextResponse.json({
       user: {
@@ -22,6 +26,7 @@ export async function GET(request: NextRequest) {
         minAmount: env.MIN_RECHARGE_AMOUNT,
         maxAmount: env.MAX_RECHARGE_AMOUNT,
         maxDailyAmount: env.MAX_DAILY_RECHARGE_AMOUNT,
+        methodLimits,
       },
     });
   } catch (error) {

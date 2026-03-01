@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { getEnv } from '@/lib/config';
 import { generateRechargeCode } from './code-gen';
+import { getMethodDailyLimit } from './limits';
 import { initPaymentProviders, paymentRegistry } from '@/lib/payment';
 import type { PaymentType, PaymentNotification } from '@/lib/payment';
 import { getUser, createAndRedeem, subtractBalance } from '@/lib/sub2api/client';
@@ -62,6 +63,32 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       throw new OrderError(
         'DAILY_LIMIT_EXCEEDED',
         `今日累计充值已达上限，剩余可充值 ${remaining.toFixed(2)} 元`,
+        429,
+      );
+    }
+  }
+
+  // 渠道每日全平台限额校验（0 = 不限）
+  const methodDailyLimit = getMethodDailyLimit(input.paymentType);
+  if (methodDailyLimit > 0) {
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const methodAgg = await prisma.order.aggregate({
+      where: {
+        paymentType: input.paymentType,
+        status: { in: ['PAID', 'RECHARGING', 'COMPLETED'] },
+        paidAt: { gte: todayStart },
+      },
+      _sum: { amount: true },
+    });
+    const methodUsed = Number(methodAgg._sum.amount ?? 0);
+    if (methodUsed + input.amount > methodDailyLimit) {
+      const remaining = Math.max(0, methodDailyLimit - methodUsed);
+      throw new OrderError(
+        'METHOD_DAILY_LIMIT_EXCEEDED',
+        remaining > 0
+          ? `${input.paymentType} 今日剩余额度 ${remaining.toFixed(2)} 元，请减少充值金额或使用其他支付方式`
+          : `${input.paymentType} 今日充值额度已满，请使用其他支付方式`,
         429,
       );
     }
