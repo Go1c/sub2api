@@ -138,6 +138,13 @@ export default function PaymentQRCode({
       const res = await fetch(`/api/orders/${orderId}`);
       if (!res.ok) return;
       const data = await res.json();
+
+      // If the order already reached a terminal status, handle it immediately
+      if (TERMINAL_STATUSES.has(data.status)) {
+        onStatusChange(data.status);
+        return;
+      }
+
       const cancelRes = await fetch(`/api/orders/${orderId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,6 +152,9 @@ export default function PaymentQRCode({
       });
       if (cancelRes.ok) {
         onStatusChange('CANCELLED');
+      } else {
+        // Cancel failed (e.g. order was paid between the two requests) — re-check status
+        await pollStatus();
       }
     } catch {
       // ignore
