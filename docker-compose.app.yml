@@ -12,4 +12,7 @@ services:
     ports:
       - '${APP_PORT:-3001}:3000'
     env_file: .env
+    volumes:
+      # 宿主机 uploads 目录挂载到 Next.js public/uploads，可通过 /uploads/* 访问
+      - ./uploads:/app/public/uploads:ro
     restart: unless-stopped

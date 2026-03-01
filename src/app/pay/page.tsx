@@ -62,6 +62,7 @@ function PayContent() {
     maxDailyAmount: 0,
   });
   const [userNotFound, setUserNotFound] = useState(false);
+  const [helpImageOpen, setHelpImageOpen] = useState(false);
 
   const effectiveUserId = resolvedUserId || userId;
   const isEmbedded = uiMode === 'embedded' && isIframeContext;
@@ -432,7 +433,8 @@ function PayContent() {
                       <img
                         src={helpImageUrl}
                         alt='help'
-                        className='mt-3 max-h-40 w-full rounded-lg object-contain bg-white/70 p-2'
+                        onClick={() => setHelpImageOpen(true)}
+                        className='mt-3 max-h-40 w-full cursor-zoom-in rounded-lg object-contain bg-white/70 p-2'
                       />
                     )}
                     {helpText && (
@@ -466,6 +468,20 @@ function PayContent() {
 
       {step === 'result' && (
         <OrderStatus status={finalStatus} onBack={handleBack} dark={isDark} />
+      )}
+
+      {helpImageOpen && helpImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={() => setHelpImageOpen(false)}
+        >
+          <img
+            src={helpImageUrl}
+            alt='help'
+            className='max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl'
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </PayPageLayout>
   );
