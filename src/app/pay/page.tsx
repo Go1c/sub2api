@@ -181,6 +181,7 @@ function PayContent() {
           TOO_MANY_PENDING: '您有过多待支付订单，请先完成或取消现有订单后再试',
           USER_NOT_FOUND: '用户不存在，请检查链接是否正确',
           DAILY_LIMIT_EXCEEDED: data.error,
+          PAYMENT_GATEWAY_ERROR: data.error,
         };
         setError(codeMessages[data.code] || data.error || '创建订单失败');
         return;

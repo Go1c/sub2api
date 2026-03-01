@@ -133,7 +133,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     };
   } catch (error) {
     await prisma.order.delete({ where: { id: order.id } });
-    throw error;
+
+    // 已经是业务错误，直接向上抛
+    if (error instanceof OrderError) throw error;
+
+    // 支付网关配置缺失或调用失败，转成友好错误
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('environment variables') || msg.includes('not configured') || msg.includes('not found')) {
+      throw new OrderError('PAYMENT_GATEWAY_ERROR', `支付渠道（${input.paymentType}）暂未配置，请联系管理员`, 503);
+    }
+    throw new OrderError('PAYMENT_GATEWAY_ERROR', '支付渠道暂时不可用，请稍后重试或更换支付方式', 502);
   }
 }
 
