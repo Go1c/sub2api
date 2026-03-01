@@ -7,7 +7,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const { id } = await params;
-    await adminCancelOrder(id);
+    const outcome = await adminCancelOrder(id);
+    if (outcome === 'already_paid') {
+      return NextResponse.json({ success: true, status: 'PAID', message: '订单已支付完成' });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof OrderError) {

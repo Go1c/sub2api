@@ -50,6 +50,7 @@ export default function PaymentQRCode({
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [imageLoading, setImageLoading] = useState(false);
   const [stripeOpened, setStripeOpened] = useState(false);
+  const [cancelBlocked, setCancelBlocked] = useState(false);
 
   const qrPayload = useMemo(() => {
     const value = (qrCode || payUrl || '').trim();
@@ -151,6 +152,11 @@ export default function PaymentQRCode({
         body: JSON.stringify({ user_id: data.user_id }),
       });
       if (cancelRes.ok) {
+        const cancelData = await cancelRes.json();
+        if (cancelData.status === 'PAID') {
+          setCancelBlocked(true);
+          return;
+        }
         onStatusChange('CANCELLED');
       } else {
         // Cancel failed (e.g. order was paid between the two requests) — re-check status
@@ -166,6 +172,24 @@ export default function PaymentQRCode({
   const iconSrc = isStripe ? '' : isWx ? '/icons/wxpay.svg' : '/icons/alipay.svg';
   const channelLabel = isStripe ? 'Stripe' : isWx ? '\u5FAE\u4FE1' : '\u652F\u4ED8\u5B9D';
   const iconBgClass = isStripe ? 'bg-[#635bff]' : isWx ? 'bg-[#07C160]' : 'bg-[#1677FF]';
+
+  if (cancelBlocked) {
+    return (
+      <div className="flex flex-col items-center space-y-4 py-8">
+        <div className="text-6xl text-green-600">{'\u2713'}</div>
+        <h2 className="text-xl font-bold text-green-600">{'\u8BA2\u5355\u5DF2\u652F\u4ED8'}</h2>
+        <p className={['text-center text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>
+          {'\u8BE5\u8BA2\u5355\u5DF2\u652F\u4ED8\u5B8C\u6210\uFF0C\u65E0\u6CD5\u53D6\u6D88\u3002\u5145\u503C\u5C06\u81EA\u52A8\u5230\u8D26\u3002'}
+        </p>
+        <button
+          onClick={onBack}
+          className="mt-4 w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700"
+        >
+          {'\u8FD4\u56DE\u5145\u503C'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center space-y-4">

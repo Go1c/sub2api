@@ -114,48 +114,109 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 }
 
-export async function cancelOrder(orderId: string, userId: number): Promise<void> {
-  const result = await prisma.order.updateMany({
-    where: { id: orderId, userId, status: 'PENDING' },
-    data: { status: 'CANCELLED', updatedAt: new Date() },
-  });
+export type CancelOutcome = 'cancelled' | 'already_paid';
 
-  if (result.count === 0) {
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new OrderError('NOT_FOUND', 'Order not found', 404);
-    if (order.userId !== userId) throw new OrderError('FORBIDDEN', 'Forbidden', 403);
-    throw new OrderError('INVALID_STATUS', 'Order cannot be cancelled', 400);
+/**
+ * 核心取消逻辑 — 所有取消路径共用。
+ * 调用前由 caller 负责权限校验（userId / admin 身份）。
+ */
+export async function cancelOrderCore(options: {
+  orderId: string;
+  paymentTradeNo: string | null;
+  paymentType: string | null;
+  finalStatus: 'CANCELLED' | 'EXPIRED';
+  operator: string;
+  auditDetail: string;
+}): Promise<CancelOutcome> {
+  const { orderId, paymentTradeNo, paymentType, finalStatus, operator, auditDetail } = options;
+
+  // 1. 平台侧处理
+  if (paymentTradeNo && paymentType) {
+    try {
+      initPaymentProviders();
+      const provider = paymentRegistry.getProvider(paymentType as PaymentType);
+      const queryResult = await provider.queryOrder(paymentTradeNo);
+
+      if (queryResult.status === 'paid') {
+        await confirmPayment({
+          orderId,
+          tradeNo: paymentTradeNo,
+          paidAmount: queryResult.amount,
+          providerName: provider.name,
+        });
+        console.log(`Order ${orderId} was paid during cancel (${operator}), processed as success`);
+        return 'already_paid';
+      }
+
+      if (provider.cancelPayment) {
+        try {
+          await provider.cancelPayment(paymentTradeNo);
+        } catch (cancelErr) {
+          console.warn(`Failed to cancel payment for order ${orderId}:`, cancelErr);
+        }
+      }
+    } catch (platformErr) {
+      console.warn(`Platform check failed for order ${orderId}, cancelling locally:`, platformErr);
+    }
   }
 
-  await prisma.auditLog.create({
-    data: {
-      orderId,
-      action: 'ORDER_CANCELLED',
-      detail: 'User cancelled order',
-      operator: `user:${userId}`,
-    },
+  // 2. DB 更新 (WHERE status='PENDING' 保证幂等)
+  const result = await prisma.order.updateMany({
+    where: { id: orderId, status: 'PENDING' },
+    data: { status: finalStatus, updatedAt: new Date() },
+  });
+
+  // 3. 审计日志
+  if (result.count > 0) {
+    await prisma.auditLog.create({
+      data: {
+        orderId,
+        action: finalStatus === 'EXPIRED' ? 'ORDER_EXPIRED' : 'ORDER_CANCELLED',
+        detail: auditDetail,
+        operator,
+      },
+    });
+  }
+
+  return 'cancelled';
+}
+
+export async function cancelOrder(orderId: string, userId: number): Promise<CancelOutcome> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, userId: true, status: true, paymentTradeNo: true, paymentType: true },
+  });
+
+  if (!order) throw new OrderError('NOT_FOUND', 'Order not found', 404);
+  if (order.userId !== userId) throw new OrderError('FORBIDDEN', 'Forbidden', 403);
+  if (order.status !== 'PENDING') throw new OrderError('INVALID_STATUS', 'Order cannot be cancelled', 400);
+
+  return cancelOrderCore({
+    orderId: order.id,
+    paymentTradeNo: order.paymentTradeNo,
+    paymentType: order.paymentType,
+    finalStatus: 'CANCELLED',
+    operator: `user:${userId}`,
+    auditDetail: 'User cancelled order',
   });
 }
 
-export async function adminCancelOrder(orderId: string): Promise<void> {
-  const result = await prisma.order.updateMany({
-    where: { id: orderId, status: 'PENDING' },
-    data: { status: 'CANCELLED', updatedAt: new Date() },
+export async function adminCancelOrder(orderId: string): Promise<CancelOutcome> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, status: true, paymentTradeNo: true, paymentType: true },
   });
 
-  if (result.count === 0) {
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new OrderError('NOT_FOUND', 'Order not found', 404);
-    throw new OrderError('INVALID_STATUS', 'Order cannot be cancelled', 400);
-  }
+  if (!order) throw new OrderError('NOT_FOUND', 'Order not found', 404);
+  if (order.status !== 'PENDING') throw new OrderError('INVALID_STATUS', 'Order cannot be cancelled', 400);
 
-  await prisma.auditLog.create({
-    data: {
-      orderId,
-      action: 'ORDER_CANCELLED',
-      detail: 'Admin cancelled order',
-      operator: 'admin',
-    },
+  return cancelOrderCore({
+    orderId: order.id,
+    paymentTradeNo: order.paymentTradeNo,
+    paymentType: order.paymentType,
+    finalStatus: 'CANCELLED',
+    operator: 'admin',
+    auditDetail: 'Admin cancelled order',
   });
 }
 

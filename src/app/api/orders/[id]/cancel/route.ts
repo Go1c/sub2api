@@ -16,7 +16,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: '参数错误', details: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    await cancelOrder(id, parsed.data.user_id);
+    const outcome = await cancelOrder(id, parsed.data.user_id);
+    if (outcome === 'already_paid') {
+      return NextResponse.json({ success: true, status: 'PAID', message: '订单已支付完成' });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof OrderError) {
