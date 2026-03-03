@@ -116,6 +116,17 @@ ENABLED_PAYMENT_TYPES=alipay,wxpay
 
 #### EasyPay (Alipay / WeChat Pay)
 
+Any payment provider compatible with the **EasyPay protocol** can be used, such as ZPay (`https://z-pay.cn/?uid=23808`) (this link contains the author's referral code — feel free to remove it).
+
+<details>
+<summary>ZPay Registration QR Code</summary>
+
+![ZPay Preview](./docs/zpay-preview.png)
+
+</details>
+
+> **Disclaimer**: Please evaluate the security, reliability, and compliance of any third-party payment provider on your own. This project does not endorse or guarantee any specific provider.
+
 | Variable | Description |
 |----------|-------------|
 | `EASY_PAY_PID` | EasyPay merchant ID |
@@ -256,13 +267,15 @@ docker compose exec app npx prisma migrate deploy
 Configure the recharge URL in the Sub2API admin panel:
 
 ```
-https://pay.example.com/pay?user_id={USER_ID}&token={TOKEN}&theme={THEME}
+https://pay.example.com/pay
 ```
+
+Sub2API **v0.1.88** and above will automatically append the following parameters — no manual query string needed:
 
 | Parameter | Description |
 |-----------|-------------|
-| `user_id` | Sub2API user ID (required) |
-| `token` | User login token (optional — required to view order history) |
+| `user_id` | Sub2API user ID |
+| `token` | User login token (required to view order history) |
 | `theme` | `light` (default) or `dark` |
 | `ui_mode` | `standalone` (default) or `embedded` (for iframe) |
 

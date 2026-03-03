@@ -116,10 +116,10 @@ ENABLED_PAYMENT_TYPES=alipay,wxpay
 
 #### EasyPay（支付宝 / 微信支付）
 
-支付提供商只需兼容**易支付（EasyPay）协议**即可接入，例如 [ZPay](https://z-pay.cn/?uid=23808) 等平台（链接含本项目作者的邀请码，介意可去掉）。
+支付提供商只需兼容**易支付（EasyPay）协议**即可接入，例如 ZPay（`https://z-pay.cn/?uid=23808`）等平台（链接含本项目作者的邀请码，介意可去掉）。
 
 <details>
-<summary>ZPay 平台预览</summary>
+<summary>ZPay 申请二维码</summary>
 
 ![ZPay 预览](./docs/zpay-preview.png)
 
@@ -267,13 +267,15 @@ docker compose exec app npx prisma migrate deploy
 在 Sub2API 管理后台将充值链接配置为：
 
 ```
-https://pay.example.com/pay?user_id={USER_ID}&token={TOKEN}&theme={THEME}
+https://pay.example.com/pay
 ```
+
+Sub2API **v0.1.88** 及以上版本会自动拼接以下参数，无需手动添加：
 
 | 参数 | 说明 |
 |------|------|
-| `user_id` | Sub2API 用户 ID（必填） |
-| `token` | 用户登录 Token（可选，有 token 才能查看订单历史） |
+| `user_id` | Sub2API 用户 ID |
+| `token` | 用户登录 Token（有 token 才能查看订单历史） |
 | `theme` | `light`（默认）或 `dark` |
 | `ui_mode` | `standalone`（默认）或 `embedded`（iframe 嵌入） |
 
