@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { createOrder, OrderError } from '@/lib/order/service';
 import { getEnv } from '@/lib/config';
 import { initPaymentProviders, paymentRegistry } from '@/lib/payment';
+import { getCurrentUserByToken } from '@/lib/sub2api/client';
 
 const createOrderSchema = z.object({
-  user_id: z.number().int().positive(),
+  token: z.string().min(1),
   amount: z.number().positive(),
   payment_type: z.string().min(1),
   src_host: z.string().max(253).optional(),
@@ -24,7 +25,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '参数错误', details: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    const { user_id, amount, payment_type, src_host, src_url, is_mobile } = parsed.data;
+    const { token, amount, payment_type, src_host, src_url, is_mobile } = parsed.data;
+
+    // 通过 token 解析用户身份
+    let userId: number;
+    try {
+      const user = await getCurrentUserByToken(token);
+      userId = user.id;
+    } catch {
+      return NextResponse.json({ error: '无效的 token，请重新登录', code: 'INVALID_TOKEN' }, { status: 401 });
+    }
 
     // Validate amount range
     if (amount < env.MIN_RECHARGE_AMOUNT || amount > env.MAX_RECHARGE_AMOUNT) {
@@ -43,7 +53,7 @@ export async function POST(request: NextRequest) {
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || '127.0.0.1';
 
     const result = await createOrder({
-      userId: user_id,
+      userId,
       amount,
       paymentType: payment_type,
       clientIp,

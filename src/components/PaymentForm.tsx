@@ -23,6 +23,8 @@ interface PaymentFormProps {
   onSubmit: (amount: number, paymentType: string) => Promise<void>;
   loading?: boolean;
   dark?: boolean;
+  pendingBlocked?: boolean;
+  pendingCount?: number;
 }
 
 const QUICK_AMOUNTS = [10, 20, 50, 100, 200, 500, 1000, 2000];
@@ -43,6 +45,8 @@ export default function PaymentForm({
   onSubmit,
   loading,
   dark = false,
+  pendingBlocked = false,
+  pendingCount = 0,
 }: PaymentFormProps) {
   const [amount, setAmount] = useState<number | ''>('');
   const [paymentType, setPaymentType] = useState(enabledPaymentTypes[0] || 'alipay');
@@ -321,12 +325,26 @@ export default function PaymentForm({
         </div>
       )}
 
+      {/* Pending order limit warning */}
+      {pendingBlocked && (
+        <div
+          className={[
+            'rounded-lg border p-3 text-sm',
+            dark
+              ? 'border-amber-700 bg-amber-900/30 text-amber-300'
+              : 'border-amber-200 bg-amber-50 text-amber-700',
+          ].join(' ')}
+        >
+          您有 {pendingCount} 个待支付订单，请先完成或取消后再充值
+        </div>
+      )}
+
       {/* Submit */}
       <button
         type="submit"
-        disabled={!isValid || loading}
+        disabled={!isValid || loading || pendingBlocked}
         className={`w-full rounded-lg py-3 text-center font-medium text-white transition-colors ${
-          isValid && !loading
+          isValid && !loading && !pendingBlocked
             ? getPaymentMeta(effectivePaymentType).buttonClass
             : dark
               ? 'cursor-not-allowed bg-slate-700 text-slate-300'
@@ -335,7 +353,9 @@ export default function PaymentForm({
       >
         {loading
           ? '处理中...'
-          : `立即充值 ¥${(feeRate > 0 && selectedAmount > 0 ? payAmount : selectedAmount || 0).toFixed(2)}`}
+          : pendingBlocked
+            ? '待支付订单过多'
+            : `立即充值 ¥${(feeRate > 0 && selectedAmount > 0 ? payAmount : selectedAmount || 0).toFixed(2)}`}
       </button>
     </form>
   );

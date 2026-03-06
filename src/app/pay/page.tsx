@@ -35,7 +35,6 @@ interface AppConfig {
 
 function PayContent() {
   const searchParams = useSearchParams();
-  const userId = Number(searchParams.get('user_id'));
   const token = (searchParams.get('token') || '').trim();
   const theme = searchParams.get('theme') === 'dark' ? 'dark' : 'light';
   const uiMode = searchParams.get('ui_mode') || 'standalone';
@@ -58,6 +57,7 @@ function PayContent() {
   const [ordersHasMore, setOrdersHasMore] = useState(false);
   const [ordersLoadingMore, setOrdersLoadingMore] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<'pay' | 'orders'>('pay');
+  const [pendingCount, setPendingCount] = useState(0);
 
   const [config, setConfig] = useState<AppConfig>({
     enabledPaymentTypes: [],
@@ -68,12 +68,13 @@ function PayContent() {
   const [userNotFound, setUserNotFound] = useState(false);
   const [helpImageOpen, setHelpImageOpen] = useState(false);
 
-  const effectiveUserId = resolvedUserId || userId;
-  const isEmbedded = uiMode === 'embedded' && isIframeContext;
   const hasToken = token.length > 0;
+  const isEmbedded = uiMode === 'embedded' && isIframeContext;
   const helpImageUrl = (config.helpImageUrl || '').trim();
   const helpText = (config.helpText || '').trim();
   const hasHelpContent = Boolean(helpImageUrl || helpText);
+  const MAX_PENDING = 3;
+  const pendingBlocked = pendingCount >= MAX_PENDING;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -92,12 +93,49 @@ function PayContent() {
   }, [isMobile, step, tab]);
 
   const loadUserAndOrders = async () => {
-    if (!userId || Number.isNaN(userId) || userId <= 0) return;
+    if (!token) return;
 
     setUserNotFound(false);
     try {
-      // 始终获取服务端配置（不含隐私信息）
-      const cfgRes = await fetch(`/api/user?user_id=${userId}`);
+      // 通过 token 获取用户详情和订单
+      const meRes = await fetch(`/api/orders/my?token=${encodeURIComponent(token)}`);
+      if (!meRes.ok) {
+        setUserNotFound(true);
+        return;
+      }
+
+      const meData = await meRes.json();
+      const meUser = meData.user || {};
+      const meId = Number(meUser.id);
+      if (!Number.isInteger(meId) || meId <= 0) {
+        setUserNotFound(true);
+        return;
+      }
+
+      setResolvedUserId(meId);
+      setPendingCount(meData.summary?.pending ?? 0);
+
+      setUserInfo({
+        id: meId,
+        username:
+          (typeof meUser.displayName === 'string' && meUser.displayName.trim()) ||
+          (typeof meUser.username === 'string' && meUser.username.trim()) ||
+          `用户 #${meId}`,
+        balance: typeof meUser.balance === 'number' ? meUser.balance : undefined,
+      });
+
+      if (Array.isArray(meData.orders)) {
+        setMyOrders(meData.orders);
+        setOrdersPage(1);
+        setOrdersHasMore((meData.total_pages ?? 1) > 1);
+      } else {
+        setMyOrders([]);
+        setOrdersPage(1);
+        setOrdersHasMore(false);
+      }
+
+      // 获取服务端支付配置
+      const cfgRes = await fetch(`/api/user?user_id=${meId}`);
       if (cfgRes.ok) {
         const cfgData = await cfgRes.json();
         if (cfgData.config) {
@@ -111,54 +149,11 @@ function PayContent() {
             helpText: cfgData.config.helpText ?? null,
             stripePublishableKey: cfgData.config.stripePublishableKey ?? null,
           });
-          // 应用自定义 sublabel
           if (cfgData.config.sublabelOverrides) {
             applySublabelOverrides(cfgData.config.sublabelOverrides);
           }
         }
-      } else if (cfgRes.status === 404) {
-        setUserNotFound(true);
-        return;
       }
-
-      // 有 token 时才尝试获取用户详情和订单
-      if (token) {
-        const meRes = await fetch(`/api/orders/my?token=${encodeURIComponent(token)}`);
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          const meUser = meData.user || {};
-          const meId = Number(meUser.id);
-          if (Number.isInteger(meId) && meId > 0) {
-            setResolvedUserId(meId);
-          }
-
-          setUserInfo({
-            id: Number.isInteger(meId) && meId > 0 ? meId : userId,
-            username:
-              (typeof meUser.displayName === 'string' && meUser.displayName.trim()) ||
-              (typeof meUser.username === 'string' && meUser.username.trim()) ||
-              `用户 #${userId}`,
-            balance: typeof meUser.balance === 'number' ? meUser.balance : undefined,
-          });
-
-          if (Array.isArray(meData.orders)) {
-            setMyOrders(meData.orders);
-            setOrdersPage(1);
-            setOrdersHasMore((meData.total_pages ?? 1) > 1);
-          } else {
-            setMyOrders([]);
-            setOrdersPage(1);
-            setOrdersHasMore(false);
-          }
-          return;
-        }
-      }
-
-      // 无 token 或 token 失效：只显示用户 ID，不展示隐私信息（不显示余额）
-      setUserInfo({ id: userId, username: `用户 #${userId}` });
-      setMyOrders([]);
-      setOrdersPage(1);
-      setOrdersHasMore(false);
     } catch {
       // ignore and keep page usable
     }
@@ -189,7 +184,7 @@ function PayContent() {
   useEffect(() => {
     loadUserAndOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, token]);
+  }, [token]);
 
   useEffect(() => {
     if (step !== 'result' || finalStatus !== 'COMPLETED') return;
@@ -205,11 +200,11 @@ function PayContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, finalStatus]);
 
-  if (!effectiveUserId || Number.isNaN(effectiveUserId) || effectiveUserId <= 0) {
+  if (!hasToken) {
     return (
       <div className={`flex min-h-screen items-center justify-center p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
         <div className="text-center text-red-500">
-          <p className="text-lg font-medium">无效的用户 ID</p>
+          <p className="text-lg font-medium">缺少认证信息</p>
           <p className="mt-2 text-sm text-gray-500">请从 Sub2API 平台正确访问充值页面</p>
         </div>
       </div>
@@ -229,7 +224,6 @@ function PayContent() {
 
   const buildScopedUrl = (path: string, forceOrdersTab = false) => {
     const params = new URLSearchParams();
-    if (effectiveUserId) params.set('user_id', String(effectiveUserId));
     if (token) params.set('token', token);
     params.set('theme', theme);
     params.set('ui_mode', uiMode);
@@ -242,6 +236,11 @@ function PayContent() {
   const ordersUrl = isMobile ? mobileOrdersUrl : pcOrdersUrl;
 
   const handleSubmit = async (amount: number, paymentType: string) => {
+    if (pendingBlocked) {
+      setError(`您有 ${pendingCount} 个待支付订单，请先完成或取消后再试（最多 ${MAX_PENDING} 个）`);
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -250,7 +249,7 @@ function PayContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: effectiveUserId,
+          token,
           amount,
           payment_type: paymentType,
           is_mobile: isMobile,
@@ -263,6 +262,7 @@ function PayContent() {
 
       if (!res.ok) {
         const codeMessages: Record<string, string> = {
+          INVALID_TOKEN: '认证已失效，请重新从平台进入充值页面',
           USER_INACTIVE: '账户已被禁用，无法充值，请联系管理员',
           TOO_MANY_PENDING: '您有过多待支付订单，请先完成或取消现有订单后再试',
           USER_NOT_FOUND: '用户不存在，请检查链接是否正确',
@@ -402,7 +402,7 @@ function PayContent() {
           {isMobile ? (
             activeMobileTab === 'pay' ? (
               <PaymentForm
-                userId={effectiveUserId}
+                userId={resolvedUserId ?? 0}
                 userName={userInfo?.username}
                 userBalance={userInfo?.balance}
                 enabledPaymentTypes={config.enabledPaymentTypes}
@@ -412,6 +412,8 @@ function PayContent() {
                 onSubmit={handleSubmit}
                 loading={loading}
                 dark={isDark}
+                pendingBlocked={pendingBlocked}
+                pendingCount={pendingCount}
               />
             ) : (
               <MobileOrderList
@@ -428,7 +430,7 @@ function PayContent() {
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.8fr)]">
               <div className="min-w-0">
                 <PaymentForm
-                  userId={effectiveUserId}
+                  userId={resolvedUserId ?? 0}
                   userName={userInfo?.username}
                   userBalance={userInfo?.balance}
                   enabledPaymentTypes={config.enabledPaymentTypes}
@@ -438,6 +440,8 @@ function PayContent() {
                   onSubmit={handleSubmit}
                   loading={loading}
                   dark={isDark}
+                  pendingBlocked={pendingBlocked}
+                  pendingCount={pendingCount}
                 />
               </div>
               <div className="space-y-4">
@@ -452,9 +456,6 @@ function PayContent() {
                     <li>订单完成后会自动到账</li>
                     <li>如需历史记录请查看「我的订单」</li>
                     {config.maxDailyAmount > 0 && <li>每日最大充值 ¥{config.maxDailyAmount.toFixed(2)}</li>}
-                    {!hasToken && (
-                      <li className={isDark ? 'text-amber-200' : 'text-amber-700'}>当前链接无 token，订单查询受限</li>
-                    )}
                   </ul>
                 </div>
 
