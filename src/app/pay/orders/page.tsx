@@ -20,7 +20,6 @@ interface Summary {
 
 function OrdersContent() {
   const searchParams = useSearchParams();
-  const userId = Number(searchParams.get('user_id'));
   const token = (searchParams.get('token') || '').trim();
   const theme = searchParams.get('theme') === 'dark' ? 'dark' : 'light';
   const uiMode = searchParams.get('ui_mode') || 'standalone';
@@ -43,7 +42,6 @@ function OrdersContent() {
 
   const isEmbedded = uiMode === 'embedded' && isIframeContext;
   const hasToken = token.length > 0;
-  const effectiveUserId = resolvedUserId || userId;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -54,7 +52,6 @@ function OrdersContent() {
   useEffect(() => {
     if (!isMobile || isEmbedded || typeof window === 'undefined') return;
     const params = new URLSearchParams();
-    if (userId && !Number.isNaN(userId)) params.set('user_id', String(userId));
     if (token) params.set('token', token);
     params.set('theme', theme);
     params.set('ui_mode', uiMode);
@@ -67,15 +64,9 @@ function OrdersContent() {
     setLoading(true);
     setError('');
     try {
-      if (!userId || Number.isNaN(userId) || userId <= 0) {
-        setError('无效的用户 ID');
-        setOrders([]);
-        return;
-      }
       if (!hasToken) {
-        setUserInfo({ id: userId, username: `用户 #${userId}` });
         setOrders([]);
-        setError('当前链接未携带登录 token，无法查询"我的订单"。');
+        setError('缺少认证信息，请从 Sub2API 平台正确访问订单页面。');
         return;
       }
 
@@ -97,11 +88,11 @@ function OrdersContent() {
       if (Number.isInteger(meId) && meId > 0) setResolvedUserId(meId);
 
       setUserInfo({
-        id: Number.isInteger(meId) && meId > 0 ? meId : userId,
+        id: Number.isInteger(meId) && meId > 0 ? meId : undefined,
         username:
           (typeof meUser.displayName === 'string' && meUser.displayName.trim()) ||
           (typeof meUser.username === 'string' && meUser.username.trim()) ||
-          `用户 #${userId}`,
+          `用户 #${meId}`,
         balance: typeof meUser.balance === 'number' ? meUser.balance : 0,
       });
 
@@ -121,7 +112,7 @@ function OrdersContent() {
     if (isMobile && !isEmbedded) return;
     loadOrders(1, pageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, token, isMobile, isEmbedded]);
+  }, [token, isMobile, isEmbedded]);
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
@@ -153,11 +144,11 @@ function OrdersContent() {
     );
   }
 
-  if (!effectiveUserId || Number.isNaN(effectiveUserId) || effectiveUserId <= 0) {
+  if (!hasToken && !resolvedUserId) {
     return (
       <div className={`flex min-h-screen items-center justify-center p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
         <div className="text-center text-red-500">
-          <p className="text-lg font-medium">无效的用户 ID</p>
+          <p className="text-lg font-medium">缺少认证信息</p>
           <p className="mt-2 text-sm text-gray-500">请从 Sub2API 平台正确访问订单页面</p>
         </div>
       </div>
@@ -166,7 +157,6 @@ function OrdersContent() {
 
   const buildScopedUrl = (path: string) => {
     const params = new URLSearchParams();
-    if (effectiveUserId) params.set('user_id', String(effectiveUserId));
     if (token) params.set('token', token);
     params.set('theme', theme);
     params.set('ui_mode', uiMode);
@@ -178,7 +168,7 @@ function OrdersContent() {
       isDark={isDark}
       isEmbedded={isEmbedded}
       title="我的订单"
-      subtitle={userInfo?.username || `用户 #${effectiveUserId}`}
+      subtitle={userInfo?.username || '我的订单'}
       actions={
         <>
           <button type="button" onClick={() => loadOrders(page, pageSize)} className={btnClass}>

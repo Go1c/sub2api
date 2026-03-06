@@ -77,8 +77,8 @@ export default function PaymentQRCode({
   const [popupBlocked, setPopupBlocked] = useState(false);
   const paymentMethodListenerAdded = useRef(false);
 
-  // 有 payUrl 就直接跳转，不需要确认
-  const shouldAutoRedirect = !expired && !isStripeType(paymentType) && !!payUrl;
+  // PC 端有二维码时优先展示二维码；仅移动端或无二维码时才跳转
+  const shouldAutoRedirect = !expired && !isStripeType(paymentType) && !!payUrl && (isMobile || !qrCode);
 
   useEffect(() => {
     if (!shouldAutoRedirect || redirected) return;
