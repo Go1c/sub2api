@@ -23,9 +23,9 @@ import type { WxpayNotifyPayload, WxpayNotifyResource } from './types';
 export class WxpayProvider implements PaymentProvider {
   readonly name = 'wxpay-direct';
   readonly providerKey = 'wxpay';
-  readonly supportedTypes: PaymentType[] = ['wxpay'];
+  readonly supportedTypes: PaymentType[] = ['wxpay_direct'];
   readonly defaultLimits = {
-    wxpay: { singleMax: 1000, dailyMax: 10000 },
+    wxpay_direct: { singleMax: 1000, dailyMax: 10000 },
   };
 
   async createPayment(request: CreatePaymentRequest): Promise<CreatePaymentResponse> {
