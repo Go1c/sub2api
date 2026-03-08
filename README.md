@@ -55,6 +55,7 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 
 - Dependency Security: `docs/dependency-security.md`
 - Admin Payment Integration API: `docs/ADMIN_PAYMENT_INTEGRATION_API.md`
+- **Sub2ApiPay 支付充值网关**：本仓库已合并 [touwaeriol/sub2apipay](https://github.com/touwaeriol/sub2apipay) 的支付网关（易支付/Stripe），详见 `docs/sub2apipay.md` 与根目录下 `src/`、`prisma/` 等 Sub2ApiPay 相关文件。
 
 ---
 

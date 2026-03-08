@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  userId        Int         @map("user_id")
+  userEmail     String?     @map("user_email")
+  userName      String?     @map("user_name")
+  userNotes     String?     @map("user_notes")
+  amount        Decimal     @db.Decimal(10, 2)
+  payAmount     Decimal?    @db.Decimal(10, 2) @map("pay_amount")
+  feeRate       Decimal?    @db.Decimal(5, 2)  @map("fee_rate")
+  rechargeCode  String      @unique @map("recharge_code")
+  status        OrderStatus @default(PENDING)
+  paymentType   String      @map("payment_type")
+
+  paymentTradeNo String?    @map("payment_trade_no")
+  payUrl        String?     @map("pay_url")
+  qrCode        String?     @map("qr_code")
+  qrCodeImg     String?     @map("qr_code_img")
+
+  refundAmount  Decimal?    @db.Decimal(10, 2) @map("refund_amount")
+  refundReason  String?     @map("refund_reason")
+  refundAt      DateTime?   @map("refund_at")
+  forceRefund   Boolean     @default(false) @map("force_refund")
+
+  expiresAt     DateTime    @map("expires_at")
+  paidAt        DateTime?   @map("paid_at")
+  completedAt   DateTime?   @map("completed_at")
+  failedAt      DateTime?   @map("failed_at")
+  failedReason  String?     @map("failed_reason")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  clientIp      String?     @map("client_ip")
+  srcHost       String?     @map("src_host")
+  srcUrl        String?     @map("src_url")
+
+  auditLogs     AuditLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@index([paidAt])
+  @@index([paymentType, paidAt])
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  RECHARGING
+  COMPLETED
+  EXPIRED
+  CANCELLED
+  FAILED
+  REFUNDING
+  REFUNDED
+  REFUND_FAILED
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orderId   String   @map("order_id")
+  order     Order    @relation(fields: [orderId], references: [id])
+  action    String
+  detail    String?  @db.Text
+  operator  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

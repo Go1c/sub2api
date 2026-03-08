@@ -1,0 +1,15 @@
+services:
+  app:
+    image: touwaeriol/sub2apipay:${IMAGE_TAG:-latest}
+    container_name: sub2apipay
+    ports:
+      - '8087:3000'
+    env_file: .env
+    networks:
+      - sub2api-network
+    restart: unless-stopped
+
+networks:
+  sub2api-network:
+    external: true
+    name: sub2api-star_sub2api-network

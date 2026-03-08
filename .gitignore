@@ -133,3 +133,13 @@ frontend/coverage/
 aicodex
 output/
 
+# ===================
+# Sub2ApiPay (Next.js)
+# ===================
+/.next/
+/out/
+.vercel
+next-env.d.ts
+/third-party
+.pnp
+.pnp.*
