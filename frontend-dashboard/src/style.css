@@ -1,0 +1,58 @@
+@import './assets/styles/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ui-mono {
+  font-family: var(--font-mono);
+}
+
+.ui-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Backwards-compat class names from the earlier iteration — now no-ops. */
+.brand-serif,
+.ui-sans {
+  /* body already uses sans-serif; these classes kept to avoid touching every view */
+}
+
+@layer components {
+  .btn-brand {
+    @apply inline-flex items-center justify-center rounded-full bg-brand-500 px-5 py-2 text-white text-sm font-medium hover:bg-brand-600 transition-colors;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded-full border border-ink-200 px-5 py-2 text-ink-700 text-sm font-medium hover:border-brand-500 hover:text-brand-600 transition-colors;
+  }
+  .card {
+    @apply bg-white rounded-xl border border-ink-100 p-5 transition-shadow;
+  }
+  .card-hover {
+    @apply hover:shadow-card-hover;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .icon-box {
+    @apply w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0;
+  }
+}
