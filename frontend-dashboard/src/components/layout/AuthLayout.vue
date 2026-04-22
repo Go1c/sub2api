@@ -5,10 +5,10 @@
     <div class="w-full max-w-md">
       <div class="flex items-center gap-2 justify-center mb-8">
         <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-500 to-brand-900 flex items-center justify-center text-white text-lg font-semibold">
-          D
+          L
         </div>
         <div>
-          <div class="font-semibold text-xl text-ink-900 leading-tight">Dragon Code</div>
+          <div class="font-semibold text-xl text-ink-900 leading-tight">LumioAPI</div>
           <div class="text-xs text-ink-500">{{ $t('site.tagline') }}</div>
         </div>
       </div>

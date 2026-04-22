@@ -25,7 +25,7 @@
    ```
    VITE_API_BASE_URL=https://your-backend.zeabur.app    # 若连接真后端
    VITE_USE_MOCK=false
-   VITE_SITE_NAME=Dragon Code
+   VITE_SITE_NAME=LumioAPI
    ```
    留空 `VITE_API_BASE_URL` 会启用 mock（不推荐生产，但适合先上线看前端）。
 6. Save，触发第一次部署。

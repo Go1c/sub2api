@@ -1,6 +1,6 @@
 # frontend-dashboard
 
-Dragon Code 风格的独立前端工程。与仓库根部的 `frontend/`（原 Sub2API 前端）解耦，可在**无后端**环境下通过内置 mock 直接预览。
+LumioAPI（视觉参考 dragoncode.codes）的独立前端工程。与仓库根部的 `frontend/`（原 Sub2API 前端）解耦，可在**无后端**环境下通过内置 mock 直接预览。
 
 ## 本地开发
 

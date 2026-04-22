@@ -1,8 +1,8 @@
 export default {
   site: {
-    name: 'Dragon Code',
+    name: 'LumioAPI',
     tagline: 'Enterprise AI Relay',
-    footer: '© {year} Dragon Code. All rights reserved.'
+    footer: '© {year} LumioAPI. All rights reserved.'
   },
   nav: {
     dashboard: 'Dashboard',

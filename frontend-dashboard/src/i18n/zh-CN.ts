@@ -1,8 +1,8 @@
 export default {
   site: {
-    name: 'Dragon Code',
+    name: 'LumioAPI',
     tagline: '企业级 AI 编码中转',
-    footer: '© {year} Dragon Code. All rights reserved.'
+    footer: '© {year} LumioAPI. All rights reserved.'
   },
   marketing: {
     header: {
@@ -23,7 +23,7 @@ export default {
     },
     why: {
       title: '为什么选择',
-      titleBrand: 'Dragon Code',
+      titleBrand: 'LumioAPI',
       subtitle: '专为日常编码而设计的一站式体验 ✦ 更低的价格，更简单的配置，让每位开发者都能用上顶级 AI 编码模型。',
       items: [
         {
@@ -68,7 +68,7 @@ export default {
       sections: [
         {
           title: '产品',
-          links: ['Dragon Code 介绍', '价格方案', '登录']
+          links: ['LumioAPI 介绍', '价格方案', '登录']
         },
         {
           title: '资源',
@@ -87,7 +87,7 @@ export default {
           links: ['关于我们', '联系我们']
         }
       ],
-      copyright: '© {year} Dragon Code. 保留所有权利. · 杭州沧衡信息技术（示例站点，非真实备案）'
+      copyright: '© {year} LumioAPI. All rights reserved.'
     }
   },
   nav: {

@@ -2,7 +2,9 @@
 
 **创建日期**: 2026-04-22
 **作者**: Go1c
-**状态**: 待评审（pending）
+**状态**: 已实施（本文保留作为历史记录）
+
+> **品牌更名**：本计划以参考站名称 "Dragon Code" 作为工作名起草，产品最终品牌定为 **LumioAPI**。实施过程中的所有品牌字样以 LumioAPI 为准（见 `CLAUDE.md`、`doc/frontend-dashboard.md`）。
 
 ---
 

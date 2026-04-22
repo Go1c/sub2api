@@ -1,6 +1,6 @@
 # CLAUDE.md — sub2api fork 指引
 
-本仓库是 [`Wei-Shaw/sub2api`](https://github.com/Wei-Shaw/sub2api) 的 fork，在此基础上增加了 **Dragon Code 风格的独立前端** (`frontend-dashboard/`)，最终部署目标是 **Zeabur**。
+本仓库是 [`Wei-Shaw/sub2api`](https://github.com/Wei-Shaw/sub2api) 的 fork，在此基础上增加了 **LumioAPI 品牌的独立前端（视觉参考 dragoncode.codes）** (`frontend-dashboard/`)，最终部署目标是 **Zeabur**。
 
 ## 项目结构（核心）
 
@@ -8,7 +8,7 @@
 |------|------|---------|
 | `backend/` | Go 后端（Gin + Ent + PostgreSQL + Redis）— 来自 upstream | **不主动改**，与 upstream 同步 |
 | `frontend/` | 上游 Sub2API 的 Vue 3 前端（teal 配色）| **不主动改**，与 upstream 同步 |
-| `frontend-dashboard/` | Dragon Code 风格复刻前端（blue + serif）| **本仓库开发焦点**，在 `dev` 分支迭代 |
+| `frontend-dashboard/` | LumioAPI 前端（blue 主色，视觉参考 dragoncode.codes）| **本仓库开发焦点**，在 `dev` 分支迭代 |
 | `doc/` | 项目文档（本分支专属）| 任何改动都同步更新 |
 | `deploy/` | Docker / 安装脚本 — 来自 upstream | 不主动改 |
 
@@ -78,7 +78,7 @@ git tag -a vX.Y.Z -m "release X.Y.Z" && git push origin publish --tags
 
 ## 视觉识别
 
-Dragon Code 风格的关键视觉点，改样式时以此为北极星：
+LumioAPI 的关键视觉点（沿用 dragoncode.codes 的观感），改样式时以此为北极星：
 
 - 主色 `#4f8cff`（brand-500）配 navy `#1a2f5a`（brand-900）渐变
 - 标题/品牌文案用衬线 `Source Serif 4` + `Noto Serif SC`（Google Fonts）

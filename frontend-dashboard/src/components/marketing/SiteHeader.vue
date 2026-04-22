@@ -39,9 +39,9 @@ function onNav(item: { to?: string; href?: string }) {
     <div class="max-w-6xl mx-auto h-16 px-6 flex items-center">
       <RouterLink to="/" class="flex items-center gap-2">
         <div class="w-8 h-8 rounded-md bg-gradient-to-br from-brand-500 to-brand-900 flex items-center justify-center text-white text-sm font-semibold">
-          D
+          L
         </div>
-        <span class="text-base font-semibold text-ink-900">DragonCode</span>
+        <span class="text-base font-semibold text-ink-900">LumioAPI</span>
       </RouterLink>
 
       <nav class="hidden md:flex items-center gap-8 ml-10">

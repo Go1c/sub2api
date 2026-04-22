@@ -9,7 +9,7 @@ const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 
-const email = ref('demo@dragoncode.codes')
+const email = ref('demo@lumioapi.com')
 const password = ref('demo')
 const loading = ref(false)
 const error = ref('')

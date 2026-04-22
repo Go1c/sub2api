@@ -1,6 +1,6 @@
 # 分支与同步策略
 
-本仓库是 `Wei-Shaw/sub2api` 的 fork，在此基础上做了 **Dragon Code 风格的独立前端** (`frontend-dashboard/`)。分支职责按如下分工，请**不要直接在 `main` 或 `publish` 上提交**。
+本仓库是 `Wei-Shaw/sub2api` 的 fork，在此基础上做了 **LumioAPI 风格的独立前端** (`frontend-dashboard/`)。分支职责按如下分工，请**不要直接在 `main` 或 `publish` 上提交**。
 
 ## 远端
 

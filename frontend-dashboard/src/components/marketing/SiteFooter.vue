@@ -19,9 +19,9 @@ const sections = computed<Section[]>(() => (tm('marketing.footer.sections') as a
         <div class="col-span-2 md:col-span-1">
           <div class="flex items-center gap-2">
             <div class="w-8 h-8 rounded-md bg-gradient-to-br from-brand-500 to-brand-900 flex items-center justify-center text-white text-sm font-semibold">
-              D
+              L
             </div>
-            <span class="text-base font-semibold text-white">DragonCode</span>
+            <span class="text-base font-semibold text-white">LumioAPI</span>
           </div>
           <p class="mt-4 text-xs text-ink-400 leading-relaxed">{{ t('site.tagline') }}</p>
         </div>

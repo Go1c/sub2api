@@ -43,9 +43,9 @@ function toggleTheme() {
   >
     <div class="h-14 flex items-center gap-2 px-4 border-b border-ink-100">
       <div class="w-7 h-7 rounded-md bg-gradient-to-br from-brand-500 to-brand-900 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-        D
+        L
       </div>
-      <span v-if="!collapsed" class="text-sm font-semibold text-ink-900">Dragon Code</span>
+      <span v-if="!collapsed" class="text-sm font-semibold text-ink-900">LumioAPI</span>
     </div>
 
     <nav class="flex-1 px-2 py-3 space-y-0.5">

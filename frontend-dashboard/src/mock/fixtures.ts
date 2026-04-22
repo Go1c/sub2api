@@ -10,7 +10,7 @@ export const fixtures = {
     token: 'mock-token-' + Math.random().toString(36).slice(2),
     user: {
       id: '18032145',
-      email: 'demo@dragoncode.codes',
+      email: 'demo@lumioapi.com',
       name: 'Demo User',
       plan: 'User',
       joinedAt: '2026-01-10',
@@ -19,7 +19,7 @@ export const fixtures = {
   },
   user: {
     id: '18032145',
-    email: 'demo@dragoncode.codes',
+    email: 'demo@lumioapi.com',
     name: 'Demo User',
     plan: 'User',
     joinedAt: '2026-01-10',

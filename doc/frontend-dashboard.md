@@ -1,6 +1,6 @@
 # frontend-dashboard 模块说明
 
-Dragon Code 风格的独立前端，复刻 `https://dragoncode.codes/dashboard` 的视觉与结构。与上游同步的 `frontend/` 解耦，可离线运行。
+LumioAPI 风格的独立前端，复刻 `https://dragoncode.codes/dashboard` 的视觉与结构。与上游同步的 `frontend/` 解耦，可离线运行。
 
 ## 位置与关系
 

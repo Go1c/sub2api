@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Dragon Code style dashboard replica — independent frontend for sub2api",
+  "description": "LumioAPI frontend — marketing + dashboard, independent from the upstream frontend/",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
