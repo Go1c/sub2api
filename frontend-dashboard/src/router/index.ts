@@ -4,7 +4,8 @@ import { useAuthStore } from '@/stores/auth'
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/dashboard'
+    component: () => import('@/components/layout/MarketingLayout.vue'),
+    children: [{ path: '', component: () => import('@/views/HomeView.vue') }]
   },
   {
     path: '/',
@@ -31,7 +32,11 @@ const routes: RouteRecordRaw[] = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior(to) {
+    if (to.hash) return { el: to.hash, behavior: 'smooth' }
+    return { top: 0 }
+  }
 })
 
 router.beforeEach((to) => {

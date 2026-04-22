@@ -4,6 +4,100 @@ export default {
     tagline: '企业级 AI 编码中转',
     footer: '© {year} Dragon Code. All rights reserved.'
   },
+  marketing: {
+    header: {
+      home: '首页',
+      pricing: '定价',
+      status: '服务状态',
+      docs: '文档',
+      cta: '开始使用',
+      ctaAuthed: '进入控制台'
+    },
+    hero: {
+      eyebrow: '开发者首选',
+      title: 'AI 编码工作台',
+      subtitle: '一个账号、一条线路，统一调用 Claude Code、Codex 和 Gemini CLI。更低价格、更稳链路、更透明计费。',
+      primary: '立即体验',
+      secondary: '查看定价',
+      note: '核心体验'
+    },
+    why: {
+      title: '为什么选择',
+      titleBrand: 'Dragon Code',
+      subtitle: '专为日常编码而设计的一站式体验 ✦ 更低的价格，更简单的配置，让每位开发者都能用上顶级 AI 编码模型。',
+      items: [
+        {
+          title: '5 分钟完成配置',
+          desc: '统一的域名与密钥格式，覆盖主流 IDE 插件与 CLI 工具，新手也能快速上手。'
+        },
+        {
+          title: '与官方一致的精确计费',
+          desc: '采用与官方完全一致的计价方式，每一笔费用都经得起核对。'
+        },
+        {
+          title: '每一笔调用，费用一目了然',
+          desc: '每一次请求的 Token 数、模型与价格都可回溯，按需调优成本。'
+        },
+        {
+          title: '专注编码，拒绝瞎折腾',
+          desc: '一个账号同时使用 Claude、Codex、Gemini，不再在多个控制台之间切换。'
+        }
+      ]
+    },
+    pricing: {
+      title: '灵活定价',
+      subtitle: '按需计费，与官方一致，无隐形费用。',
+      plans: [
+        {
+          name: '按量付费',
+          price: '官方同价',
+          priceNote: '按 Token 结算',
+          features: ['全部模型解锁', '按实际用量计费', '自助充值 / 退款', '7×24 技术支持'],
+          cta: '立即开始'
+        },
+        {
+          name: '团队版',
+          price: '自定义',
+          priceNote: '按团队规模协商',
+          features: ['多成员分组管理', '独立配额与限速', 'SSO 集成', '专属客户经理'],
+          cta: '联系我们',
+          highlight: true
+        },
+        {
+          name: '企业版',
+          price: 'SLA',
+          priceNote: '私有部署或 VPC',
+          features: ['私有部署支持', 'SLA 99.95%', '审计日志', '合规协助'],
+          cta: '咨询方案'
+        }
+      ]
+    },
+    footer: {
+      sections: [
+        {
+          title: '产品',
+          links: ['Dragon Code 介绍', '价格方案', '登录']
+        },
+        {
+          title: '资源',
+          links: ['使用教程', '品牌故事', 'Claude 模型']
+        },
+        {
+          title: '服务承诺',
+          links: ['透明定价', '服务状态', '隐私保护', '安全合规']
+        },
+        {
+          title: '解决方案',
+          links: ['AI 编程助手', '代码生成', '技术支持']
+        },
+        {
+          title: '关于',
+          links: ['关于我们', '联系我们']
+        }
+      ],
+      copyright: '© {year} Dragon Code. 保留所有权利. · 杭州沧衡信息技术（示例站点，非真实备案）'
+    }
+  },
   nav: {
     dashboard: '仪表盘',
     keys: 'API 密钥',
