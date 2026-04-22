@@ -1,0 +1,51 @@
+@import './assets/styles/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-serif);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Brand typography defaults */
+h1,
+h2,
+h3,
+h4,
+.brand-serif {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+
+.ui-sans {
+  font-family: var(--font-sans);
+}
+
+.ui-mono {
+  font-family: var(--font-mono);
+}
+
+/* Brand button helper */
+@layer components {
+  .btn-brand {
+    @apply inline-flex items-center justify-center rounded-md bg-brand-500 px-4 py-2 text-white font-medium shadow-brand hover:bg-brand-600 transition-colors;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center rounded-md border border-brand-500 px-4 py-2 text-brand-500 font-medium hover:bg-brand-50 transition-colors;
+  }
+  .card {
+    @apply bg-white rounded-lg shadow-card p-6 transition-shadow hover:shadow-card-hover;
+  }
+}
