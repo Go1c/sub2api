@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import HeroSection from '@/components/marketing/HeroSection.vue'
 import WhyChooseSection from '@/components/marketing/WhyChooseSection.vue'
-import PricingSection from '@/components/marketing/PricingSection.vue'
+import ModelPricingSection from '@/components/marketing/ModelPricingSection.vue'
 </script>
 
 <template>
   <div>
     <HeroSection />
     <WhyChooseSection />
-    <PricingSection />
+    <ModelPricingSection />
   </div>
 </template>

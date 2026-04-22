@@ -45,32 +45,24 @@ export default {
       ]
     },
     pricing: {
-      title: '灵活定价',
-      subtitle: '按需计费，与官方一致，无隐形费用。',
-      plans: [
-        {
-          name: '按量付费',
-          price: '官方同价',
-          priceNote: '按 Token 结算',
-          features: ['全部模型解锁', '按实际用量计费', '自助充值 / 退款', '7×24 技术支持'],
-          cta: '立即开始'
-        },
-        {
-          name: '团队版',
-          price: '自定义',
-          priceNote: '按团队规模协商',
-          features: ['多成员分组管理', '独立配额与限速', 'SSO 集成', '专属客户经理'],
-          cta: '联系我们',
-          highlight: true
-        },
-        {
-          name: '企业版',
-          price: 'SLA',
-          priceNote: '私有部署或 VPC',
-          features: ['私有部署支持', 'SLA 99.95%', '审计日志', '合规协助'],
-          cta: '咨询方案'
-        }
-      ]
+      title: '模型定价',
+      ctaRegister: '免费注册',
+      ctaExperience: '立即体验',
+      note: '我们的价格以人民币（¥）计价 · 官方原价以美元（$）标注 · 汇率按 1:7 折算（单位：百万 tokens）',
+      cols: {
+        model: '模型名',
+        group: '分组',
+        multiplier: '倍率',
+        input: '输入（¥）',
+        output: '输出（¥）',
+        official: '官方（¥）',
+        discount: '折扣',
+        openClaw: 'OpenClaw'
+      },
+      yes: '是',
+      no: '否',
+      loading: '加载定价…',
+      error: '定价暂时不可用'
     },
     footer: {
       sections: [

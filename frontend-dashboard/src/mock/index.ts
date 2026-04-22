@@ -16,7 +16,8 @@ const handlers: Array<{ method: 'GET' | 'POST'; match: RegExp; handler: Handler 
   { method: 'GET', match: /\/user\/dashboard\/recent$/, handler: () => fixtures.dashboardRecent },
   { method: 'GET', match: /\/user\/keys$/, handler: () => fixtures.keys },
   { method: 'GET', match: /\/user\/usage$/, handler: () => fixtures.usage },
-  { method: 'GET', match: /\/user\/groups$/, handler: () => fixtures.groups }
+  { method: 'GET', match: /\/user\/groups$/, handler: () => fixtures.groups },
+  { method: 'GET', match: /\/pricing\/public$/, handler: () => fixtures.publicPricing }
 ]
 
 function match(method: string, url: string) {

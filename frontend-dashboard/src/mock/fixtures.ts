@@ -60,5 +60,24 @@ export const fixtures = {
     tokens: Array.from({ length: 30 }, () => 0),
     totals: { requests: 0, tokens: 0, cost: 0 }
   },
-  groups: [] as Array<{ id: string; name: string; capacity: number; members: number; usage: string }>
+  groups: [] as Array<{ id: string; name: string; capacity: number; members: number; usage: string }>,
+
+  // Public pricing — mirrors screenshot-captured pricing from dragoncode.codes.
+  // Keep in sync with backend channel_model_pricing once the /pricing/public
+  // endpoint is implemented; until then, this file is the source of truth.
+  publicPricing: {
+    currency: 'CNY',
+    unit: '百万 tokens',
+    rateNote: '我们的价格以人民币（¥）计价 · 官方原价以美元（$）标注 · 汇率按 1:7 折算（单位：百万 tokens）',
+    rows: [
+      { model: 'Opus 4.6', group: '企业稳定版', multiplier: '2.5x', inputPrice: 12.50, outputPrice: 62.50, officialInput: 35, officialOutput: 175, discount: '3.6折', openClaw: false },
+      { model: 'Sonnet 4.6', group: '企业稳定版', multiplier: '2.5x', inputPrice: 7.50, outputPrice: 37.50, officialInput: 21, officialOutput: 105, discount: '3.6折', openClaw: false },
+      { model: 'Opus 4.6', group: 'kiro 逆向', multiplier: '0.65x', inputPrice: 3.25, outputPrice: 16.25, officialInput: 35, officialOutput: 175, discount: '0.9折', openClaw: true },
+      { model: 'Sonnet 4.6', group: 'kiro 逆向', multiplier: '0.65x', inputPrice: 1.95, outputPrice: 9.75, officialInput: 21, officialOutput: 105, discount: '0.9折', openClaw: true },
+      { model: 'Opus 4.6', group: '反重力逆向', multiplier: '0.85x', inputPrice: 4.25, outputPrice: 21.25, officialInput: 35, officialOutput: 175, discount: '1.2折', openClaw: true },
+      { model: 'Sonnet 4.6', group: '反重力逆向', multiplier: '0.85x', inputPrice: 2.55, outputPrice: 12.75, officialInput: 21, officialOutput: 105, discount: '1.2折', openClaw: true },
+      { model: '5.4', group: 'codex', multiplier: '0.5x', inputPrice: 1.25, outputPrice: 7.50, officialInput: 21, officialOutput: 105, discount: '0.7折', openClaw: true },
+      { model: '5.3 Codex', group: 'codex', multiplier: '0.5x', inputPrice: 0.87, outputPrice: 7.00, officialInput: 12.25, officialOutput: 98, discount: '0.7折', openClaw: true }
+    ]
+  }
 }
