@@ -9,53 +9,56 @@ export const fixtures = {
   loginResponse: {
     token: 'mock-token-' + Math.random().toString(36).slice(2),
     user: {
-      id: 'u_001',
+      id: '18032145',
       email: 'demo@dragoncode.codes',
       name: 'Demo User',
-      plan: 'Pro',
+      plan: 'User',
       joinedAt: '2026-01-10',
-      balance: 128.5
+      balance: 0
     }
   },
   user: {
-    id: 'u_001',
+    id: '18032145',
     email: 'demo@dragoncode.codes',
     name: 'Demo User',
-    plan: 'Pro',
+    plan: 'User',
     joinedAt: '2026-01-10',
-    balance: 128.5
+    balance: 0
   },
   dashboardStats: {
-    balance: 128.5,
-    todayRequests: 1284,
-    todayTokens: 356_912,
-    activeKeys: 3
+    balance: 0,
+    todayRequests: 0,
+    todayTokens: 0,
+    todayTokensIn: 0,
+    todayTokensOut: 0,
+    totalTokens: 0,
+    totalTokensIn: 0,
+    totalTokensOut: 0,
+    todaySpend: 0,
+    totalSpend: 0,
+    activeKeys: 0,
+    rpm: 0,
+    tpm: 0,
+    latencyMs: 0
+  },
+  dashboardInvite: {
+    invited: 0,
+    totalBonus: 0,
+    monthBonus: 0,
+    code: 'YY62PX4K'
   },
   dashboardTrend: {
     labels: [6, 5, 4, 3, 2, 1, 0].map(days),
-    requests: [820, 1020, 930, 1140, 1205, 1100, 1284],
-    tokens: [210_000, 245_000, 231_000, 288_000, 301_200, 279_500, 356_912]
+    requests: [0, 0, 0, 0, 0, 0, 0],
+    tokens: [0, 0, 0, 0, 0, 0, 0]
   },
-  dashboardRecent: [
-    { id: 'r1', time: '10:24', model: 'claude-sonnet-4-6', tokens: 1832, status: 'success' },
-    { id: 'r2', time: '10:19', model: 'claude-opus-4-7', tokens: 4210, status: 'success' },
-    { id: 'r3', time: '10:03', model: 'gemini-2.5-pro', tokens: 928, status: 'success' },
-    { id: 'r4', time: '09:58', model: 'claude-haiku-4-5', tokens: 412, status: 'error' },
-    { id: 'r5', time: '09:41', model: 'claude-sonnet-4-6', tokens: 2204, status: 'success' }
-  ],
-  keys: [
-    { id: 'k1', name: '本地开发', prefix: 'sk-dc-ab12', created: '2026-03-12', status: 'active' },
-    { id: 'k2', name: '服务端', prefix: 'sk-dc-cd34', created: '2026-02-20', status: 'active' },
-    { id: 'k3', name: '已弃用', prefix: 'sk-dc-ef56', created: '2026-01-05', status: 'disabled' }
-  ],
+  dashboardRecent: [] as Array<{ id: string; time: string; model: string; tokens: number; status: string }>,
+  keys: [] as Array<{ id: string; name: string; prefix: string; created: string; status: string }>,
   usage: {
     labels: Array.from({ length: 30 }, (_, i) => days(29 - i)),
-    requests: Array.from({ length: 30 }, () => Math.floor(600 + Math.random() * 900)),
-    tokens: Array.from({ length: 30 }, () => Math.floor(150_000 + Math.random() * 250_000)),
-    totals: { requests: 32_845, tokens: 8_912_450, cost: 42.18 }
+    requests: Array.from({ length: 30 }, () => 0),
+    tokens: Array.from({ length: 30 }, () => 0),
+    totals: { requests: 0, tokens: 0, cost: 0 }
   },
-  groups: [
-    { id: 'g1', name: 'Claude Code 主组', capacity: 80, members: 12, usage: '64%' },
-    { id: 'g2', name: 'Gemini 备用组', capacity: 50, members: 8, usage: '38%' }
-  ]
+  groups: [] as Array<{ id: string; name: string; capacity: number; members: number; usage: string }>
 }

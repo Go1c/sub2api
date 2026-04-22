@@ -11,6 +11,7 @@ const handlers: Array<{ method: 'GET' | 'POST'; match: RegExp; handler: Handler 
   { method: 'POST', match: /\/auth\/register$/, handler: () => fixtures.loginResponse },
   { method: 'GET', match: /\/user\/profile$/, handler: () => fixtures.user },
   { method: 'GET', match: /\/user\/dashboard\/stats$/, handler: () => fixtures.dashboardStats },
+  { method: 'GET', match: /\/user\/dashboard\/invite$/, handler: () => fixtures.dashboardInvite },
   { method: 'GET', match: /\/user\/dashboard\/trend$/, handler: () => fixtures.dashboardTrend },
   { method: 'GET', match: /\/user\/dashboard\/recent$/, handler: () => fixtures.dashboardRecent },
   { method: 'GET', match: /\/user\/keys$/, handler: () => fixtures.keys },
