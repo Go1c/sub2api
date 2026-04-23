@@ -3285,6 +3285,79 @@
                 </p>
               </div>
 
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelOpenAI") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_openai"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelOpenAIPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelOpenAIHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAnthropic") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_anthropic"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelAnthropicPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAnthropicHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelGemini") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_gemini"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelGeminiPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelGeminiHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravity") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_antigravity"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelAntigravityPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravityHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravityGemini") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_antigravity_gemini"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelAntigravityGeminiPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravityGeminiHint") }}
+                  </p>
+                </div>
+              </div>
+
               <!-- Global Table Preferences -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <h3 class="text-sm font-medium text-gray-900 dark:text-white">
@@ -4870,6 +4943,11 @@ const form = reactive<SettingsForm>({
   home_content: "",
   backend_mode_enabled: false,
   hide_ccs_import_button: false,
+  ccswitch_default_model_anthropic: "",
+  ccswitch_default_model_openai: "gpt-5.4",
+  ccswitch_default_model_gemini: "",
+  ccswitch_default_model_antigravity: "",
+  ccswitch_default_model_antigravity_gemini: "",
   payment_enabled: false,
   payment_min_amount: 1,
   payment_max_amount: 10000,
@@ -5786,6 +5864,12 @@ async function saveSettings() {
       home_content: form.home_content,
       backend_mode_enabled: form.backend_mode_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
+      ccswitch_default_model_anthropic: form.ccswitch_default_model_anthropic,
+      ccswitch_default_model_openai: form.ccswitch_default_model_openai,
+      ccswitch_default_model_gemini: form.ccswitch_default_model_gemini,
+      ccswitch_default_model_antigravity: form.ccswitch_default_model_antigravity,
+      ccswitch_default_model_antigravity_gemini:
+        form.ccswitch_default_model_antigravity_gemini,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,

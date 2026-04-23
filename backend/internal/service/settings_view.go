@@ -103,6 +103,11 @@ type SystemSettings struct {
 	TablePageSizeOptions        []int
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
+	CCSwitchDefaultModelAnthropic      string
+	CCSwitchDefaultModelOpenAI         string
+	CCSwitchDefaultModelGemini         string
+	CCSwitchDefaultModelAntigravity    string
+	CCSwitchDefaultModelAntigravityGemini string
 
 	DefaultConcurrency   int
 	DefaultBalance       float64
@@ -193,6 +198,11 @@ type PublicSettings struct {
 	TablePageSizeOptions        []int
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
+	CCSwitchDefaultModelAnthropic      string
+	CCSwitchDefaultModelOpenAI         string
+	CCSwitchDefaultModelGemini         string
+	CCSwitchDefaultModelAntigravity    string
+	CCSwitchDefaultModelAntigravityGemini string
 
 	LinuxDoOAuthEnabled      bool
 	WeChatOAuthEnabled       bool

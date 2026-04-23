@@ -340,6 +340,11 @@ export interface SystemSettings {
   doc_url: string;
   home_content: string;
   hide_ccs_import_button: boolean;
+  ccswitch_default_model_anthropic: string;
+  ccswitch_default_model_openai: string;
+  ccswitch_default_model_gemini: string;
+  ccswitch_default_model_antigravity: string;
+  ccswitch_default_model_antigravity_gemini: string;
   table_default_page_size: number;
   table_page_size_options: number[];
   backend_mode_enabled: boolean;
@@ -512,6 +517,11 @@ export interface UpdateSettingsRequest {
   doc_url?: string;
   home_content?: string;
   hide_ccs_import_button?: boolean;
+  ccswitch_default_model_anthropic?: string;
+  ccswitch_default_model_openai?: string;
+  ccswitch_default_model_gemini?: string;
+  ccswitch_default_model_antigravity?: string;
+  ccswitch_default_model_antigravity_gemini?: string;
   table_default_page_size?: number;
   table_page_size_options?: number[];
   backend_mode_enabled?: boolean;

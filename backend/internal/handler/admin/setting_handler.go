@@ -177,6 +177,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		DocURL:                                 settings.DocURL,
 		HomeContent:                            settings.HomeContent,
 		HideCcsImportButton:                    settings.HideCcsImportButton,
+		CCSwitchDefaultModelAnthropic:          settings.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:             settings.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:             settings.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:        settings.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini:  settings.CCSwitchDefaultModelAntigravityGemini,
 		PurchaseSubscriptionEnabled:            settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                   settings.TableDefaultPageSize,
@@ -322,6 +327,11 @@ type UpdateSettingsRequest struct {
 	DocURL                      string                `json:"doc_url"`
 	HomeContent                 string                `json:"home_content"`
 	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
+	CCSwitchDefaultModelAnthropic   string            `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI      string            `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini      string            `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity string            `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini string      `json:"ccswitch_default_model_antigravity_gemini"`
 	PurchaseSubscriptionEnabled *bool                 `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     *string               `json:"purchase_subscription_url"`
 	TableDefaultPageSize        int                   `json:"table_default_page_size"`
@@ -1064,6 +1074,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DocURL:                           req.DocURL,
 		HomeContent:                      req.HomeContent,
 		HideCcsImportButton:              req.HideCcsImportButton,
+		CCSwitchDefaultModelAnthropic:    req.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:       req.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:       req.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:  req.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini: req.CCSwitchDefaultModelAntigravityGemini,
 		PurchaseSubscriptionEnabled:      purchaseEnabled,
 		PurchaseSubscriptionURL:          purchaseURL,
 		TableDefaultPageSize:             req.TableDefaultPageSize,
@@ -1365,6 +1380,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TablePageSizeOptions:                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
 		CustomEndpoints:                        dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
+		CCSwitchDefaultModelAnthropic:          updatedSettings.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:             updatedSettings.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:             updatedSettings.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:        updatedSettings.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini:  updatedSettings.CCSwitchDefaultModelAntigravityGemini,
 		DefaultConcurrency:                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                         updatedSettings.DefaultBalance,
 		DefaultSubscriptions:                   updatedDefaultSubscriptions,
@@ -1659,6 +1679,21 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.HideCcsImportButton != after.HideCcsImportButton {
 		changed = append(changed, "hide_ccs_import_button")
+	}
+	if before.CCSwitchDefaultModelAnthropic != after.CCSwitchDefaultModelAnthropic {
+		changed = append(changed, "ccswitch_default_model_anthropic")
+	}
+	if before.CCSwitchDefaultModelOpenAI != after.CCSwitchDefaultModelOpenAI {
+		changed = append(changed, "ccswitch_default_model_openai")
+	}
+	if before.CCSwitchDefaultModelGemini != after.CCSwitchDefaultModelGemini {
+		changed = append(changed, "ccswitch_default_model_gemini")
+	}
+	if before.CCSwitchDefaultModelAntigravity != after.CCSwitchDefaultModelAntigravity {
+		changed = append(changed, "ccswitch_default_model_antigravity")
+	}
+	if before.CCSwitchDefaultModelAntigravityGemini != after.CCSwitchDefaultModelAntigravityGemini {
+		changed = append(changed, "ccswitch_default_model_antigravity_gemini")
 	}
 	if before.DefaultConcurrency != after.DefaultConcurrency {
 		changed = append(changed, "default_concurrency")
