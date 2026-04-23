@@ -315,6 +315,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyDocURL,
 		SettingKeyHomeContent,
 		SettingKeyHideCcsImportButton,
+		SettingKeyCCSwitchDefaultModelAnthropic,
+		SettingKeyCCSwitchDefaultModelOpenAI,
+		SettingKeyCCSwitchDefaultModelGemini,
+		SettingKeyCCSwitchDefaultModelAntigravity,
+		SettingKeyCCSwitchDefaultModelAntigravityGemini,
 		SettingKeyPurchaseSubscriptionEnabled,
 		SettingKeyPurchaseSubscriptionURL,
 		SettingKeyTableDefaultPageSize,
@@ -409,6 +414,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		DocURL:                           settings[SettingKeyDocURL],
 		HomeContent:                      settings[SettingKeyHomeContent],
 		HideCcsImportButton:              settings[SettingKeyHideCcsImportButton] == "true",
+		CCSwitchDefaultModelAnthropic:    strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
+		CCSwitchDefaultModelOpenAI:       firstNonEmpty(strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelOpenAI]), "gpt-5.4"),
+		CCSwitchDefaultModelGemini:       strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelGemini]),
+		CCSwitchDefaultModelAntigravity:  strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravity]),
+		CCSwitchDefaultModelAntigravityGemini: strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravityGemini]),
 		PurchaseSubscriptionEnabled:      settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:          strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		TableDefaultPageSize:             tableDefaultPageSize,
@@ -469,6 +479,11 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		DocURL                           string          `json:"doc_url,omitempty"`
 		HomeContent                      string          `json:"home_content,omitempty"`
 		HideCcsImportButton              bool            `json:"hide_ccs_import_button"`
+		CCSwitchDefaultModelAnthropic    string          `json:"ccswitch_default_model_anthropic,omitempty"`
+		CCSwitchDefaultModelOpenAI       string          `json:"ccswitch_default_model_openai,omitempty"`
+		CCSwitchDefaultModelGemini       string          `json:"ccswitch_default_model_gemini,omitempty"`
+		CCSwitchDefaultModelAntigravity  string          `json:"ccswitch_default_model_antigravity,omitempty"`
+		CCSwitchDefaultModelAntigravityGemini string     `json:"ccswitch_default_model_antigravity_gemini,omitempty"`
 		PurchaseSubscriptionEnabled      bool            `json:"purchase_subscription_enabled"`
 		PurchaseSubscriptionURL          string          `json:"purchase_subscription_url,omitempty"`
 		TableDefaultPageSize             int             `json:"table_default_page_size"`
@@ -507,6 +522,11 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		DocURL:                           settings.DocURL,
 		HomeContent:                      settings.HomeContent,
 		HideCcsImportButton:              settings.HideCcsImportButton,
+		CCSwitchDefaultModelAnthropic:    settings.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:       settings.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:       settings.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:  settings.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini: settings.CCSwitchDefaultModelAntigravityGemini,
 		PurchaseSubscriptionEnabled:      settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:          settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:             settings.TableDefaultPageSize,
@@ -938,6 +958,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyDocURL] = settings.DocURL
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
+	updates[SettingKeyCCSwitchDefaultModelAnthropic] = strings.TrimSpace(settings.CCSwitchDefaultModelAnthropic)
+	updates[SettingKeyCCSwitchDefaultModelOpenAI] = firstNonEmpty(strings.TrimSpace(settings.CCSwitchDefaultModelOpenAI), "gpt-5.4")
+	updates[SettingKeyCCSwitchDefaultModelGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelGemini)
+	updates[SettingKeyCCSwitchDefaultModelAntigravity] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravity)
+	updates[SettingKeyCCSwitchDefaultModelAntigravityGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravityGemini)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(
@@ -1482,6 +1507,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyFallbackModelOpenAI:      "gpt-4o",
 		SettingKeyFallbackModelGemini:      "gemini-2.5-pro",
 		SettingKeyFallbackModelAntigravity: "gemini-2.5-pro",
+		// CCSwitch import defaults
+		SettingKeyCCSwitchDefaultModelAnthropic:         "",
+		SettingKeyCCSwitchDefaultModelOpenAI:            "gpt-5.4",
+		SettingKeyCCSwitchDefaultModelGemini:            "",
+		SettingKeyCCSwitchDefaultModelAntigravity:       "",
+		SettingKeyCCSwitchDefaultModelAntigravityGemini: "",
 		// Identity patch defaults
 		SettingKeyEnableIdentityPatch: "true",
 		SettingKeyIdentityPatchPrompt: "",
@@ -1537,6 +1568,11 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		DocURL:                           settings[SettingKeyDocURL],
 		HomeContent:                      settings[SettingKeyHomeContent],
 		HideCcsImportButton:              settings[SettingKeyHideCcsImportButton] == "true",
+		CCSwitchDefaultModelAnthropic:    settings[SettingKeyCCSwitchDefaultModelAnthropic],
+		CCSwitchDefaultModelOpenAI:       s.getStringOrDefault(settings, SettingKeyCCSwitchDefaultModelOpenAI, "gpt-5.4"),
+		CCSwitchDefaultModelGemini:       settings[SettingKeyCCSwitchDefaultModelGemini],
+		CCSwitchDefaultModelAntigravity:  settings[SettingKeyCCSwitchDefaultModelAntigravity],
+		CCSwitchDefaultModelAntigravityGemini: settings[SettingKeyCCSwitchDefaultModelAntigravityGemini],
 		PurchaseSubscriptionEnabled:      settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:          strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
