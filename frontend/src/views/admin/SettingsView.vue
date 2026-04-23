@@ -2032,7 +2032,7 @@
                     </div>
                     <Toggle
                       v-model="form.oidc_connect_use_pkce"
-                      :disabled="true"
+                      data-testid="oidc-connect-use-pkce"
                     />
                   </div>
 
@@ -2046,7 +2046,7 @@
                     </div>
                     <Toggle
                       v-model="form.oidc_connect_validate_id_token"
-                      :disabled="true"
+                      data-testid="oidc-connect-validate-id-token"
                     />
                   </div>
 
@@ -3285,6 +3285,79 @@
                 </p>
               </div>
 
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelOpenAI") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_openai"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelOpenAIPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelOpenAIHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAnthropic") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_anthropic"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelAnthropicPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAnthropicHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelGemini") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_gemini"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelGeminiPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelGeminiHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravity") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_antigravity"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelAntigravityPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravityHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravityGemini") }}
+                  </label>
+                  <input
+                    v-model="form.ccswitch_default_model_antigravity_gemini"
+                    type="text"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.site.ccswitchDefaultModelAntigravityGeminiPlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.ccswitchDefaultModelAntigravityGeminiHint") }}
+                  </p>
+                </div>
+              </div>
+
               <!-- Global Table Preferences -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <h3 class="text-sm font-medium text-gray-900 dark:text-white">
@@ -3763,11 +3836,7 @@
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {{ t("admin.settings.payment.description") }}
                 <a
-                  :href="
-                    locale === 'zh'
-                      ? 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md'
-                      : 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md'
-                  "
+                  :href="paymentGuideHref"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="ml-2 inline-flex items-center text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
@@ -4140,11 +4209,7 @@
                   <p class="mt-2 text-xs text-gray-400 dark:text-gray-500">
                     {{ t("admin.settings.payment.enabledPaymentTypesHint") }}
                     <a
-                      :href="
-                        locale === 'zh'
-                          ? 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md#%E6%94%AF%E6%8C%81%E7%9A%84%E6%94%AF%E4%BB%98%E6%96%B9%E5%BC%8F'
-                          : 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md#supported-payment-methods'
-                      "
+                      :href="paymentMethodsHref"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="ml-1 text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"
@@ -4174,6 +4239,8 @@
                     }}</label>
                     <ImageUpload
                       v-model="form.payment_help_image_url"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
                       :placeholder="
                         t('admin.settings.payment.helpImagePlaceholder')
                       "
@@ -4729,6 +4796,18 @@ function localText(zh: string, en: string): string {
   return locale.value.startsWith("zh") ? zh : en;
 }
 
+const paymentGuideHref = computed(() =>
+  locale.value.startsWith("zh")
+    ? "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md"
+    : "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md",
+);
+
+const paymentMethodsHref = computed(() =>
+  locale.value.startsWith("zh")
+    ? "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md#支持的支付方式"
+    : "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md#supported-payment-methods",
+);
+
 type SettingsTab =
   | "general"
   | "security"
@@ -4870,6 +4949,11 @@ const form = reactive<SettingsForm>({
   home_content: "",
   backend_mode_enabled: false,
   hide_ccs_import_button: false,
+  ccswitch_default_model_anthropic: "",
+  ccswitch_default_model_openai: "gpt-5.4",
+  ccswitch_default_model_gemini: "",
+  ccswitch_default_model_antigravity: "",
+  ccswitch_default_model_antigravity_gemini: "",
   payment_enabled: false,
   payment_min_amount: 1,
   payment_max_amount: 10000,
@@ -4961,8 +5045,8 @@ const form = reactive<SettingsForm>({
   oidc_connect_redirect_url: "",
   oidc_connect_frontend_redirect_url: "/auth/oidc/callback",
   oidc_connect_token_auth_method: "client_secret_post",
-  oidc_connect_use_pkce: true,
-  oidc_connect_validate_id_token: true,
+  oidc_connect_use_pkce: false,
+  oidc_connect_validate_id_token: false,
   oidc_connect_allowed_signing_algs: "RS256,ES256,PS256",
   oidc_connect_clock_skew_seconds: 120,
   oidc_connect_require_email_verified: false,
@@ -5786,6 +5870,12 @@ async function saveSettings() {
       home_content: form.home_content,
       backend_mode_enabled: form.backend_mode_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
+      ccswitch_default_model_anthropic: form.ccswitch_default_model_anthropic,
+      ccswitch_default_model_openai: form.ccswitch_default_model_openai,
+      ccswitch_default_model_gemini: form.ccswitch_default_model_gemini,
+      ccswitch_default_model_antigravity: form.ccswitch_default_model_antigravity,
+      ccswitch_default_model_antigravity_gemini:
+        form.ccswitch_default_model_antigravity_gemini,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,
@@ -5846,8 +5936,8 @@ async function saveSettings() {
       oidc_connect_frontend_redirect_url:
         form.oidc_connect_frontend_redirect_url,
       oidc_connect_token_auth_method: form.oidc_connect_token_auth_method,
-      oidc_connect_use_pkce: true,
-      oidc_connect_validate_id_token: true,
+      oidc_connect_use_pkce: form.oidc_connect_use_pkce,
+      oidc_connect_validate_id_token: form.oidc_connect_validate_id_token,
       oidc_connect_allowed_signing_algs: form.oidc_connect_allowed_signing_algs,
       oidc_connect_clock_skew_seconds: form.oidc_connect_clock_skew_seconds,
       oidc_connect_require_email_verified:
