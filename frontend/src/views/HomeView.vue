@@ -470,7 +470,7 @@
 
     <section id="support" class="order-5 border-t border-gray-200 bg-white px-6 py-14 dark:border-dark-800 dark:bg-dark-950">
       <div class="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-        <div>
+        <div class="min-w-0">
           <div class="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-600 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300">
             <Icon name="chatBubble" size="lg" />
           </div>
@@ -482,27 +482,29 @@
           </p>
         </div>
 
-        <div v-if="contactChannels.length > 0" class="grid gap-3 sm:grid-cols-2">
+        <div v-if="contactChannels.length > 0" class="grid min-w-0 gap-3 sm:grid-cols-2">
           <button
             v-for="channel in contactChannels"
             :key="`${channel.label}-${channel.url}`"
-            class="group flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-left transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-dark-700 dark:bg-dark-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/30"
+            class="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-left transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-dark-700 dark:bg-dark-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/30"
             @click="openContact(channel.url)"
           >
-            <span>
+            <span class="min-w-0">
               <span class="block text-sm font-semibold text-gray-900 dark:text-white">{{ channel.label }}</span>
-              <span class="mt-1 block max-w-[18rem] truncate text-xs text-gray-500 dark:text-dark-400">{{ channel.url }}</span>
+              <span class="mt-1 block break-all text-xs leading-relaxed text-gray-500 dark:text-dark-400">{{ channel.url }}</span>
             </span>
-            <Icon name="externalLink" size="sm" class="text-gray-400 transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-300" />
+            <Icon name="externalLink" size="sm" class="shrink-0 text-gray-400 transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-300" />
           </button>
         </div>
 
         <div
           v-else-if="fallbackContactInfo"
-          class="rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-sm font-medium text-gray-700 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-200"
+          class="min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-sm font-medium text-gray-700 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-200"
         >
-          <span class="text-gray-500 dark:text-dark-400">{{ copy.supportFallbackLabel }}：</span>
-          {{ fallbackContactInfo }}
+          <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-dark-400">{{ copy.supportFallbackLabel }}</span>
+          <span class="mt-2 block whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere]">
+            {{ fallbackContactInfo }}
+          </span>
         </div>
       </div>
     </section>
@@ -819,7 +821,7 @@ const zhCopy: HomeCopy = {
   visionAuthor: 'Lumio · OPC 创业团队',
   visionCta: '加入我们的愿景',
   supportTitle: '技术支持',
-  supportSubtitle: '选择后台配置的联系渠道，直接加入 QQ 群、飞书群或 Telegram 群获取支持。',
+  supportSubtitle: '选择任意联系渠道，直接加入 QQ 群、飞书群或 Telegram 群获取支持。',
   supportFallbackLabel: '客服联系方式',
   docsLabel: '文档'
 }
@@ -916,7 +918,7 @@ const enCopy: HomeCopy = {
   visionAuthor: 'Lumio · OPC founding team',
   visionCta: 'Join the vision',
   supportTitle: 'Support',
-  supportSubtitle: 'Use the configured contact channels to reach the support community directly.',
+  supportSubtitle: 'Choose any contact channel to reach the support community directly.',
   supportFallbackLabel: 'Contact',
   docsLabel: 'Docs'
 }
