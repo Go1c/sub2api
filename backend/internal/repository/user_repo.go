@@ -403,6 +403,59 @@ func (r *userRepository) List(ctx context.Context, params pagination.PaginationP
 	return r.ListWithFilters(ctx, params, service.UserListFilters{})
 }
 
+func (r *userRepository) GetBalanceSummary(ctx context.Context, limit int) (*service.UserBalanceSummary, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	userCount, err := r.client.User.Query().Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var sumRows []struct {
+		Sum sql.NullFloat64 `json:"sum"`
+	}
+	if err := r.client.User.Query().
+		Aggregate(dbent.As(dbent.Sum(dbuser.FieldBalance), "sum")).
+		Scan(ctx, &sumRows); err != nil {
+		return nil, err
+	}
+
+	totalBalance := 0.0
+	if len(sumRows) > 0 && sumRows[0].Sum.Valid {
+		totalBalance = sumRows[0].Sum.Float64
+	}
+
+	users, err := r.client.User.Query().
+		Order(dbent.Desc(dbuser.FieldBalance), dbent.Asc(dbuser.FieldID)).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ranking := make([]service.UserBalanceRankingItem, 0, len(users))
+	for i := range users {
+		ranking = append(ranking, service.UserBalanceRankingItem{
+			UserID:   users[i].ID,
+			Email:    users[i].Email,
+			Username: users[i].Username,
+			Status:   users[i].Status,
+			Balance:  users[i].Balance,
+		})
+	}
+
+	return &service.UserBalanceSummary{
+		TotalBalance: totalBalance,
+		UserCount:    int64(userCount),
+		Ranking:      ranking,
+	}, nil
+}
+
 func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters service.UserListFilters) ([]service.User, *pagination.PaginationResult, error) {
 	q := r.client.User.Query()
 

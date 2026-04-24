@@ -44,6 +44,20 @@ export interface AdminBoundAuthIdentity {
   channel?: AdminBoundAuthIdentityChannel | null
 }
 
+export interface UserBalanceRankingItem {
+  user_id: number
+  email: string
+  username: string
+  status: 'active' | 'disabled'
+  balance: number
+}
+
+export interface UserBalanceSummary {
+  total_balance: number
+  user_count: number
+  ranking: UserBalanceRankingItem[]
+}
+
 /**
  * List all users with pagination
  * @param page - Page number (default: 1)
@@ -93,6 +107,18 @@ export async function list(
   const { data } = await apiClient.get<PaginatedResponse<AdminUser>>('/admin/users', {
     params,
     signal: options?.signal
+  })
+  return data
+}
+
+/**
+ * Get total user balance and top balance ranking.
+ * @param limit - Maximum ranking rows (default: 20)
+ * @returns User balance summary
+ */
+export async function getBalanceSummary(limit: number = 20): Promise<UserBalanceSummary> {
+  const { data } = await apiClient.get<UserBalanceSummary>('/admin/users/balance-summary', {
+    params: { limit }
   })
   return data
 }
@@ -308,6 +334,7 @@ export const usersAPI = {
   toggleStatus,
   getUserApiKeys,
   getUserUsageStats,
+  getBalanceSummary,
   getUserBalanceHistory,
   replaceGroup,
   bindUserAuthIdentity

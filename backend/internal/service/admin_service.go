@@ -26,6 +26,7 @@ import (
 type AdminService interface {
 	// User management
 	ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error)
+	GetUserBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error)
 	GetUser(ctx context.Context, id int64) (*User, error)
 	CreateUser(ctx context.Context, input *CreateUserInput) (*User, error)
 	UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error)
@@ -516,6 +517,10 @@ type userGroupRateBatchReader interface {
 	GetByUserIDs(ctx context.Context, userIDs []int64) (map[int64]map[int64]float64, error)
 }
 
+type userBalanceSummaryRepository interface {
+	GetBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error)
+}
+
 // NewAdminService creates a new AdminService
 func NewAdminService(
 	userRepo UserRepository,
@@ -601,6 +606,14 @@ func (s *adminServiceImpl) ListUsers(ctx context.Context, page, pageSize int, fi
 		}
 	}
 	return users, result.Total, nil
+}
+
+func (s *adminServiceImpl) GetUserBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error) {
+	repo, ok := s.userRepo.(userBalanceSummaryRepository)
+	if !ok {
+		return nil, fmt.Errorf("user balance summary repository is not available")
+	}
+	return repo.GetBalanceSummary(ctx, limit)
 }
 
 func (s *adminServiceImpl) loadUserGroupRatesOneByOne(ctx context.Context, users []User) {

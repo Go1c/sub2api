@@ -122,6 +122,58 @@ func TestUserRepositoryUpdateRejectsNormalizedEmailDuplicate(t *testing.T) {
 	require.ErrorIs(t, err, service.ErrEmailExists)
 }
 
+func TestUserRepositoryGetBalanceSummaryTotalsAndRanksTopUsers(t *testing.T) {
+	repo, _ := newUserEntRepo(t)
+	ctx := context.Background()
+
+	require.NoError(t, repo.Create(ctx, &service.User{
+		Email:        "high@example.com",
+		Username:     "high",
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Balance:      12.82,
+	}))
+	require.NoError(t, repo.Create(ctx, &service.User{
+		Email:        "mid@example.com",
+		Username:     "mid",
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusDisabled,
+		Balance:      5.5,
+	}))
+	require.NoError(t, repo.Create(ctx, &service.User{
+		Email:        "zero@example.com",
+		Username:     "zero",
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Balance:      0,
+	}))
+
+	summary, err := repo.GetBalanceSummary(ctx, 2)
+	require.NoError(t, err)
+	require.InDelta(t, 18.32, summary.TotalBalance, 0.0001)
+	require.Equal(t, int64(3), summary.UserCount)
+	require.Len(t, summary.Ranking, 2)
+	require.Equal(t, "high@example.com", summary.Ranking[0].Email)
+	require.Equal(t, 12.82, summary.Ranking[0].Balance)
+	require.Equal(t, "mid@example.com", summary.Ranking[1].Email)
+	require.Equal(t, 5.5, summary.Ranking[1].Balance)
+	require.Equal(t, service.StatusDisabled, summary.Ranking[1].Status)
+}
+
+func TestUserRepositoryGetBalanceSummaryEmpty(t *testing.T) {
+	repo, _ := newUserEntRepo(t)
+	ctx := context.Background()
+
+	summary, err := repo.GetBalanceSummary(ctx, 20)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, summary.TotalBalance)
+	require.Equal(t, int64(0), summary.UserCount)
+	require.Empty(t, summary.Ranking)
+}
+
 func TestUserRepositoryGetByEmailReportsNormalizedEmailConflict(t *testing.T) {
 	repo, client := newUserEntRepo(t)
 	ctx := context.Background()
