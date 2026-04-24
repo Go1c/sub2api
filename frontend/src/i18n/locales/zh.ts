@@ -5189,7 +5189,7 @@ export default {
           contentPlaceholder: '# 文档\n\n在这里编写 Markdown 内容。',
           contentHint: '支持 Markdown，保存后可通过 /doc/文档 访问。',
           required: '公开页面需要填写标识、标题和访问路径',
-          invalidSlug: '公开页面路径不能包含 ?、#、反斜杠、连续斜杠或 ..'
+          invalidSlug: '公开页面路径必须以 doc/ 开头，且不能包含 ?、#、反斜杠、连续斜杠或 ..'
         },
         siteLogo: '站点Logo',
         uploadImage: '上传图片',

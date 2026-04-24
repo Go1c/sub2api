@@ -522,7 +522,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ContactInfo:                           settings[SettingKeyContactInfo],
 		ContactChannels:                       settings[SettingKeyContactChannels],
 		DocURL:                                settings[SettingKeyDocURL],
-		SitePages:                             settings[SettingKeySitePages],
+		SitePages:                             string(filterEnabledSitePages(settings[SettingKeySitePages])),
 		HomeContent:                           settings[SettingKeyHomeContent],
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
 		CCSwitchDefaultModelAnthropic:         strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
@@ -853,6 +853,45 @@ func filterUserVisibleMenuItems(raw string) json.RawMessage {
 	if len(filtered) == 0 {
 		return json.RawMessage("[]")
 	}
+	result, err := json.Marshal(filtered)
+	if err != nil {
+		return json.RawMessage("[]")
+	}
+	return result
+}
+
+// filterEnabledSitePages removes explicitly disabled public markdown pages.
+// Pages without an enabled field are kept for compatibility with older saved
+// settings where missing enabled was treated as visible by the frontend.
+func filterEnabledSitePages(raw string) json.RawMessage {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return json.RawMessage("[]")
+	}
+
+	var items []struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return json.RawMessage("[]")
+	}
+
+	var fullItems []json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &fullItems); err != nil || len(fullItems) != len(items) {
+		return json.RawMessage("[]")
+	}
+
+	filtered := make([]json.RawMessage, 0, len(fullItems))
+	for i, item := range items {
+		if item.Enabled != nil && !*item.Enabled {
+			continue
+		}
+		filtered = append(filtered, fullItems[i])
+	}
+	if len(filtered) == 0 {
+		return json.RawMessage("[]")
+	}
+
 	result, err := json.Marshal(filtered)
 	if err != nil {
 		return json.RawMessage("[]")

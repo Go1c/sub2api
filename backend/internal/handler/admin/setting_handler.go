@@ -1074,6 +1074,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		maxSitePageTitle   = 80
 		maxSitePageSlug    = 120
 		maxSitePageContent = 200000
+		sitePageSlugPrefix = "doc/"
 	)
 
 	sitePagesJSON := previousSettings.SitePages
@@ -1115,6 +1116,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return
 			}
 			if len(pages[i].Slug) > maxSitePageSlug ||
+				!strings.HasPrefix(pages[i].Slug, sitePageSlugPrefix) ||
 				strings.ContainsAny(pages[i].Slug, "?#\\") ||
 				strings.Contains(pages[i].Slug, "//") ||
 				strings.Contains(pages[i].Slug, "..") {

@@ -6602,6 +6602,7 @@ async function saveSettings() {
         return;
       }
       if (
+        !page.slug.startsWith("doc/") ||
         page.slug.includes("?") ||
         page.slug.includes("#") ||
         page.slug.includes("\\") ||

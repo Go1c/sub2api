@@ -5030,7 +5030,7 @@ export default {
           contentPlaceholder: '# Docs\n\nWrite Markdown content here.',
           contentHint: 'Markdown is supported. After saving, the page is available under its path.',
           required: 'Public pages require a key, title, and path',
-          invalidSlug: 'Public page path cannot contain ?, #, backslash, double slash, or ..'
+          invalidSlug: 'Public page path must start with doc/ and cannot contain ?, #, backslash, double slash, or ..'
         },
         siteLogo: 'Site Logo',
         uploadImage: 'Upload Image',
