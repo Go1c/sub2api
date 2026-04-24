@@ -305,7 +305,7 @@
         </span>
       </h2>
 
-      <p class="mb-6 mt-4 text-center text-gray-600 dark:text-dark-300">{{ copy.pricingNote }}</p>
+      <p class="mb-6 mt-4 text-center text-gray-600 dark:text-dark-300">{{ pricingNote }}</p>
 
       <div class="mb-16 text-center">
         <span class="inline-block rounded-full border border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 text-sm font-medium text-blue-700 dark:border-blue-900/40 dark:from-blue-950/40 dark:to-purple-950/40 dark:text-blue-300">
@@ -332,7 +332,7 @@
               </thead>
               <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
                 <tr
-                  v-for="row in copy.pricingRows"
+                  v-for="row in pricingRows"
                   :key="row.model"
                   :class="['transition-all duration-200', pricingTone(row).row]"
                 >
@@ -471,6 +471,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { getPublicPricing, type PublicPricingConfig, type PublicPricingRow } from '@/api/pricing'
 
 type HomeIconName =
   | 'sparkles'
@@ -663,7 +664,7 @@ const zhCopy: HomeCopy = {
   pricingTitleLead: '模型',
   pricingTitleAccent: '定价',
   pricingNote: '官方原价以美元（$）标注 · 汇率按 1:7 折算 · 单位：百万 tokens',
-  pricingBadge: '最低可达官方价格的 0.1 折',
+  pricingBadge: '价格与折扣支持管理员后台配置',
   pricingCols: {
     model: '模型',
     group: '分组',
@@ -678,11 +679,8 @@ const zhCopy: HomeCopy = {
   pricingRows: [
     { model: 'Claude Opus 4.7', group: '企业稳定版', officialInput: 15, officialOutput: 75, inputPrice: 3.5, outputPrice: 17.5, discount: '3.3%', tone: 'purple' },
     { model: 'Claude Sonnet 4.6', group: '企业稳定版', officialInput: 3, officialOutput: 15, inputPrice: 0.7, outputPrice: 3.5, discount: '3.3%', tone: 'purple' },
-    { model: 'Claude Haiku 4.5', group: '企业稳定版', officialInput: 0.4, officialOutput: 2, inputPrice: 0.09, outputPrice: 0.47, discount: '3.3%', tone: 'purple' },
-    { model: 'GPT-5.5 Turbo', group: 'OpenAI', officialInput: 5, officialOutput: 15, inputPrice: 0.35, outputPrice: 1.05, discount: '1.0%', tone: 'blue' },
-    { model: 'GPT-5.5', group: 'OpenAI', officialInput: 2.5, officialOutput: 10, inputPrice: 0.18, outputPrice: 0.7, discount: '1.0%', tone: 'blue' },
-    { model: 'Gemini 2.5 Pro', group: 'Google', officialInput: 1.25, officialOutput: 5, inputPrice: 0.09, outputPrice: 0.35, discount: '1.0%', tone: 'blue' },
-    { model: 'Gemini 2.0 Flash', group: 'Google', officialInput: 0.075, officialOutput: 0.3, inputPrice: 0.05, outputPrice: 0.21, discount: '10%', tone: 'green' }
+    { model: 'GPT5.5', group: 'OpenAI', officialInput: 2.5, officialOutput: 10, inputPrice: 0.18, outputPrice: 0.7, discount: '1.0%', tone: 'blue' },
+    { model: 'GPT5.4', group: 'OpenAI', officialInput: 2.5, officialOutput: 15, inputPrice: 0.18, outputPrice: 1.05, discount: '1.0%', tone: 'blue' }
   ],
   visionLead: '让每一个开发者都能以',
   visionHighlightOne: '可接受的价格',
@@ -754,7 +752,7 @@ const enCopy: HomeCopy = {
   pricingTitleLead: 'Model',
   pricingTitleAccent: 'pricing',
   pricingNote: 'Official list price is shown in USD · converted at 1:7 · unit: per million tokens',
-  pricingBadge: 'As low as 10% of the official price',
+  pricingBadge: 'Pricing and discounts are configurable in admin settings',
   pricingCols: {
     model: 'Model',
     group: 'Group',
@@ -769,11 +767,8 @@ const enCopy: HomeCopy = {
   pricingRows: [
     { model: 'Claude Opus 4.7', group: 'Enterprise', officialInput: 15, officialOutput: 75, inputPrice: 3.5, outputPrice: 17.5, discount: '3.3%', tone: 'purple' },
     { model: 'Claude Sonnet 4.6', group: 'Enterprise', officialInput: 3, officialOutput: 15, inputPrice: 0.7, outputPrice: 3.5, discount: '3.3%', tone: 'purple' },
-    { model: 'Claude Haiku 4.5', group: 'Enterprise', officialInput: 0.4, officialOutput: 2, inputPrice: 0.09, outputPrice: 0.47, discount: '3.3%', tone: 'purple' },
-    { model: 'GPT-5.5 Turbo', group: 'OpenAI', officialInput: 5, officialOutput: 15, inputPrice: 0.35, outputPrice: 1.05, discount: '1.0%', tone: 'blue' },
-    { model: 'GPT-5.5', group: 'OpenAI', officialInput: 2.5, officialOutput: 10, inputPrice: 0.18, outputPrice: 0.7, discount: '1.0%', tone: 'blue' },
-    { model: 'Gemini 2.5 Pro', group: 'Google', officialInput: 1.25, officialOutput: 5, inputPrice: 0.09, outputPrice: 0.35, discount: '1.0%', tone: 'blue' },
-    { model: 'Gemini 2.0 Flash', group: 'Google', officialInput: 0.075, officialOutput: 0.3, inputPrice: 0.05, outputPrice: 0.21, discount: '10%', tone: 'green' }
+    { model: 'GPT5.5', group: 'OpenAI', officialInput: 2.5, officialOutput: 10, inputPrice: 0.18, outputPrice: 0.7, discount: '1.0%', tone: 'blue' },
+    { model: 'GPT5.4', group: 'OpenAI', officialInput: 2.5, officialOutput: 15, inputPrice: 0.18, outputPrice: 1.05, discount: '1.0%', tone: 'blue' }
   ],
   visionLead: 'We want every developer to reach the world’s smartest AI with',
   visionHighlightOne: 'pricing they can accept',
@@ -786,6 +781,14 @@ const enCopy: HomeCopy = {
 }
 
 const copy = computed(() => (locale.value.startsWith('zh') ? zhCopy : enCopy))
+const publicPricing = ref<PublicPricingConfig | null>(null)
+const pricingNote = computed(() => publicPricing.value?.rateNote?.trim() || copy.value.pricingNote)
+const pricingRows = computed<PricingRow[]>(() => {
+  const configuredRows = publicPricing.value?.rows
+  const rows: Array<PricingRow | PublicPricingRow> =
+    configuredRows && configuredRows.length > 0 ? configuredRows : copy.value.pricingRows
+  return rows.map(toPricingRow)
+})
 
 const navItems = computed<NavItem[]>(() => [
   { ...copy.value.nav[0], target: '#features' },
@@ -889,6 +892,38 @@ function pricingTone(row: PricingRow) {
   }
 }
 
+function pricingToneForRow(row: Pick<PricingRow, 'model' | 'group'>): PricingRow['tone'] {
+  const text = `${row.model} ${row.group}`.toLowerCase()
+  if (text.includes('claude') || text.includes('opus') || text.includes('sonnet')) {
+    return 'purple'
+  }
+  if (text.includes('gemini') || text.includes('google')) {
+    return 'green'
+  }
+  return 'blue'
+}
+
+function toPricingRow(row: PricingRow | PublicPricingRow): PricingRow {
+  return {
+    model: row.model,
+    group: row.group,
+    officialInput: Number(row.officialInput) || 0,
+    officialOutput: Number(row.officialOutput) || 0,
+    inputPrice: Number(row.inputPrice) || 0,
+    outputPrice: Number(row.outputPrice) || 0,
+    discount: row.discount || '',
+    tone: 'tone' in row ? row.tone : pricingToneForRow(row)
+  }
+}
+
+async function loadPublicPricing() {
+  try {
+    publicPricing.value = await getPublicPricing()
+  } catch (error) {
+    console.warn('Failed to load public pricing', error)
+  }
+}
+
 function formatUsd(value: number) {
   const fixed = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(value < 0.1 ? 3 : 2)
   return `$${fixed.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.00$/, '')}`
@@ -906,6 +941,7 @@ function formatConverted(value: number) {
 onMounted(() => {
   initTheme()
   authStore.checkAuth()
+  void loadPublicPricing()
   if (!appStore.publicSettingsLoaded) {
     appStore.fetchPublicSettings()
   }

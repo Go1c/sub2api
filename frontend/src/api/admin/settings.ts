@@ -46,6 +46,26 @@ export interface WeChatConnectModeOption {
   labelEn: string;
 }
 
+export interface PublicModelPricingRow {
+  model: string;
+  group: string;
+  multiplier: string;
+  inputPrice: number;
+  outputPrice: number;
+  officialInput: number;
+  officialOutput: number;
+  discount: string;
+  openClaw: boolean;
+  enabled: boolean;
+}
+
+export interface PublicModelPricingConfig {
+  currency: string;
+  unit: string;
+  rateNote: string;
+  rows: PublicModelPricingRow[];
+}
+
 const AUTH_SOURCE_TYPES: AuthSourceType[] = [
   "email",
   "linuxdo",
@@ -750,6 +770,25 @@ export async function deleteAdminApiKey(): Promise<{ message: string }> {
   return data;
 }
 
+// ==================== Public Model Pricing ====================
+
+export async function getPublicModelPricing(): Promise<PublicModelPricingConfig> {
+  const { data } = await apiClient.get<PublicModelPricingConfig>(
+    "/admin/settings/public-model-pricing",
+  );
+  return data;
+}
+
+export async function updatePublicModelPricing(
+  config: PublicModelPricingConfig,
+): Promise<PublicModelPricingConfig> {
+  const { data } = await apiClient.put<PublicModelPricingConfig>(
+    "/admin/settings/public-model-pricing",
+    config,
+  );
+  return data;
+}
+
 // ==================== Overload Cooldown Settings ====================
 
 /**
@@ -971,6 +1010,8 @@ export const settingsAPI = {
   getAdminApiKey,
   regenerateAdminApiKey,
   deleteAdminApiKey,
+  getPublicModelPricing,
+  updatePublicModelPricing,
   getOverloadCooldownSettings,
   updateOverloadCooldownSettings,
   getStreamTimeoutSettings,

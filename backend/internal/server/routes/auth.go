@@ -174,6 +174,11 @@ func RegisterAuthRoutes(
 		settings.GET("/public", h.Setting.GetPublicSettings)
 	}
 
+	pricing := v1.Group("/pricing")
+	{
+		pricing.GET("/public", h.Setting.GetPublicModelPricing)
+	}
+
 	// 需要认证的当前用户信息
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
