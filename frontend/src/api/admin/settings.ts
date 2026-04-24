@@ -46,6 +46,26 @@ export interface WeChatConnectModeOption {
   labelEn: string;
 }
 
+export interface PublicModelPricingRow {
+  model: string;
+  group: string;
+  multiplier: string;
+  inputPrice: number;
+  outputPrice: number;
+  officialInput: number;
+  officialOutput: number;
+  discount: string;
+  openClaw: boolean;
+  enabled: boolean;
+}
+
+export interface PublicModelPricingConfig {
+  currency: string;
+  unit: string;
+  rateNote: string;
+  rows: PublicModelPricingRow[];
+}
+
 const AUTH_SOURCE_TYPES: AuthSourceType[] = [
   "email",
   "linuxdo",
@@ -309,6 +329,7 @@ export interface SystemSettings {
   // Default settings
   default_balance: number;
   default_concurrency: number;
+  default_user_rpm_limit: number;
   default_subscriptions: DefaultSubscriptionSetting[];
   auth_source_default_email_balance?: number;
   auth_source_default_email_concurrency?: number;
@@ -474,6 +495,13 @@ export interface SystemSettings {
   balance_low_notify_recharge_url: string;
   account_quota_notify_enabled: boolean;
   account_quota_notify_emails: NotifyEmailEntry[];
+
+  // Channel Monitor feature switch
+  channel_monitor_enabled: boolean;
+  channel_monitor_default_interval_seconds: number;
+
+  // Available Channels feature switch
+  available_channels_enabled: boolean;
 }
 
 export interface UpdateSettingsRequest {
@@ -487,6 +515,7 @@ export interface UpdateSettingsRequest {
   totp_enabled?: boolean; // TOTP 双因素认证
   default_balance?: number;
   default_concurrency?: number;
+  default_user_rpm_limit?: number;
   default_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_email_balance?: number;
   auth_source_default_email_concurrency?: number;
@@ -628,6 +657,13 @@ export interface UpdateSettingsRequest {
   balance_low_notify_recharge_url?: string;
   account_quota_notify_enabled?: boolean;
   account_quota_notify_emails?: NotifyEmailEntry[];
+
+  // Channel Monitor feature switch
+  channel_monitor_enabled?: boolean;
+  channel_monitor_default_interval_seconds?: number;
+
+  // Available Channels feature switch
+  available_channels_enabled?: boolean;
 }
 
 /**
@@ -746,6 +782,25 @@ export async function regenerateAdminApiKey(): Promise<{ key: string }> {
 export async function deleteAdminApiKey(): Promise<{ message: string }> {
   const { data } = await apiClient.delete<{ message: string }>(
     "/admin/settings/admin-api-key",
+  );
+  return data;
+}
+
+// ==================== Public Model Pricing ====================
+
+export async function getPublicModelPricing(): Promise<PublicModelPricingConfig> {
+  const { data } = await apiClient.get<PublicModelPricingConfig>(
+    "/admin/settings/public-model-pricing",
+  );
+  return data;
+}
+
+export async function updatePublicModelPricing(
+  config: PublicModelPricingConfig,
+): Promise<PublicModelPricingConfig> {
+  const { data } = await apiClient.put<PublicModelPricingConfig>(
+    "/admin/settings/public-model-pricing",
+    config,
   );
   return data;
 }
@@ -971,6 +1026,8 @@ export const settingsAPI = {
   getAdminApiKey,
   regenerateAdminApiKey,
   deleteAdminApiKey,
+  getPublicModelPricing,
+  updatePublicModelPricing,
   getOverloadCooldownSettings,
   updateOverloadCooldownSettings,
   getStreamTimeoutSettings,

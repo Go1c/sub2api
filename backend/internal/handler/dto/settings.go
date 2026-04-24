@@ -91,28 +91,29 @@ type SystemSettings struct {
 	OIDCConnectUserInfoIDPath         string `json:"oidc_connect_userinfo_id_path"`
 	OIDCConnectUserInfoUsernamePath   string `json:"oidc_connect_userinfo_username_path"`
 
-	SiteName                    string           `json:"site_name"`
-	SiteLogo                    string           `json:"site_logo"`
-	SiteSubtitle                string           `json:"site_subtitle"`
-	APIBaseURL                  string           `json:"api_base_url"`
-	ContactInfo                 string           `json:"contact_info"`
-	DocURL                      string           `json:"doc_url"`
-	HomeContent                 string           `json:"home_content"`
-	HideCcsImportButton         bool             `json:"hide_ccs_import_button"`
-	CCSwitchDefaultModelAnthropic string         `json:"ccswitch_default_model_anthropic"`
-	CCSwitchDefaultModelOpenAI    string         `json:"ccswitch_default_model_openai"`
-	CCSwitchDefaultModelGemini    string         `json:"ccswitch_default_model_gemini"`
-	CCSwitchDefaultModelAntigravity string       `json:"ccswitch_default_model_antigravity"`
-	CCSwitchDefaultModelAntigravityGemini string `json:"ccswitch_default_model_antigravity_gemini"`
-	PurchaseSubscriptionEnabled bool             `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL     string           `json:"purchase_subscription_url"`
-	TableDefaultPageSize        int              `json:"table_default_page_size"`
-	TablePageSizeOptions        []int            `json:"table_page_size_options"`
-	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
+	SiteName                              string           `json:"site_name"`
+	SiteLogo                              string           `json:"site_logo"`
+	SiteSubtitle                          string           `json:"site_subtitle"`
+	APIBaseURL                            string           `json:"api_base_url"`
+	ContactInfo                           string           `json:"contact_info"`
+	DocURL                                string           `json:"doc_url"`
+	HomeContent                           string           `json:"home_content"`
+	HideCcsImportButton                   bool             `json:"hide_ccs_import_button"`
+	CCSwitchDefaultModelAnthropic         string           `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI            string           `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini            string           `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity       string           `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini string           `json:"ccswitch_default_model_antigravity_gemini"`
+	PurchaseSubscriptionEnabled           bool             `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL               string           `json:"purchase_subscription_url"`
+	TableDefaultPageSize                  int              `json:"table_default_page_size"`
+	TablePageSizeOptions                  []int            `json:"table_page_size_options"`
+	CustomMenuItems                       []CustomMenuItem `json:"custom_menu_items"`
+	CustomEndpoints                       []CustomEndpoint `json:"custom_endpoints"`
 
 	DefaultConcurrency   int                          `json:"default_concurrency"`
 	DefaultBalance       float64                      `json:"default_balance"`
+	DefaultUserRPMLimit  int                          `json:"default_user_rpm_limit"`
 	DefaultSubscriptions []DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
@@ -188,6 +189,13 @@ type SystemSettings struct {
 	BalanceLowNotifyRechargeURL string             `json:"balance_low_notify_recharge_url"`
 	AccountQuotaNotifyEnabled   bool               `json:"account_quota_notify_enabled"`
 	AccountQuotaNotifyEmails    []NotifyEmailEntry `json:"account_quota_notify_emails"`
+
+	// Channel Monitor feature switch
+	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+
+	// Available Channels feature switch (user-facing aggregate view)
+	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 }
 
 type DefaultSubscriptionSetting struct {
@@ -196,50 +204,55 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
-	RegistrationEnabled              bool             `json:"registration_enabled"`
-	EmailVerifyEnabled               bool             `json:"email_verify_enabled"`
-	ForceEmailOnThirdPartySignup     bool             `json:"force_email_on_third_party_signup"`
-	RegistrationEmailSuffixWhitelist []string         `json:"registration_email_suffix_whitelist"`
-	PromoCodeEnabled                 bool             `json:"promo_code_enabled"`
-	PasswordResetEnabled             bool             `json:"password_reset_enabled"`
-	InvitationCodeEnabled            bool             `json:"invitation_code_enabled"`
-	TotpEnabled                      bool             `json:"totp_enabled"` // TOTP 双因素认证
-	TurnstileEnabled                 bool             `json:"turnstile_enabled"`
-	TurnstileSiteKey                 string           `json:"turnstile_site_key"`
-	SiteName                         string           `json:"site_name"`
-	SiteLogo                         string           `json:"site_logo"`
-	SiteSubtitle                     string           `json:"site_subtitle"`
-	APIBaseURL                       string           `json:"api_base_url"`
-	ContactInfo                      string           `json:"contact_info"`
-	DocURL                           string           `json:"doc_url"`
-	HomeContent                      string           `json:"home_content"`
-	HideCcsImportButton              bool             `json:"hide_ccs_import_button"`
-	CCSwitchDefaultModelAnthropic    string           `json:"ccswitch_default_model_anthropic"`
-	CCSwitchDefaultModelOpenAI       string           `json:"ccswitch_default_model_openai"`
-	CCSwitchDefaultModelGemini       string           `json:"ccswitch_default_model_gemini"`
-	CCSwitchDefaultModelAntigravity  string           `json:"ccswitch_default_model_antigravity"`
-	CCSwitchDefaultModelAntigravityGemini string      `json:"ccswitch_default_model_antigravity_gemini"`
-	PurchaseSubscriptionEnabled      bool             `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL          string           `json:"purchase_subscription_url"`
-	TableDefaultPageSize             int              `json:"table_default_page_size"`
-	TablePageSizeOptions             []int            `json:"table_page_size_options"`
-	CustomMenuItems                  []CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints                  []CustomEndpoint `json:"custom_endpoints"`
-	LinuxDoOAuthEnabled              bool             `json:"linuxdo_oauth_enabled"`
-	WeChatOAuthEnabled               bool             `json:"wechat_oauth_enabled"`
-	WeChatOAuthOpenEnabled           bool             `json:"wechat_oauth_open_enabled"`
-	WeChatOAuthMPEnabled             bool             `json:"wechat_oauth_mp_enabled"`
-	WeChatOAuthMobileEnabled         bool             `json:"wechat_oauth_mobile_enabled"`
-	OIDCOAuthEnabled                 bool             `json:"oidc_oauth_enabled"`
-	OIDCOAuthProviderName            string           `json:"oidc_oauth_provider_name"`
-	SoraClientEnabled                bool             `json:"sora_client_enabled"`
-	BackendModeEnabled               bool             `json:"backend_mode_enabled"`
-	PaymentEnabled                   bool             `json:"payment_enabled"`
-	Version                          string           `json:"version"`
-	BalanceLowNotifyEnabled          bool             `json:"balance_low_notify_enabled"`
-	AccountQuotaNotifyEnabled        bool             `json:"account_quota_notify_enabled"`
-	BalanceLowNotifyThreshold        float64          `json:"balance_low_notify_threshold"`
-	BalanceLowNotifyRechargeURL      string           `json:"balance_low_notify_recharge_url"`
+	RegistrationEnabled                   bool             `json:"registration_enabled"`
+	EmailVerifyEnabled                    bool             `json:"email_verify_enabled"`
+	ForceEmailOnThirdPartySignup          bool             `json:"force_email_on_third_party_signup"`
+	RegistrationEmailSuffixWhitelist      []string         `json:"registration_email_suffix_whitelist"`
+	PromoCodeEnabled                      bool             `json:"promo_code_enabled"`
+	PasswordResetEnabled                  bool             `json:"password_reset_enabled"`
+	InvitationCodeEnabled                 bool             `json:"invitation_code_enabled"`
+	TotpEnabled                           bool             `json:"totp_enabled"` // TOTP 双因素认证
+	TurnstileEnabled                      bool             `json:"turnstile_enabled"`
+	TurnstileSiteKey                      string           `json:"turnstile_site_key"`
+	SiteName                              string           `json:"site_name"`
+	SiteLogo                              string           `json:"site_logo"`
+	SiteSubtitle                          string           `json:"site_subtitle"`
+	APIBaseURL                            string           `json:"api_base_url"`
+	ContactInfo                           string           `json:"contact_info"`
+	DocURL                                string           `json:"doc_url"`
+	HomeContent                           string           `json:"home_content"`
+	HideCcsImportButton                   bool             `json:"hide_ccs_import_button"`
+	CCSwitchDefaultModelAnthropic         string           `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI            string           `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini            string           `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity       string           `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini string           `json:"ccswitch_default_model_antigravity_gemini"`
+	PurchaseSubscriptionEnabled           bool             `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL               string           `json:"purchase_subscription_url"`
+	TableDefaultPageSize                  int              `json:"table_default_page_size"`
+	TablePageSizeOptions                  []int            `json:"table_page_size_options"`
+	CustomMenuItems                       []CustomMenuItem `json:"custom_menu_items"`
+	CustomEndpoints                       []CustomEndpoint `json:"custom_endpoints"`
+	LinuxDoOAuthEnabled                   bool             `json:"linuxdo_oauth_enabled"`
+	WeChatOAuthEnabled                    bool             `json:"wechat_oauth_enabled"`
+	WeChatOAuthOpenEnabled                bool             `json:"wechat_oauth_open_enabled"`
+	WeChatOAuthMPEnabled                  bool             `json:"wechat_oauth_mp_enabled"`
+	WeChatOAuthMobileEnabled              bool             `json:"wechat_oauth_mobile_enabled"`
+	OIDCOAuthEnabled                      bool             `json:"oidc_oauth_enabled"`
+	OIDCOAuthProviderName                 string           `json:"oidc_oauth_provider_name"`
+	SoraClientEnabled                     bool             `json:"sora_client_enabled"`
+	BackendModeEnabled                    bool             `json:"backend_mode_enabled"`
+	PaymentEnabled                        bool             `json:"payment_enabled"`
+	Version                               string           `json:"version"`
+	BalanceLowNotifyEnabled               bool             `json:"balance_low_notify_enabled"`
+	AccountQuotaNotifyEnabled             bool             `json:"account_quota_notify_enabled"`
+	BalanceLowNotifyThreshold             float64          `json:"balance_low_notify_threshold"`
+	BalanceLowNotifyRechargeURL           string           `json:"balance_low_notify_recharge_url"`
+
+	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+
+	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 }
 
 // OverloadCooldownSettings 529过载冷却配置 DTO

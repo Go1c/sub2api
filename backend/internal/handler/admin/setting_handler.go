@@ -190,6 +190,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		CustomEndpoints:                        dto.ParseCustomEndpoints(settings.CustomEndpoints),
 		DefaultConcurrency:                     settings.DefaultConcurrency,
 		DefaultBalance:                         settings.DefaultBalance,
+		DefaultUserRPMLimit:                    settings.DefaultUserRPMLimit,
 		DefaultSubscriptions:                   defaultSubscriptions,
 		EnableModelFallback:                    settings.EnableModelFallback,
 		FallbackModelAnthropic:                 settings.FallbackModelAnthropic,
@@ -240,6 +241,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PaymentCancelRateLimitWindow:           paymentCfg.CancelRateLimitWindow,
 		PaymentCancelRateLimitUnit:             paymentCfg.CancelRateLimitUnit,
 		PaymentCancelRateLimitMode:             paymentCfg.CancelRateLimitMode,
+
+		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
+		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
+
+		AvailableChannelsEnabled: settings.AvailableChannelsEnabled,
 	}
 	response.Success(c, systemSettingsResponseData(payload, authSourceDefaults))
 }
@@ -319,29 +325,30 @@ type UpdateSettingsRequest struct {
 	OIDCConnectUserInfoUsernamePath string `json:"oidc_connect_userinfo_username_path"`
 
 	// OEM设置
-	SiteName                    string                `json:"site_name"`
-	SiteLogo                    string                `json:"site_logo"`
-	SiteSubtitle                string                `json:"site_subtitle"`
-	APIBaseURL                  string                `json:"api_base_url"`
-	ContactInfo                 string                `json:"contact_info"`
-	DocURL                      string                `json:"doc_url"`
-	HomeContent                 string                `json:"home_content"`
-	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
-	CCSwitchDefaultModelAnthropic   string            `json:"ccswitch_default_model_anthropic"`
-	CCSwitchDefaultModelOpenAI      string            `json:"ccswitch_default_model_openai"`
-	CCSwitchDefaultModelGemini      string            `json:"ccswitch_default_model_gemini"`
-	CCSwitchDefaultModelAntigravity string            `json:"ccswitch_default_model_antigravity"`
-	CCSwitchDefaultModelAntigravityGemini string      `json:"ccswitch_default_model_antigravity_gemini"`
-	PurchaseSubscriptionEnabled *bool                 `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL     *string               `json:"purchase_subscription_url"`
-	TableDefaultPageSize        int                   `json:"table_default_page_size"`
-	TablePageSizeOptions        []int                 `json:"table_page_size_options"`
-	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
+	SiteName                              string                `json:"site_name"`
+	SiteLogo                              string                `json:"site_logo"`
+	SiteSubtitle                          string                `json:"site_subtitle"`
+	APIBaseURL                            string                `json:"api_base_url"`
+	ContactInfo                           string                `json:"contact_info"`
+	DocURL                                string                `json:"doc_url"`
+	HomeContent                           string                `json:"home_content"`
+	HideCcsImportButton                   bool                  `json:"hide_ccs_import_button"`
+	CCSwitchDefaultModelAnthropic         string                `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI            string                `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini            string                `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity       string                `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini string                `json:"ccswitch_default_model_antigravity_gemini"`
+	PurchaseSubscriptionEnabled           *bool                 `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL               *string               `json:"purchase_subscription_url"`
+	TableDefaultPageSize                  int                   `json:"table_default_page_size"`
+	TablePageSizeOptions                  []int                 `json:"table_page_size_options"`
+	CustomMenuItems                       *[]dto.CustomMenuItem `json:"custom_menu_items"`
+	CustomEndpoints                       *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
 	// 默认配置
 	DefaultConcurrency                       int                               `json:"default_concurrency"`
 	DefaultBalance                           float64                           `json:"default_balance"`
+	DefaultUserRPMLimit                      int                               `json:"default_user_rpm_limit"`
 	DefaultSubscriptions                     []dto.DefaultSubscriptionSetting  `json:"default_subscriptions"`
 	AuthSourceDefaultEmailBalance            *float64                          `json:"auth_source_default_email_balance"`
 	AuthSourceDefaultEmailConcurrency        *int                              `json:"auth_source_default_email_concurrency"`
@@ -435,6 +442,13 @@ type UpdateSettingsRequest struct {
 	PaymentCancelRateLimitWindow  *int    `json:"payment_cancel_rate_limit_window"`
 	PaymentCancelRateLimitUnit    *string `json:"payment_cancel_rate_limit_unit"`
 	PaymentCancelRateLimitMode    *string `json:"payment_cancel_rate_limit_window_mode"`
+
+	// Channel Monitor feature switch
+	ChannelMonitorEnabled                *bool `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds *int  `json:"channel_monitor_default_interval_seconds"`
+
+	// Available Channels feature switch (user-facing)
+	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
 }
 
 // UpdateSettings 更新系统设置
@@ -1039,99 +1053,100 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	settings := &service.SystemSettings{
-		RegistrationEnabled:              req.RegistrationEnabled,
-		EmailVerifyEnabled:               req.EmailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist: req.RegistrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                 req.PromoCodeEnabled,
-		PasswordResetEnabled:             req.PasswordResetEnabled,
-		FrontendURL:                      req.FrontendURL,
-		InvitationCodeEnabled:            req.InvitationCodeEnabled,
-		TotpEnabled:                      req.TotpEnabled,
-		SMTPHost:                         req.SMTPHost,
-		SMTPPort:                         req.SMTPPort,
-		SMTPUsername:                     req.SMTPUsername,
-		SMTPPassword:                     req.SMTPPassword,
-		SMTPFrom:                         req.SMTPFrom,
-		SMTPFromName:                     req.SMTPFromName,
-		SMTPUseTLS:                       req.SMTPUseTLS,
-		TurnstileEnabled:                 req.TurnstileEnabled,
-		TurnstileSiteKey:                 req.TurnstileSiteKey,
-		TurnstileSecretKey:               req.TurnstileSecretKey,
-		LinuxDoConnectEnabled:            req.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID:           req.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecret:       req.LinuxDoConnectClientSecret,
-		LinuxDoConnectRedirectURL:        req.LinuxDoConnectRedirectURL,
-		WeChatConnectEnabled:             req.WeChatConnectEnabled,
-		WeChatConnectAppID:               req.WeChatConnectAppID,
-		WeChatConnectAppSecret:           req.WeChatConnectAppSecret,
-		WeChatConnectOpenAppID:           req.WeChatConnectOpenAppID,
-		WeChatConnectOpenAppSecret:       req.WeChatConnectOpenAppSecret,
-		WeChatConnectMPAppID:             req.WeChatConnectMPAppID,
-		WeChatConnectMPAppSecret:         req.WeChatConnectMPAppSecret,
-		WeChatConnectMobileAppID:         req.WeChatConnectMobileAppID,
-		WeChatConnectMobileAppSecret:     req.WeChatConnectMobileAppSecret,
-		WeChatConnectOpenEnabled:         req.WeChatConnectOpenEnabled,
-		WeChatConnectMPEnabled:           req.WeChatConnectMPEnabled,
-		WeChatConnectMobileEnabled:       req.WeChatConnectMobileEnabled,
-		WeChatConnectMode:                req.WeChatConnectMode,
-		WeChatConnectScopes:              req.WeChatConnectScopes,
-		WeChatConnectRedirectURL:         req.WeChatConnectRedirectURL,
-		WeChatConnectFrontendRedirectURL: req.WeChatConnectFrontendRedirectURL,
-		OIDCConnectEnabled:               req.OIDCConnectEnabled,
-		OIDCConnectProviderName:          req.OIDCConnectProviderName,
-		OIDCConnectClientID:              req.OIDCConnectClientID,
-		OIDCConnectClientSecret:          req.OIDCConnectClientSecret,
-		OIDCConnectIssuerURL:             req.OIDCConnectIssuerURL,
-		OIDCConnectDiscoveryURL:          req.OIDCConnectDiscoveryURL,
-		OIDCConnectAuthorizeURL:          req.OIDCConnectAuthorizeURL,
-		OIDCConnectTokenURL:              req.OIDCConnectTokenURL,
-		OIDCConnectUserInfoURL:           req.OIDCConnectUserInfoURL,
-		OIDCConnectJWKSURL:               req.OIDCConnectJWKSURL,
-		OIDCConnectScopes:                req.OIDCConnectScopes,
-		OIDCConnectRedirectURL:           req.OIDCConnectRedirectURL,
-		OIDCConnectFrontendRedirectURL:   req.OIDCConnectFrontendRedirectURL,
-		OIDCConnectTokenAuthMethod:       req.OIDCConnectTokenAuthMethod,
-		OIDCConnectUsePKCE:               oidcUsePKCE,
-		OIDCConnectValidateIDToken:       oidcValidateIDToken,
-		OIDCConnectAllowedSigningAlgs:    req.OIDCConnectAllowedSigningAlgs,
-		OIDCConnectClockSkewSeconds:      req.OIDCConnectClockSkewSeconds,
-		OIDCConnectRequireEmailVerified:  req.OIDCConnectRequireEmailVerified,
-		OIDCConnectUserInfoEmailPath:     req.OIDCConnectUserInfoEmailPath,
-		OIDCConnectUserInfoIDPath:        req.OIDCConnectUserInfoIDPath,
-		OIDCConnectUserInfoUsernamePath:  req.OIDCConnectUserInfoUsernamePath,
-		SiteName:                         req.SiteName,
-		SiteLogo:                         req.SiteLogo,
-		SiteSubtitle:                     req.SiteSubtitle,
-		APIBaseURL:                       req.APIBaseURL,
-		ContactInfo:                      req.ContactInfo,
-		DocURL:                           req.DocURL,
-		HomeContent:                      req.HomeContent,
-		HideCcsImportButton:              req.HideCcsImportButton,
-		CCSwitchDefaultModelAnthropic:    req.CCSwitchDefaultModelAnthropic,
-		CCSwitchDefaultModelOpenAI:       req.CCSwitchDefaultModelOpenAI,
-		CCSwitchDefaultModelGemini:       req.CCSwitchDefaultModelGemini,
-		CCSwitchDefaultModelAntigravity:  req.CCSwitchDefaultModelAntigravity,
+		RegistrationEnabled:                   req.RegistrationEnabled,
+		EmailVerifyEnabled:                    req.EmailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:      req.RegistrationEmailSuffixWhitelist,
+		PromoCodeEnabled:                      req.PromoCodeEnabled,
+		PasswordResetEnabled:                  req.PasswordResetEnabled,
+		FrontendURL:                           req.FrontendURL,
+		InvitationCodeEnabled:                 req.InvitationCodeEnabled,
+		TotpEnabled:                           req.TotpEnabled,
+		SMTPHost:                              req.SMTPHost,
+		SMTPPort:                              req.SMTPPort,
+		SMTPUsername:                          req.SMTPUsername,
+		SMTPPassword:                          req.SMTPPassword,
+		SMTPFrom:                              req.SMTPFrom,
+		SMTPFromName:                          req.SMTPFromName,
+		SMTPUseTLS:                            req.SMTPUseTLS,
+		TurnstileEnabled:                      req.TurnstileEnabled,
+		TurnstileSiteKey:                      req.TurnstileSiteKey,
+		TurnstileSecretKey:                    req.TurnstileSecretKey,
+		LinuxDoConnectEnabled:                 req.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID:                req.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecret:            req.LinuxDoConnectClientSecret,
+		LinuxDoConnectRedirectURL:             req.LinuxDoConnectRedirectURL,
+		WeChatConnectEnabled:                  req.WeChatConnectEnabled,
+		WeChatConnectAppID:                    req.WeChatConnectAppID,
+		WeChatConnectAppSecret:                req.WeChatConnectAppSecret,
+		WeChatConnectOpenAppID:                req.WeChatConnectOpenAppID,
+		WeChatConnectOpenAppSecret:            req.WeChatConnectOpenAppSecret,
+		WeChatConnectMPAppID:                  req.WeChatConnectMPAppID,
+		WeChatConnectMPAppSecret:              req.WeChatConnectMPAppSecret,
+		WeChatConnectMobileAppID:              req.WeChatConnectMobileAppID,
+		WeChatConnectMobileAppSecret:          req.WeChatConnectMobileAppSecret,
+		WeChatConnectOpenEnabled:              req.WeChatConnectOpenEnabled,
+		WeChatConnectMPEnabled:                req.WeChatConnectMPEnabled,
+		WeChatConnectMobileEnabled:            req.WeChatConnectMobileEnabled,
+		WeChatConnectMode:                     req.WeChatConnectMode,
+		WeChatConnectScopes:                   req.WeChatConnectScopes,
+		WeChatConnectRedirectURL:              req.WeChatConnectRedirectURL,
+		WeChatConnectFrontendRedirectURL:      req.WeChatConnectFrontendRedirectURL,
+		OIDCConnectEnabled:                    req.OIDCConnectEnabled,
+		OIDCConnectProviderName:               req.OIDCConnectProviderName,
+		OIDCConnectClientID:                   req.OIDCConnectClientID,
+		OIDCConnectClientSecret:               req.OIDCConnectClientSecret,
+		OIDCConnectIssuerURL:                  req.OIDCConnectIssuerURL,
+		OIDCConnectDiscoveryURL:               req.OIDCConnectDiscoveryURL,
+		OIDCConnectAuthorizeURL:               req.OIDCConnectAuthorizeURL,
+		OIDCConnectTokenURL:                   req.OIDCConnectTokenURL,
+		OIDCConnectUserInfoURL:                req.OIDCConnectUserInfoURL,
+		OIDCConnectJWKSURL:                    req.OIDCConnectJWKSURL,
+		OIDCConnectScopes:                     req.OIDCConnectScopes,
+		OIDCConnectRedirectURL:                req.OIDCConnectRedirectURL,
+		OIDCConnectFrontendRedirectURL:        req.OIDCConnectFrontendRedirectURL,
+		OIDCConnectTokenAuthMethod:            req.OIDCConnectTokenAuthMethod,
+		OIDCConnectUsePKCE:                    oidcUsePKCE,
+		OIDCConnectValidateIDToken:            oidcValidateIDToken,
+		OIDCConnectAllowedSigningAlgs:         req.OIDCConnectAllowedSigningAlgs,
+		OIDCConnectClockSkewSeconds:           req.OIDCConnectClockSkewSeconds,
+		OIDCConnectRequireEmailVerified:       req.OIDCConnectRequireEmailVerified,
+		OIDCConnectUserInfoEmailPath:          req.OIDCConnectUserInfoEmailPath,
+		OIDCConnectUserInfoIDPath:             req.OIDCConnectUserInfoIDPath,
+		OIDCConnectUserInfoUsernamePath:       req.OIDCConnectUserInfoUsernamePath,
+		SiteName:                              req.SiteName,
+		SiteLogo:                              req.SiteLogo,
+		SiteSubtitle:                          req.SiteSubtitle,
+		APIBaseURL:                            req.APIBaseURL,
+		ContactInfo:                           req.ContactInfo,
+		DocURL:                                req.DocURL,
+		HomeContent:                           req.HomeContent,
+		HideCcsImportButton:                   req.HideCcsImportButton,
+		CCSwitchDefaultModelAnthropic:         req.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:            req.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:            req.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:       req.CCSwitchDefaultModelAntigravity,
 		CCSwitchDefaultModelAntigravityGemini: req.CCSwitchDefaultModelAntigravityGemini,
-		PurchaseSubscriptionEnabled:      purchaseEnabled,
-		PurchaseSubscriptionURL:          purchaseURL,
-		TableDefaultPageSize:             req.TableDefaultPageSize,
-		TablePageSizeOptions:             req.TablePageSizeOptions,
-		CustomMenuItems:                  customMenuJSON,
-		CustomEndpoints:                  customEndpointsJSON,
-		DefaultConcurrency:               req.DefaultConcurrency,
-		DefaultBalance:                   req.DefaultBalance,
-		DefaultSubscriptions:             defaultSubscriptions,
-		EnableModelFallback:              req.EnableModelFallback,
-		FallbackModelAnthropic:           req.FallbackModelAnthropic,
-		FallbackModelOpenAI:              req.FallbackModelOpenAI,
-		FallbackModelGemini:              req.FallbackModelGemini,
-		FallbackModelAntigravity:         req.FallbackModelAntigravity,
-		EnableIdentityPatch:              req.EnableIdentityPatch,
-		IdentityPatchPrompt:              req.IdentityPatchPrompt,
-		MinClaudeCodeVersion:             req.MinClaudeCodeVersion,
-		MaxClaudeCodeVersion:             req.MaxClaudeCodeVersion,
-		AllowUngroupedKeyScheduling:      req.AllowUngroupedKeyScheduling,
-		BackendModeEnabled:               req.BackendModeEnabled,
+		PurchaseSubscriptionEnabled:           purchaseEnabled,
+		PurchaseSubscriptionURL:               purchaseURL,
+		TableDefaultPageSize:                  req.TableDefaultPageSize,
+		TablePageSizeOptions:                  req.TablePageSizeOptions,
+		CustomMenuItems:                       customMenuJSON,
+		CustomEndpoints:                       customEndpointsJSON,
+		DefaultConcurrency:                    req.DefaultConcurrency,
+		DefaultBalance:                        req.DefaultBalance,
+		DefaultUserRPMLimit:                   req.DefaultUserRPMLimit,
+		DefaultSubscriptions:                  defaultSubscriptions,
+		EnableModelFallback:                   req.EnableModelFallback,
+		FallbackModelAnthropic:                req.FallbackModelAnthropic,
+		FallbackModelOpenAI:                   req.FallbackModelOpenAI,
+		FallbackModelGemini:                   req.FallbackModelGemini,
+		FallbackModelAntigravity:              req.FallbackModelAntigravity,
+		EnableIdentityPatch:                   req.EnableIdentityPatch,
+		IdentityPatchPrompt:                   req.IdentityPatchPrompt,
+		MinClaudeCodeVersion:                  req.MinClaudeCodeVersion,
+		MaxClaudeCodeVersion:                  req.MaxClaudeCodeVersion,
+		AllowUngroupedKeyScheduling:           req.AllowUngroupedKeyScheduling,
+		BackendModeEnabled:                    req.BackendModeEnabled,
 		OpsMonitoringEnabled: func() bool {
 			if req.OpsMonitoringEnabled != nil {
 				return *req.OpsMonitoringEnabled
@@ -1233,6 +1248,24 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return dto.NotifyEmailEntriesToService(*req.AccountQuotaNotifyEmails)
 			}
 			return previousSettings.AccountQuotaNotifyEmails
+		}(),
+		ChannelMonitorEnabled: func() bool {
+			if req.ChannelMonitorEnabled != nil {
+				return *req.ChannelMonitorEnabled
+			}
+			return previousSettings.ChannelMonitorEnabled
+		}(),
+		ChannelMonitorDefaultIntervalSeconds: func() int {
+			if req.ChannelMonitorDefaultIntervalSeconds != nil {
+				return *req.ChannelMonitorDefaultIntervalSeconds
+			}
+			return previousSettings.ChannelMonitorDefaultIntervalSeconds
+		}(),
+		AvailableChannelsEnabled: func() bool {
+			if req.AvailableChannelsEnabled != nil {
+				return *req.AvailableChannelsEnabled
+			}
+			return previousSettings.AvailableChannelsEnabled
 		}(),
 	}
 
@@ -1420,6 +1453,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		CCSwitchDefaultModelAntigravityGemini:  updatedSettings.CCSwitchDefaultModelAntigravityGemini,
 		DefaultConcurrency:                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                         updatedSettings.DefaultBalance,
+		DefaultUserRPMLimit:                    updatedSettings.DefaultUserRPMLimit,
 		DefaultSubscriptions:                   updatedDefaultSubscriptions,
 		EnableModelFallback:                    updatedSettings.EnableModelFallback,
 		FallbackModelAnthropic:                 updatedSettings.FallbackModelAnthropic,
@@ -1469,6 +1503,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PaymentCancelRateLimitWindow:           updatedPaymentCfg.CancelRateLimitWindow,
 		PaymentCancelRateLimitUnit:             updatedPaymentCfg.CancelRateLimitUnit,
 		PaymentCancelRateLimitMode:             updatedPaymentCfg.CancelRateLimitMode,
+
+		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
+		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
+
+		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
 	}
 	response.Success(c, systemSettingsResponseData(payload, updatedAuthSourceDefaults))
 }
@@ -1839,6 +1878,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if !equalNotifyEmailEntries(before.AccountQuotaNotifyEmails, after.AccountQuotaNotifyEmails) {
 		changed = append(changed, "account_quota_notify_emails")
+	}
+	if before.ChannelMonitorEnabled != after.ChannelMonitorEnabled {
+		changed = append(changed, "channel_monitor_enabled")
+	}
+	if before.ChannelMonitorDefaultIntervalSeconds != after.ChannelMonitorDefaultIntervalSeconds {
+		changed = append(changed, "channel_monitor_default_interval_seconds")
+	}
+	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
+		changed = append(changed, "available_channels_enabled")
 	}
 	changed = appendAuthSourceDefaultChanges(changed, beforeAuthSourceDefaults, afterAuthSourceDefaults)
 	return changed
@@ -2244,6 +2292,36 @@ func (h *SettingHandler) DeleteAdminAPIKey(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "Admin API key deleted"})
+}
+
+// GetPublicModelPricingSettings 获取首页公开模型定价配置
+// GET /api/v1/admin/settings/public-model-pricing
+func (h *SettingHandler) GetPublicModelPricingSettings(c *gin.Context) {
+	pricing, err := h.settingService.GetPublicModelPricing(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, pricing)
+}
+
+// UpdatePublicModelPricingSettings 更新首页公开模型定价配置
+// PUT /api/v1/admin/settings/public-model-pricing
+func (h *SettingHandler) UpdatePublicModelPricingSettings(c *gin.Context) {
+	var req service.PublicModelPricingConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	updated, err := h.settingService.SetPublicModelPricing(c.Request.Context(), req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, updated)
 }
 
 // GetOverloadCooldownSettings 获取529过载冷却配置

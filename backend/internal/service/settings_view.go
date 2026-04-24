@@ -89,28 +89,29 @@ type SystemSettings struct {
 	OIDCConnectUserInfoIDPath         string
 	OIDCConnectUserInfoUsernamePath   string
 
-	SiteName                    string
-	SiteLogo                    string
-	SiteSubtitle                string
-	APIBaseURL                  string
-	ContactInfo                 string
-	DocURL                      string
-	HomeContent                 string
-	HideCcsImportButton         bool
-	PurchaseSubscriptionEnabled bool
-	PurchaseSubscriptionURL     string
-	TableDefaultPageSize        int
-	TablePageSizeOptions        []int
-	CustomMenuItems             string // JSON array of custom menu items
-	CustomEndpoints             string // JSON array of custom endpoints
-	CCSwitchDefaultModelAnthropic      string
-	CCSwitchDefaultModelOpenAI         string
-	CCSwitchDefaultModelGemini         string
-	CCSwitchDefaultModelAntigravity    string
+	SiteName                              string
+	SiteLogo                              string
+	SiteSubtitle                          string
+	APIBaseURL                            string
+	ContactInfo                           string
+	DocURL                                string
+	HomeContent                           string
+	HideCcsImportButton                   bool
+	PurchaseSubscriptionEnabled           bool
+	PurchaseSubscriptionURL               string
+	TableDefaultPageSize                  int
+	TablePageSizeOptions                  []int
+	CustomMenuItems                       string // JSON array of custom menu items
+	CustomEndpoints                       string // JSON array of custom endpoints
+	CCSwitchDefaultModelAnthropic         string
+	CCSwitchDefaultModelOpenAI            string
+	CCSwitchDefaultModelGemini            string
+	CCSwitchDefaultModelAntigravity       string
 	CCSwitchDefaultModelAntigravityGemini string
 
 	DefaultConcurrency   int
 	DefaultBalance       float64
+	DefaultUserRPMLimit  int
 	DefaultSubscriptions []DefaultSubscriptionSetting
 
 	// Model fallback configuration
@@ -129,6 +130,13 @@ type SystemSettings struct {
 	OpsRealtimeMonitoringEnabled bool
 	OpsQueryModeDefault          string
 	OpsMetricsIntervalSeconds    int
+
+	// Channel Monitor feature
+	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+
+	// Available Channels feature (user-facing aggregate view)
+	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
 	// Claude Code version check
 	MinClaudeCodeVersion string
@@ -192,16 +200,16 @@ type PublicSettings struct {
 	HomeContent                      string
 	HideCcsImportButton              bool
 
-	PurchaseSubscriptionEnabled bool
-	PurchaseSubscriptionURL     string
-	TableDefaultPageSize        int
-	TablePageSizeOptions        []int
-	CustomMenuItems             string // JSON array of custom menu items
-	CustomEndpoints             string // JSON array of custom endpoints
-	CCSwitchDefaultModelAnthropic      string
-	CCSwitchDefaultModelOpenAI         string
-	CCSwitchDefaultModelGemini         string
-	CCSwitchDefaultModelAntigravity    string
+	PurchaseSubscriptionEnabled           bool
+	PurchaseSubscriptionURL               string
+	TableDefaultPageSize                  int
+	TablePageSizeOptions                  []int
+	CustomMenuItems                       string // JSON array of custom menu items
+	CustomEndpoints                       string // JSON array of custom endpoints
+	CCSwitchDefaultModelAnthropic         string
+	CCSwitchDefaultModelOpenAI            string
+	CCSwitchDefaultModelGemini            string
+	CCSwitchDefaultModelAntigravity       string
 	CCSwitchDefaultModelAntigravityGemini string
 
 	LinuxDoOAuthEnabled      bool
@@ -219,6 +227,33 @@ type PublicSettings struct {
 	AccountQuotaNotifyEnabled   bool
 	BalanceLowNotifyThreshold   float64
 	BalanceLowNotifyRechargeURL string
+
+	// Channel Monitor feature
+	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+
+	// Available Channels feature (user-facing aggregate view)
+	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+}
+
+type PublicModelPricingConfig struct {
+	Currency string                  `json:"currency"`
+	Unit     string                  `json:"unit"`
+	RateNote string                  `json:"rateNote"`
+	Rows     []PublicModelPricingRow `json:"rows"`
+}
+
+type PublicModelPricingRow struct {
+	Model          string  `json:"model"`
+	Group          string  `json:"group"`
+	Multiplier     string  `json:"multiplier"`
+	InputPrice     float64 `json:"inputPrice"`
+	OutputPrice    float64 `json:"outputPrice"`
+	OfficialInput  float64 `json:"officialInput"`
+	OfficialOutput float64 `json:"officialOutput"`
+	Discount       string  `json:"discount"`
+	OpenClaw       bool    `json:"openClaw"`
+	Enabled        bool    `json:"enabled"`
 }
 
 type WeChatConnectOAuthConfig struct {

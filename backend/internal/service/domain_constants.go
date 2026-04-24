@@ -154,30 +154,32 @@ const (
 	SettingKeyOIDCConnectUserInfoUsernamePath = "oidc_connect_userinfo_username_path"
 
 	// OEM设置
-	SettingKeySiteName                    = "site_name"                     // 网站名称
-	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
-	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
-	SettingKeyAPIBaseURL                  = "api_base_url"                  // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
-	SettingKeyDocURL                      = "doc_url"                       // 文档链接
-	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
-	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
-	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
-	SettingKeyTableDefaultPageSize        = "table_default_page_size"       // 表格默认每页条数
-	SettingKeyTablePageSizeOptions        = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
-	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
-	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
-	SettingKeyCCSwitchDefaultModelAnthropic      = "ccswitch_default_model_anthropic"       // CCSwitch 导入默认 Claude 模型
-	SettingKeyCCSwitchDefaultModelOpenAI         = "ccswitch_default_model_openai"          // CCSwitch 导入默认 OpenAI/Codex 模型
-	SettingKeyCCSwitchDefaultModelGemini         = "ccswitch_default_model_gemini"          // CCSwitch 导入默认 Gemini 模型
-	SettingKeyCCSwitchDefaultModelAntigravity    = "ccswitch_default_model_antigravity"     // CCSwitch 导入默认 Antigravity Claude 模型
+	SettingKeySiteName                              = "site_name"                                 // 网站名称
+	SettingKeySiteLogo                              = "site_logo"                                 // 网站Logo (base64)
+	SettingKeySiteSubtitle                          = "site_subtitle"                             // 网站副标题
+	SettingKeyAPIBaseURL                            = "api_base_url"                              // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo                           = "contact_info"                              // 客服联系方式
+	SettingKeyDocURL                                = "doc_url"                                   // 文档链接
+	SettingKeyHomeContent                           = "home_content"                              // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyHideCcsImportButton                   = "hide_ccs_import_button"                    // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeyPurchaseSubscriptionEnabled           = "purchase_subscription_enabled"             // 是否展示"购买订阅"页面入口
+	SettingKeyPurchaseSubscriptionURL               = "purchase_subscription_url"                 // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeyTableDefaultPageSize                  = "table_default_page_size"                   // 表格默认每页条数
+	SettingKeyTablePageSizeOptions                  = "table_page_size_options"                   // 表格可选每页条数（JSON 数组）
+	SettingKeyCustomMenuItems                       = "custom_menu_items"                         // 自定义菜单项（JSON 数组）
+	SettingKeyCustomEndpoints                       = "custom_endpoints"                          // 自定义端点列表（JSON 数组）
+	SettingKeyPublicModelPricing                    = "public_model_pricing"                      // 首页公开模型定价（JSON）
+	SettingKeyCCSwitchDefaultModelAnthropic         = "ccswitch_default_model_anthropic"          // CCSwitch 导入默认 Claude 模型
+	SettingKeyCCSwitchDefaultModelOpenAI            = "ccswitch_default_model_openai"             // CCSwitch 导入默认 OpenAI/Codex 模型
+	SettingKeyCCSwitchDefaultModelGemini            = "ccswitch_default_model_gemini"             // CCSwitch 导入默认 Gemini 模型
+	SettingKeyCCSwitchDefaultModelAntigravity       = "ccswitch_default_model_antigravity"        // CCSwitch 导入默认 Antigravity Claude 模型
 	SettingKeyCCSwitchDefaultModelAntigravityGemini = "ccswitch_default_model_antigravity_gemini" // CCSwitch 导入默认 Antigravity Gemini 模型
 
 	// 默认配置
-	SettingKeyDefaultConcurrency   = "default_concurrency"   // 新用户默认并发量
-	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
-	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
+	SettingKeyDefaultBalance       = "default_balance"        // 新用户默认余额
+	SettingKeyDefaultSubscriptions = "default_subscriptions"  // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultUserRPMLimit  = "default_user_rpm_limit" // 新用户默认 RPM 限制（0 = 不限制）
 
 	// 第三方认证来源默认授予配置
 	SettingKeyAuthSourceDefaultEmailBalance            = "auth_source_default_email_balance"
@@ -246,6 +248,23 @@ const (
 
 	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
 	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
+
+	// =========================
+	// Channel Monitor (渠道监控)
+	// =========================
+
+	// SettingKeyChannelMonitorEnabled is a DB-backed soft switch for the channel monitor feature.
+	// When false: runner skips scheduling and user-facing endpoints return an empty list.
+	SettingKeyChannelMonitorEnabled = "channel_monitor_enabled"
+
+	// SettingKeyChannelMonitorDefaultIntervalSeconds controls the default interval (seconds)
+	// pre-filled when creating a new channel monitor from the admin UI. Range: [15, 3600].
+	SettingKeyChannelMonitorDefaultIntervalSeconds = "channel_monitor_default_interval_seconds"
+
+	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
+	// user-facing aggregate view. When false: user endpoint returns an empty list and the
+	// sidebar entry is hidden. Defaults to false (opt-in feature).
+	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
 
 	// =========================
 	// Overload Cooldown (529)
