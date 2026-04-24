@@ -7,7 +7,16 @@
     ]"
   >
     <!-- Logo/Brand -->
-    <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
+    <div
+      class="sidebar-header"
+      :class="{ 'sidebar-header-collapsed': sidebarCollapsed }"
+      role="link"
+      tabindex="0"
+      :title="siteName"
+      @click="goHome"
+      @keydown.enter.prevent="goHome"
+      @keydown.space.prevent="goHome"
+    >
       <!-- Custom Logo or Default Logo -->
       <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
         <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
@@ -17,7 +26,9 @@
           {{ siteName }}
         </span>
         <!-- Version Badge -->
-        <VersionBadge :version="siteVersion" />
+        <span @click.stop @keydown.stop>
+          <VersionBadge :version="siteVersion" />
+        </span>
       </div>
     </div>
 
@@ -769,6 +780,13 @@ function closeMobile() {
   appStore.setMobileOpen(false)
 }
 
+function goHome() {
+  if (mobileOpen.value) {
+    appStore.setMobileOpen(false)
+  }
+  router.push('/')
+}
+
 function handleMenuItemClick(itemPath: string) {
   if (mobileOpen.value) {
     setTimeout(() => {
@@ -864,6 +882,15 @@ onMounted(() => {
 .sidebar-logo {
   flex: 0 0 2.25rem;
   min-width: 2.25rem;
+}
+
+.sidebar-header {
+  cursor: pointer;
+}
+
+.sidebar-header:focus-visible {
+  outline: 2px solid rgb(59 130 246 / 0.75);
+  outline-offset: -4px;
 }
 
 .sidebar-header-collapsed {

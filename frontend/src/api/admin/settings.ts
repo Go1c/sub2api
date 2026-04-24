@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from "../client";
-import type { CustomMenuItem, CustomEndpoint, NotifyEmailEntry } from "@/types";
+import type { ContactChannel, CustomEndpoint, CustomMenuItem, NotifyEmailEntry, SitePage } from "@/types";
 
 export interface DefaultSubscriptionSetting {
   group_id: number;
@@ -358,7 +358,9 @@ export interface SystemSettings {
   site_subtitle: string;
   api_base_url: string;
   contact_info: string;
+  contact_channels: ContactChannel[];
   doc_url: string;
+  site_pages: SitePage[];
   home_content: string;
   hide_ccs_import_button: boolean;
   ccswitch_default_model_anthropic: string;
@@ -543,7 +545,9 @@ export interface UpdateSettingsRequest {
   site_subtitle?: string;
   api_base_url?: string;
   contact_info?: string;
+  contact_channels?: ContactChannel[];
   doc_url?: string;
+  site_pages?: SitePage[];
   home_content?: string;
   hide_ccs_import_button?: boolean;
   ccswitch_default_model_anthropic?: string;

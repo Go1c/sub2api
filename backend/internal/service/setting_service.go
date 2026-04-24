@@ -416,7 +416,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeySiteSubtitle,
 		SettingKeyAPIBaseURL,
 		SettingKeyContactInfo,
+		SettingKeyContactChannels,
 		SettingKeyDocURL,
+		SettingKeySitePages,
 		SettingKeyHomeContent,
 		SettingKeyHideCcsImportButton,
 		SettingKeyCCSwitchDefaultModelAnthropic,
@@ -518,7 +520,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SiteSubtitle:                          s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                            settings[SettingKeyAPIBaseURL],
 		ContactInfo:                           settings[SettingKeyContactInfo],
+		ContactChannels:                       settings[SettingKeyContactChannels],
 		DocURL:                                settings[SettingKeyDocURL],
+		SitePages:                             settings[SettingKeySitePages],
 		HomeContent:                           settings[SettingKeyHomeContent],
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
 		CCSwitchDefaultModelAnthropic:         strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
@@ -664,7 +668,9 @@ type PublicSettingsInjectionPayload struct {
 	SiteSubtitle                          string          `json:"site_subtitle"`
 	APIBaseURL                            string          `json:"api_base_url"`
 	ContactInfo                           string          `json:"contact_info"`
+	ContactChannels                       json.RawMessage `json:"contact_channels"`
 	DocURL                                string          `json:"doc_url"`
+	SitePages                             json.RawMessage `json:"site_pages"`
 	HomeContent                           string          `json:"home_content"`
 	HideCcsImportButton                   bool            `json:"hide_ccs_import_button"`
 	CCSwitchDefaultModelAnthropic         string          `json:"ccswitch_default_model_anthropic"`
@@ -724,7 +730,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SiteSubtitle:                          settings.SiteSubtitle,
 		APIBaseURL:                            settings.APIBaseURL,
 		ContactInfo:                           settings.ContactInfo,
+		ContactChannels:                       safeRawJSONArray(settings.ContactChannels),
 		DocURL:                                settings.DocURL,
+		SitePages:                             safeRawJSONArray(settings.SitePages),
 		HomeContent:                           settings.HomeContent,
 		HideCcsImportButton:                   settings.HideCcsImportButton,
 		CCSwitchDefaultModelAnthropic:         settings.CCSwitchDefaultModelAnthropic,
@@ -1163,7 +1171,9 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
+	updates[SettingKeyContactChannels] = settings.ContactChannels
 	updates[SettingKeyDocURL] = settings.DocURL
+	updates[SettingKeySitePages] = settings.SitePages
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
 	updates[SettingKeyCCSwitchDefaultModelAnthropic] = strings.TrimSpace(settings.CCSwitchDefaultModelAnthropic)
@@ -1700,6 +1710,8 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyPromoCodeEnabled:                         "true", // 默认启用优惠码功能
 		SettingKeySiteName:                                 "Sub2API",
 		SettingKeySiteLogo:                                 "",
+		SettingKeyContactChannels:                          "[]",
+		SettingKeySitePages:                                "[]",
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
 		SettingKeyPurchaseSubscriptionURL:                  "",
 		SettingKeyTableDefaultPageSize:                     "20",
@@ -1843,7 +1855,9 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SiteSubtitle:                          s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                            settings[SettingKeyAPIBaseURL],
 		ContactInfo:                           settings[SettingKeyContactInfo],
+		ContactChannels:                       settings[SettingKeyContactChannels],
 		DocURL:                                settings[SettingKeyDocURL],
+		SitePages:                             settings[SettingKeySitePages],
 		HomeContent:                           settings[SettingKeyHomeContent],
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
 		CCSwitchDefaultModelAnthropic:         settings[SettingKeyCCSwitchDefaultModelAnthropic],

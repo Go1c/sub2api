@@ -11,9 +11,9 @@
 
   <div
     v-else
-    class="min-h-screen bg-[#fafafa] text-gray-900 selection:bg-blue-200 selection:text-blue-900 dark:bg-dark-950 dark:text-white"
+    class="flex min-h-screen flex-col bg-[#fafafa] text-gray-900 selection:bg-blue-200 selection:text-blue-900 dark:bg-dark-950 dark:text-white"
   >
-    <div class="relative overflow-hidden">
+    <div class="relative order-1 overflow-hidden">
       <nav class="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <button class="group flex items-center gap-3 text-left" @click="scrollTo('body')">
           <span class="relative inline-flex h-11 w-11 items-center justify-center">
@@ -203,7 +203,7 @@
       </div>
     </div>
 
-    <section id="features" class="relative mx-auto max-w-7xl px-6 py-16">
+    <section id="features" class="relative order-3 mx-auto max-w-7xl px-6 py-16">
       <div class="fade-rise mb-16 text-center">
         <div class="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300">
           <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
@@ -290,26 +290,24 @@
       </div>
     </section>
 
-    <section id="pricing" class="relative mx-auto max-w-7xl px-6 py-12">
+    <section id="pricing" class="relative order-2 mx-auto max-w-7xl px-6 py-12">
       <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[40rem] bg-[radial-gradient(ellipse_50%_40%_at_50%_0%,rgba(99,102,241,0.10),transparent_70%)]"></div>
 
-      <div class="mx-auto inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300">
-        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
-        {{ copy.pricingKicker }}
-      </div>
-
-      <h2 class="mt-4 text-center text-5xl font-semibold tracking-tight text-gray-900 dark:text-white">
+      <h2 class="text-center text-5xl font-semibold tracking-tight text-gray-900 dark:text-white">
         {{ copy.pricingTitleLead }}
         <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
           {{ copy.pricingTitleAccent }}
         </span>
       </h2>
 
-      <p class="mb-6 mt-4 text-center text-gray-600 dark:text-dark-300">{{ pricingNote }}</p>
+      <p class="mt-4 text-center text-gray-600 dark:text-dark-300">{{ pricingNote }}</p>
 
-      <div class="mb-16 text-center">
-        <span class="inline-block rounded-full border border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 text-sm font-medium text-blue-700 dark:border-blue-900/40 dark:from-blue-950/40 dark:to-purple-950/40 dark:text-blue-300">
-          💰 {{ copy.pricingBadge }}
+      <div class="mx-auto mb-12 mt-5 flex max-w-3xl flex-wrap items-center justify-center gap-2 text-sm">
+        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+          {{ copy.pricingRechargeNote }}
+        </span>
+        <span class="rounded-full border border-purple-200 bg-purple-50 px-3 py-1.5 font-semibold text-purple-700 dark:border-purple-400/30 dark:bg-purple-500/10 dark:text-purple-200">
+          {{ copy.pricingDiscountFormula }}
         </span>
       </div>
 
@@ -321,13 +319,62 @@
                 <tr>
                   <th class="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.model }}</th>
                   <th class="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.group }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.officialInput }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.officialOutput }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.convertedInput }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.convertedOutput }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-blue-700 dark:text-blue-300">{{ copy.pricingCols.input }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-blue-700 dark:text-blue-300">{{ copy.pricingCols.output }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.discount }}</th>
+                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <span>{{ copy.pricingCols.officialInput }}</span>
+                      <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200">
+                        {{ copy.pricingCurrency.usd }}
+                      </span>
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <span>{{ copy.pricingCols.officialOutput }}</span>
+                      <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200">
+                        {{ copy.pricingCurrency.usd }}
+                      </span>
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <span>{{ copy.pricingCols.convertedInput }}</span>
+                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                        {{ copy.pricingCurrency.cny }}
+                      </span>
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <span>{{ copy.pricingCols.convertedOutput }}</span>
+                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                        {{ copy.pricingCurrency.cny }}
+                      </span>
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-center text-sm font-semibold text-blue-700 dark:text-blue-300">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <span>{{ copy.pricingCols.input }}</span>
+                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                        {{ copy.pricingCurrency.cny }}
+                      </span>
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-center text-sm font-semibold text-blue-700 dark:text-blue-300">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <span>{{ copy.pricingCols.output }}</span>
+                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                        {{ copy.pricingCurrency.cny }}
+                      </span>
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <span>{{ copy.pricingCols.discount }}</span>
+                      <span class="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 dark:border-purple-400/30 dark:bg-purple-500/10 dark:text-purple-200">
+                        {{ copy.pricingDiscountBasis }}
+                      </span>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
@@ -340,22 +387,36 @@
                     <div class="flex items-center gap-2">{{ row.model }}</div>
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-600 dark:text-dark-300">{{ row.group }}</td>
-                  <td class="px-6 py-4 text-center text-sm text-gray-600 dark:text-dark-300">{{ formatUsd(row.officialInput) }}</td>
-                  <td class="px-6 py-4 text-center text-sm text-gray-600 dark:text-dark-300">{{ formatUsd(row.officialOutput) }}</td>
-                  <td class="px-6 py-4 text-center text-sm text-gray-400 line-through decoration-2 decoration-red-400/60 dark:text-dark-500">
-                    {{ formatConverted(row.officialInput) }}
+                  <td class="px-6 py-4 text-center text-sm">
+                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-amber-200/70 bg-amber-50/80 px-2.5 py-1 font-semibold text-amber-700 shadow-sm dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
+                      {{ formatUsd(row.officialInput) }}
+                    </span>
                   </td>
-                  <td class="px-6 py-4 text-center text-sm text-gray-400 line-through decoration-2 decoration-red-400/60 dark:text-dark-500">
-                    {{ formatConverted(row.officialOutput) }}
+                  <td class="px-6 py-4 text-center text-sm">
+                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-amber-200/70 bg-amber-50/80 px-2.5 py-1 font-semibold text-amber-700 shadow-sm dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
+                      {{ formatUsd(row.officialOutput) }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-center text-sm">
+                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-emerald-200/50 bg-emerald-50/50 px-2.5 py-1 font-semibold text-emerald-700 line-through decoration-2 decoration-red-400/70 shadow-sm dark:border-emerald-400/15 dark:bg-emerald-500/10 dark:text-emerald-300/70">
+                      {{ formatConverted(row.officialInput) }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-center text-sm">
+                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-emerald-200/50 bg-emerald-50/50 px-2.5 py-1 font-semibold text-emerald-700 line-through decoration-2 decoration-red-400/70 shadow-sm dark:border-emerald-400/15 dark:bg-emerald-500/10 dark:text-emerald-300/70">
+                      {{ formatConverted(row.officialOutput) }}
+                    </span>
                   </td>
                   <td class="px-6 py-4 text-center">
-                    <div :class="['inline-block rounded-lg border px-3 py-1.5 text-base font-bold', pricingTone(row).price]">
-                      {{ formatCny(row.inputPrice) }}
+                    <div :class="['inline-flex min-w-[6.25rem] items-baseline justify-center gap-1 rounded-lg border px-3 py-1.5 font-bold shadow-sm', pricingTone(row).price]">
+                      <span class="text-[10px] font-semibold opacity-70">CNY</span>
+                      <span class="text-base">{{ formatCny(row.inputPrice) }}</span>
                     </div>
                   </td>
                   <td class="px-6 py-4 text-center">
-                    <div :class="['inline-block rounded-lg border px-3 py-1.5 text-base font-bold', pricingTone(row).price]">
-                      {{ formatCny(row.outputPrice) }}
+                    <div :class="['inline-flex min-w-[6.25rem] items-baseline justify-center gap-1 rounded-lg border px-3 py-1.5 font-bold shadow-sm', pricingTone(row).price]">
+                      <span class="text-[10px] font-semibold opacity-70">CNY</span>
+                      <span class="text-base">{{ formatCny(row.outputPrice) }}</span>
                     </div>
                   </td>
                   <td class="px-6 py-4 text-center">
@@ -363,12 +424,13 @@
                       <span v-if="pricingTone(row).flame" class="animate-bounce text-xl drop-shadow-md">🔥</span>
                       <span
                         :class="[
-                          'inline-block rounded-full bg-gradient-to-r px-4 py-1.5 font-bold text-white shadow-md',
+                          'inline-flex min-w-[7rem] flex-col items-center justify-center rounded-full bg-gradient-to-r px-5 py-2 text-white shadow-xl ring-2 ring-white/25 dark:ring-white/10',
                           pricingTone(row).discount,
                           pricingTone(row).discountText
                         ]"
                       >
-                        {{ row.discount }}
+                        <span class="text-[10px] font-semibold leading-none text-white/80">{{ copy.pricingDiscountTag }}</span>
+                        <span class="mt-0.5 text-xl font-extrabold leading-none">{{ row.discount }}</span>
                       </span>
                     </div>
                   </td>
@@ -380,7 +442,7 @@
       </div>
     </section>
 
-    <section id="vision" class="relative mx-auto max-w-7xl px-6 py-16">
+    <section id="vision" class="relative order-4 mx-auto max-w-7xl px-6 py-16">
       <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div class="absolute left-1/2 top-1/2 h-[70rem] w-[70rem] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.12),rgba(168,85,247,0.06)_40%,transparent_70%)]"></div>
         <div class="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-60 [mask-image:radial-gradient(ellipse_50%_40%_at_50%_50%,#000_40%,transparent_80%)] dark:bg-none"></div>
@@ -406,7 +468,46 @@
       </div>
     </section>
 
-    <footer id="footer" class="border-t border-gray-200 bg-white px-6 py-8 dark:border-dark-800 dark:bg-dark-950">
+    <section id="support" class="order-5 border-t border-gray-200 bg-white px-6 py-14 dark:border-dark-800 dark:bg-dark-950">
+      <div class="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+        <div>
+          <div class="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-600 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300">
+            <Icon name="chatBubble" size="lg" />
+          </div>
+          <h2 class="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white md:text-4xl">
+            {{ copy.supportTitle }}
+          </h2>
+          <p class="mt-4 max-w-xl text-base leading-relaxed text-gray-600 dark:text-dark-300">
+            {{ copy.supportSubtitle }}
+          </p>
+        </div>
+
+        <div v-if="contactChannels.length > 0" class="grid gap-3 sm:grid-cols-2">
+          <button
+            v-for="channel in contactChannels"
+            :key="`${channel.label}-${channel.url}`"
+            class="group flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-left transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 dark:border-dark-700 dark:bg-dark-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/30"
+            @click="openContact(channel.url)"
+          >
+            <span>
+              <span class="block text-sm font-semibold text-gray-900 dark:text-white">{{ channel.label }}</span>
+              <span class="mt-1 block max-w-[18rem] truncate text-xs text-gray-500 dark:text-dark-400">{{ channel.url }}</span>
+            </span>
+            <Icon name="externalLink" size="sm" class="text-gray-400 transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-300" />
+          </button>
+        </div>
+
+        <div
+          v-else-if="fallbackContactInfo"
+          class="rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-sm font-medium text-gray-700 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-200"
+        >
+          <span class="text-gray-500 dark:text-dark-400">{{ copy.supportFallbackLabel }}：</span>
+          {{ fallbackContactInfo }}
+        </div>
+      </div>
+    </section>
+
+    <footer id="footer" class="order-6 border-t border-gray-200 bg-white px-6 py-8 dark:border-dark-800 dark:bg-dark-950">
       <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
         <div class="flex items-center gap-3">
           <span class="relative inline-flex h-9 w-9 items-center justify-center">
@@ -472,6 +573,7 @@ import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { getPublicPricing, type PublicPricingConfig, type PublicPricingRow } from '@/api/pricing'
+import type { ContactChannel, SitePage } from '@/types'
 
 type HomeIconName =
   | 'sparkles'
@@ -521,6 +623,7 @@ interface StatusItem {
 interface PricingRow {
   model: string
   group: string
+  multiplier?: string
   officialInput: number
   officialOutput: number
   inputPrice: number
@@ -553,11 +656,17 @@ interface HomeCopy {
   engineCards: EngineCard[]
   statusEyebrow: string
   statusItems: StatusItem[]
-  pricingKicker: string
   pricingTitleLead: string
   pricingTitleAccent: string
   pricingNote: string
-  pricingBadge: string
+  pricingCurrency: {
+    usd: string
+    cny: string
+  }
+  pricingRechargeNote: string
+  pricingDiscountFormula: string
+  pricingDiscountBasis: string
+  pricingDiscountTag: string
   pricingCols: {
     model: string
     group: string
@@ -577,6 +686,9 @@ interface HomeCopy {
   visionEnd: string
   visionAuthor: string
   visionCta: string
+  supportTitle: string
+  supportSubtitle: string
+  supportFallbackLabel: string
   docsLabel: string
 }
 
@@ -602,7 +714,18 @@ const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.isAdmin)
 const dashboardPath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
 const currentYear = computed(() => new Date().getFullYear())
+const contactChannels = computed<ContactChannel[]>(() =>
+  (appStore.cachedPublicSettings?.contact_channels || []).filter((channel) => {
+    return channel.label?.trim() && channel.url?.trim()
+  })
+)
+const fallbackContactInfo = computed(() => appStore.cachedPublicSettings?.contact_info || appStore.contactInfo || '')
+const sitePages = computed<SitePage[]>(() => appStore.cachedPublicSettings?.site_pages || [])
+const docsRoute = computed(() => sitePageRoute('docs'))
+const termsRoute = computed(() => sitePageRoute('terms'))
+const privacyRoute = computed(() => sitePageRoute('privacy'))
 const docsHref = computed(() => docUrl.value || githubUrl)
+const usdToCnyRate = 7
 
 const zhCopy: HomeCopy = {
   nav: [
@@ -660,27 +783,33 @@ const zhCopy: HomeCopy = {
     { icon: 'chartBar', label: '月调用次数', value: '100万+' },
     { icon: 'clock', label: '平均响应', value: '16.3ms' }
   ],
-  pricingKicker: '透明计价 · 按量付费',
   pricingTitleLead: '模型',
   pricingTitleAccent: '定价',
-  pricingNote: '官方原价以美元（$）标注 · 汇率按 1:7 折算 · 单位：百万 tokens',
-  pricingBadge: '价格与折扣支持管理员后台配置',
+  pricingNote: '官方原价以美元（USD）标注 · 折合价与 LumioAPI 价格以人民币（CNY）计价 · 单位：百万 tokens',
+  pricingCurrency: {
+    usd: '美元 USD',
+    cny: '人民币 CNY'
+  },
+  pricingRechargeNote: '充值规则：¥1 人民币 = $1 美元额度',
+  pricingDiscountFormula: '先享 1.43 折，再叠加渠道倍率算最终折扣',
+  pricingDiscountBasis: '最终折扣',
+  pricingDiscountTag: '最终折扣',
   pricingCols: {
     model: '模型',
     group: '分组',
-    officialInput: '输入官方',
-    officialOutput: '输出官方',
-    convertedInput: '输入折合',
-    convertedOutput: '输出折合',
-    input: 'LumioAPI 输入',
-    output: 'LumioAPI 输出',
-    discount: '折扣'
+    officialInput: '官方输入',
+    officialOutput: '官方输出',
+    convertedInput: '人民币折合',
+    convertedOutput: '人民币折合',
+    input: 'LumioAPI 输入价',
+    output: 'LumioAPI 输出价',
+    discount: '最终折扣'
   },
   pricingRows: [
-    { model: 'Claude Opus 4.7', group: '企业稳定版', officialInput: 15, officialOutput: 75, inputPrice: 3.5, outputPrice: 17.5, discount: '3.3%', tone: 'purple' },
-    { model: 'Claude Sonnet 4.6', group: '企业稳定版', officialInput: 3, officialOutput: 15, inputPrice: 0.7, outputPrice: 3.5, discount: '3.3%', tone: 'purple' },
-    { model: 'GPT5.5', group: 'OpenAI', officialInput: 2.5, officialOutput: 10, inputPrice: 0.18, outputPrice: 0.7, discount: '1.0%', tone: 'blue' },
-    { model: 'GPT5.4', group: 'OpenAI', officialInput: 2.5, officialOutput: 15, inputPrice: 0.18, outputPrice: 1.05, discount: '1.0%', tone: 'blue' }
+    { model: 'Claude Opus 4.7', group: 'Claude', multiplier: '1.4', officialInput: 5, officialOutput: 25, inputPrice: 7, outputPrice: 35, discount: '2折', tone: 'purple' },
+    { model: 'Claude Sonnet 4.6', group: 'Claude', multiplier: '1.4', officialInput: 3, officialOutput: 15, inputPrice: 4.2, outputPrice: 21, discount: '2折', tone: 'purple' },
+    { model: 'GPT5.5', group: 'OpenAI', multiplier: '0.2', officialInput: 5, officialOutput: 30, inputPrice: 1, outputPrice: 6, discount: '0.29折', tone: 'blue' },
+    { model: 'GPT5.4', group: 'OpenAI', multiplier: '0.2', officialInput: 2.5, officialOutput: 15, inputPrice: 0.5, outputPrice: 3, discount: '0.29折', tone: 'blue' }
   ],
   visionLead: '让每一个开发者都能以',
   visionHighlightOne: '可接受的价格',
@@ -689,6 +818,9 @@ const zhCopy: HomeCopy = {
   visionEnd: '，触达世界上最聪明的 AI。',
   visionAuthor: 'Lumio · OPC 创业团队',
   visionCta: '加入我们的愿景',
+  supportTitle: '技术支持',
+  supportSubtitle: '选择后台配置的联系渠道，直接加入 QQ 群、飞书群或 Telegram 群获取支持。',
+  supportFallbackLabel: '客服联系方式',
   docsLabel: '文档'
 }
 
@@ -748,11 +880,17 @@ const enCopy: HomeCopy = {
     { icon: 'chartBar', label: 'Monthly calls', value: '1M+' },
     { icon: 'clock', label: 'Average latency', value: '16.3ms' }
   ],
-  pricingKicker: 'Transparent pricing · pay as you go',
   pricingTitleLead: 'Model',
   pricingTitleAccent: 'pricing',
-  pricingNote: 'Official list price is shown in USD · converted at 1:7 · unit: per million tokens',
-  pricingBadge: 'Pricing and discounts are configurable in admin settings',
+  pricingNote: 'Official list price is in USD · converted and LumioAPI prices are in CNY · unit: per million tokens',
+  pricingCurrency: {
+    usd: 'USD',
+    cny: 'CNY'
+  },
+  pricingRechargeNote: 'Recharge rule: ¥1 CNY = $1 USD credit',
+  pricingDiscountFormula: 'Start at 14.3%, then apply the channel multiplier',
+  pricingDiscountBasis: 'Final discount',
+  pricingDiscountTag: 'Final',
   pricingCols: {
     model: 'Model',
     group: 'Group',
@@ -765,10 +903,10 @@ const enCopy: HomeCopy = {
     discount: 'Discount'
   },
   pricingRows: [
-    { model: 'Claude Opus 4.7', group: 'Enterprise', officialInput: 15, officialOutput: 75, inputPrice: 3.5, outputPrice: 17.5, discount: '3.3%', tone: 'purple' },
-    { model: 'Claude Sonnet 4.6', group: 'Enterprise', officialInput: 3, officialOutput: 15, inputPrice: 0.7, outputPrice: 3.5, discount: '3.3%', tone: 'purple' },
-    { model: 'GPT5.5', group: 'OpenAI', officialInput: 2.5, officialOutput: 10, inputPrice: 0.18, outputPrice: 0.7, discount: '1.0%', tone: 'blue' },
-    { model: 'GPT5.4', group: 'OpenAI', officialInput: 2.5, officialOutput: 15, inputPrice: 0.18, outputPrice: 1.05, discount: '1.0%', tone: 'blue' }
+    { model: 'Claude Opus 4.7', group: 'Claude', multiplier: '1.4', officialInput: 5, officialOutput: 25, inputPrice: 7, outputPrice: 35, discount: '20%', tone: 'purple' },
+    { model: 'Claude Sonnet 4.6', group: 'Claude', multiplier: '1.4', officialInput: 3, officialOutput: 15, inputPrice: 4.2, outputPrice: 21, discount: '20%', tone: 'purple' },
+    { model: 'GPT5.5', group: 'OpenAI', multiplier: '0.2', officialInput: 5, officialOutput: 30, inputPrice: 1, outputPrice: 6, discount: '2.86%', tone: 'blue' },
+    { model: 'GPT5.4', group: 'OpenAI', multiplier: '0.2', officialInput: 2.5, officialOutput: 15, inputPrice: 0.5, outputPrice: 3, discount: '2.86%', tone: 'blue' }
   ],
   visionLead: 'We want every developer to reach the world’s smartest AI with',
   visionHighlightOne: 'pricing they can accept',
@@ -777,12 +915,18 @@ const enCopy: HomeCopy = {
   visionEnd: '.',
   visionAuthor: 'Lumio · OPC founding team',
   visionCta: 'Join the vision',
+  supportTitle: 'Support',
+  supportSubtitle: 'Use the configured contact channels to reach the support community directly.',
+  supportFallbackLabel: 'Contact',
   docsLabel: 'Docs'
 }
 
 const copy = computed(() => (locale.value.startsWith('zh') ? zhCopy : enCopy))
 const publicPricing = ref<PublicPricingConfig | null>(null)
-const pricingNote = computed(() => publicPricing.value?.rateNote?.trim() || copy.value.pricingNote)
+const pricingNote = computed(() => {
+  const configuredNote = normalizePricingNote(publicPricing.value?.rateNote)
+  return configuredNote || copy.value.pricingNote
+})
 const pricingRows = computed<PricingRow[]>(() => {
   const configuredRows = publicPricing.value?.rows
   const rows: Array<PricingRow | PublicPricingRow> =
@@ -794,10 +938,12 @@ const navItems = computed<NavItem[]>(() => [
   { ...copy.value.nav[0], target: '#features' },
   { ...copy.value.nav[1], target: '#pricing' },
   { ...copy.value.nav[2], target: '#status' },
-  { ...copy.value.nav[3], target: docsHref.value, external: true },
-  { ...copy.value.dimNav[0], target: '#footer', dim: true },
-  { ...copy.value.dimNav[1], target: '#footer', dim: true },
-  { ...copy.value.dimNav[2], target: '#footer', dim: true }
+  docsRoute.value
+    ? { ...copy.value.nav[3], target: docsRoute.value }
+    : { ...copy.value.nav[3], target: docsHref.value, external: true },
+  { ...copy.value.dimNav[0], target: termsRoute.value || '#footer', dim: true },
+  { ...copy.value.dimNav[1], target: privacyRoute.value || '#footer', dim: true },
+  { ...copy.value.dimNav[2], target: '#support', dim: true }
 ])
 
 const floatingSlots = [
@@ -832,16 +978,39 @@ function scrollTo(target: string) {
   document.querySelector(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function normalizeSitePageSlug(slug: string) {
+  return slug.trim().replace(/^\/+|\/+$/g, '')
+}
+
+function sitePageRoute(key: string) {
+  const page = sitePages.value.find((item) => item.enabled !== false && item.key === key)
+  if (!page?.slug) return ''
+  const slug = normalizeSitePageSlug(page.slug)
+  return slug ? encodeURI(`/${slug}`) : ''
+}
+
 function openDocs() {
+  if (docsRoute.value) {
+    router.push(docsRoute.value)
+    return
+  }
   window.open(docsHref.value, '_blank', 'noopener,noreferrer')
 }
 
 function onNav(item: NavItem) {
   if (item.external) {
-    openDocs()
+    window.open(item.target, '_blank', 'noopener,noreferrer')
+    return
+  }
+  if (item.target.startsWith('/')) {
+    router.push(item.target)
     return
   }
   scrollTo(item.target)
+}
+
+function openContact(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 function goConsole() {
@@ -867,8 +1036,8 @@ function pricingTone(row: PricingRow) {
     return {
       row: 'bg-purple-50/30 hover:bg-purple-50/50 dark:bg-purple-950/10 dark:hover:bg-purple-950/20',
       price: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900/40 dark:bg-purple-950/30 dark:text-purple-300',
-      discount: 'from-purple-500 to-purple-600',
-      discountText: 'text-sm',
+      discount: 'from-purple-500 via-fuchsia-500 to-purple-600',
+      discountText: 'shadow-purple-500/35',
       flame: false
     }
   }
@@ -886,8 +1055,8 @@ function pricingTone(row: PricingRow) {
   return {
     row: 'hover:bg-gray-50 dark:hover:bg-dark-800',
     price: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300',
-    discount: 'from-blue-500 to-blue-600',
-    discountText: 'text-sm',
+    discount: 'from-blue-500 via-sky-500 to-blue-600',
+    discountText: 'shadow-blue-500/35',
     flame: false
   }
 }
@@ -904,14 +1073,21 @@ function pricingToneForRow(row: Pick<PricingRow, 'model' | 'group'>): PricingRow
 }
 
 function toPricingRow(row: PricingRow | PublicPricingRow): PricingRow {
+  const officialInput = Number(row.officialInput) || 0
+  const officialOutput = Number(row.officialOutput) || 0
+  const multiplier = parsePricingMultiplier(row.multiplier)
+  const derivedInputPrice = calculateLumioPrice(officialInput, multiplier)
+  const derivedOutputPrice = calculateLumioPrice(officialOutput, multiplier)
+
   return {
     model: row.model,
     group: row.group,
-    officialInput: Number(row.officialInput) || 0,
-    officialOutput: Number(row.officialOutput) || 0,
-    inputPrice: Number(row.inputPrice) || 0,
-    outputPrice: Number(row.outputPrice) || 0,
-    discount: row.discount || '',
+    multiplier: row.multiplier,
+    officialInput,
+    officialOutput,
+    inputPrice: derivedInputPrice ?? (Number(row.inputPrice) || 0),
+    outputPrice: derivedOutputPrice ?? (Number(row.outputPrice) || 0),
+    discount: multiplier > 0 ? formatFinalDiscount(multiplier) : row.discount || '',
     tone: 'tone' in row ? row.tone : pricingToneForRow(row)
   }
 }
@@ -922,6 +1098,62 @@ async function loadPublicPricing() {
   } catch (error) {
     console.warn('Failed to load public pricing', error)
   }
+}
+
+function normalizePricingNote(note?: string) {
+  const cleaned = note
+    ?.trim()
+    .replace(/[；;]\s*折扣展示可在管理员后台调整。?$/, '')
+    .replace(/[；;]\s*价格与折扣支持管理员后台配置。?$/, '')
+    .trim()
+
+  if (!cleaned || cleaned === '价格以人民币（¥）计价，单位为百万 tokens') {
+    return ''
+  }
+  return cleaned
+}
+
+function parsePricingMultiplier(value?: string) {
+  const raw = value?.trim()
+  if (!raw) return 0
+
+  const normalized = raw
+    .replace(/倍率/g, '')
+    .replace(/[xX倍\s]/g, '')
+    .trim()
+
+  if (!normalized) return 0
+
+  const numeric = Number.parseFloat(normalized)
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0
+
+  if (normalized.endsWith('%')) {
+    return numeric / 100
+  }
+  if (normalized.endsWith('折')) {
+    return (numeric / 10) * usdToCnyRate
+  }
+  return numeric
+}
+
+function calculateLumioPrice(officialUsd: number, multiplier: number) {
+  if (officialUsd <= 0 || multiplier <= 0) return null
+  return Math.round(officialUsd * multiplier * 100) / 100
+}
+
+function formatFinalDiscount(multiplier: number) {
+  const ratio = multiplier / usdToCnyRate
+  if (locale.value.startsWith('zh')) {
+    return `${formatCompactNumber(ratio * 10)}折`
+  }
+  return `${formatCompactNumber(ratio * 100)}%`
+}
+
+function formatCompactNumber(value: number) {
+  return value
+    .toFixed(value < 1 ? 2 : 1)
+    .replace(/(\.\d*?[1-9])0+$/, '$1')
+    .replace(/\.0$/, '')
 }
 
 function formatUsd(value: number) {

@@ -124,3 +124,47 @@ func TestAPIKeyAndSubscriptionFromContext(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, int64(2), gotSub.ID)
 }
+
+func TestRequireGroupAssignment_AllowsUsageQueryForUngroupedKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewSettingService(&bmSettingRepo{values: map[string]string{}}, nil)
+
+	for _, path := range []string{"/v1/usage", "/antigravity/v1/usage"} {
+		t.Run(path, func(t *testing.T) {
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set(string(ContextKeyAPIKey), &service.APIKey{ID: 1})
+				c.Next()
+			})
+			r.Use(RequireGroupAssignment(svc, AnthropicErrorWriter))
+			r.GET(path, func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			r.ServeHTTP(w, req)
+			require.Equal(t, http.StatusOK, w.Code)
+		})
+	}
+}
+
+func TestRequireGroupAssignment_BlocksUngroupedNonUsageRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyAPIKey), &service.APIKey{ID: 1})
+		c.Next()
+	})
+	r.Use(RequireGroupAssignment(service.NewSettingService(&bmSettingRepo{values: map[string]string{}}, nil), AnthropicErrorWriter))
+	r.GET("/v1/messages", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/messages", nil)
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusForbidden, w.Code)
+}

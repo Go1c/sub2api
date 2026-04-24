@@ -66,12 +66,12 @@ export const fixtures = {
   publicPricing: {
     currency: 'CNY',
     unit: '百万 tokens',
-    rateNote: '价格以人民币（¥）计价，单位为百万 tokens；折扣展示可在管理员后台调整。',
+    rateNote: '官方原价以美元（USD）标注；充值 ¥1 = $1 账户额度；人民币展示价和最终折扣自动计算。',
     rows: [
-      { model: 'Claude Opus 4.7', group: '企业稳定版', multiplier: '3.3%', inputPrice: 3.50, outputPrice: 17.50, officialInput: 15, officialOutput: 75, discount: '3.3%', openClaw: false, enabled: true },
-      { model: 'Claude Sonnet 4.6', group: '企业稳定版', multiplier: '3.3%', inputPrice: 0.70, outputPrice: 3.50, officialInput: 3, officialOutput: 15, discount: '3.3%', openClaw: false, enabled: true },
-      { model: 'GPT5.5', group: 'OpenAI', multiplier: '1.0%', inputPrice: 0.18, outputPrice: 0.70, officialInput: 2.5, officialOutput: 10, discount: '1.0%', openClaw: false, enabled: true },
-      { model: 'GPT5.4', group: 'OpenAI', multiplier: '1.0%', inputPrice: 0.18, outputPrice: 1.05, officialInput: 2.5, officialOutput: 15, discount: '1.0%', openClaw: false, enabled: true }
+      { model: 'Claude Opus 4.7', group: 'Claude', multiplier: '1.4', inputPrice: 7, outputPrice: 35, officialInput: 5, officialOutput: 25, discount: '2折', openClaw: false, enabled: true },
+      { model: 'Claude Sonnet 4.6', group: 'Claude', multiplier: '1.4', inputPrice: 4.20, outputPrice: 21, officialInput: 3, officialOutput: 15, discount: '2折', openClaw: false, enabled: true },
+      { model: 'GPT5.5', group: 'OpenAI', multiplier: '0.2', inputPrice: 1, outputPrice: 6, officialInput: 5, officialOutput: 30, discount: '0.29折', openClaw: false, enabled: true },
+      { model: 'GPT5.4', group: 'OpenAI', multiplier: '0.2', inputPrice: 0.50, outputPrice: 3, officialInput: 2.5, officialOutput: 15, discount: '0.29折', openClaw: false, enabled: true }
     ]
   }
 }

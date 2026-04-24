@@ -21,18 +21,49 @@
         </div>
       </div>
 
+      <nav class="hidden flex-1 justify-center px-4 xl:flex" aria-label="Homepage sections">
+        <div class="inline-flex max-w-full items-center gap-1 overflow-hidden rounded-full border border-gray-200/70 bg-white/70 p-1 shadow-sm backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/60">
+          <template v-for="item in homeNavItems" :key="item.key">
+            <a
+              v-if="item.external"
+              :href="item.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="rounded-full px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-white"
+            >
+              {{ item.label }}
+            </a>
+            <router-link
+              v-else
+              :to="item.to"
+              class="rounded-full px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-white"
+            >
+              {{ item.label }}
+            </router-link>
+          </template>
+        </div>
+      </nav>
+
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex items-center gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
         <!-- Docs Link -->
+        <router-link
+          v-if="docsRoute"
+          :to="docsRoute"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
+        >
+          <Icon name="book" size="sm" />
+          <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
+        </router-link>
         <a
-          v-if="docUrl"
+          v-else-if="docUrl"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -222,10 +253,11 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import type { SitePage } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
@@ -237,6 +269,26 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
+const sitePages = computed<SitePage[]>(() => appStore.cachedPublicSettings?.site_pages || [])
+const docsRoute = computed(() => sitePageRoute('docs'))
+const termsRoute = computed(() => sitePageRoute('terms'))
+const privacyRoute = computed(() => sitePageRoute('privacy'))
+const homeNavItems = computed(() => {
+  const isZh = locale.value.startsWith('zh')
+  return [
+    { key: 'pricing', label: isZh ? '定价' : 'Pricing', to: { path: '/home', hash: '#pricing' }, href: '', external: false },
+    { key: 'features', label: isZh ? '特性' : 'Features', to: { path: '/home', hash: '#features' }, href: '', external: false },
+    { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/home', hash: '#status' }, href: '', external: false },
+    docsRoute.value
+      ? { key: 'docs', label: t('nav.docs'), to: docsRoute.value, href: '', external: false }
+      : docUrl.value
+        ? { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: docUrl.value, external: true }
+        : { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: '', external: false },
+    { key: 'terms', label: isZh ? '服务条款' : 'Terms', to: termsRoute.value || { path: '/home', hash: '#footer' }, href: '', external: false },
+    { key: 'privacy', label: isZh ? '隐私保护' : 'Privacy', to: privacyRoute.value || { path: '/home', hash: '#footer' }, href: '', external: false },
+    { key: 'support', label: isZh ? '技术支持' : 'Support', to: { path: '/home', hash: '#support' }, href: '', external: false },
+  ]
+})
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
@@ -285,6 +337,17 @@ const pageDescription = computed(() => {
   }
   return (route.meta.description as string) || ''
 })
+
+function normalizeSitePageSlug(slug: string) {
+  return slug.trim().replace(/^\/+|\/+$/g, '')
+}
+
+function sitePageRoute(key: string) {
+  const page = sitePages.value.find((item) => item.enabled !== false && item.key === key)
+  if (!page?.slug) return ''
+  const slug = normalizeSitePageSlug(page.slug)
+  return slug ? encodeURI(`/${slug}`) : ''
+}
 
 function toggleMobileSidebar() {
   appStore.toggleMobileSidebar()

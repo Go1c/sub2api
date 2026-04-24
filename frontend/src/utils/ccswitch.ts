@@ -37,12 +37,21 @@ function buildUsageScript(): string {
       headers: { "Authorization": "Bearer {{apiKey}}" }
     },
     extractor: function(response) {
-      const remaining = response?.remaining ?? response?.quota?.remaining ?? response?.balance;
-      const unit = response?.unit ?? response?.quota?.unit ?? "USD";
+      var data = response && response.data && typeof response.data === "object" ? response.data : response;
+      data = data || {};
+      var quota = data.quota || {};
+      var walletBalance = data.wallet_balance;
+      if (walletBalance === undefined || walletBalance === null) walletBalance = data.account_balance;
+      if (walletBalance === undefined || walletBalance === null) walletBalance = data.balance;
+      var remaining = walletBalance;
+      if (remaining === undefined || remaining === null) remaining = data.remaining;
+      if (remaining === undefined || remaining === null) remaining = quota.remaining;
+      var unit = data.unit || quota.unit || "USD";
       return {
-        isValid: response?.is_active ?? response?.isValid ?? true,
-        remaining,
-        unit
+        isValid: data.is_active === false || data.isValid === false ? false : true,
+        remaining: remaining,
+        unit: unit,
+        balance: walletBalance
       };
     }
   })`

@@ -987,13 +987,42 @@ func (h *GatewayHandler) Usage(c *gin.Context) {
 
 	// 判断模式: key 有总额度或速率限制 → quota_limited，否则 → unrestricted
 	isQuotaLimited := apiKey.Quota > 0 || apiKey.HasRateLimits()
-
-	if isQuotaLimited {
-		h.usageQuotaLimited(c, ctx, apiKey, usageData, modelStats)
+	walletBalance, walletErr := h.loadUsageWalletBalance(ctx, subject.UserID)
+	if walletErr != nil && !isQuotaLimited && (apiKey.Group == nil || !apiKey.Group.IsSubscriptionType()) {
+		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to get user info")
 		return
 	}
 
-	h.usageUnrestricted(c, ctx, apiKey, subject, usageData, modelStats)
+	if isQuotaLimited {
+		h.usageQuotaLimited(c, ctx, apiKey, walletBalance, usageData, modelStats)
+		return
+	}
+
+	h.usageUnrestricted(c, ctx, apiKey, walletBalance, usageData, modelStats)
+}
+
+func (h *GatewayHandler) loadUsageWalletBalance(ctx context.Context, userID int64) (*float64, error) {
+	if h.userService == nil {
+		return nil, errors.New("user service unavailable")
+	}
+	latestUser, err := h.userService.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if latestUser == nil {
+		return nil, errors.New("user not found")
+	}
+	balance := latestUser.Balance
+	return &balance, nil
+}
+
+func attachWalletBalance(resp gin.H, walletBalance *float64) {
+	if resp == nil || walletBalance == nil {
+		return
+	}
+	resp["balance"] = *walletBalance
+	resp["wallet_balance"] = *walletBalance
+	resp["account_balance"] = *walletBalance
 }
 
 // parseUsageDateRange 解析 start_date / end_date query params，默认返回近 30 天范围
@@ -1052,12 +1081,13 @@ func (h *GatewayHandler) buildUsageData(ctx context.Context, apiKeyID int64) gin
 }
 
 // usageQuotaLimited 处理 quota_limited 模式的响应
-func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, apiKey *service.APIKey, usageData gin.H, modelStats any) {
+func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, apiKey *service.APIKey, walletBalance *float64, usageData gin.H, modelStats any) {
 	resp := gin.H{
 		"mode":    "quota_limited",
 		"isValid": apiKey.Status == service.StatusAPIKeyActive || apiKey.Status == service.StatusAPIKeyQuotaExhausted || apiKey.Status == service.StatusAPIKeyExpired,
 		"status":  apiKey.Status,
 	}
+	attachWalletBalance(resp, walletBalance)
 
 	// 总额度信息
 	if apiKey.Quota > 0 {
@@ -1142,7 +1172,7 @@ func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, 
 }
 
 // usageUnrestricted 处理 unrestricted 模式的响应（向后兼容）
-func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, usageData gin.H, modelStats any) {
+func (h *GatewayHandler) usageUnrestricted(c *gin.Context, _ context.Context, apiKey *service.APIKey, walletBalance *float64, usageData gin.H, modelStats any) {
 	// 订阅模式
 	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
 		resp := gin.H{
@@ -1151,6 +1181,7 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 			"planName": apiKey.Group.Name,
 			"unit":     "USD",
 		}
+		attachWalletBalance(resp, walletBalance)
 
 		// 订阅信息可能不在 context 中（/v1/usage 路径跳过了中间件的计费检查）
 		subscription, ok := middleware2.GetSubscriptionFromContext(c)
@@ -1179,20 +1210,20 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 	}
 
 	// 余额模式
-	latestUser, err := h.userService.GetByID(ctx, subject.UserID)
-	if err != nil {
-		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to get user info")
-		return
+	balance := 0.0
+	if walletBalance != nil {
+		balance = *walletBalance
 	}
 
 	resp := gin.H{
 		"mode":      "unrestricted",
 		"isValid":   true,
 		"planName":  "钱包余额",
-		"remaining": latestUser.Balance,
+		"remaining": balance,
 		"unit":      "USD",
-		"balance":   latestUser.Balance,
+		"balance":   balance,
 	}
+	attachWalletBalance(resp, walletBalance)
 	if usageData != nil {
 		resp["usage"] = usageData
 	}

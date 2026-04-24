@@ -94,7 +94,9 @@ type SystemSettings struct {
 	SiteSubtitle                          string
 	APIBaseURL                            string
 	ContactInfo                           string
+	ContactChannels                       string
 	DocURL                                string
+	SitePages                             string
 	HomeContent                           string
 	HideCcsImportButton                   bool
 	PurchaseSubscriptionEnabled           bool
@@ -196,7 +198,9 @@ type PublicSettings struct {
 	SiteSubtitle                     string
 	APIBaseURL                       string
 	ContactInfo                      string
+	ContactChannels                  string
 	DocURL                           string
+	SitePages                        string
 	HomeContent                      string
 	HideCcsImportButton              bool
 
