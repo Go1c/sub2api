@@ -172,6 +172,31 @@ func parseAttributeFilters(c *gin.Context) map[int64]string {
 	return result
 }
 
+// GetBalanceSummary handles the admin user balance summary.
+// GET /api/v1/admin/users/balance-summary
+func (h *UserHandler) GetBalanceSummary(c *gin.Context) {
+	limit := 20
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			response.BadRequest(c, "Invalid limit")
+			return
+		}
+		limit = parsed
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	summary, err := h.adminService.GetUserBalanceSummary(c.Request.Context(), limit)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, summary)
+}
+
 // GetByID handles getting a user by ID
 // GET /api/v1/admin/users/:id
 func (h *UserHandler) GetByID(c *gin.Context) {

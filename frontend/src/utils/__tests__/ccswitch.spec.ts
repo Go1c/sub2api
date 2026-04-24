@@ -35,7 +35,35 @@ describe('buildCcswitchImportUrl', () => {
 
     expect(params.get('endpoint')).toBe('https://api.example.com/v1')
     expect(params.get('usageBaseUrl')).toBe('https://api.example.com')
-    expect(atob(params.get('usageScript') || '')).toContain('{{baseUrl}}/v1/usage')
+    const usageScript = atob(params.get('usageScript') || '')
+    expect(usageScript).toContain('{{baseUrl}}/v1/usage')
+    expect(usageScript).not.toContain('?.')
+    expect(usageScript).not.toContain('??')
+  })
+
+  it('prefers site wallet balance over key quota or upstream remaining values', () => {
+    const params = parseImportUrl(buildCcswitchImportUrl({
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.example.com/v1',
+      platform: 'anthropic',
+      usageEnabled: true
+    }))
+    const usageScript = atob(params.get('usageScript') || '')
+    const usageConfig = new Function(`return ${usageScript}`)() as {
+      extractor: (response: unknown) => { remaining: number; balance: number; unit: string }
+    }
+    const extracted = usageConfig.extractor({
+      data: {
+        remaining: 12.82,
+        balance: 5.5,
+        wallet_balance: 5.5,
+        quota: { remaining: 7.2, unit: 'USD' }
+      }
+    })
+
+    expect(extracted.remaining).toBe(5.5)
+    expect(extracted.balance).toBe(5.5)
+    expect(extracted.unit).toBe('USD')
   })
 
   it('builds antigravity imports from the API root', () => {

@@ -22,6 +22,21 @@ type CustomEndpoint struct {
 	Description string `json:"description"`
 }
 
+// ContactChannel represents a public support/contact link configured by admin.
+type ContactChannel struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
+}
+
+// SitePage represents a public markdown page configured by admin.
+type SitePage struct {
+	Key     string `json:"key"`
+	Title   string `json:"title"`
+	Slug    string `json:"slug"`
+	Content string `json:"content"`
+	Enabled bool   `json:"enabled"`
+}
+
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
 	RegistrationEnabled              bool     `json:"registration_enabled"`
@@ -96,7 +111,9 @@ type SystemSettings struct {
 	SiteSubtitle                          string           `json:"site_subtitle"`
 	APIBaseURL                            string           `json:"api_base_url"`
 	ContactInfo                           string           `json:"contact_info"`
+	ContactChannels                       []ContactChannel `json:"contact_channels"`
 	DocURL                                string           `json:"doc_url"`
+	SitePages                             []SitePage       `json:"site_pages"`
 	HomeContent                           string           `json:"home_content"`
 	HideCcsImportButton                   bool             `json:"hide_ccs_import_button"`
 	CCSwitchDefaultModelAnthropic         string           `json:"ccswitch_default_model_anthropic"`
@@ -219,7 +236,9 @@ type PublicSettings struct {
 	SiteSubtitle                          string           `json:"site_subtitle"`
 	APIBaseURL                            string           `json:"api_base_url"`
 	ContactInfo                           string           `json:"contact_info"`
+	ContactChannels                       []ContactChannel `json:"contact_channels"`
 	DocURL                                string           `json:"doc_url"`
+	SitePages                             []SitePage       `json:"site_pages"`
 	HomeContent                           string           `json:"home_content"`
 	HideCcsImportButton                   bool             `json:"hide_ccs_import_button"`
 	CCSwitchDefaultModelAnthropic         string           `json:"ccswitch_default_model_anthropic"`
@@ -331,6 +350,34 @@ func ParseCustomEndpoints(raw string) []CustomEndpoint {
 	var items []CustomEndpoint
 	if err := json.Unmarshal([]byte(raw), &items); err != nil {
 		return []CustomEndpoint{}
+	}
+	return items
+}
+
+// ParseContactChannels parses a JSON string into a slice of ContactChannel.
+// Returns empty slice on empty/invalid input.
+func ParseContactChannels(raw string) []ContactChannel {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return []ContactChannel{}
+	}
+	var items []ContactChannel
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []ContactChannel{}
+	}
+	return items
+}
+
+// ParseSitePages parses a JSON string into a slice of SitePage.
+// Returns empty slice on empty/invalid input.
+func ParseSitePages(raw string) []SitePage {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return []SitePage{}
+	}
+	var items []SitePage
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []SitePage{}
 	}
 	return items
 }

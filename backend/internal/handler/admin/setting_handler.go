@@ -174,7 +174,9 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SiteSubtitle:                           settings.SiteSubtitle,
 		APIBaseURL:                             settings.APIBaseURL,
 		ContactInfo:                            settings.ContactInfo,
+		ContactChannels:                        dto.ParseContactChannels(settings.ContactChannels),
 		DocURL:                                 settings.DocURL,
+		SitePages:                              dto.ParseSitePages(settings.SitePages),
 		HomeContent:                            settings.HomeContent,
 		HideCcsImportButton:                    settings.HideCcsImportButton,
 		CCSwitchDefaultModelAnthropic:          settings.CCSwitchDefaultModelAnthropic,
@@ -330,7 +332,9 @@ type UpdateSettingsRequest struct {
 	SiteSubtitle                          string                `json:"site_subtitle"`
 	APIBaseURL                            string                `json:"api_base_url"`
 	ContactInfo                           string                `json:"contact_info"`
+	ContactChannels                       *[]dto.ContactChannel `json:"contact_channels"`
 	DocURL                                string                `json:"doc_url"`
+	SitePages                             *[]dto.SitePage       `json:"site_pages"`
 	HomeContent                           string                `json:"home_content"`
 	HideCcsImportButton                   bool                  `json:"hide_ccs_import_button"`
 	CCSwitchDefaultModelAnthropic         string                `json:"ccswitch_default_model_anthropic"`
@@ -1009,6 +1013,134 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		customEndpointsJSON = string(endpointBytes)
 	}
 
+	// 客服联系渠道验证
+	const (
+		maxContactChannels = 10
+		maxContactLabelLen = 50
+		maxContactURLLen   = 2048
+	)
+
+	contactChannelsJSON := previousSettings.ContactChannels
+	if req.ContactChannels != nil {
+		channels := *req.ContactChannels
+		if len(channels) > maxContactChannels {
+			response.BadRequest(c, "Too many contact channels (max 10)")
+			return
+		}
+		for i := range channels {
+			channels[i].Label = strings.TrimSpace(channels[i].Label)
+			channels[i].URL = strings.TrimSpace(channels[i].URL)
+			if channels[i].Label == "" && channels[i].URL == "" {
+				continue
+			}
+			if channels[i].Label == "" {
+				response.BadRequest(c, "Contact channel label is required")
+				return
+			}
+			if len(channels[i].Label) > maxContactLabelLen {
+				response.BadRequest(c, "Contact channel label is too long (max 50 characters)")
+				return
+			}
+			if channels[i].URL == "" {
+				response.BadRequest(c, "Contact channel URL is required")
+				return
+			}
+			if len(channels[i].URL) > maxContactURLLen {
+				response.BadRequest(c, "Contact channel URL is too long (max 2048 characters)")
+				return
+			}
+			if err := config.ValidateAbsoluteHTTPURL(channels[i].URL); err != nil {
+				response.BadRequest(c, "Contact channel URL must be an absolute http(s) URL")
+				return
+			}
+		}
+		filtered := make([]dto.ContactChannel, 0, len(channels))
+		for _, channel := range channels {
+			if channel.Label != "" || channel.URL != "" {
+				filtered = append(filtered, channel)
+			}
+		}
+		channelBytes, err := json.Marshal(filtered)
+		if err != nil {
+			response.BadRequest(c, "Failed to serialize contact channels")
+			return
+		}
+		contactChannelsJSON = string(channelBytes)
+	}
+
+	// 公开 Markdown 页面验证
+	const (
+		maxSitePages       = 10
+		maxSitePageTitle   = 80
+		maxSitePageSlug    = 120
+		maxSitePageContent = 200000
+		sitePageSlugPrefix = "doc/"
+	)
+
+	sitePagesJSON := previousSettings.SitePages
+	if req.SitePages != nil {
+		pages := *req.SitePages
+		if len(pages) > maxSitePages {
+			response.BadRequest(c, "Too many site pages (max 10)")
+			return
+		}
+		seenPageKeys := make(map[string]struct{}, len(pages))
+		seenPageSlugs := make(map[string]struct{}, len(pages))
+		for i := range pages {
+			pages[i].Key = strings.TrimSpace(pages[i].Key)
+			pages[i].Title = strings.TrimSpace(pages[i].Title)
+			pages[i].Slug = strings.Trim(strings.TrimSpace(pages[i].Slug), "/")
+			if pages[i].Key == "" {
+				response.BadRequest(c, "Site page key is required")
+				return
+			}
+			if !menuItemIDPattern.MatchString(pages[i].Key) {
+				response.BadRequest(c, "Site page key contains invalid characters")
+				return
+			}
+			if _, exists := seenPageKeys[pages[i].Key]; exists {
+				response.BadRequest(c, "Duplicate site page key: "+pages[i].Key)
+				return
+			}
+			seenPageKeys[pages[i].Key] = struct{}{}
+			if pages[i].Title == "" {
+				response.BadRequest(c, "Site page title is required")
+				return
+			}
+			if len(pages[i].Title) > maxSitePageTitle {
+				response.BadRequest(c, "Site page title is too long (max 80 characters)")
+				return
+			}
+			if pages[i].Slug == "" {
+				response.BadRequest(c, "Site page slug is required")
+				return
+			}
+			if len(pages[i].Slug) > maxSitePageSlug ||
+				!strings.HasPrefix(pages[i].Slug, sitePageSlugPrefix) ||
+				strings.ContainsAny(pages[i].Slug, "?#\\") ||
+				strings.Contains(pages[i].Slug, "//") ||
+				strings.Contains(pages[i].Slug, "..") {
+				response.BadRequest(c, "Site page slug is invalid")
+				return
+			}
+			if _, exists := seenPageSlugs[pages[i].Slug]; exists {
+				response.BadRequest(c, "Duplicate site page slug: "+pages[i].Slug)
+				return
+			}
+			seenPageSlugs[pages[i].Slug] = struct{}{}
+			if len(pages[i].Content) > maxSitePageContent {
+				response.BadRequest(c, "Site page content is too long (max 200000 characters)")
+				return
+			}
+		}
+		pageBytes, err := json.Marshal(pages)
+		if err != nil {
+			response.BadRequest(c, "Failed to serialize site pages")
+			return
+		}
+		sitePagesJSON = string(pageBytes)
+	}
+
 	// Ops metrics collector interval validation (seconds).
 	if req.OpsMetricsIntervalSeconds != nil {
 		v := *req.OpsMetricsIntervalSeconds
@@ -1118,7 +1250,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SiteSubtitle:                          req.SiteSubtitle,
 		APIBaseURL:                            req.APIBaseURL,
 		ContactInfo:                           req.ContactInfo,
+		ContactChannels:                       contactChannelsJSON,
 		DocURL:                                req.DocURL,
+		SitePages:                             sitePagesJSON,
 		HomeContent:                           req.HomeContent,
 		HideCcsImportButton:                   req.HideCcsImportButton,
 		CCSwitchDefaultModelAnthropic:         req.CCSwitchDefaultModelAnthropic,
@@ -1437,7 +1571,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SiteSubtitle:                           updatedSettings.SiteSubtitle,
 		APIBaseURL:                             updatedSettings.APIBaseURL,
 		ContactInfo:                            updatedSettings.ContactInfo,
+		ContactChannels:                        dto.ParseContactChannels(updatedSettings.ContactChannels),
 		DocURL:                                 updatedSettings.DocURL,
+		SitePages:                              dto.ParseSitePages(updatedSettings.SitePages),
 		HomeContent:                            updatedSettings.HomeContent,
 		HideCcsImportButton:                    updatedSettings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:            updatedSettings.PurchaseSubscriptionEnabled,
@@ -1743,8 +1879,14 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ContactInfo != after.ContactInfo {
 		changed = append(changed, "contact_info")
 	}
+	if before.ContactChannels != after.ContactChannels {
+		changed = append(changed, "contact_channels")
+	}
 	if before.DocURL != after.DocURL {
 		changed = append(changed, "doc_url")
+	}
+	if before.SitePages != after.SitePages {
+		changed = append(changed, "site_pages")
 	}
 	if before.HomeContent != after.HomeContent {
 		changed = append(changed, "home_content")

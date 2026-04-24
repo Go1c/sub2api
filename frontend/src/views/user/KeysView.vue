@@ -1710,7 +1710,7 @@ const executeCcsImport = (row: ApiKey, clientType: 'claude' | 'gemini') => {
     providerName,
     platform: row.group?.platform,
     clientType,
-    usageEnabled: false,
+    usageEnabled: true,
     defaultModels: {
       anthropic: publicSettings.value?.ccswitch_default_model_anthropic,
       openai: publicSettings.value?.ccswitch_default_model_openai,

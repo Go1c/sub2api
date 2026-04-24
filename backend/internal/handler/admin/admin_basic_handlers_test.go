@@ -22,6 +22,7 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 	redeemHandler := NewRedeemHandler(adminSvc, nil)
 
 	router.GET("/api/v1/admin/users", userHandler.List)
+	router.GET("/api/v1/admin/users/balance-summary", userHandler.GetBalanceSummary)
 	router.GET("/api/v1/admin/users/:id", userHandler.GetByID)
 	router.POST("/api/v1/admin/users/:id/auth-identities", userHandler.BindAuthIdentity)
 	router.POST("/api/v1/admin/users", userHandler.Create)
@@ -64,12 +65,35 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 }
 
 func TestUserHandlerEndpoints(t *testing.T) {
-	router, _ := setupAdminRouter()
+	router, adminSvc := setupAdminRouter()
+	adminSvc.users[0].Balance = 12.82
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users?page=1&page_size=20", nil)
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/admin/users/balance-summary?limit=20", nil)
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, 20, adminSvc.lastBalanceSummaryLimit)
+	var balanceSummary struct {
+		Data struct {
+			TotalBalance float64 `json:"total_balance"`
+			UserCount    int64   `json:"user_count"`
+			Ranking      []struct {
+				UserID  int64   `json:"user_id"`
+				Balance float64 `json:"balance"`
+			} `json:"ranking"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &balanceSummary))
+	require.Equal(t, 12.82, balanceSummary.Data.TotalBalance)
+	require.Equal(t, int64(1), balanceSummary.Data.UserCount)
+	require.Len(t, balanceSummary.Data.Ranking, 1)
+	require.Equal(t, int64(1), balanceSummary.Data.Ranking[0].UserID)
+	require.Equal(t, 12.82, balanceSummary.Data.Ranking[0].Balance)
 
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/admin/users/1", nil)

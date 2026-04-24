@@ -3573,6 +3573,87 @@
                 </p>
               </div>
 
+              <!-- Contact Channels -->
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ t("admin.settings.site.contactChannels.title") }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.contactChannels.description") }}
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      @click="addDefaultContactChannels"
+                    >
+                      {{ t("admin.settings.site.contactChannels.addDefaults") }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      @click="addContactChannel()"
+                    >
+                      <Icon name="plus" size="sm" />
+                      {{ t("admin.settings.site.contactChannels.add") }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-3">
+                  <div
+                    v-for="(channel, index) in form.contact_channels"
+                    :key="index"
+                    class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+                  >
+                    <div class="mb-3 flex items-center justify-between">
+                      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{
+                          t("admin.settings.site.contactChannels.itemLabel", {
+                            n: index + 1,
+                          })
+                        }}
+                      </span>
+                      <button
+                        type="button"
+                        class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                        :title="t('common.delete')"
+                        @click="removeContactChannel(index)"
+                      >
+                        <Icon name="trash" size="sm" />
+                      </button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <div>
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ t("admin.settings.site.contactChannels.label") }}
+                        </label>
+                        <input
+                          v-model="channel.label"
+                          type="text"
+                          class="input text-sm"
+                          :placeholder="t('admin.settings.site.contactChannels.labelPlaceholder')"
+                        />
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ t("admin.settings.site.contactChannels.url") }}
+                        </label>
+                        <input
+                          v-model="channel.url"
+                          type="url"
+                          class="input font-mono text-sm"
+                          :placeholder="t('admin.settings.site.contactChannels.urlPlaceholder')"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Doc URL -->
               <div>
                 <label
@@ -3589,6 +3670,106 @@
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{ t("admin.settings.site.docUrlHint") }}
                 </p>
+              </div>
+
+              <!-- Site Pages -->
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ t("admin.settings.site.sitePages.title") }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.sitePages.description") }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="addSitePage"
+                  >
+                    <Icon name="plus" size="sm" />
+                    {{ t("admin.settings.site.sitePages.add") }}
+                  </button>
+                </div>
+
+                <div class="space-y-4">
+                  <div
+                    v-for="(page, index) in form.site_pages"
+                    :key="page.key || index"
+                    class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+                  >
+                    <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="flex items-center gap-3">
+                        <Toggle v-model="page.enabled" />
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {{
+                            t("admin.settings.site.sitePages.itemLabel", {
+                              n: index + 1,
+                            })
+                          }}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                        :title="t('common.delete')"
+                        @click="removeSitePage(index)"
+                      >
+                        <Icon name="trash" size="sm" />
+                      </button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <div>
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ t("admin.settings.site.sitePages.key") }}
+                        </label>
+                        <input
+                          v-model="page.key"
+                          type="text"
+                          class="input font-mono text-sm"
+                          :placeholder="t('admin.settings.site.sitePages.keyPlaceholder')"
+                        />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ t("admin.settings.site.sitePages.titleLabel") }}
+                        </label>
+                        <input
+                          v-model="page.title"
+                          type="text"
+                          class="input text-sm"
+                          :placeholder="t('admin.settings.site.sitePages.titlePlaceholder')"
+                        />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ t("admin.settings.site.sitePages.slug") }}
+                        </label>
+                        <input
+                          v-model="page.slug"
+                          type="text"
+                          class="input font-mono text-sm"
+                          :placeholder="t('admin.settings.site.sitePages.slugPlaceholder')"
+                        />
+                      </div>
+                      <div class="md:col-span-3">
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ t("admin.settings.site.sitePages.content") }}
+                        </label>
+                        <textarea
+                          v-model="page.content"
+                          rows="8"
+                          class="input font-mono text-sm"
+                          :placeholder="t('admin.settings.site.sitePages.contentPlaceholder')"
+                        ></textarea>
+                        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                          {{ t("admin.settings.site.sitePages.contentHint") }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Site Logo Upload -->
@@ -4847,6 +5028,10 @@
                 </div>
               </div>
 
+              <div class="rounded-xl border border-primary-200 bg-primary-50/70 p-4 text-sm text-primary-800 dark:border-primary-800/50 dark:bg-primary-900/20 dark:text-primary-200">
+                {{ t("admin.settings.publicPricing.autoCalcHint") }}
+              </div>
+
               <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-700">
                 <table class="min-w-[1080px] w-full text-sm">
                   <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-dark-800 dark:text-gray-400">
@@ -4854,11 +5039,11 @@
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.enabled") }}</th>
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.model") }}</th>
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.group") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialInput") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialOutput") }}</th>
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.multiplier") }}</th>
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.inputPrice") }}</th>
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.outputPrice") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialInput") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialOutput") }}</th>
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.discount") }}</th>
                       <th class="px-3 py-3">{{ t("admin.settings.publicPricing.openClaw") }}</th>
                       <th class="px-3 py-3"></th>
@@ -4884,22 +5069,28 @@
                         <input v-model="row.group" type="text" class="input input-sm min-w-[120px]" />
                       </td>
                       <td class="px-3 py-3">
-                        <input v-model="row.multiplier" type="text" class="input input-sm min-w-[80px]" />
-                      </td>
-                      <td class="px-3 py-3">
-                        <input v-model.number="row.inputPrice" type="number" min="0" step="0.01" class="input input-sm w-24" />
-                      </td>
-                      <td class="px-3 py-3">
-                        <input v-model.number="row.outputPrice" type="number" min="0" step="0.01" class="input input-sm w-24" />
-                      </td>
-                      <td class="px-3 py-3">
                         <input v-model.number="row.officialInput" type="number" min="0" step="0.01" class="input input-sm w-24" />
                       </td>
                       <td class="px-3 py-3">
                         <input v-model.number="row.officialOutput" type="number" min="0" step="0.01" class="input input-sm w-24" />
                       </td>
                       <td class="px-3 py-3">
-                        <input v-model="row.discount" type="text" class="input input-sm min-w-[80px]" />
+                        <input v-model="row.multiplier" type="text" class="input input-sm min-w-[80px]" placeholder="1.4" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <span class="inline-flex min-w-[5.5rem] items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                          {{ formatPublicPricingCny(derivePublicPricingInput(row)) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-3">
+                        <span class="inline-flex min-w-[5.5rem] items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                          {{ formatPublicPricingCny(derivePublicPricingOutput(row)) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-3">
+                        <span class="inline-flex min-w-[5rem] items-center justify-center rounded-full bg-gradient-to-r from-primary-500 to-primary-600 px-3 py-1.5 font-bold text-white shadow-sm">
+                          {{ derivePublicPricingDiscount(row) || "-" }}
+                        </span>
                       </td>
                       <td class="px-3 py-3">
                         <input
@@ -5062,7 +5253,7 @@ import type {
   WebSearchProviderConfig,
   WebSearchTestResult,
 } from "@/api/admin/settings";
-import type { AdminGroup, Proxy, NotifyEmailEntry } from "@/types";
+import type { AdminGroup, ContactChannel, NotifyEmailEntry, Proxy, SitePage } from "@/types";
 import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import Icon from "@/components/icons/Icon.vue";
@@ -5150,6 +5341,7 @@ const publicModelPricingForm = reactive<PublicModelPricingConfig>({
   rateNote: "",
   rows: [],
 });
+const publicPricingUsdToCnyRate = 7;
 
 // Admin API Key 状态
 const adminApiKeyLoading = ref(true);
@@ -5258,7 +5450,9 @@ const form = reactive<SettingsForm>({
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
   contact_info: "",
+  contact_channels: [] as ContactChannel[],
   doc_url: "",
+  site_pages: [] as SitePage[],
   home_content: "",
   backend_mode_enabled: false,
   hide_ccs_import_button: false,
@@ -5862,6 +6056,133 @@ function removeEndpoint(index: number) {
   form.custom_endpoints.splice(index, 1);
 }
 
+const defaultSitePageSeeds: SitePage[] = [
+  { key: "docs", title: "文档", slug: "doc/文档", content: "", enabled: true },
+  { key: "terms", title: "服务条款", slug: "doc/服务条款", content: "", enabled: true },
+  { key: "privacy", title: "隐私协议", slug: "doc/隐私协议", content: "", enabled: true },
+];
+
+function normalizeContactChannels(
+  channels: ContactChannel[] | null | undefined,
+): ContactChannel[] {
+  if (!Array.isArray(channels)) return [];
+  return channels.map((channel) => ({
+    label: String(channel.label || "").trim(),
+    url: String(channel.url || "").trim(),
+  }));
+}
+
+function addContactChannel(label = "") {
+  form.contact_channels.push({ label, url: "" });
+}
+
+function addDefaultContactChannels() {
+  const existingLabels = new Set(
+    form.contact_channels.map((channel) => channel.label.trim()),
+  );
+  for (const label of ["QQ 群", "飞书群", "Telegram 群"]) {
+    if (!existingLabels.has(label)) {
+      addContactChannel(label);
+    }
+  }
+}
+
+function removeContactChannel(index: number) {
+  form.contact_channels.splice(index, 1);
+}
+
+function normalizeSitePageSlug(slug: string) {
+  return slug.trim().replace(/^\/+|\/+$/g, "");
+}
+
+function normalizeSitePages(pages: SitePage[] | null | undefined): SitePage[] {
+  if (!Array.isArray(pages)) return [];
+  return pages.map((page) => ({
+    key: String(page.key || "").trim(),
+    title: String(page.title || "").trim(),
+    slug: normalizeSitePageSlug(String(page.slug || "")),
+    content: String(page.content || ""),
+    enabled: page.enabled !== false,
+  }));
+}
+
+function ensureDefaultSitePages(pages: SitePage[] | null | undefined): SitePage[] {
+  const normalized = normalizeSitePages(pages);
+  const byKey = new Map(normalized.map((page) => [page.key, page]));
+  const result = defaultSitePageSeeds.map((seed) => ({
+    ...seed,
+    ...(byKey.get(seed.key) || {}),
+  }));
+
+  for (const page of normalized) {
+    if (!defaultSitePageSeeds.some((seed) => seed.key === page.key)) {
+      result.push(page);
+    }
+  }
+  return result;
+}
+
+function addSitePage() {
+  form.site_pages.push({
+    key: `page_${Date.now()}`,
+    title: "",
+    slug: "doc/",
+    content: "",
+    enabled: true,
+  });
+}
+
+function removeSitePage(index: number) {
+  form.site_pages.splice(index, 1);
+}
+
+function parsePublicPricingMultiplier(value?: string) {
+  const raw = value?.trim();
+  if (!raw) return 0;
+
+  const normalized = raw
+    .replace(/倍率/g, "")
+    .replace(/[xX倍\s]/g, "")
+    .trim();
+  if (!normalized) return 0;
+
+  const numeric = Number.parseFloat(normalized);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  if (normalized.endsWith("%")) return numeric / 100;
+  if (normalized.endsWith("折")) return (numeric / 10) * publicPricingUsdToCnyRate;
+  return numeric;
+}
+
+function roundPublicPricing(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function derivePublicPricingInput(row: PublicModelPricingRow) {
+  return roundPublicPricing((Number(row.officialInput) || 0) * parsePublicPricingMultiplier(row.multiplier));
+}
+
+function derivePublicPricingOutput(row: PublicModelPricingRow) {
+  return roundPublicPricing((Number(row.officialOutput) || 0) * parsePublicPricingMultiplier(row.multiplier));
+}
+
+function formatPublicPricingCompact(value: number) {
+  return value
+    .toFixed(value < 1 ? 2 : 1)
+    .replace(/(\.\d*?[1-9])0+$/, "$1")
+    .replace(/\.0$/, "");
+}
+
+function derivePublicPricingDiscount(row: PublicModelPricingRow) {
+  const multiplier = parsePublicPricingMultiplier(row.multiplier);
+  if (multiplier <= 0) return "";
+  const finalDiscount = (multiplier / publicPricingUsdToCnyRate) * 10;
+  return `${formatPublicPricingCompact(finalDiscount)}折`;
+}
+
+function formatPublicPricingCny(value: number) {
+  return `¥${value.toFixed(2)}`;
+}
+
 function createPublicPricingRow(): PublicModelPricingRow {
   return {
     model: "",
@@ -5925,11 +6246,11 @@ async function savePublicModelPricing() {
     model: row.model.trim(),
     group: row.group.trim(),
     multiplier: row.multiplier.trim(),
-    discount: row.discount.trim(),
-    inputPrice: Number(row.inputPrice) || 0,
-    outputPrice: Number(row.outputPrice) || 0,
     officialInput: Number(row.officialInput) || 0,
     officialOutput: Number(row.officialOutput) || 0,
+    inputPrice: derivePublicPricingInput(row),
+    outputPrice: derivePublicPricingOutput(row),
+    discount: derivePublicPricingDiscount(row),
     enabled: row.enabled !== false,
   }));
   const invalidIndex = rows.findIndex((row) => row.model === "");
@@ -6005,6 +6326,8 @@ async function loadSettings() {
     }
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(settings));
     form.backend_mode_enabled = settings.backend_mode_enabled;
+    form.contact_channels = normalizeContactChannels(settings.contact_channels);
+    form.site_pages = ensureDefaultSitePages(settings.site_pages);
     form.default_subscriptions = normalizeDefaultSubscriptionSettings(
       settings.default_subscriptions,
     );
@@ -6253,6 +6576,44 @@ async function saveSettings() {
     // Optional URL fields: auto-clear invalid values so they don't cause backend 400 errors
     if (!isValidHttpUrl(form.frontend_url)) form.frontend_url = "";
     if (!isValidHttpUrl(form.doc_url)) form.doc_url = "";
+
+    const normalizedContactChannels = normalizeContactChannels(
+      form.contact_channels,
+    ).filter((channel) => channel.label !== "" || channel.url !== "");
+    for (const channel of normalizedContactChannels) {
+      if (!channel.label || !channel.url) {
+        appStore.showError(
+          t("admin.settings.site.contactChannels.required"),
+        );
+        return;
+      }
+      if (!isValidHttpUrl(channel.url)) {
+        appStore.showError(
+          t("admin.settings.site.contactChannels.invalidUrl"),
+        );
+        return;
+      }
+    }
+
+    const normalizedSitePages = normalizeSitePages(form.site_pages);
+    for (const page of normalizedSitePages) {
+      if (!page.key || !page.title || !page.slug) {
+        appStore.showError(t("admin.settings.site.sitePages.required"));
+        return;
+      }
+      if (
+        !page.slug.startsWith("doc/") ||
+        page.slug.includes("?") ||
+        page.slug.includes("#") ||
+        page.slug.includes("\\") ||
+        page.slug.includes("//") ||
+        page.slug.includes("..")
+      ) {
+        appStore.showError(t("admin.settings.site.sitePages.invalidSlug"));
+        return;
+      }
+    }
+
     syncWeChatConnectMode();
     const wechatStoredMode = deriveWeChatConnectStoredMode(
       form.wechat_connect_open_enabled,
@@ -6282,7 +6643,9 @@ async function saveSettings() {
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
+      contact_channels: normalizedContactChannels,
       doc_url: form.doc_url,
+      site_pages: normalizedSitePages,
       home_content: form.home_content,
       backend_mode_enabled: form.backend_mode_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
@@ -6429,6 +6792,8 @@ async function saveSettings() {
       }
     }
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
+    form.contact_channels = normalizeContactChannels(updated.contact_channels);
+    form.site_pages = ensureDefaultSitePages(updated.site_pages);
     registrationEmailSuffixWhitelistTags.value =
       normalizeRegistrationEmailSuffixDomains(
         updated.registration_email_suffix_whitelist,

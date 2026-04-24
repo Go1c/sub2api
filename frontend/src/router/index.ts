@@ -37,6 +37,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/doc/:slug(.*)*',
+    name: 'SitePage',
+    component: () => import('@/views/PublicMarkdownPageView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Document'
+    }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/auth/LoginView.vue'),
@@ -562,10 +571,13 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(_to, _from, savedPosition) {
+  scrollBehavior(to, _from, savedPosition) {
     // Scroll to saved position when using browser back/forward
     if (savedPosition) {
       return savedPosition
+    }
+    if (to.hash) {
+      return { el: to.hash, behavior: 'smooth' }
     }
     // Scroll to top for new routes
     return { top: 0 }

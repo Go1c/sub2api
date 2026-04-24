@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -89,6 +90,40 @@ func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t 
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.True(t, settings.ForceEmailOnThirdPartySignup)
+}
+
+func TestSettingService_GetPublicSettings_FiltersDisabledSitePages(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeySitePages: `[
+				{"key":"docs","title":"Docs","slug":"doc/docs","content":"published","enabled":true},
+				{"key":"draft","title":"Draft","slug":"doc/draft","content":"hidden draft","enabled":false},
+				{"key":"legacy","title":"Legacy","slug":"doc/legacy","content":"legacy visible"}
+			]`,
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.NotContains(t, settings.SitePages, "hidden draft")
+	require.Contains(t, settings.SitePages, "published")
+	require.Contains(t, settings.SitePages, "legacy visible")
+
+	var pages []struct {
+		Key     string `json:"key"`
+		Content string `json:"content"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(settings.SitePages), &pages))
+	require.Len(t, pages, 2)
+	require.Equal(t, []string{"docs", "legacy"}, []string{pages[0].Key, pages[1].Key})
+
+	injection, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	rawInjection, err := json.Marshal(injection)
+	require.NoError(t, err)
+	require.NotContains(t, string(rawInjection), "hidden draft")
+	require.Contains(t, string(rawInjection), "published")
 }
 
 func TestSettingService_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {

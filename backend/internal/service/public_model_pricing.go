@@ -5,65 +5,130 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-const maxPublicModelPricingRows = 20
+const (
+	maxPublicModelPricingRows = 20
+	publicPricingUSDToCNYRate = 7.0
+)
 
 func DefaultPublicModelPricingConfig() PublicModelPricingConfig {
 	return PublicModelPricingConfig{
 		Currency: "CNY",
 		Unit:     "1M tokens",
-		RateNote: "价格以人民币（¥）计价，单位为百万 tokens；折扣展示可在管理员后台调整。",
+		RateNote: "官方原价以美元（USD）标注；充值 ¥1 = $1 账户额度；人民币展示价和最终折扣自动计算。",
 		Rows: []PublicModelPricingRow{
 			{
 				Model:          "Claude Opus 4.7",
-				Group:          "企业稳定版",
-				Multiplier:     "3.3%",
-				InputPrice:     3.50,
-				OutputPrice:    17.50,
-				OfficialInput:  15,
-				OfficialOutput: 75,
-				Discount:       "3.3%",
+				Group:          "Claude",
+				Multiplier:     "1.4",
+				InputPrice:     calculatePublicPricingPrice(5, 1.4),
+				OutputPrice:    calculatePublicPricingPrice(25, 1.4),
+				OfficialInput:  5,
+				OfficialOutput: 25,
+				Discount:       formatPublicPricingFinalDiscount(1.4),
 				Enabled:        true,
 			},
 			{
 				Model:          "Claude Sonnet 4.6",
-				Group:          "企业稳定版",
-				Multiplier:     "3.3%",
-				InputPrice:     0.70,
-				OutputPrice:    3.50,
+				Group:          "Claude",
+				Multiplier:     "1.4",
+				InputPrice:     calculatePublicPricingPrice(3, 1.4),
+				OutputPrice:    calculatePublicPricingPrice(15, 1.4),
 				OfficialInput:  3,
 				OfficialOutput: 15,
-				Discount:       "3.3%",
+				Discount:       formatPublicPricingFinalDiscount(1.4),
 				Enabled:        true,
 			},
 			{
 				Model:          "GPT5.5",
 				Group:          "OpenAI",
-				Multiplier:     "1.0%",
-				InputPrice:     0.18,
-				OutputPrice:    0.70,
-				OfficialInput:  2.5,
-				OfficialOutput: 10,
-				Discount:       "1.0%",
+				Multiplier:     "0.2",
+				InputPrice:     calculatePublicPricingPrice(5, 0.2),
+				OutputPrice:    calculatePublicPricingPrice(30, 0.2),
+				OfficialInput:  5,
+				OfficialOutput: 30,
+				Discount:       formatPublicPricingFinalDiscount(0.2),
 				Enabled:        true,
 			},
 			{
 				Model:          "GPT5.4",
 				Group:          "OpenAI",
-				Multiplier:     "1.0%",
-				InputPrice:     0.18,
-				OutputPrice:    1.05,
+				Multiplier:     "0.2",
+				InputPrice:     calculatePublicPricingPrice(2.5, 0.2),
+				OutputPrice:    calculatePublicPricingPrice(15, 0.2),
 				OfficialInput:  2.5,
 				OfficialOutput: 15,
-				Discount:       "1.0%",
+				Discount:       formatPublicPricingFinalDiscount(0.2),
 				Enabled:        true,
 			},
 		},
 	}
+}
+
+func parsePublicPricingMultiplier(value string) float64 {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return 0
+	}
+	normalized = strings.ReplaceAll(normalized, "倍率", "")
+	normalized = strings.ReplaceAll(normalized, "倍", "")
+	normalized = strings.ReplaceAll(normalized, "x", "")
+	normalized = strings.ReplaceAll(normalized, "X", "")
+	normalized = strings.TrimSpace(normalized)
+	if normalized == "" {
+		return 0
+	}
+
+	if strings.HasSuffix(normalized, "%") {
+		n, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(normalized, "%")), 64)
+		if err != nil || n <= 0 {
+			return 0
+		}
+		return n / 100
+	}
+	if strings.HasSuffix(normalized, "折") {
+		n, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(normalized, "折")), 64)
+		if err != nil || n <= 0 {
+			return 0
+		}
+		return (n / 10) * publicPricingUSDToCNYRate
+	}
+
+	n, err := strconv.ParseFloat(normalized, 64)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+func calculatePublicPricingPrice(officialUSD float64, multiplier float64) float64 {
+	if officialUSD <= 0 || multiplier <= 0 {
+		return 0
+	}
+	return math.Round(officialUSD*multiplier*100) / 100
+}
+
+func formatPublicPricingFinalDiscount(multiplier float64) string {
+	if multiplier <= 0 {
+		return ""
+	}
+	return trimFloatForDisplay((multiplier/publicPricingUSDToCNYRate)*10) + "折"
+}
+
+func trimFloatForDisplay(value float64) string {
+	precision := 1
+	if value < 1 {
+		precision = 2
+	}
+	formatted := strconv.FormatFloat(value, 'f', precision, 64)
+	formatted = strings.TrimRight(formatted, "0")
+	return strings.TrimRight(formatted, ".")
 }
 
 func NormalizePublicModelPricingConfig(cfg PublicModelPricingConfig) PublicModelPricingConfig {
@@ -99,6 +164,7 @@ func NormalizePublicModelPricingConfig(cfg PublicModelPricingConfig) PublicModel
 		if row.Discount == "" {
 			row.Discount = row.Multiplier
 		}
+		multiplier := parsePublicPricingMultiplier(row.Multiplier)
 		if row.InputPrice < 0 {
 			row.InputPrice = 0
 		}
@@ -110,6 +176,11 @@ func NormalizePublicModelPricingConfig(cfg PublicModelPricingConfig) PublicModel
 		}
 		if row.OfficialOutput < 0 {
 			row.OfficialOutput = 0
+		}
+		if multiplier > 0 {
+			row.InputPrice = calculatePublicPricingPrice(row.OfficialInput, multiplier)
+			row.OutputPrice = calculatePublicPricingPrice(row.OfficialOutput, multiplier)
+			row.Discount = formatPublicPricingFinalDiscount(multiplier)
 		}
 		rows = append(rows, row)
 		if len(rows) >= maxPublicModelPricingRows {

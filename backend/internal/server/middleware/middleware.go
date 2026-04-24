@@ -105,6 +105,10 @@ func GoogleErrorWriter(c *gin.Context, status int, message string) {
 // 如果未分组且系统设置不允许未分组 Key 调度则返回 403。
 func RequireGroupAssignment(settingService *service.SettingService, writeError GatewayErrorWriter) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if isGatewayUsagePath(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
 		apiKey, ok := GetAPIKeyFromContext(c)
 		if !ok || apiKey.GroupID != nil {
 			c.Next()
@@ -118,4 +122,8 @@ func RequireGroupAssignment(settingService *service.SettingService, writeError G
 		writeError(c, http.StatusForbidden, "API Key is not assigned to any group and cannot be used. Please contact the administrator to assign it to a group.")
 		c.Abort()
 	}
+}
+
+func isGatewayUsagePath(path string) bool {
+	return path == "/v1/usage" || path == "/antigravity/v1/usage"
 }

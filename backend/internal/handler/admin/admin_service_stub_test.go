@@ -52,7 +52,8 @@ type stubAdminService struct {
 		sortOrder string
 		calls     int
 	}
-	lastListProxies struct {
+	lastBalanceSummaryLimit int
+	lastListProxies         struct {
 		protocol  string
 		status    string
 		search    string
@@ -144,6 +145,30 @@ func (s *stubAdminService) ListUsers(ctx context.Context, page, pageSize int, fi
 	s.lastListUsers.sortOrder = sortOrder
 	s.lastListUsers.calls++
 	return s.users, int64(len(s.users)), nil
+}
+
+func (s *stubAdminService) GetUserBalanceSummary(ctx context.Context, limit int) (*service.UserBalanceSummary, error) {
+	s.lastBalanceSummaryLimit = limit
+	ranking := make([]service.UserBalanceRankingItem, 0, len(s.users))
+	totalBalance := 0.0
+	for i := range s.users {
+		totalBalance += s.users[i].Balance
+		if len(ranking) >= limit {
+			continue
+		}
+		ranking = append(ranking, service.UserBalanceRankingItem{
+			UserID:   s.users[i].ID,
+			Email:    s.users[i].Email,
+			Username: s.users[i].Username,
+			Status:   s.users[i].Status,
+			Balance:  s.users[i].Balance,
+		})
+	}
+	return &service.UserBalanceSummary{
+		TotalBalance: totalBalance,
+		UserCount:    int64(len(s.users)),
+		Ranking:      ranking,
+	}, nil
 }
 
 func (s *stubAdminService) GetUser(ctx context.Context, id int64) (*service.User, error) {
