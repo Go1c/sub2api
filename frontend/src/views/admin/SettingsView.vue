@@ -4672,13 +4672,205 @@
         </div>
         <!-- /Tab: Email -->
 
+        <!-- Tab: Public Pricing -->
+        <div v-show="activeTab === 'pricing'" class="space-y-6">
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {{ t("admin.settings.publicPricing.title") }}
+                  </h2>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.publicPricing.description") }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  :disabled="publicModelPricingLoading"
+                  @click="loadPublicModelPricing"
+                >
+                  <Icon name="refresh" size="sm" />
+                  {{ t("common.refresh") }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="publicModelPricingLoading" class="flex items-center gap-2 p-6 text-gray-500">
+              <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
+              {{ t("common.loading") }}
+            </div>
+
+            <div v-else class="space-y-6 p-6">
+              <div class="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label class="input-label">
+                    {{ t("admin.settings.publicPricing.currency") }}
+                  </label>
+                  <input
+                    v-model="publicModelPricingForm.currency"
+                    type="text"
+                    class="input"
+                    placeholder="CNY"
+                  />
+                </div>
+                <div>
+                  <label class="input-label">
+                    {{ t("admin.settings.publicPricing.unit") }}
+                  </label>
+                  <input
+                    v-model="publicModelPricingForm.unit"
+                    type="text"
+                    class="input"
+                    placeholder="1M tokens"
+                  />
+                </div>
+                <div>
+                  <label class="input-label">
+                    {{ t("admin.settings.publicPricing.rateNote") }}
+                  </label>
+                  <input
+                    v-model="publicModelPricingForm.rateNote"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.settings.publicPricing.rateNotePlaceholder')"
+                  />
+                </div>
+              </div>
+
+              <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-700">
+                <table class="min-w-[1080px] w-full text-sm">
+                  <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-dark-800 dark:text-gray-400">
+                    <tr>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.enabled") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.model") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.group") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.multiplier") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.inputPrice") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.outputPrice") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialInput") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialOutput") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.discount") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.openClaw") }}</th>
+                      <th class="px-3 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+                    <tr
+                      v-for="(row, index) in publicModelPricingForm.rows"
+                      :key="index"
+                      class="bg-white dark:bg-dark-900"
+                    >
+                      <td class="px-3 py-3">
+                        <input
+                          v-model="row.enabled"
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model="row.model" type="text" class="input input-sm min-w-[150px]" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model="row.group" type="text" class="input input-sm min-w-[120px]" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model="row.multiplier" type="text" class="input input-sm min-w-[80px]" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model.number="row.inputPrice" type="number" min="0" step="0.01" class="input input-sm w-24" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model.number="row.outputPrice" type="number" min="0" step="0.01" class="input input-sm w-24" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model.number="row.officialInput" type="number" min="0" step="0.01" class="input input-sm w-24" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model.number="row.officialOutput" type="number" min="0" step="0.01" class="input input-sm w-24" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input v-model="row.discount" type="text" class="input input-sm min-w-[80px]" />
+                      </td>
+                      <td class="px-3 py-3">
+                        <input
+                          v-model="row.openClaw"
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                      </td>
+                      <td class="px-3 py-3 text-right">
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
+                          @click="removePublicPricingRow(index)"
+                        >
+                          <Icon name="trash" size="sm" />
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="publicModelPricingForm.rows.length === 0">
+                      <td colspan="11" class="px-3 py-8 text-center text-gray-500">
+                        {{ t("admin.settings.publicPricing.empty") }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  @click="addPublicPricingRow"
+                >
+                  <Icon name="plus" size="sm" />
+                  {{ t("admin.settings.publicPricing.addRow") }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  :disabled="publicModelPricingSaving"
+                  @click="savePublicModelPricing"
+                >
+                  <svg
+                    v-if="publicModelPricingSaving"
+                    class="h-4 w-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  {{ t("admin.settings.publicPricing.save") }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /Tab: Public Pricing -->
+
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
           <BackupSettings />
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+        <div v-show="activeTab !== 'backup' && activeTab !== 'pricing'" class="flex justify-end">
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -4757,6 +4949,8 @@ import type {
   SystemSettings,
   UpdateSettingsRequest,
   DefaultSubscriptionSetting,
+  PublicModelPricingConfig,
+  PublicModelPricingRow,
   WeChatConnectMode,
   WebSearchEmulationConfig,
   WebSearchProviderConfig,
@@ -4814,6 +5008,7 @@ type SettingsTab =
   | "users"
   | "gateway"
   | "payment"
+  | "pricing"
   | "email"
   | "backup";
 const activeTab = ref<SettingsTab>("general");
@@ -4823,6 +5018,7 @@ const settingsTabs = [
   { key: "users" as SettingsTab, icon: "user" as const },
   { key: "gateway" as SettingsTab, icon: "server" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
+  { key: "pricing" as SettingsTab, icon: "dollar" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
@@ -4838,6 +5034,14 @@ const testEmailAddress = ref("");
 const registrationEmailSuffixWhitelistTags = ref<string[]>([]);
 const registrationEmailSuffixWhitelistDraft = ref("");
 const tablePageSizeOptionsInput = ref("10, 20, 50, 100");
+const publicModelPricingLoading = ref(false);
+const publicModelPricingSaving = ref(false);
+const publicModelPricingForm = reactive<PublicModelPricingConfig>({
+  currency: "CNY",
+  unit: "1M tokens",
+  rateNote: "",
+  rows: [],
+});
 
 // Admin API Key 状态
 const adminApiKeyLoading = ref(true);
@@ -5542,6 +5746,103 @@ function addEndpoint() {
 
 function removeEndpoint(index: number) {
   form.custom_endpoints.splice(index, 1);
+}
+
+function createPublicPricingRow(): PublicModelPricingRow {
+  return {
+    model: "",
+    group: "",
+    multiplier: "",
+    inputPrice: 0,
+    outputPrice: 0,
+    officialInput: 0,
+    officialOutput: 0,
+    discount: "",
+    openClaw: false,
+    enabled: true,
+  };
+}
+
+function applyPublicModelPricingConfig(config: PublicModelPricingConfig) {
+  publicModelPricingForm.currency = config.currency || "CNY";
+  publicModelPricingForm.unit = config.unit || "1M tokens";
+  publicModelPricingForm.rateNote = config.rateNote || "";
+  publicModelPricingForm.rows = Array.isArray(config.rows)
+    ? config.rows.map((row) => ({
+        model: row.model || "",
+        group: row.group || "",
+        multiplier: row.multiplier || "",
+        inputPrice: Number(row.inputPrice) || 0,
+        outputPrice: Number(row.outputPrice) || 0,
+        officialInput: Number(row.officialInput) || 0,
+        officialOutput: Number(row.officialOutput) || 0,
+        discount: row.discount || "",
+        openClaw: row.openClaw === true,
+        enabled: row.enabled !== false,
+      }))
+    : [];
+}
+
+async function loadPublicModelPricing() {
+  publicModelPricingLoading.value = true;
+  try {
+    const config = await adminAPI.settings.getPublicModelPricing();
+    applyPublicModelPricingConfig(config);
+  } catch (error: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(error, t("admin.settings.publicPricing.failedToLoad")),
+    );
+  } finally {
+    publicModelPricingLoading.value = false;
+  }
+}
+
+function addPublicPricingRow() {
+  publicModelPricingForm.rows.push(createPublicPricingRow());
+}
+
+function removePublicPricingRow(index: number) {
+  publicModelPricingForm.rows.splice(index, 1);
+}
+
+async function savePublicModelPricing() {
+  const rows = publicModelPricingForm.rows.map((row) => ({
+    ...row,
+    model: row.model.trim(),
+    group: row.group.trim(),
+    multiplier: row.multiplier.trim(),
+    discount: row.discount.trim(),
+    inputPrice: Number(row.inputPrice) || 0,
+    outputPrice: Number(row.outputPrice) || 0,
+    officialInput: Number(row.officialInput) || 0,
+    officialOutput: Number(row.officialOutput) || 0,
+    enabled: row.enabled !== false,
+  }));
+  const invalidIndex = rows.findIndex((row) => row.model === "");
+  if (invalidIndex >= 0) {
+    appStore.showError(
+      t("admin.settings.publicPricing.modelRequired", { index: invalidIndex + 1 }),
+    );
+    return;
+  }
+
+  publicModelPricingSaving.value = true;
+  try {
+    const updated = await adminAPI.settings.updatePublicModelPricing({
+      currency: publicModelPricingForm.currency.trim() || "CNY",
+      unit: publicModelPricingForm.unit.trim() || "1M tokens",
+      rateNote: publicModelPricingForm.rateNote.trim(),
+      rows,
+    });
+    applyPublicModelPricingConfig(updated);
+    appStore.showSuccess(t("admin.settings.publicPricing.saved"));
+  } catch (error: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(error, t("admin.settings.publicPricing.failedToSave")),
+    );
+  } finally {
+    publicModelPricingSaving.value = false;
+  }
 }
 
 function formatTablePageSizeOptions(options: number[]): string {
@@ -6775,6 +7076,7 @@ onMounted(() => {
   loadStreamTimeoutSettings();
   loadRectifierSettings();
   loadBetaPolicySettings();
+  loadPublicModelPricing();
   loadProviders();
 });
 </script>
