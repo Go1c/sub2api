@@ -187,6 +187,7 @@ import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, isTotp2FARequired, isWeChatWebOAuthEnabled } from '@/api/auth'
 import { performExternalAuthHandoff, resolveExternalAuthHandoff } from '@/utils/externalAuthHandoff'
 import type { TotpLoginResponse } from '@/types'
+import { clearAllAffiliateReferralCodes } from '@/utils/oauthAffiliate'
 
 const { t } = useI18n()
 
@@ -376,6 +377,7 @@ async function handleLogin(): Promise<void> {
     }
 
     // Show success toast
+    clearAllAffiliateReferralCodes()
     appStore.showSuccess(t('auth.loginSuccess'))
 
     if (tryExternalAuthHandoff(response.access_token)) {
@@ -422,6 +424,7 @@ async function handle2FAVerify(code: string): Promise<void> {
 
     // Close modal and show success
     show2FAModal.value = false
+    clearAllAffiliateReferralCodes()
     appStore.showSuccess(t('auth.loginSuccess'))
 
     if (tryExternalAuthHandoff(authStore.token)) {
