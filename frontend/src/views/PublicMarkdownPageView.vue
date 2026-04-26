@@ -1,6 +1,14 @@
 <template>
-  <div class="min-h-screen bg-[#fafafa] text-gray-900 dark:bg-dark-950 dark:text-white">
-    <header class="sticky top-0 z-20 border-b border-gray-200 bg-white/85 backdrop-blur-md dark:border-dark-800 dark:bg-dark-950/85">
+  <div
+    :class="[
+      'min-h-screen text-gray-900 dark:text-white',
+      isEmbeddedLinkPage ? 'bg-white dark:bg-dark-950' : 'bg-[#fafafa] dark:bg-dark-950'
+    ]"
+  >
+    <header
+      v-if="!isEmbeddedLinkPage"
+      class="sticky top-0 z-20 border-b border-gray-200 bg-white/85 backdrop-blur-md dark:border-dark-800 dark:bg-dark-950/85"
+    >
       <div class="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
         <button class="flex items-center gap-3 text-left" @click="goHome">
           <span class="relative inline-flex h-10 w-10 items-center justify-center">
@@ -25,7 +33,17 @@
       </div>
     </header>
 
-    <main class="mx-auto max-w-5xl px-6 py-12">
+    <main v-if="isEmbeddedLinkPage" class="h-screen w-screen overflow-hidden bg-white dark:bg-dark-950">
+      <iframe
+        class="public-page-frame h-screen w-screen border-0 bg-white"
+        :src="linkContentUrl"
+        :title="page?.title || siteName"
+        loading="eager"
+        referrerpolicy="no-referrer-when-downgrade"
+      ></iframe>
+    </main>
+
+    <main v-else class="mx-auto max-w-5xl px-6 py-12">
       <section
         v-if="page"
         class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-dark-800 dark:bg-dark-900 md:p-10"
@@ -81,6 +99,7 @@ import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore, useAuthStore } from '@/stores'
 import type { SitePage } from '@/types'
+import { isHttpUrl, normalizeSitePageSlug, normalizeSitePages } from '@/utils/sitePages'
 
 marked.setOptions({
   breaks: true,
@@ -96,7 +115,7 @@ const { locale } = useI18n()
 const isZh = computed(() => locale.value.startsWith('zh'))
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
-const sitePages = computed(() => appStore.cachedPublicSettings?.site_pages || [])
+const sitePages = computed(() => normalizeSitePages(appStore.cachedPublicSettings?.site_pages || []))
 
 const consoleLabel = computed(() => (isZh.value ? '控制台' : 'Console'))
 const backLabel = computed(() => (isZh.value ? '返回首页' : 'Back home'))
@@ -121,13 +140,20 @@ const page = computed<SitePage | null>(() => {
 })
 
 const renderedContent = computed(() => {
+  if (page.value?.mode === 'link') return ''
   const content = page.value?.content?.trim() || ''
   if (!content) return ''
   return DOMPurify.sanitize(marked.parse(content) as string)
 })
 
+const linkContentUrl = computed(() => {
+  const content = page.value?.mode === 'link' ? page.value.content.trim() : ''
+  return isHttpUrl(content) ? content : ''
+})
+const isEmbeddedLinkPage = computed(() => Boolean(linkContentUrl.value))
+
 function normalizeSlug(slug: string) {
-  return slug.trim().replace(/^\/+|\/+$/g, '')
+  return normalizeSitePageSlug(slug)
 }
 
 function goHome() {
@@ -150,6 +176,7 @@ watchEffect(() => {
     document.title = `${page.value.title} - ${siteName.value}`
   }
 })
+
 </script>
 
 <style scoped>

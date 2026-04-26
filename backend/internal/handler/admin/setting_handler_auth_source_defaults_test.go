@@ -233,6 +233,38 @@ func TestSettingHandler_UpdateSettings_RejectsSitePageSlugOutsideDocRoute(t *tes
 	require.NotContains(t, repo.values, service.SettingKeySitePages)
 }
 
+func TestSettingHandler_UpdateSettings_PreservesSitePageMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{values: map[string]string{}}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"site_pages": []map[string]any{
+			{
+				"key":     "docs",
+				"title":   "Docs",
+				"slug":    "doc/docs",
+				"mode":    "link",
+				"content": "https://blog.lumio.games/docs/doc/api",
+				"enabled": true,
+			},
+		},
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, repo.values[service.SettingKeySitePages], `"mode":"link"`)
+}
+
 func TestSettingHandler_UpdateSettings_PersistsPaymentVisibleMethodsAndAdvancedScheduler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{

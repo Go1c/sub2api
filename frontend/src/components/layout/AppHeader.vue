@@ -51,8 +51,8 @@
 
         <!-- Docs Link -->
         <router-link
-          v-if="docsRoute"
-          :to="docsRoute"
+          v-if="docsTarget?.kind === 'route'"
+          :to="docsTarget.target"
           class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
         >
           <Icon name="book" size="sm" />
@@ -254,6 +254,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { SitePage } from '@/types'
+import { normalizeSitePages, resolveSitePageNavigationTarget } from '@/utils/sitePages'
 
 const router = useRouter()
 const route = useRoute()
@@ -269,23 +270,44 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
-const sitePages = computed<SitePage[]>(() => appStore.cachedPublicSettings?.site_pages || [])
-const docsRoute = computed(() => sitePageRoute('docs'))
-const termsRoute = computed(() => sitePageRoute('terms'))
-const privacyRoute = computed(() => sitePageRoute('privacy'))
+const sitePages = computed<SitePage[]>(() => normalizeSitePages(appStore.cachedPublicSettings?.site_pages || []))
+const docsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'docs'))
+const termsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'terms'))
+const privacyTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'privacy'))
 const homeNavItems = computed(() => {
   const isZh = locale.value.startsWith('zh')
+  const docs = docsTarget.value
+  const terms = termsTarget.value
+  const privacy = privacyTarget.value
   return [
     { key: 'pricing', label: isZh ? '定价' : 'Pricing', to: { path: '/home', hash: '#pricing' }, href: '', external: false },
     { key: 'features', label: isZh ? '特性' : 'Features', to: { path: '/home', hash: '#features' }, href: '', external: false },
     { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/home', hash: '#status' }, href: '', external: false },
-    docsRoute.value
-      ? { key: 'docs', label: t('nav.docs'), to: docsRoute.value, href: '', external: false }
+    docs
+      ? {
+          key: 'docs',
+          label: t('nav.docs'),
+          to: docs.target,
+          href: '',
+          external: false
+        }
       : docUrl.value
         ? { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: docUrl.value, external: true }
         : { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: '', external: false },
-    { key: 'terms', label: isZh ? '服务条款' : 'Terms', to: termsRoute.value || { path: '/home', hash: '#footer' }, href: '', external: false },
-    { key: 'privacy', label: isZh ? '隐私保护' : 'Privacy', to: privacyRoute.value || { path: '/home', hash: '#footer' }, href: '', external: false },
+    {
+      key: 'terms',
+      label: isZh ? '服务条款' : 'Terms',
+      to: terms?.target || { path: '/home', hash: '#footer' },
+      href: '',
+      external: false
+    },
+    {
+      key: 'privacy',
+      label: isZh ? '隐私保护' : 'Privacy',
+      to: privacy?.target || { path: '/home', hash: '#footer' },
+      href: '',
+      external: false
+    },
     { key: 'support', label: isZh ? '技术支持' : 'Support', to: { path: '/home', hash: '#support' }, href: '', external: false },
   ]
 })
@@ -337,17 +359,6 @@ const pageDescription = computed(() => {
   }
   return (route.meta.description as string) || ''
 })
-
-function normalizeSitePageSlug(slug: string) {
-  return slug.trim().replace(/^\/+|\/+$/g, '')
-}
-
-function sitePageRoute(key: string) {
-  const page = sitePages.value.find((item) => item.enabled !== false && item.key === key)
-  if (!page?.slug) return ''
-  const slug = normalizeSitePageSlug(page.slug)
-  return slug ? encodeURI(`/${slug}`) : ''
-}
 
 function toggleMobileSidebar() {
   appStore.toggleMobileSidebar()
