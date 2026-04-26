@@ -308,7 +308,7 @@ const homeNavItems = computed(() => {
       href: '',
       external: false
     },
-    { key: 'support', label: isZh ? '技术支持' : 'Support', to: { path: '/home', hash: '#support' }, href: '', external: false },
+    { key: 'image2', label: 'Image2生图', to: { path: '/home', hash: '#footer' }, href: 'https://img.lumio.games/', external: true },
   ]
 })
 
