@@ -100,6 +100,12 @@ describe("PublicMarkdownPageView", () => {
     expect(frame.attributes("src")).toBe(
       "https://blog.lumio.games/docs/doc/api/%E5%B8%AE%E5%8A%A9%E6%96%87%E6%A1%A3",
     );
+    expect(frame.classes()).toContain("h-screen");
+    expect(frame.classes()).toContain("w-screen");
+    expect(frame.classes()).toContain("border-0");
+    expect(wrapper.find("header").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("返回首页");
+    expect(wrapper.text()).not.toContain("帮助文档");
     expect(window.location.assign).not.toHaveBeenCalled();
   });
 });
