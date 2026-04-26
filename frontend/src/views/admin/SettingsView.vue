@@ -3719,7 +3719,7 @@
                         <Icon name="trash" size="sm" />
                       </button>
                     </div>
-                    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
                       <div>
                         <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                           {{ t("admin.settings.site.sitePages.key") }}
@@ -3744,6 +3744,16 @@
                       </div>
                       <div>
                         <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ t("admin.settings.site.sitePages.mode") }}
+                        </label>
+                        <Select
+                          v-model="page.mode"
+                          :options="sitePageModeOptions"
+                          :placeholder="t('admin.settings.site.sitePages.mode')"
+                        />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                           {{ t("admin.settings.site.sitePages.slug") }}
                         </label>
                         <input
@@ -3753,18 +3763,34 @@
                           :placeholder="t('admin.settings.site.sitePages.slugPlaceholder')"
                         />
                       </div>
-                      <div class="md:col-span-3">
+                      <div class="md:col-span-4">
                         <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                          {{ t("admin.settings.site.sitePages.content") }}
+                          {{
+                            page.mode === "link"
+                              ? t("admin.settings.site.sitePages.linkUrl")
+                              : t("admin.settings.site.sitePages.content")
+                          }}
                         </label>
+                        <input
+                          v-if="page.mode === 'link'"
+                          v-model="page.content"
+                          type="url"
+                          class="input font-mono text-sm"
+                          :placeholder="t('admin.settings.site.sitePages.linkPlaceholder')"
+                        />
                         <textarea
+                          v-else
                           v-model="page.content"
                           rows="8"
                           class="input font-mono text-sm"
                           :placeholder="t('admin.settings.site.sitePages.contentPlaceholder')"
                         ></textarea>
                         <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                          {{ t("admin.settings.site.sitePages.contentHint") }}
+                          {{
+                            page.mode === "link"
+                              ? t("admin.settings.site.sitePages.linkHint")
+                              : t("admin.settings.site.sitePages.contentHint")
+                          }}
                         </p>
                       </div>
                     </div>
@@ -5278,6 +5304,10 @@ import {
   normalizeRegistrationEmailSuffixDomains,
   parseRegistrationEmailSuffixWhitelistInput,
 } from "@/utils/registrationEmailPolicy";
+import {
+  isHttpUrl,
+  normalizeSitePages,
+} from "@/utils/sitePages";
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
@@ -5286,6 +5316,11 @@ const adminSettingsStore = useAdminSettingsStore();
 function localText(zh: string, en: string): string {
   return locale.value.startsWith("zh") ? zh : en;
 }
+
+const sitePageModeOptions = computed(() => [
+  { value: "markdown", label: t("admin.settings.site.sitePages.modeMarkdown") },
+  { value: "link", label: t("admin.settings.site.sitePages.modeLink") },
+]);
 
 const paymentGuideHref = computed(() =>
   locale.value.startsWith("zh")
@@ -6057,9 +6092,9 @@ function removeEndpoint(index: number) {
 }
 
 const defaultSitePageSeeds: SitePage[] = [
-  { key: "docs", title: "文档", slug: "doc/文档", content: "", enabled: true },
-  { key: "terms", title: "服务条款", slug: "doc/服务条款", content: "", enabled: true },
-  { key: "privacy", title: "隐私协议", slug: "doc/隐私协议", content: "", enabled: true },
+  { key: "docs", title: "文档", slug: "doc/文档", mode: "markdown", content: "", enabled: true },
+  { key: "terms", title: "服务条款", slug: "doc/服务条款", mode: "markdown", content: "", enabled: true },
+  { key: "privacy", title: "隐私协议", slug: "doc/隐私协议", mode: "markdown", content: "", enabled: true },
 ];
 
 function normalizeContactChannels(
@@ -6091,21 +6126,6 @@ function removeContactChannel(index: number) {
   form.contact_channels.splice(index, 1);
 }
 
-function normalizeSitePageSlug(slug: string) {
-  return slug.trim().replace(/^\/+|\/+$/g, "");
-}
-
-function normalizeSitePages(pages: SitePage[] | null | undefined): SitePage[] {
-  if (!Array.isArray(pages)) return [];
-  return pages.map((page) => ({
-    key: String(page.key || "").trim(),
-    title: String(page.title || "").trim(),
-    slug: normalizeSitePageSlug(String(page.slug || "")),
-    content: String(page.content || ""),
-    enabled: page.enabled !== false,
-  }));
-}
-
 function ensureDefaultSitePages(pages: SitePage[] | null | undefined): SitePage[] {
   const normalized = normalizeSitePages(pages);
   const byKey = new Map(normalized.map((page) => [page.key, page]));
@@ -6127,6 +6147,7 @@ function addSitePage() {
     key: `page_${Date.now()}`,
     title: "",
     slug: "doc/",
+    mode: "markdown",
     content: "",
     enabled: true,
   });
@@ -6610,6 +6631,10 @@ async function saveSettings() {
         page.slug.includes("..")
       ) {
         appStore.showError(t("admin.settings.site.sitePages.invalidSlug"));
+        return;
+      }
+      if (page.mode === "link" && !isHttpUrl(page.content)) {
+        appStore.showError(t("admin.settings.site.sitePages.invalidLink"));
         return;
       }
     }

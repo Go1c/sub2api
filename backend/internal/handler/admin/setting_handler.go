@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -24,6 +25,14 @@ var semverPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 // menuItemIDPattern validates custom menu item IDs: alphanumeric, hyphens, underscores only.
 var menuItemIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+func isHTTPURL(raw string) bool {
+	parsed, err := url.ParseRequestURI(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	return parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
+}
 
 // generateMenuItemID generates a short random hex ID for a custom menu item.
 func generateMenuItemID() (string, error) {
@@ -1068,7 +1077,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		contactChannelsJSON = string(channelBytes)
 	}
 
-	// 公开 Markdown 页面验证
+	// 公开站点页面验证
 	const (
 		maxSitePages       = 10
 		maxSitePageTitle   = 80
@@ -1090,8 +1099,16 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			pages[i].Key = strings.TrimSpace(pages[i].Key)
 			pages[i].Title = strings.TrimSpace(pages[i].Title)
 			pages[i].Slug = strings.Trim(strings.TrimSpace(pages[i].Slug), "/")
+			pages[i].Mode = strings.TrimSpace(pages[i].Mode)
+			if pages[i].Mode == "" {
+				pages[i].Mode = "markdown"
+			}
 			if pages[i].Key == "" {
 				response.BadRequest(c, "Site page key is required")
+				return
+			}
+			if pages[i].Mode != "markdown" && pages[i].Mode != "link" {
+				response.BadRequest(c, "Site page mode is invalid")
 				return
 			}
 			if !menuItemIDPattern.MatchString(pages[i].Key) {
@@ -1131,6 +1148,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			if len(pages[i].Content) > maxSitePageContent {
 				response.BadRequest(c, "Site page content is too long (max 200000 characters)")
 				return
+			}
+			if pages[i].Mode == "link" {
+				pages[i].Content = strings.TrimSpace(pages[i].Content)
+				if !isHTTPURL(pages[i].Content) {
+					response.BadRequest(c, "Site page link URL is invalid")
+					return
+				}
 			}
 		}
 		pageBytes, err := json.Marshal(pages)

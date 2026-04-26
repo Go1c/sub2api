@@ -156,10 +156,13 @@ export interface ContactChannel {
   url: string
 }
 
+export type SitePageMode = 'markdown' | 'link'
+
 export interface SitePage {
   key: string
   title: string
   slug: string
+  mode?: SitePageMode
   content: string
   enabled: boolean
 }

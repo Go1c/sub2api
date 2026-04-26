@@ -43,8 +43,16 @@
           </h1>
         </div>
 
+        <iframe
+          v-if="linkContentUrl"
+          class="public-page-frame h-[calc(100vh-13rem)] min-h-[640px] w-full rounded-xl border border-gray-200 bg-white dark:border-dark-700"
+          :src="linkContentUrl"
+          :title="page.title"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+        ></iframe>
         <article
-          v-if="renderedContent"
+          v-else-if="renderedContent"
           class="markdown-body"
           v-html="renderedContent"
         ></article>
@@ -81,6 +89,7 @@ import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore, useAuthStore } from '@/stores'
 import type { SitePage } from '@/types'
+import { isHttpUrl, normalizeSitePageSlug, normalizeSitePages } from '@/utils/sitePages'
 
 marked.setOptions({
   breaks: true,
@@ -96,7 +105,7 @@ const { locale } = useI18n()
 const isZh = computed(() => locale.value.startsWith('zh'))
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
-const sitePages = computed(() => appStore.cachedPublicSettings?.site_pages || [])
+const sitePages = computed(() => normalizeSitePages(appStore.cachedPublicSettings?.site_pages || []))
 
 const consoleLabel = computed(() => (isZh.value ? '控制台' : 'Console'))
 const backLabel = computed(() => (isZh.value ? '返回首页' : 'Back home'))
@@ -121,13 +130,19 @@ const page = computed<SitePage | null>(() => {
 })
 
 const renderedContent = computed(() => {
+  if (page.value?.mode === 'link') return ''
   const content = page.value?.content?.trim() || ''
   if (!content) return ''
   return DOMPurify.sanitize(marked.parse(content) as string)
 })
 
+const linkContentUrl = computed(() => {
+  const content = page.value?.mode === 'link' ? page.value.content.trim() : ''
+  return isHttpUrl(content) ? content : ''
+})
+
 function normalizeSlug(slug: string) {
-  return slug.trim().replace(/^\/+|\/+$/g, '')
+  return normalizeSitePageSlug(slug)
 }
 
 function goHome() {
@@ -150,6 +165,7 @@ watchEffect(() => {
     document.title = `${page.value.title} - ${siteName.value}`
   }
 })
+
 </script>
 
 <style scoped>

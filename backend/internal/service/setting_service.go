@@ -860,7 +860,7 @@ func filterUserVisibleMenuItems(raw string) json.RawMessage {
 	return result
 }
 
-// filterEnabledSitePages removes explicitly disabled public markdown pages.
+// filterEnabledSitePages removes explicitly disabled public site pages.
 // Pages without an enabled field are kept for compatibility with older saved
 // settings where missing enabled was treated as visible by the frontend.
 func filterEnabledSitePages(raw string) json.RawMessage {

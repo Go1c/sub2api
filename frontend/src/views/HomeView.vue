@@ -576,6 +576,7 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { getPublicPricing, type PublicPricingConfig, type PublicPricingRow } from '@/api/pricing'
 import type { ContactChannel, SitePage } from '@/types'
+import { normalizeSitePages, resolveSitePageNavigationTarget } from '@/utils/sitePages'
 
 type HomeIconName =
   | 'sparkles'
@@ -722,10 +723,10 @@ const contactChannels = computed<ContactChannel[]>(() =>
   })
 )
 const fallbackContactInfo = computed(() => appStore.cachedPublicSettings?.contact_info || appStore.contactInfo || '')
-const sitePages = computed<SitePage[]>(() => appStore.cachedPublicSettings?.site_pages || [])
-const docsRoute = computed(() => sitePageRoute('docs'))
-const termsRoute = computed(() => sitePageRoute('terms'))
-const privacyRoute = computed(() => sitePageRoute('privacy'))
+const sitePages = computed<SitePage[]>(() => normalizeSitePages(appStore.cachedPublicSettings?.site_pages || []))
+const docsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'docs'))
+const termsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'terms'))
+const privacyTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'privacy'))
 const docsHref = computed(() => docUrl.value || githubUrl)
 const usdToCnyRate = 7
 
@@ -940,11 +941,22 @@ const navItems = computed<NavItem[]>(() => [
   { ...copy.value.nav[0], target: '#features' },
   { ...copy.value.nav[1], target: '#pricing' },
   { ...copy.value.nav[2], target: '#status' },
-  docsRoute.value
-    ? { ...copy.value.nav[3], target: docsRoute.value }
+  docsTarget.value
+    ? {
+        ...copy.value.nav[3],
+        target: docsTarget.value.target
+      }
     : { ...copy.value.nav[3], target: docsHref.value, external: true },
-  { ...copy.value.dimNav[0], target: termsRoute.value || '#footer', dim: true },
-  { ...copy.value.dimNav[1], target: privacyRoute.value || '#footer', dim: true },
+  {
+    ...copy.value.dimNav[0],
+    target: termsTarget.value?.target || '#footer',
+    dim: true
+  },
+  {
+    ...copy.value.dimNav[1],
+    target: privacyTarget.value?.target || '#footer',
+    dim: true
+  },
   { ...copy.value.dimNav[2], target: '#support', dim: true }
 ])
 
@@ -980,20 +992,9 @@ function scrollTo(target: string) {
   document.querySelector(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-function normalizeSitePageSlug(slug: string) {
-  return slug.trim().replace(/^\/+|\/+$/g, '')
-}
-
-function sitePageRoute(key: string) {
-  const page = sitePages.value.find((item) => item.enabled !== false && item.key === key)
-  if (!page?.slug) return ''
-  const slug = normalizeSitePageSlug(page.slug)
-  return slug ? encodeURI(`/${slug}`) : ''
-}
-
 function openDocs() {
-  if (docsRoute.value) {
-    router.push(docsRoute.value)
+  if (docsTarget.value?.kind === 'route') {
+    router.push(docsTarget.value.target)
     return
   }
   window.open(docsHref.value, '_blank', 'noopener,noreferrer')

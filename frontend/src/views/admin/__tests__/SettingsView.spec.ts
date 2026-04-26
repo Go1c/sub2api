@@ -48,6 +48,17 @@ const {
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
 
+vi.mock("@/i18n", () => ({
+  i18n: {
+    global: {
+      locale: localeRef,
+      t: (key: string) => key,
+    },
+  },
+  getLocale: () => localeRef.value,
+  setLocale: vi.fn(),
+}));
+
 vi.mock("@/api", () => ({
   adminAPI: {
     settings: {
@@ -75,6 +86,133 @@ vi.mock("@/api", () => ({
     },
   },
 }));
+
+vi.mock("@/api/admin/settings", () => {
+  const authSourceTypes = ["email", "linuxdo", "oidc", "wechat"] as const;
+  const normalizeDefaultSubscriptionSettings = (
+    subscriptions: Array<{ group_id: number; validity_days: number }> | null | undefined,
+  ) =>
+    Array.isArray(subscriptions)
+      ? subscriptions
+          .filter((item) => item.group_id > 0 && item.validity_days > 0)
+          .map((item) => ({
+            group_id: Math.floor(item.group_id),
+            validity_days: Math.min(36500, Math.max(1, Math.floor(item.validity_days))),
+          }))
+      : [];
+  const normalizeWeChatConnectMode = (source: unknown) => {
+    const normalized = String(source || "").trim().toLowerCase();
+    return normalized === "mp" || normalized === "mobile" ? normalized : "open";
+  };
+  const settingsAPI = {
+    getSettings,
+    updateSettings,
+    testSmtpConnection: vi.fn(),
+    sendTestEmail: vi.fn(),
+    getAdminApiKey,
+    regenerateAdminApiKey: vi.fn(),
+    deleteAdminApiKey: vi.fn(),
+    getPublicModelPricing: vi.fn(),
+    updatePublicModelPricing: vi.fn(),
+    getOverloadCooldownSettings,
+    updateOverloadCooldownSettings: vi.fn(),
+    getStreamTimeoutSettings,
+    updateStreamTimeoutSettings: vi.fn(),
+    getRectifierSettings,
+    updateRectifierSettings: vi.fn(),
+    getBetaPolicySettings,
+    updateBetaPolicySettings: vi.fn(),
+    getWebSearchEmulationConfig,
+    updateWebSearchEmulationConfig,
+    testWebSearchEmulation: vi.fn(),
+    resetWebSearchUsage: vi.fn(),
+  };
+
+  return {
+    default: settingsAPI,
+    settingsAPI,
+    normalizeDefaultSubscriptionSettings,
+    buildAuthSourceDefaultsState: (settings: Record<string, unknown>) =>
+      authSourceTypes.reduce(
+        (acc, source) => {
+          acc[source] = {
+            balance: Number(settings[`auth_source_default_${source}_balance`] ?? 0),
+            concurrency: Math.max(1, Number(settings[`auth_source_default_${source}_concurrency`] ?? 5)),
+            subscriptions: normalizeDefaultSubscriptionSettings(
+              settings[`auth_source_default_${source}_subscriptions`] as Array<{
+                group_id: number;
+                validity_days: number;
+              }>,
+            ),
+            grant_on_signup: settings[`auth_source_default_${source}_grant_on_signup`] === true,
+            grant_on_first_bind: settings[`auth_source_default_${source}_grant_on_first_bind`] === true,
+          };
+          return acc;
+        },
+        {} as Record<string, Record<string, unknown>>,
+      ),
+    appendAuthSourceDefaultsToUpdateRequest: (
+      payload: Record<string, unknown>,
+      authSourceDefaults: Record<string, Record<string, unknown>>,
+    ) => {
+      for (const source of authSourceTypes) {
+        const current = authSourceDefaults[source] || {};
+        payload[`auth_source_default_${source}_balance`] = Number(current.balance) || 0;
+        payload[`auth_source_default_${source}_concurrency`] = Math.max(
+          1,
+          Math.floor(Number(current.concurrency) || 5),
+        );
+        payload[`auth_source_default_${source}_subscriptions`] = normalizeDefaultSubscriptionSettings(
+          current.subscriptions as Array<{ group_id: number; validity_days: number }>,
+        );
+        payload[`auth_source_default_${source}_grant_on_signup`] = current.grant_on_signup === true;
+        payload[`auth_source_default_${source}_grant_on_first_bind`] = current.grant_on_first_bind === true;
+      }
+      return payload;
+    },
+    defaultWeChatConnectScopesForMode: (mode: unknown) => {
+      const normalized = normalizeWeChatConnectMode(mode);
+      if (normalized === "mp") return "snsapi_userinfo";
+      if (normalized === "mobile") return "";
+      return "snsapi_login";
+    },
+    deriveWeChatConnectStoredMode: (
+      openEnabled: boolean,
+      mpEnabled: boolean,
+      mobileEnabled: boolean,
+      legacyMode: unknown,
+    ) => {
+      if (mpEnabled) return "mp";
+      if (mobileEnabled) return "mobile";
+      if (openEnabled) return "open";
+      return normalizeWeChatConnectMode(legacyMode);
+    },
+    resolveWeChatConnectModeCapabilities: (
+      openEnabled: unknown,
+      mpEnabled: unknown,
+      mobileEnabled: unknown,
+      legacyMode: unknown,
+    ) => {
+      if (
+        typeof openEnabled === "boolean" ||
+        typeof mpEnabled === "boolean" ||
+        typeof mobileEnabled === "boolean"
+      ) {
+        return {
+          openEnabled: openEnabled === true,
+          mpEnabled: mpEnabled === true,
+          mobileEnabled: mobileEnabled === true,
+        };
+      }
+      const normalized = normalizeWeChatConnectMode(legacyMode);
+      return {
+        openEnabled: normalized === "open",
+        mpEnabled: normalized === "mp",
+        mobileEnabled: normalized === "mobile",
+      };
+    },
+  };
+});
 
 vi.mock("@/stores", () => ({
   useAppStore: () => ({
@@ -399,6 +537,8 @@ function mountView() {
     global: {
       stubs: {
         AppLayout: AppLayoutStub,
+        RouterLink: { template: "<a><slot /></a>" },
+        "router-link": { template: "<a><slot /></a>" },
         Select: SelectStub,
         Toggle: ToggleStub,
         Icon: true,
@@ -565,6 +705,40 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_source");
     expect(payload).not.toHaveProperty("payment_visible_method_alipay_enabled");
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_enabled");
+  });
+
+  it("preserves public site page link mode when saving", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_pages: [
+        {
+          key: "docs",
+          title: "Docs",
+          slug: "doc/docs",
+          mode: "link",
+          content: "https://blog.lumio.games/docs/doc/api",
+          enabled: true,
+        },
+      ],
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        site_pages: expect.arrayContaining([
+          expect.objectContaining({
+            key: "docs",
+            mode: "link",
+            content: "https://blog.lumio.games/docs/doc/api",
+          }),
+        ]),
+      }),
+    );
   });
 
   it("updates provider enablement immediately and reloads providers", async () => {

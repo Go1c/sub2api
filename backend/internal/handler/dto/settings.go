@@ -28,11 +28,12 @@ type ContactChannel struct {
 	URL   string `json:"url"`
 }
 
-// SitePage represents a public markdown page configured by admin.
+// SitePage represents a public site page configured by admin.
 type SitePage struct {
 	Key     string `json:"key"`
 	Title   string `json:"title"`
 	Slug    string `json:"slug"`
+	Mode    string `json:"mode"`
 	Content string `json:"content"`
 	Enabled bool   `json:"enabled"`
 }
