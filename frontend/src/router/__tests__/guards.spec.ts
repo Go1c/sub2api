@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { resolveExternalAuthHandoff } from '@/utils/externalAuthHandoff'
 
 // Mock 导航加载状态
 vi.mock('@/composables/useNavigationLoading', () => {
@@ -53,6 +54,7 @@ interface MockAuthState {
   isSimpleMode: boolean
   backendModeEnabled: boolean
   hasPendingAuthSession: boolean
+  token?: string
 }
 
 /**
@@ -61,8 +63,9 @@ interface MockAuthState {
 function simulateGuard(
   toPath: string,
   toMeta: Record<string, any>,
-  authState: MockAuthState
-): string | null {
+  authState: MockAuthState,
+  query: Record<string, string> = {}
+): string | { externalHandoffUrl: string } | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
 
@@ -72,6 +75,13 @@ function simulateGuard(
       authState.isAuthenticated &&
       (toPath === '/login' || toPath === '/register')
     ) {
+      if (toPath === '/login') {
+        const handoff = resolveExternalAuthHandoff(query, authState.token)
+        if (handoff.valid) {
+          return { externalHandoffUrl: handoff.url }
+        }
+      }
+
       if (authState.backendModeEnabled && !authState.isAdmin) {
         return null
       }
@@ -199,6 +209,22 @@ describe('路由守卫逻辑', () => {
     it('访问 /login 重定向到 /dashboard', () => {
       const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
       expect(redirect).toBe('/dashboard')
+    })
+
+    it('访问带 handoff 的 /login 时触发外部登录回跳', () => {
+      const redirect = simulateGuard(
+        '/login',
+        { requiresAuth: false },
+        { ...authState, token: 'guard-token' },
+        {
+          handoff: '1',
+          return_to: 'http://localhost:3000/#view=studio',
+        },
+      )
+
+      expect(redirect).toEqual({
+        externalHandoffUrl: 'http://localhost:3000/#view=studio&token=guard-token',
+      })
     })
 
     it('访问 /register 重定向到 /dashboard', () => {

@@ -185,6 +185,7 @@ import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, isTotp2FARequired, isWeChatWebOAuthEnabled } from '@/api/auth'
+import { performExternalAuthHandoff, resolveExternalAuthHandoff } from '@/utils/externalAuthHandoff'
 import type { TotpLoginResponse } from '@/types'
 
 const { t } = useI18n()
@@ -323,6 +324,26 @@ function validateForm(): boolean {
   return isValid
 }
 
+function tryExternalAuthHandoff(accessToken?: string | null): boolean {
+  const handoff = resolveExternalAuthHandoff(
+    router.currentRoute.value.query,
+    accessToken || authStore.token,
+  )
+
+  if (handoff.valid) {
+    performExternalAuthHandoff(handoff.url)
+    return true
+  }
+
+  if (handoff.active && handoff.reason !== 'inactive') {
+    const message = t('auth.externalHandoffInvalid')
+    errorMessage.value = message
+    appStore.showError(message)
+  }
+
+  return false
+}
+
 // ==================== Form Handlers ====================
 
 async function handleLogin(): Promise<void> {
@@ -356,6 +377,10 @@ async function handleLogin(): Promise<void> {
 
     // Show success toast
     appStore.showSuccess(t('auth.loginSuccess'))
+
+    if (tryExternalAuthHandoff(response.access_token)) {
+      return
+    }
 
     // Redirect to dashboard or intended route
     const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
@@ -398,6 +423,10 @@ async function handle2FAVerify(code: string): Promise<void> {
     // Close modal and show success
     show2FAModal.value = false
     appStore.showSuccess(t('auth.loginSuccess'))
+
+    if (tryExternalAuthHandoff(authStore.token)) {
+      return
+    }
 
     // Redirect to dashboard or intended route
     const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
