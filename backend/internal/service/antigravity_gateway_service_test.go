@@ -122,6 +122,44 @@ func TestIsPromptTooLongError(t *testing.T) {
 	require.False(t, isPromptTooLongError([]byte(`{"error":{"message":"other"}}`)))
 }
 
+func TestForwardUpstreamNonStreamLimitsResponseBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &httpUpstreamStub{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader("0123456789")),
+		},
+	}
+	settingService := &SettingService{
+		cfg: &config.Config{Gateway: config.GatewayConfig{UpstreamResponseReadMaxBytes: 8}},
+	}
+	svc := &AntigravityGatewayService{
+		httpUpstream:   upstream,
+		settingService: settingService,
+	}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	account := &Account{
+		ID:   1,
+		Name: "custom-upstream",
+		Credentials: map[string]any{
+			"base_url": "https://upstream.example",
+			"api_key":  "sk-test",
+		},
+	}
+	body := []byte(`{"model":"claude-test","messages":[],"max_tokens":1}`)
+
+	_, err := svc.ForwardUpstream(context.Background(), c, account, body)
+
+	require.ErrorIs(t, err, ErrUpstreamResponseBodyTooLarge)
+	require.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
 type httpUpstreamStub struct {
 	resp *http.Response
 	err  error
