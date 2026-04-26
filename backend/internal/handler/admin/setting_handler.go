@@ -205,6 +205,13 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		AffiliateRebateFreezeHours:             settings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:            settings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:           settings.AffiliateRebatePerInviteeCap,
+		AffiliateSignupBonusEnabled:            settings.AffiliateSignupBonusEnabled,
+		AffiliateSignupBonusAmount:             settings.AffiliateSignupBonusAmount,
+		AffiliateSignupBonusTotalCap:           settings.AffiliateSignupBonusTotalCap,
+		AffiliateSignupBonusDailyCap:           settings.AffiliateSignupBonusDailyCap,
+		BalanceUsageGateEnabled:                settings.BalanceUsageGateEnabled,
+		BalanceUsageGateMinBalance:             settings.BalanceUsageGateMinBalance,
+		BalanceUsageGateMinRecharge:            settings.BalanceUsageGateMinRecharge,
 		DefaultUserRPMLimit:                    settings.DefaultUserRPMLimit,
 		DefaultSubscriptions:                   defaultSubscriptions,
 		EnableModelFallback:                    settings.EnableModelFallback,
@@ -371,6 +378,13 @@ type UpdateSettingsRequest struct {
 	AffiliateRebateFreezeHours               *int                              `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays              *int                              `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap             *float64                          `json:"affiliate_rebate_per_invitee_cap"`
+	AffiliateSignupBonusEnabled              *bool                             `json:"affiliate_signup_bonus_enabled"`
+	AffiliateSignupBonusAmount               *float64                          `json:"affiliate_signup_bonus_amount"`
+	AffiliateSignupBonusTotalCap             *float64                          `json:"affiliate_signup_bonus_total_cap"`
+	AffiliateSignupBonusDailyCap             *float64                          `json:"affiliate_signup_bonus_daily_cap"`
+	BalanceUsageGateEnabled                  *bool                             `json:"balance_usage_gate_enabled"`
+	BalanceUsageGateMinBalance               *float64                          `json:"balance_usage_gate_min_balance"`
+	BalanceUsageGateMinRecharge              *float64                          `json:"balance_usage_gate_min_recharge"`
 	DefaultUserRPMLimit                      int                               `json:"default_user_rpm_limit"`
 	DefaultSubscriptions                     []dto.DefaultSubscriptionSetting  `json:"default_subscriptions"`
 	AuthSourceDefaultEmailBalance            *float64                          `json:"auth_source_default_email_balance"`
@@ -540,6 +554,41 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 	if affiliateRebatePerInviteeCap < 0 {
 		affiliateRebatePerInviteeCap = service.AffiliateRebatePerInviteeCapDefault
+	}
+	affiliateSignupBonusAmount := previousSettings.AffiliateSignupBonusAmount
+	if req.AffiliateSignupBonusAmount != nil {
+		affiliateSignupBonusAmount = *req.AffiliateSignupBonusAmount
+	}
+	if affiliateSignupBonusAmount < 0 {
+		affiliateSignupBonusAmount = service.AffiliateSignupBonusAmountDefault
+	}
+	affiliateSignupBonusTotalCap := previousSettings.AffiliateSignupBonusTotalCap
+	if req.AffiliateSignupBonusTotalCap != nil {
+		affiliateSignupBonusTotalCap = *req.AffiliateSignupBonusTotalCap
+	}
+	if affiliateSignupBonusTotalCap < 0 {
+		affiliateSignupBonusTotalCap = service.AffiliateSignupBonusTotalCapDefault
+	}
+	affiliateSignupBonusDailyCap := previousSettings.AffiliateSignupBonusDailyCap
+	if req.AffiliateSignupBonusDailyCap != nil {
+		affiliateSignupBonusDailyCap = *req.AffiliateSignupBonusDailyCap
+	}
+	if affiliateSignupBonusDailyCap < 0 {
+		affiliateSignupBonusDailyCap = service.AffiliateSignupBonusDailyCapDefault
+	}
+	balanceUsageGateMinBalance := previousSettings.BalanceUsageGateMinBalance
+	if req.BalanceUsageGateMinBalance != nil {
+		balanceUsageGateMinBalance = *req.BalanceUsageGateMinBalance
+	}
+	if balanceUsageGateMinBalance < 0 {
+		balanceUsageGateMinBalance = service.BalanceUsageGateMinBalanceDefault
+	}
+	balanceUsageGateMinRecharge := previousSettings.BalanceUsageGateMinRecharge
+	if req.BalanceUsageGateMinRecharge != nil {
+		balanceUsageGateMinRecharge = *req.BalanceUsageGateMinRecharge
+	}
+	if balanceUsageGateMinRecharge < 0 {
+		balanceUsageGateMinRecharge = service.BalanceUsageGateMinRechargeDefault
 	}
 	// 通用表格配置：兼容旧客户端未传字段时保留当前值。
 	if req.TableDefaultPageSize <= 0 {
@@ -1346,19 +1395,36 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AffiliateRebateFreezeHours:            affiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:           affiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:          affiliateRebatePerInviteeCap,
-		DefaultUserRPMLimit:                   req.DefaultUserRPMLimit,
-		DefaultSubscriptions:                  defaultSubscriptions,
-		EnableModelFallback:                   req.EnableModelFallback,
-		FallbackModelAnthropic:                req.FallbackModelAnthropic,
-		FallbackModelOpenAI:                   req.FallbackModelOpenAI,
-		FallbackModelGemini:                   req.FallbackModelGemini,
-		FallbackModelAntigravity:              req.FallbackModelAntigravity,
-		EnableIdentityPatch:                   req.EnableIdentityPatch,
-		IdentityPatchPrompt:                   req.IdentityPatchPrompt,
-		MinClaudeCodeVersion:                  req.MinClaudeCodeVersion,
-		MaxClaudeCodeVersion:                  req.MaxClaudeCodeVersion,
-		AllowUngroupedKeyScheduling:           req.AllowUngroupedKeyScheduling,
-		BackendModeEnabled:                    req.BackendModeEnabled,
+		AffiliateSignupBonusEnabled: func() bool {
+			if req.AffiliateSignupBonusEnabled != nil {
+				return *req.AffiliateSignupBonusEnabled
+			}
+			return previousSettings.AffiliateSignupBonusEnabled
+		}(),
+		AffiliateSignupBonusAmount:   affiliateSignupBonusAmount,
+		AffiliateSignupBonusTotalCap: affiliateSignupBonusTotalCap,
+		AffiliateSignupBonusDailyCap: affiliateSignupBonusDailyCap,
+		BalanceUsageGateEnabled: func() bool {
+			if req.BalanceUsageGateEnabled != nil {
+				return *req.BalanceUsageGateEnabled
+			}
+			return previousSettings.BalanceUsageGateEnabled
+		}(),
+		BalanceUsageGateMinBalance:  balanceUsageGateMinBalance,
+		BalanceUsageGateMinRecharge: balanceUsageGateMinRecharge,
+		DefaultUserRPMLimit:         req.DefaultUserRPMLimit,
+		DefaultSubscriptions:        defaultSubscriptions,
+		EnableModelFallback:         req.EnableModelFallback,
+		FallbackModelAnthropic:      req.FallbackModelAnthropic,
+		FallbackModelOpenAI:         req.FallbackModelOpenAI,
+		FallbackModelGemini:         req.FallbackModelGemini,
+		FallbackModelAntigravity:    req.FallbackModelAntigravity,
+		EnableIdentityPatch:         req.EnableIdentityPatch,
+		IdentityPatchPrompt:         req.IdentityPatchPrompt,
+		MinClaudeCodeVersion:        req.MinClaudeCodeVersion,
+		MaxClaudeCodeVersion:        req.MaxClaudeCodeVersion,
+		AllowUngroupedKeyScheduling: req.AllowUngroupedKeyScheduling,
+		BackendModeEnabled:          req.BackendModeEnabled,
 		OpsMonitoringEnabled: func() bool {
 			if req.OpsMonitoringEnabled != nil {
 				return *req.OpsMonitoringEnabled
@@ -1677,6 +1743,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AffiliateRebateFreezeHours:             updatedSettings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:            updatedSettings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:           updatedSettings.AffiliateRebatePerInviteeCap,
+		AffiliateSignupBonusEnabled:            updatedSettings.AffiliateSignupBonusEnabled,
+		AffiliateSignupBonusAmount:             updatedSettings.AffiliateSignupBonusAmount,
+		AffiliateSignupBonusTotalCap:           updatedSettings.AffiliateSignupBonusTotalCap,
+		AffiliateSignupBonusDailyCap:           updatedSettings.AffiliateSignupBonusDailyCap,
+		BalanceUsageGateEnabled:                updatedSettings.BalanceUsageGateEnabled,
+		BalanceUsageGateMinBalance:             updatedSettings.BalanceUsageGateMinBalance,
+		BalanceUsageGateMinRecharge:            updatedSettings.BalanceUsageGateMinRecharge,
 		DefaultUserRPMLimit:                    updatedSettings.DefaultUserRPMLimit,
 		DefaultSubscriptions:                   updatedDefaultSubscriptions,
 		EnableModelFallback:                    updatedSettings.EnableModelFallback,
@@ -2016,6 +2089,27 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.AffiliateRebatePerInviteeCap != after.AffiliateRebatePerInviteeCap {
 		changed = append(changed, "affiliate_rebate_per_invitee_cap")
+	}
+	if before.AffiliateSignupBonusEnabled != after.AffiliateSignupBonusEnabled {
+		changed = append(changed, "affiliate_signup_bonus_enabled")
+	}
+	if before.AffiliateSignupBonusAmount != after.AffiliateSignupBonusAmount {
+		changed = append(changed, "affiliate_signup_bonus_amount")
+	}
+	if before.AffiliateSignupBonusTotalCap != after.AffiliateSignupBonusTotalCap {
+		changed = append(changed, "affiliate_signup_bonus_total_cap")
+	}
+	if before.AffiliateSignupBonusDailyCap != after.AffiliateSignupBonusDailyCap {
+		changed = append(changed, "affiliate_signup_bonus_daily_cap")
+	}
+	if before.BalanceUsageGateEnabled != after.BalanceUsageGateEnabled {
+		changed = append(changed, "balance_usage_gate_enabled")
+	}
+	if before.BalanceUsageGateMinBalance != after.BalanceUsageGateMinBalance {
+		changed = append(changed, "balance_usage_gate_min_balance")
+	}
+	if before.BalanceUsageGateMinRecharge != after.BalanceUsageGateMinRecharge {
+		changed = append(changed, "balance_usage_gate_min_recharge")
 	}
 	if !equalDefaultSubscriptions(before.DefaultSubscriptions, after.DefaultSubscriptions) {
 		changed = append(changed, "default_subscriptions")

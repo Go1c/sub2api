@@ -68,6 +68,7 @@ type createPendingOAuthAccountRequest struct {
 	Password         string `json:"password" binding:"required,min=6"`
 	InvitationCode   string `json:"invitation_code,omitempty"`
 	AffCode          string `json:"aff_code,omitempty"`
+	AffFingerprint   string `json:"aff_fingerprint,omitempty"`
 	AdoptDisplayName *bool  `json:"adopt_display_name,omitempty"`
 	AdoptAvatar      *bool  `json:"adopt_avatar,omitempty"`
 }
@@ -1737,8 +1738,12 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 	}
 	defer func() { _ = tx.Rollback() }()
 	txCtx := dbent.NewTxContext(c.Request.Context(), tx)
+	signupTxCtx := service.ContextWithAffiliateSignupRequestMeta(
+		txCtx,
+		service.NewAffiliateSignupRequestMeta(req.AffFingerprint, ip.GetClientIP(c), c.Request.UserAgent()),
+	)
 
-	if err := applyPendingOAuthBinding(txCtx, client, h.authService, h.userService, session, decision, &user.ID, true, false); err != nil {
+	if err := applyPendingOAuthBinding(signupTxCtx, client, h.authService, h.userService, session, decision, &user.ID, true, false); err != nil {
 		_ = tx.Rollback()
 		if rollbackCreatedUser(err) {
 			return
@@ -1748,7 +1753,7 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 	}
 
 	if err := h.authService.FinalizeOAuthEmailAccount(
-		txCtx,
+		signupTxCtx,
 		user,
 		strings.TrimSpace(req.InvitationCode),
 		strings.TrimSpace(session.ProviderType),

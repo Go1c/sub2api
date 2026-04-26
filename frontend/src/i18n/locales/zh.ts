@@ -1016,6 +1016,20 @@ export default {
         joinedAt: '注册时间'
       }
     },
+    logs: {
+      title: '邀请记录',
+      description: '查看与你相关的邀请绑定和注册赠送结果。敏感指纹与 IP 仅管理员可见。',
+      empty: '暂无邀请记录',
+      loadFailed: '加载邀请记录失败',
+      total: '共 {total} 条',
+      columns: {
+        time: '时间',
+        account: '账号',
+        code: '邀请码',
+        result: '结果',
+        bonus: '赠送余额'
+      }
+    },
     tips: {
       title: '使用说明',
       line1: '将邀请码或邀请链接分享给新用户。',
@@ -4994,6 +5008,24 @@ export default {
           durationDaysDesc: '被邀请用户注册后多少天内的充值产生返利。0 = 永久有效。',
           perInviteeCap: '单人返利上限',
           perInviteeCapDesc: '每个被邀请用户最多产生的返利总额。0 = 无上限。',
+          signupBonus: {
+            title: '注册就送',
+            description: '被邀请人注册成功后，立即给邀请人赠送固定余额；指纹重复、个人累计上限或全站当日上限命中时只记录原因不赠送。',
+            amount: '固定赠送额度',
+            amountHint: '每个有效邀请注册赠送给邀请人的余额。',
+            totalCap: '单个邀请人总上限',
+            totalCapHint: '该邀请人累计注册赠送上限。0 = 无上限。',
+            dailyCap: '全站每日总上限',
+            dailyCapHint: '所有人当日注册赠送总额度上限。达到后当日自动停止，次日恢复。'
+          },
+          balanceGate: {
+            title: '余额使用门控',
+            description: '防止注册赠送余额被刷后直接消耗服务；仅余额计费模式生效，不影响订阅模式。',
+            minBalance: '最低当前余额',
+            minBalanceHint: '账户余额必须大于该值才可使用余额服务。',
+            minRecharge: '最低历史充值',
+            minRechargeHint: '历史充值必须大于该值才可使用余额服务。邀请赠送不会计入历史充值。'
+          },
           customUsers: {
             title: '专属用户配置',
             description: '为指定用户设置专属邀请码或专属返利比例。仅展示已设置过专属配置的用户。',
@@ -5034,6 +5066,22 @@ export default {
             hint: '为所选用户统一设置专属返利比例。',
             placeholder: '例如 30',
             clearHint: '留空提交将清除所选用户的专属比例。',
+          },
+          inviteLogs: {
+            title: '邀请记录',
+            description: '管理员可查询所有邀请绑定和注册赠送记录，包含失败原因、指纹、IP 等敏感信息。',
+            accountId: '账号 ID',
+            inviterId: '邀请人 ID',
+            inviteeId: '被邀请人 ID',
+            empty: '暂无邀请记录',
+            col: {
+              time: '时间',
+              inviter: '邀请人',
+              invitee: '被邀请人',
+              result: '结果',
+              fingerprint: '指纹',
+              ip: 'IP'
+            }
           },
         },
       },

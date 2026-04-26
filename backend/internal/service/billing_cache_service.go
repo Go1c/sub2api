@@ -20,6 +20,7 @@ import (
 var (
 	ErrSubscriptionInvalid       = infraerrors.Forbidden("SUBSCRIPTION_INVALID", "subscription is invalid or expired")
 	ErrBillingServiceUnavailable = infraerrors.ServiceUnavailable("BILLING_SERVICE_ERROR", "Billing service temporarily unavailable. Please retry later.")
+	ErrBalanceUsageGateNotMet    = infraerrors.Forbidden("BALANCE_USAGE_GATE_NOT_MET", "account balance is not eligible for service use; please recharge first")
 	// RPM 超限错误。gateway_handler 负责映射为 HTTP 429。
 	ErrGroupRPMExceeded = infraerrors.TooManyRequests("GROUP_RPM_EXCEEDED", "group requests-per-minute limit exceeded")
 	ErrUserRPMExceeded  = infraerrors.TooManyRequests("USER_RPM_EXCEEDED", "user requests-per-minute limit exceeded")
@@ -92,6 +93,7 @@ type BillingCacheService struct {
 	apiKeyRateLimitLoader apiKeyRateLimitLoader
 	userRPMCache          UserRPMCache
 	userGroupRateRepo     UserGroupRateRepository
+	settingService        *SettingService
 	cfg                   *config.Config
 	circuitBreaker        *billingCircuitBreaker
 
@@ -117,7 +119,12 @@ func NewBillingCacheService(
 	userRPMCache UserRPMCache,
 	userGroupRateRepo UserGroupRateRepository,
 	cfg *config.Config,
+	settingServices ...*SettingService,
 ) *BillingCacheService {
+	var settingService *SettingService
+	if len(settingServices) > 0 {
+		settingService = settingServices[0]
+	}
 	svc := &BillingCacheService{
 		cache:                 cache,
 		userRepo:              userRepo,
@@ -125,6 +132,7 @@ func NewBillingCacheService(
 		apiKeyRateLimitLoader: apiKeyRepo,
 		userRPMCache:          userRPMCache,
 		userGroupRateRepo:     userGroupRateRepo,
+		settingService:        settingService,
 		cfg:                   cfg,
 	}
 	svc.circuitBreaker = newBillingCircuitBreaker(cfg.Billing.CircuitBreaker)
@@ -652,7 +660,7 @@ func (s *BillingCacheService) QueueUpdateAPIKeyRateLimitUsage(apiKeyID int64, co
 // 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
 func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription) error {
 	// 简易模式：跳过所有计费检查
-	if s.cfg.RunMode == config.RunModeSimple {
+	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		return nil
 	}
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
@@ -667,7 +675,7 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 			return err
 		}
 	} else {
-		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
+		if err := s.checkBalanceEligibility(ctx, user); err != nil {
 			return err
 		}
 	}
@@ -772,13 +780,16 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 }
 
 // checkBalanceEligibility 检查余额模式资格
-func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userID int64) error {
-	balance, err := s.GetUserBalance(ctx, userID)
+func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, user *User) error {
+	if user == nil || user.ID <= 0 {
+		return ErrInsufficientBalance
+	}
+	balance, err := s.GetUserBalance(ctx, user.ID)
 	if err != nil {
 		if s.circuitBreaker != nil {
 			s.circuitBreaker.OnFailure(err)
 		}
-		logger.LegacyPrintf("service.billing_cache", "ALERT: billing balance check failed for user %d: %v", userID, err)
+		logger.LegacyPrintf("service.billing_cache", "ALERT: billing balance check failed for user %d: %v", user.ID, err)
 		return ErrBillingServiceUnavailable.WithCause(err)
 	}
 	if s.circuitBreaker != nil {
@@ -787,6 +798,24 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 
 	if balance <= 0 {
 		return ErrInsufficientBalance
+	}
+	if s.settingService != nil {
+		gateEnabled, minBalance, minRecharge := s.settingService.GetBalanceUsageGateSettings(ctx)
+		if !gateEnabled {
+			return nil
+		}
+		if minBalance > 0 && balance <= minBalance {
+			return infraerrors.Forbidden(
+				"BALANCE_USAGE_GATE_NOT_MET",
+				fmt.Sprintf("账户余额需大于 %.2f 才能使用余额服务，请先充值。", minBalance),
+			)
+		}
+		if minRecharge > 0 && user.TotalRecharged <= minRecharge {
+			return infraerrors.Forbidden(
+				"BALANCE_USAGE_GATE_NOT_MET",
+				fmt.Sprintf("账户历史充值需大于 %.2f 才能使用余额服务，请先充值。", minRecharge),
+			)
+		}
 	}
 
 	return nil

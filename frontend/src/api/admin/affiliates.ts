@@ -5,7 +5,7 @@
  */
 
 import { apiClient } from '../client'
-import type { PaginatedResponse } from '@/types'
+import type { AffiliateInviteLog, PaginatedResponse } from '@/types'
 
 export interface AffiliateAdminEntry {
   user_id: number
@@ -35,6 +35,14 @@ export interface BatchSetRateRequest {
   aff_rebate_rate_percent?: number | null
   /** Set true to clear rates instead of setting. */
   clear?: boolean
+}
+
+export interface ListInviteLogsParams {
+  page?: number
+  page_size?: number
+  account_id?: number | string
+  inviter_id?: number | string
+  invitee_id?: number | string
 }
 
 export interface SimpleUser {
@@ -97,12 +105,31 @@ export async function batchSetRate(
   return data
 }
 
+export async function listInviteLogs(
+  params: ListInviteLogsParams = {},
+): Promise<PaginatedResponse<AffiliateInviteLog>> {
+  const { data } = await apiClient.get<PaginatedResponse<AffiliateInviteLog>>(
+    '/admin/affiliates/invite-logs',
+    {
+      params: {
+        page: params.page ?? 1,
+        page_size: params.page_size ?? 20,
+        account_id: params.account_id || undefined,
+        inviter_id: params.inviter_id || undefined,
+        invitee_id: params.invitee_id || undefined,
+      },
+    },
+  )
+  return data
+}
+
 export const affiliatesAPI = {
   listUsers,
   lookupUsers,
   updateUserSettings,
   clearUserSettings,
   batchSetRate,
+  listInviteLogs,
 }
 
 export default affiliatesAPI

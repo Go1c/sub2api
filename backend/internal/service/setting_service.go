@@ -95,6 +95,20 @@ const gatewayForwardingCacheTTL = 60 * time.Second
 const gatewayForwardingErrorTTL = 5 * time.Second
 const gatewayForwardingDBTimeout = 5 * time.Second
 
+type cachedBalanceUsageGateSettings struct {
+	enabled     bool
+	minBalance  float64
+	minRecharge float64
+	expiresAt   int64 // unix nano
+}
+
+var balanceUsageGateCache atomic.Value // *cachedBalanceUsageGateSettings
+var balanceUsageGateSF singleflight.Group
+
+const balanceUsageGateCacheTTL = 60 * time.Second
+const balanceUsageGateErrorTTL = 5 * time.Second
+const balanceUsageGateDBTimeout = 5 * time.Second
+
 // DefaultSubscriptionGroupReader validates group references used by default subscriptions.
 type DefaultSubscriptionGroupReader interface {
 	GetByID(ctx context.Context, id int64) (*Group, error)
@@ -1290,6 +1304,28 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		settings.AffiliateRebatePerInviteeCap = AffiliateRebatePerInviteeCapDefault
 	}
 	updates[SettingKeyAffiliateRebatePerInviteeCap] = strconv.FormatFloat(settings.AffiliateRebatePerInviteeCap, 'f', 8, 64)
+	updates[SettingKeyAffiliateSignupBonusEnabled] = strconv.FormatBool(settings.AffiliateSignupBonusEnabled)
+	if settings.AffiliateSignupBonusAmount < 0 {
+		settings.AffiliateSignupBonusAmount = AffiliateSignupBonusAmountDefault
+	}
+	updates[SettingKeyAffiliateSignupBonusAmount] = strconv.FormatFloat(settings.AffiliateSignupBonusAmount, 'f', 8, 64)
+	if settings.AffiliateSignupBonusTotalCap < 0 {
+		settings.AffiliateSignupBonusTotalCap = AffiliateSignupBonusTotalCapDefault
+	}
+	updates[SettingKeyAffiliateSignupBonusTotalCap] = strconv.FormatFloat(settings.AffiliateSignupBonusTotalCap, 'f', 8, 64)
+	if settings.AffiliateSignupBonusDailyCap < 0 {
+		settings.AffiliateSignupBonusDailyCap = AffiliateSignupBonusDailyCapDefault
+	}
+	updates[SettingKeyAffiliateSignupBonusDailyCap] = strconv.FormatFloat(settings.AffiliateSignupBonusDailyCap, 'f', 8, 64)
+	updates[SettingKeyBalanceUsageGateEnabled] = strconv.FormatBool(settings.BalanceUsageGateEnabled)
+	if settings.BalanceUsageGateMinBalance < 0 {
+		settings.BalanceUsageGateMinBalance = BalanceUsageGateMinBalanceDefault
+	}
+	updates[SettingKeyBalanceUsageGateMinBalance] = strconv.FormatFloat(settings.BalanceUsageGateMinBalance, 'f', 8, 64)
+	if settings.BalanceUsageGateMinRecharge < 0 {
+		settings.BalanceUsageGateMinRecharge = BalanceUsageGateMinRechargeDefault
+	}
+	updates[SettingKeyBalanceUsageGateMinRecharge] = strconv.FormatFloat(settings.BalanceUsageGateMinRecharge, 'f', 8, 64)
 	updates[SettingKeyDefaultUserRPMLimit] = strconv.Itoa(settings.DefaultUserRPMLimit)
 	defaultSubsJSON, err := json.Marshal(settings.DefaultSubscriptions)
 	if err != nil {
@@ -1406,6 +1442,13 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 		metadataPassthrough:    settings.EnableMetadataPassthrough,
 		cchSigning:             settings.EnableCCHSigning,
 		expiresAt:              time.Now().Add(gatewayForwardingCacheTTL).UnixNano(),
+	})
+	balanceUsageGateSF.Forget("balance_usage_gate")
+	balanceUsageGateCache.Store(&cachedBalanceUsageGateSettings{
+		enabled:     settings.BalanceUsageGateEnabled,
+		minBalance:  settings.BalanceUsageGateMinBalance,
+		minRecharge: settings.BalanceUsageGateMinRecharge,
+		expiresAt:   time.Now().Add(balanceUsageGateCacheTTL).UnixNano(),
 	})
 	openAIAdvancedSchedulerSettingSF.Forget(openAIAdvancedSchedulerSettingKey)
 	openAIAdvancedSchedulerSettingCache.Store(&cachedOpenAIAdvancedSchedulerSetting{
@@ -1675,6 +1718,113 @@ func (s *SettingService) GetAffiliateRebatePerInviteeCap(ctx context.Context) fl
 	return cap
 }
 
+func (s *SettingService) IsAffiliateSignupBonusEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateSignupBonusEnabled)
+	if err != nil {
+		return AffiliateSignupBonusEnabledDefault
+	}
+	return value == "true"
+}
+
+func (s *SettingService) GetAffiliateSignupBonusAmount(ctx context.Context) float64 {
+	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusAmount, AffiliateSignupBonusAmountDefault)
+}
+
+func (s *SettingService) GetAffiliateSignupBonusTotalCap(ctx context.Context) float64 {
+	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusTotalCap, AffiliateSignupBonusTotalCapDefault)
+}
+
+func (s *SettingService) GetAffiliateSignupBonusDailyCap(ctx context.Context) float64 {
+	return s.getNonNegativeFloatSetting(ctx, SettingKeyAffiliateSignupBonusDailyCap, AffiliateSignupBonusDailyCapDefault)
+}
+
+func (s *SettingService) IsBalanceUsageGateEnabled(ctx context.Context) bool {
+	enabled, _, _ := s.GetBalanceUsageGateSettings(ctx)
+	return enabled
+}
+
+func (s *SettingService) GetBalanceUsageGateSettings(ctx context.Context) (enabled bool, minBalance, minRecharge float64) {
+	if s == nil || s.settingRepo == nil {
+		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
+	}
+	if cached, ok := balanceUsageGateCache.Load().(*cachedBalanceUsageGateSettings); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.enabled, cached.minBalance, cached.minRecharge
+		}
+	}
+
+	type gateResult struct {
+		enabled     bool
+		minBalance  float64
+		minRecharge float64
+	}
+	result, err, _ := balanceUsageGateSF.Do("balance_usage_gate", func() (any, error) {
+		if cached, ok := balanceUsageGateCache.Load().(*cachedBalanceUsageGateSettings); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return gateResult{cached.enabled, cached.minBalance, cached.minRecharge}, nil
+			}
+		}
+
+		dbCtx, cancel := context.WithTimeout(context.Background(), balanceUsageGateDBTimeout)
+		defer cancel()
+		settings, err := s.settingRepo.GetMultiple(dbCtx, []string{
+			SettingKeyBalanceUsageGateEnabled,
+			SettingKeyBalanceUsageGateMinBalance,
+			SettingKeyBalanceUsageGateMinRecharge,
+		})
+		ttl := balanceUsageGateCacheTTL
+		if err != nil {
+			ttl = balanceUsageGateErrorTTL
+			settings = map[string]string{}
+		}
+		value := gateResult{
+			enabled:     settings[SettingKeyBalanceUsageGateEnabled] == "true",
+			minBalance:  parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinBalance], BalanceUsageGateMinBalanceDefault),
+			minRecharge: parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinRecharge], BalanceUsageGateMinRechargeDefault),
+		}
+		balanceUsageGateCache.Store(&cachedBalanceUsageGateSettings{
+			enabled:     value.enabled,
+			minBalance:  value.minBalance,
+			minRecharge: value.minRecharge,
+			expiresAt:   time.Now().Add(ttl).UnixNano(),
+		})
+		return value, nil
+	})
+	if err != nil {
+		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
+	}
+	value, ok := result.(gateResult)
+	if !ok {
+		return BalanceUsageGateEnabledDefault, BalanceUsageGateMinBalanceDefault, BalanceUsageGateMinRechargeDefault
+	}
+	return value.enabled, value.minBalance, value.minRecharge
+}
+
+func (s *SettingService) GetBalanceUsageGateMinBalance(ctx context.Context) float64 {
+	_, minBalance, _ := s.GetBalanceUsageGateSettings(ctx)
+	return minBalance
+}
+
+func (s *SettingService) GetBalanceUsageGateMinRecharge(ctx context.Context) float64 {
+	_, _, minRecharge := s.GetBalanceUsageGateSettings(ctx)
+	return minRecharge
+}
+
+func (s *SettingService) getNonNegativeFloatSetting(ctx context.Context, key string, fallback float64) float64 {
+	if s == nil || s.settingRepo == nil {
+		return fallback
+	}
+	raw, err := s.settingRepo.GetValue(ctx, key)
+	if err != nil {
+		return fallback
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
+	}
+	return value
+}
+
 // IsPasswordResetEnabled 检查是否启用密码重置功能
 // 要求：必须同时开启邮件验证
 func (s *SettingService) IsPasswordResetEnabled(ctx context.Context) bool {
@@ -1929,6 +2079,13 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAffiliateRebateFreezeHours:               strconv.Itoa(AffiliateRebateFreezeHoursDefault),
 		SettingKeyAffiliateRebateDurationDays:              strconv.Itoa(AffiliateRebateDurationDaysDefault),
 		SettingKeyAffiliateRebatePerInviteeCap:             strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 2, 64),
+		SettingKeyAffiliateSignupBonusEnabled:              strconv.FormatBool(AffiliateSignupBonusEnabledDefault),
+		SettingKeyAffiliateSignupBonusAmount:               strconv.FormatFloat(AffiliateSignupBonusAmountDefault, 'f', 2, 64),
+		SettingKeyAffiliateSignupBonusTotalCap:             strconv.FormatFloat(AffiliateSignupBonusTotalCapDefault, 'f', 2, 64),
+		SettingKeyAffiliateSignupBonusDailyCap:             strconv.FormatFloat(AffiliateSignupBonusDailyCapDefault, 'f', 2, 64),
+		SettingKeyBalanceUsageGateEnabled:                  strconv.FormatBool(BalanceUsageGateEnabledDefault),
+		SettingKeyBalanceUsageGateMinBalance:               strconv.FormatFloat(BalanceUsageGateMinBalanceDefault, 'f', 2, 64),
+		SettingKeyBalanceUsageGateMinRecharge:              strconv.FormatFloat(BalanceUsageGateMinRechargeDefault, 'f', 2, 64),
 		SettingKeyDefaultUserRPMLimit:                      "0",
 		SettingKeyDefaultSubscriptions:                     "[]",
 		SettingKeyAuthSourceDefaultEmailBalance:            "0",
@@ -2092,6 +2249,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	if perInviteeCap, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebatePerInviteeCap], 64); err == nil && perInviteeCap >= 0 {
 		result.AffiliateRebatePerInviteeCap = perInviteeCap
 	}
+	result.AffiliateSignupBonusEnabled = settings[SettingKeyAffiliateSignupBonusEnabled] == "true"
+	result.AffiliateSignupBonusAmount = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusAmount], AffiliateSignupBonusAmountDefault)
+	result.AffiliateSignupBonusTotalCap = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusTotalCap], AffiliateSignupBonusTotalCapDefault)
+	result.AffiliateSignupBonusDailyCap = parseNonNegativeFloat(settings[SettingKeyAffiliateSignupBonusDailyCap], AffiliateSignupBonusDailyCapDefault)
+	result.BalanceUsageGateEnabled = settings[SettingKeyBalanceUsageGateEnabled] == "true"
+	result.BalanceUsageGateMinBalance = parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinBalance], BalanceUsageGateMinBalanceDefault)
+	result.BalanceUsageGateMinRecharge = parseNonNegativeFloat(settings[SettingKeyBalanceUsageGateMinRecharge], BalanceUsageGateMinRechargeDefault)
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
 
 	// 敏感信息直接返回，方便测试连接时使用
@@ -2388,6 +2552,14 @@ func clampAffiliateRebateRate(value float64) float64 {
 	}
 	if value > AffiliateRebateRateMax {
 		return AffiliateRebateRateMax
+	}
+	return value
+}
+
+func parseNonNegativeFloat(raw string, fallback float64) float64 {
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
 	}
 	return value
 }

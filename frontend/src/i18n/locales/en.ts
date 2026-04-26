@@ -1012,6 +1012,20 @@ export default {
         joinedAt: 'Joined At'
       }
     },
+    logs: {
+      title: 'Invite Logs',
+      description: 'View invite binding and signup bonus results related to your account. Sensitive fingerprints and IPs are admin-only.',
+      empty: 'No invite logs yet',
+      loadFailed: 'Failed to load invite logs',
+      total: '{total} total',
+      columns: {
+        time: 'Time',
+        account: 'Account',
+        code: 'Invite Code',
+        result: 'Result',
+        bonus: 'Bonus'
+      }
+    },
     tips: {
       title: 'How It Works',
       line1: 'Share your affiliate code or invite link with new users.',
@@ -4831,6 +4845,24 @@ export default {
           durationDaysDesc: 'Rebate relationship expires after this many days since invitee registration. 0 = permanent.',
           perInviteeCap: 'Per-Invitee Rebate Cap',
           perInviteeCapDesc: 'Maximum total rebate from a single invitee. 0 = no limit.',
+          signupBonus: {
+            title: 'Signup Bonus',
+            description: 'When an invited user registers successfully, credit a fixed balance to the inviter. Fingerprint reuse, inviter total cap, or global daily cap will skip the bonus and record the reason.',
+            amount: 'Fixed Bonus Amount',
+            amountHint: 'Balance credited to the inviter for each eligible signup.',
+            totalCap: 'Inviter Total Cap',
+            totalCapHint: 'Maximum signup bonus credited to one inviter. 0 = unlimited.',
+            dailyCap: 'Global Daily Cap',
+            dailyCapHint: 'Daily signup bonus cap for all users. Stops automatically after reaching the cap and resumes the next day.'
+          },
+          balanceGate: {
+            title: 'Balance Usage Gate',
+            description: 'Prevents gifted balances from being used directly by abuse accounts. Applies only to balance billing, not subscription billing.',
+            minBalance: 'Minimum Current Balance',
+            minBalanceHint: 'Account balance must be greater than this value to use balance-based services.',
+            minRecharge: 'Minimum Historical Recharge',
+            minRechargeHint: 'Historical recharge must be greater than this value. Invite bonuses do not count as recharge.'
+          },
           customUsers: {
             title: 'Per-User Overrides',
             description: 'Set a custom invite code or exclusive rebate rate for specific users. Lists only users that have an override applied.',
@@ -4871,6 +4903,22 @@ export default {
             hint: 'Apply the same exclusive rebate rate to all selected users.',
             placeholder: 'e.g. 30',
             clearHint: 'Submitting empty will clear the exclusive rate for selected users.',
+          },
+          inviteLogs: {
+            title: 'Invite Logs',
+            description: 'Admins can query all invite binding and signup bonus records, including failure reasons, fingerprints, and IP addresses.',
+            accountId: 'Account ID',
+            inviterId: 'Inviter ID',
+            inviteeId: 'Invitee ID',
+            empty: 'No invite logs yet',
+            col: {
+              time: 'Time',
+              inviter: 'Inviter',
+              invitee: 'Invitee',
+              result: 'Result',
+              fingerprint: 'Fingerprint',
+              ip: 'IP',
+            },
           },
         },
       },

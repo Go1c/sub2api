@@ -299,6 +299,7 @@ import {
 import {
   clearAffiliateReferralCode,
   loadAffiliateReferralCode,
+  oauthAffiliatePayload,
   resolveAffiliateReferralCode
 } from '@/utils/oauthAffiliate'
 
@@ -728,6 +729,7 @@ async function handleRegister(): Promise<void> {
     if (affCode) {
       formData.aff_code = affCode
     }
+    const affiliatePayload = oauthAffiliatePayload(affCode)
 
     // If email verification is enabled, redirect to verification page
     if (emailVerifyEnabled.value) {
@@ -740,7 +742,7 @@ async function handleRegister(): Promise<void> {
           turnstile_token: turnstileToken.value,
           promo_code: formData.promo_code || undefined,
           invitation_code: formData.invitation_code || undefined,
-          ...(affCode ? { aff_code: affCode } : {})
+          ...affiliatePayload
         })
       )
 
@@ -756,7 +758,7 @@ async function handleRegister(): Promise<void> {
       turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined,
       promo_code: formData.promo_code || undefined,
       invitation_code: formData.invitation_code || undefined,
-      ...(affCode ? { aff_code: affCode } : {})
+      ...affiliatePayload
     })
     clearAffiliateReferralCode()
 

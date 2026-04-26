@@ -86,12 +86,13 @@ describe('oauth adoption auth api', () => {
       ' AFF123 '
     )
 
-    expect(post).toHaveBeenCalledWith('/auth/oauth/linuxdo/complete-registration', {
+    expect(post).toHaveBeenCalledWith('/auth/oauth/linuxdo/complete-registration', expect.objectContaining({
       invitation_code: 'invite-code',
       aff_code: 'AFF123',
+      aff_fingerprint: expect.any(String),
       adopt_display_name: true,
       adopt_avatar: false
-    })
+    }))
   })
 
   it('posts oidc invitation completion with adoption decisions', async () => {
@@ -166,12 +167,13 @@ describe('oauth adoption auth api', () => {
       'WXAFF'
     )
 
-    expect(post).toHaveBeenCalledWith('/auth/oauth/wechat/complete-registration', {
+    expect(post).toHaveBeenCalledWith('/auth/oauth/wechat/complete-registration', expect.objectContaining({
       invitation_code: 'invite-code',
       aff_code: 'WXAFF',
+      aff_fingerprint: expect.any(String),
       adopt_display_name: false,
       adopt_avatar: true
-    })
+    }))
   })
 
   it('classifies oauth completion results as login or bind', async () => {

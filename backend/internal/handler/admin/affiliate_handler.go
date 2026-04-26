@@ -43,6 +43,38 @@ func (h *AffiliateHandler) ListUsers(c *gin.Context) {
 	response.Paginated(c, entries, total, page, pageSize)
 }
 
+// ListInviteLogs returns invite audit logs for administrators.
+// GET /api/v1/admin/affiliates/invite-logs
+func (h *AffiliateHandler) ListInviteLogs(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	filter := service.AffiliateInviteLogFilter{
+		AccountID: parseOptionalInt64Query(c, "account_id"),
+		InviterID: parseOptionalInt64Query(c, "inviter_id"),
+		InviteeID: parseOptionalInt64Query(c, "invitee_id"),
+		Page:      page,
+		PageSize:  pageSize,
+	}
+
+	items, total, err := h.affiliateService.AdminListInviteLogs(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items, total, page, pageSize)
+}
+
+func parseOptionalInt64Query(c *gin.Context, key string) int64 {
+	raw := c.Query(key)
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return value
+}
+
 // UpdateUserSettings updates a user's affiliate settings.
 // PUT /api/v1/admin/affiliates/users/:user_id
 //

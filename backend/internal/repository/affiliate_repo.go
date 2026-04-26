@@ -86,6 +86,219 @@ func (r *affiliateRepository) BindInviter(ctx context.Context, userID, inviterID
 	return bound, nil
 }
 
+func (r *affiliateRepository) BindInviterWithSignupBonus(ctx context.Context, req service.AffiliateSignupBonusRequest) (*service.AffiliateSignupBonusResult, error) {
+	result := &service.AffiliateSignupBonusResult{}
+	if req.UserID <= 0 || req.InviterID <= 0 {
+		return result, nil
+	}
+
+	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		if _, err := ensureUserAffiliateWithClient(txCtx, txClient, req.UserID); err != nil {
+			return err
+		}
+		if _, err := ensureUserAffiliateWithClient(txCtx, txClient, req.InviterID); err != nil {
+			return err
+		}
+
+		res, err := txClient.ExecContext(txCtx,
+			"UPDATE user_affiliates SET inviter_id = $1, updated_at = NOW() WHERE user_id = $2 AND inviter_id IS NULL",
+			req.InviterID, req.UserID,
+		)
+		if err != nil {
+			return fmt.Errorf("bind inviter: %w", err)
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			result.Bound = false
+			result.FailureReason = "already_bound"
+			return insertAffiliateInviteLog(txCtx, txClient, service.AffiliateInviteLogEntry{
+				InviterID:       &req.InviterID,
+				InviteeID:       &req.UserID,
+				AffiliateCode:   req.AffiliateCode,
+				Success:         false,
+				FailureReason:   result.FailureReason,
+				FingerprintHash: req.FingerprintHash,
+				IPAddress:       req.IPAddress,
+				UserAgent:       req.UserAgent,
+			})
+		}
+
+		if _, err = txClient.ExecContext(txCtx,
+			"UPDATE user_affiliates SET aff_count = aff_count + 1, updated_at = NOW() WHERE user_id = $1",
+			req.InviterID,
+		); err != nil {
+			return fmt.Errorf("increment inviter aff_count: %w", err)
+		}
+
+		result.Bound = true
+		if req.Amount > 0 {
+			if err := lockAffiliateSignupBonusScopes(txCtx, txClient, req); err != nil {
+				return err
+			}
+		}
+		award, reason, err := r.resolveSignupBonusAward(txCtx, txClient, req)
+		if err != nil {
+			return err
+		}
+		result.AwardedAmount = award
+		result.FailureReason = reason
+
+		if award > 0 {
+			affected, err := txClient.User.Update().
+				Where(user.IDEQ(req.InviterID)).
+				AddBalance(award).
+				Save(txCtx)
+			if err != nil {
+				return fmt.Errorf("credit affiliate signup bonus: %w", err)
+			}
+			if affected == 0 {
+				return service.ErrUserNotFound
+			}
+			if _, err = txClient.ExecContext(txCtx, `
+INSERT INTO user_affiliate_ledger (user_id, action, amount, source_user_id, created_at, updated_at)
+VALUES ($1, 'signup_bonus', $2, $3, NOW(), NOW())`, req.InviterID, award, req.UserID); err != nil {
+				return fmt.Errorf("insert affiliate signup bonus ledger: %w", err)
+			}
+		}
+
+		return insertAffiliateInviteLog(txCtx, txClient, service.AffiliateInviteLogEntry{
+			InviterID:       &req.InviterID,
+			InviteeID:       &req.UserID,
+			AffiliateCode:   req.AffiliateCode,
+			Success:         true,
+			FailureReason:   reason,
+			BonusAmount:     award,
+			FingerprintHash: req.FingerprintHash,
+			IPAddress:       req.IPAddress,
+			UserAgent:       req.UserAgent,
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func lockAffiliateSignupBonusScopes(ctx context.Context, client affiliateQueryExecer, req service.AffiliateSignupBonusRequest) error {
+	for _, key := range affiliateSignupBonusLockKeys(req) {
+		if _, err := client.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", key); err != nil {
+			return fmt.Errorf("lock affiliate signup bonus scope: %w", err)
+		}
+	}
+	return nil
+}
+
+func affiliateSignupBonusLockKeys(req service.AffiliateSignupBonusRequest) []string {
+	keys := make([]string, 0, 3)
+	if req.FingerprintHash != "" {
+		keys = append(keys, "affiliate_signup_bonus:fingerprint:"+req.FingerprintHash)
+	}
+	if req.InviterTotalCap > 0 && req.InviterID > 0 {
+		keys = append(keys, fmt.Sprintf("affiliate_signup_bonus:inviter:%d", req.InviterID))
+	}
+	if req.DailyTotalCap > 0 {
+		keys = append(keys, "affiliate_signup_bonus:daily")
+	}
+	return keys
+}
+
+func (r *affiliateRepository) resolveSignupBonusAward(ctx context.Context, client *dbent.Client, req service.AffiliateSignupBonusRequest) (float64, string, error) {
+	amount := req.Amount
+	if amount <= 0 {
+		return 0, "", nil
+	}
+
+	if req.FingerprintHash != "" {
+		var reused int
+		rows, err := client.QueryContext(ctx, `
+SELECT COUNT(*)
+FROM affiliate_invite_logs
+WHERE fingerprint_hash = $1
+  AND bonus_amount > 0`, req.FingerprintHash)
+		if err != nil {
+			return 0, "", fmt.Errorf("query affiliate signup fingerprint: %w", err)
+		}
+		if rows.Next() {
+			if err := rows.Scan(&reused); err != nil {
+				_ = rows.Close()
+				return 0, "", err
+			}
+		}
+		if err := rows.Close(); err != nil {
+			return 0, "", err
+		}
+		if reused > 0 {
+			return 0, "fingerprint_reused", nil
+		}
+	}
+
+	if req.InviterTotalCap > 0 {
+		existing, err := queryAffiliateLedgerSum(ctx, client, `
+SELECT COALESCE(SUM(amount), 0)::double precision
+FROM user_affiliate_ledger
+WHERE user_id = $1 AND action = 'signup_bonus'`, req.InviterID)
+		if err != nil {
+			return 0, "", err
+		}
+		award, reason := computeAffiliateSignupBonusAward(amount, req.InviterTotalCap, existing, 0, 0)
+		if award <= 0 {
+			return 0, reason, nil
+		}
+	}
+
+	if req.DailyTotalCap > 0 {
+		existing, err := queryAffiliateLedgerSum(ctx, client, `
+SELECT COALESCE(SUM(amount), 0)::double precision
+FROM user_affiliate_ledger
+WHERE action = 'signup_bonus'
+  AND created_at >= date_trunc('day', NOW())
+  AND created_at < date_trunc('day', NOW()) + interval '1 day'`)
+		if err != nil {
+			return 0, "", err
+		}
+		award, reason := computeAffiliateSignupBonusAward(amount, 0, 0, req.DailyTotalCap, existing)
+		if award <= 0 {
+			return 0, reason, nil
+		}
+	}
+
+	if amount <= 0 {
+		return 0, "cap_reached", nil
+	}
+	return amount, "", nil
+}
+
+func computeAffiliateSignupBonusAward(amount, inviterTotalCap, inviterAwarded, dailyTotalCap, dailyAwarded float64) (float64, string) {
+	if amount <= 0 {
+		return 0, ""
+	}
+	if inviterTotalCap > 0 && inviterAwarded+amount > inviterTotalCap {
+		return 0, "inviter_total_cap_reached"
+	}
+	if dailyTotalCap > 0 && dailyAwarded+amount > dailyTotalCap {
+		return 0, "daily_total_cap_reached"
+	}
+	return amount, ""
+}
+
+func queryAffiliateLedgerSum(ctx context.Context, client affiliateQueryExecer, query string, args ...any) (float64, error) {
+	rows, err := client.QueryContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("query affiliate ledger sum: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var total float64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (r *affiliateRepository) AccrueQuota(ctx context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int) (bool, error) {
 	if amount <= 0 {
 		return false, nil
@@ -330,6 +543,161 @@ LIMIT $2`, inviterID, limit)
 		return nil, err
 	}
 	return invitees, nil
+}
+
+func (r *affiliateRepository) RecordInviteLog(ctx context.Context, entry service.AffiliateInviteLogEntry) error {
+	client := clientFromContext(ctx, r.client)
+	return insertAffiliateInviteLog(ctx, client, entry)
+}
+
+func insertAffiliateInviteLog(ctx context.Context, client affiliateQueryExecer, entry service.AffiliateInviteLogEntry) error {
+	_, err := client.ExecContext(ctx, `
+INSERT INTO affiliate_invite_logs (
+    inviter_id,
+    invitee_id,
+    affiliate_code,
+    success,
+    failure_reason,
+    bonus_amount,
+    fingerprint_hash,
+    ip_address,
+    user_agent,
+    created_at,
+    updated_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+		entry.InviterID,
+		entry.InviteeID,
+		strings.ToUpper(strings.TrimSpace(entry.AffiliateCode)),
+		entry.Success,
+		strings.TrimSpace(entry.FailureReason),
+		entry.BonusAmount,
+		strings.TrimSpace(entry.FingerprintHash),
+		strings.TrimSpace(entry.IPAddress),
+		strings.TrimSpace(entry.UserAgent),
+	)
+	if err != nil {
+		return fmt.Errorf("insert affiliate invite log: %w", err)
+	}
+	return nil
+}
+
+func (r *affiliateRepository) ListInviteLogs(ctx context.Context, filter service.AffiliateInviteLogFilter) ([]service.AffiliateInviteLog, int64, error) {
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+	if filter.PageSize <= 0 {
+		filter.PageSize = 20
+	}
+	if filter.PageSize > 100 {
+		filter.PageSize = 100
+	}
+
+	client := clientFromContext(ctx, r.client)
+	where := []string{"1=1"}
+	args := make([]any, 0, 3)
+	if filter.AccountID > 0 {
+		args = append(args, filter.AccountID)
+		where = append(where, fmt.Sprintf("(ail.inviter_id = $%d OR ail.invitee_id = $%d)", len(args), len(args)))
+	}
+	if filter.InviterID > 0 {
+		args = append(args, filter.InviterID)
+		where = append(where, fmt.Sprintf("ail.inviter_id = $%d", len(args)))
+	}
+	if filter.InviteeID > 0 {
+		args = append(args, filter.InviteeID)
+		where = append(where, fmt.Sprintf("ail.invitee_id = $%d", len(args)))
+	}
+	whereSQL := strings.Join(where, " AND ")
+
+	countQuery := "SELECT COUNT(*) FROM affiliate_invite_logs ail WHERE " + whereSQL
+	rows, err := client.QueryContext(ctx, countQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count affiliate invite logs: %w", err)
+	}
+	var total int64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			_ = rows.Close()
+			return nil, 0, err
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return nil, 0, err
+	}
+
+	args = append(args, filter.PageSize, (filter.Page-1)*filter.PageSize)
+	query := fmt.Sprintf(`
+SELECT ail.id,
+       ail.inviter_id,
+       COALESCE(inviter.email, ''),
+       COALESCE(inviter.username, ''),
+       ail.invitee_id,
+       COALESCE(invitee.email, ''),
+       COALESCE(invitee.username, ''),
+       ail.affiliate_code,
+       ail.success,
+       ail.failure_reason,
+       ail.bonus_amount::double precision,
+       ail.fingerprint_hash,
+       ail.ip_address,
+       ail.user_agent,
+       ail.created_at
+FROM affiliate_invite_logs ail
+LEFT JOIN users inviter ON inviter.id = ail.inviter_id
+LEFT JOIN users invitee ON invitee.id = ail.invitee_id
+WHERE %s
+ORDER BY ail.created_at DESC, ail.id DESC
+LIMIT $%d OFFSET $%d`, whereSQL, len(args)-1, len(args))
+
+	rows, err = client.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list affiliate invite logs: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]service.AffiliateInviteLog, 0)
+	for rows.Next() {
+		var item service.AffiliateInviteLog
+		var inviterID, inviteeID sql.NullInt64
+		if err := rows.Scan(
+			&item.ID,
+			&inviterID,
+			&item.InviterEmail,
+			&item.InviterUsername,
+			&inviteeID,
+			&item.InviteeEmail,
+			&item.InviteeUsername,
+			&item.AffiliateCode,
+			&item.Success,
+			&item.FailureReason,
+			&item.BonusAmount,
+			&item.FingerprintHash,
+			&item.IPAddress,
+			&item.UserAgent,
+			&item.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		if inviterID.Valid {
+			id := inviterID.Int64
+			item.InviterID = &id
+		}
+		if inviteeID.Valid {
+			id := inviteeID.Int64
+			item.InviteeID = &id
+		}
+		if !filter.IncludeSensitive {
+			item.FingerprintHash = ""
+			item.IPAddress = ""
+			item.UserAgent = ""
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (r *affiliateRepository) withTx(ctx context.Context, fn func(txCtx context.Context, txClient *dbent.Client) error) error {

@@ -63,7 +63,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	apiKeyRepository := repository.NewAPIKeyRepository(client, db)
 	userRPMCache := repository.NewUserRPMCache(redisClient)
 	userGroupRateRepository := repository.NewUserGroupRateRepository(db)
-	billingCacheService := service.ProvideBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, userRPMCache, userGroupRateRepository, configConfig)
+	billingCacheService := service.ProvideBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, userRPMCache, userGroupRateRepository, settingService, configConfig)
 	apiKeyCache := repository.NewAPIKeyCache(redisClient)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, apiKeyCache, configConfig)
 	apiKeyAuthCacheInvalidator := service.ProvideAPIKeyAuthCacheInvalidator(apiKeyService)

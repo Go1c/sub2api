@@ -102,3 +102,175 @@ func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 	})
 	require.False(t, enqueued)
 }
+
+type balanceGateCacheStub struct {
+	balance float64
+}
+
+func (b *balanceGateCacheStub) GetUserBalance(context.Context, int64) (float64, error) {
+	return b.balance, nil
+}
+
+func (b *balanceGateCacheStub) SetUserBalance(context.Context, int64, float64) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) DeductUserBalance(context.Context, int64, float64) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) InvalidateUserBalance(context.Context, int64) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) GetSubscriptionCache(context.Context, int64, int64) (*SubscriptionCacheData, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (b *balanceGateCacheStub) SetSubscriptionCache(context.Context, int64, int64, *SubscriptionCacheData) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) UpdateSubscriptionUsage(context.Context, int64, int64, float64) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) InvalidateSubscriptionCache(context.Context, int64, int64) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) GetAPIKeyRateLimit(context.Context, int64) (*APIKeyRateLimitCacheData, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (b *balanceGateCacheStub) SetAPIKeyRateLimit(context.Context, int64, *APIKeyRateLimitCacheData) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) UpdateAPIKeyRateLimitUsage(context.Context, int64, float64) error {
+	return nil
+}
+
+func (b *balanceGateCacheStub) InvalidateAPIKeyRateLimit(context.Context, int64) error {
+	return nil
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateRequiresRecharge(t *testing.T) {
+	resetBalanceUsageGateCacheForTest()
+	settingSvc := NewSettingService(&balanceGateSettingRepoStub{values: map[string]string{
+		"balance_usage_gate_enabled":      "true",
+		"balance_usage_gate_min_balance":  "1",
+		"balance_usage_gate_min_recharge": "5",
+	}}, nil)
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 3}, nil, nil, nil, nil, nil, &config.Config{}, settingSvc)
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1, TotalRecharged: 0}, nil, &Group{}, nil)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "历史充值")
+	require.Contains(t, err.Error(), "5.00")
+	require.NotContains(t, err.Error(), "当前历史充值")
+	require.NotContains(t, err.Error(), "0.00")
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateRequiresMinBalance(t *testing.T) {
+	resetBalanceUsageGateCacheForTest()
+	settingSvc := NewSettingService(&balanceGateSettingRepoStub{values: map[string]string{
+		"balance_usage_gate_enabled":      "true",
+		"balance_usage_gate_min_balance":  "2",
+		"balance_usage_gate_min_recharge": "5",
+	}}, nil)
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 1.25}, nil, nil, nil, nil, nil, &config.Config{}, settingSvc)
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1, TotalRecharged: 6}, nil, &Group{}, nil)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "余额需大于 2.00")
+	require.NotContains(t, err.Error(), "当前余额")
+	require.NotContains(t, err.Error(), "1.25")
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateAllowsQualifiedUser(t *testing.T) {
+	resetBalanceUsageGateCacheForTest()
+	settingSvc := NewSettingService(&balanceGateSettingRepoStub{values: map[string]string{
+		"balance_usage_gate_enabled":      "true",
+		"balance_usage_gate_min_balance":  "2",
+		"balance_usage_gate_min_recharge": "5",
+	}}, nil)
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 3}, nil, nil, nil, nil, nil, &config.Config{}, settingSvc)
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1, TotalRecharged: 6}, nil, &Group{}, nil)
+
+	require.NoError(t, err)
+}
+
+func TestSettingServiceGetBalanceUsageGateSettingsUsesProcessCache(t *testing.T) {
+	resetBalanceUsageGateCacheForTest()
+	repo := &balanceGateSettingRepoStub{values: map[string]string{
+		"balance_usage_gate_enabled":      "true",
+		"balance_usage_gate_min_balance":  "2",
+		"balance_usage_gate_min_recharge": "5",
+	}}
+	settingSvc := NewSettingService(repo, nil)
+
+	enabled, minBalance, minRecharge := settingSvc.GetBalanceUsageGateSettings(context.Background())
+	require.True(t, enabled)
+	require.Equal(t, 2.0, minBalance)
+	require.Equal(t, 5.0, minRecharge)
+
+	enabled, minBalance, minRecharge = settingSvc.GetBalanceUsageGateSettings(context.Background())
+	require.True(t, enabled)
+	require.Equal(t, 2.0, minBalance)
+	require.Equal(t, 5.0, minRecharge)
+	require.Equal(t, 1, repo.getMultipleCalls)
+}
+
+func resetBalanceUsageGateCacheForTest() {
+	balanceUsageGateSF.Forget("balance_usage_gate")
+	balanceUsageGateCache.Store(&cachedBalanceUsageGateSettings{expiresAt: 0})
+}
+
+type balanceGateSettingRepoStub struct {
+	values           map[string]string
+	getMultipleCalls int
+}
+
+func (s *balanceGateSettingRepoStub) Get(context.Context, string) (*Setting, error) {
+	panic("unexpected Get call")
+}
+
+func (s *balanceGateSettingRepoStub) GetValue(_ context.Context, key string) (string, error) {
+	value, ok := s.values[key]
+	if !ok {
+		return "", errors.New("setting not found")
+	}
+	return value, nil
+}
+
+func (s *balanceGateSettingRepoStub) Set(context.Context, string, string) error {
+	panic("unexpected Set call")
+}
+
+func (s *balanceGateSettingRepoStub) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	s.getMultipleCalls++
+	out := make(map[string]string, len(keys))
+	for _, key := range keys {
+		out[key] = s.values[key]
+	}
+	return out, nil
+}
+
+func (s *balanceGateSettingRepoStub) SetMultiple(context.Context, map[string]string) error {
+	panic("unexpected SetMultiple call")
+}
+
+func (s *balanceGateSettingRepoStub) GetAll(context.Context) (map[string]string, error) {
+	panic("unexpected GetAll call")
+}
+
+func (s *balanceGateSettingRepoStub) Delete(context.Context, string) error {
+	panic("unexpected Delete call")
+}

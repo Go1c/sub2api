@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './client'
+import { oauthAffiliatePayload } from '@/utils/oauthAffiliate'
 import type {
   LoginRequest,
   RegisterRequest,
@@ -597,12 +598,11 @@ async function createPendingOAuthAccount(
   decision?: OAuthAdoptionDecision,
   affiliateCode?: string
 ): Promise<PendingOAuthCreateAccountResponse> {
-  const normalizedAffiliateCode = affiliateCode?.trim()
   const { data } = await apiClient.post<PendingOAuthCreateAccountResponse>(
     `/auth/oauth/${provider}/complete-registration`,
     {
       invitation_code: invitationCode,
-      ...(normalizedAffiliateCode ? { aff_code: normalizedAffiliateCode } : {}),
+      ...oauthAffiliatePayload(affiliateCode),
       ...serializeOAuthAdoptionDecision(decision)
     }
   )
