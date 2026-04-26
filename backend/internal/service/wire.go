@@ -399,9 +399,10 @@ func ProvideBillingCacheService(
 	apiKeyRepo APIKeyRepository,
 	rpmCache UserRPMCache,
 	rateRepo UserGroupRateRepository,
+	settingService *SettingService,
 	cfg *config.Config,
 ) *BillingCacheService {
-	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg)
+	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, settingService)
 }
 
 // ProviderSet is the Wire provider set for all services

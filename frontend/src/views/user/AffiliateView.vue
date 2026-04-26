@@ -105,6 +105,64 @@
         </div>
 
         <div class="card p-6">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.logs.title') }}</h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.logs.description') }}</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" :disabled="logsLoading" @click="loadAffiliateInviteLogs">
+              <Icon v-if="logsLoading" name="refresh" size="sm" class="animate-spin" />
+              <span>{{ t('common.refresh') }}</span>
+            </button>
+          </div>
+          <div v-if="logs.length === 0" class="mt-4 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">
+            {{ t('affiliate.logs.empty') }}
+          </div>
+          <div v-else class="mt-4 overflow-x-auto">
+            <table class="w-full min-w-[640px] text-left text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 text-gray-500 dark:border-dark-700 dark:text-dark-400">
+                  <th class="px-3 py-2 font-medium">{{ t('affiliate.logs.columns.time') }}</th>
+                  <th class="px-3 py-2 font-medium">{{ t('affiliate.logs.columns.account') }}</th>
+                  <th class="px-3 py-2 font-medium">{{ t('affiliate.logs.columns.code') }}</th>
+                  <th class="px-3 py-2 font-medium">{{ t('affiliate.logs.columns.result') }}</th>
+                  <th class="px-3 py-2 text-right font-medium">{{ t('affiliate.logs.columns.bonus') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="entry in logs" :key="entry.id" class="border-b border-gray-100 last:border-b-0 dark:border-dark-800">
+                  <td class="px-3 py-3 text-gray-700 dark:text-gray-300">{{ formatDateTime(entry.created_at) || '-' }}</td>
+                  <td class="px-3 py-3 text-gray-900 dark:text-white">
+                    {{ entry.invitee_email || entry.inviter_email || `#${entry.invitee_id || entry.inviter_id || '-'}` }}
+                  </td>
+                  <td class="px-3 py-3 font-mono text-gray-700 dark:text-gray-300">{{ entry.affiliate_code || '-' }}</td>
+                  <td class="px-3 py-3">
+                    <span :class="entry.success && !entry.failure_reason ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                      {{ entry.failure_message || (entry.success ? t('common.success') : entry.failure_reason) || '-' }}
+                    </span>
+                  </td>
+                  <td class="px-3 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400">
+                    {{ entry.bonus_amount > 0 ? formatCurrency(entry.bonus_amount) : '-' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="logsTotal > logsPageSize" class="mt-4 flex items-center justify-between text-sm text-gray-500">
+            <span>{{ t('affiliate.logs.total', { total: logsTotal }) }}</span>
+            <div class="flex items-center gap-2">
+              <button class="btn btn-secondary btn-sm" :disabled="logsPage <= 1" @click="changeLogPage(logsPage - 1)">
+                {{ t('pagination.previous') }}
+              </button>
+              <span>{{ logsPage }} / {{ Math.max(1, Math.ceil(logsTotal / logsPageSize)) }}</span>
+              <button class="btn btn-secondary btn-sm" :disabled="logsPage >= Math.ceil(logsTotal / logsPageSize)" @click="changeLogPage(logsPage + 1)">
+                {{ t('pagination.next') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-6">
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.invitees.title') }}</h3>
           <div v-if="detail.invitees.length === 0" class="mt-4 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-dark-400">
             {{ t('affiliate.invitees.empty') }}
@@ -145,7 +203,7 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import userAPI from '@/api/user'
-import type { UserAffiliateDetail } from '@/types'
+import type { AffiliateInviteLog, UserAffiliateDetail } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useClipboard } from '@/composables/useClipboard'
@@ -160,6 +218,11 @@ const { copyToClipboard } = useClipboard()
 const loading = ref(true)
 const transferring = ref(false)
 const detail = ref<UserAffiliateDetail | null>(null)
+const logsLoading = ref(false)
+const logs = ref<AffiliateInviteLog[]>([])
+const logsTotal = ref(0)
+const logsPage = ref(1)
+const logsPageSize = 10
 
 const inviteLink = computed(() => {
   if (!detail.value) return ''
@@ -194,6 +257,28 @@ async function loadAffiliateDetail(silent = false): Promise<void> {
   }
 }
 
+async function loadAffiliateInviteLogs(): Promise<void> {
+  logsLoading.value = true
+  try {
+    const resp = await userAPI.getAffiliateInviteLogs({
+      page: logsPage.value,
+      page_size: logsPageSize,
+    })
+    logs.value = resp.items ?? []
+    logsTotal.value = resp.total ?? 0
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('affiliate.logs.loadFailed')))
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+function changeLogPage(page: number): void {
+  if (page < 1) return
+  logsPage.value = page
+  void loadAffiliateInviteLogs()
+}
+
 async function copyCode(): Promise<void> {
   if (!detail.value?.aff_code) return
   await copyToClipboard(detail.value.aff_code, t('affiliate.codeCopied'))
@@ -223,5 +308,6 @@ async function transferQuota(): Promise<void> {
 
 onMounted(() => {
   void loadAffiliateDetail()
+  void loadAffiliateInviteLogs()
 })
 </script>

@@ -118,6 +118,13 @@ type SystemSettings struct {
 	AffiliateRebateFreezeHours   int
 	AffiliateRebateDurationDays  int
 	AffiliateRebatePerInviteeCap float64
+	AffiliateSignupBonusEnabled  bool
+	AffiliateSignupBonusAmount   float64
+	AffiliateSignupBonusTotalCap float64
+	AffiliateSignupBonusDailyCap float64
+	BalanceUsageGateEnabled      bool
+	BalanceUsageGateMinBalance   float64
+	BalanceUsageGateMinRecharge  float64
 	DefaultUserRPMLimit          int
 	DefaultSubscriptions         []DefaultSubscriptionSetting
 

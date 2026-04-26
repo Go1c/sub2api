@@ -4,6 +4,7 @@ import {
   clearOAuthAffiliateCode,
   loadAffiliateReferralCode,
   loadOAuthAffiliateCode,
+  oauthAffiliatePayload,
   resolveAffiliateReferralCode,
   storeAffiliateReferralCode,
   storeOAuthAffiliateCode
@@ -44,5 +45,15 @@ describe('oauthAffiliate', () => {
 
     clearAffiliateReferralCode()
     expect(loadAffiliateReferralCode()).toBe('')
+  })
+
+  it('adds a stable fingerprint when building affiliate payload', () => {
+    const first = oauthAffiliatePayload(' AFF123 ')
+    const second = oauthAffiliatePayload('AFF123')
+
+    expect(first.aff_code).toBe('AFF123')
+    expect(first.aff_fingerprint).toBeTruthy()
+    expect(second.aff_fingerprint).toBe(first.aff_fingerprint)
+    expect(oauthAffiliatePayload()).toEqual({})
   })
 })

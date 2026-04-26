@@ -29,6 +29,13 @@ const (
 	AffiliateRebateDurationDaysDefault  = 0     // 0 = 永久有效
 	AffiliateRebateDurationDaysMax      = 3650  // ~10 年
 	AffiliateRebatePerInviteeCapDefault = 0.0   // 0 = 无上限
+	AffiliateSignupBonusEnabledDefault  = false // 注册就送默认关闭
+	AffiliateSignupBonusAmountDefault   = 0.0
+	AffiliateSignupBonusTotalCapDefault = 0.0 // 单个邀请人累计上限，0 = 无上限
+	AffiliateSignupBonusDailyCapDefault = 0.0 // 全站每日上限，0 = 无上限
+	BalanceUsageGateEnabledDefault      = false
+	BalanceUsageGateMinBalanceDefault   = 0.0
+	BalanceUsageGateMinRechargeDefault  = 0.0
 )
 
 // Platform constants
@@ -105,6 +112,13 @@ const (
 	SettingKeyAffiliateRebateFreezeHours       = "affiliate_rebate_freeze_hours"       // 返利冻结期（小时，0=不冻结）
 	SettingKeyAffiliateRebateDurationDays      = "affiliate_rebate_duration_days"      // 返利有效期（天，0=永久）
 	SettingKeyAffiliateRebatePerInviteeCap     = "affiliate_rebate_per_invitee_cap"    // 单人返利上限（0=无上限）
+	SettingKeyAffiliateSignupBonusEnabled      = "affiliate_signup_bonus_enabled"      // 注册就送开关
+	SettingKeyAffiliateSignupBonusAmount       = "affiliate_signup_bonus_amount"       // 注册就送固定额度
+	SettingKeyAffiliateSignupBonusTotalCap     = "affiliate_signup_bonus_total_cap"    // 单个邀请人累计注册赠送上限（0=无上限）
+	SettingKeyAffiliateSignupBonusDailyCap     = "affiliate_signup_bonus_daily_cap"    // 全站每日注册赠送上限（0=无上限）
+	SettingKeyBalanceUsageGateEnabled          = "balance_usage_gate_enabled"          // 余额使用门槛开关
+	SettingKeyBalanceUsageGateMinBalance       = "balance_usage_gate_min_balance"      // 使用余额服务前需大于的当前余额
+	SettingKeyBalanceUsageGateMinRecharge      = "balance_usage_gate_min_recharge"     // 使用余额服务前需大于的历史充值
 
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址

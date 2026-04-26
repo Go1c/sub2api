@@ -123,6 +123,7 @@ export interface RegisterRequest {
   promo_code?: string
   invitation_code?: string
   aff_code?: string
+  aff_fingerprint?: string
 }
 
 export interface AffiliateInvitee {
@@ -149,6 +150,25 @@ export interface UserAffiliateDetail {
 export interface AffiliateTransferResponse {
   transferred_quota: number
   balance: number
+}
+
+export interface AffiliateInviteLog {
+  id: number
+  inviter_id?: number | null
+  inviter_email?: string
+  inviter_username?: string
+  invitee_id?: number | null
+  invitee_email?: string
+  invitee_username?: string
+  affiliate_code?: string
+  success: boolean
+  failure_reason?: string
+  failure_message?: string
+  bonus_amount: number
+  fingerprint_hash?: string
+  ip_address?: string
+  user_agent?: string
+  created_at: string
 }
 
 export interface SendVerifyCodeRequest {

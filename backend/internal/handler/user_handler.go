@@ -200,6 +200,24 @@ func (h *UserHandler) TransferAffiliateQuota(c *gin.Context) {
 	})
 }
 
+// ListAffiliateInviteLogs returns invite audit logs visible to the current user.
+// GET /api/v1/user/aff/logs
+func (h *UserHandler) ListAffiliateInviteLogs(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	page, pageSize := response.ParsePagination(c)
+	items, total, err := h.affiliateService.ListInviteLogs(c.Request.Context(), subject.UserID, page, pageSize)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items, total, page, pageSize)
+}
+
 type StartIdentityBindingRequest struct {
 	Provider   string `json:"provider" binding:"required"`
 	RedirectTo string `json:"redirect_to"`

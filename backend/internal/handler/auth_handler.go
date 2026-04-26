@@ -49,6 +49,7 @@ type RegisterRequest struct {
 	PromoCode      string `json:"promo_code"`      // 注册优惠码
 	InvitationCode string `json:"invitation_code"` // 邀请码
 	AffCode        string `json:"aff_code"`        // 邀请返利码
+	AffFingerprint string `json:"aff_fingerprint"` // 邀请注册设备指纹
 }
 
 // SendVerifyCodeRequest 发送验证码请求
@@ -150,6 +151,16 @@ func (h *AuthHandler) isBackendModeEnabled(ctx context.Context) bool {
 	return h.settingSvc.IsBackendModeEnabled(ctx)
 }
 
+func affiliateSignupContextFromGin(c *gin.Context, rawFingerprint string) context.Context {
+	if c == nil || c.Request == nil {
+		return context.Background()
+	}
+	return service.ContextWithAffiliateSignupRequestMeta(
+		c.Request.Context(),
+		service.NewAffiliateSignupRequestMeta(rawFingerprint, ip.GetClientIP(c), c.Request.UserAgent()),
+	)
+}
+
 // Register handles user registration
 // POST /api/v1/auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -165,8 +176,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	ctx := affiliateSignupContextFromGin(c, req.AffFingerprint)
 	_, user, err := h.authService.RegisterWithVerification(
-		c.Request.Context(),
+		ctx,
 		req.Email,
 		req.Password,
 		req.VerifyCode,

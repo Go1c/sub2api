@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"math"
 	"strings"
@@ -79,6 +81,34 @@ type AffiliateInvitee struct {
 	TotalRebate float64    `json:"total_rebate"`
 }
 
+type AffiliateInviteLog struct {
+	ID              int64     `json:"id"`
+	InviterID       *int64    `json:"inviter_id,omitempty"`
+	InviterEmail    string    `json:"inviter_email,omitempty"`
+	InviterUsername string    `json:"inviter_username,omitempty"`
+	InviteeID       *int64    `json:"invitee_id,omitempty"`
+	InviteeEmail    string    `json:"invitee_email,omitempty"`
+	InviteeUsername string    `json:"invitee_username,omitempty"`
+	AffiliateCode   string    `json:"affiliate_code,omitempty"`
+	Success         bool      `json:"success"`
+	FailureReason   string    `json:"failure_reason,omitempty"`
+	FailureMessage  string    `json:"failure_message,omitempty"`
+	BonusAmount     float64   `json:"bonus_amount"`
+	FingerprintHash string    `json:"fingerprint_hash,omitempty"`
+	IPAddress       string    `json:"ip_address,omitempty"`
+	UserAgent       string    `json:"user_agent,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type AffiliateInviteLogFilter struct {
+	AccountID        int64
+	InviterID        int64
+	InviteeID        int64
+	IncludeSensitive bool
+	Page             int
+	PageSize         int
+}
+
 type AffiliateDetail struct {
 	UserID          int64   `json:"user_id"`
 	AffCode         string  `json:"aff_code"`
@@ -98,6 +128,9 @@ type AffiliateRepository interface {
 	EnsureUserAffiliate(ctx context.Context, userID int64) (*AffiliateSummary, error)
 	GetAffiliateByCode(ctx context.Context, code string) (*AffiliateSummary, error)
 	BindInviter(ctx context.Context, userID, inviterID int64) (bool, error)
+	BindInviterWithSignupBonus(ctx context.Context, req AffiliateSignupBonusRequest) (*AffiliateSignupBonusResult, error)
+	RecordInviteLog(ctx context.Context, entry AffiliateInviteLogEntry) error
+	ListInviteLogs(ctx context.Context, filter AffiliateInviteLogFilter) ([]AffiliateInviteLog, int64, error)
 	AccrueQuota(ctx context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int) (bool, error)
 	GetAccruedRebateFromInvitee(ctx context.Context, inviterID, inviteeUserID int64) (float64, error)
 	ThawFrozenQuota(ctx context.Context, userID int64) (float64, error)
@@ -110,6 +143,75 @@ type AffiliateRepository interface {
 	SetUserRebateRate(ctx context.Context, userID int64, ratePercent *float64) error
 	BatchSetUserRebateRate(ctx context.Context, userIDs []int64, ratePercent *float64) error
 	ListUsersWithCustomSettings(ctx context.Context, filter AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error)
+}
+
+type AffiliateSignupBonusRequest struct {
+	UserID          int64
+	InviterID       int64
+	AffiliateCode   string
+	Amount          float64
+	InviterTotalCap float64
+	DailyTotalCap   float64
+	FingerprintHash string
+	IPAddress       string
+	UserAgent       string
+}
+
+type AffiliateSignupBonusResult struct {
+	Bound         bool
+	AwardedAmount float64
+	FailureReason string
+}
+
+type AffiliateInviteLogEntry struct {
+	InviterID       *int64
+	InviteeID       *int64
+	AffiliateCode   string
+	Success         bool
+	FailureReason   string
+	BonusAmount     float64
+	FingerprintHash string
+	IPAddress       string
+	UserAgent       string
+}
+
+type AffiliateSignupRequestMeta struct {
+	FingerprintHash string
+	IPAddress       string
+	UserAgent       string
+}
+
+type affiliateSignupMetaContextKey struct{}
+
+func NewAffiliateSignupRequestMeta(rawFingerprint, ipAddress, userAgent string) AffiliateSignupRequestMeta {
+	raw := strings.TrimSpace(rawFingerprint)
+	if raw == "" {
+		raw = strings.TrimSpace(ipAddress) + "|" + strings.TrimSpace(userAgent)
+	}
+	hash := ""
+	if raw != "" {
+		sum := sha256.Sum256([]byte(raw))
+		hash = hex.EncodeToString(sum[:])
+	}
+	return AffiliateSignupRequestMeta{
+		FingerprintHash: hash,
+		IPAddress:       truncateString(strings.TrimSpace(ipAddress), 64),
+		UserAgent:       truncateString(strings.TrimSpace(userAgent), 1024),
+	}
+}
+
+func ContextWithAffiliateSignupRequestMeta(ctx context.Context, meta AffiliateSignupRequestMeta) context.Context {
+	return context.WithValue(ctx, affiliateSignupMetaContextKey{}, meta)
+}
+
+func affiliateSignupRequestMetaFromContext(ctx context.Context) AffiliateSignupRequestMeta {
+	if ctx == nil {
+		return AffiliateSignupRequestMeta{}
+	}
+	if meta, ok := ctx.Value(affiliateSignupMetaContextKey{}).(AffiliateSignupRequestMeta); ok {
+		return meta
+	}
+	return AffiliateSignupRequestMeta{}
 }
 
 // AffiliateAdminFilter 列表筛选条件
@@ -200,11 +302,31 @@ func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, 
 	if s == nil || s.repo == nil {
 		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
+	meta := affiliateSignupRequestMetaFromContext(ctx)
+	inviteeID := userID
 	// 总开关关闭时，注册阶段静默忽略 aff 参数（不报错，避免阻断注册流程）
 	if !s.IsEnabled(ctx) {
+		s.recordInviteLog(ctx, AffiliateInviteLogEntry{
+			InviteeID:       &inviteeID,
+			AffiliateCode:   code,
+			Success:         false,
+			FailureReason:   "affiliate_disabled",
+			FingerprintHash: meta.FingerprintHash,
+			IPAddress:       meta.IPAddress,
+			UserAgent:       meta.UserAgent,
+		})
 		return nil
 	}
 	if !isValidAffiliateCodeFormat(code) {
+		s.recordInviteLog(ctx, AffiliateInviteLogEntry{
+			InviteeID:       &inviteeID,
+			AffiliateCode:   code,
+			Success:         false,
+			FailureReason:   "invalid_code",
+			FingerprintHash: meta.FingerprintHash,
+			IPAddress:       meta.IPAddress,
+			UserAgent:       meta.UserAgent,
+		})
 		return ErrAffiliateCodeInvalid
 	}
 
@@ -213,28 +335,93 @@ func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, 
 		return err
 	}
 	if selfSummary.InviterID != nil {
+		s.recordInviteLog(ctx, AffiliateInviteLogEntry{
+			InviterID:       selfSummary.InviterID,
+			InviteeID:       &inviteeID,
+			AffiliateCode:   code,
+			Success:         false,
+			FailureReason:   "already_bound",
+			FingerprintHash: meta.FingerprintHash,
+			IPAddress:       meta.IPAddress,
+			UserAgent:       meta.UserAgent,
+		})
 		return nil
 	}
 
 	inviterSummary, err := s.repo.GetAffiliateByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, ErrAffiliateProfileNotFound) {
+			s.recordInviteLog(ctx, AffiliateInviteLogEntry{
+				InviteeID:       &inviteeID,
+				AffiliateCode:   code,
+				Success:         false,
+				FailureReason:   "invalid_code",
+				FingerprintHash: meta.FingerprintHash,
+				IPAddress:       meta.IPAddress,
+				UserAgent:       meta.UserAgent,
+			})
 			return ErrAffiliateCodeInvalid
 		}
 		return err
 	}
 	if inviterSummary == nil || inviterSummary.UserID <= 0 || inviterSummary.UserID == userID {
+		reason := "invalid_code"
+		if inviterSummary != nil && inviterSummary.UserID == userID {
+			reason = "self_invite"
+		}
+		s.recordInviteLog(ctx, AffiliateInviteLogEntry{
+			InviteeID:       &inviteeID,
+			AffiliateCode:   code,
+			Success:         false,
+			FailureReason:   reason,
+			FingerprintHash: meta.FingerprintHash,
+			IPAddress:       meta.IPAddress,
+			UserAgent:       meta.UserAgent,
+		})
 		return ErrAffiliateCodeInvalid
 	}
 
-	bound, err := s.repo.BindInviter(ctx, userID, inviterSummary.UserID)
+	bonusAmount, inviterTotalCap, dailyTotalCap := s.resolveSignupBonusSettings(ctx)
+	result, err := s.repo.BindInviterWithSignupBonus(ctx, AffiliateSignupBonusRequest{
+		UserID:          userID,
+		InviterID:       inviterSummary.UserID,
+		AffiliateCode:   code,
+		Amount:          bonusAmount,
+		InviterTotalCap: inviterTotalCap,
+		DailyTotalCap:   dailyTotalCap,
+		FingerprintHash: meta.FingerprintHash,
+		IPAddress:       meta.IPAddress,
+		UserAgent:       meta.UserAgent,
+	})
 	if err != nil {
 		return err
 	}
-	if !bound {
+	if result == nil || !result.Bound {
 		return ErrAffiliateAlreadyBound
 	}
 	return nil
+}
+
+func (s *AffiliateService) resolveSignupBonusSettings(ctx context.Context) (amount, inviterTotalCap, dailyTotalCap float64) {
+	if s == nil || s.settingService == nil || !s.settingService.IsAffiliateSignupBonusEnabled(ctx) {
+		return 0, 0, 0
+	}
+	amount = roundTo(s.settingService.GetAffiliateSignupBonusAmount(ctx), 8)
+	if amount <= 0 {
+		return 0, 0, 0
+	}
+	inviterTotalCap = roundTo(s.settingService.GetAffiliateSignupBonusTotalCap(ctx), 8)
+	dailyTotalCap = roundTo(s.settingService.GetAffiliateSignupBonusDailyCap(ctx), 8)
+	return amount, inviterTotalCap, dailyTotalCap
+}
+
+func (s *AffiliateService) recordInviteLog(ctx context.Context, entry AffiliateInviteLogEntry) {
+	if s == nil || s.repo == nil {
+		return
+	}
+	if err := s.repo.RecordInviteLog(ctx, entry); err != nil {
+		logger.LegacyPrintf("service.affiliate", "[Affiliate] Failed to record invite log: %v", err)
+	}
 }
 
 func (s *AffiliateService) AccrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64) (float64, error) {
@@ -343,6 +530,78 @@ func (s *AffiliateService) TransferAffiliateQuota(ctx context.Context, userID in
 		s.invalidateAffiliateCaches(ctx, userID)
 	}
 	return transferred, balance, nil
+}
+
+func (s *AffiliateService) ListInviteLogs(ctx context.Context, accountID int64, page, pageSize int) ([]AffiliateInviteLog, int64, error) {
+	if s == nil || s.repo == nil {
+		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	if accountID <= 0 {
+		return nil, 0, infraerrors.BadRequest("INVALID_USER", "invalid user")
+	}
+	items, total, err := s.repo.ListInviteLogs(ctx, AffiliateInviteLogFilter{
+		AccountID:        accountID,
+		IncludeSensitive: false,
+		Page:             page,
+		PageSize:         pageSize,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range items {
+		items[i].FailureMessage = affiliateInviteFailureMessage(items[i].FailureReason)
+		items[i] = scrubAffiliateInviteLogForUser(items[i])
+	}
+	return items, total, nil
+}
+
+func (s *AffiliateService) AdminListInviteLogs(ctx context.Context, filter AffiliateInviteLogFilter) ([]AffiliateInviteLog, int64, error) {
+	if s == nil || s.repo == nil {
+		return nil, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	filter.IncludeSensitive = true
+	items, total, err := s.repo.ListInviteLogs(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range items {
+		items[i].FailureMessage = affiliateInviteFailureMessage(items[i].FailureReason)
+	}
+	return items, total, nil
+}
+
+func scrubAffiliateInviteLogForUser(item AffiliateInviteLog) AffiliateInviteLog {
+	item.FingerprintHash = ""
+	item.IPAddress = ""
+	item.UserAgent = ""
+	item.InviterEmail = maskEmail(item.InviterEmail)
+	item.InviteeEmail = maskEmail(item.InviteeEmail)
+	return item
+}
+
+func affiliateInviteFailureMessage(reason string) string {
+	switch strings.TrimSpace(reason) {
+	case "":
+		return ""
+	case "affiliate_disabled":
+		return "邀请返利功能未开启，未绑定邀请关系。"
+	case "invalid_code":
+		return "邀请码无效，未绑定邀请关系。"
+	case "already_bound":
+		return "该账号已经绑定过邀请人，不能重复绑定。"
+	case "self_invite":
+		return "不能使用自己的邀请码。"
+	case "fingerprint_reused":
+		return "该设备指纹已经领取过注册奖励，本次只绑定邀请关系，不再赠送余额。"
+	case "inviter_total_cap_reached":
+		return "邀请人的注册赠送累计上限已达到，本次不再赠送余额。"
+	case "daily_total_cap_reached":
+		return "全站今日注册赠送额度已达到上限，本次不再赠送余额，明日自动恢复。"
+	case "cap_reached":
+		return "注册赠送额度上限已达到，本次不再赠送余额。"
+	default:
+		return "邀请处理未完成：" + reason
+	}
 }
 
 func (s *AffiliateService) listInvitees(ctx context.Context, inviterID int64) ([]AffiliateInvitee, error) {

@@ -533,7 +533,7 @@ async function handleVerify(): Promise<void> {
         turnstile_token: initialTurnstileToken.value || undefined,
         promo_code: promoCode.value || undefined,
         invitation_code: invitationCode.value || undefined,
-        ...(affCode.value ? { aff_code: affCode.value } : {})
+        ...oauthAffiliatePayload(affCode.value || loadAffiliateReferralCode())
       })
     }
 

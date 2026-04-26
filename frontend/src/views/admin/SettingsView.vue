@@ -4228,6 +4228,63 @@
                 </p>
               </div>
 
+              <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
+                <div class="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t('admin.settings.features.affiliate.signupBonus.title') }}
+                    </h3>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.affiliate.signupBonus.description') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.affiliate_signup_bonus_enabled" />
+                </div>
+                <div v-if="form.affiliate_signup_bonus_enabled" class="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.affiliate.signupBonus.amount') }}</label>
+                    <input v-model.number="form.affiliate_signup_bonus_amount" type="number" min="0" step="0.01" class="input" />
+                    <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.affiliate.signupBonus.amountHint') }}</p>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.affiliate.signupBonus.totalCap') }}</label>
+                    <input v-model.number="form.affiliate_signup_bonus_total_cap" type="number" min="0" step="0.01" class="input" />
+                    <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.affiliate.signupBonus.totalCapHint') }}</p>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.affiliate.signupBonus.dailyCap') }}</label>
+                    <input v-model.number="form.affiliate_signup_bonus_daily_cap" type="number" min="0" step="0.01" class="input" />
+                    <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.affiliate.signupBonus.dailyCapHint') }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
+                <div class="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t('admin.settings.features.affiliate.balanceGate.title') }}
+                    </h3>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.affiliate.balanceGate.description') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.balance_usage_gate_enabled" />
+                </div>
+                <div v-if="form.balance_usage_gate_enabled" class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.affiliate.balanceGate.minBalance') }}</label>
+                    <input v-model.number="form.balance_usage_gate_min_balance" type="number" min="0" step="0.01" class="input" />
+                    <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.affiliate.balanceGate.minBalanceHint') }}</p>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.features.affiliate.balanceGate.minRecharge') }}</label>
+                    <input v-model.number="form.balance_usage_gate_min_recharge" type="number" min="0" step="0.01" class="input" />
+                    <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.affiliate.balanceGate.minRechargeHint') }}</p>
+                  </div>
+                </div>
+              </div>
+
               <!-- 专属用户管理 -->
               <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
                 <div class="mb-3 flex items-center justify-between">
@@ -4355,6 +4412,74 @@
                       :disabled="affiliateState.page >= Math.ceil(affiliateState.total / affiliateState.pageSize)"
                       @click="changeAffiliatePage(affiliateState.page + 1)"
                     >
+                      {{ t('pagination.next') }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
+                <div class="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t('admin.settings.features.affiliate.inviteLogs.title') }}
+                    </h3>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.affiliate.inviteLogs.description') }}
+                    </p>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-4">
+                    <input v-model="affiliateLogState.accountId" type="number" min="1" class="input" :placeholder="t('admin.settings.features.affiliate.inviteLogs.accountId')" />
+                    <input v-model="affiliateLogState.inviterId" type="number" min="1" class="input" :placeholder="t('admin.settings.features.affiliate.inviteLogs.inviterId')" />
+                    <input v-model="affiliateLogState.inviteeId" type="number" min="1" class="input" :placeholder="t('admin.settings.features.affiliate.inviteLogs.inviteeId')" />
+                    <button type="button" class="btn btn-secondary btn-sm" @click="reloadAffiliateInviteLogs">
+                      {{ t('common.search') }}
+                    </button>
+                  </div>
+                </div>
+                <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
+                  <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
+                    <thead class="bg-gray-50 dark:bg-dark-800">
+                      <tr>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.inviteLogs.col.time') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.inviteLogs.col.inviter') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.inviteLogs.col.invitee') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.inviteLogs.col.result') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.inviteLogs.col.fingerprint') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.inviteLogs.col.ip') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                      <tr v-if="affiliateLogState.loading">
+                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">{{ t('common.loading') }}</td>
+                      </tr>
+                      <tr v-else-if="affiliateLogState.entries.length === 0">
+                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">{{ t('admin.settings.features.affiliate.inviteLogs.empty') }}</td>
+                      </tr>
+                      <tr v-for="entry in affiliateLogState.entries" :key="entry.id">
+                        <td class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">{{ formatDateTime(entry.created_at) }}</td>
+                        <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">#{{ entry.inviter_id || '-' }} {{ entry.inviter_email || '' }}</td>
+                        <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">#{{ entry.invitee_id || '-' }} {{ entry.invitee_email || '' }}</td>
+                        <td class="px-3 py-2 text-sm">
+                          <span :class="entry.success && !entry.failure_reason ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                            {{ entry.failure_message || (entry.success ? t('common.success') : entry.failure_reason) || '-' }}
+                          </span>
+                          <span v-if="entry.bonus_amount > 0" class="ml-2 text-emerald-600 dark:text-emerald-400">+{{ formatCurrency(entry.bonus_amount) }}</span>
+                        </td>
+                        <td class="max-w-[180px] truncate px-3 py-2 text-xs font-mono text-gray-500">{{ entry.fingerprint_hash || '-' }}</td>
+                        <td class="px-3 py-2 text-xs text-gray-500">{{ entry.ip_address || '-' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-if="affiliateLogState.total > affiliateLogState.pageSize" class="mt-3 flex items-center justify-between text-sm">
+                  <span class="text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.totalLabel', { total: affiliateLogState.total }) }}</span>
+                  <div class="flex items-center gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" :disabled="affiliateLogState.page <= 1" @click="changeAffiliateLogPage(affiliateLogState.page - 1)">
+                      {{ t('pagination.previous') }}
+                    </button>
+                    <span class="text-gray-500">{{ affiliateLogState.page }} / {{ Math.max(1, Math.ceil(affiliateLogState.total / affiliateLogState.pageSize)) }}</span>
+                    <button type="button" class="btn btn-secondary btn-sm" :disabled="affiliateLogState.page >= Math.ceil(affiliateLogState.total / affiliateLogState.pageSize)" @click="changeAffiliateLogPage(affiliateLogState.page + 1)">
                       {{ t('pagination.next') }}
                     </button>
                   </div>
@@ -5688,7 +5813,7 @@ import type {
   WebSearchProviderConfig,
   WebSearchTestResult,
 } from "@/api/admin/settings";
-import type { AdminGroup, ContactChannel, NotifyEmailEntry, Proxy, SitePage } from "@/types";
+import type { AdminGroup, AffiliateInviteLog, ContactChannel, NotifyEmailEntry, Proxy, SitePage } from "@/types";
 import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import Icon from "@/components/icons/Icon.vue";
@@ -5718,6 +5843,7 @@ import {
   isHttpUrl,
   normalizeSitePages,
 } from "@/utils/sitePages";
+import { formatCurrency, formatDateTime } from "@/utils/format";
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
@@ -5890,6 +6016,13 @@ const form = reactive<SettingsForm>({
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
   affiliate_rebate_per_invitee_cap: 0,
+  affiliate_signup_bonus_enabled: false,
+  affiliate_signup_bonus_amount: 0,
+  affiliate_signup_bonus_total_cap: 0,
+  affiliate_signup_bonus_daily_cap: 0,
+  balance_usage_gate_enabled: false,
+  balance_usage_gate_min_balance: 0,
+  balance_usage_gate_min_recharge: 0,
   default_concurrency: 1,
   default_subscriptions: [],
   force_email_on_third_party_signup: false,
@@ -7082,6 +7215,13 @@ async function saveSettings() {
       affiliate_rebate_freeze_hours: Math.max(0, Math.min(720, Number(form.affiliate_rebate_freeze_hours) || 0)),
       affiliate_rebate_duration_days: Math.max(0, Math.min(3650, Math.floor(Number(form.affiliate_rebate_duration_days) || 0))),
       affiliate_rebate_per_invitee_cap: Math.max(0, Number(form.affiliate_rebate_per_invitee_cap) || 0),
+      affiliate_signup_bonus_enabled: form.affiliate_signup_bonus_enabled,
+      affiliate_signup_bonus_amount: Math.max(0, Number(form.affiliate_signup_bonus_amount) || 0),
+      affiliate_signup_bonus_total_cap: Math.max(0, Number(form.affiliate_signup_bonus_total_cap) || 0),
+      affiliate_signup_bonus_daily_cap: Math.max(0, Number(form.affiliate_signup_bonus_daily_cap) || 0),
+      balance_usage_gate_enabled: form.balance_usage_gate_enabled,
+      balance_usage_gate_min_balance: Math.max(0, Number(form.balance_usage_gate_min_balance) || 0),
+      balance_usage_gate_min_recharge: Math.max(0, Number(form.balance_usage_gate_min_recharge) || 0),
       default_concurrency: form.default_concurrency,
       default_subscriptions: normalizedDefaultSubscriptions,
       force_email_on_third_party_signup: form.force_email_on_third_party_signup,
@@ -8042,6 +8182,26 @@ const affiliateState = reactive<AffiliateState>({
   searchTimer: null,
 });
 
+const affiliateLogState = reactive<{
+  loading: boolean;
+  entries: AffiliateInviteLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  accountId: string;
+  inviterId: string;
+  inviteeId: string;
+}>({
+  loading: false,
+  entries: [],
+  total: 0,
+  page: 1,
+  pageSize: 20,
+  accountId: "",
+  inviterId: "",
+  inviteeId: "",
+});
+
 // `rate` is typed as string|number because <input type="number"> makes Vue's
 // v-model auto-cast the bound value to a Number on every keystroke. We keep
 // both shapes and normalize at read time.
@@ -8199,6 +8359,36 @@ function toggleAffiliateSelect(userId: number) {
   const idx = affiliateState.selected.indexOf(userId);
   if (idx >= 0) affiliateState.selected.splice(idx, 1);
   else affiliateState.selected.push(userId);
+}
+
+async function loadAffiliateInviteLogs() {
+  affiliateLogState.loading = true;
+  try {
+    const res = await affiliatesAPI.listInviteLogs({
+      page: affiliateLogState.page,
+      page_size: affiliateLogState.pageSize,
+      account_id: affiliateLogState.accountId.trim(),
+      inviter_id: affiliateLogState.inviterId.trim(),
+      invitee_id: affiliateLogState.inviteeId.trim(),
+    });
+    affiliateLogState.entries = res.items ?? [];
+    affiliateLogState.total = res.total ?? 0;
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t("common.error")));
+  } finally {
+    affiliateLogState.loading = false;
+  }
+}
+
+function reloadAffiliateInviteLogs() {
+  affiliateLogState.page = 1;
+  loadAffiliateInviteLogs();
+}
+
+function changeAffiliateLogPage(page: number) {
+  if (page < 1) return;
+  affiliateLogState.page = page;
+  loadAffiliateInviteLogs();
 }
 
 // openAffiliateModal opens the add/edit modal, prefilling fields from the
@@ -8365,6 +8555,7 @@ watch(
   (enabled, prev) => {
     if (enabled && !prev) {
       loadAffiliateUsers();
+      loadAffiliateInviteLogs();
     }
   },
 );
