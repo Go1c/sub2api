@@ -740,7 +740,7 @@ const zhCopy: HomeCopy = {
   dimNav: [
     { key: 'terms', label: '服务条款' },
     { key: 'privacy', label: '隐私保护' },
-    { key: 'support', label: '技术支持' }
+    { key: 'image2', label: 'Image2生图' }
   ],
   headerCta: '控制台',
   announcement: 'Claude 4.7 和 GPT-5.5 现已可用',
@@ -837,7 +837,7 @@ const enCopy: HomeCopy = {
   dimNav: [
     { key: 'terms', label: 'Terms' },
     { key: 'privacy', label: 'Privacy' },
-    { key: 'support', label: 'Support' }
+    { key: 'image2', label: 'Image2生图' }
   ],
   headerCta: 'Console',
   announcement: 'Claude 4.7 and GPT-5.5 are now live',
@@ -957,7 +957,7 @@ const navItems = computed<NavItem[]>(() => [
     target: privacyTarget.value?.target || '#footer',
     dim: true
   },
-  { ...copy.value.dimNav[2], target: '#support', dim: true }
+  { key: 'image2', label: copy.value.dimNav[2].label, target: 'https://img.lumio.games/', external: true, dim: true }
 ])
 
 const floatingSlots = [
