@@ -126,6 +126,27 @@ func TestSettingService_GetPublicSettings_FiltersDisabledSitePages(t *testing.T)
 	require.Contains(t, string(rawInjection), "published")
 }
 
+func TestSettingService_GetFrameSrcOrigins_IncludesPublicLinkPages(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyHomeContent: "https://home.example.com/page",
+			SettingKeySitePages: `[
+				{"key":"docs","title":"Docs","slug":"doc/docs","mode":"link","content":"https://blog.lumio.games/docs/doc/api","enabled":true},
+				{"key":"terms","title":"Terms","slug":"doc/terms","mode":"markdown","content":"https://not-embedded.example.com","enabled":true},
+				{"key":"draft","title":"Draft","slug":"doc/draft","mode":"link","content":"https://hidden.example.com/page","enabled":false}
+			]`,
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	origins, err := svc.GetFrameSrcOrigins(context.Background())
+	require.NoError(t, err)
+	require.Contains(t, origins, "https://home.example.com")
+	require.Contains(t, origins, "https://blog.lumio.games")
+	require.NotContains(t, origins, "https://not-embedded.example.com")
+	require.NotContains(t, origins, "https://hidden.example.com")
+}
+
 func TestSettingService_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {
 	svc := NewSettingService(&settingPublicRepoStub{
 		values: map[string]string{

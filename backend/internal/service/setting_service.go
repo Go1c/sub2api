@@ -911,8 +911,8 @@ func safeRawJSONArray(raw string) json.RawMessage {
 	return json.RawMessage("[]")
 }
 
-// GetFrameSrcOrigins returns deduplicated http(s) origins from home_content URL,
-// purchase_subscription_url, and all custom_menu_items URLs. Used by the router layer for CSP frame-src injection.
+// GetFrameSrcOrigins returns deduplicated http(s) origins from iframe-backed settings.
+// Used by the router layer for CSP frame-src injection.
 func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, error) {
 	settings, err := s.GetPublicSettings(ctx)
 	if err != nil {
@@ -939,6 +939,11 @@ func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, erro
 		addOrigin(settings.PurchaseSubscriptionURL)
 	}
 
+	// public site pages configured in link mode
+	for _, item := range parseSitePageLinkURLs(settings.SitePages) {
+		addOrigin(item)
+	}
+
 	// all custom menu items (including admin-only, since CSP must allow all iframes)
 	for _, item := range parseCustomMenuItemURLs(settings.CustomMenuItems) {
 		addOrigin(item)
@@ -962,6 +967,28 @@ func extractOriginFromURL(rawURL string) string {
 		return ""
 	}
 	return u.Scheme + "://" + u.Host
+}
+
+// parseSitePageLinkURLs extracts link-mode content URLs from public site pages.
+func parseSitePageLinkURLs(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return nil
+	}
+	var items []struct {
+		Mode    string `json:"mode"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return nil
+	}
+	urls := make([]string, 0, len(items))
+	for _, item := range items {
+		if strings.TrimSpace(item.Mode) == "link" && item.Content != "" {
+			urls = append(urls, item.Content)
+		}
+	}
+	return urls
 }
 
 // parseCustomMenuItemURLs extracts URLs from a raw JSON array of custom menu items.
