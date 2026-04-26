@@ -807,13 +807,13 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, user 
 		if minBalance > 0 && balance <= minBalance {
 			return infraerrors.Forbidden(
 				"BALANCE_USAGE_GATE_NOT_MET",
-				fmt.Sprintf("账户当前余额需大于 %.2f 才能使用余额服务；当前余额 %.2f。请先充值。", minBalance, balance),
+				fmt.Sprintf("账户余额需大于 %.2f 才能使用余额服务，请先充值。", minBalance),
 			)
 		}
 		if minRecharge > 0 && user.TotalRecharged <= minRecharge {
 			return infraerrors.Forbidden(
 				"BALANCE_USAGE_GATE_NOT_MET",
-				fmt.Sprintf("账户历史充值需大于 %.2f 才能使用余额服务；当前历史充值 %.2f。请先充值。", minRecharge, user.TotalRecharged),
+				fmt.Sprintf("账户历史充值需大于 %.2f 才能使用余额服务，请先充值。", minRecharge),
 			)
 		}
 	}

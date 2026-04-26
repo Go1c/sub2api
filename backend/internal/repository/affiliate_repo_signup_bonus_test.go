@@ -3,6 +3,7 @@ package repository
 import (
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,4 +32,28 @@ func TestComputeAffiliateSignupBonusAwardRejectsPartialDailyCap(t *testing.T) {
 
 	require.Zero(t, award)
 	require.Equal(t, "daily_total_cap_reached", reason)
+}
+
+func TestAffiliateSignupBonusLockKeysScopesByConfiguredGuardrails(t *testing.T) {
+	t.Parallel()
+
+	keys := affiliateSignupBonusLockKeys(service.AffiliateSignupBonusRequest{
+		InviterID:       42,
+		InviterTotalCap: 10,
+	})
+
+	require.Equal(t, []string{"affiliate_signup_bonus:inviter:42"}, keys)
+
+	keys = affiliateSignupBonusLockKeys(service.AffiliateSignupBonusRequest{
+		InviterID:       42,
+		InviterTotalCap: 10,
+		DailyTotalCap:   100,
+		FingerprintHash: "abc123",
+	})
+
+	require.Equal(t, []string{
+		"affiliate_signup_bonus:fingerprint:abc123",
+		"affiliate_signup_bonus:inviter:42",
+		"affiliate_signup_bonus:daily",
+	}, keys)
 }

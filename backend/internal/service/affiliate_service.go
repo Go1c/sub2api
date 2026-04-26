@@ -600,7 +600,7 @@ func affiliateInviteFailureMessage(reason string) string {
 	case "cap_reached":
 		return "注册赠送额度上限已达到，本次不再赠送余额。"
 	default:
-		return "邀请处理未完成：" + reason
+		return "邀请处理未完成，请联系管理员查看原因。"
 	}
 }
 

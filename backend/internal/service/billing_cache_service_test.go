@@ -169,6 +169,9 @@ func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateRequiresRech
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "历史充值")
+	require.Contains(t, err.Error(), "5.00")
+	require.NotContains(t, err.Error(), "当前历史充值")
+	require.NotContains(t, err.Error(), "0.00")
 }
 
 func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateRequiresMinBalance(t *testing.T) {
@@ -178,13 +181,15 @@ func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateRequiresMinB
 		"balance_usage_gate_min_balance":  "2",
 		"balance_usage_gate_min_recharge": "5",
 	}}, nil)
-	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 2}, nil, nil, nil, nil, nil, &config.Config{}, settingSvc)
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 1.25}, nil, nil, nil, nil, nil, &config.Config{}, settingSvc)
 	t.Cleanup(svc.Stop)
 
 	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1, TotalRecharged: 6}, nil, &Group{}, nil)
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "余额需大于 2.00")
+	require.NotContains(t, err.Error(), "当前余额")
+	require.NotContains(t, err.Error(), "1.25")
 }
 
 func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateAllowsQualifiedUser(t *testing.T) {

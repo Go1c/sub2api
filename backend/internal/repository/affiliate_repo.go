@@ -132,7 +132,7 @@ func (r *affiliateRepository) BindInviterWithSignupBonus(ctx context.Context, re
 
 		result.Bound = true
 		if req.Amount > 0 {
-			if err := lockAffiliateSignupBonusAward(txCtx, txClient); err != nil {
+			if err := lockAffiliateSignupBonusScopes(txCtx, txClient, req); err != nil {
 				return err
 			}
 		}
@@ -179,11 +179,27 @@ VALUES ($1, 'signup_bonus', $2, $3, NOW(), NOW())`, req.InviterID, award, req.Us
 	return result, nil
 }
 
-func lockAffiliateSignupBonusAward(ctx context.Context, client affiliateQueryExecer) error {
-	if _, err := client.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext('affiliate_signup_bonus_award'))"); err != nil {
-		return fmt.Errorf("lock affiliate signup bonus award: %w", err)
+func lockAffiliateSignupBonusScopes(ctx context.Context, client affiliateQueryExecer, req service.AffiliateSignupBonusRequest) error {
+	for _, key := range affiliateSignupBonusLockKeys(req) {
+		if _, err := client.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", key); err != nil {
+			return fmt.Errorf("lock affiliate signup bonus scope: %w", err)
+		}
 	}
 	return nil
+}
+
+func affiliateSignupBonusLockKeys(req service.AffiliateSignupBonusRequest) []string {
+	keys := make([]string, 0, 3)
+	if req.FingerprintHash != "" {
+		keys = append(keys, "affiliate_signup_bonus:fingerprint:"+req.FingerprintHash)
+	}
+	if req.InviterTotalCap > 0 && req.InviterID > 0 {
+		keys = append(keys, fmt.Sprintf("affiliate_signup_bonus:inviter:%d", req.InviterID))
+	}
+	if req.DailyTotalCap > 0 {
+		keys = append(keys, "affiliate_signup_bonus:daily")
+	}
+	return keys
 }
 
 func (r *affiliateRepository) resolveSignupBonusAward(ctx context.Context, client *dbent.Client, req service.AffiliateSignupBonusRequest) (float64, string, error) {

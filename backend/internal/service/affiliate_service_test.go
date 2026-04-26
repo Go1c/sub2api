@@ -185,6 +185,16 @@ func TestAdminListInviteLogs_IncludesSensitiveFieldsAndFilters(t *testing.T) {
 	require.Equal(t, "203.0.113.21", items[0].IPAddress)
 }
 
+func TestAffiliateInviteFailureMessageDoesNotExposeUnknownReason(t *testing.T) {
+	t.Parallel()
+
+	message := affiliateInviteFailureMessage("internal_detail=secret")
+
+	require.Equal(t, "邀请处理未完成，请联系管理员查看原因。", message)
+	require.NotContains(t, message, "internal_detail")
+	require.NotContains(t, message, "secret")
+}
+
 // TestValidateExclusiveRate_BoundaryAndInvalid covers the validator used by
 // admin-facing rate setters: nil is always valid (clear), in-range values
 // are accepted, NaN/Inf and out-of-range values produce a typed BadRequest.
