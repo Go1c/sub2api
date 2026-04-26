@@ -1,14 +1,14 @@
 -- Affiliate signup bonus controls, daily/global guardrails, and audit logs.
 
-INSERT INTO settings (key, value, created_at, updated_at)
+INSERT INTO settings (key, value)
 VALUES
-    ('affiliate_signup_bonus_enabled', 'false', NOW(), NOW()),
-    ('affiliate_signup_bonus_amount', '0.00', NOW(), NOW()),
-    ('affiliate_signup_bonus_total_cap', '0.00', NOW(), NOW()),
-    ('affiliate_signup_bonus_daily_cap', '0.00', NOW(), NOW()),
-    ('balance_usage_gate_enabled', 'false', NOW(), NOW()),
-    ('balance_usage_gate_min_balance', '0.00', NOW(), NOW()),
-    ('balance_usage_gate_min_recharge', '0.00', NOW(), NOW())
+    ('affiliate_signup_bonus_enabled', 'false'),
+    ('affiliate_signup_bonus_amount', '0.00'),
+    ('affiliate_signup_bonus_total_cap', '0.00'),
+    ('affiliate_signup_bonus_daily_cap', '0.00'),
+    ('balance_usage_gate_enabled', 'false'),
+    ('balance_usage_gate_min_balance', '0.00'),
+    ('balance_usage_gate_min_recharge', '0.00')
 ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS affiliate_invite_logs (
