@@ -57,27 +57,51 @@ export interface UserMonitorDetail {
   models: UserMonitorModelDetail[]
 }
 
+async function listFrom(path: string, options?: { signal?: AbortSignal }): Promise<UserMonitorListResponse> {
+  const { data } = await apiClient.get<UserMonitorListResponse>(path, {
+    signal: options?.signal,
+  })
+  return data
+}
+
+async function statusFrom(path: string): Promise<UserMonitorDetail> {
+  const { data } = await apiClient.get<UserMonitorDetail>(path)
+  return data
+}
+
 /**
  * List all monitor views available to the current user.
  */
 export async function list(options?: { signal?: AbortSignal }): Promise<UserMonitorListResponse> {
-  const { data } = await apiClient.get<UserMonitorListResponse>('/channel-monitors', {
-    signal: options?.signal,
-  })
-  return data
+  return listFrom('/channel-monitors', options)
 }
 
 /**
  * Get detailed status (multi-window availability + latency) for a single monitor.
  */
 export async function status(id: number): Promise<UserMonitorDetail> {
-  const { data } = await apiClient.get<UserMonitorDetail>(`/channel-monitors/${id}/status`)
-  return data
+  return statusFrom(`/channel-monitors/${id}/status`)
+}
+
+/**
+ * List all public monitor views without requiring an authenticated session.
+ */
+export async function publicList(options?: { signal?: AbortSignal }): Promise<UserMonitorListResponse> {
+  return listFrom('/public/channel-monitors', options)
+}
+
+/**
+ * Get public detailed status without requiring an authenticated session.
+ */
+export async function publicStatus(id: number): Promise<UserMonitorDetail> {
+  return statusFrom(`/public/channel-monitors/${id}/status`)
 }
 
 export const channelMonitorUserAPI = {
   list,
   status,
+  publicList,
+  publicStatus,
 }
 
 export default channelMonitorUserAPI

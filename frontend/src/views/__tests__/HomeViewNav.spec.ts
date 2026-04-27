@@ -13,6 +13,14 @@ function homeNavItemsBlock(): string {
 }
 
 describe('HomeView navigation', () => {
+  it('links status navigation to the standalone public status page', () => {
+    const navItems = homeNavItemsBlock()
+
+    expect(navItems).toContain("key: 'status'")
+    expect(navItems).toContain("target: '/status'")
+    expect(navItems).not.toContain("target: '#status'")
+  })
+
   it('replaces support with the Image2 generator external link', () => {
     const navItems = homeNavItemsBlock()
 

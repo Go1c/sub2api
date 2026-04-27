@@ -940,7 +940,7 @@ const pricingRows = computed<PricingRow[]>(() => {
 const navItems = computed<NavItem[]>(() => [
   { ...copy.value.nav[0], target: '#features' },
   { ...copy.value.nav[1], target: '#pricing' },
-  { ...copy.value.nav[2], target: '#status' },
+  { ...copy.value.nav[2], key: 'status', target: '/status' },
   docsTarget.value
     ? {
         ...copy.value.nav[3],
