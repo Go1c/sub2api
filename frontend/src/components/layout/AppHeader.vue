@@ -4,6 +4,7 @@
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex items-center gap-4">
         <button
+          v-if="showMobileMenu"
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
           aria-label="Toggle Menu"
@@ -264,6 +265,12 @@ const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
 const onboardingStore = useOnboardingStore()
 
+withDefaults(defineProps<{
+  showMobileMenu?: boolean
+}>(), {
+  showMobileMenu: true
+})
+
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
@@ -282,7 +289,7 @@ const homeNavItems = computed(() => {
   return [
     { key: 'pricing', label: isZh ? '定价' : 'Pricing', to: { path: '/home', hash: '#pricing' }, href: '', external: false },
     { key: 'features', label: isZh ? '特性' : 'Features', to: { path: '/home', hash: '#features' }, href: '', external: false },
-    { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/home', hash: '#status' }, href: '', external: false },
+    { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/status' }, href: '', external: false },
     docs
       ? {
           key: 'docs',
