@@ -52,6 +52,7 @@
               :row="row"
               :running="runningId === row.id"
               @run="handleRunNow"
+              @logs="openHistoryDialog"
               @edit="openEditDialog"
               @delete="handleDelete"
             />
@@ -99,6 +100,12 @@
       @close="showRunResult = false"
     />
 
+    <MonitorHistoryDialog
+      :show="showHistoryDialog"
+      :monitor="historyMonitor"
+      @close="closeHistoryDialog"
+    />
+
     <ConfirmDialog
       :show="showDeleteDialog"
       :title="t('common.delete')"
@@ -138,6 +145,7 @@ import MonitorFiltersBar from '@/components/admin/monitor/MonitorFiltersBar.vue'
 import MonitorFormDialog from '@/components/admin/monitor/MonitorFormDialog.vue'
 import MonitorTemplateManagerDialog from '@/components/admin/monitor/MonitorTemplateManagerDialog.vue'
 import MonitorRunResultDialog from '@/components/admin/monitor/MonitorRunResultDialog.vue'
+import MonitorHistoryDialog from '@/components/admin/monitor/MonitorHistoryDialog.vue'
 import MonitorPrimaryModelCell from '@/components/admin/monitor/MonitorPrimaryModelCell.vue'
 import MonitorActionsCell from '@/components/admin/monitor/MonitorActionsCell.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -167,6 +175,8 @@ const showDeleteDialog = ref(false)
 const deleting = ref<ChannelMonitor | null>(null)
 const showRunResult = ref(false)
 const runResults = ref<CheckResult[]>([])
+const showHistoryDialog = ref(false)
+const historyMonitor = ref<ChannelMonitor | null>(null)
 
 let abortController: AbortController | null = null
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
@@ -276,6 +286,16 @@ async function handleRunNow(row: ChannelMonitor) {
   } finally {
     runningId.value = null
   }
+}
+
+function openHistoryDialog(row: ChannelMonitor) {
+  historyMonitor.value = row
+  showHistoryDialog.value = true
+}
+
+function closeHistoryDialog() {
+  showHistoryDialog.value = false
+  historyMonitor.value = null
 }
 
 function handleDelete(row: ChannelMonitor) {

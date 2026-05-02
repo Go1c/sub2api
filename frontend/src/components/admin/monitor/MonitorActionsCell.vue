@@ -9,6 +9,13 @@
       <span class="text-xs">{{ t('admin.channelMonitor.runNow') }}</span>
     </button>
     <button
+      @click="$emit('logs', row)"
+      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+    >
+      <Icon name="document" size="sm" />
+      <span class="text-xs">{{ t('admin.channelMonitor.logs.action') }}</span>
+    </button>
+    <button
       @click="$emit('edit', row)"
       class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
     >
@@ -37,6 +44,7 @@ defineProps<{
 
 defineEmits<{
   (e: 'run', row: ChannelMonitor): void
+  (e: 'logs', row: ChannelMonitor): void
   (e: 'edit', row: ChannelMonitor): void
   (e: 'delete', row: ChannelMonitor): void
 }>()

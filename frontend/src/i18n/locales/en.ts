@@ -2284,6 +2284,18 @@ export default {
       runNow: 'Run Now',
       runSuccess: 'Check completed',
       runFailed: 'Check failed',
+      logs: {
+        action: 'Logs',
+        title: 'Request logs - {name}',
+        empty: 'No request logs',
+        loadError: 'Failed to load request logs',
+        checkedAt: 'Checked At',
+        model: 'Model',
+        status: 'Status',
+        latency: 'Latency',
+        pingLatency: 'Ping Latency',
+        message: 'Message'
+      },
       apiKeyDecryptFailed: 'API Key decryption failed. Please re-edit this monitor with a fresh key.',
       createSuccess: 'Monitor created',
       updateSuccess: 'Monitor updated',
