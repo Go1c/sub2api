@@ -99,8 +99,18 @@ func anthropicPromptFromBody(body map[string]any) string {
 		return ""
 	}
 	message, _ := messages[0].(map[string]any)
-	content, _ := message["content"].(string)
-	return content
+	switch content := message["content"].(type) {
+	case string:
+		return content
+	case []any:
+		for _, part := range content {
+			partMap, _ := part.(map[string]any)
+			if text, _ := partMap["text"].(string); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
 }
 
 func geminiPromptFromBody(body map[string]any) string {
@@ -262,6 +272,43 @@ func TestRunCheckForModel_AnthropicTextAfterThinkingBlockPassesChallenge(t *test
 	}
 }
 
+func TestRunCheckForModel_AnthropicDefaultRequestPassesClaudeCodeValidation(t *testing.T) {
+	validator := NewClaudeCodeValidator()
+	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() { _ = r.Body.Close() }()
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if !validator.Validate(r, body) {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
+					"type":    nil,
+					"message": "This API is only for use in claude code",
+				},
+				"type": "error",
+			})
+			return
+		}
+		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
+		if err != nil {
+			t.Fatalf("extract expected answer: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]any{{"type": "text", "text": answer}},
+		})
+	}))
+
+	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-7", nil)
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("expected operational with default Claude Code-like monitor request, got status=%s message=%q", res.Status, res.Message)
+	}
+}
+
 func TestRunCheckForModel_GeminiTextAfterThoughtBlockPassesChallenge(t *testing.T) {
 	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() { _ = r.Body.Close() }()
@@ -293,5 +340,35 @@ func TestRunCheckForModel_GeminiTextAfterThoughtBlockPassesChallenge(t *testing.
 
 	if res.Status != MonitorStatusOperational {
 		t.Fatalf("expected operational when Gemini text follows thought block, got status=%s message=%q", res.Status, res.Message)
+	}
+}
+
+func TestRunCheckForModel_GeminiSSEStreamPassesChallenge(t *testing.T) {
+	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, ":streamGenerateContent") || r.URL.Query().Get("alt") != "sse" {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"message":"expected streamGenerateContent SSE endpoint"}}`))
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		answer, err := expectedAnswerFromPrompt(geminiPromptFromBody(body))
+		if err != nil {
+			t.Fatalf("extract expected answer: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: %s\n\n", `{"candidates":[{"content":{"parts":[{"thought":true,"text":"ignored thinking"}]}}]}`)
+		fmt.Fprintf(w, "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":%q}]}}]}\n\n", answer)
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+
+	res := runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "AIza-fake", "gemini-3.1-pro-preview", nil)
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("expected operational with Gemini SSE response, got status=%s message=%q", res.Status, res.Message)
 	}
 }
