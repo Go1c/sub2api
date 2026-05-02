@@ -150,14 +150,14 @@ func pingEndpointOrigin(ctx context.Context, endpoint string) *int {
 //   - 拼出请求路径（含 model 占位）
 //   - 序列化请求体
 //   - 构造鉴权头
-//   - 从响应 JSON 中按 path 提取文本（gjson path）
+//   - 从响应 JSON 中提取可校验文本
 //
 // 加新 provider 只需要在 providerAdapters 里增加一个条目，无需触碰 callProvider / validateProvider。
 type providerAdapter struct {
 	buildPath    func(model string) string
 	buildBody    func(model, prompt string) ([]byte, error)
 	buildHeaders func(apiKey string) map[string]string
-	textPath     string // gjson 提取响应文本的 path
+	extractText  func([]byte) string
 }
 
 // providerAdapters 全部已支持的 provider。键值即 MonitorProvider* 字符串。
@@ -177,7 +177,7 @@ var providerAdapters = map[string]providerAdapter{
 		buildHeaders: func(apiKey string) map[string]string {
 			return map[string]string{"Authorization": "Bearer " + apiKey}
 		},
-		textPath: "choices.0.message.content",
+		extractText: extractOpenAIResponseText,
 	},
 	MonitorProviderAnthropic: {
 		buildPath: func(string) string { return providerAnthropicPath },
@@ -194,7 +194,7 @@ var providerAdapters = map[string]providerAdapter{
 				"anthropic-version": monitorAnthropicAPIVersion,
 			}
 		},
-		textPath: "content.0.text",
+		extractText: extractAnthropicResponseText,
 	},
 	MonitorProviderGemini: {
 		// Gemini 把 model 名写在 URL path 上：/v1beta/models/{model}:generateContent
@@ -211,7 +211,7 @@ var providerAdapters = map[string]providerAdapter{
 		buildHeaders: func(apiKey string) map[string]string {
 			return map[string]string{"x-goog-api-key": apiKey}
 		},
-		textPath: "candidates.0.content.parts.0.text",
+		extractText: extractGeminiResponseText,
 	},
 }
 
@@ -226,7 +226,7 @@ func isSupportedProvider(p string) bool {
 // opts 承载用户的自定义 headers / body 覆盖（可为 nil）。
 //
 // 返回值：
-//   - extractedText: 按 textPath 抽出的成功文本，仅在 status 2xx 时有意义；非 2xx 时通常为空串
+//   - extractedText: 按 provider 响应结构抽出的成功文本，仅在 status 2xx 时有意义；非 2xx 时通常为空串
 //   - rawBody: 完整响应体的字符串形式（已被 monitorResponseMaxBytes 截断），用于错误路径保留上游真实回包
 //   - status: HTTP 状态码
 //   - err: 网络 / 序列化错误
@@ -245,7 +245,53 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	if err != nil {
 		return "", "", status, err
 	}
-	return gjson.GetBytes(respBytes, adapter.textPath).String(), string(respBytes), status, nil
+	return adapter.extractText(respBytes), string(respBytes), status, nil
+}
+
+func extractOpenAIResponseText(respBytes []byte) string {
+	return gjson.GetBytes(respBytes, "choices.0.message.content").String()
+}
+
+func extractAnthropicResponseText(respBytes []byte) string {
+	return joinNonEmptyGJSONStrings(gjson.GetBytes(respBytes, "content").Array(), func(item gjson.Result) string {
+		if typ := item.Get("type").String(); typ != "" && typ != "text" {
+			return ""
+		}
+		return item.Get("text").String()
+	})
+}
+
+func extractGeminiResponseText(respBytes []byte) string {
+	candidates := gjson.GetBytes(respBytes, "candidates").Array()
+	if text := joinGeminiPartText(candidates, false); text != "" {
+		return text
+	}
+	return joinGeminiPartText(candidates, true)
+}
+
+func joinGeminiPartText(candidates []gjson.Result, includeThoughts bool) string {
+	var texts []string
+	for _, candidate := range candidates {
+		for _, part := range candidate.Get("content.parts").Array() {
+			if !includeThoughts && part.Get("thought").Bool() {
+				continue
+			}
+			if text := strings.TrimSpace(part.Get("text").String()); text != "" {
+				texts = append(texts, text)
+			}
+		}
+	}
+	return strings.Join(texts, "\n")
+}
+
+func joinNonEmptyGJSONStrings(items []gjson.Result, extract func(gjson.Result) string) string {
+	texts := make([]string, 0, len(items))
+	for _, item := range items {
+		if text := strings.TrimSpace(extract(item)); text != "" {
+			texts = append(texts, text)
+		}
+	}
+	return strings.Join(texts, "\n")
 }
 
 // mergeHeaders 把用户自定义 headers 合并到 adapter 默认 headers 上。
