@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/tidwall/gjson"
 )
 
@@ -84,7 +85,7 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 	}
 
 	// Replace 模式：跳过 challenge 校验（用户 body 是静态的，challenge 没法嵌入）。
-	// 改用「HTTP 2xx + 响应文本（adapter.textPath 抽取）非空」作为 operational 判定。
+	// 改用「HTTP 2xx + 响应文本（adapter.extractText 抽取）非空」作为 operational 判定。
 	// 响应文本为空则降级为 failed（视为上游回了 200 但没实际内容）。
 	if mode == MonitorBodyOverrideModeReplace {
 		if strings.TrimSpace(respText) == "" {
@@ -181,23 +182,22 @@ var providerAdapters = map[string]providerAdapter{
 	},
 	MonitorProviderAnthropic: {
 		buildPath: func(string) string { return providerAnthropicPath },
-		buildBody: func(model, prompt string) ([]byte, error) {
-			return json.Marshal(map[string]any{
-				"model":      model,
-				"messages":   []map[string]string{{"role": "user", "content": prompt}},
-				"max_tokens": monitorChallengeMaxTokens,
-			})
-		},
+		buildBody: buildAnthropicChallengeBody,
 		buildHeaders: func(apiKey string) map[string]string {
-			return map[string]string{
+			headers := map[string]string{
 				"x-api-key":         apiKey,
 				"anthropic-version": monitorAnthropicAPIVersion,
+				"anthropic-beta":    claude.APIKeyBetaHeader,
 			}
+			for k, v := range claude.DefaultHeaders {
+				headers[k] = v
+			}
+			return headers
 		},
 		extractText: extractAnthropicResponseText,
 	},
 	MonitorProviderGemini: {
-		// Gemini 把 model 名写在 URL path 上：/v1beta/models/{model}:generateContent
+		// Gemini 把 model 名写在 URL path 上；监控使用流式接口，避免部分 Code Assist 非流式 2xx 空内容。
 		buildPath: func(model string) string { return fmt.Sprintf(providerGeminiPathTemplate, model) },
 		buildBody: func(_, prompt string) ([]byte, error) {
 			return json.Marshal(map[string]any{
@@ -248,6 +248,43 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	return adapter.extractText(respBytes), string(respBytes), status, nil
 }
 
+func buildAnthropicChallengeBody(model, prompt string) ([]byte, error) {
+	sessionID, err := generateSessionString()
+	if err != nil {
+		return nil, fmt.Errorf("generate claude-code session id: %w", err)
+	}
+	return json.Marshal(map[string]any{
+		"model": model,
+		"messages": []map[string]any{
+			{
+				"role": "user",
+				"content": []map[string]any{
+					{
+						"type": "text",
+						"text": prompt,
+						"cache_control": map[string]string{
+							"type": "ephemeral",
+							"ttl":  claude.DefaultCacheControlTTL,
+						},
+					},
+				},
+			},
+		},
+		"system": []map[string]any{
+			{
+				"type": "text",
+				"text": claudeCodeSystemPrompt,
+				"cache_control": map[string]string{
+					"type": "ephemeral",
+					"ttl":  claude.DefaultCacheControlTTL,
+				},
+			},
+		},
+		"metadata":   map[string]string{"user_id": sessionID},
+		"max_tokens": monitorChallengeMaxTokens,
+	})
+}
+
 func extractOpenAIResponseText(respBytes []byte) string {
 	return gjson.GetBytes(respBytes, "choices.0.message.content").String()
 }
@@ -262,18 +299,55 @@ func extractAnthropicResponseText(respBytes []byte) string {
 }
 
 func extractGeminiResponseText(respBytes []byte) string {
-	candidates := gjson.GetBytes(respBytes, "candidates").Array()
-	if text := joinGeminiPartText(candidates, false); text != "" {
+	if text := extractGeminiSSEText(respBytes); text != "" {
 		return text
 	}
-	return joinGeminiPartText(candidates, true)
+	return extractGeminiJSONResponseText(respBytes)
 }
 
-func joinGeminiPartText(candidates []gjson.Result, includeThoughts bool) string {
+func extractGeminiSSEText(respBytes []byte) string {
+	var texts []string
+	for _, line := range strings.Split(string(respBytes), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		if text := extractGeminiJSONResponseText([]byte(payload)); text != "" {
+			texts = append(texts, text)
+		}
+	}
+	return strings.Join(texts, "")
+}
+
+func extractGeminiJSONResponseText(respBytes []byte) string {
+	return extractGeminiResultText(gjson.ParseBytes(respBytes))
+}
+
+func extractGeminiResultText(root gjson.Result) string {
+	if root.IsArray() {
+		var texts []string
+		for _, item := range root.Array() {
+			if text := extractGeminiResultText(item); text != "" {
+				texts = append(texts, text)
+			}
+		}
+		return strings.Join(texts, "")
+	}
+	if response := root.Get("response"); response.Exists() {
+		root = response
+	}
+	return joinGeminiPartText(root.Get("candidates").Array())
+}
+
+func joinGeminiPartText(candidates []gjson.Result) string {
 	var texts []string
 	for _, candidate := range candidates {
 		for _, part := range candidate.Get("content.parts").Array() {
-			if !includeThoughts && part.Get("thought").Bool() {
+			if part.Get("thought").Bool() {
 				continue
 			}
 			if text := strings.TrimSpace(part.Get("text").String()); text != "" {
