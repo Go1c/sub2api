@@ -2361,6 +2361,18 @@ export default {
       runNow: '立即检测',
       runSuccess: '检测完成',
       runFailed: '检测失败',
+      logs: {
+        action: '日志',
+        title: '请求日志 - {name}',
+        empty: '暂无请求日志',
+        loadError: '加载请求日志失败',
+        checkedAt: '检测时间',
+        model: '模型',
+        status: '状态',
+        latency: '延迟',
+        pingLatency: 'Ping 延迟',
+        message: '消息'
+      },
       apiKeyDecryptFailed: 'API Key 解密失败，请重新编辑该监控并填入新的 Key',
       createSuccess: '监控创建成功',
       updateSuccess: '监控更新成功',
