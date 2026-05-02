@@ -48,6 +48,8 @@ type CheckOptions struct {
 	// BodyOverride 在 merge 模式下做浅合并（key 命中黑名单时静默丢弃），
 	// 在 replace 模式下直接当作完整 body。
 	BodyOverride map[string]any
+	// CompatibilityProbeEnabled 启用 provider-specific 兼容探测请求体。
+	CompatibilityProbeEnabled bool
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -182,17 +184,18 @@ var providerAdapters = map[string]providerAdapter{
 	},
 	MonitorProviderAnthropic: {
 		buildPath: func(string) string { return providerAnthropicPath },
-		buildBody: buildAnthropicChallengeBody,
+		buildBody: func(model, prompt string) ([]byte, error) {
+			return json.Marshal(map[string]any{
+				"model":      model,
+				"messages":   []map[string]string{{"role": "user", "content": prompt}},
+				"max_tokens": monitorChallengeMaxTokens,
+			})
+		},
 		buildHeaders: func(apiKey string) map[string]string {
-			headers := map[string]string{
+			return map[string]string{
 				"x-api-key":         apiKey,
 				"anthropic-version": monitorAnthropicAPIVersion,
-				"anthropic-beta":    claude.APIKeyBetaHeader,
 			}
-			for k, v := range claude.DefaultHeaders {
-				headers[k] = v
-			}
-			return headers
 		},
 		extractText: extractAnthropicResponseText,
 	},
@@ -240,6 +243,7 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 		return "", "", 0, err
 	}
 	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
+	applyCompatibilityProbeHeaders(provider, headers, opts)
 	full := joinURL(endpoint, adapter.buildPath(model))
 	respBytes, status, err := postRawJSON(ctx, full, body, headers)
 	if err != nil {
@@ -248,7 +252,20 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	return adapter.extractText(respBytes), string(respBytes), status, nil
 }
 
-func buildAnthropicChallengeBody(model, prompt string) ([]byte, error) {
+func applyCompatibilityProbeHeaders(provider string, headers map[string]string, opts *CheckOptions) {
+	if opts == nil || !opts.CompatibilityProbeEnabled || provider != MonitorProviderAnthropic {
+		return
+	}
+	headers["anthropic-beta"] = claude.APIKeyBetaHeader
+	headers["Accept"] = "text/event-stream"
+	for k, v := range claude.DefaultHeaders {
+		if _, ok := headers[k]; !ok {
+			headers[k] = v
+		}
+	}
+}
+
+func buildAnthropicCompatibilityChallengeBody(model, prompt string) ([]byte, error) {
 	sessionID, err := generateSessionString()
 	if err != nil {
 		return nil, fmt.Errorf("generate claude-code session id: %w", err)
@@ -264,7 +281,6 @@ func buildAnthropicChallengeBody(model, prompt string) ([]byte, error) {
 						"text": prompt,
 						"cache_control": map[string]string{
 							"type": "ephemeral",
-							"ttl":  claude.DefaultCacheControlTTL,
 						},
 					},
 				},
@@ -276,12 +292,13 @@ func buildAnthropicChallengeBody(model, prompt string) ([]byte, error) {
 				"text": claudeCodeSystemPrompt,
 				"cache_control": map[string]string{
 					"type": "ephemeral",
-					"ttl":  claude.DefaultCacheControlTTL,
 				},
 			},
 		},
-		"metadata":   map[string]string{"user_id": sessionID},
-		"max_tokens": monitorChallengeMaxTokens,
+		"metadata":    map[string]string{"user_id": sessionID},
+		"max_tokens":  monitorAnthropicChallengeMaxTokens,
+		"temperature": 1,
+		"stream":      true,
 	})
 }
 
@@ -290,12 +307,41 @@ func extractOpenAIResponseText(respBytes []byte) string {
 }
 
 func extractAnthropicResponseText(respBytes []byte) string {
+	if text := extractAnthropicSSEText(respBytes); text != "" {
+		return text
+	}
+	return extractAnthropicJSONResponseText(respBytes)
+}
+
+func extractAnthropicJSONResponseText(respBytes []byte) string {
 	return joinNonEmptyGJSONStrings(gjson.GetBytes(respBytes, "content").Array(), func(item gjson.Result) string {
 		if typ := item.Get("type").String(); typ != "" && typ != "text" {
 			return ""
 		}
 		return item.Get("text").String()
 	})
+}
+
+func extractAnthropicSSEText(respBytes []byte) string {
+	var texts []string
+	for _, line := range strings.Split(string(respBytes), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		item := gjson.Parse(payload)
+		for _, path := range []string{"delta.text", "content.0.text", "text"} {
+			if text := strings.TrimSpace(item.Get(path).String()); text != "" {
+				texts = append(texts, text)
+				break
+			}
+		}
+	}
+	return strings.Join(texts, "")
 }
 
 func extractGeminiResponseText(respBytes []byte) string {
@@ -409,7 +455,7 @@ func buildRequestBody(adapter providerAdapter, provider, model, prompt string, o
 		return body, nil
 	}
 
-	defaultBody, err := adapter.buildBody(model, prompt)
+	defaultBody, err := buildDefaultRequestBody(adapter, provider, model, prompt, opts)
 	if err != nil {
 		return nil, fmt.Errorf("marshal default body: %w", err)
 	}
@@ -433,6 +479,27 @@ func buildRequestBody(adapter providerAdapter, provider, model, prompt string, o
 		return nil, fmt.Errorf("marshal merged body: %w", err)
 	}
 	return merged, nil
+}
+
+func buildDefaultRequestBody(adapter providerAdapter, provider, model, prompt string, opts *CheckOptions) ([]byte, error) {
+	if opts != nil && opts.CompatibilityProbeEnabled {
+		switch provider {
+		case MonitorProviderAnthropic:
+			return buildAnthropicCompatibilityChallengeBody(model, prompt)
+		case MonitorProviderGemini:
+			return buildGeminiCompatibilityChallengeBody(prompt)
+		}
+	}
+	return adapter.buildBody(model, prompt)
+}
+
+func buildGeminiCompatibilityChallengeBody(prompt string) ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"contents": []map[string]any{
+			{"parts": []map[string]any{{"text": prompt}}},
+		},
+		"generationConfig": map[string]any{"maxOutputTokens": monitorGeminiChallengeMaxOutputTokens},
+	})
 }
 
 // bodyMergeKeyDenyList 在 merge 模式下，禁止用户覆盖这些 provider-specific 的关键字段。
