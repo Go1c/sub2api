@@ -5,8 +5,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +58,64 @@ func setupFakeAnthropic(t *testing.T, handler *captureHandler) string {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+func setupFakeMonitorProvider(t *testing.T, handler http.Handler) string {
+	t.Helper()
+	swapMonitorHTTPClient(t)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+var monitorPromptQuestionRegex = regexp.MustCompile(`Q: (\d+) ([+-]) (\d+) = \?\s*A:\s*$`)
+
+func expectedAnswerFromPrompt(prompt string) (string, error) {
+	matches := monitorPromptQuestionRegex.FindStringSubmatch(prompt)
+	if len(matches) != 4 {
+		return "", fmt.Errorf("monitor prompt did not contain final arithmetic question: %q", prompt)
+	}
+	left, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return "", err
+	}
+	right, err := strconv.Atoi(matches[3])
+	if err != nil {
+		return "", err
+	}
+	switch matches[2] {
+	case "+":
+		return strconv.Itoa(left + right), nil
+	case "-":
+		return strconv.Itoa(left - right), nil
+	default:
+		return "", fmt.Errorf("unsupported operator %q", matches[2])
+	}
+}
+
+func anthropicPromptFromBody(body map[string]any) string {
+	messages, _ := body["messages"].([]any)
+	if len(messages) == 0 {
+		return ""
+	}
+	message, _ := messages[0].(map[string]any)
+	content, _ := message["content"].(string)
+	return content
+}
+
+func geminiPromptFromBody(body map[string]any) string {
+	contents, _ := body["contents"].([]any)
+	if len(contents) == 0 {
+		return ""
+	}
+	content, _ := contents[0].(map[string]any)
+	parts, _ := content["parts"].([]any)
+	if len(parts) == 0 {
+		return ""
+	}
+	part, _ := parts[0].(map[string]any)
+	text, _ := part["text"].(string)
+	return text
 }
 
 func TestRunCheckForModel_OffMode_PreservesDefaultBody(t *testing.T) {
@@ -169,5 +230,68 @@ func TestRunCheckForModel_ReplaceMode_EmptyResponseIsFailed(t *testing.T) {
 	}
 	if !strings.Contains(res.Message, "replace-mode") {
 		t.Errorf("failure message should hint replace-mode, got %q", res.Message)
+	}
+}
+
+func TestRunCheckForModel_AnthropicTextAfterThinkingBlockPassesChallenge(t *testing.T) {
+	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() { _ = r.Body.Close() }()
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
+		if err != nil {
+			t.Fatalf("extract expected answer: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]any{
+				{"type": "thinking", "thinking": ""},
+				{"type": "text", "text": answer},
+			},
+			"usage": map[string]any{"input_tokens": 562, "output_tokens": 57},
+		})
+	}))
+
+	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-6", nil)
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("expected operational when Anthropic text follows thinking block, got status=%s message=%q", res.Status, res.Message)
+	}
+}
+
+func TestRunCheckForModel_GeminiTextAfterThoughtBlockPassesChallenge(t *testing.T) {
+	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() { _ = r.Body.Close() }()
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		answer, err := expectedAnswerFromPrompt(geminiPromptFromBody(body))
+		if err != nil {
+			t.Fatalf("extract expected answer: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"candidates": []map[string]any{
+				{
+					"content": map[string]any{
+						"parts": []map[string]any{
+							{"thought": true, "text": ""},
+							{"text": answer},
+						},
+					},
+				},
+			},
+		})
+	}))
+
+	res := runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "AIza-fake", "gemini-3.1-pro-preview", nil)
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("expected operational when Gemini text follows thought block, got status=%s message=%q", res.Status, res.Message)
 	}
 }
