@@ -180,6 +180,45 @@ function oauthOrderFixture() {
   }
 }
 
+describe('PaymentView recharge notices', () => {
+  beforeEach(() => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    routerReplace.mockReset().mockResolvedValue(undefined)
+    routerPush.mockReset().mockResolvedValue(undefined)
+    routerResolve.mockClear()
+    createOrder.mockReset()
+    refreshUser.mockReset()
+    fetchActiveSubscriptions.mockReset().mockResolvedValue(undefined)
+    showError.mockReset()
+    showInfo.mockReset()
+    showWarning.mockReset()
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture())
+    bridgeInvoke.mockReset()
+    window.localStorage.clear()
+  })
+
+  it('renders the invoice notice on the recharge account card', async () => {
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: {
+            template: '<div><slot /></div>',
+          },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('payment.rechargeExchangeRule')
+    expect(wrapper.text()).toContain('payment.invoiceNotice')
+  })
+})
+
 describe('PaymentView WeChat JSAPI flow', () => {
   beforeEach(() => {
     routeState.path = '/purchase'
