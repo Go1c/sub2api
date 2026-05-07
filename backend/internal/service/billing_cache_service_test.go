@@ -168,7 +168,10 @@ func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateRequiresRech
 	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1, TotalRecharged: 0}, nil, &Group{}, nil)
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "历史充值")
+	require.Contains(t, err.Error(), "为防止批量注册")
+	require.Contains(t, err.Error(), "最低充值 5.00 元")
+	require.Contains(t, err.Error(), "正常使用赠送余额")
+	require.Contains(t, err.Error(), "无理由退款")
 	require.Contains(t, err.Error(), "5.00")
 	require.NotContains(t, err.Error(), "当前历史充值")
 	require.NotContains(t, err.Error(), "0.00")

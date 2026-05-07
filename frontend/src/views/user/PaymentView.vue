@@ -38,8 +38,13 @@
                   <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">{{ user?.username || '' }}</p>
                   <p class="mt-0.5 text-sm font-medium text-green-600 dark:text-green-400">{{ t('payment.currentBalance') }}: {{ user?.balance?.toFixed(2) || '0.00' }}</p>
                 </div>
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 dark:border-emerald-400/30 dark:bg-emerald-500/10">
-                  <p class="text-sm font-semibold text-emerald-700 dark:text-emerald-200">{{ t('payment.rechargeExchangeRule') }}</p>
+                <div class="w-full space-y-2 sm:w-auto sm:max-w-xl">
+                  <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 dark:border-emerald-400/30 dark:bg-emerald-500/10">
+                    <p class="text-sm font-semibold leading-relaxed text-emerald-700 dark:text-emerald-200">{{ t('payment.rechargeExchangeRule') }}</p>
+                  </div>
+                  <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-400/30 dark:bg-amber-500/10">
+                    <p class="text-sm font-semibold leading-relaxed text-amber-700 dark:text-amber-200">{{ t('payment.invoiceNotice') }}</p>
+                  </div>
                 </div>
               </div>
             </div>
