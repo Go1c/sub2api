@@ -79,6 +79,14 @@ export interface PublicModelPricingConfig {
   rows: PublicModelPricingRow[];
 }
 
+export type FrontendLocaleCode = "en" | "zh" | "zh-Hant";
+
+export interface FrontendLocaleOption {
+  value: FrontendLocaleCode;
+  labelZh: string;
+  labelEn: string;
+}
+
 const AUTH_SOURCE_TYPES: AuthSourceType[] = [
   "email",
   "linuxdo",
@@ -154,6 +162,11 @@ const WECHAT_CONNECT_MODE_OPTIONS: WeChatConnectModeOption[] = [
     labelZh: "移动应用",
     labelEn: "Mobile App",
   },
+];
+export const FRONTEND_LOCALE_OPTIONS: FrontendLocaleOption[] = [
+  { value: "en", labelZh: "English", labelEn: "English" },
+  { value: "zh", labelZh: "简体中文", labelEn: "Simplified Chinese" },
+  { value: "zh-Hant", labelZh: "繁體中文", labelEn: "Traditional Chinese" },
 ];
 const WECHAT_CONNECT_MODE_ALIASES: Record<string, WeChatConnectMode> = {
   open: "open",
@@ -413,6 +426,7 @@ export interface SystemSettings {
   backend_mode_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
+  frontend_locales: FrontendLocaleCode[];
   // SMTP settings
   smtp_host: string;
   smtp_port: number;
@@ -643,6 +657,7 @@ export interface UpdateSettingsRequest {
   backend_mode_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
   custom_endpoints?: CustomEndpoint[];
+  frontend_locales?: FrontendLocaleCode[];
   smtp_host?: string;
   smtp_port?: number;
   smtp_username?: string;

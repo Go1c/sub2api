@@ -202,6 +202,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SitePages:                              dto.ParseSitePages(settings.SitePages),
 		HomeContent:                            settings.HomeContent,
 		HideCcsImportButton:                    settings.HideCcsImportButton,
+		FrontendLocales:                        settings.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:          settings.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:             settings.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:             settings.CCSwitchDefaultModelGemini,
@@ -461,6 +462,7 @@ type UpdateSettingsRequest struct {
 	SitePages                             *[]dto.SitePage       `json:"site_pages"`
 	HomeContent                           string                `json:"home_content"`
 	HideCcsImportButton                   bool                  `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string              `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string                `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string                `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string                `json:"ccswitch_default_model_gemini"`
@@ -1559,6 +1561,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SitePages:                             sitePagesJSON,
 		HomeContent:                           req.HomeContent,
 		HideCcsImportButton:                   req.HideCcsImportButton,
+		FrontendLocales:                       req.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:         req.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:            req.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:            req.CCSwitchDefaultModelGemini,
@@ -1955,6 +1958,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SitePages:                              dto.ParseSitePages(updatedSettings.SitePages),
 		HomeContent:                            updatedSettings.HomeContent,
 		HideCcsImportButton:                    updatedSettings.HideCcsImportButton,
+		FrontendLocales:                        updatedSettings.FrontendLocales,
 		PurchaseSubscriptionEnabled:            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                   updatedSettings.TableDefaultPageSize,
@@ -2305,6 +2309,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.HideCcsImportButton != after.HideCcsImportButton {
 		changed = append(changed, "hide_ccs_import_button")
+	}
+	if !equalStringSlice(before.FrontendLocales, after.FrontendLocales) {
+		changed = append(changed, "frontend_locales")
 	}
 	if before.CCSwitchDefaultModelAnthropic != after.CCSwitchDefaultModelAnthropic {
 		changed = append(changed, "ccswitch_default_model_anthropic")

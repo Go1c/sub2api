@@ -390,7 +390,7 @@ func (r *affiliateSignupBonusRepoStub) ListInviteLogs(_ context.Context, filter 
 	return r.listLogsResult, r.listLogsTotal, nil
 }
 
-func (r *affiliateSignupBonusRepoStub) AccrueQuota(context.Context, int64, int64, float64, int) (bool, error) {
+func (r *affiliateSignupBonusRepoStub) AccrueQuota(context.Context, int64, int64, float64, int, *int64) (bool, error) {
 	panic("unexpected AccrueQuota call")
 }
 
@@ -408,6 +408,10 @@ func (r *affiliateSignupBonusRepoStub) TransferQuotaToBalance(context.Context, i
 
 func (r *affiliateSignupBonusRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
 	panic("unexpected ListInvitees call")
+}
+
+func (r *affiliateSignupBonusRepoStub) GetAffiliateUserOverview(context.Context, int64) (*AffiliateUserOverview, error) {
+	panic("unexpected GetAffiliateUserOverview call")
 }
 
 func (r *affiliateSignupBonusRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
@@ -428,4 +432,16 @@ func (r *affiliateSignupBonusRepoStub) BatchSetUserRebateRate(context.Context, [
 
 func (r *affiliateSignupBonusRepoStub) ListUsersWithCustomSettings(context.Context, AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error) {
 	panic("unexpected ListUsersWithCustomSettings call")
+}
+
+func (r *affiliateSignupBonusRepoStub) ListAffiliateInviteRecords(context.Context, AffiliateRecordFilter) ([]AffiliateInviteRecord, int64, error) {
+	panic("unexpected ListAffiliateInviteRecords call")
+}
+
+func (r *affiliateSignupBonusRepoStub) ListAffiliateRebateRecords(context.Context, AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error) {
+	panic("unexpected ListAffiliateRebateRecords call")
+}
+
+func (r *affiliateSignupBonusRepoStub) ListAffiliateTransferRecords(context.Context, AffiliateRecordFilter) ([]AffiliateTransferRecord, int64, error) {
+	panic("unexpected ListAffiliateTransferRecords call")
 }
