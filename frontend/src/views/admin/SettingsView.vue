@@ -3920,6 +3920,39 @@
                     {{ t("admin.settings.site.siteSubtitleHint") }}
                   </p>
                 </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.site.frontendLocales") }}
+                  </label>
+                  <div class="flex flex-wrap gap-2">
+                    <label
+                      v-for="option in frontendLocaleOptions"
+                      :key="option.value"
+                      class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-dark-600 dark:text-gray-200"
+                      :class="{
+                        'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary-500 dark:bg-primary-900/20 dark:text-primary-200':
+                          form.frontend_locales.includes(option.value),
+                      }"
+                    >
+                      <input
+                        v-model="form.frontend_locales"
+                        type="checkbox"
+                        :value="option.value"
+                        :disabled="
+                          form.frontend_locales.length === 1 &&
+                          form.frontend_locales.includes(option.value)
+                        "
+                        class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span>{{ isZhLocale ? option.labelZh : option.labelEn }}</span>
+                    </label>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.frontendLocalesHint") }}
+                  </p>
+                </div>
               </div>
 
               <!-- API Base URL -->
@@ -6669,6 +6702,7 @@ import {
   buildAuthSourceDefaultsState,
   defaultWeChatConnectScopesForMode,
   deriveWeChatConnectStoredMode,
+  FRONTEND_LOCALE_OPTIONS,
   normalizeDefaultSubscriptionSettings,
   resolveWeChatConnectModeCapabilities,
 } from "@/api/admin/settings";
@@ -6730,6 +6764,7 @@ const { t, locale } = useI18n();
 const appStore = useAppStore();
 const adminSettingsStore = useAdminSettingsStore();
 const isZhLocale = computed(() => locale.value.startsWith("zh"));
+const frontendLocaleOptions = FRONTEND_LOCALE_OPTIONS;
 
 function localText(zh: string, en: string): string {
   return isZhLocale.value ? zh : en;
@@ -7015,6 +7050,7 @@ const form = reactive<SettingsForm>({
   payment_cancel_rate_limit_window_mode: "rolling",
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
+  frontend_locales: ["en", "zh", "zh-Hant"],
   custom_menu_items: [] as Array<{
     id: string;
     label: string;
@@ -7964,6 +8000,10 @@ async function loadSettings() {
     form.backend_mode_enabled = settings.backend_mode_enabled;
     form.contact_channels = normalizeContactChannels(settings.contact_channels);
     form.site_pages = ensureDefaultSitePages(settings.site_pages);
+    form.frontend_locales =
+      Array.isArray(settings.frontend_locales) && settings.frontend_locales.length > 0
+        ? [...settings.frontend_locales]
+        : ["en", "zh", "zh-Hant"];
     form.default_subscriptions = normalizeDefaultSubscriptionSettings(
       settings.default_subscriptions,
     );
@@ -8372,6 +8412,7 @@ async function saveSettings() {
         form.ccswitch_default_model_antigravity_gemini,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
+      frontend_locales: form.frontend_locales,
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,

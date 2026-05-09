@@ -94,7 +94,12 @@ vi.mock("@/api", () => ({
 }));
 
 vi.mock("@/api/admin/settings", () => {
-  const authSourceTypes = ["email", "linuxdo", "oidc", "wechat"] as const;
+  const authSourceTypes = ["email", "linuxdo", "oidc", "wechat", "github", "google"] as const;
+  const FRONTEND_LOCALE_OPTIONS = [
+    { value: "en", labelZh: "English", labelEn: "English" },
+    { value: "zh", labelZh: "简体中文", labelEn: "Simplified Chinese" },
+    { value: "zh-Hant", labelZh: "繁體中文", labelEn: "Traditional Chinese" },
+  ];
   const normalizeDefaultSubscriptionSettings = (
     subscriptions: Array<{ group_id: number; validity_days: number }> | null | undefined,
   ) =>
@@ -137,6 +142,7 @@ vi.mock("@/api/admin/settings", () => {
   return {
     default: settingsAPI,
     settingsAPI,
+    FRONTEND_LOCALE_OPTIONS,
     normalizeDefaultSubscriptionSettings,
     buildAuthSourceDefaultsState: (settings: Record<string, unknown>) =>
       authSourceTypes.reduce(

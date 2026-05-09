@@ -78,6 +78,69 @@ var backendModeCache atomic.Value // *cachedBackendMode
 var backendModeSF singleflight.Group
 
 const backendModeCacheTTL = 60 * time.Second
+
+var defaultFrontendLocales = []string{"en", "zh", "zh-Hant"}
+
+func normalizeFrontendLocaleCode(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "en", "en-us", "en-gb":
+		return "en", true
+	case "zh", "zh-cn", "zh-hans", "zh-sg":
+		return "zh", true
+	case "zh-hant", "zh-tw", "zh-hk", "zh-mo":
+		return "zh-Hant", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeFrontendLocales(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return append([]string(nil), defaultFrontendLocales...), nil
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		code, ok := normalizeFrontendLocaleCode(value)
+		if !ok {
+			return nil, infraerrors.BadRequest("INVALID_FRONTEND_LOCALE", "frontend locale must be one of en, zh, zh-Hant")
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	if len(result) == 0 {
+		return append([]string(nil), defaultFrontendLocales...), nil
+	}
+	return result, nil
+}
+
+func parseFrontendLocales(raw string) []string {
+	var values []string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &values); err != nil {
+		return append([]string(nil), defaultFrontendLocales...)
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		code, ok := normalizeFrontendLocaleCode(value)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	if len(result) == 0 {
+		return append([]string(nil), defaultFrontendLocales...)
+	}
+	return result
+}
+
 const backendModeErrorTTL = 5 * time.Second
 const backendModeDBTimeout = 5 * time.Second
 
@@ -601,6 +664,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeySitePages,
 		SettingKeyHomeContent,
 		SettingKeyHideCcsImportButton,
+		SettingKeyFrontendLocales,
 		SettingKeyCCSwitchDefaultModelAnthropic,
 		SettingKeyCCSwitchDefaultModelOpenAI,
 		SettingKeyCCSwitchDefaultModelGemini,
@@ -725,6 +789,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SitePages:                             string(filterEnabledSitePages(settings[SettingKeySitePages])),
 		HomeContent:                           settings[SettingKeyHomeContent],
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
+		FrontendLocales:                       parseFrontendLocales(settings[SettingKeyFrontendLocales]),
 		CCSwitchDefaultModelAnthropic:         strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
 		CCSwitchDefaultModelOpenAI:            firstNonEmpty(strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelOpenAI]), "gpt-5.4"),
 		CCSwitchDefaultModelGemini:            strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelGemini]),
@@ -882,6 +947,7 @@ type PublicSettingsInjectionPayload struct {
 	SitePages                             json.RawMessage          `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`
 	HideCcsImportButton                   bool                     `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string                 `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string                   `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string                   `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`
@@ -953,6 +1019,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SitePages:                             safeRawJSONArray(settings.SitePages),
 		HomeContent:                           settings.HomeContent,
 		HideCcsImportButton:                   settings.HideCcsImportButton,
+		FrontendLocales:                       settings.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:         settings.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:            settings.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:            settings.CCSwitchDefaultModelGemini,
@@ -1595,6 +1662,16 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeySitePages] = settings.SitePages
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
+	frontendLocales, err := normalizeFrontendLocales(settings.FrontendLocales)
+	if err != nil {
+		return nil, err
+	}
+	settings.FrontendLocales = frontendLocales
+	frontendLocalesJSON, err := json.Marshal(frontendLocales)
+	if err != nil {
+		return nil, fmt.Errorf("marshal frontend locales: %w", err)
+	}
+	updates[SettingKeyFrontendLocales] = string(frontendLocalesJSON)
 	updates[SettingKeyCCSwitchDefaultModelAnthropic] = strings.TrimSpace(settings.CCSwitchDefaultModelAnthropic)
 	updates[SettingKeyCCSwitchDefaultModelOpenAI] = firstNonEmpty(strings.TrimSpace(settings.CCSwitchDefaultModelOpenAI), "gpt-5.4")
 	updates[SettingKeyCCSwitchDefaultModelGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelGemini)
@@ -2480,6 +2557,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySiteLogo:                                 "",
 		SettingKeyContactChannels:                          "[]",
 		SettingKeySitePages:                                "[]",
+		SettingKeyFrontendLocales:                          `["en","zh","zh-Hant"]`,
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
 		SettingKeyPurchaseSubscriptionURL:                  "",
 		SettingKeyTableDefaultPageSize:                     "20",
@@ -2675,6 +2753,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SitePages:                             settings[SettingKeySitePages],
 		HomeContent:                           settings[SettingKeyHomeContent],
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
+		FrontendLocales:                       parseFrontendLocales(settings[SettingKeyFrontendLocales]),
 		CCSwitchDefaultModelAnthropic:         settings[SettingKeyCCSwitchDefaultModelAnthropic],
 		CCSwitchDefaultModelOpenAI:            s.getStringOrDefault(settings, SettingKeyCCSwitchDefaultModelOpenAI, "gpt-5.4"),
 		CCSwitchDefaultModelGemini:            settings[SettingKeyCCSwitchDefaultModelGemini],

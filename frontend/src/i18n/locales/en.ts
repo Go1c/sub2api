@@ -5526,6 +5526,8 @@ export default {
         siteSubtitle: 'Site Subtitle',
         siteSubtitlePlaceholder: 'Subscription to API Conversion Platform',
         siteSubtitleHint: 'Displayed on login and register pages',
+        frontendLocales: 'Available Frontend Languages',
+        frontendLocalesHint: 'Controls which languages users can choose from in the frontend language switcher.',
         apiBaseUrl: 'API Base URL',
         apiBaseUrlPlaceholder: 'https://api.example.com',
         apiBaseUrlHint:

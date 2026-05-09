@@ -122,6 +122,7 @@ type SystemSettings struct {
 	SitePages                             []SitePage       `json:"site_pages"`
 	HomeContent                           string           `json:"home_content"`
 	HideCcsImportButton                   bool             `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string         `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string           `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string           `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string           `json:"ccswitch_default_model_gemini"`
@@ -278,6 +279,7 @@ type PublicSettings struct {
 	SitePages                             []SitePage               `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`
 	HideCcsImportButton                   bool                     `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string                 `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string                   `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string                   `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`

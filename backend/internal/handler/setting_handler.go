@@ -57,6 +57,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		SitePages:                             dto.ParseSitePages(settings.SitePages),
 		HomeContent:                           settings.HomeContent,
 		HideCcsImportButton:                   settings.HideCcsImportButton,
+		FrontendLocales:                       settings.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:         settings.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:            settings.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:            settings.CCSwitchDefaultModelGemini,

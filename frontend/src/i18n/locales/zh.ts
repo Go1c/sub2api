@@ -5685,6 +5685,8 @@ export default {
         siteSubtitle: '站点副标题',
         siteSubtitleHint: '显示在登录和注册页面',
         siteSubtitlePlaceholder: '订阅转 API 转换平台',
+        frontendLocales: '前端可用语言',
+        frontendLocalesHint: '控制用户可以在前端语言切换器中选择哪些语言。',
         apiBaseUrl: 'API 端点地址',
         apiBaseUrlHint: '用于"使用密钥"和"导入到 CC Switch"功能，留空则使用当前站点地址',
         apiBaseUrlPlaceholder: 'https://api.example.com',
