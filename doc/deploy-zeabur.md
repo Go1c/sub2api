@@ -26,6 +26,8 @@
    VITE_API_BASE_URL=https://your-backend.zeabur.app    # 若连接真后端
    VITE_USE_MOCK=false
    VITE_SITE_NAME=LumioAPI
+   VITE_SUPPORT_CHAT_ENABLED=true
+   VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
    ```
    留空 `VITE_API_BASE_URL` 会启用 mock（不推荐生产，但适合先上线看前端）。
 6. Save，触发第一次部署。
@@ -50,6 +52,80 @@
 1. 后端服务的内部/公开域名填入前端 `VITE_API_BASE_URL`。
 2. 后端需开 CORS 允许前端域名（见 `backend/internal/config/cors.yaml` 或等效配置，参考根 `README.md` "CORS 允许来源" 一节）。
 3. 若用相同根域的子域，可在 Zeabur 配置 rewrite 把 `/api/*` 指回后端，前端 `VITE_API_BASE_URL` 留空、保留相对路径即可。
+
+## DocsGPT AI 客服
+
+AI 客服由三个服务协作：
+
+1. DocsGPT 自托管服务：保存知识库和 Agent，持有模型 API key。
+2. `support-gateway/`：Go 服务，持有 DocsGPT Agent API key，向浏览器暴露 `/widget-config` 和 `/chat/stream`。
+3. `frontend-dashboard/`：只配置公开的 gateway URL，并渲染右下角客服气泡。
+
+Zeabur 部署 `support-gateway/` 时 Root Directory 设为 `support-gateway`，可使用该目录内的 Dockerfile。必填环境变量：
+
+```bash
+DOCSGPT_API_BASE_URL=https://your-docsgpt-service
+DOCSGPT_AGENT_API_KEY=your-docsgpt-agent-key
+ALLOWED_ORIGINS=https://your-frontend-domain
+SUPPORT_EMAIL=support@example.com
+SUPPORT_URL=https://your-support-page.com
+RATE_LIMIT_WINDOW_SECONDS=60
+RATE_LIMIT_MAX_REQUESTS=20
+```
+
+`/widget-config?locale=zh-CN|zh-Hant|en-US` 会按前端当前语言返回默认客服文案；若配置了 `WIDGET_TITLE`、`WELCOME_MESSAGE` 或 `OFFICIAL_CONTACT_TEXT`，这些值会覆盖默认本地化文案。
+
+Doc Agent 服务的完整部署步骤见 [`docsgpt-support-agent.md`](docsgpt-support-agent.md)。这里仅列 Zeabur 侧最小接线：
+
+1. 先部署 DocsGPT：`docsgpt-postgres`、`docsgpt-redis`、`docsgpt-backend`、`docsgpt-worker`、`docsgpt-admin-ui`。
+2. 在 DocsGPT admin UI 中上传 LumioAPI FAQ/Markdown，创建 `LumioAPI Support` Agent，复制 Agent API key。
+3. 部署本仓库 `support-gateway/`，把 `DOCSGPT_API_BASE_URL` 指向 `docsgpt-backend`，把 `DOCSGPT_AGENT_API_KEY` 填成 Agent API key。
+4. 部署 `frontend-dashboard/`，设置 `VITE_SUPPORT_CHAT_ENABLED=true` 和 `VITE_SUPPORT_CHAT_GATEWAY_URL`。
+
+### 使用和验证
+
+1. DocsGPT admin UI 中创建 LumioAPI Support Agent，并上传 FAQ/Markdown 知识库。
+2. 在 DocsGPT 中配置 OpenAI-compatible 模型环境变量，例如 `OPENAI_BASE_URL`、`API_KEY`、`LLM_NAME`。
+3. 从 DocsGPT Agent API 获取 Agent API key，填入 `support-gateway` 的 `DOCSGPT_AGENT_API_KEY`。
+4. 打开 `support-gateway` 公网域名，确认：
+   ```bash
+   curl https://your-support-gateway.zeabur.app/healthz
+   curl 'https://your-support-gateway.zeabur.app/widget-config?locale=zh-Hant'
+   ```
+5. 在前端生产变量中启用：
+   ```bash
+   VITE_SUPPORT_CHAT_ENABLED=true
+   VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
+   ```
+6. 打开前端，确认网络面板只出现 gateway URL，看不到 DocsGPT Agent key 或模型 API key。
+
+### 框架设计和关键代码
+
+```text
+Browser
+  -> frontend-dashboard/src/components/support/SupportChatWidget.vue
+  -> frontend-dashboard/src/api/supportChat.ts
+  -> support-gateway /chat/stream
+  -> DocsGPT /stream
+  -> OpenAI-compatible model endpoint
+```
+
+关键实现：
+
+| 文件 | 说明 |
+|------|------|
+| `support-gateway/server.go` | HTTP 路由、CORS、限流、`/widget-config` 本地化、`/chat/stream` SSE 转发。 |
+| `support-gateway/config.go` | 从环境变量加载 DocsGPT URL、Agent key、允许来源、支持入口、限流参数。 |
+| `support-gateway/Dockerfile` | Zeabur 可直接构建的 Go gateway 镜像。 |
+| `support-gateway/.env.example` | Gateway 部署变量模板。 |
+| `frontend-dashboard/src/api/supportChat.ts` | 前端只连接 gateway，解析 DocsGPT SSE 事件。 |
+| `frontend-dashboard/src/components/support/SupportChatWidget.vue` | 右下角气泡 UI，按当前站点语言传 `locale`。 |
+
+语言策略：
+
+- 前端当前 locale 会发给 `/widget-config?locale=...`，用于返回默认欢迎语和按钮文案。
+- 每次 `POST /chat/stream` 都带 `locale`，gateway 会映射为 `language` 和 `language_instruction` 透传给 DocsGPT。
+- 用户在同一会话中切换语言后，下一条消息会使用新的前端语言。
 
 ## 域名与 HTTPS
 

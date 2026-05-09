@@ -24,6 +24,13 @@ export type IconName =
   | 'copy'
   | 'plus'
   | 'check'
+  | 'message'
+  | 'x'
+  | 'send'
+  | 'trash'
+  | 'refresh'
+  | 'mail'
+  | 'external'
 </script>
 
 <template>
@@ -120,6 +127,34 @@ export type IconName =
     </template>
     <template v-else-if="name === 'check'">
       <path d="M5 12l5 5L20 7" />
+    </template>
+    <template v-else-if="name === 'message'">
+      <path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z" />
+      <path d="M8 9h8M8 13h5" />
+    </template>
+    <template v-else-if="name === 'x'">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </template>
+    <template v-else-if="name === 'send'">
+      <path d="M22 2L11 13" />
+      <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+    </template>
+    <template v-else-if="name === 'trash'">
+      <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </template>
+    <template v-else-if="name === 'refresh'">
+      <path d="M20 11a8 8 0 10-2.3 5.7" />
+      <path d="M20 4v7h-7" />
+    </template>
+    <template v-else-if="name === 'mail'">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
+    </template>
+    <template v-else-if="name === 'external'">
+      <path d="M14 3h7v7" />
+      <path d="M10 14L21 3" />
+      <path d="M21 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5" />
     </template>
   </svg>
 </template>

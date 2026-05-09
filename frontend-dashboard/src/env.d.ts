@@ -12,6 +12,8 @@ interface ImportMetaEnv {
   readonly VITE_PREVIEW_PORT?: string
   readonly VITE_USE_MOCK?: string
   readonly VITE_SITE_NAME?: string
+  readonly VITE_SUPPORT_CHAT_ENABLED?: string
+  readonly VITE_SUPPORT_CHAT_GATEWAY_URL?: string
 }
 
 interface ImportMeta {
