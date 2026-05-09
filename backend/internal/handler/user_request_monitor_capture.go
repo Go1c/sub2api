@@ -13,17 +13,24 @@ func (h *GatewayHandler) captureClientRequest(c *gin.Context, model string, body
 	if h == nil {
 		return
 	}
-	captureClientRequest(h.userRequestMonitorService, c, model, body)
+	captureClientRequest(h.userRequestMonitorService, c, model, body, len(body))
 }
 
 func (h *OpenAIGatewayHandler) captureClientRequest(c *gin.Context, model string, body []byte) {
 	if h == nil {
 		return
 	}
-	captureClientRequest(h.userRequestMonitorService, c, model, body)
+	captureClientRequest(h.userRequestMonitorService, c, model, body, len(body))
 }
 
-func captureClientRequest(svc *service.OpsUserRequestMonitorService, c *gin.Context, model string, body []byte) {
+func (h *OpenAIGatewayHandler) captureClientRequestWithBytes(c *gin.Context, model string, body []byte, bodyBytes int) {
+	if h == nil {
+		return
+	}
+	captureClientRequest(h.userRequestMonitorService, c, model, body, bodyBytes)
+}
+
+func captureClientRequest(svc *service.OpsUserRequestMonitorService, c *gin.Context, model string, body []byte, bodyBytes int) {
 	if svc == nil || c == nil || len(body) == 0 {
 		return
 	}
@@ -48,6 +55,7 @@ func captureClientRequest(svc *service.OpsUserRequestMonitorService, c *gin.Cont
 		Method:          c.Request.Method,
 		ContentType:     c.GetHeader("Content-Type"),
 		Body:            body,
+		BodyBytes:       bodyBytes,
 	})
 }
 

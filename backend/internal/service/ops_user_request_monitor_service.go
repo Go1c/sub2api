@@ -23,6 +23,8 @@ const (
 	opsUserRequestMonitorMaxPerMinute  = 120
 )
 
+var ErrOpsUserRequestMonitorAlreadyActive = errors.New("ops user request monitor already active")
+
 type opsUserRequestMonitorUserLookup interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
 }
@@ -48,6 +50,10 @@ type OpsUserRequestMonitorService struct {
 
 	cacheMu sync.Mutex
 	cache   map[int64]opsUserRequestMonitorCacheEntry
+
+	// createMonitorMu serializes admin create flows so two concurrent requests
+	// cannot both pass the "no active monitor" pre-check in the same process.
+	createMonitorMu sync.Mutex
 
 	captureTimeout time.Duration
 	cacheTTL       time.Duration
@@ -109,6 +115,8 @@ func (s *OpsUserRequestMonitorService) CreateMonitor(ctx context.Context, input 
 	if err := validateOpsUserRequestMonitorInput(input.UserID, input.DurationSeconds, input.MaxCapturesPerMinute, input.SampleRatePercent, retentionDays, input.CreatedBy); err != nil {
 		return nil, err
 	}
+	s.createMonitorMu.Lock()
+	defer s.createMonitorMu.Unlock()
 	if s.userLookup == nil {
 		return nil, infraerrors.ServiceUnavailable("OPS_USER_REQUEST_MONITOR_USER_LOOKUP_UNAVAILABLE", "user lookup unavailable")
 	}
@@ -143,6 +151,9 @@ func (s *OpsUserRequestMonitorService) CreateMonitor(ctx context.Context, input 
 	}
 	monitor, err := s.opsRepo.CreateUserRequestMonitor(ctx, record)
 	if err != nil {
+		if errors.Is(err, ErrOpsUserRequestMonitorAlreadyActive) {
+			return nil, infraerrors.Conflict("OPS_USER_REQUEST_MONITOR_ALREADY_ACTIVE", "target user already has an active request monitor")
+		}
 		return nil, infraerrors.InternalServer("OPS_USER_REQUEST_MONITOR_CREATE_FAILED", "failed to create request monitor").WithCause(err)
 	}
 	s.invalidateUser(input.UserID)
@@ -241,7 +252,7 @@ func (s *OpsUserRequestMonitorService) CaptureClientRequestIfEnabled(ctx context
 	if s == nil || input == nil {
 		return
 	}
-	snapshot := cloneOpsCaptureClientRequestInput(input)
+	snapshot := snapshotOpsCaptureClientRequestInput(input)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -289,7 +300,7 @@ func (s *OpsUserRequestMonitorService) CaptureClientRequestSync(ctx context.Cont
 			continue
 		}
 
-		body, bodyBytes, truncated := prepareOpsUserRequestMonitorBody(input.Body)
+		body, bodyBytes, truncated := prepareOpsUserRequestMonitorBody(input.Body, input.BodyBytes)
 		insert := &OpsInsertUserRequestCaptureInput{
 			MonitorID:         monitor.ID,
 			UserID:            input.UserID,
@@ -497,18 +508,24 @@ func cloneOpsUserRequestMonitors(in []*OpsUserRequestMonitor) []*OpsUserRequestM
 	return out
 }
 
-func prepareOpsUserRequestMonitorBody(raw []byte) (body string, bodyBytes int, truncated bool) {
-	bodyBytes = len(raw)
+func prepareOpsUserRequestMonitorBody(raw []byte, originalBytes int) (body string, bodyBytes int, truncated bool) {
+	bodyBytes = originalBytes
+	if bodyBytes < len(raw) {
+		bodyBytes = len(raw)
+	}
 	if bodyBytes == 0 {
 		return "", 0, false
 	}
 	if bodyBytes <= opsUserRequestMonitorMaxBodyBytes {
 		return string(raw), bodyBytes, false
 	}
-	return string(raw[:opsUserRequestMonitorMaxBodyBytes]), bodyBytes, true
+	if len(raw) > opsUserRequestMonitorMaxBodyBytes {
+		return string(raw[:opsUserRequestMonitorMaxBodyBytes]), bodyBytes, true
+	}
+	return string(raw), bodyBytes, true
 }
 
-func cloneOpsCaptureClientRequestInput(input *OpsCaptureClientRequestInput) *OpsCaptureClientRequestInput {
+func snapshotOpsCaptureClientRequestInput(input *OpsCaptureClientRequestInput) *OpsCaptureClientRequestInput {
 	if input == nil {
 		return nil
 	}
@@ -516,8 +533,15 @@ func cloneOpsCaptureClientRequestInput(input *OpsCaptureClientRequestInput) *Ops
 	out.APIKeyID = cloneOpsUserRequestMonitorInt64Ptr(input.APIKeyID)
 	out.AccountID = cloneOpsUserRequestMonitorInt64Ptr(input.AccountID)
 	out.GroupID = cloneOpsUserRequestMonitorInt64Ptr(input.GroupID)
+	if out.BodyBytes < len(input.Body) {
+		out.BodyBytes = len(input.Body)
+	}
 	if len(input.Body) > 0 {
-		out.Body = append([]byte(nil), input.Body...)
+		body := input.Body
+		if len(body) > opsUserRequestMonitorMaxBodyBytes {
+			body = body[:opsUserRequestMonitorMaxBodyBytes]
+		}
+		out.Body = append([]byte(nil), body...)
 	}
 	return &out
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -11,24 +12,39 @@ import (
 type opsUserRequestMonitorRepoStub struct {
 	OpsRepository
 
+	mu             sync.Mutex
 	activeMonitors []*OpsUserRequestMonitor
 	created        []*OpsCreateUserRequestMonitorRecord
 	inserted       []*OpsInsertUserRequestCaptureInput
 
-	createErr error
-	insertErr error
+	createErr          error
+	insertErr          error
+	createCalls        int
+	firstCreateStarted chan struct{}
+	releaseFirstCreate chan struct{}
 }
 
 func (r *opsUserRequestMonitorRepoStub) GetActiveUserRequestMonitors(ctx context.Context, userID int64, now time.Time) ([]*OpsUserRequestMonitor, error) {
-	return r.activeMonitors, nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneOpsUserRequestMonitors(r.activeMonitors), nil
 }
 
 func (r *opsUserRequestMonitorRepoStub) CreateUserRequestMonitor(ctx context.Context, input *OpsCreateUserRequestMonitorRecord) (*OpsUserRequestMonitor, error) {
 	if r.createErr != nil {
 		return nil, r.createErr
 	}
-	r.created = append(r.created, input)
-	return &OpsUserRequestMonitor{
+	r.mu.Lock()
+	r.createCalls++
+	callNum := r.createCalls
+	r.mu.Unlock()
+	if callNum == 1 && r.firstCreateStarted != nil {
+		close(r.firstCreateStarted)
+		if r.releaseFirstCreate != nil {
+			<-r.releaseFirstCreate
+		}
+	}
+	monitor := &OpsUserRequestMonitor{
 		ID:                   11,
 		UserID:               input.UserID,
 		TargetEmail:          input.TargetEmail,
@@ -41,7 +57,12 @@ func (r *opsUserRequestMonitorRepoStub) CreateUserRequestMonitor(ctx context.Con
 		CreatedAt:            input.CreatedAt,
 		StartsAt:             input.StartsAt,
 		EndsAt:               input.EndsAt,
-	}, nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.created = append(r.created, input)
+	r.activeMonitors = append(r.activeMonitors, monitor)
+	return monitor, nil
 }
 
 func (r *opsUserRequestMonitorRepoStub) InsertUserRequestCapture(ctx context.Context, input *OpsInsertUserRequestCaptureInput) (int64, error) {
@@ -234,6 +255,64 @@ func TestOpsUserRequestMonitorService_CreateRejectsSecondActiveMonitor(t *testin
 	}
 }
 
+func TestOpsUserRequestMonitorService_CreateMonitorSerializesConcurrentRequestsForSameUser(t *testing.T) {
+	repo := &opsUserRequestMonitorRepoStub{
+		firstCreateStarted: make(chan struct{}),
+		releaseFirstCreate: make(chan struct{}),
+	}
+	svc := newMonitorServiceForTest(repo)
+	input := &OpsCreateUserRequestMonitorInput{
+		UserID:               42,
+		DurationSeconds:      300,
+		MaxCapturesPerMinute: 10,
+		SampleRatePercent:    100,
+		RetentionDays:        7,
+		CreatedBy:            1,
+	}
+
+	errCh := make(chan error, 2)
+	go func() {
+		_, err := svc.CreateMonitor(context.Background(), input)
+		errCh <- err
+	}()
+	<-repo.firstCreateStarted
+
+	secondReturned := make(chan struct{})
+	go func() {
+		_, err := svc.CreateMonitor(context.Background(), input)
+		errCh <- err
+		close(secondReturned)
+	}()
+
+	select {
+	case <-secondReturned:
+		t.Fatalf("second CreateMonitor returned before first create was released")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(repo.releaseFirstCreate)
+
+	var successCount int
+	var conflictCount int
+	for range 2 {
+		err := <-errCh
+		switch {
+		case err == nil:
+			successCount++
+		case strings.Contains(err.Error(), "already has an active request monitor"):
+			conflictCount++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if successCount != 1 || conflictCount != 1 {
+		t.Fatalf("success=%d conflict=%d, want 1/1", successCount, conflictCount)
+	}
+	if repo.createCalls != 1 {
+		t.Fatalf("repo create calls = %d, want 1", repo.createCalls)
+	}
+}
+
 func TestOpsUserRequestMonitorService_CaptureTruncatesRawBody(t *testing.T) {
 	repo := &opsUserRequestMonitorRepoStub{
 		activeMonitors: []*OpsUserRequestMonitor{{
@@ -274,6 +353,37 @@ func TestOpsUserRequestMonitorService_CaptureTruncatesRawBody(t *testing.T) {
 	}
 	if !got.BodyTruncated {
 		t.Fatalf("body_truncated = false, want true")
+	}
+}
+
+func TestOpsUserRequestMonitorService_CaptureUsesProvidedOriginalBodyBytes(t *testing.T) {
+	repo := &opsUserRequestMonitorRepoStub{
+		activeMonitors: []*OpsUserRequestMonitor{{
+			ID:                   7,
+			UserID:               42,
+			Status:               OpsUserRequestMonitorStatusActive,
+			MaxCapturesPerMinute: 10,
+			SampleRatePercent:    100,
+			RetentionDays:        7,
+			StartsAt:             time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC),
+			EndsAt:               time.Date(2026, 5, 9, 11, 0, 0, 0, time.UTC),
+		}},
+	}
+	svc := newMonitorServiceForTest(repo)
+
+	err := svc.CaptureClientRequestSync(context.Background(), &OpsCaptureClientRequestInput{
+		UserID:    42,
+		Body:      []byte(`{"multipart_summary":true}`),
+		BodyBytes: 2048,
+	})
+	if err != nil {
+		t.Fatalf("CaptureClientRequestSync returned error: %v", err)
+	}
+	if len(repo.inserted) != 1 {
+		t.Fatalf("inserted captures = %d, want 1", len(repo.inserted))
+	}
+	if repo.inserted[0].BodyBytes != 2048 {
+		t.Fatalf("body_bytes = %d, want 2048", repo.inserted[0].BodyBytes)
 	}
 }
 
@@ -351,5 +461,27 @@ func TestOpsUserRequestMonitorService_CaptureSwallowsInsertErrors(t *testing.T) 
 		Body:   []byte(`{"model":"x"}`),
 	}); err != nil {
 		t.Fatalf("CaptureClientRequestSync returned error: %v", err)
+	}
+}
+
+func TestSnapshotOpsCaptureClientRequestInputCapsClonedBodyAndPreservesOriginalBytes(t *testing.T) {
+	raw := []byte(strings.Repeat("a", opsUserRequestMonitorMaxBodyBytes+32))
+	snapshot := snapshotOpsCaptureClientRequestInput(&OpsCaptureClientRequestInput{
+		UserID:    42,
+		Body:      raw,
+		BodyBytes: len(raw),
+	})
+	if snapshot == nil {
+		t.Fatalf("snapshot = nil")
+	}
+	if len(snapshot.Body) != opsUserRequestMonitorMaxBodyBytes {
+		t.Fatalf("snapshot body len = %d, want %d", len(snapshot.Body), opsUserRequestMonitorMaxBodyBytes)
+	}
+	if snapshot.BodyBytes != len(raw) {
+		t.Fatalf("snapshot body bytes = %d, want %d", snapshot.BodyBytes, len(raw))
+	}
+	raw[0] = 'z'
+	if snapshot.Body[0] != 'a' {
+		t.Fatalf("snapshot body mutated with source slice")
 	}
 }

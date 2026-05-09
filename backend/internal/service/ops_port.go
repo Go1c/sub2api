@@ -142,6 +142,7 @@ type OpsCaptureClientRequestInput struct {
 	Method          string
 	ContentType     string
 	Body            []byte
+	BodyBytes       int
 }
 
 type OpsInsertUserRequestCaptureInput struct {

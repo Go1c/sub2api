@@ -17,6 +17,31 @@ func (r *opsRepository) CreateUserRequestMonitor(ctx context.Context, input *ser
 	if input == nil {
 		return nil, fmt.Errorf("nil input")
 	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var lockedUserID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id = $1 FOR UPDATE`, input.UserID).Scan(&lockedUserID); err != nil {
+		return nil, err
+	}
+	var existingID int64
+	activeLookupErr := tx.QueryRowContext(ctx, `
+SELECT id
+FROM ops_user_request_monitors
+WHERE user_id = $1
+  AND status = 'active'
+  AND starts_at <= $2
+  AND ends_at > $2
+LIMIT 1`, input.UserID, input.CreatedAt.UTC()).Scan(&existingID)
+	if activeLookupErr == nil {
+		return nil, service.ErrOpsUserRequestMonitorAlreadyActive
+	}
+	if activeLookupErr != nil && activeLookupErr != sql.ErrNoRows {
+		return nil, activeLookupErr
+	}
 	q := `
 INSERT INTO ops_user_request_monitors (
   user_id,
@@ -48,7 +73,7 @@ INSERT INTO ops_user_request_monitors (
   stopped_at,
   last_capture_at,
   capture_count`
-	return scanOpsUserRequestMonitor(r.db.QueryRowContext(
+	monitor, err := scanOpsUserRequestMonitor(tx.QueryRowContext(
 		ctx,
 		q,
 		input.UserID,
@@ -62,6 +87,13 @@ INSERT INTO ops_user_request_monitors (
 		input.StartsAt.UTC(),
 		input.EndsAt.UTC(),
 	))
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return monitor, nil
 }
 
 func (r *opsRepository) ListUserRequestMonitors(ctx context.Context, filter *service.OpsUserRequestMonitorFilter) ([]*service.OpsUserRequestMonitor, int64, error) {
