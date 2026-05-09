@@ -297,6 +297,12 @@ func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
 	return sink
 }
 
+func ProvideOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, redisClient *redis.Client) *OpsUserRequestMonitorService {
+	svc := NewOpsUserRequestMonitorService(opsRepo, userRepo, redisClient)
+	svc.Start()
+	return svc
+}
+
 func buildIdempotencyConfig(cfg *config.Config) IdempotencyConfig {
 	idempotencyCfg := DefaultIdempotencyConfig()
 	if cfg != nil {
@@ -470,6 +476,7 @@ var ProviderSet = wire.NewSet(
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
+	ProvideOpsUserRequestMonitorService,
 	NewOpsService,
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,

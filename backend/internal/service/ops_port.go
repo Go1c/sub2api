@@ -63,6 +63,134 @@ type OpsRepository interface {
 	UpsertDailyMetrics(ctx context.Context, startTime, endTime time.Time) error
 	GetLatestHourlyBucketStart(ctx context.Context) (time.Time, bool, error)
 	GetLatestDailyBucketDate(ctx context.Context) (time.Time, bool, error)
+
+	// User request monitoring (admin-created, targeted raw request body capture).
+	CreateUserRequestMonitor(ctx context.Context, input *OpsCreateUserRequestMonitorRecord) (*OpsUserRequestMonitor, error)
+	ListUserRequestMonitors(ctx context.Context, filter *OpsUserRequestMonitorFilter) ([]*OpsUserRequestMonitor, int64, error)
+	GetUserRequestMonitorByID(ctx context.Context, id int64) (*OpsUserRequestMonitor, error)
+	GetActiveUserRequestMonitors(ctx context.Context, userID int64, now time.Time) ([]*OpsUserRequestMonitor, error)
+	StopUserRequestMonitor(ctx context.Context, id int64, stoppedAt time.Time) (*OpsUserRequestMonitor, error)
+	InsertUserRequestCapture(ctx context.Context, input *OpsInsertUserRequestCaptureInput) (int64, error)
+	ListUserRequestCaptures(ctx context.Context, filter *OpsUserRequestCaptureFilter) ([]*OpsUserRequestCapture, int64, error)
+	GetUserRequestCapture(ctx context.Context, monitorID, captureID int64) (*OpsUserRequestCapture, error)
+	DeleteUserRequestCapture(ctx context.Context, monitorID, captureID int64) (bool, error)
+	ExpireUserRequestMonitors(ctx context.Context, now time.Time) (int64, error)
+	DeleteExpiredUserRequestCaptures(ctx context.Context, now time.Time) (int64, error)
+}
+
+const (
+	OpsUserRequestMonitorStatusActive  = "active"
+	OpsUserRequestMonitorStatusExpired = "expired"
+	OpsUserRequestMonitorStatusStopped = "stopped"
+)
+
+type OpsUserRequestMonitor struct {
+	ID                   int64      `json:"id"`
+	UserID               int64      `json:"user_id"`
+	TargetEmail          string     `json:"target_email"`
+	Status               string     `json:"status"`
+	DurationSeconds      int        `json:"duration_seconds"`
+	MaxCapturesPerMinute int        `json:"max_captures_per_minute"`
+	SampleRatePercent    int        `json:"sample_rate_percent"`
+	RetentionDays        int        `json:"retention_days"`
+	CreatedBy            int64      `json:"created_by"`
+	CreatedAt            time.Time  `json:"created_at"`
+	StartsAt             time.Time  `json:"starts_at"`
+	EndsAt               time.Time  `json:"ends_at"`
+	StoppedAt            *time.Time `json:"stopped_at"`
+	LastCaptureAt        *time.Time `json:"last_capture_at"`
+	CaptureCount         int64      `json:"capture_count"`
+}
+
+type OpsCreateUserRequestMonitorInput struct {
+	UserID               int64 `json:"user_id"`
+	DurationSeconds      int   `json:"duration_seconds"`
+	MaxCapturesPerMinute int   `json:"max_captures_per_minute"`
+	SampleRatePercent    int   `json:"sample_rate_percent"`
+	RetentionDays        int   `json:"retention_days"`
+	CreatedBy            int64 `json:"-"`
+}
+
+type OpsCreateUserRequestMonitorRecord struct {
+	UserID               int64
+	TargetEmail          string
+	DurationSeconds      int
+	MaxCapturesPerMinute int
+	SampleRatePercent    int
+	RetentionDays        int
+	CreatedBy            int64
+	CreatedAt            time.Time
+	StartsAt             time.Time
+	EndsAt               time.Time
+}
+
+type OpsUserRequestMonitorFilter struct {
+	Status    string
+	UserQuery string
+	Page      int
+	PageSize  int
+}
+
+type OpsCaptureClientRequestInput struct {
+	UserID          int64
+	APIKeyID        *int64
+	AccountID       *int64
+	GroupID         *int64
+	RequestID       string
+	Model           string
+	InboundEndpoint string
+	Method          string
+	ContentType     string
+	Body            []byte
+}
+
+type OpsInsertUserRequestCaptureInput struct {
+	MonitorID         int64
+	UserID            int64
+	APIKeyID          *int64
+	AccountID         *int64
+	GroupID           *int64
+	RequestID         string
+	Model             string
+	InboundEndpoint   string
+	Method            string
+	ContentType       string
+	Body              string
+	BodyBytes         int
+	BodyTruncated     bool
+	SampleRatePercent int
+	CaptureMinute     time.Time
+	CreatedAt         time.Time
+	ExpiresAt         time.Time
+}
+
+type OpsUserRequestCapture struct {
+	ID                int64     `json:"id"`
+	MonitorID         int64     `json:"monitor_id"`
+	UserID            int64     `json:"user_id"`
+	APIKeyID          *int64    `json:"api_key_id"`
+	AccountID         *int64    `json:"account_id"`
+	AccountName       string    `json:"account_name,omitempty"`
+	GroupID           *int64    `json:"group_id"`
+	GroupName         string    `json:"group_name,omitempty"`
+	RequestID         string    `json:"request_id"`
+	Model             string    `json:"model"`
+	InboundEndpoint   string    `json:"inbound_endpoint"`
+	Method            string    `json:"method"`
+	ContentType       string    `json:"content_type"`
+	Body              string    `json:"body,omitempty"`
+	BodyBytes         int       `json:"body_bytes"`
+	BodyTruncated     bool      `json:"body_truncated"`
+	SampleRatePercent int       `json:"sample_rate_percent"`
+	CaptureMinute     time.Time `json:"capture_minute"`
+	CreatedAt         time.Time `json:"created_at"`
+	ExpiresAt         time.Time `json:"expires_at"`
+}
+
+type OpsUserRequestCaptureFilter struct {
+	MonitorID int64
+	Page      int
+	PageSize  int
 }
 
 type OpsInsertErrorLogInput struct {
