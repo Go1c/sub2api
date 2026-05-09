@@ -329,8 +329,9 @@ import {
   completeWeChatOAuthRegistration,
   exchangePendingOAuthCompletion,
   getAuthToken,
-  hasExplicitWeChatOAuthCapabilities,
   getOAuthCompletionKind,
+  getPublicSettings,
+  hasExplicitWeChatOAuthCapabilities,
   isOAuthLoginCompletion,
   login2FA,
   prepareOAuthBindAccessTokenCookie,
@@ -345,6 +346,11 @@ import {
   loadOAuthAffiliateCode,
   oauthAffiliatePayload
 } from '@/utils/oauthAffiliate'
+import {
+  invitationRegistrationModeSupportsAffiliateLink,
+  normalizeInvitationRegistrationMode,
+  type InvitationRegistrationMode
+} from '@/utils/invitationRegistrationMode'
 
 const route = useRoute()
 const router = useRouter()
@@ -380,6 +386,36 @@ const totpCode = ref('')
 const totpError = ref('')
 const totpUserEmailMasked = ref('')
 const bindSuccessMessage = t('profile.authBindings.bindSuccess')
+
+const invitationRegistrationMode = ref<InvitationRegistrationMode>('redeem_code')
+let invitationRegistrationModeLoaded = false
+
+async function ensureInvitationRegistrationMode(): Promise<void> {
+  if (invitationRegistrationModeLoaded) {
+    return
+  }
+  try {
+    const settings = await getPublicSettings()
+    invitationRegistrationMode.value = normalizeInvitationRegistrationMode(
+      settings.invitation_registration_mode
+    )
+  } catch {
+    invitationRegistrationMode.value = 'redeem_code'
+  } finally {
+    invitationRegistrationModeLoaded = true
+  }
+}
+
+async function applyStoredAffiliateCodeToInvitation(): Promise<void> {
+  if (invitationCode.value.trim()) {
+    return
+  }
+  await ensureInvitationRegistrationMode()
+  if (!invitationRegistrationModeSupportsAffiliateLink(invitationRegistrationMode.value)) {
+    return
+  }
+  invitationCode.value = loadOAuthAffiliateCode()
+}
 
 const providerName = t('auth.wechatProviderName')
 const showBackToChooser = computed(
@@ -831,6 +867,7 @@ async function finalizePendingAccountResponse(completion: PendingWeChatCompletio
   if (completion.error === 'invitation_required') {
     pendingAccountAction.value = 'none'
     needsInvitation.value = true
+    await applyStoredAffiliateCodeToInvitation()
     needsAdoptionConfirmation.value = false
     isProcessing.value = false
     persistPendingAuthSession(redirect)
@@ -1036,6 +1073,7 @@ onMounted(async () => {
       legacyPendingOAuthToken.value = legacyPendingToken
       redirectTo.value = redirect
       needsInvitation.value = true
+      await applyStoredAffiliateCodeToInvitation()
       isProcessing.value = false
       return
     }
@@ -1055,6 +1093,7 @@ onMounted(async () => {
 
     if (completion.error === 'invitation_required') {
       needsInvitation.value = true
+      await applyStoredAffiliateCodeToInvitation()
       isProcessing.value = false
       persistPendingAuthSession(completionRedirect)
       return

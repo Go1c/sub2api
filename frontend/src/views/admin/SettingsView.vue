@@ -1486,6 +1486,31 @@
                 </div>
                 <Toggle v-model="form.invitation_code_enabled" />
               </div>
+              <div
+                v-if="form.invitation_code_enabled"
+                class="border-t border-gray-100 pt-4 dark:border-dark-700"
+              >
+                <label class="font-medium text-gray-900 dark:text-white">{{
+                  t("admin.settings.registration.invitationRegistrationMode")
+                }}</label>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.registration.invitationRegistrationModeHint") }}
+                </p>
+                <select
+                  v-model="form.invitation_registration_mode"
+                  class="input mt-3 max-w-md"
+                >
+                  <option value="redeem_code">
+                    {{ t("admin.settings.registration.invitationRegistrationModeRedeemCode") }}
+                  </option>
+                  <option value="affiliate_link">
+                    {{ t("admin.settings.registration.invitationRegistrationModeAffiliateLink") }}
+                  </option>
+                  <option value="both">
+                    {{ t("admin.settings.registration.invitationRegistrationModeBoth") }}
+                  </option>
+                </select>
+              </div>
               <!-- Password Reset - Only show when email verification is enabled -->
               <div
                 v-if="form.email_verify_enabled"
@@ -6988,6 +7013,7 @@ const form = reactive<SettingsForm>({
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
   invitation_code_enabled: false,
+  invitation_registration_mode: "redeem_code",
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
@@ -8368,6 +8394,7 @@ async function saveSettings() {
         ),
       promo_code_enabled: form.promo_code_enabled,
       invitation_code_enabled: form.invitation_code_enabled,
+      invitation_registration_mode: form.invitation_registration_mode || "redeem_code",
       password_reset_enabled: form.password_reset_enabled,
       totp_enabled: form.totp_enabled,
       login_agreement_enabled: form.login_agreement_enabled,
