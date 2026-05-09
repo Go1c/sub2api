@@ -79,6 +79,10 @@ func ProvideSystemHandler(updateService *service.UpdateService, lockService *ser
 	return admin.NewSystemHandler(updateService, lockService)
 }
 
+func ProvideOpsHandler(opsService *service.OpsService, userRequestMonitorService *service.OpsUserRequestMonitorService) *admin.OpsHandler {
+	return admin.NewOpsHandler(opsService).SetUserRequestMonitorService(userRequestMonitorService)
+}
+
 // ProvideSettingHandler creates SettingHandler with version from BuildInfo
 func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo) *SettingHandler {
 	return NewSettingHandler(settingService, buildInfo.Version)
@@ -160,7 +164,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewRedeemHandler,
 	admin.NewPromoHandler,
 	admin.NewSettingHandler,
-	admin.NewOpsHandler,
+	ProvideOpsHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
 	admin.NewUsageHandler,

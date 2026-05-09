@@ -195,6 +195,14 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Request drilldown (success + error)
 		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
 
+		// Targeted user request body monitoring
+		ops.GET("/user-request-monitors", h.Admin.Ops.ListUserRequestMonitors)
+		ops.POST("/user-request-monitors", h.Admin.Ops.CreateUserRequestMonitor)
+		ops.POST("/user-request-monitors/:id/stop", h.Admin.Ops.StopUserRequestMonitor)
+		ops.GET("/user-request-monitors/:id/captures", h.Admin.Ops.ListUserRequestCaptures)
+		ops.GET("/user-request-monitors/:id/captures/:capture_id", h.Admin.Ops.GetUserRequestCapture)
+		ops.DELETE("/user-request-monitors/:id/captures/:capture_id", h.Admin.Ops.DeleteUserRequestCapture)
+
 		// Indexed system logs
 		ops.GET("/system-logs", h.Admin.Ops.ListSystemLogs)
 		ops.POST("/system-logs/cleanup", h.Admin.Ops.CleanupSystemLogs)

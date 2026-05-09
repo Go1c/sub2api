@@ -1230,6 +1230,99 @@ export async function listRequestDetails(params: OpsRequestDetailsParams): Promi
   return data
 }
 
+export type OpsUserRequestMonitorStatus = 'active' | 'expired' | 'stopped' | string
+
+export interface OpsUserRequestMonitor {
+  id: number
+  user_id: number
+  target_email: string
+  status: OpsUserRequestMonitorStatus
+  duration_seconds: number
+  max_captures_per_minute: number
+  sample_rate_percent: number
+  retention_days: number
+  created_by: number
+  created_at: string
+  starts_at: string
+  ends_at: string
+  stopped_at?: string | null
+  last_capture_at?: string | null
+  capture_count: number
+}
+
+export interface CreateUserRequestMonitorRequest {
+  user_id: number
+  duration_seconds: number
+  max_captures_per_minute: number
+  sample_rate_percent: number
+  retention_days?: number
+}
+
+export interface OpsUserRequestMonitorQuery {
+  status?: OpsUserRequestMonitorStatus
+  user_query?: string
+  page?: number
+  page_size?: number
+}
+
+export interface OpsUserRequestCapture {
+  id: number
+  monitor_id: number
+  user_id: number
+  api_key_id?: number | null
+  account_id?: number | null
+  account_name?: string
+  group_id?: number | null
+  group_name?: string
+  request_id?: string
+  model?: string
+  inbound_endpoint?: string
+  method?: string
+  content_type?: string
+  body?: string
+  body_bytes: number
+  body_truncated: boolean
+  sample_rate_percent: number
+  capture_minute: string
+  created_at: string
+  expires_at: string
+}
+
+export type OpsUserRequestMonitorListResponse = PaginatedResponse<OpsUserRequestMonitor>
+export type OpsUserRequestCaptureListResponse = PaginatedResponse<OpsUserRequestCapture>
+
+export async function listUserRequestMonitors(params: OpsUserRequestMonitorQuery = {}): Promise<OpsUserRequestMonitorListResponse> {
+  const { data } = await apiClient.get<OpsUserRequestMonitorListResponse>('/admin/ops/user-request-monitors', { params })
+  return data
+}
+
+export async function createUserRequestMonitor(req: CreateUserRequestMonitorRequest): Promise<OpsUserRequestMonitor> {
+  const { data } = await apiClient.post<OpsUserRequestMonitor>('/admin/ops/user-request-monitors', req)
+  return data
+}
+
+export async function stopUserRequestMonitor(id: number): Promise<OpsUserRequestMonitor> {
+  const { data } = await apiClient.post<OpsUserRequestMonitor>(`/admin/ops/user-request-monitors/${id}/stop`, {})
+  return data
+}
+
+export async function listUserRequestCaptures(
+  monitorId: number,
+  params: { page?: number, page_size?: number } = {}
+): Promise<OpsUserRequestCaptureListResponse> {
+  const { data } = await apiClient.get<OpsUserRequestCaptureListResponse>(`/admin/ops/user-request-monitors/${monitorId}/captures`, { params })
+  return data
+}
+
+export async function getUserRequestCapture(monitorId: number, captureId: number): Promise<OpsUserRequestCapture> {
+  const { data } = await apiClient.get<OpsUserRequestCapture>(`/admin/ops/user-request-monitors/${monitorId}/captures/${captureId}`)
+  return data
+}
+
+export async function deleteUserRequestCapture(monitorId: number, captureId: number): Promise<void> {
+  await apiClient.delete(`/admin/ops/user-request-monitors/${monitorId}/captures/${captureId}`)
+}
+
 // Alert rules
 export async function listAlertRules(): Promise<AlertRule[]> {
   const { data } = await apiClient.get<AlertRule[]>('/admin/ops/alert-rules')
@@ -1397,6 +1490,12 @@ export const opsAPI = {
   listRequestErrorUpstreamErrors,
 
   listRequestDetails,
+  listUserRequestMonitors,
+  createUserRequestMonitor,
+  stopUserRequestMonitor,
+  listUserRequestCaptures,
+  getUserRequestCapture,
+  deleteUserRequestCapture,
   listAlertRules,
   createAlertRule,
   updateAlertRule,
