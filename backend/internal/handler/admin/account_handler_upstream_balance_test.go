@@ -15,7 +15,19 @@ func TestAccountHandler_UpstreamBalanceLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/user/login" {
+		switch r.URL.Path {
+		case "/api/user/login":
+		case "/api/user/self":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"id":    42,
+					"quota": 500000,
+				},
+			})
+			return
+		default:
 			http.NotFound(w, r)
 			return
 		}
@@ -34,7 +46,7 @@ func TestAccountHandler_UpstreamBalanceLogin(t *testing.T) {
 	router := gin.New()
 	router.POST("/api/v1/admin/accounts/upstream-balance/login", handler.UpstreamBalanceLogin)
 
-	body := `{"base_url":"` + upstream.URL + `","username":"alice@example.com","password":"secret"}`
+	body := `{"base_url":"` + upstream.URL + `","provider":"newapi","username":"alice@example.com","password":"secret"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/upstream-balance/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

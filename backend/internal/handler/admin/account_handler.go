@@ -168,6 +168,7 @@ type CheckMixedChannelRequest struct {
 
 type UpstreamBalanceLoginRequest struct {
 	BaseURL  string `json:"base_url" binding:"required"`
+	Provider string `json:"provider"`
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
@@ -1687,6 +1688,7 @@ func (h *AccountHandler) UpstreamBalanceLogin(c *gin.Context) {
 	}
 	result, err := h.accountUsageService.FetchUpstreamBalanceLoginCredentials(c.Request.Context(), service.UpstreamBalanceLoginInput{
 		BaseURL:  req.BaseURL,
+		Provider: req.Provider,
 		Username: req.Username,
 		Password: req.Password,
 	})

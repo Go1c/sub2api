@@ -156,6 +156,7 @@ export async function checkMixedChannelRisk(
 
 export interface UpstreamBalanceLoginRequest {
   base_url: string
+  provider: 'newapi' | 'sub2api' | 'other'
   username: string
   password: string
 }

@@ -435,6 +435,55 @@ func TestAccountUsageService_GetUsage_DoesNotTreatNewAPITokenQuotaAsUserBalance(
 	if usage.UpstreamBalance.Message == "" {
 		t.Fatal("expected diagnostic message")
 	}
+	if usage.UpstreamBalance.Message != newAPITokenQuotaNotUserBalanceMessage {
+		t.Fatalf("expected concise credential diagnostic, got %q", usage.UpstreamBalance.Message)
+	}
+	if usage.UpstreamBalance.StatusCode != 0 {
+		t.Fatalf("expected no HTTP status for credential diagnostic, got %d", usage.UpstreamBalance.StatusCode)
+	}
+	if usage.UpstreamBalance.Raw != "" {
+		t.Fatalf("expected token quota raw body to be hidden, got %q", usage.UpstreamBalance.Raw)
+	}
+}
+
+func TestAccountUsageService_GetUsage_NewAPIProviderRequiresUserBalanceCredentials(t *testing.T) {
+	t.Parallel()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       995,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": "https://newapi.example",
+					"api_key":  "sk-newapi-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled":  true,
+					"upstream_balance_provider": "newapi",
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 995)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if usage.UpstreamBalance.Success {
+		t.Fatalf("expected credential diagnostic, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Path != "" || usage.UpstreamBalance.StatusCode != 0 || usage.UpstreamBalance.Raw != "" {
+		t.Fatalf("expected local diagnostic without probing token quota, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Message != newAPITokenQuotaNotUserBalanceMessage {
+		t.Fatalf("expected NewAPI credential message, got %q", usage.UpstreamBalance.Message)
+	}
 }
 
 func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalance(t *testing.T) {
@@ -473,6 +522,7 @@ func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalance(t *testin
 				},
 				Extra: map[string]any{
 					"upstream_balance_enabled":      true,
+					"upstream_balance_provider":     "newapi",
 					"upstream_balance_access_token": "user-access-token",
 					"upstream_balance_user_id":      "123",
 				},
@@ -500,8 +550,8 @@ func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalance(t *testin
 	if usage.UpstreamBalance.Path != "/api/user/self" {
 		t.Fatalf("expected /api/user/self probe to win, got %q", usage.UpstreamBalance.Path)
 	}
-	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 1 {
-		t.Fatalf("expected parsed user quota balance $1.00, got %#v", usage.UpstreamBalance.Balance)
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 1.5 {
+		t.Fatalf("expected parsed user quota balance $1.50, got %#v", usage.UpstreamBalance.Balance)
 	}
 	if usage.UpstreamBalance.Currency != "USD" {
 		t.Fatalf("expected USD currency, got %q", usage.UpstreamBalance.Currency)
@@ -546,6 +596,7 @@ func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalanceWithSessio
 				},
 				Extra: map[string]any{
 					"upstream_balance_enabled":      true,
+					"upstream_balance_provider":     "newapi",
 					"upstream_balance_access_token": "cookie:session=session-value",
 					"upstream_balance_user_id":      "11",
 				},
@@ -573,8 +624,8 @@ func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalanceWithSessio
 	if !usage.UpstreamBalance.Success {
 		t.Fatalf("expected upstream balance success, got %#v", usage.UpstreamBalance)
 	}
-	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != -878.276788 {
-		t.Fatalf("expected parsed negative user quota balance, got %#v", usage.UpstreamBalance.Balance)
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 325.861606 {
+		t.Fatalf("expected parsed user quota balance, got %#v", usage.UpstreamBalance.Balance)
 	}
 }
 
@@ -669,6 +720,7 @@ func TestAccountUsageService_GetUsage_ParsesSub2APIUserProfileBalance(t *testing
 				},
 				Extra: map[string]any{
 					"upstream_balance_enabled":      true,
+					"upstream_balance_provider":     "sub2api",
 					"upstream_balance_access_token": "sub2api-access-token",
 					"upstream_balance_user_id":      "77",
 				},
@@ -703,8 +755,24 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPI(t *test
 
 	var gotUsername string
 	var gotPassword string
+	var gotSelfAuth string
+	var gotSelfUser string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/user/login" {
+		switch r.URL.Path {
+		case "/api/user/login":
+		case "/api/user/self":
+			gotSelfAuth = r.Header.Get("Authorization")
+			gotSelfUser = r.Header.Get("New-Api-User")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"id":    42,
+					"quota": 500000,
+				},
+			})
+			return
+		default:
 			http.NotFound(w, r)
 			return
 		}
@@ -728,6 +796,7 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPI(t *test
 	svc := &AccountUsageService{}
 	result, err := svc.FetchUpstreamBalanceLoginCredentials(context.Background(), UpstreamBalanceLoginInput{
 		BaseURL:  upstream.URL,
+		Provider: "newapi",
 		Username: "alice@example.com",
 		Password: "secret",
 	})
@@ -746,6 +815,15 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPI(t *test
 	if result.UserID != "42" {
 		t.Fatalf("expected user id 42, got %q", result.UserID)
 	}
+	if gotSelfAuth != "Bearer newapi-access-token" {
+		t.Fatalf("expected NewAPI self bearer auth, got %q", gotSelfAuth)
+	}
+	if gotSelfUser != "42" {
+		t.Fatalf("expected New-Api-User 42, got %q", gotSelfUser)
+	}
+	if result.Balance == nil || *result.Balance != 1 {
+		t.Fatalf("expected verified balance 1, got %#v", result.Balance)
+	}
 }
 
 func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPISessionCookie(t *testing.T) {
@@ -753,8 +831,25 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPISessionC
 
 	var gotUsername string
 	var gotPassword string
+	var gotSelfCookie string
+	var gotSelfUser string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/user/login" {
+		switch r.URL.Path {
+		case "/api/user/login":
+		case "/api/user/self":
+			gotSelfCookie = r.Header.Get("Cookie")
+			gotSelfUser = r.Header.Get("New-Api-User")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"id":         11,
+					"quota":      162930803,
+					"used_quota": 602069197,
+				},
+			})
+			return
+		default:
 			http.NotFound(w, r)
 			return
 		}
@@ -775,10 +870,8 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPISessionC
 			"success": true,
 			"message": "",
 			"data": map[string]any{
-				"id":         11,
-				"username":   "go1c",
-				"quota":      750000,
-				"used_quota": 250000,
+				"id":       11,
+				"username": "go1c",
 			},
 		})
 	}))
@@ -787,6 +880,7 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPISessionC
 	svc := &AccountUsageService{}
 	result, err := svc.FetchUpstreamBalanceLoginCredentials(context.Background(), UpstreamBalanceLoginInput{
 		BaseURL:  upstream.URL,
+		Provider: "newapi",
 		Username: "go1c",
 		Password: "secret",
 	})
@@ -805,8 +899,14 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPISessionC
 	if result.UserID != "11" {
 		t.Fatalf("expected user id 11, got %q", result.UserID)
 	}
-	if result.Balance == nil || *result.Balance != 1 {
-		t.Fatalf("expected balance 1, got %#v", result.Balance)
+	if gotSelfCookie != "session=session-value" {
+		t.Fatalf("expected session cookie balance probe, got %q", gotSelfCookie)
+	}
+	if gotSelfUser != "11" {
+		t.Fatalf("expected New-Api-User balance probe, got %q", gotSelfUser)
+	}
+	if result.Balance == nil || *result.Balance != 325.861606 {
+		t.Fatalf("expected verified user balance, got %#v", result.Balance)
 	}
 }
 
@@ -845,6 +945,7 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_Sub2API(t *tes
 	svc := &AccountUsageService{}
 	result, err := svc.FetchUpstreamBalanceLoginCredentials(context.Background(), UpstreamBalanceLoginInput{
 		BaseURL:  upstream.URL,
+		Provider: "sub2api",
 		Username: "bob@example.com",
 		Password: "secret",
 	})

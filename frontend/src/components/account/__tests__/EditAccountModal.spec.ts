@@ -255,6 +255,7 @@ describe('EditAccountModal', () => {
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_enabled).toBe(true)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_provider).toBe('newapi')
   })
 
   it('submits New API user auth fields for upstream balance', async () => {
@@ -274,6 +275,7 @@ describe('EditAccountModal', () => {
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_enabled).toBe(true)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_provider).toBe('newapi')
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_access_token).toBe('user-access-token')
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_user_id).toBe('123')
   })
@@ -295,6 +297,7 @@ describe('EditAccountModal', () => {
     const wrapper = mountModal(account)
 
     await wrapper.get('button[data-testid="upstream-balance-enabled"]').trigger('click')
+    await wrapper.get('select[data-testid="upstream-balance-provider"]').setValue('sub2api')
     await wrapper.get('input[data-testid="upstream-balance-login-username"]').setValue('user@example.com')
     await wrapper.get('input[data-testid="upstream-balance-login-password"]').setValue('secret')
     await wrapper.get('button[data-testid="upstream-balance-login"]').trigger('click')
@@ -303,6 +306,7 @@ describe('EditAccountModal', () => {
     expect(loginUpstreamBalanceCredentialsMock).toHaveBeenCalledTimes(1)
     expect(loginUpstreamBalanceCredentialsMock).toHaveBeenCalledWith({
       base_url: 'https://api.openai.com',
+      provider: 'sub2api',
       username: 'user@example.com',
       password: 'secret'
     })
@@ -312,6 +316,7 @@ describe('EditAccountModal', () => {
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_enabled).toBe(true)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_provider).toBe('sub2api')
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_access_token).toBe('sub2api-access-token')
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_user_id).toBe('77')
   })
