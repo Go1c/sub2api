@@ -95,6 +95,45 @@
             </button>
           </div>
           <div v-if="upstreamBalanceEnabled" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-700/50 sm:col-span-2">
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div>
+                  <label class="input-label">{{ t('admin.accounts.upstreamBalance.loginUsername') }}</label>
+                  <input
+                    v-model="upstreamBalanceLoginUsername"
+                    type="text"
+                    class="input"
+                    data-testid="upstream-balance-login-username"
+                    autocomplete="username"
+                    placeholder="user@example.com"
+                  />
+                </div>
+                <div>
+                  <label class="input-label">{{ t('admin.accounts.upstreamBalance.loginPassword') }}</label>
+                  <input
+                    v-model="upstreamBalanceLoginPassword"
+                    type="password"
+                    class="input"
+                    data-testid="upstream-balance-login-password"
+                    autocomplete="new-password"
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-bwignore="true"
+                    :placeholder="t('admin.accounts.upstreamBalance.loginPasswordPlaceholder')"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary whitespace-nowrap"
+                  data-testid="upstream-balance-login"
+                  :disabled="upstreamBalanceLoginLoading"
+                  @click="fetchUpstreamBalanceCredentials"
+                >
+                  {{ upstreamBalanceLoginLoading ? t('admin.accounts.upstreamBalance.loginLoading') : t('admin.accounts.upstreamBalance.loginButton') }}
+                </button>
+              </div>
+              <p class="input-hint mt-2">{{ t('admin.accounts.upstreamBalance.loginHint') }}</p>
+            </div>
             <div>
               <label class="input-label">{{ t('admin.accounts.upstreamBalance.newApiAccessToken') }}</label>
               <input
@@ -646,6 +685,45 @@
             </button>
           </div>
           <div v-if="upstreamBalanceEnabled" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-700/50 sm:col-span-2">
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div>
+                  <label class="input-label">{{ t('admin.accounts.upstreamBalance.loginUsername') }}</label>
+                  <input
+                    v-model="upstreamBalanceLoginUsername"
+                    type="text"
+                    class="input"
+                    data-testid="upstream-balance-login-username"
+                    autocomplete="username"
+                    placeholder="user@example.com"
+                  />
+                </div>
+                <div>
+                  <label class="input-label">{{ t('admin.accounts.upstreamBalance.loginPassword') }}</label>
+                  <input
+                    v-model="upstreamBalanceLoginPassword"
+                    type="password"
+                    class="input"
+                    data-testid="upstream-balance-login-password"
+                    autocomplete="new-password"
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-bwignore="true"
+                    :placeholder="t('admin.accounts.upstreamBalance.loginPasswordPlaceholder')"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary whitespace-nowrap"
+                  data-testid="upstream-balance-login"
+                  :disabled="upstreamBalanceLoginLoading"
+                  @click="fetchUpstreamBalanceCredentials"
+                >
+                  {{ upstreamBalanceLoginLoading ? t('admin.accounts.upstreamBalance.loginLoading') : t('admin.accounts.upstreamBalance.loginButton') }}
+                </button>
+              </div>
+              <p class="input-hint mt-2">{{ t('admin.accounts.upstreamBalance.loginHint') }}</p>
+            </div>
             <div>
               <label class="input-label">{{ t('admin.accounts.upstreamBalance.newApiAccessToken') }}</label>
               <input
@@ -2393,6 +2471,9 @@ const customErrorCodeInput = ref<number | null>(null)
 const upstreamBalanceEnabled = ref(false)
 const upstreamBalanceAccessToken = ref('')
 const upstreamBalanceUserId = ref('')
+const upstreamBalanceLoginUsername = ref('')
+const upstreamBalanceLoginPassword = ref('')
+const upstreamBalanceLoginLoading = ref(false)
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
@@ -2692,6 +2773,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   allowOverages.value = extra?.allow_overages === true
   upstreamBalanceEnabled.value = extra?.upstream_balance_enabled === true
   upstreamBalanceAccessToken.value = ''
+  upstreamBalanceLoginUsername.value = ''
+  upstreamBalanceLoginPassword.value = ''
+  upstreamBalanceLoginLoading.value = false
   upstreamBalanceUserId.value = typeof extra?.upstream_balance_user_id === 'string'
     ? extra.upstream_balance_user_id
     : extra?.upstream_balance_user_id != null
@@ -3421,6 +3505,33 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
     appStore.showError(error.message || t('admin.accounts.failedToUpdate'))
   } finally {
     submitting.value = false
+  }
+}
+
+const fetchUpstreamBalanceCredentials = async () => {
+  const baseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
+  const username = upstreamBalanceLoginUsername.value.trim()
+  const password = upstreamBalanceLoginPassword.value
+  if (!baseUrl || !username || !password) {
+    appStore.showError(t('admin.accounts.upstreamBalance.loginMissingFields'))
+    return
+  }
+
+  upstreamBalanceLoginLoading.value = true
+  try {
+    const result = await adminAPI.accounts.loginUpstreamBalanceCredentials({
+      base_url: baseUrl,
+      username,
+      password
+    })
+    upstreamBalanceAccessToken.value = result.access_token
+    upstreamBalanceUserId.value = result.user_id ? String(result.user_id) : ''
+    upstreamBalanceLoginPassword.value = ''
+    appStore.showSuccess(t('admin.accounts.upstreamBalance.loginSuccess'))
+  } catch (error: any) {
+    appStore.showError(error.message || t('admin.accounts.upstreamBalance.loginFailed'))
+  } finally {
+    upstreamBalanceLoginLoading.value = false
   }
 }
 

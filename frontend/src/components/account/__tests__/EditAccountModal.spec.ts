@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
-const { updateAccountMock, checkMixedChannelRiskMock } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, loginUpstreamBalanceCredentialsMock } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
-  checkMixedChannelRiskMock: vi.fn()
+  checkMixedChannelRiskMock: vi.fn(),
+  loginUpstreamBalanceCredentialsMock: vi.fn()
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -25,7 +26,8 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       update: updateAccountMock,
-      checkMixedChannelRisk: checkMixedChannelRiskMock
+      checkMixedChannelRisk: checkMixedChannelRiskMock,
+      loginUpstreamBalanceCredentials: loginUpstreamBalanceCredentialsMock
     },
     settings: {
       getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false, providers: [] }),
@@ -274,5 +276,43 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_enabled).toBe(true)
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_access_token).toBe('user-access-token')
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_user_id).toBe('123')
+  })
+
+  it('fetches upstream balance credentials with username and password without submitting the account form', async () => {
+    const account = buildAccount()
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    loginUpstreamBalanceCredentialsMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+    loginUpstreamBalanceCredentialsMock.mockResolvedValue({
+      provider: 'sub2api',
+      access_token: 'sub2api-access-token',
+      user_id: '77',
+      balance: 12.5
+    })
+
+    const wrapper = mountModal(account)
+
+    await wrapper.get('button[data-testid="upstream-balance-enabled"]').trigger('click')
+    await wrapper.get('input[data-testid="upstream-balance-login-username"]').setValue('user@example.com')
+    await wrapper.get('input[data-testid="upstream-balance-login-password"]').setValue('secret')
+    await wrapper.get('button[data-testid="upstream-balance-login"]').trigger('click')
+    await flushPromises()
+
+    expect(loginUpstreamBalanceCredentialsMock).toHaveBeenCalledTimes(1)
+    expect(loginUpstreamBalanceCredentialsMock).toHaveBeenCalledWith({
+      base_url: 'https://api.openai.com',
+      username: 'user@example.com',
+      password: 'secret'
+    })
+    expect(updateAccountMock).not.toHaveBeenCalled()
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_enabled).toBe(true)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_access_token).toBe('sub2api-access-token')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_user_id).toBe('77')
   })
 })
