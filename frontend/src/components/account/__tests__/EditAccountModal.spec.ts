@@ -254,4 +254,25 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_enabled).toBe(true)
   })
+
+  it('submits New API user auth fields for upstream balance', async () => {
+    const account = buildAccount()
+    account.extra = {}
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+
+    await wrapper.get('button[data-testid="upstream-balance-enabled"]').trigger('click')
+    await wrapper.get('input[data-testid="upstream-balance-access-token"]').setValue('user-access-token')
+    await wrapper.get('input[data-testid="upstream-balance-user-id"]').setValue('123')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_enabled).toBe(true)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_access_token).toBe('user-access-token')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_balance_user_id).toBe('123')
+  })
 })

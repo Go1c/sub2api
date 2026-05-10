@@ -262,3 +262,305 @@ func TestAccountUsageService_GetUsage_AttachesUpstreamBalanceForEnabledAPIKey(t 
 		t.Fatalf("expected parsed balance 12.34, got %#v", usage.UpstreamBalance.Balance)
 	}
 }
+
+func TestAccountUsageService_GetUsage_ContinuesPastHTMLToUsageEndpoint(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/dashboard/billing/credit_grants":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<!doctype html><html lang="zh"><body>dashboard</body></html>`))
+		case "/v1/usage":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"wallet_balance": 45.67,
+					"unit":           "USD",
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       988,
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL,
+					"api_key":  "sk-ant-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled": true,
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 988)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if !usage.UpstreamBalance.Success {
+		t.Fatalf("expected upstream balance success, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Path != "/v1/usage" {
+		t.Fatalf("expected /v1/usage probe to win, got %q", usage.UpstreamBalance.Path)
+	}
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 45.67 {
+		t.Fatalf("expected parsed wallet balance 45.67, got %#v", usage.UpstreamBalance.Balance)
+	}
+}
+
+func TestAccountUsageService_GetUsage_StripsV1BaseURLForUsageEndpoint(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/usage" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"account_balance": 8.9,
+			"currency":        "USD",
+		})
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       989,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL + "/v1",
+					"api_key":  "sk-openai-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled": true,
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 989)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if !usage.UpstreamBalance.Success {
+		t.Fatalf("expected upstream balance success, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 8.9 {
+		t.Fatalf("expected parsed account balance 8.9, got %#v", usage.UpstreamBalance.Balance)
+	}
+}
+
+func TestAccountUsageService_GetUsage_DoesNotTreatNewAPITokenQuotaAsUserBalance(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/usage/token/":
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer sk-newapi-test" {
+			http.Error(w, "missing token auth", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"object":              "token_usage",
+				"total_available":     123456,
+				"total_used":          1000,
+				"unlimited_quota":     false,
+				"total_usd_available": 0.246912,
+			},
+		})
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       990,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL,
+					"api_key":  "sk-newapi-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled": true,
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 990)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if usage.UpstreamBalance.Success {
+		t.Fatalf("token quota must not be reported as user balance: %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Path != "/api/usage/token/" {
+		t.Fatalf("expected /api/usage/token/ diagnostic, got %q", usage.UpstreamBalance.Path)
+	}
+	if usage.UpstreamBalance.Balance != nil {
+		t.Fatalf("expected no user balance from token quota, got %#v", usage.UpstreamBalance.Balance)
+	}
+	if usage.UpstreamBalance.Message == "" {
+		t.Fatal("expected diagnostic message")
+	}
+}
+
+func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalance(t *testing.T) {
+	t.Parallel()
+
+	var gotAuth string
+	var gotUser string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user/self" {
+			http.NotFound(w, r)
+			return
+		}
+		gotAuth = r.Header.Get("Authorization")
+		gotUser = r.Header.Get("New-Api-User")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"id":         123,
+				"quota":      750000,
+				"used_quota": 250000,
+			},
+		})
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       991,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL,
+					"api_key":  "sk-newapi-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled":      true,
+					"upstream_balance_access_token": "user-access-token",
+					"upstream_balance_user_id":      "123",
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 991)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if gotAuth != "Bearer user-access-token" {
+		t.Fatalf("expected New API access token auth, got %q", gotAuth)
+	}
+	if gotUser != "123" {
+		t.Fatalf("expected New-Api-User header, got %q", gotUser)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if !usage.UpstreamBalance.Success {
+		t.Fatalf("expected upstream balance success, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Path != "/api/user/self" {
+		t.Fatalf("expected /api/user/self probe to win, got %q", usage.UpstreamBalance.Path)
+	}
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 1 {
+		t.Fatalf("expected parsed user quota balance $1.00, got %#v", usage.UpstreamBalance.Balance)
+	}
+	if usage.UpstreamBalance.Currency != "USD" {
+		t.Fatalf("expected USD currency, got %q", usage.UpstreamBalance.Currency)
+	}
+}
+
+func TestAccountUsageService_GetUsage_DoesNotTreatSub2APIKeyQuotaAsWalletBalance(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/usage" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"isValid": true,
+			"mode":    "quota_limited",
+			"quota": map[string]any{
+				"limit":     10,
+				"remaining": 7,
+				"unit":      "USD",
+				"used":      3,
+			},
+			"remaining": 7,
+			"unit":      "USD",
+		})
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       992,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL,
+					"api_key":  "sk-sub2api-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled": true,
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 992)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if usage.UpstreamBalance.Success {
+		t.Fatalf("key quota must not be reported as wallet balance: %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Balance != nil {
+		t.Fatalf("expected no wallet balance from quota_limited key quota, got %#v", usage.UpstreamBalance.Balance)
+	}
+}
