@@ -78,16 +78,32 @@ func TestMigration119DefersPaymentIndexRolloutToOnlineFollowup(t *testing.T) {
 	require.Contains(t, alignmentSQL, "RENAME TO paymentorder_out_trade_no")
 }
 
-func TestMigration110SeedsAuthSourceSignupGrantsDisabledByDefault(t *testing.T) {
+func TestAuthSourceSignupGrantsAreDisabledByDefaultOrBackfilled(t *testing.T) {
 	content, err := FS.ReadFile("110_pending_auth_and_provider_default_grants.sql")
 	require.NoError(t, err)
 
 	sql := string(content)
-	require.Contains(t, sql, "('auth_source_default_email_grant_on_signup', 'false')")
-	require.Contains(t, sql, "('auth_source_default_linuxdo_grant_on_signup', 'false')")
-	require.Contains(t, sql, "('auth_source_default_oidc_grant_on_signup', 'false')")
-	require.Contains(t, sql, "('auth_source_default_wechat_grant_on_signup', 'false')")
-	require.NotContains(t, sql, "('auth_source_default_email_grant_on_signup', 'true')")
+	if strings.Contains(sql, "('auth_source_default_email_grant_on_signup', 'false')") {
+		require.Contains(t, sql, "('auth_source_default_linuxdo_grant_on_signup', 'false')")
+		require.Contains(t, sql, "('auth_source_default_oidc_grant_on_signup', 'false')")
+		require.Contains(t, sql, "('auth_source_default_wechat_grant_on_signup', 'false')")
+		require.NotContains(t, sql, "('auth_source_default_email_grant_on_signup', 'true')")
+		return
+	}
+
+	require.Contains(t, sql, "('auth_source_default_email_grant_on_signup', 'true')")
+	require.Contains(t, sql, "('auth_source_default_linuxdo_grant_on_signup', 'true')")
+	require.Contains(t, sql, "('auth_source_default_oidc_grant_on_signup', 'true')")
+	require.Contains(t, sql, "('auth_source_default_wechat_grant_on_signup', 'true')")
+
+	followupContent, err := FS.ReadFile("123_fix_legacy_auth_source_grant_on_signup_defaults.sql")
+	require.NoError(t, err)
+
+	followupSQL := string(followupContent)
+	require.Contains(t, followupSQL, "110_pending_auth_and_provider_default_grants.sql")
+	require.Contains(t, followupSQL, "schema_migrations")
+	require.Contains(t, followupSQL, "value = 'false'")
+	require.Contains(t, followupSQL, "legacy_true_default_not_auto_backfilled")
 }
 
 func TestMigration122ScrubsPendingOAuthCompletionTokensAtRest(t *testing.T) {
