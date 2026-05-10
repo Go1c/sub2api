@@ -1019,6 +1019,17 @@ export interface AccountUsageInfo {
     amount?: number
     minimum_balance?: number
   }> | null
+  upstream_balance?: {
+    enabled?: boolean
+    checked_at?: string
+    success?: boolean
+    status_code?: number
+    path?: string
+    balance?: number
+    currency?: string
+    message?: string
+    raw?: string
+  } | null
   // Antigravity 403 forbidden 状态
   is_forbidden?: boolean
   forbidden_reason?: string

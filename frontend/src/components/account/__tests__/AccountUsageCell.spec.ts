@@ -617,6 +617,52 @@ describe('AccountUsageCell', () => {
 		expect(wrapper.text().trim()).toBe('-')
   })
 
+  it('开启上游余额的 Key 账号会在用量窗口内展示请求结果', async () => {
+		getUsage.mockResolvedValue({
+		  upstream_balance: {
+		    enabled: true,
+		    success: true,
+		    status_code: 200,
+		    balance: 18.75,
+		    raw: '{"total_available":18.75}'
+		  }
+		})
+
+		const wrapper = mount(AccountUsageCell, {
+		  props: {
+		    account: makeAccount({
+		      id: 3004,
+		      platform: 'anthropic',
+		      type: 'apikey',
+		      credentials: {
+		        base_url: 'https://upstream.example.com',
+		        api_key: 'sk-ant-test'
+		      },
+		      extra: {
+		        upstream_balance_enabled: true
+		      },
+		      quota_limit: 0,
+		      quota_daily_limit: 0,
+		      quota_weekly_limit: 0
+		    }),
+		    todayStats: null,
+		    todayStatsLoading: false
+		  },
+		  global: {
+		    stubs: {
+		      UsageProgressBar: true,
+		      AccountQuotaInfo: true
+		    }
+		  }
+		})
+
+		await flushPromises()
+
+		expect(getUsage).toHaveBeenCalledWith(3004)
+		expect(wrapper.text()).toContain('admin.accounts.upstreamBalance.label')
+		expect(wrapper.text()).toContain('$18.75')
+  })
+
   it('Vertex 账号会在 Gemini 用量窗口里展示 today stats 徽章', async () => {
 		const wrapper = mount(AccountUsageCell, {
 		  props: {

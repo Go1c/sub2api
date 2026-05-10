@@ -441,6 +441,27 @@
         <div class="h-3 w-12 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
       </div>
 
+      <!-- Optional upstream balance probe result -->
+      <div
+        v-if="upstreamBalanceDisplay"
+        class="flex max-w-[220px] items-center gap-1.5 text-[10px]"
+        :title="upstreamBalanceTitle"
+      >
+        <span class="text-gray-500 dark:text-gray-400">
+          {{ t('admin.accounts.upstreamBalance.label') }}
+        </span>
+        <span :class="upstreamBalanceClass">
+          {{ upstreamBalanceDisplay }}
+        </span>
+      </div>
+      <div
+        v-else-if="upstreamBalanceLoading"
+        class="mb-0.5 flex items-center gap-1"
+      >
+        <div class="h-3 w-12 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+        <div class="h-3 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+      </div>
+
       <!-- API Key accounts with quota limits: show progress bars -->
       <UsageProgressBar
         v-if="quotaDailyBar"
@@ -464,7 +485,7 @@
       />
 
       <!-- No data at all -->
-      <div v-if="!todayStats && !todayStatsLoading && !hasApiKeyQuota" class="text-xs text-gray-400">-</div>
+      <div v-if="!todayStats && !todayStatsLoading && !hasApiKeyQuota && !upstreamBalanceEnabled" class="text-xs text-gray-400">-</div>
     </div>
   </div>
 </template>
@@ -527,7 +548,10 @@ const showUsageWindows = computed(() => {
   return props.account.type === 'oauth' || props.account.type === 'setup-token'
 })
 
+const upstreamBalanceEnabled = computed(() => props.account.extra?.upstream_balance_enabled === true)
+
 const shouldFetchUsage = computed(() => {
+  if (upstreamBalanceEnabled.value) return true
   if (props.account.platform === 'anthropic') {
     return props.account.type === 'oauth' || props.account.type === 'setup-token'
   }
@@ -561,6 +585,62 @@ const geminiUsageAvailable = computed(() => {
 const hasOpenAIUsageFallback = computed(() => {
   if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return false
   return !!usageInfo.value?.five_hour || !!usageInfo.value?.seven_day
+})
+
+const upstreamBalanceResult = computed(() => usageInfo.value?.upstream_balance ?? null)
+
+const upstreamBalanceLoading = computed(() => {
+  return upstreamBalanceEnabled.value && loading.value && !upstreamBalanceResult.value
+})
+
+const formatUpstreamBalanceAmount = (balance: number, currency?: string) => {
+  const amount = Number.isFinite(balance) ? balance.toFixed(2) : String(balance)
+  const normalizedCurrency = (currency || '').trim().toUpperCase()
+  if (!normalizedCurrency || normalizedCurrency === 'USD') return `$${amount}`
+  return `${normalizedCurrency} ${amount}`
+}
+
+const compactUpstreamBalanceText = (value?: string | null) => {
+  if (!value) return ''
+  const compact = value.replace(/\s+/g, ' ').trim()
+  return compact.length > 80 ? `${compact.slice(0, 80)}...` : compact
+}
+
+const upstreamBalanceDisplay = computed(() => {
+  const result = upstreamBalanceResult.value
+  if (!result) return ''
+  if (result.success) {
+    if (typeof result.balance === 'number') {
+      return formatUpstreamBalanceAmount(result.balance, result.currency)
+    }
+    return compactUpstreamBalanceText(result.raw || result.message) || t('admin.accounts.upstreamBalance.success')
+  }
+  if (result.status_code) {
+    return `${result.status_code} ${compactUpstreamBalanceText(result.message || result.raw)}`
+  }
+  return compactUpstreamBalanceText(result.message || result.raw) || t('admin.accounts.upstreamBalance.failed')
+})
+
+const upstreamBalanceTitle = computed(() => {
+  const result = upstreamBalanceResult.value
+  if (!result) return ''
+  const parts = [
+    result.path,
+    result.status_code ? String(result.status_code) : '',
+    result.message,
+    result.raw
+  ].filter(Boolean)
+  return parts.join(' | ')
+})
+
+const upstreamBalanceClass = computed(() => {
+  const result = upstreamBalanceResult.value
+  return [
+    'truncate rounded px-1.5 py-0.5 font-medium',
+    result?.success
+      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+      : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+  ]
 })
 
 const openAIUsageRefreshKey = computed(() => buildOpenAIUsageRefreshKey(props.account))
