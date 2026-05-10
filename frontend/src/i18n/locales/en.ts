@@ -2957,7 +2957,11 @@ export default {
       },
       upstreamBalance: {
         label: 'Upstream Balance',
-        hint: 'When enabled, the usage window requests and displays the upstream balance result.',
+        hint: 'When enabled, the usage window requests and displays the upstream user account balance.',
+        newApiAccessToken: 'New API User Access Token',
+        newApiAccessTokenHint: 'Optional. Required for New API user balance; leave empty to keep the existing token.',
+        newApiUserId: 'New API User ID',
+        newApiUserIdHint: 'Optional. Required with the New API user access token.',
         success: 'Request succeeded',
         failed: 'Request failed'
       },

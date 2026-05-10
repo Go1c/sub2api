@@ -2995,7 +2995,11 @@ export default {
       },
       upstreamBalance: {
         label: '上游餘額',
-        hint: '開啟後在用量窗口中請求並展示上游餘額接口結果。',
+        hint: '開啟後在用量窗口中請求並展示上游用戶帳戶餘額。',
+        newApiAccessToken: 'New API 用戶 Access Token',
+        newApiAccessTokenHint: '可選。查詢 New API 用戶餘額需要填寫；留空則保留已保存的 token。',
+        newApiUserId: 'New API 用戶 ID',
+        newApiUserIdHint: '可選。需要和 New API 用戶 Access Token 一起使用。',
         success: '請求成功',
         failed: '請求失敗'
       },

@@ -541,14 +541,14 @@ let desktopViewportMediaQuery: MediaQueryList | null = null
 let desktopViewportListener: ((event: MediaQueryListEvent) => void) | null = null
 let visibilityObserver: IntersectionObserver | null = null
 
+const upstreamBalanceEnabled = computed(() => props.account.extra?.upstream_balance_enabled === true)
+
 // Show usage windows for OAuth and Setup Token accounts
 const showUsageWindows = computed(() => {
   // Gemini: we can always compute local usage windows from DB logs (simulated quotas).
   if (props.account.platform === 'gemini') return true
   return props.account.type === 'oauth' || props.account.type === 'setup-token'
 })
-
-const upstreamBalanceEnabled = computed(() => props.account.extra?.upstream_balance_enabled === true)
 
 const shouldFetchUsage = computed(() => {
   if (upstreamBalanceEnabled.value) return true
@@ -613,7 +613,7 @@ const upstreamBalanceDisplay = computed(() => {
     if (typeof result.balance === 'number') {
       return formatUpstreamBalanceAmount(result.balance, result.currency)
     }
-    return compactUpstreamBalanceText(result.raw || result.message) || t('admin.accounts.upstreamBalance.success')
+    return compactUpstreamBalanceText(result.message || result.raw) || t('admin.accounts.upstreamBalance.success')
   }
   if (result.status_code) {
     return `${result.status_code} ${compactUpstreamBalanceText(result.message || result.raw)}`

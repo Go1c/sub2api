@@ -115,13 +115,21 @@ const (
 	openAICodexProbeVersion = "0.125.0"
 	upstreamBalanceTimeout  = 10 * time.Second
 	upstreamBalanceBodyMax  = 4096
+	newAPIQuotaPerUnit      = 500000.0
+
+	newAPITokenQuotaNotUserBalanceMessage = "New API token quota is not user account balance; configure New API user access token and user id"
 )
 
 var upstreamBalancePaths = []string{
+	"/v1/usage",
+	"/api/v1/usage",
 	"/dashboard/billing/credit_grants",
 	"/v1/dashboard/billing/credit_grants",
 	"/api/v1/balance",
 	"/v1/balance",
+	"/usage",
+	"/api/usage/token/",
+	"/api/usage/token",
 }
 
 // UsageCache 封装账户使用量相关的缓存
@@ -477,6 +485,70 @@ func upstreamBalanceBaseURL(account *Account) string {
 	return ""
 }
 
+func upstreamBalanceBaseURLs(baseURL string) []string {
+	normalized := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if normalized == "" {
+		return nil
+	}
+	candidates := []string{normalized}
+	apiRoot := stripUpstreamBalanceAPISuffix(normalized)
+	if apiRoot != "" && apiRoot != normalized {
+		candidates = append(candidates, apiRoot)
+	}
+	return candidates
+}
+
+func stripUpstreamBalanceAPISuffix(baseURL string) string {
+	lower := strings.ToLower(baseURL)
+	for _, suffix := range []string{"/v1", "/v1beta"} {
+		if strings.HasSuffix(lower, suffix) {
+			return strings.TrimRight(baseURL[:len(baseURL)-len(suffix)], "/")
+		}
+	}
+	return baseURL
+}
+
+func upstreamBalanceProbePaths(account *Account) []string {
+	paths := make([]string, 0, len(upstreamBalancePaths)+1)
+	if hasNewAPIUserBalanceAuth(account) {
+		paths = append(paths, "/api/user/self")
+	}
+	paths = append(paths, upstreamBalancePaths...)
+	return paths
+}
+
+func hasNewAPIUserBalanceAuth(account *Account) bool {
+	return upstreamBalanceNewAPIAccessToken(account) != "" && upstreamBalanceNewAPIUserID(account) != ""
+}
+
+func upstreamBalanceNewAPIAccessToken(account *Account) string {
+	if account == nil || account.Extra == nil {
+		return ""
+	}
+	for _, key := range []string{"upstream_balance_access_token", "newapi_access_token"} {
+		if raw, ok := account.Extra[key]; ok {
+			if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" && value != "<nil>" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func upstreamBalanceNewAPIUserID(account *Account) string {
+	if account == nil || account.Extra == nil {
+		return ""
+	}
+	for _, key := range []string{"upstream_balance_user_id", "newapi_user_id"} {
+		if raw, ok := account.Extra[key]; ok {
+			if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" && value != "<nil>" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
 func (s *AccountUsageService) fetchUpstreamBalance(ctx context.Context, account *Account) *UpstreamBalanceResult {
 	checkedAt := time.Now()
 	result := &UpstreamBalanceResult{
@@ -484,25 +556,29 @@ func (s *AccountUsageService) fetchUpstreamBalance(ctx context.Context, account 
 		CheckedAt: &checkedAt,
 	}
 
-	baseURL := strings.TrimRight(upstreamBalanceBaseURL(account), "/")
+	baseURL := upstreamBalanceBaseURL(account)
 	apiKey := strings.TrimSpace(account.GetCredential("api_key"))
 	if baseURL == "" || apiKey == "" {
 		result.Message = "base_url or api_key is empty"
 		return result
 	}
+	baseURLs := upstreamBalanceBaseURLs(baseURL)
 
 	reqCtx, cancel := context.WithTimeout(ctx, upstreamBalanceTimeout)
 	defer cancel()
 
 	var lastResult *UpstreamBalanceResult
-	for _, path := range upstreamBalancePaths {
-		current := s.fetchUpstreamBalancePath(reqCtx, account, baseURL, path, apiKey, checkedAt)
-		lastResult = current
-		if current.Success {
-			return current
-		}
-		if current.StatusCode != http.StatusNotFound {
-			return current
+	paths := upstreamBalanceProbePaths(account)
+	for _, candidateBaseURL := range baseURLs {
+		for _, path := range paths {
+			current := s.fetchUpstreamBalancePath(reqCtx, account, candidateBaseURL, path, apiKey, checkedAt)
+			lastResult = current
+			if current.Success {
+				return current
+			}
+			if !shouldTryNextUpstreamBalanceProbe(current) {
+				return current
+			}
 		}
 	}
 	if lastResult != nil {
@@ -510,6 +586,22 @@ func (s *AccountUsageService) fetchUpstreamBalance(ctx context.Context, account 
 	}
 	result.Message = "request failed"
 	return result
+}
+
+func shouldTryNextUpstreamBalanceProbe(result *UpstreamBalanceResult) bool {
+	if result == nil || result.Success {
+		return false
+	}
+	if result.StatusCode == http.StatusNotFound {
+		return true
+	}
+	if result.Message == newAPITokenQuotaNotUserBalanceMessage {
+		return false
+	}
+	if result.StatusCode >= 200 && result.StatusCode < 300 && result.Balance == nil {
+		return true
+	}
+	return false
 }
 
 func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, account *Account, baseURL, path, apiKey string, checkedAt time.Time) *UpstreamBalanceResult {
@@ -525,8 +617,7 @@ func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, acco
 		return result
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("x-api-key", apiKey)
+	applyUpstreamBalanceAuthHeaders(req, account, path, apiKey)
 	if account != nil && account.Platform == PlatformAnthropic {
 		req.Header.Set("anthropic-version", "2023-06-01")
 	}
@@ -547,12 +638,31 @@ func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, acco
 		return result
 	}
 
-	result.Success = true
 	result.Balance, result.Currency = parseUpstreamBalance(body)
+	if result.Balance == nil && isNewAPITokenUsagePayload(body) {
+		result.Message = newAPITokenQuotaNotUserBalanceMessage
+		return result
+	}
 	if result.Balance == nil && result.Raw != "" {
 		result.Message = "unparsed response"
+		return result
 	}
+	result.Success = true
 	return result
+}
+
+func applyUpstreamBalanceAuthHeaders(req *http.Request, account *Account, path, apiKey string) {
+	if path == "/api/user/self" {
+		if token := upstreamBalanceNewAPIAccessToken(account); token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		if userID := upstreamBalanceNewAPIUserID(account); userID != "" {
+			req.Header.Set("New-Api-User", userID)
+		}
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("x-api-key", apiKey)
 }
 
 func compactUpstreamBalanceRaw(body []byte) string {
@@ -571,19 +681,112 @@ func parseUpstreamBalance(body []byte) (*float64, string) {
 	if err := decoder.Decode(&payload); err != nil {
 		return nil, ""
 	}
-	currency := findStringValue(payload, []string{"currency", "unit"}, 0)
-	return findNumericValue(payload, []string{
+	if isNewAPITokenUsageValue(payload) {
+		return nil, ""
+	}
+	if balance, currency, ok := parseNewAPIUserBalance(payload); ok {
+		return balance, currency
+	}
+	if balance := findNumericValue(payload, []string{
+		"wallet_balance",
+		"account_balance",
+		"balance",
+	}, 0); balance != nil {
+		currency := findStringValue(payload, []string{"currency", "unit"}, 0)
+		return balance, currency
+	}
+	if balance, currency, ok := parseGenericUpstreamCreditBalance(payload); ok {
+		return balance, currency
+	}
+	return nil, ""
+}
+
+func isNewAPITokenUsagePayload(body []byte) bool {
+	var payload any
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return false
+	}
+	return isNewAPITokenUsageValue(payload)
+}
+
+func isNewAPITokenUsageValue(value any) bool {
+	data, ok := asStringMap(value)
+	if !ok {
+		return false
+	}
+	if nested, ok := asStringMap(data["data"]); ok {
+		data = nested
+	}
+	return looksLikeNewAPITokenUsage(data)
+}
+
+func parseNewAPIUserBalance(value any) (*float64, string, bool) {
+	payload, ok := asStringMap(value)
+	if !ok {
+		return nil, "", false
+	}
+	data := payload
+	if nested, ok := asStringMap(payload["data"]); ok {
+		data = nested
+	}
+	if looksLikeNewAPITokenUsage(data) {
+		return nil, "", false
+	}
+	quota, hasQuota := numericFromAny(data["quota"])
+	usedQuota, hasUsedQuota := numericFromAny(data["used_quota"])
+	if !hasQuota || !hasUsedQuota {
+		return nil, "", false
+	}
+	balance := (quota - usedQuota) / newAPIQuotaPerUnit
+	return &balance, "USD", true
+}
+
+func parseGenericUpstreamCreditBalance(value any) (*float64, string, bool) {
+	currency := findStringValue(value, []string{"currency", "unit"}, 0)
+	balance := findNumericValue(value, []string{
+		"total_usd_available",
+		"user_usd_available",
+		"usd_available",
 		"total_available",
 		"available_balance",
 		"available",
-		"balance",
 		"remaining_balance",
-		"remaining",
 		"credit",
 		"credits",
 		"amount",
-		"quota",
-	}, 0), currency
+	}, 0)
+	if balance == nil {
+		return nil, "", false
+	}
+	return balance, currency, true
+}
+
+func asStringMap(value any) (map[string]any, bool) {
+	m, ok := value.(map[string]any)
+	return m, ok
+}
+
+func looksLikeNewAPITokenUsage(data map[string]any) bool {
+	if data == nil {
+		return false
+	}
+	if object, _ := data["object"].(string); object == "token_usage" {
+		return true
+	}
+	if _, ok := data["unlimited_quota"]; ok {
+		if _, hasTotalUsed := data["total_used"]; hasTotalUsed {
+			return true
+		}
+		if _, hasUsedQuota := data["used_quota"]; hasUsedQuota {
+			return true
+		}
+		if _, hasAvailable := data["total_available"]; hasAvailable {
+			return true
+		}
+	}
+	return false
 }
 
 func findNumericValue(value any, keys []string, depth int) *float64 {
