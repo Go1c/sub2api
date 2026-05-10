@@ -11,6 +11,7 @@ const {
   setTokenMock,
   copyToClipboardMock,
   exchangePendingOAuthCompletionMock,
+  getPublicSettingsMock,
   apiPostMock,
 } = vi.hoisted(() => ({
   routeState: {
@@ -29,6 +30,7 @@ const {
   setTokenMock: vi.fn(),
   copyToClipboardMock: vi.fn(),
   exchangePendingOAuthCompletionMock: vi.fn(),
+  getPublicSettingsMock: vi.fn(),
   apiPostMock: vi.fn(),
 }))
 
@@ -66,6 +68,7 @@ vi.mock('@/api/auth', async () => {
   return {
     ...actual,
     exchangePendingOAuthCompletion: (...args: any[]) => exchangePendingOAuthCompletionMock(...args),
+    getPublicSettings: (...args: any[]) => getPublicSettingsMock(...args),
     persistOAuthTokenContext: vi.fn(),
   }
 })
@@ -94,6 +97,10 @@ describe('OAuthCallbackView', () => {
     setTokenMock.mockReset()
     copyToClipboardMock.mockReset()
     exchangePendingOAuthCompletionMock.mockReset()
+    getPublicSettingsMock.mockReset()
+    getPublicSettingsMock.mockResolvedValue({
+      invitation_registration_mode: 'redeem_code'
+    })
     apiPostMock.mockReset()
     window.sessionStorage.clear()
   })
@@ -177,15 +184,41 @@ describe('OAuthCallbackView', () => {
     await passwordInputs[0].setValue('secret-123')
     await passwordInputs[1].setValue('secret-123')
     const invitationInput = wrapper.find('input[type="text"]')
+    expect((invitationInput.element as HTMLInputElement).value).toBe('')
     await invitationInput.setValue('INVITE456')
     await wrapper.findAll('button').at(0)?.trigger('click')
 
-    expect(apiPostMock).toHaveBeenCalledWith('/auth/oauth/google/complete-registration', {
-      password: 'secret-123',
-      invitation_code: 'INVITE456',
-      aff_code: 'AFF456',
-    })
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/auth/oauth/google/complete-registration',
+      expect.objectContaining({
+        password: 'secret-123',
+        invitation_code: 'INVITE456',
+        aff_code: 'AFF456',
+        aff_fingerprint: expect.any(String),
+      })
+    )
     expect(setTokenMock).toHaveBeenCalledWith('token-1')
+  })
+
+  it('autofills invited email oauth registration from affiliate code when mode allows invite links', async () => {
+    routeState.path = '/auth/oauth/callback'
+    getPublicSettingsMock.mockResolvedValue({
+      invitation_registration_mode: 'affiliate_link'
+    })
+    exchangePendingOAuthCompletionMock.mockResolvedValue({
+      error: 'invitation_required',
+      provider: 'google',
+      redirect: '/dashboard',
+      resolved_email: 'pending@example.com',
+      invitation_required: true,
+    })
+    window.sessionStorage.setItem('oauth_aff_code', 'AFF456')
+
+    const wrapper = mount(OAuthCallbackView)
+    await vi.dynamicImportSettled()
+
+    const invitationInput = wrapper.find('input[type="text"]')
+    expect((invitationInput.element as HTMLInputElement).value).toBe('AFF456')
   })
 
   it('completes email oauth registration with readonly email and without posting email', async () => {

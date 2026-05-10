@@ -160,3 +160,17 @@ func TestSettingService_ParseSettings_FallsBackToConfigForWeChatAdminView(t *tes
 	require.Equal(t, "open", got.WeChatConnectMode)
 	require.Equal(t, "snsapi_login", got.WeChatConnectScopes)
 }
+
+func TestSettingService_ParseSettings_PreservesInvitationRegistrationMode(t *testing.T) {
+	svc := NewSettingService(&settingWeChatRepoStub{values: map[string]string{}}, &config.Config{})
+
+	got := svc.parseSettings(map[string]string{
+		SettingKeyInvitationRegistrationMode: InvitationRegistrationModeBoth,
+	})
+	require.Equal(t, InvitationRegistrationModeBoth, got.InvitationRegistrationMode)
+
+	got = svc.parseSettings(map[string]string{
+		SettingKeyInvitationRegistrationMode: "unknown",
+	})
+	require.Equal(t, InvitationRegistrationModeDefault, got.InvitationRegistrationMode)
+}

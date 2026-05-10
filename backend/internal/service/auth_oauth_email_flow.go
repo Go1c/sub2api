@@ -54,27 +54,8 @@ func (s *AuthService) SendPendingOAuthVerifyCode(ctx context.Context, email stri
 	}, nil
 }
 
-func (s *AuthService) validateOAuthRegistrationInvitation(ctx context.Context, invitationCode string) (*RedeemCode, error) {
-	if s == nil || s.settingService == nil || !s.settingService.IsInvitationCodeEnabled(ctx) {
-		return nil, nil
-	}
-	if s.redeemRepo == nil && s.oauthEmailFlowClient(ctx) == nil {
-		return nil, ErrServiceUnavailable
-	}
-
-	invitationCode = strings.TrimSpace(invitationCode)
-	if invitationCode == "" {
-		return nil, ErrInvitationCodeRequired
-	}
-
-	redeemCode, err := s.loadOAuthRegistrationInvitation(ctx, invitationCode)
-	if err != nil {
-		return nil, ErrInvitationCodeInvalid
-	}
-	if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUnused {
-		return nil, ErrInvitationCodeInvalid
-	}
-	return redeemCode, nil
+func (s *AuthService) validateOAuthRegistrationInvitation(ctx context.Context, invitationCode, affiliateCode string) (*registrationInvitationResult, error) {
+	return s.validateRegistrationInvitation(ctx, invitationCode, affiliateCode, ErrInvitationCodeRequired)
 }
 
 // VerifyOAuthEmailCode verifies the locally entered email verification code for
@@ -104,6 +85,7 @@ func (s *AuthService) RegisterOAuthEmailAccount(
 	password string,
 	verifyCode string,
 	invitationCode string,
+	affiliateCode string,
 	signupSource string,
 ) (*TokenPair, *User, error) {
 	if s == nil {
@@ -124,7 +106,7 @@ func (s *AuthService) RegisterOAuthEmailAccount(
 		return nil, nil, err
 	}
 
-	if _, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode); err != nil {
+	if _, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode, affiliateCode); err != nil {
 		return nil, nil, err
 	}
 
@@ -176,6 +158,7 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 	email string,
 	password string,
 	invitationCode string,
+	affiliateCode string,
 	signupSource string,
 ) (*TokenPair, *User, error) {
 	if s == nil {
@@ -201,7 +184,7 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 	if strings.TrimSpace(password) == "" {
 		return nil, nil, infraerrors.BadRequest("PASSWORD_REQUIRED", "password is required")
 	}
-	if _, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode); err != nil {
+	if _, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode, affiliateCode); err != nil {
 		return nil, nil, err
 	}
 
@@ -264,9 +247,16 @@ func (s *AuthService) FinalizeOAuthEmailAccount(
 	}
 
 	signupSource = normalizeOAuthSignupSource(signupSource)
-	invitationRedeemCode, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode)
+	invitationResult, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode, affiliateCode)
 	if err != nil {
 		return err
+	}
+	var invitationRedeemCode *RedeemCode
+	if invitationResult != nil {
+		invitationRedeemCode = invitationResult.redeemCode
+		if invitationResult.affiliateCode != "" {
+			affiliateCode = invitationResult.affiliateCode
+		}
 	}
 	if invitationRedeemCode != nil {
 		if err := s.useOAuthRegistrationInvitation(ctx, invitationRedeemCode.ID, user.ID); err != nil {

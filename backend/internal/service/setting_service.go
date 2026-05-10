@@ -647,6 +647,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyPromoCodeEnabled,
 		SettingKeyPasswordResetEnabled,
 		SettingKeyInvitationCodeEnabled,
+		SettingKeyInvitationRegistrationMode,
 		SettingKeyTotpEnabled,
 		SettingKeyLoginAgreementEnabled,
 		SettingKeyLoginAgreementMode,
@@ -772,6 +773,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		PromoCodeEnabled:                      settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:                  passwordResetEnabled,
 		InvitationCodeEnabled:                 settings[SettingKeyInvitationCodeEnabled] == "true",
+		InvitationRegistrationMode:            normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
 		TotpEnabled:                           settings[SettingKeyTotpEnabled] == "true",
 		LoginAgreementEnabled:                 settings[SettingKeyLoginAgreementEnabled] == "true" && len(loginAgreementDocuments) > 0,
 		LoginAgreementMode:                    normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
@@ -960,6 +962,7 @@ type PublicSettingsInjectionPayload struct {
 	PromoCodeEnabled                      bool                     `json:"promo_code_enabled"`
 	PasswordResetEnabled                  bool                     `json:"password_reset_enabled"`
 	InvitationCodeEnabled                 bool                     `json:"invitation_code_enabled"`
+	InvitationRegistrationMode            string                   `json:"invitation_registration_mode"`
 	TotpEnabled                           bool                     `json:"totp_enabled"`
 	LoginAgreementEnabled                 bool                     `json:"login_agreement_enabled"`
 	LoginAgreementMode                    string                   `json:"login_agreement_mode"`
@@ -1033,6 +1036,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		PromoCodeEnabled:                      settings.PromoCodeEnabled,
 		PasswordResetEnabled:                  settings.PasswordResetEnabled,
 		InvitationCodeEnabled:                 settings.InvitationCodeEnabled,
+		InvitationRegistrationMode:            settings.InvitationRegistrationMode,
 		TotpEnabled:                           settings.TotpEnabled,
 		LoginAgreementEnabled:                 settings.LoginAgreementEnabled,
 		LoginAgreementMode:                    settings.LoginAgreementMode,
@@ -1575,6 +1579,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyFrontendURL] = settings.FrontendURL
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
+	updates[SettingKeyInvitationRegistrationMode] = normalizeInvitationRegistrationMode(settings.InvitationRegistrationMode)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 	settings.LoginAgreementMode = normalizeLoginAgreementMode(settings.LoginAgreementMode)
 	settings.LoginAgreementUpdatedAt = strings.TrimSpace(settings.LoginAgreementUpdatedAt)
@@ -2190,6 +2195,35 @@ func (s *SettingService) IsInvitationCodeEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+func normalizeInvitationRegistrationMode(value string) string {
+	switch strings.TrimSpace(value) {
+	case InvitationRegistrationModeAffiliateLink:
+		return InvitationRegistrationModeAffiliateLink
+	case InvitationRegistrationModeBoth:
+		return InvitationRegistrationModeBoth
+	default:
+		return InvitationRegistrationModeDefault
+	}
+}
+
+func invitationRegistrationModeAllowsRedeemCode(mode string) bool {
+	mode = normalizeInvitationRegistrationMode(mode)
+	return mode == InvitationRegistrationModeRedeemCode || mode == InvitationRegistrationModeBoth
+}
+
+func invitationRegistrationModeAllowsAffiliateLink(mode string) bool {
+	mode = normalizeInvitationRegistrationMode(mode)
+	return mode == InvitationRegistrationModeAffiliateLink || mode == InvitationRegistrationModeBoth
+}
+
+func (s *SettingService) GetInvitationRegistrationMode(ctx context.Context) string {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyInvitationRegistrationMode)
+	if err != nil {
+		return InvitationRegistrationModeDefault
+	}
+	return normalizeInvitationRegistrationMode(value)
+}
+
 // GetCustomMenuItemsRaw returns the raw JSON string of custom_menu_items setting.
 func (s *SettingService) GetCustomMenuItemsRaw(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyCustomMenuItems)
@@ -2778,6 +2812,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		PasswordResetEnabled:                  emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		FrontendURL:                           settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:                 settings[SettingKeyInvitationCodeEnabled] == "true",
+		InvitationRegistrationMode:            normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
 		TotpEnabled:                           settings[SettingKeyTotpEnabled] == "true",
 		LoginAgreementEnabled:                 settings[SettingKeyLoginAgreementEnabled] == "true",
 		LoginAgreementMode:                    normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),

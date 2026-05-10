@@ -124,6 +124,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PasswordResetEnabled:                   settings.PasswordResetEnabled,
 		FrontendURL:                            settings.FrontendURL,
 		InvitationCodeEnabled:                  settings.InvitationCodeEnabled,
+		InvitationRegistrationMode:             settings.InvitationRegistrationMode,
 		TotpEnabled:                            settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:            h.settingService.IsTotpEncryptionKeyConfigured(),
 		LoginAgreementEnabled:                  settings.LoginAgreementEnabled,
@@ -376,6 +377,7 @@ type UpdateSettingsRequest struct {
 	PasswordResetEnabled             bool                         `json:"password_reset_enabled"`
 	FrontendURL                      string                       `json:"frontend_url"`
 	InvitationCodeEnabled            bool                         `json:"invitation_code_enabled"`
+	InvitationRegistrationMode       string                       `json:"invitation_registration_mode"`
 	TotpEnabled                      bool                         `json:"totp_enabled"` // TOTP 双因素认证
 	LoginAgreementEnabled            bool                         `json:"login_agreement_enabled"`
 	LoginAgreementMode               string                       `json:"login_agreement_mode"`
@@ -1493,6 +1495,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasswordResetEnabled:                  req.PasswordResetEnabled,
 		FrontendURL:                           req.FrontendURL,
 		InvitationCodeEnabled:                 req.InvitationCodeEnabled,
+		InvitationRegistrationMode:            req.InvitationRegistrationMode,
 		TotpEnabled:                           req.TotpEnabled,
 		LoginAgreementEnabled:                 req.LoginAgreementEnabled,
 		LoginAgreementMode:                    loginAgreementMode,
@@ -1907,6 +1910,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasswordResetEnabled:                   updatedSettings.PasswordResetEnabled,
 		FrontendURL:                            updatedSettings.FrontendURL,
 		InvitationCodeEnabled:                  updatedSettings.InvitationCodeEnabled,
+		InvitationRegistrationMode:             updatedSettings.InvitationRegistrationMode,
 		TotpEnabled:                            updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:            h.settingService.IsTotpEncryptionKeyConfigured(),
 		LoginAgreementEnabled:                  updatedSettings.LoginAgreementEnabled,
@@ -2133,6 +2137,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.InvitationCodeEnabled != after.InvitationCodeEnabled {
 		changed = append(changed, "invitation_code_enabled")
+	}
+	if before.InvitationRegistrationMode != after.InvitationRegistrationMode {
+		changed = append(changed, "invitation_registration_mode")
 	}
 	if before.PasswordResetEnabled != after.PasswordResetEnabled {
 		changed = append(changed, "password_reset_enabled")
