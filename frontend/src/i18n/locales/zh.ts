@@ -2993,6 +2993,12 @@ export default {
         expiresAt: '过期时间',
         actions: '操作'
       },
+      upstreamBalance: {
+        label: '上游余额',
+        hint: '开启后在用量窗口中请求并展示上游余额接口结果。',
+        success: '请求成功',
+        failed: '请求失败'
+      },
       allPrivacyModes: '全部Privacy状态',
       privacyUnset: '未设置',
       privacyTrainingOff: '已关闭训练数据共享',

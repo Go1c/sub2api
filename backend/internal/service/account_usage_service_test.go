@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -206,4 +208,57 @@ func TestBuildCodexUsageProgressFromExtra_ZerosExpiredWindow(t *testing.T) {
 			t.Fatalf("expected Utilization=0 for expired 7d window, got %v", progress.Utilization)
 		}
 	})
+}
+
+func TestAccountUsageService_GetUsage_AttachesUpstreamBalanceForEnabledAPIKey(t *testing.T) {
+	t.Parallel()
+
+	var gotAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/dashboard/billing/credit_grants" {
+			http.NotFound(w, r)
+			return
+		}
+		gotAuth = r.Header.Get("x-api-key")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"total_available": 12.34,
+		})
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       987,
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL,
+					"api_key":  "sk-ant-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled": true,
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 987)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if gotAuth != "sk-ant-test" {
+		t.Fatalf("expected x-api-key header, got %q", gotAuth)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if !usage.UpstreamBalance.Success {
+		t.Fatalf("expected upstream balance success, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 12.34 {
+		t.Fatalf("expected parsed balance 12.34, got %#v", usage.UpstreamBalance.Balance)
+	}
 }

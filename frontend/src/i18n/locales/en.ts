@@ -2955,6 +2955,12 @@ export default {
         expiresAt: 'Expires At',
         actions: 'Actions'
       },
+      upstreamBalance: {
+        label: 'Upstream Balance',
+        hint: 'When enabled, the usage window requests and displays the upstream balance result.',
+        success: 'Request succeeded',
+        failed: 'Request failed'
+      },
       allPrivacyModes: 'All Privacy States',
       privacyUnset: 'Unset',
       privacyTrainingOff: 'Training data sharing disabled',

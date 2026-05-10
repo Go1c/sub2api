@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -111,7 +113,16 @@ const (
 	windowStatsCacheTTL     = 1 * time.Minute
 	openAIProbeCacheTTL     = 10 * time.Minute
 	openAICodexProbeVersion = "0.125.0"
+	upstreamBalanceTimeout  = 10 * time.Second
+	upstreamBalanceBodyMax  = 4096
 )
+
+var upstreamBalancePaths = []string{
+	"/dashboard/billing/credit_grants",
+	"/v1/dashboard/billing/credit_grants",
+	"/api/v1/balance",
+	"/v1/balance",
+}
 
 // UsageCache 封装账户使用量相关的缓存
 type UsageCache struct {
@@ -176,6 +187,19 @@ type AICredit struct {
 	MinimumBalance float64 `json:"minimum_balance,omitempty"`
 }
 
+// UpstreamBalanceResult records a lightweight upstream balance probe result.
+type UpstreamBalanceResult struct {
+	Enabled    bool       `json:"enabled"`
+	CheckedAt  *time.Time `json:"checked_at,omitempty"`
+	Success    bool       `json:"success"`
+	StatusCode int        `json:"status_code,omitempty"`
+	Path       string     `json:"path,omitempty"`
+	Balance    *float64   `json:"balance,omitempty"`
+	Currency   string     `json:"currency,omitempty"`
+	Message    string     `json:"message,omitempty"`
+	Raw        string     `json:"raw,omitempty"`
+}
+
 // UsageInfo 账号使用量信息
 type UsageInfo struct {
 	Source             string         `json:"source,omitempty"`               // "passive" or "active"
@@ -202,6 +226,9 @@ type UsageInfo struct {
 
 	// Antigravity AI Credits 余额
 	AICredits []AICredit `json:"ai_credits,omitempty"`
+
+	// 自定义上游余额请求结果（Base URL + API Key 账号可选）
+	UpstreamBalance *UpstreamBalanceResult `json:"upstream_balance,omitempty"`
 
 	// Antigravity 废弃模型转发规则 (old_model_id -> new_model_id)
 	ModelForwardingRules map[string]string `json:"model_forwarding_rules,omitempty"`
@@ -414,7 +441,223 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64) (*U
 	}
 
 	// API Key账号不支持usage查询
+	if isUpstreamBalanceEnabled(account) {
+		now := time.Now()
+		usage := &UsageInfo{UpdatedAt: &now}
+		usage.UpstreamBalance = s.fetchUpstreamBalance(ctx, account)
+		return usage, nil
+	}
+
+	// API Key账号不支持usage查询
 	return nil, fmt.Errorf("account type %s does not support usage query", account.Type)
+}
+
+func isUpstreamBalanceEnabled(account *Account) bool {
+	if account == nil || account.Extra == nil {
+		return false
+	}
+	enabled, _ := account.Extra["upstream_balance_enabled"].(bool)
+	if !enabled {
+		return false
+	}
+	return account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream
+}
+
+func upstreamBalanceBaseURL(account *Account) string {
+	if account == nil {
+		return ""
+	}
+	baseURL := strings.TrimSpace(account.GetCredential("base_url"))
+	if baseURL != "" {
+		return baseURL
+	}
+	if account.Type == AccountTypeAPIKey {
+		return account.GetBaseURL()
+	}
+	return ""
+}
+
+func (s *AccountUsageService) fetchUpstreamBalance(ctx context.Context, account *Account) *UpstreamBalanceResult {
+	checkedAt := time.Now()
+	result := &UpstreamBalanceResult{
+		Enabled:   true,
+		CheckedAt: &checkedAt,
+	}
+
+	baseURL := strings.TrimRight(upstreamBalanceBaseURL(account), "/")
+	apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+	if baseURL == "" || apiKey == "" {
+		result.Message = "base_url or api_key is empty"
+		return result
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, upstreamBalanceTimeout)
+	defer cancel()
+
+	var lastResult *UpstreamBalanceResult
+	for _, path := range upstreamBalancePaths {
+		current := s.fetchUpstreamBalancePath(reqCtx, account, baseURL, path, apiKey, checkedAt)
+		lastResult = current
+		if current.Success {
+			return current
+		}
+		if current.StatusCode != http.StatusNotFound {
+			return current
+		}
+	}
+	if lastResult != nil {
+		return lastResult
+	}
+	result.Message = "request failed"
+	return result
+}
+
+func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, account *Account, baseURL, path, apiKey string, checkedAt time.Time) *UpstreamBalanceResult {
+	result := &UpstreamBalanceResult{
+		Enabled:   true,
+		CheckedAt: &checkedAt,
+		Path:      path,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
+	if err != nil {
+		result.Message = err.Error()
+		return result
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("x-api-key", apiKey)
+	if account != nil && account.Platform == PlatformAnthropic {
+		req.Header.Set("anthropic-version", "2023-06-01")
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		result.Message = err.Error()
+		return result
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	result.StatusCode = resp.StatusCode
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, upstreamBalanceBodyMax))
+	result.Raw = compactUpstreamBalanceRaw(body)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		result.Message = resp.Status
+		return result
+	}
+
+	result.Success = true
+	result.Balance, result.Currency = parseUpstreamBalance(body)
+	if result.Balance == nil && result.Raw != "" {
+		result.Message = "unparsed response"
+	}
+	return result
+}
+
+func compactUpstreamBalanceRaw(body []byte) string {
+	raw := strings.TrimSpace(string(body))
+	raw = strings.Join(strings.Fields(raw), " ")
+	if len(raw) > upstreamBalanceBodyMax {
+		return raw[:upstreamBalanceBodyMax]
+	}
+	return raw
+}
+
+func parseUpstreamBalance(body []byte) (*float64, string) {
+	var payload any
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return nil, ""
+	}
+	currency := findStringValue(payload, []string{"currency", "unit"}, 0)
+	return findNumericValue(payload, []string{
+		"total_available",
+		"available_balance",
+		"available",
+		"balance",
+		"remaining_balance",
+		"remaining",
+		"credit",
+		"credits",
+		"amount",
+		"quota",
+	}, 0), currency
+}
+
+func findNumericValue(value any, keys []string, depth int) *float64 {
+	if depth > 4 {
+		return nil
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		for _, key := range keys {
+			if raw, ok := v[key]; ok {
+				if parsed, ok := numericFromAny(raw); ok {
+					return &parsed
+				}
+			}
+		}
+		for _, raw := range v {
+			if parsed := findNumericValue(raw, keys, depth+1); parsed != nil {
+				return parsed
+			}
+		}
+	case []any:
+		for _, raw := range v {
+			if parsed := findNumericValue(raw, keys, depth+1); parsed != nil {
+				return parsed
+			}
+		}
+	}
+	return nil
+}
+
+func numericFromAny(value any) (float64, bool) {
+	switch v := value.(type) {
+	case json.Number:
+		parsed, err := v.Float64()
+		return parsed, err == nil
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case string:
+		trimmed := strings.TrimSpace(strings.TrimPrefix(v, "$"))
+		parsed, err := strconv.ParseFloat(trimmed, 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func findStringValue(value any, keys []string, depth int) string {
+	if depth > 4 {
+		return ""
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		for _, key := range keys {
+			if raw, ok := v[key].(string); ok {
+				return raw
+			}
+		}
+		for _, raw := range v {
+			if parsed := findStringValue(raw, keys, depth+1); parsed != "" {
+				return parsed
+			}
+		}
+	case []any:
+		for _, raw := range v {
+			if parsed := findStringValue(raw, keys, depth+1); parsed != "" {
+				return parsed
+			}
+		}
+	}
+	return ""
 }
 
 // GetPassiveUsage 从 Account.Extra 中的被动采样数据构建 UsageInfo，不调用外部 API。
