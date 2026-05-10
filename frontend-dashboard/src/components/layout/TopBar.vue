@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useRouter, useRoute } from 'vue-router'
 import { computed } from 'vue'
 import Icon from '@/components/common/Icon.vue'
+import { nextLocale } from '@/i18n'
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
@@ -22,10 +23,16 @@ const title = computed(() => {
 })
 
 function toggleLocale() {
-  const next = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
+  const next = nextLocale(locale.value)
   locale.value = next
   localStorage.setItem('locale', next)
 }
+
+const localeLabel = computed(() => {
+  if (locale.value === 'zh-CN') return '简'
+  if (locale.value === 'zh-Hant') return '繁'
+  return 'EN'
+})
 
 function logout() {
   auth.logout()
@@ -49,7 +56,7 @@ function logout() {
 
     <button class="flex items-center gap-1 text-xs text-ink-600 hover:text-brand-600 px-2 py-1 rounded-md hover:bg-ink-50" @click="toggleLocale">
       <Icon name="globe" class="w-3.5 h-3.5" />
-      <span>{{ locale === 'zh-CN' ? 'CN ZH' : 'EN' }}</span>
+      <span>{{ localeLabel }}</span>
     </button>
 
     <div class="chip bg-emerald-50 text-emerald-700 h-7 gap-1 px-3">

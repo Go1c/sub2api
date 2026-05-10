@@ -154,6 +154,7 @@ import { useAppStore, useAuthStore } from '@/stores'
 import { apiClient } from '@/api/client'
 import {
   exchangePendingOAuthCompletion,
+  getPublicSettings,
   persistOAuthTokenContext,
   type OAuthTokenResponse
 } from '@/api/auth'
@@ -162,6 +163,11 @@ import {
   loadOAuthAffiliateCode,
   oauthAffiliatePayload
 } from '@/utils/oauthAffiliate'
+import {
+  invitationRegistrationModeSupportsAffiliateLink,
+  normalizeInvitationRegistrationMode,
+  type InvitationRegistrationMode
+} from '@/utils/invitationRegistrationMode'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,6 +188,36 @@ const pendingProvider = ref<'github' | 'google'>('github')
 const redirectTo = ref('/dashboard')
 const invalidCallback = ref(false)
 const EMAIL_OAUTH_PENDING_PROVIDER_KEY = 'email_oauth_pending_provider'
+
+const invitationRegistrationMode = ref<InvitationRegistrationMode>('redeem_code')
+let invitationRegistrationModeLoaded = false
+
+async function ensureInvitationRegistrationMode(): Promise<void> {
+  if (invitationRegistrationModeLoaded) {
+    return
+  }
+  try {
+    const settings = await getPublicSettings()
+    invitationRegistrationMode.value = normalizeInvitationRegistrationMode(
+      settings.invitation_registration_mode
+    )
+  } catch {
+    invitationRegistrationMode.value = 'redeem_code'
+  } finally {
+    invitationRegistrationModeLoaded = true
+  }
+}
+
+async function applyStoredAffiliateCodeToInvitation(): Promise<void> {
+  if (invitationCode.value.trim()) {
+    return
+  }
+  await ensureInvitationRegistrationMode()
+  if (!invitationRegistrationModeSupportsAffiliateLink(invitationRegistrationMode.value)) {
+    return
+  }
+  invitationCode.value = loadOAuthAffiliateCode()
+}
 
 type EmailOAuthPendingCompletion = Partial<OAuthTokenResponse> & {
   error?: string
@@ -305,6 +341,9 @@ async function resumePendingEmailOAuth() {
 
     if (completion.error === 'invitation_required' || completion.error === 'registration_completion_required') {
       invitationRequired.value = completion.error === 'invitation_required' || completion.invitation_required === true
+      if (invitationRequired.value) {
+        await applyStoredAffiliateCodeToInvitation()
+      }
       registrationEmail.value = String(completion.resolved_email || completion.email || '').trim()
       needsRegistrationCompletion.value = true
       isProcessing.value = false

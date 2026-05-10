@@ -129,6 +129,107 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (str
 	return s.RegisterWithVerification(ctx, email, password, "", "", "", "")
 }
 
+type registrationInvitationResult struct {
+	redeemCode    *RedeemCode
+	affiliateCode string
+}
+
+func (s *AuthService) validateInvitationRedeemCode(ctx context.Context, code string) (*RedeemCode, error) {
+	if s == nil || s.redeemRepo == nil {
+		return nil, ErrServiceUnavailable
+	}
+	redeemCode, err := s.redeemRepo.GetByCode(ctx, strings.TrimSpace(code))
+	if err != nil {
+		return nil, ErrInvitationCodeInvalid
+	}
+	if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUnused {
+		return nil, ErrInvitationCodeInvalid
+	}
+	return redeemCode, nil
+}
+
+func (s *AuthService) validateInvitationAffiliateCode(ctx context.Context, code string) (string, error) {
+	if s == nil || s.affiliateService == nil {
+		return "", ErrServiceUnavailable
+	}
+	normalized, err := s.affiliateService.ValidateInviteCodeForRegistration(ctx, code)
+	if err != nil {
+		if errors.Is(err, ErrAffiliateCodeInvalid) || errors.Is(err, ErrAffiliateProfileNotFound) {
+			return "", ErrInvitationCodeInvalid
+		}
+		return "", err
+	}
+	return normalized, nil
+}
+
+func (s *AuthService) validateRegistrationInvitation(ctx context.Context, invitationCode, affiliateCode string, requiredErr error) (*registrationInvitationResult, error) {
+	result := &registrationInvitationResult{}
+	if s == nil || s.settingService == nil || !s.settingService.IsInvitationCodeEnabled(ctx) {
+		return result, nil
+	}
+
+	mode := s.settingService.GetInvitationRegistrationMode(ctx)
+	invitationCode = strings.TrimSpace(invitationCode)
+	affiliateCode = strings.TrimSpace(affiliateCode)
+	if invitationCode == "" && affiliateCode == "" {
+		return nil, requiredErr
+	}
+
+	if invitationRegistrationModeAllowsRedeemCode(mode) && invitationCode != "" {
+		redeemCode, err := s.validateInvitationRedeemCode(ctx, invitationCode)
+		if err == nil {
+			result.redeemCode = redeemCode
+			return result, nil
+		}
+		if !invitationRegistrationModeAllowsAffiliateLink(mode) {
+			return nil, err
+		}
+	}
+
+	if invitationRegistrationModeAllowsAffiliateLink(mode) {
+		seen := make(map[string]struct{}, 2)
+		for _, candidate := range []string{affiliateCode, invitationCode} {
+			candidate = strings.TrimSpace(candidate)
+			if candidate == "" {
+				continue
+			}
+			key := strings.ToUpper(candidate)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			normalized, err := s.validateInvitationAffiliateCode(ctx, candidate)
+			if err == nil {
+				result.affiliateCode = normalized
+				return result, nil
+			}
+			if !errors.Is(err, ErrInvitationCodeInvalid) {
+				return nil, err
+			}
+		}
+	}
+
+	return nil, ErrInvitationCodeInvalid
+}
+
+func (s *AuthService) ValidateRegistrationInvitationCode(ctx context.Context, code string) (bool, string) {
+	if s == nil || s.settingService == nil || !s.settingService.IsInvitationCodeEnabled(ctx) {
+		return false, "INVITATION_CODE_DISABLED"
+	}
+	_, err := s.validateRegistrationInvitation(ctx, code, code, ErrInvitationCodeRequired)
+	if err == nil {
+		return true, ""
+	}
+	switch {
+	case errors.Is(err, ErrInvitationCodeRequired):
+		return false, "INVITATION_CODE_REQUIRED"
+	case errors.Is(err, ErrServiceUnavailable):
+		return false, "SERVICE_UNAVAILABLE"
+	default:
+		return false, "INVITATION_CODE_INVALID"
+	}
+}
+
 // RegisterWithVerification 用户注册（支持邮件验证、优惠码、邀请码和邀请返利码），返回token和用户。
 func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode, invitationCode, affiliateCode string) (string, *User, error) {
 	// 检查是否开放注册（默认关闭：settingService 未配置时不允许注册）
@@ -145,23 +246,16 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 
 	// 检查是否需要邀请码
+	invitationResult, err := s.validateRegistrationInvitation(ctx, invitationCode, affiliateCode, ErrInvitationCodeRequired)
+	if err != nil {
+		return "", nil, err
+	}
 	var invitationRedeemCode *RedeemCode
-	if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
-		if invitationCode == "" {
-			return "", nil, ErrInvitationCodeRequired
+	if invitationResult != nil {
+		invitationRedeemCode = invitationResult.redeemCode
+		if invitationResult.affiliateCode != "" {
+			affiliateCode = invitationResult.affiliateCode
 		}
-		// 验证邀请码
-		redeemCode, err := s.redeemRepo.GetByCode(ctx, invitationCode)
-		if err != nil {
-			logger.LegacyPrintf("service.auth", "[Auth] Invalid invitation code: %s, error: %v", invitationCode, err)
-			return "", nil, ErrInvitationCodeInvalid
-		}
-		// 检查类型和状态
-		if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUnused {
-			logger.LegacyPrintf("service.auth", "[Auth] Invitation code invalid: type=%s, status=%s", redeemCode.Type, redeemCode.Status)
-			return "", nil, ErrInvitationCodeInvalid
-		}
-		invitationRedeemCode = redeemCode
 	}
 
 	// 检查是否需要邮件验证
@@ -592,19 +686,16 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 			}
 
 			// 检查是否需要邀请码
+			invitationResult, err := s.validateRegistrationInvitation(ctx, invitationCode, affiliateCode, ErrOAuthInvitationRequired)
+			if err != nil {
+				return nil, nil, err
+			}
 			var invitationRedeemCode *RedeemCode
-			if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
-				if invitationCode == "" {
-					return nil, nil, ErrOAuthInvitationRequired
+			if invitationResult != nil {
+				invitationRedeemCode = invitationResult.redeemCode
+				if invitationResult.affiliateCode != "" {
+					affiliateCode = invitationResult.affiliateCode
 				}
-				redeemCode, err := s.redeemRepo.GetByCode(ctx, invitationCode)
-				if err != nil {
-					return nil, nil, ErrInvitationCodeInvalid
-				}
-				if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUnused {
-					return nil, nil, ErrInvitationCodeInvalid
-				}
-				invitationRedeemCode = redeemCode
 			}
 
 			randomPassword, err := randomHexString(32)

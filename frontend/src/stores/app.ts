@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Toast, ToastType, PublicSettings } from '@/types'
-import { i18n } from '@/i18n'
+import { configureAvailableLocales, i18n } from '@/i18n'
 import {
   checkUpdates as checkUpdatesAPI,
   type VersionInfo,
@@ -292,6 +292,7 @@ export const useAppStore = defineStore('app', () => {
       window.__APP_CONFIG__ = { ...config }
     }
     cachedPublicSettings.value = config
+    configureAvailableLocales(config.frontend_locales)
     siteName.value = config.site_name || 'Sub2API'
     siteLogo.value = config.site_logo || ''
     siteVersion.value = config.version || ''
@@ -333,6 +334,11 @@ export const useAppStore = defineStore('app', () => {
         api_base_url: apiBaseUrl.value,
         contact_info: contactInfo.value,
         contact_channels: [],
+        support_chat_enabled: false,
+        support_chat_gateway_url: '',
+        support_chat_title: '',
+        support_chat_welcome_message: '',
+        support_chat_official_contact_text: '',
         doc_url: docUrl.value,
         site_pages: [],
         home_content: '',
@@ -342,6 +348,7 @@ export const useAppStore = defineStore('app', () => {
         table_page_size_options: [10, 20, 50, 100],
         custom_menu_items: [],
         custom_endpoints: [],
+        frontend_locales: ['en', 'zh', 'zh-Hant'],
         linuxdo_oauth_enabled: false,
         wechat_oauth_enabled: false,
         wechat_oauth_open_enabled: false,
@@ -361,6 +368,8 @@ export const useAppStore = defineStore('app', () => {
         available_channels_enabled: false,
         risk_control_enabled: false,
         affiliate_enabled: false,
+        site_messages_enabled: false,
+        site_messages_default_recipient_email: '',
       }
     }
 

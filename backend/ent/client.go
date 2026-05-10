@@ -40,6 +40,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -108,6 +109,8 @@ type Client struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// SiteMessage is the client for interacting with the SiteMessage builders.
+	SiteMessage *SiteMessageClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
@@ -162,6 +165,7 @@ func (c *Client) init() {
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
+	c.SiteMessage = NewSiteMessageClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
@@ -288,6 +292,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		SiteMessage:                   NewSiteMessageClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
@@ -341,6 +346,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		SiteMessage:                   NewSiteMessageClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
@@ -386,9 +392,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.SiteMessage, c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -405,9 +411,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.SiteMessage, c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -466,6 +472,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
+	case *SiteMessageMutation:
+		return c.SiteMessage.mutate(ctx, m)
 	case *SubscriptionPlanMutation:
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
@@ -4429,6 +4437,203 @@ func (c *SettingClient) mutate(ctx context.Context, m *SettingMutation) (Value, 
 	}
 }
 
+// SiteMessageClient is a client for the SiteMessage schema.
+type SiteMessageClient struct {
+	config
+}
+
+// NewSiteMessageClient returns a client for the SiteMessage from the given config.
+func NewSiteMessageClient(c config) *SiteMessageClient {
+	return &SiteMessageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sitemessage.Hooks(f(g(h())))`.
+func (c *SiteMessageClient) Use(hooks ...Hook) {
+	c.hooks.SiteMessage = append(c.hooks.SiteMessage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sitemessage.Intercept(f(g(h())))`.
+func (c *SiteMessageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SiteMessage = append(c.inters.SiteMessage, interceptors...)
+}
+
+// Create returns a builder for creating a SiteMessage entity.
+func (c *SiteMessageClient) Create() *SiteMessageCreate {
+	mutation := newSiteMessageMutation(c.config, OpCreate)
+	return &SiteMessageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SiteMessage entities.
+func (c *SiteMessageClient) CreateBulk(builders ...*SiteMessageCreate) *SiteMessageCreateBulk {
+	return &SiteMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SiteMessageClient) MapCreateBulk(slice any, setFunc func(*SiteMessageCreate, int)) *SiteMessageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SiteMessageCreateBulk{err: fmt.Errorf("calling to SiteMessageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SiteMessageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SiteMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SiteMessage.
+func (c *SiteMessageClient) Update() *SiteMessageUpdate {
+	mutation := newSiteMessageMutation(c.config, OpUpdate)
+	return &SiteMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SiteMessageClient) UpdateOne(_m *SiteMessage) *SiteMessageUpdateOne {
+	mutation := newSiteMessageMutation(c.config, OpUpdateOne, withSiteMessage(_m))
+	return &SiteMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SiteMessageClient) UpdateOneID(id int64) *SiteMessageUpdateOne {
+	mutation := newSiteMessageMutation(c.config, OpUpdateOne, withSiteMessageID(id))
+	return &SiteMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SiteMessage.
+func (c *SiteMessageClient) Delete() *SiteMessageDelete {
+	mutation := newSiteMessageMutation(c.config, OpDelete)
+	return &SiteMessageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SiteMessageClient) DeleteOne(_m *SiteMessage) *SiteMessageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SiteMessageClient) DeleteOneID(id int64) *SiteMessageDeleteOne {
+	builder := c.Delete().Where(sitemessage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SiteMessageDeleteOne{builder}
+}
+
+// Query returns a query builder for SiteMessage.
+func (c *SiteMessageClient) Query() *SiteMessageQuery {
+	return &SiteMessageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSiteMessage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SiteMessage entity by its id.
+func (c *SiteMessageClient) Get(ctx context.Context, id int64) (*SiteMessage, error) {
+	return c.Query().Where(sitemessage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SiteMessageClient) GetX(ctx context.Context, id int64) *SiteMessage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySender queries the sender edge of a SiteMessage.
+func (c *SiteMessageClient) QuerySender(_m *SiteMessage) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sitemessage.Table, sitemessage.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sitemessage.SenderTable, sitemessage.SenderColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryRecipient queries the recipient edge of a SiteMessage.
+func (c *SiteMessageClient) QueryRecipient(_m *SiteMessage) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sitemessage.Table, sitemessage.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sitemessage.RecipientTable, sitemessage.RecipientColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReplies queries the replies edge of a SiteMessage.
+func (c *SiteMessageClient) QueryReplies(_m *SiteMessage) *SiteMessageQuery {
+	query := (&SiteMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sitemessage.Table, sitemessage.FieldID, id),
+			sqlgraph.To(sitemessage.Table, sitemessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, sitemessage.RepliesTable, sitemessage.RepliesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryParent queries the parent edge of a SiteMessage.
+func (c *SiteMessageClient) QueryParent(_m *SiteMessage) *SiteMessageQuery {
+	query := (&SiteMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(sitemessage.Table, sitemessage.FieldID, id),
+			sqlgraph.To(sitemessage.Table, sitemessage.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, sitemessage.ParentTable, sitemessage.ParentColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SiteMessageClient) Hooks() []Hook {
+	return c.hooks.SiteMessage
+}
+
+// Interceptors returns the client interceptors.
+func (c *SiteMessageClient) Interceptors() []Interceptor {
+	return c.inters.SiteMessage
+}
+
+func (c *SiteMessageClient) mutate(ctx context.Context, m *SiteMessageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SiteMessageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SiteMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SiteMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SiteMessageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SiteMessage mutation op: %q", m.Op())
+	}
+}
+
 // SubscriptionPlanClient is a client for the SubscriptionPlan schema.
 type SubscriptionPlanClient struct {
 	config
@@ -5222,6 +5427,38 @@ func (c *UserClient) QueryAnnouncementReads(_m *User) *AnnouncementReadQuery {
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(announcementread.Table, announcementread.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.AnnouncementReadsTable, user.AnnouncementReadsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySentSiteMessages queries the sent_site_messages edge of a User.
+func (c *UserClient) QuerySentSiteMessages(_m *User) *SiteMessageQuery {
+	query := (&SiteMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(sitemessage.Table, sitemessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SentSiteMessagesTable, user.SentSiteMessagesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReceivedSiteMessages queries the received_site_messages edge of a User.
+func (c *UserClient) QueryReceivedSiteMessages(_m *User) *SiteMessageQuery {
+	query := (&SiteMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(sitemessage.Table, sitemessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ReceivedSiteMessagesTable, user.ReceivedSiteMessagesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -6023,9 +6260,10 @@ type (
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SiteMessage,
+		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6033,9 +6271,10 @@ type (
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SiteMessage,
+		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Interceptor
 	}
 )
 

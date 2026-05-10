@@ -79,6 +79,14 @@ export interface PublicModelPricingConfig {
   rows: PublicModelPricingRow[];
 }
 
+export type FrontendLocaleCode = "en" | "zh" | "zh-Hant";
+
+export interface FrontendLocaleOption {
+  value: FrontendLocaleCode;
+  labelZh: string;
+  labelEn: string;
+}
+
 const AUTH_SOURCE_TYPES: AuthSourceType[] = [
   "email",
   "linuxdo",
@@ -155,6 +163,11 @@ const WECHAT_CONNECT_MODE_OPTIONS: WeChatConnectModeOption[] = [
     labelEn: "Mobile App",
   },
 ];
+export const FRONTEND_LOCALE_OPTIONS: FrontendLocaleOption[] = [
+  { value: "en", labelZh: "English", labelEn: "English" },
+  { value: "zh", labelZh: "简体中文", labelEn: "Simplified Chinese" },
+  { value: "zh-Hant", labelZh: "繁體中文", labelEn: "Traditional Chinese" },
+];
 const WECHAT_CONNECT_MODE_ALIASES: Record<string, WeChatConnectMode> = {
   open: "open",
   open_platform: "open",
@@ -225,7 +238,13 @@ export function appendAuthSourceDefaultsToUpdateRequest(
   const target = payload as Record<string, unknown>;
 
   for (const source of AUTH_SOURCE_TYPES) {
-    const current = authSourceDefaults[source];
+    const current = authSourceDefaults[source] ?? {
+      balance: AUTH_SOURCE_DEFAULT_BALANCE,
+      concurrency: AUTH_SOURCE_DEFAULT_CONCURRENCY,
+      subscriptions: [],
+      grant_on_signup: false,
+      grant_on_first_bind: false,
+    };
     target[`auth_source_default_${source}_balance`] =
       Number(current.balance) || 0;
     target[`auth_source_default_${source}_concurrency`] = Math.max(
@@ -339,6 +358,7 @@ export interface SystemSettings {
   password_reset_enabled: boolean;
   frontend_url: string;
   invitation_code_enabled: boolean;
+  invitation_registration_mode: "redeem_code" | "affiliate_link" | "both" | string;
   totp_enabled: boolean; // TOTP 双因素认证
   totp_encryption_key_configured: boolean; // TOTP 加密密钥是否已配置
   login_agreement_enabled: boolean;
@@ -399,6 +419,11 @@ export interface SystemSettings {
   api_base_url: string;
   contact_info: string;
   contact_channels: ContactChannel[];
+  support_chat_enabled: boolean;
+  support_chat_gateway_url: string;
+  support_chat_title: string;
+  support_chat_welcome_message: string;
+  support_chat_official_contact_text: string;
   doc_url: string;
   site_pages: SitePage[];
   home_content: string;
@@ -413,6 +438,7 @@ export interface SystemSettings {
   backend_mode_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
+  frontend_locales: FrontendLocaleCode[];
   // SMTP settings
   smtp_host: string;
   smtp_port: number;
@@ -557,6 +583,12 @@ export interface SystemSettings {
   // Available Channels feature switch
   available_channels_enabled: boolean;
 
+  // Site Messages feature switch
+  site_messages_enabled: boolean;
+  site_messages_daily_send_limit: number;
+  site_messages_retention_days: number;
+  site_messages_default_recipient_email: string;
+
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
 
@@ -572,6 +604,7 @@ export interface UpdateSettingsRequest {
   password_reset_enabled?: boolean;
   frontend_url?: string;
   invitation_code_enabled?: boolean;
+  invitation_registration_mode?: "redeem_code" | "affiliate_link" | "both" | string;
   totp_enabled?: boolean; // TOTP 双因素认证
   login_agreement_enabled?: boolean;
   login_agreement_mode?: "modal" | "checkbox" | string;
@@ -629,6 +662,11 @@ export interface UpdateSettingsRequest {
   api_base_url?: string;
   contact_info?: string;
   contact_channels?: ContactChannel[];
+  support_chat_enabled?: boolean;
+  support_chat_gateway_url?: string;
+  support_chat_title?: string;
+  support_chat_welcome_message?: string;
+  support_chat_official_contact_text?: string;
   doc_url?: string;
   site_pages?: SitePage[];
   home_content?: string;
@@ -643,6 +681,7 @@ export interface UpdateSettingsRequest {
   backend_mode_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
   custom_endpoints?: CustomEndpoint[];
+  frontend_locales?: FrontendLocaleCode[];
   smtp_host?: string;
   smtp_port?: number;
   smtp_username?: string;
@@ -763,6 +802,12 @@ export interface UpdateSettingsRequest {
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;
+
+  // Site Messages feature switch
+  site_messages_enabled?: boolean;
+  site_messages_daily_send_limit?: number;
+  site_messages_retention_days?: number;
+  site_messages_default_recipient_email?: string;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

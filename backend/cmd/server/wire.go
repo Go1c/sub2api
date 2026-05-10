@@ -78,6 +78,7 @@ func provideCleanup(
 	opsCleanup *service.OpsCleanupService,
 	opsScheduledReport *service.OpsScheduledReportService,
 	opsSystemLogSink *service.OpsSystemLogSink,
+	opsUserRequestMonitor *service.OpsUserRequestMonitorService,
 	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
@@ -125,6 +126,12 @@ func provideCleanup(
 			{"OpsSystemLogSink", func() error {
 				if opsSystemLogSink != nil {
 					opsSystemLogSink.Stop()
+				}
+				return nil
+			}},
+			{"OpsUserRequestMonitorService", func() error {
+				if opsUserRequestMonitor != nil {
+					opsUserRequestMonitor.Stop()
 				}
 				return nil
 			}},

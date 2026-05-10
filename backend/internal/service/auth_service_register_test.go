@@ -392,6 +392,106 @@ func TestAuthService_Register_Success(t *testing.T) {
 	require.True(t, user.CheckPassword("password"))
 }
 
+func TestAuthService_Register_InvitationModeAffiliateLinkAcceptsUserInviteCode(t *testing.T) {
+	repo := &userRepoStub{nextID: 2}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled:   "true",
+		SettingKeyInvitationCodeEnabled: "true",
+		"invitation_registration_mode":  "affiliate_link",
+		SettingKeyAffiliateEnabled:      "true",
+	}, nil)
+	affiliateRepo := newAffiliateSignupBonusRepoStub()
+	service.affiliateService = NewAffiliateService(affiliateRepo, service.settingService, nil, nil)
+	service.redeemRepo = &redeemCodeRepoStub{}
+
+	_, user, err := service.RegisterWithVerification(
+		context.Background(),
+		"invitee@test.com",
+		"password",
+		"",
+		"",
+		"",
+		"INVITE123",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	require.Len(t, affiliateRepo.bindWithBonusCalls, 1)
+	require.Equal(t, int64(2), affiliateRepo.bindWithBonusCalls[0].userID)
+	require.Equal(t, int64(1), affiliateRepo.bindWithBonusCalls[0].inviterID)
+}
+
+func TestAuthService_Register_InvitationModeBothAcceptsRedeemOrAffiliateCode(t *testing.T) {
+	t.Run("redeem code", func(t *testing.T) {
+		repo := &userRepoStub{nextID: 3}
+		redeemRepo := &redeemCodeRepoStub{
+			codesByCode: map[string]*RedeemCode{
+				"REDEEM123": {
+					ID:     7,
+					Code:   "REDEEM123",
+					Type:   RedeemTypeInvitation,
+					Status: StatusUnused,
+				},
+			},
+		}
+		service := newAuthService(repo, map[string]string{
+			SettingKeyRegistrationEnabled:   "true",
+			SettingKeyInvitationCodeEnabled: "true",
+			"invitation_registration_mode":  "both",
+			SettingKeyAffiliateEnabled:      "true",
+		}, nil)
+		affiliateRepo := newAffiliateSignupBonusRepoStub()
+		service.affiliateService = NewAffiliateService(affiliateRepo, service.settingService, nil, nil)
+		service.redeemRepo = redeemRepo
+
+		_, user, err := service.RegisterWithVerification(
+			context.Background(),
+			"redeem@test.com",
+			"password",
+			"",
+			"",
+			"REDEEM123",
+			"",
+		)
+
+		require.NoError(t, err)
+		require.NotNil(t, user)
+		require.Len(t, redeemRepo.useCalls, 1)
+		require.Empty(t, affiliateRepo.bindWithBonusCalls)
+	})
+
+	t.Run("affiliate invite code", func(t *testing.T) {
+		repo := &userRepoStub{nextID: 4}
+		service := newAuthService(repo, map[string]string{
+			SettingKeyRegistrationEnabled:   "true",
+			SettingKeyInvitationCodeEnabled: "true",
+			"invitation_registration_mode":  "both",
+			SettingKeyAffiliateEnabled:      "true",
+		}, nil)
+		affiliateRepo := newAffiliateSignupBonusRepoStub()
+		now := time.Now()
+		affiliateRepo.profiles[4] = &AffiliateSummary{UserID: 4, AffCode: "INVITEE4", CreatedAt: now}
+		service.affiliateService = NewAffiliateService(affiliateRepo, service.settingService, nil, nil)
+		service.redeemRepo = &redeemCodeRepoStub{}
+
+		_, user, err := service.RegisterWithVerification(
+			context.Background(),
+			"affiliate@test.com",
+			"password",
+			"",
+			"",
+			"",
+			"INVITE123",
+		)
+
+		require.NoError(t, err)
+		require.NotNil(t, user)
+		require.Len(t, affiliateRepo.bindWithBonusCalls, 1)
+		require.Equal(t, int64(4), affiliateRepo.bindWithBonusCalls[0].userID)
+		require.Equal(t, int64(1), affiliateRepo.bindWithBonusCalls[0].inviterID)
+	})
+}
+
 func TestAuthService_ValidateToken_ExpiredReturnsClaimsWithError(t *testing.T) {
 	repo := &userRepoStub{}
 	service := newAuthService(repo, nil, nil)

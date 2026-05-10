@@ -368,6 +368,30 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	}, nil
 }
 
+func (s *AffiliateService) ValidateInviteCodeForRegistration(ctx context.Context, rawCode string) (string, error) {
+	code := strings.ToUpper(strings.TrimSpace(rawCode))
+	if code == "" {
+		return "", ErrAffiliateCodeInvalid
+	}
+	if s == nil || s.repo == nil {
+		return "", infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	if !isValidAffiliateCodeFormat(code) {
+		return "", ErrAffiliateCodeInvalid
+	}
+	summary, err := s.repo.GetAffiliateByCode(ctx, code)
+	if err != nil {
+		if errors.Is(err, ErrAffiliateProfileNotFound) {
+			return "", ErrAffiliateCodeInvalid
+		}
+		return "", err
+	}
+	if summary == nil || summary.UserID <= 0 {
+		return "", ErrAffiliateCodeInvalid
+	}
+	return code, nil
+}
+
 func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, rawCode string) error {
 	code := strings.ToUpper(strings.TrimSpace(rawCode))
 	if code == "" {

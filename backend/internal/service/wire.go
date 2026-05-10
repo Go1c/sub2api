@@ -297,6 +297,12 @@ func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
 	return sink
 }
 
+func ProvideOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, redisClient *redis.Client) *OpsUserRequestMonitorService {
+	svc := NewOpsUserRequestMonitorService(opsRepo, userRepo, redisClient)
+	svc.Start()
+	return svc
+}
+
 func buildIdempotencyConfig(cfg *config.Config) IdempotencyConfig {
 	idempotencyCfg := DefaultIdempotencyConfig()
 	if cfg != nil {
@@ -428,6 +434,14 @@ func ProvideAPIKeyService(
 	return svc
 }
 
+func ProvideSiteMessageUserRepository(userRepo UserRepository) SiteMessageUserRepository {
+	return userRepo
+}
+
+func ProvideSiteMessageSettingsReader(settingService *SettingService) SiteMessageSettingsReader {
+	return settingService
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -446,6 +460,10 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
+	ProvideSiteMessageUserRepository,
+	ProvideSiteMessageSettingsReader,
+	NewSiteMessageService,
+	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
@@ -470,6 +488,7 @@ var ProviderSet = wire.NewSet(
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
+	ProvideOpsUserRequestMonitorService,
 	NewOpsService,
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,

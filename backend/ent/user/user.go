@@ -71,6 +71,10 @@ const (
 	EdgeAssignedSubscriptions = "assigned_subscriptions"
 	// EdgeAnnouncementReads holds the string denoting the announcement_reads edge name in mutations.
 	EdgeAnnouncementReads = "announcement_reads"
+	// EdgeSentSiteMessages holds the string denoting the sent_site_messages edge name in mutations.
+	EdgeSentSiteMessages = "sent_site_messages"
+	// EdgeReceivedSiteMessages holds the string denoting the received_site_messages edge name in mutations.
+	EdgeReceivedSiteMessages = "received_site_messages"
 	// EdgeAllowedGroups holds the string denoting the allowed_groups edge name in mutations.
 	EdgeAllowedGroups = "allowed_groups"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
@@ -124,6 +128,20 @@ const (
 	AnnouncementReadsInverseTable = "announcement_reads"
 	// AnnouncementReadsColumn is the table column denoting the announcement_reads relation/edge.
 	AnnouncementReadsColumn = "user_id"
+	// SentSiteMessagesTable is the table that holds the sent_site_messages relation/edge.
+	SentSiteMessagesTable = "site_messages"
+	// SentSiteMessagesInverseTable is the table name for the SiteMessage entity.
+	// It exists in this package in order to avoid circular dependency with the "sitemessage" package.
+	SentSiteMessagesInverseTable = "site_messages"
+	// SentSiteMessagesColumn is the table column denoting the sent_site_messages relation/edge.
+	SentSiteMessagesColumn = "sender_id"
+	// ReceivedSiteMessagesTable is the table that holds the received_site_messages relation/edge.
+	ReceivedSiteMessagesTable = "site_messages"
+	// ReceivedSiteMessagesInverseTable is the table name for the SiteMessage entity.
+	// It exists in this package in order to avoid circular dependency with the "sitemessage" package.
+	ReceivedSiteMessagesInverseTable = "site_messages"
+	// ReceivedSiteMessagesColumn is the table column denoting the received_site_messages relation/edge.
+	ReceivedSiteMessagesColumn = "recipient_id"
 	// AllowedGroupsTable is the table that holds the allowed_groups relation/edge. The primary key declared below.
 	AllowedGroupsTable = "user_allowed_groups"
 	// AllowedGroupsInverseTable is the table name for the Group entity.
@@ -471,6 +489,34 @@ func ByAnnouncementReads(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption
 	}
 }
 
+// BySentSiteMessagesCount orders the results by sent_site_messages count.
+func BySentSiteMessagesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSentSiteMessagesStep(), opts...)
+	}
+}
+
+// BySentSiteMessages orders the results by sent_site_messages terms.
+func BySentSiteMessages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSentSiteMessagesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByReceivedSiteMessagesCount orders the results by received_site_messages count.
+func ByReceivedSiteMessagesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newReceivedSiteMessagesStep(), opts...)
+	}
+}
+
+// ByReceivedSiteMessages orders the results by received_site_messages terms.
+func ByReceivedSiteMessages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newReceivedSiteMessagesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAllowedGroupsCount orders the results by allowed_groups count.
 func ByAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -615,6 +661,20 @@ func newAnnouncementReadsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(AnnouncementReadsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, AnnouncementReadsTable, AnnouncementReadsColumn),
+	)
+}
+func newSentSiteMessagesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SentSiteMessagesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SentSiteMessagesTable, SentSiteMessagesColumn),
+	)
+}
+func newReceivedSiteMessagesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ReceivedSiteMessagesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ReceivedSiteMessagesTable, ReceivedSiteMessagesColumn),
 	)
 }
 func newAllowedGroupsStep() *sqlgraph.Step {

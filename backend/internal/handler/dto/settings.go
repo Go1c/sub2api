@@ -48,6 +48,7 @@ type SystemSettings struct {
 	PasswordResetEnabled             bool                     `json:"password_reset_enabled"`
 	FrontendURL                      string                   `json:"frontend_url"`
 	InvitationCodeEnabled            bool                     `json:"invitation_code_enabled"`
+	InvitationRegistrationMode       string                   `json:"invitation_registration_mode"`
 	TotpEnabled                      bool                     `json:"totp_enabled"`                   // TOTP 双因素认证
 	TotpEncryptionKeyConfigured      bool                     `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
 	LoginAgreementEnabled            bool                     `json:"login_agreement_enabled"`
@@ -118,10 +119,16 @@ type SystemSettings struct {
 	APIBaseURL                            string           `json:"api_base_url"`
 	ContactInfo                           string           `json:"contact_info"`
 	ContactChannels                       []ContactChannel `json:"contact_channels"`
+	SupportChatEnabled                    bool             `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string           `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string           `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string           `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string           `json:"support_chat_official_contact_text"`
 	DocURL                                string           `json:"doc_url"`
 	SitePages                             []SitePage       `json:"site_pages"`
 	HomeContent                           string           `json:"home_content"`
 	HideCcsImportButton                   bool             `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string         `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string           `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string           `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string           `json:"ccswitch_default_model_gemini"`
@@ -245,6 +252,12 @@ type SystemSettings struct {
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
+	// Site messages feature switch and limits
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDailySendLimit        int    `json:"site_messages_daily_send_limit"`
+	SiteMessagesRetentionDays         int    `json:"site_messages_retention_days"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
+
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 
@@ -265,6 +278,7 @@ type PublicSettings struct {
 	PromoCodeEnabled                      bool                     `json:"promo_code_enabled"`
 	PasswordResetEnabled                  bool                     `json:"password_reset_enabled"`
 	InvitationCodeEnabled                 bool                     `json:"invitation_code_enabled"`
+	InvitationRegistrationMode            string                   `json:"invitation_registration_mode"`
 	TotpEnabled                           bool                     `json:"totp_enabled"` // TOTP 双因素认证
 	TurnstileEnabled                      bool                     `json:"turnstile_enabled"`
 	TurnstileSiteKey                      string                   `json:"turnstile_site_key"`
@@ -274,10 +288,16 @@ type PublicSettings struct {
 	APIBaseURL                            string                   `json:"api_base_url"`
 	ContactInfo                           string                   `json:"contact_info"`
 	ContactChannels                       []ContactChannel         `json:"contact_channels"`
+	SupportChatEnabled                    bool                     `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string                   `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string                   `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string                   `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string                   `json:"support_chat_official_contact_text"`
 	DocURL                                string                   `json:"doc_url"`
 	SitePages                             []SitePage               `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`
 	HideCcsImportButton                   bool                     `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string                 `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string                   `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string                   `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`
@@ -320,6 +340,9 @@ type PublicSettings struct {
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 
 	RiskControlEnabled bool `json:"risk_control_enabled"`
+
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
 }
 
 type LoginAgreementDocument struct {

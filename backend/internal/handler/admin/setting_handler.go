@@ -124,6 +124,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PasswordResetEnabled:                   settings.PasswordResetEnabled,
 		FrontendURL:                            settings.FrontendURL,
 		InvitationCodeEnabled:                  settings.InvitationCodeEnabled,
+		InvitationRegistrationMode:             settings.InvitationRegistrationMode,
 		TotpEnabled:                            settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:            h.settingService.IsTotpEncryptionKeyConfigured(),
 		LoginAgreementEnabled:                  settings.LoginAgreementEnabled,
@@ -198,10 +199,16 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		APIBaseURL:                             settings.APIBaseURL,
 		ContactInfo:                            settings.ContactInfo,
 		ContactChannels:                        dto.ParseContactChannels(settings.ContactChannels),
+		SupportChatEnabled:                     settings.SupportChatEnabled,
+		SupportChatGatewayURL:                  settings.SupportChatGatewayURL,
+		SupportChatTitle:                       settings.SupportChatTitle,
+		SupportChatWelcomeMessage:              settings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:         settings.SupportChatOfficialContactText,
 		DocURL:                                 settings.DocURL,
 		SitePages:                              dto.ParseSitePages(settings.SitePages),
 		HomeContent:                            settings.HomeContent,
 		HideCcsImportButton:                    settings.HideCcsImportButton,
+		FrontendLocales:                        settings.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:          settings.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:             settings.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:             settings.CCSwitchDefaultModelGemini,
@@ -286,6 +293,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		AvailableChannelsEnabled: settings.AvailableChannelsEnabled,
 
 		AffiliateEnabled: settings.AffiliateEnabled,
+
+		SiteMessagesEnabled:               settings.SiteMessagesEnabled,
+		SiteMessagesDailySendLimit:        settings.SiteMessagesDailySendLimit,
+		SiteMessagesRetentionDays:         settings.SiteMessagesRetentionDays,
+		SiteMessagesDefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
 	}
 
 	// OpenAI fast policy (stored under a dedicated setting key)
@@ -371,6 +383,7 @@ type UpdateSettingsRequest struct {
 	PasswordResetEnabled             bool                         `json:"password_reset_enabled"`
 	FrontendURL                      string                       `json:"frontend_url"`
 	InvitationCodeEnabled            bool                         `json:"invitation_code_enabled"`
+	InvitationRegistrationMode       string                       `json:"invitation_registration_mode"`
 	TotpEnabled                      bool                         `json:"totp_enabled"` // TOTP 双因素认证
 	LoginAgreementEnabled            bool                         `json:"login_agreement_enabled"`
 	LoginAgreementMode               string                       `json:"login_agreement_mode"`
@@ -457,10 +470,16 @@ type UpdateSettingsRequest struct {
 	APIBaseURL                            string                `json:"api_base_url"`
 	ContactInfo                           string                `json:"contact_info"`
 	ContactChannels                       *[]dto.ContactChannel `json:"contact_channels"`
+	SupportChatEnabled                    bool                  `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string                `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string                `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string                `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string                `json:"support_chat_official_contact_text"`
 	DocURL                                string                `json:"doc_url"`
 	SitePages                             *[]dto.SitePage       `json:"site_pages"`
 	HomeContent                           string                `json:"home_content"`
 	HideCcsImportButton                   bool                  `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string              `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string                `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string                `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string                `json:"ccswitch_default_model_gemini"`
@@ -605,6 +624,12 @@ type UpdateSettingsRequest struct {
 
 	// 风控中心功能开关
 	RiskControlEnabled *bool `json:"risk_control_enabled"`
+
+	// Site messages feature switch and limits
+	SiteMessagesEnabled               *bool   `json:"site_messages_enabled"`
+	SiteMessagesDailySendLimit        *int    `json:"site_messages_daily_send_limit"`
+	SiteMessagesRetentionDays         *int    `json:"site_messages_retention_days"`
+	SiteMessagesDefaultRecipientEmail *string `json:"site_messages_default_recipient_email"`
 
 	// OpenAI fast/flex policy (optional, only updated when provided)
 	OpenAIFastPolicySettings *dto.OpenAIFastPolicySettings `json:"openai_fast_policy_settings,omitempty"`
@@ -1482,6 +1507,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasswordResetEnabled:                  req.PasswordResetEnabled,
 		FrontendURL:                           req.FrontendURL,
 		InvitationCodeEnabled:                 req.InvitationCodeEnabled,
+		InvitationRegistrationMode:            req.InvitationRegistrationMode,
 		TotpEnabled:                           req.TotpEnabled,
 		LoginAgreementEnabled:                 req.LoginAgreementEnabled,
 		LoginAgreementMode:                    loginAgreementMode,
@@ -1555,10 +1581,16 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		APIBaseURL:                            req.APIBaseURL,
 		ContactInfo:                           req.ContactInfo,
 		ContactChannels:                       contactChannelsJSON,
+		SupportChatEnabled:                    req.SupportChatEnabled,
+		SupportChatGatewayURL:                 req.SupportChatGatewayURL,
+		SupportChatTitle:                      req.SupportChatTitle,
+		SupportChatWelcomeMessage:             req.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:        req.SupportChatOfficialContactText,
 		DocURL:                                req.DocURL,
 		SitePages:                             sitePagesJSON,
 		HomeContent:                           req.HomeContent,
 		HideCcsImportButton:                   req.HideCcsImportButton,
+		FrontendLocales:                       req.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:         req.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:            req.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:            req.CCSwitchDefaultModelGemini,
@@ -1744,6 +1776,30 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.RiskControlEnabled
 		}(),
+		SiteMessagesEnabled: func() bool {
+			if req.SiteMessagesEnabled != nil {
+				return *req.SiteMessagesEnabled
+			}
+			return previousSettings.SiteMessagesEnabled
+		}(),
+		SiteMessagesDailySendLimit: func() int {
+			if req.SiteMessagesDailySendLimit != nil {
+				return *req.SiteMessagesDailySendLimit
+			}
+			return previousSettings.SiteMessagesDailySendLimit
+		}(),
+		SiteMessagesRetentionDays: func() int {
+			if req.SiteMessagesRetentionDays != nil {
+				return *req.SiteMessagesRetentionDays
+			}
+			return previousSettings.SiteMessagesRetentionDays
+		}(),
+		SiteMessagesDefaultRecipientEmail: func() string {
+			if req.SiteMessagesDefaultRecipientEmail != nil {
+				return *req.SiteMessagesDefaultRecipientEmail
+			}
+			return previousSettings.SiteMessagesDefaultRecipientEmail
+		}(),
 	}
 
 	authSourceDefaults := &service.AuthSourceDefaultSettings{
@@ -1877,6 +1933,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasswordResetEnabled:                   updatedSettings.PasswordResetEnabled,
 		FrontendURL:                            updatedSettings.FrontendURL,
 		InvitationCodeEnabled:                  updatedSettings.InvitationCodeEnabled,
+		InvitationRegistrationMode:             updatedSettings.InvitationRegistrationMode,
 		TotpEnabled:                            updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:            h.settingService.IsTotpEncryptionKeyConfigured(),
 		LoginAgreementEnabled:                  updatedSettings.LoginAgreementEnabled,
@@ -1951,10 +2008,16 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		APIBaseURL:                             updatedSettings.APIBaseURL,
 		ContactInfo:                            updatedSettings.ContactInfo,
 		ContactChannels:                        dto.ParseContactChannels(updatedSettings.ContactChannels),
+		SupportChatEnabled:                     updatedSettings.SupportChatEnabled,
+		SupportChatGatewayURL:                  updatedSettings.SupportChatGatewayURL,
+		SupportChatTitle:                       updatedSettings.SupportChatTitle,
+		SupportChatWelcomeMessage:              updatedSettings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:         updatedSettings.SupportChatOfficialContactText,
 		DocURL:                                 updatedSettings.DocURL,
 		SitePages:                              dto.ParseSitePages(updatedSettings.SitePages),
 		HomeContent:                            updatedSettings.HomeContent,
 		HideCcsImportButton:                    updatedSettings.HideCcsImportButton,
+		FrontendLocales:                        updatedSettings.FrontendLocales,
 		PurchaseSubscriptionEnabled:            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                   updatedSettings.TableDefaultPageSize,
@@ -2039,6 +2102,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
 
 		RiskControlEnabled: updatedSettings.RiskControlEnabled,
+
+		SiteMessagesEnabled:               updatedSettings.SiteMessagesEnabled,
+		SiteMessagesDailySendLimit:        updatedSettings.SiteMessagesDailySendLimit,
+		SiteMessagesRetentionDays:         updatedSettings.SiteMessagesRetentionDays,
+		SiteMessagesDefaultRecipientEmail: updatedSettings.SiteMessagesDefaultRecipientEmail,
 	}
 	if fastPolicy, err := h.settingService.GetOpenAIFastPolicySettings(c.Request.Context()); err != nil {
 		slog.Error("openai_fast_policy_settings_get_failed", "error", err)
@@ -2098,6 +2166,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.InvitationCodeEnabled != after.InvitationCodeEnabled {
 		changed = append(changed, "invitation_code_enabled")
+	}
+	if before.InvitationRegistrationMode != after.InvitationRegistrationMode {
+		changed = append(changed, "invitation_registration_mode")
 	}
 	if before.PasswordResetEnabled != after.PasswordResetEnabled {
 		changed = append(changed, "password_reset_enabled")
@@ -2294,6 +2365,21 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ContactChannels != after.ContactChannels {
 		changed = append(changed, "contact_channels")
 	}
+	if before.SupportChatEnabled != after.SupportChatEnabled {
+		changed = append(changed, "support_chat_enabled")
+	}
+	if before.SupportChatGatewayURL != after.SupportChatGatewayURL {
+		changed = append(changed, "support_chat_gateway_url")
+	}
+	if before.SupportChatTitle != after.SupportChatTitle {
+		changed = append(changed, "support_chat_title")
+	}
+	if before.SupportChatWelcomeMessage != after.SupportChatWelcomeMessage {
+		changed = append(changed, "support_chat_welcome_message")
+	}
+	if before.SupportChatOfficialContactText != after.SupportChatOfficialContactText {
+		changed = append(changed, "support_chat_official_contact_text")
+	}
 	if before.DocURL != after.DocURL {
 		changed = append(changed, "doc_url")
 	}
@@ -2305,6 +2391,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.HideCcsImportButton != after.HideCcsImportButton {
 		changed = append(changed, "hide_ccs_import_button")
+	}
+	if !equalStringSlice(before.FrontendLocales, after.FrontendLocales) {
+		changed = append(changed, "frontend_locales")
 	}
 	if before.CCSwitchDefaultModelAnthropic != after.CCSwitchDefaultModelAnthropic {
 		changed = append(changed, "ccswitch_default_model_anthropic")
@@ -2483,6 +2572,18 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.RiskControlEnabled != after.RiskControlEnabled {
 		changed = append(changed, "risk_control_enabled")
+	}
+	if before.SiteMessagesEnabled != after.SiteMessagesEnabled {
+		changed = append(changed, "site_messages_enabled")
+	}
+	if before.SiteMessagesDailySendLimit != after.SiteMessagesDailySendLimit {
+		changed = append(changed, "site_messages_daily_send_limit")
+	}
+	if before.SiteMessagesRetentionDays != after.SiteMessagesRetentionDays {
+		changed = append(changed, "site_messages_retention_days")
+	}
+	if before.SiteMessagesDefaultRecipientEmail != after.SiteMessagesDefaultRecipientEmail {
+		changed = append(changed, "site_messages_default_recipient_email")
 	}
 	changed = appendAuthSourceDefaultChanges(changed, beforeAuthSourceDefaults, afterAuthSourceDefaults)
 	return changed

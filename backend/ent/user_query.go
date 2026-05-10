@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
@@ -41,6 +42,8 @@ type UserQuery struct {
 	withSubscriptions         *UserSubscriptionQuery
 	withAssignedSubscriptions *UserSubscriptionQuery
 	withAnnouncementReads     *AnnouncementReadQuery
+	withSentSiteMessages      *SiteMessageQuery
+	withReceivedSiteMessages  *SiteMessageQuery
 	withAllowedGroups         *GroupQuery
 	withUsageLogs             *UsageLogQuery
 	withAttributeValues       *UserAttributeValueQuery
@@ -189,6 +192,50 @@ func (_q *UserQuery) QueryAnnouncementReads() *AnnouncementReadQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(announcementread.Table, announcementread.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.AnnouncementReadsTable, user.AnnouncementReadsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySentSiteMessages chains the current query on the "sent_site_messages" edge.
+func (_q *UserQuery) QuerySentSiteMessages() *SiteMessageQuery {
+	query := (&SiteMessageClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(sitemessage.Table, sitemessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SentSiteMessagesTable, user.SentSiteMessagesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryReceivedSiteMessages chains the current query on the "received_site_messages" edge.
+func (_q *UserQuery) QueryReceivedSiteMessages() *SiteMessageQuery {
+	query := (&SiteMessageClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(sitemessage.Table, sitemessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ReceivedSiteMessagesTable, user.ReceivedSiteMessagesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -569,6 +616,8 @@ func (_q *UserQuery) Clone() *UserQuery {
 		withSubscriptions:         _q.withSubscriptions.Clone(),
 		withAssignedSubscriptions: _q.withAssignedSubscriptions.Clone(),
 		withAnnouncementReads:     _q.withAnnouncementReads.Clone(),
+		withSentSiteMessages:      _q.withSentSiteMessages.Clone(),
+		withReceivedSiteMessages:  _q.withReceivedSiteMessages.Clone(),
 		withAllowedGroups:         _q.withAllowedGroups.Clone(),
 		withUsageLogs:             _q.withUsageLogs.Clone(),
 		withAttributeValues:       _q.withAttributeValues.Clone(),
@@ -635,6 +684,28 @@ func (_q *UserQuery) WithAnnouncementReads(opts ...func(*AnnouncementReadQuery))
 		opt(query)
 	}
 	_q.withAnnouncementReads = query
+	return _q
+}
+
+// WithSentSiteMessages tells the query-builder to eager-load the nodes that are connected to
+// the "sent_site_messages" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSentSiteMessages(opts ...func(*SiteMessageQuery)) *UserQuery {
+	query := (&SiteMessageClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSentSiteMessages = query
+	return _q
+}
+
+// WithReceivedSiteMessages tells the query-builder to eager-load the nodes that are connected to
+// the "received_site_messages" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithReceivedSiteMessages(opts ...func(*SiteMessageQuery)) *UserQuery {
+	query := (&SiteMessageClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withReceivedSiteMessages = query
 	return _q
 }
 
@@ -804,12 +875,14 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [13]bool{
+		loadedTypes = [15]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
 			_q.withAssignedSubscriptions != nil,
 			_q.withAnnouncementReads != nil,
+			_q.withSentSiteMessages != nil,
+			_q.withReceivedSiteMessages != nil,
 			_q.withAllowedGroups != nil,
 			_q.withUsageLogs != nil,
 			_q.withAttributeValues != nil,
@@ -875,6 +948,20 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadAnnouncementReads(ctx, query, nodes,
 			func(n *User) { n.Edges.AnnouncementReads = []*AnnouncementRead{} },
 			func(n *User, e *AnnouncementRead) { n.Edges.AnnouncementReads = append(n.Edges.AnnouncementReads, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSentSiteMessages; query != nil {
+		if err := _q.loadSentSiteMessages(ctx, query, nodes,
+			func(n *User) { n.Edges.SentSiteMessages = []*SiteMessage{} },
+			func(n *User, e *SiteMessage) { n.Edges.SentSiteMessages = append(n.Edges.SentSiteMessages, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withReceivedSiteMessages; query != nil {
+		if err := _q.loadReceivedSiteMessages(ctx, query, nodes,
+			func(n *User) { n.Edges.ReceivedSiteMessages = []*SiteMessage{} },
+			func(n *User, e *SiteMessage) { n.Edges.ReceivedSiteMessages = append(n.Edges.ReceivedSiteMessages, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -1090,6 +1177,66 @@ func (_q *UserQuery) loadAnnouncementReads(ctx context.Context, query *Announcem
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSentSiteMessages(ctx context.Context, query *SiteMessageQuery, nodes []*User, init func(*User), assign func(*User, *SiteMessage)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(sitemessage.FieldSenderID)
+	}
+	query.Where(predicate.SiteMessage(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SentSiteMessagesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SenderID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "sender_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadReceivedSiteMessages(ctx context.Context, query *SiteMessageQuery, nodes []*User, init func(*User), assign func(*User, *SiteMessage)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(sitemessage.FieldRecipientID)
+	}
+	query.Where(predicate.SiteMessage(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.ReceivedSiteMessagesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.RecipientID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "recipient_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

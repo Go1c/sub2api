@@ -269,6 +269,11 @@ import {
   loadOAuthAffiliateCode,
   oauthAffiliatePayload
 } from '@/utils/oauthAffiliate'
+import {
+  invitationRegistrationModeSupportsAffiliateLink,
+  normalizeInvitationRegistrationMode,
+  type InvitationRegistrationMode
+} from '@/utils/invitationRegistrationMode'
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +295,36 @@ const suggestedDisplayName = ref('')
 const suggestedAvatarUrl = ref('')
 const adoptDisplayName = ref(true)
 const adoptAvatar = ref(true)
+
+const invitationRegistrationMode = ref<InvitationRegistrationMode>('redeem_code')
+let invitationRegistrationModeLoaded = false
+
+async function ensureInvitationRegistrationMode(): Promise<void> {
+  if (invitationRegistrationModeLoaded) {
+    return
+  }
+  try {
+    const settings = await getPublicSettings()
+    invitationRegistrationMode.value = normalizeInvitationRegistrationMode(
+      settings.invitation_registration_mode
+    )
+  } catch {
+    invitationRegistrationMode.value = 'redeem_code'
+  } finally {
+    invitationRegistrationModeLoaded = true
+  }
+}
+
+async function applyStoredAffiliateCodeToInvitation(): Promise<void> {
+  if (invitationCode.value.trim()) {
+    return
+  }
+  await ensureInvitationRegistrationMode()
+  if (!invitationRegistrationModeSupportsAffiliateLink(invitationRegistrationMode.value)) {
+    return
+  }
+  invitationCode.value = loadOAuthAffiliateCode()
+}
 const needsAdoptionConfirmation = ref(false)
 const pendingAccountAction = ref<'none' | 'choose_account_action' | 'create_account' | 'bind_login'>('none')
 const pendingAccountEmail = ref('')
@@ -402,6 +437,10 @@ function sanitizeRedirectPath(path: string | null | undefined): string {
 async function loadProviderName() {
   try {
     const settings = await getPublicSettings()
+    invitationRegistrationMode.value = normalizeInvitationRegistrationMode(
+      settings.invitation_registration_mode
+    )
+    invitationRegistrationModeLoaded = true
     const name = settings.oidc_oauth_provider_name?.trim()
     if (name) {
       providerName.value = name
@@ -619,6 +658,7 @@ async function finalizePendingAccountResponse(completion: PendingOidcCompletion)
   if (completion.error === 'invitation_required') {
     pendingAccountAction.value = 'none'
     needsInvitation.value = true
+    await applyStoredAffiliateCodeToInvitation()
     needsAdoptionConfirmation.value = false
     isProcessing.value = false
     persistPendingAuthSession(redirect)
@@ -788,6 +828,7 @@ onMounted(async () => {
       legacyPendingOAuthToken.value = legacyPendingToken
       redirectTo.value = redirect
       needsInvitation.value = true
+      await applyStoredAffiliateCodeToInvitation()
       isProcessing.value = false
       return
     }
@@ -807,6 +848,7 @@ onMounted(async () => {
 
     if (completion.error === 'invitation_required') {
       needsInvitation.value = true
+      await applyStoredAffiliateCodeToInvitation()
       isProcessing.value = false
       persistPendingAuthSession(completionRedirect)
       return

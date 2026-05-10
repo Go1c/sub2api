@@ -1,0 +1,444 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/stretchr/testify/require"
+)
+
+type siteMessageSettingsStub struct {
+	settings SiteMessageSettings
+	err      error
+}
+
+func (s siteMessageSettingsStub) GetSiteMessageSettings(context.Context) (SiteMessageSettings, error) {
+	if s.err != nil {
+		return SiteMessageSettings{}, s.err
+	}
+	return s.settings, nil
+}
+
+type siteMessageUserRepoStub struct {
+	users map[int64]*User
+}
+
+type siteMessageEmailCall struct {
+	email   string
+	subject string
+	content string
+}
+
+type siteMessageEmailSenderStub struct {
+	calls []siteMessageEmailCall
+	err   error
+}
+
+func (s *siteMessageEmailSenderStub) EnqueueSiteMessage(email, subject, content string) error {
+	s.calls = append(s.calls, siteMessageEmailCall{email: email, subject: subject, content: content})
+	return s.err
+}
+
+func (s siteMessageUserRepoStub) GetByID(_ context.Context, id int64) (*User, error) {
+	if user, ok := s.users[id]; ok {
+		copy := *user
+		return &copy, nil
+	}
+	return nil, ErrUserNotFound
+}
+
+func (s siteMessageUserRepoStub) GetByEmail(_ context.Context, email string) (*User, error) {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	for _, user := range s.users {
+		if strings.ToLower(strings.TrimSpace(user.Email)) == normalized {
+			copy := *user
+			return &copy, nil
+		}
+	}
+	return nil, ErrUserNotFound
+}
+
+func (s siteMessageUserRepoStub) ListWithFilters(_ context.Context, params pagination.PaginationParams, filters UserListFilters) ([]User, *pagination.PaginationResult, error) {
+	search := strings.ToLower(strings.TrimSpace(filters.Search))
+	out := make([]User, 0)
+	for _, user := range s.users {
+		if search == "" ||
+			strings.Contains(strings.ToLower(user.Email), search) ||
+			strings.Contains(strings.ToLower(user.Username), search) {
+			copy := *user
+			out = append(out, copy)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, &pagination.PaginationResult{
+		Total:    int64(len(out)),
+		Page:     params.Page,
+		PageSize: params.PageSize,
+	}, nil
+}
+
+type siteMessageRepoStub struct {
+	nextID  int64
+	items   map[int64]*SiteMessage
+	created []*SiteMessage
+}
+
+func newSiteMessageRepoStub() *siteMessageRepoStub {
+	return &siteMessageRepoStub{
+		nextID: 1,
+		items:  make(map[int64]*SiteMessage),
+	}
+}
+
+func (s *siteMessageRepoStub) Create(_ context.Context, message *SiteMessage) error {
+	copy := *message
+	if copy.ID == 0 {
+		copy.ID = s.nextID
+		s.nextID++
+	}
+	s.items[copy.ID] = &copy
+	s.created = append(s.created, &copy)
+	message.ID = copy.ID
+	message.CreatedAt = copy.CreatedAt
+	message.UpdatedAt = copy.UpdatedAt
+	return nil
+}
+
+func (s *siteMessageRepoStub) GetVisibleByID(_ context.Context, messageID, userID int64, cutoff time.Time) (*SiteMessage, error) {
+	item, ok := s.items[messageID]
+	if !ok || item.CreatedAt.Before(cutoff) {
+		return nil, ErrSiteMessageNotFound
+	}
+	if item.SenderID != userID && item.RecipientID != userID {
+		return nil, ErrSiteMessageNotFound
+	}
+	copy := *item
+	return &copy, nil
+}
+
+func (s *siteMessageRepoStub) ListInbox(_ context.Context, userID int64, params pagination.PaginationParams, cutoff time.Time) ([]SiteMessage, *pagination.PaginationResult, error) {
+	out := make([]SiteMessage, 0)
+	for _, item := range s.items {
+		if item.RecipientID == userID && !item.CreatedAt.Before(cutoff) {
+			out = append(out, *item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, &pagination.PaginationResult{Total: int64(len(out)), Page: params.Page, PageSize: params.PageSize}, nil
+}
+
+func (s *siteMessageRepoStub) ListSent(_ context.Context, userID int64, params pagination.PaginationParams, cutoff time.Time) ([]SiteMessage, *pagination.PaginationResult, error) {
+	out := make([]SiteMessage, 0)
+	for _, item := range s.items {
+		if item.SenderID == userID && !item.CreatedAt.Before(cutoff) {
+			out = append(out, *item)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, &pagination.PaginationResult{Total: int64(len(out)), Page: params.Page, PageSize: params.PageSize}, nil
+}
+
+func (s *siteMessageRepoStub) MarkRead(_ context.Context, messageID, userID int64, readAt time.Time) error {
+	item, ok := s.items[messageID]
+	if !ok || item.RecipientID != userID {
+		return ErrSiteMessageNotFound
+	}
+	if item.ReadAt == nil {
+		item.ReadAt = &readAt
+	}
+	return nil
+}
+
+func (s *siteMessageRepoStub) CountUnread(_ context.Context, userID int64, cutoff time.Time) (int64, error) {
+	var count int64
+	for _, item := range s.items {
+		if item.RecipientID == userID && item.ReadAt == nil && !item.CreatedAt.Before(cutoff) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (s *siteMessageRepoStub) CountSentSince(_ context.Context, userID int64, since time.Time) (int64, error) {
+	var count int64
+	for _, item := range s.items {
+		if item.SenderID == userID && !item.CreatedAt.Before(since) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (s *siteMessageRepoStub) DeleteOlderThan(_ context.Context, cutoff time.Time) (int64, error) {
+	var deleted int64
+	for id, item := range s.items {
+		if item.CreatedAt.Before(cutoff) {
+			delete(s.items, id)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
+func newSiteMessageTestService(repo *siteMessageRepoStub, settings SiteMessageSettings, users map[int64]*User, now time.Time) *SiteMessageService {
+	svc := NewSiteMessageService(repo, siteMessageUserRepoStub{users: users}, siteMessageSettingsStub{settings: settings}, nil)
+	svc.now = func() time.Time { return now }
+	return svc
+}
+
+func siteMessageTestUsers() map[int64]*User {
+	return map[int64]*User{
+		1: {ID: 1, Email: "admin@example.com", Username: "admin", Role: RoleAdmin, Status: StatusActive},
+		2: {ID: 2, Email: "alice@example.com", Username: "alice", Role: RoleUser, Status: StatusActive},
+		3: {ID: 3, Email: "bob@example.com", Username: "bob", Role: RoleUser, Status: StatusActive},
+	}
+}
+
+func TestSiteMessageServiceDisabledBlocksSend(t *testing.T) {
+	repo := newSiteMessageRepoStub()
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: false, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), time.Unix(1778000000, 0))
+
+	_, err := svc.Send(context.Background(), SendSiteMessageInput{
+		SenderID:       2,
+		RecipientQuery: "bob@example.com",
+		Subject:        "hello",
+		Content:        "body",
+	})
+
+	require.ErrorIs(t, err, ErrSiteMessagesDisabled)
+	require.Empty(t, repo.created)
+}
+
+func TestSiteMessageServiceResolvesExactRecipientOnlyForUsers(t *testing.T) {
+	svc := newSiteMessageTestService(newSiteMessageRepoStub(), SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), time.Unix(1778000000, 0))
+
+	byID, err := svc.ResolveRecipient(context.Background(), "3", false)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), byID.ID)
+
+	byEmail, err := svc.ResolveRecipient(context.Background(), "BOB@example.com", false)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), byEmail.ID)
+
+	_, err = svc.ResolveRecipient(context.Background(), "bob", false)
+	require.ErrorIs(t, err, ErrSiteMessageRecipientNotFound)
+}
+
+func TestSiteMessageServiceResolveRecipientReturnsDisabledWhenFeatureOff(t *testing.T) {
+	svc := newSiteMessageTestService(newSiteMessageRepoStub(), SiteMessageSettings{Enabled: false, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), time.Unix(1778000000, 0))
+
+	_, err := svc.ResolveRecipient(context.Background(), "bob@example.com", false)
+
+	require.ErrorIs(t, err, ErrSiteMessagesDisabled)
+}
+
+func TestSiteMessageServiceEnforcesDailyLimitForRegularUsers(t *testing.T) {
+	now := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	for i := 0; i < 10; i++ {
+		id := int64(i + 1)
+		repo.items[id] = &SiteMessage{
+			ID:          id,
+			SenderID:    2,
+			RecipientID: 3,
+			Subject:     "sent " + strconv.Itoa(i),
+			Content:     "body",
+			CreatedAt:   now.Add(-time.Duration(i) * time.Hour),
+		}
+	}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+
+	_, err := svc.Send(context.Background(), SendSiteMessageInput{
+		SenderID:       2,
+		RecipientQuery: "bob@example.com",
+		Subject:        "limit",
+		Content:        "body",
+	})
+
+	require.ErrorIs(t, err, ErrSiteMessageDailyLimitExceeded)
+}
+
+func TestSiteMessageServiceAdminBypassesDailyLimit(t *testing.T) {
+	now := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	for i := 0; i < 10; i++ {
+		id := int64(i + 1)
+		repo.items[id] = &SiteMessage{
+			ID:          id,
+			SenderID:    1,
+			RecipientID: 3,
+			Subject:     "sent " + strconv.Itoa(i),
+			Content:     "body",
+			CreatedAt:   now.Add(-time.Duration(i) * time.Hour),
+		}
+	}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+
+	message, err := svc.AdminSendToUser(context.Background(), AdminSendSiteMessageInput{
+		AdminID:     1,
+		RecipientID: 3,
+		Subject:     "admin note",
+		Content:     "body",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), message.SenderID)
+	require.Equal(t, int64(3), message.RecipientID)
+}
+
+func TestSiteMessageServiceAdminSendToUserEnqueuesEmailCopyWhenRequested(t *testing.T) {
+	now := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	emailSender := &siteMessageEmailSenderStub{}
+	svc := newSiteMessageTestService(newSiteMessageRepoStub(), SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+	svc.emailSender = emailSender
+
+	message, err := svc.AdminSendToUser(context.Background(), AdminSendSiteMessageInput{
+		AdminID:     1,
+		RecipientID: 3,
+		Subject:     "admin note",
+		Content:     "body",
+		SendEmail:   true,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(3), message.RecipientID)
+	require.Len(t, emailSender.calls, 1)
+	require.Equal(t, "bob@example.com", emailSender.calls[0].email)
+	require.Equal(t, "admin note", emailSender.calls[0].subject)
+	require.Equal(t, "body", emailSender.calls[0].content)
+}
+
+func TestSiteMessageServiceAdminSendToUserSkipsEmailCopyWhenNotRequested(t *testing.T) {
+	now := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	emailSender := &siteMessageEmailSenderStub{}
+	svc := newSiteMessageTestService(newSiteMessageRepoStub(), SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+	svc.emailSender = emailSender
+
+	_, err := svc.AdminSendToUser(context.Background(), AdminSendSiteMessageInput{
+		AdminID:     1,
+		RecipientID: 3,
+		Subject:     "admin note",
+		Content:     "body",
+		SendEmail:   false,
+	})
+
+	require.NoError(t, err)
+	require.Empty(t, emailSender.calls)
+}
+
+func TestSiteMessageServiceOpenMarksRecipientMessageRead(t *testing.T) {
+	now := time.Unix(1778000000, 0)
+	repo := newSiteMessageRepoStub()
+	repo.items[1] = &SiteMessage{
+		ID:          1,
+		SenderID:    2,
+		RecipientID: 3,
+		Subject:     "hello",
+		Content:     "body",
+		CreatedAt:   now,
+	}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+
+	message, err := svc.Get(context.Background(), 3, 1)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), message.ID)
+	require.NotNil(t, repo.items[1].ReadAt)
+}
+
+func TestSiteMessageServiceRejectsUnauthorizedDetail(t *testing.T) {
+	now := time.Unix(1778000000, 0)
+	repo := newSiteMessageRepoStub()
+	repo.items[1] = &SiteMessage{
+		ID:          1,
+		SenderID:    1,
+		RecipientID: 3,
+		Subject:     "secret",
+		Content:     "body",
+		CreatedAt:   now,
+	}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+
+	_, err := svc.Get(context.Background(), 2, 1)
+
+	require.ErrorIs(t, err, ErrSiteMessageNotFound)
+}
+
+func TestSiteMessageServiceReplyPreservesParentAndRequiresAccess(t *testing.T) {
+	now := time.Unix(1778000000, 0)
+	repo := newSiteMessageRepoStub()
+	repo.items[1] = &SiteMessage{
+		ID:          1,
+		SenderID:    2,
+		RecipientID: 3,
+		Subject:     "question",
+		Content:     "body",
+		CreatedAt:   now,
+	}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+
+	reply, err := svc.Reply(context.Background(), 3, 1, "answer")
+	require.NoError(t, err)
+	require.NotNil(t, reply.ParentID)
+	require.Equal(t, int64(1), *reply.ParentID)
+	require.Equal(t, int64(3), reply.SenderID)
+	require.Equal(t, int64(2), reply.RecipientID)
+
+	_, err = svc.Reply(context.Background(), 1, 1, "not allowed")
+	require.ErrorIs(t, err, ErrSiteMessageNotFound)
+}
+
+func TestSiteMessageServiceReplyCountsTowardDailyLimit(t *testing.T) {
+	now := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	repo.items[1] = &SiteMessage{
+		ID:          1,
+		SenderID:    2,
+		RecipientID: 3,
+		Subject:     "question",
+		Content:     "body",
+		CreatedAt:   now.Add(-time.Hour),
+	}
+	repo.items[2] = &SiteMessage{
+		ID:          2,
+		SenderID:    3,
+		RecipientID: 2,
+		Subject:     "already sent",
+		Content:     "body",
+		CreatedAt:   now.Add(-time.Minute),
+	}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 1, RetentionDays: 30}, siteMessageTestUsers(), now)
+
+	_, err := svc.Reply(context.Background(), 3, 1, "answer")
+
+	require.ErrorIs(t, err, ErrSiteMessageDailyLimitExceeded)
+}
+
+func TestSiteMessageServiceUnreadCountIgnoresReadAndExpired(t *testing.T) {
+	now := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
+	readAt := now.Add(-time.Hour)
+	repo := newSiteMessageRepoStub()
+	repo.items[1] = &SiteMessage{ID: 1, SenderID: 2, RecipientID: 3, Subject: "unread", Content: "body", CreatedAt: now.Add(-time.Hour)}
+	repo.items[2] = &SiteMessage{ID: 2, SenderID: 2, RecipientID: 3, Subject: "read", Content: "body", ReadAt: &readAt, CreatedAt: now.Add(-time.Hour)}
+	repo.items[3] = &SiteMessage{ID: 3, SenderID: 2, RecipientID: 3, Subject: "expired", Content: "body", CreatedAt: now.AddDate(0, 0, -31)}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+
+	count, err := svc.UnreadCount(context.Background(), 3)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+}
+
+func TestSiteMessageServicePropagatesSettingsError(t *testing.T) {
+	svc := NewSiteMessageService(newSiteMessageRepoStub(), siteMessageUserRepoStub{users: siteMessageTestUsers()}, siteMessageSettingsStub{err: errors.New("settings down")}, nil)
+
+	_, err := svc.UnreadCount(context.Background(), 3)
+
+	require.ErrorContains(t, err, "settings down")
+}

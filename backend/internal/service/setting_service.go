@@ -78,6 +78,69 @@ var backendModeCache atomic.Value // *cachedBackendMode
 var backendModeSF singleflight.Group
 
 const backendModeCacheTTL = 60 * time.Second
+
+var defaultFrontendLocales = []string{"en", "zh", "zh-Hant"}
+
+func normalizeFrontendLocaleCode(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "en", "en-us", "en-gb":
+		return "en", true
+	case "zh", "zh-cn", "zh-hans", "zh-sg":
+		return "zh", true
+	case "zh-hant", "zh-tw", "zh-hk", "zh-mo":
+		return "zh-Hant", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeFrontendLocales(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return append([]string(nil), defaultFrontendLocales...), nil
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		code, ok := normalizeFrontendLocaleCode(value)
+		if !ok {
+			return nil, infraerrors.BadRequest("INVALID_FRONTEND_LOCALE", "frontend locale must be one of en, zh, zh-Hant")
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	if len(result) == 0 {
+		return append([]string(nil), defaultFrontendLocales...), nil
+	}
+	return result, nil
+}
+
+func parseFrontendLocales(raw string) []string {
+	var values []string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &values); err != nil {
+		return append([]string(nil), defaultFrontendLocales...)
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		code, ok := normalizeFrontendLocaleCode(value)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	if len(result) == 0 {
+		return append([]string(nil), defaultFrontendLocales...)
+	}
+	return result
+}
+
 const backendModeErrorTTL = 5 * time.Second
 const backendModeDBTimeout = 5 * time.Second
 
@@ -584,6 +647,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyPromoCodeEnabled,
 		SettingKeyPasswordResetEnabled,
 		SettingKeyInvitationCodeEnabled,
+		SettingKeyInvitationRegistrationMode,
 		SettingKeyTotpEnabled,
 		SettingKeyLoginAgreementEnabled,
 		SettingKeyLoginAgreementMode,
@@ -597,10 +661,16 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAPIBaseURL,
 		SettingKeyContactInfo,
 		SettingKeyContactChannels,
+		SettingKeySupportChatEnabled,
+		SettingKeySupportChatGatewayURL,
+		SettingKeySupportChatTitle,
+		SettingKeySupportChatWelcomeMessage,
+		SettingKeySupportChatOfficialContactText,
 		SettingKeyDocURL,
 		SettingKeySitePages,
 		SettingKeyHomeContent,
 		SettingKeyHideCcsImportButton,
+		SettingKeyFrontendLocales,
 		SettingKeyCCSwitchDefaultModelAnthropic,
 		SettingKeyCCSwitchDefaultModelOpenAI,
 		SettingKeyCCSwitchDefaultModelGemini,
@@ -648,6 +718,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
+		SettingKeySiteMessagesEnabled,
+		SettingKeySiteMessagesDefaultRecipientEmail,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -707,6 +779,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		PromoCodeEnabled:                      settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:                  passwordResetEnabled,
 		InvitationCodeEnabled:                 settings[SettingKeyInvitationCodeEnabled] == "true",
+		InvitationRegistrationMode:            normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
 		TotpEnabled:                           settings[SettingKeyTotpEnabled] == "true",
 		LoginAgreementEnabled:                 settings[SettingKeyLoginAgreementEnabled] == "true" && len(loginAgreementDocuments) > 0,
 		LoginAgreementMode:                    normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
@@ -721,10 +794,16 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		APIBaseURL:                            settings[SettingKeyAPIBaseURL],
 		ContactInfo:                           settings[SettingKeyContactInfo],
 		ContactChannels:                       settings[SettingKeyContactChannels],
+		SupportChatEnabled:                    settings[SettingKeySupportChatEnabled] == "true",
+		SupportChatGatewayURL:                 strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
+		SupportChatTitle:                      strings.TrimSpace(settings[SettingKeySupportChatTitle]),
+		SupportChatWelcomeMessage:             strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage]),
+		SupportChatOfficialContactText:        strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText]),
 		DocURL:                                settings[SettingKeyDocURL],
 		SitePages:                             string(filterEnabledSitePages(settings[SettingKeySitePages])),
 		HomeContent:                           settings[SettingKeyHomeContent],
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
+		FrontendLocales:                       parseFrontendLocales(settings[SettingKeyFrontendLocales]),
 		CCSwitchDefaultModelAnthropic:         strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
 		CCSwitchDefaultModelOpenAI:            firstNonEmpty(strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelOpenAI]), "gpt-5.4"),
 		CCSwitchDefaultModelGemini:            strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelGemini]),
@@ -756,6 +835,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AvailableChannelsEnabled:              settings[SettingKeyAvailableChannelsEnabled] == "true",
 		AffiliateEnabled:                      settings[SettingKeyAffiliateEnabled] == "true",
 		RiskControlEnabled:                    settings[SettingKeyRiskControlEnabled] == "true",
+		SiteMessagesEnabled:                   settings[SettingKeySiteMessagesEnabled] == "true",
+		SiteMessagesDefaultRecipientEmail:     strings.TrimSpace(settings[SettingKeySiteMessagesDefaultRecipientEmail]),
 	}, nil
 }
 
@@ -833,6 +914,37 @@ func (s *SettingService) GetAvailableChannelsRuntime(ctx context.Context) Availa
 	}
 }
 
+// GetSiteMessageSettings reads the site-message feature switch and limits.
+func (s *SettingService) GetSiteMessageSettings(ctx context.Context) (SiteMessageSettings, error) {
+	vals, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeySiteMessagesEnabled,
+		SettingKeySiteMessagesDailySendLimit,
+		SettingKeySiteMessagesRetentionDays,
+		SettingKeySiteMessagesDefaultRecipientEmail,
+	})
+	if err != nil {
+		return SiteMessageSettings{}, err
+	}
+
+	settings := SiteMessageSettings{
+		Enabled:               vals[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit:        SiteMessagesDailySendLimitDefault,
+		RetentionDays:         SiteMessagesRetentionDaysDefault,
+		DefaultRecipientEmail: strings.TrimSpace(vals[SettingKeySiteMessagesDefaultRecipientEmail]),
+	}
+	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesDailySendLimit]); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil {
+			settings.DailySendLimit = value
+		}
+	}
+	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesRetentionDays]); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil {
+			settings.RetentionDays = value
+		}
+	}
+	return normalizeSiteMessageSettings(settings), nil
+}
+
 // SetOnUpdateCallback sets a callback function to be called when settings are updated
 // This is used for cache invalidation (e.g., HTML cache in frontend server)
 func (s *SettingService) SetOnUpdateCallback(callback func()) {
@@ -864,6 +976,7 @@ type PublicSettingsInjectionPayload struct {
 	PromoCodeEnabled                      bool                     `json:"promo_code_enabled"`
 	PasswordResetEnabled                  bool                     `json:"password_reset_enabled"`
 	InvitationCodeEnabled                 bool                     `json:"invitation_code_enabled"`
+	InvitationRegistrationMode            string                   `json:"invitation_registration_mode"`
 	TotpEnabled                           bool                     `json:"totp_enabled"`
 	LoginAgreementEnabled                 bool                     `json:"login_agreement_enabled"`
 	LoginAgreementMode                    string                   `json:"login_agreement_mode"`
@@ -878,10 +991,16 @@ type PublicSettingsInjectionPayload struct {
 	APIBaseURL                            string                   `json:"api_base_url"`
 	ContactInfo                           string                   `json:"contact_info"`
 	ContactChannels                       json.RawMessage          `json:"contact_channels"`
+	SupportChatEnabled                    bool                     `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string                   `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string                   `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string                   `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string                   `json:"support_chat_official_contact_text"`
 	DocURL                                string                   `json:"doc_url"`
 	SitePages                             json.RawMessage          `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`
 	HideCcsImportButton                   bool                     `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string                 `json:"frontend_locales"`
 	CCSwitchDefaultModelAnthropic         string                   `json:"ccswitch_default_model_anthropic"`
 	CCSwitchDefaultModelOpenAI            string                   `json:"ccswitch_default_model_openai"`
 	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`
@@ -913,11 +1032,13 @@ type PublicSettingsInjectionPayload struct {
 	// Feature flags — MUST match the opt-in/opt-out registry in
 	// frontend/src/utils/featureFlags.ts. Missing a field here is the bug
 	// that hid the "可用渠道" menu on page refresh.
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
-	AvailableChannelsEnabled             bool `json:"available_channels_enabled"`
-	AffiliateEnabled                     bool `json:"affiliate_enabled"`
-	RiskControlEnabled                   bool `json:"risk_control_enabled"`
+	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
+	AvailableChannelsEnabled             bool   `json:"available_channels_enabled"`
+	AffiliateEnabled                     bool   `json:"affiliate_enabled"`
+	RiskControlEnabled                   bool   `json:"risk_control_enabled"`
+	SiteMessagesEnabled                  bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail    string `json:"site_messages_default_recipient_email"`
 }
 
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
@@ -935,6 +1056,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		PromoCodeEnabled:                      settings.PromoCodeEnabled,
 		PasswordResetEnabled:                  settings.PasswordResetEnabled,
 		InvitationCodeEnabled:                 settings.InvitationCodeEnabled,
+		InvitationRegistrationMode:            settings.InvitationRegistrationMode,
 		TotpEnabled:                           settings.TotpEnabled,
 		LoginAgreementEnabled:                 settings.LoginAgreementEnabled,
 		LoginAgreementMode:                    settings.LoginAgreementMode,
@@ -949,10 +1071,16 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		APIBaseURL:                            settings.APIBaseURL,
 		ContactInfo:                           settings.ContactInfo,
 		ContactChannels:                       safeRawJSONArray(settings.ContactChannels),
+		SupportChatEnabled:                    settings.SupportChatEnabled,
+		SupportChatGatewayURL:                 settings.SupportChatGatewayURL,
+		SupportChatTitle:                      settings.SupportChatTitle,
+		SupportChatWelcomeMessage:             settings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:        settings.SupportChatOfficialContactText,
 		DocURL:                                settings.DocURL,
 		SitePages:                             safeRawJSONArray(settings.SitePages),
 		HomeContent:                           settings.HomeContent,
 		HideCcsImportButton:                   settings.HideCcsImportButton,
+		FrontendLocales:                       settings.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:         settings.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:            settings.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:            settings.CCSwitchDefaultModelGemini,
@@ -985,6 +1113,8 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AvailableChannelsEnabled:              settings.AvailableChannelsEnabled,
 		AffiliateEnabled:                      settings.AffiliateEnabled,
 		RiskControlEnabled:                    settings.RiskControlEnabled,
+		SiteMessagesEnabled:                   settings.SiteMessagesEnabled,
+		SiteMessagesDefaultRecipientEmail:     settings.SiteMessagesDefaultRecipientEmail,
 	}, nil
 }
 
@@ -1460,6 +1590,15 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if settings.GoogleOAuthFrontendRedirectURL == "" {
 		settings.GoogleOAuthFrontendRedirectURL = defaultGoogleOAuthFrontend
 	}
+	settings.SupportChatGatewayURL = strings.TrimRight(strings.TrimSpace(settings.SupportChatGatewayURL), "/")
+	settings.SupportChatTitle = strings.TrimSpace(settings.SupportChatTitle)
+	settings.SupportChatWelcomeMessage = strings.TrimSpace(settings.SupportChatWelcomeMessage)
+	settings.SupportChatOfficialContactText = strings.TrimSpace(settings.SupportChatOfficialContactText)
+	if settings.SupportChatEnabled || settings.SupportChatGatewayURL != "" {
+		if err := config.ValidateAbsoluteHTTPURL(settings.SupportChatGatewayURL); err != nil {
+			return nil, infraerrors.BadRequest("INVALID_SUPPORT_CHAT_GATEWAY_URL", "support chat gateway URL must be an absolute HTTP(S) URL")
+		}
+	}
 
 	updates := make(map[string]string)
 
@@ -1475,6 +1614,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyFrontendURL] = settings.FrontendURL
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
+	updates[SettingKeyInvitationRegistrationMode] = normalizeInvitationRegistrationMode(settings.InvitationRegistrationMode)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 	settings.LoginAgreementMode = normalizeLoginAgreementMode(settings.LoginAgreementMode)
 	settings.LoginAgreementUpdatedAt = strings.TrimSpace(settings.LoginAgreementUpdatedAt)
@@ -1591,10 +1731,25 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
 	updates[SettingKeyContactChannels] = settings.ContactChannels
+	updates[SettingKeySupportChatEnabled] = strconv.FormatBool(settings.SupportChatEnabled)
+	updates[SettingKeySupportChatGatewayURL] = settings.SupportChatGatewayURL
+	updates[SettingKeySupportChatTitle] = settings.SupportChatTitle
+	updates[SettingKeySupportChatWelcomeMessage] = settings.SupportChatWelcomeMessage
+	updates[SettingKeySupportChatOfficialContactText] = settings.SupportChatOfficialContactText
 	updates[SettingKeyDocURL] = settings.DocURL
 	updates[SettingKeySitePages] = settings.SitePages
 	updates[SettingKeyHomeContent] = settings.HomeContent
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
+	frontendLocales, err := normalizeFrontendLocales(settings.FrontendLocales)
+	if err != nil {
+		return nil, err
+	}
+	settings.FrontendLocales = frontendLocales
+	frontendLocalesJSON, err := json.Marshal(frontendLocales)
+	if err != nil {
+		return nil, fmt.Errorf("marshal frontend locales: %w", err)
+	}
+	updates[SettingKeyFrontendLocales] = string(frontendLocalesJSON)
 	updates[SettingKeyCCSwitchDefaultModelAnthropic] = strings.TrimSpace(settings.CCSwitchDefaultModelAnthropic)
 	updates[SettingKeyCCSwitchDefaultModelOpenAI] = firstNonEmpty(strings.TrimSpace(settings.CCSwitchDefaultModelOpenAI), "gpt-5.4")
 	updates[SettingKeyCCSwitchDefaultModelGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelGemini)
@@ -1700,6 +1855,20 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 
 	// 风控中心功能开关
 	updates[SettingKeyRiskControlEnabled] = strconv.FormatBool(settings.RiskControlEnabled)
+
+	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
+		Enabled:               settings.SiteMessagesEnabled,
+		DailySendLimit:        settings.SiteMessagesDailySendLimit,
+		RetentionDays:         settings.SiteMessagesRetentionDays,
+		DefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
+	})
+	settings.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
+	settings.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+	settings.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
+	updates[SettingKeySiteMessagesEnabled] = strconv.FormatBool(settings.SiteMessagesEnabled)
+	updates[SettingKeySiteMessagesDailySendLimit] = strconv.Itoa(settings.SiteMessagesDailySendLimit)
+	updates[SettingKeySiteMessagesRetentionDays] = strconv.Itoa(settings.SiteMessagesRetentionDays)
+	updates[SettingKeySiteMessagesDefaultRecipientEmail] = settings.SiteMessagesDefaultRecipientEmail
 
 	// Claude Code version check
 	updates[SettingKeyMinClaudeCodeVersion] = settings.MinClaudeCodeVersion
@@ -2067,6 +2236,35 @@ func (s *SettingService) IsInvitationCodeEnabled(ctx context.Context) bool {
 		return false // 默认关闭
 	}
 	return value == "true"
+}
+
+func normalizeInvitationRegistrationMode(value string) string {
+	switch strings.TrimSpace(value) {
+	case InvitationRegistrationModeAffiliateLink:
+		return InvitationRegistrationModeAffiliateLink
+	case InvitationRegistrationModeBoth:
+		return InvitationRegistrationModeBoth
+	default:
+		return InvitationRegistrationModeDefault
+	}
+}
+
+func invitationRegistrationModeAllowsRedeemCode(mode string) bool {
+	mode = normalizeInvitationRegistrationMode(mode)
+	return mode == InvitationRegistrationModeRedeemCode || mode == InvitationRegistrationModeBoth
+}
+
+func invitationRegistrationModeAllowsAffiliateLink(mode string) bool {
+	mode = normalizeInvitationRegistrationMode(mode)
+	return mode == InvitationRegistrationModeAffiliateLink || mode == InvitationRegistrationModeBoth
+}
+
+func (s *SettingService) GetInvitationRegistrationMode(ctx context.Context) string {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyInvitationRegistrationMode)
+	if err != nil {
+		return InvitationRegistrationModeDefault
+	}
+	return normalizeInvitationRegistrationMode(value)
 }
 
 // GetCustomMenuItemsRaw returns the raw JSON string of custom_menu_items setting.
@@ -2479,7 +2677,13 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySiteName:                                 "Sub2API",
 		SettingKeySiteLogo:                                 "",
 		SettingKeyContactChannels:                          "[]",
+		SettingKeySupportChatEnabled:                       "false",
+		SettingKeySupportChatGatewayURL:                    "",
+		SettingKeySupportChatTitle:                         "",
+		SettingKeySupportChatWelcomeMessage:                "",
+		SettingKeySupportChatOfficialContactText:           "",
 		SettingKeySitePages:                                "[]",
+		SettingKeyFrontendLocales:                          `["en","zh","zh-Hant"]`,
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
 		SettingKeyPurchaseSubscriptionURL:                  "",
 		SettingKeyTableDefaultPageSize:                     "20",
@@ -2618,6 +2822,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		// 风控中心功能（默认关闭，显式启用）
 		SettingKeyRiskControlEnabled: "false",
 
+		// 站内信功能（默认关闭，显式启用）
+		SettingKeySiteMessagesEnabled:               strconv.FormatBool(SiteMessagesEnabledDefault),
+		SettingKeySiteMessagesDailySendLimit:        strconv.Itoa(SiteMessagesDailySendLimitDefault),
+		SettingKeySiteMessagesRetentionDays:         strconv.Itoa(SiteMessagesRetentionDaysDefault),
+		SettingKeySiteMessagesDefaultRecipientEmail: "",
+
 		// Claude Code version check (default: empty = disabled)
 		SettingKeyMinClaudeCodeVersion: "",
 		SettingKeyMaxClaudeCodeVersion: "",
@@ -2651,6 +2861,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		PasswordResetEnabled:                  emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		FrontendURL:                           settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:                 settings[SettingKeyInvitationCodeEnabled] == "true",
+		InvitationRegistrationMode:            normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
 		TotpEnabled:                           settings[SettingKeyTotpEnabled] == "true",
 		LoginAgreementEnabled:                 settings[SettingKeyLoginAgreementEnabled] == "true",
 		LoginAgreementMode:                    normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
@@ -2671,10 +2882,16 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		APIBaseURL:                            settings[SettingKeyAPIBaseURL],
 		ContactInfo:                           settings[SettingKeyContactInfo],
 		ContactChannels:                       settings[SettingKeyContactChannels],
+		SupportChatEnabled:                    settings[SettingKeySupportChatEnabled] == "true",
+		SupportChatGatewayURL:                 strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
+		SupportChatTitle:                      strings.TrimSpace(settings[SettingKeySupportChatTitle]),
+		SupportChatWelcomeMessage:             strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage]),
+		SupportChatOfficialContactText:        strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText]),
 		DocURL:                                settings[SettingKeyDocURL],
 		SitePages:                             settings[SettingKeySitePages],
 		HomeContent:                           settings[SettingKeyHomeContent],
 		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
+		FrontendLocales:                       parseFrontendLocales(settings[SettingKeyFrontendLocales]),
 		CCSwitchDefaultModelAnthropic:         settings[SettingKeyCCSwitchDefaultModelAnthropic],
 		CCSwitchDefaultModelOpenAI:            s.getStringOrDefault(settings, SettingKeyCCSwitchDefaultModelOpenAI, "gpt-5.4"),
 		CCSwitchDefaultModelGemini:            settings[SettingKeyCCSwitchDefaultModelGemini],
@@ -2999,6 +3216,17 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// 风控中心功能（默认关闭，严格 true 才启用）
 	result.RiskControlEnabled = settings[SettingKeyRiskControlEnabled] == "true"
 
+	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
+		Enabled:               settings[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit:        parseIntSetting(settings[SettingKeySiteMessagesDailySendLimit], SiteMessagesDailySendLimitDefault),
+		RetentionDays:         parseIntSetting(settings[SettingKeySiteMessagesRetentionDays], SiteMessagesRetentionDaysDefault),
+		DefaultRecipientEmail: settings[SettingKeySiteMessagesDefaultRecipientEmail],
+	})
+	result.SiteMessagesEnabled = siteMessageSettings.Enabled
+	result.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
+	result.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+	result.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
+
 	// Claude Code version check
 	result.MinClaudeCodeVersion = settings[SettingKeyMinClaudeCodeVersion]
 	result.MaxClaudeCodeVersion = settings[SettingKeyMaxClaudeCodeVersion]
@@ -3064,6 +3292,14 @@ func clampAffiliateRebateRate(value float64) float64 {
 func parseNonNegativeFloat(raw string, fallback float64) float64 {
 	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
+	}
+	return value
+}
+
+func parseIntSetting(raw string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
 		return fallback
 	}
 	return value

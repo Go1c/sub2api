@@ -1189,6 +1189,71 @@ var (
 		Columns:    SettingsColumns,
 		PrimaryKey: []*schema.Column{SettingsColumns[0]},
 	}
+	// SiteMessagesColumns holds the columns for the "site_messages" table.
+	SiteMessagesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "subject", Type: field.TypeString, Size: 200},
+		{Name: "content", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "read_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "parent_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "sender_id", Type: field.TypeInt64},
+		{Name: "recipient_id", Type: field.TypeInt64},
+	}
+	// SiteMessagesTable holds the schema information for the "site_messages" table.
+	SiteMessagesTable = &schema.Table{
+		Name:       "site_messages",
+		Columns:    SiteMessagesColumns,
+		PrimaryKey: []*schema.Column{SiteMessagesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "site_messages_site_messages_replies",
+				Columns:    []*schema.Column{SiteMessagesColumns[6]},
+				RefColumns: []*schema.Column{SiteMessagesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "site_messages_users_sent_site_messages",
+				Columns:    []*schema.Column{SiteMessagesColumns[7]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "site_messages_users_received_site_messages",
+				Columns:    []*schema.Column{SiteMessagesColumns[8]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sitemessage_recipient_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{SiteMessagesColumns[8], SiteMessagesColumns[4]},
+			},
+			{
+				Name:    "sitemessage_sender_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{SiteMessagesColumns[7], SiteMessagesColumns[4]},
+			},
+			{
+				Name:    "sitemessage_recipient_id_read_at",
+				Unique:  false,
+				Columns: []*schema.Column{SiteMessagesColumns[8], SiteMessagesColumns[3]},
+			},
+			{
+				Name:    "sitemessage_parent_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{SiteMessagesColumns[6], SiteMessagesColumns[4]},
+			},
+			{
+				Name:    "sitemessage_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{SiteMessagesColumns[4]},
+			},
+		},
+	}
 	// SubscriptionPlansColumns holds the columns for the "subscription_plans" table.
 	SubscriptionPlansColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1707,6 +1772,7 @@ var (
 		RedeemCodesTable,
 		SecuritySecretsTable,
 		SettingsTable,
+		SiteMessagesTable,
 		SubscriptionPlansTable,
 		TLSFingerprintProfilesTable,
 		UsageCleanupTasksTable,
@@ -1814,6 +1880,12 @@ func init() {
 	}
 	SettingsTable.Annotation = &entsql.Annotation{
 		Table: "settings",
+	}
+	SiteMessagesTable.ForeignKeys[0].RefTable = SiteMessagesTable
+	SiteMessagesTable.ForeignKeys[1].RefTable = UsersTable
+	SiteMessagesTable.ForeignKeys[2].RefTable = UsersTable
+	SiteMessagesTable.Annotation = &entsql.Annotation{
+		Table: "site_messages",
 	}
 	SubscriptionPlansTable.Annotation = &entsql.Annotation{
 		Table: "subscription_plans",

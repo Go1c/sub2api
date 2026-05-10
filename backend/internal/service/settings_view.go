@@ -19,6 +19,7 @@ type SystemSettings struct {
 	PasswordResetEnabled             bool
 	FrontendURL                      string
 	InvitationCodeEnabled            bool
+	InvitationRegistrationMode       string
 	TotpEnabled                      bool // TOTP 双因素认证
 	LoginAgreementEnabled            bool
 	LoginAgreementMode               string
@@ -113,10 +114,16 @@ type SystemSettings struct {
 	APIBaseURL                            string
 	ContactInfo                           string
 	ContactChannels                       string
+	SupportChatEnabled                    bool
+	SupportChatGatewayURL                 string
+	SupportChatTitle                      string
+	SupportChatWelcomeMessage             string
+	SupportChatOfficialContactText        string
 	DocURL                                string
 	SitePages                             string
 	HomeContent                           string
 	HideCcsImportButton                   bool
+	FrontendLocales                       []string
 	PurchaseSubscriptionEnabled           bool
 	PurchaseSubscriptionURL               string
 	TableDefaultPageSize                  int
@@ -129,23 +136,27 @@ type SystemSettings struct {
 	CCSwitchDefaultModelAntigravity       string
 	CCSwitchDefaultModelAntigravityGemini string
 
-	DefaultConcurrency           int
-	DefaultBalance               float64
-	RiskControlEnabled           bool
-	AffiliateEnabled             bool
-	AffiliateRebateRate          float64
-	AffiliateRebateFreezeHours   int
-	AffiliateRebateDurationDays  int
-	AffiliateRebatePerInviteeCap float64
-	AffiliateSignupBonusEnabled  bool
-	AffiliateSignupBonusAmount   float64
-	AffiliateSignupBonusTotalCap float64
-	AffiliateSignupBonusDailyCap float64
-	BalanceUsageGateEnabled      bool
-	BalanceUsageGateMinBalance   float64
-	BalanceUsageGateMinRecharge  float64
-	DefaultUserRPMLimit          int
-	DefaultSubscriptions         []DefaultSubscriptionSetting
+	DefaultConcurrency                int
+	DefaultBalance                    float64
+	RiskControlEnabled                bool
+	SiteMessagesEnabled               bool
+	SiteMessagesDailySendLimit        int
+	SiteMessagesRetentionDays         int
+	SiteMessagesDefaultRecipientEmail string
+	AffiliateEnabled                  bool
+	AffiliateRebateRate               float64
+	AffiliateRebateFreezeHours        int
+	AffiliateRebateDurationDays       int
+	AffiliateRebatePerInviteeCap      float64
+	AffiliateSignupBonusEnabled       bool
+	AffiliateSignupBonusAmount        float64
+	AffiliateSignupBonusTotalCap      float64
+	AffiliateSignupBonusDailyCap      float64
+	BalanceUsageGateEnabled           bool
+	BalanceUsageGateMinBalance        float64
+	BalanceUsageGateMinRecharge       float64
+	DefaultUserRPMLimit               int
+	DefaultSubscriptions              []DefaultSubscriptionSetting
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -222,6 +233,7 @@ type PublicSettings struct {
 	PromoCodeEnabled                 bool
 	PasswordResetEnabled             bool
 	InvitationCodeEnabled            bool
+	InvitationRegistrationMode       string
 	TotpEnabled                      bool // TOTP 双因素认证
 	LoginAgreementEnabled            bool
 	LoginAgreementMode               string
@@ -236,10 +248,16 @@ type PublicSettings struct {
 	APIBaseURL                       string
 	ContactInfo                      string
 	ContactChannels                  string
+	SupportChatEnabled               bool
+	SupportChatGatewayURL            string
+	SupportChatTitle                 string
+	SupportChatWelcomeMessage        string
+	SupportChatOfficialContactText   string
 	DocURL                           string
 	SitePages                        string
 	HomeContent                      string
 	HideCcsImportButton              bool
+	FrontendLocales                  []string
 
 	PurchaseSubscriptionEnabled           bool
 	PurchaseSubscriptionURL               string
@@ -283,6 +301,10 @@ type PublicSettings struct {
 
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
+
+	// Site messages feature toggle
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
 }
 
 type LoginAgreementDocument struct {

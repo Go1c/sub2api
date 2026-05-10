@@ -28,6 +28,18 @@
 
       <!-- Registration Form -->
       <form v-else @submit.prevent="handleRegister" class="space-y-5">
+        <div
+          v-if="invitationCodeEnabled"
+          class="rounded-xl border border-primary-200 bg-primary-50 p-4 dark:border-primary-900/40 dark:bg-primary-900/20"
+        >
+          <div class="flex items-start gap-3">
+            <Icon name="key" size="md" class="mt-0.5 text-primary-600 dark:text-primary-400" />
+            <p class="text-sm text-primary-700 dark:text-primary-300">
+              {{ t('auth.invitationOnlyNotice') }}
+            </p>
+          </div>
+        </div>
+
         <!-- Email Input -->
         <div>
           <label for="email" class="input-label">
@@ -327,6 +339,11 @@ import {
   oauthAffiliatePayload,
   resolveAffiliateReferralCode
 } from '@/utils/oauthAffiliate'
+import {
+  invitationRegistrationModeSupportsAffiliateLink,
+  normalizeInvitationRegistrationMode,
+  type InvitationRegistrationMode
+} from '@/utils/invitationRegistrationMode'
 import type { LoginAgreementDocument } from '@/types'
 
 const { t, locale } = useI18n()
@@ -351,6 +368,7 @@ const registrationEnabled = ref<boolean>(true)
 const emailVerifyEnabled = ref<boolean>(false)
 const promoCodeEnabled = ref<boolean>(true)
 const invitationCodeEnabled = ref<boolean>(false)
+const invitationRegistrationMode = ref<InvitationRegistrationMode>('redeem_code')
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Sub2API')
@@ -434,6 +452,10 @@ const registrationActionDisabled = computed(
   () => isLoading.value || !settingsLoaded.value || agreementGateActive.value
 )
 
+const invitationRegistrationSupportsAffiliateLink = computed(
+  () => invitationRegistrationModeSupportsAffiliateLink(invitationRegistrationMode.value)
+)
+
 watch(validationToastMessage, (value, previousValue) => {
   if (value && value !== previousValue) {
     appStore.showError(value)
@@ -448,6 +470,21 @@ function syncAffiliateReferralCode(): string {
   return code
 }
 
+async function applyAffiliateReferralToInvitationCode(code = formData.aff_code): Promise<void> {
+  const normalizedCode = code.trim()
+  if (
+    !invitationCodeEnabled.value ||
+    !invitationRegistrationSupportsAffiliateLink.value ||
+    !normalizedCode ||
+    formData.invitation_code.trim()
+  ) {
+    return
+  }
+
+  formData.invitation_code = normalizedCode
+  await validateInvitationCodeDebounced(normalizedCode)
+}
+
 // ==================== Lifecycle ====================
 
 onMounted(async () => {
@@ -459,6 +496,9 @@ onMounted(async () => {
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
     invitationCodeEnabled.value = settings.invitation_code_enabled
+    invitationRegistrationMode.value = normalizeInvitationRegistrationMode(
+      settings.invitation_registration_mode
+    )
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     siteName.value = settings.site_name || 'Sub2API'
@@ -482,7 +522,7 @@ onMounted(async () => {
         await validatePromoCodeDebounced(promoParam)
       }
     }
-    syncAffiliateReferralCode()
+    await applyAffiliateReferralToInvitationCode(syncAffiliateReferralCode())
   } catch (error) {
     console.error('Failed to load public settings:', error)
     loginAgreementEnabled.value = false
@@ -495,7 +535,8 @@ onMounted(async () => {
 watch(
   () => [route.query.aff, route.query.aff_code],
   () => {
-    syncAffiliateReferralCode()
+    const code = syncAffiliateReferralCode()
+    void applyAffiliateReferralToInvitationCode(code)
   }
 )
 

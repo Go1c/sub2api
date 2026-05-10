@@ -39,6 +39,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		PromoCodeEnabled:                      settings.PromoCodeEnabled,
 		PasswordResetEnabled:                  settings.PasswordResetEnabled,
 		InvitationCodeEnabled:                 settings.InvitationCodeEnabled,
+		InvitationRegistrationMode:            settings.InvitationRegistrationMode,
 		TotpEnabled:                           settings.TotpEnabled,
 		LoginAgreementEnabled:                 settings.LoginAgreementEnabled,
 		LoginAgreementMode:                    settings.LoginAgreementMode,
@@ -53,10 +54,16 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		APIBaseURL:                            settings.APIBaseURL,
 		ContactInfo:                           settings.ContactInfo,
 		ContactChannels:                       dto.ParseContactChannels(settings.ContactChannels),
+		SupportChatEnabled:                    settings.SupportChatEnabled,
+		SupportChatGatewayURL:                 settings.SupportChatGatewayURL,
+		SupportChatTitle:                      settings.SupportChatTitle,
+		SupportChatWelcomeMessage:             settings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:        settings.SupportChatOfficialContactText,
 		DocURL:                                settings.DocURL,
 		SitePages:                             dto.ParseSitePages(settings.SitePages),
 		HomeContent:                           settings.HomeContent,
 		HideCcsImportButton:                   settings.HideCcsImportButton,
+		FrontendLocales:                       settings.FrontendLocales,
 		CCSwitchDefaultModelAnthropic:         settings.CCSwitchDefaultModelAnthropic,
 		CCSwitchDefaultModelOpenAI:            settings.CCSwitchDefaultModelOpenAI,
 		CCSwitchDefaultModelGemini:            settings.CCSwitchDefaultModelGemini,
@@ -92,7 +99,9 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 
-		RiskControlEnabled: settings.RiskControlEnabled,
+		RiskControlEnabled:                settings.RiskControlEnabled,
+		SiteMessagesEnabled:               settings.SiteMessagesEnabled,
+		SiteMessagesDefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
 	})
 }
 

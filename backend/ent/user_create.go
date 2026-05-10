@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -412,6 +413,36 @@ func (_c *UserCreate) AddAnnouncementReads(v ...*AnnouncementRead) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddAnnouncementReadIDs(ids...)
+}
+
+// AddSentSiteMessageIDs adds the "sent_site_messages" edge to the SiteMessage entity by IDs.
+func (_c *UserCreate) AddSentSiteMessageIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddSentSiteMessageIDs(ids...)
+	return _c
+}
+
+// AddSentSiteMessages adds the "sent_site_messages" edges to the SiteMessage entity.
+func (_c *UserCreate) AddSentSiteMessages(v ...*SiteMessage) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSentSiteMessageIDs(ids...)
+}
+
+// AddReceivedSiteMessageIDs adds the "received_site_messages" edge to the SiteMessage entity by IDs.
+func (_c *UserCreate) AddReceivedSiteMessageIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddReceivedSiteMessageIDs(ids...)
+	return _c
+}
+
+// AddReceivedSiteMessages adds the "received_site_messages" edges to the SiteMessage entity.
+func (_c *UserCreate) AddReceivedSiteMessages(v ...*SiteMessage) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddReceivedSiteMessageIDs(ids...)
 }
 
 // AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by IDs.
@@ -900,6 +931,38 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(announcementread.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SentSiteMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSiteMessagesTable,
+			Columns: []string{user.SentSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ReceivedSiteMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ReceivedSiteMessagesTable,
+			Columns: []string{user.ReceivedSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

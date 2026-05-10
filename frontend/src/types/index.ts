@@ -229,6 +229,7 @@ export interface PublicSettings {
   promo_code_enabled: boolean
   password_reset_enabled: boolean
   invitation_code_enabled: boolean
+  invitation_registration_mode?: 'redeem_code' | 'affiliate_link' | 'both' | string
   login_agreement_enabled?: boolean
   login_agreement_mode?: 'modal' | 'checkbox' | string
   login_agreement_updated_at?: string
@@ -242,6 +243,11 @@ export interface PublicSettings {
   api_base_url: string
   contact_info: string
   contact_channels: ContactChannel[]
+  support_chat_enabled: boolean
+  support_chat_gateway_url: string
+  support_chat_title: string
+  support_chat_welcome_message: string
+  support_chat_official_contact_text: string
   doc_url: string
   site_pages: SitePage[]
   home_content: string
@@ -257,6 +263,7 @@ export interface PublicSettings {
   table_page_size_options: number[]
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
+  frontend_locales: string[]
   linuxdo_oauth_enabled: boolean
   wechat_oauth_enabled: boolean
   wechat_oauth_open_enabled?: boolean
@@ -275,6 +282,8 @@ export interface PublicSettings {
   channel_monitor_default_interval_seconds: number
   available_channels_enabled: boolean
   affiliate_enabled: boolean
+  site_messages_enabled?: boolean
+  site_messages_default_recipient_email?: string
 }
 
 export interface AuthResponse {
@@ -398,6 +407,46 @@ export interface AnnouncementUserReadStatus {
   balance: number
   eligible: boolean
   read_at?: string
+}
+
+// ==================== Site Message Types ====================
+
+export interface SiteMessageRecipient {
+  id: number
+  email: string
+  username: string
+  is_admin?: boolean
+}
+
+export interface SiteMessage {
+  id: number
+  sender_id: number
+  recipient_id: number
+  parent_id?: number
+  subject: string
+  content: string
+  read_at?: string
+  created_at: string
+  updated_at: string
+  sender?: SiteMessageRecipient
+  recipient?: SiteMessageRecipient
+  replies?: SiteMessage[]
+}
+
+export interface CreateSiteMessageRequest {
+  recipient: string
+  subject: string
+  content: string
+}
+
+export interface ReplySiteMessageRequest {
+  content: string
+}
+
+export interface AdminSendSiteMessageRequest {
+  subject: string
+  content: string
+  send_email?: boolean
 }
 
 // ==================== Proxy Node Types ====================

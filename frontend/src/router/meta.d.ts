@@ -56,6 +56,12 @@ declare module 'vue-router' {
     requiresRiskControl?: boolean
 
     /**
+     * Whether this route requires site messages to be enabled
+     * @default false
+     */
+    requiresSiteMessages?: boolean
+
+    /**
      * i18n key for the page title
      */
     titleKey?: string

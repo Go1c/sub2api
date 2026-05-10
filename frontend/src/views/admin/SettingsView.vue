@@ -1486,6 +1486,31 @@
                 </div>
                 <Toggle v-model="form.invitation_code_enabled" />
               </div>
+              <div
+                v-if="form.invitation_code_enabled"
+                class="border-t border-gray-100 pt-4 dark:border-dark-700"
+              >
+                <label class="font-medium text-gray-900 dark:text-white">{{
+                  t("admin.settings.registration.invitationRegistrationMode")
+                }}</label>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.registration.invitationRegistrationModeHint") }}
+                </p>
+                <select
+                  v-model="form.invitation_registration_mode"
+                  class="input mt-3 max-w-md"
+                >
+                  <option value="redeem_code">
+                    {{ t("admin.settings.registration.invitationRegistrationModeRedeemCode") }}
+                  </option>
+                  <option value="affiliate_link">
+                    {{ t("admin.settings.registration.invitationRegistrationModeAffiliateLink") }}
+                  </option>
+                  <option value="both">
+                    {{ t("admin.settings.registration.invitationRegistrationModeBoth") }}
+                  </option>
+                </select>
+              </div>
               <!-- Password Reset - Only show when email verification is enabled -->
               <div
                 v-if="form.email_verify_enabled"
@@ -3920,6 +3945,39 @@
                     {{ t("admin.settings.site.siteSubtitleHint") }}
                   </p>
                 </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.site.frontendLocales") }}
+                  </label>
+                  <div class="flex flex-wrap gap-2">
+                    <label
+                      v-for="option in frontendLocaleOptions"
+                      :key="option.value"
+                      class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-dark-600 dark:text-gray-200"
+                      :class="{
+                        'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary-500 dark:bg-primary-900/20 dark:text-primary-200':
+                          form.frontend_locales.includes(option.value),
+                      }"
+                    >
+                      <input
+                        v-model="form.frontend_locales"
+                        type="checkbox"
+                        :value="option.value"
+                        :disabled="
+                          form.frontend_locales.length === 1 &&
+                          form.frontend_locales.includes(option.value)
+                        "
+                        class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span>{{ isZhLocale ? option.labelZh : option.labelEn }}</span>
+                    </label>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.frontendLocalesHint") }}
+                  </p>
+                </div>
               </div>
 
               <!-- API Base URL -->
@@ -4208,6 +4266,76 @@
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{ t("admin.settings.site.contactInfoHint") }}
                 </p>
+              </div>
+
+              <!-- AI Support Chat -->
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div
+                  class="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 dark:border-dark-600 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ t("admin.settings.site.supportChat.title") }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.supportChat.description") }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.support_chat_enabled" />
+                </div>
+
+                <div
+                  v-if="form.support_chat_enabled"
+                  class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2"
+                >
+                  <div class="md:col-span-2">
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.gatewayUrl") }}
+                    </label>
+                    <input
+                      v-model="form.support_chat_gateway_url"
+                      type="url"
+                      class="input font-mono text-sm"
+                      :placeholder="t('admin.settings.site.supportChat.gatewayUrlPlaceholder')"
+                    />
+                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.supportChat.gatewayUrlHint") }}
+                    </p>
+                  </div>
+                  <div>
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.widgetTitle") }}
+                    </label>
+                    <input
+                      v-model="form.support_chat_title"
+                      type="text"
+                      class="input"
+                      :placeholder="t('admin.settings.site.supportChat.widgetTitlePlaceholder')"
+                    />
+                  </div>
+                  <div>
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.contactText") }}
+                    </label>
+                    <input
+                      v-model="form.support_chat_official_contact_text"
+                      type="text"
+                      class="input"
+                      :placeholder="t('admin.settings.site.supportChat.contactTextPlaceholder')"
+                    />
+                  </div>
+                  <div class="md:col-span-2">
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.welcomeMessage") }}
+                    </label>
+                    <textarea
+                      v-model="form.support_chat_welcome_message"
+                      rows="3"
+                      class="input resize-y"
+                      :placeholder="t('admin.settings.site.supportChat.welcomeMessagePlaceholder')"
+                    ></textarea>
+                  </div>
+                </div>
               </div>
 
               <!-- Contact Channels -->
@@ -4968,6 +5096,65 @@
                 </p>
               </div>
               <Toggle v-model="form.available_channels_enabled" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.siteMessages.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.siteMessages.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.siteMessages.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.siteMessages.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.site_messages_enabled" />
+            </div>
+
+            <div v-if="form.site_messages_enabled" class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.siteMessages.dailyLimit') }}</label>
+                <input
+                  v-model.number="form.site_messages_daily_send_limit"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.siteMessages.dailyLimitHint') }}</p>
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.siteMessages.retentionDays') }}</label>
+                <input
+                  v-model.number="form.site_messages_retention_days"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.siteMessages.retentionDaysHint') }}</p>
+              </div>
+              <div class="md:col-span-2">
+                <label class="input-label">{{ t('admin.settings.features.siteMessages.defaultRecipientEmail') }}</label>
+                <input
+                  v-model="form.site_messages_default_recipient_email"
+                  type="email"
+                  class="input"
+                  :placeholder="t('admin.settings.features.siteMessages.defaultRecipientEmailPlaceholder')"
+                />
+                <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.siteMessages.defaultRecipientEmailHint') }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -6669,6 +6856,7 @@ import {
   buildAuthSourceDefaultsState,
   defaultWeChatConnectScopesForMode,
   deriveWeChatConnectStoredMode,
+  FRONTEND_LOCALE_OPTIONS,
   normalizeDefaultSubscriptionSettings,
   resolveWeChatConnectModeCapabilities,
 } from "@/api/admin/settings";
@@ -6730,6 +6918,7 @@ const { t, locale } = useI18n();
 const appStore = useAppStore();
 const adminSettingsStore = useAdminSettingsStore();
 const isZhLocale = computed(() => locale.value.startsWith("zh"));
+const frontendLocaleOptions = FRONTEND_LOCALE_OPTIONS;
 
 function localText(zh: string, en: string): string {
   return isZhLocale.value ? zh : en;
@@ -6953,6 +7142,7 @@ const form = reactive<SettingsForm>({
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
   invitation_code_enabled: false,
+  invitation_registration_mode: "redeem_code",
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
@@ -6982,6 +7172,11 @@ const form = reactive<SettingsForm>({
   api_base_url: "",
   contact_info: "",
   contact_channels: [] as ContactChannel[],
+  support_chat_enabled: false,
+  support_chat_gateway_url: "",
+  support_chat_title: "",
+  support_chat_welcome_message: "",
+  support_chat_official_contact_text: "",
   doc_url: "",
   site_pages: [] as SitePage[],
   home_content: "",
@@ -7015,6 +7210,7 @@ const form = reactive<SettingsForm>({
   payment_cancel_rate_limit_window_mode: "rolling",
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
+  frontend_locales: ["en", "zh", "zh-Hant"],
   custom_menu_items: [] as Array<{
     id: string;
     label: string;
@@ -7141,6 +7337,11 @@ const form = reactive<SettingsForm>({
   channel_monitor_default_interval_seconds: 60,
   // Available Channels feature switch
   available_channels_enabled: false,
+  // Site Messages feature switch
+  site_messages_enabled: false,
+  site_messages_daily_send_limit: 10,
+  site_messages_retention_days: 30,
+  site_messages_default_recipient_email: "",
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
 });
@@ -7964,6 +8165,10 @@ async function loadSettings() {
     form.backend_mode_enabled = settings.backend_mode_enabled;
     form.contact_channels = normalizeContactChannels(settings.contact_channels);
     form.site_pages = ensureDefaultSitePages(settings.site_pages);
+    form.frontend_locales =
+      Array.isArray(settings.frontend_locales) && settings.frontend_locales.length > 0
+        ? [...settings.frontend_locales]
+        : ["en", "zh", "zh-Hant"];
     form.default_subscriptions = normalizeDefaultSubscriptionSettings(
       settings.default_subscriptions,
     );
@@ -8269,6 +8474,14 @@ async function saveSettings() {
     // Optional URL fields: auto-clear invalid values so they don't cause backend 400 errors
     if (!isValidHttpUrl(form.frontend_url)) form.frontend_url = "";
     if (!isValidHttpUrl(form.doc_url)) form.doc_url = "";
+    form.support_chat_gateway_url = form.support_chat_gateway_url.trim().replace(/\/+$/, "");
+    if (form.support_chat_enabled && !isValidHttpUrl(form.support_chat_gateway_url)) {
+      appStore.showError(t("admin.settings.site.supportChat.invalidGatewayUrl"));
+      return;
+    }
+    if (!form.support_chat_enabled && !isValidHttpUrl(form.support_chat_gateway_url)) {
+      form.support_chat_gateway_url = "";
+    }
 
     const normalizedContactChannels = normalizeContactChannels(
       form.contact_channels,
@@ -8328,6 +8541,7 @@ async function saveSettings() {
         ),
       promo_code_enabled: form.promo_code_enabled,
       invitation_code_enabled: form.invitation_code_enabled,
+      invitation_registration_mode: form.invitation_registration_mode || "redeem_code",
       password_reset_enabled: form.password_reset_enabled,
       totp_enabled: form.totp_enabled,
       login_agreement_enabled: form.login_agreement_enabled,
@@ -8359,6 +8573,11 @@ async function saveSettings() {
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
       contact_channels: normalizedContactChannels,
+      support_chat_enabled: form.support_chat_enabled,
+      support_chat_gateway_url: form.support_chat_gateway_url,
+      support_chat_title: form.support_chat_title,
+      support_chat_welcome_message: form.support_chat_welcome_message,
+      support_chat_official_contact_text: form.support_chat_official_contact_text,
       doc_url: form.doc_url,
       site_pages: normalizedSitePages,
       home_content: form.home_content,
@@ -8372,6 +8591,7 @@ async function saveSettings() {
         form.ccswitch_default_model_antigravity_gemini,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
+      frontend_locales: form.frontend_locales,
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
@@ -8513,6 +8733,17 @@ async function saveSettings() {
         Number(form.channel_monitor_default_interval_seconds) || 60,
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
+      // Site Messages feature switch
+      site_messages_enabled: form.site_messages_enabled,
+      site_messages_daily_send_limit: Math.max(
+        0,
+        Math.min(1000, Math.floor(Number(form.site_messages_daily_send_limit) || 0)),
+      ),
+      site_messages_retention_days: Math.max(
+        1,
+        Math.min(365, Math.floor(Number(form.site_messages_retention_days) || 30)),
+      ),
+      site_messages_default_recipient_email: form.site_messages_default_recipient_email.trim(),
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
     };

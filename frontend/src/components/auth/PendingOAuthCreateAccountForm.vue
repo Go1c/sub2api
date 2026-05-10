@@ -93,6 +93,12 @@ import { useI18n } from 'vue-i18n'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { getPublicSettings, sendPendingOAuthVerifyCode } from '@/api/auth'
 import { useAppStore } from '@/stores'
+import { loadAffiliateReferralCode, loadOAuthAffiliateCode } from '@/utils/oauthAffiliate'
+import {
+  invitationRegistrationModeSupportsAffiliateLink,
+  normalizeInvitationRegistrationMode,
+  type InvitationRegistrationMode
+} from '@/utils/invitationRegistrationMode'
 
 export type PendingOAuthCreateAccountPayload = {
   email: string
@@ -125,6 +131,7 @@ const sendCodeError = ref('')
 const sendCodeSuccess = ref(false)
 const countdown = ref(0)
 const invitationCodeEnabled = ref(false)
+const invitationRegistrationMode = ref<InvitationRegistrationMode>('redeem_code')
 const turnstileEnabled = ref(false)
 const turnstileSiteKey = ref('')
 const turnstileToken = ref('')
@@ -256,10 +263,25 @@ function emitSwitchToBind() {
   emit('switchToBind', email.value.trim())
 }
 
+function invitationModeSupportsAffiliateLink(): boolean {
+  return invitationRegistrationModeSupportsAffiliateLink(invitationRegistrationMode.value)
+}
+
+function applyStoredAffiliateCodeToInvitation(): void {
+  if (!invitationCodeEnabled.value || !invitationModeSupportsAffiliateLink() || invitationCode.value.trim()) {
+    return
+  }
+  invitationCode.value = loadOAuthAffiliateCode() || loadAffiliateReferralCode()
+}
+
 onMounted(async () => {
   try {
     const settings = await getPublicSettings()
     invitationCodeEnabled.value = settings.invitation_code_enabled === true
+    invitationRegistrationMode.value = normalizeInvitationRegistrationMode(
+      settings.invitation_registration_mode
+    )
+    applyStoredAffiliateCodeToInvitation()
     turnstileEnabled.value = settings.turnstile_enabled === true
     turnstileSiteKey.value = settings.turnstile_site_key || ''
   } catch {

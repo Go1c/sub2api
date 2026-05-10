@@ -145,12 +145,19 @@ func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username,
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 		return nil, ErrRegDisabled
 	}
-	invitationRedeemCode, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode)
+	invitationResult, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode, affiliateCode)
 	if err != nil {
 		if errors.Is(err, ErrInvitationCodeRequired) {
 			return nil, ErrOAuthInvitationRequired
 		}
 		return nil, err
+	}
+	var invitationRedeemCode *RedeemCode
+	if invitationResult != nil {
+		invitationRedeemCode = invitationResult.redeemCode
+		if invitationResult.affiliateCode != "" {
+			affiliateCode = invitationResult.affiliateCode
+		}
 	}
 
 	randomPassword, err := randomHexString(32)

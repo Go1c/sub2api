@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -485,6 +486,36 @@ func (_u *UserUpdate) AddAnnouncementReads(v ...*AnnouncementRead) *UserUpdate {
 	return _u.AddAnnouncementReadIDs(ids...)
 }
 
+// AddSentSiteMessageIDs adds the "sent_site_messages" edge to the SiteMessage entity by IDs.
+func (_u *UserUpdate) AddSentSiteMessageIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddSentSiteMessageIDs(ids...)
+	return _u
+}
+
+// AddSentSiteMessages adds the "sent_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdate) AddSentSiteMessages(v ...*SiteMessage) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSentSiteMessageIDs(ids...)
+}
+
+// AddReceivedSiteMessageIDs adds the "received_site_messages" edge to the SiteMessage entity by IDs.
+func (_u *UserUpdate) AddReceivedSiteMessageIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddReceivedSiteMessageIDs(ids...)
+	return _u
+}
+
+// AddReceivedSiteMessages adds the "received_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdate) AddReceivedSiteMessages(v ...*SiteMessage) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddReceivedSiteMessageIDs(ids...)
+}
+
 // AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by IDs.
 func (_u *UserUpdate) AddAllowedGroupIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAllowedGroupIDs(ids...)
@@ -698,6 +729,48 @@ func (_u *UserUpdate) RemoveAnnouncementReads(v ...*AnnouncementRead) *UserUpdat
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAnnouncementReadIDs(ids...)
+}
+
+// ClearSentSiteMessages clears all "sent_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdate) ClearSentSiteMessages() *UserUpdate {
+	_u.mutation.ClearSentSiteMessages()
+	return _u
+}
+
+// RemoveSentSiteMessageIDs removes the "sent_site_messages" edge to SiteMessage entities by IDs.
+func (_u *UserUpdate) RemoveSentSiteMessageIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveSentSiteMessageIDs(ids...)
+	return _u
+}
+
+// RemoveSentSiteMessages removes "sent_site_messages" edges to SiteMessage entities.
+func (_u *UserUpdate) RemoveSentSiteMessages(v ...*SiteMessage) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSentSiteMessageIDs(ids...)
+}
+
+// ClearReceivedSiteMessages clears all "received_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdate) ClearReceivedSiteMessages() *UserUpdate {
+	_u.mutation.ClearReceivedSiteMessages()
+	return _u
+}
+
+// RemoveReceivedSiteMessageIDs removes the "received_site_messages" edge to SiteMessage entities by IDs.
+func (_u *UserUpdate) RemoveReceivedSiteMessageIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveReceivedSiteMessageIDs(ids...)
+	return _u
+}
+
+// RemoveReceivedSiteMessages removes "received_site_messages" edges to SiteMessage entities.
+func (_u *UserUpdate) RemoveReceivedSiteMessages(v ...*SiteMessage) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveReceivedSiteMessageIDs(ids...)
 }
 
 // ClearAllowedGroups clears all "allowed_groups" edges to the Group entity.
@@ -1253,6 +1326,96 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(announcementread.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SentSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSiteMessagesTable,
+			Columns: []string{user.SentSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSentSiteMessagesIDs(); len(nodes) > 0 && !_u.mutation.SentSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSiteMessagesTable,
+			Columns: []string{user.SentSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SentSiteMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSiteMessagesTable,
+			Columns: []string{user.SentSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ReceivedSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ReceivedSiteMessagesTable,
+			Columns: []string{user.ReceivedSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedReceivedSiteMessagesIDs(); len(nodes) > 0 && !_u.mutation.ReceivedSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ReceivedSiteMessagesTable,
+			Columns: []string{user.ReceivedSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ReceivedSiteMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ReceivedSiteMessagesTable,
+			Columns: []string{user.ReceivedSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -2053,6 +2216,36 @@ func (_u *UserUpdateOne) AddAnnouncementReads(v ...*AnnouncementRead) *UserUpdat
 	return _u.AddAnnouncementReadIDs(ids...)
 }
 
+// AddSentSiteMessageIDs adds the "sent_site_messages" edge to the SiteMessage entity by IDs.
+func (_u *UserUpdateOne) AddSentSiteMessageIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddSentSiteMessageIDs(ids...)
+	return _u
+}
+
+// AddSentSiteMessages adds the "sent_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdateOne) AddSentSiteMessages(v ...*SiteMessage) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSentSiteMessageIDs(ids...)
+}
+
+// AddReceivedSiteMessageIDs adds the "received_site_messages" edge to the SiteMessage entity by IDs.
+func (_u *UserUpdateOne) AddReceivedSiteMessageIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddReceivedSiteMessageIDs(ids...)
+	return _u
+}
+
+// AddReceivedSiteMessages adds the "received_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdateOne) AddReceivedSiteMessages(v ...*SiteMessage) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddReceivedSiteMessageIDs(ids...)
+}
+
 // AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by IDs.
 func (_u *UserUpdateOne) AddAllowedGroupIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAllowedGroupIDs(ids...)
@@ -2266,6 +2459,48 @@ func (_u *UserUpdateOne) RemoveAnnouncementReads(v ...*AnnouncementRead) *UserUp
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAnnouncementReadIDs(ids...)
+}
+
+// ClearSentSiteMessages clears all "sent_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdateOne) ClearSentSiteMessages() *UserUpdateOne {
+	_u.mutation.ClearSentSiteMessages()
+	return _u
+}
+
+// RemoveSentSiteMessageIDs removes the "sent_site_messages" edge to SiteMessage entities by IDs.
+func (_u *UserUpdateOne) RemoveSentSiteMessageIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveSentSiteMessageIDs(ids...)
+	return _u
+}
+
+// RemoveSentSiteMessages removes "sent_site_messages" edges to SiteMessage entities.
+func (_u *UserUpdateOne) RemoveSentSiteMessages(v ...*SiteMessage) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSentSiteMessageIDs(ids...)
+}
+
+// ClearReceivedSiteMessages clears all "received_site_messages" edges to the SiteMessage entity.
+func (_u *UserUpdateOne) ClearReceivedSiteMessages() *UserUpdateOne {
+	_u.mutation.ClearReceivedSiteMessages()
+	return _u
+}
+
+// RemoveReceivedSiteMessageIDs removes the "received_site_messages" edge to SiteMessage entities by IDs.
+func (_u *UserUpdateOne) RemoveReceivedSiteMessageIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveReceivedSiteMessageIDs(ids...)
+	return _u
+}
+
+// RemoveReceivedSiteMessages removes "received_site_messages" edges to SiteMessage entities.
+func (_u *UserUpdateOne) RemoveReceivedSiteMessages(v ...*SiteMessage) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveReceivedSiteMessageIDs(ids...)
 }
 
 // ClearAllowedGroups clears all "allowed_groups" edges to the Group entity.
@@ -2851,6 +3086,96 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(announcementread.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SentSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSiteMessagesTable,
+			Columns: []string{user.SentSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSentSiteMessagesIDs(); len(nodes) > 0 && !_u.mutation.SentSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSiteMessagesTable,
+			Columns: []string{user.SentSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SentSiteMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSiteMessagesTable,
+			Columns: []string{user.SentSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ReceivedSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ReceivedSiteMessagesTable,
+			Columns: []string{user.ReceivedSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedReceivedSiteMessagesIDs(); len(nodes) > 0 && !_u.mutation.ReceivedSiteMessagesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ReceivedSiteMessagesTable,
+			Columns: []string{user.ReceivedSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ReceivedSiteMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ReceivedSiteMessagesTable,
+			Columns: []string{user.ReceivedSiteMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(sitemessage.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

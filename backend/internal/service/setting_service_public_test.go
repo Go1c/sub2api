@@ -79,6 +79,49 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
 }
 
+func TestSettingService_GetPublicSettings_ExposesFrontendLocales(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyFrontendLocales: `["zh-Hant","en"]`,
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"zh-Hant", "en"}, settings.FrontendLocales)
+}
+
+func TestSettingService_GetPublicSettings_ExposesSupportChatSettings(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeySupportChatEnabled:             "true",
+			SettingKeySupportChatGatewayURL:          "https://support-gateway.example.com/",
+			SettingKeySupportChatTitle:               "LumioAPI Helper",
+			SettingKeySupportChatWelcomeMessage:      "Ask from the LumioAPI docs.",
+			SettingKeySupportChatOfficialContactText: "Contact human support",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, settings.SupportChatEnabled)
+	require.Equal(t, "https://support-gateway.example.com", settings.SupportChatGatewayURL)
+	require.Equal(t, "LumioAPI Helper", settings.SupportChatTitle)
+	require.Equal(t, "Ask from the LumioAPI docs.", settings.SupportChatWelcomeMessage)
+	require.Equal(t, "Contact human support", settings.SupportChatOfficialContactText)
+}
+
+func TestSettingService_GetPublicSettings_DefaultsFrontendLocales(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"en", "zh", "zh-Hant"}, settings.FrontendLocales)
+}
+
 func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{

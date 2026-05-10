@@ -30,3 +30,15 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar unread indicator styles', () => {
+  it('uses a larger animated dot for unread site messages', () => {
+    const unreadDotBlockMatch = componentSource.match(/\.sidebar-unread-dot\s*\{[\s\S]*?\n\}/)
+
+    expect(unreadDotBlockMatch).not.toBeNull()
+    expect(unreadDotBlockMatch?.[0]).toContain('height: 0.625rem;')
+    expect(unreadDotBlockMatch?.[0]).toContain('width: 0.625rem;')
+    expect(unreadDotBlockMatch?.[0]).toContain('animation: sidebarUnreadPulse')
+    expect(componentSource).toContain('@keyframes sidebarUnreadPulse')
+  })
+})

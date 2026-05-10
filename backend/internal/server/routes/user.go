@@ -97,6 +97,19 @@ func RegisterUserRoutes(
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
 		}
 
+		// 站内信（用户收发）
+		siteMessages := authenticated.Group("/site-messages")
+		{
+			siteMessages.GET("/inbox", h.SiteMessage.ListInbox)
+			siteMessages.GET("/sent", h.SiteMessage.ListSent)
+			siteMessages.GET("/unread-count", h.SiteMessage.UnreadCount)
+			siteMessages.GET("/recipient/resolve", h.SiteMessage.ResolveRecipient)
+			siteMessages.POST("", h.SiteMessage.Send)
+			siteMessages.GET("/:id", h.SiteMessage.Get)
+			siteMessages.POST("/:id/reply", h.SiteMessage.Reply)
+			siteMessages.POST("/:id/read", h.SiteMessage.MarkRead)
+		}
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{

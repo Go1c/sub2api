@@ -23,6 +23,7 @@ repo-root/
 | i18n | vue-i18n 9（zh-CN 默认，en-US 回落） |
 | 图表 | Chart.js 4 + vue-chartjs 5 |
 | HTTP | axios + 自定义 mock 拦截器 |
+| AI 客服 | 自研 Vue 气泡 + `support-gateway` SSE |
 
 ## 本地开发
 
@@ -52,9 +53,11 @@ pnpm dev                  # http://localhost:5174
 ```
 src/
 ├── api/http.ts              # axios 实例 + 401 拦截 + token 注入
+├── api/supportChat.ts       # DocsGPT support-gateway 客服客户端
 ├── assets/styles/tokens.css # 颜色/字体/阴影 CSS 变量
 ├── components/
 │   ├── dashboard/           # UserDashboardStats/Charts/RecentUsage/QuickActions + RechargeModal
+│   ├── support/             # SupportChatWidget 右下角客服气泡
 │   └── layout/              # Sidebar / TopBar / AppLayout / AuthLayout
 ├── composables/             # （占位）组合式函数
 ├── i18n/                    # zh-CN.ts / en-US.ts / index.ts
@@ -87,6 +90,50 @@ VITE_API_BASE_URL=http://localhost:8080
 VITE_USE_MOCK=false
 ```
 
+## DocsGPT AI 客服
+
+`App.vue` 全站挂载 `SupportChatWidget`。正式环境默认从后端公开设置 `GET /settings/public` 读取开关和配置；管理员在上游 `frontend/` 后台的“站点设置 -> AI 客服”中开启，并填写公开的 `support-gateway` 地址。
+
+`frontend-dashboard` 仍保留 Vite 公开变量作为本地开发或旧部署 fallback；生产优先使用后台设置：
+
+```bash
+VITE_SUPPORT_CHAT_ENABLED=false
+VITE_SUPPORT_CHAT_GATEWAY_URL=
+```
+
+### 使用方式
+
+1. 部署并配置 `github.com/Go1c/lumio-ai-support-chat`，确认 `GET /healthz` 返回 `{ "ok": true }`。
+2. 确认 `frontend-dashboard` 的 `VITE_API_BASE_URL` 指向当前后端，或使用同域 `/api/v1` 代理。
+3. 进入管理员后台“系统设置/站点设置”的 AI 客服区域。
+4. 开启 AI 客服，填写 `Support Gateway 地址`，可选填写客服标题、欢迎语、人工联系按钮文案。
+5. 保存后刷新前端。右下角会出现客服气泡，全站可用，包括营销页、登录页和控制台页面。
+6. 用户切换站点语言后，客服窗口文案和下一条发送给 DocsGPT 的语言参数都会跟着切换。
+
+Doc Agent / DocsGPT 自托管服务的部署步骤见 `github.com/Go1c/lumio-ai-support-chat` 仓库文档；当前仓库只保留前端接入说明。
+
+### 语言联动
+
+浏览器只访问 `support-gateway`，不会持有 DocsGPT Agent API key 或模型 API key。客服请求会带上当前前端语言 `locale`：
+
+- `en-US` → 网关传给 DocsGPT `language=English`
+- `zh-CN` → `language=Simplified Chinese`
+- `zh-Hant` → `language=Traditional Chinese`
+
+已登录用户会附带 `id` 和 `email` 给网关，方便后续排查；未登录用户不会带用户信息。气泡支持流式回复、来源链接、失败重试、清空会话、邮件和官方支持入口。
+
+### 关键代码
+
+| 文件 | 作用 |
+|------|------|
+| `src/App.vue` | 全站挂载 `SupportChatWidget`，保证营销页、认证页、控制台都可见。 |
+| `src/components/support/SupportChatWidget.vue` | 客服气泡 UI、发送消息、重试、清空会话、来源展示；通过 `useI18n()` 读取当前 `locale`。 |
+| `src/api/supportChat.ts` | `fetchSupportChatPublicSettings()` 读取后端公开开关；`fetchSupportChatConfig()` 获取 gateway 文案配置；`streamSupportChat()` 解析 SSE 分片并派发 `answer/source/id/error/end`。 |
+| `src/i18n/index.ts` | 注册 `zh-CN`、`zh-Hant`、`en-US`，并提供 `nextLocale()` 给语言切换按钮使用。 |
+| `src/components/layout/TopBar.vue` | 控制台语言切换入口，按简体中文 → 繁体中文 → 英文循环。 |
+| `src/api/supportChat.spec.ts` | 覆盖 gateway config 请求、SSE 分片解析和错误状态。 |
+| `src/components/support/SupportChatWidget.spec.ts` | 覆盖启用开关、打开面板、登录用户上下文、繁体中文 locale 传递。 |
+
 ## 设计令牌
 
 | Token | 值 | 用途 |
@@ -101,6 +148,7 @@ VITE_USE_MOCK=false
 在开 PR 前，至少跑通：
 
 - [ ] `pnpm typecheck` 无 error
+- [ ] `pnpm test` 通过（客服客户端与组件测试）
 - [ ] `pnpm build` 成功，无 WARN
 - [ ] `pnpm dev` 能打开并点完三条主路径：
   - `/login` → `/dashboard`（触发 mock 登录）

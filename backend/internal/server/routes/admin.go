@@ -32,6 +32,9 @@ func RegisterAdminRoutes(
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
 
+		// 站内信管理
+		registerSiteMessageRoutes(admin, h)
+
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
 
@@ -195,6 +198,14 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Request drilldown (success + error)
 		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
 
+		// Targeted user request body monitoring
+		ops.GET("/user-request-monitors", h.Admin.Ops.ListUserRequestMonitors)
+		ops.POST("/user-request-monitors", h.Admin.Ops.CreateUserRequestMonitor)
+		ops.POST("/user-request-monitors/:id/stop", h.Admin.Ops.StopUserRequestMonitor)
+		ops.GET("/user-request-monitors/:id/captures", h.Admin.Ops.ListUserRequestCaptures)
+		ops.GET("/user-request-monitors/:id/captures/:capture_id", h.Admin.Ops.GetUserRequestCapture)
+		ops.DELETE("/user-request-monitors/:id/captures/:capture_id", h.Admin.Ops.DeleteUserRequestCapture)
+
 		// Indexed system logs
 		ops.GET("/system-logs", h.Admin.Ops.ListSystemLogs)
 		ops.POST("/system-logs/cleanup", h.Admin.Ops.CleanupSystemLogs)
@@ -251,6 +262,14 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// User attribute values
 		users.GET("/:id/attributes", h.Admin.UserAttribute.GetUserAttributes)
 		users.PUT("/:id/attributes", h.Admin.UserAttribute.UpdateUserAttributes)
+	}
+}
+
+func registerSiteMessageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	siteMessages := admin.Group("/site-messages")
+	{
+		siteMessages.POST("/users/:id", h.Admin.SiteMessage.SendToUser)
+		siteMessages.GET("/recipients", h.Admin.SiteMessage.SearchRecipients)
 	}
 }
 
