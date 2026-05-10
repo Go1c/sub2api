@@ -119,6 +119,7 @@ const (
 	newAPIQuotaPerUnit          = 500000.0
 
 	newAPITokenQuotaNotUserBalanceMessage = "New API token quota is not user account balance; configure New API user access token and user id"
+	upstreamBalanceCookieCredentialPrefix = "cookie:"
 )
 
 var upstreamBalancePaths = []string{
@@ -655,14 +656,14 @@ func fetchUpstreamBalanceLoginPath(ctx context.Context, baseURL string, probe up
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("%s %s", probe.path, resp.Status)
 	}
-	result, err := parseUpstreamBalanceLoginCredentials(probe.provider, raw)
+	result, err := parseUpstreamBalanceLoginCredentials(probe.provider, raw, resp.Cookies())
 	if err != nil {
 		return nil, fmt.Errorf("%s %w", probe.path, err)
 	}
 	return result, nil
 }
 
-func parseUpstreamBalanceLoginCredentials(provider string, body []byte) (*UpstreamBalanceLoginCredentials, error) {
+func parseUpstreamBalanceLoginCredentials(provider string, body []byte, cookies []*http.Cookie) (*UpstreamBalanceLoginCredentials, error) {
 	var payload any
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
@@ -675,7 +676,10 @@ func parseUpstreamBalanceLoginCredentials(provider string, body []byte) (*Upstre
 
 	accessToken := strings.TrimSpace(findStringValue(payload, []string{"access_token", "accessToken", "token"}, 0))
 	if accessToken == "" {
-		return nil, fmt.Errorf("access token not found")
+		accessToken = upstreamBalanceCookieCredential(cookies)
+	}
+	if accessToken == "" {
+		return nil, fmt.Errorf("access token or session cookie not found")
 	}
 	userID := strings.TrimSpace(findStringValue(payload, []string{"user_id", "userId", "uid"}, 0))
 	if userID == "" {
@@ -692,6 +696,24 @@ func parseUpstreamBalanceLoginCredentials(provider string, body []byte) (*Upstre
 		Balance:     balance,
 		Currency:    currency,
 	}, nil
+}
+
+func upstreamBalanceCookieCredential(cookies []*http.Cookie) string {
+	for _, cookie := range cookies {
+		if cookie == nil || strings.TrimSpace(cookie.Name) == "" || strings.TrimSpace(cookie.Value) == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(cookie.Name), "session") {
+			return upstreamBalanceCookieCredentialPrefix + cookie.Name + "=" + cookie.Value
+		}
+	}
+	for _, cookie := range cookies {
+		if cookie == nil || strings.TrimSpace(cookie.Name) == "" || strings.TrimSpace(cookie.Value) == "" {
+			continue
+		}
+		return upstreamBalanceCookieCredentialPrefix + cookie.Name + "=" + cookie.Value
+	}
+	return ""
 }
 
 func upstreamBalanceLoginFailureMessage(value any) string {
@@ -819,7 +841,11 @@ func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, acco
 func applyUpstreamBalanceAuthHeaders(req *http.Request, account *Account, path, apiKey string) {
 	if isUpstreamBalanceUserAuthPath(path) {
 		if token := upstreamBalanceNewAPIAccessToken(account); token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			if cookie, ok := upstreamBalanceCookieAuthValue(token); ok {
+				req.Header.Set("Cookie", cookie)
+			} else {
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
 		}
 		if path == "/api/user/self" {
 			if userID := upstreamBalanceNewAPIUserID(account); userID != "" {
@@ -830,6 +856,21 @@ func applyUpstreamBalanceAuthHeaders(req *http.Request, account *Account, path, 
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("x-api-key", apiKey)
+}
+
+func upstreamBalanceCookieAuthValue(token string) (string, bool) {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return "", false
+	}
+	if cookie, ok := strings.CutPrefix(trimmed, upstreamBalanceCookieCredentialPrefix); ok {
+		cookie = strings.TrimSpace(cookie)
+		return cookie, cookie != ""
+	}
+	if strings.HasPrefix(strings.ToLower(trimmed), "session=") {
+		return trimmed, true
+	}
+	return "", false
 }
 
 func isUpstreamBalanceUserAuthPath(path string) bool {
