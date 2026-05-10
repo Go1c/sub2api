@@ -96,7 +96,19 @@
           </div>
           <div v-if="upstreamBalanceEnabled" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-700/50 sm:col-span-2">
-              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr_1fr_auto] sm:items-end">
+                <div>
+                  <label class="input-label">{{ t('admin.accounts.upstreamBalance.provider') }}</label>
+                  <select
+                    v-model="upstreamBalanceProvider"
+                    class="input"
+                    data-testid="upstream-balance-provider"
+                  >
+                    <option value="newapi">{{ t('admin.accounts.upstreamBalance.providerNewAPI') }}</option>
+                    <option value="sub2api">{{ t('admin.accounts.upstreamBalance.providerSub2API') }}</option>
+                    <option value="other">{{ t('admin.accounts.upstreamBalance.providerOther') }}</option>
+                  </select>
+                </div>
                 <div>
                   <label class="input-label">{{ t('admin.accounts.upstreamBalance.loginUsername') }}</label>
                   <input
@@ -105,6 +117,7 @@
                     class="input"
                     data-testid="upstream-balance-login-username"
                     autocomplete="username"
+                    :disabled="!upstreamBalanceLoginSupported"
                     placeholder="user@example.com"
                   />
                 </div>
@@ -119,6 +132,7 @@
                     data-1p-ignore
                     data-lpignore="true"
                     data-bwignore="true"
+                    :disabled="!upstreamBalanceLoginSupported"
                     :placeholder="t('admin.accounts.upstreamBalance.loginPasswordPlaceholder')"
                   />
                 </div>
@@ -126,7 +140,7 @@
                   type="button"
                   class="btn btn-secondary whitespace-nowrap"
                   data-testid="upstream-balance-login"
-                  :disabled="upstreamBalanceLoginLoading"
+                  :disabled="upstreamBalanceLoginLoading || !upstreamBalanceLoginSupported"
                   @click="fetchUpstreamBalanceCredentials"
                 >
                   {{ upstreamBalanceLoginLoading ? t('admin.accounts.upstreamBalance.loginLoading') : t('admin.accounts.upstreamBalance.loginButton') }}
@@ -686,7 +700,19 @@
           </div>
           <div v-if="upstreamBalanceEnabled" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-700/50 sm:col-span-2">
-              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-[160px_1fr_1fr_auto] sm:items-end">
+                <div>
+                  <label class="input-label">{{ t('admin.accounts.upstreamBalance.provider') }}</label>
+                  <select
+                    v-model="upstreamBalanceProvider"
+                    class="input"
+                    data-testid="upstream-balance-provider"
+                  >
+                    <option value="newapi">{{ t('admin.accounts.upstreamBalance.providerNewAPI') }}</option>
+                    <option value="sub2api">{{ t('admin.accounts.upstreamBalance.providerSub2API') }}</option>
+                    <option value="other">{{ t('admin.accounts.upstreamBalance.providerOther') }}</option>
+                  </select>
+                </div>
                 <div>
                   <label class="input-label">{{ t('admin.accounts.upstreamBalance.loginUsername') }}</label>
                   <input
@@ -695,6 +721,7 @@
                     class="input"
                     data-testid="upstream-balance-login-username"
                     autocomplete="username"
+                    :disabled="!upstreamBalanceLoginSupported"
                     placeholder="user@example.com"
                   />
                 </div>
@@ -709,6 +736,7 @@
                     data-1p-ignore
                     data-lpignore="true"
                     data-bwignore="true"
+                    :disabled="!upstreamBalanceLoginSupported"
                     :placeholder="t('admin.accounts.upstreamBalance.loginPasswordPlaceholder')"
                   />
                 </div>
@@ -716,7 +744,7 @@
                   type="button"
                   class="btn btn-secondary whitespace-nowrap"
                   data-testid="upstream-balance-login"
-                  :disabled="upstreamBalanceLoginLoading"
+                  :disabled="upstreamBalanceLoginLoading || !upstreamBalanceLoginSupported"
                   @click="fetchUpstreamBalanceCredentials"
                 >
                   {{ upstreamBalanceLoginLoading ? t('admin.accounts.upstreamBalance.loginLoading') : t('admin.accounts.upstreamBalance.loginButton') }}
@@ -2469,6 +2497,7 @@ const customErrorCodesEnabled = ref(false)
 const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
 const upstreamBalanceEnabled = ref(false)
+const upstreamBalanceProvider = ref<'newapi' | 'sub2api' | 'other'>('newapi')
 const upstreamBalanceAccessToken = ref('')
 const upstreamBalanceUserId = ref('')
 const upstreamBalanceLoginUsername = ref('')
@@ -2493,6 +2522,14 @@ const mixedChannelWarningDetails = ref<{ groupName: string; currentPlatform: str
   null
 )
 const mixedChannelWarningRawMessage = ref('')
+
+const normalizeUpstreamBalanceProvider = (value: unknown): 'newapi' | 'sub2api' | 'other' => {
+  if (value === 'sub2api') return 'sub2api'
+  if (value === 'other') return 'other'
+  return 'newapi'
+}
+
+const upstreamBalanceLoginSupported = computed(() => upstreamBalanceProvider.value !== 'other')
 const mixedChannelWarningAction = ref<(() => Promise<void>) | null>(null)
 const antigravityMixedChannelConfirmed = ref(false)
 
@@ -2772,6 +2809,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedScheduling.value = extra?.mixed_scheduling === true
   allowOverages.value = extra?.allow_overages === true
   upstreamBalanceEnabled.value = extra?.upstream_balance_enabled === true
+  upstreamBalanceProvider.value = normalizeUpstreamBalanceProvider(extra?.upstream_balance_provider)
   upstreamBalanceAccessToken.value = ''
   upstreamBalanceLoginUsername.value = ''
   upstreamBalanceLoginPassword.value = ''
@@ -3512,6 +3550,10 @@ const fetchUpstreamBalanceCredentials = async () => {
   const baseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
   const username = upstreamBalanceLoginUsername.value.trim()
   const password = upstreamBalanceLoginPassword.value
+  if (!upstreamBalanceLoginSupported.value) {
+    appStore.showError(t('admin.accounts.upstreamBalance.loginUnsupportedProvider'))
+    return
+  }
   if (!baseUrl || !username || !password) {
     appStore.showError(t('admin.accounts.upstreamBalance.loginMissingFields'))
     return
@@ -3521,6 +3563,7 @@ const fetchUpstreamBalanceCredentials = async () => {
   try {
     const result = await adminAPI.accounts.loginUpstreamBalanceCredentials({
       base_url: baseUrl,
+      provider: upstreamBalanceProvider.value,
       username,
       password
     })
@@ -4034,6 +4077,7 @@ const handleSubmit = async () => {
       const newExtra: Record<string, unknown> = { ...currentExtra }
       if (upstreamBalanceEnabled.value) {
         newExtra.upstream_balance_enabled = true
+        newExtra.upstream_balance_provider = upstreamBalanceProvider.value
         const accessToken = upstreamBalanceAccessToken.value.trim()
         const userId = upstreamBalanceUserId.value.trim()
         if (accessToken) {
@@ -4046,6 +4090,7 @@ const handleSubmit = async () => {
         }
       } else {
         delete newExtra.upstream_balance_enabled
+        delete newExtra.upstream_balance_provider
         delete newExtra.upstream_balance_access_token
         delete newExtra.upstream_balance_user_id
       }

@@ -118,7 +118,7 @@ const (
 	upstreamBalanceBodyMax      = 4096
 	newAPIQuotaPerUnit          = 500000.0
 
-	newAPITokenQuotaNotUserBalanceMessage = "New API token quota is not user account balance; configure New API user access token and user id"
+	newAPITokenQuotaNotUserBalanceMessage = "New API token quota is not user account balance; use upstream panel login to fetch user balance credentials"
 	upstreamBalanceCookieCredentialPrefix = "cookie:"
 )
 
@@ -214,6 +214,7 @@ type UpstreamBalanceResult struct {
 // user balance credentials without persisting the upstream password.
 type UpstreamBalanceLoginInput struct {
 	BaseURL  string
+	Provider string
 	Username string
 	Password string
 }
@@ -530,6 +531,20 @@ func stripUpstreamBalanceAPISuffix(baseURL string) string {
 
 func upstreamBalanceProbePaths(account *Account) []string {
 	paths := make([]string, 0, len(upstreamBalancePaths)+3)
+	switch upstreamBalanceProvider(account) {
+	case "newapi":
+		if hasNewAPIUserBalanceAuth(account) {
+			return append(paths, "/api/user/self")
+		}
+		return paths
+	case "sub2api":
+		if hasUpstreamBalanceUserAccessToken(account) {
+			return append(paths, "/api/v1/user/profile", "/api/user/profile")
+		}
+		return paths
+	case "other":
+		return append(paths, upstreamBalancePaths...)
+	}
 	if hasNewAPIUserBalanceAuth(account) {
 		paths = append(paths, "/api/user/self")
 	}
@@ -576,6 +591,29 @@ func upstreamBalanceNewAPIUserID(account *Account) string {
 	return ""
 }
 
+func upstreamBalanceProvider(account *Account) string {
+	if account == nil || account.Extra == nil {
+		return "auto"
+	}
+	if raw, ok := account.Extra["upstream_balance_provider"]; ok {
+		return normalizeUpstreamBalanceProvider(fmt.Sprint(raw))
+	}
+	return "auto"
+}
+
+func normalizeUpstreamBalanceProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "newapi", "new_api", "new-api":
+		return "newapi"
+	case "sub2api", "sub2_api", "sub2-api":
+		return "sub2api"
+	case "other", "generic":
+		return "other"
+	default:
+		return "auto"
+	}
+}
+
 type upstreamBalanceLoginProbe struct {
 	provider string
 	path     string
@@ -595,27 +633,34 @@ func (s *AccountUsageService) FetchUpstreamBalanceLoginCredentials(ctx context.C
 	if username == "" || password == "" {
 		return nil, fmt.Errorf("username or password is empty")
 	}
+	provider := normalizeUpstreamBalanceProvider(input.Provider)
+	if provider == "other" {
+		return nil, fmt.Errorf("upstream balance login does not support provider other")
+	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, upstreamBalanceLoginTimeout)
 	defer cancel()
 
-	probes := []upstreamBalanceLoginProbe{
-		{
+	probes := make([]upstreamBalanceLoginProbe, 0, 2)
+	if provider == "auto" || provider == "newapi" {
+		probes = append(probes, upstreamBalanceLoginProbe{
 			provider: "newapi",
 			path:     "/api/user/login",
 			payload: map[string]string{
 				"username": username,
 				"password": password,
 			},
-		},
-		{
+		})
+	}
+	if provider == "auto" || provider == "sub2api" {
+		probes = append(probes, upstreamBalanceLoginProbe{
 			provider: "sub2api",
 			path:     "/api/v1/auth/login",
 			payload: map[string]string{
 				"email":    username,
 				"password": password,
 			},
-		},
+		})
 	}
 
 	var lastErr error
@@ -659,6 +704,11 @@ func fetchUpstreamBalanceLoginPath(ctx context.Context, baseURL string, probe up
 	result, err := parseUpstreamBalanceLoginCredentials(probe.provider, raw, resp.Cookies())
 	if err != nil {
 		return nil, fmt.Errorf("%s %w", probe.path, err)
+	}
+	if probe.provider == "newapi" {
+		if err := verifyNewAPIUpstreamBalanceLogin(ctx, baseURL, result); err != nil {
+			return nil, fmt.Errorf("%s %w", probe.path, err)
+		}
 	}
 	return result, nil
 }
@@ -716,6 +766,44 @@ func upstreamBalanceCookieCredential(cookies []*http.Cookie) string {
 	return ""
 }
 
+func verifyNewAPIUpstreamBalanceLogin(ctx context.Context, baseURL string, credentials *UpstreamBalanceLoginCredentials) error {
+	if credentials == nil || strings.TrimSpace(credentials.AccessToken) == "" {
+		return fmt.Errorf("access token or session cookie not found")
+	}
+	if strings.TrimSpace(credentials.UserID) == "" {
+		return fmt.Errorf("user id not found")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/user/self", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	if cookie, ok := upstreamBalanceCookieAuthValue(credentials.AccessToken); ok {
+		req.Header.Set("Cookie", cookie)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+credentials.AccessToken)
+	}
+	req.Header.Set("New-Api-User", credentials.UserID)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, upstreamBalanceBodyMax))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("/api/user/self %s", resp.Status)
+	}
+	balance, currency := parseUpstreamBalance(raw)
+	if balance == nil {
+		return fmt.Errorf("/api/user/self user balance not found")
+	}
+	credentials.Balance = balance
+	credentials.Currency = currency
+	return nil
+}
+
 func upstreamBalanceLoginFailureMessage(value any) string {
 	payload, ok := asStringMap(value)
 	if !ok {
@@ -753,6 +841,16 @@ func (s *AccountUsageService) fetchUpstreamBalance(ctx context.Context, account 
 
 	reqCtx, cancel := context.WithTimeout(ctx, upstreamBalanceTimeout)
 	defer cancel()
+
+	provider := upstreamBalanceProvider(account)
+	if provider == "newapi" && !hasNewAPIUserBalanceAuth(account) {
+		result.Message = newAPITokenQuotaNotUserBalanceMessage
+		return result
+	}
+	if provider == "sub2api" && !hasUpstreamBalanceUserAccessToken(account) {
+		result.Message = "Sub2API user balance credentials are missing; use upstream panel login to fetch them"
+		return result
+	}
 
 	var lastResult *UpstreamBalanceResult
 	paths := upstreamBalanceProbePaths(account)
@@ -828,6 +926,8 @@ func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, acco
 	result.Balance, result.Currency = parseUpstreamBalance(body)
 	if result.Balance == nil && isNewAPITokenUsagePayload(body) {
 		result.Message = newAPITokenQuotaNotUserBalanceMessage
+		result.StatusCode = 0
+		result.Raw = ""
 		return result
 	}
 	if result.Balance == nil && result.Raw != "" {
@@ -952,11 +1052,10 @@ func parseNewAPIUserBalance(value any) (*float64, string, bool) {
 		return nil, "", false
 	}
 	quota, hasQuota := numericFromAny(data["quota"])
-	usedQuota, hasUsedQuota := numericFromAny(data["used_quota"])
-	if !hasQuota || !hasUsedQuota {
+	if !hasQuota {
 		return nil, "", false
 	}
-	balance := (quota - usedQuota) / newAPIQuotaPerUnit
+	balance := quota / newAPIQuotaPerUnit
 	return &balance, "USD", true
 }
 
