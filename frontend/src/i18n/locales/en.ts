@@ -5246,7 +5246,7 @@ export default {
           retentionDays: 'Message retention days',
           retentionDaysHint: 'Default 30 days. Range 1–365 days.',
           defaultRecipientEmail: 'Default recipient email',
-          defaultRecipientEmailPlaceholder: 'support@example.com',
+          defaultRecipientEmailPlaceholder: "support{'@'}example.com",
           defaultRecipientEmailHint: 'Pre-fills the compose recipient when users click Compose. Leave empty to disable.',
         },
         riskControl: {
