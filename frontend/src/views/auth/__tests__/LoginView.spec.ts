@@ -99,6 +99,7 @@ function mountLoginView() {
 }
 
 async function submitLogin(wrapper: ReturnType<typeof mountLoginView>) {
+  await flushPromises()
   await wrapper.find('#email').setValue('test@example.com')
   await wrapper.find('#password').setValue('password123')
   await wrapper.find('form').trigger('submit')
