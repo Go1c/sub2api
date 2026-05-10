@@ -63,18 +63,21 @@ func TestSettingServiceSiteMessageSettingsDefaultsAndPublicFlag(t *testing.T) {
 	require.False(t, siteMessageSettings.Enabled)
 	require.Equal(t, SiteMessagesDailySendLimitDefault, siteMessageSettings.DailySendLimit)
 	require.Equal(t, SiteMessagesRetentionDaysDefault, siteMessageSettings.RetentionDays)
+	require.Equal(t, "", siteMessageSettings.DefaultRecipientEmail)
 
 	publicSettings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.False(t, publicSettings.SiteMessagesEnabled)
+	require.Equal(t, "", publicSettings.SiteMessagesDefaultRecipientEmail)
 }
 
 func TestSettingServiceSiteMessageSettingsParsesAndClamps(t *testing.T) {
 	svc := NewSettingService(&siteMessageSettingRepoStub{
 		values: map[string]string{
-			SettingKeySiteMessagesEnabled:        "true",
-			SettingKeySiteMessagesDailySendLimit: "5000",
-			SettingKeySiteMessagesRetentionDays:  "0",
+			SettingKeySiteMessagesEnabled:               "true",
+			SettingKeySiteMessagesDailySendLimit:        "5000",
+			SettingKeySiteMessagesRetentionDays:         "0",
+			SettingKeySiteMessagesDefaultRecipientEmail: " support@example.com ",
 		},
 	}, &config.Config{})
 
@@ -83,6 +86,7 @@ func TestSettingServiceSiteMessageSettingsParsesAndClamps(t *testing.T) {
 	require.True(t, settings.Enabled)
 	require.Equal(t, SiteMessagesDailySendLimitMax, settings.DailySendLimit)
 	require.Equal(t, SiteMessagesRetentionDaysDefault, settings.RetentionDays)
+	require.Equal(t, "support@example.com", settings.DefaultRecipientEmail)
 }
 
 func TestSettingServiceUpdateSettingsPersistsSiteMessageSettings(t *testing.T) {
@@ -90,13 +94,15 @@ func TestSettingServiceUpdateSettingsPersistsSiteMessageSettings(t *testing.T) {
 	svc := NewSettingService(repo, &config.Config{})
 
 	err := svc.UpdateSettings(context.Background(), &SystemSettings{
-		SiteMessagesEnabled:        true,
-		SiteMessagesDailySendLimit: 25,
-		SiteMessagesRetentionDays:  45,
+		SiteMessagesEnabled:               true,
+		SiteMessagesDailySendLimit:        25,
+		SiteMessagesRetentionDays:         45,
+		SiteMessagesDefaultRecipientEmail: " support@example.com ",
 	})
 	require.NoError(t, err)
 
 	require.Equal(t, "true", repo.updates[SettingKeySiteMessagesEnabled])
 	require.Equal(t, "25", repo.updates[SettingKeySiteMessagesDailySendLimit])
 	require.Equal(t, "45", repo.updates[SettingKeySiteMessagesRetentionDays])
+	require.Equal(t, "support@example.com", repo.updates[SettingKeySiteMessagesDefaultRecipientEmail])
 }

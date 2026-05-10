@@ -5145,6 +5145,16 @@
                 />
                 <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.siteMessages.retentionDaysHint') }}</p>
               </div>
+              <div class="md:col-span-2">
+                <label class="input-label">{{ t('admin.settings.features.siteMessages.defaultRecipientEmail') }}</label>
+                <input
+                  v-model="form.site_messages_default_recipient_email"
+                  type="email"
+                  class="input"
+                  :placeholder="t('admin.settings.features.siteMessages.defaultRecipientEmailPlaceholder')"
+                />
+                <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.siteMessages.defaultRecipientEmailHint') }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -7331,6 +7341,7 @@ const form = reactive<SettingsForm>({
   site_messages_enabled: false,
   site_messages_daily_send_limit: 10,
   site_messages_retention_days: 30,
+  site_messages_default_recipient_email: "",
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
 });
@@ -8732,6 +8743,7 @@ async function saveSettings() {
         1,
         Math.min(365, Math.floor(Number(form.site_messages_retention_days) || 30)),
       ),
+      site_messages_default_recipient_email: form.site_messages_default_recipient_email.trim(),
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
     };

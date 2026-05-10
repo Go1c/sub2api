@@ -283,6 +283,7 @@ export interface PublicSettings {
   available_channels_enabled: boolean
   affiliate_enabled: boolean
   site_messages_enabled?: boolean
+  site_messages_default_recipient_email?: string
 }
 
 export interface AuthResponse {
@@ -429,6 +430,7 @@ export interface SiteMessage {
   updated_at: string
   sender?: SiteMessageRecipient
   recipient?: SiteMessageRecipient
+  replies?: SiteMessage[]
 }
 
 export interface CreateSiteMessageRequest {

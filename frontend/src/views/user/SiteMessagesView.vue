@@ -125,7 +125,32 @@
             </div>
 
             <div class="min-h-0 flex-1 overflow-y-auto p-5">
-              <div class="whitespace-pre-wrap break-words text-sm leading-6 text-gray-800 dark:text-gray-100">{{ selectedMessage.content }}</div>
+              <div class="space-y-4">
+                <div
+                  v-for="message in conversationMessages"
+                  :key="message.id"
+                  class="flex"
+                  :class="isOwnConversationMessage(message) ? 'justify-end' : 'justify-start'"
+                >
+                  <div class="max-w-[min(78%,42rem)]">
+                    <div
+                      class="mb-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
+                      :class="isOwnConversationMessage(message) ? 'justify-end text-right' : 'justify-start'"
+                    >
+                      <span class="truncate">{{ displayUser(message.sender, message.sender_id) }}</span>
+                      <span class="flex-shrink-0">{{ formatDateTime(message.created_at) }}</span>
+                    </div>
+                    <div
+                      class="whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
+                      :class="isOwnConversationMessage(message)
+                        ? 'rounded-br-md bg-primary-600 text-white shadow-primary-600/20'
+                        : 'rounded-bl-md border border-gray-200 bg-gray-50 text-gray-800 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-100'"
+                    >
+                      {{ message.content }}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <form class="border-t border-gray-100 p-5 dark:border-dark-700" @submit.prevent="sendReply">
@@ -199,7 +224,7 @@ import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AdminSenderBadge from '@/components/site-message/AdminSenderBadge.vue'
 import { siteMessagesAPI } from '@/api/siteMessages'
-import { useAppStore, useSiteMessageStore } from '@/stores'
+import { useAppStore, useAuthStore, useSiteMessageStore } from '@/stores'
 import type { SiteMessage, SiteMessageRecipient } from '@/types'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
@@ -208,6 +233,7 @@ type MailboxTab = 'inbox' | 'sent'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const siteMessageStore = useSiteMessageStore()
 
 const activeTab = ref<MailboxTab>('inbox')
@@ -234,6 +260,20 @@ const composeForm = reactive({
   recipient: '',
   subject: '',
   content: '',
+})
+
+const defaultRecipientEmail = computed(() => {
+  const value = appStore.cachedPublicSettings?.site_messages_default_recipient_email
+  return typeof value === 'string' ? value.trim() : ''
+})
+
+const conversationMessages = computed(() => {
+  if (!selectedMessage.value) return []
+  return [selectedMessage.value, ...(selectedMessage.value.replies ?? [])].sort((a, b) => {
+    const createdDiff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    if (Number.isFinite(createdDiff) && createdDiff !== 0) return createdDiff
+    return a.id - b.id
+  })
 })
 
 const canSendCompose = computed(() =>
@@ -331,8 +371,8 @@ function closeCompose(): void {
   composeOpen.value = false
 }
 
-function resetCompose(): void {
-  composeForm.recipient = ''
+function resetCompose(recipient = ''): void {
+  composeForm.recipient = recipient
   composeForm.subject = ''
   composeForm.content = ''
   resolvedRecipient.value = null
@@ -397,9 +437,13 @@ async function sendReply(): Promise<void> {
   if (!selectedMessage.value || replyContent.value.trim().length === 0) return
   replying.value = true
   try {
-    await siteMessagesAPI.reply(selectedMessage.value.id, {
+    const reply = await siteMessagesAPI.reply(selectedMessage.value.id, {
       content: replyContent.value.trim(),
     })
+    selectedMessage.value = {
+      ...selectedMessage.value,
+      replies: [...(selectedMessage.value.replies ?? []), reply],
+    }
     replyContent.value = ''
     appStore.showSuccess(t('siteMessages.replySent'))
   } catch (error: unknown) {
@@ -411,9 +455,17 @@ async function sendReply(): Promise<void> {
 
 watch(composeOpen, (open) => {
   if (open) {
-    resetCompose()
+    resetCompose(defaultRecipientEmail.value)
   }
 })
+
+function isOwnConversationMessage(message: SiteMessage): boolean {
+  const currentUserID = authStore.user?.id
+  if (typeof currentUserID === 'number') return message.sender_id === currentUserID
+  if (!selectedMessage.value) return false
+  if (message.id === selectedMessage.value.id) return activeTab.value === 'sent'
+  return message.sender_id === selectedMessage.value.recipient_id
+}
 
 onMounted(() => {
   void loadMessages()

@@ -25,6 +25,7 @@ type SiteMessage struct {
 	UpdatedAt   time.Time             `json:"updated_at"`
 	Sender      *SiteMessageRecipient `json:"sender,omitempty"`
 	Recipient   *SiteMessageRecipient `json:"recipient,omitempty"`
+	Replies     []SiteMessage         `json:"replies,omitempty"`
 }
 
 type CreateSiteMessageRequest struct {
@@ -63,6 +64,7 @@ func SiteMessageFromService(message *service.SiteMessage) *SiteMessage {
 		UpdatedAt:   message.UpdatedAt,
 		Sender:      SiteMessageUserFromService(message.Sender),
 		Recipient:   SiteMessageUserFromService(message.Recipient),
+		Replies:     SiteMessagesFromService(message.Replies),
 	}
 }
 

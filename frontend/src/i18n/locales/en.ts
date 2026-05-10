@@ -5245,6 +5245,9 @@ export default {
           dailyLimitHint: 'Default 10 messages. 0 means unlimited. Admin sends are not limited.',
           retentionDays: 'Message retention days',
           retentionDaysHint: 'Default 30 days. Range 1–365 days.',
+          defaultRecipientEmail: 'Default recipient email',
+          defaultRecipientEmailPlaceholder: 'support@example.com',
+          defaultRecipientEmailHint: 'Pre-fills the compose recipient when users click Compose. Leave empty to disable.',
         },
         riskControl: {
           title: 'Risk Control',

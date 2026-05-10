@@ -369,6 +369,7 @@ export const useAppStore = defineStore('app', () => {
         risk_control_enabled: false,
         affiliate_enabled: false,
         site_messages_enabled: false,
+        site_messages_default_recipient_email: '',
       }
     }
 

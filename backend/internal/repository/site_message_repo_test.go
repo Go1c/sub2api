@@ -109,6 +109,11 @@ func TestSiteMessageRepositoryCreateListAndVisibility(t *testing.T) {
 	require.Equal(t, newer.ID, got.ID)
 	require.NotNil(t, got.Recipient)
 	require.Equal(t, bob.Email, got.Recipient.Email)
+	require.Len(t, got.Replies, 1)
+	require.Equal(t, reply.ID, got.Replies[0].ID)
+	require.Equal(t, "reply", got.Replies[0].Content)
+	require.NotNil(t, got.Replies[0].Sender)
+	require.Equal(t, bob.Email, got.Replies[0].Sender.Email)
 
 	_, err = repo.GetVisibleByID(ctx, newer.ID, outsider.ID, cutoff)
 	require.ErrorIs(t, err, service.ErrSiteMessageNotFound)
