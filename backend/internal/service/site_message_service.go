@@ -287,6 +287,7 @@ func (s *SiteMessageService) retentionCutoff(settings SiteMessageSettings) time.
 }
 
 func normalizeSiteMessageSettings(settings SiteMessageSettings) SiteMessageSettings {
+	settings.DefaultRecipientEmail = strings.TrimSpace(settings.DefaultRecipientEmail)
 	if settings.DailySendLimit < 0 {
 		settings.DailySendLimit = SiteMessagesDailySendLimitDefault
 	}

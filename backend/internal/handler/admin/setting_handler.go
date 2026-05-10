@@ -294,9 +294,10 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 
-		SiteMessagesEnabled:        settings.SiteMessagesEnabled,
-		SiteMessagesDailySendLimit: settings.SiteMessagesDailySendLimit,
-		SiteMessagesRetentionDays:  settings.SiteMessagesRetentionDays,
+		SiteMessagesEnabled:               settings.SiteMessagesEnabled,
+		SiteMessagesDailySendLimit:        settings.SiteMessagesDailySendLimit,
+		SiteMessagesRetentionDays:         settings.SiteMessagesRetentionDays,
+		SiteMessagesDefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
 	}
 
 	// OpenAI fast policy (stored under a dedicated setting key)
@@ -625,9 +626,10 @@ type UpdateSettingsRequest struct {
 	RiskControlEnabled *bool `json:"risk_control_enabled"`
 
 	// Site messages feature switch and limits
-	SiteMessagesEnabled        *bool `json:"site_messages_enabled"`
-	SiteMessagesDailySendLimit *int  `json:"site_messages_daily_send_limit"`
-	SiteMessagesRetentionDays  *int  `json:"site_messages_retention_days"`
+	SiteMessagesEnabled               *bool   `json:"site_messages_enabled"`
+	SiteMessagesDailySendLimit        *int    `json:"site_messages_daily_send_limit"`
+	SiteMessagesRetentionDays         *int    `json:"site_messages_retention_days"`
+	SiteMessagesDefaultRecipientEmail *string `json:"site_messages_default_recipient_email"`
 
 	// OpenAI fast/flex policy (optional, only updated when provided)
 	OpenAIFastPolicySettings *dto.OpenAIFastPolicySettings `json:"openai_fast_policy_settings,omitempty"`
@@ -1792,6 +1794,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.SiteMessagesRetentionDays
 		}(),
+		SiteMessagesDefaultRecipientEmail: func() string {
+			if req.SiteMessagesDefaultRecipientEmail != nil {
+				return *req.SiteMessagesDefaultRecipientEmail
+			}
+			return previousSettings.SiteMessagesDefaultRecipientEmail
+		}(),
 	}
 
 	authSourceDefaults := &service.AuthSourceDefaultSettings{
@@ -2095,9 +2103,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 
 		RiskControlEnabled: updatedSettings.RiskControlEnabled,
 
-		SiteMessagesEnabled:        updatedSettings.SiteMessagesEnabled,
-		SiteMessagesDailySendLimit: updatedSettings.SiteMessagesDailySendLimit,
-		SiteMessagesRetentionDays:  updatedSettings.SiteMessagesRetentionDays,
+		SiteMessagesEnabled:               updatedSettings.SiteMessagesEnabled,
+		SiteMessagesDailySendLimit:        updatedSettings.SiteMessagesDailySendLimit,
+		SiteMessagesRetentionDays:         updatedSettings.SiteMessagesRetentionDays,
+		SiteMessagesDefaultRecipientEmail: updatedSettings.SiteMessagesDefaultRecipientEmail,
 	}
 	if fastPolicy, err := h.settingService.GetOpenAIFastPolicySettings(c.Request.Context()); err != nil {
 		slog.Error("openai_fast_policy_settings_get_failed", "error", err)
@@ -2572,6 +2581,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SiteMessagesRetentionDays != after.SiteMessagesRetentionDays {
 		changed = append(changed, "site_messages_retention_days")
+	}
+	if before.SiteMessagesDefaultRecipientEmail != after.SiteMessagesDefaultRecipientEmail {
+		changed = append(changed, "site_messages_default_recipient_email")
 	}
 	changed = appendAuthSourceDefaultChanges(changed, beforeAuthSourceDefaults, afterAuthSourceDefaults)
 	return changed

@@ -36,6 +36,35 @@ func TestSiteMessageFromServiceMarksAdminSender(t *testing.T) {
 	require.False(t, got.Recipient.IsAdmin)
 }
 
+func TestSiteMessageFromServiceIncludesReplies(t *testing.T) {
+	parentID := int64(1)
+	message := &service.SiteMessage{
+		ID:          parentID,
+		SenderID:    10,
+		RecipientID: 20,
+		Subject:     "notice",
+		Content:     "body",
+		Replies: []service.SiteMessage{
+			{
+				ID:          2,
+				SenderID:    20,
+				RecipientID: 10,
+				ParentID:    &parentID,
+				Subject:     "Re: notice",
+				Content:     "reply body",
+			},
+		},
+	}
+
+	got := SiteMessageFromService(message)
+
+	require.Len(t, got.Replies, 1)
+	require.Equal(t, int64(2), got.Replies[0].ID)
+	require.Equal(t, "reply body", got.Replies[0].Content)
+	require.NotNil(t, got.Replies[0].ParentID)
+	require.Equal(t, parentID, *got.Replies[0].ParentID)
+}
+
 func TestAdminSendSiteMessageRequestDefaultsEmailCopyOn(t *testing.T) {
 	req := AdminSendSiteMessageRequest{}
 

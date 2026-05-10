@@ -5408,6 +5408,9 @@ export default {
           dailyLimitHint: '默认 10 封，0 表示不限制，管理员发送不受限制。',
           retentionDays: '邮件保存天数',
           retentionDaysHint: '默认 30 天，范围 1 – 365 天。',
+          defaultRecipientEmail: '默认收件邮箱',
+          defaultRecipientEmailPlaceholder: 'support@example.com',
+          defaultRecipientEmailHint: '用户点击写信时自动填入，可留空。',
         },
         riskControl: {
           title: '风控中心',

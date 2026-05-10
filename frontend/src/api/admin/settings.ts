@@ -581,6 +581,7 @@ export interface SystemSettings {
   site_messages_enabled: boolean;
   site_messages_daily_send_limit: number;
   site_messages_retention_days: number;
+  site_messages_default_recipient_email: string;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
@@ -800,6 +801,7 @@ export interface UpdateSettingsRequest {
   site_messages_enabled?: boolean;
   site_messages_daily_send_limit?: number;
   site_messages_retention_days?: number;
+  site_messages_default_recipient_email?: string;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

@@ -62,6 +62,18 @@ func (r *siteMessageRepository) GetVisibleByID(ctx context.Context, messageID, u
 		).
 		WithSender().
 		WithRecipient().
+		WithReplies(func(q *dbent.SiteMessageQuery) {
+			q.Where(
+				siteMessageCreatedAtGTE(retentionCutoff),
+				sitemessage.Or(
+					sitemessage.SenderIDEQ(userID),
+					sitemessage.RecipientIDEQ(userID),
+				),
+			).
+				WithSender().
+				WithRecipient().
+				Order(dbent.Asc(sitemessage.FieldCreatedAt), dbent.Asc(sitemessage.FieldID))
+		}).
 		Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSiteMessageNotFound, nil)
@@ -277,6 +289,9 @@ func siteMessageEntityToService(m *dbent.SiteMessage) *service.SiteMessage {
 	}
 	if m.Edges.Recipient != nil {
 		out.Recipient = userEntityToService(m.Edges.Recipient)
+	}
+	if len(m.Edges.Replies) > 0 {
+		out.Replies = siteMessageEntitiesToService(m.Edges.Replies)
 	}
 	return out
 }

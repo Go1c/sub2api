@@ -136,26 +136,27 @@ type SystemSettings struct {
 	CCSwitchDefaultModelAntigravity       string
 	CCSwitchDefaultModelAntigravityGemini string
 
-	DefaultConcurrency           int
-	DefaultBalance               float64
-	RiskControlEnabled           bool
-	SiteMessagesEnabled          bool
-	SiteMessagesDailySendLimit   int
-	SiteMessagesRetentionDays    int
-	AffiliateEnabled             bool
-	AffiliateRebateRate          float64
-	AffiliateRebateFreezeHours   int
-	AffiliateRebateDurationDays  int
-	AffiliateRebatePerInviteeCap float64
-	AffiliateSignupBonusEnabled  bool
-	AffiliateSignupBonusAmount   float64
-	AffiliateSignupBonusTotalCap float64
-	AffiliateSignupBonusDailyCap float64
-	BalanceUsageGateEnabled      bool
-	BalanceUsageGateMinBalance   float64
-	BalanceUsageGateMinRecharge  float64
-	DefaultUserRPMLimit          int
-	DefaultSubscriptions         []DefaultSubscriptionSetting
+	DefaultConcurrency                int
+	DefaultBalance                    float64
+	RiskControlEnabled                bool
+	SiteMessagesEnabled               bool
+	SiteMessagesDailySendLimit        int
+	SiteMessagesRetentionDays         int
+	SiteMessagesDefaultRecipientEmail string
+	AffiliateEnabled                  bool
+	AffiliateRebateRate               float64
+	AffiliateRebateFreezeHours        int
+	AffiliateRebateDurationDays       int
+	AffiliateRebatePerInviteeCap      float64
+	AffiliateSignupBonusEnabled       bool
+	AffiliateSignupBonusAmount        float64
+	AffiliateSignupBonusTotalCap      float64
+	AffiliateSignupBonusDailyCap      float64
+	BalanceUsageGateEnabled           bool
+	BalanceUsageGateMinBalance        float64
+	BalanceUsageGateMinRecharge       float64
+	DefaultUserRPMLimit               int
+	DefaultSubscriptions              []DefaultSubscriptionSetting
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -302,7 +303,8 @@ type PublicSettings struct {
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
 	// Site messages feature toggle
-	SiteMessagesEnabled bool `json:"site_messages_enabled"`
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
 }
 
 type LoginAgreementDocument struct {

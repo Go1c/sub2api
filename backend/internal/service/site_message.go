@@ -38,12 +38,14 @@ type SiteMessage struct {
 	UpdatedAt   time.Time
 	Sender      *User
 	Recipient   *User
+	Replies     []SiteMessage
 }
 
 type SiteMessageSettings struct {
-	Enabled        bool
-	DailySendLimit int
-	RetentionDays  int
+	Enabled               bool
+	DailySendLimit        int
+	RetentionDays         int
+	DefaultRecipientEmail string
 }
 
 type SiteMessageRecipient struct {

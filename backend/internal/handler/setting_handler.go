@@ -99,8 +99,9 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 
 		AffiliateEnabled: settings.AffiliateEnabled,
 
-		RiskControlEnabled:  settings.RiskControlEnabled,
-		SiteMessagesEnabled: settings.SiteMessagesEnabled,
+		RiskControlEnabled:                settings.RiskControlEnabled,
+		SiteMessagesEnabled:               settings.SiteMessagesEnabled,
+		SiteMessagesDefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
 	})
 }
 

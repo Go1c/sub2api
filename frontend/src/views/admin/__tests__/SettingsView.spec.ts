@@ -543,6 +543,10 @@ const baseSettingsResponse = {
   balance_low_notify_recharge_url: "",
   account_quota_notify_enabled: false,
   account_quota_notify_emails: [],
+  site_messages_enabled: false,
+  site_messages_daily_send_limit: 10,
+  site_messages_retention_days: 30,
+  site_messages_default_recipient_email: "",
 };
 
 function mountView() {
@@ -777,6 +781,27 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         enable_anthropic_cache_ttl_1h_injection: true,
+      }),
+    );
+  });
+
+  it("submits trimmed site message default recipient email", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_messages_enabled: true,
+      site_messages_default_recipient_email: " support@lumio.games ",
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        site_messages_default_recipient_email: "support@lumio.games",
       }),
     );
   });

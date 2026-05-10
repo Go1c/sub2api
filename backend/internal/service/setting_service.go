@@ -719,6 +719,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeySiteMessagesEnabled,
+		SettingKeySiteMessagesDefaultRecipientEmail,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -835,6 +836,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AffiliateEnabled:                      settings[SettingKeyAffiliateEnabled] == "true",
 		RiskControlEnabled:                    settings[SettingKeyRiskControlEnabled] == "true",
 		SiteMessagesEnabled:                   settings[SettingKeySiteMessagesEnabled] == "true",
+		SiteMessagesDefaultRecipientEmail:     strings.TrimSpace(settings[SettingKeySiteMessagesDefaultRecipientEmail]),
 	}, nil
 }
 
@@ -918,15 +920,17 @@ func (s *SettingService) GetSiteMessageSettings(ctx context.Context) (SiteMessag
 		SettingKeySiteMessagesEnabled,
 		SettingKeySiteMessagesDailySendLimit,
 		SettingKeySiteMessagesRetentionDays,
+		SettingKeySiteMessagesDefaultRecipientEmail,
 	})
 	if err != nil {
 		return SiteMessageSettings{}, err
 	}
 
 	settings := SiteMessageSettings{
-		Enabled:        vals[SettingKeySiteMessagesEnabled] == "true",
-		DailySendLimit: SiteMessagesDailySendLimitDefault,
-		RetentionDays:  SiteMessagesRetentionDaysDefault,
+		Enabled:               vals[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit:        SiteMessagesDailySendLimitDefault,
+		RetentionDays:         SiteMessagesRetentionDaysDefault,
+		DefaultRecipientEmail: strings.TrimSpace(vals[SettingKeySiteMessagesDefaultRecipientEmail]),
 	}
 	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesDailySendLimit]); raw != "" {
 		if value, err := strconv.Atoi(raw); err == nil {
@@ -1028,12 +1032,13 @@ type PublicSettingsInjectionPayload struct {
 	// Feature flags — MUST match the opt-in/opt-out registry in
 	// frontend/src/utils/featureFlags.ts. Missing a field here is the bug
 	// that hid the "可用渠道" menu on page refresh.
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
-	AvailableChannelsEnabled             bool `json:"available_channels_enabled"`
-	AffiliateEnabled                     bool `json:"affiliate_enabled"`
-	RiskControlEnabled                   bool `json:"risk_control_enabled"`
-	SiteMessagesEnabled                  bool `json:"site_messages_enabled"`
+	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
+	AvailableChannelsEnabled             bool   `json:"available_channels_enabled"`
+	AffiliateEnabled                     bool   `json:"affiliate_enabled"`
+	RiskControlEnabled                   bool   `json:"risk_control_enabled"`
+	SiteMessagesEnabled                  bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail    string `json:"site_messages_default_recipient_email"`
 }
 
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
@@ -1109,6 +1114,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AffiliateEnabled:                      settings.AffiliateEnabled,
 		RiskControlEnabled:                    settings.RiskControlEnabled,
 		SiteMessagesEnabled:                   settings.SiteMessagesEnabled,
+		SiteMessagesDefaultRecipientEmail:     settings.SiteMessagesDefaultRecipientEmail,
 	}, nil
 }
 
@@ -1851,15 +1857,18 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyRiskControlEnabled] = strconv.FormatBool(settings.RiskControlEnabled)
 
 	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
-		Enabled:        settings.SiteMessagesEnabled,
-		DailySendLimit: settings.SiteMessagesDailySendLimit,
-		RetentionDays:  settings.SiteMessagesRetentionDays,
+		Enabled:               settings.SiteMessagesEnabled,
+		DailySendLimit:        settings.SiteMessagesDailySendLimit,
+		RetentionDays:         settings.SiteMessagesRetentionDays,
+		DefaultRecipientEmail: settings.SiteMessagesDefaultRecipientEmail,
 	})
 	settings.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
 	settings.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+	settings.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
 	updates[SettingKeySiteMessagesEnabled] = strconv.FormatBool(settings.SiteMessagesEnabled)
 	updates[SettingKeySiteMessagesDailySendLimit] = strconv.Itoa(settings.SiteMessagesDailySendLimit)
 	updates[SettingKeySiteMessagesRetentionDays] = strconv.Itoa(settings.SiteMessagesRetentionDays)
+	updates[SettingKeySiteMessagesDefaultRecipientEmail] = settings.SiteMessagesDefaultRecipientEmail
 
 	// Claude Code version check
 	updates[SettingKeyMinClaudeCodeVersion] = settings.MinClaudeCodeVersion
@@ -2814,9 +2823,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyRiskControlEnabled: "false",
 
 		// 站内信功能（默认关闭，显式启用）
-		SettingKeySiteMessagesEnabled:        strconv.FormatBool(SiteMessagesEnabledDefault),
-		SettingKeySiteMessagesDailySendLimit: strconv.Itoa(SiteMessagesDailySendLimitDefault),
-		SettingKeySiteMessagesRetentionDays:  strconv.Itoa(SiteMessagesRetentionDaysDefault),
+		SettingKeySiteMessagesEnabled:               strconv.FormatBool(SiteMessagesEnabledDefault),
+		SettingKeySiteMessagesDailySendLimit:        strconv.Itoa(SiteMessagesDailySendLimitDefault),
+		SettingKeySiteMessagesRetentionDays:         strconv.Itoa(SiteMessagesRetentionDaysDefault),
+		SettingKeySiteMessagesDefaultRecipientEmail: "",
 
 		// Claude Code version check (default: empty = disabled)
 		SettingKeyMinClaudeCodeVersion: "",
@@ -3207,13 +3217,15 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.RiskControlEnabled = settings[SettingKeyRiskControlEnabled] == "true"
 
 	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
-		Enabled:        settings[SettingKeySiteMessagesEnabled] == "true",
-		DailySendLimit: parseIntSetting(settings[SettingKeySiteMessagesDailySendLimit], SiteMessagesDailySendLimitDefault),
-		RetentionDays:  parseIntSetting(settings[SettingKeySiteMessagesRetentionDays], SiteMessagesRetentionDaysDefault),
+		Enabled:               settings[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit:        parseIntSetting(settings[SettingKeySiteMessagesDailySendLimit], SiteMessagesDailySendLimitDefault),
+		RetentionDays:         parseIntSetting(settings[SettingKeySiteMessagesRetentionDays], SiteMessagesRetentionDaysDefault),
+		DefaultRecipientEmail: settings[SettingKeySiteMessagesDefaultRecipientEmail],
 	})
 	result.SiteMessagesEnabled = siteMessageSettings.Enabled
 	result.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
 	result.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+	result.SiteMessagesDefaultRecipientEmail = siteMessageSettings.DefaultRecipientEmail
 
 	// Claude Code version check
 	result.MinClaudeCodeVersion = settings[SettingKeyMinClaudeCodeVersion]

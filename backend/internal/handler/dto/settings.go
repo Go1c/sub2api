@@ -253,9 +253,10 @@ type SystemSettings struct {
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
 	// Site messages feature switch and limits
-	SiteMessagesEnabled        bool `json:"site_messages_enabled"`
-	SiteMessagesDailySendLimit int  `json:"site_messages_daily_send_limit"`
-	SiteMessagesRetentionDays  int  `json:"site_messages_retention_days"`
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDailySendLimit        int    `json:"site_messages_daily_send_limit"`
+	SiteMessagesRetentionDays         int    `json:"site_messages_retention_days"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled bool `json:"affiliate_enabled"`
@@ -340,7 +341,8 @@ type PublicSettings struct {
 
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
-	SiteMessagesEnabled bool `json:"site_messages_enabled"`
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
 }
 
 type LoginAgreementDocument struct {

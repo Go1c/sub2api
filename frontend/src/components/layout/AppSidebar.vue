@@ -1021,17 +1021,40 @@ onMounted(() => {
 
 .sidebar-unread-dot {
   position: absolute;
-  right: -0.125rem;
-  top: -0.125rem;
-  height: 0.5rem;
-  width: 0.5rem;
+  right: -0.1875rem;
+  top: -0.1875rem;
+  height: 0.625rem;
+  width: 0.625rem;
   border-radius: 9999px;
   border: 2px solid rgb(255 255 255);
   background: rgb(239 68 68);
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  animation: sidebarUnreadPulse 1.8s ease-out infinite;
 }
 
 .dark .sidebar-unread-dot {
   border-color: rgb(17 24 39);
+}
+
+@keyframes sidebarUnreadPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+  55% {
+    transform: scale(1.14);
+    box-shadow: 0 0 0 0.35rem rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-unread-dot {
+    animation: none;
+  }
 }
 
 .sidebar-section-title {
