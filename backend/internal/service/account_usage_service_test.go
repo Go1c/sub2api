@@ -564,3 +564,174 @@ func TestAccountUsageService_GetUsage_DoesNotTreatSub2APIKeyQuotaAsWalletBalance
 		t.Fatalf("expected no wallet balance from quota_limited key quota, got %#v", usage.UpstreamBalance.Balance)
 	}
 }
+
+func TestAccountUsageService_GetUsage_ParsesSub2APIUserProfileBalance(t *testing.T) {
+	t.Parallel()
+
+	var gotAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/user/profile" {
+			http.NotFound(w, r)
+			return
+		}
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code":    0,
+			"message": "success",
+			"data": map[string]any{
+				"id":      77,
+				"balance": 12.5,
+			},
+		})
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       993,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL,
+					"api_key":  "sk-sub2api-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled":      true,
+					"upstream_balance_access_token": "sub2api-access-token",
+					"upstream_balance_user_id":      "77",
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 993)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if gotAuth != "Bearer sub2api-access-token" {
+		t.Fatalf("expected Sub2API access token auth, got %q", gotAuth)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if !usage.UpstreamBalance.Success {
+		t.Fatalf("expected upstream balance success, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Path != "/api/v1/user/profile" {
+		t.Fatalf("expected /api/v1/user/profile probe to win, got %q", usage.UpstreamBalance.Path)
+	}
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != 12.5 {
+		t.Fatalf("expected parsed user balance 12.5, got %#v", usage.UpstreamBalance.Balance)
+	}
+}
+
+func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPI(t *testing.T) {
+	t.Parallel()
+
+	var gotUsername string
+	var gotPassword string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user/login" {
+			http.NotFound(w, r)
+			return
+		}
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode login payload: %v", err)
+		}
+		gotUsername = payload["username"]
+		gotPassword = payload["password"]
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"id":           42,
+				"access_token": "newapi-access-token",
+			},
+		})
+	}))
+	defer upstream.Close()
+
+	svc := &AccountUsageService{}
+	result, err := svc.FetchUpstreamBalanceLoginCredentials(context.Background(), UpstreamBalanceLoginInput{
+		BaseURL:  upstream.URL,
+		Username: "alice@example.com",
+		Password: "secret",
+	})
+	if err != nil {
+		t.Fatalf("FetchUpstreamBalanceLoginCredentials() error = %v", err)
+	}
+	if gotUsername != "alice@example.com" || gotPassword != "secret" {
+		t.Fatalf("unexpected login payload username=%q password=%q", gotUsername, gotPassword)
+	}
+	if result.Provider != "newapi" {
+		t.Fatalf("expected newapi provider, got %q", result.Provider)
+	}
+	if result.AccessToken != "newapi-access-token" {
+		t.Fatalf("expected access token, got %q", result.AccessToken)
+	}
+	if result.UserID != "42" {
+		t.Fatalf("expected user id 42, got %q", result.UserID)
+	}
+}
+
+func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_Sub2API(t *testing.T) {
+	t.Parallel()
+
+	var gotEmail string
+	var gotPassword string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/auth/login" {
+			http.NotFound(w, r)
+			return
+		}
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode login payload: %v", err)
+		}
+		gotEmail = payload["email"]
+		gotPassword = payload["password"]
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code":    0,
+			"message": "success",
+			"data": map[string]any{
+				"access_token": "sub2api-access-token",
+				"token_type":   "Bearer",
+				"user": map[string]any{
+					"id":      77,
+					"balance": 12.5,
+				},
+			},
+		})
+	}))
+	defer upstream.Close()
+
+	svc := &AccountUsageService{}
+	result, err := svc.FetchUpstreamBalanceLoginCredentials(context.Background(), UpstreamBalanceLoginInput{
+		BaseURL:  upstream.URL,
+		Username: "bob@example.com",
+		Password: "secret",
+	})
+	if err != nil {
+		t.Fatalf("FetchUpstreamBalanceLoginCredentials() error = %v", err)
+	}
+	if gotEmail != "bob@example.com" || gotPassword != "secret" {
+		t.Fatalf("unexpected login payload email=%q password=%q", gotEmail, gotPassword)
+	}
+	if result.Provider != "sub2api" {
+		t.Fatalf("expected sub2api provider, got %q", result.Provider)
+	}
+	if result.AccessToken != "sub2api-access-token" {
+		t.Fatalf("expected access token, got %q", result.AccessToken)
+	}
+	if result.UserID != "77" {
+		t.Fatalf("expected user id 77, got %q", result.UserID)
+	}
+	if result.Balance == nil || *result.Balance != 12.5 {
+		t.Fatalf("expected balance 12.5, got %#v", result.Balance)
+	}
+}

@@ -154,6 +154,30 @@ export async function checkMixedChannelRisk(
   return data
 }
 
+export interface UpstreamBalanceLoginRequest {
+  base_url: string
+  username: string
+  password: string
+}
+
+export interface UpstreamBalanceLoginCredentials {
+  provider: 'newapi' | 'sub2api' | string
+  access_token: string
+  user_id?: string
+  balance?: number
+  currency?: string
+}
+
+export async function loginUpstreamBalanceCredentials(
+  payload: UpstreamBalanceLoginRequest
+): Promise<UpstreamBalanceLoginCredentials> {
+  const { data } = await apiClient.post<UpstreamBalanceLoginCredentials>(
+    '/admin/accounts/upstream-balance/login',
+    payload
+  )
+  return data
+}
+
 /**
  * Delete account
  * @param id - Account ID
@@ -637,6 +661,7 @@ export const accountsAPI = {
   create,
   update,
   checkMixedChannelRisk,
+  loginUpstreamBalanceCredentials,
   delete: deleteAccount,
   toggleStatus,
   testAccount,

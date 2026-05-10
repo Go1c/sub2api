@@ -106,16 +106,17 @@ type antigravityUsageCache struct {
 }
 
 const (
-	apiCacheTTL             = 3 * time.Minute
-	apiErrorCacheTTL        = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
-	antigravityErrorTTL     = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
-	apiQueryMaxJitter       = 800 * time.Millisecond // 用量查询最大随机延迟
-	windowStatsCacheTTL     = 1 * time.Minute
-	openAIProbeCacheTTL     = 10 * time.Minute
-	openAICodexProbeVersion = "0.125.0"
-	upstreamBalanceTimeout  = 10 * time.Second
-	upstreamBalanceBodyMax  = 4096
-	newAPIQuotaPerUnit      = 500000.0
+	apiCacheTTL                 = 3 * time.Minute
+	apiErrorCacheTTL            = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
+	antigravityErrorTTL         = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
+	apiQueryMaxJitter           = 800 * time.Millisecond // 用量查询最大随机延迟
+	windowStatsCacheTTL         = 1 * time.Minute
+	openAIProbeCacheTTL         = 10 * time.Minute
+	openAICodexProbeVersion     = "0.125.0"
+	upstreamBalanceTimeout      = 10 * time.Second
+	upstreamBalanceLoginTimeout = 10 * time.Second
+	upstreamBalanceBodyMax      = 4096
+	newAPIQuotaPerUnit          = 500000.0
 
 	newAPITokenQuotaNotUserBalanceMessage = "New API token quota is not user account balance; configure New API user access token and user id"
 )
@@ -206,6 +207,24 @@ type UpstreamBalanceResult struct {
 	Currency   string     `json:"currency,omitempty"`
 	Message    string     `json:"message,omitempty"`
 	Raw        string     `json:"raw,omitempty"`
+}
+
+// UpstreamBalanceLoginInput is a one-shot upstream login request used to obtain
+// user balance credentials without persisting the upstream password.
+type UpstreamBalanceLoginInput struct {
+	BaseURL  string
+	Username string
+	Password string
+}
+
+// UpstreamBalanceLoginCredentials contains the reusable user auth material
+// extracted from a NewAPI/Sub2API login response.
+type UpstreamBalanceLoginCredentials struct {
+	Provider    string   `json:"provider"`
+	AccessToken string   `json:"access_token"`
+	UserID      string   `json:"user_id,omitempty"`
+	Balance     *float64 `json:"balance,omitempty"`
+	Currency    string   `json:"currency,omitempty"`
 }
 
 // UsageInfo 账号使用量信息
@@ -500,7 +519,7 @@ func upstreamBalanceBaseURLs(baseURL string) []string {
 
 func stripUpstreamBalanceAPISuffix(baseURL string) string {
 	lower := strings.ToLower(baseURL)
-	for _, suffix := range []string{"/v1", "/v1beta"} {
+	for _, suffix := range []string{"/api/v1", "/api/v1beta", "/v1", "/v1beta"} {
 		if strings.HasSuffix(lower, suffix) {
 			return strings.TrimRight(baseURL[:len(baseURL)-len(suffix)], "/")
 		}
@@ -509,9 +528,12 @@ func stripUpstreamBalanceAPISuffix(baseURL string) string {
 }
 
 func upstreamBalanceProbePaths(account *Account) []string {
-	paths := make([]string, 0, len(upstreamBalancePaths)+1)
+	paths := make([]string, 0, len(upstreamBalancePaths)+3)
 	if hasNewAPIUserBalanceAuth(account) {
 		paths = append(paths, "/api/user/self")
+	}
+	if hasUpstreamBalanceUserAccessToken(account) {
+		paths = append(paths, "/api/v1/user/profile", "/api/user/profile")
 	}
 	paths = append(paths, upstreamBalancePaths...)
 	return paths
@@ -519,6 +541,10 @@ func upstreamBalanceProbePaths(account *Account) []string {
 
 func hasNewAPIUserBalanceAuth(account *Account) bool {
 	return upstreamBalanceNewAPIAccessToken(account) != "" && upstreamBalanceNewAPIUserID(account) != ""
+}
+
+func hasUpstreamBalanceUserAccessToken(account *Account) bool {
+	return upstreamBalanceNewAPIAccessToken(account) != ""
 }
 
 func upstreamBalanceNewAPIAccessToken(account *Account) string {
@@ -545,6 +571,145 @@ func upstreamBalanceNewAPIUserID(account *Account) string {
 				return value
 			}
 		}
+	}
+	return ""
+}
+
+type upstreamBalanceLoginProbe struct {
+	provider string
+	path     string
+	payload  map[string]string
+}
+
+// FetchUpstreamBalanceLoginCredentials logs into a NewAPI/Sub2API-compatible
+// upstream once and returns reusable balance auth fields. It does not store the
+// upstream password.
+func (s *AccountUsageService) FetchUpstreamBalanceLoginCredentials(ctx context.Context, input UpstreamBalanceLoginInput) (*UpstreamBalanceLoginCredentials, error) {
+	baseURLs := upstreamBalanceBaseURLs(input.BaseURL)
+	username := strings.TrimSpace(input.Username)
+	password := input.Password
+	if len(baseURLs) == 0 {
+		return nil, fmt.Errorf("base_url is empty")
+	}
+	if username == "" || password == "" {
+		return nil, fmt.Errorf("username or password is empty")
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, upstreamBalanceLoginTimeout)
+	defer cancel()
+
+	probes := []upstreamBalanceLoginProbe{
+		{
+			provider: "newapi",
+			path:     "/api/user/login",
+			payload: map[string]string{
+				"username": username,
+				"password": password,
+			},
+		},
+		{
+			provider: "sub2api",
+			path:     "/api/v1/auth/login",
+			payload: map[string]string{
+				"email":    username,
+				"password": password,
+			},
+		},
+	}
+
+	var lastErr error
+	for _, baseURL := range baseURLs {
+		for _, probe := range probes {
+			result, err := fetchUpstreamBalanceLoginPath(reqCtx, baseURL, probe)
+			if err == nil {
+				return result, nil
+			}
+			lastErr = err
+		}
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("upstream balance login failed: %w", lastErr)
+	}
+	return nil, fmt.Errorf("upstream balance login failed")
+}
+
+func fetchUpstreamBalanceLoginPath(ctx context.Context, baseURL string, probe upstreamBalanceLoginProbe) (*UpstreamBalanceLoginCredentials, error) {
+	body, err := json.Marshal(probe.payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+probe.path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, upstreamBalanceBodyMax))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%s %s", probe.path, resp.Status)
+	}
+	result, err := parseUpstreamBalanceLoginCredentials(probe.provider, raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s %w", probe.path, err)
+	}
+	return result, nil
+}
+
+func parseUpstreamBalanceLoginCredentials(provider string, body []byte) (*UpstreamBalanceLoginCredentials, error) {
+	var payload any
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+	if message := upstreamBalanceLoginFailureMessage(payload); message != "" {
+		return nil, fmt.Errorf("%s", message)
+	}
+
+	accessToken := strings.TrimSpace(findStringValue(payload, []string{"access_token", "accessToken", "token"}, 0))
+	if accessToken == "" {
+		return nil, fmt.Errorf("access token not found")
+	}
+	userID := strings.TrimSpace(findStringValue(payload, []string{"user_id", "userId", "uid"}, 0))
+	if userID == "" {
+		if id := findNumericValue(payload, []string{"id"}, 0); id != nil {
+			userID = strconv.FormatInt(int64(*id), 10)
+		}
+	}
+
+	balance, currency := parseUpstreamBalance(body)
+	return &UpstreamBalanceLoginCredentials{
+		Provider:    provider,
+		AccessToken: accessToken,
+		UserID:      userID,
+		Balance:     balance,
+		Currency:    currency,
+	}, nil
+}
+
+func upstreamBalanceLoginFailureMessage(value any) string {
+	payload, ok := asStringMap(value)
+	if !ok {
+		return ""
+	}
+	if success, ok := payload["success"].(bool); ok && !success {
+		if message := findStringValue(payload, []string{"message", "error"}, 0); message != "" {
+			return message
+		}
+		return "upstream login failed"
+	}
+	if code, ok := numericFromAny(payload["code"]); ok && code != 0 {
+		if message := findStringValue(payload, []string{"message", "error"}, 0); message != "" {
+			return message
+		}
+		return fmt.Sprintf("upstream login failed with code %.0f", code)
 	}
 	return ""
 }
@@ -652,17 +817,28 @@ func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, acco
 }
 
 func applyUpstreamBalanceAuthHeaders(req *http.Request, account *Account, path, apiKey string) {
-	if path == "/api/user/self" {
+	if isUpstreamBalanceUserAuthPath(path) {
 		if token := upstreamBalanceNewAPIAccessToken(account); token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
-		if userID := upstreamBalanceNewAPIUserID(account); userID != "" {
-			req.Header.Set("New-Api-User", userID)
+		if path == "/api/user/self" {
+			if userID := upstreamBalanceNewAPIUserID(account); userID != "" {
+				req.Header.Set("New-Api-User", userID)
+			}
 		}
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("x-api-key", apiKey)
+}
+
+func isUpstreamBalanceUserAuthPath(path string) bool {
+	switch path {
+	case "/api/user/self", "/api/v1/user/profile", "/api/user/profile":
+		return true
+	default:
+		return false
+	}
 }
 
 func compactUpstreamBalanceRaw(body []byte) string {

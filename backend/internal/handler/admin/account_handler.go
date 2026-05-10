@@ -166,6 +166,12 @@ type CheckMixedChannelRequest struct {
 	AccountID *int64  `json:"account_id"`
 }
 
+type UpstreamBalanceLoginRequest struct {
+	BaseURL  string `json:"base_url" binding:"required"`
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 // AccountWithConcurrency extends Account with real-time concurrency info
 type AccountWithConcurrency struct {
 	*dto.Account
@@ -1665,6 +1671,30 @@ func (h *AccountHandler) GetUsage(c *gin.Context) {
 	}
 
 	response.Success(c, usage)
+}
+
+// UpstreamBalanceLogin handles one-shot upstream user login for balance credentials.
+// POST /api/v1/admin/accounts/upstream-balance/login
+func (h *AccountHandler) UpstreamBalanceLogin(c *gin.Context) {
+	if h.accountUsageService == nil {
+		response.InternalError(c, "Account usage service unavailable")
+		return
+	}
+	var req UpstreamBalanceLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	result, err := h.accountUsageService.FetchUpstreamBalanceLoginCredentials(c.Request.Context(), service.UpstreamBalanceLoginInput{
+		BaseURL:  req.BaseURL,
+		Username: req.Username,
+		Password: req.Password,
+	})
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, result)
 }
 
 // ClearRateLimit handles clearing account rate limit status
