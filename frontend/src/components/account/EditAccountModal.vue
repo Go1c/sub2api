@@ -94,6 +94,34 @@
               />
             </button>
           </div>
+          <div v-if="upstreamBalanceEnabled" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label class="input-label">{{ t('admin.accounts.upstreamBalance.newApiAccessToken') }}</label>
+              <input
+                v-model="upstreamBalanceAccessToken"
+                type="password"
+                class="input font-mono"
+                autocomplete="new-password"
+                data-testid="upstream-balance-access-token"
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore="true"
+                placeholder="New API access token"
+              />
+              <p class="input-hint">{{ t('admin.accounts.upstreamBalance.newApiAccessTokenHint') }}</p>
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.accounts.upstreamBalance.newApiUserId') }}</label>
+              <input
+                v-model="upstreamBalanceUserId"
+                type="text"
+                class="input font-mono"
+                data-testid="upstream-balance-user-id"
+                placeholder="123"
+              />
+              <p class="input-hint">{{ t('admin.accounts.upstreamBalance.newApiUserIdHint') }}</p>
+            </div>
+          </div>
         </div>
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
@@ -616,6 +644,34 @@
                 ]"
               />
             </button>
+          </div>
+          <div v-if="upstreamBalanceEnabled" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label class="input-label">{{ t('admin.accounts.upstreamBalance.newApiAccessToken') }}</label>
+              <input
+                v-model="upstreamBalanceAccessToken"
+                type="password"
+                class="input font-mono"
+                autocomplete="new-password"
+                data-testid="upstream-balance-access-token"
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore="true"
+                placeholder="New API access token"
+              />
+              <p class="input-hint">{{ t('admin.accounts.upstreamBalance.newApiAccessTokenHint') }}</p>
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.accounts.upstreamBalance.newApiUserId') }}</label>
+              <input
+                v-model="upstreamBalanceUserId"
+                type="text"
+                class="input font-mono"
+                data-testid="upstream-balance-user-id"
+                placeholder="123"
+              />
+              <p class="input-hint">{{ t('admin.accounts.upstreamBalance.newApiUserIdHint') }}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -2335,6 +2391,8 @@ const customErrorCodesEnabled = ref(false)
 const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
 const upstreamBalanceEnabled = ref(false)
+const upstreamBalanceAccessToken = ref('')
+const upstreamBalanceUserId = ref('')
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
@@ -2633,6 +2691,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedScheduling.value = extra?.mixed_scheduling === true
   allowOverages.value = extra?.allow_overages === true
   upstreamBalanceEnabled.value = extra?.upstream_balance_enabled === true
+  upstreamBalanceAccessToken.value = ''
+  upstreamBalanceUserId.value = typeof extra?.upstream_balance_user_id === 'string'
+    ? extra.upstream_balance_user_id
+    : extra?.upstream_balance_user_id != null
+      ? String(extra.upstream_balance_user_id)
+      : ''
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
   openaiPassthroughEnabled.value = false
@@ -3859,8 +3923,20 @@ const handleSubmit = async () => {
       const newExtra: Record<string, unknown> = { ...currentExtra }
       if (upstreamBalanceEnabled.value) {
         newExtra.upstream_balance_enabled = true
+        const accessToken = upstreamBalanceAccessToken.value.trim()
+        const userId = upstreamBalanceUserId.value.trim()
+        if (accessToken) {
+          newExtra.upstream_balance_access_token = accessToken
+        }
+        if (userId) {
+          newExtra.upstream_balance_user_id = userId
+        } else {
+          delete newExtra.upstream_balance_user_id
+        }
       } else {
         delete newExtra.upstream_balance_enabled
+        delete newExtra.upstream_balance_access_token
+        delete newExtra.upstream_balance_user_id
       }
       updatePayload.extra = newExtra
     }

@@ -2995,7 +2995,11 @@ export default {
       },
       upstreamBalance: {
         label: '上游余额',
-        hint: '开启后在用量窗口中请求并展示上游余额接口结果。',
+        hint: '开启后在用量窗口中请求并展示上游用户账户余额。',
+        newApiAccessToken: 'New API 用户 Access Token',
+        newApiAccessTokenHint: '可选。查询 New API 用户余额需要填写；留空则保留已保存的 token。',
+        newApiUserId: 'New API 用户 ID',
+        newApiUserIdHint: '可选。需要和 New API 用户 Access Token 一起使用。',
         success: '请求成功',
         failed: '请求失败'
       },
