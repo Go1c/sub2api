@@ -571,6 +571,11 @@ export interface SystemSettings {
   // Available Channels feature switch
   available_channels_enabled: boolean;
 
+  // Site Messages feature switch
+  site_messages_enabled: boolean;
+  site_messages_daily_send_limit: number;
+  site_messages_retention_days: number;
+
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
 
@@ -778,6 +783,11 @@ export interface UpdateSettingsRequest {
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;
+
+  // Site Messages feature switch
+  site_messages_enabled?: boolean;
+  site_messages_daily_send_limit?: number;
+  site_messages_retention_days?: number;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

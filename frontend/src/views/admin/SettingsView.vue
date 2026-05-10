@@ -5008,6 +5008,55 @@
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.siteMessages.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.siteMessages.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.siteMessages.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.siteMessages.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.site_messages_enabled" />
+            </div>
+
+            <div v-if="form.site_messages_enabled" class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.siteMessages.dailyLimit') }}</label>
+                <input
+                  v-model.number="form.site_messages_daily_send_limit"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.siteMessages.dailyLimitHint') }}</p>
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.siteMessages.retentionDays') }}</label>
+                <input
+                  v-model.number="form.site_messages_retention_days"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.features.siteMessages.retentionDaysHint') }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.riskControl.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7177,6 +7226,10 @@ const form = reactive<SettingsForm>({
   channel_monitor_default_interval_seconds: 60,
   // Available Channels feature switch
   available_channels_enabled: false,
+  // Site Messages feature switch
+  site_messages_enabled: false,
+  site_messages_daily_send_limit: 10,
+  site_messages_retention_days: 30,
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
 });
@@ -8554,6 +8607,16 @@ async function saveSettings() {
         Number(form.channel_monitor_default_interval_seconds) || 60,
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
+      // Site Messages feature switch
+      site_messages_enabled: form.site_messages_enabled,
+      site_messages_daily_send_limit: Math.max(
+        0,
+        Math.min(1000, Math.floor(Number(form.site_messages_daily_send_limit) || 0)),
+      ),
+      site_messages_retention_days: Math.max(
+        1,
+        Math.min(365, Math.floor(Number(form.site_messages_retention_days) || 30)),
+      ),
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
     };

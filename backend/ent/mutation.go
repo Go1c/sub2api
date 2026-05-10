@@ -38,6 +38,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -84,6 +85,7 @@ const (
 	TypeRedeemCode                    = "RedeemCode"
 	TypeSecuritySecret                = "SecuritySecret"
 	TypeSetting                       = "Setting"
+	TypeSiteMessage                   = "SiteMessage"
 	TypeSubscriptionPlan              = "SubscriptionPlan"
 	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
 	TypeUsageCleanupTask              = "UsageCleanupTask"
@@ -30637,6 +30639,985 @@ func (m *SettingMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Setting edge %s", name)
 }
 
+// SiteMessageMutation represents an operation that mutates the SiteMessage nodes in the graph.
+type SiteMessageMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int64
+	subject          *string
+	content          *string
+	read_at          *time.Time
+	created_at       *time.Time
+	updated_at       *time.Time
+	clearedFields    map[string]struct{}
+	sender           *int64
+	clearedsender    bool
+	recipient        *int64
+	clearedrecipient bool
+	replies          map[int64]struct{}
+	removedreplies   map[int64]struct{}
+	clearedreplies   bool
+	parent           *int64
+	clearedparent    bool
+	done             bool
+	oldValue         func(context.Context) (*SiteMessage, error)
+	predicates       []predicate.SiteMessage
+}
+
+var _ ent.Mutation = (*SiteMessageMutation)(nil)
+
+// sitemessageOption allows management of the mutation configuration using functional options.
+type sitemessageOption func(*SiteMessageMutation)
+
+// newSiteMessageMutation creates new mutation for the SiteMessage entity.
+func newSiteMessageMutation(c config, op Op, opts ...sitemessageOption) *SiteMessageMutation {
+	m := &SiteMessageMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSiteMessage,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSiteMessageID sets the ID field of the mutation.
+func withSiteMessageID(id int64) sitemessageOption {
+	return func(m *SiteMessageMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SiteMessage
+		)
+		m.oldValue = func(ctx context.Context) (*SiteMessage, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SiteMessage.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSiteMessage sets the old SiteMessage of the mutation.
+func withSiteMessage(node *SiteMessage) sitemessageOption {
+	return func(m *SiteMessageMutation) {
+		m.oldValue = func(context.Context) (*SiteMessage, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SiteMessageMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SiteMessageMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SiteMessageMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SiteMessageMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SiteMessage.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSenderID sets the "sender_id" field.
+func (m *SiteMessageMutation) SetSenderID(i int64) {
+	m.sender = &i
+}
+
+// SenderID returns the value of the "sender_id" field in the mutation.
+func (m *SiteMessageMutation) SenderID() (r int64, exists bool) {
+	v := m.sender
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSenderID returns the old "sender_id" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldSenderID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSenderID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSenderID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSenderID: %w", err)
+	}
+	return oldValue.SenderID, nil
+}
+
+// ResetSenderID resets all changes to the "sender_id" field.
+func (m *SiteMessageMutation) ResetSenderID() {
+	m.sender = nil
+}
+
+// SetRecipientID sets the "recipient_id" field.
+func (m *SiteMessageMutation) SetRecipientID(i int64) {
+	m.recipient = &i
+}
+
+// RecipientID returns the value of the "recipient_id" field in the mutation.
+func (m *SiteMessageMutation) RecipientID() (r int64, exists bool) {
+	v := m.recipient
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRecipientID returns the old "recipient_id" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldRecipientID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRecipientID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRecipientID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRecipientID: %w", err)
+	}
+	return oldValue.RecipientID, nil
+}
+
+// ResetRecipientID resets all changes to the "recipient_id" field.
+func (m *SiteMessageMutation) ResetRecipientID() {
+	m.recipient = nil
+}
+
+// SetParentID sets the "parent_id" field.
+func (m *SiteMessageMutation) SetParentID(i int64) {
+	m.parent = &i
+}
+
+// ParentID returns the value of the "parent_id" field in the mutation.
+func (m *SiteMessageMutation) ParentID() (r int64, exists bool) {
+	v := m.parent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentID returns the old "parent_id" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldParentID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentID: %w", err)
+	}
+	return oldValue.ParentID, nil
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (m *SiteMessageMutation) ClearParentID() {
+	m.parent = nil
+	m.clearedFields[sitemessage.FieldParentID] = struct{}{}
+}
+
+// ParentIDCleared returns if the "parent_id" field was cleared in this mutation.
+func (m *SiteMessageMutation) ParentIDCleared() bool {
+	_, ok := m.clearedFields[sitemessage.FieldParentID]
+	return ok
+}
+
+// ResetParentID resets all changes to the "parent_id" field.
+func (m *SiteMessageMutation) ResetParentID() {
+	m.parent = nil
+	delete(m.clearedFields, sitemessage.FieldParentID)
+}
+
+// SetSubject sets the "subject" field.
+func (m *SiteMessageMutation) SetSubject(s string) {
+	m.subject = &s
+}
+
+// Subject returns the value of the "subject" field in the mutation.
+func (m *SiteMessageMutation) Subject() (r string, exists bool) {
+	v := m.subject
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubject returns the old "subject" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldSubject(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubject is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubject requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubject: %w", err)
+	}
+	return oldValue.Subject, nil
+}
+
+// ResetSubject resets all changes to the "subject" field.
+func (m *SiteMessageMutation) ResetSubject() {
+	m.subject = nil
+}
+
+// SetContent sets the "content" field.
+func (m *SiteMessageMutation) SetContent(s string) {
+	m.content = &s
+}
+
+// Content returns the value of the "content" field in the mutation.
+func (m *SiteMessageMutation) Content() (r string, exists bool) {
+	v := m.content
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContent returns the old "content" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldContent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContent: %w", err)
+	}
+	return oldValue.Content, nil
+}
+
+// ResetContent resets all changes to the "content" field.
+func (m *SiteMessageMutation) ResetContent() {
+	m.content = nil
+}
+
+// SetReadAt sets the "read_at" field.
+func (m *SiteMessageMutation) SetReadAt(t time.Time) {
+	m.read_at = &t
+}
+
+// ReadAt returns the value of the "read_at" field in the mutation.
+func (m *SiteMessageMutation) ReadAt() (r time.Time, exists bool) {
+	v := m.read_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReadAt returns the old "read_at" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldReadAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReadAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReadAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReadAt: %w", err)
+	}
+	return oldValue.ReadAt, nil
+}
+
+// ClearReadAt clears the value of the "read_at" field.
+func (m *SiteMessageMutation) ClearReadAt() {
+	m.read_at = nil
+	m.clearedFields[sitemessage.FieldReadAt] = struct{}{}
+}
+
+// ReadAtCleared returns if the "read_at" field was cleared in this mutation.
+func (m *SiteMessageMutation) ReadAtCleared() bool {
+	_, ok := m.clearedFields[sitemessage.FieldReadAt]
+	return ok
+}
+
+// ResetReadAt resets all changes to the "read_at" field.
+func (m *SiteMessageMutation) ResetReadAt() {
+	m.read_at = nil
+	delete(m.clearedFields, sitemessage.FieldReadAt)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SiteMessageMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SiteMessageMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SiteMessageMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SiteMessageMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SiteMessageMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SiteMessage entity.
+// If the SiteMessage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SiteMessageMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SiteMessageMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearSender clears the "sender" edge to the User entity.
+func (m *SiteMessageMutation) ClearSender() {
+	m.clearedsender = true
+	m.clearedFields[sitemessage.FieldSenderID] = struct{}{}
+}
+
+// SenderCleared reports if the "sender" edge to the User entity was cleared.
+func (m *SiteMessageMutation) SenderCleared() bool {
+	return m.clearedsender
+}
+
+// SenderIDs returns the "sender" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SenderID instead. It exists only for internal usage by the builders.
+func (m *SiteMessageMutation) SenderIDs() (ids []int64) {
+	if id := m.sender; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSender resets all changes to the "sender" edge.
+func (m *SiteMessageMutation) ResetSender() {
+	m.sender = nil
+	m.clearedsender = false
+}
+
+// ClearRecipient clears the "recipient" edge to the User entity.
+func (m *SiteMessageMutation) ClearRecipient() {
+	m.clearedrecipient = true
+	m.clearedFields[sitemessage.FieldRecipientID] = struct{}{}
+}
+
+// RecipientCleared reports if the "recipient" edge to the User entity was cleared.
+func (m *SiteMessageMutation) RecipientCleared() bool {
+	return m.clearedrecipient
+}
+
+// RecipientIDs returns the "recipient" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RecipientID instead. It exists only for internal usage by the builders.
+func (m *SiteMessageMutation) RecipientIDs() (ids []int64) {
+	if id := m.recipient; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRecipient resets all changes to the "recipient" edge.
+func (m *SiteMessageMutation) ResetRecipient() {
+	m.recipient = nil
+	m.clearedrecipient = false
+}
+
+// AddReplyIDs adds the "replies" edge to the SiteMessage entity by ids.
+func (m *SiteMessageMutation) AddReplyIDs(ids ...int64) {
+	if m.replies == nil {
+		m.replies = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.replies[ids[i]] = struct{}{}
+	}
+}
+
+// ClearReplies clears the "replies" edge to the SiteMessage entity.
+func (m *SiteMessageMutation) ClearReplies() {
+	m.clearedreplies = true
+}
+
+// RepliesCleared reports if the "replies" edge to the SiteMessage entity was cleared.
+func (m *SiteMessageMutation) RepliesCleared() bool {
+	return m.clearedreplies
+}
+
+// RemoveReplyIDs removes the "replies" edge to the SiteMessage entity by IDs.
+func (m *SiteMessageMutation) RemoveReplyIDs(ids ...int64) {
+	if m.removedreplies == nil {
+		m.removedreplies = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.replies, ids[i])
+		m.removedreplies[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedReplies returns the removed IDs of the "replies" edge to the SiteMessage entity.
+func (m *SiteMessageMutation) RemovedRepliesIDs() (ids []int64) {
+	for id := range m.removedreplies {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RepliesIDs returns the "replies" edge IDs in the mutation.
+func (m *SiteMessageMutation) RepliesIDs() (ids []int64) {
+	for id := range m.replies {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetReplies resets all changes to the "replies" edge.
+func (m *SiteMessageMutation) ResetReplies() {
+	m.replies = nil
+	m.clearedreplies = false
+	m.removedreplies = nil
+}
+
+// ClearParent clears the "parent" edge to the SiteMessage entity.
+func (m *SiteMessageMutation) ClearParent() {
+	m.clearedparent = true
+	m.clearedFields[sitemessage.FieldParentID] = struct{}{}
+}
+
+// ParentCleared reports if the "parent" edge to the SiteMessage entity was cleared.
+func (m *SiteMessageMutation) ParentCleared() bool {
+	return m.ParentIDCleared() || m.clearedparent
+}
+
+// ParentIDs returns the "parent" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ParentID instead. It exists only for internal usage by the builders.
+func (m *SiteMessageMutation) ParentIDs() (ids []int64) {
+	if id := m.parent; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetParent resets all changes to the "parent" edge.
+func (m *SiteMessageMutation) ResetParent() {
+	m.parent = nil
+	m.clearedparent = false
+}
+
+// Where appends a list predicates to the SiteMessageMutation builder.
+func (m *SiteMessageMutation) Where(ps ...predicate.SiteMessage) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SiteMessageMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SiteMessageMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SiteMessage, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SiteMessageMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SiteMessageMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SiteMessage).
+func (m *SiteMessageMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SiteMessageMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.sender != nil {
+		fields = append(fields, sitemessage.FieldSenderID)
+	}
+	if m.recipient != nil {
+		fields = append(fields, sitemessage.FieldRecipientID)
+	}
+	if m.parent != nil {
+		fields = append(fields, sitemessage.FieldParentID)
+	}
+	if m.subject != nil {
+		fields = append(fields, sitemessage.FieldSubject)
+	}
+	if m.content != nil {
+		fields = append(fields, sitemessage.FieldContent)
+	}
+	if m.read_at != nil {
+		fields = append(fields, sitemessage.FieldReadAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, sitemessage.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, sitemessage.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SiteMessageMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case sitemessage.FieldSenderID:
+		return m.SenderID()
+	case sitemessage.FieldRecipientID:
+		return m.RecipientID()
+	case sitemessage.FieldParentID:
+		return m.ParentID()
+	case sitemessage.FieldSubject:
+		return m.Subject()
+	case sitemessage.FieldContent:
+		return m.Content()
+	case sitemessage.FieldReadAt:
+		return m.ReadAt()
+	case sitemessage.FieldCreatedAt:
+		return m.CreatedAt()
+	case sitemessage.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SiteMessageMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case sitemessage.FieldSenderID:
+		return m.OldSenderID(ctx)
+	case sitemessage.FieldRecipientID:
+		return m.OldRecipientID(ctx)
+	case sitemessage.FieldParentID:
+		return m.OldParentID(ctx)
+	case sitemessage.FieldSubject:
+		return m.OldSubject(ctx)
+	case sitemessage.FieldContent:
+		return m.OldContent(ctx)
+	case sitemessage.FieldReadAt:
+		return m.OldReadAt(ctx)
+	case sitemessage.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case sitemessage.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SiteMessage field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SiteMessageMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case sitemessage.FieldSenderID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSenderID(v)
+		return nil
+	case sitemessage.FieldRecipientID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRecipientID(v)
+		return nil
+	case sitemessage.FieldParentID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentID(v)
+		return nil
+	case sitemessage.FieldSubject:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubject(v)
+		return nil
+	case sitemessage.FieldContent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContent(v)
+		return nil
+	case sitemessage.FieldReadAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReadAt(v)
+		return nil
+	case sitemessage.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case sitemessage.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SiteMessage field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SiteMessageMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SiteMessageMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SiteMessageMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SiteMessage numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SiteMessageMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(sitemessage.FieldParentID) {
+		fields = append(fields, sitemessage.FieldParentID)
+	}
+	if m.FieldCleared(sitemessage.FieldReadAt) {
+		fields = append(fields, sitemessage.FieldReadAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SiteMessageMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SiteMessageMutation) ClearField(name string) error {
+	switch name {
+	case sitemessage.FieldParentID:
+		m.ClearParentID()
+		return nil
+	case sitemessage.FieldReadAt:
+		m.ClearReadAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SiteMessage nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SiteMessageMutation) ResetField(name string) error {
+	switch name {
+	case sitemessage.FieldSenderID:
+		m.ResetSenderID()
+		return nil
+	case sitemessage.FieldRecipientID:
+		m.ResetRecipientID()
+		return nil
+	case sitemessage.FieldParentID:
+		m.ResetParentID()
+		return nil
+	case sitemessage.FieldSubject:
+		m.ResetSubject()
+		return nil
+	case sitemessage.FieldContent:
+		m.ResetContent()
+		return nil
+	case sitemessage.FieldReadAt:
+		m.ResetReadAt()
+		return nil
+	case sitemessage.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case sitemessage.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SiteMessage field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SiteMessageMutation) AddedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.sender != nil {
+		edges = append(edges, sitemessage.EdgeSender)
+	}
+	if m.recipient != nil {
+		edges = append(edges, sitemessage.EdgeRecipient)
+	}
+	if m.replies != nil {
+		edges = append(edges, sitemessage.EdgeReplies)
+	}
+	if m.parent != nil {
+		edges = append(edges, sitemessage.EdgeParent)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SiteMessageMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case sitemessage.EdgeSender:
+		if id := m.sender; id != nil {
+			return []ent.Value{*id}
+		}
+	case sitemessage.EdgeRecipient:
+		if id := m.recipient; id != nil {
+			return []ent.Value{*id}
+		}
+	case sitemessage.EdgeReplies:
+		ids := make([]ent.Value, 0, len(m.replies))
+		for id := range m.replies {
+			ids = append(ids, id)
+		}
+		return ids
+	case sitemessage.EdgeParent:
+		if id := m.parent; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SiteMessageMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.removedreplies != nil {
+		edges = append(edges, sitemessage.EdgeReplies)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SiteMessageMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case sitemessage.EdgeReplies:
+		ids := make([]ent.Value, 0, len(m.removedreplies))
+		for id := range m.removedreplies {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SiteMessageMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.clearedsender {
+		edges = append(edges, sitemessage.EdgeSender)
+	}
+	if m.clearedrecipient {
+		edges = append(edges, sitemessage.EdgeRecipient)
+	}
+	if m.clearedreplies {
+		edges = append(edges, sitemessage.EdgeReplies)
+	}
+	if m.clearedparent {
+		edges = append(edges, sitemessage.EdgeParent)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SiteMessageMutation) EdgeCleared(name string) bool {
+	switch name {
+	case sitemessage.EdgeSender:
+		return m.clearedsender
+	case sitemessage.EdgeRecipient:
+		return m.clearedrecipient
+	case sitemessage.EdgeReplies:
+		return m.clearedreplies
+	case sitemessage.EdgeParent:
+		return m.clearedparent
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SiteMessageMutation) ClearEdge(name string) error {
+	switch name {
+	case sitemessage.EdgeSender:
+		m.ClearSender()
+		return nil
+	case sitemessage.EdgeRecipient:
+		m.ClearRecipient()
+		return nil
+	case sitemessage.EdgeParent:
+		m.ClearParent()
+		return nil
+	}
+	return fmt.Errorf("unknown SiteMessage unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SiteMessageMutation) ResetEdge(name string) error {
+	switch name {
+	case sitemessage.EdgeSender:
+		m.ResetSender()
+		return nil
+	case sitemessage.EdgeRecipient:
+		m.ResetRecipient()
+		return nil
+	case sitemessage.EdgeReplies:
+		m.ResetReplies()
+		return nil
+	case sitemessage.EdgeParent:
+		m.ResetParent()
+		return nil
+	}
+	return fmt.Errorf("unknown SiteMessage edge %s", name)
+}
+
 // SubscriptionPlanMutation represents an operation that mutates the SubscriptionPlan nodes in the graph.
 type SubscriptionPlanMutation struct {
 	config
@@ -37720,6 +38701,12 @@ type UserMutation struct {
 	announcement_reads            map[int64]struct{}
 	removedannouncement_reads     map[int64]struct{}
 	clearedannouncement_reads     bool
+	sent_site_messages            map[int64]struct{}
+	removedsent_site_messages     map[int64]struct{}
+	clearedsent_site_messages     bool
+	received_site_messages        map[int64]struct{}
+	removedreceived_site_messages map[int64]struct{}
+	clearedreceived_site_messages bool
 	allowed_groups                map[int64]struct{}
 	removedallowed_groups         map[int64]struct{}
 	clearedallowed_groups         bool
@@ -39121,6 +40108,114 @@ func (m *UserMutation) ResetAnnouncementReads() {
 	m.removedannouncement_reads = nil
 }
 
+// AddSentSiteMessageIDs adds the "sent_site_messages" edge to the SiteMessage entity by ids.
+func (m *UserMutation) AddSentSiteMessageIDs(ids ...int64) {
+	if m.sent_site_messages == nil {
+		m.sent_site_messages = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.sent_site_messages[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSentSiteMessages clears the "sent_site_messages" edge to the SiteMessage entity.
+func (m *UserMutation) ClearSentSiteMessages() {
+	m.clearedsent_site_messages = true
+}
+
+// SentSiteMessagesCleared reports if the "sent_site_messages" edge to the SiteMessage entity was cleared.
+func (m *UserMutation) SentSiteMessagesCleared() bool {
+	return m.clearedsent_site_messages
+}
+
+// RemoveSentSiteMessageIDs removes the "sent_site_messages" edge to the SiteMessage entity by IDs.
+func (m *UserMutation) RemoveSentSiteMessageIDs(ids ...int64) {
+	if m.removedsent_site_messages == nil {
+		m.removedsent_site_messages = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.sent_site_messages, ids[i])
+		m.removedsent_site_messages[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSentSiteMessages returns the removed IDs of the "sent_site_messages" edge to the SiteMessage entity.
+func (m *UserMutation) RemovedSentSiteMessagesIDs() (ids []int64) {
+	for id := range m.removedsent_site_messages {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SentSiteMessagesIDs returns the "sent_site_messages" edge IDs in the mutation.
+func (m *UserMutation) SentSiteMessagesIDs() (ids []int64) {
+	for id := range m.sent_site_messages {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSentSiteMessages resets all changes to the "sent_site_messages" edge.
+func (m *UserMutation) ResetSentSiteMessages() {
+	m.sent_site_messages = nil
+	m.clearedsent_site_messages = false
+	m.removedsent_site_messages = nil
+}
+
+// AddReceivedSiteMessageIDs adds the "received_site_messages" edge to the SiteMessage entity by ids.
+func (m *UserMutation) AddReceivedSiteMessageIDs(ids ...int64) {
+	if m.received_site_messages == nil {
+		m.received_site_messages = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.received_site_messages[ids[i]] = struct{}{}
+	}
+}
+
+// ClearReceivedSiteMessages clears the "received_site_messages" edge to the SiteMessage entity.
+func (m *UserMutation) ClearReceivedSiteMessages() {
+	m.clearedreceived_site_messages = true
+}
+
+// ReceivedSiteMessagesCleared reports if the "received_site_messages" edge to the SiteMessage entity was cleared.
+func (m *UserMutation) ReceivedSiteMessagesCleared() bool {
+	return m.clearedreceived_site_messages
+}
+
+// RemoveReceivedSiteMessageIDs removes the "received_site_messages" edge to the SiteMessage entity by IDs.
+func (m *UserMutation) RemoveReceivedSiteMessageIDs(ids ...int64) {
+	if m.removedreceived_site_messages == nil {
+		m.removedreceived_site_messages = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.received_site_messages, ids[i])
+		m.removedreceived_site_messages[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedReceivedSiteMessages returns the removed IDs of the "received_site_messages" edge to the SiteMessage entity.
+func (m *UserMutation) RemovedReceivedSiteMessagesIDs() (ids []int64) {
+	for id := range m.removedreceived_site_messages {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ReceivedSiteMessagesIDs returns the "received_site_messages" edge IDs in the mutation.
+func (m *UserMutation) ReceivedSiteMessagesIDs() (ids []int64) {
+	for id := range m.received_site_messages {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetReceivedSiteMessages resets all changes to the "received_site_messages" edge.
+func (m *UserMutation) ResetReceivedSiteMessages() {
+	m.received_site_messages = nil
+	m.clearedreceived_site_messages = false
+	m.removedreceived_site_messages = nil
+}
+
 // AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by ids.
 func (m *UserMutation) AddAllowedGroupIDs(ids ...int64) {
 	if m.allowed_groups == nil {
@@ -40108,7 +41203,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 12)
+	edges := make([]string, 0, 14)
 	if m.api_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -40123,6 +41218,12 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.announcement_reads != nil {
 		edges = append(edges, user.EdgeAnnouncementReads)
+	}
+	if m.sent_site_messages != nil {
+		edges = append(edges, user.EdgeSentSiteMessages)
+	}
+	if m.received_site_messages != nil {
+		edges = append(edges, user.EdgeReceivedSiteMessages)
 	}
 	if m.allowed_groups != nil {
 		edges = append(edges, user.EdgeAllowedGroups)
@@ -40182,6 +41283,18 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeSentSiteMessages:
+		ids := make([]ent.Value, 0, len(m.sent_site_messages))
+		for id := range m.sent_site_messages {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeReceivedSiteMessages:
+		ids := make([]ent.Value, 0, len(m.received_site_messages))
+		for id := range m.received_site_messages {
+			ids = append(ids, id)
+		}
+		return ids
 	case user.EdgeAllowedGroups:
 		ids := make([]ent.Value, 0, len(m.allowed_groups))
 		for id := range m.allowed_groups {
@@ -40230,7 +41343,7 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 12)
+	edges := make([]string, 0, 14)
 	if m.removedapi_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -40245,6 +41358,12 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedannouncement_reads != nil {
 		edges = append(edges, user.EdgeAnnouncementReads)
+	}
+	if m.removedsent_site_messages != nil {
+		edges = append(edges, user.EdgeSentSiteMessages)
+	}
+	if m.removedreceived_site_messages != nil {
+		edges = append(edges, user.EdgeReceivedSiteMessages)
 	}
 	if m.removedallowed_groups != nil {
 		edges = append(edges, user.EdgeAllowedGroups)
@@ -40304,6 +41423,18 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeSentSiteMessages:
+		ids := make([]ent.Value, 0, len(m.removedsent_site_messages))
+		for id := range m.removedsent_site_messages {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeReceivedSiteMessages:
+		ids := make([]ent.Value, 0, len(m.removedreceived_site_messages))
+		for id := range m.removedreceived_site_messages {
+			ids = append(ids, id)
+		}
+		return ids
 	case user.EdgeAllowedGroups:
 		ids := make([]ent.Value, 0, len(m.removedallowed_groups))
 		for id := range m.removedallowed_groups {
@@ -40352,7 +41483,7 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 12)
+	edges := make([]string, 0, 14)
 	if m.clearedapi_keys {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -40367,6 +41498,12 @@ func (m *UserMutation) ClearedEdges() []string {
 	}
 	if m.clearedannouncement_reads {
 		edges = append(edges, user.EdgeAnnouncementReads)
+	}
+	if m.clearedsent_site_messages {
+		edges = append(edges, user.EdgeSentSiteMessages)
+	}
+	if m.clearedreceived_site_messages {
+		edges = append(edges, user.EdgeReceivedSiteMessages)
 	}
 	if m.clearedallowed_groups {
 		edges = append(edges, user.EdgeAllowedGroups)
@@ -40406,6 +41543,10 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedassigned_subscriptions
 	case user.EdgeAnnouncementReads:
 		return m.clearedannouncement_reads
+	case user.EdgeSentSiteMessages:
+		return m.clearedsent_site_messages
+	case user.EdgeReceivedSiteMessages:
+		return m.clearedreceived_site_messages
 	case user.EdgeAllowedGroups:
 		return m.clearedallowed_groups
 	case user.EdgeUsageLogs:
@@ -40450,6 +41591,12 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeAnnouncementReads:
 		m.ResetAnnouncementReads()
+		return nil
+	case user.EdgeSentSiteMessages:
+		m.ResetSentSiteMessages()
+		return nil
+	case user.EdgeReceivedSiteMessages:
+		m.ResetReceivedSiteMessages()
 		return nil
 	case user.EdgeAllowedGroups:
 		m.ResetAllowedGroups()

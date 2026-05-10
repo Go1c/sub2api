@@ -123,6 +123,9 @@ const (
 	SettingKeyBalanceUsageGateMinRecharge      = "balance_usage_gate_min_recharge"     // 使用余额服务前需大于的历史充值
 	SettingKeyRiskControlEnabled               = "risk_control_enabled"                // 是否启用风控中心入口与审计链路
 	SettingKeyContentModerationConfig          = "content_moderation_config"           // 内容审计配置（JSON）
+	SettingKeySiteMessagesEnabled              = "site_messages_enabled"               // 是否启用站内信功能
+	SettingKeySiteMessagesDailySendLimit       = "site_messages_daily_send_limit"      // 非管理员每日站内信发送上限（0=不限制）
+	SettingKeySiteMessagesRetentionDays        = "site_messages_retention_days"        // 站内信保留天数
 	SettingKeyLoginAgreementEnabled            = "login_agreement_enabled"             // 登录前是否要求同意条款
 	SettingKeyLoginAgreementMode               = "login_agreement_mode"                // 条款确认展示模式：modal / checkbox
 	SettingKeyLoginAgreementUpdatedAt          = "login_agreement_updated_at"          // 条款更新日期（展示用）

@@ -31,6 +31,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -1456,6 +1457,40 @@ func init() {
 	setting.DefaultUpdatedAt = settingDescUpdatedAt.Default.(func() time.Time)
 	// setting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	setting.UpdateDefaultUpdatedAt = settingDescUpdatedAt.UpdateDefault.(func() time.Time)
+	sitemessageFields := schema.SiteMessage{}.Fields()
+	_ = sitemessageFields
+	// sitemessageDescSubject is the schema descriptor for subject field.
+	sitemessageDescSubject := sitemessageFields[3].Descriptor()
+	// sitemessage.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	sitemessage.SubjectValidator = func() func(string) error {
+		validators := sitemessageDescSubject.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(subject string) error {
+			for _, fn := range fns {
+				if err := fn(subject); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// sitemessageDescContent is the schema descriptor for content field.
+	sitemessageDescContent := sitemessageFields[4].Descriptor()
+	// sitemessage.ContentValidator is a validator for the "content" field. It is called by the builders before save.
+	sitemessage.ContentValidator = sitemessageDescContent.Validators[0].(func(string) error)
+	// sitemessageDescCreatedAt is the schema descriptor for created_at field.
+	sitemessageDescCreatedAt := sitemessageFields[6].Descriptor()
+	// sitemessage.DefaultCreatedAt holds the default value on creation for the created_at field.
+	sitemessage.DefaultCreatedAt = sitemessageDescCreatedAt.Default.(func() time.Time)
+	// sitemessageDescUpdatedAt is the schema descriptor for updated_at field.
+	sitemessageDescUpdatedAt := sitemessageFields[7].Descriptor()
+	// sitemessage.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	sitemessage.DefaultUpdatedAt = sitemessageDescUpdatedAt.Default.(func() time.Time)
+	// sitemessage.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	sitemessage.UpdateDefaultUpdatedAt = sitemessageDescUpdatedAt.UpdateDefault.(func() time.Time)
 	subscriptionplanFields := schema.SubscriptionPlan{}.Fields()
 	_ = subscriptionplanFields
 	// subscriptionplanDescName is the schema descriptor for name field.

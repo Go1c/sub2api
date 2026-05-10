@@ -119,6 +119,11 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Affiliate',
   }),
+  siteMessages: defineFlag({
+    key: 'site_messages_enabled',
+    mode: 'opt-in',
+    label: 'Site Messages',
+  }),
 } as const
 
 export type RegisteredFeatureFlag = keyof typeof FeatureFlags

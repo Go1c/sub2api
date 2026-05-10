@@ -343,6 +343,7 @@ export default {
   nav: {
     dashboard: '儀表盤',
     announcements: '公告',
+    siteMessages: '站內信',
     apiKeys: 'API 密鑰',
     usage: '使用記錄',
     redeem: '兌換',
@@ -1825,6 +1826,18 @@ export default {
       failedToToggle: '更新用戶狀態失敗',
       failedToLoadApiKeys: '加載用戶 API 密鑰失敗',
       deleteConfirm: "確定要刪除用戶 '{email}' 嗎？此操作無法撤銷。",
+      siteMessage: {
+        action: '發送站內信',
+        title: '發送站內信',
+        subject: '標題',
+        content: '內容',
+        sendEmail: '同時發送到用戶郵箱',
+        sendEmailHint: '使用已配置的 SMTP 發送一封郵件副本',
+        send: '發送',
+        sending: '發送中...',
+        sent: '站內信已發送',
+        failed: '發送站內信失敗',
+      },
       roles: {
         admin: '管理員',
         user: '用戶'
@@ -5385,6 +5398,16 @@ export default {
           enabled: '啟用可用渠道',
           enabledHint: '關閉後用戶端側邊欄入口隱藏，接口返回空數組。',
         },
+        siteMessages: {
+          title: '站內信',
+          description: '啟用用戶之間的站內信收發、回覆和未讀提醒。',
+          enabled: '啟用站內信',
+          enabledHint: '關閉後用戶端入口隱藏，站內信接口返回功能未開啟。',
+          dailyLimit: '非管理員每日發送上限',
+          dailyLimitHint: '默認 10 封，0 表示不限制，管理員發送不受限制。',
+          retentionDays: '郵件保存天數',
+          retentionDaysHint: '默認 30 天，範圍 1 – 365 天。',
+        },
         riskControl: {
           title: '風控中心',
           description: '啟用內容審計菜單和全端點請求審核入口。默認關閉。',
@@ -6566,6 +6589,34 @@ export default {
     emptyDescription: '暫時沒有任何系統公告',
     readStatus: '您已閱讀此公告',
     markReadHint: '點擊"已讀"標記此公告'
+  },
+
+  siteMessages: {
+    title: '站內信',
+    description: '收發站內消息',
+    inbox: '收件箱',
+    sent: '已發送',
+    compose: '寫信',
+    send: '發送',
+    sending: '發送中...',
+    sendReply: '發送回覆',
+    reply: '回覆',
+    replyPlaceholder: '輸入回覆內容',
+    recipient: '收件人',
+    recipientPlaceholder: '郵箱或用戶 ID',
+    subject: '標題',
+    content: '內容',
+    from: '發件人',
+    to: '收件人',
+    adminSender: '官方',
+    emptyInbox: '暫無收件',
+    emptySent: '暫無已發送郵件',
+    emptyDetail: '選擇一封站內信',
+    sentSuccess: '站內信已發送',
+    replySent: '回覆已發送',
+    failedToLoad: '加載站內信失敗',
+    failedToSend: '發送站內信失敗',
+    recipientNotFound: '未找到收件人',
   },
 
   // User Subscriptions Page

@@ -434,6 +434,14 @@ func ProvideAPIKeyService(
 	return svc
 }
 
+func ProvideSiteMessageUserRepository(userRepo UserRepository) SiteMessageUserRepository {
+	return userRepo
+}
+
+func ProvideSiteMessageSettingsReader(settingService *SettingService) SiteMessageSettingsReader {
+	return settingService
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -452,6 +460,10 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
+	ProvideSiteMessageUserRepository,
+	ProvideSiteMessageSettingsReader,
+	NewSiteMessageService,
+	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,

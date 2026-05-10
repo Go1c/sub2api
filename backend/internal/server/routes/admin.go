@@ -32,6 +32,9 @@ func RegisterAdminRoutes(
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
 
+		// 站内信管理
+		registerSiteMessageRoutes(admin, h)
+
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
 
@@ -259,6 +262,14 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// User attribute values
 		users.GET("/:id/attributes", h.Admin.UserAttribute.GetUserAttributes)
 		users.PUT("/:id/attributes", h.Admin.UserAttribute.UpdateUserAttributes)
+	}
+}
+
+func registerSiteMessageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	siteMessages := admin.Group("/site-messages")
+	{
+		siteMessages.POST("/users/:id", h.Admin.SiteMessage.SendToUser)
+		siteMessages.GET("/recipients", h.Admin.SiteMessage.SearchRecipients)
 	}
 }
 

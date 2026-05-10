@@ -343,6 +343,7 @@ export default {
   nav: {
     dashboard: '仪表盘',
     announcements: '公告',
+    siteMessages: '站内信',
     apiKeys: 'API 密钥',
     usage: '使用记录',
     redeem: '兑换',
@@ -1825,6 +1826,18 @@ export default {
       failedToToggle: '更新用户状态失败',
       failedToLoadApiKeys: '加载用户 API 密钥失败',
       deleteConfirm: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
+      siteMessage: {
+        action: '发送站内信',
+        title: '发送站内信',
+        subject: '标题',
+        content: '内容',
+        sendEmail: '同时发送到用户邮箱',
+        sendEmailHint: '使用已配置的 SMTP 发送一封邮件副本',
+        send: '发送',
+        sending: '发送中...',
+        sent: '站内信已发送',
+        failed: '发送站内信失败',
+      },
       roles: {
         admin: '管理员',
         user: '用户'
@@ -5385,6 +5398,16 @@ export default {
           enabled: '启用可用渠道',
           enabledHint: '关闭后用户端侧边栏入口隐藏，接口返回空数组。',
         },
+        siteMessages: {
+          title: '站内信',
+          description: '启用用户之间的站内信收发、回复和未读提醒。',
+          enabled: '启用站内信',
+          enabledHint: '关闭后用户端入口隐藏，站内信接口返回功能未开启。',
+          dailyLimit: '非管理员每日发送上限',
+          dailyLimitHint: '默认 10 封，0 表示不限制，管理员发送不受限制。',
+          retentionDays: '邮件保存天数',
+          retentionDaysHint: '默认 30 天，范围 1 – 365 天。',
+        },
         riskControl: {
           title: '风控中心',
           description: '启用内容审计菜单和全端点请求审核入口。默认关闭。',
@@ -6566,6 +6589,34 @@ export default {
     emptyDescription: '暂时没有任何系统公告',
     readStatus: '您已阅读此公告',
     markReadHint: '点击"已读"标记此公告'
+  },
+
+  siteMessages: {
+    title: '站内信',
+    description: '收发站内消息',
+    inbox: '收件箱',
+    sent: '已发送',
+    compose: '写信',
+    send: '发送',
+    sending: '发送中...',
+    sendReply: '发送回复',
+    reply: '回复',
+    replyPlaceholder: '输入回复内容',
+    recipient: '收件人',
+    recipientPlaceholder: '邮箱或用户 ID',
+    subject: '标题',
+    content: '内容',
+    from: '发件人',
+    to: '收件人',
+    adminSender: '官方',
+    emptyInbox: '暂无收件',
+    emptySent: '暂无已发送邮件',
+    emptyDetail: '选择一封站内信',
+    sentSuccess: '站内信已发送',
+    replySent: '回复已发送',
+    failedToLoad: '加载站内信失败',
+    failedToSend: '发送站内信失败',
+    recipientNotFound: '未找到收件人',
   },
 
   // User Subscriptions Page

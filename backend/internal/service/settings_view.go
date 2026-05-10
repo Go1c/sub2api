@@ -133,6 +133,9 @@ type SystemSettings struct {
 	DefaultConcurrency           int
 	DefaultBalance               float64
 	RiskControlEnabled           bool
+	SiteMessagesEnabled          bool
+	SiteMessagesDailySendLimit   int
+	SiteMessagesRetentionDays    int
 	AffiliateEnabled             bool
 	AffiliateRebateRate          float64
 	AffiliateRebateFreezeHours   int
@@ -285,6 +288,9 @@ type PublicSettings struct {
 
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
+
+	// Site messages feature toggle
+	SiteMessagesEnabled bool `json:"site_messages_enabled"`
 }
 
 type LoginAgreementDocument struct {

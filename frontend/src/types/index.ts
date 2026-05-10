@@ -276,6 +276,7 @@ export interface PublicSettings {
   channel_monitor_default_interval_seconds: number
   available_channels_enabled: boolean
   affiliate_enabled: boolean
+  site_messages_enabled?: boolean
 }
 
 export interface AuthResponse {
@@ -399,6 +400,45 @@ export interface AnnouncementUserReadStatus {
   balance: number
   eligible: boolean
   read_at?: string
+}
+
+// ==================== Site Message Types ====================
+
+export interface SiteMessageRecipient {
+  id: number
+  email: string
+  username: string
+  is_admin?: boolean
+}
+
+export interface SiteMessage {
+  id: number
+  sender_id: number
+  recipient_id: number
+  parent_id?: number
+  subject: string
+  content: string
+  read_at?: string
+  created_at: string
+  updated_at: string
+  sender?: SiteMessageRecipient
+  recipient?: SiteMessageRecipient
+}
+
+export interface CreateSiteMessageRequest {
+  recipient: string
+  subject: string
+  content: string
+}
+
+export interface ReplySiteMessageRequest {
+  content: string
+}
+
+export interface AdminSendSiteMessageRequest {
+  subject: string
+  content: string
+  send_email?: boolean
 }
 
 // ==================== Proxy Node Types ====================

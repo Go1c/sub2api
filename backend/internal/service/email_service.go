@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"html"
 	"log/slog"
 	"math/big"
 	"net"
@@ -155,6 +156,16 @@ func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) 
 		return err
 	}
 	return s.SendEmailWithConfig(config, to, subject, body)
+}
+
+// SendSiteMessageCopy sends an email copy for a site message.
+func (s *EmailService) SendSiteMessageCopy(ctx context.Context, to, subject, content string) error {
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		subject = "Site Message"
+	}
+	body := s.buildSiteMessageCopyEmailBody(subject, content)
+	return s.SendEmail(ctx, to, "[Site Message] "+subject, body)
 }
 
 const smtpDialTimeout = 10 * time.Second
@@ -412,6 +423,45 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
 </body>
 </html>
 `, siteName, code)
+}
+
+func (s *EmailService) buildSiteMessageCopyEmailBody(subject, content string) string {
+	escapedSubject := html.EscapeString(strings.TrimSpace(subject))
+	escapedContent := html.EscapeString(strings.TrimSpace(content))
+	escapedContent = strings.ReplaceAll(escapedContent, "\r\n", "\n")
+	escapedContent = strings.ReplaceAll(escapedContent, "\n", "<br>")
+
+	return fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background: #2563eb; color: white; padding: 24px 30px; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .content { padding: 30px; color: #333; line-height: 1.7; }
+        .message { background-color: #f8f9fa; border-radius: 8px; padding: 18px; word-break: break-word; }
+        .footer { background-color: #f8f9fa; padding: 18px 30px; color: #777; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Site Message</h1>
+        </div>
+        <div class="content">
+            <h2 style="font-size: 18px; margin-top: 0;">%s</h2>
+            <div class="message">%s</div>
+        </div>
+        <div class="footer">
+            <p>This is a copy of an admin site message. Sign in to view or reply.</p>
+        </div>
+    </div>
+</body>
+</html>
+`, escapedSubject, escapedContent)
 }
 
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接

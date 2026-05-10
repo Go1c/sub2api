@@ -1455,6 +1455,52 @@ func HasAnnouncementReadsWith(preds ...predicate.AnnouncementRead) predicate.Use
 	})
 }
 
+// HasSentSiteMessages applies the HasEdge predicate on the "sent_site_messages" edge.
+func HasSentSiteMessages() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SentSiteMessagesTable, SentSiteMessagesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSentSiteMessagesWith applies the HasEdge predicate on the "sent_site_messages" edge with a given conditions (other predicates).
+func HasSentSiteMessagesWith(preds ...predicate.SiteMessage) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newSentSiteMessagesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasReceivedSiteMessages applies the HasEdge predicate on the "received_site_messages" edge.
+func HasReceivedSiteMessages() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ReceivedSiteMessagesTable, ReceivedSiteMessagesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasReceivedSiteMessagesWith applies the HasEdge predicate on the "received_site_messages" edge with a given conditions (other predicates).
+func HasReceivedSiteMessagesWith(preds ...predicate.SiteMessage) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newReceivedSiteMessagesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasAllowedGroups applies the HasEdge predicate on the "allowed_groups" edge.
 func HasAllowedGroups() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

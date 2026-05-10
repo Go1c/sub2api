@@ -13,14 +13,17 @@ import (
 const (
 	TaskTypeVerifyCode    = "verify_code"
 	TaskTypePasswordReset = "password_reset"
+	TaskTypeSiteMessage   = "site_message"
 )
 
 // EmailTask 邮件发送任务
 type EmailTask struct {
 	Email    string
 	SiteName string
-	TaskType string // "verify_code" or "password_reset"
+	TaskType string // "verify_code", "password_reset", or "site_message"
 	ResetURL string // Only used for password_reset task type
+	Subject  string // Only used for site_message task type
+	Body     string // Only used for site_message task type
 }
 
 // EmailQueueService 异步邮件队列服务
@@ -93,6 +96,12 @@ func (s *EmailQueueService) processTask(workerID int, task EmailTask) {
 		} else {
 			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d sent password reset to %s", workerID, task.Email)
 		}
+	case TaskTypeSiteMessage:
+		if err := s.emailService.SendSiteMessageCopy(ctx, task.Email, task.Subject, task.Body); err != nil {
+			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d failed to send site message copy to %s: %v", workerID, task.Email, err)
+		} else {
+			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d sent site message copy to %s", workerID, task.Email)
+		}
 	default:
 		logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d unknown task type: %s", workerID, task.TaskType)
 	}
@@ -127,6 +136,24 @@ func (s *EmailQueueService) EnqueuePasswordReset(email, siteName, resetURL strin
 	select {
 	case s.taskChan <- task:
 		logger.LegacyPrintf("service.email_queue", "[EmailQueue] Enqueued password reset task for %s", email)
+		return nil
+	default:
+		return fmt.Errorf("email queue is full")
+	}
+}
+
+// EnqueueSiteMessage queues a site-message email copy.
+func (s *EmailQueueService) EnqueueSiteMessage(email, subject, content string) error {
+	task := EmailTask{
+		Email:    email,
+		TaskType: TaskTypeSiteMessage,
+		Subject:  subject,
+		Body:     content,
+	}
+
+	select {
+	case s.taskChan <- task:
+		logger.LegacyPrintf("service.email_queue", "[EmailQueue] Enqueued site message copy task for %s", email)
 		return nil
 	default:
 		return fmt.Errorf("email queue is full")

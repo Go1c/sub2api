@@ -712,6 +712,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
+		SettingKeySiteMessagesEnabled,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -821,6 +822,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AvailableChannelsEnabled:              settings[SettingKeyAvailableChannelsEnabled] == "true",
 		AffiliateEnabled:                      settings[SettingKeyAffiliateEnabled] == "true",
 		RiskControlEnabled:                    settings[SettingKeyRiskControlEnabled] == "true",
+		SiteMessagesEnabled:                   settings[SettingKeySiteMessagesEnabled] == "true",
 	}, nil
 }
 
@@ -896,6 +898,35 @@ func (s *SettingService) GetAvailableChannelsRuntime(ctx context.Context) Availa
 	return AvailableChannelsRuntime{
 		Enabled: vals[SettingKeyAvailableChannelsEnabled] == "true",
 	}
+}
+
+// GetSiteMessageSettings reads the site-message feature switch and limits.
+func (s *SettingService) GetSiteMessageSettings(ctx context.Context) (SiteMessageSettings, error) {
+	vals, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeySiteMessagesEnabled,
+		SettingKeySiteMessagesDailySendLimit,
+		SettingKeySiteMessagesRetentionDays,
+	})
+	if err != nil {
+		return SiteMessageSettings{}, err
+	}
+
+	settings := SiteMessageSettings{
+		Enabled:        vals[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit: SiteMessagesDailySendLimitDefault,
+		RetentionDays:  SiteMessagesRetentionDaysDefault,
+	}
+	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesDailySendLimit]); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil {
+			settings.DailySendLimit = value
+		}
+	}
+	if raw := strings.TrimSpace(vals[SettingKeySiteMessagesRetentionDays]); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil {
+			settings.RetentionDays = value
+		}
+	}
+	return normalizeSiteMessageSettings(settings), nil
 }
 
 // SetOnUpdateCallback sets a callback function to be called when settings are updated
@@ -984,6 +1015,7 @@ type PublicSettingsInjectionPayload struct {
 	AvailableChannelsEnabled             bool `json:"available_channels_enabled"`
 	AffiliateEnabled                     bool `json:"affiliate_enabled"`
 	RiskControlEnabled                   bool `json:"risk_control_enabled"`
+	SiteMessagesEnabled                  bool `json:"site_messages_enabled"`
 }
 
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
@@ -1052,6 +1084,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AvailableChannelsEnabled:              settings.AvailableChannelsEnabled,
 		AffiliateEnabled:                      settings.AffiliateEnabled,
 		RiskControlEnabled:                    settings.RiskControlEnabled,
+		SiteMessagesEnabled:                   settings.SiteMessagesEnabled,
 	}, nil
 }
 
@@ -1777,6 +1810,17 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 
 	// 风控中心功能开关
 	updates[SettingKeyRiskControlEnabled] = strconv.FormatBool(settings.RiskControlEnabled)
+
+	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
+		Enabled:        settings.SiteMessagesEnabled,
+		DailySendLimit: settings.SiteMessagesDailySendLimit,
+		RetentionDays:  settings.SiteMessagesRetentionDays,
+	})
+	settings.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
+	settings.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+	updates[SettingKeySiteMessagesEnabled] = strconv.FormatBool(settings.SiteMessagesEnabled)
+	updates[SettingKeySiteMessagesDailySendLimit] = strconv.Itoa(settings.SiteMessagesDailySendLimit)
+	updates[SettingKeySiteMessagesRetentionDays] = strconv.Itoa(settings.SiteMessagesRetentionDays)
 
 	// Claude Code version check
 	updates[SettingKeyMinClaudeCodeVersion] = settings.MinClaudeCodeVersion
@@ -2696,6 +2740,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		// 风控中心功能（默认关闭，显式启用）
 		SettingKeyRiskControlEnabled: "false",
 
+		// 站内信功能（默认关闭，显式启用）
+		SettingKeySiteMessagesEnabled:        strconv.FormatBool(SiteMessagesEnabledDefault),
+		SettingKeySiteMessagesDailySendLimit: strconv.Itoa(SiteMessagesDailySendLimitDefault),
+		SettingKeySiteMessagesRetentionDays:  strconv.Itoa(SiteMessagesRetentionDaysDefault),
+
 		// Claude Code version check (default: empty = disabled)
 		SettingKeyMinClaudeCodeVersion: "",
 		SettingKeyMaxClaudeCodeVersion: "",
@@ -3078,6 +3127,15 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// 风控中心功能（默认关闭，严格 true 才启用）
 	result.RiskControlEnabled = settings[SettingKeyRiskControlEnabled] == "true"
 
+	siteMessageSettings := normalizeSiteMessageSettings(SiteMessageSettings{
+		Enabled:        settings[SettingKeySiteMessagesEnabled] == "true",
+		DailySendLimit: parseIntSetting(settings[SettingKeySiteMessagesDailySendLimit], SiteMessagesDailySendLimitDefault),
+		RetentionDays:  parseIntSetting(settings[SettingKeySiteMessagesRetentionDays], SiteMessagesRetentionDaysDefault),
+	})
+	result.SiteMessagesEnabled = siteMessageSettings.Enabled
+	result.SiteMessagesDailySendLimit = siteMessageSettings.DailySendLimit
+	result.SiteMessagesRetentionDays = siteMessageSettings.RetentionDays
+
 	// Claude Code version check
 	result.MinClaudeCodeVersion = settings[SettingKeyMinClaudeCodeVersion]
 	result.MaxClaudeCodeVersion = settings[SettingKeyMaxClaudeCodeVersion]
@@ -3143,6 +3201,14 @@ func clampAffiliateRebateRate(value float64) float64 {
 func parseNonNegativeFloat(raw string, fallback float64) float64 {
 	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil || value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return fallback
+	}
+	return value
+}
+
+func parseIntSetting(raw string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
 		return fallback
 	}
 	return value

@@ -10,6 +10,7 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { performExternalAuthHandoff, resolveExternalAuthHandoff } from '@/utils/externalAuthHandoff'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveDocumentTitle } from './title'
 
 /**
@@ -250,6 +251,19 @@ const routes: RouteRecordRaw[] = [
       title: 'Available Channels',
       titleKey: 'availableChannels.title',
       descriptionKey: 'availableChannels.description'
+    }
+  },
+  {
+    path: '/site-messages',
+    name: 'SiteMessages',
+    component: () => import('@/views/user/SiteMessagesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresSiteMessages: true,
+      title: 'Site Messages',
+      titleKey: 'siteMessages.title',
+      descriptionKey: 'siteMessages.description'
     }
   },
   {
@@ -809,6 +823,11 @@ router.beforeEach((to, _from, next) => {
       next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
       return
     }
+  }
+
+  if (to.meta.requiresSiteMessages && !isFeatureFlagEnabled(FeatureFlags.siteMessages)) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
   }
 
   // 简易模式下限制访问某些页面
