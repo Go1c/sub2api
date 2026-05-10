@@ -212,6 +212,11 @@ const (
 	SettingKeyAPIBaseURL                            = "api_base_url"                              // API端点地址（用于客户端配置和导入）
 	SettingKeyContactInfo                           = "contact_info"                              // 客服联系方式
 	SettingKeyContactChannels                       = "contact_channels"                          // 客服联系渠道（JSON 数组）
+	SettingKeySupportChatEnabled                    = "support_chat_enabled"                      // 是否启用 AI 客服气泡
+	SettingKeySupportChatGatewayURL                 = "support_chat_gateway_url"                  // AI 客服 support-gateway 公网地址
+	SettingKeySupportChatTitle                      = "support_chat_title"                        // AI 客服标题覆盖
+	SettingKeySupportChatWelcomeMessage             = "support_chat_welcome_message"              // AI 客服欢迎语覆盖
+	SettingKeySupportChatOfficialContactText        = "support_chat_official_contact_text"        // AI 客服人工联系文案覆盖
 	SettingKeyDocURL                                = "doc_url"                                   // 文档链接
 	SettingKeySitePages                             = "site_pages"                                // 公开站点页面（JSON 数组，Markdown 或链接）
 	SettingKeyHomeContent                           = "home_content"                              // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）

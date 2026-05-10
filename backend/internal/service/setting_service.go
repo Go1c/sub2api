@@ -660,6 +660,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAPIBaseURL,
 		SettingKeyContactInfo,
 		SettingKeyContactChannels,
+		SettingKeySupportChatEnabled,
+		SettingKeySupportChatGatewayURL,
+		SettingKeySupportChatTitle,
+		SettingKeySupportChatWelcomeMessage,
+		SettingKeySupportChatOfficialContactText,
 		SettingKeyDocURL,
 		SettingKeySitePages,
 		SettingKeyHomeContent,
@@ -785,6 +790,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		APIBaseURL:                            settings[SettingKeyAPIBaseURL],
 		ContactInfo:                           settings[SettingKeyContactInfo],
 		ContactChannels:                       settings[SettingKeyContactChannels],
+		SupportChatEnabled:                    settings[SettingKeySupportChatEnabled] == "true",
+		SupportChatGatewayURL:                 strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
+		SupportChatTitle:                      strings.TrimSpace(settings[SettingKeySupportChatTitle]),
+		SupportChatWelcomeMessage:             strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage]),
+		SupportChatOfficialContactText:        strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText]),
 		DocURL:                                settings[SettingKeyDocURL],
 		SitePages:                             string(filterEnabledSitePages(settings[SettingKeySitePages])),
 		HomeContent:                           settings[SettingKeyHomeContent],
@@ -943,6 +953,11 @@ type PublicSettingsInjectionPayload struct {
 	APIBaseURL                            string                   `json:"api_base_url"`
 	ContactInfo                           string                   `json:"contact_info"`
 	ContactChannels                       json.RawMessage          `json:"contact_channels"`
+	SupportChatEnabled                    bool                     `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string                   `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string                   `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string                   `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string                   `json:"support_chat_official_contact_text"`
 	DocURL                                string                   `json:"doc_url"`
 	SitePages                             json.RawMessage          `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`
@@ -1015,6 +1030,11 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		APIBaseURL:                            settings.APIBaseURL,
 		ContactInfo:                           settings.ContactInfo,
 		ContactChannels:                       safeRawJSONArray(settings.ContactChannels),
+		SupportChatEnabled:                    settings.SupportChatEnabled,
+		SupportChatGatewayURL:                 settings.SupportChatGatewayURL,
+		SupportChatTitle:                      settings.SupportChatTitle,
+		SupportChatWelcomeMessage:             settings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:        settings.SupportChatOfficialContactText,
 		DocURL:                                settings.DocURL,
 		SitePages:                             safeRawJSONArray(settings.SitePages),
 		HomeContent:                           settings.HomeContent,
@@ -1527,6 +1547,15 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if settings.GoogleOAuthFrontendRedirectURL == "" {
 		settings.GoogleOAuthFrontendRedirectURL = defaultGoogleOAuthFrontend
 	}
+	settings.SupportChatGatewayURL = strings.TrimRight(strings.TrimSpace(settings.SupportChatGatewayURL), "/")
+	settings.SupportChatTitle = strings.TrimSpace(settings.SupportChatTitle)
+	settings.SupportChatWelcomeMessage = strings.TrimSpace(settings.SupportChatWelcomeMessage)
+	settings.SupportChatOfficialContactText = strings.TrimSpace(settings.SupportChatOfficialContactText)
+	if settings.SupportChatEnabled || settings.SupportChatGatewayURL != "" {
+		if err := config.ValidateAbsoluteHTTPURL(settings.SupportChatGatewayURL); err != nil {
+			return nil, infraerrors.BadRequest("INVALID_SUPPORT_CHAT_GATEWAY_URL", "support chat gateway URL must be an absolute HTTP(S) URL")
+		}
+	}
 
 	updates := make(map[string]string)
 
@@ -1658,6 +1687,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
 	updates[SettingKeyContactChannels] = settings.ContactChannels
+	updates[SettingKeySupportChatEnabled] = strconv.FormatBool(settings.SupportChatEnabled)
+	updates[SettingKeySupportChatGatewayURL] = settings.SupportChatGatewayURL
+	updates[SettingKeySupportChatTitle] = settings.SupportChatTitle
+	updates[SettingKeySupportChatWelcomeMessage] = settings.SupportChatWelcomeMessage
+	updates[SettingKeySupportChatOfficialContactText] = settings.SupportChatOfficialContactText
 	updates[SettingKeyDocURL] = settings.DocURL
 	updates[SettingKeySitePages] = settings.SitePages
 	updates[SettingKeyHomeContent] = settings.HomeContent
@@ -2556,6 +2590,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySiteName:                                 "Sub2API",
 		SettingKeySiteLogo:                                 "",
 		SettingKeyContactChannels:                          "[]",
+		SettingKeySupportChatEnabled:                       "false",
+		SettingKeySupportChatGatewayURL:                    "",
+		SettingKeySupportChatTitle:                         "",
+		SettingKeySupportChatWelcomeMessage:                "",
+		SettingKeySupportChatOfficialContactText:           "",
 		SettingKeySitePages:                                "[]",
 		SettingKeyFrontendLocales:                          `["en","zh","zh-Hant"]`,
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
@@ -2749,6 +2788,11 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		APIBaseURL:                            settings[SettingKeyAPIBaseURL],
 		ContactInfo:                           settings[SettingKeyContactInfo],
 		ContactChannels:                       settings[SettingKeyContactChannels],
+		SupportChatEnabled:                    settings[SettingKeySupportChatEnabled] == "true",
+		SupportChatGatewayURL:                 strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
+		SupportChatTitle:                      strings.TrimSpace(settings[SettingKeySupportChatTitle]),
+		SupportChatWelcomeMessage:             strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage]),
+		SupportChatOfficialContactText:        strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText]),
 		DocURL:                                settings[SettingKeyDocURL],
 		SitePages:                             settings[SettingKeySitePages],
 		HomeContent:                           settings[SettingKeyHomeContent],

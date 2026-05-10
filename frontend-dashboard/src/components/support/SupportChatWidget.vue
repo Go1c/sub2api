@@ -4,9 +4,13 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/common/Icon.vue'
 import {
   fetchSupportChatConfig,
+  fetchSupportChatPublicSettings,
   isSupportChatEnabled,
+  mergeSupportChatConfig,
+  resolveSupportChatGatewayURL,
   streamSupportChat,
   type SupportChatConfig,
+  type SupportChatPublicSettings,
   type SupportChatSource
 } from '@/api/supportChat'
 import { useAuthStore } from '@/stores/auth'
@@ -22,7 +26,8 @@ interface ChatMessage {
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
-const enabled = isSupportChatEnabled()
+const enabled = ref(isSupportChatEnabled())
+const gatewayUrl = ref(resolveSupportChatGatewayURL())
 const open = ref(false)
 const draft = ref('')
 const loading = ref(false)
@@ -44,9 +49,27 @@ const contactEmailHref = computed(() => {
 watch(locale, loadConfig, { immediate: true })
 
 async function loadConfig() {
-  if (!enabled) return
+  let publicSettings: SupportChatPublicSettings | null = null
   try {
-    config.value = await fetchSupportChatConfig({ locale: locale.value })
+    publicSettings = await fetchSupportChatPublicSettings()
+    enabled.value = isSupportChatEnabled(publicSettings)
+    gatewayUrl.value = resolveSupportChatGatewayURL(publicSettings)
+  } catch {
+    enabled.value = isSupportChatEnabled()
+    gatewayUrl.value = resolveSupportChatGatewayURL()
+  }
+
+  if (!enabled.value) {
+    open.value = false
+    return
+  }
+
+  try {
+    const gatewayConfig = await fetchSupportChatConfig({
+      locale: locale.value,
+      gatewayUrl: gatewayUrl.value
+    })
+    config.value = mergeSupportChatConfig(gatewayConfig, publicSettings)
   } catch {
     error.value = t('supportChat.configError')
   }
@@ -121,7 +144,8 @@ async function sendMessage() {
         onEnd() {
           loading.value = false
         }
-      }
+      },
+      { gatewayUrl: gatewayUrl.value }
     )
   } catch {
     error.value = t('supportChat.error')

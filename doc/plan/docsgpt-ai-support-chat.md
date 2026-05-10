@@ -2,9 +2,9 @@
 
 ## Summary
 
-采用 **DocsGPT 自托管 + 独立 support-gateway + LumioAPI Vue 气泡组件**。
+采用 **DocsGPT 自托管 + 独立 support-gateway + 管理后台配置 + LumioAPI Vue 气泡组件**。
 
-DocsGPT 负责 AI Agent、FAQ/Markdown 知识库、OpenAI-compatible 模型调用；support-gateway 隐藏 DocsGPT Agent API key，负责 CORS、限流和流式转发；`frontend-dashboard` 只展示右下角客服气泡并调用网关。
+DocsGPT 负责 AI Agent、FAQ/Markdown 知识库、OpenAI-compatible 模型调用；support-gateway 隐藏 DocsGPT Agent API key，负责 CORS、限流和流式转发；LumioAPI 管理后台负责公开开关、gateway URL 和展示文案；`frontend-dashboard` 只展示右下角客服气泡并调用网关。
 
 部署目标为 Zeabur。同平台可行，但不能直接部署 Docker Compose YAML，需要将 DocsGPT 拆成多个 Zeabur 服务。
 
@@ -15,6 +15,7 @@ DocsGPT 负责 AI Agent、FAQ/Markdown 知识库、OpenAI-compatible 模型调�
 ```text
 Browser
   -> frontend-dashboard SupportChatWidget
+  -> LumioAPI backend /settings/public
   -> support-gateway /chat/stream
   -> DocsGPT /stream
   -> OpenAI-compatible model endpoint
@@ -24,15 +25,16 @@ Browser
 
 - 模型 API key 放在 DocsGPT 服务环境变量中。
 - DocsGPT Agent API key 放在 support-gateway 服务环境变量中。
-- `frontend-dashboard` 只放公开的 gateway URL，不放任何 key。
+- LumioAPI 后台只保存公开的开关、gateway URL 和展示文案。
+- `frontend-dashboard` 只读取公开 settings，不放任何 key。
 
 ## Key Changes
 
 ### frontend-dashboard
 
 - 在 `App.vue` 全站挂载 `SupportChatWidget.vue`。
-- 新增 `src/api/supportChat.ts`，调用 `VITE_SUPPORT_CHAT_GATEWAY_URL`。
-- 新增环境变量：
+- 新增 `src/api/supportChat.ts`，优先读取后端公开 settings，再调用 support-gateway。
+- 保留本地/旧部署 fallback 环境变量：
   - `VITE_SUPPORT_CHAT_ENABLED`
   - `VITE_SUPPORT_CHAT_GATEWAY_URL`
 - 聊天窗口支持：
@@ -47,6 +49,17 @@ Browser
   - `zh-CN` 返回简体中文。
   - `zh-Hant` 返回繁体中文。
 - 全站显示，包括营销页、登录/注册页、控制台页面；登录后可附带用户 `id`、`email` 给 support-gateway。
+
+### LumioAPI admin/backend
+
+- 后端设置新增公开字段：
+  - `support_chat_enabled`
+  - `support_chat_gateway_url`
+  - `support_chat_title`
+  - `support_chat_welcome_message`
+  - `support_chat_official_contact_text`
+- 管理员后台“站点设置 -> AI 客服”负责开启和配置。
+- 启用时校验 gateway URL 必须是完整 HTTP(S) 地址。
 
 ### support-gateway
 
@@ -102,11 +115,11 @@ SUPPORT_URL=https://your-support-page.com
 OFFICIAL_CONTACT_TEXT=联系官方支持
 ```
 
-frontend-dashboard 只配置公开变量：
+管理员后台配置公开开关和 gateway URL；frontend-dashboard 的变量只作为本地/旧部署 fallback：
 
 ```env
-VITE_SUPPORT_CHAT_ENABLED=true
-VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
+VITE_SUPPORT_CHAT_ENABLED=false
+VITE_SUPPORT_CHAT_GATEWAY_URL=
 ```
 
 ## Zeabur Deployment
@@ -121,6 +134,7 @@ Zeabur 官方文档说明当前不支持直接从 Docker Compose YAML 部署，�
 - `docsgpt-worker`：同镜像不同启动命令，用于文档处理和索引。
 - `docsgpt-admin-ui`：仅管理员使用，用于上传 FAQ/Markdown、创建 Agent。
 - `support-gateway`：公网暴露，前端只连接它。
+- `backend`：LumioAPI 后端，公开 AI 客服开关和展示配置。
 - `frontend-dashboard`：现有 LumioAPI 前端静态站点。
 
 免费计划可用于验证，但生产要注意：
@@ -143,18 +157,19 @@ Zeabur 官方文档说明当前不支持直接从 Docker Compose YAML 部署，�
 - 未登录、登录后、控制台页面均显示右下角气泡。
 - 移动端窗口不遮挡主要操作，桌面端固定右下角。
 - 流式回复、失败重试、清空会话、邮件和官方支持链接正常。
+- 管理后台开启、关闭和修改文案后，前端刷新后按公开 settings 生效。
 - 浏览器网络面板中只能看到 support-gateway URL，看不到 DocsGPT Agent key 或模型 API key。
 
 部署验证：
 
 - Zeabur 服务间环境变量和内部地址可用。
 - DocsGPT backend、worker、PostgreSQL、Redis 均健康。
-- 前端生产环境只配置 gateway URL。
+- 前端生产环境指向 LumioAPI 后端，AI 客服由管理员后台开启和配置。
 - DocsGPT admin UI 不暴露给普通用户，或至少通过强认证保护。
 
 ## Assumptions
 
-- 首版不做人工坐席、工单系统、后台在线配置页面。
+- 首版不做人工坐席或工单系统；AI 客服开关和公开展示配置放在 LumioAPI 管理后台。
 - 首版知识来源为 FAQ/Markdown，不做自动抓站或复杂爬取。
 - 本站使用自研 Vue 气泡，不嵌 DocsGPT 官方 widget。
 - 模型接口先按 OpenAI-compatible 规划。

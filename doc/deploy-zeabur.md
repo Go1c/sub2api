@@ -26,8 +26,6 @@
    VITE_API_BASE_URL=https://your-backend.zeabur.app    # 若连接真后端
    VITE_USE_MOCK=false
    VITE_SITE_NAME=LumioAPI
-   VITE_SUPPORT_CHAT_ENABLED=true
-   VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
    ```
    留空 `VITE_API_BASE_URL` 会启用 mock（不推荐生产，但适合先上线看前端）。
 6. Save，触发第一次部署。
@@ -55,13 +53,14 @@
 
 ## DocsGPT AI 客服
 
-AI 客服由三个服务协作：
+AI 客服由四层服务协作：
 
 1. DocsGPT 自托管服务：保存知识库和 Agent，持有模型 API key。
-2. `support-gateway/`：Go 服务，持有 DocsGPT Agent API key，向浏览器暴露 `/widget-config` 和 `/chat/stream`。
-3. `frontend-dashboard/`：只配置公开的 gateway URL，并渲染右下角客服气泡。
+2. `github.com/Go1c/lumio-ai-support-chat`：独立 Go 服务，持有 DocsGPT Agent API key，向浏览器暴露 `/widget-config` 和 `/chat/stream`。
+3. LumioAPI 后端：保存公开的客服开关、gateway URL 和展示文案。
+4. `frontend-dashboard/`：读取公开设置并渲染右下角客服气泡。
 
-Zeabur 部署 `support-gateway/` 时 Root Directory 设为 `support-gateway`，可使用该目录内的 Dockerfile。必填环境变量：
+Zeabur 部署 `lumio-ai-support-chat` 时直接选择该仓库根目录，可使用仓库内的 Dockerfile。必填环境变量：
 
 ```bash
 DOCSGPT_API_BASE_URL=https://your-docsgpt-service
@@ -73,14 +72,15 @@ RATE_LIMIT_WINDOW_SECONDS=60
 RATE_LIMIT_MAX_REQUESTS=20
 ```
 
-`/widget-config?locale=zh-CN|zh-Hant|en-US` 会按前端当前语言返回默认客服文案；若配置了 `WIDGET_TITLE`、`WELCOME_MESSAGE` 或 `OFFICIAL_CONTACT_TEXT`，这些值会覆盖默认本地化文案。
+`/widget-config?locale=zh-CN|zh-Hant|en-US` 会按前端当前语言返回默认客服文案。LumioAPI 后台中填写的客服标题、欢迎语、人工联系按钮文案会覆盖这些默认文案；gateway 里的 `WIDGET_TITLE`、`WELCOME_MESSAGE`、`OFFICIAL_CONTACT_TEXT` 只作为旧部署或本地联调 fallback。
 
-Doc Agent 服务的完整部署步骤见 [`docsgpt-support-agent.md`](docsgpt-support-agent.md)。这里仅列 Zeabur 侧最小接线：
+Doc Agent 服务的完整部署步骤见 `lumio-ai-support-chat` 仓库文档。这里仅列 Zeabur 侧最小接线：
 
 1. 先部署 DocsGPT：`docsgpt-postgres`、`docsgpt-redis`、`docsgpt-backend`、`docsgpt-worker`、`docsgpt-admin-ui`。
 2. 在 DocsGPT admin UI 中上传 LumioAPI FAQ/Markdown，创建 `LumioAPI Support` Agent，复制 Agent API key。
-3. 部署本仓库 `support-gateway/`，把 `DOCSGPT_API_BASE_URL` 指向 `docsgpt-backend`，把 `DOCSGPT_AGENT_API_KEY` 填成 Agent API key。
-4. 部署 `frontend-dashboard/`，设置 `VITE_SUPPORT_CHAT_ENABLED=true` 和 `VITE_SUPPORT_CHAT_GATEWAY_URL`。
+3. 部署 `github.com/Go1c/lumio-ai-support-chat`，把 `DOCSGPT_API_BASE_URL` 指向 `docsgpt-backend`，把 `DOCSGPT_AGENT_API_KEY` 填成 Agent API key。
+4. 部署 `frontend-dashboard/`，确保 `VITE_API_BASE_URL` 指向 LumioAPI 后端，或同域代理 `/api/v1` 可用。
+5. 进入 LumioAPI 管理员后台“站点设置 -> AI 客服”，打开开关并填写 `support-gateway` 公网地址。
 
 ### 使用和验证
 
@@ -92,12 +92,8 @@ Doc Agent 服务的完整部署步骤见 [`docsgpt-support-agent.md`](docsgpt-su
    curl https://your-support-gateway.zeabur.app/healthz
    curl 'https://your-support-gateway.zeabur.app/widget-config?locale=zh-Hant'
    ```
-5. 在前端生产变量中启用：
-   ```bash
-   VITE_SUPPORT_CHAT_ENABLED=true
-   VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
-   ```
-6. 打开前端，确认网络面板只出现 gateway URL，看不到 DocsGPT Agent key 或模型 API key。
+5. 在 LumioAPI 管理员后台“站点设置 -> AI 客服”中启用，并填写 `https://your-support-gateway.zeabur.app`。
+6. 打开前端，确认右下角客服气泡出现，网络面板只出现 gateway URL，看不到 DocsGPT Agent key 或模型 API key。
 
 ### 框架设计和关键代码
 
@@ -105,6 +101,7 @@ Doc Agent 服务的完整部署步骤见 [`docsgpt-support-agent.md`](docsgpt-su
 Browser
   -> frontend-dashboard/src/components/support/SupportChatWidget.vue
   -> frontend-dashboard/src/api/supportChat.ts
+  -> LumioAPI backend /settings/public
   -> support-gateway /chat/stream
   -> DocsGPT /stream
   -> OpenAI-compatible model endpoint
@@ -114,11 +111,13 @@ Browser
 
 | 文件 | 说明 |
 |------|------|
-| `support-gateway/server.go` | HTTP 路由、CORS、限流、`/widget-config` 本地化、`/chat/stream` SSE 转发。 |
-| `support-gateway/config.go` | 从环境变量加载 DocsGPT URL、Agent key、允许来源、支持入口、限流参数。 |
-| `support-gateway/Dockerfile` | Zeabur 可直接构建的 Go gateway 镜像。 |
-| `support-gateway/.env.example` | Gateway 部署变量模板。 |
-| `frontend-dashboard/src/api/supportChat.ts` | 前端只连接 gateway，解析 DocsGPT SSE 事件。 |
+| `github.com/Go1c/lumio-ai-support-chat/server.go` | HTTP 路由、CORS、限流、`/widget-config` 本地化、`/chat/stream` SSE 转发。 |
+| `github.com/Go1c/lumio-ai-support-chat/config.go` | 从环境变量加载 DocsGPT URL、Agent key、允许来源、支持入口、限流参数。 |
+| `github.com/Go1c/lumio-ai-support-chat/Dockerfile` | Zeabur 可直接构建的 Go gateway 镜像。 |
+| `github.com/Go1c/lumio-ai-support-chat/.env.example` | Gateway 部署变量模板。 |
+| `backend/internal/service/setting_service.go` | 公开 AI 客服开关、gateway URL 和展示文案。 |
+| `frontend/src/views/admin/SettingsView.vue` | 管理员后台 AI 客服配置入口。 |
+| `frontend-dashboard/src/api/supportChat.ts` | 读取公开设置、连接 gateway，并解析 DocsGPT SSE 事件。 |
 | `frontend-dashboard/src/components/support/SupportChatWidget.vue` | 右下角气泡 UI，按当前站点语言传 `locale`。 |
 
 语言策略：

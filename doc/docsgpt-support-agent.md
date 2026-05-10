@@ -4,10 +4,11 @@
 
 ## 服务拆分
 
-生产链路分为三层：
+生产链路分为运行链路和配置链路：
 
 ```text
 frontend-dashboard
+  -> LumioAPI backend /settings/public
   -> support-gateway
   -> DocsGPT backend /stream
   -> DocsGPT worker + PostgreSQL + Redis + 文档存储
@@ -18,7 +19,8 @@ frontend-dashboard
 
 - 模型 API key 只放在 DocsGPT backend / worker。
 - DocsGPT Agent API key 只放在 `support-gateway`。
-- `frontend-dashboard` 只放公开的 `VITE_SUPPORT_CHAT_GATEWAY_URL`。
+- LumioAPI 后台只保存公开的客服开关、gateway URL 和展示文案。
+- `frontend-dashboard` 只读取后端公开设置，不保存任何密钥。
 
 ## 本地先验证
 
@@ -184,12 +186,12 @@ curl https://your-support-gateway.zeabur.app/healthz
 curl 'https://your-support-gateway.zeabur.app/widget-config?locale=zh-Hant'
 ```
 
-然后在 `frontend-dashboard` 配置：
+然后进入 LumioAPI 管理员后台“站点设置 -> AI 客服”：
 
-```bash
-VITE_SUPPORT_CHAT_ENABLED=true
-VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
-```
+1. 打开 AI 客服开关。
+2. 将 `Support Gateway 地址` 填为 `https://your-support-gateway.zeabur.app`。
+3. 按需覆盖客服标题、欢迎语和人工联系按钮文案。
+4. 保存后刷新 `frontend-dashboard` 验证右下角客服气泡。
 
 ## 语言设计
 
@@ -210,6 +212,7 @@ VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
 - [ ] Agent 能回答 FAQ/Markdown 中的问题。
 - [ ] Agent 对账户、支付、不可验证问题会引导官方支持。
 - [ ] `support-gateway` 不向浏览器返回 DocsGPT Agent API key。
+- [ ] LumioAPI 管理员后台已开启 AI 客服并保存 gateway URL。
 - [ ] 前端网络面板只能看到 `support-gateway` URL。
 - [ ] 切换 `en-US`、`zh-CN`、`zh-Hant` 后，下一条客服回复跟随当前语言。
 
@@ -221,7 +224,7 @@ VITE_SUPPORT_CHAT_GATEWAY_URL=https://your-support-gateway.zeabur.app
 | `support-gateway/config.go` | `DOCSGPT_API_BASE_URL`、`DOCSGPT_AGENT_API_KEY`、`ALLOWED_ORIGINS` 等环境变量加载。 |
 | `support-gateway/Dockerfile` | Zeabur 部署 gateway 的镜像。 |
 | `frontend-dashboard/src/components/support/SupportChatWidget.vue` | 右下角客服气泡，读取当前 `locale` 并发送给 gateway。 |
-| `frontend-dashboard/src/api/supportChat.ts` | 获取 widget config，解析 SSE 流。 |
+| `frontend-dashboard/src/api/supportChat.ts` | 读取后端公开设置、获取 widget config，并解析 SSE 流。 |
 
 ## 参考
 

@@ -6,6 +6,14 @@ export interface SupportChatConfig {
   officialContactText: string
 }
 
+export interface SupportChatPublicSettings {
+  support_chat_enabled?: boolean
+  support_chat_gateway_url?: string
+  support_chat_title?: string
+  support_chat_welcome_message?: string
+  support_chat_official_contact_text?: string
+}
+
 export interface SupportChatUser {
   id?: string
   email?: string
@@ -43,6 +51,17 @@ interface SupportChatClientOptions {
   signal?: AbortSignal
 }
 
+interface SupportChatPublicSettingsOptions {
+  apiBaseUrl?: string
+  fetcher?: typeof fetch
+}
+
+interface APIEnvelope<T> {
+  code?: number
+  message?: string
+  data?: T
+}
+
 type SupportChatEvent = {
   type?: string
   answer?: string
@@ -62,11 +81,57 @@ const defaultConfig: SupportChatConfig = {
   officialContactText: 'Contact official support'
 }
 
-export function isSupportChatEnabled() {
-  return (
-    import.meta.env.VITE_SUPPORT_CHAT_ENABLED === 'true' &&
-    Boolean(import.meta.env.VITE_SUPPORT_CHAT_GATEWAY_URL)
-  )
+export function isSupportChatEnabled(settings?: SupportChatPublicSettings | null) {
+  if (settings) {
+    return settings.support_chat_enabled === true && Boolean(resolveSupportChatGatewayURL(settings))
+  }
+  return import.meta.env.VITE_SUPPORT_CHAT_ENABLED === 'true' && Boolean(resolveSupportChatGatewayURL())
+}
+
+export function resolveSupportChatGatewayURL(settings?: SupportChatPublicSettings | null) {
+  const raw = settings?.support_chat_gateway_url ?? import.meta.env.VITE_SUPPORT_CHAT_GATEWAY_URL ?? ''
+  return raw.trim().replace(/\/+$/, '')
+}
+
+export function mergeSupportChatConfig(
+  config: SupportChatConfig,
+  settings?: SupportChatPublicSettings | null
+): SupportChatConfig {
+  if (!settings) return config
+  return {
+    ...config,
+    ...(settings.support_chat_title?.trim() ? { title: settings.support_chat_title.trim() } : {}),
+    ...(settings.support_chat_welcome_message?.trim()
+      ? { welcomeMessage: settings.support_chat_welcome_message.trim() }
+      : {}),
+    ...(settings.support_chat_official_contact_text?.trim()
+      ? { officialContactText: settings.support_chat_official_contact_text.trim() }
+      : {})
+  }
+}
+
+export async function fetchSupportChatPublicSettings(
+  options: SupportChatPublicSettingsOptions = {}
+): Promise<SupportChatPublicSettings> {
+  const fetcher = options.fetcher ?? fetch
+  const response = await fetcher(buildAPIURL('/settings/public', options.apiBaseUrl), {
+    headers: { Accept: 'application/json' }
+  })
+
+  if (!response.ok) {
+    throw new Error(`Support chat public settings request failed (${response.status})`)
+  }
+
+  const payload = (await response.json()) as SupportChatPublicSettings | APIEnvelope<SupportChatPublicSettings>
+  if (payload && typeof payload === 'object' && 'code' in payload) {
+    const envelope = payload as APIEnvelope<SupportChatPublicSettings>
+    if (envelope.code !== 0) {
+      throw new Error(envelope.message || 'Support chat public settings request failed')
+    }
+    return envelope.data ?? {}
+  }
+
+  return payload as SupportChatPublicSettings
 }
 
 export async function fetchSupportChatConfig(
@@ -130,6 +195,10 @@ function buildGatewayURL(path: string, gatewayUrl = import.meta.env.VITE_SUPPORT
     throw new Error('VITE_SUPPORT_CHAT_GATEWAY_URL is not configured')
   }
   return `${gatewayUrl.replace(/\/+$/, '')}${path}`
+}
+
+function buildAPIURL(path: string, apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1') {
+  return `${apiBaseUrl.replace(/\/+$/, '')}${path}`
 }
 
 function consumeSSEBuffer(buffer: string, onEvent: (event: SupportChatEvent) => void) {
