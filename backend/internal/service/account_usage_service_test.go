@@ -508,6 +508,76 @@ func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalance(t *testin
 	}
 }
 
+func TestAccountUsageService_GetUsage_ParsesNewAPIUserSelfQuotaBalanceWithSessionCookie(t *testing.T) {
+	t.Parallel()
+
+	var gotAuth string
+	var gotCookie string
+	var gotUser string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user/self" {
+			http.NotFound(w, r)
+			return
+		}
+		gotAuth = r.Header.Get("Authorization")
+		gotCookie = r.Header.Get("Cookie")
+		gotUser = r.Header.Get("New-Api-User")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"id":         11,
+				"quota":      162930803,
+				"used_quota": 602069197,
+			},
+		})
+	}))
+	defer upstream.Close()
+
+	repo := &stubOpenAIAccountRepo{
+		accounts: []Account{
+			{
+				ID:       994,
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"base_url": upstream.URL,
+					"api_key":  "sk-newapi-test",
+				},
+				Extra: map[string]any{
+					"upstream_balance_enabled":      true,
+					"upstream_balance_access_token": "cookie:session=session-value",
+					"upstream_balance_user_id":      "11",
+				},
+			},
+		},
+	}
+	svc := &AccountUsageService{accountRepo: repo}
+
+	usage, err := svc.GetUsage(context.Background(), 994)
+	if err != nil {
+		t.Fatalf("GetUsage() error = %v", err)
+	}
+	if gotAuth != "" {
+		t.Fatalf("expected no bearer auth for session cookie, got %q", gotAuth)
+	}
+	if gotCookie != "session=session-value" {
+		t.Fatalf("expected session cookie auth, got %q", gotCookie)
+	}
+	if gotUser != "11" {
+		t.Fatalf("expected New-Api-User header, got %q", gotUser)
+	}
+	if usage.UpstreamBalance == nil {
+		t.Fatal("expected upstream balance result")
+	}
+	if !usage.UpstreamBalance.Success {
+		t.Fatalf("expected upstream balance success, got %#v", usage.UpstreamBalance)
+	}
+	if usage.UpstreamBalance.Balance == nil || *usage.UpstreamBalance.Balance != -878.276788 {
+		t.Fatalf("expected parsed negative user quota balance, got %#v", usage.UpstreamBalance.Balance)
+	}
+}
+
 func TestAccountUsageService_GetUsage_DoesNotTreatSub2APIKeyQuotaAsWalletBalance(t *testing.T) {
 	t.Parallel()
 
@@ -675,6 +745,68 @@ func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPI(t *test
 	}
 	if result.UserID != "42" {
 		t.Fatalf("expected user id 42, got %q", result.UserID)
+	}
+}
+
+func TestAccountUsageService_FetchUpstreamBalanceLoginCredentials_NewAPISessionCookie(t *testing.T) {
+	t.Parallel()
+
+	var gotUsername string
+	var gotPassword string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user/login" {
+			http.NotFound(w, r)
+			return
+		}
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode login payload: %v", err)
+		}
+		gotUsername = payload["username"]
+		gotPassword = payload["password"]
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    "session-value",
+			Path:     "/",
+			HttpOnly: true,
+		})
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"message": "",
+			"data": map[string]any{
+				"id":         11,
+				"username":   "go1c",
+				"quota":      750000,
+				"used_quota": 250000,
+			},
+		})
+	}))
+	defer upstream.Close()
+
+	svc := &AccountUsageService{}
+	result, err := svc.FetchUpstreamBalanceLoginCredentials(context.Background(), UpstreamBalanceLoginInput{
+		BaseURL:  upstream.URL,
+		Username: "go1c",
+		Password: "secret",
+	})
+	if err != nil {
+		t.Fatalf("FetchUpstreamBalanceLoginCredentials() error = %v", err)
+	}
+	if gotUsername != "go1c" || gotPassword != "secret" {
+		t.Fatalf("unexpected login payload username=%q password=%q", gotUsername, gotPassword)
+	}
+	if result.Provider != "newapi" {
+		t.Fatalf("expected newapi provider, got %q", result.Provider)
+	}
+	if result.AccessToken != "cookie:session=session-value" {
+		t.Fatalf("expected session cookie credential, got %q", result.AccessToken)
+	}
+	if result.UserID != "11" {
+		t.Fatalf("expected user id 11, got %q", result.UserID)
+	}
+	if result.Balance == nil || *result.Balance != 1 {
+		t.Fatalf("expected balance 1, got %#v", result.Balance)
 	}
 }
 
