@@ -235,6 +235,38 @@ func TestSettingService_UpdateSettings_FrontendLocales(t *testing.T) {
 	require.Equal(t, `["zh-Hant","zh","en"]`, repo.updates[SettingKeyFrontendLocales])
 }
 
+func TestSettingService_UpdateSettings_SupportChatSettings(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		SupportChatEnabled:             true,
+		SupportChatGatewayURL:          " https://support-gateway.example.com/ ",
+		SupportChatTitle:               " LumioAPI Helper ",
+		SupportChatWelcomeMessage:      " Ask from the LumioAPI docs. ",
+		SupportChatOfficialContactText: " Contact human support ",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "true", repo.updates[SettingKeySupportChatEnabled])
+	require.Equal(t, "https://support-gateway.example.com", repo.updates[SettingKeySupportChatGatewayURL])
+	require.Equal(t, "LumioAPI Helper", repo.updates[SettingKeySupportChatTitle])
+	require.Equal(t, "Ask from the LumioAPI docs.", repo.updates[SettingKeySupportChatWelcomeMessage])
+	require.Equal(t, "Contact human support", repo.updates[SettingKeySupportChatOfficialContactText])
+}
+
+func TestSettingService_UpdateSettings_SupportChatEnabledRequiresHTTPGatewayURL(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		SupportChatEnabled:    true,
+		SupportChatGatewayURL: "javascript:alert(1)",
+	})
+	require.Error(t, err)
+	require.Equal(t, "INVALID_SUPPORT_CHAT_GATEWAY_URL", infraerrors.Reason(err))
+	require.Nil(t, repo.updates)
+}
+
 func TestSettingService_UpdateSettings_RejectsInvalidFrontendLocale(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	svc := NewSettingService(repo, &config.Config{})

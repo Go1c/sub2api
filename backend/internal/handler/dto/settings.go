@@ -119,6 +119,11 @@ type SystemSettings struct {
 	APIBaseURL                            string           `json:"api_base_url"`
 	ContactInfo                           string           `json:"contact_info"`
 	ContactChannels                       []ContactChannel `json:"contact_channels"`
+	SupportChatEnabled                    bool             `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string           `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string           `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string           `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string           `json:"support_chat_official_contact_text"`
 	DocURL                                string           `json:"doc_url"`
 	SitePages                             []SitePage       `json:"site_pages"`
 	HomeContent                           string           `json:"home_content"`
@@ -282,6 +287,11 @@ type PublicSettings struct {
 	APIBaseURL                            string                   `json:"api_base_url"`
 	ContactInfo                           string                   `json:"contact_info"`
 	ContactChannels                       []ContactChannel         `json:"contact_channels"`
+	SupportChatEnabled                    bool                     `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string                   `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string                   `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string                   `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string                   `json:"support_chat_official_contact_text"`
 	DocURL                                string                   `json:"doc_url"`
 	SitePages                             []SitePage               `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`

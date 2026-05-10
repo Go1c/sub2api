@@ -9,13 +9,14 @@ import enUS from '@/i18n/en-US'
 import zhHant from '@/i18n/zh-Hant'
 import { useAuthStore } from '@/stores/auth'
 import SupportChatWidget from './SupportChatWidget.vue'
-import { fetchSupportChatConfig, streamSupportChat } from '@/api/supportChat'
+import { fetchSupportChatConfig, fetchSupportChatPublicSettings, streamSupportChat } from '@/api/supportChat'
 
 vi.mock('@/api/supportChat', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/supportChat')>()
   return {
     ...actual,
     fetchSupportChatConfig: vi.fn(),
+    fetchSupportChatPublicSettings: vi.fn(),
     streamSupportChat: vi.fn()
   }
 })
@@ -27,8 +28,15 @@ describe('SupportChatWidget', () => {
     localStorage.clear()
     vi.clearAllMocks()
     vi.unstubAllEnvs()
-    vi.stubEnv('VITE_SUPPORT_CHAT_ENABLED', 'true')
-    vi.stubEnv('VITE_SUPPORT_CHAT_GATEWAY_URL', 'https://gateway.example.com')
+    vi.stubEnv('VITE_SUPPORT_CHAT_ENABLED', 'false')
+    vi.stubEnv('VITE_SUPPORT_CHAT_GATEWAY_URL', '')
+    vi.mocked(fetchSupportChatPublicSettings).mockResolvedValue({
+      support_chat_enabled: true,
+      support_chat_gateway_url: 'https://gateway.example.com',
+      support_chat_title: '',
+      support_chat_welcome_message: '',
+      support_chat_official_contact_text: ''
+    })
     vi.mocked(fetchSupportChatConfig).mockResolvedValue({
       title: 'LumioAPI Support',
       welcomeMessage: 'Ask us anything',
@@ -38,10 +46,17 @@ describe('SupportChatWidget', () => {
     })
   })
 
-  it('stays hidden when the support chat env flag is disabled', () => {
-    vi.stubEnv('VITE_SUPPORT_CHAT_ENABLED', 'false')
+  it('stays hidden when public settings disable support chat', async () => {
+    vi.mocked(fetchSupportChatPublicSettings).mockResolvedValue({
+      support_chat_enabled: false,
+      support_chat_gateway_url: 'https://gateway.example.com',
+      support_chat_title: '',
+      support_chat_welcome_message: '',
+      support_chat_official_contact_text: ''
+    })
 
     const wrapper = mountWidget()
+    await flushPromises()
 
     expect(wrapper.find('[data-testid="support-chat-toggle"]').exists()).toBe(false)
   })
@@ -92,7 +107,8 @@ describe('SupportChatWidget', () => {
         locale: 'en-US',
         user: { id: 'u-1', email: 'u@example.com' }
       },
-      expect.any(Object)
+      expect.any(Object),
+      { gatewayUrl: 'https://gateway.example.com' }
     )
     expect(wrapper.text()).toContain('Recharge from Billing.')
     expect(wrapper.text()).toContain('Billing FAQ')
@@ -112,7 +128,8 @@ describe('SupportChatWidget', () => {
         message: '如何充值？',
         locale: 'zh-Hant'
       },
-      expect.any(Object)
+      expect.any(Object),
+      { gatewayUrl: 'https://gateway.example.com' }
     )
     expect(wrapper.find('[data-testid="support-chat-input"]').attributes('placeholder')).toBe(
       '輸入你的問題…'

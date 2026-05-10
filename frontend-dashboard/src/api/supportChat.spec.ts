@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { streamSupportChat, fetchSupportChatConfig } from './supportChat'
+import {
+  streamSupportChat,
+  fetchSupportChatConfig,
+  fetchSupportChatPublicSettings,
+  isSupportChatEnabled,
+  mergeSupportChatConfig,
+  resolveSupportChatGatewayURL
+} from './supportChat'
 
 function streamResponse(chunks: string[]) {
   const encoder = new TextEncoder()
@@ -18,6 +25,50 @@ function streamResponse(chunks: string[]) {
 }
 
 describe('support chat API', () => {
+  it('loads support chat enablement from public backend settings', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({
+          code: 0,
+          message: 'success',
+          data: {
+            support_chat_enabled: true,
+            support_chat_gateway_url: 'https://gateway.example.com/',
+            support_chat_title: 'LumioAPI Helper',
+            support_chat_welcome_message: 'Ask from the LumioAPI docs.',
+            support_chat_official_contact_text: 'Contact human support'
+          }
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+
+    const settings = await fetchSupportChatPublicSettings({
+      apiBaseUrl: 'https://api.example.com/api/v1/',
+      fetcher
+    })
+
+    expect(fetcher).toHaveBeenCalledWith('https://api.example.com/api/v1/settings/public', {
+      headers: { Accept: 'application/json' }
+    })
+    expect(isSupportChatEnabled(settings)).toBe(true)
+    expect(resolveSupportChatGatewayURL(settings)).toBe('https://gateway.example.com')
+    expect(
+      mergeSupportChatConfig(
+        {
+          title: 'Gateway title',
+          welcomeMessage: 'Gateway welcome',
+          officialContactText: 'Gateway contact'
+        },
+        settings
+      )
+    ).toEqual({
+      title: 'LumioAPI Helper',
+      welcomeMessage: 'Ask from the LumioAPI docs.',
+      officialContactText: 'Contact human support'
+    })
+  })
+
   it('loads public widget configuration from the gateway', async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       new Response(

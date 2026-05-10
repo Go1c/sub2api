@@ -4268,6 +4268,76 @@
                 </p>
               </div>
 
+              <!-- AI Support Chat -->
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div
+                  class="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 dark:border-dark-600 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ t("admin.settings.site.supportChat.title") }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.supportChat.description") }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.support_chat_enabled" />
+                </div>
+
+                <div
+                  v-if="form.support_chat_enabled"
+                  class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2"
+                >
+                  <div class="md:col-span-2">
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.gatewayUrl") }}
+                    </label>
+                    <input
+                      v-model="form.support_chat_gateway_url"
+                      type="url"
+                      class="input font-mono text-sm"
+                      :placeholder="t('admin.settings.site.supportChat.gatewayUrlPlaceholder')"
+                    />
+                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.supportChat.gatewayUrlHint") }}
+                    </p>
+                  </div>
+                  <div>
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.widgetTitle") }}
+                    </label>
+                    <input
+                      v-model="form.support_chat_title"
+                      type="text"
+                      class="input"
+                      :placeholder="t('admin.settings.site.supportChat.widgetTitlePlaceholder')"
+                    />
+                  </div>
+                  <div>
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.contactText") }}
+                    </label>
+                    <input
+                      v-model="form.support_chat_official_contact_text"
+                      type="text"
+                      class="input"
+                      :placeholder="t('admin.settings.site.supportChat.contactTextPlaceholder')"
+                    />
+                  </div>
+                  <div class="md:col-span-2">
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.welcomeMessage") }}
+                    </label>
+                    <textarea
+                      v-model="form.support_chat_welcome_message"
+                      rows="3"
+                      class="input resize-y"
+                      :placeholder="t('admin.settings.site.supportChat.welcomeMessagePlaceholder')"
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+
               <!-- Contact Channels -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -7092,6 +7162,11 @@ const form = reactive<SettingsForm>({
   api_base_url: "",
   contact_info: "",
   contact_channels: [] as ContactChannel[],
+  support_chat_enabled: false,
+  support_chat_gateway_url: "",
+  support_chat_title: "",
+  support_chat_welcome_message: "",
+  support_chat_official_contact_text: "",
   doc_url: "",
   site_pages: [] as SitePage[],
   home_content: "",
@@ -8388,6 +8463,14 @@ async function saveSettings() {
     // Optional URL fields: auto-clear invalid values so they don't cause backend 400 errors
     if (!isValidHttpUrl(form.frontend_url)) form.frontend_url = "";
     if (!isValidHttpUrl(form.doc_url)) form.doc_url = "";
+    form.support_chat_gateway_url = form.support_chat_gateway_url.trim().replace(/\/+$/, "");
+    if (form.support_chat_enabled && !isValidHttpUrl(form.support_chat_gateway_url)) {
+      appStore.showError(t("admin.settings.site.supportChat.invalidGatewayUrl"));
+      return;
+    }
+    if (!form.support_chat_enabled && !isValidHttpUrl(form.support_chat_gateway_url)) {
+      form.support_chat_gateway_url = "";
+    }
 
     const normalizedContactChannels = normalizeContactChannels(
       form.contact_channels,
@@ -8479,6 +8562,11 @@ async function saveSettings() {
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
       contact_channels: normalizedContactChannels,
+      support_chat_enabled: form.support_chat_enabled,
+      support_chat_gateway_url: form.support_chat_gateway_url,
+      support_chat_title: form.support_chat_title,
+      support_chat_welcome_message: form.support_chat_welcome_message,
+      support_chat_official_contact_text: form.support_chat_official_contact_text,
       doc_url: form.doc_url,
       site_pages: normalizedSitePages,
       home_content: form.home_content,

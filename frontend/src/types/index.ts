@@ -243,6 +243,11 @@ export interface PublicSettings {
   api_base_url: string
   contact_info: string
   contact_channels: ContactChannel[]
+  support_chat_enabled: boolean
+  support_chat_gateway_url: string
+  support_chat_title: string
+  support_chat_welcome_message: string
+  support_chat_official_contact_text: string
   doc_url: string
   site_pages: SitePage[]
   home_content: string

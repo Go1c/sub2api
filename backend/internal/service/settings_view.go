@@ -114,6 +114,11 @@ type SystemSettings struct {
 	APIBaseURL                            string
 	ContactInfo                           string
 	ContactChannels                       string
+	SupportChatEnabled                    bool
+	SupportChatGatewayURL                 string
+	SupportChatTitle                      string
+	SupportChatWelcomeMessage             string
+	SupportChatOfficialContactText        string
 	DocURL                                string
 	SitePages                             string
 	HomeContent                           string
@@ -242,6 +247,11 @@ type PublicSettings struct {
 	APIBaseURL                       string
 	ContactInfo                      string
 	ContactChannels                  string
+	SupportChatEnabled               bool
+	SupportChatGatewayURL            string
+	SupportChatTitle                 string
+	SupportChatWelcomeMessage        string
+	SupportChatOfficialContactText   string
 	DocURL                           string
 	SitePages                        string
 	HomeContent                      string

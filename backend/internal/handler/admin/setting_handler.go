@@ -199,6 +199,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		APIBaseURL:                             settings.APIBaseURL,
 		ContactInfo:                            settings.ContactInfo,
 		ContactChannels:                        dto.ParseContactChannels(settings.ContactChannels),
+		SupportChatEnabled:                     settings.SupportChatEnabled,
+		SupportChatGatewayURL:                  settings.SupportChatGatewayURL,
+		SupportChatTitle:                       settings.SupportChatTitle,
+		SupportChatWelcomeMessage:              settings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:         settings.SupportChatOfficialContactText,
 		DocURL:                                 settings.DocURL,
 		SitePages:                              dto.ParseSitePages(settings.SitePages),
 		HomeContent:                            settings.HomeContent,
@@ -464,6 +469,11 @@ type UpdateSettingsRequest struct {
 	APIBaseURL                            string                `json:"api_base_url"`
 	ContactInfo                           string                `json:"contact_info"`
 	ContactChannels                       *[]dto.ContactChannel `json:"contact_channels"`
+	SupportChatEnabled                    bool                  `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string                `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string                `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string                `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string                `json:"support_chat_official_contact_text"`
 	DocURL                                string                `json:"doc_url"`
 	SitePages                             *[]dto.SitePage       `json:"site_pages"`
 	HomeContent                           string                `json:"home_content"`
@@ -1569,6 +1579,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		APIBaseURL:                            req.APIBaseURL,
 		ContactInfo:                           req.ContactInfo,
 		ContactChannels:                       contactChannelsJSON,
+		SupportChatEnabled:                    req.SupportChatEnabled,
+		SupportChatGatewayURL:                 req.SupportChatGatewayURL,
+		SupportChatTitle:                      req.SupportChatTitle,
+		SupportChatWelcomeMessage:             req.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:        req.SupportChatOfficialContactText,
 		DocURL:                                req.DocURL,
 		SitePages:                             sitePagesJSON,
 		HomeContent:                           req.HomeContent,
@@ -1985,6 +2000,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		APIBaseURL:                             updatedSettings.APIBaseURL,
 		ContactInfo:                            updatedSettings.ContactInfo,
 		ContactChannels:                        dto.ParseContactChannels(updatedSettings.ContactChannels),
+		SupportChatEnabled:                     updatedSettings.SupportChatEnabled,
+		SupportChatGatewayURL:                  updatedSettings.SupportChatGatewayURL,
+		SupportChatTitle:                       updatedSettings.SupportChatTitle,
+		SupportChatWelcomeMessage:              updatedSettings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:         updatedSettings.SupportChatOfficialContactText,
 		DocURL:                                 updatedSettings.DocURL,
 		SitePages:                              dto.ParseSitePages(updatedSettings.SitePages),
 		HomeContent:                            updatedSettings.HomeContent,
@@ -2335,6 +2355,21 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.ContactChannels != after.ContactChannels {
 		changed = append(changed, "contact_channels")
+	}
+	if before.SupportChatEnabled != after.SupportChatEnabled {
+		changed = append(changed, "support_chat_enabled")
+	}
+	if before.SupportChatGatewayURL != after.SupportChatGatewayURL {
+		changed = append(changed, "support_chat_gateway_url")
+	}
+	if before.SupportChatTitle != after.SupportChatTitle {
+		changed = append(changed, "support_chat_title")
+	}
+	if before.SupportChatWelcomeMessage != after.SupportChatWelcomeMessage {
+		changed = append(changed, "support_chat_welcome_message")
+	}
+	if before.SupportChatOfficialContactText != after.SupportChatOfficialContactText {
+		changed = append(changed, "support_chat_official_contact_text")
 	}
 	if before.DocURL != after.DocURL {
 		changed = append(changed, "doc_url")
