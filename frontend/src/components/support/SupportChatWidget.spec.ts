@@ -131,6 +131,79 @@ describe('SupportChatWidget', () => {
     expect(wrapper.find('a[href="https://docs.example.com/billing"]').exists()).toBe(false)
   })
 
+  it('renders assistant answers as safe LLM markdown with highlighted code blocks', async () => {
+    vi.mocked(streamSupportChat).mockImplementation(async (_request, handlers) => {
+      handlers.onAnswer?.(
+        [
+          '**Codex CLI** 安装步骤：',
+          '',
+          '- 需要 `Node.js 18+`',
+          '- 执行安装命令',
+          '',
+          '```bash',
+          'npm install -g @openai/codex',
+          '```',
+          '',
+          '> 如果失败，请检查网络代理。'
+        ].join('\n')
+      )
+      handlers.onEnd?.()
+    })
+
+    const wrapper = mountWidget()
+    await flushPromises()
+    await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
+    await wrapper.find('[data-testid="support-chat-input"]').setValue('如何安装 Codex？')
+    await wrapper.find('[data-testid="support-chat-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    const markdown = wrapper.find('[data-testid="support-chat-markdown"]')
+    expect(markdown.exists()).toBe(true)
+    expect(markdown.find('strong').text()).toBe('Codex CLI')
+    expect(markdown.find('ul li code').text()).toBe('Node.js 18+')
+    expect(markdown.find('.support-chat-code-block pre code').text()).toContain('npm install -g @openai/codex')
+    expect(markdown.find('.support-chat-code-language').text()).toBe('bash')
+    expect(markdown.find('blockquote').text()).toContain('检查网络代理')
+  })
+
+  it('sanitizes assistant markdown and copies code block contents', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true
+    })
+
+    vi.mocked(streamSupportChat).mockImplementation(async (_request, handlers) => {
+      handlers.onAnswer?.(
+        [
+          '<img src=x onerror="alert(1)">',
+          '[bad](javascript:alert(1))',
+          '',
+          '```ts',
+          'console.log("safe")',
+          '```'
+        ].join('\n')
+      )
+      handlers.onEnd?.()
+    })
+
+    const wrapper = mountWidget()
+    await flushPromises()
+    await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
+    await wrapper.find('[data-testid="support-chat-input"]').setValue('测试格式')
+    await wrapper.find('[data-testid="support-chat-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    const html = wrapper.find('[data-testid="support-chat-markdown"]').html()
+    expect(html).not.toContain('onerror')
+    expect(html).not.toContain('javascript:alert')
+
+    await wrapper.find('.support-chat-code-copy').trigger('click')
+
+    expect(writeText).toHaveBeenCalledWith('console.log("safe")')
+  })
+
   it('uses homepage-aligned gradient accents for the main actions', async () => {
     const wrapper = mountWidget()
     await flushPromises()

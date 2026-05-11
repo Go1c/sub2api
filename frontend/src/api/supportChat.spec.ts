@@ -36,7 +36,8 @@ describe('support chat API', () => {
             support_chat_gateway_url: 'https://gateway.example.com/',
             support_chat_title: 'LumioAPI Helper',
             support_chat_welcome_message: 'Ask from the LumioAPI docs.',
-            support_chat_official_contact_text: 'Contact human support'
+            support_chat_official_contact_text: 'Contact human support',
+            support_chat_official_contact_url: ' https://admin.example.com/support/ '
           }
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -58,14 +59,16 @@ describe('support chat API', () => {
         {
           title: 'Gateway title',
           welcomeMessage: 'Gateway welcome',
-          officialContactText: 'Gateway contact'
+          officialContactText: 'Gateway contact',
+          supportUrl: 'https://gateway.example.com/support'
         },
         settings
       )
     ).toEqual({
       title: 'LumioAPI Helper',
       welcomeMessage: 'Ask from the LumioAPI docs.',
-      officialContactText: 'Contact human support'
+      officialContactText: 'Contact human support',
+      supportUrl: 'https://admin.example.com/support'
     })
   })
 

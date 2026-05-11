@@ -124,6 +124,7 @@ type SystemSettings struct {
 	SupportChatTitle                      string           `json:"support_chat_title"`
 	SupportChatWelcomeMessage             string           `json:"support_chat_welcome_message"`
 	SupportChatOfficialContactText        string           `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL         string           `json:"support_chat_official_contact_url"`
 	DocURL                                string           `json:"doc_url"`
 	SitePages                             []SitePage       `json:"site_pages"`
 	HomeContent                           string           `json:"home_content"`
@@ -293,6 +294,7 @@ type PublicSettings struct {
 	SupportChatTitle                      string                   `json:"support_chat_title"`
 	SupportChatWelcomeMessage             string                   `json:"support_chat_welcome_message"`
 	SupportChatOfficialContactText        string                   `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL         string                   `json:"support_chat_official_contact_url"`
 	DocURL                                string                   `json:"doc_url"`
 	SitePages                             []SitePage               `json:"site_pages"`
 	HomeContent                           string                   `json:"home_content"`

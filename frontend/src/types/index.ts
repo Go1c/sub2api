@@ -248,6 +248,7 @@ export interface PublicSettings {
   support_chat_title: string
   support_chat_welcome_message: string
   support_chat_official_contact_text: string
+  support_chat_official_contact_url: string
   doc_url: string
   site_pages: SitePage[]
   home_content: string
