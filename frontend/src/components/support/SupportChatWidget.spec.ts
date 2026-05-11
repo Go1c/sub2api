@@ -73,12 +73,15 @@ describe('SupportChatWidget', () => {
 
     await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
 
-    expect(wrapper.find('[data-testid="support-chat-panel"]').exists()).toBe(true)
+    const panel = wrapper.find('[data-testid="support-chat-panel"]')
+    expect(panel.exists()).toBe(true)
+    expect(panel.classes()).toContain('h-[min(620px,calc(100vh-7rem))]')
+    expect(panel.classes()).toContain('sm:w-[420px]')
     expect(wrapper.text()).toContain('LumioAPI Support')
     expect(wrapper.text()).toContain('Ask us anything')
   })
 
-  it('sends logged-in user context and renders streamed answer sources', async () => {
+  it('sends logged-in user context and hides streamed answer sources', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
 
@@ -124,7 +127,8 @@ describe('SupportChatWidget', () => {
       { gatewayUrl: 'https://gateway.example.com' }
     )
     expect(wrapper.text()).toContain('Recharge from Billing.')
-    expect(wrapper.text()).toContain('Billing FAQ')
+    expect(wrapper.text()).not.toContain('Billing FAQ')
+    expect(wrapper.find('a[href="https://docs.example.com/billing"]').exists()).toBe(false)
   })
 
   it('uses homepage-aligned gradient accents for the main actions', async () => {
