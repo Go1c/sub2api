@@ -219,6 +219,65 @@ describe('SupportChatWidget', () => {
     expect(sendButton.classes()).toContain('from-blue-600')
   })
 
+  it('sends the current message when Enter is pressed and preserves Shift+Enter for new lines', async () => {
+    vi.mocked(streamSupportChat).mockImplementation(async (_request, handlers) => {
+      handlers.onAnswer?.('Sure.')
+      handlers.onEnd?.()
+    })
+
+    const wrapper = mountWidget()
+    await flushPromises()
+    await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
+
+    const input = wrapper.find('[data-testid="support-chat-input"]')
+    await input.setValue('first line')
+    await input.trigger('keydown.enter', { shiftKey: true })
+
+    expect(streamSupportChat).not.toHaveBeenCalled()
+
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    expect(streamSupportChat).toHaveBeenCalledWith(
+      {
+        message: 'first line',
+        locale: 'en-US'
+      },
+      expect.any(Object),
+      { gatewayUrl: 'https://gateway.example.com' }
+    )
+  })
+
+  it('lets the floating chat launcher move to a dragged viewport position', async () => {
+    const wrapper = mountWidget()
+    await flushPromises()
+
+    const launcher = wrapper.find('[data-testid="support-chat-toggle"]')
+    await launcher.trigger('pointerdown', {
+      pointerId: 1,
+      clientX: 760,
+      clientY: 560
+    })
+    window.dispatchEvent(createPointerLikeEvent('pointermove', { pointerId: 1, clientX: 620, clientY: 420 }))
+    window.dispatchEvent(createPointerLikeEvent('pointerup', { pointerId: 1, clientX: 620, clientY: 420 }))
+    await flushPromises()
+
+    const root = wrapper.find('[data-testid="support-chat-root"]')
+    expect(root.attributes('style')).toContain('left:')
+    expect(root.attributes('style')).toContain('top:')
+    expect(root.classes()).not.toContain('bottom-4')
+    expect(root.classes()).not.toContain('right-4')
+  })
+
+  it('uses a dark-mode chat surface instead of the light message gradient', async () => {
+    const wrapper = mountWidget()
+    await flushPromises()
+    await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
+
+    const surface = wrapper.find('[data-testid="support-chat-surface"]')
+    expect(surface.classes().join(' ')).toContain('dark:bg-[linear-gradient')
+  })
+
   it('uses the active Traditional Chinese locale for the next support request', async () => {
     const i18n = createTestI18n('zh-Hant')
     const wrapper = mountWidget(createPinia(), i18n)
@@ -265,6 +324,12 @@ function createMemoryStorage(): Storage {
       values.set(key, value)
     }
   }
+}
+
+function createPointerLikeEvent(type: string, init: MouseEventInit & { pointerId: number }) {
+  const event = new MouseEvent(type, init)
+  Object.defineProperty(event, 'pointerId', { value: init.pointerId })
+  return event
 }
 
 function mountWidget(pinia = createPinia(), i18n = createTestI18n()) {

@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -20,6 +20,10 @@ async function mountHeader() {
       },
       {
         path: '/home',
+        component: { template: '<div />' }
+      },
+      {
+        path: '/login',
         component: { template: '<div />' }
       }
     ]
@@ -46,7 +50,7 @@ async function mountHeader() {
         AnnouncementBell: true,
         Icon: true,
         LocaleSwitcher: true,
-        RouterLink: true,
+        RouterLink: RouterLinkStub,
         SubscriptionProgressMini: true
       }
     }
@@ -54,15 +58,21 @@ async function mountHeader() {
 }
 
 describe('AppHeader home navigation', () => {
-  it('renders Image2 generation as an external navigation link', async () => {
+  it('renders Image2 generation as an authenticated handoff navigation link', async () => {
     const wrapper = await mountHeader()
 
-    const link = wrapper.findAll('a').find((anchor) => anchor.text() === 'Image2生图')
+    const link = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((routerLink) => routerLink.text() === 'Image2生图')
 
     expect(wrapper.text()).not.toContain('技术支持')
     expect(link).toBeTruthy()
-    expect(link?.attributes('href')).toBe('https://img.lumio.games/')
-    expect(link?.attributes('target')).toBe('_blank')
-    expect(link?.attributes('rel')).toBe('noopener noreferrer')
+    expect(link?.props('to')).toEqual({
+      path: '/login',
+      query: {
+        handoff: '1',
+        return_to: 'https://img.lumio.games/'
+      }
+    })
   })
 })
