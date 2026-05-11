@@ -7180,4 +7180,22 @@ export default {
     },
   },
 
+  supportChat: {
+    title: 'LumioAPI 客服',
+    subtitle: 'AI 客服助手',
+    welcome: '你好，我会优先基于 LumioAPI 文档回答。涉及账户、付款或无法确认的问题，请联系官方支持。',
+    open: '打开客服',
+    close: '关闭客服',
+    clear: '清空会话',
+    send: '发送',
+    retry: '重试',
+    placeholder: '输入你的问题…',
+    thinking: '正在思考…',
+    error: '客服暂时无法使用，请稍后再试。',
+    errorAssistant: '我暂时无法连接客服网关。',
+    configError: '客服配置暂时不可用。',
+    contactSupport: '联系官方支持',
+    sourceFallback: '来源 {n}'
+  },
+
 }

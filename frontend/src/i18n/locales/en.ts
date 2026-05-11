@@ -6996,4 +6996,22 @@ export default {
     },
   },
 
+  supportChat: {
+    title: 'LumioAPI Support',
+    subtitle: 'AI support assistant',
+    welcome: 'Ask a question and the AI support assistant will answer from the LumioAPI docs.',
+    open: 'Open support chat',
+    close: 'Close support chat',
+    clear: 'Clear conversation',
+    send: 'Send',
+    retry: 'Retry',
+    placeholder: 'Type your question…',
+    thinking: 'Thinking…',
+    error: 'Support chat is temporarily unavailable. Please try again later.',
+    errorAssistant: 'I cannot reach the support gateway right now.',
+    configError: 'Support chat configuration is temporarily unavailable.',
+    contactSupport: 'Contact official support',
+    sourceFallback: 'Source {n}'
+  },
+
 }
