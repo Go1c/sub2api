@@ -2,6 +2,7 @@
 
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en'
@@ -248,6 +249,31 @@ describe('SupportChatWidget', () => {
     )
   })
 
+  it('scrolls the transcript to the newest pending response after sending', async () => {
+    let resolveStream!: () => void
+    vi.mocked(streamSupportChat).mockImplementation(() => new Promise<void>((resolve) => {
+      resolveStream = resolve
+    }))
+
+    const wrapper = mountWidget()
+    await flushPromises()
+    await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
+
+    const surface = wrapper.find('[data-testid="support-chat-surface"]').element as HTMLElement
+    makeScrollable(surface, { scrollHeight: 1200, scrollTop: 0 })
+
+    await wrapper.find('[data-testid="support-chat-input"]').setValue('你要告诉我')
+    await wrapper.find('[data-testid="support-chat-input"]').trigger('keydown.enter')
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('supportChat.thinking')
+    expect(surface.scrollTop).toBe(1200)
+
+    resolveStream()
+    await flushPromises()
+  })
+
   it('lets the floating chat launcher move to a dragged viewport position', async () => {
     const wrapper = mountWidget()
     await flushPromises()
@@ -330,6 +356,18 @@ function createPointerLikeEvent(type: string, init: MouseEventInit & { pointerId
   const event = new MouseEvent(type, init)
   Object.defineProperty(event, 'pointerId', { value: init.pointerId })
   return event
+}
+
+function makeScrollable(element: HTMLElement, values: { scrollHeight: number; scrollTop: number }) {
+  Object.defineProperty(element, 'scrollHeight', {
+    configurable: true,
+    value: values.scrollHeight
+  })
+  Object.defineProperty(element, 'scrollTop', {
+    configurable: true,
+    writable: true,
+    value: values.scrollTop
+  })
 }
 
 function mountWidget(pinia = createPinia(), i18n = createTestI18n()) {
