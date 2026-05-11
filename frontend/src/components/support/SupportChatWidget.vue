@@ -55,6 +55,7 @@ const error = ref('')
 const lastUserMessage = ref('')
 const conversationId = ref<string>()
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+const transcriptRef = ref<HTMLElement | null>(null)
 const messages = ref<ChatMessage[]>([])
 const widgetPosition = ref<WidgetPosition | null>(null)
 const suppressNextToggle = ref(false)
@@ -117,7 +118,10 @@ function toggleOpen() {
 
   open.value = !open.value
   if (open.value) {
-    nextTick(() => inputRef.value?.focus())
+    nextTick(() => {
+      inputRef.value?.focus()
+      void scrollChatToBottom()
+    })
   }
 }
 
@@ -243,6 +247,7 @@ async function sendMessage() {
   }
   messages.value.push(assistantMessage)
   loading.value = true
+  await scrollChatToBottom()
 
   try {
     await streamSupportChat(
@@ -262,15 +267,18 @@ async function sendMessage() {
       {
         onAnswer(chunk) {
           assistantMessage.content += chunk
+          void scrollChatToBottom()
         },
         onConversationId(id) {
           conversationId.value = id
         },
         onError(messageText) {
           error.value = messageText
+          void scrollChatToBottom()
         },
         onEnd() {
           loading.value = false
+          void scrollChatToBottom()
         }
       },
       { gatewayUrl: gatewayUrl.value }
@@ -280,9 +288,18 @@ async function sendMessage() {
     if (!assistantMessage.content) {
       assistantMessage.content = t('supportChat.errorAssistant')
     }
+    void scrollChatToBottom()
   } finally {
     loading.value = false
+    void scrollChatToBottom()
   }
+}
+
+async function scrollChatToBottom() {
+  await nextTick()
+  const transcript = transcriptRef.value
+  if (!transcript) return
+  transcript.scrollTop = transcript.scrollHeight
 }
 
 function normalizeSupportChatLocale(currentLocale: string) {
@@ -417,6 +434,7 @@ onBeforeUnmount(() => {
       </header>
 
       <div
+        ref="transcriptRef"
         data-testid="support-chat-surface"
         class="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(238,242,255,0.88))] px-4 py-4 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.94))]"
       >
