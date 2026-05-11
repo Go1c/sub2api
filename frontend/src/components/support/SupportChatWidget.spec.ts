@@ -118,13 +118,28 @@ describe('SupportChatWidget', () => {
       {
         message: 'How do I recharge?',
         locale: 'en-US',
-        user: { id: 1, email: 'u@example.com' }
+        user: { id: '1', email: 'u@example.com' }
       },
       expect.any(Object),
       { gatewayUrl: 'https://gateway.example.com' }
     )
     expect(wrapper.text()).toContain('Recharge from Billing.')
     expect(wrapper.text()).toContain('Billing FAQ')
+  })
+
+  it('uses homepage-aligned gradient accents for the main actions', async () => {
+    const wrapper = mountWidget()
+    await flushPromises()
+
+    const toggle = wrapper.find('[data-testid="support-chat-toggle"]')
+    expect(toggle.classes()).toContain('bg-gradient-to-br')
+    expect(toggle.classes()).toContain('from-blue-600')
+
+    await toggle.trigger('click')
+
+    const sendButton = wrapper.find('[data-testid="support-chat-form"] button[type="submit"]')
+    expect(sendButton.classes()).toContain('bg-gradient-to-br')
+    expect(sendButton.classes()).toContain('from-blue-600')
   })
 
   it('uses the active Traditional Chinese locale for the next support request', async () => {

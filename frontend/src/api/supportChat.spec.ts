@@ -119,7 +119,7 @@ describe('support chat API', () => {
         message: 'How do I recharge?',
         conversationId: 'conv-1',
         locale: 'en-US',
-        user: { id: 'u-1', email: 'u@example.com' }
+        user: { id: 123, email: 'u@example.com' }
       },
       { onAnswer, onSources, onConversationId, onEnd },
       { gatewayUrl: 'https://gateway.example.com', fetcher }
@@ -131,7 +131,7 @@ describe('support chat API', () => {
       message: 'How do I recharge?',
       conversationId: 'conv-1',
       locale: 'en-US',
-      user: { id: 'u-1', email: 'u@example.com' }
+      user: { id: '123', email: 'u@example.com' }
     })
     expect(onAnswer).toHaveBeenCalledWith('Hello')
     expect(onSources).toHaveBeenCalledWith([
@@ -147,5 +147,21 @@ describe('support chat API', () => {
     await expect(
       streamSupportChat({ message: 'hello' }, {}, { gatewayUrl: 'https://gateway.example.com', fetcher })
     ).rejects.toThrow('Support chat request failed (502)')
+  })
+
+  it('preserves anonymous requests without injecting user fields', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => streamResponse(['data: {"type":"end"}\n\n']))
+
+    await streamSupportChat(
+      { message: 'hello', locale: 'en-US' },
+      {},
+      { gatewayUrl: 'https://gateway.example.com', fetcher }
+    )
+
+    const [, init] = fetcher.mock.calls[0]
+    expect(JSON.parse(String(init?.body))).toEqual({
+      message: 'hello',
+      locale: 'en-US'
+    })
   })
 })

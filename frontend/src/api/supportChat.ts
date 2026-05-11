@@ -167,7 +167,7 @@ export async function streamSupportChat(
       Accept: 'text/event-stream',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(request),
+    body: JSON.stringify(normalizeSupportChatRequest(request)),
     signal: options.signal
   })
 
@@ -277,4 +277,18 @@ function normalizeSources(
 ): SupportChatSource[] {
   if (!input) return []
   return Array.isArray(input) ? input : [input]
+}
+
+function normalizeSupportChatRequest(request: SupportChatRequest): SupportChatRequest {
+  if (!request.user || request.user.id === undefined || request.user.id === null) {
+    return request
+  }
+
+  return {
+    ...request,
+    user: {
+      ...request.user,
+      id: String(request.user.id)
+    }
+  }
 }
