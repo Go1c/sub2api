@@ -124,7 +124,7 @@ async function sendMessage() {
         ...(auth.user
           ? {
               user: {
-                id: auth.user.id,
+                id: String(auth.user.id),
                 email: auth.user.email
               }
             }
@@ -181,22 +181,22 @@ function normalizeSupportChatLocale(currentLocale: string) {
     <section
       v-if="open"
       data-testid="support-chat-panel"
-      class="fixed bottom-20 left-3 right-3 flex max-h-[min(680px,calc(100vh-7rem))] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-900 sm:left-auto sm:right-6 sm:w-[380px]"
+      class="fixed bottom-20 left-3 right-3 flex max-h-[min(680px,calc(100vh-7rem))] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_28px_80px_rgba(15,23,42,0.18)] backdrop-blur dark:border-dark-700 dark:bg-dark-900/95 sm:left-auto sm:right-6 sm:w-[380px]"
       aria-live="polite"
     >
-      <header class="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+      <header class="flex items-center justify-between gap-3 border-b border-white/10 bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 px-4 py-3 text-white">
         <div class="min-w-0">
-          <h2 class="truncate text-base font-semibold text-gray-900 dark:text-white">
+          <h2 class="truncate text-base font-semibold text-white">
             {{ config.title }}
           </h2>
-          <p class="truncate text-xs text-gray-500 dark:text-dark-400">
+          <p class="truncate text-xs text-white/75">
             {{ t('supportChat.subtitle') }}
           </p>
         </div>
         <div class="flex items-center gap-1">
           <button
             type="button"
-            class="grid h-8 w-8 place-items-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="grid h-8 w-8 place-items-center rounded-md text-white/80 transition hover:bg-white/10 hover:text-white"
             :aria-label="t('supportChat.clear')"
             :title="t('supportChat.clear')"
             @click="clearConversation"
@@ -205,7 +205,7 @@ function normalizeSupportChatLocale(currentLocale: string) {
           </button>
           <button
             type="button"
-            class="grid h-8 w-8 place-items-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="grid h-8 w-8 place-items-center rounded-md text-white/80 transition hover:bg-white/10 hover:text-white"
             :aria-label="t('supportChat.close')"
             :title="t('supportChat.close')"
             @click="toggleOpen"
@@ -215,8 +215,8 @@ function normalizeSupportChatLocale(currentLocale: string) {
         </div>
       </header>
 
-      <div class="flex-1 space-y-3 overflow-y-auto bg-gray-50/70 px-4 py-4 dark:bg-dark-950/50">
-        <div class="rounded-xl border border-primary-100 bg-white px-3 py-3 text-sm text-gray-700 dark:border-primary-900/40 dark:bg-dark-800 dark:text-dark-100">
+      <div class="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(238,242,255,0.88))] px-4 py-4 dark:bg-dark-950/50">
+        <div class="rounded-2xl border border-indigo-100 bg-white/90 px-3 py-3 text-sm text-gray-700 shadow-[0_10px_24px_rgba(99,102,241,0.06)] dark:border-indigo-900/40 dark:bg-dark-800 dark:text-dark-100">
           {{ config.welcomeMessage }}
         </div>
 
@@ -230,7 +230,7 @@ function normalizeSupportChatLocale(currentLocale: string) {
             class="max-w-[86%] rounded-xl px-3 py-2 text-sm leading-relaxed"
             :class="
               message.role === 'user'
-                ? 'bg-primary-600 text-white'
+                ? 'bg-gradient-to-br from-blue-600 via-indigo-500 to-purple-600 text-white shadow-[0_12px_28px_rgba(99,102,241,0.28)]'
                 : 'border border-gray-200 bg-white text-gray-800 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-100'
             "
           >
@@ -247,7 +247,7 @@ function normalizeSupportChatLocale(currentLocale: string) {
                 :href="source.url"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex max-w-full items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-[11px] text-primary-700 transition hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-200 dark:hover:bg-primary-900/50"
+                class="inline-flex max-w-full items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50/90 px-2.5 py-1 text-[11px] font-medium text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-100 dark:border-indigo-900/50 dark:bg-indigo-900/30 dark:text-indigo-100 dark:hover:bg-indigo-900/50"
               >
                 <span class="truncate">{{ sourceLabel(source, index) }}</span>
                 <Icon v-if="source.url" name="externalLink" class="h-3 w-3 shrink-0" />
@@ -285,13 +285,13 @@ function normalizeSupportChatLocale(currentLocale: string) {
             v-model="draft"
             data-testid="support-chat-input"
             rows="2"
-            class="min-h-[44px] flex-1 resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100 dark:border-dark-700 dark:bg-dark-800 dark:text-white dark:focus:border-primary-500 dark:focus:ring-primary-900/40"
+            class="min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-dark-700 dark:bg-dark-800 dark:text-white dark:focus:border-indigo-500 dark:focus:ring-indigo-900/40"
             :placeholder="t('supportChat.placeholder')"
             :disabled="loading"
           />
           <button
             type="submit"
-            class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-600 text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-dark-700"
+            class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-purple-600 text-white shadow-[0_12px_24px_rgba(99,102,241,0.24)] transition hover:-translate-y-0.5 hover:from-blue-700 hover:via-indigo-600 hover:to-purple-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             :disabled="loading || !draft.trim()"
             :aria-label="t('supportChat.send')"
             :title="t('supportChat.send')"
@@ -304,7 +304,7 @@ function normalizeSupportChatLocale(currentLocale: string) {
           <a
             v-if="contactEmailHref"
             :href="contactEmailHref"
-            class="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 transition hover:border-primary-200 hover:text-primary-700 dark:border-dark-700 dark:hover:border-primary-700 dark:hover:text-primary-300"
+            class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 transition hover:border-indigo-200 hover:bg-indigo-50/70 hover:text-indigo-700 dark:border-dark-700 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
           >
             <Icon name="mail" class="h-3.5 w-3.5" />
             {{ config.supportEmail }}
@@ -314,7 +314,7 @@ function normalizeSupportChatLocale(currentLocale: string) {
             :href="config.supportUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 transition hover:border-primary-200 hover:text-primary-700 dark:border-dark-700 dark:hover:border-primary-700 dark:hover:text-primary-300"
+            class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 transition hover:border-indigo-200 hover:bg-indigo-50/70 hover:text-indigo-700 dark:border-dark-700 dark:hover:border-indigo-700 dark:hover:text-indigo-300"
           >
             <Icon name="externalLink" class="h-3.5 w-3.5" />
             {{ config.officialContactText }}
@@ -326,7 +326,7 @@ function normalizeSupportChatLocale(currentLocale: string) {
     <button
       type="button"
       data-testid="support-chat-toggle"
-      class="grid h-14 w-14 place-items-center rounded-full bg-primary-600 text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-primary-700 focus:outline-none focus:ring-4 focus:ring-primary-200 dark:focus:ring-primary-900/40"
+      class="grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-500 to-purple-600 text-white shadow-[0_16px_40px_rgba(99,102,241,0.32)] transition hover:-translate-y-0.5 hover:from-blue-700 hover:via-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 dark:focus:ring-indigo-900/40"
       :aria-label="open ? t('supportChat.close') : t('supportChat.open')"
       :title="open ? t('supportChat.close') : t('supportChat.open')"
       @click="toggleOpen"
