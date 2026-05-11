@@ -10,8 +10,7 @@ import {
   resolveSupportChatGatewayURL,
   streamSupportChat,
   type SupportChatConfig,
-  type SupportChatPublicSettings,
-  type SupportChatSource
+  type SupportChatPublicSettings
 } from '@/api/supportChat'
 import { useAuthStore } from '@/stores/auth'
 
@@ -21,7 +20,6 @@ interface ChatMessage {
   id: string
   role: ChatRole
   content: string
-  sources?: SupportChatSource[]
 }
 
 const { t, locale } = useI18n()
@@ -109,8 +107,7 @@ async function sendMessage() {
   const assistantMessage: ChatMessage = {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: '',
-    sources: []
+    content: ''
   }
   messages.value.push(assistantMessage)
   loading.value = true
@@ -134,9 +131,6 @@ async function sendMessage() {
         onAnswer(chunk) {
           assistantMessage.content += chunk
         },
-        onSources(sources) {
-          assistantMessage.sources = [...(assistantMessage.sources ?? []), ...sources]
-        },
         onConversationId(id) {
           conversationId.value = id
         },
@@ -159,16 +153,6 @@ async function sendMessage() {
   }
 }
 
-function sourceLabel(source: SupportChatSource, index: number) {
-  return (
-    source.title ||
-    source.name ||
-    source.source ||
-    source.url ||
-    t('supportChat.sourceFallback', { n: index + 1 })
-  )
-}
-
 function normalizeSupportChatLocale(currentLocale: string) {
   if (currentLocale === 'zh-Hant') return 'zh-Hant'
   if (currentLocale === 'zh') return 'zh-CN'
@@ -181,7 +165,7 @@ function normalizeSupportChatLocale(currentLocale: string) {
     <section
       v-if="open"
       data-testid="support-chat-panel"
-      class="fixed bottom-20 left-3 right-3 flex max-h-[min(680px,calc(100vh-7rem))] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_28px_80px_rgba(15,23,42,0.18)] backdrop-blur dark:border-dark-700 dark:bg-dark-900/95 sm:left-auto sm:right-6 sm:w-[380px]"
+      class="fixed bottom-20 left-3 right-3 flex h-[min(620px,calc(100vh-7rem))] max-h-[min(680px,calc(100vh-7rem))] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_28px_80px_rgba(15,23,42,0.18)] backdrop-blur dark:border-dark-700 dark:bg-dark-900/95 sm:left-auto sm:right-6 sm:w-[420px]"
       aria-live="polite"
     >
       <header class="flex items-center justify-between gap-3 border-b border-white/10 bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 px-4 py-3 text-white">
@@ -237,22 +221,6 @@ function normalizeSupportChatLocale(currentLocale: string) {
             <p class="whitespace-pre-wrap break-words">
               {{ message.content || (loading && message.role === 'assistant' ? t('supportChat.thinking') : '') }}
             </p>
-            <div
-              v-if="message.sources?.length"
-              class="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200 pt-2 dark:border-dark-700"
-            >
-              <a
-                v-for="(source, index) in message.sources"
-                :key="`${message.id}-${index}`"
-                :href="source.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex max-w-full items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50/90 px-2.5 py-1 text-[11px] font-medium text-indigo-700 transition hover:border-indigo-200 hover:bg-indigo-100 dark:border-indigo-900/50 dark:bg-indigo-900/30 dark:text-indigo-100 dark:hover:bg-indigo-900/50"
-              >
-                <span class="truncate">{{ sourceLabel(source, index) }}</span>
-                <Icon v-if="source.url" name="externalLink" class="h-3 w-3 shrink-0" />
-              </a>
-            </div>
           </div>
         </div>
       </div>
