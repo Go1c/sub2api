@@ -18,7 +18,7 @@
 - 不做“只靠邮箱验证码登录”。
 - 不替代 TOTP 2FA。已启用 TOTP 的用户仍需在密码和邮箱验证码通过后完成 TOTP。
 - 不改 API Key 网关鉴权。
-- 不改 LumioAPI 独立前端 `frontend-dashboard/`，本功能落在上游后端和上游 Vue 前端登录页。
+- 不改其他前端入口；本功能落在上游后端和主 Vue 前端登录页。
 
 ## 推荐交互
 
@@ -95,7 +95,7 @@ POST /api/v1/auth/login/send-email-code
 - 再次提交时带上 `email_code`。
 - 若登录后还需要 TOTP，继续使用现有 TOTP 弹窗。
 
-`frontend-dashboard/` 当前只做独立 LumioAPI 前端，不作为本功能入口。
+当前只有主前端 `frontend/` 作为本功能入口。
 
 ## 测试
 

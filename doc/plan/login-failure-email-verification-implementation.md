@@ -1095,6 +1095,6 @@ If docs did not change, skip this commit.
 
 ## Self-Review
 
-- Spec coverage: account-wide failure counter, 5 failures, 15-minute challenge, password plus email code, manual code sending, no frontend-dashboard changes, and TOTP preservation are covered by Tasks 2, 3, and 5.
+- Spec coverage: account-wide failure counter, 5 failures, 15-minute challenge, password plus email code, manual code sending, main-frontend login flow changes, and TOTP preservation are covered by Tasks 2, 3, and 5.
 - Placeholder scan: no placeholders remain in this plan; every step has concrete files, commands, and expected outcomes.
 - Type consistency: backend uses `email_code`, `EMAIL_CODE_REQUIRED`, and `LoginProtectionCache`; frontend uses the same `email_code` request field and error code.

@@ -1,6 +1,6 @@
 # 分支与同步策略
 
-本仓库是 `Wei-Shaw/sub2api` 的 fork，在此基础上做了 **LumioAPI 风格的独立前端** (`frontend-dashboard/`)。分支职责按如下分工，请**不要直接在 `main` 或 `publish` 上提交**。
+本仓库是 `Wei-Shaw/sub2api` 的 fork，当前线上前端统一使用 `frontend/`。分支职责按如下分工，请**不要直接在 `main` 或 `publish` 上提交**。
 
 ## 远端
 
@@ -45,7 +45,7 @@ git merge main                       # 可能有冲突，解决后提交
 git push origin dev
 ```
 
-> ⚠️ 本仓库新增了 `frontend-dashboard/` 和 `doc/`，upstream 没有这些；与 upstream 合并时冲突应集中在 `backend/` 或 `frontend/`。
+> ⚠️ 本仓库新增了 `doc/`，并对 `backend/`、`frontend/` 做了持续定制；与 upstream 合并时冲突通常集中在这两处。
 
 ## 日常开发
 
@@ -53,7 +53,7 @@ git push origin dev
 git checkout dev
 git pull
 git checkout -b feat/your-change
-# ... 写代码，本地验证通过（见 doc/frontend-dashboard.md） ...
+# ... 写代码，本地验证通过 ...
 git push -u origin feat/your-change
 gh pr create --base dev --title "feat: xxx"
 ```
@@ -70,4 +70,4 @@ git tag -a vX.Y.Z -m "release X.Y.Z"
 git push origin publish --tags
 ```
 
-Zeabur 监听 `publish` 分支（或 tag），自动触发构建/部署。详见 `doc/deploy-zeabur.md`。
+Zeabur 监听 `publish` 分支（或 tag），自动触发构建/部署。
