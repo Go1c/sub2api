@@ -21,12 +21,13 @@ describe('HomeView navigation', () => {
     expect(navItems).not.toContain("target: '#status'")
   })
 
-  it('replaces support with the Image2 generator external link', () => {
+  it('replaces support with the Image2 generator authenticated handoff link', () => {
     const navItems = homeNavItemsBlock()
 
     expect(navItems).toContain("key: 'image2'")
-    expect(navItems).toContain("target: 'https://img.lumio.games/'")
-    expect(navItems).toContain('external: true')
+    expect(navItems).toContain('target: image2LoginHandoffTarget')
+    expect(navItems).not.toContain("target: 'https://img.lumio.games/'")
+    expect(navItems).not.toContain('external: true, dim: true')
     expect(navItems).not.toContain("key: 'support'")
     expect(navItems).not.toContain("target: '#support'")
   })

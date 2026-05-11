@@ -281,6 +281,14 @@ const sitePages = computed<SitePage[]>(() => normalizeSitePages(appStore.cachedP
 const docsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'docs'))
 const termsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'terms'))
 const privacyTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'privacy'))
+const image2ReturnTo = 'https://img.lumio.games/'
+const image2LoginHandoffTo = computed(() => ({
+  path: '/login',
+  query: {
+    handoff: '1',
+    return_to: image2ReturnTo
+  }
+}))
 const homeNavItems = computed(() => {
   const isZh = locale.value.startsWith('zh')
   const docs = docsTarget.value
@@ -315,7 +323,7 @@ const homeNavItems = computed(() => {
       href: '',
       external: false
     },
-    { key: 'image2', label: 'Image2生图', to: { path: '/home', hash: '#footer' }, href: 'https://img.lumio.games/', external: true },
+    { key: 'image2', label: 'Image2生图', to: image2LoginHandoffTo.value, href: '', external: false },
   ]
 })
 

@@ -925,6 +925,8 @@ const enCopy: HomeCopy = {
 }
 
 const copy = computed(() => (locale.value.startsWith('zh') ? zhCopy : enCopy))
+const image2ReturnTo = 'https://img.lumio.games/'
+const image2LoginHandoffTarget = `/login?handoff=1&return_to=${encodeURIComponent(image2ReturnTo)}`
 const publicPricing = ref<PublicPricingConfig | null>(null)
 const pricingNote = computed(() => {
   const configuredNote = normalizePricingNote(publicPricing.value?.rateNote)
@@ -957,7 +959,7 @@ const navItems = computed<NavItem[]>(() => [
     target: privacyTarget.value?.target || '#footer',
     dim: true
   },
-  { key: 'image2', label: copy.value.dimNav[2].label, target: 'https://img.lumio.games/', external: true, dim: true }
+  { key: 'image2', label: copy.value.dimNav[2].label, target: image2LoginHandoffTarget, dim: true }
 ])
 
 const floatingSlots = [

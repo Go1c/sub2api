@@ -27,6 +27,19 @@ describe('externalAuthHandoff', () => {
     expect(url).toBe('http://localhost:3000/#view=studio&token=access-token-123')
   })
 
+  it('allows the production Image2 generator as a return_to destination', () => {
+    const result = resolveExternalAuthHandoff(
+      {
+        handoff: '1',
+        return_to: 'https://img.lumio.games/',
+      },
+      'access-token-123',
+    )
+
+    expect(result.valid).toBe(true)
+    expect(result.url).toBe('https://img.lumio.games/#token=access-token-123')
+  })
+
   it('removes existing token values from query and hash before appending the new token', () => {
     const url = buildExternalAuthHandoffUrl(
       'http://localhost:3000/?token=old&access_token=old2&ok=1#view=studio&refresh_token=old3',

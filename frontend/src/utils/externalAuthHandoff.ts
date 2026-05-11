@@ -14,6 +14,7 @@ const SENSITIVE_TOKEN_KEYS = [
 const DEFAULT_ALLOWED_RETURN_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
+  'https://img.lumio.games',
 ]
 
 export interface ExternalAuthHandoffResult {

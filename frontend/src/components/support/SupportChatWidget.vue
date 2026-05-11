@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -25,6 +25,24 @@ interface ChatMessage {
   content: string
 }
 
+interface WidgetPosition {
+  left: number
+  top: number
+}
+
+interface DragState {
+  pointerId: number
+  startX: number
+  startY: number
+  offsetX: number
+  offsetY: number
+  moved: boolean
+}
+
+const LAUNCHER_SIZE = 56
+const LAUNCHER_MARGIN = 16
+const DRAG_THRESHOLD = 4
+
 const { t, locale } = useI18n()
 const auth = useAuthStore()
 const { copyToClipboard } = useClipboard()
@@ -38,6 +56,10 @@ const lastUserMessage = ref('')
 const conversationId = ref<string>()
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const messages = ref<ChatMessage[]>([])
+const widgetPosition = ref<WidgetPosition | null>(null)
+const suppressNextToggle = ref(false)
+let dragState: DragState | null = null
+let suppressToggleTimer: number | null = null
 const config = ref<SupportChatConfig>({
   title: t('supportChat.title'),
   welcomeMessage: t('supportChat.welcome'),
@@ -45,6 +67,13 @@ const config = ref<SupportChatConfig>({
 })
 
 const gatewayLocale = computed(() => normalizeSupportChatLocale(locale.value))
+const chatRootStyle = computed(() => {
+  if (!widgetPosition.value) return {}
+  return {
+    left: `${widgetPosition.value.left}px`,
+    top: `${widgetPosition.value.top}px`
+  }
+})
 const contactEmailHref = computed(() => {
   return config.value.supportEmail ? `mailto:${config.value.supportEmail}` : ''
 })
@@ -80,6 +109,12 @@ async function loadConfig() {
 }
 
 function toggleOpen() {
+  if (suppressNextToggle.value) {
+    suppressNextToggle.value = false
+    clearSuppressToggleTimer()
+    return
+  }
+
   open.value = !open.value
   if (open.value) {
     nextTick(() => inputRef.value?.focus())
@@ -97,6 +132,99 @@ async function retryLastMessage() {
   if (!lastUserMessage.value || loading.value) return
   draft.value = lastUserMessage.value
   await sendMessage()
+}
+
+function startLauncherDrag(event: PointerEvent) {
+  if (typeof event.button === 'number' && event.button !== 0) return
+
+  const currentPosition = widgetPosition.value ?? defaultWidgetPosition(event)
+  dragState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    offsetX: event.clientX - currentPosition.left,
+    offsetY: event.clientY - currentPosition.top,
+    moved: false
+  }
+
+  window.addEventListener('pointermove', moveLauncher)
+  window.addEventListener('pointerup', stopLauncherDrag)
+  window.addEventListener('pointercancel', stopLauncherDrag)
+}
+
+function moveLauncher(event: PointerEvent) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return
+
+  const deltaX = event.clientX - dragState.startX
+  const deltaY = event.clientY - dragState.startY
+  if (!dragState.moved && Math.hypot(deltaX, deltaY) < DRAG_THRESHOLD) {
+    return
+  }
+
+  dragState.moved = true
+  markDragClickSuppressed()
+  widgetPosition.value = clampWidgetPosition({
+    left: event.clientX - dragState.offsetX,
+    top: event.clientY - dragState.offsetY
+  })
+}
+
+function stopLauncherDrag(event: PointerEvent) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return
+
+  if (dragState.moved) {
+    markDragClickSuppressed()
+  }
+  dragState = null
+  window.removeEventListener('pointermove', moveLauncher)
+  window.removeEventListener('pointerup', stopLauncherDrag)
+  window.removeEventListener('pointercancel', stopLauncherDrag)
+}
+
+function defaultWidgetPosition(event: PointerEvent): WidgetPosition {
+  const { width, height } = viewportSize()
+  return clampWidgetPosition({
+    left: event.clientX - LAUNCHER_SIZE / 2 || width - LAUNCHER_SIZE - LAUNCHER_MARGIN,
+    top: event.clientY - LAUNCHER_SIZE / 2 || height - LAUNCHER_SIZE - LAUNCHER_MARGIN
+  })
+}
+
+function clampWidgetPosition(position: WidgetPosition): WidgetPosition {
+  const { width, height } = viewportSize()
+  return {
+    left: clamp(position.left, LAUNCHER_MARGIN, Math.max(LAUNCHER_MARGIN, width - LAUNCHER_SIZE - LAUNCHER_MARGIN)),
+    top: clamp(position.top, LAUNCHER_MARGIN, Math.max(LAUNCHER_MARGIN, height - LAUNCHER_SIZE - LAUNCHER_MARGIN))
+  }
+}
+
+function viewportSize() {
+  if (typeof window === 'undefined') {
+    return { width: 1024, height: 768 }
+  }
+
+  return {
+    width: window.innerWidth || 1024,
+    height: window.innerHeight || 768
+  }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function markDragClickSuppressed() {
+  suppressNextToggle.value = true
+  clearSuppressToggleTimer()
+  suppressToggleTimer = window.setTimeout(() => {
+    suppressNextToggle.value = false
+    suppressToggleTimer = null
+  }, 250)
+}
+
+function clearSuppressToggleTimer() {
+  if (!suppressToggleTimer) return
+  window.clearTimeout(suppressToggleTimer)
+  suppressToggleTimer = null
 }
 
 async function sendMessage() {
@@ -234,10 +362,23 @@ async function handleMarkdownClick(event: MouseEvent) {
 
   await copyToClipboard(button.dataset.code ?? '')
 }
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', moveLauncher)
+  window.removeEventListener('pointerup', stopLauncherDrag)
+  window.removeEventListener('pointercancel', stopLauncherDrag)
+  clearSuppressToggleTimer()
+})
 </script>
 
 <template>
-  <div v-if="enabled" class="fixed bottom-4 right-4 z-50 sm:bottom-6 sm:right-6">
+  <div
+    v-if="enabled"
+    data-testid="support-chat-root"
+    class="fixed z-50"
+    :class="widgetPosition ? '' : 'bottom-4 right-4 sm:bottom-6 sm:right-6'"
+    :style="chatRootStyle"
+  >
     <section
       v-if="open"
       data-testid="support-chat-panel"
@@ -275,7 +416,10 @@ async function handleMarkdownClick(event: MouseEvent) {
         </div>
       </header>
 
-      <div class="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(238,242,255,0.88))] px-4 py-4 dark:bg-dark-950/50">
+      <div
+        data-testid="support-chat-surface"
+        class="flex-1 space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(238,242,255,0.88))] px-4 py-4 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.94))]"
+      >
         <div class="rounded-2xl border border-indigo-100 bg-white/90 px-3 py-3 text-sm text-gray-700 shadow-[0_10px_24px_rgba(99,102,241,0.06)] dark:border-indigo-900/40 dark:bg-dark-800 dark:text-dark-100">
           {{ config.welcomeMessage }}
         </div>
@@ -342,6 +486,7 @@ async function handleMarkdownClick(event: MouseEvent) {
             class="min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-dark-700 dark:bg-dark-800 dark:text-white dark:focus:border-indigo-500 dark:focus:ring-indigo-900/40"
             :placeholder="t('supportChat.placeholder')"
             :disabled="loading"
+            @keydown.enter.exact.prevent="sendMessage"
           />
           <button
             type="submit"
@@ -383,6 +528,7 @@ async function handleMarkdownClick(event: MouseEvent) {
       class="grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-500 to-purple-600 text-white shadow-[0_16px_40px_rgba(99,102,241,0.32)] transition hover:-translate-y-0.5 hover:from-blue-700 hover:via-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 dark:focus:ring-indigo-900/40"
       :aria-label="open ? t('supportChat.close') : t('supportChat.open')"
       :title="open ? t('supportChat.close') : t('supportChat.open')"
+      @pointerdown="startLauncherDrag"
       @click="toggleOpen"
     >
       <Icon :name="open ? 'x' : 'chatBubble'" size="lg" />
