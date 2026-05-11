@@ -119,6 +119,7 @@ type SystemSettings struct {
 	SupportChatTitle                      string
 	SupportChatWelcomeMessage             string
 	SupportChatOfficialContactText        string
+	SupportChatOfficialContactURL         string
 	DocURL                                string
 	SitePages                             string
 	HomeContent                           string
@@ -253,6 +254,7 @@ type PublicSettings struct {
 	SupportChatTitle                 string
 	SupportChatWelcomeMessage        string
 	SupportChatOfficialContactText   string
+	SupportChatOfficialContactURL    string
 	DocURL                           string
 	SitePages                        string
 	HomeContent                      string

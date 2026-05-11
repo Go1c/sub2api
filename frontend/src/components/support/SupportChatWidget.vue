@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
 import {
   fetchSupportChatConfig,
@@ -13,6 +15,7 @@ import {
   type SupportChatPublicSettings
 } from '@/api/supportChat'
 import { useAuthStore } from '@/stores/auth'
+import { useClipboard } from '@/composables/useClipboard'
 
 type ChatRole = 'assistant' | 'user'
 
@@ -24,6 +27,7 @@ interface ChatMessage {
 
 const { t, locale } = useI18n()
 const auth = useAuthStore()
+const { copyToClipboard } = useClipboard()
 const enabled = ref(isSupportChatEnabled())
 const gatewayUrl = ref(resolveSupportChatGatewayURL())
 const open = ref(false)
@@ -158,6 +162,78 @@ function normalizeSupportChatLocale(currentLocale: string) {
   if (currentLocale === 'zh') return 'zh-CN'
   return 'en-US'
 }
+
+function renderAssistantContent(content: string) {
+  const rendered = marked.parse(stripUnsafeMarkdownLinks(content), { breaks: true, gfm: true }) as string
+  const sanitized = DOMPurify.sanitize(rendered)
+  return enhanceAssistantMarkdown(sanitized)
+}
+
+function stripUnsafeMarkdownLinks(content: string) {
+  return content.replace(/\[([^\]]+)\]\(\s*(?:javascript|data|vbscript):[^\n]*\)/gi, '$1')
+}
+
+function enhanceAssistantMarkdown(html: string) {
+  if (!html || typeof document === 'undefined') return html
+
+  const template = document.createElement('template')
+  template.innerHTML = html
+
+  template.content.querySelectorAll('a').forEach((link) => {
+    link.setAttribute('target', '_blank')
+    link.setAttribute('rel', 'noopener noreferrer')
+  })
+
+  template.content.querySelectorAll('pre').forEach((pre) => {
+    const code = pre.querySelector('code')
+    if (!code) return
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'support-chat-code-block'
+
+    const toolbar = document.createElement('div')
+    toolbar.className = 'support-chat-code-toolbar'
+
+    const language = document.createElement('span')
+    language.className = 'support-chat-code-language'
+    language.textContent = codeLanguage(code)
+
+    const copyButton = document.createElement('button')
+    copyButton.type = 'button'
+    copyButton.className = 'support-chat-code-copy'
+    copyButton.dataset.code = (code.textContent ?? '').replace(/\n$/, '')
+    copyButton.textContent = copyCodeLabel()
+
+    toolbar.append(language, copyButton)
+    wrapper.append(toolbar)
+    pre.parentNode?.insertBefore(wrapper, pre)
+    wrapper.appendChild(pre)
+  })
+
+  return template.innerHTML
+}
+
+function copyCodeLabel() {
+  const label = t('common.copy')
+  return label === 'common.copy' ? (locale.value.startsWith('zh') ? '复制' : 'Copy') : label
+}
+
+function codeLanguage(code: Element) {
+  const languageClass = Array.from(code.classList).find((className) =>
+    className.startsWith('language-')
+  )
+  return languageClass?.replace(/^language-/, '') || 'code'
+}
+
+async function handleMarkdownClick(event: MouseEvent) {
+  const target = event.target
+  if (!(target instanceof Element)) return
+
+  const button = target.closest<HTMLButtonElement>('.support-chat-code-copy')
+  if (!button) return
+
+  await copyToClipboard(button.dataset.code ?? '')
+}
 </script>
 
 <template>
@@ -218,9 +294,19 @@ function normalizeSupportChatLocale(currentLocale: string) {
                 : 'border border-gray-200 bg-white text-gray-800 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-100'
             "
           >
-            <p class="whitespace-pre-wrap break-words">
+            <p
+              v-if="message.role === 'user' || !message.content"
+              class="whitespace-pre-wrap break-words"
+            >
               {{ message.content || (loading && message.role === 'assistant' ? t('supportChat.thinking') : '') }}
             </p>
+            <div
+              v-else
+              data-testid="support-chat-markdown"
+              class="support-chat-markdown"
+              v-html="renderAssistantContent(message.content)"
+              @click="handleMarkdownClick"
+            ></div>
           </div>
         </div>
       </div>
@@ -303,3 +389,188 @@ function normalizeSupportChatLocale(currentLocale: string) {
     </button>
   </div>
 </template>
+
+<style scoped>
+.support-chat-markdown {
+  color: rgb(31 41 55);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.dark .support-chat-markdown {
+  color: rgb(229 231 235);
+}
+
+.support-chat-markdown :deep(:first-child) {
+  margin-top: 0;
+}
+
+.support-chat-markdown :deep(:last-child) {
+  margin-bottom: 0;
+}
+
+.support-chat-markdown :deep(p),
+.support-chat-markdown :deep(ul),
+.support-chat-markdown :deep(ol),
+.support-chat-markdown :deep(blockquote),
+.support-chat-markdown :deep(.support-chat-code-block),
+.support-chat-markdown :deep(table) {
+  margin: 0.75rem 0;
+}
+
+.support-chat-markdown :deep(strong) {
+  color: rgb(15 23 42);
+  font-weight: 700;
+}
+
+.dark .support-chat-markdown :deep(strong) {
+  color: white;
+}
+
+.support-chat-markdown :deep(ul),
+.support-chat-markdown :deep(ol) {
+  padding-left: 1.25rem;
+}
+
+.support-chat-markdown :deep(ul) {
+  list-style: disc;
+}
+
+.support-chat-markdown :deep(ol) {
+  list-style: decimal;
+}
+
+.support-chat-markdown :deep(li + li) {
+  margin-top: 0.25rem;
+}
+
+.support-chat-markdown :deep(a) {
+  color: rgb(79 70 229);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.support-chat-markdown :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.support-chat-markdown :deep(code) {
+  border-radius: 0.375rem;
+  background: rgb(241 245 249);
+  color: rgb(67 56 202);
+  padding: 0.125rem 0.375rem;
+  font-size: 0.86em;
+  font-weight: 600;
+}
+
+.dark .support-chat-markdown :deep(code) {
+  background: rgb(30 41 59);
+  color: rgb(199 210 254);
+}
+
+.support-chat-markdown :deep(blockquote) {
+  border-left: 3px solid rgb(99 102 241);
+  border-radius: 0 0.75rem 0.75rem 0;
+  background: rgb(238 242 255);
+  color: rgb(55 65 81);
+  padding: 0.625rem 0.75rem;
+}
+
+.dark .support-chat-markdown :deep(blockquote) {
+  background: rgba(49, 46, 129, 0.28);
+  color: rgb(209 213 219);
+}
+
+.support-chat-markdown :deep(.support-chat-code-block) {
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.875rem;
+  background: rgb(15 23 42);
+}
+
+.dark .support-chat-markdown :deep(.support-chat-code-block) {
+  border-color: rgb(51 65 85);
+}
+
+.support-chat-markdown :deep(.support-chat-code-toolbar) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgb(30 41 59);
+  padding: 0.45rem 0.625rem;
+}
+
+.support-chat-markdown :deep(.support-chat-code-language) {
+  color: rgb(203 213 225);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.support-chat-markdown :deep(.support-chat-code-copy) {
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgb(226 232 240);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.support-chat-markdown :deep(.support-chat-code-copy:hover) {
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
+}
+
+.support-chat-markdown :deep(pre) {
+  overflow-x: auto;
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  color: rgb(226 232 240);
+}
+
+.support-chat-markdown :deep(pre code) {
+  display: block;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.65;
+  white-space: pre;
+}
+
+.support-chat-markdown :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.support-chat-markdown :deep(th),
+.support-chat-markdown :deep(td) {
+  border: 1px solid rgb(226 232 240);
+  padding: 0.45rem 0.55rem;
+}
+
+.support-chat-markdown :deep(th) {
+  background: rgb(248 250 252);
+  color: rgb(15 23 42);
+  font-weight: 700;
+}
+
+.dark .support-chat-markdown :deep(th),
+.dark .support-chat-markdown :deep(td) {
+  border-color: rgb(51 65 85);
+}
+
+.dark .support-chat-markdown :deep(th) {
+  background: rgb(30 41 59);
+  color: white;
+}
+</style>

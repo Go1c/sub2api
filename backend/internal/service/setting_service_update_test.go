@@ -245,6 +245,7 @@ func TestSettingService_UpdateSettings_SupportChatSettings(t *testing.T) {
 		SupportChatTitle:               " LumioAPI Helper ",
 		SupportChatWelcomeMessage:      " Ask from the LumioAPI docs. ",
 		SupportChatOfficialContactText: " Contact human support ",
+		SupportChatOfficialContactURL:  " https://support.example.com/group/ ",
 	})
 	require.NoError(t, err)
 	require.Equal(t, "true", repo.updates[SettingKeySupportChatEnabled])
@@ -252,6 +253,7 @@ func TestSettingService_UpdateSettings_SupportChatSettings(t *testing.T) {
 	require.Equal(t, "LumioAPI Helper", repo.updates[SettingKeySupportChatTitle])
 	require.Equal(t, "Ask from the LumioAPI docs.", repo.updates[SettingKeySupportChatWelcomeMessage])
 	require.Equal(t, "Contact human support", repo.updates[SettingKeySupportChatOfficialContactText])
+	require.Equal(t, "https://support.example.com/group", repo.updates[SettingKeySupportChatOfficialContactURL])
 }
 
 func TestSettingService_UpdateSettings_SupportChatEnabledRequiresHTTPGatewayURL(t *testing.T) {
@@ -264,6 +266,18 @@ func TestSettingService_UpdateSettings_SupportChatEnabledRequiresHTTPGatewayURL(
 	})
 	require.Error(t, err)
 	require.Equal(t, "INVALID_SUPPORT_CHAT_GATEWAY_URL", infraerrors.Reason(err))
+	require.Nil(t, repo.updates)
+}
+
+func TestSettingService_UpdateSettings_RejectsInvalidSupportChatOfficialContactURL(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		SupportChatOfficialContactURL: "javascript:alert(1)",
+	})
+	require.Error(t, err)
+	require.Equal(t, "INVALID_SUPPORT_CHAT_OFFICIAL_CONTACT_URL", infraerrors.Reason(err))
 	require.Nil(t, repo.updates)
 }
 

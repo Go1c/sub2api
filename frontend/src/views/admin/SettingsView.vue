@@ -4324,6 +4324,17 @@
                       :placeholder="t('admin.settings.site.supportChat.contactTextPlaceholder')"
                     />
                   </div>
+                  <div>
+                    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.site.supportChat.contactUrl") }}
+                    </label>
+                    <input
+                      v-model="form.support_chat_official_contact_url"
+                      type="url"
+                      class="input font-mono text-sm"
+                      :placeholder="t('admin.settings.site.supportChat.contactUrlPlaceholder')"
+                    />
+                  </div>
                   <div class="md:col-span-2">
                     <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                       {{ t("admin.settings.site.supportChat.welcomeMessage") }}
@@ -7177,6 +7188,7 @@ const form = reactive<SettingsForm>({
   support_chat_title: "",
   support_chat_welcome_message: "",
   support_chat_official_contact_text: "",
+  support_chat_official_contact_url: "",
   doc_url: "",
   site_pages: [] as SitePage[],
   home_content: "",
@@ -8482,6 +8494,16 @@ async function saveSettings() {
     if (!form.support_chat_enabled && !isValidHttpUrl(form.support_chat_gateway_url)) {
       form.support_chat_gateway_url = "";
     }
+    form.support_chat_official_contact_url = form.support_chat_official_contact_url
+      .trim()
+      .replace(/\/+$/, "");
+    if (
+      form.support_chat_official_contact_url &&
+      !isValidHttpUrl(form.support_chat_official_contact_url)
+    ) {
+      appStore.showError(t("admin.settings.site.supportChat.invalidContactUrl"));
+      return;
+    }
 
     const normalizedContactChannels = normalizeContactChannels(
       form.contact_channels,
@@ -8578,6 +8600,7 @@ async function saveSettings() {
       support_chat_title: form.support_chat_title,
       support_chat_welcome_message: form.support_chat_welcome_message,
       support_chat_official_contact_text: form.support_chat_official_contact_text,
+      support_chat_official_contact_url: form.support_chat_official_contact_url,
       doc_url: form.doc_url,
       site_pages: normalizedSitePages,
       home_content: form.home_content,

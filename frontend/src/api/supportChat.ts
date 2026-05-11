@@ -12,6 +12,7 @@ export interface SupportChatPublicSettings {
   support_chat_title?: string
   support_chat_welcome_message?: string
   support_chat_official_contact_text?: string
+  support_chat_official_contact_url?: string
 }
 
 export interface SupportChatUser {
@@ -98,6 +99,7 @@ export function mergeSupportChatConfig(
   settings?: SupportChatPublicSettings | null
 ): SupportChatConfig {
   if (!settings) return config
+  const officialContactUrl = normalizeAbsoluteHTTPURL(settings.support_chat_official_contact_url)
   return {
     ...config,
     ...(settings.support_chat_title?.trim() ? { title: settings.support_chat_title.trim() } : {}),
@@ -106,7 +108,8 @@ export function mergeSupportChatConfig(
       : {}),
     ...(settings.support_chat_official_contact_text?.trim()
       ? { officialContactText: settings.support_chat_official_contact_text.trim() }
-      : {})
+      : {}),
+    ...(officialContactUrl ? { supportUrl: officialContactUrl } : {})
   }
 }
 
@@ -202,6 +205,17 @@ function buildGatewayURL(path: string, gatewayUrl = import.meta.env.VITE_SUPPORT
 
 function buildAPIURL(path: string, apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1') {
   return `${apiBaseUrl.replace(/\/+$/, '')}${path}`
+}
+
+function normalizeAbsoluteHTTPURL(raw?: string) {
+  const value = raw?.trim().replace(/\/+$/, '') ?? ''
+  if (!value) return ''
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : ''
+  } catch {
+    return ''
+  }
 }
 
 function consumeSSEBuffer(buffer: string, onEvent: (event: SupportChatEvent) => void) {

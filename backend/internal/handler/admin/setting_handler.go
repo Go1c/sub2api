@@ -204,6 +204,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SupportChatTitle:                       settings.SupportChatTitle,
 		SupportChatWelcomeMessage:              settings.SupportChatWelcomeMessage,
 		SupportChatOfficialContactText:         settings.SupportChatOfficialContactText,
+		SupportChatOfficialContactURL:          settings.SupportChatOfficialContactURL,
 		DocURL:                                 settings.DocURL,
 		SitePages:                              dto.ParseSitePages(settings.SitePages),
 		HomeContent:                            settings.HomeContent,
@@ -475,6 +476,7 @@ type UpdateSettingsRequest struct {
 	SupportChatTitle                      string                `json:"support_chat_title"`
 	SupportChatWelcomeMessage             string                `json:"support_chat_welcome_message"`
 	SupportChatOfficialContactText        string                `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL         string                `json:"support_chat_official_contact_url"`
 	DocURL                                string                `json:"doc_url"`
 	SitePages                             *[]dto.SitePage       `json:"site_pages"`
 	HomeContent                           string                `json:"home_content"`
@@ -1586,6 +1588,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SupportChatTitle:                      req.SupportChatTitle,
 		SupportChatWelcomeMessage:             req.SupportChatWelcomeMessage,
 		SupportChatOfficialContactText:        req.SupportChatOfficialContactText,
+		SupportChatOfficialContactURL:         req.SupportChatOfficialContactURL,
 		DocURL:                                req.DocURL,
 		SitePages:                             sitePagesJSON,
 		HomeContent:                           req.HomeContent,
@@ -2013,6 +2016,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SupportChatTitle:                       updatedSettings.SupportChatTitle,
 		SupportChatWelcomeMessage:              updatedSettings.SupportChatWelcomeMessage,
 		SupportChatOfficialContactText:         updatedSettings.SupportChatOfficialContactText,
+		SupportChatOfficialContactURL:          updatedSettings.SupportChatOfficialContactURL,
 		DocURL:                                 updatedSettings.DocURL,
 		SitePages:                              dto.ParseSitePages(updatedSettings.SitePages),
 		HomeContent:                            updatedSettings.HomeContent,
@@ -2379,6 +2383,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SupportChatOfficialContactText != after.SupportChatOfficialContactText {
 		changed = append(changed, "support_chat_official_contact_text")
+	}
+	if before.SupportChatOfficialContactURL != after.SupportChatOfficialContactURL {
+		changed = append(changed, "support_chat_official_contact_url")
 	}
 	if before.DocURL != after.DocURL {
 		changed = append(changed, "doc_url")

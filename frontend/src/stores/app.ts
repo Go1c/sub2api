@@ -339,6 +339,7 @@ export const useAppStore = defineStore('app', () => {
         support_chat_title: '',
         support_chat_welcome_message: '',
         support_chat_official_contact_text: '',
+        support_chat_official_contact_url: '',
         doc_url: docUrl.value,
         site_pages: [],
         home_content: '',

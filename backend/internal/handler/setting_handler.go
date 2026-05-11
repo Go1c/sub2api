@@ -59,6 +59,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		SupportChatTitle:                      settings.SupportChatTitle,
 		SupportChatWelcomeMessage:             settings.SupportChatWelcomeMessage,
 		SupportChatOfficialContactText:        settings.SupportChatOfficialContactText,
+		SupportChatOfficialContactURL:         settings.SupportChatOfficialContactURL,
 		DocURL:                                settings.DocURL,
 		SitePages:                             dto.ParseSitePages(settings.SitePages),
 		HomeContent:                           settings.HomeContent,

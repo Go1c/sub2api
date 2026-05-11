@@ -100,6 +100,7 @@ func TestSettingService_GetPublicSettings_ExposesSupportChatSettings(t *testing.
 			SettingKeySupportChatTitle:               "LumioAPI Helper",
 			SettingKeySupportChatWelcomeMessage:      "Ask from the LumioAPI docs.",
 			SettingKeySupportChatOfficialContactText: "Contact human support",
+			SettingKeySupportChatOfficialContactURL:  "https://support.example.com/group/",
 		},
 	}
 	svc := NewSettingService(repo, &config.Config{})
@@ -111,6 +112,7 @@ func TestSettingService_GetPublicSettings_ExposesSupportChatSettings(t *testing.
 	require.Equal(t, "LumioAPI Helper", settings.SupportChatTitle)
 	require.Equal(t, "Ask from the LumioAPI docs.", settings.SupportChatWelcomeMessage)
 	require.Equal(t, "Contact human support", settings.SupportChatOfficialContactText)
+	require.Equal(t, "https://support.example.com/group", settings.SupportChatOfficialContactURL)
 }
 
 func TestSettingService_GetPublicSettings_DefaultsFrontendLocales(t *testing.T) {
