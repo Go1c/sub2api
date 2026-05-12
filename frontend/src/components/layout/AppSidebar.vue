@@ -788,6 +788,7 @@ const adminNavItems = computed((): NavItem[] => {
       children: [
         { path: '/admin/affiliates/invites', label: t('nav.affiliateInviteRecords'), icon: UsersIcon },
         { path: '/admin/affiliates/rebates', label: t('nav.affiliateRebateRecords'), icon: OrderIcon },
+        { path: '/admin/affiliates/signup-bonuses', label: t('nav.affiliateSignupBonusRecords'), icon: GiftIcon },
         { path: '/admin/affiliates/transfers', label: t('nav.affiliateTransferRecords'), icon: CreditCardIcon },
       ],
     },

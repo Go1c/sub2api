@@ -351,6 +351,7 @@ export default {
     affiliateManagement: '邀请返利',
     affiliateInviteRecords: '邀请记录',
     affiliateRebateRecords: '返利记录',
+    affiliateSignupBonusRecords: '注册赠送记录',
     affiliateTransferRecords: '提取记录',
     profile: '个人资料',
     users: '用户管理',
@@ -1083,6 +1084,7 @@ export default {
     historyWillAppear: '您的兑换历史将显示在这里',
     balanceAddedRedeem: '余额充值（兑换）',
     balanceAddedAffiliate: '余额充值（返利转入）',
+    balanceAddedAffiliateSignupBonus: '余额充值（邀请注册赠送）',
     balanceAddedAdmin: '余额充值（管理员）',
     balanceDeductedAdmin: '余额扣除（管理员）',
     concurrencyAddedRedeem: '并发增加（兑换）',
@@ -1697,6 +1699,7 @@ export default {
     affiliates: {
       invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
       rebatesDescription: '查看每一笔产生返利的充值订单',
+      signupBonusesDescription: '查看邀请注册赠送的发放结果、拒绝原因和风控信息',
       transfersDescription: '查看返利额度转入账户余额的提取流水',
       errors: {
         loadFailed: '加载邀请返利记录失败'
@@ -1715,6 +1718,11 @@ export default {
         orderAmount: '充值金额',
         payAmount: '支付金额',
         rebateAmount: '返利金额',
+        result: '结果',
+        signupBonusAmount: '注册赠送',
+        fingerprint: '指纹',
+        ip: 'IP',
+        signupBonusGranted: '已赠送',
         paymentType: '支付方式',
         orderStatus: '订单状态',
         transferAmount: '提取金额',
@@ -1723,6 +1731,7 @@ export default {
         frozenQuotaAfter: '提取后冻结',
         historyQuotaAfter: '提取后历史返利',
         invitedAt: '邀请时间',
+        signupBonusAt: '注册时间',
         rebatedAt: '返利时间',
         transferredAt: '提取时间'
       },

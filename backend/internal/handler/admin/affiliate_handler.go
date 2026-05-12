@@ -54,8 +54,18 @@ func (h *AffiliateHandler) ListInviteLogs(c *gin.Context) {
 		AccountID: parseOptionalInt64Query(c, "account_id"),
 		InviterID: parseOptionalInt64Query(c, "inviter_id"),
 		InviteeID: parseOptionalInt64Query(c, "invitee_id"),
+		Search:    c.Query("search"),
+		SortBy:    c.Query("sort_by"),
+		SortDesc:  c.Query("sort_order") != "asc",
 		Page:      page,
 		PageSize:  pageSize,
+	}
+	userTZ := c.Query("timezone")
+	if t := parseAffiliateRecordStartTime(c.Query("start_at"), userTZ); t != nil {
+		filter.StartAt = t
+	}
+	if t := parseAffiliateRecordEndTime(c.Query("end_at"), userTZ); t != nil {
+		filter.EndAt = t
 	}
 
 	items, total, err := h.affiliateService.AdminListInviteLogs(c.Request.Context(), filter)

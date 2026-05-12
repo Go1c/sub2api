@@ -31,7 +31,7 @@
               :id="row.inviter_id"
               :email="row.inviter_email"
               :username="row.inviter_username"
-              :clickable="props.type !== 'transfers'"
+              :clickable="props.type !== 'transfers' && Boolean(row.inviter_id)"
               @open="openUserOverview"
             />
           </template>
@@ -40,7 +40,7 @@
               :id="row.invitee_id"
               :email="row.invitee_email"
               :username="row.invitee_username"
-              :clickable="props.type !== 'transfers'"
+              :clickable="props.type !== 'transfers' && Boolean(row.invitee_id)"
               @open="openUserOverview"
             />
           </template>
@@ -54,7 +54,21 @@
             />
           </template>
           <template #cell-aff_code="{ row }">
-            <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ row.aff_code || '-' }}</span>
+            <span class="font-mono text-sm text-gray-700 dark:text-gray-300">{{ row.aff_code || row.affiliate_code || '-' }}</span>
+          </template>
+          <template #cell-result="{ row }">
+            <span :class="row.success && !row.failure_reason ? 'text-sm font-medium text-emerald-600 dark:text-emerald-400' : 'text-sm font-medium text-amber-600 dark:text-amber-400'">
+              {{ formatSignupBonusResult(row) }}
+            </span>
+          </template>
+          <template #cell-bonus_amount="{ row }">
+            <AmountText :value="row.bonus_amount" strong />
+          </template>
+          <template #cell-fingerprint_hash="{ row }">
+            <span class="block max-w-44 truncate font-mono text-xs text-gray-500 dark:text-dark-400" :title="row.fingerprint_hash || ''">{{ row.fingerprint_hash || '-' }}</span>
+          </template>
+          <template #cell-ip_address="{ row }">
+            <span class="font-mono text-xs text-gray-500 dark:text-dark-400">{{ row.ip_address || '-' }}</span>
           </template>
           <template #cell-order="{ row }">
             <div class="space-y-0.5">
@@ -153,13 +167,13 @@ import Icon from '@/components/icons/Icon.vue'
 import OrderStatusBadge from '@/components/payment/OrderStatusBadge.vue'
 import type { Column } from '@/components/common/types'
 import { useAppStore } from '@/stores/app'
-import { affiliatesAPI, type AffiliateInviteRecord, type AffiliateRebateRecord, type AffiliateTransferRecord, type AffiliateUserOverview, type ListAffiliateRecordsParams } from '@/api/admin/affiliates'
+import { affiliatesAPI, type AffiliateInviteRecord, type AffiliateRebateRecord, type AffiliateSignupBonusRecord, type AffiliateTransferRecord, type AffiliateUserOverview, type ListAffiliateRecordsParams } from '@/api/admin/affiliates'
 import type { PaginatedResponse } from '@/types'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { formatDateTime as formatDisplayDateTime } from '@/utils/format'
 
-type RecordType = 'invites' | 'rebates' | 'transfers'
-type AffiliateRecord = AffiliateInviteRecord | AffiliateRebateRecord | AffiliateTransferRecord
+type RecordType = 'invites' | 'signup-bonuses' | 'rebates' | 'transfers'
+type AffiliateRecord = AffiliateInviteRecord | AffiliateSignupBonusRecord | AffiliateRebateRecord | AffiliateTransferRecord
 
 const props = defineProps<{
   type: RecordType
@@ -184,6 +198,18 @@ const columns = computed<Column[]>(() => {
       { key: 'aff_code', label: t('admin.affiliates.records.affCode'), sortable: true },
       { key: 'total_rebate', label: t('admin.affiliates.records.totalRebate'), sortable: true },
       { key: 'created_at', label: t('admin.affiliates.records.invitedAt'), sortable: true },
+    ]
+  }
+  if (props.type === 'signup-bonuses') {
+    return [
+      { key: 'inviter', label: t('admin.affiliates.records.inviter'), sortable: true },
+      { key: 'invitee', label: t('admin.affiliates.records.invitee'), sortable: true },
+      { key: 'aff_code', label: t('admin.affiliates.records.affCode'), sortable: true },
+      { key: 'result', label: t('admin.affiliates.records.result'), sortable: true },
+      { key: 'bonus_amount', label: t('admin.affiliates.records.signupBonusAmount'), sortable: true },
+      { key: 'fingerprint_hash', label: t('admin.affiliates.records.fingerprint'), sortable: true },
+      { key: 'ip_address', label: t('admin.affiliates.records.ip'), sortable: true },
+      { key: 'created_at', label: t('admin.affiliates.records.signupBonusAt'), sortable: true },
     ]
   }
   if (props.type === 'rebates') {
@@ -259,6 +285,9 @@ async function fetchRecords(params: ListAffiliateRecordsParams): Promise<Paginat
   if (props.type === 'rebates') {
     return affiliatesAPI.listRebateRecords(params)
   }
+  if (props.type === 'signup-bonuses') {
+    return affiliatesAPI.listSignupBonusRecords(params)
+  }
   return affiliatesAPI.listTransferRecords(params)
 }
 
@@ -316,6 +345,17 @@ function formatDateTime(value: string | null | undefined): string {
   return value ? formatDisplayDateTime(value) : '-'
 }
 
+function formatSignupBonusResult(row: AffiliateRecord): string {
+  const record = row as AffiliateSignupBonusRecord
+  if (record.failure_message) {
+    return record.failure_message
+  }
+  if (record.success && !record.failure_reason) {
+    return t('admin.affiliates.records.signupBonusGranted')
+  }
+  return record.failure_reason || '-'
+}
+
 async function openUserOverview(userId: number) {
   if (!userId) return
   overviewDialog.value = true
@@ -333,7 +373,7 @@ async function openUserOverview(userId: number) {
 
 const UserCell = defineComponent({
   props: {
-    id: { type: Number, required: true },
+    id: { type: Number, default: 0 },
     email: { type: String, default: '' },
     username: { type: String, default: '' },
     clickable: { type: Boolean, default: false },
@@ -341,13 +381,13 @@ const UserCell = defineComponent({
   emits: ['open'],
   setup(cellProps, { emit }) {
     return () => h('div', { class: 'space-y-0.5' }, [
-      h('div', { class: 'font-mono text-sm text-gray-900 dark:text-white' }, `#${cellProps.id}`),
+      h('div', { class: 'font-mono text-sm text-gray-900 dark:text-white' }, cellProps.id ? `#${cellProps.id}` : '#-'),
       h(cellProps.clickable ? 'button' : 'div', {
         class: cellProps.clickable
           ? 'max-w-56 truncate text-left text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline dark:text-primary-400 dark:hover:text-primary-300'
           : 'max-w-56 truncate text-sm text-gray-700 dark:text-gray-300',
         type: cellProps.clickable ? 'button' : undefined,
-        onClick: cellProps.clickable ? () => emit('open', cellProps.id) : undefined,
+        onClick: cellProps.clickable && cellProps.id ? () => emit('open', cellProps.id) : undefined,
       }, cellProps.email || '-'),
       h('div', { class: 'max-w-56 truncate text-sm text-gray-500 dark:text-dark-400' }, cellProps.username || '-'),
     ])

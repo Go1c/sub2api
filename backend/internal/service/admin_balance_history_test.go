@@ -84,3 +84,23 @@ func TestMergeBalanceHistoryCodesPaginatesAfterCombiningSources(t *testing.T) {
 	require.Equal(t, RedeemTypeConcurrency, got[0].Type)
 	require.Equal(t, int64(-4), got[1].ID)
 }
+
+func TestAffiliateBalanceHistoryItemMarksSignupBonusAction(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, 5, 12, 9, 30, 0, 0, time.UTC)
+
+	got := affiliateBalanceHistoryItem(88, "signup_bonus", 2.5, 42, createdAt)
+
+	require.Equal(t, int64(-88), got.ID)
+	require.Equal(t, "AFF-88", got.Code)
+	require.Equal(t, RedeemTypeAffiliateBalance, got.Type)
+	require.Equal(t, 2.5, got.Value)
+	require.Equal(t, StatusUsed, got.Status)
+	require.NotNil(t, got.UsedBy)
+	require.Equal(t, int64(42), *got.UsedBy)
+	require.NotNil(t, got.UsedAt)
+	require.Equal(t, createdAt, *got.UsedAt)
+	require.Equal(t, createdAt, got.CreatedAt)
+	require.Equal(t, "signup_bonus", got.Notes)
+}

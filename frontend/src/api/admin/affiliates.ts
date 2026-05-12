@@ -77,6 +77,8 @@ export interface AffiliateTransferRecord {
   created_at: string
 }
 
+export type AffiliateSignupBonusRecord = AffiliateInviteLog
+
 export interface AffiliateUserOverview {
   user_id: number
   email: string
@@ -106,6 +108,12 @@ export interface BatchSetRateRequest {
 export interface ListInviteLogsParams {
   page?: number
   page_size?: number
+  search?: string
+  start_at?: string
+  end_at?: string
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
+  timezone?: string
   account_id?: number | string
   inviter_id?: number | string
   invitee_id?: number | string
@@ -180,6 +188,12 @@ export async function listInviteLogs(
       params: {
         page: params.page ?? 1,
         page_size: params.page_size ?? 20,
+        search: params.search ?? '',
+        start_at: params.start_at || undefined,
+        end_at: params.end_at || undefined,
+        sort_by: params.sort_by || undefined,
+        sort_order: params.sort_order || undefined,
+        timezone: params.timezone || undefined,
         account_id: params.account_id || undefined,
         inviter_id: params.inviter_id || undefined,
         invitee_id: params.invitee_id || undefined,
@@ -200,6 +214,16 @@ function recordParams(params: ListAffiliateRecordsParams = {}) {
     sort_order: params.sort_order || undefined,
     timezone: params.timezone || undefined,
   }
+}
+
+export async function listSignupBonusRecords(
+  params: ListAffiliateRecordsParams = {},
+): Promise<PaginatedResponse<AffiliateSignupBonusRecord>> {
+  const { data } = await apiClient.get<PaginatedResponse<AffiliateSignupBonusRecord>>(
+    '/admin/affiliates/invite-logs',
+    { params: recordParams(params) },
+  )
+  return data
 }
 
 export async function listInviteRecords(
@@ -248,6 +272,7 @@ export const affiliatesAPI = {
   clearUserSettings,
   batchSetRate,
   listInviteLogs,
+  listSignupBonusRecords,
   listInviteRecords,
   listRebateRecords,
   listTransferRecords,
