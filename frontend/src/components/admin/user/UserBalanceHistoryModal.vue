@@ -293,7 +293,9 @@ const getItemTitle = (item: BalanceHistoryItem) => {
     case 'balance':
       return t('redeem.balanceAddedRedeem')
     case 'affiliate_balance':
-      return t('redeem.balanceAddedAffiliate')
+      return item.notes === 'signup_bonus'
+        ? t('redeem.balanceAddedAffiliateSignupBonus')
+        : t('redeem.balanceAddedAffiliate')
     case 'admin_balance':
       return item.value >= 0 ? t('redeem.balanceAddedAdmin') : t('redeem.balanceDeductedAdmin')
     case 'concurrency':

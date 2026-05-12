@@ -351,6 +351,7 @@ export default {
     affiliateManagement: 'Affiliate Rebates',
     affiliateInviteRecords: 'Invite Records',
     affiliateRebateRecords: 'Rebate Records',
+    affiliateSignupBonusRecords: 'Signup Bonus Records',
     affiliateTransferRecords: 'Transfer Records',
     profile: 'Profile',
     users: 'Users',
@@ -1079,6 +1080,7 @@ export default {
     historyWillAppear: 'Your redemption history will appear here',
     balanceAddedRedeem: 'Balance Added (Redeem)',
     balanceAddedAffiliate: 'Balance Added (Affiliate Transfer)',
+    balanceAddedAffiliateSignupBonus: 'Balance Added (Invite Signup Bonus)',
     balanceAddedAdmin: 'Balance Added (Admin)',
     balanceDeductedAdmin: 'Balance Deducted (Admin)',
     concurrencyAddedRedeem: 'Concurrency Added (Redeem)',
@@ -1676,6 +1678,7 @@ export default {
     affiliates: {
       invitesDescription: 'View site-wide inviter and invitee relationships',
       rebatesDescription: 'View recharge orders that generated affiliate rebates',
+      signupBonusesDescription: 'View invite signup bonus grants, rejection reasons, and risk data',
       transfersDescription: 'View affiliate quota transfers into account balance',
       errors: {
         loadFailed: 'Failed to load affiliate records'
@@ -1694,6 +1697,11 @@ export default {
         orderAmount: 'Top-up Amount',
         payAmount: 'Paid Amount',
         rebateAmount: 'Rebate Amount',
+        result: 'Result',
+        signupBonusAmount: 'Signup Bonus',
+        fingerprint: 'Fingerprint',
+        ip: 'IP',
+        signupBonusGranted: 'Granted',
         paymentType: 'Payment Method',
         orderStatus: 'Order Status',
         transferAmount: 'Transfer Amount',
@@ -1702,6 +1710,7 @@ export default {
         frozenQuotaAfter: 'Frozen After',
         historyQuotaAfter: 'Historical Rebate After',
         invitedAt: 'Invited At',
+        signupBonusAt: 'Registered At',
         rebatedAt: 'Rebated At',
         transferredAt: 'Transferred At'
       },

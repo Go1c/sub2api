@@ -1142,11 +1142,12 @@ func (s *adminServiceImpl) listAffiliateBalanceHistory(ctx context.Context, user
 
 	rows, err := s.entClient.QueryContext(ctx, `
 SELECT id,
+       action,
        amount::double precision,
        created_at
 FROM user_affiliate_ledger
 WHERE user_id = $1
-  AND action = 'transfer'
+  AND action IN ('transfer', 'signup_bonus')
 ORDER BY created_at DESC, id DESC
 OFFSET $2
 LIMIT $3`, userID, params.Offset(), params.Limit())
@@ -1158,23 +1159,13 @@ LIMIT $3`, userID, params.Offset(), params.Limit())
 	codes := make([]RedeemCode, 0, params.Limit())
 	for rows.Next() {
 		var id int64
+		var action string
 		var amount float64
 		var createdAt time.Time
-		if err := rows.Scan(&id, &amount, &createdAt); err != nil {
+		if err := rows.Scan(&id, &action, &amount, &createdAt); err != nil {
 			return nil, 0, err
 		}
-		usedBy := userID
-		usedAt := createdAt
-		codes = append(codes, RedeemCode{
-			ID:        -id,
-			Code:      fmt.Sprintf("AFF-%d", id),
-			Type:      RedeemTypeAffiliateBalance,
-			Value:     amount,
-			Status:    StatusUsed,
-			UsedBy:    &usedBy,
-			UsedAt:    &usedAt,
-			CreatedAt: createdAt,
-		})
+		codes = append(codes, affiliateBalanceHistoryItem(id, action, amount, userID, createdAt))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
@@ -1192,7 +1183,7 @@ func countAffiliateBalanceHistory(ctx context.Context, client *dbent.Client, use
 SELECT COUNT(*)
 FROM user_affiliate_ledger
 WHERE user_id = $1
-  AND action = 'transfer'`, userID)
+  AND action IN ('transfer', 'signup_bonus')`, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -1211,6 +1202,22 @@ WHERE user_id = $1
 		return 0, nil
 	}
 	return total.Int64, nil
+}
+
+func affiliateBalanceHistoryItem(id int64, action string, amount float64, userID int64, createdAt time.Time) RedeemCode {
+	usedBy := userID
+	usedAt := createdAt
+	return RedeemCode{
+		ID:        -id,
+		Code:      fmt.Sprintf("AFF-%d", id),
+		Type:      RedeemTypeAffiliateBalance,
+		Value:     amount,
+		Status:    StatusUsed,
+		UsedBy:    &usedBy,
+		UsedAt:    &usedAt,
+		Notes:     action,
+		CreatedAt: createdAt,
+	}
 }
 
 func mergeBalanceHistoryCodes(redeemCodes, affiliateCodes []RedeemCode, params pagination.PaginationParams) []RedeemCode {

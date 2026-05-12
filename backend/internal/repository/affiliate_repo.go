@@ -659,9 +659,36 @@ func (r *affiliateRepository) ListInviteLogs(ctx context.Context, filter service
 		args = append(args, filter.InviteeID)
 		where = append(where, fmt.Sprintf("ail.invitee_id = $%d", len(args)))
 	}
+	if filter.StartAt != nil {
+		args = append(args, *filter.StartAt)
+		where = append(where, fmt.Sprintf("ail.created_at >= $%d", len(args)))
+	}
+	if filter.EndAt != nil {
+		args = append(args, *filter.EndAt)
+		where = append(where, fmt.Sprintf("ail.created_at <= $%d", len(args)))
+	}
+	search := strings.TrimSpace(filter.Search)
+	if search != "" {
+		args = append(args, "%"+strings.ToLower(search)+"%")
+		searchArg := len(args)
+		where = append(where, fmt.Sprintf(`(
+LOWER(COALESCE(inviter.email, '')) LIKE $%[1]d OR
+LOWER(COALESCE(inviter.username, '')) LIKE $%[1]d OR
+LOWER(COALESCE(invitee.email, '')) LIKE $%[1]d OR
+LOWER(COALESCE(invitee.username, '')) LIKE $%[1]d OR
+LOWER(ail.affiliate_code) LIKE $%[1]d OR
+LOWER(ail.failure_reason) LIKE $%[1]d OR
+ail.inviter_id::text LIKE $%[1]d OR
+ail.invitee_id::text LIKE $%[1]d
+)`, searchArg))
+	}
 	whereSQL := strings.Join(where, " AND ")
+	baseJoin := `
+FROM affiliate_invite_logs ail
+LEFT JOIN users inviter ON inviter.id = ail.inviter_id
+LEFT JOIN users invitee ON invitee.id = ail.invitee_id`
 
-	countQuery := "SELECT COUNT(*) FROM affiliate_invite_logs ail WHERE " + whereSQL
+	countQuery := "SELECT COUNT(*) " + baseJoin + " WHERE " + whereSQL
 	rows, err := client.QueryContext(ctx, countQuery, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count affiliate invite logs: %w", err)
@@ -677,6 +704,20 @@ func (r *affiliateRepository) ListInviteLogs(ctx context.Context, filter service
 		return nil, 0, err
 	}
 
+	orderBy := buildAffiliateRecordOrderBy(service.AffiliateRecordFilter{
+		SortBy:   filter.SortBy,
+		SortDesc: filter.SortDesc,
+	}, map[string]string{
+		"inviter":          "inviter.email",
+		"invitee":          "invitee.email",
+		"aff_code":         "ail.affiliate_code",
+		"affiliate_code":   "ail.affiliate_code",
+		"result":           "ail.success",
+		"bonus_amount":     "ail.bonus_amount",
+		"fingerprint_hash": "ail.fingerprint_hash",
+		"ip_address":       "ail.ip_address",
+		"created_at":       "ail.created_at",
+	}, "ail.created_at")
 	args = append(args, filter.PageSize, (filter.Page-1)*filter.PageSize)
 	query := fmt.Sprintf(`
 SELECT ail.id,
@@ -694,12 +735,10 @@ SELECT ail.id,
        ail.ip_address,
        ail.user_agent,
        ail.created_at
-FROM affiliate_invite_logs ail
-LEFT JOIN users inviter ON inviter.id = ail.inviter_id
-LEFT JOIN users invitee ON invitee.id = ail.invitee_id
+%s
 WHERE %s
-ORDER BY ail.created_at DESC, ail.id DESC
-LIMIT $%d OFFSET $%d`, whereSQL, len(args)-1, len(args))
+%s, ail.id DESC
+LIMIT $%d OFFSET $%d`, baseJoin, whereSQL, orderBy, len(args)-1, len(args))
 
 	rows, err = client.QueryContext(ctx, query, args...)
 	if err != nil {

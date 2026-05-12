@@ -105,6 +105,11 @@ type AffiliateInviteLogFilter struct {
 	InviterID        int64
 	InviteeID        int64
 	IncludeSensitive bool
+	Search           string
+	StartAt          *time.Time
+	EndAt            *time.Time
+	SortBy           string
+	SortDesc         bool
 	Page             int
 	PageSize         int
 }
