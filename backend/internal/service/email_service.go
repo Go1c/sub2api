@@ -164,7 +164,7 @@ func (s *EmailService) SendSiteMessageCopy(ctx context.Context, to, subject, con
 	if subject == "" {
 		subject = "Site Message"
 	}
-	body := s.buildSiteMessageCopyEmailBody(subject, content)
+	body := s.buildSiteMessageCopyEmailBody(subject, content, s.siteMessageCopyFrontendURL(ctx))
 	return s.SendEmail(ctx, to, "[Site Message] "+subject, body)
 }
 
@@ -425,11 +425,27 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
 `, siteName, code)
 }
 
-func (s *EmailService) buildSiteMessageCopyEmailBody(subject, content string) string {
+func (s *EmailService) siteMessageCopyFrontendURL(ctx context.Context) string {
+	if s == nil || s.settingRepo == nil {
+		return ""
+	}
+	frontendURL, err := s.settingRepo.GetValue(ctx, SettingKeyFrontendURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(frontendURL)
+}
+
+func (s *EmailService) buildSiteMessageCopyEmailBody(subject, content, frontendURL string) string {
 	escapedSubject := html.EscapeString(strings.TrimSpace(subject))
 	escapedContent := html.EscapeString(strings.TrimSpace(content))
 	escapedContent = strings.ReplaceAll(escapedContent, "\r\n", "\n")
 	escapedContent = strings.ReplaceAll(escapedContent, "\n", "<br>")
+	frontendURLBlock := ""
+	if trimmedFrontendURL := strings.TrimSpace(frontendURL); trimmedFrontendURL != "" {
+		escapedFrontendURL := html.EscapeString(trimmedFrontendURL)
+		frontendURLBlock = fmt.Sprintf(`<p class="frontend-url"><a href="%s">%s</a></p>`, escapedFrontendURL, escapedFrontendURL)
+	}
 
 	return fmt.Sprintf(`
 <!DOCTYPE html>
@@ -441,6 +457,8 @@ func (s *EmailService) buildSiteMessageCopyEmailBody(subject, content string) st
         .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .header { background: #2563eb; color: white; padding: 24px 30px; }
         .header h1 { margin: 0; font-size: 22px; }
+        .header .frontend-url { margin: 8px 0 0; font-size: 13px; line-height: 1.4; opacity: 0.92; word-break: break-all; }
+        .header .frontend-url a { color: #dbeafe; text-decoration: none; }
         .content { padding: 30px; color: #333; line-height: 1.7; }
         .message { background-color: #f8f9fa; border-radius: 8px; padding: 18px; word-break: break-word; }
         .footer { background-color: #f8f9fa; padding: 18px 30px; color: #777; font-size: 12px; }
@@ -450,6 +468,7 @@ func (s *EmailService) buildSiteMessageCopyEmailBody(subject, content string) st
     <div class="container">
         <div class="header">
             <h1>Site Message</h1>
+            %s
         </div>
         <div class="content">
             <h2 style="font-size: 18px; margin-top: 0;">%s</h2>
@@ -461,7 +480,7 @@ func (s *EmailService) buildSiteMessageCopyEmailBody(subject, content string) st
     </div>
 </body>
 </html>
-`, escapedSubject, escapedContent)
+`, frontendURLBlock, escapedSubject, escapedContent)
 }
 
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
