@@ -177,14 +177,32 @@
                       {{ formatDate(monitor.ends_at) }}
                     </td>
                     <td class="px-4 py-3 text-right">
-                      <div class="flex justify-end gap-2">
-                        <button type="button" class="text-primary-600 hover:text-primary-700" @click="selectMonitor(monitor)">
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <button type="button" class="whitespace-nowrap text-primary-600 hover:text-primary-700" @click="selectMonitor(monitor)">
                           {{ t('admin.ops.userRequestMonitor.viewCaptures') }}
+                        </button>
+                        <button
+                          type="button"
+                          class="whitespace-nowrap text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          :disabled="downloadingMonitorId === monitor.id"
+                          :data-test="`monitor-download-${monitor.id}`"
+                          @click="downloadMonitor(monitor)"
+                        >
+                          {{ t('admin.ops.userRequestMonitor.download') }}
+                        </button>
+                        <button
+                          type="button"
+                          class="whitespace-nowrap text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          :disabled="deletingMonitorId === monitor.id"
+                          :data-test="`monitor-delete-${monitor.id}`"
+                          @click="deleteMonitor(monitor)"
+                        >
+                          {{ t('admin.ops.userRequestMonitor.deleteMonitor') }}
                         </button>
                         <button
                           v-if="monitor.status === 'active'"
                           type="button"
-                          class="text-red-600 hover:text-red-700"
+                          class="whitespace-nowrap text-red-600 hover:text-red-700"
                           @click="stopMonitor(monitor)"
                         >
                           {{ t('admin.ops.userRequestMonitor.stop') }}
@@ -307,6 +325,8 @@ const detail = ref<OpsUserRequestCapture | null>(null)
 const selectedMonitor = ref<OpsUserRequestMonitor | null>(null)
 const loadingMonitors = ref(false)
 const loadingCaptures = ref(false)
+const downloadingMonitorId = ref<number | null>(null)
+const deletingMonitorId = ref<number | null>(null)
 const creating = ref(false)
 const monitorError = ref('')
 const statusFilter = ref('')
@@ -376,6 +396,47 @@ async function stopMonitor(monitor: OpsUserRequestMonitor) {
   }
 }
 
+async function downloadMonitor(monitor: OpsUserRequestMonitor) {
+  downloadingMonitorId.value = monitor.id
+  try {
+    const blob = await opsAPI.downloadUserRequestMonitor(monitor.id)
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = monitorExportFilename(monitor)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+    appStore.showSuccess(t('admin.ops.userRequestMonitor.downloaded'))
+  } catch (err: any) {
+    appStore.showError(err?.message || t('admin.ops.userRequestMonitor.downloadFailed'))
+  } finally {
+    downloadingMonitorId.value = null
+  }
+}
+
+async function deleteMonitor(monitor: OpsUserRequestMonitor) {
+  if (!window.confirm(t('admin.ops.userRequestMonitor.deleteConfirm', { email: monitor.target_email || monitor.user_id }))) {
+    return
+  }
+  deletingMonitorId.value = monitor.id
+  try {
+    await opsAPI.deleteUserRequestMonitor(monitor.id)
+    if (selectedMonitor.value?.id === monitor.id) {
+      selectedMonitor.value = null
+      captures.value = []
+      detail.value = null
+    }
+    await loadMonitors()
+    appStore.showSuccess(t('admin.ops.userRequestMonitor.monitorDeleted'))
+  } catch (err: any) {
+    appStore.showError(err?.message || t('admin.ops.userRequestMonitor.deleteMonitorFailed'))
+  } finally {
+    deletingMonitorId.value = null
+  }
+}
+
 async function selectMonitor(monitor: OpsUserRequestMonitor) {
   selectedMonitor.value = monitor
   await loadCaptures(monitor.id)
@@ -442,6 +503,12 @@ function formatDate(value?: string | null) {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
   return d.toLocaleString()
+}
+
+function monitorExportFilename(monitor: OpsUserRequestMonitor) {
+  const rawTarget = monitor.target_email || `user-${monitor.user_id}`
+  const safeTarget = rawTarget.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80)
+  return `user-request-monitor-${monitor.id}-${safeTarget || monitor.user_id}.jsonl`
 }
 
 watch([statusFilter, userQuery], () => {

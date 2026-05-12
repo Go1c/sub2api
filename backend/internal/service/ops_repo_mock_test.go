@@ -19,10 +19,12 @@ type opsRepoMock struct {
 	GetUserRequestMonitorByIDFn        func(ctx context.Context, id int64) (*OpsUserRequestMonitor, error)
 	GetActiveUserRequestMonitorsFn     func(ctx context.Context, userID int64, now time.Time) ([]*OpsUserRequestMonitor, error)
 	StopUserRequestMonitorFn           func(ctx context.Context, id int64, stoppedAt time.Time) (*OpsUserRequestMonitor, error)
+	DeleteUserRequestMonitorFn         func(ctx context.Context, id int64) (bool, error)
 	InsertUserRequestCaptureFn         func(ctx context.Context, input *OpsInsertUserRequestCaptureInput) (int64, error)
 	ListUserRequestCapturesFn          func(ctx context.Context, filter *OpsUserRequestCaptureFilter) ([]*OpsUserRequestCapture, int64, error)
 	GetUserRequestCaptureFn            func(ctx context.Context, monitorID, captureID int64) (*OpsUserRequestCapture, error)
 	DeleteUserRequestCaptureFn         func(ctx context.Context, monitorID, captureID int64) (bool, error)
+	StreamUserRequestCapturesFn        func(ctx context.Context, monitorID int64, handle func(*OpsUserRequestCapture) error) error
 	ExpireUserRequestMonitorsFn        func(ctx context.Context, now time.Time) (int64, error)
 	DeleteExpiredUserRequestCapturesFn func(ctx context.Context, now time.Time) (int64, error)
 }
@@ -252,6 +254,13 @@ func (m *opsRepoMock) StopUserRequestMonitor(ctx context.Context, id int64, stop
 	return &OpsUserRequestMonitor{ID: id, Status: OpsUserRequestMonitorStatusStopped, StoppedAt: &stoppedAt}, nil
 }
 
+func (m *opsRepoMock) DeleteUserRequestMonitor(ctx context.Context, id int64) (bool, error) {
+	if m.DeleteUserRequestMonitorFn != nil {
+		return m.DeleteUserRequestMonitorFn(ctx, id)
+	}
+	return true, nil
+}
+
 func (m *opsRepoMock) InsertUserRequestCapture(ctx context.Context, input *OpsInsertUserRequestCaptureInput) (int64, error) {
 	if m.InsertUserRequestCaptureFn != nil {
 		return m.InsertUserRequestCaptureFn(ctx, input)
@@ -278,6 +287,13 @@ func (m *opsRepoMock) DeleteUserRequestCapture(ctx context.Context, monitorID, c
 		return m.DeleteUserRequestCaptureFn(ctx, monitorID, captureID)
 	}
 	return true, nil
+}
+
+func (m *opsRepoMock) StreamUserRequestCaptures(ctx context.Context, monitorID int64, handle func(*OpsUserRequestCapture) error) error {
+	if m.StreamUserRequestCapturesFn != nil {
+		return m.StreamUserRequestCapturesFn(ctx, monitorID, handle)
+	}
+	return nil
 }
 
 func (m *opsRepoMock) ExpireUserRequestMonitors(ctx context.Context, now time.Time) (int64, error) {

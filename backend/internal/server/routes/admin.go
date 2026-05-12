@@ -202,6 +202,8 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/user-request-monitors", h.Admin.Ops.ListUserRequestMonitors)
 		ops.POST("/user-request-monitors", h.Admin.Ops.CreateUserRequestMonitor)
 		ops.POST("/user-request-monitors/:id/stop", h.Admin.Ops.StopUserRequestMonitor)
+		ops.GET("/user-request-monitors/:id/download", h.Admin.Ops.DownloadUserRequestMonitor)
+		ops.DELETE("/user-request-monitors/:id", h.Admin.Ops.DeleteUserRequestMonitor)
 		ops.GET("/user-request-monitors/:id/captures", h.Admin.Ops.ListUserRequestCaptures)
 		ops.GET("/user-request-monitors/:id/captures/:capture_id", h.Admin.Ops.GetUserRequestCapture)
 		ops.DELETE("/user-request-monitors/:id/captures/:capture_id", h.Admin.Ops.DeleteUserRequestCapture)

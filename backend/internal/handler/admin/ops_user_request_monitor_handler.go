@@ -91,6 +91,44 @@ func (h *OpsHandler) StopUserRequestMonitor(c *gin.Context) {
 	response.Success(c, monitor)
 }
 
+// DeleteUserRequestMonitor deletes one monitor and all of its captured bodies.
+// DELETE /api/v1/admin/ops/user-request-monitors/:id
+func (h *OpsHandler) DeleteUserRequestMonitor(c *gin.Context) {
+	svc, ok := h.requireUserRequestMonitorService(c)
+	if !ok {
+		return
+	}
+	id, ok := parsePositiveOpsID(c, "id")
+	if !ok {
+		return
+	}
+	if err := svc.DeleteMonitor(c.Request.Context(), id); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"deleted": true})
+}
+
+// DownloadUserRequestMonitor streams all captures for one monitor as JSON Lines.
+// GET /api/v1/admin/ops/user-request-monitors/:id/download
+func (h *OpsHandler) DownloadUserRequestMonitor(c *gin.Context) {
+	svc, ok := h.requireUserRequestMonitorService(c)
+	if !ok {
+		return
+	}
+	id, ok := parsePositiveOpsID(c, "id")
+	if !ok {
+		return
+	}
+	filename := "user-request-monitor-" + strconv.FormatInt(id, 10) + "-captures.jsonl"
+	c.Header("Content-Type", "application/x-ndjson; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="`+filename+`"`)
+	if err := svc.ExportCapturesJSONL(c.Request.Context(), id, c.Writer); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+}
+
 // ListUserRequestCaptures lists captures without raw body content.
 // GET /api/v1/admin/ops/user-request-monitors/:id/captures
 func (h *OpsHandler) ListUserRequestCaptures(c *gin.Context) {
