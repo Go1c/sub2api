@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -19,9 +21,16 @@ type opsUserRequestMonitorRepoStub struct {
 
 	createErr          error
 	insertErr          error
+	deleteMonitorErr   error
+	streamErr          error
 	createCalls        int
+	deleteMonitorID    int64
+	deleteMonitorOK    bool
+	streamMonitorID    int64
 	firstCreateStarted chan struct{}
 	releaseFirstCreate chan struct{}
+	monitorByID        *OpsUserRequestMonitor
+	streamCaptures     []*OpsUserRequestCapture
 }
 
 func (r *opsUserRequestMonitorRepoStub) GetActiveUserRequestMonitors(ctx context.Context, userID int64, now time.Time) ([]*OpsUserRequestMonitor, error) {
@@ -71,6 +80,34 @@ func (r *opsUserRequestMonitorRepoStub) InsertUserRequestCapture(ctx context.Con
 	}
 	r.inserted = append(r.inserted, input)
 	return int64(len(r.inserted)), nil
+}
+
+func (r *opsUserRequestMonitorRepoStub) GetUserRequestMonitorByID(ctx context.Context, id int64) (*OpsUserRequestMonitor, error) {
+	if r.monitorByID != nil {
+		return r.monitorByID, nil
+	}
+	return &OpsUserRequestMonitor{ID: id, UserID: 42}, nil
+}
+
+func (r *opsUserRequestMonitorRepoStub) DeleteUserRequestMonitor(ctx context.Context, id int64) (bool, error) {
+	r.deleteMonitorID = id
+	if r.deleteMonitorErr != nil {
+		return false, r.deleteMonitorErr
+	}
+	return r.deleteMonitorOK, nil
+}
+
+func (r *opsUserRequestMonitorRepoStub) StreamUserRequestCaptures(ctx context.Context, monitorID int64, handle func(*OpsUserRequestCapture) error) error {
+	r.streamMonitorID = monitorID
+	if r.streamErr != nil {
+		return r.streamErr
+	}
+	for _, capture := range r.streamCaptures {
+		if err := handle(capture); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type opsUserLookupStub struct {
@@ -461,6 +498,61 @@ func TestOpsUserRequestMonitorService_CaptureSwallowsInsertErrors(t *testing.T) 
 		Body:   []byte(`{"model":"x"}`),
 	}); err != nil {
 		t.Fatalf("CaptureClientRequestSync returned error: %v", err)
+	}
+}
+
+func TestOpsUserRequestMonitorService_DeleteMonitorDeletesWholeMonitor(t *testing.T) {
+	repo := &opsUserRequestMonitorRepoStub{deleteMonitorOK: true}
+	svc := newMonitorServiceForTest(repo)
+
+	if err := svc.DeleteMonitor(context.Background(), 77); err != nil {
+		t.Fatalf("DeleteMonitor returned error: %v", err)
+	}
+
+	if repo.deleteMonitorID != 77 {
+		t.Fatalf("delete monitor id = %d, want 77", repo.deleteMonitorID)
+	}
+}
+
+func TestOpsUserRequestMonitorService_ExportCapturesJSONLIncludesRawBodies(t *testing.T) {
+	createdAt := time.Date(2026, 5, 12, 2, 3, 4, 0, time.UTC)
+	repo := &opsUserRequestMonitorRepoStub{
+		monitorByID: &OpsUserRequestMonitor{ID: 77, UserID: 42},
+		streamCaptures: []*OpsUserRequestCapture{{
+			ID:              9,
+			MonitorID:       77,
+			UserID:          42,
+			RequestID:       "req-1",
+			Model:           "gpt-test",
+			InboundEndpoint: "/v1/chat/completions",
+			ContentType:     "application/json",
+			Body:            `{"messages":[{"role":"user","content":"hello"}]}`,
+			BodyBytes:       48,
+			CreatedAt:       createdAt,
+			ExpiresAt:       createdAt.Add(24 * time.Hour),
+		}},
+	}
+	svc := newMonitorServiceForTest(repo)
+
+	var buf bytes.Buffer
+	if err := svc.ExportCapturesJSONL(context.Background(), 77, &buf); err != nil {
+		t.Fatalf("ExportCapturesJSONL returned error: %v", err)
+	}
+
+	if repo.streamMonitorID != 77 {
+		t.Fatalf("stream monitor id = %d, want 77", repo.streamMonitorID)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("export line count = %d, want 1; body=%q", len(lines), buf.String())
+	}
+	var got OpsUserRequestCapture
+	if err := json.Unmarshal([]byte(lines[0]), &got); err != nil {
+		t.Fatalf("export line is not JSON: %v", err)
+	}
+	if got.ID != 9 || got.MonitorID != 77 || got.Body == "" {
+		t.Fatalf("exported capture = %+v, want id 9, monitor 77, non-empty raw body", got)
 	}
 }
 

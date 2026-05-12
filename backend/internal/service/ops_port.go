@@ -70,10 +70,12 @@ type OpsRepository interface {
 	GetUserRequestMonitorByID(ctx context.Context, id int64) (*OpsUserRequestMonitor, error)
 	GetActiveUserRequestMonitors(ctx context.Context, userID int64, now time.Time) ([]*OpsUserRequestMonitor, error)
 	StopUserRequestMonitor(ctx context.Context, id int64, stoppedAt time.Time) (*OpsUserRequestMonitor, error)
+	DeleteUserRequestMonitor(ctx context.Context, id int64) (bool, error)
 	InsertUserRequestCapture(ctx context.Context, input *OpsInsertUserRequestCaptureInput) (int64, error)
 	ListUserRequestCaptures(ctx context.Context, filter *OpsUserRequestCaptureFilter) ([]*OpsUserRequestCapture, int64, error)
 	GetUserRequestCapture(ctx context.Context, monitorID, captureID int64) (*OpsUserRequestCapture, error)
 	DeleteUserRequestCapture(ctx context.Context, monitorID, captureID int64) (bool, error)
+	StreamUserRequestCaptures(ctx context.Context, monitorID int64, handle func(*OpsUserRequestCapture) error) error
 	ExpireUserRequestMonitors(ctx context.Context, now time.Time) (int64, error)
 	DeleteExpiredUserRequestCaptures(ctx context.Context, now time.Time) (int64, error)
 }

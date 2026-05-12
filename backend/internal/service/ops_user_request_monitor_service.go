@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"strings"
@@ -196,6 +198,33 @@ func (s *OpsUserRequestMonitorService) StopMonitor(ctx context.Context, id int64
 	return monitor, nil
 }
 
+func (s *OpsUserRequestMonitorService) DeleteMonitor(ctx context.Context, id int64) error {
+	if s == nil || s.opsRepo == nil {
+		return infraerrors.ServiceUnavailable("OPS_USER_REQUEST_MONITOR_UNAVAILABLE", "user request monitor service unavailable")
+	}
+	if id <= 0 {
+		return infraerrors.BadRequest("OPS_USER_REQUEST_MONITOR_INVALID_ID", "invalid monitor id")
+	}
+	monitor, err := s.opsRepo.GetUserRequestMonitorByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return infraerrors.NotFound("OPS_USER_REQUEST_MONITOR_NOT_FOUND", "request monitor not found")
+		}
+		return infraerrors.InternalServer("OPS_USER_REQUEST_MONITOR_LOAD_FAILED", "failed to load request monitor").WithCause(err)
+	}
+	deleted, err := s.opsRepo.DeleteUserRequestMonitor(ctx, id)
+	if err != nil {
+		return infraerrors.InternalServer("OPS_USER_REQUEST_MONITOR_DELETE_FAILED", "failed to delete request monitor").WithCause(err)
+	}
+	if !deleted {
+		return infraerrors.NotFound("OPS_USER_REQUEST_MONITOR_NOT_FOUND", "request monitor not found")
+	}
+	if monitor != nil {
+		s.invalidateUser(monitor.UserID)
+	}
+	return nil
+}
+
 func (s *OpsUserRequestMonitorService) ListCaptures(ctx context.Context, filter *OpsUserRequestCaptureFilter) ([]*OpsUserRequestCapture, int64, error) {
 	if s == nil || s.opsRepo == nil {
 		return []*OpsUserRequestCapture{}, 0, nil
@@ -229,6 +258,33 @@ func (s *OpsUserRequestMonitorService) GetCapture(ctx context.Context, monitorID
 		return nil, infraerrors.InternalServer("OPS_USER_REQUEST_CAPTURE_LOAD_FAILED", "failed to load request capture").WithCause(err)
 	}
 	return capture, nil
+}
+
+func (s *OpsUserRequestMonitorService) ExportCapturesJSONL(ctx context.Context, monitorID int64, w io.Writer) error {
+	if s == nil || s.opsRepo == nil {
+		return infraerrors.ServiceUnavailable("OPS_USER_REQUEST_MONITOR_UNAVAILABLE", "user request monitor service unavailable")
+	}
+	if monitorID <= 0 {
+		return infraerrors.BadRequest("OPS_USER_REQUEST_CAPTURE_INVALID_MONITOR_ID", "invalid monitor id")
+	}
+	if w == nil {
+		return infraerrors.BadRequest("OPS_USER_REQUEST_CAPTURE_EXPORT_INVALID_WRITER", "export writer is required")
+	}
+	if _, err := s.opsRepo.GetUserRequestMonitorByID(ctx, monitorID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return infraerrors.NotFound("OPS_USER_REQUEST_MONITOR_NOT_FOUND", "request monitor not found")
+		}
+		return infraerrors.InternalServer("OPS_USER_REQUEST_MONITOR_LOAD_FAILED", "failed to load request monitor").WithCause(err)
+	}
+
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	if err := s.opsRepo.StreamUserRequestCaptures(ctx, monitorID, func(capture *OpsUserRequestCapture) error {
+		return encoder.Encode(capture)
+	}); err != nil {
+		return infraerrors.InternalServer("OPS_USER_REQUEST_CAPTURE_EXPORT_FAILED", "failed to export request captures").WithCause(err)
+	}
+	return nil
 }
 
 func (s *OpsUserRequestMonitorService) DeleteCapture(ctx context.Context, monitorID, captureID int64) error {

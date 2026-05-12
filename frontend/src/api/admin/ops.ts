@@ -1306,6 +1306,15 @@ export async function stopUserRequestMonitor(id: number): Promise<OpsUserRequest
   return data
 }
 
+export async function downloadUserRequestMonitor(id: number): Promise<Blob> {
+  const { data } = await apiClient.get<Blob>(`/admin/ops/user-request-monitors/${id}/download`, { responseType: 'blob' })
+  return data
+}
+
+export async function deleteUserRequestMonitor(id: number): Promise<void> {
+  await apiClient.delete(`/admin/ops/user-request-monitors/${id}`)
+}
+
 export async function listUserRequestCaptures(
   monitorId: number,
   params: { page?: number, page_size?: number } = {}
@@ -1493,6 +1502,8 @@ export const opsAPI = {
   listUserRequestMonitors,
   createUserRequestMonitor,
   stopUserRequestMonitor,
+  downloadUserRequestMonitor,
+  deleteUserRequestMonitor,
   listUserRequestCaptures,
   getUserRequestCapture,
   deleteUserRequestCapture,

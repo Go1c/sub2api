@@ -277,6 +277,24 @@ RETURNING
 	return scanOpsUserRequestMonitor(r.db.QueryRowContext(ctx, q, id, stoppedAt.UTC()))
 }
 
+func (r *opsRepository) DeleteUserRequestMonitor(ctx context.Context, id int64) (bool, error) {
+	if r == nil || r.db == nil {
+		return false, fmt.Errorf("nil ops repository")
+	}
+	if id <= 0 {
+		return false, fmt.Errorf("invalid id")
+	}
+	res, err := r.db.ExecContext(ctx, `DELETE FROM ops_user_request_monitors WHERE id = $1`, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (r *opsRepository) InsertUserRequestCapture(ctx context.Context, input *service.OpsInsertUserRequestCaptureInput) (int64, error) {
 	if r == nil || r.db == nil {
 		return 0, fmt.Errorf("nil ops repository")
@@ -476,6 +494,60 @@ func (r *opsRepository) DeleteUserRequestCapture(ctx context.Context, monitorID,
 		return false, err
 	}
 	return n > 0, nil
+}
+
+func (r *opsRepository) StreamUserRequestCaptures(ctx context.Context, monitorID int64, handle func(*service.OpsUserRequestCapture) error) error {
+	if r == nil || r.db == nil {
+		return fmt.Errorf("nil ops repository")
+	}
+	if monitorID <= 0 {
+		return fmt.Errorf("invalid monitor id")
+	}
+	if handle == nil {
+		return fmt.Errorf("nil capture handler")
+	}
+	q := `
+SELECT
+  c.id,
+  c.monitor_id,
+  c.user_id,
+  c.api_key_id,
+  c.account_id,
+  COALESCE(a.name, ''),
+  c.group_id,
+  COALESCE(g.name, ''),
+  COALESCE(c.request_id, ''),
+  COALESCE(c.model, ''),
+  COALESCE(c.inbound_endpoint, ''),
+  COALESCE(c.method, ''),
+  COALESCE(c.content_type, ''),
+  c.body,
+  c.body_bytes,
+  c.body_truncated,
+  c.sample_rate_percent,
+  c.capture_minute,
+  c.created_at,
+  c.expires_at
+FROM ops_user_request_captures c
+LEFT JOIN accounts a ON c.account_id = a.id
+LEFT JOIN groups g ON c.group_id = g.id
+WHERE c.monitor_id = $1
+ORDER BY c.created_at DESC, c.id DESC`
+	rows, err := r.db.QueryContext(ctx, q, monitorID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		capture, err := scanOpsUserRequestCapture(rows)
+		if err != nil {
+			return err
+		}
+		if err := handle(capture); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 func (r *opsRepository) ExpireUserRequestMonitors(ctx context.Context, now time.Time) (int64, error) {
