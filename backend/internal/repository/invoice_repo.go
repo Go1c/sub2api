@@ -195,6 +195,25 @@ RETURNING completed_at, updated_at
 	if _, err := tx.ExecContext(ctx, `UPDATE users SET balance = balance - $1 WHERE id = $2`, input.TaxAmount, item.UserID); err != nil {
 		return nil, fmt.Errorf("deduct invoice tax: %w", err)
 	}
+	if input.TaxAmount > 0 {
+		deductionCode := strings.TrimSpace(input.DeductionCode)
+		if deductionCode == "" {
+			deductionCode, err = service.GenerateRedeemCode()
+			if err != nil {
+				return nil, fmt.Errorf("generate invoice tax deduction code: %w", err)
+			}
+		}
+		deductionNotes := strings.TrimSpace(input.DeductionNotes)
+		if deductionNotes == "" {
+			deductionNotes = fmt.Sprintf("发票税点扣除 %s，税率 %.2f%%，扣除金额 %.2f", item.OrderNo, input.TaxRate*100, input.TaxAmount)
+		}
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO redeem_codes (code, type, value, status, used_by, used_at, notes, created_at)
+VALUES ($1, $2, $3, $4, $5, NOW(), $6, NOW())
+`, deductionCode, service.AdjustmentTypeAdminBalance, -input.TaxAmount, service.StatusUsed, item.UserID, deductionNotes); err != nil {
+			return nil, fmt.Errorf("record invoice tax deduction: %w", err)
+		}
+	}
 
 	item.Status = service.InvoiceStatusCompleted
 	item.FileName = input.FileName

@@ -17,12 +17,14 @@ const (
 	InvoiceStatusFailed     = "failed"
 
 	defaultInvoiceTaxRate = 0.01
+	minInvoiceAmount      = 100.0
 )
 
 var (
 	ErrInvoiceNotFound        = infraerrors.NotFound("INVOICE_NOT_FOUND", "invoice request not found")
 	ErrInvoiceFeatureDisabled = infraerrors.Forbidden("INVOICE_FEATURE_DISABLED", "invoice feature is not enabled for this user")
 	ErrInvoiceAmountExceeded  = infraerrors.BadRequest("INVOICE_AMOUNT_EXCEEDED", "invoice amount exceeds remaining rechargeable amount")
+	ErrInvoiceAmountTooLow    = infraerrors.BadRequest("INVOICE_AMOUNT_TOO_LOW", "invoice amount is below the minimum")
 	ErrInvoiceInvalidInput    = infraerrors.BadRequest("INVOICE_INVALID_INPUT", "invalid invoice request")
 	ErrInvoiceInvalidStatus   = infraerrors.Conflict("INVOICE_INVALID_STATUS", "invoice request status does not allow this operation")
 )
@@ -76,12 +78,14 @@ type CompleteInvoiceInput struct {
 }
 
 type CompleteInvoicePersistInput struct {
-	FileName    string
-	FilePath    string
-	FileSize    int64
-	ContentType string
-	TaxRate     float64
-	TaxAmount   float64
+	FileName       string
+	FilePath       string
+	FileSize       int64
+	ContentType    string
+	TaxRate        float64
+	TaxAmount      float64
+	DeductionCode  string
+	DeductionNotes string
 }
 
 type InvoiceListFilter struct {
@@ -166,6 +170,9 @@ func (s *InvoiceService) Create(ctx context.Context, userID int64, input CreateI
 	if title == "" || taxNumber == "" || recipientEmail == "" || amount <= 0 {
 		return nil, ErrInvoiceInvalidInput
 	}
+	if amount < minInvoiceAmount {
+		return nil, ErrInvoiceAmountTooLow
+	}
 
 	activeAmount, err := s.repo.SumActiveAmountByUser(ctx, userID)
 	if err != nil {
@@ -225,6 +232,15 @@ func (s *InvoiceService) Complete(ctx context.Context, id int64, input CompleteI
 		return nil, ErrInvoiceInvalidInput
 	}
 	taxAmount := roundMoney(invoice.Amount * taxRate)
+	deductionCode := ""
+	deductionNotes := ""
+	if taxAmount > 0 {
+		deductionCode, err = GenerateRedeemCode()
+		if err != nil {
+			return nil, fmt.Errorf("generate invoice tax deduction code: %w", err)
+		}
+		deductionNotes = fmt.Sprintf("发票税点扣除 %s，税率 %.2f%%，扣除金额 %.2f", invoice.OrderNo, taxRate*100, taxAmount)
+	}
 
 	if s.emailSender == nil {
 		return nil, ErrEmailNotConfigured
@@ -240,12 +256,14 @@ func (s *InvoiceService) Complete(ctx context.Context, id int64, input CompleteI
 	}
 
 	return s.repo.MarkCompletedAndDeduct(ctx, id, CompleteInvoicePersistInput{
-		FileName:    fileName,
-		FilePath:    filePath,
-		FileSize:    input.FileSize,
-		ContentType: strings.TrimSpace(input.ContentType),
-		TaxRate:     taxRate,
-		TaxAmount:   taxAmount,
+		FileName:       fileName,
+		FilePath:       filePath,
+		FileSize:       input.FileSize,
+		ContentType:    strings.TrimSpace(input.ContentType),
+		TaxRate:        taxRate,
+		TaxAmount:      taxAmount,
+		DeductionCode:  deductionCode,
+		DeductionNotes: deductionNotes,
 	})
 }
 

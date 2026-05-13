@@ -51,7 +51,8 @@
             </div>
             <div>
               <label class="input-label">{{ t('invoice.form.amount') }}</label>
-              <input v-model.number="form.amount" type="number" min="0" step="0.01" class="input" />
+              <input v-model.number="form.amount" type="number" :min="MIN_INVOICE_AMOUNT" step="0.01" class="input" />
+              <p class="input-hint">{{ t('invoice.form.amountHint', { amount: MIN_INVOICE_AMOUNT }) }}</p>
             </div>
             <div>
               <label class="input-label">{{ t('invoice.form.email') }}</label>
@@ -70,6 +71,7 @@
               <Icon name="infoCircle" size="md" />
             </div>
             <div class="space-y-3 text-sm text-gray-600 dark:text-dark-300">
+              <p>{{ t('invoice.minimumAmountRule', { amount: MIN_INVOICE_AMOUNT }) }}</p>
               <p>{{ t('invoice.quotaRule') }}</p>
               <p>{{ t('invoice.taxRule') }}</p>
               <p>{{ t('invoice.readyRule') }}</p>
@@ -144,6 +146,7 @@ import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const MIN_INVOICE_AMOUNT = 100
 
 const overview = ref<InvoiceOverview>({
   total_recharged: 0,
@@ -216,6 +219,10 @@ async function handleSubmit() {
   }
   if (form.amount <= 0) {
     appStore.showError(t('invoice.amountInvalid'))
+    return
+  }
+  if (form.amount < MIN_INVOICE_AMOUNT) {
+    appStore.showError(t('invoice.amountTooLow', { amount: MIN_INVOICE_AMOUNT }))
     return
   }
   if (form.amount > overview.value.remaining_amount) {
