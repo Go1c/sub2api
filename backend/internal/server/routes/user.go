@@ -110,6 +110,15 @@ func RegisterUserRoutes(
 			siteMessages.POST("/:id/read", h.SiteMessage.MarkRead)
 		}
 
+		// 发票申请
+		invoices := authenticated.Group("/invoices")
+		{
+			invoices.GET("/overview", h.Invoice.Overview)
+			invoices.GET("", h.Invoice.List)
+			invoices.POST("", h.Invoice.Create)
+			invoices.GET("/:id/download", h.Invoice.Download)
+		}
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{

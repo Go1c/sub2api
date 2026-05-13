@@ -62,6 +62,12 @@ declare module 'vue-router' {
     requiresSiteMessages?: boolean
 
     /**
+     * Whether this route requires per-user invoice access to be enabled
+     * @default false
+     */
+    requiresInvoice?: boolean
+
+    /**
      * i18n key for the page title
      */
     titleKey?: string

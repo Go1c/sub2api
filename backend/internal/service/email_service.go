@@ -1,17 +1,22 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"html"
 	"log/slog"
 	"math/big"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/smtp"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -185,14 +190,123 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
 		from, to, subject, body)
 
+	return s.sendRawEmailWithConfig(config, to, []byte(msg))
+}
+
+// SendInvoiceAttachment sends a completed invoice file to the requested recipient.
+func (s *EmailService) SendInvoiceAttachment(ctx context.Context, to string, invoice *InvoiceRequest, attachment InvoiceEmailAttachment) error {
+	if invoice == nil {
+		return ErrInvoiceNotFound
+	}
+	config, err := s.GetSMTPConfig(ctx)
+	if err != nil {
+		return err
+	}
+	subject := fmt.Sprintf("发票已开具 / Invoice %s", invoice.OrderNo)
+	body := buildInvoiceEmailBody(invoice)
+	msg, err := buildAttachmentEmailMessage(config, to, subject, body, attachment)
+	if err != nil {
+		return err
+	}
+	return s.sendRawEmailWithConfig(config, to, msg)
+}
+
+func (s *EmailService) sendRawEmailWithConfig(config *SMTPConfig, to string, msg []byte) error {
+	to = sanitizeEmailHeader(to)
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
 
 	if config.UseTLS {
-		return s.sendMailTLS(addr, auth, config.From, to, []byte(msg), config.Host)
+		return s.sendMailTLS(addr, auth, config.From, to, msg, config.Host)
 	}
 
-	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg), config.Host)
+	return s.sendMailPlain(addr, auth, config.From, to, msg, config.Host)
+}
+
+func buildAttachmentEmailMessage(config *SMTPConfig, to, subject, body string, attachment InvoiceEmailAttachment) ([]byte, error) {
+	fileName := sanitizeEmailHeader(strings.TrimSpace(attachment.FileName))
+	if fileName == "" || len(attachment.Bytes) == 0 {
+		return nil, ErrInvoiceInvalidInput
+	}
+	to = sanitizeEmailHeader(to)
+	subject = sanitizeEmailHeader(subject)
+	from := sanitizeEmailHeader(config.From)
+	if config.FromName != "" {
+		from = fmt.Sprintf("%s <%s>", sanitizeEmailHeader(config.FromName), sanitizeEmailHeader(config.From))
+	}
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	fmt.Fprintf(&buf, "From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%q\r\n\r\n", from, to, subject, writer.Boundary())
+
+	htmlHeader := textproto.MIMEHeader{}
+	htmlHeader.Set("Content-Type", "text/html; charset=UTF-8")
+	htmlPart, err := writer.CreatePart(htmlHeader)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := htmlPart.Write([]byte(body)); err != nil {
+		return nil, err
+	}
+
+	contentType := strings.TrimSpace(attachment.ContentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	attachmentHeader := textproto.MIMEHeader{}
+	attachmentHeader.Set("Content-Type", contentType)
+	attachmentHeader.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, mime.QEncoding.Encode("utf-8", fileName)))
+	attachmentHeader.Set("Content-Transfer-Encoding", "base64")
+	attachmentPart, err := writer.CreatePart(attachmentHeader)
+	if err != nil {
+		return nil, err
+	}
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(attachment.Bytes)))
+	base64.StdEncoding.Encode(encoded, attachment.Bytes)
+	for len(encoded) > 76 {
+		if _, err := attachmentPart.Write(encoded[:76]); err != nil {
+			return nil, err
+		}
+		if _, err := attachmentPart.Write([]byte("\r\n")); err != nil {
+			return nil, err
+		}
+		encoded = encoded[76:]
+	}
+	if len(encoded) > 0 {
+		if _, err := attachmentPart.Write(encoded); err != nil {
+			return nil, err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func buildInvoiceEmailBody(invoice *InvoiceRequest) string {
+	orderNo := html.EscapeString(invoice.OrderNo)
+	title := html.EscapeString(invoice.Title)
+	amount := fmt.Sprintf("%.2f", invoice.Amount)
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;margin:0;padding:20px;">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;">
+    <div style="background:#2563eb;color:#fff;padding:24px 30px;">
+      <h1 style="margin:0;font-size:22px;">发票已开具</h1>
+    </div>
+    <div style="padding:30px;color:#333;line-height:1.7;">
+      <p>您的发票申请已完成，发票文件见附件。</p>
+      <p><strong>订单号：</strong>%s</p>
+      <p><strong>发票抬头：</strong>%s</p>
+      <p><strong>开票金额：</strong>%s</p>
+    </div>
+    <div style="background:#f8f9fa;padding:18px 30px;color:#777;font-size:12px;">
+      <p>此邮件由系统自动发送，请勿回复。</p>
+    </div>
+  </div>
+</body>
+</html>`, orderNo, title, amount)
 }
 
 // sendMailPlain sends mail without TLS using a dialer with timeout.

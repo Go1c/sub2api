@@ -267,6 +267,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/invoices',
+    name: 'Invoices',
+    component: () => import('@/views/user/InvoicesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresInvoice: true,
+      title: 'Invoices',
+      titleKey: 'invoice.title',
+      descriptionKey: 'invoice.description'
+    }
+  },
+  {
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/user/ProfileView.vue'),
@@ -500,6 +513,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Announcements',
       titleKey: 'admin.announcements.title',
       descriptionKey: 'admin.announcements.description'
+    }
+  },
+  {
+    path: '/admin/invoices',
+    name: 'AdminInvoices',
+    component: () => import('@/views/admin/InvoicesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Invoice Records',
+      titleKey: 'admin.invoice.title',
+      descriptionKey: 'admin.invoice.description'
     }
   },
   {
@@ -839,6 +864,11 @@ router.beforeEach((to, _from, next) => {
 
   if (to.meta.requiresSiteMessages && !isFeatureFlagEnabled(FeatureFlags.siteMessages)) {
     next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
+  }
+
+  if (to.meta.requiresInvoice && authStore.user?.invoice_enabled !== true) {
+    next('/dashboard')
     return
   }
 

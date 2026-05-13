@@ -344,6 +344,7 @@ export default {
     dashboard: '仪表盘',
     announcements: '公告',
     siteMessages: '站内信',
+    invoices: '发票申请',
     apiKeys: 'API 密钥',
     usage: '使用记录',
     redeem: '兑换',
@@ -377,6 +378,7 @@ export default {
     docs: '文档',
     myOrders: '我的订单',
     orderManagement: '订单管理',
+    invoiceManagement: '开票记录',
     paymentDashboard: '支付概览',
     paymentConfig: '支付配置',
     paymentPlans: '订阅套餐',
@@ -1870,7 +1872,9 @@ export default {
         selectStatus: '选择状态',
         rpmLimit: '每分钟请求数 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
-        rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效'
+        rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效',
+        invoiceEnabled: '启用发票申请',
+        invoiceEnabledHint: '开启后该用户左侧菜单会显示发票申请入口'
       },
       adjustBalance: '调整余额',
       adjustConcurrency: '调整并发数',
@@ -2017,6 +2021,31 @@ export default {
         keyExists: '属性键已存在',
         dragToReorder: '拖拽排序'
       }
+    },
+
+    invoice: {
+      title: '开票记录',
+      description: '查看全站发票申请，上传发票并完成邮件发送',
+      searchPlaceholder: '搜索申请单号、邮箱、抬头或税号',
+      userId: '用户 ID',
+      user: '用户',
+      userCompletedInvoiceAmount: '历史开票金额',
+      userTotalRecharged: '历史充值金额',
+      taxAmount: '税点扣除',
+      complete: '完成开票',
+      fail: '标记失败',
+      completeTitle: '完成开票',
+      file: '发票文件',
+      taxRate: '税点比例',
+      taxRateHint: '默认 0.01，即 1%。完成后按发票金额乘以该比例扣除用户余额。',
+      failTitle: '标记开票失败',
+      failReasonPlaceholder: '请输入失败原因',
+      failedToLoad: '加载开票记录失败',
+      fileRequired: '请先选择发票文件',
+      completeSuccess: '开票已完成，系统已发送邮件并扣除税点',
+      completeFailed: '完成开票失败',
+      failSuccess: '开票申请已标记失败',
+      failFailed: '标记失败失败'
     },
 
     // Groups Management
@@ -6881,6 +6910,59 @@ export default {
         description:
           '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">点击确认创建您的 API 密钥。</p><div style="padding: 8px 12px; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>⚠️ 重要：</b><ul style="margin: 8px 0 0 16px;"><li>创建后请立即复制密钥（sk-xxx）</li><li>密钥只显示一次，丢失需重新生成</li></ul></div><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>🚀 如何使用：</b><br/>将密钥配置到支持 OpenAI 接口的任何客户端（如 ChatBox、OpenCat 等），即可开始使用！</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 点击"创建"按钮</p></div>'
       }
+    }
+  },
+
+  invoice: {
+    title: '发票申请',
+    description: '提交发票申请并查看历史开票状态',
+    totalRecharged: '历史充值金额',
+    usedInvoiceAmount: '已申请开票金额',
+    remainingAmount: '可申请金额',
+    createdOrder: '申请单号',
+    applyTitle: '申请开票',
+    mailDeliveryHint: '管理员开票完成后，系统会将发票附件发送到填写的邮箱，也可在这里下载。',
+    quotaRule: '申请前系统会校验：历史充值金额 - 已申请/已完成开票金额必须大于等于本次开票金额。',
+    taxRule: '开票完成后将按管理员设置比例从账户余额扣除税点，默认 1%，余额不足时可扣为负数。',
+    readyRule: '已完成的发票可在历史记录中下载；如邮件发送失败，请联系管理员处理。',
+    history: '开票历史',
+    submit: '申请',
+    download: '下载',
+    failedToLoad: '加载发票信息失败',
+    formRequired: '请完整填写发票抬头、税号、金额和邮箱',
+    amountInvalid: '开票金额必须大于 0',
+    amountExceeded: '开票金额不能超过可申请金额',
+    createSuccess: '发票申请已提交',
+    createFailed: '提交发票申请失败',
+    downloadFailed: '下载发票失败',
+    form: {
+      title: '发票抬头',
+      titlePlaceholder: '请输入发票抬头',
+      taxNumber: '发票税号',
+      taxNumberPlaceholder: '请输入纳税人识别号',
+      amount: '开票金额',
+      email: '接收邮箱',
+      emailPlaceholder: '请输入接收发票的邮箱'
+    },
+    columns: {
+      orderNo: '申请单号',
+      title: '发票抬头',
+      amount: '开票金额',
+      email: '邮箱',
+      status: '状态',
+      createdAt: '申请时间'
+    },
+    status: {
+      processing: '正在开票',
+      completed: '已完成',
+      failed: '开票失败'
+    },
+    errors: {
+      INVOICE_NOT_FOUND: '发票申请不存在',
+      INVOICE_FEATURE_DISABLED: '当前账号未开通发票申请',
+      INVOICE_AMOUNT_EXCEEDED: '开票金额超过可申请金额',
+      INVOICE_INVALID_INPUT: '发票申请参数有误',
+      INVOICE_INVALID_STATUS: '当前发票状态不允许此操作'
     }
   },
 
