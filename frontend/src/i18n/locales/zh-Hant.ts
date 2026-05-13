@@ -6951,6 +6951,7 @@ export default {
       orderNo: '申請單號',
       title: '發票抬頭',
       amount: '開票金額',
+      taxAmount: '稅點扣除',
       email: '郵箱',
       status: '狀態',
       createdAt: '申請時間'

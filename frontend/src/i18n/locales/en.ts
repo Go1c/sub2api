@@ -6766,6 +6766,7 @@ export default {
       orderNo: 'Request ID',
       title: 'Invoice Title',
       amount: 'Invoice Amount',
+      taxAmount: 'Tax Deduction',
       email: 'Email',
       status: 'Status',
       createdAt: 'Requested At'

@@ -96,6 +96,10 @@
           <template #cell-amount="{ value }">
             <span>{{ formatMoney(value) }}</span>
           </template>
+          <template #cell-tax_amount="{ row }">
+            <span v-if="row.status === 'completed'">{{ formatMoney(row.tax_amount) }}</span>
+            <span v-else class="text-gray-400 dark:text-dark-500">-</span>
+          </template>
           <template #cell-status="{ value }">
             <span :class="['inline-flex rounded-full px-2 py-1 text-xs font-medium', statusClass(value)]">
               {{ statusLabel(value) }}
@@ -171,6 +175,7 @@ const columns = computed<Column[]>(() => [
   { key: 'order_no', label: t('invoice.columns.orderNo') },
   { key: 'title', label: t('invoice.columns.title') },
   { key: 'amount', label: t('invoice.columns.amount') },
+  { key: 'tax_amount', label: t('invoice.columns.taxAmount') },
   { key: 'recipient_email', label: t('invoice.columns.email') },
   { key: 'status', label: t('invoice.columns.status') },
   { key: 'created_at', label: t('invoice.columns.createdAt') },
