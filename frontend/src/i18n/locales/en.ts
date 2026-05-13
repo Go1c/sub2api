@@ -344,6 +344,7 @@ export default {
     dashboard: 'Dashboard',
     announcements: 'Announcements',
     siteMessages: 'Site Messages',
+    invoices: 'Invoices',
     apiKeys: 'API Keys',
     usage: 'Usage',
     redeem: 'Redeem',
@@ -377,6 +378,7 @@ export default {
     docs: 'Docs',
     myOrders: 'My Orders',
     orderManagement: 'Orders',
+    invoiceManagement: 'Invoice Records',
     paymentDashboard: 'Payment Dashboard',
     paymentConfig: 'Payment Config',
     paymentPlans: 'Plans',
@@ -1759,7 +1761,9 @@ export default {
       form: {
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
-        rpmLimitHint: 'Max requests per minute for this user; 0 = unlimited. Acts as a fallback only when the group has no rpm_limit set.'
+        rpmLimitHint: 'Max requests per minute for this user; 0 = unlimited. Acts as a fallback only when the group has no rpm_limit set.',
+        invoiceEnabled: 'Enable invoice requests',
+        invoiceEnabledHint: 'When enabled, this user can see the invoice request entry in the sidebar.'
       },
       columns: {
         user: 'User',
@@ -1964,6 +1968,31 @@ export default {
         keyExists: 'Attribute key already exists',
         dragToReorder: 'Drag to reorder'
       }
+    },
+
+    invoice: {
+      title: 'Invoice Records',
+      description: 'Review all invoice requests, upload invoices, and send completion emails.',
+      searchPlaceholder: 'Search order number, email, title, or tax number',
+      userId: 'User ID',
+      user: 'User',
+      userCompletedInvoiceAmount: 'Historical Invoice Amount',
+      userTotalRecharged: 'Historical Recharge Amount',
+      taxAmount: 'Tax Deduction',
+      complete: 'Complete',
+      fail: 'Mark Failed',
+      completeTitle: 'Complete Invoice',
+      file: 'Invoice File',
+      taxRate: 'Tax Rate',
+      taxRateHint: 'Default is 0.01, meaning 1%. The user balance is deducted by invoice amount times this rate.',
+      failTitle: 'Mark Invoice Failed',
+      failReasonPlaceholder: 'Enter failure reason',
+      failedToLoad: 'Failed to load invoice records',
+      fileRequired: 'Please choose an invoice file first',
+      completeSuccess: 'Invoice completed. Email sent and tax fee deducted.',
+      completeFailed: 'Failed to complete invoice',
+      failSuccess: 'Invoice request marked as failed',
+      failFailed: 'Failed to mark invoice as failed'
     },
 
     // Groups
@@ -6696,6 +6725,59 @@ export default {
         title: '🎉 Complete Creation',
         description: '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">Click to confirm and create your API key.</p><div style="padding: 8px 12px; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>⚠️ Important:</b><ul style="margin: 8px 0 0 16px;"><li>Copy the key (sk-xxx) immediately after creation</li><li>Key is only shown once, need to regenerate if lost</li></ul></div><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>🚀 How to Use:</b><br/>Configure the key in any OpenAI-compatible client (like ChatBox, OpenCat, etc.) and start using!</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 Click "Create" button</p></div>'
       }
+    }
+  },
+
+  invoice: {
+    title: 'Invoice Request',
+    description: 'Submit invoice requests and review invoice status history',
+    totalRecharged: 'Historical Recharge Amount',
+    usedInvoiceAmount: 'Requested Invoice Amount',
+    remainingAmount: 'Available Invoice Amount',
+    createdOrder: 'Request ID',
+    applyTitle: 'Request Invoice',
+    mailDeliveryHint: 'After an admin completes the invoice, the system sends the attachment to this email and keeps it available here.',
+    quotaRule: 'Before submitting, the system checks that historical recharge amount minus active/completed invoice amount is at least the requested amount.',
+    taxRule: 'After completion, the system deducts tax from account balance at the admin-set rate. Default is 1%; balance may become negative.',
+    readyRule: 'Completed invoices can be downloaded from history. Contact an admin if email delivery fails.',
+    history: 'Invoice History',
+    submit: 'Submit',
+    download: 'Download',
+    failedToLoad: 'Failed to load invoice information',
+    formRequired: 'Please fill in invoice title, tax number, amount, and email',
+    amountInvalid: 'Invoice amount must be greater than 0',
+    amountExceeded: 'Invoice amount cannot exceed available invoice amount',
+    createSuccess: 'Invoice request submitted',
+    createFailed: 'Failed to submit invoice request',
+    downloadFailed: 'Failed to download invoice',
+    form: {
+      title: 'Invoice Title',
+      titlePlaceholder: 'Enter invoice title',
+      taxNumber: 'Tax Number',
+      taxNumberPlaceholder: 'Enter taxpayer identification number',
+      amount: 'Invoice Amount',
+      email: 'Recipient Email',
+      emailPlaceholder: 'Enter the email address for receiving the invoice'
+    },
+    columns: {
+      orderNo: 'Request ID',
+      title: 'Invoice Title',
+      amount: 'Invoice Amount',
+      email: 'Email',
+      status: 'Status',
+      createdAt: 'Requested At'
+    },
+    status: {
+      processing: 'Processing',
+      completed: 'Completed',
+      failed: 'Failed'
+    },
+    errors: {
+      INVOICE_NOT_FOUND: 'Invoice request not found',
+      INVOICE_FEATURE_DISABLED: 'Invoice requests are not enabled for this account',
+      INVOICE_AMOUNT_EXCEEDED: 'Invoice amount exceeds available invoice amount',
+      INVOICE_INVALID_INPUT: 'Invalid invoice request',
+      INVOICE_INVALID_STATUS: 'This invoice status does not allow the operation'
     }
   },
 
