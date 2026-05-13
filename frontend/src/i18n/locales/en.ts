@@ -6737,6 +6737,7 @@ export default {
     createdOrder: 'Request ID',
     applyTitle: 'Request Invoice',
     mailDeliveryHint: 'After an admin completes the invoice, the system sends the attachment to this email and keeps it available here.',
+    minimumAmountRule: 'The minimum invoice amount is {amount}.',
     quotaRule: 'Before submitting, the system checks that historical recharge amount minus active/completed invoice amount is at least the requested amount.',
     taxRule: 'After completion, the system deducts tax from account balance at the admin-set rate. Default is 1%; balance may become negative.',
     readyRule: 'Completed invoices can be downloaded from history. Contact an admin if email delivery fails.',
@@ -6746,6 +6747,7 @@ export default {
     failedToLoad: 'Failed to load invoice information',
     formRequired: 'Please fill in invoice title, tax number, amount, and email',
     amountInvalid: 'Invoice amount must be greater than 0',
+    amountTooLow: 'The minimum invoice amount is {amount}',
     amountExceeded: 'Invoice amount cannot exceed available invoice amount',
     createSuccess: 'Invoice request submitted',
     createFailed: 'Failed to submit invoice request',
@@ -6756,6 +6758,7 @@ export default {
       taxNumber: 'Tax Number',
       taxNumberPlaceholder: 'Enter taxpayer identification number',
       amount: 'Invoice Amount',
+      amountHint: 'Minimum {amount}',
       email: 'Recipient Email',
       emailPlaceholder: 'Enter the email address for receiving the invoice'
     },
@@ -6775,6 +6778,7 @@ export default {
     errors: {
       INVOICE_NOT_FOUND: 'Invoice request not found',
       INVOICE_FEATURE_DISABLED: 'Invoice requests are not enabled for this account',
+      INVOICE_AMOUNT_TOO_LOW: 'The minimum invoice amount is 100',
       INVOICE_AMOUNT_EXCEEDED: 'Invoice amount exceeds available invoice amount',
       INVOICE_INVALID_INPUT: 'Invalid invoice request',
       INVOICE_INVALID_STATUS: 'This invoice status does not allow the operation'

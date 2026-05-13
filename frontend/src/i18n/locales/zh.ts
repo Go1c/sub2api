@@ -6922,6 +6922,7 @@ export default {
     createdOrder: '申请单号',
     applyTitle: '申请开票',
     mailDeliveryHint: '管理员开票完成后，系统会将发票附件发送到填写的邮箱，也可在这里下载。',
+    minimumAmountRule: '单次最低开票金额为 {amount}。',
     quotaRule: '申请前系统会校验：历史充值金额 - 已申请/已完成开票金额必须大于等于本次开票金额。',
     taxRule: '开票完成后将按管理员设置比例从账户余额扣除税点，默认 1%，余额不足时可扣为负数。',
     readyRule: '已完成的发票可在历史记录中下载；如邮件发送失败，请联系管理员处理。',
@@ -6931,6 +6932,7 @@ export default {
     failedToLoad: '加载发票信息失败',
     formRequired: '请完整填写发票抬头、税号、金额和邮箱',
     amountInvalid: '开票金额必须大于 0',
+    amountTooLow: '单次最低开票金额为 {amount}',
     amountExceeded: '开票金额不能超过可申请金额',
     createSuccess: '发票申请已提交',
     createFailed: '提交发票申请失败',
@@ -6941,6 +6943,7 @@ export default {
       taxNumber: '发票税号',
       taxNumberPlaceholder: '请输入纳税人识别号',
       amount: '开票金额',
+      amountHint: '最低 {amount}',
       email: '接收邮箱',
       emailPlaceholder: '请输入接收发票的邮箱'
     },
@@ -6960,6 +6963,7 @@ export default {
     errors: {
       INVOICE_NOT_FOUND: '发票申请不存在',
       INVOICE_FEATURE_DISABLED: '当前账号未开通发票申请',
+      INVOICE_AMOUNT_TOO_LOW: '单次最低开票金额为 100',
       INVOICE_AMOUNT_EXCEEDED: '开票金额超过可申请金额',
       INVOICE_INVALID_INPUT: '发票申请参数有误',
       INVOICE_INVALID_STATUS: '当前发票状态不允许此操作'

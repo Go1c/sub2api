@@ -11,10 +11,11 @@ import (
 )
 
 type invoiceRepoStub struct {
-	items        map[int64]*InvoiceRequest
-	activeTotal  float64
-	completed    *InvoiceRequest
-	failedReason string
+	items          map[int64]*InvoiceRequest
+	activeTotal    float64
+	completed      *InvoiceRequest
+	completedInput CompleteInvoicePersistInput
+	failedReason   string
 }
 
 func (r *invoiceRepoStub) Create(_ context.Context, req *InvoiceRequest) error {
@@ -64,6 +65,7 @@ func (r *invoiceRepoStub) MarkCompletedAndDeduct(_ context.Context, id int64, in
 	item.TaxAmount = input.TaxAmount
 	now := time.Unix(1778000000, 0)
 	item.CompletedAt = &now
+	r.completedInput = input
 	r.completed = cloneInvoiceRequest(item)
 	return cloneInvoiceRequest(item), nil
 }
@@ -129,18 +131,37 @@ func TestInvoiceServiceCreateChecksRemainingInvoiceAmount(t *testing.T) {
 	svc := NewInvoiceService(repo, invoiceUserReaderStub{user: &User{
 		ID:             7,
 		Email:          "user@example.com",
-		TotalRecharged: 100,
+		TotalRecharged: 200,
 		InvoiceEnabled: true,
 	}}, nil)
 
 	_, err := svc.Create(context.Background(), 7, CreateInvoiceRequestInput{
 		Title:          "Acme Inc.",
 		TaxNumber:      "TAX123",
-		Amount:         25,
+		Amount:         125,
 		RecipientEmail: "billing@example.com",
 	})
 
 	require.ErrorIs(t, err, ErrInvoiceAmountExceeded)
+}
+
+func TestInvoiceServiceCreateRejectsAmountBelowMinimum(t *testing.T) {
+	repo := &invoiceRepoStub{}
+	svc := NewInvoiceService(repo, invoiceUserReaderStub{user: &User{
+		ID:             7,
+		Email:          "user@example.com",
+		TotalRecharged: 1000,
+		InvoiceEnabled: true,
+	}}, nil)
+
+	_, err := svc.Create(context.Background(), 7, CreateInvoiceRequestInput{
+		Title:          "Acme Inc.",
+		TaxNumber:      "TAX123",
+		Amount:         99.99,
+		RecipientEmail: "billing@example.com",
+	})
+
+	require.ErrorIs(t, err, ErrInvoiceAmountTooLow)
 }
 
 func TestInvoiceServiceCompleteSendsEmailThenDeductsDefaultTaxRate(t *testing.T) {
@@ -175,6 +196,9 @@ func TestInvoiceServiceCompleteSendsEmailThenDeductsDefaultTaxRate(t *testing.T)
 	require.NotNil(t, repo.completed)
 	require.Equal(t, 0.01, repo.completed.TaxRate)
 	require.Equal(t, 2.0, repo.completed.TaxAmount)
+	require.Len(t, repo.completedInput.DeductionCode, 32)
+	require.Contains(t, repo.completedInput.DeductionNotes, "INV00000001")
+	require.Contains(t, repo.completedInput.DeductionNotes, "1.00%")
 }
 
 func TestInvoiceServiceCompleteMarksFailedWhenEmailFailsWithoutTaxDeduction(t *testing.T) {
