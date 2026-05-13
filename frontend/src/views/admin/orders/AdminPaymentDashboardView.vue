@@ -1,22 +1,31 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <!-- Header with Day Switcher -->
+      <!-- Header with Day / Month Switcher -->
       <div class="flex items-center justify-end">
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <div class="flex rounded-lg border border-gray-200 dark:border-dark-600">
             <button
               v-for="d in DAYS_OPTIONS"
               :key="d"
               type="button"
-              class="px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg"
-              :class="days === d
+              class="px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-lg"
+              :class="mode === 'days' && days === d
                 ? 'bg-primary-600 text-white'
                 : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
-              @click="days = d"
+              @click="selectDays(d)"
             >
               {{ d }}{{ t('payment.admin.daySuffix') }}
             </button>
+            <input
+              type="month"
+              v-model="month"
+              :max="maxMonth"
+              class="rounded-r-lg border-l border-gray-200 bg-transparent px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none dark:border-dark-600 dark:text-gray-200"
+              :class="mode === 'month' ? 'bg-primary-600 text-white' : ''"
+              :title="t('payment.admin.monthPickerTitle')"
+              @change="onMonthChange"
+            />
           </div>
           <button @click="loadDashboard" :disabled="loading" class="btn btn-secondary" :title="t('common.refresh')">
             <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
@@ -68,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
@@ -84,9 +93,32 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const DAYS_OPTIONS = [7, 30, 90] as const
+const mode = ref<'days' | 'month'>('days')
 const days = ref<number>(30)
+const month = ref<string>('')
 const loading = ref(false)
 const stats = ref<DashboardStats | null>(null)
+
+const maxMonth = computed(() => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+})
+
+function selectDays(d: number) {
+  mode.value = 'days'
+  days.value = d
+  month.value = ''
+  loadDashboard()
+}
+
+function onMonthChange() {
+  if (!month.value) {
+    mode.value = 'days'
+  } else {
+    mode.value = 'month'
+  }
+  loadDashboard()
+}
 
 function methodColor(type: string): string {
   const c: Record<string, string> = {
@@ -107,7 +139,10 @@ function rankClass(idx: number): string {
 async function loadDashboard() {
   loading.value = true
   try {
-    const res = await adminPaymentAPI.getDashboard(days.value)
+    const params = mode.value === 'month' && month.value
+      ? { month: month.value }
+      : { days: days.value }
+    const res = await adminPaymentAPI.getDashboard(params)
     stats.value = res.data
   } catch (err: unknown) {
     appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
@@ -116,6 +151,6 @@ async function loadDashboard() {
   }
 }
 
-watch(days, () => loadDashboard())
+watch(days, () => { if (mode.value === 'days') loadDashboard() })
 onMounted(() => loadDashboard())
 </script>
