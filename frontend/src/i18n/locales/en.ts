@@ -6985,6 +6985,7 @@ export default {
       dashboardTitle: 'Payment Dashboard',
       dashboardDesc: 'Recharge order analytics and insights',
       daySuffix: 'd',
+      monthPickerTitle: 'View by month',
       paymentConfigTitle: 'Payment Config',
       paymentConfigDesc: 'Configure payment providers and settings',
       plansPageTitle: 'Subscription Plans',

@@ -64,10 +64,13 @@ export const adminPaymentAPI = {
 
   // ==================== Dashboard ====================
 
-  /** Get payment dashboard statistics */
-  getDashboard(days?: number) {
+  /** Get payment dashboard statistics. Pass `month` (YYYY-MM) to scope by calendar month; otherwise `days` is used. */
+  getDashboard(params?: { days?: number; month?: string }) {
+    const query: Record<string, string | number> = {}
+    if (params?.month) query.month = params.month
+    else if (params?.days) query.days = params.days
     return apiClient.get<DashboardStats>('/admin/payment/dashboard', {
-      params: days ? { days } : undefined
+      params: Object.keys(query).length ? query : undefined
     })
   },
 

@@ -7169,6 +7169,7 @@ export default {
       dashboardTitle: '支付概覽',
       dashboardDesc: '充值訂單統計與分析',
       daySuffix: '天',
+      monthPickerTitle: '按年月份檢視',
       paymentConfigTitle: '支付配置',
       paymentConfigDesc: '管理支付服務商與相關設置',
       plansPageTitle: '訂閱套餐管理',
