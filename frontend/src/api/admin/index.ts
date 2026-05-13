@@ -32,6 +32,7 @@ import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
 import adminSiteMessagesAPI from './siteMessages'
+import adminInvoicesAPI from './invoices'
 
 /**
  * Unified admin API object for convenient access
@@ -65,7 +66,8 @@ export const adminAPI = {
   payment: adminPaymentAPI,
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
-  siteMessages: adminSiteMessagesAPI
+  siteMessages: adminSiteMessagesAPI,
+  invoices: adminInvoicesAPI
 }
 
 export {
@@ -97,7 +99,8 @@ export {
   adminPaymentAPI,
   affiliatesAPI,
   riskControlAPI,
-  adminSiteMessagesAPI
+  adminSiteMessagesAPI,
+  adminInvoicesAPI
 }
 
 export default adminAPI
@@ -108,3 +111,4 @@ export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from 
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
+export type { AdminInvoiceListParams, CompleteInvoiceRequest } from './invoices'

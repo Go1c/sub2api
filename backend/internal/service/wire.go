@@ -442,6 +442,10 @@ func ProvideSiteMessageSettingsReader(settingService *SettingService) SiteMessag
 	return settingService
 }
 
+func ProvideInvoiceUserReader(userRepo UserRepository) InvoiceUserReader {
+	return userRepo
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -464,6 +468,9 @@ var ProviderSet = wire.NewSet(
 	ProvideSiteMessageSettingsReader,
 	NewSiteMessageService,
 	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
+	ProvideInvoiceUserReader,
+	NewInvoiceService,
+	wire.Bind(new(InvoiceEmailSender), new(*EmailService)),
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,

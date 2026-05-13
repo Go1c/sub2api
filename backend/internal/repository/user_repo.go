@@ -105,6 +105,11 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 	if err := ensureEmailAuthIdentityWithClient(txCtx, txClient, created.ID, created.Email, "user_repo_create"); err != nil {
 		return err
 	}
+	if userIn.InvoiceEnabled {
+		if err := setUserInvoiceEnabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), created.ID, true); err != nil {
+			return err
+		}
+	}
 
 	if tx != nil {
 		if err := tx.Commit(); err != nil {
@@ -129,6 +134,9 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	}
 	if v, ok := groups[id]; ok {
 		out.AllowedGroups = v
+	}
+	if err := r.hydrateInvoiceEnabled(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -156,6 +164,9 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 	}
 	if v, ok := groups[m.ID]; ok {
 		out.AllowedGroups = v
+	}
+	if err := r.hydrateInvoiceEnabled(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -237,6 +248,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 	updated, err := updateOp.Save(txCtx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrEmailExists)
+	}
+	if err := setUserInvoiceEnabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), updated.ID, userIn.InvoiceEnabled); err != nil {
+		return err
 	}
 
 	if err := r.syncUserAllowedGroupsWithClient(txCtx, txClient, updated.ID, userIn.AllowedGroups); err != nil {
@@ -556,6 +570,9 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 	for id, u := range userMap {
 		if groups, ok := allowedGroupsByUser[id]; ok {
 			u.AllowedGroups = groups
+		}
+		if err := r.hydrateInvoiceEnabled(ctx, u); err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -926,7 +943,40 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	if v, ok := groups[m.ID]; ok {
 		out.AllowedGroups = v
 	}
+	if err := r.hydrateInvoiceEnabled(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+func (r *userRepository) hydrateInvoiceEnabled(ctx context.Context, user *service.User) error {
+	if user == nil {
+		return nil
+	}
+	exec := txAwareSQLExecutor(ctx, r.sql, r.client)
+	if exec == nil {
+		return nil
+	}
+	var enabled bool
+	err := scanSingleRow(ctx, exec, "SELECT invoice_enabled FROM users WHERE id = $1", []any{user.ID}, &enabled)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("load user invoice flag: %w", err)
+	}
+	user.InvoiceEnabled = enabled
+	return nil
+}
+
+func setUserInvoiceEnabled(ctx context.Context, exec sqlQueryExecutor, userID int64, enabled bool) error {
+	if exec == nil {
+		return nil
+	}
+	if _, err := exec.ExecContext(ctx, "UPDATE users SET invoice_enabled = $1 WHERE id = $2", enabled, userID); err != nil {
+		return fmt.Errorf("update user invoice flag: %w", err)
+	}
+	return nil
 }
 
 func (r *userRepository) loadAllowedGroups(ctx context.Context, userIDs []int64) (map[int64][]int64, error) {

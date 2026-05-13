@@ -12,6 +12,7 @@ type AdminHandlers struct {
 	Account                *admin.AccountHandler
 	Announcement           *admin.AnnouncementHandler
 	SiteMessage            *admin.SiteMessageHandler
+	Invoice                *admin.InvoiceHandler
 	DataManagement         *admin.DataManagementHandler
 	Backup                 *admin.BackupHandler
 	OAuth                  *admin.OAuthHandler
@@ -49,6 +50,7 @@ type Handlers struct {
 	Subscription     *SubscriptionHandler
 	Announcement     *AnnouncementHandler
 	SiteMessage      *SiteMessageHandler
+	Invoice          *InvoiceHandler
 	ChannelMonitor   *ChannelMonitorUserHandler
 	Admin            *AdminHandlers
 	Gateway          *GatewayHandler

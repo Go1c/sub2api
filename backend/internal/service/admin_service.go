@@ -128,15 +128,16 @@ type CreateUserInput struct {
 }
 
 type UpdateUserInput struct {
-	Email         string
-	Password      string
-	Username      *string
-	Notes         *string
-	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
-	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
-	RPMLimit      *int     // 使用指针区分"未提供"和"设置为0"
-	Status        string
-	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	Email          string
+	Password       string
+	Username       *string
+	Notes          *string
+	Balance        *float64 // 使用指针区分"未提供"和"设置为0"
+	Concurrency    *int     // 使用指针区分"未提供"和"设置为0"
+	RPMLimit       *int     // 使用指针区分"未提供"和"设置为0"
+	InvoiceEnabled *bool
+	Status         string
+	AllowedGroups  *[]int64 // 使用指针区分"未提供"和"设置为空数组"
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
 	GroupRates map[int64]*float64
@@ -736,6 +737,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	oldStatus := user.Status
 	oldRole := user.Role
 	oldRPMLimit := user.RPMLimit
+	oldInvoiceEnabled := user.InvoiceEnabled
 
 	if input.Email != "" {
 		user.Email = input.Email
@@ -765,6 +767,10 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		user.RPMLimit = *input.RPMLimit
 	}
 
+	if input.InvoiceEnabled != nil {
+		user.InvoiceEnabled = *input.InvoiceEnabled
+	}
+
 	if input.AllowedGroups != nil {
 		user.AllowedGroups = *input.AllowedGroups
 	}
@@ -783,7 +789,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
 		// 不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit {
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.InvoiceEnabled != oldInvoiceEnabled {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}

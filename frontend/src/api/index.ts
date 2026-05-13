@@ -21,6 +21,8 @@ export { totpAPI } from './totp'
 export { default as announcementsAPI } from './announcements'
 export { channelMonitorUserAPI } from './channelMonitor'
 export { siteMessagesAPI } from './siteMessages'
+export { invoicesAPI } from './invoices'
+export type { InvoiceRequest, InvoiceOverview, InvoiceStatus, CreateInvoiceRequest } from './invoices'
 
 // Admin APIs
 export { adminAPI } from './admin'

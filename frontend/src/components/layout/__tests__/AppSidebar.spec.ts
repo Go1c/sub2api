@@ -42,3 +42,13 @@ describe('AppSidebar unread indicator styles', () => {
     expect(componentSource).toContain('@keyframes sidebarUnreadPulse')
   })
 })
+
+describe('AppSidebar invoice navigation', () => {
+  it('gates the user invoice tab by per-user invoice access and exposes admin invoice records', () => {
+    expect(componentSource).toContain('flagInvoiceAccess')
+    expect(componentSource).toContain("path: '/invoices'")
+    expect(componentSource).toContain("path: '/admin/invoices'")
+    expect(componentSource).toContain("t('nav.invoices')")
+    expect(componentSource).toContain("t('nav.invoiceManagement')")
+  })
+})

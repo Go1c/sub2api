@@ -35,6 +35,9 @@ func RegisterAdminRoutes(
 		// 站内信管理
 		registerSiteMessageRoutes(admin, h)
 
+		// 发票管理
+		registerInvoiceRoutes(admin, h)
+
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
 
@@ -272,6 +275,16 @@ func registerSiteMessageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		siteMessages.POST("/users/:id", h.Admin.SiteMessage.SendToUser)
 		siteMessages.GET("/recipients", h.Admin.SiteMessage.SearchRecipients)
+	}
+}
+
+func registerInvoiceRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	invoices := admin.Group("/invoices")
+	{
+		invoices.GET("", h.Admin.Invoice.List)
+		invoices.POST("/:id/complete", h.Admin.Invoice.Complete)
+		invoices.POST("/:id/fail", h.Admin.Invoice.Fail)
+		invoices.GET("/:id/download", h.Admin.Invoice.Download)
 	}
 }
 

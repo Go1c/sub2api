@@ -691,6 +691,7 @@ const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagSiteMessages = makeSidebarFlag(FeatureFlags.siteMessages)
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
+const flagInvoiceAccess = () => authStore.user?.invoice_enabled === true
 const siteMessagesUnreadDot = () => siteMessageStore.hasUnread
 
 // buildSelfNavItems 构造用户自己的导航项（用户端主菜单和管理员的"我的账户"子菜单共享这组声明）。
@@ -707,6 +708,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/site-messages', label: t('nav.siteMessages'), icon: MailIcon, hideInSimpleMode: true, featureFlag: flagSiteMessages, badgeDot: siteMessagesUnreadDot },
+    { path: '/invoices', label: t('nav.invoices'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagInvoiceAccess },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
@@ -774,6 +776,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
+    { path: '/admin/invoices', label: t('nav.invoiceManagement'), icon: OrderListIcon, hideInSimpleMode: true },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     { path: '/admin/risk-control', label: t('nav.riskControl'), icon: ShieldIcon, hideInSimpleMode: true, featureFlag: flagRiskControl },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
