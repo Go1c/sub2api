@@ -15,6 +15,8 @@ describe('user InvoicesView source contract', () => {
     expect(source).toContain('MIN_INVOICE_AMOUNT')
     expect(source).toContain('form.amount < MIN_INVOICE_AMOUNT')
     expect(source).toContain("t('invoice.minimumAmountRule'")
+    expect(source).toContain("key: 'tax_amount'")
+    expect(source).toContain("#cell-tax_amount")
     expect(source).toContain('invoicesAPI.create')
     expect(source).toContain('invoicesAPI.download')
     expect(source).toContain("t('invoice.mailDeliveryHint')")
