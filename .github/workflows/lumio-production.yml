@@ -48,6 +48,7 @@ jobs:
       - name: Test frontend
         run: |
           corepack enable
+          corepack prepare pnpm@10.30.3 --activate
           pnpm --dir frontend install --frozen-lockfile
           pnpm --dir frontend run lint:check
           pnpm --dir frontend run typecheck
