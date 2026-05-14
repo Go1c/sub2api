@@ -1,3 +1,20 @@
 {
-  "signedContributors": []
+  "signedContributors": [
+    {
+      "name": "Go1c",
+      "id": 50826835,
+      "comment_id": 4452399669,
+      "created_at": "2026-05-14T16:06:21Z",
+      "repoId": 1217653015,
+      "pullRequestNo": 11
+    },
+    {
+      "name": "Go1c",
+      "id": 50826835,
+      "comment_id": 4452462119,
+      "created_at": "2026-05-14T16:14:09Z",
+      "repoId": 1217653015,
+      "pullRequestNo": 11
+    }
+  ]
 }
