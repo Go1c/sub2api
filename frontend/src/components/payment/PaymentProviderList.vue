@@ -60,7 +60,7 @@
           <div class="min-w-0 flex-1">
             <ProviderCard
               :provider="p"
-              :enabled="isEnabled(p.provider_key)"
+              :enabled="isProviderEnabled(p)"
               :available-types="getTypes(p.provider_key)"
               @toggle-field="(field) => emit('toggleField', p, field)"
               @toggle-type="(type) => emit('toggleType', p, type)"
@@ -136,8 +136,20 @@ function onDragEnd() {
   emit('reorder', updates)
 }
 
-function isEnabled(providerKey: string): boolean {
-  return props.enabledPaymentTypes.includes(providerKey)
+function normalizeVisiblePaymentType(type: string): string {
+  if (type.startsWith('alipay')) return 'alipay'
+  if (type.startsWith('wxpay')) return 'wxpay'
+  return type
+}
+
+function isProviderEnabled(provider: ProviderInstance): boolean {
+  if (props.enabledPaymentTypes.includes(provider.provider_key)) {
+    return true
+  }
+
+  return provider.supported_types.some(type =>
+    props.enabledPaymentTypes.includes(normalizeVisiblePaymentType(type)),
+  )
 }
 
 function getTypes(providerKey: string): TypeOption[] {
