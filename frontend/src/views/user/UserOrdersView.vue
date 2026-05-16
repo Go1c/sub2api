@@ -114,6 +114,7 @@ const statusFilters = computed(() => [
   { value: 'PENDING', label: t('payment.status.pending') },
   { value: 'COMPLETED', label: t('payment.status.completed') },
   { value: 'FAILED', label: t('payment.status.failed') },
+  { value: 'FULFILLMENT_FAILED', label: t('payment.status.fulfillment_failed') },
   { value: 'REFUNDED', label: t('payment.status.refunded') },
 ])
 

@@ -1,7 +1,7 @@
 <template>
   <BaseDialog :show="show" :title="dialogTitle" width="narrow" @close="handleClose">
     <!-- QR Code + Polling State -->
-    <div v-if="!success" class="flex flex-col items-center space-y-4">
+    <div v-if="!success && !fulfillmentPending" class="flex flex-col items-center space-y-4">
       <!-- QR Code mode -->
       <template v-if="qrUrl">
         <div class="rounded-2xl bg-white p-4 shadow-sm dark:bg-dark-800">
@@ -33,10 +33,24 @@
     </div>
     <!-- Success State -->
     <div v-else class="flex flex-col items-center space-y-4 py-4">
-      <div class="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-        <Icon name="check" size="lg" class="text-green-500" />
+      <div
+        :class="[
+          'flex h-16 w-16 items-center justify-center rounded-full',
+          fulfillmentPending ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30',
+        ]"
+      >
+        <Icon
+          :name="fulfillmentPending ? 'exclamationTriangle' : 'check'"
+          size="lg"
+          :class="fulfillmentPending ? 'text-amber-500' : 'text-green-500'"
+        />
       </div>
-      <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('payment.result.success') }}</p>
+      <p class="text-lg font-bold text-gray-900 dark:text-white">
+        {{ fulfillmentPending ? t('payment.result.fulfillmentPending') : t('payment.result.success') }}
+      </p>
+      <p v-if="fulfillmentPending" class="text-center text-sm text-gray-500 dark:text-gray-400">
+        {{ t('payment.result.fulfillmentPendingHint') }}
+      </p>
       <div v-if="paidOrder" class="w-full rounded-xl bg-gray-50 p-4 dark:bg-dark-800">
         <div class="space-y-2 text-sm">
           <div class="flex justify-between">
@@ -56,10 +70,10 @@
     </div>
     <template #footer>
       <div class="flex justify-end gap-3">
-        <button v-if="!success && !expired" class="btn btn-secondary" :disabled="cancelling" @click="handleCancel">
+        <button v-if="!success && !fulfillmentPending && !expired" class="btn btn-secondary" :disabled="cancelling" @click="handleCancel">
           {{ cancelling ? t('common.processing') : t('payment.qr.cancelOrder') }}
         </button>
-        <button v-if="success" class="btn btn-primary" @click="handleDone">
+        <button v-if="success || fulfillmentPending" class="btn btn-primary" @click="handleDone">
           {{ t('common.confirm') }}
         </button>
         <button v-if="expired" class="btn btn-primary" @click="handleClose">
@@ -110,6 +124,7 @@ const remainingSeconds = ref(0)
 const expired = ref(false)
 const cancelling = ref(false)
 const success = ref(false)
+const fulfillmentPending = ref(false)
 const paidOrder = ref<PaymentOrder | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -119,6 +134,7 @@ const isAlipay = computed(() => props.paymentType.includes('alipay'))
 const isWxpay = computed(() => props.paymentType.includes('wxpay'))
 
 const dialogTitle = computed(() => {
+  if (fulfillmentPending.value) return t('payment.result.fulfillmentPending')
   if (success.value) return t('payment.result.success')
   if (!qrUrl.value) return t('payment.qr.payInNewWindow')
   if (isAlipay.value) return t('payment.qr.scanAlipay')
@@ -193,6 +209,11 @@ async function pollStatus() {
     paidOrder.value = order
     success.value = true
     emit('success')
+  } else if (order.status === 'FULFILLMENT_FAILED') {
+    cleanup()
+    paidOrder.value = order
+    fulfillmentPending.value = true
+    emit('success')
   } else if (order.status === 'EXPIRED' || order.status === 'CANCELLED' || order.status === 'FAILED') {
     cleanup()
     expired.value = true
@@ -246,6 +267,7 @@ function cleanup() {
 function init() {
   // Reset state
   success.value = false
+  fulfillmentPending.value = false
   paidOrder.value = null
   expired.value = false
   cancelling.value = false

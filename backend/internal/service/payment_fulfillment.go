@@ -167,7 +167,17 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 		})
 	}
 	s.writeAuditLog(ctx, o.ID, "ORDER_PAID", pk, map[string]any{"tradeNo": tradeNo, "paidAmount": paid})
-	return s.executeFulfillment(ctx, o.ID)
+	if err := s.executeFulfillment(ctx, o.ID); err != nil {
+		slog.Error("payment fulfillment failed after payment confirmation",
+			"orderID", o.ID,
+			"provider", pk,
+			"tradeNo", tradeNo,
+			"error", err,
+		)
+		s.scheduleFulfillmentRetries(o.ID)
+		return nil
+	}
+	return nil
 }
 
 func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentOrder) error {
@@ -178,8 +188,12 @@ func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentO
 	switch cur.Status {
 	case OrderStatusCompleted, OrderStatusRefunded:
 		return nil
-	case OrderStatusFailed:
-		return s.executeFulfillment(ctx, o.ID)
+	case OrderStatusFailed, OrderStatusFulfillmentFailed:
+		if err := s.executeFulfillment(ctx, o.ID); err != nil {
+			s.scheduleFulfillmentRetries(o.ID)
+			return nil
+		}
+		return nil
 	case OrderStatusPaid, OrderStatusRecharging:
 		return fmt.Errorf("order %d is being processed", o.ID)
 	case OrderStatusExpired:
@@ -221,10 +235,15 @@ func (s *PaymentService) ExecuteBalanceFulfillment(ctx context.Context, oid int6
 	if psIsRefundStatus(o.Status) {
 		return infraerrors.BadRequest("INVALID_STATUS", "refund-related order cannot fulfill")
 	}
-	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed {
+	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed && o.Status != OrderStatusFulfillmentFailed {
 		return infraerrors.BadRequest("INVALID_STATUS", "order cannot fulfill in status "+o.Status)
 	}
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.StatusIn(OrderStatusPaid, OrderStatusFailed)).SetStatus(OrderStatusRecharging).Save(ctx)
+	c, err := s.entClient.PaymentOrder.Update().
+		Where(paymentorder.IDEQ(oid), paymentorder.StatusIn(OrderStatusPaid, OrderStatusFailed, OrderStatusFulfillmentFailed)).
+		SetStatus(OrderStatusRecharging).
+		ClearFailedAt().
+		ClearFailedReason().
+		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("lock: %w", err)
 	}
@@ -316,13 +335,18 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 	if psIsRefundStatus(o.Status) {
 		return infraerrors.BadRequest("INVALID_STATUS", "refund-related order cannot fulfill")
 	}
-	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed {
+	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed && o.Status != OrderStatusFulfillmentFailed {
 		return infraerrors.BadRequest("INVALID_STATUS", "order cannot fulfill in status "+o.Status)
 	}
 	if o.SubscriptionGroupID == nil || o.SubscriptionDays == nil {
 		return infraerrors.BadRequest("INVALID_STATUS", "missing subscription info")
 	}
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.StatusIn(OrderStatusPaid, OrderStatusFailed)).SetStatus(OrderStatusRecharging).Save(ctx)
+	c, err := s.entClient.PaymentOrder.Update().
+		Where(paymentorder.IDEQ(oid), paymentorder.StatusIn(OrderStatusPaid, OrderStatusFailed, OrderStatusFulfillmentFailed)).
+		SetStatus(OrderStatusRecharging).
+		ClearFailedAt().
+		ClearFailedReason().
+		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("lock: %w", err)
 	}
@@ -505,16 +529,83 @@ func (s *PaymentService) updateClaimedAffiliateRebateAudit(ctx context.Context, 
 func (s *PaymentService) markFailed(ctx context.Context, oid int64, cause error) {
 	now := time.Now()
 	r := psErrMsg(cause)
-	// Only mark FAILED if still in RECHARGING state — prevents overwriting
+	// Only mark fulfillment failed if still in RECHARGING state — prevents overwriting
 	// a COMPLETED order when markCompleted failed but fulfillment succeeded.
 	c, e := s.entClient.PaymentOrder.Update().
 		Where(paymentorder.IDEQ(oid), paymentorder.StatusEQ(OrderStatusRecharging)).
-		SetStatus(OrderStatusFailed).SetFailedAt(now).SetFailedReason(r).Save(ctx)
+		SetStatus(OrderStatusFulfillmentFailed).SetFailedAt(now).SetFailedReason(r).Save(ctx)
 	if e != nil {
-		slog.Error("mark FAILED", "orderID", oid, "error", e)
+		slog.Error("mark fulfillment failed", "orderID", oid, "error", e)
 	}
 	if c > 0 {
 		s.writeAuditLog(ctx, oid, "FULFILLMENT_FAILED", "system", map[string]any{"reason": r})
+	}
+}
+
+func (s *PaymentService) scheduleFulfillmentRetries(oid int64) {
+	delays := s.effectiveFulfillmentRetryDelays()
+	if len(delays) == 0 {
+		s.writeAuditLog(context.Background(), oid, "FULFILLMENT_MANUAL_REQUIRED", "system", map[string]any{
+			"reason": "fulfillment retry attempts exhausted",
+		})
+		return
+	}
+	run := func() {
+		s.runFulfillmentRetries(context.Background(), oid, delays)
+	}
+	if s.fulfillmentRetryAsync != nil {
+		s.fulfillmentRetryAsync(run)
+		return
+	}
+	go run()
+}
+
+func (s *PaymentService) effectiveFulfillmentRetryDelays() []time.Duration {
+	if s != nil && s.fulfillmentRetryDelays != nil {
+		return s.fulfillmentRetryDelays
+	}
+	return defaultFulfillmentRetryDelays
+}
+
+func (s *PaymentService) runFulfillmentRetries(ctx context.Context, oid int64, delays []time.Duration) {
+	for attempt, delay := range delays {
+		if !s.sleepBeforeFulfillmentRetry(ctx, delay) {
+			return
+		}
+		s.writeAuditLog(ctx, oid, "FULFILLMENT_RETRY", "system", map[string]any{
+			"attempt": attempt + 2,
+			"delay":   delay.String(),
+		})
+		if err := s.executeFulfillment(ctx, oid); err != nil {
+			slog.Warn("payment fulfillment retry failed",
+				"orderID", oid,
+				"attempt", attempt+2,
+				"error", err,
+			)
+			continue
+		}
+		return
+	}
+	s.writeAuditLog(ctx, oid, "FULFILLMENT_MANUAL_REQUIRED", "system", map[string]any{
+		"attempts": len(delays) + 1,
+		"reason":   "fulfillment retry attempts exhausted",
+	})
+}
+
+func (s *PaymentService) sleepBeforeFulfillmentRetry(ctx context.Context, delay time.Duration) bool {
+	if s != nil && s.fulfillmentRetrySleep != nil {
+		return s.fulfillmentRetrySleep(ctx, delay)
+	}
+	if delay <= 0 {
+		return true
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
@@ -535,10 +626,10 @@ func (s *PaymentService) RetryFulfillment(ctx context.Context, oid int64) error 
 	if o.Status == OrderStatusCompleted {
 		return infraerrors.BadRequest("INVALID_STATUS", "order already completed")
 	}
-	if o.Status != OrderStatusFailed && o.Status != OrderStatusPaid {
-		return infraerrors.BadRequest("INVALID_STATUS", "only paid and failed orders can retry")
+	if o.Status != OrderStatusFailed && o.Status != OrderStatusFulfillmentFailed && o.Status != OrderStatusPaid {
+		return infraerrors.BadRequest("INVALID_STATUS", "only paid and fulfillment-failed orders can retry")
 	}
-	_, err = s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.StatusIn(OrderStatusFailed, OrderStatusPaid)).SetStatus(OrderStatusPaid).ClearFailedAt().ClearFailedReason().Save(ctx)
+	_, err = s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.StatusIn(OrderStatusFailed, OrderStatusFulfillmentFailed, OrderStatusPaid)).SetStatus(OrderStatusPaid).ClearFailedAt().ClearFailedReason().Save(ctx)
 	if err != nil {
 		return fmt.Errorf("reset for retry: %w", err)
 	}

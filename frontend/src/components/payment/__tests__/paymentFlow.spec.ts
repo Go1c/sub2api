@@ -138,6 +138,25 @@ describe('decidePaymentLaunch', () => {
     expect(decision.paymentState.qrCode).toBe('https://pay.example.com/qr/session')
   })
 
+  it('keeps Mapay QR flow first on mobile when both pay_url and qr_code are present', () => {
+    const decision = decidePaymentLaunch(createOrderResult({
+      provider_key: 'mapay',
+      payment_mode: 'qrcode',
+      pay_url: 'https://pay.example.com/mobile/session',
+      qr_code: 'https://pay.example.com/qr/session',
+      pay_amount: 10.03,
+    }), {
+      visibleMethod: 'alipay',
+      orderType: 'balance',
+      isMobile: true,
+    })
+
+    expect(decision.kind).toBe('qr_waiting')
+    expect(decision.paymentState.providerKey).toBe('mapay')
+    expect(decision.paymentState.payAmount).toBe(10.03)
+    expect(decision.paymentState.qrCode).toBe('https://pay.example.com/qr/session')
+  })
+
   it('keeps QR flow on desktop when both pay_url and qr_code are present', () => {
     const decision = decidePaymentLaunch(createOrderResult({
       pay_url: 'https://pay.example.com/desktop/session',
@@ -251,6 +270,7 @@ describe('readPaymentRecoverySnapshot', () => {
       payAmount: 18,
       orderType: 'balance',
       paymentMode: 'popup',
+      providerKey: '',
       resumeToken: 'resume-33',
       createdAt: Date.UTC(2099, 0, 1, 0, 0, 0),
     }
@@ -276,6 +296,7 @@ describe('readPaymentRecoverySnapshot', () => {
       payAmount: 18,
       orderType: 'balance',
       paymentMode: 'popup',
+      providerKey: '',
       resumeToken: 'resume-55',
       createdAt: Date.UTC(2024, 0, 1, 0, 0, 0),
     }

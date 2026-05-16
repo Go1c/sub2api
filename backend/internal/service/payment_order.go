@@ -264,7 +264,7 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 			snapshot["merchant_app_id"] = merchantAppID
 		}
 	}
-	if providerKey == payment.TypeEasyPay {
+	if providerKey == payment.TypeEasyPay || providerKey == payment.TypeMapay {
 		if merchantID := strings.TrimSpace(sel.Config["pid"]); merchantID != "" {
 			snapshot["merchant_id"] = merchantID
 		}
@@ -291,7 +291,7 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 		return nil
 	}
 	ts := psStartOfDayUTC(time.Now())
-	orders, err := tx.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusCompleted), paymentorder.PaidAtGTE(ts)).All(ctx)
+	orders, err := tx.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusFulfillmentFailed, OrderStatusCompleted), paymentorder.PaidAtGTE(ts)).All(ctx)
 	if err != nil {
 		return fmt.Errorf("query daily usage: %w", err)
 	}
@@ -418,7 +418,9 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		}
 		return nil, classifyCreatePaymentError(req, sel.ProviderKey, err)
 	}
+	actualPayAmount := providerRequiredPayAmount(payAmount, pr)
 	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).
+		SetPayAmount(actualPayAmount).
 		SetNillablePaymentTradeNo(psNilIfEmpty(pr.TradeNo)).
 		SetNillablePayURL(psNilIfEmpty(pr.PayURL)).
 		SetNillableQrCode(psNilIfEmpty(pr.QRCode)).
@@ -431,7 +433,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
 		"paymentAmount":  req.Amount,
 		"creditedAmount": order.Amount,
-		"payAmount":      order.PayAmount,
+		"payAmount":      actualPayAmount,
 		"paymentType":    req.PaymentType,
 		"orderType":      req.OrderType,
 		"paymentSource":  NormalizePaymentSource(req.PaymentSource),
@@ -440,9 +442,24 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	if resultType == "" {
 		resultType = payment.CreatePaymentResultOrderCreated
 	}
-	resp := buildCreateOrderResponse(order, req, payAmount, sel, pr, resultType)
+	resp := buildCreateOrderResponse(order, req, actualPayAmount, sel, pr, resultType)
 	resp.ResumeToken = resumeToken
 	return resp, nil
+}
+
+func providerRequiredPayAmount(defaultAmount float64, pr *payment.CreatePaymentResponse) float64 {
+	if pr == nil {
+		return defaultAmount
+	}
+	raw := strings.TrimSpace(pr.PayAmount)
+	if raw == "" {
+		return defaultAmount
+	}
+	amount, err := strconv.ParseFloat(raw, 64)
+	if err != nil || !isValidProviderAmount(amount) {
+		return defaultAmount
+	}
+	return amount
 }
 
 func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.InstanceSelection, orderID, amount, subject string) payment.CreatePaymentRequest {
@@ -584,6 +601,7 @@ func classifyCreatePaymentError(req CreateOrderRequest, providerKey string, err 
 }
 
 func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest, payAmount float64, sel *payment.InstanceSelection, pr *payment.CreatePaymentResponse, resultType payment.CreatePaymentResultType) *CreateOrderResponse {
+	payAmount = providerRequiredPayAmount(payAmount, pr)
 	return &CreateOrderResponse{
 		OrderID:      order.ID,
 		Amount:       order.Amount,
@@ -592,6 +610,7 @@ func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest,
 		Status:       OrderStatusPending,
 		ResultType:   resultType,
 		PaymentType:  req.PaymentType,
+		ProviderKey:  strings.TrimSpace(sel.ProviderKey),
 		OutTradeNo:   order.OutTradeNo,
 		PayURL:       pr.PayURL,
 		QRCode:       pr.QRCode,

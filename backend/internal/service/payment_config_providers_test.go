@@ -38,6 +38,13 @@ func TestValidateProviderRequest(t *testing.T) {
 			wantErr:        false,
 		},
 		{
+			name:           "valid mapay with types",
+			providerKey:    "mapay",
+			providerName:   "Mapay Provider",
+			supportedTypes: "alipay,wxpay",
+			wantErr:        false,
+		},
+		{
 			name:           "valid stripe with empty types",
 			providerKey:    "stripe",
 			providerName:   "Stripe Provider",
@@ -141,6 +148,11 @@ func TestIsSensitiveProviderConfigField(t *testing.T) {
 		{"easypay", "pkey", true},
 		{"easypay", "pid", false},
 		{"easypay", "apiBase", false},
+
+		// Mapay
+		{"mapay", "pkey", true},
+		{"mapay", "pid", false},
+		{"mapay", "apiBase", false},
 
 		// Unknown provider: never sensitive
 		{"unknown", "secretKey", false},
@@ -395,6 +407,15 @@ func TestUpdateProviderInstanceRejectsProtectedConfigChangesWhilePendingOrders(t
 			fieldName:     "pid",
 			wantValue:     "pid-test",
 		},
+		{
+			name:          "mapay pid",
+			providerKey:   payment.TypeMapay,
+			createConfig:  validMapayProviderConfig,
+			supportedType: []string{payment.TypeAlipay},
+			updateConfig:  map[string]string{"pid": "pid-updated"},
+			fieldName:     "pid",
+			wantValue:     "pid-test",
+		},
 	}
 
 	for _, tc := range tests {
@@ -574,6 +595,18 @@ func validEasyPayProviderConfig(t *testing.T) map[string]string {
 		"apiBase":   "https://pay.example.com",
 		"notifyUrl": "https://merchant.example.com/easypay/notify",
 		"returnUrl": "https://merchant.example.com/easypay/return",
+	}
+}
+
+func validMapayProviderConfig(t *testing.T) map[string]string {
+	t.Helper()
+
+	return map[string]string{
+		"pid":       "pid-test",
+		"pkey":      "pkey-test",
+		"apiBase":   "https://mzf.mapay.cc",
+		"notifyUrl": "https://merchant.example.com/mapay/notify",
+		"returnUrl": "https://merchant.example.com/mapay/return",
 	}
 }
 

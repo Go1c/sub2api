@@ -164,6 +164,23 @@ func TestBuildPaymentOrderProviderSnapshot_IncludesEasyPayMerchantIdentity(t *te
 	require.NotContains(t, snapshot, "pkey")
 }
 
+func TestBuildPaymentOrderProviderSnapshot_IncludesMapayMerchantIdentity(t *testing.T) {
+	t.Parallel()
+
+	snapshot := buildPaymentOrderProviderSnapshot(&payment.InstanceSelection{
+		InstanceID:  "67",
+		ProviderKey: payment.TypeMapay,
+		Config: map[string]string{
+			"pid":  "mapay-merchant-67",
+			"pkey": "secret",
+		},
+		PaymentMode: "qrcode",
+	}, CreateOrderRequest{PaymentType: payment.TypeAlipay})
+
+	require.Equal(t, "mapay-merchant-67", snapshot["merchant_id"])
+	require.NotContains(t, snapshot, "pkey")
+}
+
 func valueOrEmpty(v *string) string {
 	if v == nil {
 		return ""

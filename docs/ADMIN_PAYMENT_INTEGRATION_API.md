@@ -117,6 +117,7 @@ https://pay.example.com/pay?user_id=123&token=<jwt>&theme=light&lang=zh&ui_mode=
 - 回调验签成功后立即标记“支付成功”
 - 支付成功但充值失败的订单允许后续重试
 - 重试保持相同 `code`，并使用新的 `Idempotency-Key`
+- 内置支付会将已支付但履约失败的订单标记为 `FULFILLMENT_FAILED`，并按“立即、5 秒、10 秒、1 分钟、2 分钟、5 分钟”的节奏重试；仍失败后转人工处理
 
 ### 6) `doc_url` 配置建议
 - 查看链接：`https://github.com/Wei-Shaw/sub2api/blob/main/ADMIN_PAYMENT_INTEGRATION_API.md`

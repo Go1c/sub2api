@@ -375,6 +375,30 @@ describe('PaymentResultView', () => {
     expect(wrapper.text()).toContain('payment.result.success')
   })
 
+  it('renders fulfillment failure as paid and pending delivery instead of payment failed', async () => {
+    routeState.query = {
+      resume_token: 'resume-fulfillment-pending',
+    }
+    resolveOrderPublicByResumeToken.mockResolvedValue({
+      data: orderFactory('FULFILLMENT_FAILED'),
+    })
+
+    const wrapper = mount(PaymentResultView, {
+      global: {
+        stubs: {
+          OrderStatusBadge: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('payment.result.fulfillmentPending')
+    expect(wrapper.text()).toContain('payment.result.fulfillmentPendingHint')
+    expect(wrapper.text()).not.toContain('payment.result.failed')
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+  })
+
   it('normalizes aliased payment methods before rendering the label', async () => {
     routeState.query = {
       resume_token: 'resume-88',

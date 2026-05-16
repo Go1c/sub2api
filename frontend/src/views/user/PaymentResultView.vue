@@ -19,6 +19,12 @@
             class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30">
             <div class="h-10 w-10 animate-spin rounded-full border-4 border-yellow-500 border-t-transparent"></div>
           </div>
+          <div v-else-if="isFulfillmentFailed"
+            class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+            <svg class="h-10 w-10 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
           <div v-else
             class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
             <svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -30,6 +36,9 @@
           </h2>
           <p v-if="isPending" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
             {{ t('payment.result.processingHint') }}
+          </p>
+          <p v-else-if="isFulfillmentFailed" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            {{ t('payment.result.fulfillmentPendingHint') }}
           </p>
         </div>
         <!-- Order Info -->
@@ -155,12 +164,19 @@ const isPending = computed(() => {
   return isPendingStatus(order.value?.status)
 })
 
+const isFulfillmentFailed = computed(() => {
+  return normalizeOrderStatus(order.value?.status) === 'FULFILLMENT_FAILED'
+})
+
 const statusTitle = computed(() => {
   if (isSuccess.value) {
     return t('payment.result.success')
   }
   if (isPending.value) {
     return t('payment.result.processing')
+  }
+  if (isFulfillmentFailed.value) {
+    return t('payment.result.fulfillmentPending')
   }
   return t('payment.result.failed')
 })

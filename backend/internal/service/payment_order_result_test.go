@@ -25,7 +25,7 @@ func TestBuildCreateOrderResponseDefaultsToOrderCreated(t *testing.T) {
 		},
 		CreateOrderRequest{PaymentType: payment.TypeWxpay},
 		12.71,
-		&payment.InstanceSelection{PaymentMode: "qrcode"},
+		&payment.InstanceSelection{ProviderKey: payment.TypeEasyPay, PaymentMode: "qrcode"},
 		&payment.CreatePaymentResponse{
 			TradeNo: "sub2_42",
 			QRCode:  "weixin://wxpay/bizpayurl?pr=test",
@@ -35,6 +35,9 @@ func TestBuildCreateOrderResponseDefaultsToOrderCreated(t *testing.T) {
 
 	if resp.ResultType != payment.CreatePaymentResultOrderCreated {
 		t.Fatalf("result type = %q, want %q", resp.ResultType, payment.CreatePaymentResultOrderCreated)
+	}
+	if resp.ProviderKey != payment.TypeEasyPay {
+		t.Fatalf("provider_key = %q, want %q", resp.ProviderKey, payment.TypeEasyPay)
 	}
 	if resp.OutTradeNo != "sub2_42" {
 		t.Fatalf("out_trade_no = %q, want %q", resp.OutTradeNo, "sub2_42")
@@ -88,6 +91,33 @@ func TestBuildCreateOrderResponseCopiesJSAPIPayload(t *testing.T) {
 	}
 	if resp.JSAPI != jsapiPayload || resp.JSAPIPayload != jsapiPayload {
 		t.Fatal("expected jsapi aliases to preserve the original pointer")
+	}
+}
+
+func TestBuildCreateOrderResponseUsesProviderRequiredPayAmount(t *testing.T) {
+	t.Parallel()
+
+	resp := buildCreateOrderResponse(
+		&dbent.PaymentOrder{
+			ID:         103,
+			Amount:     10,
+			FeeRate:    0,
+			ExpiresAt:  time.Date(2026, 5, 16, 12, 0, 0, 0, time.UTC),
+			OutTradeNo: "sub2_actual_amount",
+		},
+		CreateOrderRequest{PaymentType: payment.TypeAlipay},
+		10.00,
+		&payment.InstanceSelection{ProviderKey: payment.TypeEasyPay, PaymentMode: "qrcode"},
+		&payment.CreatePaymentResponse{
+			TradeNo:   "mapay-trade-actual",
+			QRCode:    "alipayqr://actual",
+			PayAmount: "10.03",
+		},
+		payment.CreatePaymentResultOrderCreated,
+	)
+
+	if resp.PayAmount != 10.03 {
+		t.Fatalf("pay_amount = %.2f, want 10.03", resp.PayAmount)
 	}
 }
 
