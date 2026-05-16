@@ -405,7 +405,10 @@ const paymentState = ref<PaymentRecoverySnapshot>(emptyPaymentState())
 
 function persistRecoverySnapshot(snapshot: PaymentRecoverySnapshot) {
   if (typeof window === 'undefined' || !snapshot.orderId) return
-  writePaymentRecoverySnapshot(window.localStorage, snapshot, PAYMENT_RECOVERY_STORAGE_KEY)
+  writePaymentRecoverySnapshot(window.localStorage, {
+    ...snapshot,
+    userId: authStore.user?.id,
+  }, PAYMENT_RECOVERY_STORAGE_KEY)
 }
 
 function removeRecoverySnapshot() {
@@ -1027,7 +1030,7 @@ onMounted(async () => {
           : undefined
       const restored = readPaymentRecoverySnapshot(
         window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY),
-        { resumeToken: routeResumeToken },
+        { resumeToken: routeResumeToken, userId: authStore.user?.id },
       )
       if (restored) {
         paymentState.value = restored

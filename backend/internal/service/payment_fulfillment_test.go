@@ -333,6 +333,33 @@ func TestIsValidProviderAmount(t *testing.T) {
 	assert.False(t, isValidProviderAmount(math.Inf(1)))
 }
 
+func TestResolveNotificationPaymentAmountAllowsMapayCallbackOrderAmount(t *testing.T) {
+	t.Parallel()
+
+	order := &dbent.PaymentOrder{
+		Amount:    1.13,
+		PayAmount: 1.14,
+	}
+
+	amount, ok := resolveNotificationPaymentAmount(order, payment.TypeMapay, 1.13)
+
+	assert.True(t, ok)
+	assert.InDelta(t, 1.14, amount, amountToleranceCNY)
+}
+
+func TestResolveNotificationPaymentAmountRejectsNonMapayOrderAmountMismatch(t *testing.T) {
+	t.Parallel()
+
+	order := &dbent.PaymentOrder{
+		Amount:    1.13,
+		PayAmount: 1.14,
+	}
+
+	_, ok := resolveNotificationPaymentAmount(order, payment.TypeEasyPay, 1.13)
+
+	assert.False(t, ok)
+}
+
 func TestValidateProviderNotificationMetadataRejectsAlipaySnapshotMismatch(t *testing.T) {
 	t.Parallel()
 
