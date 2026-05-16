@@ -30,19 +30,19 @@ func newSettingRepoSQLMock(t *testing.T) (*settingRepository, sqlmock.Sqlmock) {
 }
 
 func settingUpsertSQLPattern() string {
-	return regexp.QuoteMeta(`INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`)
+	return regexp.QuoteMeta(`INSERT INTO "settings" ("key", "value", "updated_at") VALUES ($1, $2, $3) ON CONFLICT ("key") DO UPDATE SET "value" = "excluded"."value", "updated_at" = "excluded"."updated_at" RETURNING "id"`)
 }
 
-func TestSettingRepositorySetMultipleUsesTransactionalPostgresUpserts(t *testing.T) {
+func TestSettingRepositorySetMultipleUsesTransactionalEntUpserts(t *testing.T) {
 	repo, mock := newSettingRepoSQLMock(t)
 
 	mock.ExpectBegin()
-	mock.ExpectExec(settingUpsertSQLPattern()).
+	mock.ExpectQuery(settingUpsertSQLPattern()).
 		WithArgs("existing_key", "updated", sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(settingUpsertSQLPattern()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+	mock.ExpectQuery(settingUpsertSQLPattern()).
 		WithArgs("new_key", "created", sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(2)))
 	mock.ExpectCommit()
 
 	err := repo.SetMultiple(context.Background(), map[string]string{
@@ -58,10 +58,10 @@ func TestSettingRepositorySetMultipleRollsBackWhenAnyUpsertFails(t *testing.T) {
 	writeErr := errors.New("write failed")
 
 	mock.ExpectBegin()
-	mock.ExpectExec(settingUpsertSQLPattern()).
+	mock.ExpectQuery(settingUpsertSQLPattern()).
 		WithArgs("first_key", "written", sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(settingUpsertSQLPattern()).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+	mock.ExpectQuery(settingUpsertSQLPattern()).
 		WithArgs("second_key", "fails", sqlmock.AnyArg()).
 		WillReturnError(writeErr)
 	mock.ExpectRollback()
