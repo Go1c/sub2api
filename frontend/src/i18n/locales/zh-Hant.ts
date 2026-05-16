@@ -2045,7 +2045,12 @@ export default {
       completeSuccess: '開票已完成，系統已發送郵件並扣除稅點',
       completeFailed: '完成開票失敗',
       failSuccess: '開票申請已標記失敗',
-      failFailed: '標記失敗失敗'
+      failFailed: '標記失敗失敗',
+      exportAll: '導出全部開票信息',
+      exportProcessing: '導出正在開票',
+      exportSuccess: '已導出 {count} 條開票記錄',
+      exportEmpty: '沒有可導出的開票記錄',
+      exportFailed: '導出開票記錄失敗'
     },
 
     // Groups Management

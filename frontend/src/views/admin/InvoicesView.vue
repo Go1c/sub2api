@@ -22,7 +22,15 @@
             :placeholder="t('admin.invoice.userId')"
             @input="debounceLoad"
           />
-          <div class="flex flex-1 justify-end">
+          <div class="flex flex-1 flex-wrap justify-end gap-2">
+            <button class="btn btn-secondary" :disabled="loading || !!exportingScope" @click="exportInvoices('all')">
+              <Icon name="download" size="sm" class="mr-2" />
+              {{ exportingScope === 'all' ? t('common.processing') : t('admin.invoice.exportAll') }}
+            </button>
+            <button class="btn btn-secondary" :disabled="loading || !!exportingScope" @click="exportInvoices('processing')">
+              <Icon name="download" size="sm" class="mr-2" />
+              {{ exportingScope === 'processing' ? t('common.processing') : t('admin.invoice.exportProcessing') }}
+            </button>
             <button class="btn btn-secondary" :disabled="loading" @click="loadItems">
               <Icon name="refresh" size="sm" class="mr-2" :class="loading ? 'animate-spin' : ''" />
               {{ t('common.refresh') }}
@@ -163,6 +171,10 @@ import { adminInvoicesAPI } from '@/api/admin/invoices'
 import type { InvoiceRequest, InvoiceStatus } from '@/api/invoices'
 import { useAppStore } from '@/stores/app'
 import { extractI18nErrorMessage } from '@/utils/apiError'
+import {
+  downloadAdminInvoiceWorkbook,
+  type AdminInvoiceExportScope,
+} from '@/utils/adminInvoiceExport'
 import { formatCurrency, formatDateTime } from '@/utils/format'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -178,6 +190,7 @@ const appStore = useAppStore()
 const items = ref<InvoiceRequest[]>([])
 const loading = ref(false)
 const actionLoading = ref(false)
+const exportingScope = ref<AdminInvoiceExportScope | null>(null)
 const downloadingId = ref<number | null>(null)
 const completeTarget = ref<InvoiceRequest | null>(null)
 const failTarget = ref<InvoiceRequest | null>(null)
@@ -245,6 +258,43 @@ async function loadItems() {
     appStore.showError(extractI18nErrorMessage(err, t, 'invoice.errors', t('admin.invoice.failedToLoad')))
   } finally {
     loading.value = false
+  }
+}
+
+async function exportInvoices(scope: AdminInvoiceExportScope) {
+  exportingScope.value = scope
+  try {
+    const allItems: InvoiceRequest[] = []
+    const pageSize = 200
+    let page = 1
+    let total = 0
+
+    do {
+      const response = await adminInvoicesAPI.list({
+        page,
+        page_size: pageSize,
+        status: scope === 'processing' ? 'processing' : '',
+        search: filters.search || undefined,
+        user_id: filters.user_id || undefined,
+      })
+      const pageItems = response.items || []
+      allItems.push(...pageItems)
+      total = response.total || allItems.length
+      if (pageItems.length === 0) break
+      page += 1
+    } while (allItems.length < total)
+
+    if (allItems.length === 0) {
+      appStore.showWarning(t('admin.invoice.exportEmpty'))
+      return
+    }
+
+    downloadAdminInvoiceWorkbook(allItems, scope)
+    appStore.showSuccess(t('admin.invoice.exportSuccess', { count: allItems.length }))
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'invoice.errors', t('admin.invoice.exportFailed')))
+  } finally {
+    exportingScope.value = null
   }
 }
 

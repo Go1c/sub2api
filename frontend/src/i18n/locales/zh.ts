@@ -2045,7 +2045,12 @@ export default {
       completeSuccess: '开票已完成，系统已发送邮件并扣除税点',
       completeFailed: '完成开票失败',
       failSuccess: '开票申请已标记失败',
-      failFailed: '标记失败失败'
+      failFailed: '标记失败失败',
+      exportAll: '导出全部开票信息',
+      exportProcessing: '导出正在开票',
+      exportSuccess: '已导出 {count} 条开票记录',
+      exportEmpty: '没有可导出的开票记录',
+      exportFailed: '导出开票记录失败'
     },
 
     // Groups Management
