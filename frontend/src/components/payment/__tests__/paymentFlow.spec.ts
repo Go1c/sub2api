@@ -316,6 +316,56 @@ describe('readPaymentRecoverySnapshot', () => {
     })).toBeNull()
   })
 
+  it('drops recovery snapshots owned by another signed-in user', () => {
+    const snapshot: PaymentRecoverySnapshot = {
+      orderId: 66,
+      amount: 18,
+      qrCode: '',
+      expiresAt: '2099-01-01T00:10:00.000Z',
+      paymentType: 'alipay',
+      payUrl: 'https://pay.example.com/session/66',
+      outTradeNo: 'sub2_66',
+      clientSecret: '',
+      payAmount: 18,
+      orderType: 'balance',
+      paymentMode: 'popup',
+      providerKey: '',
+      resumeToken: 'resume-66',
+      userId: 1001,
+      createdAt: Date.UTC(2099, 0, 1, 0, 0, 0),
+    }
+
+    expect(readPaymentRecoverySnapshot(JSON.stringify(snapshot), {
+      now: Date.UTC(2099, 0, 1, 0, 1, 0),
+      userId: 1002,
+    })).toBeNull()
+
+    expect(readPaymentRecoverySnapshot(JSON.stringify(snapshot), {
+      now: Date.UTC(2099, 0, 1, 0, 1, 0),
+      userId: 1001,
+    })?.orderId).toBe(66)
+  })
+
+  it('drops legacy recovery snapshots without an owner when a signed-in user is known', () => {
+    expect(readPaymentRecoverySnapshot(JSON.stringify({
+      orderId: 77,
+      amount: 18,
+      qrCode: '',
+      expiresAt: '2099-01-01T00:10:00.000Z',
+      paymentType: 'alipay',
+      payUrl: 'https://pay.example.com/session/77',
+      clientSecret: '',
+      payAmount: 18,
+      orderType: 'balance',
+      paymentMode: 'popup',
+      resumeToken: 'resume-77',
+      createdAt: Date.UTC(2099, 0, 1, 0, 0, 0),
+    }), {
+      now: Date.UTC(2099, 0, 1, 0, 1, 0),
+      userId: 1001,
+    })).toBeNull()
+  })
+
   it('keeps backward compatibility with snapshots written before outTradeNo existed', () => {
     const restored = readPaymentRecoverySnapshot(JSON.stringify({
       orderId: 44,

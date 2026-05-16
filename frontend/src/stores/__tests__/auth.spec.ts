@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 
 // Mock authAPI
 const mockLogin = vi.fn()
@@ -155,6 +156,19 @@ describe('useAuthStore', () => {
       expect(localStorage.getItem('auth_user')).toBeNull()
       expect(localStorage.getItem('refresh_token')).toBeNull()
       expect(localStorage.getItem('token_expires_at')).toBeNull()
+    })
+
+    it('注销后清除当前支付恢复快照', async () => {
+      mockLogin.mockResolvedValue(fakeAuthResponse)
+      mockLogout.mockResolvedValue(undefined)
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: '123456' })
+      localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({ orderId: 101 }))
+
+      await store.logout()
+
+      expect(localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
     })
   })
 
