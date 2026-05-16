@@ -5310,6 +5310,12 @@ export default {
           enabled: 'Enable Available Channels',
           enabledHint: 'When off, the sidebar entry is hidden and the endpoint returns an empty list.',
         },
+        userSubscriptions: {
+          title: 'User Subscriptions Entry',
+          description: 'Control whether users can access their subscription page from the sidebar or direct links.',
+          enabled: 'Show user subscriptions entry',
+          enabledHint: 'When off, My Subscriptions is hidden and direct access is blocked. Payment top-up remains available.',
+        },
         siteMessages: {
           title: 'Site Messages',
           description: 'Enable user-to-user site messages, replies, and unread reminders.',
@@ -5626,9 +5632,6 @@ export default {
         backendMode: 'Backend Mode',
         backendModeDescription:
           'Disables user registration, public site, and self-service features. Only admin can log in and manage the platform.',
-        userSubscriptionsVisible: 'Show user subscriptions entry',
-        userSubscriptionsVisibleDescription:
-          'Controls whether users can see and directly access My Subscriptions. Payment top-up remains available.',
         siteName: 'Site Name',
         siteNamePlaceholder: 'Sub2API',
         siteNameHint: 'Displayed in emails and page titles',

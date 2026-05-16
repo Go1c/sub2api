@@ -603,6 +603,16 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
   await flushPromises();
 }
 
+async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
+  const featuresTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.features"));
+
+  expect(featuresTabButton).toBeDefined();
+  await featuresTabButton?.trigger("click");
+  await flushPromises();
+}
+
 describe("admin SettingsView payment visible method controls", () => {
   beforeEach(() => {
     getSettings.mockReset();
@@ -764,6 +774,24 @@ describe("admin SettingsView payment visible method controls", () => {
         ]),
       }),
     );
+  });
+
+  it("places user subscriptions visibility under feature switches, not general settings", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      user_subscriptions_visible: false,
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+
+    await openFeaturesTab(wrapper);
+
+    const pageText = wrapper.text();
+
+    expect(pageText).not.toContain("admin.settings.site.userSubscriptionsVisible");
+    expect(pageText).toContain("admin.settings.features.userSubscriptions.title");
   });
 
   it("submits the user subscriptions visibility setting", async () => {

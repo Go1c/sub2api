@@ -5473,6 +5473,12 @@ export default {
           enabled: '啟用可用渠道',
           enabledHint: '關閉後用戶端側邊欄入口隱藏，接口返回空數組。',
         },
+        userSubscriptions: {
+          title: '用戶訂閱入口',
+          description: '控制用戶是否可以從側邊欄或直鏈訪問自己的訂閱頁面。',
+          enabled: '顯示用戶訂閱入口',
+          enabledHint: '關閉後隱藏「我的訂閱」入口並攔截直鏈訪問，不影響支付充值入口。',
+        },
         siteMessages: {
           title: '站內信',
           description: '啟用用戶之間的站內信收發、回覆和未讀提醒。',
@@ -5785,9 +5791,6 @@ export default {
         backendMode: 'Backend 模式',
         backendModeDescription:
           '禁用用戶註冊、公開頁面和自助服務功能。僅管理員可以登錄和管理平臺。',
-        userSubscriptionsVisible: '顯示用戶訂閱入口',
-        userSubscriptionsVisibleDescription:
-          '控制用戶側左欄和直鏈是否可以訪問「我的訂閱」，不影響支付充值入口。',
         siteName: '站點名稱',
         siteNameHint: '顯示在郵件和頁面標題中',
         siteNamePlaceholder: 'Sub2API',
