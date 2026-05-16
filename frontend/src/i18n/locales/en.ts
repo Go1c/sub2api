@@ -374,7 +374,7 @@ export default {
     logout: 'Logout',
     github: 'GitHub',
     mySubscriptions: 'My Subscriptions',
-    buySubscription: 'Recharge / Subscription',
+    buySubscription: 'Top up',
     docs: 'Docs',
     myOrders: 'My Orders',
     orderManagement: 'Orders',
@@ -5621,6 +5621,9 @@ export default {
         backendMode: 'Backend Mode',
         backendModeDescription:
           'Disables user registration, public site, and self-service features. Only admin can log in and manage the platform.',
+        userSubscriptionsVisible: 'Show user subscriptions entry',
+        userSubscriptionsVisibleDescription:
+          'Controls whether users can see and directly access My Subscriptions. Payment top-up remains available.',
         siteName: 'Site Name',
         siteNamePlaceholder: 'Sub2API',
         siteNameHint: 'Displayed in emails and page titles',

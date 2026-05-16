@@ -135,6 +135,7 @@ type SystemSettings struct {
 	CCSwitchDefaultModelGemini            string           `json:"ccswitch_default_model_gemini"`
 	CCSwitchDefaultModelAntigravity       string           `json:"ccswitch_default_model_antigravity"`
 	CCSwitchDefaultModelAntigravityGemini string           `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible              bool             `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled           bool             `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL               string           `json:"purchase_subscription_url"`
 	TableDefaultPageSize                  int              `json:"table_default_page_size"`
@@ -305,6 +306,7 @@ type PublicSettings struct {
 	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`
 	CCSwitchDefaultModelAntigravity       string                   `json:"ccswitch_default_model_antigravity"`
 	CCSwitchDefaultModelAntigravityGemini string                   `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible              bool                     `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled           bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL               string                   `json:"purchase_subscription_url"`
 	TableDefaultPageSize                  int                      `json:"table_default_page_size"`

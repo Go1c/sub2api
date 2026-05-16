@@ -300,7 +300,8 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: false,
       title: 'My Subscriptions',
       titleKey: 'userSubscriptions.title',
-      descriptionKey: 'userSubscriptions.description'
+      descriptionKey: 'userSubscriptions.description',
+      requiresUserSubscriptions: true
     }
   },
   {
@@ -852,6 +853,11 @@ router.beforeEach((to, _from, next) => {
       next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
       return
     }
+  }
+
+  if (to.meta.requiresUserSubscriptions && !isFeatureFlagEnabled(FeatureFlags.userSubscriptions)) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
   }
 
   if (to.meta.requiresRiskControl) {

@@ -111,7 +111,7 @@
             </template>
           </template>
           <!-- Subscribe Tab -->
-          <template v-else-if="activeTab === 'subscription'">
+          <template v-else-if="activeTab === 'subscription' && userSubscriptionsVisible">
             <!-- Subscription confirm (inline, replaces plan list) -->
             <template v-if="selectedPlan">
               <div class="card p-5">
@@ -496,10 +496,11 @@ const checkout = ref<CheckoutInfoResponse>({
   plans: [], balance_disabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
 })
 
+const userSubscriptionsVisible = computed(() => appStore.cachedPublicSettings?.user_subscriptions_visible !== false)
 const tabs = computed(() => {
   const result: { key: 'recharge' | 'subscription'; label: string }[] = []
   if (!checkout.value.balance_disabled) result.push({ key: 'recharge', label: t('payment.tabTopUp') })
-  result.push({ key: 'subscription', label: t('payment.tabSubscribe') })
+  if (userSubscriptionsVisible.value) result.push({ key: 'subscription', label: t('payment.tabSubscribe') })
   return result
 })
 
@@ -1036,11 +1037,11 @@ onMounted(async () => {
       }
     }
     await resumeWechatPaymentFromQuery()
-    if (checkout.value.balance_disabled) {
+    if (checkout.value.balance_disabled && userSubscriptionsVisible.value) {
       activeTab.value = 'subscription'
     }
     // Handle renewal navigation: ?tab=subscription&group=123
-    if (route.query.tab === 'subscription') {
+    if (route.query.tab === 'subscription' && userSubscriptionsVisible.value) {
       activeTab.value = 'subscription'
       if (route.query.group) {
         const groupId = Number(route.query.group)

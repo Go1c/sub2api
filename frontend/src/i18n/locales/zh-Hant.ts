@@ -374,7 +374,7 @@ export default {
     logout: '退出登錄',
     github: 'GitHub',
     mySubscriptions: '我的訂閱',
-    buySubscription: '充值/訂閱',
+    buySubscription: '充值',
     docs: '文檔',
     myOrders: '我的訂單',
     orderManagement: '訂單管理',
@@ -5780,6 +5780,9 @@ export default {
         backendMode: 'Backend 模式',
         backendModeDescription:
           '禁用用戶註冊、公開頁面和自助服務功能。僅管理員可以登錄和管理平臺。',
+        userSubscriptionsVisible: '顯示用戶訂閱入口',
+        userSubscriptionsVisibleDescription:
+          '控制用戶側左欄和直鏈是否可以訪問「我的訂閱」，不影響支付充值入口。',
         siteName: '站點名稱',
         siteNameHint: '顯示在郵件和頁面標題中',
         siteNamePlaceholder: 'Sub2API',

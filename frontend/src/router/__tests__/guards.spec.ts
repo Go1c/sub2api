@@ -54,6 +54,8 @@ interface MockAuthState {
   isSimpleMode: boolean
   backendModeEnabled: boolean
   hasPendingAuthSession: boolean
+  userSubscriptionsVisible?: boolean
+  paymentEnabled?: boolean
   token?: string
 }
 
@@ -116,6 +118,14 @@ function simulateGuard(
   // 需要管理员但不是管理员
   if (requiresAdmin && !authState.isAdmin) {
     return '/dashboard'
+  }
+
+  if (toMeta.requiresPayment && authState.paymentEnabled === false) {
+    return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
+  }
+
+  if (toMeta.requiresUserSubscriptions && authState.userSubscriptionsVisible === false) {
+    return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
   }
 
   // 简易模式限制
@@ -245,6 +255,24 @@ describe('路由守卫逻辑', () => {
     it('访问 /admin/users 被拒绝', () => {
       const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
       expect(redirect).toBe('/dashboard')
+    })
+
+    it('订阅入口关闭时访问 /subscriptions 重定向到 /dashboard', () => {
+      const redirect = simulateGuard(
+        '/subscriptions',
+        { requiresUserSubscriptions: true },
+        { ...authState, userSubscriptionsVisible: false, paymentEnabled: true },
+      )
+      expect(redirect).toBe('/dashboard')
+    })
+
+    it('订阅入口关闭时仍允许访问支付页', () => {
+      const redirect = simulateGuard(
+        '/purchase',
+        { requiresPayment: true },
+        { ...authState, userSubscriptionsVisible: false, paymentEnabled: true },
+      )
+      expect(redirect).toBeNull()
     })
   })
 
