@@ -3,17 +3,26 @@ package admin
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/enttest"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+
+	_ "modernc.org/sqlite"
 )
 
 type settingHandlerRepoStub struct {
@@ -316,6 +325,44 @@ func TestSettingHandler_UpdateSettings_AllowsExplicitlyDisablingAllWeChatCapabil
 	require.Equal(t, "false", repo.values[service.SettingKeyWeChatConnectOpenEnabled])
 	require.Equal(t, "false", repo.values[service.SettingKeyWeChatConnectMPEnabled])
 	require.Equal(t, "false", repo.values[service.SettingKeyWeChatConnectMobileEnabled])
+}
+
+func TestSettingHandler_UpdateSettings_AllowsConsecutiveSavesWithExistingSettings(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", t.Name()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
+
+	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(entsql.OpenDB(dialect.SQLite, db))))
+	t.Cleanup(func() { _ = client.Close() })
+
+	svc := service.NewSettingService(repository.NewSettingRepository(client), &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	body := map[string]any{
+		"registration_enabled":          true,
+		"promo_code_enabled":            true,
+		"wechat_connect_enabled":        true,
+		"wechat_connect_open_enabled":   false,
+		"wechat_connect_mp_enabled":     false,
+		"wechat_connect_mobile_enabled": false,
+		"wechat_connect_mode":           "open",
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	for i := 0; i < 2; i++ {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.UpdateSettings(c)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+	}
 }
 
 func TestSettingHandler_UpdateSettings_RejectsSitePageSlugOutsideDocRoute(t *testing.T) {
