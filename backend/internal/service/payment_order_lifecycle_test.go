@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -28,10 +29,12 @@ type paymentOrderLifecycleQueryProvider struct {
 
 type paymentOrderLifecycleRedeemRepo struct {
 	codesByCode map[string]*RedeemCode
+	useAttempts int
 	useCalls    []struct {
 		id     int64
 		userID int64
 	}
+	useErrs []error
 }
 
 func (p *paymentOrderLifecycleQueryProvider) Name() string {
@@ -106,6 +109,14 @@ func (r *paymentOrderLifecycleRedeemRepo) Delete(context.Context, int64) error {
 }
 
 func (r *paymentOrderLifecycleRedeemRepo) Use(_ context.Context, id, userID int64) error {
+	r.useAttempts++
+	if len(r.useErrs) > 0 {
+		err := r.useErrs[0]
+		r.useErrs = r.useErrs[1:]
+		if err != nil {
+			return err
+		}
+	}
 	for code, redeemCode := range r.codesByCode {
 		if redeemCode.ID != id {
 			continue
@@ -122,6 +133,13 @@ func (r *paymentOrderLifecycleRedeemRepo) Use(_ context.Context, id, userID int6
 		return nil
 	}
 	return ErrRedeemCodeNotFound
+}
+
+func (r *paymentOrderLifecycleRedeemRepo) useCallCount() int {
+	if r == nil {
+		return 0
+	}
+	return len(r.useCalls)
 }
 
 func (r *paymentOrderLifecycleRedeemRepo) List(context.Context, pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error) {
@@ -433,6 +451,178 @@ func TestVerifyOrderByOutTradeNoRejectsPaidQueryWithZeroAmount(t *testing.T) {
 
 	require.Equal(t, 0.0, userRepo.getByIDUser.Balance)
 	require.Empty(t, redeemRepo.useCalls)
+}
+
+func TestHandlePaymentNotificationAcknowledgesPaidOrderWhenFulfillmentFails(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("webhook-fulfillment-fails@example.com").
+		SetPasswordHash("hash").
+		SetUsername("webhook-fulfillment-fails-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(88).
+		SetPayAmount(88).
+		SetFeeRate(0).
+		SetRechargeCode("WEBHOOK-FULFILLMENT-FAILS").
+		SetOutTradeNo("sub2_webhook_fulfillment_fails").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetProviderKey(payment.TypeEasyPay).
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusPending).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	userRepo := &mockUserRepo{
+		getByIDUser: &User{
+			ID:       user.ID,
+			Email:    user.Email,
+			Username: user.Username,
+			Balance:  0,
+		},
+	}
+	redeemRepo := &paymentOrderLifecycleRedeemRepo{
+		codesByCode: map[string]*RedeemCode{
+			order.RechargeCode: {
+				ID:     1,
+				Code:   order.RechargeCode,
+				Type:   RedeemTypeBalance,
+				Value:  order.Amount,
+				Status: StatusUnused,
+			},
+		},
+		useErrs: []error{errors.New("temporary balance credit failure")},
+	}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
+	svc := &PaymentService{
+		entClient:              client,
+		redeemService:          redeemService,
+		userRepo:               userRepo,
+		fulfillmentRetryDelays: []time.Duration{},
+		fulfillmentRetryAsync:  func(fn func()) { fn() },
+		providersLoaded:        true,
+	}
+
+	err = svc.HandlePaymentNotification(ctx, &payment.PaymentNotification{
+		TradeNo: "easypay-trade-paid",
+		OrderID: order.OutTradeNo,
+		Amount:  88,
+		Status:  payment.NotificationStatusSuccess,
+	}, payment.TypeEasyPay)
+	require.NoError(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, payment.OrderStatusFulfillmentFailed, reloaded.Status)
+	require.NotNil(t, reloaded.PaidAt)
+	require.Equal(t, "easypay-trade-paid", reloaded.PaymentTradeNo)
+	require.NotNil(t, reloaded.FailedAt)
+	require.NotNil(t, reloaded.FailedReason)
+	require.Contains(t, *reloaded.FailedReason, "temporary balance credit failure")
+	require.Equal(t, 0.0, userRepo.getByIDUser.Balance)
+}
+
+func TestHandlePaymentNotificationRetriesFulfillmentInternallyBeforeManualHandling(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("webhook-fulfillment-retry@example.com").
+		SetPasswordHash("hash").
+		SetUsername("webhook-fulfillment-retry-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(88).
+		SetPayAmount(88).
+		SetFeeRate(0).
+		SetRechargeCode("WEBHOOK-FULFILLMENT-RETRY").
+		SetOutTradeNo("sub2_webhook_fulfillment_retry").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetProviderKey(payment.TypeEasyPay).
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusPending).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	userRepo := &mockUserRepo{
+		getByIDUser: &User{
+			ID:       user.ID,
+			Email:    user.Email,
+			Username: user.Username,
+			Balance:  0,
+		},
+	}
+	userRepo.updateBalanceFn = func(ctx context.Context, id int64, amount float64) error {
+		require.Equal(t, user.ID, id)
+		if userRepo.getByIDUser != nil {
+			userRepo.getByIDUser.Balance += amount
+		}
+		return nil
+	}
+	redeemRepo := &paymentOrderLifecycleRedeemRepo{
+		codesByCode: map[string]*RedeemCode{
+			order.RechargeCode: {
+				ID:     1,
+				Code:   order.RechargeCode,
+				Type:   RedeemTypeBalance,
+				Value:  order.Amount,
+				Status: StatusUnused,
+			},
+		},
+		useErrs: []error{
+			errors.New("temporary balance credit failure 1"),
+			errors.New("temporary balance credit failure 2"),
+		},
+	}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
+	var slept []time.Duration
+	svc := &PaymentService{
+		entClient:              client,
+		redeemService:          redeemService,
+		userRepo:               userRepo,
+		fulfillmentRetryDelays: []time.Duration{5 * time.Second, 10 * time.Second},
+		fulfillmentRetrySleep: func(_ context.Context, delay time.Duration) bool {
+			slept = append(slept, delay)
+			return true
+		},
+		fulfillmentRetryAsync: func(fn func()) { fn() },
+		providersLoaded:       true,
+	}
+
+	err = svc.HandlePaymentNotification(ctx, &payment.PaymentNotification{
+		TradeNo: "easypay-trade-retry",
+		OrderID: order.OutTradeNo,
+		Amount:  88,
+		Status:  payment.NotificationStatusSuccess,
+	}, payment.TypeEasyPay)
+	require.NoError(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.Equal(t, 3, redeemRepo.useAttempts)
+	require.Equal(t, []time.Duration{5 * time.Second, 10 * time.Second}, slept)
+	require.Equal(t, 88.0, userRepo.getByIDUser.Balance)
 }
 
 func TestVerifyOrderByOutTradeNoUsesOutTradeNoWhenPaymentTradeNoAlreadyExistsForAlipay(t *testing.T) {

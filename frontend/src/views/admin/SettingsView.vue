@@ -9322,9 +9322,14 @@ function togglePaymentType(type: string) {
 }
 
 async function disableProvidersByType(type: string) {
-  const matching = providers.value.filter(
-    (p) => p.provider_key === type && p.enabled,
-  );
+  const matching = providers.value.filter((p) => {
+    if (!p.enabled) return false;
+    if (p.provider_key === type) return true;
+    if (type === "alipay" || type === "wxpay") {
+      return getProviderVisibleMethods(p).includes(type);
+    }
+    return false;
+  });
   for (const p of matching) {
     try {
       await adminAPI.payment.updateProvider(p.id, { enabled: false });
@@ -9352,6 +9357,7 @@ const providerDialogRef = ref<InstanceType<
 
 const providerKeyOptions = computed(() => [
   { value: "easypay", label: t("admin.settings.payment.providerEasypay") },
+  { value: "mapay", label: t("admin.settings.payment.providerMapay") },
   { value: "alipay", label: t("admin.settings.payment.providerAlipay") },
   { value: "wxpay", label: t("admin.settings.payment.providerWxpay") },
   { value: "stripe", label: t("admin.settings.payment.providerStripe") },
@@ -9359,7 +9365,10 @@ const providerKeyOptions = computed(() => [
 
 const enabledProviderKeyOptions = computed(() => {
   const enabled = form.payment_enabled_types;
-  return providerKeyOptions.value.filter((opt) => enabled.includes(opt.value));
+  return providerKeyOptions.value.filter((opt) =>
+    enabled.includes(opt.value) ||
+    (opt.value === "mapay" && (enabled.includes("alipay") || enabled.includes("wxpay"))),
+  );
 });
 
 const loadBalanceOptions = computed(() => [
@@ -9436,7 +9445,7 @@ function getProviderVisibleMethods(
         }
       });
     }
-  } else if (provider.provider_key === "easypay") {
+  } else if (provider.provider_key === "easypay" || provider.provider_key === "mapay") {
     supportedTypes.forEach(addMethod);
   }
 

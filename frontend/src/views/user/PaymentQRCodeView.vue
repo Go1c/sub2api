@@ -15,6 +15,14 @@
         <p class="text-lg font-medium text-red-500">{{ t('payment.qr.expired') }}</p>
         <button class="btn btn-primary mt-4" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
       </div>
+      <div v-else-if="fulfillmentPending" class="text-center">
+        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+          <Icon name="exclamationTriangle" size="lg" class="text-amber-500" />
+        </div>
+        <p class="mt-4 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.result.fulfillmentPending') }}</p>
+        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t('payment.result.fulfillmentPendingHint') }}</p>
+        <button class="btn btn-primary mt-4" @click="router.push('/orders')">{{ t('payment.result.viewOrders') }}</button>
+      </div>
       <div v-else class="text-center">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ qrUrl ? t('payment.qr.expiresIn') : t('payment.qr.payInNewWindowHint') }}</p>
         <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
@@ -25,7 +33,7 @@
         {{ t('payment.qr.openPayWindow') }}
       </a>
       <!-- Cancel button -->
-      <button v-if="!expired && orderId" class="btn btn-secondary w-full" :disabled="cancelling" @click="handleCancel">
+      <button v-if="!expired && !fulfillmentPending && orderId" class="btn btn-secondary w-full" :disabled="cancelling" @click="handleCancel">
         {{ cancelling ? t('common.processing') : t('payment.qr.cancelOrder') }}
       </button>
     </div>
@@ -37,6 +45,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { usePaymentStore } from '@/stores/payment'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
@@ -57,6 +66,7 @@ const payUrl = ref('')
 const orderId = ref(0)
 const remainingSeconds = ref(0)
 const expired = ref(false)
+const fulfillmentPending = ref(false)
 const cancelling = ref(false)
 const paymentType = ref('')
 
@@ -138,6 +148,9 @@ async function pollStatus() {
   if (order.status === 'COMPLETED' || order.status === 'PAID') {
     cleanup()
     router.push({ path: '/payment/result', query: { order_id: String(orderId.value), status: 'success' } })
+  } else if (order.status === 'FULFILLMENT_FAILED') {
+    cleanup()
+    fulfillmentPending.value = true
   } else if (order.status === 'EXPIRED' || order.status === 'CANCELLED' || order.status === 'FAILED') {
     cleanup()
     expired.value = true
