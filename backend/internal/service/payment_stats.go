@@ -42,7 +42,7 @@ func (s *PaymentService) dashboardStatsForRange(ctx context.Context, since, unti
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-	paidStatuses := []string{OrderStatusCompleted, OrderStatusPaid, OrderStatusRecharging}
+	paidStatuses := []string{OrderStatusCompleted, OrderStatusPaid, OrderStatusRecharging, OrderStatusFulfillmentFailed}
 
 	orders, err := s.entClient.PaymentOrder.Query().
 		Where(

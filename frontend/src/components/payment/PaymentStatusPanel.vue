@@ -51,6 +51,32 @@
       </div>
     </template>
 
+    <!-- Paid but fulfillment needs manual handling -->
+    <template v-else-if="outcome === 'fulfillment_failed'">
+      <div class="card p-6">
+        <div class="flex flex-col items-center space-y-4 py-4">
+          <div class="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+            <Icon name="exclamationTriangle" size="lg" class="text-amber-500" />
+          </div>
+          <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('payment.result.fulfillmentPending') }}</p>
+          <p class="text-center text-sm text-gray-500 dark:text-gray-400">{{ t('payment.result.fulfillmentPendingHint') }}</p>
+          <div v-if="paidOrder" class="w-full rounded-xl bg-gray-50 p-4 dark:bg-dark-800">
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderId') }}</span>
+                <span class="font-medium text-gray-900 dark:text-white">#{{ paidOrder.id }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
+                <span class="font-medium text-gray-900 dark:text-white">¥{{ paidOrder.pay_amount.toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" @click="handleDone">{{ t('common.confirm') }}</button>
+        </div>
+      </div>
+    </template>
+
     <!-- Expired / Failed -->
     <template v-else-if="outcome === 'expired'">
       <div class="card p-6">
@@ -84,6 +110,23 @@
             </div>
           </div>
           <p v-if="scanHint" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ scanHint }}</p>
+          <div
+            v-if="showExactAmountWarning"
+            class="relative w-full overflow-hidden rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-center shadow-lg shadow-amber-500/20 ring-4 ring-amber-200/70 dark:border-amber-300 dark:bg-amber-500/15 dark:ring-amber-400/20"
+          >
+            <div class="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-amber-100/10"></div>
+            <div class="relative space-y-1">
+              <p class="text-sm font-black uppercase tracking-wide text-amber-800 dark:text-amber-100">
+                {{ t('payment.qr.exactAmountTitle') }}
+              </p>
+              <p class="text-3xl font-black tabular-nums text-amber-700 dark:text-amber-200">
+                ¥{{ exactPayAmountDisplay }}
+              </p>
+              <p class="text-sm font-bold leading-relaxed text-amber-800 dark:text-amber-100">
+                {{ t('payment.qr.exactAmountWarning') }}
+              </p>
+            </div>
+          </div>
           <button v-if="payUrl" class="btn btn-secondary text-sm" @click="reopenPopup">
             {{ t('payment.qr.openPayWindow') }}
           </button>
@@ -142,9 +185,12 @@ const props = defineProps<{
   paymentType: string
   payUrl?: string
   orderType?: string
+  payAmount?: number
+  providerKey?: string
+  paymentMode?: string
 }>()
 
-type PaymentOutcome = 'success' | 'cancelled' | 'expired'
+type PaymentOutcome = 'success' | 'cancelled' | 'expired' | 'fulfillment_failed'
 
 const emit = defineEmits<{ done: []; success: []; settled: [outcome: PaymentOutcome] }>()
 
@@ -157,6 +203,8 @@ const qrUrl = ref('')
 const remainingSeconds = ref(0)
 const cancelling = ref(false)
 const paidOrder = ref<PaymentOrder | null>(null)
+const activePayAmount = ref(props.payAmount ?? 0)
+const activeProviderHint = ref(props.providerKey || '')
 
 // Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired'
 const outcome = ref<PaymentOutcome | null>(null)
@@ -166,6 +214,20 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 const isAlipay = computed(() => props.paymentType.includes('alipay'))
 const isWxpay = computed(() => props.paymentType.includes('wxpay'))
+const normalizedProviderKey = computed(() => (props.providerKey || '').trim().toLowerCase())
+const normalizedPaymentMode = computed(() => (props.paymentMode || '').trim().toLowerCase())
+const isMapayFlow = computed(() => {
+  const providerHint = activeProviderHint.value.trim().toLowerCase()
+  return normalizedProviderKey.value === 'mapay'
+  || providerHint.includes('mapay')
+  || normalizedPaymentMode.value.includes('mapay')
+  || normalizedPaymentMode.value.includes('codepay')
+})
+const hasExactPayAmount = computed(() => Number.isFinite(activePayAmount.value) && activePayAmount.value > 0)
+const showExactAmountWarning = computed(() =>
+  !!qrUrl.value && hasExactPayAmount.value && (isAlipay.value || isWxpay.value) && isMapayFlow.value
+)
+const exactPayAmountDisplay = computed(() => activePayAmount.value.toFixed(2))
 
 const qrBorderClass = computed(() => {
   if (isAlipay.value) return 'border-[#00AEEF] bg-blue-50 dark:border-[#00AEEF]/70 dark:bg-blue-950/20'
@@ -229,11 +291,21 @@ async function pollStatus() {
   if (!props.orderId || outcome.value) return
   const order = await paymentStore.pollOrderStatus(props.orderId)
   if (!order) return
+  if (Number.isFinite(order.pay_amount) && order.pay_amount > 0) {
+    activePayAmount.value = order.pay_amount
+  }
+  if (!props.providerKey && order.provider_key) {
+    activeProviderHint.value = order.provider_key
+  }
   if (isSuccessStatus(order.status)) {
     cleanup()
     paidOrder.value = order
     setOutcome('success')
     emit('success')
+  } else if (order.status === 'FULFILLMENT_FAILED') {
+    cleanup()
+    paidOrder.value = order
+    setOutcome('fulfillment_failed')
   } else if (order.status === 'CANCELLED') {
     cleanup()
     setOutcome('cancelled')
@@ -284,5 +356,13 @@ pollTimer = setInterval(pollStatus, 3000)
 renderQR()
 
 watch(() => qrUrl.value, () => renderQR())
+watch(() => props.payAmount, (value) => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    activePayAmount.value = value
+  }
+})
+watch(() => props.providerKey, value => {
+  activeProviderHint.value = value || ''
+})
 onUnmounted(() => cleanup())
 </script>

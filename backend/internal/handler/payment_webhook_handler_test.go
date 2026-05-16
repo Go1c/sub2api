@@ -55,6 +55,13 @@ func TestWriteSuccessResponse(t *testing.T) {
 			wantBody:        "success",
 		},
 		{
+			name:            "mapay returns plain text success",
+			providerKey:     "mapay",
+			wantCode:        http.StatusOK,
+			wantContentType: "text/plain",
+			wantBody:        "success",
+		},
+		{
 			name:            "alipay returns plain text success",
 			providerKey:     "alipay",
 			wantCode:        http.StatusOK,
@@ -160,6 +167,12 @@ func TestExtractOutTradeNo(t *testing.T) {
 			want:        "sub2_456",
 		},
 		{
+			name:        "mapay query payload",
+			providerKey: "mapay",
+			rawBody:     "out_trade_no=sub2_789&trade_status=TRADE_SUCCESS",
+			want:        "sub2_789",
+		},
+		{
 			name:        "unknown provider",
 			providerKey: "wxpay",
 			rawBody:     "{}",
@@ -220,7 +233,7 @@ type webhookHandlerProviderStub struct {
 	verifyErr    error
 }
 
-func (p webhookHandlerProviderStub) Name() string { return p.key }
+func (p webhookHandlerProviderStub) Name() string        { return p.key }
 func (p webhookHandlerProviderStub) ProviderKey() string { return p.key }
 func (p webhookHandlerProviderStub) SupportedTypes() []payment.PaymentType {
 	return []payment.PaymentType{payment.PaymentType(p.key)}

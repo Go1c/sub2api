@@ -103,7 +103,7 @@
             <span class="text-xs">{{ t('payment.orders.cancel') }}</span>
           </button>
           <button
-            v-if="row.status === 'FAILED'"
+            v-if="row.status === 'FAILED' || row.status === 'FULFILLMENT_FAILED'"
             @click="emit('retry', row)"
             class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
           >
@@ -202,6 +202,7 @@ const statusFilterOptions = computed(() => [
   { value: 'EXPIRED', label: t('payment.status.expired') },
   { value: 'CANCELLED', label: t('payment.status.cancelled') },
   { value: 'FAILED', label: t('payment.status.failed') },
+  { value: 'FULFILLMENT_FAILED', label: t('payment.status.fulfillment_failed') },
   { value: 'REFUNDED', label: t('payment.status.refunded') },
   { value: 'REFUND_REQUESTED', label: t('payment.status.refund_requested') },
   { value: 'REFUND_FAILED', label: t('payment.status.refund_failed') },

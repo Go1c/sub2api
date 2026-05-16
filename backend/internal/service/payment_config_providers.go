@@ -100,6 +100,7 @@ var pendingOrderStatuses = []string{
 	payment.OrderStatusPending,
 	payment.OrderStatusPaid,
 	payment.OrderStatusRecharging,
+	payment.OrderStatusFulfillmentFailed,
 }
 
 // providerSensitiveConfigFields is the authoritative list of config keys that
@@ -111,6 +112,7 @@ var pendingOrderStatuses = []string{
 // stripe publishableKey) are returned in plaintext by the admin GET API.
 var providerSensitiveConfigFields = map[string]map[string]struct{}{
 	payment.TypeEasyPay: {"pkey": {}},
+	payment.TypeMapay:   {"pkey": {}},
 	payment.TypeAlipay:  {"privatekey": {}, "publickey": {}, "alipaypublickey": {}},
 	payment.TypeWxpay:   {"privatekey": {}, "apiv3key": {}, "publickey": {}},
 	payment.TypeStripe:  {"secretkey": {}, "webhooksecret": {}},
@@ -122,6 +124,7 @@ var providerSensitiveConfigFields = map[string]map[string]struct{}{
 // webhook/refund verification.
 var providerPendingOrderProtectedConfigFields = map[string]map[string]struct{}{
 	payment.TypeEasyPay: {"pkey": {}, "pid": {}},
+	payment.TypeMapay:   {"pkey": {}, "pid": {}},
 	payment.TypeAlipay:  {"privatekey": {}, "publickey": {}, "alipaypublickey": {}, "appid": {}},
 	payment.TypeWxpay:   {"privatekey": {}, "apiv3key": {}, "publickey": {}, "appid": {}, "mpappid": {}, "mchid": {}, "publickeyid": {}, "certserial": {}},
 	payment.TypeStripe:  {"secretkey": {}, "webhooksecret": {}},
@@ -175,7 +178,7 @@ func (s *PaymentConfigService) countPendingOrdersByPlan(ctx context.Context, pla
 }
 
 var validProviderKeys = map[string]bool{
-	payment.TypeEasyPay: true, payment.TypeAlipay: true, payment.TypeWxpay: true, payment.TypeStripe: true,
+	payment.TypeEasyPay: true, payment.TypeMapay: true, payment.TypeAlipay: true, payment.TypeWxpay: true, payment.TypeStripe: true,
 }
 
 func (s *PaymentConfigService) CreateProviderInstance(ctx context.Context, req CreateProviderInstanceRequest) (*dbent.PaymentProviderInstance, error) {

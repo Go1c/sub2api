@@ -128,4 +128,40 @@ describe('PaymentStatusPanel', () => {
 
     openSpy.mockRestore()
   })
+
+  it('highlights exact Mapay QR payment amount from create response and polling updates', async () => {
+    pollOrderStatus.mockResolvedValue({
+      ...orderFactory('PENDING'),
+      pay_amount: 10.04,
+      provider_instance_id: 'mapay-main',
+    })
+
+    const wrapper = mount(PaymentStatusPanel, {
+      props: {
+        orderId: 42,
+        qrCode: 'https://pay.example.com/qr/42',
+        payUrl: 'https://pay.example.com/session/42',
+        expiresAt: '2099-01-01T12:30:00Z',
+        paymentType: 'alipay',
+        orderType: 'balance',
+        payAmount: 10.03,
+        providerKey: 'mapay',
+        paymentMode: 'qrcode',
+      },
+      global: {
+        stubs: {
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.qr.exactAmountTitle')
+    expect(wrapper.text()).toContain('10.03')
+
+    await vi.advanceTimersByTimeAsync(3000)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('10.04')
+  })
 })

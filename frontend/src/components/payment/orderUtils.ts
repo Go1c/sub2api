@@ -11,6 +11,7 @@ const STATUS_BADGE_MAP: Record<string, string> = {
   EXPIRED: 'badge-secondary',
   CANCELLED: 'badge-secondary',
   FAILED: 'badge-danger',
+  FULFILLMENT_FAILED: 'badge-warning',
   REFUND_REQUESTED: 'badge-warning',
   REFUNDING: 'badge-warning',
   PARTIALLY_REFUNDED: 'badge-warning',

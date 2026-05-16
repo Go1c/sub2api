@@ -21,6 +21,9 @@
             :payment-type="paymentState.paymentType"
             :pay-url="paymentState.payUrl"
             :order-type="paymentState.orderType"
+            :pay-amount="paymentState.payAmount"
+            :provider-key="paymentState.providerKey"
+            :payment-mode="paymentState.paymentMode"
             @done="onPaymentDone"
             @success="onPaymentSuccess"
             @settled="onPaymentSettled"
@@ -357,6 +360,7 @@ function emptyPaymentState(): PaymentRecoverySnapshot {
     payAmount: 0,
     orderType: '',
     paymentMode: '',
+    providerKey: '',
     resumeToken: '',
     createdAt: 0,
   }

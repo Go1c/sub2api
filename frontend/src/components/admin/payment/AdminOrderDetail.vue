@@ -95,7 +95,7 @@
           {{ t('payment.orders.cancel') }}
         </button>
         <button
-          v-if="order.status === 'FAILED'"
+          v-if="order.status === 'FAILED' || order.status === 'FULFILLMENT_FAILED'"
           @click="emit('retry', order)"
           class="btn btn-sm btn-secondary"
         >

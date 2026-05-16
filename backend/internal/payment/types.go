@@ -17,6 +17,7 @@ const (
 	TypeCard         PaymentType = "card"
 	TypeLink         PaymentType = "link"
 	TypeEasyPay      PaymentType = "easypay"
+	TypeMapay        PaymentType = "mapay"
 )
 
 // Order status constants shared across payment and service layers.
@@ -28,6 +29,7 @@ const (
 	OrderStatusExpired           = "EXPIRED"
 	OrderStatusCancelled         = "CANCELLED"
 	OrderStatusFailed            = "FAILED"
+	OrderStatusFulfillmentFailed = "FULFILLMENT_FAILED"
 	OrderStatusRefundRequested   = "REFUND_REQUESTED"
 	OrderStatusRefunding         = "REFUNDING"
 	OrderStatusPartiallyRefunded = "PARTIALLY_REFUNDED"
@@ -82,6 +84,8 @@ func GetBasePaymentType(t string) string {
 	switch {
 	case t == TypeEasyPay:
 		return TypeEasyPay
+	case t == TypeMapay:
+		return TypeMapay
 	case t == TypeStripe || t == TypeCard || t == TypeLink:
 		return TypeStripe
 	case len(t) >= len(TypeAlipay) && t[:len(TypeAlipay)] == TypeAlipay:
@@ -141,6 +145,7 @@ type CreatePaymentResponse struct {
 	TradeNo      string                  // Third-party transaction ID
 	PayURL       string                  // H5 payment URL (alipay/wxpay)
 	QRCode       string                  // QR code content for scanning
+	PayAmount    string                  // Provider-required payment amount, if adjusted by upstream
 	ClientSecret string                  // Stripe PaymentIntent client secret
 	ResultType   CreatePaymentResultType // Typed result contract for frontend flows
 	OAuth        *WechatOAuthInfo        // WeChat OAuth bootstrap payload when required

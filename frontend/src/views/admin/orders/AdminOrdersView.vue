@@ -30,7 +30,7 @@
               <Icon name="x" size="sm" />
               {{ t('payment.orders.cancel') }}
             </button>
-            <button v-if="row.status === 'FAILED'" @click="handleRetryOrder(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20">
+            <button v-if="row.status === 'FAILED' || row.status === 'FULFILLMENT_FAILED'" @click="handleRetryOrder(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20">
               <Icon name="refresh" size="sm" />
               {{ t('payment.admin.retry') }}
             </button>
@@ -182,6 +182,7 @@ const statusFilterOptions = computed(() => [
   { value: 'EXPIRED', label: t('payment.status.expired') },
   { value: 'CANCELLED', label: t('payment.status.cancelled') },
   { value: 'FAILED', label: t('payment.status.failed') },
+  { value: 'FULFILLMENT_FAILED', label: t('payment.status.fulfillment_failed') },
   { value: 'REFUNDED', label: t('payment.status.refunded') },
   { value: 'REFUND_REQUESTED', label: t('payment.status.refund_requested') },
   { value: 'REFUND_FAILED', label: t('payment.status.refund_failed') },
