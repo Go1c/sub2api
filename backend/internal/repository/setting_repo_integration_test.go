@@ -109,11 +109,15 @@ func (s *SettingRepoSuite) TestSetMultiple_Upsert() {
 
 func (s *SettingRepoSuite) TestSetMultiple_UpdatesExistingKey() {
 	s.Require().NoError(s.repo.Set(s.ctx, "existing_update_key", "old_value"))
+	before, err := s.repo.Get(s.ctx, "existing_update_key")
+	s.Require().NoError(err)
+
 	s.Require().NoError(s.repo.SetMultiple(s.ctx, map[string]string{"existing_update_key": "new_value"}))
 
-	got, err := s.repo.GetValue(s.ctx, "existing_update_key")
+	after, err := s.repo.Get(s.ctx, "existing_update_key")
 	s.Require().NoError(err)
-	s.Require().Equal("new_value", got)
+	s.Require().Equal(before.ID, after.ID)
+	s.Require().Equal("new_value", after.Value)
 }
 
 func (s *SettingRepoSuite) TestSetMultiple_MixedExistingAndNewKeys() {
