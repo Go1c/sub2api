@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	stdsql "database/sql"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -44,15 +46,7 @@ func (r *settingRepository) GetValue(ctx context.Context, key string) (string, e
 }
 
 func (r *settingRepository) Set(ctx context.Context, key, value string) error {
-	now := time.Now()
-	return r.client.Setting.
-		Create().
-		SetKey(key).
-		SetValue(value).
-		SetUpdatedAt(now).
-		OnConflictColumns(setting.FieldKey).
-		UpdateNewValues().
-		Exec(ctx)
+	return r.SetMultiple(ctx, map[string]string{key: value})
 }
 
 func (r *settingRepository) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
@@ -104,21 +98,40 @@ func (r *settingRepository) SetMultiple(ctx context.Context, settings map[string
 
 func setMultipleWithClient(ctx context.Context, client *ent.Client, keys []string, settings map[string]string, now time.Time) error {
 	for _, key := range keys {
-		if err := client.Setting.
-			Create().
-			SetKey(key).
-			SetValue(settings[key]).
-			SetUpdatedAt(now).
-			OnConflictColumns(setting.FieldKey).
-			Update(func(u *ent.SettingUpsert) {
-				u.UpdateValue()
-				u.UpdateUpdatedAt()
-			}).
-			Exec(ctx); err != nil {
-			return err
+		result, err := execSettingSQL(ctx, client,
+			`UPDATE "settings" SET "value" = $1, "updated_at" = $2 WHERE "key" = $3`,
+			settings[key], now, key,
+		)
+		if err != nil {
+			return fmt.Errorf("update setting %q: %w", key, err)
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("update setting %q rows affected: %w", key, err)
+		}
+		if rowsAffected > 0 {
+			continue
+		}
+
+		if _, err := execSettingSQL(ctx, client,
+			`INSERT INTO "settings" ("key", "value", "updated_at") VALUES ($1, $2, $3) ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value", "updated_at" = EXCLUDED."updated_at"`,
+			key, settings[key], now,
+		); err != nil {
+			return fmt.Errorf("insert setting %q: %w", key, err)
 		}
 	}
 	return nil
+}
+
+func execSettingSQL(ctx context.Context, client *ent.Client, query string, args ...any) (stdsql.Result, error) {
+	var result stdsql.Result
+	if err := client.Driver().Exec(ctx, query, args, &result); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("settings SQL returned nil result")
+	}
+	return result, nil
 }
 
 func (r *settingRepository) GetAll(ctx context.Context) (map[string]string, error) {
