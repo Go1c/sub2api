@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -31,7 +29,8 @@ type opsUserRequestMonitorUserLookup interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
 }
 
-type opsUserRequestCaptureLimiter interface {
+// OpsUserRequestCaptureLimiter limits per-monitor capture volume.
+type OpsUserRequestCaptureLimiter interface {
 	Allow(ctx context.Context, monitorID int64, captureMinute time.Time, maxPerMinute int) (bool, error)
 }
 
@@ -45,7 +44,7 @@ type opsUserRequestMonitorCacheEntry struct {
 type OpsUserRequestMonitorService struct {
 	opsRepo    OpsRepository
 	userLookup opsUserRequestMonitorUserLookup
-	limiter    opsUserRequestCaptureLimiter
+	limiter    OpsUserRequestCaptureLimiter
 
 	sample func(percent int) bool
 	now    func() time.Time
@@ -66,11 +65,7 @@ type OpsUserRequestMonitorService struct {
 	stopCh    chan struct{}
 }
 
-func NewOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, redisClient *redis.Client) *OpsUserRequestMonitorService {
-	var limiter opsUserRequestCaptureLimiter
-	if redisClient != nil {
-		limiter = &opsUserRequestRedisLimiter{client: redisClient}
-	}
+func NewOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, limiter OpsUserRequestCaptureLimiter) *OpsUserRequestMonitorService {
 	return &OpsUserRequestMonitorService{
 		opsRepo:        opsRepo,
 		userLookup:     userRepo,
@@ -618,25 +613,4 @@ func defaultOpsUserRequestMonitorSample(percent int) bool {
 		return false
 	}
 	return rand.Intn(100)+1 <= percent
-}
-
-type opsUserRequestRedisLimiter struct {
-	client *redis.Client
-}
-
-func (l *opsUserRequestRedisLimiter) Allow(ctx context.Context, monitorID int64, captureMinute time.Time, maxPerMinute int) (bool, error) {
-	if l == nil || l.client == nil {
-		return false, fmt.Errorf("redis client unavailable")
-	}
-	key := fmt.Sprintf("ops:user-request-monitor:%d:%s", monitorID, captureMinute.UTC().Format("200601021504"))
-	n, err := l.client.Incr(ctx, key).Result()
-	if err != nil {
-		return false, err
-	}
-	if n == 1 {
-		if err := l.client.Expire(ctx, key, 2*time.Minute).Err(); err != nil {
-			return false, err
-		}
-	}
-	return n <= int64(maxPerMinute), nil
 }

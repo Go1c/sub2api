@@ -260,6 +260,7 @@ export interface PublicSettings {
   ccswitch_default_model_gemini?: string
   ccswitch_default_model_antigravity?: string
   ccswitch_default_model_antigravity_gemini?: string
+  user_subscriptions_visible?: boolean
   payment_enabled: boolean
   risk_control_enabled: boolean
   table_default_page_size: number

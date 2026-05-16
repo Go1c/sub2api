@@ -374,7 +374,7 @@ export default {
     logout: '退出登录',
     github: 'GitHub',
     mySubscriptions: '我的订阅',
-    buySubscription: '充值/订阅',
+    buySubscription: '充值',
     docs: '文档',
     myOrders: '我的订单',
     orderManagement: '订单管理',
@@ -2045,7 +2045,12 @@ export default {
       completeSuccess: '开票已完成，系统已发送邮件并扣除税点',
       completeFailed: '完成开票失败',
       failSuccess: '开票申请已标记失败',
-      failFailed: '标记失败失败'
+      failFailed: '标记失败失败',
+      exportAll: '导出全部开票信息',
+      exportProcessing: '导出正在开票',
+      exportSuccess: '已导出 {count} 条开票记录',
+      exportEmpty: '没有可导出的开票记录',
+      exportFailed: '导出开票记录失败'
     },
 
     // Groups Management
@@ -5467,6 +5472,12 @@ export default {
           configureLink: '前往 渠道管理 > 渠道定价 配置模型价格',
           enabled: '启用可用渠道',
           enabledHint: '关闭后用户端侧边栏入口隐藏，接口返回空数组。',
+        },
+        userSubscriptions: {
+          title: '用户订阅入口',
+          description: '控制用户是否可以从侧边栏或直链访问自己的订阅页面。',
+          enabled: '显示用户订阅入口',
+          enabledHint: '关闭后隐藏“我的订阅”入口并拦截直链访问，不影响支付充值入口。',
         },
         siteMessages: {
           title: '站内信',

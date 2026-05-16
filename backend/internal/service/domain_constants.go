@@ -236,6 +236,7 @@ const (
 	SettingKeyHomeContent                           = "home_content"                              // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
 	SettingKeyHideCcsImportButton                   = "hide_ccs_import_button"                    // 是否隐藏 API Keys 页面的导入 CCS 按钮
 	SettingKeyFrontendLocales                       = "frontend_locales"                          // 前端可用语言（JSON 数组）
+	SettingKeyUserSubscriptionsVisible              = "user_subscriptions_visible"                // 是否展示用户侧“我的订阅”入口
 	SettingKeyPurchaseSubscriptionEnabled           = "purchase_subscription_enabled"             // 是否展示"购买订阅"页面入口
 	SettingKeyPurchaseSubscriptionURL               = "purchase_subscription_url"                 // "购买订阅"页面 URL（作为 iframe src）
 	SettingKeyTableDefaultPageSize                  = "table_default_page_size"                   // 表格默认每页条数

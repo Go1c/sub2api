@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/suite"
 )
@@ -104,6 +105,84 @@ func (s *SettingRepoSuite) TestSetMultiple_Upsert() {
 	got2, err := s.repo.GetValue(s.ctx, "new_key")
 	s.Require().NoError(err)
 	s.Require().Equal("new_val", got2)
+}
+
+func (s *SettingRepoSuite) TestSetMultiple_UpdatesExistingKey() {
+	s.Require().NoError(s.repo.Set(s.ctx, "existing_update_key", "old_value"))
+	s.Require().NoError(s.repo.SetMultiple(s.ctx, map[string]string{"existing_update_key": "new_value"}))
+
+	got, err := s.repo.GetValue(s.ctx, "existing_update_key")
+	s.Require().NoError(err)
+	s.Require().Equal("new_value", got)
+}
+
+func (s *SettingRepoSuite) TestSetMultiple_MixedExistingAndNewKeys() {
+	s.Require().NoError(s.repo.Set(s.ctx, "mixed_existing_key", "old_value"))
+	s.Require().NoError(s.repo.SetMultiple(s.ctx, map[string]string{
+		"mixed_existing_key": "new_value",
+		"mixed_new_key":      "created_value",
+	}))
+
+	got, err := s.repo.GetMultiple(s.ctx, []string{"mixed_existing_key", "mixed_new_key"})
+	s.Require().NoError(err)
+	s.Require().Equal("new_value", got["mixed_existing_key"])
+	s.Require().Equal("created_value", got["mixed_new_key"])
+}
+
+func (s *SettingRepoSuite) TestSetMultiple_RollsBackWhenOneKeyFails() {
+	repo := NewSettingRepository(testEntClient(s.T())).(*settingRepository)
+	firstKey := "set_multiple_tx_rollback_first"
+	invalidKey := "set_multiple_tx_rollback_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+
+	err := repo.SetMultiple(s.ctx, map[string]string{
+		firstKey:   "should_not_persist",
+		invalidKey: "too_long",
+	})
+	s.Require().Error(err)
+
+	_, err = repo.GetValue(s.ctx, firstKey)
+	s.Require().ErrorIs(err, service.ErrSettingNotFound)
+}
+
+func (s *SettingRepoSuite) TestUpdateSettingsWithAuthSourceDefaults_DisableWeChatPCAfterEnableIsIdempotent() {
+	svc := service.NewSettingService(s.repo, &config.Config{})
+	authDefaults := &service.AuthSourceDefaultSettings{}
+	enabled := &service.SystemSettings{
+		WeChatConnectEnabled:             true,
+		WeChatConnectAppID:               "wx_legacy_app",
+		WeChatConnectAppSecret:           "wx_legacy_secret",
+		WeChatConnectOpenAppID:           "wx_pc_app",
+		WeChatConnectOpenAppSecret:       "wx_pc_secret",
+		WeChatConnectOpenEnabled:         true,
+		WeChatConnectMode:                "open",
+		WeChatConnectScopes:              "snsapi_login",
+		WeChatConnectRedirectURL:         "https://example.com/api/v1/auth/wechat/callback",
+		WeChatConnectFrontendRedirectURL: "/auth/wechat/callback",
+	}
+	disabled := &service.SystemSettings{
+		WeChatConnectEnabled:             false,
+		WeChatConnectAppID:               "wx_legacy_app",
+		WeChatConnectOpenAppID:           "wx_pc_app",
+		WeChatConnectOpenEnabled:         false,
+		WeChatConnectMode:                "open",
+		WeChatConnectScopes:              "snsapi_login",
+		WeChatConnectRedirectURL:         "https://example.com/api/v1/auth/wechat/callback",
+		WeChatConnectFrontendRedirectURL: "/auth/wechat/callback",
+	}
+
+	s.Require().NoError(svc.UpdateSettingsWithAuthSourceDefaults(s.ctx, enabled, authDefaults))
+	s.Require().NoError(svc.UpdateSettingsWithAuthSourceDefaults(s.ctx, disabled, authDefaults))
+	s.Require().NoError(svc.UpdateSettingsWithAuthSourceDefaults(s.ctx, disabled, authDefaults))
+
+	got, err := s.repo.GetMultiple(s.ctx, []string{
+		service.SettingKeyWeChatConnectEnabled,
+		service.SettingKeyWeChatConnectOpenEnabled,
+		service.SettingKeyWeChatConnectOpenAppID,
+	})
+	s.Require().NoError(err)
+	s.Require().Equal("false", got[service.SettingKeyWeChatConnectEnabled])
+	s.Require().Equal("false", got[service.SettingKeyWeChatConnectOpenEnabled])
+	s.Require().Equal("wx_pc_app", got[service.SettingKeyWeChatConnectOpenAppID])
 }
 
 // TestSet_EmptyValue 测试保存空字符串值

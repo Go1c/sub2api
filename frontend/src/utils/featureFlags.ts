@@ -109,6 +109,11 @@ export const FeatureFlags = {
     mode: 'opt-out',
     label: 'Payment',
   }),
+  userSubscriptions: defineFlag({
+    key: 'user_subscriptions_visible',
+    mode: 'opt-out',
+    label: 'User Subscriptions',
+  }),
   riskControl: defineFlag({
     key: 'risk_control_enabled',
     mode: 'opt-in',

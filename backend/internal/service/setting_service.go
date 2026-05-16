@@ -677,6 +677,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyCCSwitchDefaultModelGemini,
 		SettingKeyCCSwitchDefaultModelAntigravity,
 		SettingKeyCCSwitchDefaultModelAntigravityGemini,
+		SettingKeyUserSubscriptionsVisible,
 		SettingKeyPurchaseSubscriptionEnabled,
 		SettingKeyPurchaseSubscriptionURL,
 		SettingKeyTableDefaultPageSize,
@@ -811,6 +812,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		CCSwitchDefaultModelGemini:            strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelGemini]),
 		CCSwitchDefaultModelAntigravity:       strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravity]),
 		CCSwitchDefaultModelAntigravityGemini: strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravityGemini]),
+		UserSubscriptionsVisible:              !isFalseSettingValue(settings[SettingKeyUserSubscriptionsVisible]),
 		PurchaseSubscriptionEnabled:           settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:               strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		TableDefaultPageSize:                  tableDefaultPageSize,
@@ -1009,6 +1011,7 @@ type PublicSettingsInjectionPayload struct {
 	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`
 	CCSwitchDefaultModelAntigravity       string                   `json:"ccswitch_default_model_antigravity"`
 	CCSwitchDefaultModelAntigravityGemini string                   `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible              bool                     `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled           bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL               string                   `json:"purchase_subscription_url"`
 	TableDefaultPageSize                  int                      `json:"table_default_page_size"`
@@ -1090,6 +1093,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		CCSwitchDefaultModelGemini:            settings.CCSwitchDefaultModelGemini,
 		CCSwitchDefaultModelAntigravity:       settings.CCSwitchDefaultModelAntigravity,
 		CCSwitchDefaultModelAntigravityGemini: settings.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:              settings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:           settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:               settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                  settings.TableDefaultPageSize,
@@ -1766,6 +1770,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyCCSwitchDefaultModelGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelGemini)
 	updates[SettingKeyCCSwitchDefaultModelAntigravity] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravity)
 	updates[SettingKeyCCSwitchDefaultModelAntigravityGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravityGemini)
+	updates[SettingKeyUserSubscriptionsVisible] = strconv.FormatBool(settings.UserSubscriptionsVisible)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(
@@ -2696,6 +2701,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySupportChatOfficialContactURL:            "",
 		SettingKeySitePages:                                "[]",
 		SettingKeyFrontendLocales:                          `["en","zh","zh-Hant"]`,
+		SettingKeyUserSubscriptionsVisible:                 "true",
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
 		SettingKeyPurchaseSubscriptionURL:                  "",
 		SettingKeyTableDefaultPageSize:                     "20",
@@ -2910,6 +2916,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		CCSwitchDefaultModelGemini:            settings[SettingKeyCCSwitchDefaultModelGemini],
 		CCSwitchDefaultModelAntigravity:       settings[SettingKeyCCSwitchDefaultModelAntigravity],
 		CCSwitchDefaultModelAntigravityGemini: settings[SettingKeyCCSwitchDefaultModelAntigravityGemini],
+		UserSubscriptionsVisible:              !isFalseSettingValue(settings[SettingKeyUserSubscriptionsVisible]),
 		PurchaseSubscriptionEnabled:           settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:               strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		CustomMenuItems:                       settings[SettingKeyCustomMenuItems],

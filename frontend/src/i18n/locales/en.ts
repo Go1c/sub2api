@@ -374,7 +374,7 @@ export default {
     logout: 'Logout',
     github: 'GitHub',
     mySubscriptions: 'My Subscriptions',
-    buySubscription: 'Recharge / Subscription',
+    buySubscription: 'Top up',
     docs: 'Docs',
     myOrders: 'My Orders',
     orderManagement: 'Orders',
@@ -1992,7 +1992,12 @@ export default {
       completeSuccess: 'Invoice completed. Email sent and tax fee deducted.',
       completeFailed: 'Failed to complete invoice',
       failSuccess: 'Invoice request marked as failed',
-      failFailed: 'Failed to mark invoice as failed'
+      failFailed: 'Failed to mark invoice as failed',
+      exportAll: 'Export All Invoice Info',
+      exportProcessing: 'Export Processing Invoices',
+      exportSuccess: 'Exported {count} invoice records',
+      exportEmpty: 'No invoice records to export',
+      exportFailed: 'Failed to export invoice records'
     },
 
     // Groups
@@ -5304,6 +5309,12 @@ export default {
           configureLink: 'Configure model pricing in Channel Management > Channel Pricing',
           enabled: 'Enable Available Channels',
           enabledHint: 'When off, the sidebar entry is hidden and the endpoint returns an empty list.',
+        },
+        userSubscriptions: {
+          title: 'User Subscriptions Entry',
+          description: 'Control whether users can access their subscription page from the sidebar or direct links.',
+          enabled: 'Show user subscriptions entry',
+          enabledHint: 'When off, My Subscriptions is hidden and direct access is blocked. Payment top-up remains available.',
         },
         siteMessages: {
           title: 'Site Messages',
