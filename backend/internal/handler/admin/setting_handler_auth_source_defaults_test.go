@@ -206,6 +206,118 @@ func TestSettingHandler_UpdateSettings_PreservesOmittedAuthSourceDefaults(t *tes
 	require.Equal(t, true, data["force_email_on_third_party_signup"])
 }
 
+func TestSettingHandler_UpdateSettings_PreservesOmittedSiteLogo(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled: "false",
+			service.SettingKeyPromoCodeEnabled:    "true",
+			service.SettingKeySiteLogo:            "data:image/png;base64,existing",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"registration_enabled": true,
+		"promo_code_enabled":   true,
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "data:image/png;base64,existing", repo.values[service.SettingKeySiteLogo])
+
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "data:image/png;base64,existing", data["site_logo"])
+}
+
+func TestSettingHandler_UpdateSettings_ClearsExplicitEmptySiteLogo(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled: "false",
+			service.SettingKeyPromoCodeEnabled:    "true",
+			service.SettingKeySiteLogo:            "data:image/png;base64,existing",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"registration_enabled": true,
+		"promo_code_enabled":   true,
+		"site_logo":            "",
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "", repo.values[service.SettingKeySiteLogo])
+}
+
+func TestSettingHandler_UpdateSettings_AllowsExplicitlyDisablingAllWeChatCapabilities(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled:              "false",
+			service.SettingKeyPromoCodeEnabled:                 "true",
+			service.SettingKeyWeChatConnectEnabled:             "true",
+			service.SettingKeyWeChatConnectOpenEnabled:         "true",
+			service.SettingKeyWeChatConnectMPEnabled:           "false",
+			service.SettingKeyWeChatConnectMobileEnabled:       "false",
+			service.SettingKeyWeChatConnectMode:                "open",
+			service.SettingKeyWeChatConnectOpenAppID:           "wx-open-app",
+			service.SettingKeyWeChatConnectRedirectURL:         "https://example.com/api/v1/auth/oauth/wechat/callback",
+			service.SettingKeyWeChatConnectFrontendRedirectURL: "/auth/wechat/callback",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"registration_enabled":          true,
+		"promo_code_enabled":            true,
+		"wechat_connect_enabled":        true,
+		"wechat_connect_open_enabled":   false,
+		"wechat_connect_mp_enabled":     false,
+		"wechat_connect_mobile_enabled": false,
+		"wechat_connect_mode":           "open",
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "true", repo.values[service.SettingKeyWeChatConnectEnabled])
+	require.Equal(t, "false", repo.values[service.SettingKeyWeChatConnectOpenEnabled])
+	require.Equal(t, "false", repo.values[service.SettingKeyWeChatConnectMPEnabled])
+	require.Equal(t, "false", repo.values[service.SettingKeyWeChatConnectMobileEnabled])
+}
+
 func TestSettingHandler_UpdateSettings_RejectsSitePageSlugOutsideDocRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{values: map[string]string{}}

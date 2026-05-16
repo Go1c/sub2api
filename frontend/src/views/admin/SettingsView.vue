@@ -6919,6 +6919,7 @@ const testEmailAddress = ref("");
 const registrationEmailSuffixWhitelistTags = ref<string[]>([]);
 const registrationEmailSuffixWhitelistDraft = ref("");
 const tablePageSizeOptionsInput = ref("10, 20, 50, 100");
+const persistedSiteLogo = ref("");
 const publicModelPricingLoading = ref(false);
 const publicModelPricingSaving = ref(false);
 const publicModelPricingForm = reactive<PublicModelPricingConfig>({
@@ -8106,6 +8107,7 @@ async function loadSettings() {
         : defaultLoginAgreementDocuments();
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(settings));
     form.backend_mode_enabled = settings.backend_mode_enabled;
+    persistedSiteLogo.value = settings.site_logo || "";
     form.contact_channels = normalizeContactChannels(settings.contact_channels);
     form.site_pages = ensureDefaultSitePages(settings.site_pages);
     form.frontend_locales =
@@ -8521,7 +8523,6 @@ async function saveSettings() {
       force_email_on_third_party_signup: form.force_email_on_third_party_signup,
       default_user_rpm_limit: form.default_user_rpm_limit,
       site_name: form.site_name,
-      site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
@@ -8701,6 +8702,9 @@ async function saveSettings() {
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
     };
+    if (form.site_logo !== persistedSiteLogo.value) {
+      payload.site_logo = form.site_logo;
+    }
 
     // 仅当 openai_fast_policy_settings 已成功从后端加载时才回写，
     // 否则省略整个字段，让后端保留既有规则（含默认值）。
@@ -8740,6 +8744,7 @@ async function saveSettings() {
       }
     }
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
+    persistedSiteLogo.value = updated.site_logo || "";
     form.contact_channels = normalizeContactChannels(updated.contact_channels);
     form.site_pages = ensureDefaultSitePages(updated.site_pages);
     registrationEmailSuffixWhitelistTags.value =

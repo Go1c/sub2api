@@ -1094,6 +1094,22 @@ describe("admin SettingsView wechat connect controls", () => {
     ).toContain("密钥已配置");
   });
 
+  it("omits unchanged site_logo from the settings save payload", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: "data:image/png;base64," + "a".repeat(1024),
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings.mock.calls[0][0]).not.toHaveProperty("site_logo");
+  });
+
   it("collapses auth source defaults until the source is enabled", async () => {
     const wrapper = mountView();
 
