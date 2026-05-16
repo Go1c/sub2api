@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
@@ -74,16 +76,41 @@ func (r *settingRepository) SetMultiple(ctx context.Context, settings map[string
 		return nil
 	}
 
-	now := time.Now()
-	builders := make([]*ent.SettingCreate, 0, len(settings))
-	for key, value := range settings {
-		builders = append(builders, r.client.Setting.Create().SetKey(key).SetValue(value).SetUpdatedAt(now))
+	keys := make([]string, 0, len(settings))
+	for key := range settings {
+		keys = append(keys, key)
 	}
-	return r.client.Setting.
-		CreateBulk(builders...).
-		OnConflictColumns(setting.FieldKey).
-		UpdateNewValues().
-		Exec(ctx)
+	sort.Strings(keys)
+
+	now := time.Now()
+	if tx := ent.TxFromContext(ctx); tx != nil {
+		return setMultipleWithClient(ctx, tx.Client(), keys, settings, now)
+	}
+
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		if errors.Is(err, ent.ErrTxStarted) {
+			return setMultipleWithClient(ctx, r.client, keys, settings, now)
+		}
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := setMultipleWithClient(ent.NewTxContext(ctx, tx), tx.Client(), keys, settings, now); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func setMultipleWithClient(ctx context.Context, client *ent.Client, keys []string, settings map[string]string, now time.Time) error {
+	const upsertSQL = `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`
+
+	for _, key := range keys {
+		if _, err := client.ExecContext(ctx, upsertSQL, key, settings[key], now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *settingRepository) GetAll(ctx context.Context) (map[string]string, error) {
