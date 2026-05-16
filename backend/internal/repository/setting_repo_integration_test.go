@@ -244,3 +244,29 @@ func (s *SettingRepoSuite) TestSetMultiple_UpdateToEmpty() {
 	s.Require().NoError(err)
 	s.Require().Equal("", got, "value should be updated to empty string")
 }
+
+// TestSetMultiple_ConsecutiveSavesAreIdempotent 直接复现生产场景：
+// 管理员 PUT /api/v1/admin/settings 携带相同 key 连续两次必须都成功，
+// 且 id 不变（即第二次走 UPDATE 而非 INSERT）。这是 b161265e 之后仍出现
+// settings_key_key 报错的反向断言。
+func (s *SettingRepoSuite) TestSetMultiple_ConsecutiveSavesAreIdempotent() {
+	repo := NewSettingRepository(testEntClient(s.T())).(*settingRepository)
+	const key = "custom_menu_items"
+
+	s.Require().NoError(repo.SetMultiple(s.ctx, map[string]string{key: "[]"}))
+	first, err := repo.Get(s.ctx, key)
+	s.Require().NoError(err)
+
+	s.Require().NoError(repo.SetMultiple(s.ctx, map[string]string{key: `[{"label":"home"}]`}))
+	second, err := repo.Get(s.ctx, key)
+	s.Require().NoError(err)
+
+	s.Require().Equal(first.ID, second.ID, "id must not change across consecutive SetMultiple calls")
+	s.Require().Equal(`[{"label":"home"}]`, second.Value)
+
+	// 再保存一次，确保第三次也不会 duplicate key
+	s.Require().NoError(repo.SetMultiple(s.ctx, map[string]string{key: `[{"label":"home"},{"label":"about"}]`}))
+	third, err := repo.Get(s.ctx, key)
+	s.Require().NoError(err)
+	s.Require().Equal(first.ID, third.ID)
+}
