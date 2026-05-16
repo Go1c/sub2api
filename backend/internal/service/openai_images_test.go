@@ -146,13 +146,20 @@ func TestOpenAIGatewayServiceParseOpenAIImagesRequest_NormalizesOfficialAndCusto
 		{size: "1536x1024", wantTier: "2K"},
 		{size: "1024x1536", wantTier: "2K"},
 		{size: "2048x2048", wantTier: "2K"},
+		{size: "2048x1536", wantTier: "2K"},
+		{size: "1536x2048", wantTier: "2K"},
 		{size: "2048x1152", wantTier: "2K"},
+		{size: "1152x2048", wantTier: "2K"},
+		{size: "2880x2880", wantTier: "4K"},
+		{size: "3264x2448", wantTier: "4K"},
+		{size: "2448x3264", wantTier: "4K"},
 		{size: "3840x2160", wantTier: "4K"},
 		{size: "2160x3840", wantTier: "4K"},
-		{size: "1024X768", wantTier: "2K"},
-		{size: "1280x768", wantTier: "2K"},
+		{size: "1024X768", wantTier: "1K"},
+		{size: "1280x768", wantTier: "1K"},
+		{size: "720x1280", wantTier: "1K"},
 		{size: "2560x1440", wantTier: "2K"},
-		{size: "2560x1600", wantTier: "4K"},
+		{size: "2560x1600", wantTier: "2K"},
 		{size: "auto", wantTier: "2K"},
 	}
 
@@ -184,9 +191,9 @@ func TestOpenAIGatewayServiceParseOpenAIImagesRequest_UnknownSizesDoNotBlockPass
 		wantTier string
 	}{
 		{size: "2048x1153", wantTier: "2K"},
-		{size: "4096x1024", wantTier: "4K"},
-		{size: "3840x1024", wantTier: "4K"},
-		{size: "512x512", wantTier: "2K"},
+		{size: "4096x1024", wantTier: "2K"},
+		{size: "3840x1024", wantTier: "2K"},
+		{size: "512x512", wantTier: "1K"},
 		{size: "invalid", wantTier: "2K"},
 		{size: "999999999999999999999999999x2", wantTier: "2K"},
 	}
