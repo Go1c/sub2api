@@ -215,6 +215,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		CCSwitchDefaultModelGemini:             settings.CCSwitchDefaultModelGemini,
 		CCSwitchDefaultModelAntigravity:        settings.CCSwitchDefaultModelAntigravity,
 		CCSwitchDefaultModelAntigravityGemini:  settings.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:               settings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:            settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                   settings.TableDefaultPageSize,
@@ -487,6 +488,7 @@ type UpdateSettingsRequest struct {
 	CCSwitchDefaultModelGemini            string                `json:"ccswitch_default_model_gemini"`
 	CCSwitchDefaultModelAntigravity       string                `json:"ccswitch_default_model_antigravity"`
 	CCSwitchDefaultModelAntigravityGemini string                `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible              *bool                 `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled           *bool                 `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL               *string               `json:"purchase_subscription_url"`
 	TableDefaultPageSize                  int                   `json:"table_default_page_size"`
@@ -1467,6 +1469,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if req.SiteLogo != nil {
 		siteLogo = *req.SiteLogo
 	}
+	userSubscriptionsVisible := boolValueOrDefault(req.UserSubscriptionsVisible, previousSettings.UserSubscriptionsVisible)
 
 	// Ops metrics collector interval validation (seconds).
 	if req.OpsMetricsIntervalSeconds != nil {
@@ -1609,6 +1612,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		CCSwitchDefaultModelGemini:            req.CCSwitchDefaultModelGemini,
 		CCSwitchDefaultModelAntigravity:       req.CCSwitchDefaultModelAntigravity,
 		CCSwitchDefaultModelAntigravityGemini: req.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:              userSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:           purchaseEnabled,
 		PurchaseSubscriptionURL:               purchaseURL,
 		TableDefaultPageSize:                  req.TableDefaultPageSize,
@@ -2032,6 +2036,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HomeContent:                            updatedSettings.HomeContent,
 		HideCcsImportButton:                    updatedSettings.HideCcsImportButton,
 		FrontendLocales:                        updatedSettings.FrontendLocales,
+		UserSubscriptionsVisible:               updatedSettings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                   updatedSettings.TableDefaultPageSize,
@@ -2513,6 +2518,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.BackendModeEnabled != after.BackendModeEnabled {
 		changed = append(changed, "backend_mode_enabled")
+	}
+	if before.UserSubscriptionsVisible != after.UserSubscriptionsVisible {
+		changed = append(changed, "user_subscriptions_visible")
 	}
 	if before.PurchaseSubscriptionEnabled != after.PurchaseSubscriptionEnabled {
 		changed = append(changed, "purchase_subscription_enabled")

@@ -137,6 +137,30 @@ func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t 
 	require.True(t, settings.ForceEmailOnThirdPartySignup)
 }
 
+func TestSettingService_GetPublicSettings_ExposesUserSubscriptionsVisible(t *testing.T) {
+	t.Run("defaults visible", func(t *testing.T) {
+		repo := &settingPublicRepoStub{values: map[string]string{}}
+		svc := NewSettingService(repo, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.True(t, settings.UserSubscriptionsVisible)
+	})
+
+	t.Run("can be disabled", func(t *testing.T) {
+		repo := &settingPublicRepoStub{
+			values: map[string]string{
+				SettingKeyUserSubscriptionsVisible: "false",
+			},
+		}
+		svc := NewSettingService(repo, &config.Config{})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.False(t, settings.UserSubscriptionsVisible)
+	})
+}
+
 func TestSettingService_GetPublicSettings_FiltersDisabledSitePages(t *testing.T) {
 	repo := &settingPublicRepoStub{
 		values: map[string]string{

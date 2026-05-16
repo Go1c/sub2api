@@ -3910,6 +3910,20 @@
 	                <Toggle v-model="form.backend_mode_enabled" />
 	              </div>
 
+              <div
+                class="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/50"
+              >
+                <div>
+                  <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t("admin.settings.site.userSubscriptionsVisible") }}
+                  </h3>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.userSubscriptionsVisibleDescription") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.user_subscriptions_visible" />
+              </div>
+
 	              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
                   <label
@@ -7125,6 +7139,7 @@ const form = reactive<SettingsForm>({
   site_pages: [] as SitePage[],
   home_content: "",
   backend_mode_enabled: false,
+  user_subscriptions_visible: true,
   hide_ccs_import_button: false,
   ccswitch_default_model_anthropic: "",
   ccswitch_default_model_openai: "gpt-5.4",
@@ -8537,6 +8552,7 @@ async function saveSettings() {
       site_pages: normalizedSitePages,
       home_content: form.home_content,
       backend_mode_enabled: form.backend_mode_enabled,
+      user_subscriptions_visible: form.user_subscriptions_visible,
       hide_ccs_import_button: form.hide_ccs_import_button,
       ccswitch_default_model_anthropic: form.ccswitch_default_model_anthropic,
       ccswitch_default_model_openai: form.ccswitch_default_model_openai,

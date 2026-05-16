@@ -543,6 +543,7 @@ export interface SystemSettings {
   web_search_emulation_enabled?: boolean;
 
   // Payment configuration
+  user_subscriptions_visible: boolean;
   payment_enabled: boolean;
   risk_control_enabled: boolean;
   payment_min_amount: number;
@@ -765,6 +766,7 @@ export interface UpdateSettingsRequest {
   enable_cch_signing?: boolean;
   enable_anthropic_cache_ttl_1h_injection?: boolean;
   // Payment configuration
+  user_subscriptions_visible?: boolean;
   payment_enabled?: boolean;
   risk_control_enabled?: boolean;
   payment_min_amount?: number;

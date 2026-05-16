@@ -125,6 +125,7 @@ type SystemSettings struct {
 	HomeContent                           string
 	HideCcsImportButton                   bool
 	FrontendLocales                       []string
+	UserSubscriptionsVisible              bool
 	PurchaseSubscriptionEnabled           bool
 	PurchaseSubscriptionURL               string
 	TableDefaultPageSize                  int
@@ -261,6 +262,7 @@ type PublicSettings struct {
 	HideCcsImportButton              bool
 	FrontendLocales                  []string
 
+	UserSubscriptionsVisible              bool
 	PurchaseSubscriptionEnabled           bool
 	PurchaseSubscriptionURL               string
 	TableDefaultPageSize                  int

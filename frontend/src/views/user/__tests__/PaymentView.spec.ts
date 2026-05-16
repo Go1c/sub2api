@@ -19,6 +19,9 @@ const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
+const cachedPublicSettings = vi.hoisted(() => ({
+  value: null as null | Record<string, unknown>,
+}))
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
@@ -68,6 +71,7 @@ vi.mock('@/stores/subscriptions', () => ({
 
 vi.mock('@/stores', () => ({
   useAppStore: () => ({
+    cachedPublicSettings: cachedPublicSettings.value,
     showError,
     showInfo,
     showWarning,
@@ -195,6 +199,7 @@ describe('PaymentView recharge notices', () => {
     showWarning.mockReset()
     getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture())
     bridgeInvoke.mockReset()
+    cachedPublicSettings.value = null
     window.localStorage.clear()
   })
 
@@ -217,6 +222,30 @@ describe('PaymentView recharge notices', () => {
     expect(wrapper.text()).toContain('payment.rechargeExchangeRule')
     expect(wrapper.text()).toContain('payment.invoiceNotice')
   })
+
+  it('hides subscription purchase options when user subscriptions are disabled', async () => {
+    cachedPublicSettings.value = { user_subscriptions_visible: false }
+    getCheckoutInfo.mockResolvedValue(checkoutInfoWithPlansFixture())
+
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: {
+            template: '<div><slot /></div>',
+          },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('payment.rechargeAccount')
+    expect(wrapper.text()).not.toContain('payment.tabSubscribe')
+    expect(wrapper.text()).not.toContain('payment.noPlans')
+  })
 })
 
 describe('PaymentView WeChat JSAPI flow', () => {
@@ -237,6 +266,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     showWarning.mockReset()
     getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture())
     bridgeInvoke.mockReset()
+    cachedPublicSettings.value = null
     window.localStorage.clear()
     ;(window as Window & { WeixinJSBridge?: { invoke: typeof bridgeInvoke } }).WeixinJSBridge = {
       invoke: bridgeInvoke,

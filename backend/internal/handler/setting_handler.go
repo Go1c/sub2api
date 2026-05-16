@@ -70,6 +70,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		CCSwitchDefaultModelGemini:            settings.CCSwitchDefaultModelGemini,
 		CCSwitchDefaultModelAntigravity:       settings.CCSwitchDefaultModelAntigravity,
 		CCSwitchDefaultModelAntigravityGemini: settings.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:              settings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:           settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:               settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                  settings.TableDefaultPageSize,

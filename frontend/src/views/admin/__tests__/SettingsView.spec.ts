@@ -533,6 +533,7 @@ const baseSettingsResponse = {
   payment_cancel_rate_limit_window: 1,
   payment_cancel_rate_limit_unit: "day",
   payment_cancel_rate_limit_window_mode: "rolling",
+  user_subscriptions_visible: true,
   payment_visible_method_alipay_source: "alipay_direct",
   payment_visible_method_wxpay_source: "invalid-source",
   payment_visible_method_alipay_enabled: true,
@@ -761,6 +762,25 @@ describe("admin SettingsView payment visible method controls", () => {
             content: "https://blog.lumio.games/docs/doc/api",
           }),
         ]),
+      }),
+    );
+  });
+
+  it("submits the user subscriptions visibility setting", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      user_subscriptions_visible: false,
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_subscriptions_visible: false,
       }),
     );
   });
