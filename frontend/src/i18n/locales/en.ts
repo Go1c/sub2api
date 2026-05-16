@@ -1992,7 +1992,12 @@ export default {
       completeSuccess: 'Invoice completed. Email sent and tax fee deducted.',
       completeFailed: 'Failed to complete invoice',
       failSuccess: 'Invoice request marked as failed',
-      failFailed: 'Failed to mark invoice as failed'
+      failFailed: 'Failed to mark invoice as failed',
+      exportAll: 'Export All Invoice Info',
+      exportProcessing: 'Export Processing Invoices',
+      exportSuccess: 'Exported {count} invoice records',
+      exportEmpty: 'No invoice records to export',
+      exportFailed: 'Failed to export invoice records'
     },
 
     // Groups
