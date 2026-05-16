@@ -116,6 +116,7 @@ import {
   readPaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 import { usePaymentStore } from '@/stores/payment'
+import { useAuthStore } from '@/stores/auth'
 import { paymentAPI } from '@/api/payment'
 import type { PaymentOrder } from '@/types/payment'
 import { normalizePaymentMethodForDisplay, paymentMethodI18nKey } from './paymentUx'
@@ -124,6 +125,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const paymentStore = usePaymentStore()
+const authStore = useAuthStore()
 
 const order = ref<PaymentOrder | null>(null)
 const loading = ref(true)
@@ -222,6 +224,7 @@ function restoreRecoverySnapshot(context: {
   if (context.resumeToken) {
     return readPaymentRecoverySnapshot(rawSnapshot, {
       resumeToken: context.resumeToken,
+      userId: authStore.user?.id,
     })
   }
 
@@ -229,7 +232,9 @@ function restoreRecoverySnapshot(context: {
     return null
   }
 
-  const restored = readPaymentRecoverySnapshot(rawSnapshot)
+  const restored = readPaymentRecoverySnapshot(rawSnapshot, {
+    userId: authStore.user?.id,
+  })
   if (!restored) {
     return null
   }

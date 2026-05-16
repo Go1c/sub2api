@@ -702,6 +702,19 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(wrapper.text()).not.toContain("支付来源");
   });
 
+  it("renders Mapay in the enabled payment types selector", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openPaymentTab(wrapper);
+
+    const enabledTypeButtons = wrapper
+      .findAll("button")
+      .map((node) => node.text());
+
+    expect(enabledTypeButtons).toContain("payment.methods.mapay");
+  });
+
   it("links payment guidance to README sections instead of removed payment docs", async () => {
     const wrapper = mountView();
 

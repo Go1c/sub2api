@@ -35,6 +35,12 @@ vi.mock('@/stores/payment', () => ({
   }),
 }))
 
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    user: { id: 9 },
+  }),
+}))
+
 vi.mock('@/api/payment', () => ({
   paymentAPI: {
     verifyOrderPublic,

@@ -30,6 +30,7 @@ export type PaymentLaunchKind =
 
 export interface PaymentRecoverySnapshot {
   orderId: number
+  userId?: number
   amount: number
   qrCode: string
   expiresAt: string
@@ -228,7 +229,7 @@ export function clearPaymentRecoverySnapshot(
 
 export function readPaymentRecoverySnapshot(
   raw: string | null | undefined,
-  options: { now?: number; resumeToken?: string } = {},
+  options: { now?: number; resumeToken?: string; userId?: number } = {},
 ): PaymentRecoverySnapshot | null {
   if (!raw) return null
 
@@ -236,6 +237,7 @@ export function readPaymentRecoverySnapshot(
     const parsed = JSON.parse(raw) as Partial<PaymentRecoverySnapshot>
     if (
       typeof parsed.orderId !== 'number'
+      || (parsed.userId != null && typeof parsed.userId !== 'number')
       || typeof parsed.amount !== 'number'
       || typeof parsed.qrCode !== 'string'
       || typeof parsed.expiresAt !== 'string'
@@ -260,9 +262,13 @@ export function readPaymentRecoverySnapshot(
     if (options.resumeToken && parsed.resumeToken !== options.resumeToken) {
       return null
     }
+    if (options.userId != null && parsed.userId !== options.userId) {
+      return null
+    }
 
     return {
       orderId: parsed.orderId,
+      userId: parsed.userId,
       amount: parsed.amount,
       qrCode: parsed.qrCode,
       expiresAt: parsed.expiresAt,

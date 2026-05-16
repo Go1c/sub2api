@@ -101,15 +101,35 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		})
 		return fmt.Errorf("invalid paid amount from provider: %v", paid)
 	}
-	if math.Abs(paid-o.PayAmount) > amountToleranceCNY {
-		s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{"expected": o.PayAmount, "paid": paid, "tradeNo": tradeNo})
+	confirmedPayAmount, ok := resolveNotificationPaymentAmount(o, pk, paid)
+	if !ok {
+		s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{
+			"expected":       o.PayAmount,
+			"creditedAmount": o.Amount,
+			"paid":           paid,
+			"tradeNo":        tradeNo,
+		})
 		return fmt.Errorf("amount mismatch: expected %.2f, got %.2f", o.PayAmount, paid)
 	}
-	return s.toPaid(ctx, o, tradeNo, paid, pk)
+	return s.toPaid(ctx, o, tradeNo, confirmedPayAmount, pk)
 }
 
 func isValidProviderAmount(amount float64) bool {
 	return amount > 0 && !math.IsNaN(amount) && !math.IsInf(amount, 0)
+}
+
+func resolveNotificationPaymentAmount(order *dbent.PaymentOrder, providerKey string, paid float64) (float64, bool) {
+	if order == nil {
+		return 0, false
+	}
+	if math.Abs(paid-order.PayAmount) <= amountToleranceCNY {
+		return paid, true
+	}
+	if strings.EqualFold(strings.TrimSpace(providerKey), payment.TypeMapay) &&
+		math.Abs(paid-order.Amount) <= amountToleranceCNY {
+		return order.PayAmount, true
+	}
+	return 0, false
 }
 
 func validateProviderNotificationMetadata(order *dbent.PaymentOrder, providerKey string, metadata map[string]string) error {
