@@ -22,11 +22,12 @@ Sub2API has a built-in payment system that enables user self-service top-up with
 | Provider | Payment Methods | Description |
 |----------|----------------|-------------|
 | **EasyPay** | Alipay, WeChat Pay | Third-party aggregation via EasyPay protocol |
+| **Mapay** | Alipay, WeChat Pay | EasyPay-style Mapay integration with provider-adjusted exact payment amounts |
 | **Alipay (Direct)** | Desktop QR code, mobile Alipay redirect | Direct integration with Alipay Open Platform, returning desktop QR codes and mobile WAP/app launch links |
 | **WeChat Pay (Direct)** | Native QR, H5, MP/JSAPI Pay | Direct integration with WeChat Pay APIv3 with environment-aware routing |
 | **Stripe** | Card, Alipay, WeChat Pay, Link, etc. | International payments, multi-currency support |
 
-> Alipay/WeChat Pay direct and EasyPay can both exist as backend provider instances, but the frontend always exposes only two visible buttons: `Alipay` and `WeChat Pay`. Admins choose exactly one source for each visible method: direct or EasyPay. Direct channels connect to payment APIs directly with lower fees; EasyPay aggregates through third-party platforms with easier setup.
+> Alipay/WeChat Pay direct, EasyPay, and Mapay can all exist as backend provider instances, but the frontend always exposes only two visible buttons: `Alipay` and `WeChat Pay`. Admins choose exactly one source for each visible method: direct, EasyPay, or Mapay. Direct channels connect to payment APIs directly with lower fees; aggregators are easier to set up.
 
 > **EasyPay Provider Recommendations**: Both options below are third-party aggregators compatible with the EasyPay protocol. Pick based on the funding channel and settlement currency you need:
 >
@@ -69,8 +70,8 @@ Configure the following in Admin Dashboard **Settings → Payment Settings**:
 
 The current payment UX keeps the frontend method list unified and does not expose provider brands directly:
 
-- **Alipay**: when enabled, this button must be routed to either `Alipay (Direct)` or `EasyPay Alipay`
-- **WeChat Pay**: when enabled, this button must be routed to either `WeChat Pay (Direct)` or `EasyPay WeChat`
+- **Alipay**: when enabled, this button must be routed to `Alipay (Direct)`, `EasyPay Alipay`, or `Mapay Alipay`
+- **WeChat Pay**: when enabled, this button must be routed to `WeChat Pay (Direct)`, `EasyPay WeChat`, or `Mapay WeChat`
 - Each visible method can route to only one source at a time
 - If a visible method is enabled without a selected source, the frontend will not expose that method
 
@@ -119,6 +120,21 @@ Compatible with any payment service that implements the EasyPay protocol.
 | **API Base URL** | EasyPay API base address | Yes |
 | **Alipay Channel ID** | Specify Alipay channel (optional) | No |
 | **WeChat Channel ID** | Specify WeChat channel (optional) | No |
+
+### Mapay
+
+Mapay uses EasyPay-style endpoints under `/xpay/epay/`. By default, Sub2API calls `mapi.php` first to get an embeddable QR code or payment URL. If the provider instance is set to `Popup` mode, Sub2API uses the hosted `submit.php` page instead.
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| **Merchant ID (PID)** | Mapay merchant ID | Yes |
+| **Merchant Key (PKey)** | Mapay merchant secret key | Yes |
+| **API Base URL** | Mapay site base URL or `/xpay/epay` URL; endpoint paths are normalized automatically | Yes |
+| **Default Channel ID** | Optional fallback channel for all methods | No |
+| **Alipay Channel ID** | Optional Alipay-specific channel, preferred over the default | No |
+| **WeChat Channel ID** | Optional WeChat-specific channel, preferred over the default | No |
+
+> **Exact amount requirement**: Mapay identifies orders by the actual amount received. After creating an order, the upstream may return a required amount such as `10.03`. The frontend highlights this amount with an animated warning; users must pay exactly that amount or automatic fulfillment may fail.
 
 ### Alipay (Direct)
 
@@ -192,6 +208,7 @@ When adding a provider, the system auto-generates callback URLs from your site d
 | Provider | Callback Path |
 |----------|-------------|
 | **EasyPay** | `https://your-domain.com/api/v1/payment/webhook/easypay` |
+| **Mapay** | `https://your-domain.com/api/v1/payment/webhook/mapay` |
 | **Alipay (Direct)** | `https://your-domain.com/api/v1/payment/webhook/alipay` |
 | **WeChat Pay (Direct)** | `https://your-domain.com/api/v1/payment/webhook/wxpay` |
 | **Stripe** | `https://your-domain.com/api/v1/payment/webhook/stripe` |
@@ -229,6 +246,7 @@ User selects amount and payment method
        ▼
   User completes payment
   ├─ EasyPay     → QR code / H5 redirect
+  ├─ Mapay       → Embedded QR first, popup/redirect fallback, exact required amount displayed
   ├─ Alipay      → Desktop QR payload (Face-to-Face preferred, Website Pay fallback) / mobile Alipay redirect
   ├─ WeChat Pay  → Desktop Native QR / non-WeChat H5 / in-WeChat JSAPI
   └─ Stripe      → Payment Element (card/Alipay/WeChat/etc.)
@@ -249,7 +267,8 @@ User selects amount and payment method
 | `COMPLETED` | Balance credited successfully |
 | `EXPIRED` | Timed out without payment |
 | `CANCELLED` | Cancelled by user |
-| `FAILED` | Balance credit failed, admin can retry |
+| `FAILED` | Failed before payment was confirmed |
+| `FULFILLMENT_FAILED` | Payment confirmed, but credit/subscription fulfillment failed; the system retries automatically and then leaves the order for manual handling |
 | `REFUND_REQUESTED` | Refund requested |
 | `REFUNDING` | Refund in progress |
 | `REFUNDED` | Refund completed |
@@ -259,6 +278,8 @@ User selects amount and payment method
 - Before marking an order as expired, the background job queries the upstream payment status first
 - If the user has actually paid but the callback was delayed, the system will reconcile automatically
 - The background job runs every 60 seconds to check for timed-out orders
+- After a verified successful webhook, Sub2API confirms the payment before running fulfillment. Fulfillment failure does not return HTTP 500 to the payment provider and is not shown to users as “payment failed”.
+- Fulfillment retry schedule: first attempt immediately, then after 5 seconds, 10 seconds, 1 minute, 2 minutes, and 5 minutes. If all attempts fail, the order remains `FULFILLMENT_FAILED` for manual handling.
 
 ---
 
@@ -271,7 +292,7 @@ If you previously used [Sub2ApiPay](https://github.com/touwaeriol/sub2apipay) as
 | Aspect | Sub2ApiPay | Built-in Payment |
 |--------|-----------|-----------------|
 | Deployment | Separate service (Next.js + PostgreSQL) | Built into Sub2API, no extra deployment |
-| Payment Methods | EasyPay, Alipay, WeChat, Stripe | Same |
+| Payment Methods | EasyPay, Alipay, WeChat, Stripe | Adds Mapay |
 | Configuration | Environment variables + separate admin UI | Unified in Sub2API admin dashboard |
 | Top-up Integration | Via Admin API callback | Internal processing, more reliable |
 | Subscription Plans | Supported | Not yet (planned) |

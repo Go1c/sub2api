@@ -327,6 +327,14 @@ func TestGetAvailableMethodLimitsUsesConfiguredVisibleMethodSource(t *testing.T)
 			wantGlobalMin:       20,
 			wantGlobalMax:       300,
 		},
+		{
+			name:                "mapay source",
+			sourceSetting:       VisibleMethodSourceMapayAlipay,
+			wantAlipaySingleMin: 25,
+			wantAlipaySingleMax: 250,
+			wantGlobalMin:       25,
+			wantGlobalMax:       300,
+		},
 	}
 
 	for _, tt := range tests {
@@ -355,6 +363,17 @@ func TestGetAvailableMethodLimitsUsesConfiguredVisibleMethodSource(t *testing.T)
 				Save(ctx)
 			if err != nil {
 				t.Fatalf("create easypay alipay instance: %v", err)
+			}
+			_, err = client.PaymentProviderInstance.Create().
+				SetProviderKey(payment.TypeMapay).
+				SetName("Mapay Alipay").
+				SetConfig("{}").
+				SetSupportedTypes("alipay").
+				SetLimits(`{"alipay":{"singleMin":25,"singleMax":250}}`).
+				SetEnabled(true).
+				Save(ctx)
+			if err != nil {
+				t.Fatalf("create mapay alipay instance: %v", err)
 			}
 			_, err = client.PaymentProviderInstance.Create().
 				SetProviderKey(payment.TypeWxpay).

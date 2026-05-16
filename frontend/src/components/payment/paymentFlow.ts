@@ -40,6 +40,7 @@ export interface PaymentRecoverySnapshot {
   payAmount: number
   orderType: OrderType | ''
   paymentMode: string
+  providerKey: string
   resumeToken: string
   createdAt: number
 }
@@ -141,6 +142,7 @@ export function decidePaymentLaunch(
     payAmount: result.pay_amount,
     orderType: context.orderType,
     paymentMode: (result.payment_mode || '').trim(),
+    providerKey: (result.provider_key || '').trim().toLowerCase(),
     resumeToken: result.resume_token || '',
   }, context.now)
 
@@ -171,11 +173,13 @@ export function decidePaymentLaunch(
   }
 
   const normalizedPaymentMode = baseState.paymentMode.trim().toLowerCase()
+  const isMapay = baseState.providerKey === 'mapay'
   const prefersRedirect = normalizedPaymentMode === 'redirect'
     || normalizedPaymentMode === 'popup'
-    || (context.isMobile && !!baseState.payUrl)
+    || (context.isMobile && !!baseState.payUrl && !isMapay)
   const prefersQr = normalizedPaymentMode === 'qrcode'
     || normalizedPaymentMode === 'native'
+    || (isMapay && !!baseState.qrCode)
     || (!prefersRedirect && !!baseState.qrCode)
 
   if (visibleMethod === 'wxpay' && context.isWechatBrowser && baseState.payUrl && !baseState.qrCode) {
@@ -241,6 +245,7 @@ export function readPaymentRecoverySnapshot(
       || typeof parsed.clientSecret !== 'string'
       || typeof parsed.payAmount !== 'number'
       || typeof parsed.paymentMode !== 'string'
+      || (parsed.providerKey != null && typeof parsed.providerKey !== 'string')
       || typeof parsed.resumeToken !== 'string'
       || typeof parsed.createdAt !== 'number'
     ) {
@@ -268,6 +273,7 @@ export function readPaymentRecoverySnapshot(
       payAmount: parsed.payAmount,
       orderType: parsed.orderType === 'subscription' ? 'subscription' : 'balance',
       paymentMode: parsed.paymentMode,
+      providerKey: parsed.providerKey || '',
       resumeToken: parsed.resumeToken,
       createdAt: parsed.createdAt,
     }

@@ -28,6 +28,7 @@ const (
 	OrderStatusExpired           = payment.OrderStatusExpired
 	OrderStatusCancelled         = payment.OrderStatusCancelled
 	OrderStatusFailed            = payment.OrderStatusFailed
+	OrderStatusFulfillmentFailed = payment.OrderStatusFulfillmentFailed
 	OrderStatusRefundRequested   = payment.OrderStatusRefundRequested
 	OrderStatusRefunding         = payment.OrderStatusRefunding
 	OrderStatusPartiallyRefunded = payment.OrderStatusPartiallyRefunded
@@ -47,6 +48,14 @@ const (
 
 	orderIDPrefix = "sub2_"
 )
+
+var defaultFulfillmentRetryDelays = []time.Duration{
+	5 * time.Second,
+	10 * time.Second,
+	time.Minute,
+	2 * time.Minute,
+	5 * time.Minute,
+}
 
 const paymentResumeSigningKeyEnv = "PAYMENT_RESUME_SIGNING_KEY"
 
@@ -93,6 +102,7 @@ type CreateOrderResponse struct {
 	Status       string                          `json:"status"`
 	ResultType   payment.CreatePaymentResultType `json:"result_type,omitempty"`
 	PaymentType  string                          `json:"payment_type"`
+	ProviderKey  string                          `json:"provider_key,omitempty"`
 	OutTradeNo   string                          `json:"out_trade_no,omitempty"`
 	PayURL       string                          `json:"pay_url,omitempty"`
 	QRCode       string                          `json:"qr_code,omitempty"`
@@ -182,6 +192,10 @@ type PaymentService struct {
 	groupRepo        GroupRepository
 	resumeService    *PaymentResumeService
 	affiliateService *AffiliateService
+
+	fulfillmentRetryDelays []time.Duration
+	fulfillmentRetrySleep  func(context.Context, time.Duration) bool
+	fulfillmentRetryAsync  func(func())
 }
 
 func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService) *PaymentService {
