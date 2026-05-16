@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -26,8 +27,9 @@ import (
 )
 
 type settingHandlerRepoStub struct {
-	values      map[string]string
-	lastUpdates map[string]string
+	values           map[string]string
+	lastUpdates      map[string]string
+	setMultipleCalls int
 }
 
 func (s *settingHandlerRepoStub) Get(ctx context.Context, key string) (*service.Setting, error) {
@@ -58,6 +60,7 @@ func (s *settingHandlerRepoStub) GetMultiple(ctx context.Context, keys []string)
 }
 
 func (s *settingHandlerRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
+	s.setMultipleCalls++
 	s.lastUpdates = make(map[string]string, len(settings))
 	for key, value := range settings {
 		s.lastUpdates[key] = value
@@ -363,6 +366,59 @@ func TestSettingHandler_UpdateSettings_AllowsConsecutiveSavesWithExistingSetting
 
 		require.Equal(t, http.StatusOK, rec.Code)
 	}
+}
+
+func TestSettingHandler_UpdateSettings_DeduplicatesSameAdminAndBodyWithinWindow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled: "false",
+			service.SettingKeyPromoCodeEnabled:    "true",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+
+	idempotencyRepo := newMemoryIdempotencyRepoStub()
+	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(idempotencyRepo, service.DefaultIdempotencyConfig()))
+	t.Cleanup(func() {
+		service.SetDefaultIdempotencyCoordinator(nil)
+	})
+
+	body := map[string]any{
+		"registration_enabled": true,
+		"promo_code_enabled":   true,
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	router := gin.New()
+	router.PUT("/api/v1/admin/settings", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+		handler.UpdateSettings(c)
+	})
+
+	call := func() (int, http.Header, response.Response) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(rec, req)
+
+		var resp response.Response
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		return rec.Code, rec.Header(), resp
+	}
+
+	status1, headers1, resp1 := call()
+	status2, headers2, resp2 := call()
+
+	require.Equal(t, http.StatusOK, status1)
+	require.Equal(t, http.StatusOK, status2)
+	require.Empty(t, headers1.Get("X-Idempotency-Replayed"))
+	require.Equal(t, "true", headers2.Get("X-Idempotency-Replayed"))
+	require.Equal(t, 0, resp1.Code)
+	require.Equal(t, resp1.Data, resp2.Data)
+	require.Equal(t, 1, repo.setMultipleCalls, "same admin and same settings body should only update settings once within the dedupe window")
 }
 
 func TestSettingHandler_UpdateSettings_RejectsSitePageSlugOutsideDocRoute(t *testing.T) {
