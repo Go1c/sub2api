@@ -26,16 +26,19 @@ func TestBillingErrorDetails_MapsUserRPMExceededToTooManyRequests(t *testing.T) 
 	require.LessOrEqual(t, retryAfter, 60)
 }
 
-func TestBillingErrorDetails_APIKeyRateLimitStillMaps(t *testing.T) {
-	// 回归保护：加 RPM 分支后不应影响已有 APIKey rate limit 的映射。
+func TestBillingErrorDetails_APIKeyRateLimitUsesNonRetryableStatus(t *testing.T) {
+	// 本地 API Key 金额窗口限额不是上游瞬时拥塞。返回 429 会让 Codex/OpenAI 类客户端
+	// 自动重试并最终只显示 "exceeded retry limit"，吞掉这里的明确提示。
 	for _, err := range []error{
 		service.ErrAPIKeyRateLimit5hExceeded,
 		service.ErrAPIKeyRateLimit1dExceeded,
 		service.ErrAPIKeyRateLimit7dExceeded,
 	} {
-		status, code, _, _ := billingErrorDetails(err)
-		require.Equal(t, http.StatusTooManyRequests, status, "status for %v", err)
+		status, code, msg, retryAfter := billingErrorDetails(err)
+		require.Equal(t, http.StatusForbidden, status, "status for %v", err)
 		require.Equal(t, "rate_limit_exceeded", code)
+		require.NotEmpty(t, msg)
+		require.Equal(t, 0, retryAfter)
 	}
 }
 
