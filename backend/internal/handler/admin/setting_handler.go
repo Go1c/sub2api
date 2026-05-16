@@ -1,7 +1,10 @@
 package admin
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,6 +13,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -25,6 +29,132 @@ var semverPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 // menuItemIDPattern validates custom menu item IDs: alphanumeric, hyphens, underscores only.
 var menuItemIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+const (
+	adminSettingsUpdateIdempotencyScope = "admin.settings.update"
+	adminSettingsUpdateDedupeTTL        = time.Minute
+)
+
+type capturedSettingsUpdateResponseError struct {
+	status int
+	header http.Header
+	body   []byte
+}
+
+func (e *capturedSettingsUpdateResponseError) Error() string {
+	return fmt.Sprintf("settings update returned HTTP %d", e.status)
+}
+
+type settingsUpdateResponseCapture struct {
+	gin.ResponseWriter
+	header  http.Header
+	body    bytes.Buffer
+	status  int
+	size    int
+	written bool
+}
+
+func newSettingsUpdateResponseCapture(base gin.ResponseWriter) *settingsUpdateResponseCapture {
+	return &settingsUpdateResponseCapture{
+		ResponseWriter: base,
+		header:         http.Header{},
+		status:         http.StatusOK,
+		size:           -1,
+	}
+}
+
+func (w *settingsUpdateResponseCapture) Header() http.Header {
+	return w.header
+}
+
+func (w *settingsUpdateResponseCapture) WriteHeader(code int) {
+	if code <= 0 || w.written {
+		return
+	}
+	w.status = code
+}
+
+func (w *settingsUpdateResponseCapture) WriteHeaderNow() {
+	if w.written {
+		return
+	}
+	w.written = true
+	if w.size < 0 {
+		w.size = 0
+	}
+}
+
+func (w *settingsUpdateResponseCapture) Write(data []byte) (int, error) {
+	w.WriteHeaderNow()
+	n, err := w.body.Write(data)
+	w.size += n
+	return n, err
+}
+
+func (w *settingsUpdateResponseCapture) WriteString(data string) (int, error) {
+	w.WriteHeaderNow()
+	n, err := w.body.WriteString(data)
+	w.size += n
+	return n, err
+}
+
+func (w *settingsUpdateResponseCapture) Status() int {
+	return w.status
+}
+
+func (w *settingsUpdateResponseCapture) Size() int {
+	return w.size
+}
+
+func (w *settingsUpdateResponseCapture) Written() bool {
+	return w.written
+}
+
+func adminSettingsImplicitIdempotencyKey(actorScope string, req UpdateSettingsRequest) (string, error) {
+	raw, err := json.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("marshal settings idempotency payload: %w", err)
+	}
+	sum := sha256.Sum256([]byte(actorScope + "\n" + string(raw)))
+	return "admin-settings:" + hex.EncodeToString(sum[:]), nil
+}
+
+func captureSettingsUpdateResponse(c *gin.Context, run func()) (any, error) {
+	originalWriter := c.Writer
+	captured := newSettingsUpdateResponseCapture(originalWriter)
+	c.Writer = captured
+	defer func() {
+		c.Writer = originalWriter
+	}()
+
+	run()
+
+	if captured.status >= http.StatusBadRequest {
+		return nil, &capturedSettingsUpdateResponseError{
+			status: captured.status,
+			header: captured.header.Clone(),
+			body:   append([]byte(nil), captured.body.Bytes()...),
+		}
+	}
+	if !captured.Written() {
+		return nil, nil
+	}
+
+	var resp response.Response
+	if err := json.Unmarshal(captured.body.Bytes(), &resp); err != nil {
+		return nil, fmt.Errorf("decode settings update response: %w", err)
+	}
+	return resp.Data, nil
+}
+
+func writeCapturedSettingsUpdateResponse(c *gin.Context, captured *capturedSettingsUpdateResponseError) {
+	for key, values := range captured.header {
+		for _, value := range values {
+			c.Writer.Header().Add(key, value)
+		}
+	}
+	c.Data(captured.status, captured.header.Get("Content-Type"), captured.body)
+}
 
 func isHTTPURL(raw string) bool {
 	parsed, err := url.ParseRequestURI(strings.TrimSpace(raw))
@@ -648,6 +778,59 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 
+	h.updateSettingsIdempotently(c, req)
+}
+
+func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSettingsRequest) {
+	coordinator := service.DefaultIdempotencyCoordinator()
+	if coordinator == nil {
+		h.updateSettings(c, req)
+		return
+	}
+
+	actorScope := adminIdempotencyActorScope(c)
+	idempotencyKey, err := adminSettingsImplicitIdempotencyKey(actorScope, req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	result, err := coordinator.Execute(c.Request.Context(), service.IdempotencyExecuteOptions{
+		Scope:          adminSettingsUpdateIdempotencyScope,
+		ActorScope:     actorScope,
+		Method:         c.Request.Method,
+		Route:          c.FullPath(),
+		IdempotencyKey: idempotencyKey,
+		Payload:        req,
+		RequireKey:     true,
+		TTL:            adminSettingsUpdateDedupeTTL,
+	}, func(ctx context.Context) (any, error) {
+		return captureSettingsUpdateResponse(c, func() {
+			h.updateSettings(c, req)
+		})
+	})
+	if err != nil {
+		if captured, ok := err.(*capturedSettingsUpdateResponseError); ok {
+			writeCapturedSettingsUpdateResponse(c, captured)
+			return
+		}
+		if retryAfter := service.RetryAfterSecondsFromError(err); retryAfter > 0 {
+			c.Header("Retry-After", fmt.Sprintf("%d", retryAfter))
+		}
+		response.ErrorFrom(c, err)
+		return
+	}
+	if result != nil && result.Replayed {
+		c.Header("X-Idempotency-Replayed", "true")
+	}
+	if result == nil {
+		response.Success(c, nil)
+		return
+	}
+	response.Success(c, result.Data)
+}
+
+func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsRequest) {
 	previousSettings, err := h.settingService.GetAllSettings(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
