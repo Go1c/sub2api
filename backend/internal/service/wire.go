@@ -297,8 +297,8 @@ func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
 	return sink
 }
 
-func ProvideOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, redisClient *redis.Client) *OpsUserRequestMonitorService {
-	svc := NewOpsUserRequestMonitorService(opsRepo, userRepo, redisClient)
+func ProvideOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, limiter OpsUserRequestCaptureLimiter) *OpsUserRequestMonitorService {
+	svc := NewOpsUserRequestMonitorService(opsRepo, userRepo, limiter)
 	svc.Start()
 	return svc
 }

@@ -70,8 +70,13 @@ func TestGatewayUsageQuotaLimitedIncludesWalletBalance(t *testing.T) {
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	require.Equal(t, "quota_limited", body["mode"])
-	require.InDelta(t, 13.0, body["remaining"].(float64), 1e-9)
-	require.InDelta(t, 5.5, body["balance"].(float64), 1e-9)
-	require.InDelta(t, 5.5, body["wallet_balance"].(float64), 1e-9)
-	require.InDelta(t, 5.5, body["account_balance"].(float64), 1e-9)
+	floatValue := func(key string) float64 {
+		value, ok := body[key].(float64)
+		require.Truef(t, ok, "%s should be a number", key)
+		return value
+	}
+	require.InDelta(t, 13.0, floatValue("remaining"), 1e-9)
+	require.InDelta(t, 5.5, floatValue("balance"), 1e-9)
+	require.InDelta(t, 5.5, floatValue("wallet_balance"), 1e-9)
+	require.InDelta(t, 5.5, floatValue("account_balance"), 1e-9)
 }
