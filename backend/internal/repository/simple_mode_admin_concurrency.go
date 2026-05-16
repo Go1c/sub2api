@@ -40,14 +40,10 @@ func ensureSimpleModeAdminConcurrency(ctx context.Context, client *dbent.Client)
 		return fmt.Errorf("upgrade simple mode admin concurrency: %w", err)
 	}
 
+	// 与 SettingRepository 共用同一套 raw SQL update-first + ON CONFLICT 路径，
+	// 避免再走 Ent upsert 触发历史上出现的 ent: constraint failed。
 	now := time.Now()
-	if err := client.Setting.Create().
-		SetKey(simpleModeAdminConcurrencyUpgradeKey).
-		SetValue(now.Format(time.RFC3339)).
-		SetUpdatedAt(now).
-		OnConflictColumns(setting.FieldKey).
-		UpdateNewValues().
-		Exec(ctx); err != nil {
+	if err := writeSettingWithUpdateFirst(ctx, client, simpleModeAdminConcurrencyUpgradeKey, now.Format(time.RFC3339), now); err != nil {
 		return fmt.Errorf("persist admin concurrency upgrade marker: %w", err)
 	}
 
