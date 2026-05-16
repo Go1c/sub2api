@@ -103,10 +103,18 @@ func (r *settingRepository) SetMultiple(ctx context.Context, settings map[string
 }
 
 func setMultipleWithClient(ctx context.Context, client *ent.Client, keys []string, settings map[string]string, now time.Time) error {
-	const upsertSQL = `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`
-
 	for _, key := range keys {
-		if _, err := client.ExecContext(ctx, upsertSQL, key, settings[key], now); err != nil {
+		if err := client.Setting.
+			Create().
+			SetKey(key).
+			SetValue(settings[key]).
+			SetUpdatedAt(now).
+			OnConflictColumns(setting.FieldKey).
+			Update(func(u *ent.SettingUpsert) {
+				u.UpdateValue()
+				u.UpdateUpdatedAt()
+			}).
+			Exec(ctx); err != nil {
 			return err
 		}
 	}
