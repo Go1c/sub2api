@@ -533,6 +533,7 @@ const baseSettingsResponse = {
   payment_cancel_rate_limit_window: 1,
   payment_cancel_rate_limit_unit: "day",
   payment_cancel_rate_limit_window_mode: "rolling",
+  user_subscriptions_visible: true,
   payment_visible_method_alipay_source: "alipay_direct",
   payment_visible_method_wxpay_source: "invalid-source",
   payment_visible_method_alipay_enabled: true,
@@ -599,6 +600,16 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
 
   expect(usersTabButton).toBeDefined();
   await usersTabButton?.trigger("click");
+  await flushPromises();
+}
+
+async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
+  const featuresTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.features"));
+
+  expect(featuresTabButton).toBeDefined();
+  await featuresTabButton?.trigger("click");
   await flushPromises();
 }
 
@@ -761,6 +772,43 @@ describe("admin SettingsView payment visible method controls", () => {
             content: "https://blog.lumio.games/docs/doc/api",
           }),
         ]),
+      }),
+    );
+  });
+
+  it("places user subscriptions visibility under feature switches, not general settings", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      user_subscriptions_visible: false,
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+
+    await openFeaturesTab(wrapper);
+
+    const pageText = wrapper.text();
+
+    expect(pageText).not.toContain("admin.settings.site.userSubscriptionsVisible");
+    expect(pageText).toContain("admin.settings.features.userSubscriptions.title");
+  });
+
+  it("submits the user subscriptions visibility setting", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      user_subscriptions_visible: false,
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_subscriptions_visible: false,
       }),
     );
   });
@@ -1092,6 +1140,22 @@ describe("admin SettingsView wechat connect controls", () => {
         .get('[data-testid="wechat-connect-mp-app-secret"]')
         .attributes("placeholder"),
     ).toContain("密钥已配置");
+  });
+
+  it("omits unchanged site_logo from the settings save payload", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      site_logo: "data:image/png;base64," + "a".repeat(1024),
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings.mock.calls[0][0]).not.toHaveProperty("site_logo");
   });
 
   it("collapses auth source defaults until the source is enabled", async () => {

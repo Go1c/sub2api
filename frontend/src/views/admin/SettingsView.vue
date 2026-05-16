@@ -5114,6 +5114,30 @@
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.userSubscriptions.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.userSubscriptions.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.userSubscriptions.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.userSubscriptions.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.user_subscriptions_visible" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.siteMessages.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -6919,6 +6943,7 @@ const testEmailAddress = ref("");
 const registrationEmailSuffixWhitelistTags = ref<string[]>([]);
 const registrationEmailSuffixWhitelistDraft = ref("");
 const tablePageSizeOptionsInput = ref("10, 20, 50, 100");
+const persistedSiteLogo = ref("");
 const publicModelPricingLoading = ref(false);
 const publicModelPricingSaving = ref(false);
 const publicModelPricingForm = reactive<PublicModelPricingConfig>({
@@ -7124,6 +7149,7 @@ const form = reactive<SettingsForm>({
   site_pages: [] as SitePage[],
   home_content: "",
   backend_mode_enabled: false,
+  user_subscriptions_visible: true,
   hide_ccs_import_button: false,
   ccswitch_default_model_anthropic: "",
   ccswitch_default_model_openai: "gpt-5.4",
@@ -8106,6 +8132,7 @@ async function loadSettings() {
         : defaultLoginAgreementDocuments();
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(settings));
     form.backend_mode_enabled = settings.backend_mode_enabled;
+    persistedSiteLogo.value = settings.site_logo || "";
     form.contact_channels = normalizeContactChannels(settings.contact_channels);
     form.site_pages = ensureDefaultSitePages(settings.site_pages);
     form.frontend_locales =
@@ -8521,7 +8548,6 @@ async function saveSettings() {
       force_email_on_third_party_signup: form.force_email_on_third_party_signup,
       default_user_rpm_limit: form.default_user_rpm_limit,
       site_name: form.site_name,
-      site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
       contact_info: form.contact_info,
@@ -8536,6 +8562,7 @@ async function saveSettings() {
       site_pages: normalizedSitePages,
       home_content: form.home_content,
       backend_mode_enabled: form.backend_mode_enabled,
+      user_subscriptions_visible: form.user_subscriptions_visible,
       hide_ccs_import_button: form.hide_ccs_import_button,
       ccswitch_default_model_anthropic: form.ccswitch_default_model_anthropic,
       ccswitch_default_model_openai: form.ccswitch_default_model_openai,
@@ -8701,6 +8728,9 @@ async function saveSettings() {
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
     };
+    if (form.site_logo !== persistedSiteLogo.value) {
+      payload.site_logo = form.site_logo;
+    }
 
     // 仅当 openai_fast_policy_settings 已成功从后端加载时才回写，
     // 否则省略整个字段，让后端保留既有规则（含默认值）。
@@ -8740,6 +8770,7 @@ async function saveSettings() {
       }
     }
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
+    persistedSiteLogo.value = updated.site_logo || "";
     form.contact_channels = normalizeContactChannels(updated.contact_channels);
     form.site_pages = ensureDefaultSitePages(updated.site_pages);
     registrationEmailSuffixWhitelistTags.value =

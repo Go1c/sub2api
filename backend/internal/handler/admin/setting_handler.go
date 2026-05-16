@@ -215,6 +215,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		CCSwitchDefaultModelGemini:             settings.CCSwitchDefaultModelGemini,
 		CCSwitchDefaultModelAntigravity:        settings.CCSwitchDefaultModelAntigravity,
 		CCSwitchDefaultModelAntigravityGemini:  settings.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:               settings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:            settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                settings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                   settings.TableDefaultPageSize,
@@ -421,9 +422,9 @@ type UpdateSettingsRequest struct {
 	WeChatConnectMPAppSecret         string `json:"wechat_connect_mp_app_secret"`
 	WeChatConnectMobileAppID         string `json:"wechat_connect_mobile_app_id"`
 	WeChatConnectMobileAppSecret     string `json:"wechat_connect_mobile_app_secret"`
-	WeChatConnectOpenEnabled         bool   `json:"wechat_connect_open_enabled"`
-	WeChatConnectMPEnabled           bool   `json:"wechat_connect_mp_enabled"`
-	WeChatConnectMobileEnabled       bool   `json:"wechat_connect_mobile_enabled"`
+	WeChatConnectOpenEnabled         *bool  `json:"wechat_connect_open_enabled"`
+	WeChatConnectMPEnabled           *bool  `json:"wechat_connect_mp_enabled"`
+	WeChatConnectMobileEnabled       *bool  `json:"wechat_connect_mobile_enabled"`
 	WeChatConnectMode                string `json:"wechat_connect_mode"`
 	WeChatConnectScopes              string `json:"wechat_connect_scopes"`
 	WeChatConnectRedirectURL         string `json:"wechat_connect_redirect_url"`
@@ -466,7 +467,7 @@ type UpdateSettingsRequest struct {
 
 	// OEM设置
 	SiteName                              string                `json:"site_name"`
-	SiteLogo                              string                `json:"site_logo"`
+	SiteLogo                              *string               `json:"site_logo"`
 	SiteSubtitle                          string                `json:"site_subtitle"`
 	APIBaseURL                            string                `json:"api_base_url"`
 	ContactInfo                           string                `json:"contact_info"`
@@ -487,6 +488,7 @@ type UpdateSettingsRequest struct {
 	CCSwitchDefaultModelGemini            string                `json:"ccswitch_default_model_gemini"`
 	CCSwitchDefaultModelAntigravity       string                `json:"ccswitch_default_model_antigravity"`
 	CCSwitchDefaultModelAntigravityGemini string                `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible              *bool                 `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled           *bool                 `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL               *string               `json:"purchase_subscription_url"`
 	TableDefaultPageSize                  int                   `json:"table_default_page_size"`
@@ -872,6 +874,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		}
 	}
 
+	wechatOpenEnabled := boolValueOrDefault(req.WeChatConnectOpenEnabled, previousSettings.WeChatConnectOpenEnabled)
+	wechatMPEnabled := boolValueOrDefault(req.WeChatConnectMPEnabled, previousSettings.WeChatConnectMPEnabled)
+	wechatMobileEnabled := boolValueOrDefault(req.WeChatConnectMobileEnabled, previousSettings.WeChatConnectMobileEnabled)
+	wechatCapabilitiesProvided := req.WeChatConnectOpenEnabled != nil ||
+		req.WeChatConnectMPEnabled != nil ||
+		req.WeChatConnectMobileEnabled != nil
 	if req.WeChatConnectEnabled {
 		req.WeChatConnectAppID = strings.TrimSpace(req.WeChatConnectAppID)
 		req.WeChatConnectAppSecret = strings.TrimSpace(req.WeChatConnectAppSecret)
@@ -895,7 +903,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			req.WeChatConnectScopes = strings.TrimSpace(previousSettings.WeChatConnectScopes)
 		}
 
-		if req.WeChatConnectMPEnabled && req.WeChatConnectMobileEnabled {
+		if wechatMPEnabled && wechatMobileEnabled {
 			response.BadRequest(c, "WeChat Official Account and Mobile App cannot be enabled at the same time")
 			return
 		}
@@ -907,20 +915,20 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return
 			}
 		}
-		if !req.WeChatConnectOpenEnabled && !req.WeChatConnectMPEnabled && !req.WeChatConnectMobileEnabled {
+		if !wechatCapabilitiesProvided && !wechatOpenEnabled && !wechatMPEnabled && !wechatMobileEnabled {
 			switch req.WeChatConnectMode {
 			case "mp":
-				req.WeChatConnectMPEnabled = true
+				wechatMPEnabled = true
 			case "mobile":
-				req.WeChatConnectMobileEnabled = true
+				wechatMobileEnabled = true
 			default:
-				req.WeChatConnectOpenEnabled = true
+				wechatOpenEnabled = true
 			}
 		}
 		if req.WeChatConnectMode == "" {
-			if req.WeChatConnectMPEnabled {
+			if wechatMPEnabled {
 				req.WeChatConnectMode = "mp"
-			} else if req.WeChatConnectMobileEnabled {
+			} else if wechatMobileEnabled {
 				req.WeChatConnectMode = "mobile"
 			} else {
 				req.WeChatConnectMode = "open"
@@ -944,7 +952,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			req.WeChatConnectAppSecret = strings.TrimSpace(firstNonEmpty(req.WeChatConnectOpenAppSecret, req.WeChatConnectMPAppSecret, req.WeChatConnectMobileAppSecret, previousSettings.WeChatConnectAppSecret))
 		}
 
-		if req.WeChatConnectOpenEnabled {
+		if wechatOpenEnabled {
 			if req.WeChatConnectOpenAppID == "" {
 				response.BadRequest(c, "WeChat PC App ID is required when enabled")
 				return
@@ -954,7 +962,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return
 			}
 		}
-		if req.WeChatConnectMPEnabled {
+		if wechatMPEnabled {
 			if req.WeChatConnectMPAppID == "" {
 				response.BadRequest(c, "WeChat Official Account App ID is required when enabled")
 				return
@@ -964,7 +972,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return
 			}
 		}
-		if req.WeChatConnectMobileEnabled {
+		if wechatMobileEnabled {
 			if req.WeChatConnectMobileAppID == "" {
 				response.BadRequest(c, "WeChat Mobile App ID is required when enabled")
 				return
@@ -976,13 +984,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		}
 
 		if req.WeChatConnectScopes == "" {
-			if req.WeChatConnectMPEnabled {
+			if wechatMPEnabled {
 				req.WeChatConnectScopes = service.DefaultWeChatConnectScopesForMode("mp")
 			} else {
 				req.WeChatConnectScopes = service.DefaultWeChatConnectScopesForMode(req.WeChatConnectMode)
 			}
 		}
-		if req.WeChatConnectOpenEnabled || req.WeChatConnectMPEnabled {
+		if wechatOpenEnabled || wechatMPEnabled {
 			if req.WeChatConnectRedirectURL == "" {
 				response.BadRequest(c, "WeChat Redirect URL is required when web oauth is enabled")
 				return
@@ -1457,6 +1465,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		}
 		sitePagesJSON = string(pageBytes)
 	}
+	siteLogo := previousSettings.SiteLogo
+	if req.SiteLogo != nil {
+		siteLogo = *req.SiteLogo
+	}
+	userSubscriptionsVisible := boolValueOrDefault(req.UserSubscriptionsVisible, previousSettings.UserSubscriptionsVisible)
 
 	// Ops metrics collector interval validation (seconds).
 	if req.OpsMetricsIntervalSeconds != nil {
@@ -1538,9 +1551,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		WeChatConnectMPAppSecret:              req.WeChatConnectMPAppSecret,
 		WeChatConnectMobileAppID:              req.WeChatConnectMobileAppID,
 		WeChatConnectMobileAppSecret:          req.WeChatConnectMobileAppSecret,
-		WeChatConnectOpenEnabled:              req.WeChatConnectOpenEnabled,
-		WeChatConnectMPEnabled:                req.WeChatConnectMPEnabled,
-		WeChatConnectMobileEnabled:            req.WeChatConnectMobileEnabled,
+		WeChatConnectOpenEnabled:              wechatOpenEnabled,
+		WeChatConnectMPEnabled:                wechatMPEnabled,
+		WeChatConnectMobileEnabled:            wechatMobileEnabled,
 		WeChatConnectMode:                     req.WeChatConnectMode,
 		WeChatConnectScopes:                   req.WeChatConnectScopes,
 		WeChatConnectRedirectURL:              req.WeChatConnectRedirectURL,
@@ -1578,7 +1591,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		GoogleOAuthRedirectURL:                req.GoogleOAuthRedirectURL,
 		GoogleOAuthFrontendRedirectURL:        req.GoogleOAuthFrontendRedirectURL,
 		SiteName:                              req.SiteName,
-		SiteLogo:                              req.SiteLogo,
+		SiteLogo:                              siteLogo,
 		SiteSubtitle:                          req.SiteSubtitle,
 		APIBaseURL:                            req.APIBaseURL,
 		ContactInfo:                           req.ContactInfo,
@@ -1599,6 +1612,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		CCSwitchDefaultModelGemini:            req.CCSwitchDefaultModelGemini,
 		CCSwitchDefaultModelAntigravity:       req.CCSwitchDefaultModelAntigravity,
 		CCSwitchDefaultModelAntigravityGemini: req.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:              userSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:           purchaseEnabled,
 		PurchaseSubscriptionURL:               purchaseURL,
 		TableDefaultPageSize:                  req.TableDefaultPageSize,
@@ -2022,6 +2036,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HomeContent:                            updatedSettings.HomeContent,
 		HideCcsImportButton:                    updatedSettings.HideCcsImportButton,
 		FrontendLocales:                        updatedSettings.FrontendLocales,
+		UserSubscriptionsVisible:               updatedSettings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                   updatedSettings.TableDefaultPageSize,
@@ -2503,6 +2518,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.BackendModeEnabled != after.BackendModeEnabled {
 		changed = append(changed, "backend_mode_enabled")
+	}
+	if before.UserSubscriptionsVisible != after.UserSubscriptionsVisible {
+		changed = append(changed, "user_subscriptions_visible")
 	}
 	if before.PurchaseSubscriptionEnabled != after.PurchaseSubscriptionEnabled {
 		changed = append(changed, "purchase_subscription_enabled")
