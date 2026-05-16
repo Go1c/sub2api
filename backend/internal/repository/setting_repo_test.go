@@ -24,7 +24,9 @@ func newSettingRepoSQLMock(t *testing.T) (*settingRepository, sqlmock.Sqlmock) {
 	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 	t.Cleanup(func() { _ = client.Close() })
 
-	return NewSettingRepository(client).(*settingRepository), mock
+	repo, ok := NewSettingRepository(client).(*settingRepository)
+	require.True(t, ok)
+	return repo, mock
 }
 
 func settingUpsertSQLPattern() string {
