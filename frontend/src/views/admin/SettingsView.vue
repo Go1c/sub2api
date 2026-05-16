@@ -8313,6 +8313,7 @@ function findDuplicateDefaultSubscription(
 }
 
 async function saveSettings() {
+  if (saving.value) return;
   saving.value = true;
   try {
     const normalizedTableDefaultPageSize = Math.floor(

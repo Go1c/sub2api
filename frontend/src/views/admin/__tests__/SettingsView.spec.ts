@@ -854,6 +854,28 @@ describe("admin SettingsView payment visible method controls", () => {
     );
   });
 
+  it("ignores duplicate save submissions while the settings request is in flight", async () => {
+    let resolveUpdate: ((value: typeof baseSettingsResponse) => void) | undefined;
+    updateSettings.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve;
+        }),
+    );
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    const form = wrapper.find("form");
+    await form.trigger("submit.prevent");
+    await form.trigger("submit.prevent");
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+
+    resolveUpdate?.({ ...baseSettingsResponse });
+    await flushPromises();
+  });
+
   it("updates provider enablement immediately and reloads providers", async () => {
     const provider = {
       id: 7,
