@@ -552,7 +552,8 @@ func normalizeOpenAIImageSizeTier(size string) string {
 }
 
 const (
-	openAIImage2KMaxPixels = 2560 * 1440
+	openAIImage1KMaxPixels = 1024 * 1024
+	openAIImage2KMaxPixels = 2048 * 2048
 )
 
 func parseOpenAIImageSizeDimensions(size string) (int, int, bool) {
@@ -576,10 +577,15 @@ func parseOpenAIImageSizeDimensions(size string) (int, int, bool) {
 }
 
 func classifyUnknownOpenAIImageSizeTier(width int, height int) string {
-	if height > 0 && width > openAIImage2KMaxPixels/height {
-		return "4K"
+	if height > 0 {
+		if width <= openAIImage1KMaxPixels/height {
+			return "1K"
+		}
+		if width <= openAIImage2KMaxPixels/height {
+			return "2K"
+		}
 	}
-	return "2K"
+	return "4K"
 }
 
 func (s *OpenAIGatewayService) ForwardImages(
