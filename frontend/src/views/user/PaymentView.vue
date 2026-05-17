@@ -478,6 +478,7 @@ function buildWechatOAuthAuthorizeUrl(
 
 function onPaymentDone() {
   const wasSubscription = paymentState.value.orderType === 'subscription'
+  Promise.resolve(authStore.refreshUser()).catch(() => undefined)
   resetPayment()
   selectedPlan.value = null
   if (wasSubscription) {
