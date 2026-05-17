@@ -405,6 +405,39 @@ describe('PaymentResultView', () => {
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
   })
 
+  it('refreshes a fulfillment-pending result until the recharge becomes successful', async () => {
+    vi.useFakeTimers()
+    routeState.query = {
+      resume_token: 'resume-fulfillment-retry',
+    }
+    resolveOrderPublicByResumeToken
+      .mockResolvedValueOnce({
+        data: orderFactory('FULFILLMENT_FAILED'),
+      })
+      .mockResolvedValueOnce({
+        data: orderFactory('PAID'),
+      })
+
+    const wrapper = mount(PaymentResultView, {
+      global: {
+        stubs: {
+          OrderStatusBadge: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('payment.result.fulfillmentPending')
+
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+
+    expect(resolveOrderPublicByResumeToken).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('payment.result.success')
+    expect(wrapper.text()).not.toContain('payment.result.fulfillmentPending')
+  })
+
   it('normalizes aliased payment methods before rendering the label', async () => {
     routeState.query = {
       resume_token: 'resume-88',
