@@ -89,10 +89,16 @@ describe('PaymentResultView', () => {
     pollOrderStatus.mockReset()
     verifyOrderPublic.mockReset()
     resolveOrderPublicByResumeToken.mockReset()
+    window.name = ''
+    Object.defineProperty(window, 'opener', {
+      configurable: true,
+      value: null,
+    })
     window.localStorage.clear()
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
@@ -379,6 +385,72 @@ describe('PaymentResultView', () => {
 
     expect(resolveOrderPublicByResumeToken).toHaveBeenCalledWith('resume-77')
     expect(wrapper.text()).toContain('payment.result.success')
+  })
+
+  it('closes the desktop payment popup after a successful hosted payment return', async () => {
+    vi.useFakeTimers()
+    const openerPostMessage = vi.fn()
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => undefined)
+    window.name = 'paymentPopup'
+    Object.defineProperty(window, 'opener', {
+      configurable: true,
+      value: {
+        postMessage: openerPostMessage,
+      },
+    })
+    routeState.query = {
+      resume_token: 'resume-popup',
+      order_id: '42',
+    }
+    resolveOrderPublicByResumeToken.mockResolvedValue({
+      data: orderFactory('PAID'),
+    })
+
+    const wrapper = mount(PaymentResultView, {
+      global: {
+        stubs: {
+          OrderStatusBadge: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('payment.result.success')
+    expect(openerPostMessage).toHaveBeenCalledWith({
+      type: 'PAYMENT_POPUP_COMPLETED',
+      orderId: 42,
+      outTradeNo: 'sub2_20260420abcd1234',
+      status: 'PAID',
+    }, window.location.origin)
+    expect(closeSpy).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(250)
+
+    expect(closeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not close a normal payment result page after success', async () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => undefined)
+    routeState.query = {
+      resume_token: 'resume-normal',
+    }
+    resolveOrderPublicByResumeToken.mockResolvedValue({
+      data: orderFactory('PAID'),
+    })
+
+    const wrapper = mount(PaymentResultView, {
+      global: {
+        stubs: {
+          OrderStatusBadge: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('payment.result.success')
+    expect(closeSpy).not.toHaveBeenCalled()
   })
 
   it('renders fulfillment failure as paid and pending delivery instead of payment failed', async () => {
