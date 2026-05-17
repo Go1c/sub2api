@@ -142,6 +142,7 @@ const SUCCESS_STATUSES = new Set(['COMPLETED', 'PAID', 'RECHARGING'])
 const PENDING_STATUSES = new Set(['PENDING', 'CREATED', 'WAITING', 'PROCESSING'])
 const STATUS_REFRESH_INTERVAL_MS = 2000
 const STATUS_REFRESH_MAX_ATTEMPTS = 15
+const PAYMENT_POPUP_WINDOW_NAME = 'paymentPopup'
 
 let statusRefreshTimer: ReturnType<typeof setTimeout> | null = null
 const refreshAttempts = ref(0)
@@ -287,6 +288,37 @@ function clearRecoverySnapshotForTerminalStatus(status: string | null | undefine
   }
 }
 
+function isPaymentPopupWindow(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.name === PAYMENT_POPUP_WINDOW_NAME && !!window.opener && window.opener !== window
+}
+
+function notifyOpenerPaymentComplete(completedOrder: PaymentOrder): void {
+  if (typeof window === 'undefined' || !window.opener) return
+  try {
+    window.opener.postMessage({
+      type: 'PAYMENT_POPUP_COMPLETED',
+      orderId: completedOrder.id,
+      outTradeNo: completedOrder.out_trade_no,
+      status: completedOrder.status,
+    }, window.location.origin)
+  } catch (_err: unknown) {
+    // The main checkout page also polls order status; postMessage is best-effort.
+  }
+}
+
+function closePaymentPopupOnSuccess(): boolean {
+  if (!order.value || !isSuccessStatus(order.value.status) || !isPaymentPopupWindow()) {
+    return false
+  }
+
+  notifyOpenerPaymentComplete(order.value)
+  window.setTimeout(() => {
+    window.close()
+  }, 250)
+  return true
+}
+
 function scheduleStatusRefresh(refreshOrder: (() => Promise<PaymentOrder | null>) | null): void {
   clearStatusRefreshTimer()
   if (!refreshOrder || (!isPending.value && !isFulfillmentFailed.value) || refreshAttempts.value >= STATUS_REFRESH_MAX_ATTEMPTS) {
@@ -299,6 +331,7 @@ function scheduleStatusRefresh(refreshOrder: (() => Promise<PaymentOrder | null>
     if (refreshedOrder) {
       order.value = refreshedOrder
       clearRecoverySnapshotForTerminalStatus(refreshedOrder.status)
+      closePaymentPopupOnSuccess()
     }
 
     if (isPendingStatus(order.value?.status) || isFulfillmentFailed.value) {
@@ -400,6 +433,7 @@ onMounted(async () => {
     scheduleStatusRefresh(refreshOrder)
   } else if (order.value) {
     clearRecoverySnapshotForTerminalStatus(order.value.status)
+    closePaymentPopupOnSuccess()
   } else if (returnInfo.value) {
     clearRecoverySnapshot()
   }
