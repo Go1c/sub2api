@@ -288,7 +288,7 @@ async function renderQR() {
 }
 
 async function pollStatus() {
-  if (!props.orderId || outcome.value) return
+  if (!props.orderId || (outcome.value && outcome.value !== 'fulfillment_failed')) return
   const order = await paymentStore.pollOrderStatus(props.orderId)
   if (!order) return
   if (Number.isFinite(order.pay_amount) && order.pay_amount > 0) {
@@ -303,7 +303,7 @@ async function pollStatus() {
     setOutcome('success')
     emit('success')
   } else if (order.status === 'FULFILLMENT_FAILED') {
-    cleanup()
+    stopCountdown()
     paidOrder.value = order
     setOutcome('fulfillment_failed')
   } else if (order.status === 'CANCELLED') {
@@ -324,6 +324,10 @@ function startCountdown(seconds: number) {
   }, 1000)
 }
 
+function stopCountdown() {
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
+}
+
 async function handleCancel() {
   if (!props.orderId || cancelling.value) return
   cancelling.value = true
@@ -342,7 +346,7 @@ function handleDone() { cleanup(); emit('done') }
 
 function cleanup() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
+  stopCountdown()
 }
 
 // Initialize on mount

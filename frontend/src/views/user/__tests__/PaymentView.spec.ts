@@ -247,6 +247,47 @@ describe('PaymentView recharge notices', () => {
     expect(wrapper.text()).not.toContain('payment.tabSubscribe')
     expect(wrapper.text()).not.toContain('payment.noPlans')
   })
+
+  it('refreshes user balance when confirming a settled payment panel', async () => {
+    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
+      orderId: 999,
+      amount: 66,
+      qrCode: 'stale-qr',
+      expiresAt: '2099-01-01T00:10:00.000Z',
+      paymentType: 'alipay',
+      payUrl: 'https://pay.example.com/stale',
+      outTradeNo: 'stale-out-trade-no',
+      clientSecret: '',
+      payAmount: 66,
+      orderType: 'balance',
+      paymentMode: 'popup',
+      resumeToken: '',
+      createdAt: Date.UTC(2099, 0, 1, 0, 0, 0),
+      userId: 9,
+    }))
+
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: {
+            template: '<div><slot /></div>',
+          },
+          PaymentStatusPanel: {
+            template: '<button class="done" @click="$emit(\'done\')">done</button>',
+          },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+
+    await flushPromises()
+    await flushPromises()
+    await wrapper.get('button.done').trigger('click')
+
+    expect(refreshUser).toHaveBeenCalledTimes(1)
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+  })
 })
 
 describe('PaymentView WeChat JSAPI flow', () => {
