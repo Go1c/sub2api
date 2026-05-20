@@ -39,15 +39,6 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/demo/lottery',
-    name: 'LotteryDemo',
-    component: () => import('@/views/demo/LotteryDemoView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Lottery Demo'
-    }
-  },
-  {
     path: '/doc/:slug(.*)*',
     name: 'SitePage',
     component: () => import('@/views/PublicMarkdownPageView.vue'),
@@ -571,6 +562,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Promo Code Management',
       titleKey: 'admin.promo.title',
       descriptionKey: 'admin.promo.description'
+    }
+  },
+  {
+    path: '/admin/lottery',
+    name: 'AdminLottery',
+    component: () => import('@/views/admin/LotteryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Lottery Management',
+      titleKey: 'admin.lottery.title',
+      descriptionKey: 'admin.lottery.description'
     }
   },
   {
