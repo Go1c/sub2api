@@ -286,6 +286,7 @@ export default {
     inactive: 'Inactive',
     more: 'More',
     close: 'Close',
+    menu: 'Menu',
     enabled: 'Enabled',
     disabled: 'Disabled',
     total: 'Total',
