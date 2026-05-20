@@ -164,8 +164,37 @@
             }}</span>
           </template>
 
-          <template #cell-model="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+          <template #cell-model="{ row, value }">
+            <div
+              v-if="row.model_mapping_chain && row.model_mapping_chain.includes('→')"
+              class="space-y-0.5 text-xs"
+            >
+              <div
+                v-for="(step, i) in row.model_mapping_chain.split('→')"
+                :key="i"
+                class="break-all"
+                :class="
+                  i === 0
+                    ? 'font-medium text-gray-900 dark:text-white'
+                    : 'text-gray-500 dark:text-gray-400'
+                "
+                :style="i > 0 ? `padding-left: ${i * 0.75}rem` : ''"
+              >
+                <span v-if="i > 0" class="mr-0.5">↳</span>{{ step }}
+              </div>
+            </div>
+            <div
+              v-else-if="row.upstream_model && row.upstream_model !== row.model"
+              class="space-y-0.5 text-xs"
+            >
+              <div class="break-all font-medium text-gray-900 dark:text-white">
+                {{ row.model }}
+              </div>
+              <div class="break-all text-gray-500 dark:text-gray-400">
+                <span class="mr-0.5">↳</span>{{ row.upstream_model }}
+              </div>
+            </div>
+            <span v-else class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
           </template>
 
           <template #cell-reasoning_effort="{ row }">
@@ -680,6 +709,22 @@ const formatUsageEndpoints = (log: UsageLog): string => {
   return inbound || '-'
 }
 
+const formatUsageModelForExport = (log: UsageLog): string => {
+  if (log.model_mapping_chain?.includes('→')) {
+    return log.model_mapping_chain
+      .split('→')
+      .map((step) => step.trim())
+      .filter(Boolean)
+      .join(' -> ')
+  }
+
+  if (log.upstream_model && log.upstream_model !== log.model) {
+    return `${log.model} -> ${log.upstream_model}`
+  }
+
+  return log.model
+}
+
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(2)}B`
@@ -873,7 +918,7 @@ const exportToCSV = async () => {
       [
         log.created_at,
         log.api_key?.name || '',
-        log.model,
+        formatUsageModelForExport(log),
         formatReasoningEffort(log.reasoning_effort),
         log.inbound_endpoint || '',
         getRequestTypeExportText(log),

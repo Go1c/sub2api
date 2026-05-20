@@ -14849,6 +14849,7 @@ type GroupMutation struct {
 	messages_dispatch_model_config          *domain.OpenAIMessagesDispatchModelConfig
 	rpm_limit                               *int
 	addrpm_limit                            *int
+	expose_upstream_model_to_user           *bool
 	clearedFields                           map[string]struct{}
 	api_keys                                map[int64]struct{}
 	removedapi_keys                         map[int64]struct{}
@@ -16621,6 +16622,42 @@ func (m *GroupMutation) ResetRpmLimit() {
 	m.addrpm_limit = nil
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (m *GroupMutation) SetExposeUpstreamModelToUser(b bool) {
+	m.expose_upstream_model_to_user = &b
+}
+
+// ExposeUpstreamModelToUser returns the value of the "expose_upstream_model_to_user" field in the mutation.
+func (m *GroupMutation) ExposeUpstreamModelToUser() (r bool, exists bool) {
+	v := m.expose_upstream_model_to_user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExposeUpstreamModelToUser returns the old "expose_upstream_model_to_user" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldExposeUpstreamModelToUser(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExposeUpstreamModelToUser is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExposeUpstreamModelToUser requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExposeUpstreamModelToUser: %w", err)
+	}
+	return oldValue.ExposeUpstreamModelToUser, nil
+}
+
+// ResetExposeUpstreamModelToUser resets all changes to the "expose_upstream_model_to_user" field.
+func (m *GroupMutation) ResetExposeUpstreamModelToUser() {
+	m.expose_upstream_model_to_user = nil
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by ids.
 func (m *GroupMutation) AddAPIKeyIDs(ids ...int64) {
 	if m.api_keys == nil {
@@ -16979,7 +17016,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 35)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -17082,6 +17119,9 @@ func (m *GroupMutation) Fields() []string {
 	if m.rpm_limit != nil {
 		fields = append(fields, group.FieldRpmLimit)
 	}
+	if m.expose_upstream_model_to_user != nil {
+		fields = append(fields, group.FieldExposeUpstreamModelToUser)
+	}
 	return fields
 }
 
@@ -17158,6 +17198,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.MessagesDispatchModelConfig()
 	case group.FieldRpmLimit:
 		return m.RpmLimit()
+	case group.FieldExposeUpstreamModelToUser:
+		return m.ExposeUpstreamModelToUser()
 	}
 	return nil, false
 }
@@ -17235,6 +17277,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldMessagesDispatchModelConfig(ctx)
 	case group.FieldRpmLimit:
 		return m.OldRpmLimit(ctx)
+	case group.FieldExposeUpstreamModelToUser:
+		return m.OldExposeUpstreamModelToUser(ctx)
 	}
 	return nil, fmt.Errorf("unknown Group field %s", name)
 }
@@ -17481,6 +17525,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRpmLimit(v)
+		return nil
+	case group.FieldExposeUpstreamModelToUser:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExposeUpstreamModelToUser(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Group field %s", name)
@@ -17860,6 +17911,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRpmLimit:
 		m.ResetRpmLimit()
+		return nil
+	case group.FieldExposeUpstreamModelToUser:
+		m.ResetExposeUpstreamModelToUser()
 		return nil
 	}
 	return fmt.Errorf("unknown Group field %s", name)

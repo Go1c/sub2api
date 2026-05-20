@@ -69,7 +69,7 @@ vi.mock('vue-i18n', async () => {
 
 const AppLayoutStub = { template: '<div><slot /></div>' }
 const TablePageLayoutStub = {
-  template: '<div><slot name="actions" /><slot name="filters" /><slot /></div>',
+  template: '<div><slot name="actions" /><slot name="filters" /><slot name="table" /><slot /></div>',
 }
 
 describe('user UsageView tooltip', () => {
@@ -98,6 +98,16 @@ describe('user UsageView tooltip', () => {
       observe() {}
       disconnect() {}
     }
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
   })
 
   it('shows fast service tier and unit prices in user tooltip', async () => {
@@ -207,6 +217,8 @@ describe('user UsageView tooltip', () => {
         duration_ms: 345,
         created_at: '2026-03-08T00:00:00Z',
         model: 'gpt-5.4',
+        upstream_model: 'gpt-5.4-20250514',
+        model_mapping_chain: 'gpt-5.4→gpt-5.4-20250514',
         reasoning_effort: null,
         api_key: { name: 'demo-key' },
       },
@@ -269,9 +281,77 @@ describe('user UsageView tooltip', () => {
     expect(hasSortedExportQuery).toBe(true)
     expect(clickSpy).toHaveBeenCalled()
     expect(showSuccess).toHaveBeenCalled()
+    const csvText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsText(exportedBlob!)
+    })
+    expect(csvText).toContain('gpt-5.4 -> gpt-5.4-20250514')
 
     window.URL.createObjectURL = originalCreateObjectURL
     window.URL.revokeObjectURL = originalRevokeObjectURL
     clickSpy.mockRestore()
+  })
+
+  it('renders exposed model routing chain like admin usage rows', async () => {
+    query.mockResolvedValue({
+      items: [
+        {
+          request_id: 'req-user-model-route',
+          model: 'claude-opus-4-7',
+          upstream_model: 'claude-opus-4-6',
+          model_mapping_chain: 'claude-opus-4-7→claude-opus-4-6',
+          actual_cost: 0,
+          total_cost: 0,
+          rate_multiplier: 1,
+          input_cost: 0,
+          output_cost: 0,
+          cache_creation_cost: 0,
+          cache_read_cost: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_creation_tokens: 0,
+          cache_read_tokens: 0,
+          cache_creation_5m_tokens: 0,
+          cache_creation_1h_tokens: 0,
+          image_count: 0,
+          image_size: null,
+          first_token_ms: null,
+          duration_ms: 1,
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 1,
+      pages: 1,
+    })
+    getStatsByDateRange.mockResolvedValue({
+      total_requests: 1,
+      total_tokens: 0,
+      total_cost: 0,
+      avg_duration_ms: 1,
+    })
+    list.mockResolvedValue({ items: [] })
+
+    const wrapper = mount(UsageView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          TablePageLayout: TablePageLayoutStub,
+          Pagination: true,
+          EmptyState: true,
+          Select: true,
+          DateRangePicker: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('claude-opus-4-7')
+    expect(text).toContain('↳claude-opus-4-6')
   })
 })

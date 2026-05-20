@@ -118,6 +118,9 @@ type Group struct {
 	// RPMLimit 分组级每分钟请求数上限（0 = 不限制），设置后覆盖用户级 rpm_limit。
 	RPMLimit int `json:"rpm_limit"`
 
+	// ExposeUpstreamModelToUser 是否允许用户在使用记录页看到上游模型与映射链。
+	ExposeUpstreamModelToUser bool `json:"expose_upstream_model_to_user"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -413,6 +416,11 @@ type UsageLog struct {
 
 	// BillingMode 计费模式：token/image
 	BillingMode *string `json:"billing_mode,omitempty"`
+
+	// UpstreamModel 上游模型（仅当分组配置允许用户可见时返回）
+	UpstreamModel *string `json:"upstream_model,omitempty"`
+	// ModelMappingChain 模型映射链 a→b→c（仅当分组配置允许用户可见时返回）
+	ModelMappingChain *string `json:"model_mapping_chain,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 

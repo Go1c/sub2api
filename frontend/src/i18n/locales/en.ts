@@ -2057,7 +2057,9 @@ export default {
         exclusive: 'Exclusive Group',
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
-        rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).'
+        rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).',
+        exposeUpstreamModelToUser: 'Show upstream model to users',
+        exposeUpstreamModelToUserHint: 'When enabled, regular users can see the requested-to-final model mapping in usage records. Disabled by default.'
       },
       enterGroupName: 'Enter group name',
       optionalDescription: 'Optional description',

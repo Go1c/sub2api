@@ -2115,6 +2115,8 @@ export default {
         rpmLimit: '每分鐘請求數 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '每用戶在本分組每分鐘最大請求數，0 = 不限制；一旦設置即接管該用戶的限流（覆蓋用戶級 rpm_limit）',
+        exposeUpstreamModelToUser: '用戶可見上游模型',
+        exposeUpstreamModelToUserHint: '開啟後，普通用戶在使用記錄中可看到請求模型到最終路由模型的映射；默認關閉。',
         exclusiveLabel: '專屬分組',
         exclusiveHint: '專屬分組，可以手動指定給用戶',
         platformLabel: '平臺限制',

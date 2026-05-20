@@ -866,6 +866,10 @@ func init() {
 	groupDescRpmLimit := groupFields[30].Descriptor()
 	// group.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	group.DefaultRpmLimit = groupDescRpmLimit.Default.(int)
+	// groupDescExposeUpstreamModelToUser is the schema descriptor for expose_upstream_model_to_user field.
+	groupDescExposeUpstreamModelToUser := groupFields[31].Descriptor()
+	// group.DefaultExposeUpstreamModelToUser holds the default value on creation for the expose_upstream_model_to_user field.
+	group.DefaultExposeUpstreamModelToUser = groupDescExposeUpstreamModelToUser.Default.(bool)
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
 	idempotencyrecordMixinFields0 := idempotencyrecordMixin[0].Fields()
 	_ = idempotencyrecordMixinFields0

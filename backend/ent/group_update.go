@@ -637,6 +637,20 @@ func (_u *GroupUpdate) AddRpmLimit(v int) *GroupUpdate {
 	return _u
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (_u *GroupUpdate) SetExposeUpstreamModelToUser(v bool) *GroupUpdate {
+	_u.mutation.SetExposeUpstreamModelToUser(v)
+	return _u
+}
+
+// SetNillableExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableExposeUpstreamModelToUser(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetExposeUpstreamModelToUser(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *GroupUpdate) AddAPIKeyIDs(ids ...int64) *GroupUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -1117,6 +1131,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(group.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExposeUpstreamModelToUser(); ok {
+		_spec.SetField(group.FieldExposeUpstreamModelToUser, field.TypeBool, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2033,6 +2050,20 @@ func (_u *GroupUpdateOne) AddRpmLimit(v int) *GroupUpdateOne {
 	return _u
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (_u *GroupUpdateOne) SetExposeUpstreamModelToUser(v bool) *GroupUpdateOne {
+	_u.mutation.SetExposeUpstreamModelToUser(v)
+	return _u
+}
+
+// SetNillableExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableExposeUpstreamModelToUser(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetExposeUpstreamModelToUser(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *GroupUpdateOne) AddAPIKeyIDs(ids ...int64) *GroupUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -2543,6 +2574,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(group.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExposeUpstreamModelToUser(); ok {
+		_spec.SetField(group.FieldExposeUpstreamModelToUser, field.TypeBool, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
