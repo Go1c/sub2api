@@ -66,7 +66,7 @@
 
         <div class="flex items-center gap-2">
           <button
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="hidden rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:inline-flex"
             :title="t('home.viewDocs')"
             @click="openDocs"
           >
@@ -85,13 +85,63 @@
           </button>
 
           <button
-            class="rounded-full border border-white/20 bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2.5 text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)] transition-all hover:-translate-y-0.5 hover:from-blue-700 hover:to-purple-700 hover:shadow-[0_6px_20px_rgba(99,102,241,0.4)]"
+            class="hidden rounded-full border border-white/20 bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2.5 text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)] transition-all hover:-translate-y-0.5 hover:from-blue-700 hover:to-purple-700 hover:shadow-[0_6px_20px_rgba(99,102,241,0.4)] sm:inline-flex"
             @click="goConsole"
           >
             {{ copy.headerCta }}
           </button>
+
+          <button
+            class="rounded-lg border border-gray-200 bg-white/70 p-2 text-gray-700 shadow-sm backdrop-blur-md transition-colors hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-900/70 dark:text-dark-200 dark:hover:bg-dark-800 md:hidden"
+            :aria-label="mobileMenuOpen ? t('common.close') : t('common.menu')"
+            :aria-expanded="mobileMenuOpen"
+            @click="toggleMobileMenu"
+          >
+            <Icon :name="mobileMenuOpen ? 'x' : 'menu'" size="md" />
+          </button>
         </div>
       </nav>
+
+      <transition
+        enter-active-class="transition-all duration-200 ease-out"
+        enter-from-class="-translate-y-2 opacity-0"
+        enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transition-all duration-150 ease-in"
+        leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="-translate-y-2 opacity-0"
+      >
+        <div
+          v-if="mobileMenuOpen"
+          class="relative z-20 mx-auto max-w-7xl px-6 pb-4 md:hidden"
+        >
+          <div class="rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-[0_10px_30px_rgba(99,102,241,0.12)] backdrop-blur-md dark:border-dark-700 dark:bg-dark-900/95">
+            <div class="flex flex-col gap-1">
+              <button
+                v-for="item in navItems"
+                :key="item.key"
+                class="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-[15px] font-medium text-gray-800 transition-colors hover:bg-blue-50/70 hover:text-blue-700 dark:text-dark-100 dark:hover:bg-dark-800 dark:hover:text-white"
+                :class="item.dim ? 'text-gray-600 dark:text-dark-400' : ''"
+                @click="onNav(item)"
+              >
+                <span>{{ item.label }}</span>
+                <Icon
+                  :name="item.external ? 'externalLink' : 'chevronRight'"
+                  size="sm"
+                  class="text-gray-400 dark:text-dark-500"
+                />
+              </button>
+            </div>
+            <div class="mt-3 border-t border-gray-100 pt-3 dark:border-dark-800 sm:hidden">
+              <button
+                class="flex w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-3 text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(99,102,241,0.3)]"
+                @click="goConsoleFromMobile"
+              >
+                {{ copy.headerCta }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
 
       <div class="pointer-events-none absolute inset-0 -z-10 hero-grid"></div>
       <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
@@ -712,6 +762,7 @@ const isHomeContentUrl = computed(() => {
 })
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
+const mobileMenuOpen = ref(false)
 const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.isAdmin)
@@ -1003,6 +1054,7 @@ function openDocs() {
 }
 
 function onNav(item: NavItem) {
+  mobileMenuOpen.value = false
   if (item.external) {
     window.open(item.target, '_blank', 'noopener,noreferrer')
     return
@@ -1012,6 +1064,15 @@ function onNav(item: NavItem) {
     return
   }
   scrollTo(item.target)
+}
+
+function toggleMobileMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+}
+
+function goConsoleFromMobile() {
+  mobileMenuOpen.value = false
+  goConsole()
 }
 
 function openContact(url: string) {

@@ -286,6 +286,7 @@ export default {
     inactive: '禁用',
     more: '更多',
     close: '關閉',
+    menu: '選單',
     enabled: '已啟用',
     disabled: '已禁用',
     total: '總計',
