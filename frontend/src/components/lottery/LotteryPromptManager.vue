@@ -25,9 +25,6 @@ const lotteryStore = useLotteryStore()
 const SESSION_DISMISS_KEY = 'lottery_dismissed_v1'
 const open = ref(false)
 
-// Seed the demo campaign on first mount so users can experience the popup.
-lotteryStore.seedIfEmpty()
-
 const userId = computed<number | null>(() => authStore.user?.id ?? null)
 const userName = computed<string>(() => authStore.user?.username || authStore.user?.email || `user-${userId.value ?? 'anon'}`)
 

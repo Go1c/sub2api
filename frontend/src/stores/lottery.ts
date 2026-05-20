@@ -90,31 +90,6 @@ function nowIso(): string {
 
 export const useLotteryStore = defineStore('lottery', () => {
   const campaigns = ref<Campaign[]>(loadFromStorage())
-  const initialized = ref(false)
-
-  function seedIfEmpty() {
-    if (initialized.value) return
-    initialized.value = true
-    if (campaigns.value.length === 0) {
-      campaigns.value = [
-        {
-          id: 'seed-may',
-          name: '五月幸运转盘',
-          subtitle: '登录就有机会，转一转赢取兑换码',
-          prizeCount: 5,
-          maxParticipants: 20,
-          codes: ['LUCK-MAY-A1B2', 'LUCK-MAY-C3D4', 'LUCK-MAY-E5F6', 'LUCK-MAY-G7H8', 'LUCK-MAY-I9J0'],
-          joined: 0,
-          winners: [],
-          segments: buildSegments(5, 8),
-          status: 'active',
-          createdAt: nowIso(),
-          drawnUserIds: []
-        }
-      ]
-      saveToStorage(campaigns.value)
-    }
-  }
 
   const activeCampaign = computed(() => campaigns.value.find(c => c.status === 'active') || null)
 
@@ -221,14 +196,12 @@ export const useLotteryStore = defineStore('lottery', () => {
 
   function resetAll() {
     campaigns.value = []
-    initialized.value = false
     saveToStorage(campaigns.value)
   }
 
   return {
     campaigns,
     activeCampaign,
-    seedIfEmpty,
     getActiveForUser,
     hasDrawn,
     createCampaign,
