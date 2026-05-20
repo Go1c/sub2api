@@ -39,6 +39,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/demo/lottery',
+    name: 'LotteryDemo',
+    component: () => import('@/views/demo/LotteryDemoView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Lottery Demo'
+    }
+  },
+  {
     path: '/doc/:slug(.*)*',
     name: 'SitePage',
     component: () => import('@/views/PublicMarkdownPageView.vue'),
