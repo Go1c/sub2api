@@ -35,6 +35,9 @@ func RegisterAdminRoutes(
 		// 站内信管理
 		registerSiteMessageRoutes(admin, h)
 
+		// 抽奖管理
+		registerLotteryRoutes(admin, h)
+
 		// 发票管理
 		registerInvoiceRoutes(admin, h)
 
@@ -275,6 +278,19 @@ func registerSiteMessageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		siteMessages.POST("/users/:id", h.Admin.SiteMessage.SendToUser)
 		siteMessages.GET("/recipients", h.Admin.SiteMessage.SearchRecipients)
+	}
+}
+
+func registerLotteryRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	lottery := admin.Group("/lottery")
+	{
+		campaigns := lottery.Group("/campaigns")
+		{
+			campaigns.GET("", h.Admin.Lottery.ListCampaigns)
+			campaigns.POST("", h.Admin.Lottery.CreateCampaign)
+			campaigns.GET("/:id", h.Admin.Lottery.GetCampaign)
+			campaigns.POST("/:id/finish", h.Admin.Lottery.FinishCampaign)
+		}
 	}
 }
 

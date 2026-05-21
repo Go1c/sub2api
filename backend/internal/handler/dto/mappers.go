@@ -190,6 +190,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		RequireOAuthOnly:                g.RequireOAuthOnly,
 		RequirePrivacySet:               g.RequirePrivacySet,
 		RPMLimit:                        g.RPMLimit,
+		ExposeUpstreamModelToUser:       g.ExposeUpstreamModelToUser,
 		CreatedAt:                       g.CreatedAt,
 		UpdatedAt:                       g.UpdatedAt,
 	}
@@ -567,6 +568,13 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 	if requestedModel == "" {
 		requestedModel = l.Model
 	}
+	// 仅当分组开启 expose_upstream_model_to_user 时才向用户暴露上游模型与映射链。
+	var upstreamModel *string
+	var modelMappingChain *string
+	if l.Group != nil && l.Group.ExposeUpstreamModelToUser {
+		upstreamModel = l.UpstreamModel
+		modelMappingChain = l.ModelMappingChain
+	}
 	return UsageLog{
 		ID:                    l.ID,
 		UserID:                l.UserID,
@@ -605,6 +613,8 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		UserAgent:             l.UserAgent,
 		CacheTTLOverridden:    l.CacheTTLOverridden,
 		BillingMode:           l.BillingMode,
+		UpstreamModel:         upstreamModel,
+		ModelMappingChain:     modelMappingChain,
 		CreatedAt:             l.CreatedAt,
 		User:                  UserFromServiceShallow(l.User),
 		APIKey:                APIKeyFromService(l.APIKey),

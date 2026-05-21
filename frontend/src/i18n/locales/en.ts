@@ -286,6 +286,7 @@ export default {
     inactive: 'Inactive',
     more: 'More',
     close: 'Close',
+    menu: 'Menu',
     enabled: 'Enabled',
     disabled: 'Disabled',
     total: 'Total',
@@ -365,6 +366,7 @@ export default {
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
+    lottery: 'Lottery',
     settings: 'Settings',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
@@ -2055,7 +2057,9 @@ export default {
         exclusive: 'Exclusive Group',
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
-        rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).'
+        rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).',
+        exposeUpstreamModelToUser: 'Show upstream model to users',
+        exposeUpstreamModelToUserHint: 'When enabled, regular users can see the requested-to-final model mapping in usage records. Disabled by default.'
       },
       enterGroupName: 'Enter group name',
       optionalDescription: 'Optional description',
@@ -4262,6 +4266,58 @@ export default {
       failedToDelete: 'Failed to delete announcement',
       failedToLoadReadStatus: 'Failed to load read status',
       deleteConfirm: 'Are you sure you want to delete this announcement? This action cannot be undone.'
+    },
+
+    // Lottery
+    lottery: {
+      title: 'Lottery Management',
+      description: 'Create lottery campaigns and review draw history.',
+      tabs: {
+        create: 'Create Campaign',
+        history: 'History'
+      },
+      status: {
+        active: 'Active',
+        finished: 'Finished'
+      },
+      create: {
+        title: 'Create a New Lottery',
+        description: 'Define prizes and redemption codes. The campaign opens as a popup when users log in.',
+        name: 'Campaign Name',
+        namePlaceholder: 'e.g. May Lucky Wheel',
+        subtitle: 'Subtitle',
+        subtitlePlaceholder: 'Sign in to win redemption codes',
+        prizeCount: 'Number of Prizes',
+        maxParticipants: 'Max Participants',
+        codes: 'Redemption Codes',
+        codesPlaceholder: 'LUCK-001-ABCD\nLUCK-002-EFGH',
+        codesHint: 'One code per line. Need at least as many as the prize count.',
+        codesProgress: 'Filled {filled} / Need {needed}',
+        submit: 'Publish Campaign',
+        preview: 'Preview wheel',
+        previewTitle: 'Lottery Preview',
+        previewSubtitle: 'Admin preview — no participant impact',
+        saved: '✓ Published. Switch to "History" to verify.',
+        invalid: 'Please check required fields and code count.',
+        failed: 'Failed to create lottery campaign.'
+      },
+      history: {
+        title: 'Campaign History',
+        description: 'All past campaigns with participation and winners.',
+        empty: 'No campaigns yet. Create one to get started.',
+        joined: 'joined',
+        won: 'won',
+        finish: 'Finish',
+        details: 'Details',
+        winnersList: 'Winners',
+        unclaimedCodes: 'Unclaimed Codes',
+        noWinnersYet: 'No winners yet.',
+        allClaimed: 'All codes have been claimed.',
+        userPrefix: 'User #{id}',
+        failedToLoad: 'Failed to load lottery campaigns.',
+        failedToLoadDetail: 'Failed to load lottery campaign details.',
+        failedToFinish: 'Failed to finish the lottery campaign.'
+      }
     },
 
     // Promo Codes

@@ -286,6 +286,7 @@ export default {
     inactive: '禁用',
     more: '更多',
     close: '关闭',
+    menu: '菜单',
     enabled: '已启用',
     disabled: '已禁用',
     total: '总计',
@@ -365,6 +366,7 @@ export default {
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
+    lottery: '抽奖',
     settings: '系统设置',
     myAccount: '我的账户',
     lightMode: '浅色模式',
@@ -2113,6 +2115,8 @@ export default {
         rpmLimit: '每分钟请求数 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '每用户在本分组每分钟最大请求数，0 = 不限制；一旦设置即接管该用户的限流（覆盖用户级 rpm_limit）',
+        exposeUpstreamModelToUser: '用户可见上游模型',
+        exposeUpstreamModelToUserHint: '开启后，普通用户在使用记录中可看到请求模型到最终路由模型的映射；默认关闭。',
         exclusiveLabel: '专属分组',
         exclusiveHint: '专属分组，可以手动指定给用户',
         platformLabel: '平台限制',
@@ -4418,6 +4422,58 @@ export default {
       failedToDelete: '删除公告失败',
       failedToLoadReadStatus: '加载已读情况失败',
       deleteConfirm: '确定要删除该公告吗？此操作无法撤销。'
+    },
+
+    // Lottery
+    lottery: {
+      title: '抽奖管理',
+      description: '创建抽奖活动并查看抽奖历史。',
+      tabs: {
+        create: '新建抽奖',
+        history: '历史抽奖记录'
+      },
+      status: {
+        active: '进行中',
+        finished: '已结束'
+      },
+      create: {
+        title: '新建抽奖',
+        description: '设置奖品数量和兑换码，发布后用户登录即可弹窗抽奖。',
+        name: '活动名称',
+        namePlaceholder: '例如：五月幸运转盘',
+        subtitle: '活动副标题',
+        subtitlePlaceholder: '登录就有机会，转一转赢取兑换码',
+        prizeCount: '中奖数量',
+        maxParticipants: '最大参与人数',
+        codes: '兑换码',
+        codesPlaceholder: 'LUCK-001-ABCD\nLUCK-002-EFGH',
+        codesHint: '每行一个兑换码，数量不少于中奖数量。',
+        codesProgress: '已填 {filled} / 需要 {needed}',
+        submit: '发布抽奖',
+        preview: '预览转盘',
+        previewTitle: '抽奖预览',
+        previewSubtitle: '管理员预览，不影响真实数据',
+        saved: '✓ 已发布，可切换到「历史抽奖记录」查看',
+        invalid: '请检查必填项和兑换码数量',
+        failed: '创建抽奖活动失败'
+      },
+      history: {
+        title: '历史抽奖记录',
+        description: '所有历史活动、参与人数、中奖情况一览。',
+        empty: '暂无抽奖活动，先去「新建抽奖」创建一个吧。',
+        joined: '参与',
+        won: '中奖',
+        finish: '结束活动',
+        details: '详情',
+        winnersList: '中奖名单',
+        unclaimedCodes: '未派发兑换码',
+        noWinnersYet: '尚无中奖',
+        allClaimed: '兑换码已全部派发',
+        userPrefix: '用户 #{id}',
+        failedToLoad: '加载抽奖活动失败',
+        failedToLoadDetail: '加载抽奖详情失败',
+        failedToFinish: '结束抽奖活动失败'
+      }
     },
 
     // Promo Codes

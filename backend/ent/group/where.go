@@ -210,6 +210,11 @@ func RpmLimit(v int) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRpmLimit, v))
 }
 
+// ExposeUpstreamModelToUser applies equality check predicate on the "expose_upstream_model_to_user" field. It's identical to ExposeUpstreamModelToUserEQ.
+func ExposeUpstreamModelToUser(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldExposeUpstreamModelToUser, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldCreatedAt, v))
@@ -1438,6 +1443,16 @@ func RpmLimitLT(v int) predicate.Group {
 // RpmLimitLTE applies the LTE predicate on the "rpm_limit" field.
 func RpmLimitLTE(v int) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRpmLimit, v))
+}
+
+// ExposeUpstreamModelToUserEQ applies the EQ predicate on the "expose_upstream_model_to_user" field.
+func ExposeUpstreamModelToUserEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldExposeUpstreamModelToUser, v))
+}
+
+// ExposeUpstreamModelToUserNEQ applies the NEQ predicate on the "expose_upstream_model_to_user" field.
+func ExposeUpstreamModelToUserNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldExposeUpstreamModelToUser, v))
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.
