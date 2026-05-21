@@ -4313,7 +4313,8 @@ export default {
         unclaimedCodes: 'Unclaimed Codes',
         noWinnersYet: 'No winners yet.',
         allClaimed: 'All codes have been claimed.',
-        userPrefix: 'User #{id}',
+        userPrefix: 'User ID {id}',
+        userWithEmail: 'User ID {id} · {email}',
         failedToLoad: 'Failed to load lottery campaigns.',
         failedToLoadDetail: 'Failed to load lottery campaign details.',
         failedToFinish: 'Failed to finish the lottery campaign.'

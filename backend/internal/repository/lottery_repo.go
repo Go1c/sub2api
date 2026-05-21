@@ -9,6 +9,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/lotterycampaign"
 	"github.com/Wei-Shaw/sub2api/ent/lotterycode"
 	"github.com/Wei-Shaw/sub2api/ent/lotterydraw"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -145,6 +146,9 @@ func (r *lotteryRepository) GetCampaign(ctx context.Context, id int64) (*service
 	}
 	out.Codes = lotteryCodeEntities(codes)
 	out.Draws = lotteryDrawEntities(draws)
+	if err := hydrateLotteryDrawUsers(ctx, client, out.Draws); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -366,6 +370,41 @@ func lotteryDrawEntities(items []*dbent.LotteryDraw) []service.LotteryDraw {
 		}
 	}
 	return out
+}
+
+func hydrateLotteryDrawUsers(ctx context.Context, client *dbent.Client, draws []service.LotteryDraw) error {
+	if len(draws) == 0 {
+		return nil
+	}
+	seen := make(map[int64]struct{}, len(draws))
+	userIDs := make([]int64, 0, len(draws))
+	for _, draw := range draws {
+		if draw.UserID <= 0 {
+			continue
+		}
+		if _, ok := seen[draw.UserID]; ok {
+			continue
+		}
+		seen[draw.UserID] = struct{}{}
+		userIDs = append(userIDs, draw.UserID)
+	}
+	if len(userIDs) == 0 {
+		return nil
+	}
+	users, err := client.User.Query().
+		Where(user.IDIn(userIDs...)).
+		All(ctx)
+	if err != nil {
+		return err
+	}
+	usersByID := make(map[int64]*service.User, len(users))
+	for _, item := range users {
+		usersByID[item.ID] = userEntityToService(item)
+	}
+	for i := range draws {
+		draws[i].User = usersByID[draws[i].UserID]
+	}
+	return nil
 }
 
 func lotteryUnsupportedForUpdate(err error) bool {

@@ -497,6 +497,7 @@ export interface LotteryDraw {
   id: number
   campaign_id: number
   user_id: number
+  user_email?: string
   won: boolean
   lottery_code_id?: number | null
   site_message_id?: number | null

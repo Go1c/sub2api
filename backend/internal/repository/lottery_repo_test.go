@@ -143,6 +143,8 @@ func TestLotteryRepositoryDrawPersistence(t *testing.T) {
 	require.Equal(t, user.ID, *got.Codes[0].AssignedUserID)
 	require.Len(t, got.Draws, 1)
 	require.True(t, got.Draws[0].Won)
+	require.NotNil(t, got.Draws[0].User)
+	require.Equal(t, user.Email, got.Draws[0].User.Email)
 
 	_, err = repo.GetDrawByCampaignAndUser(ctx, campaign.ID, user.ID)
 	require.NoError(t, err)
