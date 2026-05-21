@@ -286,6 +286,7 @@ export default {
     inactive: '禁用',
     more: '更多',
     close: '關閉',
+    menu: '選單',
     enabled: '已啟用',
     disabled: '已禁用',
     total: '總計',
@@ -365,6 +366,7 @@ export default {
     redeemCodes: '兌換碼',
     ops: '運維監控',
     promoCodes: '優惠碼',
+    lottery: '抽獎',
     settings: '系統設置',
     myAccount: '我的賬戶',
     lightMode: '淺色模式',
@@ -2113,6 +2115,8 @@ export default {
         rpmLimit: '每分鐘請求數 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '每用戶在本分組每分鐘最大請求數，0 = 不限制；一旦設置即接管該用戶的限流（覆蓋用戶級 rpm_limit）',
+        exposeUpstreamModelToUser: '用戶可見上游模型',
+        exposeUpstreamModelToUserHint: '開啟後，普通用戶在使用記錄中可看到請求模型到最終路由模型的映射；默認關閉。',
         exclusiveLabel: '專屬分組',
         exclusiveHint: '專屬分組，可以手動指定給用戶',
         platformLabel: '平臺限制',
@@ -4418,6 +4422,59 @@ export default {
       failedToDelete: '刪除公告失敗',
       failedToLoadReadStatus: '加載已讀情況失敗',
       deleteConfirm: '確定要刪除該公告嗎？此操作無法撤銷。'
+    },
+
+    // Lottery
+    lottery: {
+      title: '抽獎管理',
+      description: '建立抽獎活動並查看抽獎歷史。',
+      tabs: {
+        create: '新建抽獎',
+        history: '歷史抽獎記錄'
+      },
+      status: {
+        active: '進行中',
+        finished: '已結束'
+      },
+      create: {
+        title: '新建抽獎',
+        description: '設定獎品數量和兌換碼，發布後使用者登入即可彈窗抽獎。',
+        name: '活動名稱',
+        namePlaceholder: '例如：五月幸運轉盤',
+        subtitle: '活動副標題',
+        subtitlePlaceholder: '登入就有機會，轉一轉贏取兌換碼',
+        prizeCount: '中獎數量',
+        maxParticipants: '最大參與人數',
+        codes: '兌換碼',
+        codesPlaceholder: 'LUCK-001-ABCD\nLUCK-002-EFGH',
+        codesHint: '每行一個兌換碼，數量不少於中獎數量。',
+        codesProgress: '已填 {filled} / 需要 {needed}',
+        submit: '發布抽獎',
+        preview: '預覽轉盤',
+        previewTitle: '抽獎預覽',
+        previewSubtitle: '管理員預覽，不影響真實資料',
+        saved: '✓ 已發布，可切換到「歷史抽獎記錄」查看',
+        invalid: '請檢查必填項與兌換碼數量',
+        failed: '建立抽獎活動失敗'
+      },
+      history: {
+        title: '歷史抽獎記錄',
+        description: '所有歷史活動、參與人數、中獎情況一覽。',
+        empty: '尚無抽獎活動，先去「新建抽獎」建立一個吧。',
+        joined: '參與',
+        won: '中獎',
+        finish: '結束活動',
+        details: '詳情',
+        winnersList: '中獎名單',
+        unclaimedCodes: '未派發兌換碼',
+        noWinnersYet: '尚無中獎',
+        allClaimed: '兌換碼已全部派發',
+        userPrefix: '用戶ID {id}',
+        userWithEmail: '用戶ID {id} · {email}',
+        failedToLoad: '加載抽獎活動失敗',
+        failedToLoadDetail: '加載抽獎詳情失敗',
+        failedToFinish: '結束抽獎活動失敗'
+      }
     },
 
     // Promo Codes

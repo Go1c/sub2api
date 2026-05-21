@@ -481,6 +481,20 @@ func (_c *GroupCreate) SetNillableRpmLimit(v *int) *GroupCreate {
 	return _c
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (_c *GroupCreate) SetExposeUpstreamModelToUser(v bool) *GroupCreate {
+	_c.mutation.SetExposeUpstreamModelToUser(v)
+	return _c
+}
+
+// SetNillableExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableExposeUpstreamModelToUser(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetExposeUpstreamModelToUser(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *GroupCreate) AddAPIKeyIDs(ids ...int64) *GroupCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -702,6 +716,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRpmLimit
 		_c.mutation.SetRpmLimit(v)
 	}
+	if _, ok := _c.mutation.ExposeUpstreamModelToUser(); !ok {
+		v := group.DefaultExposeUpstreamModelToUser
+		_c.mutation.SetExposeUpstreamModelToUser(v)
+	}
 	return nil
 }
 
@@ -800,6 +818,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		return &ValidationError{Name: "rpm_limit", err: errors.New(`ent: missing required field "Group.rpm_limit"`)}
+	}
+	if _, ok := _c.mutation.ExposeUpstreamModelToUser(); !ok {
+		return &ValidationError{Name: "expose_upstream_model_to_user", err: errors.New(`ent: missing required field "Group.expose_upstream_model_to_user"`)}
 	}
 	return nil
 }
@@ -963,6 +984,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RpmLimit(); ok {
 		_spec.SetField(group.FieldRpmLimit, field.TypeInt, value)
 		_node.RpmLimit = value
+	}
+	if value, ok := _c.mutation.ExposeUpstreamModelToUser(); ok {
+		_spec.SetField(group.FieldExposeUpstreamModelToUser, field.TypeBool, value)
+		_node.ExposeUpstreamModelToUser = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1660,6 +1685,18 @@ func (u *GroupUpsert) AddRpmLimit(v int) *GroupUpsert {
 	return u
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (u *GroupUpsert) SetExposeUpstreamModelToUser(v bool) *GroupUpsert {
+	u.Set(group.FieldExposeUpstreamModelToUser, v)
+	return u
+}
+
+// UpdateExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateExposeUpstreamModelToUser() *GroupUpsert {
+	u.SetExcluded(group.FieldExposeUpstreamModelToUser)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -2332,6 +2369,20 @@ func (u *GroupUpsertOne) AddRpmLimit(v int) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRpmLimit() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (u *GroupUpsertOne) SetExposeUpstreamModelToUser(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetExposeUpstreamModelToUser(v)
+	})
+}
+
+// UpdateExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateExposeUpstreamModelToUser() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateExposeUpstreamModelToUser()
 	})
 }
 
@@ -3173,6 +3224,20 @@ func (u *GroupUpsertBulk) AddRpmLimit(v int) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRpmLimit() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (u *GroupUpsertBulk) SetExposeUpstreamModelToUser(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetExposeUpstreamModelToUser(v)
+	})
+}
+
+// UpdateExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateExposeUpstreamModelToUser() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateExposeUpstreamModelToUser()
 	})
 }
 

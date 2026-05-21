@@ -659,6 +659,7 @@ var (
 		{Name: "default_mapped_model", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "messages_dispatch_model_config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "rpm_limit", Type: field.TypeInt, Default: 0},
+		{Name: "expose_upstream_model_to_user", Type: field.TypeBool, Default: false},
 	}
 	// GroupsTable holds the schema information for the "groups" table.
 	GroupsTable = &schema.Table{
@@ -776,6 +777,127 @@ var (
 				Name:    "identityadoptiondecision_identity_id",
 				Unique:  false,
 				Columns: []*schema.Column{IdentityAdoptionDecisionsColumns[6]},
+			},
+		},
+	}
+	// LotteryCampaignsColumns holds the columns for the "lottery_campaigns" table.
+	LotteryCampaignsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "name", Type: field.TypeString, Size: 120},
+		{Name: "subtitle", Type: field.TypeString, Size: 240},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "prize_count", Type: field.TypeInt},
+		{Name: "max_participants", Type: field.TypeInt},
+		{Name: "joined_count", Type: field.TypeInt, Default: 0},
+		{Name: "winner_count", Type: field.TypeInt, Default: 0},
+		{Name: "created_by", Type: field.TypeInt64},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// LotteryCampaignsTable holds the schema information for the "lottery_campaigns" table.
+	LotteryCampaignsTable = &schema.Table{
+		Name:       "lottery_campaigns",
+		Columns:    LotteryCampaignsColumns,
+		PrimaryKey: []*schema.Column{LotteryCampaignsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lotterycampaign_status",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCampaignsColumns[3]},
+			},
+			{
+				Name:    "lotterycampaign_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCampaignsColumns[9]},
+			},
+			{
+				Name:    "lotterycampaign_created_by",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCampaignsColumns[8]},
+			},
+		},
+	}
+	// LotteryCodesColumns holds the columns for the "lottery_codes" table.
+	LotteryCodesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "campaign_id", Type: field.TypeInt64},
+		{Name: "code", Type: field.TypeString, Size: 128},
+		{Name: "assigned_user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "assigned_draw_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "assigned_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// LotteryCodesTable holds the schema information for the "lottery_codes" table.
+	LotteryCodesTable = &schema.Table{
+		Name:       "lottery_codes",
+		Columns:    LotteryCodesColumns,
+		PrimaryKey: []*schema.Column{LotteryCodesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lotterycode_campaign_id_code",
+				Unique:  true,
+				Columns: []*schema.Column{LotteryCodesColumns[1], LotteryCodesColumns[2]},
+			},
+			{
+				Name:    "lotterycode_campaign_id_assigned_at",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCodesColumns[1], LotteryCodesColumns[5]},
+			},
+			{
+				Name:    "lotterycode_assigned_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCodesColumns[3]},
+			},
+			{
+				Name:    "lotterycode_assigned_draw_id",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCodesColumns[4]},
+			},
+		},
+	}
+	// LotteryDrawsColumns holds the columns for the "lottery_draws" table.
+	LotteryDrawsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "campaign_id", Type: field.TypeInt64},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "won", Type: field.TypeBool, Default: false},
+		{Name: "lottery_code_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "site_message_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "result_label", Type: field.TypeString, Size: 80},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// LotteryDrawsTable holds the schema information for the "lottery_draws" table.
+	LotteryDrawsTable = &schema.Table{
+		Name:       "lottery_draws",
+		Columns:    LotteryDrawsColumns,
+		PrimaryKey: []*schema.Column{LotteryDrawsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lotterydraw_campaign_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{LotteryDrawsColumns[1], LotteryDrawsColumns[2]},
+			},
+			{
+				Name:    "lotterydraw_campaign_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryDrawsColumns[1], LotteryDrawsColumns[7]},
+			},
+			{
+				Name:    "lotterydraw_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryDrawsColumns[2], LotteryDrawsColumns[7]},
+			},
+			{
+				Name:    "lotterydraw_lottery_code_id",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryDrawsColumns[4]},
+			},
+			{
+				Name:    "lotterydraw_site_message_id",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryDrawsColumns[5]},
 			},
 		},
 	}
@@ -1517,7 +1639,6 @@ var (
 		{Name: "balance_notify_threshold", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "balance_notify_extra_emails", Type: field.TypeString, Default: "[]", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "total_recharged", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "invoice_enabled", Type: field.TypeBool, Default: false},
 		{Name: "rpm_limit", Type: field.TypeInt, Default: 0},
 	}
 	// UsersTable holds the schema information for the "users" table.
@@ -1763,6 +1884,9 @@ var (
 		GroupsTable,
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
+		LotteryCampaignsTable,
+		LotteryCodesTable,
+		LotteryDrawsTable,
 		PaymentAuditLogsTable,
 		PaymentOrdersTable,
 		PaymentProviderInstancesTable,
@@ -1845,6 +1969,15 @@ func init() {
 	IdentityAdoptionDecisionsTable.ForeignKeys[1].RefTable = PendingAuthSessionsTable
 	IdentityAdoptionDecisionsTable.Annotation = &entsql.Annotation{
 		Table: "identity_adoption_decisions",
+	}
+	LotteryCampaignsTable.Annotation = &entsql.Annotation{
+		Table: "lottery_campaigns",
+	}
+	LotteryCodesTable.Annotation = &entsql.Annotation{
+		Table: "lottery_codes",
+	}
+	LotteryDrawsTable.Annotation = &entsql.Annotation{
+		Table: "lottery_draws",
 	}
 	PaymentAuditLogsTable.Annotation = &entsql.Annotation{
 		Table: "payment_audit_logs",

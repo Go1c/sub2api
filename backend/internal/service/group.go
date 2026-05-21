@@ -66,6 +66,10 @@ type Group struct {
 	// 一旦设置即接管该分组用户的限流（覆盖用户级 rpm_limit），可被 user-group rpm_override 进一步覆盖。
 	RPMLimit int
 
+	// ExposeUpstreamModelToUser 是否允许用户在使用记录页看到上游模型与映射链。
+	// false 时仅管理员接口返回 upstream_model / model_mapping_chain。
+	ExposeUpstreamModelToUser bool
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

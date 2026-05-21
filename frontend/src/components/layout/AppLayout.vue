@@ -19,6 +19,9 @@
         <slot />
       </main>
     </div>
+
+    <!-- Global lottery popup: opens on login if there's an active campaign the user hasn't drawn -->
+    <LotteryPromptManager />
   </div>
 </template>
 
@@ -31,6 +34,7 @@ import { useOnboardingTour } from '@/composables/useOnboardingTour'
 import { useOnboardingStore } from '@/stores/onboarding'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
+import LotteryPromptManager from '@/components/lottery/LotteryPromptManager.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()

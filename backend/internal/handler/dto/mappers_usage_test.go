@@ -133,6 +133,34 @@ func TestUsageLogFromService_UsesRequestedModelAndKeepsUpstreamAdminOnly(t *test
 	require.Contains(t, string(adminJSON), `"upstream_model":"claude-sonnet-4-20250514"`)
 }
 
+func TestUsageLogFromService_ExposesUpstreamModelToUserWhenGroupAllows(t *testing.T) {
+	t.Parallel()
+
+	upstreamModel := "claude-sonnet-4-20250514"
+	modelMappingChain := "claude-sonnet-4→claude-sonnet-4-20250514"
+	log := &service.UsageLog{
+		RequestID:         "req_expose",
+		Model:             upstreamModel,
+		RequestedModel:    "claude-sonnet-4",
+		UpstreamModel:     &upstreamModel,
+		ModelMappingChain: &modelMappingChain,
+		Group: &service.Group{
+			ExposeUpstreamModelToUser: true,
+		},
+	}
+
+	userDTO := UsageLogFromService(log)
+	adminDTO := UsageLogFromServiceAdmin(log)
+
+	require.Equal(t, "claude-sonnet-4", userDTO.Model)
+	require.NotNil(t, userDTO.UpstreamModel)
+	require.Equal(t, upstreamModel, *userDTO.UpstreamModel)
+	require.NotNil(t, userDTO.ModelMappingChain)
+	require.Equal(t, modelMappingChain, *userDTO.ModelMappingChain)
+	require.NotNil(t, adminDTO.UpstreamModel)
+	require.Equal(t, upstreamModel, *adminDTO.UpstreamModel)
+}
+
 func TestUsageLogFromService_FallsBackToLegacyModelWhenRequestedModelMissing(t *testing.T) {
 	t.Parallel()
 
