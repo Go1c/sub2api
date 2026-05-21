@@ -238,7 +238,7 @@ import type { WheelSegment } from '@/components/lottery/LotteryWheel.vue'
 import { useAppStore } from '@/stores/app'
 import { useLotteryStore } from '@/stores/lottery'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import type { CreateLotteryCampaignRequest, LotteryCampaign } from '@/types'
+import type { CreateLotteryCampaignRequest, LotteryCampaign, LotteryDraw } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -358,9 +358,17 @@ function winnerRows(campaign: LotteryCampaign) {
     .filter((draw) => draw.won)
     .map((draw) => ({
       key: String(draw.id),
-      userLabel: t('admin.lottery.history.userPrefix', { id: draw.user_id }),
+      userLabel: winnerUserLabel(draw),
       code: draw.lottery_code_id ? codeById.get(draw.lottery_code_id) ?? '-' : '-',
     }))
+}
+
+function winnerUserLabel(draw: LotteryDraw) {
+  const email = draw.user_email?.trim()
+  if (email) {
+    return t('admin.lottery.history.userWithEmail', { id: draw.user_id, email })
+  }
+  return t('admin.lottery.history.userPrefix', { id: draw.user_id })
 }
 
 // Preview wheel (no persistence, no user impact)

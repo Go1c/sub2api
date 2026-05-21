@@ -65,6 +65,7 @@ type LotteryDraw struct {
 	ID            int64     `json:"id"`
 	CampaignID    int64     `json:"campaign_id"`
 	UserID        int64     `json:"user_id"`
+	UserEmail     string    `json:"user_email,omitempty"`
 	Won           bool      `json:"won"`
 	LotteryCodeID *int64    `json:"lottery_code_id,omitempty"`
 	SiteMessageID *int64    `json:"site_message_id,omitempty"`
@@ -170,7 +171,7 @@ func LotteryCodesFromService(items []service.LotteryCode) []LotteryCode {
 func LotteryDrawsFromService(items []service.LotteryDraw) []LotteryDraw {
 	out := make([]LotteryDraw, 0, len(items))
 	for _, item := range items {
-		out = append(out, LotteryDraw{
+		converted := LotteryDraw{
 			ID:            item.ID,
 			CampaignID:    item.CampaignID,
 			UserID:        item.UserID,
@@ -179,7 +180,11 @@ func LotteryDrawsFromService(items []service.LotteryDraw) []LotteryDraw {
 			SiteMessageID: item.SiteMessageID,
 			ResultLabel:   item.ResultLabel,
 			CreatedAt:     item.CreatedAt,
-		})
+		}
+		if item.User != nil {
+			converted.UserEmail = item.User.Email
+		}
+		out = append(out, converted)
 	}
 	return out
 }

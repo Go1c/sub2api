@@ -32,7 +32,15 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key,
+      t: (key: string, params?: Record<string, string | number>) => {
+        if (key === 'admin.lottery.history.userWithEmail') {
+          return `ID ${params?.id} · ${params?.email}`
+        }
+        if (key === 'admin.lottery.history.userPrefix') {
+          return `ID ${params?.id}`
+        }
+        return key
+      },
     }),
   }
 })
@@ -149,5 +157,59 @@ describe('admin LotteryView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('site messages must be enabled before starting a lottery campaign')
+  })
+
+  it('shows winner user id with registered email in campaign history', async () => {
+    vi.mocked(adminLotteryAPI.listCampaigns).mockResolvedValue({
+      items: [{ ...campaignSummary, joined_count: 1, winner_count: 1 }],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+    vi.mocked(adminLotteryAPI.getCampaign).mockResolvedValue({
+      ...campaignSummary,
+      joined_count: 1,
+      winner_count: 1,
+      codes: [
+        {
+          id: 10,
+          campaign_id: campaignSummary.id,
+          code: 'CODE-1',
+          assigned_user_id: 7,
+          assigned_draw_id: 11,
+          assigned_at: '2026-05-21T00:02:00Z',
+          created_at: '2026-05-21T00:00:00Z',
+          updated_at: '2026-05-21T00:02:00Z',
+        },
+      ],
+      draws: [
+        {
+          id: 11,
+          campaign_id: campaignSummary.id,
+          user_id: 7,
+          user_email: 'winner@example.com',
+          won: true,
+          lottery_code_id: 10,
+          result_label: '奖品 1',
+          created_at: '2026-05-21T00:02:00Z',
+        },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'admin.lottery.tabs.history')!
+      .trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'admin.lottery.history.details')!
+      .trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ID 7 · winner@example.com')
+    expect(wrapper.text()).toContain('CODE-1')
   })
 })

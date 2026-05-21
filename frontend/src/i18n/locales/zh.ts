@@ -4469,7 +4469,8 @@ export default {
         unclaimedCodes: '未派发兑换码',
         noWinnersYet: '尚无中奖',
         allClaimed: '兑换码已全部派发',
-        userPrefix: '用户 #{id}',
+        userPrefix: '用户ID {id}',
+        userWithEmail: '用户ID {id} · {email}',
         failedToLoad: '加载抽奖活动失败',
         failedToLoadDetail: '加载抽奖详情失败',
         failedToFinish: '结束抽奖活动失败'
