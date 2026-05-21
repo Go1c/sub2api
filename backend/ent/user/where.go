@@ -165,6 +165,11 @@ func TotalRecharged(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldTotalRecharged, v))
 }
 
+// InvoiceEnabled applies equality check predicate on the "invoice_enabled" field. It's identical to InvoiceEnabledEQ.
+func InvoiceEnabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInvoiceEnabled, v))
+}
+
 // RpmLimit applies equality check predicate on the "rpm_limit" field. It's identical to RpmLimitEQ.
 func RpmLimit(v int) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
@@ -1298,6 +1303,16 @@ func TotalRechargedLT(v float64) predicate.User {
 // TotalRechargedLTE applies the LTE predicate on the "total_recharged" field.
 func TotalRechargedLTE(v float64) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldTotalRecharged, v))
+}
+
+// InvoiceEnabledEQ applies the EQ predicate on the "invoice_enabled" field.
+func InvoiceEnabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInvoiceEnabled, v))
+}
+
+// InvoiceEnabledNEQ applies the NEQ predicate on the "invoice_enabled" field.
+func InvoiceEnabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldInvoiceEnabled, v))
 }
 
 // RpmLimitEQ applies the EQ predicate on the "rpm_limit" field.

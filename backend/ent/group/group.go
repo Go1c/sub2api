@@ -84,6 +84,8 @@ const (
 	FieldMessagesDispatchModelConfig = "messages_dispatch_model_config"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
+	// FieldExposeUpstreamModelToUser holds the string denoting the expose_upstream_model_to_user field in the database.
+	FieldExposeUpstreamModelToUser = "expose_upstream_model_to_user"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -193,6 +195,7 @@ var Columns = []string{
 	FieldDefaultMappedModel,
 	FieldMessagesDispatchModelConfig,
 	FieldRpmLimit,
+	FieldExposeUpstreamModelToUser,
 }
 
 var (
@@ -278,6 +281,8 @@ var (
 	DefaultMessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
+	// DefaultExposeUpstreamModelToUser holds the default value on creation for the "expose_upstream_model_to_user" field.
+	DefaultExposeUpstreamModelToUser bool
 )
 
 // OrderOption defines the ordering options for the Group queries.
@@ -441,6 +446,11 @@ func ByDefaultMappedModel(opts ...sql.OrderTermOption) OrderOption {
 // ByRpmLimit orders the results by the rpm_limit field.
 func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
+}
+
+// ByExposeUpstreamModelToUser orders the results by the expose_upstream_model_to_user field.
+func ByExposeUpstreamModelToUser(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExposeUpstreamModelToUser, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.

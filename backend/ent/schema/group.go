@@ -160,6 +160,11 @@ func (Group) Fields() []ent.Field {
 		field.Int("rpm_limit").
 			Default(0).
 			Comment("分组 RPM 上限，0 表示不限制；设置后接管该分组用户的限流"),
+
+		// 是否在用户使用记录页暴露上游模型 (added by migration 139)
+		field.Bool("expose_upstream_model_to_user").
+			Default(false).
+			Comment("是否允许用户在使用记录页看到上游模型与映射链，false 时仅管理员可见"),
 	}
 }
 

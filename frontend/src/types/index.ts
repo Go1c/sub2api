@@ -597,6 +597,7 @@ export interface Group {
   platform: GroupPlatform
   rate_multiplier: number
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
+  expose_upstream_model_to_user?: boolean
   is_exclusive: boolean
   status: 'active' | 'inactive'
   subscription_type: SubscriptionType
@@ -729,6 +730,7 @@ export interface CreateGroupRequest {
   supported_model_scopes?: string[]
   require_oauth_only?: boolean
   require_privacy_set?: boolean
+  expose_upstream_model_to_user?: boolean
   // 从指定分组复制账号
   copy_accounts_from_group_ids?: number[]
 }
@@ -757,6 +759,7 @@ export interface UpdateGroupRequest {
   supported_model_scopes?: string[]
   require_oauth_only?: boolean
   require_privacy_set?: boolean
+  expose_upstream_model_to_user?: boolean
   copy_accounts_from_group_ids?: number[]
 }
 
@@ -1224,6 +1227,8 @@ export interface UsageLog {
   account_id: number | null
   request_id: string
   model: string
+  upstream_model?: string | null
+  model_mapping_chain?: string | null
   service_tier?: string | null
   reasoning_effort?: string | null
   inbound_endpoint?: string | null
