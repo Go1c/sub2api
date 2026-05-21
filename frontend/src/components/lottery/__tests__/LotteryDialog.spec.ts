@@ -95,7 +95,10 @@ describe('LotteryDialog', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('站内信')
-    expect(wrapper.find('a[href="/site-messages"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="lottery-result-modal"]').exists()).toBe(true)
+    const claimLink = wrapper.get('a[href="/site-messages"]')
+    expect(claimLink.attributes('class')).toContain('from-[#4f8cff]')
+    expect(claimLink.attributes('class')).not.toContain('from-amber')
   })
 
   it('does not render the raw code in the dialog result', async () => {
@@ -134,5 +137,25 @@ describe('LotteryDialog', () => {
     )
 
     expect(Number(wrapper.get('[data-test="spin-button"]').attributes('data-size'))).toBeLessThan(280)
+  })
+
+  it('shows losing results in a dedicated result modal', async () => {
+    const wrapper = mountDialog(() =>
+      Promise.resolve({
+        won: false,
+        index: 1,
+        label: '谢谢参与',
+        message: '很遗憾，这次没有中奖。',
+      }),
+    )
+
+    await wrapper.get('[data-test="spin-button"]').trigger('click')
+    await flushPromises()
+    vi.runAllTimers()
+    await flushPromises()
+
+    const modal = wrapper.get('[data-test="lottery-result-modal"]')
+    expect(modal.text()).toContain('很遗憾')
+    expect(modal.text()).toContain('下次再来')
   })
 })
