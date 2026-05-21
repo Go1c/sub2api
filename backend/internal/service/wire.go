@@ -442,6 +442,10 @@ func ProvideSiteMessageSettingsReader(settingService *SettingService) SiteMessag
 	return settingService
 }
 
+func ProvideLotterySettingsReader(settingService *SettingService) LotterySettingsReader {
+	return settingService
+}
+
 func ProvideInvoiceUserReader(userRepo UserRepository) InvoiceUserReader {
 	return userRepo
 }
@@ -468,6 +472,9 @@ var ProviderSet = wire.NewSet(
 	ProvideSiteMessageSettingsReader,
 	NewSiteMessageService,
 	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
+	ProvideLotterySettingsReader,
+	NewLotteryService,
+	wire.Bind(new(LotteryPrizeMessenger), new(*SiteMessageService)),
 	ProvideInvoiceUserReader,
 	NewInvoiceService,
 	wire.Bind(new(InvoiceEmailSender), new(*EmailService)),

@@ -453,6 +453,82 @@ export interface AdminSendSiteMessageRequest {
   send_email?: boolean
 }
 
+// ==================== Lottery Types ====================
+
+export interface LotterySegment {
+  label: string
+  is_prize: boolean
+}
+
+export interface LotteryActiveCampaign {
+  id: number
+  name: string
+  subtitle: string
+  prize_count: number
+  max_participants: number
+  joined_count: number
+  segments: LotterySegment[]
+}
+
+export interface LotteryActiveResponse {
+  campaign: LotteryActiveCampaign | null
+}
+
+export interface LotteryDrawResult {
+  won: boolean
+  index: number
+  label: string
+  message: string
+  site_message_id?: number | null
+}
+
+export interface LotteryCode {
+  id: number
+  campaign_id: number
+  code: string
+  assigned_user_id?: number | null
+  assigned_draw_id?: number | null
+  assigned_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface LotteryDraw {
+  id: number
+  campaign_id: number
+  user_id: number
+  won: boolean
+  lottery_code_id?: number | null
+  site_message_id?: number | null
+  result_label: string
+  created_at: string
+}
+
+export interface LotteryCampaign {
+  id: number
+  name: string
+  subtitle: string
+  status: 'active' | 'finished'
+  prize_count: number
+  max_participants: number
+  joined_count: number
+  winner_count: number
+  created_by: number
+  created_at: string
+  updated_at: string
+  finished_at?: string | null
+  codes?: LotteryCode[]
+  draws?: LotteryDraw[]
+}
+
+export interface CreateLotteryCampaignRequest {
+  name: string
+  subtitle?: string
+  prize_count: number
+  max_participants: number
+  codes: string[]
+}
+
 // ==================== Proxy Node Types ====================
 
 export interface ProxyNode {

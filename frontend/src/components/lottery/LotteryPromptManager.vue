@@ -1,14 +1,15 @@
 <template>
   <LotteryDialog
-    v-if="campaign"
+    v-if="dialogCampaign"
     :open="open"
-    :campaign-title="campaign.name"
-    :subtitle="campaign.subtitle"
-    :prize-count="campaign.prizeCount"
-    :max-participants="campaign.maxParticipants"
-    :joined="campaign.joined"
-    :segments="campaign.segments"
+    :campaign-title="dialogCampaign.name"
+    :subtitle="dialogCampaign.subtitle"
+    :prize-count="dialogCampaign.prize_count"
+    :max-participants="dialogCampaign.max_participants"
+    :joined="dialogCampaign.joined_count"
+    :segments="dialogSegments"
     :draw-fn="doDraw"
+    @drawn="handleDrawn"
     @close="dismiss"
   />
 </template>
@@ -18,33 +19,46 @@ import { computed, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useLotteryStore } from '@/stores/lottery'
 import LotteryDialog, { type DrawResult } from './LotteryDialog.vue'
+import type { LotteryActiveCampaign } from '@/types'
 
 const authStore = useAuthStore()
 const lotteryStore = useLotteryStore()
 
-const SESSION_DISMISS_KEY = 'lottery_dismissed_v1'
+const SESSION_DISMISS_KEY = 'lottery_dismissed_v2'
 const open = ref(false)
+const dialogCampaign = ref<LotteryActiveCampaign | null>(null)
+const drawCompleted = ref(false)
+let refreshToken = 0
 
 const userId = computed<number | null>(() => authStore.user?.id ?? null)
-const userName = computed<string>(() => authStore.user?.username || authStore.user?.email || `user-${userId.value ?? 'anon'}`)
+const dialogSegments = computed(() =>
+  (dialogCampaign.value?.segments ?? []).map((segment) => ({
+    label: segment.label,
+    isPrize: segment.is_prize,
+  })),
+)
 
-const campaign = computed(() => lotteryStore.getActiveForUser(userId.value))
-
-function isDismissedThisSession(campaignId: string): boolean {
+function loadDismissedCampaigns(): number[] {
   try {
     const raw = sessionStorage.getItem(SESSION_DISMISS_KEY)
-    if (!raw) return false
+    if (!raw) return []
     const list = JSON.parse(raw)
-    return Array.isArray(list) && list.includes(campaignId)
+    if (!Array.isArray(list)) return []
+    return list
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)
   } catch {
-    return false
+    return []
   }
 }
 
-function markDismissed(campaignId: string) {
+function isDismissedThisSession(campaignId: number): boolean {
+  return loadDismissedCampaigns().includes(campaignId)
+}
+
+function markDismissed(campaignId: number) {
   try {
-    const raw = sessionStorage.getItem(SESSION_DISMISS_KEY)
-    const list = raw ? JSON.parse(raw) : []
+    const list = loadDismissedCampaigns()
     if (!list.includes(campaignId)) list.push(campaignId)
     sessionStorage.setItem(SESSION_DISMISS_KEY, JSON.stringify(list))
   } catch {
@@ -52,34 +66,78 @@ function markDismissed(campaignId: string) {
   }
 }
 
-function maybeOpen() {
-  const c = campaign.value
+function syncDialog() {
+  const c = lotteryStore.activeCampaign
   if (!c || !userId.value) {
-    open.value = false
+    if (!drawCompleted.value) {
+      dialogCampaign.value = null
+      open.value = false
+    }
     return
   }
   if (isDismissedThisSession(c.id)) {
+    dialogCampaign.value = null
     open.value = false
     return
   }
+  dialogCampaign.value = c
   open.value = true
 }
 
 watch(
-  () => [authStore.isAuthenticated, userId.value, campaign.value?.id],
-  () => maybeOpen(),
-  { immediate: true }
+  () => [authStore.isAuthenticated, userId.value],
+  async ([isAuthenticated, currentUserId]) => {
+    refreshToken += 1
+    const currentRefresh = refreshToken
+
+    if (!isAuthenticated || !currentUserId) {
+      open.value = false
+      dialogCampaign.value = null
+      drawCompleted.value = false
+      lotteryStore.clearActive()
+      lotteryStore.clearLastResult()
+      return
+    }
+
+    try {
+      await lotteryStore.fetchActive()
+      if (currentRefresh !== refreshToken) return
+      syncDialog()
+    } catch {
+      if (currentRefresh !== refreshToken) return
+      open.value = false
+      dialogCampaign.value = null
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => lotteryStore.activeCampaign?.id,
+  () => syncDialog(),
 )
 
 async function doDraw(): Promise<DrawResult> {
-  const c = campaign.value
+  const c = dialogCampaign.value
   if (!c || !userId.value) throw new Error('no active campaign or user')
-  return lotteryStore.draw(userId.value, userName.value, c.id)
+  return lotteryStore.draw(c.id)
+}
+
+function handleDrawn() {
+  drawCompleted.value = true
 }
 
 function dismiss() {
-  const c = campaign.value
-  if (c) markDismissed(c.id)
+  const c = dialogCampaign.value
+  if (c && !drawCompleted.value) {
+    markDismissed(c.id)
+  }
+  if (drawCompleted.value) {
+    lotteryStore.clearActive()
+    lotteryStore.clearLastResult()
+  }
   open.value = false
+  dialogCampaign.value = null
+  drawCompleted.value = false
 }
 </script>

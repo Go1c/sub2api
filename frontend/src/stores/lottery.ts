@@ -1,212 +1,169 @@
-/**
- * Lottery Store (frontend-only mock with localStorage persistence)
- *
- * This is the first phase of the lottery feature: admin can create campaigns,
- * users see a popup wheel on login and draw exactly once per active campaign.
- * Backend API will replace the in-memory + localStorage layer in a follow-up.
- */
-
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 
-export interface WheelSegment {
-  label: string
-  isPrize: boolean
-}
+import { lotteryAPI } from '@/api/lottery'
+import {
+  adminLotteryAPI,
+  type AdminLotteryListParams,
+} from '@/api/admin/lottery'
+import type {
+  CreateLotteryCampaignRequest,
+  LotteryActiveCampaign,
+  LotteryCampaign,
+  LotteryCode,
+  LotteryDrawResult,
+} from '@/types'
 
-export interface Winner {
-  userId: number
-  userName: string
-  code: string
-  drawnAt: string
-}
+const DEFAULT_ADMIN_PAGE_SIZE = 50
 
-export interface Campaign {
-  id: string
-  name: string
-  subtitle: string
-  prizeCount: number
-  maxParticipants: number
-  codes: string[]
-  joined: number
-  winners: Winner[]
-  segments: WheelSegment[]
-  status: 'active' | 'finished'
-  createdAt: string
-  /** user ids that already drew (for popup gating) */
-  drawnUserIds: number[]
-}
-
-export interface DrawResult {
-  won: boolean
-  index: number
-  label: string
-  code?: string
-}
-
-const STORAGE_KEY = 'lottery_demo_v1'
-
-function loadFromStorage(): Campaign[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed as Campaign[]
-  } catch {
-    return []
+function upsertCampaignSummary(
+  items: LotteryCampaign[],
+  campaign: LotteryCampaign,
+): LotteryCampaign[] {
+  const next = items.slice()
+  const index = next.findIndex((item) => item.id === campaign.id)
+  if (index === -1) {
+    next.unshift(campaign)
+    return next
   }
-}
-
-function saveToStorage(campaigns: Campaign[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(campaigns))
-  } catch (e) {
-    console.warn('lottery: failed to persist', e)
+  next[index] = {
+    ...next[index],
+    ...campaign,
   }
-}
-
-function buildSegments(prizeCount: number, totalSlots = 8): WheelSegment[] {
-  const slots = Math.max(prizeCount + 2, totalSlots)
-  const segs: WheelSegment[] = []
-  for (let i = 0; i < slots; i++) {
-    segs.push(
-      i < prizeCount
-        ? { label: `奖品 ${i + 1}`, isPrize: true }
-        : { label: '谢谢参与', isPrize: false }
-    )
-  }
-  const order = [...Array(slots).keys()]
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(((i * 9301 + 49297) % 233280) / 233280 * (i + 1))
-    ;[order[i], order[j]] = [order[j], order[i]]
-  }
-  return order.map(idx => segs[idx])
-}
-
-function nowIso(): string {
-  return new Date().toISOString().slice(0, 16).replace('T', ' ')
+  return next
 }
 
 export const useLotteryStore = defineStore('lottery', () => {
-  const campaigns = ref<Campaign[]>(loadFromStorage())
+  const activeCampaign = ref<LotteryActiveCampaign | null>(null)
+  const loadingActive = ref(false)
+  const drawing = ref(false)
+  const lastResult = ref<LotteryDrawResult | null>(null)
 
-  const activeCampaign = computed(() => campaigns.value.find(c => c.status === 'active') || null)
+  const campaigns = ref<LotteryCampaign[]>([])
+  const loadingCampaigns = ref(false)
+  const campaignDetails = ref<Record<number, LotteryCampaign>>({})
 
-  function getActiveForUser(userId: number | null | undefined): Campaign | null {
-    if (!userId) return null
-    const c = activeCampaign.value
-    if (!c) return null
-    if (c.drawnUserIds.includes(userId)) return null
-    if (c.joined >= c.maxParticipants) return null
-    return c
+  function clearActive() {
+    activeCampaign.value = null
   }
 
-  function hasDrawn(userId: number, campaignId: string): boolean {
-    const c = campaigns.value.find(x => x.id === campaignId)
-    return !!c?.drawnUserIds.includes(userId)
+  function clearLastResult() {
+    lastResult.value = null
   }
 
-  function createCampaign(input: {
-    name: string
-    subtitle: string
-    prizeCount: number
-    maxParticipants: number
-    codes: string[]
-  }): Campaign {
-    // Archive any existing active campaign to maintain "1 active at a time" invariant.
-    campaigns.value.forEach(c => {
-      if (c.status === 'active') c.status = 'finished'
-    })
-    const c: Campaign = {
-      id: `c-${Date.now()}`,
-      name: input.name.trim(),
-      subtitle: input.subtitle.trim() || '登录就有机会，转一转赢取兑换码',
-      prizeCount: input.prizeCount,
-      maxParticipants: input.maxParticipants,
-      codes: input.codes.slice(0, input.prizeCount),
-      joined: 0,
-      winners: [],
-      segments: buildSegments(input.prizeCount, 8),
-      status: 'active',
-      createdAt: nowIso(),
-      drawnUserIds: []
+  async function fetchActive(): Promise<LotteryActiveCampaign | null> {
+    loadingActive.value = true
+    lastResult.value = null
+    try {
+      const response = await lotteryAPI.getActive()
+      activeCampaign.value = response.campaign
+      return response.campaign
+    } finally {
+      loadingActive.value = false
     }
-    campaigns.value.unshift(c)
-    saveToStorage(campaigns.value)
-    return c
   }
 
-  async function draw(
-    userId: number,
-    userName: string,
-    campaignId: string
-  ): Promise<DrawResult> {
-    const c = campaigns.value.find(x => x.id === campaignId)
-    if (!c) throw new Error('campaign not found')
-    if (c.status !== 'active') throw new Error('campaign finished')
-    if (c.drawnUserIds.includes(userId)) throw new Error('already drew')
-    if (c.joined >= c.maxParticipants) throw new Error('campaign full')
-
-    // Server-side fairness simulation: P(win) = remainingPrizes / remainingSlots
-    const remainingPrizes = c.prizeCount - c.winners.length
-    const remainingSlots = c.maxParticipants - c.joined
-    const winProb = remainingSlots > 0 ? remainingPrizes / remainingSlots : 0
-    const won = Math.random() < winProb
-
-    let index: number
-    let label: string
-    let code: string | undefined
-
-    if (won) {
-      const prizeSegs = c.segments
-        .map((s, i) => ({ s, i }))
-        .filter(({ s }) => s.isPrize)
-      const pick = prizeSegs[Math.floor(Math.random() * prizeSegs.length)]
-      index = pick.i
-      label = pick.s.label
-      const claimed = new Set(c.winners.map(w => w.code))
-      code = c.codes.find(x => !claimed.has(x)) || c.codes[0]
-      c.winners.push({ userId, userName, code, drawnAt: nowIso() })
-    } else {
-      const blanks = c.segments
-        .map((s, i) => ({ s, i }))
-        .filter(({ s }) => !s.isPrize)
-      const pick = blanks[Math.floor(Math.random() * blanks.length)]
-      index = pick.i
-      label = pick.s.label
+  async function draw(campaignId: number): Promise<LotteryDrawResult> {
+    drawing.value = true
+    lastResult.value = null
+    try {
+      const result = await lotteryAPI.draw(campaignId)
+      lastResult.value = result
+      activeCampaign.value = null
+      return result
+    } catch (error) {
+      const code = String(
+        (error as { reason?: string; code?: string | number })?.reason ??
+          (error as { reason?: string; code?: string | number })?.code ??
+          '',
+      )
+      if (code === 'LOTTERY_ALREADY_DRAWN' || code === 'LOTTERY_CAMPAIGN_CLOSED') {
+        activeCampaign.value = null
+      }
+      throw error
+    } finally {
+      drawing.value = false
     }
+  }
 
-    c.drawnUserIds.push(userId)
-    c.joined += 1
-    if (c.winners.length >= c.prizeCount || c.joined >= c.maxParticipants) {
-      c.status = 'finished'
+  async function loadCampaigns(
+    params: AdminLotteryListParams = {},
+  ): Promise<LotteryCampaign[]> {
+    loadingCampaigns.value = true
+    try {
+      const response = await adminLotteryAPI.listCampaigns({
+        page: params.page ?? 1,
+        page_size: params.page_size ?? DEFAULT_ADMIN_PAGE_SIZE,
+        sort_by: params.sort_by ?? 'created_at',
+        sort_order: params.sort_order ?? 'desc',
+      })
+      campaigns.value = response.items
+      return response.items
+    } finally {
+      loadingCampaigns.value = false
     }
-    saveToStorage(campaigns.value)
-
-    // simulate network latency
-    await new Promise(r => setTimeout(r, 300))
-    return { won, index, label, code }
   }
 
-  function unclaimedCodes(c: Campaign): string[] {
-    const used = new Set(c.winners.map(w => w.code))
-    return c.codes.filter(code => !used.has(code))
+  function getCampaignDetail(id: number): LotteryCampaign | null {
+    return campaignDetails.value[id] ?? campaigns.value.find((item) => item.id === id) ?? null
   }
 
-  function resetAll() {
-    campaigns.value = []
-    saveToStorage(campaigns.value)
+  async function loadCampaign(id: number): Promise<LotteryCampaign> {
+    const campaign = await adminLotteryAPI.getCampaign(id)
+    campaignDetails.value = {
+      ...campaignDetails.value,
+      [id]: campaign,
+    }
+    campaigns.value = upsertCampaignSummary(campaigns.value, campaign)
+    return campaign
+  }
+
+  async function createCampaign(
+    input: CreateLotteryCampaignRequest,
+  ): Promise<LotteryCampaign> {
+    const campaign = await adminLotteryAPI.createCampaign(input)
+    campaignDetails.value = {
+      ...campaignDetails.value,
+      [campaign.id]: campaign,
+    }
+    await loadCampaigns()
+    return campaign
+  }
+
+  async function finishCampaign(id: number): Promise<LotteryCampaign> {
+    const campaign = await adminLotteryAPI.finishCampaign(id)
+    campaignDetails.value = {
+      ...campaignDetails.value,
+      [id]: campaign,
+    }
+    campaigns.value = upsertCampaignSummary(campaigns.value, campaign)
+    if (activeCampaign.value?.id === id) {
+      activeCampaign.value = null
+    }
+    return campaign
+  }
+
+  function unclaimedCodes(campaign: LotteryCampaign): LotteryCode[] {
+    return (campaign.codes ?? []).filter((code) => !code.assigned_user_id)
   }
 
   return {
-    campaigns,
     activeCampaign,
-    getActiveForUser,
-    hasDrawn,
-    createCampaign,
+    loadingActive,
+    drawing,
+    lastResult,
+    campaigns,
+    loadingCampaigns,
+    campaignDetails,
+    fetchActive,
     draw,
+    clearActive,
+    clearLastResult,
+    loadCampaigns,
+    getCampaignDetail,
+    loadCampaign,
+    createCampaign,
+    finishCampaign,
     unclaimedCodes,
-    resetAll
   }
 })

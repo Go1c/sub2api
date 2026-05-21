@@ -110,6 +110,12 @@ func RegisterUserRoutes(
 			siteMessages.POST("/:id/read", h.SiteMessage.MarkRead)
 		}
 
+		lottery := authenticated.Group("/lottery")
+		{
+			lottery.GET("/active", h.Lottery.GetActive)
+			lottery.POST("/:id/draw", h.Lottery.Draw)
+		}
+
 		// 发票申请
 		invoices := authenticated.Group("/invoices")
 		{

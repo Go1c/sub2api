@@ -40,6 +40,7 @@
             <span class="input-label">{{ t('admin.lottery.create.name') }}</span>
             <input
               v-model="form.name"
+              data-test="lottery-name"
               type="text"
               :placeholder="t('admin.lottery.create.namePlaceholder')"
               class="input"
@@ -49,6 +50,7 @@
             <span class="input-label">{{ t('admin.lottery.create.subtitle') }}</span>
             <input
               v-model="form.subtitle"
+              data-test="lottery-subtitle"
               type="text"
               :placeholder="t('admin.lottery.create.subtitlePlaceholder')"
               class="input"
@@ -56,11 +58,11 @@
           </label>
           <label class="block">
             <span class="input-label">{{ t('admin.lottery.create.prizeCount') }}</span>
-            <input v-model.number="form.prizeCount" type="number" min="1" class="input font-mono" />
+            <input v-model.number="form.prizeCount" data-test="lottery-prize-count" type="number" min="1" class="input font-mono" />
           </label>
           <label class="block">
             <span class="input-label">{{ t('admin.lottery.create.maxParticipants') }}</span>
-            <input v-model.number="form.maxParticipants" type="number" min="1" class="input font-mono" />
+            <input v-model.number="form.maxParticipants" data-test="lottery-max-participants" type="number" min="1" class="input font-mono" />
           </label>
         </div>
 
@@ -76,6 +78,7 @@
           </div>
           <textarea
             v-model="form.codesRaw"
+            data-test="lottery-codes"
             rows="6"
             :placeholder="t('admin.lottery.create.codesPlaceholder')"
             class="input mt-1 font-mono"
@@ -84,13 +87,13 @@
         </div>
 
         <div class="mt-6 flex flex-wrap items-center gap-3">
-          <button class="btn btn-primary" :disabled="!canSubmit" @click="submitCampaign">
-            {{ t('admin.lottery.create.submit') }}
+          <button class="btn btn-primary" data-test="lottery-submit" :disabled="!canSubmit || submitting" @click="submitCampaign">
+            {{ submitting ? t('common.saving') : t('admin.lottery.create.submit') }}
           </button>
           <button class="btn btn-secondary" @click="resetForm">
             {{ t('common.reset') }}
           </button>
-          <button class="btn btn-ghost btn-sm" @click="openPreview = true" :disabled="!canSubmit">
+          <button class="btn btn-ghost btn-sm" @click="openPreview = true" :disabled="!canSubmit || submitting">
             {{ t('admin.lottery.create.preview') }}
           </button>
           <span v-if="formError" class="text-xs text-red-500">{{ formError }}</span>
@@ -111,14 +114,21 @@
           </p>
         </div>
 
-        <div v-if="lotteryStore.campaigns.length === 0" class="px-6 py-12 text-center">
+        <div
+          v-if="lotteryStore.loadingCampaigns && displayCampaigns.length === 0"
+          class="px-6 py-12 text-center text-sm text-gray-500 dark:text-dark-400"
+        >
+          {{ t('common.loading') }}
+        </div>
+
+        <div v-else-if="displayCampaigns.length === 0" class="px-6 py-12 text-center">
           <div class="text-sm text-gray-500 dark:text-dark-400">
             {{ t('admin.lottery.history.empty') }}
           </div>
         </div>
 
         <ul v-else class="divide-y divide-gray-100 dark:divide-dark-700">
-          <li v-for="c in lotteryStore.campaigns" :key="c.id" class="px-6 py-4">
+          <li v-for="c in displayCampaigns" :key="c.id" class="px-6 py-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div class="flex items-center gap-2">
@@ -130,17 +140,24 @@
                     {{ c.status === 'active' ? t('admin.lottery.status.active') : t('admin.lottery.status.finished') }}
                   </span>
                 </div>
-                <div class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">{{ c.createdAt }}</div>
+                <div class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">{{ c.created_at }}</div>
               </div>
               <div class="flex flex-wrap items-center gap-3 text-right">
                 <div class="font-mono text-xs text-gray-500 dark:text-dark-300">
-                  <span class="font-bold text-gray-900 dark:text-white">{{ c.joined }}</span>/{{ c.maxParticipants }}
+                  <span class="font-bold text-gray-900 dark:text-white">{{ c.joined_count }}</span>/{{ c.max_participants }}
                   {{ t('admin.lottery.history.joined') }}
                 </div>
                 <div class="font-mono text-xs text-gray-500 dark:text-dark-300">
-                  <span class="font-bold text-amber-600 dark:text-amber-300">{{ c.winners.length }}</span>/{{ c.prizeCount }}
+                  <span class="font-bold text-amber-600 dark:text-amber-300">{{ c.winner_count }}</span>/{{ c.prize_count }}
                   {{ t('admin.lottery.history.won') }}
                 </div>
+                <button
+                  v-if="c.status === 'active'"
+                  class="btn btn-secondary btn-sm"
+                  @click="finishCampaign(c.id)"
+                >
+                  {{ t('admin.lottery.history.finish') }}
+                </button>
                 <button class="btn btn-secondary btn-sm" @click="toggleExpand(c.id)">
                   {{ expanded === c.id ? t('common.collapse') : t('admin.lottery.history.details') }}
                 </button>
@@ -157,14 +174,14 @@
                 </div>
                 <ul class="mt-2 space-y-1.5 text-xs">
                   <li
-                    v-for="(w, i) in c.winners"
-                    :key="i"
+                    v-for="winner in winnerRows(c)"
+                    :key="winner.key"
                     class="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 ring-1 ring-gray-200 dark:bg-dark-900 dark:ring-dark-700"
                   >
-                    <span class="text-gray-700 dark:text-dark-100">{{ w.userName }}</span>
-                    <span class="font-mono text-amber-600 dark:text-amber-300">{{ w.code }}</span>
+                    <span class="text-gray-700 dark:text-dark-100">{{ winner.userLabel }}</span>
+                    <span class="font-mono text-amber-600 dark:text-amber-300">{{ winner.code }}</span>
                   </li>
-                  <li v-if="c.winners.length === 0" class="text-gray-400 dark:text-dark-500">
+                  <li v-if="winnerRows(c).length === 0" class="text-gray-400 dark:text-dark-500">
                     {{ t('admin.lottery.history.noWinnersYet') }}
                   </li>
                 </ul>
@@ -179,7 +196,7 @@
                     :key="i"
                     class="rounded-lg bg-white px-3 py-2 font-mono text-gray-700 ring-1 ring-gray-200 dark:bg-dark-900 dark:text-dark-100 dark:ring-dark-700"
                   >
-                    {{ code }}
+                    {{ code.code }}
                   </li>
                   <li
                     v-if="lotteryStore.unclaimedCodes(c).length === 0"
@@ -213,13 +230,18 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LotteryDialog, { type DrawResult } from '@/components/lottery/LotteryDialog.vue'
 import type { WheelSegment } from '@/components/lottery/LotteryWheel.vue'
+import { useAppStore } from '@/stores/app'
 import { useLotteryStore } from '@/stores/lottery'
+import { extractApiErrorMessage } from '@/utils/apiError'
+import type { CreateLotteryCampaignRequest, LotteryCampaign } from '@/types'
 
 const { t } = useI18n()
+const appStore = useAppStore()
 const lotteryStore = useLotteryStore()
 
 const subTabs = computed(() => [
@@ -237,6 +259,13 @@ const form = ref({
 })
 const formError = ref('')
 const formSaved = ref(false)
+const submitting = ref(false)
+
+const displayCampaigns = computed(() =>
+  lotteryStore.campaigns.map(
+    (campaign) => lotteryStore.getCampaignDetail(campaign.id) ?? campaign,
+  ),
+)
 
 const codeLines = computed(() =>
   form.value.codesRaw.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
@@ -249,21 +278,43 @@ const canSubmit = computed(
     codeLines.value.length >= form.value.prizeCount
 )
 
-function submitCampaign() {
+onMounted(async () => {
+  try {
+    await lotteryStore.loadCampaigns()
+  } catch (error) {
+    appStore.showError(
+      extractApiErrorMessage(error, t('admin.lottery.history.failedToLoad')),
+    )
+  }
+})
+
+async function submitCampaign() {
   formError.value = ''
   formSaved.value = false
   if (!canSubmit.value) {
     formError.value = t('admin.lottery.create.invalid')
     return
   }
-  lotteryStore.createCampaign({
-    name: form.value.name,
-    subtitle: form.value.subtitle,
-    prizeCount: form.value.prizeCount,
-    maxParticipants: form.value.maxParticipants,
-    codes: codeLines.value
-  })
-  formSaved.value = true
+  submitting.value = true
+  try {
+    const input: CreateLotteryCampaignRequest = {
+      name: form.value.name.trim(),
+      subtitle: form.value.subtitle.trim(),
+      prize_count: form.value.prizeCount,
+      max_participants: form.value.maxParticipants,
+      codes: codeLines.value,
+    }
+    await lotteryStore.createCampaign(input)
+    formSaved.value = true
+    activeTab.value = 'history'
+  } catch (error) {
+    formError.value = extractApiErrorMessage(
+      error,
+      t('admin.lottery.create.failed'),
+    )
+  } finally {
+    submitting.value = false
+  }
 }
 
 function resetForm() {
@@ -272,9 +323,44 @@ function resetForm() {
   formSaved.value = false
 }
 
-const expanded = ref<string | null>(null)
-function toggleExpand(id: string) {
-  expanded.value = expanded.value === id ? null : id
+const expanded = ref<number | null>(null)
+async function toggleExpand(id: number) {
+  if (expanded.value === id) {
+    expanded.value = null
+    return
+  }
+
+  expanded.value = id
+  try {
+    await lotteryStore.loadCampaign(id)
+  } catch (error) {
+    appStore.showError(
+      extractApiErrorMessage(error, t('admin.lottery.history.failedToLoadDetail')),
+    )
+  }
+}
+
+async function finishCampaign(id: number) {
+  try {
+    await lotteryStore.finishCampaign(id)
+  } catch (error) {
+    appStore.showError(
+      extractApiErrorMessage(error, t('admin.lottery.history.failedToFinish')),
+    )
+  }
+}
+
+function winnerRows(campaign: LotteryCampaign) {
+  const codeById = new Map(
+    (campaign.codes ?? []).map((code) => [code.id, code.code]),
+  )
+  return (campaign.draws ?? [])
+    .filter((draw) => draw.won)
+    .map((draw) => ({
+      key: String(draw.id),
+      userLabel: t('admin.lottery.history.userPrefix', { id: draw.user_id }),
+      code: draw.lottery_code_id ? codeById.get(draw.lottery_code_id) ?? '-' : '-',
+    }))
 }
 
 // Preview wheel (no persistence, no user impact)
@@ -308,7 +394,9 @@ async function previewDrawFn(): Promise<DrawResult> {
     won,
     index: pick.i,
     label: pick.s.label,
-    code: won ? 'PREVIEW-XXXX-XXXX' : undefined
+    message: won
+      ? '恭喜你中奖！兑换码已通过站内信发放，请前往站内信领取。'
+      : '很遗憾，这次没有中奖。'
   }
 }
 </script>

@@ -22,6 +22,7 @@ export { default as announcementsAPI } from './announcements'
 export { channelMonitorUserAPI } from './channelMonitor'
 export { siteMessagesAPI } from './siteMessages'
 export { invoicesAPI } from './invoices'
+export { lotteryAPI } from './lottery'
 export type { InvoiceRequest, InvoiceOverview, InvoiceStatus, CreateInvoiceRequest } from './invoices'
 
 // Admin APIs

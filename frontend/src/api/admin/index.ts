@@ -33,6 +33,7 @@ import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
 import adminSiteMessagesAPI from './siteMessages'
 import adminInvoicesAPI from './invoices'
+import adminLotteryAPI from './lottery'
 
 /**
  * Unified admin API object for convenient access
@@ -67,7 +68,8 @@ export const adminAPI = {
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
   siteMessages: adminSiteMessagesAPI,
-  invoices: adminInvoicesAPI
+  invoices: adminInvoicesAPI,
+  lottery: adminLotteryAPI
 }
 
 export {
@@ -100,7 +102,8 @@ export {
   affiliatesAPI,
   riskControlAPI,
   adminSiteMessagesAPI,
-  adminInvoicesAPI
+  adminInvoicesAPI,
+  adminLotteryAPI
 }
 
 export default adminAPI

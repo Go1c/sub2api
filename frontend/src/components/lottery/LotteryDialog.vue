@@ -86,6 +86,13 @@
                 />
               </div>
 
+              <div
+                v-if="errorMessage && !result"
+                class="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-100"
+              >
+                {{ errorMessage }}
+              </div>
+
               <!-- Result panel -->
               <transition
                 enter-active-class="transition duration-300 ease-out"
@@ -104,28 +111,22 @@
                       <div class="mt-1 text-lg font-bold text-white">
                         {{ result.label }}
                       </div>
-                      <div class="mt-3">
-                        <div class="text-xs text-slate-400">兑换码</div>
-                        <div class="mt-1 flex items-center gap-2">
-                          <code class="flex-1 rounded-xl bg-black/40 px-3 py-2.5 font-mono text-sm font-semibold tracking-wider text-fuchsia-300 ring-1 ring-white/10">
-                            {{ result.code }}
-                          </code>
-                          <button
-                            type="button"
-                            class="rounded-xl bg-white/5 px-3 py-2.5 text-xs font-medium text-white ring-1 ring-white/10 transition-colors hover:bg-white/10"
-                            @click="copyCode"
-                          >
-                            {{ copied ? '已复制' : '复制' }}
-                          </button>
-                        </div>
-                      </div>
+                      <p class="mt-3 text-sm leading-6 text-slate-200">
+                        {{ result.message }}
+                      </p>
+                      <a
+                        href="/site-messages"
+                        class="mt-4 inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/15 transition-colors hover:bg-white/15"
+                      >
+                        前往站内信领取
+                      </a>
                     </div>
                   </div>
                   <div
                     v-else
                     class="rounded-2xl bg-white/[0.03] p-4 text-center ring-1 ring-white/10"
                   >
-                    <div class="text-sm text-slate-300">很遗憾，本次未中奖</div>
+                    <div class="text-sm text-slate-300">{{ result.message }}</div>
                     <div class="mt-1 text-base font-semibold text-slate-100">下次再来 🍀</div>
                   </div>
 
@@ -158,7 +159,8 @@ export interface DrawResult {
   won: boolean
   index: number
   label: string
-  code?: string
+  message: string
+  site_message_id?: number | null
 }
 
 const props = withDefaults(
@@ -186,22 +188,23 @@ const emit = defineEmits<{
 const wheelRef = ref<InstanceType<typeof LotteryWheel> | null>(null)
 const isSpinning = ref(false)
 const result = ref<DrawResult | null>(null)
-const copied = ref(false)
 const pendingResult = ref<DrawResult | null>(null)
+const errorMessage = ref('')
 
-const remaining = computed(() => Math.max(0, props.prizeCount))
+const remaining = computed(() => Math.max(0, props.maxParticipants - props.joined))
 const canSpin = computed(() => props.joined < props.maxParticipants && !result.value)
 
 async function onStart() {
   if (!canSpin.value || isSpinning.value) return
   isSpinning.value = true
+  errorMessage.value = ''
   try {
     const r = await props.drawFn()
-    await wheelRef.value?.spinTo(r.index)
     pendingResult.value = r
+    await wheelRef.value?.spinTo(r.index)
   } catch (e) {
     isSpinning.value = false
-    console.error('draw failed', e)
+    errorMessage.value = extractErrorMessage(e)
   }
 }
 
@@ -219,15 +222,14 @@ function onBackdrop() {
   emit('close')
 }
 
-async function copyCode() {
-  if (!result.value?.code) return
-  try {
-    await navigator.clipboard.writeText(result.value.code)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 1600)
-  } catch (e) {
-    console.warn('clipboard failed', e)
+function extractErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const message = (error as { message?: string; error?: string }).message
+      ?? (error as { message?: string; error?: string }).error
+    if (message) return message
   }
+  if (error instanceof Error && error.message) return error.message
+  return '抽奖失败，请稍后再试。'
 }
 
 watch(
@@ -236,7 +238,7 @@ watch(
     if (v) {
       result.value = null
       pendingResult.value = null
-      copied.value = false
+      errorMessage.value = ''
     }
   }
 )
