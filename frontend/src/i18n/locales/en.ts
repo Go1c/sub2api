@@ -4298,7 +4298,8 @@ export default {
         previewTitle: 'Lottery Preview',
         previewSubtitle: 'Admin preview — no participant impact',
         saved: '✓ Published. Switch to "History" to verify.',
-        invalid: 'Please check required fields and code count.'
+        invalid: 'Please check required fields and code count.',
+        failed: 'Failed to create lottery campaign.'
       },
       history: {
         title: 'Campaign History',
@@ -4306,11 +4307,17 @@ export default {
         empty: 'No campaigns yet. Create one to get started.',
         joined: 'joined',
         won: 'won',
+        finish: 'Finish',
         details: 'Details',
         winnersList: 'Winners',
         unclaimedCodes: 'Unclaimed Codes',
         noWinnersYet: 'No winners yet.',
-        allClaimed: 'All codes have been claimed.'
+        allClaimed: 'All codes have been claimed.',
+        userPrefix: 'User ID {id}',
+        userWithEmail: 'User ID {id} · {email}',
+        failedToLoad: 'Failed to load lottery campaigns.',
+        failedToLoadDetail: 'Failed to load lottery campaign details.',
+        failedToFinish: 'Failed to finish the lottery campaign.'
       }
     },
 

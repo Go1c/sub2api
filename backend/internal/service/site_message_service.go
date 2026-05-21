@@ -85,6 +85,19 @@ func (s *SiteMessageService) AdminSendToUser(ctx context.Context, input AdminSen
 	return message, nil
 }
 
+func (s *SiteMessageService) SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code string) (*SiteMessage, error) {
+	if _, err := s.enabledSettings(ctx); err != nil {
+		return nil, err
+	}
+	campaignName = strings.TrimSpace(campaignName)
+	if campaignName == "" {
+		campaignName = "抽奖活动"
+	}
+	subject := fmt.Sprintf("恭喜中奖：%s", campaignName)
+	content := fmt.Sprintf("你在「%s」中中奖。\n\n兑换码：%s\n\n请复制该兑换码前往兑换页面使用。", campaignName, strings.TrimSpace(code))
+	return s.create(ctx, senderID, recipientID, nil, subject, content)
+}
+
 func (s *SiteMessageService) Reply(ctx context.Context, senderID, parentID int64, content string) (*SiteMessage, error) {
 	settings, err := s.enabledSettings(ctx)
 	if err != nil {
