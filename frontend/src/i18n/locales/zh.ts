@@ -4454,7 +4454,8 @@ export default {
         previewTitle: '抽奖预览',
         previewSubtitle: '管理员预览，不影响真实数据',
         saved: '✓ 已发布，可切换到「历史抽奖记录」查看',
-        invalid: '请检查必填项和兑换码数量'
+        invalid: '请检查必填项和兑换码数量',
+        failed: '创建抽奖活动失败'
       },
       history: {
         title: '历史抽奖记录',
@@ -4462,11 +4463,17 @@ export default {
         empty: '暂无抽奖活动，先去「新建抽奖」创建一个吧。',
         joined: '参与',
         won: '中奖',
+        finish: '结束活动',
         details: '详情',
         winnersList: '中奖名单',
         unclaimedCodes: '未派发兑换码',
         noWinnersYet: '尚无中奖',
-        allClaimed: '兑换码已全部派发'
+        allClaimed: '兑换码已全部派发',
+        userPrefix: '用户ID {id}',
+        userWithEmail: '用户ID {id} · {email}',
+        failedToLoad: '加载抽奖活动失败',
+        failedToLoadDetail: '加载抽奖详情失败',
+        failedToFinish: '结束抽奖活动失败'
       }
     },
 

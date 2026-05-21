@@ -4454,7 +4454,8 @@ export default {
         previewTitle: '抽獎預覽',
         previewSubtitle: '管理員預覽，不影響真實資料',
         saved: '✓ 已發布，可切換到「歷史抽獎記錄」查看',
-        invalid: '請檢查必填項與兌換碼數量'
+        invalid: '請檢查必填項與兌換碼數量',
+        failed: '建立抽獎活動失敗'
       },
       history: {
         title: '歷史抽獎記錄',
@@ -4462,11 +4463,17 @@ export default {
         empty: '尚無抽獎活動，先去「新建抽獎」建立一個吧。',
         joined: '參與',
         won: '中獎',
+        finish: '結束活動',
         details: '詳情',
         winnersList: '中獎名單',
         unclaimedCodes: '未派發兌換碼',
         noWinnersYet: '尚無中獎',
-        allClaimed: '兌換碼已全部派發'
+        allClaimed: '兌換碼已全部派發',
+        userPrefix: '用戶ID {id}',
+        userWithEmail: '用戶ID {id} · {email}',
+        failedToLoad: '加載抽獎活動失敗',
+        failedToLoadDetail: '加載抽獎詳情失敗',
+        failedToFinish: '結束抽獎活動失敗'
       }
     },
 
