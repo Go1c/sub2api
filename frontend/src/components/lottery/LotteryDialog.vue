@@ -8,7 +8,7 @@
     >
       <div
         v-if="open"
-        class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
+        class="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-black/70 p-3 py-4 backdrop-blur-md sm:items-center sm:p-4"
         @click.self="onBackdrop"
       >
         <transition
@@ -19,7 +19,7 @@
         >
           <div
             v-if="open"
-            class="relative w-[min(92vw,460px)] overflow-hidden rounded-3xl bg-[#0a0a14] shadow-[0_30px_90px_-12px_rgba(139,92,246,0.5)] ring-1 ring-white/10"
+            class="relative max-h-[calc(100dvh-2rem)] w-[min(92vw,460px)] overflow-y-auto overflow-x-hidden rounded-3xl bg-[#0a0a14] shadow-[0_30px_90px_-12px_rgba(139,92,246,0.5)] ring-1 ring-white/10"
           >
             <!-- Gradient halo top -->
             <div class="pointer-events-none absolute -top-32 left-1/2 -z-0 h-72 w-[120%] -translate-x-1/2 rounded-full bg-gradient-to-br from-blue-500/25 via-violet-500/25 to-fuchsia-500/20 blur-3xl"></div>
@@ -37,7 +37,7 @@
               </svg>
             </button>
 
-            <div class="relative px-6 pb-6 pt-8">
+            <div class="relative px-4 pb-5 pt-7 sm:px-6 sm:pb-6 sm:pt-8">
               <!-- Header -->
               <div class="text-center">
                 <div class="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-white/10">
@@ -79,7 +79,7 @@
                 <LotteryWheel
                   ref="wheelRef"
                   :segments="segments"
-                  :size="280"
+                  :size="wheelSize"
                   :disabled="!canSpin"
                   @start="onStart"
                   @spin-end="onSpinEnd"
@@ -152,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LotteryWheel, { type WheelSegment } from './LotteryWheel.vue'
 
 export interface DrawResult {
@@ -190,9 +190,29 @@ const isSpinning = ref(false)
 const result = ref<DrawResult | null>(null)
 const pendingResult = ref<DrawResult | null>(null)
 const errorMessage = ref('')
+const viewportWidth = ref(getViewportWidth())
 
 const remaining = computed(() => Math.max(0, props.maxParticipants - props.joined))
 const canSpin = computed(() => props.joined < props.maxParticipants && !result.value)
+const wheelSize = computed(() => Math.min(280, Math.max(180, viewportWidth.value - 96)))
+
+function updateViewportWidth() {
+  viewportWidth.value = getViewportWidth()
+}
+
+function getViewportWidth(): number {
+  if (typeof window === 'undefined') return 460
+  return window.innerWidth
+}
+
+onMounted(() => {
+  updateViewportWidth()
+  window.addEventListener('resize', updateViewportWidth)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateViewportWidth)
+})
 
 async function onStart() {
   if (!canSpin.value || isSpinning.value) return

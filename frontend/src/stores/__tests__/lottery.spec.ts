@@ -103,7 +103,7 @@ describe('useLotteryStore', () => {
     expect(store.activeCampaign).toEqual(activeCampaign)
   })
 
-  it('stores the draw result and clears the active campaign after drawing', async () => {
+  it('stores the draw result and keeps the active campaign until the dialog is dismissed', async () => {
     const store = useLotteryStore()
     const drawResult: LotteryDrawResult = {
       won: true,
@@ -121,7 +121,7 @@ describe('useLotteryStore', () => {
     expect(lotteryAPI.draw).toHaveBeenCalledWith(activeCampaign.id)
     expect(result).toEqual(drawResult)
     expect(store.lastResult).toEqual(drawResult)
-    expect(store.activeCampaign).toBeNull()
+    expect(store.activeCampaign).toEqual(activeCampaign)
   })
 
   it('creates a campaign through the admin API and reloads campaign history', async () => {

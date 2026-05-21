@@ -69,7 +69,6 @@ export const useLotteryStore = defineStore('lottery', () => {
     try {
       const result = await lotteryAPI.draw(campaignId)
       lastResult.value = result
-      activeCampaign.value = null
       return result
     } catch (error) {
       const code = String(

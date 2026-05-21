@@ -10,6 +10,10 @@ const LotteryWheelStub = defineComponent({
       type: Boolean,
       default: false,
     },
+    size: {
+      type: Number,
+      default: 320,
+    },
   },
   emits: ['start', 'spin-end'],
   setup(props, { emit, expose }) {
@@ -26,6 +30,7 @@ const LotteryWheelStub = defineComponent({
         'button',
         {
           'data-test': 'spin-button',
+          'data-size': props.size,
           disabled: props.disabled,
           onClick: () => emit('start'),
         },
@@ -65,6 +70,11 @@ describe('LotteryDialog', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1024,
+    })
   })
 
   it('shows a site-message claim tip after winning', async () => {
@@ -106,5 +116,23 @@ describe('LotteryDialog', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('SECRET-CODE')
+  })
+
+  it('uses a smaller wheel on narrow mobile screens', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 320,
+    })
+
+    const wrapper = mountDialog(() =>
+      Promise.resolve({
+        won: false,
+        index: 1,
+        label: '谢谢参与',
+        message: '很遗憾，这次没有中奖。',
+      }),
+    )
+
+    expect(Number(wrapper.get('[data-test="spin-button"]').attributes('data-size'))).toBeLessThan(280)
   })
 })

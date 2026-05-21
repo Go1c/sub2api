@@ -25,8 +25,17 @@ const LotteryDialogStub = defineComponent({
       type: String,
       default: '',
     },
+    drawFn: {
+      type: Function,
+      required: true,
+    },
   },
-  template: '<div v-if="open" data-test="lottery-dialog">{{ campaignTitle }}</div>',
+  template: `
+    <div v-if="open" data-test="lottery-dialog">
+      {{ campaignTitle }}
+      <button data-test="draw" @click="drawFn()">draw</button>
+    </div>
+  `,
 })
 
 const activeCampaign: LotteryActiveCampaign = {
@@ -111,5 +120,34 @@ describe('LotteryPromptManager', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(false)
+  })
+
+  it('keeps the dialog open after draw resolves so the result can be shown', async () => {
+    vi.mocked(lotteryAPI.getActive).mockResolvedValue({ campaign: activeCampaign })
+    vi.mocked(lotteryAPI.draw).mockResolvedValue({
+      won: false,
+      index: 1,
+      label: '谢谢参与',
+      message: '很遗憾，这次没有中奖。',
+    })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+
+    const wrapper = mount(LotteryPromptManager, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          LotteryDialog: LotteryDialogStub,
+        },
+      },
+    })
+
+    loginUser()
+    await flushPromises()
+    await wrapper.get('[data-test="draw"]').trigger('click')
+    await flushPromises()
+
+    expect(lotteryAPI.draw).toHaveBeenCalledWith(activeCampaign.id)
+    expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(true)
   })
 })
