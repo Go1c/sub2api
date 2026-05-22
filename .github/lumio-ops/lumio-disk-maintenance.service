@@ -1,0 +1,13 @@
+[Unit]
+Description=Lumio production disk maintenance
+Wants=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/lumio/bin/disk-maintenance.sh scheduled
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+CPUWeight=20
+IOWeight=50
