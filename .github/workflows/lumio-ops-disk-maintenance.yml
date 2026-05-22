@@ -65,15 +65,16 @@ jobs:
         run: |
           ssh "${PROD_USER:-deploy}@${PROD_HOST}" "RUN_CLEANUP='${RUN_CLEANUP}' bash -s" <<'REMOTE'
           set -euo pipefail
+          RUN_CLEANUP="${RUN_CLEANUP:-true}"
 
-          sudo install -m 0755 /tmp/backup.sh /opt/lumio/bin/backup.sh
-          sudo install -m 0755 /tmp/disk-maintenance.sh /opt/lumio/bin/disk-maintenance.sh
-          sudo install -m 0644 /tmp/lumio-disk-maintenance.service /etc/systemd/system/lumio-disk-maintenance.service
-          sudo install -m 0644 /tmp/lumio-disk-maintenance.timer /etc/systemd/system/lumio-disk-maintenance.timer
-
-          sudo bash -lc '
+          configure_backup_env='
           set -euo pipefail
-          env_file=/data/lumio/backup.env
+          env_file="${1}"
+
+          if [[ ! -f "${env_file}" ]]; then
+            echo "Missing backup env: ${env_file}" >&2
+            exit 1
+          fi
 
           set_env_value() {
             local key="$1"
@@ -96,15 +97,50 @@ jobs:
           set_env_value BACKUP_MIN_FREE_MB 8192
           '
 
-          sudo systemctl daemon-reload
-          sudo systemctl enable --now lumio-disk-maintenance.timer
+          if sudo -n true 2>/dev/null; then
+            sudo install -m 0755 /tmp/backup.sh /opt/lumio/bin/backup.sh
+            sudo install -m 0755 /tmp/disk-maintenance.sh /opt/lumio/bin/disk-maintenance.sh
+            sudo install -m 0644 /tmp/lumio-disk-maintenance.service /etc/systemd/system/lumio-disk-maintenance.service
+            sudo install -m 0644 /tmp/lumio-disk-maintenance.timer /etc/systemd/system/lumio-disk-maintenance.timer
+            sudo bash -lc "${configure_backup_env}" bash /data/lumio/backup.env
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now lumio-disk-maintenance.timer
 
-          if [[ "${RUN_CLEANUP}" == "true" ]]; then
-            sudo /opt/lumio/bin/disk-maintenance.sh manual
+            if [[ "${RUN_CLEANUP}" == "true" ]]; then
+              sudo /opt/lumio/bin/disk-maintenance.sh manual
+            else
+              sudo /opt/lumio/bin/backup.sh prune
+            fi
           else
-            sudo /opt/lumio/bin/backup.sh prune
+            docker run --rm \
+              -v /:/host \
+              -v /tmp:/ops:ro \
+              caddy:2.8-alpine \
+              sh -lc '
+                set -euo pipefail
+                install -m 0755 /ops/backup.sh /host/opt/lumio/bin/backup.sh
+                install -m 0755 /ops/disk-maintenance.sh /host/opt/lumio/bin/disk-maintenance.sh
+                install -m 0644 /ops/lumio-disk-maintenance.service /host/etc/systemd/system/lumio-disk-maintenance.service
+                install -m 0644 /ops/lumio-disk-maintenance.timer /host/etc/systemd/system/lumio-disk-maintenance.timer
+              '
+
+            docker run --rm \
+              -v /:/host \
+              caddy:2.8-alpine \
+              chroot /host /bin/bash -lc "${configure_backup_env}" bash /data/lumio/backup.env
+
+            docker run --rm \
+              -v /:/host \
+              caddy:2.8-alpine \
+              chroot /host /bin/bash -lc "systemctl daemon-reload && systemctl enable --now lumio-disk-maintenance.timer" || true
+
+            if [[ "${RUN_CLEANUP}" == "true" ]]; then
+              docker run --rm -v /:/host caddy:2.8-alpine chroot /host /opt/lumio/bin/disk-maintenance.sh manual
+            else
+              docker run --rm -v /:/host caddy:2.8-alpine chroot /host /opt/lumio/bin/backup.sh prune
+            fi
           fi
 
-          sudo systemctl list-timers --all 'lumio-*' --no-pager
+          systemctl list-timers --all 'lumio-*' --no-pager || true
           df -h /data
           REMOTE
