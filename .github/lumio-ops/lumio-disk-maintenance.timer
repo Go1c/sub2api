@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Lumio disk maintenance hourly
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=20m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

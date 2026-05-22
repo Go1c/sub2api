@@ -1,0 +1,110 @@
+name: Lumio Ops Disk Maintenance
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - .github/lumio-ops/**
+      - .github/workflows/lumio-ops-disk-maintenance.yml
+  workflow_dispatch:
+    inputs:
+      run_cleanup:
+        description: Run one safe disk-maintenance pass after installing scripts
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  install-and-prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: lumio-ops-disk-maintenance
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        env:
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_SSH_KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$PROD_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [ -n "$PROD_SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$PROD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "$PROD_HOST" > ~/.ssh/known_hosts
+          fi
+
+      - name: Upload ops scripts
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          scp .github/lumio-ops/backup.sh \
+            .github/lumio-ops/disk-maintenance.sh \
+            .github/lumio-ops/lumio-disk-maintenance.service \
+            .github/lumio-ops/lumio-disk-maintenance.timer \
+            "${PROD_USER:-deploy}@${PROD_HOST}:/tmp/"
+
+      - name: Install and run safe cleanup
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          RUN_CLEANUP: ${{ inputs.run_cleanup }}
+        run: |
+          ssh "${PROD_USER:-deploy}@${PROD_HOST}" "RUN_CLEANUP='${RUN_CLEANUP}' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          sudo install -m 0755 /tmp/backup.sh /opt/lumio/bin/backup.sh
+          sudo install -m 0755 /tmp/disk-maintenance.sh /opt/lumio/bin/disk-maintenance.sh
+          sudo install -m 0644 /tmp/lumio-disk-maintenance.service /etc/systemd/system/lumio-disk-maintenance.service
+          sudo install -m 0644 /tmp/lumio-disk-maintenance.timer /etc/systemd/system/lumio-disk-maintenance.timer
+
+          sudo bash -lc '
+          set -euo pipefail
+          env_file=/data/lumio/backup.env
+
+          set_env_value() {
+            local key="$1"
+            local value="$2"
+            if grep -q "^${key}=" "${env_file}"; then
+              sed -i "s|^${key}=.*|${key}=${value}|" "${env_file}"
+            else
+              printf "%s=%s\n" "${key}" "${value}" >>"${env_file}"
+            fi
+          }
+
+          set_env_value RESTIC_KEEP_HOURLY 6
+          set_env_value RESTIC_KEEP_DAILY 3
+          set_env_value RESTIC_KEEP_WEEKLY ""
+          set_env_value RESTIC_KEEP_MONTHLY ""
+          set_env_value RESTIC_PRUNE always
+          set_env_value RESTIC_PRUNE_INTERVAL_HOURS 0
+          set_env_value STAGING_KEEP_DAYS 1
+          set_env_value STAGING_KEEP_COUNT 1
+          set_env_value BACKUP_MIN_FREE_MB 8192
+          '
+
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now lumio-disk-maintenance.timer
+
+          if [[ "${RUN_CLEANUP}" == "true" ]]; then
+            sudo /opt/lumio/bin/disk-maintenance.sh manual
+          else
+            sudo /opt/lumio/bin/backup.sh prune
+          fi
+
+          sudo systemctl list-timers --all 'lumio-*' --no-pager
+          df -h /data
+          REMOTE
