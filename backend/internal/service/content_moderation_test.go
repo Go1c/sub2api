@@ -321,6 +321,173 @@ func TestContentModerationConfigNormalize_NonHitRetentionMaxThreeDays(t *testing
 	require.Equal(t, 3, cfg.NonHitRetentionDays)
 }
 
+func TestNormalizeContentModerationModelFilter_TrimsDedupesAndDefaults(t *testing.T) {
+	filter := normalizeContentModerationModelFilter(ContentModerationModelFilter{
+		Type:   "include",
+		Models: []string{"  gpt-5.5 ", "GPT-5.5", "", "gpt-5.4"},
+	})
+
+	require.Equal(t, ContentModerationModelFilterInclude, filter.Type)
+	require.Equal(t, []string{"gpt-5.5", "gpt-5.4"}, filter.Models)
+
+	filter = normalizeContentModerationModelFilter(ContentModerationModelFilter{
+		Type:   "bogus",
+		Models: []string{"gpt-5.5"},
+	})
+
+	require.Equal(t, ContentModerationModelFilterAll, filter.Type)
+	require.Empty(t, filter.Models)
+}
+
+func TestContentModerationCheck_ModelFilterIncludeOnlyAuditsListedModels(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		_ = json.NewEncoder(w).Encode(moderationAPIResponse{
+			Results: []moderationAPIResult{{
+				CategoryScores: map[string]float64{"sexual": 0.9},
+			}},
+		})
+	}))
+	defer server.Close()
+
+	cfg := defaultContentModerationModelFilterTestConfig(server.URL)
+	cfg.ModelFilter = ContentModerationModelFilter{Type: ContentModerationModelFilterInclude, Models: []string{"gpt-5.5"}}
+	svc, repo := newContentModerationModelFilterTestService(t, cfg)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Model:    "gpt-5.5",
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"blocked prompt"}]}`),
+	})
+	require.NoError(t, err)
+	require.True(t, decision.Blocked)
+	require.Equal(t, ContentModerationActionBlock, decision.Action)
+
+	decision, err = svc.Check(context.Background(), ContentModerationCheckInput{
+		Model:    "gpt-5.4",
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"blocked prompt"}]}`),
+	})
+	require.NoError(t, err)
+	require.True(t, decision.Allowed)
+	require.False(t, decision.Blocked)
+	require.Equal(t, ContentModerationActionAllow, decision.Action)
+	require.Equal(t, 1, requestCount)
+	require.Len(t, repo.logs, 1)
+	require.Equal(t, "gpt-5.5", repo.logs[0].Model)
+}
+
+func TestContentModerationCheck_ModelFilterExcludeSkipsListedModels(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		_ = json.NewEncoder(w).Encode(moderationAPIResponse{
+			Results: []moderationAPIResult{{
+				CategoryScores: map[string]float64{"sexual": 0.9},
+			}},
+		})
+	}))
+	defer server.Close()
+
+	cfg := defaultContentModerationModelFilterTestConfig(server.URL)
+	cfg.ModelFilter = ContentModerationModelFilter{Type: ContentModerationModelFilterExclude, Models: []string{"gpt-5.4"}}
+	svc, repo := newContentModerationModelFilterTestService(t, cfg)
+
+	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{
+		Model:    "gpt-5.5",
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"blocked prompt"}]}`),
+	})
+	require.NoError(t, err)
+	require.True(t, decision.Blocked)
+	require.Equal(t, ContentModerationActionBlock, decision.Action)
+
+	decision, err = svc.Check(context.Background(), ContentModerationCheckInput{
+		Model:    "gpt-5.4",
+		Protocol: ContentModerationProtocolOpenAIChat,
+		Body:     []byte(`{"messages":[{"role":"user","content":"blocked prompt"}]}`),
+	})
+	require.NoError(t, err)
+	require.True(t, decision.Allowed)
+	require.False(t, decision.Blocked)
+	require.Equal(t, ContentModerationActionAllow, decision.Action)
+	require.Equal(t, 1, requestCount)
+	require.Len(t, repo.logs, 1)
+	require.Equal(t, "gpt-5.5", repo.logs[0].Model)
+}
+
+func TestContentModerationLoadConfig_LegacyConfigDefaultsModelFilterToAll(t *testing.T) {
+	raw := `{"enabled":true,"mode":"pre_block","base_url":"https://api.openai.com","model":"omni-moderation-latest"}`
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyContentModerationConfig: raw,
+		}},
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+
+	cfg, err := svc.loadConfig(context.Background())
+
+	require.NoError(t, err)
+	require.Equal(t, ContentModerationModelFilterAll, cfg.ModelFilter.Type)
+	require.Empty(t, cfg.ModelFilter.Models)
+	require.True(t, cfg.includesModel("gpt-5.5"))
+	require.True(t, cfg.includesModel("gpt-5.4"))
+}
+
+func TestContentModerationUpdateConfig_RejectsEmptySpecificModelFilter(t *testing.T) {
+	cfg := defaultContentModerationConfig()
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	repo := &contentModerationTestSettingRepo{values: map[string]string{
+		SettingKeyContentModerationConfig: string(rawCfg),
+	}}
+	svc := NewContentModerationService(repo, nil, nil, nil, nil, nil, nil)
+	filter := ContentModerationModelFilter{Type: ContentModerationModelFilterInclude}
+
+	_, err = svc.UpdateConfig(context.Background(), UpdateContentModerationConfigInput{
+		ModelFilter: &filter,
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "INVALID_CONTENT_MODERATION_MODEL_FILTER")
+}
+
+func defaultContentModerationModelFilterTestConfig(baseURL string) *ContentModerationConfig {
+	cfg := defaultContentModerationConfig()
+	cfg.Enabled = true
+	cfg.Mode = ContentModerationModePreBlock
+	cfg.BaseURL = baseURL
+	cfg.APIKeys = []string{"sk-test"}
+	return cfg
+}
+
+func newContentModerationModelFilterTestService(t *testing.T, cfg *ContentModerationConfig) (*ContentModerationService, *contentModerationTestRepo) {
+	t.Helper()
+	rawCfg, err := json.Marshal(cfg)
+	require.NoError(t, err)
+	repo := &contentModerationTestRepo{}
+	svc := NewContentModerationService(
+		&contentModerationTestSettingRepo{values: map[string]string{
+			SettingKeyRiskControlEnabled:      "true",
+			SettingKeyContentModerationConfig: string(rawCfg),
+		}},
+		repo,
+		&contentModerationTestHashCache{},
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+	return svc, repo
+}
+
 func TestContentModerationUpdateConfig_AppendsAndDeletesAPIKeys(t *testing.T) {
 	cfg := defaultContentModerationConfig()
 	cfg.APIKeys = []string{"sk-old-a", "sk-old-b"}
