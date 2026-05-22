@@ -52,7 +52,7 @@ const (
 	defaultContentModerationTimeoutMS = 3000
 	maxContentModerationTimeoutMS     = 30000
 	maxModerationInputRunes           = 12000
-	maxModerationExcerptRunes         = 240
+	maxModerationExcerptRunes         = 1200
 
 	defaultContentModerationWorkerCount          = 4
 	maxContentModerationWorkerCount              = 32
@@ -136,6 +136,7 @@ type ContentModerationConfig struct {
 	GroupIDs             []int64                      `json:"group_ids"`
 	RecordNonHits        bool                         `json:"record_non_hits"`
 	Thresholds           map[string]float64           `json:"thresholds"`
+	ScoreThreshold       float64                      `json:"score_threshold"`
 	WorkerCount          int                          `json:"worker_count"`
 	QueueSize            int                          `json:"queue_size"`
 	BlockStatus          int                          `json:"block_status"`
@@ -166,6 +167,7 @@ type ContentModerationConfigView struct {
 	AllGroups            bool                            `json:"all_groups"`
 	GroupIDs             []int64                         `json:"group_ids"`
 	RecordNonHits        bool                            `json:"record_non_hits"`
+	ScoreThreshold       float64                         `json:"score_threshold"`
 	WorkerCount          int                             `json:"worker_count"`
 	QueueSize            int                             `json:"queue_size"`
 	BlockStatus          int                             `json:"block_status"`
@@ -236,6 +238,7 @@ type UpdateContentModerationConfigInput struct {
 	AllGroups            *bool                         `json:"all_groups"`
 	GroupIDs             *[]int64                      `json:"group_ids"`
 	RecordNonHits        *bool                         `json:"record_non_hits"`
+	ScoreThreshold       *float64                      `json:"score_threshold"`
 	WorkerCount          *int                          `json:"worker_count"`
 	QueueSize            *int                          `json:"queue_size"`
 	BlockStatus          *int                          `json:"block_status"`
@@ -586,6 +589,9 @@ func (s *ContentModerationService) UpdateConfig(ctx context.Context, input Updat
 	if input.RecordNonHits != nil {
 		cfg.RecordNonHits = *input.RecordNonHits
 	}
+	if input.ScoreThreshold != nil {
+		cfg.ScoreThreshold = *input.ScoreThreshold
+	}
 	if input.ClearAPIKey {
 		cfg.APIKey = ""
 		cfg.APIKeys = []string{}
@@ -674,7 +680,7 @@ func (s *ContentModerationService) TestAPIKeys(ctx context.Context, input TestCo
 		} else {
 			s.markAPIKeySuccess(key, latency, httpStatus)
 			if auditResult == nil {
-				auditResult = buildContentModerationTestAuditResult(result, cfg.Thresholds)
+				auditResult = buildContentModerationTestAuditResult(result, cfg.effectiveThresholds())
 			}
 		}
 		status := s.apiKeyStatusForHash(idx, keyHash, maskSecretTail(key), configured)
@@ -891,7 +897,7 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 		return allow
 	}
 
-	flagged, highestCategory, highestScore := evaluateModerationScores(result.CategoryScores, cfg.Thresholds)
+	flagged, highestCategory, highestScore := evaluateModerationScores(result.CategoryScores, cfg.effectiveThresholds())
 	action := ContentModerationActionAllow
 	blocked := false
 	if allowBlock && flagged && cfg.Mode == ContentModerationModePreBlock {
@@ -1380,7 +1386,7 @@ func (s *ContentModerationService) buildLog(input ContentModerationCheckInput, c
 		HighestCategory:   highestCategory,
 		HighestScore:      highestScore,
 		CategoryScores:    cloneFloatMap(scores),
-		ThresholdSnapshot: cloneFloatMap(cfg.Thresholds),
+		ThresholdSnapshot: cloneFloatMap(cfg.effectiveThresholds()),
 		InputExcerpt:      trimRunes(redactContentModerationSecrets(text), maxModerationExcerptRunes),
 		UpstreamLatencyMS: latency,
 		QueueDelayMS:      queueDelay,
@@ -1479,6 +1485,7 @@ func defaultContentModerationConfig() *ContentModerationConfig {
 		GroupIDs:             []int64{},
 		RecordNonHits:        false,
 		Thresholds:           ContentModerationDefaultThresholds(),
+		ScoreThreshold:       0,
 		WorkerCount:          defaultContentModerationWorkerCount,
 		QueueSize:            defaultContentModerationQueueSize,
 		BlockStatus:          defaultContentModerationBlockHTTPStatus,
@@ -1572,8 +1579,19 @@ func (cfg *ContentModerationConfig) normalize() {
 		cfg.NonHitRetentionDays = maxContentModerationNonHitRetentionDays
 	}
 	cfg.GroupIDs = normalizeInt64IDs(cfg.GroupIDs)
+	cfg.ScoreThreshold = normalizeContentModerationScoreThreshold(cfg.ScoreThreshold)
 	cfg.Thresholds = mergeContentModerationThresholds(ContentModerationDefaultThresholds(), cfg.Thresholds)
 	cfg.ModelFilter = normalizeContentModerationModelFilter(cfg.ModelFilter)
+}
+
+func (cfg *ContentModerationConfig) effectiveThresholds() map[string]float64 {
+	if cfg == nil {
+		return ContentModerationDefaultThresholds()
+	}
+	if cfg.ScoreThreshold > 0 {
+		return contentModerationUniformThresholds(cfg.ScoreThreshold)
+	}
+	return mergeContentModerationThresholds(ContentModerationDefaultThresholds(), cfg.Thresholds)
 }
 
 func (cfg *ContentModerationConfig) includesGroup(groupID *int64) bool {
@@ -1753,6 +1771,7 @@ func (s *ContentModerationService) configView(cfg *ContentModerationConfig) *Con
 		AllGroups:            cfg.AllGroups,
 		GroupIDs:             append([]int64(nil), cfg.GroupIDs...),
 		RecordNonHits:        cfg.RecordNonHits,
+		ScoreThreshold:       cfg.ScoreThreshold,
 		WorkerCount:          cfg.WorkerCount,
 		QueueSize:            cfg.QueueSize,
 		BlockStatus:          cfg.BlockStatus,
@@ -1981,6 +2000,25 @@ func mergeContentModerationThresholds(base map[string]float64, override map[stri
 			}
 			out[category] = v
 		}
+	}
+	return out
+}
+
+func normalizeContentModerationScoreThreshold(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	if value > 1 {
+		return 1
+	}
+	return value
+}
+
+func contentModerationUniformThresholds(value float64) map[string]float64 {
+	threshold := normalizeContentModerationScoreThreshold(value)
+	out := make(map[string]float64, len(contentModerationCategoryOrder))
+	for _, category := range contentModerationCategoryOrder {
+		out[category] = threshold
 	}
 	return out
 }
