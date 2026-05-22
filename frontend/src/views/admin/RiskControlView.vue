@@ -323,6 +323,23 @@
                   <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
                 </div>
               </div>
+              <div>
+                <label class="input-label">{{ t('admin.riskControl.scoreThreshold') }}</label>
+                <div class="relative">
+                  <input
+                    v-model.number="configForm.score_threshold_percent"
+                    data-test="score-threshold-input"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    class="input pr-8"
+                    :placeholder="t('admin.riskControl.scoreThresholdPlaceholder')"
+                  />
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                </div>
+                <p class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.scoreThresholdHint') }}</p>
+              </div>
             </div>
 
             <div class="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-800">
@@ -974,6 +991,7 @@ const configForm = reactive({
   timeout_ms: 3000,
   retry_count: 2,
   sample_rate: 100,
+  score_threshold_percent: '' as number | '',
   all_groups: true,
   group_ids: [] as number[],
   record_non_hits: false,
@@ -1286,6 +1304,7 @@ function applyConfig(config: ContentModerationConfig) {
   configForm.timeout_ms = config.timeout_ms || 3000
   configForm.retry_count = config.retry_count ?? 2
   configForm.sample_rate = config.sample_rate ?? 100
+  configForm.score_threshold_percent = formatScoreThresholdPercent(config.score_threshold)
   configForm.all_groups = config.all_groups
   configForm.group_ids = Array.isArray(config.group_ids) ? [...config.group_ids] : []
   configForm.record_non_hits = config.record_non_hits
@@ -1362,6 +1381,7 @@ async function saveConfig() {
       timeout_ms: Number(configForm.timeout_ms) || 3000,
       retry_count: Number(configForm.retry_count) || 0,
       sample_rate: Number(configForm.sample_rate) || 0,
+      score_threshold: normalizeScoreThresholdPayload(configForm.score_threshold_percent),
       all_groups: configForm.all_groups,
       group_ids: configForm.all_groups ? [] : [...configForm.group_ids],
       record_non_hits: configForm.record_non_hits,
@@ -1721,6 +1741,17 @@ function percent(value: number): string {
 function percentWidth(value: number): string {
   if (!Number.isFinite(value)) return '0%'
   return `${Math.min(100, Math.max(0, value * 100)).toFixed(1)}%`
+}
+
+function formatScoreThresholdPercent(value: number): number | '' {
+  if (!Number.isFinite(value) || value <= 0) return ''
+  return Math.round(Math.min(1, Math.max(0, value)) * 1000) / 10
+}
+
+function normalizeScoreThresholdPayload(value: number | ''): number {
+  const numeric = typeof value === 'number' ? value : Number(String(value).trim())
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0
+  return Math.min(100, Math.max(0, numeric)) / 100
 }
 
 function latencyText(value: number | null): string {

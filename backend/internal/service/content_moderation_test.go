@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
@@ -298,6 +299,47 @@ func TestBuildContentModerationLog_RedactsInputExcerpt(t *testing.T) {
 
 	require.NotContains(t, log.InputExcerpt, "sk-proj-1234567890abcdef")
 	require.Contains(t, log.InputExcerpt, "[已脱敏]")
+}
+
+func TestBuildContentModerationLog_KeepsLongerInputExcerpt(t *testing.T) {
+	svc := &ContentModerationService{}
+	cfg := defaultContentModerationConfig()
+	input := ContentModerationCheckInput{
+		RequestID: "req-1",
+		Endpoint:  "/v1/images/generations",
+		Provider:  "openai",
+	}
+	text := strings.Repeat("long prompt content ", 100)
+
+	log := svc.buildLog(input, cfg, ContentModerationActionAllow, false, "sexual", 0.6, map[string]float64{"sexual": 0.6}, text, nil, nil, "")
+
+	require.GreaterOrEqual(t, utf8.RuneCountInString(log.InputExcerpt), 900)
+	require.LessOrEqual(t, utf8.RuneCountInString(log.InputExcerpt), maxModerationExcerptRunes)
+}
+
+func TestContentModerationConfigNormalize_GlobalScoreThresholdOverridesCategoryThresholds(t *testing.T) {
+	cfg := defaultContentModerationConfig()
+	require.NoError(t, json.Unmarshal([]byte(`{"score_threshold":0.6}`), cfg))
+
+	cfg.normalize()
+	flagged, highestCategory, highestScore := evaluateModerationScores(map[string]float64{"violence": 0.6}, cfg.effectiveThresholds())
+
+	require.True(t, flagged)
+	require.Equal(t, "violence", highestCategory)
+	require.Equal(t, 0.6, highestScore)
+	require.Equal(t, 0.95, cfg.Thresholds["violence"])
+}
+
+func TestContentModerationConfigNormalize_ClearingGlobalScoreThresholdRestoresCategoryThresholds(t *testing.T) {
+	cfg := defaultContentModerationConfig()
+	cfg.ScoreThreshold = 0.6
+	cfg.normalize()
+
+	cfg.ScoreThreshold = 0
+	cfg.normalize()
+	flagged, _, _ := evaluateModerationScores(map[string]float64{"violence": 0.6}, cfg.effectiveThresholds())
+
+	require.False(t, flagged)
 }
 
 func TestRedactContentModerationSecrets_LongHexAndTokens(t *testing.T) {
