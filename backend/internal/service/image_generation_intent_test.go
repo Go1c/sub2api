@@ -42,6 +42,20 @@ func TestIsImageGenerationIntent(t *testing.T) {
 			want:     true,
 		},
 		{
+			name:     "mcp image2 generate image tool",
+			endpoint: "/v1/responses",
+			model:    "gpt-5.5",
+			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"function","name":"mcp__gpt_image_2__generate_image","description":"generate images with configured gpt-image-2 API"}],"tool_choice":"auto"}`),
+			want:     true,
+		},
+		{
+			name:     "mcp image2 nested tool declaration",
+			endpoint: "/v1/responses",
+			model:    "gpt-5.5",
+			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"mcp","server_label":"gpt_image_2","tools":[{"name":"generate_image"}]}],"tool_choice":"auto"}`),
+			want:     true,
+		},
+		{
 			name:     "required tool choice alone is text",
 			endpoint: "/v1/responses",
 			model:    "gpt-5.4",
@@ -62,6 +76,22 @@ func TestIsImageGenerationIntent(t *testing.T) {
 			require.Equal(t, tt.want, IsImageGenerationIntent(tt.endpoint, tt.model, tt.body))
 		})
 	}
+}
+
+func TestIsImageGenerationIntentMapDetectsMCPImageTool(t *testing.T) {
+	body := map[string]any{
+		"model": "gpt-5.5",
+		"tools": []any{
+			map[string]any{
+				"type":        "function",
+				"name":        "mcp__gpt_image_2__generate_image",
+				"description": "generate images with configured gpt-image-2 API",
+			},
+		},
+		"tool_choice": "auto",
+	}
+
+	require.True(t, IsImageGenerationIntentMap("/v1/responses", "gpt-5.5", body))
 }
 
 func TestResolveOpenAIResponsesImageBillingConfigUsesCurrentBodyModel(t *testing.T) {

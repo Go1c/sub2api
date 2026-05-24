@@ -501,6 +501,93 @@ func TestOpenAISelectAccountForModelWithExclusions_StickyUnschedulableClearsSess
 	}
 }
 
+func TestOpenAISelectAccountWithLoadAwareness_RoutesByImageGenerationPolicy(t *testing.T) {
+	groupID := int64(1)
+	textOnly := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		Extra: map[string]any{
+			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingTextOnly,
+		},
+	}
+	imageOnly := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    10,
+		Extra: map[string]any{
+			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{textOnly, imageOnly}},
+		cfg:         &config.Config{},
+	}
+
+	textSelection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, "", "gpt-5.5", nil)
+	require.NoError(t, err)
+	require.NotNil(t, textSelection)
+	require.NotNil(t, textSelection.Account)
+	require.Equal(t, textOnly.ID, textSelection.Account.ID)
+
+	imageSelection, err := svc.SelectAccountWithLoadAwarenessForImageIntent(context.Background(), &groupID, "", "gpt-5.5", nil)
+	require.NoError(t, err)
+	require.NotNil(t, imageSelection)
+	require.NotNil(t, imageSelection.Account)
+	require.Equal(t, imageOnly.ID, imageSelection.Account.ID)
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_ImageIntentSkipsTextOnlySticky(t *testing.T) {
+	groupID := int64(1)
+	sessionHash := "image-session"
+	textOnly := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		Extra: map[string]any{
+			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingTextOnly,
+		},
+	}
+	imageOnly := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    10,
+		Extra: map[string]any{
+			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
+		},
+	}
+	cache := &stubGatewayCache{sessionBindings: map[string]int64{"openai:" + sessionHash: textOnly.ID}}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{textOnly, imageOnly}},
+		cache:       cache,
+		cfg:         &config.Config{},
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwarenessForImageIntent(context.Background(), &groupID, sessionHash, "gpt-5.5", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, imageOnly.ID, selection.Account.ID)
+	require.Equal(t, 1, cache.deletedSessions["openai:"+sessionHash])
+	require.Equal(t, imageOnly.ID, cache.sessionBindings["openai:"+sessionHash])
+}
+
 func TestOpenAISelectAccountWithLoadAwareness_StickyUnschedulableClearsSession(t *testing.T) {
 	sessionHash := "session-2"
 	groupID := int64(1)

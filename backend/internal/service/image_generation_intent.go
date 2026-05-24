@@ -95,9 +95,54 @@ func openAIJSONToolsContainImageGeneration(tools gjson.Result) bool {
 			found = true
 			return false
 		}
+		if openAIJSONToolContainsImageGenerationMCP(item) {
+			found = true
+			return false
+		}
 		return true
 	})
 	return found
+}
+
+func openAIJSONToolContainsImageGenerationMCP(tool gjson.Result) bool {
+	if !tool.Exists() || !tool.IsObject() {
+		return false
+	}
+	hasImageNamespace := false
+	hasGenerateImage := false
+	walkOpenAIJSONStrings(tool, func(value string) {
+		markOpenAIImageGenerationMCPString(value, &hasImageNamespace, &hasGenerateImage)
+	})
+	return hasImageNamespace && hasGenerateImage
+}
+
+func walkOpenAIJSONStrings(value gjson.Result, visit func(string)) {
+	if !value.Exists() {
+		return
+	}
+	switch {
+	case value.Type == gjson.String:
+		visit(value.String())
+	case value.IsArray() || value.IsObject():
+		value.ForEach(func(_, item gjson.Result) bool {
+			walkOpenAIJSONStrings(item, visit)
+			return true
+		})
+	}
+}
+
+func markOpenAIImageGenerationMCPString(value string, hasImageNamespace *bool, hasGenerateImage *bool) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return
+	}
+	normalized = strings.NewReplacer("-", "_", ".", "_", "/", "_").Replace(normalized)
+	if strings.Contains(normalized, "gpt_image") || strings.Contains(normalized, "image_2") || strings.Contains(normalized, "image2") {
+		*hasImageNamespace = true
+	}
+	if strings.Contains(normalized, "generate_image") || strings.Contains(normalized, "image_generation") {
+		*hasGenerateImage = true
+	}
 }
 
 func openAIJSONToolChoiceSelectsImageGeneration(choice gjson.Result) bool {
@@ -138,6 +183,39 @@ func openAIAnyToolChoiceSelectsImageGeneration(choice any) bool {
 		}
 	}
 	return false
+}
+
+func openAIAnyToolContainsImageGenerationCapability(tool any) bool {
+	if toolMap, ok := tool.(map[string]any); ok {
+		if strings.TrimSpace(firstNonEmptyString(toolMap["type"])) == "image_generation" {
+			return true
+		}
+	}
+	hasImageNamespace := false
+	hasGenerateImage := false
+	walkOpenAIAnyStrings(tool, func(value string) {
+		markOpenAIImageGenerationMCPString(value, &hasImageNamespace, &hasGenerateImage)
+	})
+	return hasImageNamespace && hasGenerateImage
+}
+
+func walkOpenAIAnyStrings(value any, visit func(string)) {
+	switch v := value.(type) {
+	case string:
+		visit(v)
+	case []any:
+		for _, item := range v {
+			walkOpenAIAnyStrings(item, visit)
+		}
+	case map[string]any:
+		for _, item := range v {
+			walkOpenAIAnyStrings(item, visit)
+		}
+	case map[string]string:
+		for _, item := range v {
+			visit(item)
+		}
+	}
 }
 
 func getAPIKeyFromContext(c interface{ Get(string) (any, bool) }) *APIKey {
