@@ -393,6 +393,77 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabled_Require
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 }
 
+func TestOpenAIGatewayService_SelectAccountWithScheduler_RoutesByImageGenerationPolicy(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	ctx := context.Background()
+	groupID := int64(10110)
+	accounts := []Account{
+		{
+			ID:          36031,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    0,
+			Extra: map[string]any{
+				openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingTextOnly,
+			},
+		},
+		{
+			ID:          36032,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    10,
+			Extra: map[string]any{
+				openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
+			},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                &config.Config{},
+		rateLimitService:   newOpenAIAdvancedSchedulerRateLimitService("true"),
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+	require.True(t, svc.isOpenAIAdvancedSchedulerEnabled(ctx))
+
+	textSelection, _, err := svc.SelectAccountWithScheduler(
+		ctx,
+		&groupID,
+		"",
+		"text_session",
+		"gpt-5.5",
+		nil,
+		OpenAIUpstreamTransportAny,
+		false,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, textSelection)
+	require.NotNil(t, textSelection.Account)
+	require.Equal(t, int64(36031), textSelection.Account.ID)
+
+	imageSelection, _, err := svc.SelectAccountWithSchedulerForImageIntent(
+		ctx,
+		&groupID,
+		"",
+		"image_session",
+		"gpt-5.5",
+		nil,
+		OpenAIUpstreamTransportAny,
+		false,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, imageSelection)
+	require.NotNil(t, imageSelection.Account)
+	require.Equal(t, int64(36032), imageSelection.Account.ID)
+}
+
 func TestOpenAIGatewayService_SelectAccountWithScheduler_EnabledUsesAdvancedPreviousResponseRouting(t *testing.T) {
 	resetOpenAIAdvancedSchedulerSettingCacheForTest()
 

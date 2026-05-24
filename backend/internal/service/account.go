@@ -73,6 +73,13 @@ type TempUnschedulableRule struct {
 	Description     string   `json:"description"`
 }
 
+const (
+	OpenAIImageGenerationRoutingMixed     = "mixed"
+	OpenAIImageGenerationRoutingTextOnly  = "text_only"
+	OpenAIImageGenerationRoutingImageOnly = "image_only"
+	openAIImageGenerationRoutingExtraKey  = "openai_image_generation_routing"
+)
+
 func (a *Account) IsActive() bool {
 	return a.Status == StatusActive
 }
@@ -1056,6 +1063,50 @@ func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapabilit
 	default:
 		return true
 	}
+}
+
+func normalizeOpenAIImageGenerationRoutingMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "default", "auto", "mixed", "both", "all":
+		return OpenAIImageGenerationRoutingMixed
+	case "text", "text_only", "text-only", "no_image", "no-image", "disabled", "off":
+		return OpenAIImageGenerationRoutingTextOnly
+	case "image", "image_only", "image-only", "images", "images_only", "images-only":
+		return OpenAIImageGenerationRoutingImageOnly
+	default:
+		return OpenAIImageGenerationRoutingMixed
+	}
+}
+
+// OpenAIImageGenerationRoutingMode returns the account-level routing policy for
+// generated-image requests. The value is stored in accounts.extra to avoid a DB
+// migration and defaults to mixed for backward compatibility.
+func (a *Account) OpenAIImageGenerationRoutingMode() string {
+	if a == nil || !a.IsOpenAI() {
+		return OpenAIImageGenerationRoutingMixed
+	}
+	if mode, ok := a.Extra[openAIImageGenerationRoutingExtraKey].(string); ok {
+		return normalizeOpenAIImageGenerationRoutingMode(mode)
+	}
+	if enabled, ok := a.Extra["openai_image_generation_enabled"].(bool); ok && !enabled {
+		return OpenAIImageGenerationRoutingTextOnly
+	}
+	openaiConfig, _ := a.Extra[PlatformOpenAI].(map[string]any)
+	if mode, ok := openaiConfig[openAIImageGenerationRoutingExtraKey].(string); ok {
+		return normalizeOpenAIImageGenerationRoutingMode(mode)
+	}
+	if enabled, ok := openaiConfig["openai_image_generation_enabled"].(bool); ok && !enabled {
+		return OpenAIImageGenerationRoutingTextOnly
+	}
+	return OpenAIImageGenerationRoutingMixed
+}
+
+func (a *Account) SupportsOpenAIImageGenerationRouting(requiresImageGeneration bool) bool {
+	mode := a.OpenAIImageGenerationRoutingMode()
+	if requiresImageGeneration {
+		return mode != OpenAIImageGenerationRoutingTextOnly
+	}
+	return mode != OpenAIImageGenerationRoutingImageOnly
 }
 
 func (a *Account) GetChatGPTUserID() string {
