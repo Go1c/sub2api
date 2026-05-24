@@ -584,9 +584,15 @@ func hasOpenAIImageGenerationTool(reqBody map[string]any) bool {
 	for _, rawTool := range tools {
 		toolMap, ok := rawTool.(map[string]any)
 		if !ok {
+			if openAIAnyToolContainsImageGenerationCapability(rawTool) {
+				return true
+			}
 			continue
 		}
 		if strings.TrimSpace(firstNonEmptyString(toolMap["type"])) == "image_generation" {
+			return true
+		}
+		if openAIAnyToolContainsImageGenerationCapability(toolMap) {
 			return true
 		}
 	}
