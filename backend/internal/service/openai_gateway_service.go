@@ -356,7 +356,8 @@ type OpenAIGatewayService struct {
 	balanceNotifyService  *BalanceNotifyService
 	settingService        *SettingService
 	// accountErrorHistory 通过 setter 注入（best-effort 监控，可为 nil）。
-	accountErrorHistory *AccountErrorHistoryService
+	accountErrorHistory   *AccountErrorHistoryService
+	userPlatformQuotaRepo UserPlatformQuotaRepository
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -403,7 +404,12 @@ func NewOpenAIGatewayService(
 	channelService *ChannelService,
 	balanceNotifyService *BalanceNotifyService,
 	settingService *SettingService,
+	userPlatformQuotaRepos ...UserPlatformQuotaRepository,
 ) *OpenAIGatewayService {
+	var userPlatformQuotaRepo UserPlatformQuotaRepository
+	if len(userPlatformQuotaRepos) > 0 {
+		userPlatformQuotaRepo = userPlatformQuotaRepos[0]
+	}
 	svc := &OpenAIGatewayService{
 		accountRepo:         accountRepo,
 		usageLogRepo:        usageLogRepo,
@@ -434,11 +440,19 @@ func NewOpenAIGatewayService(
 		channelService:        channelService,
 		balanceNotifyService:  balanceNotifyService,
 		settingService:        settingService,
+		userPlatformQuotaRepo: userPlatformQuotaRepo,
 		responseHeaderFilter:  compileResponseHeaderFilter(cfg),
 		codexSnapshotThrottle: newAccountWriteThrottle(openAICodexSnapshotPersistMinInterval),
 	}
 	svc.logOpenAIWSModeBootstrap()
 	return svc
+}
+
+func (s *OpenAIGatewayService) SetUserPlatformQuotaRepository(repo UserPlatformQuotaRepository) *OpenAIGatewayService {
+	if s != nil {
+		s.userPlatformQuotaRepo = repo
+	}
+	return s
 }
 
 // ResolveChannelMapping 解析渠道级模型映射（代理到 ChannelService）
@@ -533,13 +547,14 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 
 func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:          s.accountRepo,
-		userRepo:             s.userRepo,
-		userSubRepo:          s.userSubRepo,
-		settingService:       s.settingService,
-		billingCacheService:  s.billingCacheService,
-		deferredService:      s.deferredService,
-		balanceNotifyService: s.balanceNotifyService,
+		accountRepo:           s.accountRepo,
+		userRepo:              s.userRepo,
+		userSubRepo:           s.userSubRepo,
+		settingService:        s.settingService,
+		billingCacheService:   s.billingCacheService,
+		deferredService:       s.deferredService,
+		balanceNotifyService:  s.balanceNotifyService,
+		userPlatformQuotaRepo: s.userPlatformQuotaRepo,
 	}
 }
 
@@ -5613,6 +5628,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			IsSubscriptionBill:    isSubscriptionBilling,
 			AccountRateMultiplier: accountRateMultiplier,
 			APIKeyService:         input.APIKeyService,
+			Platform:              PlatformFromAPIKey(apiKey),
 		}, s.billingDeps(), s.usageBillingRepo)
 		return err
 	}()

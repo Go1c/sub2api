@@ -24,6 +24,7 @@ type stubAdminService struct {
 	updatedProxyIDs      []int64
 	updatedProxies       []*service.UpdateProxyInput
 	testedProxyIDs       []int64
+	getUserErr           error
 	createAccountErr     error
 	updateAccountErr     error
 	bulkUpdateAccountErr error
@@ -172,6 +173,9 @@ func (s *stubAdminService) GetUserBalanceSummary(ctx context.Context, limit int)
 }
 
 func (s *stubAdminService) GetUser(ctx context.Context, id int64) (*service.User, error) {
+	if s.getUserErr != nil {
+		return nil, s.getUserErr
+	}
 	for i := range s.users {
 		if s.users[i].ID == id {
 			return &s.users[i], nil

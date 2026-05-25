@@ -449,8 +449,79 @@ func ProvideBillingCacheService(
 	rateRepo UserGroupRateRepository,
 	settingService *SettingService,
 	cfg *config.Config,
+	userPlatformQuotaRepo UserPlatformQuotaRepository,
 ) *BillingCacheService {
-	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, settingService)
+	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, settingService).
+		SetUserPlatformQuotaRepository(userPlatformQuotaRepo)
+}
+
+func ProvideGatewayService(
+	accountRepo AccountRepository,
+	groupRepo GroupRepository,
+	usageLogRepo UsageLogRepository,
+	usageBillingRepo UsageBillingRepository,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	cache GatewayCache,
+	cfg *config.Config,
+	schedulerSnapshot *SchedulerSnapshotService,
+	concurrencyService *ConcurrencyService,
+	billingService *BillingService,
+	rateLimitService *RateLimitService,
+	billingCacheService *BillingCacheService,
+	identityService *IdentityService,
+	httpUpstream HTTPUpstream,
+	deferredService *DeferredService,
+	claudeTokenProvider *ClaudeTokenProvider,
+	sessionLimitCache SessionLimitCache,
+	rpmCache RPMCache,
+	digestStore *DigestSessionStore,
+	settingService *SettingService,
+	tlsFPProfileService *TLSFingerprintProfileService,
+	channelService *ChannelService,
+	resolver *ModelPricingResolver,
+	balanceNotifyService *BalanceNotifyService,
+	userPlatformQuotaRepo UserPlatformQuotaRepository,
+) *GatewayService {
+	return NewGatewayService(
+		accountRepo, groupRepo, usageLogRepo, usageBillingRepo, userRepo, userSubRepo,
+		userGroupRateRepo, cache, cfg, schedulerSnapshot, concurrencyService, billingService,
+		rateLimitService, billingCacheService, identityService, httpUpstream, deferredService,
+		claudeTokenProvider, sessionLimitCache, rpmCache, digestStore, settingService,
+		tlsFPProfileService, channelService, resolver, balanceNotifyService,
+	).SetUserPlatformQuotaRepository(userPlatformQuotaRepo)
+}
+
+func ProvideOpenAIGatewayService(
+	accountRepo AccountRepository,
+	usageLogRepo UsageLogRepository,
+	usageBillingRepo UsageBillingRepository,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	cache GatewayCache,
+	cfg *config.Config,
+	schedulerSnapshot *SchedulerSnapshotService,
+	concurrencyService *ConcurrencyService,
+	billingService *BillingService,
+	rateLimitService *RateLimitService,
+	billingCacheService *BillingCacheService,
+	httpUpstream HTTPUpstream,
+	deferredService *DeferredService,
+	openAITokenProvider *OpenAITokenProvider,
+	resolver *ModelPricingResolver,
+	channelService *ChannelService,
+	balanceNotifyService *BalanceNotifyService,
+	settingService *SettingService,
+	userPlatformQuotaRepo UserPlatformQuotaRepository,
+) *OpenAIGatewayService {
+	return NewOpenAIGatewayService(
+		accountRepo, usageLogRepo, usageBillingRepo, userRepo, userSubRepo, userGroupRateRepo,
+		cache, cfg, schedulerSnapshot, concurrencyService, billingService, rateLimitService,
+		billingCacheService, httpUpstream, deferredService, openAITokenProvider, resolver,
+		channelService, balanceNotifyService, settingService,
+	).SetUserPlatformQuotaRepository(userPlatformQuotaRepo)
 }
 
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
@@ -564,6 +635,7 @@ var ProviderSet = wire.NewSet(
 	ProvideSiteMessageSettingsReader,
 	NewSiteMessageService,
 	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
+	wire.Bind(new(SiteMessageRedeemCodeReader), new(*RedeemService)),
 	wire.Bind(new(SiteMessagePromoCodeValidator), new(*PromoService)),
 	ProvideLotterySettingsReader,
 	NewLotteryService,
@@ -572,8 +644,8 @@ var ProviderSet = wire.NewSet(
 	NewInvoiceService,
 	wire.Bind(new(InvoiceEmailSender), new(*EmailService)),
 	NewAdminService,
-	NewGatewayService,
-	NewOpenAIGatewayService,
+	ProvideGatewayService,
+	ProvideOpenAIGatewayService,
 	NewOAuthService,
 	NewOpenAIOAuthService,
 	NewGeminiOAuthService,

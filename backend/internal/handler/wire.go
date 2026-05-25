@@ -7,6 +7,12 @@ import (
 	"github.com/google/wire"
 )
 
+func provideRedeemCodeRedeemer(svc *service.RedeemService) redeemCodeRedeemer { return svc }
+func providePromoCodeRedeemer(svc *service.PromoService) promoCodeRedeemer    { return svc }
+func provideSubscriptionWasteStatsService(svc *service.SubscriptionWasteStatsService) admin.SubscriptionWasteStatsService {
+	return svc
+}
+
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
@@ -153,6 +159,8 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
+	provideRedeemCodeRedeemer,
+	providePromoCodeRedeemer,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
 	NewSiteMessageHandler,
@@ -191,6 +199,7 @@ var ProviderSet = wire.NewSet(
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
 	admin.NewSubscriptionWasteStatsHandler,
+	provideSubscriptionWasteStatsService,
 	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
