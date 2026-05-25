@@ -40,7 +40,13 @@ func IsImageGenerationIntent(endpoint string, requestedModel string, body []byte
 	if openAIJSONToolsContainImageGeneration(gjson.GetBytes(body, "tools")) {
 		return true
 	}
-	return openAIJSONToolChoiceSelectsImageGeneration(gjson.GetBytes(body, "tool_choice"))
+	if openAIJSONToolsContainImageGeneration(gjson.GetBytes(body, "functions")) {
+		return true
+	}
+	if openAIJSONToolChoiceSelectsImageGeneration(gjson.GetBytes(body, "tool_choice")) {
+		return true
+	}
+	return openAIJSONToolChoiceSelectsImageGeneration(gjson.GetBytes(body, "function_call"))
 }
 
 // IsImageGenerationIntentMap is the map-backed variant used after service-side request mutation.
@@ -57,10 +63,16 @@ func IsImageGenerationIntentMap(endpoint string, requestedModel string, reqBody 
 	if isOpenAIImageGenerationModel(firstNonEmptyString(reqBody["model"])) {
 		return true
 	}
-	if hasOpenAIImageGenerationTool(reqBody) {
+	if openAIAnyCollectionContainsImageGenerationCapability(reqBody["tools"]) {
 		return true
 	}
-	return openAIAnyToolChoiceSelectsImageGeneration(reqBody["tool_choice"])
+	if openAIAnyCollectionContainsImageGenerationCapability(reqBody["functions"]) {
+		return true
+	}
+	if openAIAnyToolChoiceSelectsImageGeneration(reqBody["tool_choice"]) {
+		return true
+	}
+	return openAIAnyToolChoiceSelectsImageGeneration(reqBody["function_call"])
 }
 
 // IsImageGenerationEndpoint identifies dedicated generated-image endpoints.
@@ -116,6 +128,13 @@ func openAIJSONToolContainsImageGenerationMCP(tool gjson.Result) bool {
 	return hasImageNamespace && hasGenerateImage
 }
 
+func openAIStringContainsImageGenerationCapability(value string) bool {
+	hasImageNamespace := false
+	hasGenerateImage := false
+	markOpenAIImageGenerationMCPString(value, &hasImageNamespace, &hasGenerateImage)
+	return hasImageNamespace && hasGenerateImage
+}
+
 func walkOpenAIJSONStrings(value gjson.Result, visit func(string)) {
 	if !value.Exists() {
 		return
@@ -132,16 +151,71 @@ func walkOpenAIJSONStrings(value gjson.Result, visit func(string)) {
 }
 
 func markOpenAIImageGenerationMCPString(value string, hasImageNamespace *bool, hasGenerateImage *bool) {
-	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized := normalizeOpenAIImageGenerationIntentString(value)
 	if normalized == "" {
 		return
 	}
-	normalized = strings.NewReplacer("-", "_", ".", "_", "/", "_").Replace(normalized)
-	if strings.Contains(normalized, "gpt_image") || strings.Contains(normalized, "image_2") || strings.Contains(normalized, "image2") {
+	if openAIImageIntentStringHasImageNamespace(normalized) {
 		*hasImageNamespace = true
 	}
-	if strings.Contains(normalized, "generate_image") || strings.Contains(normalized, "image_generation") {
+	if openAIImageIntentStringHasImageAction(normalized) {
 		*hasGenerateImage = true
+	}
+}
+
+func normalizeOpenAIImageGenerationIntentString(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return ""
+	}
+	return strings.NewReplacer("-", "_", ".", "_", "/", "_", " ", "_", ":", "_").Replace(normalized)
+}
+
+func openAIImageIntentStringHasImageNamespace(normalized string) bool {
+	switch {
+	case strings.Contains(normalized, "image"),
+		strings.Contains(normalized, "picture"),
+		strings.Contains(normalized, "photo"),
+		strings.Contains(normalized, "illustration"),
+		strings.Contains(normalized, "artwork"),
+		strings.Contains(normalized, "gpt_image"),
+		strings.Contains(normalized, "image_2"),
+		strings.Contains(normalized, "image2"),
+		strings.Contains(normalized, "imagegen"),
+		strings.Contains(normalized, "image_gen"),
+		strings.Contains(normalized, "txt2img"),
+		strings.Contains(normalized, "img2img"),
+		strings.Contains(normalized, "dalle"):
+		return true
+	default:
+		return false
+	}
+}
+
+func openAIImageIntentStringHasImageAction(normalized string) bool {
+	switch {
+	case strings.Contains(normalized, "image_generation"),
+		strings.Contains(normalized, "generate_image"),
+		strings.Contains(normalized, "create_image"),
+		strings.Contains(normalized, "render_image"),
+		strings.Contains(normalized, "draw_image"),
+		strings.Contains(normalized, "edit_image"),
+		strings.Contains(normalized, "image_edit"),
+		strings.Contains(normalized, "variation"),
+		strings.Contains(normalized, "upscale"),
+		strings.Contains(normalized, "outpaint"),
+		strings.Contains(normalized, "inpaint"),
+		strings.Contains(normalized, "generate"),
+		strings.Contains(normalized, "generation"),
+		strings.Contains(normalized, "create"),
+		strings.Contains(normalized, "render"),
+		strings.Contains(normalized, "draw"),
+		strings.Contains(normalized, "paint"),
+		strings.Contains(normalized, "edit"),
+		strings.Contains(normalized, "transform"):
+		return true
+	default:
+		return false
 	}
 }
 
@@ -150,7 +224,8 @@ func openAIJSONToolChoiceSelectsImageGeneration(choice gjson.Result) bool {
 		return false
 	}
 	if choice.Type == gjson.String {
-		return strings.TrimSpace(choice.String()) == "image_generation"
+		value := strings.TrimSpace(choice.String())
+		return value == "image_generation" || openAIStringContainsImageGenerationCapability(value)
 	}
 	if !choice.IsObject() {
 		return false
@@ -164,13 +239,14 @@ func openAIJSONToolChoiceSelectsImageGeneration(choice gjson.Result) bool {
 	if strings.TrimSpace(choice.Get("function.name").String()) == "image_generation" {
 		return true
 	}
-	return false
+	return openAIJSONToolContainsImageGenerationMCP(choice)
 }
 
 func openAIAnyToolChoiceSelectsImageGeneration(choice any) bool {
 	switch v := choice.(type) {
 	case string:
-		return strings.TrimSpace(v) == "image_generation"
+		value := strings.TrimSpace(v)
+		return value == "image_generation" || openAIStringContainsImageGenerationCapability(value)
 	case map[string]any:
 		if strings.TrimSpace(firstNonEmptyString(v["type"])) == "image_generation" {
 			return true
@@ -179,6 +255,20 @@ func openAIAnyToolChoiceSelectsImageGeneration(choice any) bool {
 			return true
 		}
 		if fn, ok := v["function"].(map[string]any); ok && strings.TrimSpace(firstNonEmptyString(fn["name"])) == "image_generation" {
+			return true
+		}
+		return openAIAnyToolContainsImageGenerationCapability(v)
+	}
+	return false
+}
+
+func openAIAnyCollectionContainsImageGenerationCapability(value any) bool {
+	items, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		if openAIAnyToolContainsImageGenerationCapability(item) {
 			return true
 		}
 	}
