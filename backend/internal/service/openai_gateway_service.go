@@ -2452,7 +2452,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
-	if IsImageGenerationIntentMap(openAIResponsesEndpoint, reqModel, reqBody) && !imageGenerationAllowed {
+	finalRequiresImageGeneration := IsImageGenerationIntentMap(openAIResponsesEndpoint, reqModel, reqBody)
+	if !s.isOpenAIAccountImageRoutingCompatible(account, finalRequiresImageGeneration) {
+		return nil, newOpenAIImageAccountRoutingFailoverError(account, finalRequiresImageGeneration)
+	}
+	if finalRequiresImageGeneration && !imageGenerationAllowed {
 		setOpsUpstreamError(c, http.StatusForbidden, ImageGenerationPermissionMessage(), "")
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": gin.H{
@@ -2464,7 +2468,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	imageBillingModel := ""
 	imageSizeTier := ""
-	if IsImageGenerationIntentMap(openAIResponsesEndpoint, reqModel, reqBody) {
+	if finalRequiresImageGeneration {
 		var imageCfgErr error
 		imageBillingModel, imageSizeTier, imageCfgErr = resolveOpenAIResponsesImageBillingConfig(reqBody, billingModel)
 		if imageCfgErr != nil {
@@ -2963,7 +2967,11 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	body = updatedBody
 
 	apiKey := getAPIKeyFromContext(c)
-	if IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, body) && !GroupAllowsImageGeneration(apiKeyGroup(apiKey)) {
+	finalRequiresImageGeneration := IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, body)
+	if !s.isOpenAIAccountImageRoutingCompatible(account, finalRequiresImageGeneration) {
+		return nil, newOpenAIImageAccountRoutingFailoverError(account, finalRequiresImageGeneration)
+	}
+	if finalRequiresImageGeneration && !GroupAllowsImageGeneration(apiKeyGroup(apiKey)) {
 		setOpsUpstreamError(c, http.StatusForbidden, ImageGenerationPermissionMessage(), "")
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": gin.H{
@@ -2975,7 +2983,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 	imageBillingModel := ""
 	imageSizeTier := ""
-	if IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, body) {
+	if finalRequiresImageGeneration {
 		var imageCfgErr error
 		imageBillingModel, imageSizeTier, imageCfgErr = resolveOpenAIResponsesImageBillingConfigFromBody(body, reqModel)
 		if imageCfgErr != nil {

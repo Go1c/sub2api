@@ -56,6 +56,27 @@ func TestIsImageGenerationIntent(t *testing.T) {
 			want:     true,
 		},
 		{
+			name:     "mcp image2 nested generate tool name",
+			endpoint: "/v1/responses",
+			model:    "gpt-5.5",
+			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"mcp","server_label":"image2","tools":[{"name":"generate"}]}],"tool_choice":"auto"}`),
+			want:     true,
+		},
+		{
+			name:     "legacy functions image tool",
+			endpoint: "/v1/responses",
+			model:    "gpt-5.5",
+			body:     []byte(`{"model":"gpt-5.5","functions":[{"name":"mcp__image2__generate","description":"Generate an image with Image2"}],"function_call":{"name":"mcp__image2__generate"}}`),
+			want:     true,
+		},
+		{
+			name:     "tool choice mcp generate",
+			endpoint: "/v1/responses",
+			model:    "gpt-5.5",
+			body:     []byte(`{"model":"gpt-5.5","tool_choice":{"type":"function","name":"mcp__image2__generate"}}`),
+			want:     true,
+		},
+		{
 			name:     "required tool choice alone is text",
 			endpoint: "/v1/responses",
 			model:    "gpt-5.4",
@@ -89,6 +110,23 @@ func TestIsImageGenerationIntentMapDetectsMCPImageTool(t *testing.T) {
 			},
 		},
 		"tool_choice": "auto",
+	}
+
+	require.True(t, IsImageGenerationIntentMap("/v1/responses", "gpt-5.5", body))
+}
+
+func TestIsImageGenerationIntentMapDetectsLegacyFunctionsImageTool(t *testing.T) {
+	body := map[string]any{
+		"model": "gpt-5.5",
+		"functions": []any{
+			map[string]any{
+				"name":        "mcp__image2__generate",
+				"description": "Generate an image with Image2",
+			},
+		},
+		"function_call": map[string]any{
+			"name": "mcp__image2__generate",
+		},
 	}
 
 	require.True(t, IsImageGenerationIntentMap("/v1/responses", "gpt-5.5", body))

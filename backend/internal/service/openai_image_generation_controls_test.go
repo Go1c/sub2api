@@ -54,6 +54,32 @@ func TestOpenAIGatewayServiceForward_RejectsDisabledImageGenerationIntents(t *te
 	}
 }
 
+func TestOpenAIGatewayServiceForward_TextOnlyAccountRejectsLegacyFunctionImageIntent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &httpUpstreamRecorder{}
+	svc := newOpenAIImageGenerationControlTestService(upstream)
+	c, _ := newOpenAIImageGenerationControlTestContext(true, "unit-test-agent/1.0")
+	account := newOpenAIImageGenerationControlTestAccount()
+	account.Extra = map[string]any{
+		openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingTextOnly,
+	}
+
+	result, err := svc.Forward(
+		context.Background(),
+		c,
+		account,
+		[]byte(`{"model":"gpt-5.5","functions":[{"name":"mcp__image2__generate","description":"Generate an image with Image2"}],"function_call":{"name":"mcp__image2__generate"}}`),
+	)
+
+	require.Error(t, err)
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
+	require.Nil(t, upstream.lastReq, "text-only account must not reach upstream for image intent")
+}
+
 func TestOpenAIGatewayServiceForward_DisabledGroupAllowsTextOnlyResponses(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
