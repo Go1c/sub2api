@@ -1532,6 +1532,57 @@
         </div>
       </div>
 
+      <!-- OpenAI 图片请求路由账号级覆盖 -->
+      <div
+        v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'apikey')"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50/60 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <div class="flex items-start gap-3 px-4 py-3">
+            <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100 dark:bg-dark-800 dark:text-emerald-300 dark:ring-emerald-900/60">
+              <Icon name="link" size="sm" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="input-label mb-0">{{ t('admin.accounts.openai.imageRouting') }}</label>
+                <span
+                  class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  :class="openAIImageRoutingBadgeClass"
+                >
+                  {{ openAIImageRoutingBadgeLabel }}
+                </span>
+              </div>
+              <p class="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
+                {{ t('admin.accounts.openai.imageRoutingDesc') }}
+              </p>
+            </div>
+          </div>
+          <div class="border-t border-emerald-100 bg-white/70 p-2 dark:border-emerald-900/50 dark:bg-dark-800/70">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <button
+                v-for="option in openAIImageRoutingOptions"
+                :key="option.value"
+                type="button"
+                :data-testid="`openai-image-routing-${option.value}`"
+                @click="openAIImageRoutingMode = option.value"
+                :class="[
+                  'group flex min-h-[68px] items-start gap-2 rounded-md border px-3 py-2 text-left transition-all',
+                  openAIImageRoutingMode === option.value
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-900 shadow-sm ring-1 ring-emerald-200 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100 dark:ring-emerald-800'
+                    : 'border-transparent bg-transparent text-slate-600 hover:border-gray-200 hover:bg-gray-50 dark:text-slate-300 dark:hover:border-dark-500 dark:hover:bg-dark-700'
+                ]"
+              >
+                <div class="mt-0.5 h-2.5 w-2.5 rounded-full transition-colors" :class="openAIImageRoutingMode === option.value ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-500'" />
+                <div class="min-w-0">
+                  <div class="text-sm font-medium">{{ option.label }}</div>
+                  <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ option.description }}</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- OpenAI Codex 图片生成桥接账号级覆盖 -->
       <div
         v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'apikey')"
@@ -2565,7 +2616,9 @@ const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const codexCLIOnlyEnabled = ref(false)
+type OpenAIImageRoutingMode = 'mixed' | 'text_only' | 'image_only'
 type CodexImageGenerationBridgeMode = 'inherit' | 'enabled' | 'disabled'
+const openAIImageRoutingMode = ref<OpenAIImageRoutingMode>('mixed')
 const codexImageGenerationBridgeMode = ref<CodexImageGenerationBridgeMode>('inherit')
 const anthropicPassthroughEnabled = ref(false)
 const webSearchEmulationMode = ref('default')
@@ -2617,6 +2670,47 @@ const openaiResponsesWebSocketV2Mode = computed({
 const openAIWSModeConcurrencyHintKey = computed(() =>
   resolveOpenAIWSModeConcurrencyHintKey(openaiResponsesWebSocketV2Mode.value)
 )
+const openAIImageRoutingOptions = computed<Array<{
+  value: OpenAIImageRoutingMode
+  label: string
+  description: string
+}>>(() => [
+  {
+    value: 'mixed',
+    label: t('admin.accounts.openai.imageRoutingMixed'),
+    description: t('admin.accounts.openai.imageRoutingMixedDesc')
+  },
+  {
+    value: 'text_only',
+    label: t('admin.accounts.openai.imageRoutingTextOnly'),
+    description: t('admin.accounts.openai.imageRoutingTextOnlyDesc')
+  },
+  {
+    value: 'image_only',
+    label: t('admin.accounts.openai.imageRoutingImageOnly'),
+    description: t('admin.accounts.openai.imageRoutingImageOnlyDesc')
+  }
+])
+const openAIImageRoutingBadgeLabel = computed(() => {
+  switch (openAIImageRoutingMode.value) {
+    case 'text_only':
+      return t('admin.accounts.openai.imageRoutingBadgeTextOnly')
+    case 'image_only':
+      return t('admin.accounts.openai.imageRoutingBadgeImageOnly')
+    default:
+      return t('admin.accounts.openai.imageRoutingBadgeMixed')
+  }
+})
+const openAIImageRoutingBadgeClass = computed(() => {
+  switch (openAIImageRoutingMode.value) {
+    case 'text_only':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+    case 'image_only':
+      return 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+    default:
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  }
+})
 const codexImageGenerationBridgeOptions = computed<Array<{
   value: CodexImageGenerationBridgeMode
   label: string
@@ -2658,6 +2752,28 @@ const codexImageGenerationBridgeBadgeClass = computed(() => {
       return 'bg-slate-100 text-slate-600 dark:bg-dark-600 dark:text-slate-300'
   }
 })
+const normalizeOpenAIImageRoutingMode = (value: unknown): OpenAIImageRoutingMode => {
+  if (typeof value !== 'string') return 'mixed'
+  switch (value.trim().toLowerCase()) {
+    case 'text':
+    case 'text_only':
+    case 'text-only':
+    case 'no_image':
+    case 'no-image':
+    case 'disabled':
+    case 'off':
+      return 'text_only'
+    case 'image':
+    case 'image_only':
+    case 'image-only':
+    case 'images':
+    case 'images_only':
+    case 'images-only':
+      return 'image_only'
+    default:
+      return 'mixed'
+  }
+}
 const openAICompactModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.compactModeAuto') },
   { value: 'force_on', label: t('admin.accounts.openai.compactModeForceOn') },
@@ -2827,12 +2943,22 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
+  openAIImageRoutingMode.value = 'mixed'
   codexImageGenerationBridgeMode.value = 'inherit'
   anthropicPassthroughEnabled.value = false
   webSearchEmulationMode.value = 'default'
   if (newAccount.platform === 'openai' && (newAccount.type === 'oauth' || newAccount.type === 'apikey')) {
     openaiPassthroughEnabled.value = extra?.openai_passthrough === true || extra?.openai_oauth_passthrough === true
     openAICompactMode.value = (extra?.openai_compact_mode as OpenAICompactMode) || 'auto'
+    const nestedOpenAIExtra = extra?.openai as Record<string, unknown> | undefined
+    const legacyImageEnabled = typeof extra?.openai_image_generation_enabled === 'boolean'
+      ? extra.openai_image_generation_enabled
+      : nestedOpenAIExtra?.openai_image_generation_enabled
+    if (legacyImageEnabled === false) {
+      openAIImageRoutingMode.value = 'text_only'
+    }
+    const routingMode = extra?.openai_image_generation_routing ?? nestedOpenAIExtra?.openai_image_generation_routing
+    openAIImageRoutingMode.value = normalizeOpenAIImageRoutingMode(routingMode ?? openAIImageRoutingMode.value)
     const codexImageGenerationBridgeValue = typeof extra?.codex_image_generation_bridge === 'boolean'
       ? extra.codex_image_generation_bridge
       : extra?.codex_image_generation_bridge_enabled
@@ -3996,6 +4122,12 @@ const handleSubmit = async () => {
       }
 
       delete newExtra.codex_image_generation_bridge_enabled
+      delete newExtra.openai_image_generation_enabled
+      if (openAIImageRoutingMode.value === 'mixed') {
+        delete newExtra.openai_image_generation_routing
+      } else {
+        newExtra.openai_image_generation_routing = openAIImageRoutingMode.value
+      }
       if (codexImageGenerationBridgeMode.value === 'inherit') {
         delete newExtra.codex_image_generation_bridge
       } else {
