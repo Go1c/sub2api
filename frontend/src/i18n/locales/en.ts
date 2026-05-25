@@ -3288,9 +3288,21 @@ export default {
         codexCLIOnly: 'Codex official clients only',
         codexCLIOnlyDesc:
           'Only applies to OpenAI OAuth. When enabled, only Codex official client families are allowed; when disabled, the gateway bypasses this restriction and keeps existing behavior.',
+        imageRouting: 'Image request routing',
+        imageRoutingDesc:
+          'Account-level policy that controls whether this OpenAI account participates in image request routing. Applies to explicit image_generation tools, MCP image tools, and standalone image endpoints without relying on global environment flags.',
+        imageRoutingMixed: 'Text and image',
+        imageRoutingMixedDesc: 'Default compatibility mode. Both text requests and image requests may route to this account.',
+        imageRoutingTextOnly: 'Text only',
+        imageRoutingTextOnlyDesc: 'This account handles only text requests. Explicit image and MCP image requests skip it.',
+        imageRoutingImageOnly: 'Image only',
+        imageRoutingImageOnlyDesc: 'This account is reserved for image requests. Regular text /responses requests skip it.',
+        imageRoutingBadgeMixed: 'Mixed',
+        imageRoutingBadgeTextOnly: 'Text only',
+        imageRoutingBadgeImageOnly: 'Image only',
         codexImageGenerationBridge: 'Codex image-generation bridge',
         codexImageGenerationBridgeDesc:
-          'Account policy takes precedence over channel and global settings. Only controls whether Codex requests through the /responses text endpoint receive the image_generation tool; standalone image-generation endpoints are unaffected.',
+          'Only controls whether Codex /responses text requests automatically receive the image_generation tool. It does not control account A/B image-request routing.',
         codexImageGenerationBridgeInherit: 'Follow channel',
         codexImageGenerationBridgeInheritDesc: 'Do not write an account override; use the channel or global policy.',
         codexImageGenerationBridgeEnabled: 'Force on',

@@ -2119,7 +2119,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	if apiKey != nil {
 		imageGenerationAllowed = GroupAllowsImageGeneration(apiKey.Group)
 	}
-	codexImageGenerationBridgeEnabled := isCodexCLI && imageGenerationAllowed && s.isCodexImageGenerationBridgeEnabled(ctx, account, apiKey)
+	codexImageGenerationBridgeEnabled := isCodexCLI &&
+		imageGenerationAllowed &&
+		s.isCodexImageGenerationBridgeEnabled(ctx, account, apiKey) &&
+		s.isOpenAIAccountImageRoutingCompatible(account, true)
 	if IsImageGenerationIntentMap(openAIResponsesEndpoint, reqModel, reqBody) && !imageGenerationAllowed {
 		setOpsUpstreamError(c, http.StatusForbidden, ImageGenerationPermissionMessage(), "")
 		c.JSON(http.StatusForbidden, gin.H{

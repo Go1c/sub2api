@@ -219,6 +219,26 @@ describe('EditAccountModal', () => {
     })
   })
 
+  it('submits account-level OpenAI image routing policy', async () => {
+    const account = buildAccount()
+    account.extra = {
+      openai_image_generation_enabled: false
+    }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+
+    await wrapper.get('button[data-testid="openai-image-routing-image_only"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_image_generation_routing).toBe('image_only')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).not.toHaveProperty('openai_image_generation_enabled')
+  })
+
   it('submits account-level Codex image generation bridge override', async () => {
     const account = buildAccount()
     account.extra = {
