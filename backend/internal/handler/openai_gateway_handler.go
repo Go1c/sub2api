@@ -201,16 +201,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	explicitImageIntent := service.IsImageGenerationIntent("/v1/responses", reqModel, body)
-	codexBridgeImageIntent := service.IsCodexTextImageGenerationIntent(
-		"/v1/responses",
-		reqModel,
-		body,
-		c.GetHeader("User-Agent"),
-		c.GetHeader("originator"),
-		h.cfg != nil && h.cfg.Gateway.ForceCodexCLI,
-	)
-	imageIntent := explicitImageIntent || codexBridgeImageIntent
+	imageIntent := service.IsImageGenerationIntent("/v1/responses", reqModel, body)
 	if imageIntent && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 		return
@@ -284,18 +275,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			scheduleDecision service.OpenAIAccountScheduleDecision
 			err              error
 		)
-		if codexBridgeImageIntent {
-			selection, scheduleDecision, err = h.gatewayService.SelectAccountWithSchedulerForCodexImageBridgeIntent(
-				c.Request.Context(),
-				apiKey.GroupID,
-				previousResponseID,
-				sessionHash,
-				reqModel,
-				failedAccountIDs,
-				service.OpenAIUpstreamTransportAny,
-				requireCompact,
-			)
-		} else if imageIntent {
+		if imageIntent {
 			selection, scheduleDecision, err = h.gatewayService.SelectAccountWithSchedulerForImageIntent(
 				c.Request.Context(),
 				apiKey.GroupID,
@@ -1216,17 +1196,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		return
 	}
 
-	explicitImageIntent := service.IsImageGenerationIntent("/v1/responses", reqModel, firstMessage)
-	codexBridgeImageIntent := service.IsCodexTextImageGenerationIntent(
-		"/v1/responses",
-		reqModel,
-		firstMessage,
-		c.GetHeader("User-Agent"),
-		c.GetHeader("originator"),
-		h.cfg != nil && h.cfg.Gateway.ForceCodexCLI,
-	)
-	imageIntent := explicitImageIntent || codexBridgeImageIntent
-	if imageIntent && !service.GroupAllowsImageGeneration(apiKey.Group) {
+	if service.IsImageGenerationIntent("/v1/responses", reqModel, firstMessage) && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, service.ImageGenerationPermissionMessage())
 		return
 	}
@@ -1273,47 +1243,18 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		firstMessage,
 		openAIWSIngressFallbackSessionSeed(subject.UserID, apiKey.ID, apiKey.GroupID),
 	)
-	var (
-		selection        *service.AccountSelectionResult
-		scheduleDecision service.OpenAIAccountScheduleDecision
-		selectErr        error
+	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
+		ctx,
+		apiKey.GroupID,
+		previousResponseID,
+		sessionHash,
+		reqModel,
+		nil,
+		service.OpenAIUpstreamTransportResponsesWebsocketV2,
+		false,
 	)
-	if codexBridgeImageIntent {
-		selection, scheduleDecision, selectErr = h.gatewayService.SelectAccountWithSchedulerForCodexImageBridgeIntent(
-			ctx,
-			apiKey.GroupID,
-			previousResponseID,
-			sessionHash,
-			reqModel,
-			nil,
-			service.OpenAIUpstreamTransportResponsesWebsocketV2,
-			false,
-		)
-	} else if imageIntent {
-		selection, scheduleDecision, selectErr = h.gatewayService.SelectAccountWithSchedulerForImageIntent(
-			ctx,
-			apiKey.GroupID,
-			previousResponseID,
-			sessionHash,
-			reqModel,
-			nil,
-			service.OpenAIUpstreamTransportResponsesWebsocketV2,
-			false,
-		)
-	} else {
-		selection, scheduleDecision, selectErr = h.gatewayService.SelectAccountWithScheduler(
-			ctx,
-			apiKey.GroupID,
-			previousResponseID,
-			sessionHash,
-			reqModel,
-			nil,
-			service.OpenAIUpstreamTransportResponsesWebsocketV2,
-			false,
-		)
-	}
-	if selectErr != nil {
-		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(selectErr))
+	if err != nil {
+		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(err))
 		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
 		return
 	}
