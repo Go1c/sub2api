@@ -588,6 +588,46 @@ func TestOpenAISelectAccountWithLoadAwareness_ImageIntentSkipsTextOnlySticky(t *
 	require.Equal(t, imageOnly.ID, cache.sessionBindings["openai:"+sessionHash])
 }
 
+func TestOpenAISelectAccountWithLoadAwareness_CodexBridgeIntentRequiresBridgeEnabledAccount(t *testing.T) {
+	groupID := int64(1)
+	bridgeDisabled := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		Extra: map[string]any{
+			featureKeyCodexImageGenerationBridge: false,
+		},
+	}
+	bridgeEnabled := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    10,
+		Extra: map[string]any{
+			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
+			featureKeyCodexImageGenerationBridge: true,
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{bridgeDisabled, bridgeEnabled}},
+		cfg:         &config.Config{},
+	}
+	svc.cfg.Gateway.CodexImageGenerationBridgeEnabled = true
+
+	selection, err := svc.SelectAccountWithLoadAwarenessForCodexImageBridgeIntent(context.Background(), &groupID, "", "gpt-5.4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, bridgeEnabled.ID, selection.Account.ID)
+}
+
 func TestOpenAISelectAccountWithLoadAwareness_StickyUnschedulableClearsSession(t *testing.T) {
 	sessionHash := "session-2"
 	groupID := int64(1)

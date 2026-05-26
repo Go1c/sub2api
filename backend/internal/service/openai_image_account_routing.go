@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -61,12 +62,25 @@ func (s *OpenAIGatewayService) isOpenAIAccountImageRoutingCompatible(account *Ac
 	return false
 }
 
+func (s *OpenAIGatewayService) isOpenAIAccountImageRequestCompatible(ctx context.Context, groupID *int64, account *Account, requiresImageGeneration bool, requiresCodexImageBridge bool) bool {
+	if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
+		return false
+	}
+	if !requiresCodexImageBridge {
+		return true
+	}
+	if account == nil || account.IsOpenAIPassthroughEnabled() {
+		return false
+	}
+	return s.isCodexImageGenerationBridgeEnabled(ctx, account, &APIKey{GroupID: groupID})
+}
+
 func newOpenAIImageAccountRoutingFailoverError(account *Account, requiresImageGeneration bool) *UpstreamFailoverError {
 	accountID := int64(0)
 	if account != nil {
 		accountID = account.ID
 	}
-	message := "selected OpenAI account is not compatible with this request"
+	var message string
 	if requiresImageGeneration {
 		message = "selected OpenAI account is not enabled for image generation"
 	} else {
