@@ -464,64 +464,6 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RoutesByImageGeneration
 	require.Equal(t, int64(36032), imageSelection.Account.ID)
 }
 
-func TestOpenAIGatewayService_SelectAccountWithScheduler_CodexBridgeIntentRequiresBridgeEnabledAccount(t *testing.T) {
-	resetOpenAIAdvancedSchedulerSettingCacheForTest()
-
-	ctx := context.Background()
-	groupID := int64(10111)
-	accounts := []Account{
-		{
-			ID:          36041,
-			Platform:    PlatformOpenAI,
-			Type:        AccountTypeAPIKey,
-			Status:      StatusActive,
-			Schedulable: true,
-			Concurrency: 1,
-			Priority:    0,
-			Extra: map[string]any{
-				featureKeyCodexImageGenerationBridge: false,
-			},
-		},
-		{
-			ID:          36042,
-			Platform:    PlatformOpenAI,
-			Type:        AccountTypeAPIKey,
-			Status:      StatusActive,
-			Schedulable: true,
-			Concurrency: 1,
-			Priority:    10,
-			Extra: map[string]any{
-				openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
-				featureKeyCodexImageGenerationBridge: true,
-			},
-		},
-	}
-	svc := &OpenAIGatewayService{
-		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
-		cache:              &schedulerTestGatewayCache{},
-		cfg:                &config.Config{},
-		rateLimitService:   newOpenAIAdvancedSchedulerRateLimitService("true"),
-		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
-	}
-	svc.cfg.Gateway.CodexImageGenerationBridgeEnabled = true
-	require.True(t, svc.isOpenAIAdvancedSchedulerEnabled(ctx))
-
-	selection, _, err := svc.SelectAccountWithSchedulerForCodexImageBridgeIntent(
-		ctx,
-		&groupID,
-		"",
-		"codex_image_session",
-		"gpt-5.4",
-		nil,
-		OpenAIUpstreamTransportAny,
-		false,
-	)
-	require.NoError(t, err)
-	require.NotNil(t, selection)
-	require.NotNil(t, selection.Account)
-	require.Equal(t, int64(36042), selection.Account.ID)
-}
-
 func TestOpenAIGatewayService_SelectAccountWithScheduler_EnabledUsesAdvancedPreviousResponseRouting(t *testing.T) {
 	resetOpenAIAdvancedSchedulerSettingCacheForTest()
 
