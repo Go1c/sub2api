@@ -1302,13 +1302,6 @@ func isOpenAIAccountEligibleForRequest(account *Account, requestedModel string, 
 	return true
 }
 
-func (s *OpenAIGatewayService) isOpenAIAccountEligibleForScheduledRequest(account *Account, requestedModel string, requireCompact bool, requiresImageGeneration bool) bool {
-	if !isOpenAIAccountEligibleForRequest(account, requestedModel, requireCompact) {
-		return false
-	}
-	return s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration)
-}
-
 // prioritizeOpenAICompactAccounts re-orders a slice so that accounts with known
 // compact support are tried first, followed by unknown, then explicitly unsupported.
 // The relative order within each tier is preserved.

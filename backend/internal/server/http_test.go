@@ -40,6 +40,19 @@ func TestProvideHTTPServer_H2CPreservesGlobalRequestBodyLimit(t *testing.T) {
 	}
 
 	server := ProvideHTTPServer(cfg, router)
+	if server.Protocols == nil || !server.Protocols.HTTP1() || !server.Protocols.UnencryptedHTTP2() {
+		t.Fatalf("server protocols = %v, want HTTP/1 and unencrypted HTTP/2", server.Protocols)
+	}
+	if server.HTTP2 == nil {
+		t.Fatal("server HTTP2 config is nil")
+	}
+	if server.HTTP2.MaxConcurrentStreams != 50 {
+		t.Fatalf("MaxConcurrentStreams = %d, want 50", server.HTTP2.MaxConcurrentStreams)
+	}
+	if server.HTTP2.MaxReadFrameSize != 1<<20 {
+		t.Fatalf("MaxReadFrameSize = %d, want %d", server.HTTP2.MaxReadFrameSize, 1<<20)
+	}
+
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString("0123456789"))
 	rec := httptest.NewRecorder()
 
