@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -59,6 +60,19 @@ func (s *OpenAIGatewayService) isOpenAIAccountImageRoutingCompatible(account *Ac
 	}
 	slog.Debug("openai image account routing skipped account", logFields...)
 	return false
+}
+
+func (s *OpenAIGatewayService) isOpenAIAccountImageRequestCompatible(ctx context.Context, groupID *int64, account *Account, requiresImageGeneration bool, requiresCodexImageBridge bool) bool {
+	if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
+		return false
+	}
+	if !requiresCodexImageBridge {
+		return true
+	}
+	if account == nil || account.IsOpenAIPassthroughEnabled() {
+		return false
+	}
+	return s.isCodexImageGenerationBridgeEnabled(ctx, account, &APIKey{GroupID: groupID})
 }
 
 func newOpenAIImageAccountRoutingFailoverError(account *Account, requiresImageGeneration bool) *UpstreamFailoverError {

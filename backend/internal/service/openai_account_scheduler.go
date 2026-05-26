@@ -38,16 +38,17 @@ var openAIAdvancedSchedulerSettingCache atomic.Value // *cachedOpenAIAdvancedSch
 var openAIAdvancedSchedulerSettingSF singleflight.Group
 
 type OpenAIAccountScheduleRequest struct {
-	GroupID                 *int64
-	SessionHash             string
-	StickyAccountID         int64
-	PreviousResponseID      string
-	RequestedModel          string
-	RequiredTransport       OpenAIUpstreamTransport
-	RequiredImageCapability OpenAIImagesCapability
-	RequiresImageGeneration bool
-	RequireCompact          bool
-	ExcludedIDs             map[int64]struct{}
+	GroupID                  *int64
+	SessionHash              string
+	StickyAccountID          int64
+	PreviousResponseID       string
+	RequestedModel           string
+	RequiredTransport        OpenAIUpstreamTransport
+	RequiredImageCapability  OpenAIImagesCapability
+	RequiresImageGeneration  bool
+	RequiresCodexImageBridge bool
+	RequireCompact           bool
+	ExcludedIDs              map[int64]struct{}
 }
 
 type OpenAIAccountScheduleDecision struct {
@@ -899,7 +900,7 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatible(ctx context.C
 		return false
 	}
 	if s != nil && s.service != nil &&
-		!s.service.isOpenAIAccountImageRoutingCompatible(account, req.RequiresImageGeneration) {
+		!s.service.isOpenAIAccountImageRequestCompatible(ctx, req.GroupID, account, req.RequiresImageGeneration, req.RequiresCodexImageBridge) {
 		return false
 	}
 	if req.GroupID != nil && s != nil && s.service != nil &&
@@ -1030,7 +1031,7 @@ func (s *OpenAIGatewayService) SelectAccountWithScheduler(
 	requiredTransport OpenAIUpstreamTransport,
 	requireCompact bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", false, requireCompact)
+	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", false, false, requireCompact)
 }
 
 func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImageIntent(
@@ -1043,7 +1044,20 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImageIntent(
 	requiredTransport OpenAIUpstreamTransport,
 	requireCompact bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", true, requireCompact)
+	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", true, false, requireCompact)
+}
+
+func (s *OpenAIGatewayService) SelectAccountWithSchedulerForCodexImageBridgeIntent(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+	requireCompact bool,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", true, true, requireCompact)
 }
 
 func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
@@ -1054,13 +1068,13 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 	excludedIDs map[int64]struct{},
 	requiredCapability OpenAIImagesCapability,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, requiredCapability, true, false)
+	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, requiredCapability, true, false, false)
 	if err == nil && selection != nil && selection.Account != nil {
 		return selection, decision, nil
 	}
 	// 如果要求 native 能力（如指定了模型）但没有可用的 APIKey 账号，回退到 basic（OAuth 账号）
 	if requiredCapability == OpenAIImagesCapabilityNative {
-		return s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, OpenAIImagesCapabilityBasic, true, false)
+		return s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, OpenAIImagesCapabilityBasic, true, false, false)
 	}
 	return selection, decision, err
 }
@@ -1075,6 +1089,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	requiredTransport OpenAIUpstreamTransport,
 	requiredImageCapability OpenAIImagesCapability,
 	requiresImageGeneration bool,
+	requiresCodexImageBridge bool,
 	requireCompact bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	decision := OpenAIAccountScheduleDecision{}
@@ -1084,7 +1099,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
 			effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
 			for {
-				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiresImageGeneration)
+				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiresImageGeneration, requiresCodexImageBridge)
 				if err != nil {
 					return nil, decision, err
 				}
@@ -1109,7 +1124,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 
 		effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
 		for {
-			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiresImageGeneration)
+			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiresImageGeneration, requiresCodexImageBridge)
 			if err != nil {
 				return nil, decision, err
 			}
@@ -1147,16 +1162,17 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	}
 
 	return scheduler.Select(ctx, OpenAIAccountScheduleRequest{
-		GroupID:                 groupID,
-		SessionHash:             sessionHash,
-		StickyAccountID:         stickyAccountID,
-		PreviousResponseID:      previousResponseID,
-		RequestedModel:          requestedModel,
-		RequiredTransport:       requiredTransport,
-		RequiredImageCapability: requiredImageCapability,
-		RequiresImageGeneration: requiresImageGeneration,
-		RequireCompact:          requireCompact,
-		ExcludedIDs:             excludedIDs,
+		GroupID:                  groupID,
+		SessionHash:              sessionHash,
+		StickyAccountID:          stickyAccountID,
+		PreviousResponseID:       previousResponseID,
+		RequestedModel:           requestedModel,
+		RequiredTransport:        requiredTransport,
+		RequiredImageCapability:  requiredImageCapability,
+		RequiresImageGeneration:  requiresImageGeneration,
+		RequiresCodexImageBridge: requiresCodexImageBridge,
+		RequireCompact:           requireCompact,
+		ExcludedIDs:              excludedIDs,
 	})
 }
 

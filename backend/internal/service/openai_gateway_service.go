@@ -1256,7 +1256,7 @@ func (s *OpenAIGatewayService) SelectAccountForModel(ctx context.Context, groupI
 // SelectAccountForModelWithExclusions selects an account supporting the requested model while excluding specified accounts.
 // SelectAccountForModelWithExclusions 选择支持指定模型的账号，同时排除指定的账号。
 func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
-	return s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, 0, false)
+	return s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, 0, false, false)
 }
 
 // noAvailableOpenAISelectionError builds the standard "no account available" error
@@ -1350,7 +1350,7 @@ func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedMode
 	return upstreamModel
 }
 
-func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiresImageGeneration bool) (*Account, error) {
+func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiresImageGeneration bool, requiresCodexImageBridge bool) (*Account, error) {
 	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
 			"group_id", derefGroupID(groupID),
@@ -1360,7 +1360,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 
 	// 1. 尝试粘性会话命中
 	// Try sticky session hit
-	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiresImageGeneration); account != nil {
+	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiresImageGeneration, requiresCodexImageBridge); account != nil {
 		return account, nil
 	}
 
@@ -1373,7 +1373,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 
 	// 3. 按优先级 + LRU 选择最佳账号
 	// Select by priority + LRU
-	selected, compactBlocked := s.selectBestAccount(ctx, groupID, accounts, requestedModel, excludedIDs, requireCompact, requiresImageGeneration)
+	selected, compactBlocked := s.selectBestAccount(ctx, groupID, accounts, requestedModel, excludedIDs, requireCompact, requiresImageGeneration, requiresCodexImageBridge)
 
 	if selected == nil {
 		return nil, noAvailableOpenAISelectionError(requestedModel, compactBlocked)
@@ -1393,7 +1393,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 //
 // tryStickySessionHit attempts to get account from sticky session.
 // Returns account if hit and usable; clears session and returns nil if account is unavailable.
-func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiresImageGeneration bool) *Account {
+func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiresImageGeneration bool, requiresCodexImageBridge bool) *Account {
 	if sessionHash == "" {
 		return nil
 	}
@@ -1428,7 +1428,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 	if !isOpenAIAccountEligibleForRequest(account, requestedModel, false) {
 		return nil
 	}
-	if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
+	if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, account, requiresImageGeneration, requiresCodexImageBridge) {
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
@@ -1437,7 +1437,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
-	if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
+	if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, account, requiresImageGeneration, requiresCodexImageBridge) {
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
@@ -1460,7 +1460,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 // Returns nil if no available account. The second return reports whether at
 // least one candidate was filtered out solely because it lacks compact support
 // (only meaningful when requireCompact=true).
-func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiresImageGeneration bool) (*Account, bool) {
+func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiresImageGeneration bool, requiresCodexImageBridge bool) (*Account, bool) {
 	var selected *Account
 	selectedCompactTier := -1
 	compactBlocked := false
@@ -1483,7 +1483,7 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 		if fresh == nil {
 			continue
 		}
-		if !s.isOpenAIAccountImageRoutingCompatible(fresh, requiresImageGeneration) {
+		if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, fresh, requiresImageGeneration, requiresCodexImageBridge) {
 			continue
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
@@ -1559,14 +1559,18 @@ func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool
 
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
-	return s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, false)
+	return s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, false, false)
 }
 
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwarenessForImageIntent(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
-	return s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, true)
+	return s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, true, false)
 }
 
-func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiresImageGeneration bool) (*AccountSelectionResult, error) {
+func (s *OpenAIGatewayService) SelectAccountWithLoadAwarenessForCodexImageBridgeIntent(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, true, true)
+}
+
+func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiresImageGeneration bool, requiresCodexImageBridge bool) (*AccountSelectionResult, error) {
 	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
 			"group_id", derefGroupID(groupID),
@@ -1583,7 +1587,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		}
 	}
 	if s.concurrencyService == nil || !cfg.LoadBatchEnabled {
-		account, err := s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiresImageGeneration)
+		account, err := s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiresImageGeneration, requiresCodexImageBridge)
 		if err != nil {
 			return nil, err
 		}
@@ -1637,13 +1641,13 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 					_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 				}
 				if !clearSticky && isOpenAIAccountEligibleForRequest(account, requestedModel, false) {
-					if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
+					if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, account, requiresImageGeneration, requiresCodexImageBridge) {
 						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 					} else {
 						account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel, requireCompact)
 						if account == nil {
 							_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
-						} else if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
+						} else if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, account, requiresImageGeneration, requiresCodexImageBridge) {
 							_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 						} else if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel, requireCompact) {
 							_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
@@ -1687,7 +1691,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		if requestedModel != "" && !acc.IsModelSupported(requestedModel) {
 			continue
 		}
-		if !s.isOpenAIAccountImageRoutingCompatible(acc, requiresImageGeneration) {
+		if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, acc, requiresImageGeneration, requiresCodexImageBridge) {
 			continue
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, acc, requestedModel, requireCompact) {
@@ -1725,7 +1729,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			if fresh == nil {
 				continue
 			}
-			if !s.isOpenAIAccountImageRoutingCompatible(fresh, requiresImageGeneration) {
+			if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, fresh, requiresImageGeneration, requiresCodexImageBridge) {
 				continue
 			}
 			if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
@@ -1804,7 +1808,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 				if fresh == nil {
 					continue
 				}
-				if !s.isOpenAIAccountImageRoutingCompatible(fresh, requiresImageGeneration) {
+				if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, fresh, requiresImageGeneration, requiresCodexImageBridge) {
 					continue
 				}
 				if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
@@ -1835,7 +1839,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		if fresh == nil {
 			continue
 		}
-		if !s.isOpenAIAccountImageRoutingCompatible(fresh, requiresImageGeneration) {
+		if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, fresh, requiresImageGeneration, requiresCodexImageBridge) {
 			continue
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
@@ -2037,8 +2041,21 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	originalBody := body
 	reqModel, reqStream, promptCacheKey := extractOpenAIRequestMetaFromBody(body)
 	originalModel := reqModel
-	requiresImageGeneration := IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, body)
-	if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
+	apiKey := getAPIKeyFromContext(c)
+	var groupID *int64
+	if apiKey != nil {
+		groupID = apiKey.GroupID
+	}
+	requiresCodexImageBridge := IsCodexTextImageGenerationIntent(
+		openAIResponsesEndpoint,
+		reqModel,
+		body,
+		c.GetHeader("User-Agent"),
+		c.GetHeader("originator"),
+		s.cfg != nil && s.cfg.Gateway.ForceCodexCLI,
+	)
+	requiresImageGeneration := IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, body) || requiresCodexImageBridge
+	if !s.isOpenAIAccountImageRequestCompatible(ctx, groupID, account, requiresImageGeneration, requiresCodexImageBridge) {
 		return nil, newOpenAIImageAccountRoutingFailoverError(account, requiresImageGeneration)
 	}
 
@@ -2114,7 +2131,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			promptCacheKey = strings.TrimSpace(v)
 		}
 	}
-	apiKey := getAPIKeyFromContext(c)
 	imageGenerationAllowed := GroupAllowsImageGeneration(nil)
 	if apiKey != nil {
 		imageGenerationAllowed = GroupAllowsImageGeneration(apiKey.Group)
@@ -5526,6 +5542,11 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	result *OpenAIForwardResult,
 	multiplier float64,
 ) *CostBreakdown {
+	groupConfig := imagePriceConfigFromGroup(apiKeyGroup(apiKey))
+	if imagePriceConfigHasTierPrice(groupConfig, result.ImageSize) {
+		return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
+	}
+
 	if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil &&
 		(resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage) {
 		gid := apiKey.Group.ID
@@ -5545,14 +5566,6 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 		logger.LegacyPrintf("service.openai_gateway", "Calculate image channel cost failed: %v", err)
 	}
 
-	var groupConfig *ImagePriceConfig
-	if apiKey != nil && apiKey.Group != nil {
-		groupConfig = &ImagePriceConfig{
-			Price1K: apiKey.Group.ImagePrice1K,
-			Price2K: apiKey.Group.ImagePrice2K,
-			Price4K: apiKey.Group.ImagePrice4K,
-		}
-	}
 	return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
 }
 
