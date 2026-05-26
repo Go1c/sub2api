@@ -174,6 +174,36 @@ func TestOpenAIGatewayServiceForward_CodexImageInjectionSkipsTextOnlyAccounts(t 
 	require.NotContains(t, instructions, "image_generation")
 }
 
+func TestOpenAIGatewayServiceForward_CodexImagePromptInjectsOnImageOnlyBridgeAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"id":"resp_codex_image_only","model":"gpt-5.4","usage":{"input_tokens":1,"output_tokens":1}}`)),
+		},
+	}
+	svc := newOpenAIImageGenerationControlTestService(upstream)
+	svc.cfg.Gateway.CodexImageGenerationBridgeEnabled = true
+	c, _ := newOpenAIImageGenerationControlTestContext(true, "codex_cli_rs/0.125.0")
+	account := newOpenAIImageGenerationControlTestAccount()
+	account.Extra = map[string]any{
+		openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
+		featureKeyCodexImageGenerationBridge: true,
+	}
+	body := []byte(`{"model":"gpt-5.4","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"帮我生成一张卡通的游戏Icon图标"}]}],"stream":false}`)
+
+	result, err := svc.Forward(context.Background(), c, account, body)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, upstream.lastReq)
+	require.True(t, gjson.GetBytes(upstream.lastBody, `tools.#(type=="image_generation")`).Exists())
+	instructions := gjson.GetBytes(upstream.lastBody, "instructions").String()
+	require.Contains(t, instructions, "image_generation")
+}
+
 func TestOpenAIGatewayServiceForward_ExplicitImageToolWorksWithBridgeDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

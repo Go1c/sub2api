@@ -132,6 +132,31 @@ func TestIsImageGenerationIntentMapDetectsLegacyFunctionsImageTool(t *testing.T)
 	require.True(t, IsImageGenerationIntentMap("/v1/responses", "gpt-5.5", body))
 }
 
+func TestIsCodexTextImageGenerationIntentDetectsUserPrompt(t *testing.T) {
+	body := []byte(`{
+		"model":"gpt-5.4",
+		"input":[
+			{"type":"message","role":"developer","content":[{"type":"input_text","text":"Tools may mention image_generation here."}]},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"帮我生成一张卡通的游戏Icon图标"}]}
+		]
+	}`)
+
+	require.True(t, IsCodexTextImageGenerationIntent("/v1/responses", "gpt-5.4", body, "codex_cli_rs/0.125.0", "", false))
+}
+
+func TestIsCodexTextImageGenerationIntentIgnoresNonCodexAndDeveloperText(t *testing.T) {
+	body := []byte(`{
+		"model":"gpt-5.4",
+		"input":[
+			{"type":"message","role":"developer","content":[{"type":"input_text","text":"When users ask for image generation, use tools."}]},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"write code"}]}
+		]
+	}`)
+
+	require.False(t, IsCodexTextImageGenerationIntent("/v1/responses", "gpt-5.4", body, "codex_cli_rs/0.125.0", "", false))
+	require.False(t, IsCodexTextImageGenerationIntent("/v1/responses", "gpt-5.4", []byte(`{"input":"generate an image icon"}`), "unit-test-agent/1.0", "", false))
+}
+
 func TestResolveOpenAIResponsesImageBillingConfigUsesCurrentBodyModel(t *testing.T) {
 	imageModel, imageSize, err := resolveOpenAIResponsesImageBillingConfigFromBody(
 		[]byte(`{"model":"mapped-image-model","tools":[{"type":"image_generation","size":"1024x1024"}]}`),
