@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"strconv"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func (userSubRepoNoop) ListActiveByUserID(context.Context, int64) ([]UserSubscri
 func (userSubRepoNoop) ListByGroupID(context.Context, int64, pagination.PaginationParams) ([]UserSubscription, *pagination.PaginationResult, error) {
 	panic("unexpected ListByGroupID call")
 }
-func (userSubRepoNoop) List(context.Context, pagination.PaginationParams, *int64, *int64, string, string, string, string) ([]UserSubscription, *pagination.PaginationResult, error) {
+func (userSubRepoNoop) List(context.Context, pagination.PaginationParams, UserSubscriptionListFilters) ([]UserSubscription, *pagination.PaginationResult, error) {
 	panic("unexpected List call")
 }
 func (userSubRepoNoop) ExistsByUserIDAndGroupID(context.Context, int64, int64) (bool, error) {
@@ -122,6 +123,30 @@ func (userSubRepoNoop) ResetMonthlyUsage(context.Context, int64, time.Time) erro
 func (userSubRepoNoop) IncrementUsage(context.Context, int64, float64) error {
 	panic("unexpected IncrementUsage call")
 }
+
+// 订阅额度池扩展（默认 panic，测试需要时由具体 stub override）
+func (userSubRepoNoop) GetUsableCreditSubscription(context.Context, int64) (*UserSubscription, error) {
+	panic("unexpected GetUsableCreditSubscription call")
+}
+func (userSubRepoNoop) HasUsableCreditSubscription(context.Context, int64) (bool, error) {
+	panic("unexpected HasUsableCreditSubscription call")
+}
+func (userSubRepoNoop) GetRenewalEligibility(context.Context, int64) (RenewalEligibility, error) {
+	panic("unexpected GetRenewalEligibility call")
+}
+func (userSubRepoNoop) LockUserForSubscriptionWrite(context.Context, *sql.Tx, int64) error {
+	panic("unexpected LockUserForSubscriptionWrite call")
+}
+func (userSubRepoNoop) InsertCreditSubscription(context.Context, *sql.Tx, *UserSubscription) (*UserSubscription, error) {
+	panic("unexpected InsertCreditSubscription call")
+}
+func (userSubRepoNoop) ExpireCreditSubscriptions(context.Context) (int64, error) {
+	panic("unexpected ExpireCreditSubscriptions call")
+}
+func (userSubRepoNoop) MarkExpiredCreditLogged(context.Context, int64, time.Time) error {
+	panic("unexpected MarkExpiredCreditLogged call")
+}
+
 func (userSubRepoNoop) BatchUpdateExpiredStatus(context.Context) (int64, error) {
 	panic("unexpected BatchUpdateExpiredStatus call")
 }
@@ -157,7 +182,11 @@ func (s *subscriptionUserSubRepoStub) seed(sub *UserSubscription) {
 		s.nextID++
 	}
 	s.byID[cp.ID] = &cp
-	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
+	var gid int64
+	if cp.GroupID != nil {
+		gid = *cp.GroupID
+	}
+	s.byUserGroup[s.key(cp.UserID, gid)] = &cp
 }
 
 func (s *subscriptionUserSubRepoStub) ExistsByUserIDAndGroupID(_ context.Context, userID, groupID int64) (bool, error) {
@@ -186,7 +215,11 @@ func (s *subscriptionUserSubRepoStub) Create(_ context.Context, sub *UserSubscri
 	}
 	sub.ID = cp.ID
 	s.byID[cp.ID] = &cp
-	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
+	var gid int64
+	if cp.GroupID != nil {
+		gid = *cp.GroupID
+	}
+	s.byUserGroup[s.key(cp.UserID, gid)] = &cp
 	return nil
 }
 
@@ -205,10 +238,11 @@ func TestAssignSubscriptionReuseWhenSemanticsMatch(t *testing.T) {
 		group: &Group{ID: 1, SubscriptionType: SubscriptionTypeSubscription},
 	}
 	subRepo := newSubscriptionUserSubRepoStub()
+	gid1 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        10,
 		UserID:    1001,
-		GroupID:   1,
+		GroupID:   &gid1,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "init",
@@ -232,10 +266,11 @@ func TestAssignSubscriptionConflictWhenSemanticsMismatch(t *testing.T) {
 		group: &Group{ID: 1, SubscriptionType: SubscriptionTypeSubscription},
 	}
 	subRepo := newSubscriptionUserSubRepoStub()
+	gid2 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        11,
 		UserID:    2001,
-		GroupID:   1,
+		GroupID:   &gid2,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "old-note",
@@ -260,19 +295,21 @@ func TestBulkAssignSubscriptionCreatedReusedAndConflict(t *testing.T) {
 	}
 	subRepo := newSubscriptionUserSubRepoStub()
 	// user 1: 语义一致，可 reused
+	gid3 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        21,
 		UserID:    1,
-		GroupID:   1,
+		GroupID:   &gid3,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "same-note",
 	})
 	// user 3: 语义冲突（有效期不一致），应 failed
+	gid4 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        23,
 		UserID:    3,
-		GroupID:   1,
+		GroupID:   &gid4,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 60),
 		Notes:     "same-note",
@@ -328,9 +365,10 @@ func TestNormalizeAssignValidityDays(t *testing.T) {
 
 func TestDetectAssignSemanticConflictCases(t *testing.T) {
 	start := time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC)
+	gid5 := int64(1)
 	base := &UserSubscription{
 		UserID:    1,
-		GroupID:   1,
+		GroupID:   &gid5,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "same",

@@ -16,6 +16,16 @@ import type {
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
 
+export const paymentSubscriptionErrorMessages: Record<string, string> = {
+  SUBSCRIPTION_CREDIT_EXHAUSTED: 'Subscription credit has been exhausted. Please renew or buy another plan.',
+  SUBSCRIPTION_EXPIRED: 'Subscription has expired. Please renew or buy another plan.',
+  SUBSCRIPTION_DAILY_LIMIT_REACHED: 'Daily subscription credit limit reached. Please try again after the daily reset.',
+  SUBSCRIPTION_WEEKLY_LIMIT_REACHED: 'Weekly subscription credit limit reached. Please try again after the weekly reset.',
+  SUBSCRIPTION_RENEWAL_NOT_ALLOWED: 'This subscription cannot be renewed right now.',
+  DAILY_LIMIT_EXCEEDED: 'Daily subscription credit limit reached. Please try again after the daily reset.',
+  WEEKLY_LIMIT_EXCEEDED: 'Weekly subscription credit limit reached. Please try again after the weekly reset.',
+}
+
 export const paymentAPI = {
   /** Get payment configuration (enabled types, limits, etc.) */
   getConfig() {

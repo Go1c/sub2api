@@ -89,6 +89,34 @@
                 @change="applyFilters"
               />
             </div>
+            <div class="w-full sm:w-36">
+              <input
+                v-model="filters.plan_id"
+                type="number"
+                min="1"
+                class="input"
+                :placeholder="t('admin.subscriptions.planId')"
+                @keyup.enter="applyFilters"
+              />
+            </div>
+            <div class="w-full sm:w-56">
+              <input
+                v-model.trim="filters.email"
+                type="search"
+                class="input"
+                :placeholder="t('admin.subscriptions.emailFilter')"
+                @keyup.enter="applyFilters"
+              />
+            </div>
+            <div class="w-full sm:w-40">
+              <input v-model="filters.created_start" type="date" class="input" :title="t('admin.subscriptions.createdStart')" @change="applyFilters" />
+            </div>
+            <div class="w-full sm:w-40">
+              <input v-model="filters.created_end" type="date" class="input" :title="t('admin.subscriptions.createdEnd')" @change="applyFilters" />
+            </div>
+            <button type="button" class="btn btn-secondary" @click="applyFilters">
+              {{ t('common.search') }}
+            </button>
           </div>
 
           <!-- Right: Actions -->
@@ -213,23 +241,40 @@
 
           <template #cell-usage="{ row }">
             <div class="min-w-[280px] space-y-2">
+              <div class="rounded-lg bg-slate-50 px-3 py-2 dark:bg-dark-800">
+                <div class="mb-1 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <span>{{ t('admin.subscriptions.quotaPool') }}</span>
+                  <span>{{ formatUsd(row.quota_remaining_usd) }} {{ t('admin.subscriptions.remaining') }}</span>
+                </div>
+                <div class="h-2 rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    class="h-2 rounded-full bg-blue-500 transition-all"
+                    :style="{ width: getProgressWidth(row.quota_used_usd, row.quota_limit_usd ?? null) }"
+                  ></div>
+                </div>
+                <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+                  <span>{{ t('admin.subscriptions.limit') }}: {{ formatUsd(row.quota_limit_usd) }}</span>
+                  <span>{{ t('admin.subscriptions.used') }}: {{ formatUsd(row.quota_used_usd) }}</span>
+                  <span v-if="getRecentWaste(row) != null">{{ t('admin.subscriptions.recent30dWaste') }}: {{ formatUsd(getRecentWaste(row)) }}</span>
+                </div>
+              </div>
               <!-- Daily Usage -->
-              <div v-if="row.group?.daily_limit_usd" class="usage-row">
+              <div v-if="getDailyLimit(row)" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.daily') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.daily_usage_usd, row.group?.daily_limit_usd)"
+                      :class="getProgressClass(row.daily_usage_usd, getDailyLimit(row))"
                       :style="{
-                        width: getProgressWidth(row.daily_usage_usd, row.group?.daily_limit_usd)
+                        width: getProgressWidth(row.daily_usage_usd, getDailyLimit(row))
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
-                    ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
+                    {{ formatUsd(row.daily_usage_usd) }}
                     <span class="text-gray-400">/</span>
-                    ${{ row.group?.daily_limit_usd?.toFixed(2) }}
+                    {{ formatUsd(getDailyLimit(row)) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.daily_window_start">
@@ -251,22 +296,22 @@
               </div>
 
               <!-- Weekly Usage -->
-              <div v-if="row.group?.weekly_limit_usd" class="usage-row">
+              <div v-if="getWeeklyLimit(row)" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.weekly_usage_usd, row.group?.weekly_limit_usd)"
+                      :class="getProgressClass(row.weekly_usage_usd, getWeeklyLimit(row))"
                       :style="{
-                        width: getProgressWidth(row.weekly_usage_usd, row.group?.weekly_limit_usd)
+                        width: getProgressWidth(row.weekly_usage_usd, getWeeklyLimit(row))
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
-                    ${{ row.weekly_usage_usd?.toFixed(2) || '0.00' }}
+                    {{ formatUsd(row.weekly_usage_usd) }}
                     <span class="text-gray-400">/</span>
-                    ${{ row.group?.weekly_limit_usd?.toFixed(2) }}
+                    {{ formatUsd(getWeeklyLimit(row)) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.weekly_window_start">
@@ -329,6 +374,8 @@
                 v-if="
                   !row.group?.daily_limit_usd &&
                   !row.group?.weekly_limit_usd &&
+                  !row.daily_limit_usd &&
+                  !row.weekly_limit_usd &&
                   !row.group?.monthly_limit_usd
                 "
                 class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
@@ -339,6 +386,11 @@
                 </span>
               </div>
             </div>
+          </template>
+
+          <template #cell-exhausted_at="{ value }">
+            <span v-if="value" class="text-sm text-red-600 dark:text-red-400">{{ formatDateOnly(value) }}</span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
           <template #cell-expires_at="{ value }">
@@ -362,18 +414,20 @@
             }}</span>
           </template>
 
-          <template #cell-status="{ value }">
+          <template #cell-status="{ row }">
             <span
               :class="[
                 'badge',
-                value === 'active'
+                getSubscriptionState(row) === 'usable'
                   ? 'badge-success'
-                  : value === 'expired'
+                  : getSubscriptionState(row) === 'expired'
                     ? 'badge-warning'
+                    : getSubscriptionState(row) === 'exhausted'
+                      ? 'badge-warning'
                     : 'badge-danger'
               ]"
             >
-              {{ t(`admin.subscriptions.status.${value}`) }}
+              {{ t(`admin.subscriptions.status.${getSubscriptionState(row)}`) }}
             </span>
           </template>
 
@@ -819,6 +873,7 @@ const allColumns = computed<Column[]>(() => [
   },
   { key: 'group', label: t('admin.subscriptions.columns.group'), sortable: false },
   { key: 'usage', label: t('admin.subscriptions.columns.usage'), sortable: false },
+  { key: 'exhausted_at', label: t('admin.subscriptions.columns.exhaustedAt'), sortable: true },
   { key: 'expires_at', label: t('admin.subscriptions.columns.expires'), sortable: true },
   { key: 'status', label: t('admin.subscriptions.columns.status'), sortable: true },
   { key: 'actions', label: t('admin.subscriptions.columns.actions'), sortable: false }
@@ -892,7 +947,8 @@ const statusOptions = computed(() => [
   { value: '', label: t('admin.subscriptions.allStatus') },
   { value: 'active', label: t('admin.subscriptions.status.active') },
   { value: 'expired', label: t('admin.subscriptions.status.expired') },
-  { value: 'revoked', label: t('admin.subscriptions.status.revoked') }
+  { value: 'revoked', label: t('admin.subscriptions.status.revoked') },
+  { value: 'suspended', label: t('admin.subscriptions.status.suspended') }
 ])
 
 const subscriptions = ref<UserSubscription[]>([])
@@ -920,6 +976,10 @@ const filters = reactive({
   status: 'active',
   group_id: '',
   platform: '',
+  plan_id: '',
+  email: '',
+  created_start: '',
+  created_end: '',
   user_id: null as number | null
 })
 
@@ -1006,6 +1066,10 @@ const loadSubscriptions = async () => {
         status: (filters.status as any) || undefined,
         group_id: filters.group_id ? parseInt(filters.group_id) : undefined,
         platform: filters.platform || undefined,
+        plan_id: filters.plan_id ? parseInt(filters.plan_id) : undefined,
+        email: filters.email || undefined,
+        created_start: filters.created_start || undefined,
+        created_end: filters.created_end || undefined,
         user_id: filters.user_id || undefined,
         sort_by: sortState.sort_by,
         sort_order: sortState.sort_order
@@ -1311,6 +1375,30 @@ const getProgressClass = (used: number | null | undefined, limit: number | null)
   if (percentage >= 90) return 'bg-red-500'
   if (percentage >= 70) return 'bg-orange-500'
   return 'bg-green-500'
+}
+
+const getDailyLimit = (sub: UserSubscription): number | null =>
+  sub.daily_limit_usd ?? sub.group?.daily_limit_usd ?? null
+
+const getWeeklyLimit = (sub: UserSubscription): number | null =>
+  sub.weekly_limit_usd ?? sub.group?.weekly_limit_usd ?? null
+
+const formatUsd = (value: number | null | undefined): string => `$${(value ?? 0).toFixed(2)}`
+
+const getRecentWaste = (sub: UserSubscription): number | null => {
+  const record = sub as unknown as Record<string, unknown>
+  const value = record.recent_30d_wasted_usd ?? record.recent_30d_waste_usd
+  return typeof value === 'number' ? value : null
+}
+
+const getSubscriptionState = (sub: UserSubscription): 'usable' | 'exhausted' | 'expired' | 'suspended' | 'revoked' => {
+  if (sub.status === 'revoked') return 'revoked'
+  if (sub.status === 'suspended') return 'suspended'
+  if (sub.status === 'expired') return 'expired'
+  if (sub.exhausted_at || sub.is_usable === false || (sub.quota_remaining_usd != null && sub.quota_remaining_usd <= 0)) {
+    return 'exhausted'
+  }
+  return 'usable'
 }
 
 // Format reset time based on window start and period type

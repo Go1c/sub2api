@@ -439,6 +439,50 @@ func TestUpdatePaymentConfig_PersistsVisibleMethodRouting(t *testing.T) {
 	}
 }
 
+func TestPaymentConfigServiceCreatePlanSetsCreditPoolFields(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	svc := &PaymentConfigService{entClient: client}
+	daily := 3.5
+	weekly := 12.5
+
+	plan, err := svc.CreatePlan(ctx, CreatePlanRequest{
+		Name:           "Credit Pool",
+		Description:    "pooled credits",
+		Price:          19.9,
+		QuotaUSD:       25,
+		DailyLimitUSD:  &daily,
+		WeeklyLimitUSD: &weekly,
+		ScopeType:      SubscriptionScopePlatforms,
+		ScopeConfig:    map[string]any{"platforms": []any{PlatformAnthropic}},
+		ValidityDays:   30,
+		ValidityUnit:   "day",
+		ForSale:        true,
+	})
+	if err != nil {
+		t.Fatalf("CreatePlan returned error: %v", err)
+	}
+
+	if plan.GroupID != nil {
+		t.Fatalf("GroupID = %v, want nil", *plan.GroupID)
+	}
+	if plan.QuotaUsd != 25 {
+		t.Fatalf("QuotaUsd = %v, want 25", plan.QuotaUsd)
+	}
+	if plan.DailyLimitUsd == nil || *plan.DailyLimitUsd != daily {
+		t.Fatalf("DailyLimitUsd = %v, want %v", plan.DailyLimitUsd, daily)
+	}
+	if plan.WeeklyLimitUsd == nil || *plan.WeeklyLimitUsd != weekly {
+		t.Fatalf("WeeklyLimitUsd = %v, want %v", plan.WeeklyLimitUsd, weekly)
+	}
+	if plan.ScopeType != SubscriptionScopePlatforms {
+		t.Fatalf("ScopeType = %q, want %q", plan.ScopeType, SubscriptionScopePlatforms)
+	}
+	if got := plan.ScopeConfig["platforms"]; got == nil {
+		t.Fatalf("ScopeConfig platforms missing: %#v", plan.ScopeConfig)
+	}
+}
+
 func paymentConfigStrPtr(value string) *string {
 	return &value
 }

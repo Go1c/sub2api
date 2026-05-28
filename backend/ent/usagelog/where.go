@@ -180,6 +180,16 @@ func ActualCost(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldActualCost, v))
 }
 
+// SubscriptionCostUsd applies equality check predicate on the "subscription_cost_usd" field. It's identical to SubscriptionCostUsdEQ.
+func SubscriptionCostUsd(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldSubscriptionCostUsd, v))
+}
+
+// BalanceCostUsd applies equality check predicate on the "balance_cost_usd" field. It's identical to BalanceCostUsdEQ.
+func BalanceCostUsd(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldBalanceCostUsd, v))
+}
+
 // RateMultiplier applies equality check predicate on the "rate_multiplier" field. It's identical to RateMultiplierEQ.
 func RateMultiplier(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldRateMultiplier, v))
@@ -1395,6 +1405,86 @@ func ActualCostLTE(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldLTE(FieldActualCost, v))
 }
 
+// SubscriptionCostUsdEQ applies the EQ predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldSubscriptionCostUsd, v))
+}
+
+// SubscriptionCostUsdNEQ applies the NEQ predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdNEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldSubscriptionCostUsd, v))
+}
+
+// SubscriptionCostUsdIn applies the In predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldSubscriptionCostUsd, vs...))
+}
+
+// SubscriptionCostUsdNotIn applies the NotIn predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdNotIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldSubscriptionCostUsd, vs...))
+}
+
+// SubscriptionCostUsdGT applies the GT predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdGT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldSubscriptionCostUsd, v))
+}
+
+// SubscriptionCostUsdGTE applies the GTE predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdGTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldSubscriptionCostUsd, v))
+}
+
+// SubscriptionCostUsdLT applies the LT predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdLT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldSubscriptionCostUsd, v))
+}
+
+// SubscriptionCostUsdLTE applies the LTE predicate on the "subscription_cost_usd" field.
+func SubscriptionCostUsdLTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldSubscriptionCostUsd, v))
+}
+
+// BalanceCostUsdEQ applies the EQ predicate on the "balance_cost_usd" field.
+func BalanceCostUsdEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldBalanceCostUsd, v))
+}
+
+// BalanceCostUsdNEQ applies the NEQ predicate on the "balance_cost_usd" field.
+func BalanceCostUsdNEQ(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldBalanceCostUsd, v))
+}
+
+// BalanceCostUsdIn applies the In predicate on the "balance_cost_usd" field.
+func BalanceCostUsdIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldBalanceCostUsd, vs...))
+}
+
+// BalanceCostUsdNotIn applies the NotIn predicate on the "balance_cost_usd" field.
+func BalanceCostUsdNotIn(vs ...float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldBalanceCostUsd, vs...))
+}
+
+// BalanceCostUsdGT applies the GT predicate on the "balance_cost_usd" field.
+func BalanceCostUsdGT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldBalanceCostUsd, v))
+}
+
+// BalanceCostUsdGTE applies the GTE predicate on the "balance_cost_usd" field.
+func BalanceCostUsdGTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldBalanceCostUsd, v))
+}
+
+// BalanceCostUsdLT applies the LT predicate on the "balance_cost_usd" field.
+func BalanceCostUsdLT(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldBalanceCostUsd, v))
+}
+
+// BalanceCostUsdLTE applies the LTE predicate on the "balance_cost_usd" field.
+func BalanceCostUsdLTE(v float64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldBalanceCostUsd, v))
+}
+
 // RateMultiplierEQ applies the EQ predicate on the "rate_multiplier" field.
 func RateMultiplierEQ(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldRateMultiplier, v))
@@ -2057,6 +2147,29 @@ func HasSubscription() predicate.UsageLog {
 func HasSubscriptionWith(preds ...predicate.UserSubscription) predicate.UsageLog {
 	return predicate.UsageLog(func(s *sql.Selector) {
 		step := newSubscriptionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSubscriptionCreditLedgers applies the HasEdge predicate on the "subscription_credit_ledgers" edge.
+func HasSubscriptionCreditLedgers() predicate.UsageLog {
+	return predicate.UsageLog(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionCreditLedgersTable, SubscriptionCreditLedgersColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSubscriptionCreditLedgersWith applies the HasEdge predicate on the "subscription_credit_ledgers" edge with a given conditions (other predicates).
+func HasSubscriptionCreditLedgersWith(preds ...predicate.SubscriptionCreditLedger) predicate.UsageLog {
+	return predicate.UsageLog(func(s *sql.Selector) {
+		step := newSubscriptionCreditLedgersStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

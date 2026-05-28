@@ -105,6 +105,7 @@ func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 
 type balanceGateCacheStub struct {
 	balance float64
+	subData *SubscriptionCacheData
 }
 
 func (b *balanceGateCacheStub) GetUserBalance(context.Context, int64) (float64, error) {
@@ -124,6 +125,9 @@ func (b *balanceGateCacheStub) InvalidateUserBalance(context.Context, int64) err
 }
 
 func (b *balanceGateCacheStub) GetSubscriptionCache(context.Context, int64, int64) (*SubscriptionCacheData, error) {
+	if b.subData != nil {
+		return b.subData, nil
+	}
 	return nil, errors.New("not implemented")
 }
 
@@ -208,6 +212,90 @@ func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateAllowsQualif
 	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1, TotalRecharged: 6}, nil, &Group{}, nil)
 
 	require.NoError(t, err)
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_SubscriptionDoesNotRequireBalance(t *testing.T) {
+	limit := 1.0
+	sub := &UserSubscription{
+		ID:            10,
+		UserID:        1,
+		Status:        SubscriptionStatusActive,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		ScopeType:     SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:   map[string]any{},
+		DailyLimitUSD: &limit,
+		DailyUsageUSD: 0.25,
+		QuotaLimitUSD: 10,
+		QuotaUsedUSD:  1,
+	}
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 0}, nil, nil, nil, nil, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(
+		context.Background(),
+		&User{ID: 1},
+		nil,
+		&Group{ID: 2, Status: StatusActive, Platform: PlatformAnthropic},
+		sub,
+	)
+
+	require.NoError(t, err)
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_SubscriptionLimitFallsBackToBalance(t *testing.T) {
+	limit := 1.0
+	sub := &UserSubscription{
+		ID:            10,
+		UserID:        1,
+		Status:        SubscriptionStatusActive,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		ScopeType:     SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:   map[string]any{},
+		DailyLimitUSD: &limit,
+		DailyUsageUSD: 1,
+		QuotaLimitUSD: 10,
+		QuotaUsedUSD:  1,
+	}
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 3}, nil, nil, nil, nil, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(
+		context.Background(),
+		&User{ID: 1},
+		nil,
+		&Group{ID: 2, Status: StatusActive, Platform: PlatformAnthropic},
+		sub,
+	)
+
+	require.NoError(t, err)
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_SubscriptionLimitWithoutBalanceReturnsLimitError(t *testing.T) {
+	limit := 1.0
+	sub := &UserSubscription{
+		ID:            10,
+		UserID:        1,
+		Status:        SubscriptionStatusActive,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		ScopeType:     SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:   map[string]any{},
+		DailyLimitUSD: &limit,
+		DailyUsageUSD: 1,
+		QuotaLimitUSD: 10,
+		QuotaUsedUSD:  1,
+	}
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 0}, nil, nil, nil, nil, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(
+		context.Background(),
+		&User{ID: 1},
+		nil,
+		&Group{ID: 2, Status: StatusActive, Platform: PlatformAnthropic},
+		sub,
+	)
+
+	require.ErrorIs(t, err, ErrDailyLimitExceeded)
 }
 
 func TestSettingServiceGetBalanceUsageGateSettingsUsesProcessCache(t *testing.T) {

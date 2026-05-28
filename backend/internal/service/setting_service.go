@@ -2858,6 +2858,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingPaymentVisibleMethodAlipayEnabled:     "false",
 		SettingPaymentVisibleMethodWxpayEnabled:      "false",
 		openAIAdvancedSchedulerSettingKey:            "false",
+
+		// 订阅额度池通知 - 重新订阅链接（空表示回退到前端订阅页）
+		SettingKeySubscriptionCreditPoolRepurchaseURL: "",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)

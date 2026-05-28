@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -711,6 +712,21 @@ func (_u *GroupUpdate) AddUsageLogs(v ...*UsageLog) *GroupUpdate {
 	return _u.AddUsageLogIDs(ids...)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *GroupUpdate) AddSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdate) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_u *GroupUpdate) AddAccountIDs(ids ...int64) *GroupUpdate {
 	_u.mutation.AddAccountIDs(ids...)
@@ -828,6 +844,27 @@ func (_u *GroupUpdate) RemoveUsageLogs(v ...*UsageLog) *GroupUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdate) ClearSubscriptionCreditLedgers() *GroupUpdate {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *GroupUpdate) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *GroupUpdate) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // ClearAccounts clears all "accounts" edges to the Account entity.
@@ -1308,6 +1345,51 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -2124,6 +2206,21 @@ func (_u *GroupUpdateOne) AddUsageLogs(v ...*UsageLog) *GroupUpdateOne {
 	return _u.AddUsageLogIDs(ids...)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *GroupUpdateOne) AddSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdateOne) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_u *GroupUpdateOne) AddAccountIDs(ids ...int64) *GroupUpdateOne {
 	_u.mutation.AddAccountIDs(ids...)
@@ -2241,6 +2338,27 @@ func (_u *GroupUpdateOne) RemoveUsageLogs(v ...*UsageLog) *GroupUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdateOne) ClearSubscriptionCreditLedgers() *GroupUpdateOne {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *GroupUpdateOne) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *GroupUpdateOne) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // ClearAccounts clears all "accounts" edges to the Account entity.
@@ -2751,6 +2869,51 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

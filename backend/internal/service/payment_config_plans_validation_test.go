@@ -27,8 +27,7 @@ func TestValidatePlanRequired_WhitespaceName(t *testing.T) {
 
 func TestValidatePlanRequired_ZeroGroupID(t *testing.T) {
 	err := validatePlanRequired("Pro", 0, 9.99, 30, "days", nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "group")
+	require.NoError(t, err)
 }
 
 func TestValidatePlanRequired_NegativeGroupID(t *testing.T) {
@@ -149,8 +148,7 @@ func TestValidatePlanPatch_ValidName(t *testing.T) {
 
 func TestValidatePlanPatch_ZeroGroupID(t *testing.T) {
 	err := validatePlanPatch(UpdatePlanRequest{GroupID: ptrInt64(0)})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "group")
+	require.NoError(t, err)
 }
 
 func TestValidatePlanPatch_NegativePrice(t *testing.T) {
@@ -189,5 +187,55 @@ func TestValidatePlanPatch_ValidValidityUnit(t *testing.T) {
 
 func TestValidatePlanPatch_AllNil(t *testing.T) {
 	err := validatePlanPatch(UpdatePlanRequest{})
+	require.NoError(t, err)
+}
+
+func TestValidatePlanCreate_AllowsCreditPoolWithoutGroup(t *testing.T) {
+	err := validatePlanCreate(CreatePlanRequest{
+		Name:         "Credit Pool",
+		GroupID:      0,
+		Price:        19.9,
+		QuotaUSD:     25,
+		ValidityDays: 30,
+		ValidityUnit: "day",
+		ScopeType:    SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:  map[string]any{},
+	})
+	require.NoError(t, err)
+}
+
+func TestValidatePlanCreate_RejectsInvalidCreditPoolQuota(t *testing.T) {
+	err := validatePlanCreate(CreatePlanRequest{
+		Name:         "Credit Pool",
+		Price:        19.9,
+		QuotaUSD:     0,
+		ValidityDays: 30,
+		ValidityUnit: "day",
+		ScopeType:    SubscriptionScopeAllAvailableGroups,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "quota")
+}
+
+func TestValidatePlanPatch_RejectsValidityBeyondThirtyDays(t *testing.T) {
+	err := validatePlanPatch(UpdatePlanRequest{
+		ValidityDays: ptrInt(31),
+		ValidityUnit: ptrStr("day"),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "validity")
+}
+
+func TestValidatePlanPatch_RejectsInvalidQuota(t *testing.T) {
+	err := validatePlanPatch(UpdatePlanRequest{QuotaUSD: ptrFloat(0)})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "quota")
+}
+
+func TestValidatePlanPatch_AllowsZeroDailyWeeklyLimitForClearSentinel(t *testing.T) {
+	err := validatePlanPatch(UpdatePlanRequest{
+		DailyLimitUSD:  ptrFloat(0),
+		WeeklyLimitUSD: ptrFloat(0),
+	})
 	require.NoError(t, err)
 }

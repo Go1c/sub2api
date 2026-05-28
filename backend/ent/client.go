@@ -44,6 +44,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -120,6 +121,8 @@ type Client struct {
 	Setting *SettingClient
 	// SiteMessage is the client for interacting with the SiteMessage builders.
 	SiteMessage *SiteMessageClient
+	// SubscriptionCreditLedger is the client for interacting with the SubscriptionCreditLedger builders.
+	SubscriptionCreditLedger *SubscriptionCreditLedgerClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
@@ -178,6 +181,7 @@ func (c *Client) init() {
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
 	c.SiteMessage = NewSiteMessageClient(c.config)
+	c.SubscriptionCreditLedger = NewSubscriptionCreditLedgerClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
@@ -308,6 +312,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
 		SiteMessage:                   NewSiteMessageClient(cfg),
+		SubscriptionCreditLedger:      NewSubscriptionCreditLedgerClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
@@ -365,6 +370,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
 		SiteMessage:                   NewSiteMessageClient(cfg),
+		SubscriptionCreditLedger:      NewSubscriptionCreditLedgerClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
@@ -411,9 +417,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.LotteryCode, c.LotteryDraw, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SiteMessage,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.SubscriptionCreditLedger, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -431,9 +437,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.LotteryCode, c.LotteryDraw, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SiteMessage,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.SubscriptionCreditLedger, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -500,6 +506,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Setting.mutate(ctx, m)
 	case *SiteMessageMutation:
 		return c.SiteMessage.mutate(ctx, m)
+	case *SubscriptionCreditLedgerMutation:
+		return c.SubscriptionCreditLedger.mutate(ctx, m)
 	case *SubscriptionPlanMutation:
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
@@ -672,6 +680,22 @@ func (c *APIKeyClient) QueryUsageLogs(_m *APIKey) *UsageLogQuery {
 			sqlgraph.From(apikey.Table, apikey.FieldID, id),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, apikey.UsageLogsTable, apikey.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscriptionCreditLedgers queries the subscription_credit_ledgers edge of a APIKey.
+func (c *APIKeyClient) QuerySubscriptionCreditLedgers(_m *APIKey) *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(apikey.Table, apikey.FieldID, id),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, apikey.SubscriptionCreditLedgersTable, apikey.SubscriptionCreditLedgersColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -2598,6 +2622,22 @@ func (c *GroupClient) QueryUsageLogs(_m *Group) *UsageLogQuery {
 	return query
 }
 
+// QuerySubscriptionCreditLedgers queries the subscription_credit_ledgers edge of a Group.
+func (c *GroupClient) QuerySubscriptionCreditLedgers(_m *Group) *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.SubscriptionCreditLedgersTable, group.SubscriptionCreditLedgersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryAccounts queries the accounts edge of a Group.
 func (c *GroupClient) QueryAccounts(_m *Group) *AccountQuery {
 	query := (&AccountClient{config: c.config}).Query()
@@ -3636,6 +3676,22 @@ func (c *PaymentOrderClient) QueryUser(_m *PaymentOrder) *UserQuery {
 			sqlgraph.From(paymentorder.Table, paymentorder.FieldID, id),
 			sqlgraph.To(user.Table, user.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, paymentorder.UserTable, paymentorder.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscriptionCreditLedgers queries the subscription_credit_ledgers edge of a PaymentOrder.
+func (c *PaymentOrderClient) QuerySubscriptionCreditLedgers(_m *PaymentOrder) *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(paymentorder.Table, paymentorder.FieldID, id),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, paymentorder.SubscriptionCreditLedgersTable, paymentorder.SubscriptionCreditLedgersColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -5059,6 +5115,235 @@ func (c *SiteMessageClient) mutate(ctx context.Context, m *SiteMessageMutation) 
 	}
 }
 
+// SubscriptionCreditLedgerClient is a client for the SubscriptionCreditLedger schema.
+type SubscriptionCreditLedgerClient struct {
+	config
+}
+
+// NewSubscriptionCreditLedgerClient returns a client for the SubscriptionCreditLedger from the given config.
+func NewSubscriptionCreditLedgerClient(c config) *SubscriptionCreditLedgerClient {
+	return &SubscriptionCreditLedgerClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptioncreditledger.Hooks(f(g(h())))`.
+func (c *SubscriptionCreditLedgerClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionCreditLedger = append(c.hooks.SubscriptionCreditLedger, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptioncreditledger.Intercept(f(g(h())))`.
+func (c *SubscriptionCreditLedgerClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionCreditLedger = append(c.inters.SubscriptionCreditLedger, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionCreditLedger entity.
+func (c *SubscriptionCreditLedgerClient) Create() *SubscriptionCreditLedgerCreate {
+	mutation := newSubscriptionCreditLedgerMutation(c.config, OpCreate)
+	return &SubscriptionCreditLedgerCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionCreditLedger entities.
+func (c *SubscriptionCreditLedgerClient) CreateBulk(builders ...*SubscriptionCreditLedgerCreate) *SubscriptionCreditLedgerCreateBulk {
+	return &SubscriptionCreditLedgerCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionCreditLedgerClient) MapCreateBulk(slice any, setFunc func(*SubscriptionCreditLedgerCreate, int)) *SubscriptionCreditLedgerCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionCreditLedgerCreateBulk{err: fmt.Errorf("calling to SubscriptionCreditLedgerClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionCreditLedgerCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionCreditLedgerCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) Update() *SubscriptionCreditLedgerUpdate {
+	mutation := newSubscriptionCreditLedgerMutation(c.config, OpUpdate)
+	return &SubscriptionCreditLedgerUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionCreditLedgerClient) UpdateOne(_m *SubscriptionCreditLedger) *SubscriptionCreditLedgerUpdateOne {
+	mutation := newSubscriptionCreditLedgerMutation(c.config, OpUpdateOne, withSubscriptionCreditLedger(_m))
+	return &SubscriptionCreditLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionCreditLedgerClient) UpdateOneID(id int64) *SubscriptionCreditLedgerUpdateOne {
+	mutation := newSubscriptionCreditLedgerMutation(c.config, OpUpdateOne, withSubscriptionCreditLedgerID(id))
+	return &SubscriptionCreditLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) Delete() *SubscriptionCreditLedgerDelete {
+	mutation := newSubscriptionCreditLedgerMutation(c.config, OpDelete)
+	return &SubscriptionCreditLedgerDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionCreditLedgerClient) DeleteOne(_m *SubscriptionCreditLedger) *SubscriptionCreditLedgerDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionCreditLedgerClient) DeleteOneID(id int64) *SubscriptionCreditLedgerDeleteOne {
+	builder := c.Delete().Where(subscriptioncreditledger.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionCreditLedgerDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) Query() *SubscriptionCreditLedgerQuery {
+	return &SubscriptionCreditLedgerQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionCreditLedger},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionCreditLedger entity by its id.
+func (c *SubscriptionCreditLedgerClient) Get(ctx context.Context, id int64) (*SubscriptionCreditLedger, error) {
+	return c.Query().Where(subscriptioncreditledger.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionCreditLedgerClient) GetX(ctx context.Context, id int64) *SubscriptionCreditLedger {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) QueryUser(_m *SubscriptionCreditLedger) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptioncreditledger.UserTable, subscriptioncreditledger.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscription queries the subscription edge of a SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) QuerySubscription(_m *SubscriptionCreditLedger) *UserSubscriptionQuery {
+	query := (&UserSubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID, id),
+			sqlgraph.To(usersubscription.Table, usersubscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptioncreditledger.SubscriptionTable, subscriptioncreditledger.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) QueryGroup(_m *SubscriptionCreditLedger) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptioncreditledger.GroupTable, subscriptioncreditledger.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKey queries the api_key edge of a SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) QueryAPIKey(_m *SubscriptionCreditLedger) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptioncreditledger.APIKeyTable, subscriptioncreditledger.APIKeyColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUsageLog queries the usage_log edge of a SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) QueryUsageLog(_m *SubscriptionCreditLedger) *UsageLogQuery {
+	query := (&UsageLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID, id),
+			sqlgraph.To(usagelog.Table, usagelog.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptioncreditledger.UsageLogTable, subscriptioncreditledger.UsageLogColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrder queries the order edge of a SubscriptionCreditLedger.
+func (c *SubscriptionCreditLedgerClient) QueryOrder(_m *SubscriptionCreditLedger) *PaymentOrderQuery {
+	query := (&PaymentOrderClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID, id),
+			sqlgraph.To(paymentorder.Table, paymentorder.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptioncreditledger.OrderTable, subscriptioncreditledger.OrderColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionCreditLedgerClient) Hooks() []Hook {
+	return c.hooks.SubscriptionCreditLedger
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionCreditLedgerClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionCreditLedger
+}
+
+func (c *SubscriptionCreditLedgerClient) mutate(ctx context.Context, m *SubscriptionCreditLedgerMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionCreditLedgerCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionCreditLedgerUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionCreditLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionCreditLedgerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionCreditLedger mutation op: %q", m.Op())
+	}
+}
+
 // SubscriptionPlanClient is a client for the SubscriptionPlan schema.
 type SubscriptionPlanClient struct {
 	config
@@ -5646,6 +5931,22 @@ func (c *UsageLogClient) QuerySubscription(_m *UsageLog) *UserSubscriptionQuery 
 	return query
 }
 
+// QuerySubscriptionCreditLedgers queries the subscription_credit_ledgers edge of a UsageLog.
+func (c *UsageLogClient) QuerySubscriptionCreditLedgers(_m *UsageLog) *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usagelog.Table, usagelog.FieldID, id),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usagelog.SubscriptionCreditLedgersTable, usagelog.SubscriptionCreditLedgersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UsageLogClient) Hooks() []Hook {
 	return c.hooks.UsageLog
@@ -5964,6 +6265,22 @@ func (c *UserClient) QueryPaymentOrders(_m *User) *PaymentOrderQuery {
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(paymentorder.Table, paymentorder.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.PaymentOrdersTable, user.PaymentOrdersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscriptionCreditLedgers queries the subscription_credit_ledgers edge of a User.
+func (c *UserClient) QuerySubscriptionCreditLedgers(_m *User) *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SubscriptionCreditLedgersTable, user.SubscriptionCreditLedgersColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -6650,6 +6967,22 @@ func (c *UserSubscriptionClient) QueryUsageLogs(_m *UserSubscription) *UsageLogQ
 	return query
 }
 
+// QueryCreditLedger queries the credit_ledger edge of a UserSubscription.
+func (c *UserSubscriptionClient) QueryCreditLedger(_m *UserSubscription) *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usersubscription.Table, usersubscription.FieldID, id),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usersubscription.CreditLedgerTable, usersubscription.CreditLedgerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UserSubscriptionClient) Hooks() []Hook {
 	hooks := c.hooks.UserSubscription
@@ -6686,9 +7019,10 @@ type (
 		Group, IdempotencyRecord, IdentityAdoptionDecision, LotteryCampaign,
 		LotteryCode, LotteryDraw, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
+		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6697,9 +7031,10 @@ type (
 		Group, IdempotencyRecord, IdentityAdoptionDecision, LotteryCampaign,
 		LotteryCode, LotteryDraw, PaymentAuditLog, PaymentOrder,
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
+		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Interceptor
 	}
 )
 

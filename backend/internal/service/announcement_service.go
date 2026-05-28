@@ -227,7 +227,10 @@ func (s *AnnouncementService) ListForUser(ctx context.Context, userID int64, unr
 	}
 	activeGroupIDs := make(map[int64]struct{}, len(activeSubs))
 	for i := range activeSubs {
-		activeGroupIDs[activeSubs[i].GroupID] = struct{}{}
+		if activeSubs[i].GroupID == nil {
+			continue
+		}
+		activeGroupIDs[*activeSubs[i].GroupID] = struct{}{}
 	}
 
 	now := time.Now()
@@ -312,7 +315,10 @@ func (s *AnnouncementService) MarkRead(ctx context.Context, userID, announcement
 	}
 	activeGroupIDs := make(map[int64]struct{}, len(activeSubs))
 	for i := range activeSubs {
-		activeGroupIDs[activeSubs[i].GroupID] = struct{}{}
+		if activeSubs[i].GroupID == nil {
+			continue
+		}
+		activeGroupIDs[*activeSubs[i].GroupID] = struct{}{}
 	}
 
 	if !a.Targeting.Matches(user.Balance, activeGroupIDs) {
@@ -364,7 +370,10 @@ func (s *AnnouncementService) ListUserReadStatus(
 		}
 		activeGroupIDs := make(map[int64]struct{}, len(subs))
 		for j := range subs {
-			activeGroupIDs[subs[j].GroupID] = struct{}{}
+			if subs[j].GroupID == nil {
+				continue
+			}
+			activeGroupIDs[*subs[j].GroupID] = struct{}{}
 		}
 
 		readAt, ok := readMap[u.ID]

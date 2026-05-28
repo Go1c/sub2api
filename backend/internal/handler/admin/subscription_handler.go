@@ -3,6 +3,8 @@ package admin
 import (
 	"context"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -59,6 +61,15 @@ type AdjustSubscriptionRequest struct {
 	Days int `json:"days" binding:"required,min=-36500,max=36500"` // negative to shorten, positive to extend
 }
 
+type UpdateSubscriptionRequest struct {
+	QuotaLimitUSD  *float64   `json:"quota_limit_usd"`
+	DailyLimitUSD  *float64   `json:"daily_limit_usd"`
+	WeeklyLimitUSD *float64   `json:"weekly_limit_usd"`
+	ExpiresAt      *time.Time `json:"expires_at"`
+	Status         *string    `json:"status"`
+	Reason         string     `json:"reason"`
+}
+
 // List handles listing all subscriptions with pagination and filters
 // GET /api/v1/admin/subscriptions
 func (h *SubscriptionHandler) List(c *gin.Context) {
@@ -78,12 +89,39 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 	}
 	status := c.Query("status")
 	platform := c.Query("platform")
+	var planID *int64
+	if planIDStr := c.Query("plan_id"); planIDStr != "" {
+		if id, err := strconv.ParseInt(planIDStr, 10, 64); err == nil {
+			planID = &id
+		}
+	}
+	createdStart, err := parseOptionalAdminTime(c.Query("created_start"))
+	if err != nil {
+		response.BadRequest(c, "Invalid created_start")
+		return
+	}
+	createdEnd, err := parseOptionalAdminEndTime(c.Query("created_end"))
+	if err != nil {
+		response.BadRequest(c, "Invalid created_end")
+		return
+	}
 
 	// Parse sorting parameters
 	sortBy := c.DefaultQuery("sort_by", "created_at")
 	sortOrder := c.DefaultQuery("sort_order", "desc")
 
-	subscriptions, pagination, err := h.subscriptionService.List(c.Request.Context(), page, pageSize, userID, groupID, status, platform, sortBy, sortOrder)
+	subscriptions, pagination, err := h.subscriptionService.List(c.Request.Context(), page, pageSize, service.UserSubscriptionListFilters{
+		UserID:       userID,
+		GroupID:      groupID,
+		PlanID:       planID,
+		Status:       status,
+		Platform:     platform,
+		Email:        c.Query("email"),
+		CreatedStart: createdStart,
+		CreatedEnd:   createdEnd,
+		SortBy:       sortBy,
+		SortOrder:    sortOrder,
+	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -94,6 +132,36 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 		out = append(out, *dto.UserSubscriptionFromServiceAdmin(&subscriptions[i]))
 	}
 	response.PaginatedWithResult(c, out, toResponsePagination(pagination))
+}
+
+func parseOptionalAdminTime(value string) (*time.Time, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return &t, nil
+	}
+	t, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func parseOptionalAdminEndTime(value string) (*time.Time, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if t, err := time.Parse(time.RFC3339, trimmed); err == nil {
+		return &t, nil
+	}
+	t, err := time.Parse("2006-01-02", trimmed)
+	if err != nil {
+		return nil, err
+	}
+	endOfDay := t.Add(24*time.Hour - time.Nanosecond)
+	return &endOfDay, nil
 }
 
 // GetByID handles getting a subscription by ID
@@ -111,6 +179,55 @@ func (h *SubscriptionHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	response.Success(c, dto.UserSubscriptionFromServiceAdmin(subscription))
+}
+
+// GetLedger handles listing subscription credit ledger entries.
+// GET /api/v1/admin/subscriptions/:id/ledger
+func (h *SubscriptionHandler) GetLedger(c *gin.Context) {
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid subscription ID")
+		return
+	}
+	page, pageSize := response.ParsePagination(c)
+	entries, pagination, err := h.subscriptionService.ListSubscriptionLedger(c.Request.Context(), subscriptionID, c.Query("type"), page, pageSize)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := make([]dto.SubscriptionCreditLedgerEntry, 0, len(entries))
+	for i := range entries {
+		out = append(out, *dto.SubscriptionCreditLedgerEntryFromService(&entries[i]))
+	}
+	response.PaginatedWithResult(c, out, toResponsePagination(pagination))
+}
+
+// Update handles admin mutation of subscription fields.
+// PATCH /api/v1/admin/subscriptions/:id
+func (h *SubscriptionHandler) Update(c *gin.Context) {
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid subscription ID")
+		return
+	}
+	var req UpdateSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	subscription, err := h.subscriptionService.AdminUpdateSubscription(c.Request.Context(), subscriptionID, service.AdminUpdateSubscriptionInput{
+		QuotaLimitUSD:  req.QuotaLimitUSD,
+		DailyLimitUSD:  req.DailyLimitUSD,
+		WeeklyLimitUSD: req.WeeklyLimitUSD,
+		ExpiresAt:      req.ExpiresAt,
+		Status:         req.Status,
+		Reason:         req.Reason,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	response.Success(c, dto.UserSubscriptionFromServiceAdmin(subscription))
 }
 

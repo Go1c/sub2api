@@ -80,9 +80,11 @@ type APIKeyEdges struct {
 	Group *Group `json:"group,omitempty"`
 	// UsageLogs holds the value of the usage_logs edge.
 	UsageLogs []*UsageLog `json:"usage_logs,omitempty"`
+	// SubscriptionCreditLedgers holds the value of the subscription_credit_ledgers edge.
+	SubscriptionCreditLedgers []*SubscriptionCreditLedger `json:"subscription_credit_ledgers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -114,6 +116,15 @@ func (e APIKeyEdges) UsageLogsOrErr() ([]*UsageLog, error) {
 		return e.UsageLogs, nil
 	}
 	return nil, &NotLoadedError{edge: "usage_logs"}
+}
+
+// SubscriptionCreditLedgersOrErr returns the SubscriptionCreditLedgers value or an error if the edge
+// was not loaded in eager-loading.
+func (e APIKeyEdges) SubscriptionCreditLedgersOrErr() ([]*SubscriptionCreditLedger, error) {
+	if e.loadedTypes[3] {
+		return e.SubscriptionCreditLedgers, nil
+	}
+	return nil, &NotLoadedError{edge: "subscription_credit_ledgers"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -327,6 +338,11 @@ func (_m *APIKey) QueryGroup() *GroupQuery {
 // QueryUsageLogs queries the "usage_logs" edge of the APIKey entity.
 func (_m *APIKey) QueryUsageLogs() *UsageLogQuery {
 	return NewAPIKeyClient(_m.config).QueryUsageLogs(_m)
+}
+
+// QuerySubscriptionCreditLedgers queries the "subscription_credit_ledgers" edge of the APIKey entity.
+func (_m *APIKey) QuerySubscriptionCreditLedgers() *SubscriptionCreditLedgerQuery {
+	return NewAPIKeyClient(_m.config).QuerySubscriptionCreditLedgers(_m)
 }
 
 // Update returns a builder for updating this APIKey.

@@ -61,6 +61,18 @@ type PaymentOrder struct {
 	ProviderKey *string `json:"provider_key,omitempty"`
 	// ProviderSnapshot holds the value of the "provider_snapshot" field.
 	ProviderSnapshot map[string]interface{} `json:"provider_snapshot,omitempty"`
+	// SubscriptionQuotaUsd holds the value of the "subscription_quota_usd" field.
+	SubscriptionQuotaUsd *float64 `json:"subscription_quota_usd,omitempty"`
+	// SubscriptionDailyLimitUsd holds the value of the "subscription_daily_limit_usd" field.
+	SubscriptionDailyLimitUsd *float64 `json:"subscription_daily_limit_usd,omitempty"`
+	// SubscriptionWeeklyLimitUsd holds the value of the "subscription_weekly_limit_usd" field.
+	SubscriptionWeeklyLimitUsd *float64 `json:"subscription_weekly_limit_usd,omitempty"`
+	// SubscriptionScopeType holds the value of the "subscription_scope_type" field.
+	SubscriptionScopeType *string `json:"subscription_scope_type,omitempty"`
+	// SubscriptionScopeConfig holds the value of the "subscription_scope_config" field.
+	SubscriptionScopeConfig map[string]interface{} `json:"subscription_scope_config,omitempty"`
+	// SubscriptionValidityDays holds the value of the "subscription_validity_days" field.
+	SubscriptionValidityDays *int `json:"subscription_validity_days,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// RefundAmount holds the value of the "refund_amount" field.
@@ -107,9 +119,11 @@ type PaymentOrder struct {
 type PaymentOrderEdges struct {
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
+	// SubscriptionCreditLedgers holds the value of the subscription_credit_ledgers edge.
+	SubscriptionCreditLedgers []*SubscriptionCreditLedger `json:"subscription_credit_ledgers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -123,20 +137,29 @@ func (e PaymentOrderEdges) UserOrErr() (*User, error) {
 	return nil, &NotLoadedError{edge: "user"}
 }
 
+// SubscriptionCreditLedgersOrErr returns the SubscriptionCreditLedgers value or an error if the edge
+// was not loaded in eager-loading.
+func (e PaymentOrderEdges) SubscriptionCreditLedgersOrErr() ([]*SubscriptionCreditLedger, error) {
+	if e.loadedTypes[1] {
+		return e.SubscriptionCreditLedgers, nil
+	}
+	return nil, &NotLoadedError{edge: "subscription_credit_ledgers"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*PaymentOrder) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case paymentorder.FieldProviderSnapshot:
+		case paymentorder.FieldProviderSnapshot, paymentorder.FieldSubscriptionScopeConfig:
 			values[i] = new([]byte)
 		case paymentorder.FieldForceRefund:
 			values[i] = new(sql.NullBool)
-		case paymentorder.FieldAmount, paymentorder.FieldPayAmount, paymentorder.FieldFeeRate, paymentorder.FieldRefundAmount:
+		case paymentorder.FieldAmount, paymentorder.FieldPayAmount, paymentorder.FieldFeeRate, paymentorder.FieldSubscriptionQuotaUsd, paymentorder.FieldSubscriptionDailyLimitUsd, paymentorder.FieldSubscriptionWeeklyLimitUsd, paymentorder.FieldRefundAmount:
 			values[i] = new(sql.NullFloat64)
-		case paymentorder.FieldID, paymentorder.FieldUserID, paymentorder.FieldPlanID, paymentorder.FieldSubscriptionGroupID, paymentorder.FieldSubscriptionDays:
+		case paymentorder.FieldID, paymentorder.FieldUserID, paymentorder.FieldPlanID, paymentorder.FieldSubscriptionGroupID, paymentorder.FieldSubscriptionDays, paymentorder.FieldSubscriptionValidityDays:
 			values[i] = new(sql.NullInt64)
-		case paymentorder.FieldUserEmail, paymentorder.FieldUserName, paymentorder.FieldUserNotes, paymentorder.FieldRechargeCode, paymentorder.FieldOutTradeNo, paymentorder.FieldPaymentType, paymentorder.FieldPaymentTradeNo, paymentorder.FieldPayURL, paymentorder.FieldQrCode, paymentorder.FieldQrCodeImg, paymentorder.FieldOrderType, paymentorder.FieldProviderInstanceID, paymentorder.FieldProviderKey, paymentorder.FieldStatus, paymentorder.FieldRefundReason, paymentorder.FieldRefundRequestReason, paymentorder.FieldRefundRequestedBy, paymentorder.FieldFailedReason, paymentorder.FieldClientIP, paymentorder.FieldSrcHost, paymentorder.FieldSrcURL:
+		case paymentorder.FieldUserEmail, paymentorder.FieldUserName, paymentorder.FieldUserNotes, paymentorder.FieldRechargeCode, paymentorder.FieldOutTradeNo, paymentorder.FieldPaymentType, paymentorder.FieldPaymentTradeNo, paymentorder.FieldPayURL, paymentorder.FieldQrCode, paymentorder.FieldQrCodeImg, paymentorder.FieldOrderType, paymentorder.FieldProviderInstanceID, paymentorder.FieldProviderKey, paymentorder.FieldSubscriptionScopeType, paymentorder.FieldStatus, paymentorder.FieldRefundReason, paymentorder.FieldRefundRequestReason, paymentorder.FieldRefundRequestedBy, paymentorder.FieldFailedReason, paymentorder.FieldClientIP, paymentorder.FieldSrcHost, paymentorder.FieldSrcURL:
 			values[i] = new(sql.NullString)
 		case paymentorder.FieldRefundAt, paymentorder.FieldRefundRequestedAt, paymentorder.FieldExpiresAt, paymentorder.FieldPaidAt, paymentorder.FieldCompletedAt, paymentorder.FieldFailedAt, paymentorder.FieldCreatedAt, paymentorder.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -298,6 +321,49 @@ func (_m *PaymentOrder) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field provider_snapshot: %w", err)
 				}
 			}
+		case paymentorder.FieldSubscriptionQuotaUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_quota_usd", values[i])
+			} else if value.Valid {
+				_m.SubscriptionQuotaUsd = new(float64)
+				*_m.SubscriptionQuotaUsd = value.Float64
+			}
+		case paymentorder.FieldSubscriptionDailyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_daily_limit_usd", values[i])
+			} else if value.Valid {
+				_m.SubscriptionDailyLimitUsd = new(float64)
+				*_m.SubscriptionDailyLimitUsd = value.Float64
+			}
+		case paymentorder.FieldSubscriptionWeeklyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_weekly_limit_usd", values[i])
+			} else if value.Valid {
+				_m.SubscriptionWeeklyLimitUsd = new(float64)
+				*_m.SubscriptionWeeklyLimitUsd = value.Float64
+			}
+		case paymentorder.FieldSubscriptionScopeType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_scope_type", values[i])
+			} else if value.Valid {
+				_m.SubscriptionScopeType = new(string)
+				*_m.SubscriptionScopeType = value.String
+			}
+		case paymentorder.FieldSubscriptionScopeConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_scope_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.SubscriptionScopeConfig); err != nil {
+					return fmt.Errorf("unmarshal field subscription_scope_config: %w", err)
+				}
+			}
+		case paymentorder.FieldSubscriptionValidityDays:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_validity_days", values[i])
+			} else if value.Valid {
+				_m.SubscriptionValidityDays = new(int)
+				*_m.SubscriptionValidityDays = int(value.Int64)
+			}
 		case paymentorder.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
@@ -434,6 +500,11 @@ func (_m *PaymentOrder) QueryUser() *UserQuery {
 	return NewPaymentOrderClient(_m.config).QueryUser(_m)
 }
 
+// QuerySubscriptionCreditLedgers queries the "subscription_credit_ledgers" edge of the PaymentOrder entity.
+func (_m *PaymentOrder) QuerySubscriptionCreditLedgers() *SubscriptionCreditLedgerQuery {
+	return NewPaymentOrderClient(_m.config).QuerySubscriptionCreditLedgers(_m)
+}
+
 // Update returns a builder for updating this PaymentOrder.
 // Note that you need to call PaymentOrder.Unwrap() before calling this method if this PaymentOrder
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -537,6 +608,34 @@ func (_m *PaymentOrder) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("provider_snapshot=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProviderSnapshot))
+	builder.WriteString(", ")
+	if v := _m.SubscriptionQuotaUsd; v != nil {
+		builder.WriteString("subscription_quota_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SubscriptionDailyLimitUsd; v != nil {
+		builder.WriteString("subscription_daily_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SubscriptionWeeklyLimitUsd; v != nil {
+		builder.WriteString("subscription_weekly_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SubscriptionScopeType; v != nil {
+		builder.WriteString("subscription_scope_type=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("subscription_scope_config=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionScopeConfig))
+	builder.WriteString(", ")
+	if v := _m.SubscriptionValidityDays; v != nil {
+		builder.WriteString("subscription_validity_days=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

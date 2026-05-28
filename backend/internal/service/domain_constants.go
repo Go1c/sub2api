@@ -423,6 +423,11 @@ const (
 	SettingKeyAccountQuotaNotifyEnabled = "account_quota_notify_enabled" // 全局开关
 	SettingKeyAccountQuotaNotifyEmails  = "account_quota_notify_emails"  // 管理员通知邮箱列表（JSON 数组）
 
+	// Subscription Credit Pool Notification
+	// 订阅触顶 / 过期通知正文里的"重新订阅"链接。
+	// 为空时回退到 SettingKeyFrontendURL（前端订阅页）。
+	SettingKeySubscriptionCreditPoolRepurchaseURL = "subscription_credit_pool_repurchase_url"
+
 	// Web Search Emulation
 	SettingKeyWebSearchEmulationConfig = "web_search_emulation_config" // JSON 配置
 )

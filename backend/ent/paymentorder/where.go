@@ -155,6 +155,31 @@ func ProviderKey(v string) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldEQ(FieldProviderKey, v))
 }
 
+// SubscriptionQuotaUsd applies equality check predicate on the "subscription_quota_usd" field. It's identical to SubscriptionQuotaUsdEQ.
+func SubscriptionQuotaUsd(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionQuotaUsd, v))
+}
+
+// SubscriptionDailyLimitUsd applies equality check predicate on the "subscription_daily_limit_usd" field. It's identical to SubscriptionDailyLimitUsdEQ.
+func SubscriptionDailyLimitUsd(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionDailyLimitUsd, v))
+}
+
+// SubscriptionWeeklyLimitUsd applies equality check predicate on the "subscription_weekly_limit_usd" field. It's identical to SubscriptionWeeklyLimitUsdEQ.
+func SubscriptionWeeklyLimitUsd(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionWeeklyLimitUsd, v))
+}
+
+// SubscriptionScopeType applies equality check predicate on the "subscription_scope_type" field. It's identical to SubscriptionScopeTypeEQ.
+func SubscriptionScopeType(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionValidityDays applies equality check predicate on the "subscription_validity_days" field. It's identical to SubscriptionValidityDaysEQ.
+func SubscriptionValidityDays(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionValidityDays, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldEQ(FieldStatus, v))
@@ -1450,6 +1475,281 @@ func ProviderSnapshotNotNil() predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldNotNull(FieldProviderSnapshot))
 }
 
+// SubscriptionQuotaUsdEQ applies the EQ predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionQuotaUsd, v))
+}
+
+// SubscriptionQuotaUsdNEQ applies the NEQ predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdNEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldSubscriptionQuotaUsd, v))
+}
+
+// SubscriptionQuotaUsdIn applies the In predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldSubscriptionQuotaUsd, vs...))
+}
+
+// SubscriptionQuotaUsdNotIn applies the NotIn predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdNotIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldSubscriptionQuotaUsd, vs...))
+}
+
+// SubscriptionQuotaUsdGT applies the GT predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdGT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldSubscriptionQuotaUsd, v))
+}
+
+// SubscriptionQuotaUsdGTE applies the GTE predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdGTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldSubscriptionQuotaUsd, v))
+}
+
+// SubscriptionQuotaUsdLT applies the LT predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdLT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldSubscriptionQuotaUsd, v))
+}
+
+// SubscriptionQuotaUsdLTE applies the LTE predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdLTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldSubscriptionQuotaUsd, v))
+}
+
+// SubscriptionQuotaUsdIsNil applies the IsNil predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldSubscriptionQuotaUsd))
+}
+
+// SubscriptionQuotaUsdNotNil applies the NotNil predicate on the "subscription_quota_usd" field.
+func SubscriptionQuotaUsdNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldSubscriptionQuotaUsd))
+}
+
+// SubscriptionDailyLimitUsdEQ applies the EQ predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionDailyLimitUsd, v))
+}
+
+// SubscriptionDailyLimitUsdNEQ applies the NEQ predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdNEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldSubscriptionDailyLimitUsd, v))
+}
+
+// SubscriptionDailyLimitUsdIn applies the In predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldSubscriptionDailyLimitUsd, vs...))
+}
+
+// SubscriptionDailyLimitUsdNotIn applies the NotIn predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdNotIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldSubscriptionDailyLimitUsd, vs...))
+}
+
+// SubscriptionDailyLimitUsdGT applies the GT predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdGT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldSubscriptionDailyLimitUsd, v))
+}
+
+// SubscriptionDailyLimitUsdGTE applies the GTE predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdGTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldSubscriptionDailyLimitUsd, v))
+}
+
+// SubscriptionDailyLimitUsdLT applies the LT predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdLT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldSubscriptionDailyLimitUsd, v))
+}
+
+// SubscriptionDailyLimitUsdLTE applies the LTE predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdLTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldSubscriptionDailyLimitUsd, v))
+}
+
+// SubscriptionDailyLimitUsdIsNil applies the IsNil predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldSubscriptionDailyLimitUsd))
+}
+
+// SubscriptionDailyLimitUsdNotNil applies the NotNil predicate on the "subscription_daily_limit_usd" field.
+func SubscriptionDailyLimitUsdNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldSubscriptionDailyLimitUsd))
+}
+
+// SubscriptionWeeklyLimitUsdEQ applies the EQ predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionWeeklyLimitUsd, v))
+}
+
+// SubscriptionWeeklyLimitUsdNEQ applies the NEQ predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdNEQ(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldSubscriptionWeeklyLimitUsd, v))
+}
+
+// SubscriptionWeeklyLimitUsdIn applies the In predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldSubscriptionWeeklyLimitUsd, vs...))
+}
+
+// SubscriptionWeeklyLimitUsdNotIn applies the NotIn predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdNotIn(vs ...float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldSubscriptionWeeklyLimitUsd, vs...))
+}
+
+// SubscriptionWeeklyLimitUsdGT applies the GT predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdGT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldSubscriptionWeeklyLimitUsd, v))
+}
+
+// SubscriptionWeeklyLimitUsdGTE applies the GTE predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdGTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldSubscriptionWeeklyLimitUsd, v))
+}
+
+// SubscriptionWeeklyLimitUsdLT applies the LT predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdLT(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldSubscriptionWeeklyLimitUsd, v))
+}
+
+// SubscriptionWeeklyLimitUsdLTE applies the LTE predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdLTE(v float64) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldSubscriptionWeeklyLimitUsd, v))
+}
+
+// SubscriptionWeeklyLimitUsdIsNil applies the IsNil predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldSubscriptionWeeklyLimitUsd))
+}
+
+// SubscriptionWeeklyLimitUsdNotNil applies the NotNil predicate on the "subscription_weekly_limit_usd" field.
+func SubscriptionWeeklyLimitUsdNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldSubscriptionWeeklyLimitUsd))
+}
+
+// SubscriptionScopeTypeEQ applies the EQ predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeNEQ applies the NEQ predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeNEQ(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeIn applies the In predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldSubscriptionScopeType, vs...))
+}
+
+// SubscriptionScopeTypeNotIn applies the NotIn predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeNotIn(vs ...string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldSubscriptionScopeType, vs...))
+}
+
+// SubscriptionScopeTypeGT applies the GT predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeGT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeGTE applies the GTE predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeGTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeLT applies the LT predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeLT(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeLTE applies the LTE predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeLTE(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeContains applies the Contains predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeContains(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContains(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeHasPrefix applies the HasPrefix predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeHasPrefix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasPrefix(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeHasSuffix applies the HasSuffix predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeHasSuffix(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldHasSuffix(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeIsNil applies the IsNil predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldSubscriptionScopeType))
+}
+
+// SubscriptionScopeTypeNotNil applies the NotNil predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldSubscriptionScopeType))
+}
+
+// SubscriptionScopeTypeEqualFold applies the EqualFold predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeEqualFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEqualFold(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionScopeTypeContainsFold applies the ContainsFold predicate on the "subscription_scope_type" field.
+func SubscriptionScopeTypeContainsFold(v string) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldContainsFold(FieldSubscriptionScopeType, v))
+}
+
+// SubscriptionValidityDaysEQ applies the EQ predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldEQ(FieldSubscriptionValidityDays, v))
+}
+
+// SubscriptionValidityDaysNEQ applies the NEQ predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysNEQ(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNEQ(FieldSubscriptionValidityDays, v))
+}
+
+// SubscriptionValidityDaysIn applies the In predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIn(FieldSubscriptionValidityDays, vs...))
+}
+
+// SubscriptionValidityDaysNotIn applies the NotIn predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysNotIn(vs ...int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotIn(FieldSubscriptionValidityDays, vs...))
+}
+
+// SubscriptionValidityDaysGT applies the GT predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysGT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGT(FieldSubscriptionValidityDays, v))
+}
+
+// SubscriptionValidityDaysGTE applies the GTE predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysGTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldGTE(FieldSubscriptionValidityDays, v))
+}
+
+// SubscriptionValidityDaysLT applies the LT predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysLT(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLT(FieldSubscriptionValidityDays, v))
+}
+
+// SubscriptionValidityDaysLTE applies the LTE predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysLTE(v int) predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldLTE(FieldSubscriptionValidityDays, v))
+}
+
+// SubscriptionValidityDaysIsNil applies the IsNil predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysIsNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldIsNull(FieldSubscriptionValidityDays))
+}
+
+// SubscriptionValidityDaysNotNil applies the NotNil predicate on the "subscription_validity_days" field.
+func SubscriptionValidityDaysNotNil() predicate.PaymentOrder {
+	return predicate.PaymentOrder(sql.FieldNotNull(FieldSubscriptionValidityDays))
+}
+
 // StatusEQ applies the EQ predicate on the "status" field.
 func StatusEQ(v string) predicate.PaymentOrder {
 	return predicate.PaymentOrder(sql.FieldEQ(FieldStatus, v))
@@ -2455,6 +2755,29 @@ func HasUser() predicate.PaymentOrder {
 func HasUserWith(preds ...predicate.User) predicate.PaymentOrder {
 	return predicate.PaymentOrder(func(s *sql.Selector) {
 		step := newUserStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSubscriptionCreditLedgers applies the HasEdge predicate on the "subscription_credit_ledgers" edge.
+func HasSubscriptionCreditLedgers() predicate.PaymentOrder {
+	return predicate.PaymentOrder(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionCreditLedgersTable, SubscriptionCreditLedgersColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSubscriptionCreditLedgersWith applies the HasEdge predicate on the "subscription_credit_ledgers" edge with a given conditions (other predicates).
+func HasSubscriptionCreditLedgersWith(preds ...predicate.SubscriptionCreditLedger) predicate.PaymentOrder {
+	return predicate.PaymentOrder(func(s *sql.Selector) {
+		step := newSubscriptionCreditLedgersStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

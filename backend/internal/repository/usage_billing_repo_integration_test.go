@@ -4,6 +4,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -102,7 +104,7 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	})
 	subscription := mustCreateSubscription(t, client, &service.UserSubscription{
 		UserID:  user.ID,
-		GroupID: group.ID,
+		GroupID: &group.ID,
 	})
 
 	requestID := uuid.NewString()
@@ -364,4 +366,246 @@ func TestUsageBillingRepositoryApply_DeduplicatesAgainstArchivedKey(t *testing.T
 	var balance float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
 	require.InDelta(t, 98.75, balance, 0.000001)
+}
+
+func TestUsageBillingRepositoryApply_MixesSubscriptionAndBalanceWhenTotalQuotaIsLow(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-mixed-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-mixed-" + uuid.NewString(),
+		Name:   "billing-mixed",
+	})
+	subID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD: 10,
+		QuotaUsedUSD:  8,
+	})
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:        uuid.NewString(),
+		APIKeyID:         apiKey.ID,
+		UserID:           user.ID,
+		SubscriptionID:   &subID,
+		SubscriptionCost: 5,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.InDelta(t, 2.0, result.SubscriptionCost, 0.000001)
+	require.InDelta(t, 3.0, result.BalanceCost, 0.000001)
+	require.ElementsMatch(t, []string{service.SubscriptionLimitReachedTotal}, result.LimitReachedKinds)
+
+	var quotaUsed float64
+	var exhaustedAt sql.NullTime
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT quota_used_usd, exhausted_at
+		FROM user_subscriptions
+		WHERE id = $1
+	`, subID).Scan(&quotaUsed, &exhaustedAt))
+	require.InDelta(t, 10.0, quotaUsed, 0.000001)
+	require.True(t, exhaustedAt.Valid, "total quota crossing should set exhausted_at")
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 97.0, balance, 0.000001)
+
+	var consumeDelta, consumeBalanceDelta, remainingAfter float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT delta_usd, balance_delta_usd, remaining_after_usd
+		FROM subscription_credit_ledger
+		WHERE subscription_id = $1 AND type = $2
+		ORDER BY id DESC
+		LIMIT 1
+	`, subID, service.SubscriptionCreditLedgerConsume).Scan(&consumeDelta, &consumeBalanceDelta, &remainingAfter))
+	require.InDelta(t, -2.0, consumeDelta, 0.000001)
+	require.InDelta(t, -3.0, consumeBalanceDelta, 0.000001)
+	require.InDelta(t, 0.0, remainingAfter, 0.000001)
+
+	requireSubscriptionNotifyOutbox(t, ctx, user.ID, subID, "limit_reached_"+service.SubscriptionLimitReachedTotal)
+}
+
+func TestUsageBillingRepositoryApply_RecordsDailyLimitReachedOnce(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-daily-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-daily-" + uuid.NewString(),
+		Name:   "billing-daily",
+	})
+	dailyLimit := 5.0
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	subID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD:    100,
+		QuotaUsedUSD:     10,
+		DailyLimitUSD:    &dailyLimit,
+		DailyUsageUSD:    4,
+		DailyWindowStart: &today,
+	})
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:        uuid.NewString(),
+		APIKeyID:         apiKey.ID,
+		UserID:           user.ID,
+		SubscriptionID:   &subID,
+		SubscriptionCost: 3,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.InDelta(t, 1.0, result.SubscriptionCost, 0.000001)
+	require.InDelta(t, 2.0, result.BalanceCost, 0.000001)
+	require.ElementsMatch(t, []string{service.SubscriptionLimitReachedDaily}, result.LimitReachedKinds)
+
+	var dailyUsage float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd
+		FROM user_subscriptions
+		WHERE id = $1
+	`, subID).Scan(&dailyUsage))
+	require.InDelta(t, 5.0, dailyUsage, 0.000001)
+
+	requireSubscriptionNotifyOutbox(t, ctx, user.ID, subID, "limit_reached_"+service.SubscriptionLimitReachedDaily)
+}
+
+func TestUsageBillingRepositoryApply_LogsDailyWindowResetWasteBeforeConsuming(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-reset-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-reset-" + uuid.NewString(),
+		Name:   "billing-reset",
+	})
+	dailyLimit := 10.0
+	oldWindowStart := time.Now().UTC().Add(-25 * time.Hour).Truncate(24 * time.Hour)
+	subID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD:    100,
+		QuotaUsedUSD:     5,
+		DailyLimitUSD:    &dailyLimit,
+		DailyUsageUSD:    4,
+		DailyWindowStart: &oldWindowStart,
+	})
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:        uuid.NewString(),
+		APIKeyID:         apiKey.ID,
+		UserID:           user.ID,
+		SubscriptionID:   &subID,
+		SubscriptionCost: 3,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.InDelta(t, 3.0, result.SubscriptionCost, 0.000001)
+	require.InDelta(t, 0.0, result.BalanceCost, 0.000001)
+
+	var dailyUsage float64
+	var dailyWindowStart time.Time
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd, daily_window_start
+		FROM user_subscriptions
+		WHERE id = $1
+	`, subID).Scan(&dailyUsage, &dailyWindowStart))
+	require.InDelta(t, 3.0, dailyUsage, 0.000001)
+	require.True(t, dailyWindowStart.After(oldWindowStart), "daily window should advance")
+
+	var metadataRaw []byte
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT metadata
+		FROM subscription_credit_ledger
+		WHERE subscription_id = $1 AND type = $2 AND event_key LIKE 'window_reset_daily:%'
+		ORDER BY id DESC
+		LIMIT 1
+	`, subID, service.SubscriptionCreditLedgerWindowReset).Scan(&metadataRaw))
+	var metadata map[string]any
+	require.NoError(t, json.Unmarshal(metadataRaw, &metadata))
+	require.Equal(t, "daily", metadata["window"])
+	require.InDelta(t, 6.0, metadata["wasted_usd"].(float64), 0.000001)
+	require.InDelta(t, 0.6, metadata["wasted_ratio"].(float64), 0.000001)
+}
+
+type usageBillingCreditSubSpec struct {
+	QuotaLimitUSD     float64
+	QuotaUsedUSD      float64
+	DailyLimitUSD     *float64
+	WeeklyLimitUSD    *float64
+	DailyUsageUSD     float64
+	WeeklyUsageUSD    float64
+	DailyWindowStart  *time.Time
+	WeeklyWindowStart *time.Time
+}
+
+func mustCreateUsageBillingCreditSubscription(t *testing.T, userID int64, spec usageBillingCreditSubSpec) int64 {
+	t.Helper()
+	now := time.Now().UTC()
+	var id int64
+	err := integrationDB.QueryRowContext(context.Background(), `
+		INSERT INTO user_subscriptions (
+			user_id, scope_type, scope_config,
+			quota_limit_usd, quota_used_usd,
+			daily_limit_usd, weekly_limit_usd,
+			starts_at, expires_at, status,
+			daily_window_start, weekly_window_start,
+			daily_usage_usd, weekly_usage_usd,
+			assigned_at, notes
+		) VALUES (
+			$1, $2, '{}'::jsonb,
+			$3, $4,
+			$5, $6,
+			$7, $8, $9,
+			$10, $11,
+			$12, $13,
+			$14, ''
+		)
+		RETURNING id
+	`,
+		userID,
+		service.SubscriptionScopeAllAvailableGroups,
+		spec.QuotaLimitUSD,
+		spec.QuotaUsedUSD,
+		spec.DailyLimitUSD,
+		spec.WeeklyLimitUSD,
+		now.Add(-time.Hour),
+		now.Add(24*time.Hour),
+		service.SubscriptionStatusActive,
+		spec.DailyWindowStart,
+		spec.WeeklyWindowStart,
+		spec.DailyUsageUSD,
+		spec.WeeklyUsageUSD,
+		now,
+	).Scan(&id)
+	require.NoError(t, err)
+	return id
+}
+
+func requireSubscriptionNotifyOutbox(t *testing.T, ctx context.Context, userID int64, subID int64, kind string) {
+	t.Helper()
+	var payloadRaw []byte
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT payload
+		FROM scheduler_outbox
+		WHERE event_type = $1
+			AND payload->>'kind' = $2
+			AND (payload->>'user_id')::bigint = $3
+			AND (payload->>'subscription_id')::bigint = $4
+		ORDER BY id DESC
+		LIMIT 1
+	`, service.SchedulerOutboxEventSubscriptionNotify, kind, userID, subID).Scan(&payloadRaw))
 }

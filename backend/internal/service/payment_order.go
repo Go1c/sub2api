@@ -112,14 +112,84 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	if err != nil || !plan.ForSale {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
 	}
-	group, err := s.groupRepo.GetByID(ctx, plan.GroupID)
-	if err != nil || group.Status != payment.EntityStatusActive {
-		return nil, infraerrors.NotFound("GROUP_NOT_FOUND", "subscription group is no longer available")
+	if _, err := subscriptionOrderSnapshotFromPlan(plan); err != nil {
+		return nil, err
 	}
-	if !group.IsSubscriptionType() {
-		return nil, infraerrors.BadRequest("GROUP_TYPE_MISMATCH", "group is not a subscription type")
+	// 额度池套餐 group_id 可空（不绑定具体分组）；仅当套餐绑分组时校验分组状态
+	if plan.GroupID != nil {
+		group, err := s.groupRepo.GetByID(ctx, *plan.GroupID)
+		if err != nil || group.Status != payment.EntityStatusActive {
+			return nil, infraerrors.NotFound("GROUP_NOT_FOUND", "subscription group is no longer available")
+		}
+		if !group.IsSubscriptionType() {
+			return nil, infraerrors.BadRequest("GROUP_TYPE_MISMATCH", "group is not a subscription type")
+		}
+	}
+	if s.subscriptionSvc != nil {
+		eligibility, err := s.subscriptionSvc.GetRenewalEligibility(ctx, req.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if !eligibility.Allowed {
+			return nil, subscriptionRenewalNotAllowedError(eligibility)
+		}
 	}
 	return plan, nil
+}
+
+type subscriptionOrderSnapshot struct {
+	PlanID         int64
+	QuotaUSD       float64
+	DailyLimitUSD  *float64
+	WeeklyLimitUSD *float64
+	ScopeType      string
+	ScopeConfig    map[string]any
+	ValidityDays   int
+}
+
+func subscriptionOrderSnapshotFromPlan(plan *dbent.SubscriptionPlan) (subscriptionOrderSnapshot, error) {
+	if plan == nil {
+		return subscriptionOrderSnapshot{}, infraerrors.BadRequest("PLAN_NOT_AVAILABLE", "subscription plan is required")
+	}
+	if plan.QuotaUsd <= 0 || math.IsNaN(plan.QuotaUsd) || math.IsInf(plan.QuotaUsd, 0) {
+		return subscriptionOrderSnapshot{}, infraerrors.BadRequest("PLAN_QUOTA_INVALID", "subscription plan quota must be positive")
+	}
+	validityDays := psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
+	if validityDays <= 0 {
+		return subscriptionOrderSnapshot{}, infraerrors.BadRequest("PLAN_VALIDITY_INVALID", "subscription plan validity must be positive")
+	}
+	scopeType := strings.TrimSpace(plan.ScopeType)
+	if scopeType == "" {
+		scopeType = SubscriptionScopeAllAvailableGroups
+	}
+	scopeConfig := cloneSubscriptionScopeConfig(plan.ScopeConfig)
+	if scopeConfig == nil {
+		scopeConfig = map[string]any{}
+	}
+	return subscriptionOrderSnapshot{
+		PlanID:         plan.ID,
+		QuotaUSD:       plan.QuotaUsd,
+		DailyLimitUSD:  cloneFloat64Ptr(plan.DailyLimitUsd),
+		WeeklyLimitUSD: cloneFloat64Ptr(plan.WeeklyLimitUsd),
+		ScopeType:      scopeType,
+		ScopeConfig:    scopeConfig,
+		ValidityDays:   validityDays,
+	}, nil
+}
+
+func subscriptionRenewalNotAllowedError(eligibility RenewalEligibility) error {
+	md := map[string]string{
+		"renewal_reason": string(eligibility.Reason),
+	}
+	if sub := eligibility.Subscription; sub != nil {
+		md["subscription_id"] = strconv.FormatInt(sub.ID, 10)
+		remaining := math.Max(sub.QuotaLimitUSD-sub.QuotaUsedUSD, 0)
+		md["quota_remaining_usd"] = fmt.Sprintf("%.10f", remaining)
+		if !sub.ExpiresAt.IsZero() {
+			md["expires_at"] = sub.ExpiresAt.UTC().Format(time.RFC3339)
+		}
+	}
+	return infraerrors.Conflict("SUBSCRIPTION_RENEWAL_NOT_ALLOWED", "current subscription is still usable").WithMetadata(md)
 }
 
 func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
@@ -180,7 +250,21 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		b.SetProviderSnapshot(providerSnapshot)
 	}
 	if plan != nil {
-		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit))
+		snapshot, err := subscriptionOrderSnapshotFromPlan(plan)
+		if err != nil {
+			return nil, err
+		}
+		b.SetPlanID(snapshot.PlanID).
+			SetSubscriptionDays(snapshot.ValidityDays).
+			SetSubscriptionQuotaUsd(snapshot.QuotaUSD).
+			SetNillableSubscriptionDailyLimitUsd(snapshot.DailyLimitUSD).
+			SetNillableSubscriptionWeeklyLimitUsd(snapshot.WeeklyLimitUSD).
+			SetSubscriptionScopeType(snapshot.ScopeType).
+			SetSubscriptionScopeConfig(snapshot.ScopeConfig).
+			SetSubscriptionValidityDays(snapshot.ValidityDays)
+		if plan.GroupID != nil {
+			b.SetSubscriptionGroupID(*plan.GroupID)
+		}
 	}
 	order, err := b.Save(ctx)
 	if err != nil {

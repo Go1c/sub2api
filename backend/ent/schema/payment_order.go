@@ -99,6 +99,31 @@ func (PaymentOrder) Fields() []ent.Field {
 			Optional().
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 
+		// 订阅快照（创建订单时从套餐快照而来；履约时使用此快照而非套餐当前值）
+		// 详见 doc/plan/2026-05-28-subscription-credit-pool-plan.md
+		field.Float("subscription_quota_usd").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Float("subscription_daily_limit_usd").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Float("subscription_weekly_limit_usd").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.String("subscription_scope_type").
+			Optional().
+			Nillable().
+			MaxLen(32),
+		field.JSON("subscription_scope_config", map[string]any{}).
+			Default(map[string]any{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
+		field.Int("subscription_validity_days").
+			Optional().
+			Nillable(),
+
 		// 状态
 		field.String("status").
 			MaxLen(30).
@@ -180,6 +205,7 @@ func (PaymentOrder) Edges() []ent.Edge {
 			Field("user_id").
 			Unique().
 			Required(),
+		edge.To("subscription_credit_ledgers", SubscriptionCreditLedger.Type),
 	}
 }
 
