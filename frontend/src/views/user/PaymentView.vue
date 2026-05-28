@@ -184,12 +184,44 @@
                   </div>
                 </div>
               </div>
+              <div v-if="subscriptionBalancePaymentEnabled" class="card p-6">
+                <div class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.balancePaymentRequired') }}</span>
+                    <span class="text-gray-900 dark:text-white">${{ subscriptionBalanceRequired.toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.currentBalance') }}</span>
+                    <span :class="canSubmitSubscriptionWithBalance ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-300'">
+                      ${{ currentUserBalance.toFixed(2) }}
+                    </span>
+                  </div>
+                  <p class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
+                    {{ t('payment.balancePaymentHint', { rate: balanceRechargeMultiplier.toFixed(2) }) }}
+                  </p>
+                  <p v-if="!canSubmitSubscriptionWithBalance" class="text-xs text-amber-600 dark:text-amber-300">
+                    {{ t('payment.balancePaymentInsufficient', { required: subscriptionBalanceRequired.toFixed(2) }) }}
+                  </p>
+                </div>
+              </div>
               <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmitSubscription || submitting" @click="confirmSubscribe">
                 <span v-if="submitting" class="flex items-center justify-center gap-2">
                   <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
                   {{ t('common.processing') }}
                 </span>
                 <span v-else>{{ t('payment.createOrder') }} ¥{{ (feeRate > 0 ? subTotalAmount : selectedPlan.price).toFixed(2) }}</span>
+              </button>
+              <button
+                v-if="subscriptionBalancePaymentEnabled"
+                class="btn btn-secondary w-full py-3 text-base font-medium"
+                :disabled="!canSubmitSubscriptionWithBalance || submitting"
+                @click="confirmSubscribeWithBalance"
+              >
+                <span v-if="submitting" class="flex items-center justify-center gap-2">
+                  <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                  {{ t('common.processing') }}
+                </span>
+                <span v-else>{{ t('payment.balancePay') }} ${{ subscriptionBalanceRequired.toFixed(2) }}</span>
               </button>
               <button class="btn btn-secondary w-full" @click="selectedPlan = null">{{ t('common.cancel') }}</button>
             </template>
@@ -522,7 +554,7 @@ function onPaymentSettled() {
 // All checkout data from single API call
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
-  plans: [], balance_disabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
+  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
 })
 
 const userSubscriptionsVisible = computed(() => appStore.cachedPublicSettings?.user_subscriptions_visible !== false)
@@ -645,10 +677,23 @@ const subTotalAmount = computed(() => {
   return Math.round((price + subFeeAmount.value) * 100) / 100
 })
 
+const subscriptionBalancePaymentEnabled = computed(() => checkout.value.subscription_balance_payment_enabled === true)
+const currentUserBalance = computed(() => user.value?.balance ?? 0)
+const subscriptionBalanceRequired = computed(() => {
+  const price = selectedPlan.value?.price ?? 0
+  if (price <= 0) return 0
+  return Math.round(price * balanceRechargeMultiplier.value * 100) / 100
+})
 const canSubmitSubscription = computed(() =>
   selectedPlan.value !== null
     && amountFitsMethod(selectedPlan.value.price, selectedMethod.value)
     && selectedLimit.value?.available !== false
+)
+
+const canSubmitSubscriptionWithBalance = computed(() =>
+  selectedPlan.value !== null
+    && subscriptionBalancePaymentEnabled.value
+    && currentUserBalance.value + 0.000001 >= subscriptionBalanceRequired.value
 )
 
 // Auto-switch to first available method when current selection can't handle the amount
@@ -720,6 +765,11 @@ async function confirmSubscribe() {
   await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
 }
 
+async function confirmSubscribeWithBalance() {
+  if (!selectedPlan.value || submitting.value) return
+  await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id, { paymentType: 'balance' })
+}
+
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
   submitting.value = true
   errorMessage.value = ''
@@ -743,6 +793,17 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
 
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
+    if (requestType === 'balance') {
+      await authStore.refreshUser().catch(() => undefined)
+      if (orderType === 'subscription') {
+        await subscriptionStore.fetchActiveSubscriptions(true).catch(() => undefined)
+      }
+      await router.push({
+        path: '/payment/result',
+        query: { order_id: String(result.order_id) },
+      })
+      return
+    }
     const openWindow = (url: string) => {
       const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
       if (!win || win.closed) {

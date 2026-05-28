@@ -13,6 +13,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -47,6 +48,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	}
 	if user.Status != payment.EntityStatusActive {
 		return nil, infraerrors.Forbidden("USER_INACTIVE", "user account is disabled")
+	}
+	if req.OrderType == payment.OrderTypeSubscription && isInternalBalancePaymentType(req.PaymentType) {
+		return s.createSubscriptionBalanceOrder(ctx, req, user, plan, cfg)
 	}
 	orderAmount := req.Amount
 	limitAmount := req.Amount
@@ -190,6 +194,201 @@ func subscriptionRenewalNotAllowedError(eligibility RenewalEligibility) error {
 		}
 	}
 	return infraerrors.Conflict("SUBSCRIPTION_RENEWAL_NOT_ALLOWED", "current subscription is still usable").WithMetadata(md)
+}
+
+func isInternalBalancePaymentType(paymentType string) bool {
+	return strings.EqualFold(strings.TrimSpace(paymentType), payment.TypeBalance)
+}
+
+func subscriptionBalancePaymentItemName(plan *dbent.SubscriptionPlan) string {
+	if plan == nil {
+		return "subscription"
+	}
+	if name := strings.TrimSpace(plan.ProductName); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(plan.Name); name != "" {
+		return name
+	}
+	return fmt.Sprintf("subscription plan #%d", plan.ID)
+}
+
+func buildSubscriptionBalancePaymentNote(plan *dbent.SubscriptionPlan, balanceSpent, balanceAfter float64) string {
+	return fmt.Sprintf(
+		"余额支付订阅：%s（¥%.2f），扣除 $%.2f，剩余 $%.2f",
+		subscriptionBalancePaymentItemName(plan),
+		plan.Price,
+		balanceSpent,
+		balanceAfter,
+	)
+}
+
+func (s *PaymentService) createSubscriptionBalanceOrder(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig) (*CreateOrderResponse, error) {
+	if plan == nil {
+		return nil, infraerrors.BadRequest("PLAN_NOT_AVAILABLE", "subscription plan is required")
+	}
+	if !cfg.SubscriptionBalancePaymentEnabled {
+		return nil, infraerrors.Forbidden("SUBSCRIPTION_BALANCE_PAYMENT_DISABLED", "subscription balance payment is disabled")
+	}
+
+	balanceSpent := calculateCreditedBalance(plan.Price, cfg.BalanceRechargeMultiplier)
+	if user.Balance+amountToleranceCNY < balanceSpent {
+		return nil, ErrInsufficientBalance.WithMetadata(map[string]string{
+			"required_balance":  fmt.Sprintf("%.2f", balanceSpent),
+			"available_balance": fmt.Sprintf("%.2f", user.Balance),
+		})
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := s.checkDailyLimit(txCtx, tx, req.UserID, plan.Price, cfg.DailyLimit); err != nil {
+		return nil, err
+	}
+
+	outTradeNo, err := s.allocateOutTradeNo(txCtx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	orderBuilder := tx.PaymentOrder.Create().
+		SetUserID(req.UserID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetNillableUserNotes(psNilIfEmpty(user.Notes)).
+		SetAmount(plan.Price).
+		SetPayAmount(balanceSpent).
+		SetFeeRate(0).
+		SetRechargeCode("").
+		SetOutTradeNo(outTradeNo).
+		SetPaymentType(payment.TypeBalance).
+		SetPaymentTradeNo("").
+		SetOrderType(req.OrderType).
+		SetStatus(OrderStatusPaid).
+		SetPaidAt(now).
+		SetExpiresAt(now).
+		SetClientIP(req.ClientIP).
+		SetSrcHost(req.SrcHost)
+	if req.SrcURL != "" {
+		orderBuilder.SetSrcURL(req.SrcURL)
+	}
+
+	snapshot, err := subscriptionOrderSnapshotFromPlan(plan)
+	if err != nil {
+		return nil, err
+	}
+	orderBuilder.SetPlanID(snapshot.PlanID).
+		SetSubscriptionDays(snapshot.ValidityDays).
+		SetSubscriptionQuotaUsd(snapshot.QuotaUSD).
+		SetNillableSubscriptionDailyLimitUsd(snapshot.DailyLimitUSD).
+		SetNillableSubscriptionWeeklyLimitUsd(snapshot.WeeklyLimitUSD).
+		SetSubscriptionScopeType(snapshot.ScopeType).
+		SetSubscriptionScopeConfig(snapshot.ScopeConfig).
+		SetSubscriptionValidityDays(snapshot.ValidityDays)
+	if plan.GroupID != nil {
+		orderBuilder.SetSubscriptionGroupID(*plan.GroupID)
+	}
+
+	order, err := orderBuilder.Save(txCtx)
+	if err != nil {
+		return nil, fmt.Errorf("create balance subscription order: %w", err)
+	}
+
+	rechargeCode := fmt.Sprintf("PAY-%d-%d", order.ID, time.Now().UnixNano()%100000)
+	order, err = tx.PaymentOrder.UpdateOneID(order.ID).SetRechargeCode(rechargeCode).Save(txCtx)
+	if err != nil {
+		return nil, fmt.Errorf("set recharge code: %w", err)
+	}
+
+	updated, err := tx.User.Update().
+		Where(dbuser.IDEQ(req.UserID), dbuser.BalanceGTE(balanceSpent)).
+		AddBalance(-balanceSpent).
+		Save(txCtx)
+	if err != nil {
+		return nil, fmt.Errorf("deduct user balance: %w", err)
+	}
+	if updated == 0 {
+		return nil, ErrInsufficientBalance.WithMetadata(map[string]string{
+			"required_balance": fmt.Sprintf("%.2f", balanceSpent),
+		})
+	}
+
+	updatedUser, err := tx.User.Get(txCtx, req.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("reload user balance: %w", err)
+	}
+
+	note := buildSubscriptionBalancePaymentNote(plan, balanceSpent, updatedUser.Balance)
+	if _, err := tx.RedeemCode.Create().
+		SetCode(order.RechargeCode).
+		SetType(RedeemTypeBalancePayment).
+		SetValue(-balanceSpent).
+		SetStatus(StatusUsed).
+		SetNotes(note).
+		SetUsedBy(req.UserID).
+		SetUsedAt(now).
+		Save(txCtx); err != nil {
+		return nil, fmt.Errorf("create balance payment ledger: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit balance subscription transaction: %w", err)
+	}
+
+	if s.redeemService != nil {
+		s.redeemService.invalidateRedeemCaches(ctx, req.UserID, &RedeemCode{Type: RedeemTypeBalancePayment})
+	}
+
+	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
+		"orderAmount":      order.Amount,
+		"payAmount":        order.PayAmount,
+		"paymentType":      payment.TypeBalance,
+		"orderType":        req.OrderType,
+		"subscriptionPlan": subscriptionBalancePaymentItemName(plan),
+	})
+	s.writeAuditLog(ctx, order.ID, "ORDER_PAID", fmt.Sprintf("user:%d", req.UserID), map[string]any{
+		"paidAmount":       balanceSpent,
+		"paymentType":      payment.TypeBalance,
+		"subscriptionPlan": subscriptionBalancePaymentItemName(plan),
+	})
+	s.writeAuditLog(ctx, order.ID, "BALANCE_PAYMENT_RECORDED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
+		"item":           subscriptionBalancePaymentItemName(plan),
+		"plan_price_cny": plan.Price,
+		"balance_spent":  balanceSpent,
+		"balance_after":  updatedUser.Balance,
+		"ledger_note":    note,
+	})
+
+	if err := s.executeFulfillment(ctx, order.ID); err != nil {
+		slog.Error("subscription balance payment fulfillment failed",
+			"orderID", order.ID,
+			"userID", req.UserID,
+			"planID", plan.ID,
+			"error", err,
+		)
+	}
+
+	refreshedOrder, err := s.entClient.PaymentOrder.Get(ctx, order.ID)
+	if err == nil {
+		order = refreshedOrder
+	}
+
+	return &CreateOrderResponse{
+		OrderID:     order.ID,
+		Amount:      order.Amount,
+		PayAmount:   order.PayAmount,
+		FeeRate:     order.FeeRate,
+		Status:      order.Status,
+		ResultType:  payment.CreatePaymentResultOrderCreated,
+		PaymentType: payment.TypeBalance,
+		OutTradeNo:  order.OutTradeNo,
+		ExpiresAt:   order.ExpiresAt,
+	}, nil
 }
 
 func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {

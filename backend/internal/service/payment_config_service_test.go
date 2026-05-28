@@ -102,22 +102,26 @@ func TestParsePaymentConfig(t *testing.T) {
 		if len(cfg.EnabledTypes) != 0 {
 			t.Fatalf("expected empty EnabledTypes, got %v", cfg.EnabledTypes)
 		}
+		if cfg.SubscriptionBalancePaymentEnabled {
+			t.Fatal("expected SubscriptionBalancePaymentEnabled=false by default")
+		}
 	})
 
 	t.Run("all values populated", func(t *testing.T) {
 		t.Parallel()
 		vals := map[string]string{
-			SettingPaymentEnabled:      "true",
-			SettingMinRechargeAmount:   "5.00",
-			SettingMaxRechargeAmount:   "1000.00",
-			SettingDailyRechargeLimit:  "5000.00",
-			SettingOrderTimeoutMinutes: "15",
-			SettingMaxPendingOrders:    "5",
-			SettingEnabledPaymentTypes: "alipay,wxpay,stripe",
-			SettingBalancePayDisabled:  "true",
-			SettingLoadBalanceStrategy: "least_amount",
-			SettingProductNamePrefix:   "PRE",
-			SettingProductNameSuffix:   "SUF",
+			SettingPaymentEnabled:                    "true",
+			SettingMinRechargeAmount:                 "5.00",
+			SettingMaxRechargeAmount:                 "1000.00",
+			SettingDailyRechargeLimit:                "5000.00",
+			SettingOrderTimeoutMinutes:               "15",
+			SettingMaxPendingOrders:                  "5",
+			SettingEnabledPaymentTypes:               "alipay,wxpay,stripe",
+			SettingBalancePayDisabled:                "true",
+			SettingSubscriptionBalancePaymentEnabled: "true",
+			SettingLoadBalanceStrategy:               "least_amount",
+			SettingProductNamePrefix:                 "PRE",
+			SettingProductNameSuffix:                 "SUF",
 		}
 		cfg := svc.parsePaymentConfig(vals)
 
@@ -147,6 +151,9 @@ func TestParsePaymentConfig(t *testing.T) {
 		}
 		if !cfg.BalanceDisabled {
 			t.Fatal("expected BalanceDisabled=true")
+		}
+		if !cfg.SubscriptionBalancePaymentEnabled {
+			t.Fatal("expected SubscriptionBalancePaymentEnabled=true")
 		}
 		if cfg.LoadBalanceStrategy != "least_amount" {
 			t.Fatalf("LoadBalanceStrategy = %q, want %q", cfg.LoadBalanceStrategy, "least_amount")

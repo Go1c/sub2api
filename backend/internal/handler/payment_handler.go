@@ -138,30 +138,32 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	}
 
 	response.Success(c, checkoutInfoResponse{
-		Methods:                   limitsResp.Methods,
-		GlobalMin:                 limitsResp.GlobalMin,
-		GlobalMax:                 limitsResp.GlobalMax,
-		Plans:                     planList,
-		BalanceDisabled:           cfg.BalanceDisabled,
-		BalanceRechargeMultiplier: cfg.BalanceRechargeMultiplier,
-		RechargeFeeRate:           cfg.RechargeFeeRate,
-		HelpText:                  cfg.HelpText,
-		HelpImageURL:              cfg.HelpImageURL,
-		StripePublishableKey:      cfg.StripePublishableKey,
+		Methods:                           limitsResp.Methods,
+		GlobalMin:                         limitsResp.GlobalMin,
+		GlobalMax:                         limitsResp.GlobalMax,
+		Plans:                             planList,
+		BalanceDisabled:                   cfg.BalanceDisabled,
+		SubscriptionBalancePaymentEnabled: cfg.SubscriptionBalancePaymentEnabled,
+		BalanceRechargeMultiplier:         cfg.BalanceRechargeMultiplier,
+		RechargeFeeRate:                   cfg.RechargeFeeRate,
+		HelpText:                          cfg.HelpText,
+		HelpImageURL:                      cfg.HelpImageURL,
+		StripePublishableKey:              cfg.StripePublishableKey,
 	})
 }
 
 type checkoutInfoResponse struct {
-	Methods                   map[string]service.MethodLimits `json:"methods"`
-	GlobalMin                 float64                         `json:"global_min"`
-	GlobalMax                 float64                         `json:"global_max"`
-	Plans                     []checkoutPlan                  `json:"plans"`
-	BalanceDisabled           bool                            `json:"balance_disabled"`
-	BalanceRechargeMultiplier float64                         `json:"balance_recharge_multiplier"`
-	RechargeFeeRate           float64                         `json:"recharge_fee_rate"`
-	HelpText                  string                          `json:"help_text"`
-	HelpImageURL              string                          `json:"help_image_url"`
-	StripePublishableKey      string                          `json:"stripe_publishable_key"`
+	Methods                           map[string]service.MethodLimits `json:"methods"`
+	GlobalMin                         float64                         `json:"global_min"`
+	GlobalMax                         float64                         `json:"global_max"`
+	Plans                             []checkoutPlan                  `json:"plans"`
+	BalanceDisabled                   bool                            `json:"balance_disabled"`
+	SubscriptionBalancePaymentEnabled bool                            `json:"subscription_balance_payment_enabled"`
+	BalanceRechargeMultiplier         float64                         `json:"balance_recharge_multiplier"`
+	RechargeFeeRate                   float64                         `json:"recharge_fee_rate"`
+	HelpText                          string                          `json:"help_text"`
+	HelpImageURL                      string                          `json:"help_image_url"`
+	StripePublishableKey              string                          `json:"stripe_publishable_key"`
 }
 
 type checkoutPlan struct {

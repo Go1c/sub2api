@@ -5132,6 +5132,17 @@
               </div>
               <Toggle v-model="form.user_subscriptions_visible" />
             </div>
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.userSubscriptions.balancePaymentEnabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.userSubscriptions.balancePaymentEnabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.payment_subscription_balance_enabled" />
+            </div>
           </div>
         </div>
 
@@ -7164,6 +7175,7 @@ const form = reactive<SettingsForm>({
   payment_max_pending_orders: 3,
   payment_order_timeout_minutes: 30,
   payment_balance_disabled: false,
+  payment_subscription_balance_enabled: false,
   payment_balance_recharge_multiplier: 1,
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
@@ -8564,6 +8576,7 @@ async function saveSettings() {
       home_content: form.home_content,
       backend_mode_enabled: form.backend_mode_enabled,
       user_subscriptions_visible: form.user_subscriptions_visible,
+      payment_subscription_balance_enabled: form.payment_subscription_balance_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
       ccswitch_default_model_anthropic: form.ccswitch_default_model_anthropic,
       ccswitch_default_model_openai: form.ccswitch_default_model_openai,

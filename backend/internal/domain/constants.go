@@ -36,10 +36,11 @@ const (
 
 // Redeem type constants
 const (
-	RedeemTypeBalance      = "balance"
-	RedeemTypeConcurrency  = "concurrency"
-	RedeemTypeSubscription = "subscription"
-	RedeemTypeInvitation   = "invitation"
+	RedeemTypeBalance        = "balance"
+	RedeemTypeBalancePayment = "balance_payment"
+	RedeemTypeConcurrency    = "concurrency"
+	RedeemTypeSubscription   = "subscription"
+	RedeemTypeInvitation     = "invitation"
 )
 
 // PromoCode status constants
@@ -97,7 +98,8 @@ const (
 
 // SchedulerOutboxEventSubscriptionNotify 是订阅通知专用的 outbox event_type。
 // payload 结构：
-//   {"user_id":..., "subscription_id":..., "kind":"limit_reached_total|limit_reached_daily|limit_reached_weekly|expired"}
+//
+//	{"user_id":..., "subscription_id":..., "kind":"limit_reached_total|limit_reached_daily|limit_reached_weekly|expired"}
 const SchedulerOutboxEventSubscriptionNotify = "subscription_notify"
 
 // DefaultAntigravityModelMapping 是 Antigravity 平台的默认模型映射
