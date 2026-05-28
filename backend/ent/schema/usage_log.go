@@ -97,6 +97,14 @@ func (UsageLog) Fields() []ent.Field {
 		field.Float("actual_cost").
 			Default(0).
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		// 混合扣费拆分：subscription_cost_usd + balance_cost_usd = actual_cost
+		// billing_type=0 时 balance_cost=actual, =1 时 subscription_cost=actual, =2 时两者都 >0
+		field.Float("subscription_cost_usd").
+			Default(0).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Float("balance_cost_usd").
+			Default(0).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
 		field.Float("rate_multiplier").
 			Default(1).
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
@@ -172,6 +180,7 @@ func (UsageLog) Edges() []ent.Edge {
 			Ref("usage_logs").
 			Field("subscription_id").
 			Unique(),
+		edge.To("subscription_credit_ledgers", SubscriptionCreditLedger.Type),
 	}
 }
 

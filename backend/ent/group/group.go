@@ -94,6 +94,8 @@ const (
 	EdgeSubscriptions = "subscriptions"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeSubscriptionCreditLedgers holds the string denoting the subscription_credit_ledgers edge name in mutations.
+	EdgeSubscriptionCreditLedgers = "subscription_credit_ledgers"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
@@ -132,6 +134,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "group_id"
+	// SubscriptionCreditLedgersTable is the table that holds the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersInverseTable is the table name for the SubscriptionCreditLedger entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptioncreditledger" package.
+	SubscriptionCreditLedgersInverseTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersColumn is the table column denoting the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersColumn = "group_id"
 	// AccountsTable is the table that holds the accounts relation/edge. The primary key declared below.
 	AccountsTable = "account_groups"
 	// AccountsInverseTable is the table name for the Account entity.
@@ -509,6 +518,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// BySubscriptionCreditLedgersCount orders the results by subscription_credit_ledgers count.
+func BySubscriptionCreditLedgersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionCreditLedgersStep(), opts...)
+	}
+}
+
+// BySubscriptionCreditLedgers orders the results by subscription_credit_ledgers terms.
+func BySubscriptionCreditLedgers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionCreditLedgersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAccountsCount orders the results by accounts count.
 func ByAccountsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -590,6 +613,13 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newSubscriptionCreditLedgersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionCreditLedgersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionCreditLedgersTable, SubscriptionCreditLedgersColumn),
 	)
 }
 func newAccountsStep() *sqlgraph.Step {

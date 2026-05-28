@@ -758,10 +758,13 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 		return nil, fmt.Errorf("list active subscriptions: %w", err)
 	}
 
-	// 构建订阅分组 ID 集合
+	// 构建订阅分组 ID 集合（额度池订阅 group_id 可能为 nil，跳过）
 	subscribedGroupIDs := make(map[int64]bool)
 	for _, sub := range activeSubscriptions {
-		subscribedGroupIDs[sub.GroupID] = true
+		if sub.GroupID == nil {
+			continue
+		}
+		subscribedGroupIDs[*sub.GroupID] = true
 	}
 
 	// 过滤出用户有权限的分组

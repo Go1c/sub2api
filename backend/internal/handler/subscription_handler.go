@@ -139,9 +139,13 @@ func (h *SubscriptionHandler) GetSummary(c *gin.Context) {
 	items := make([]SubscriptionSummaryItem, 0, len(subscriptions))
 
 	for _, sub := range subscriptions {
+		var gid int64
+		if sub.GroupID != nil {
+			gid = *sub.GroupID
+		}
 		item := SubscriptionSummaryItem{
 			ID:             sub.ID,
-			GroupID:        sub.GroupID,
+			GroupID:        gid,
 			Status:         sub.Status,
 			DailyUsedUSD:   sub.DailyUsageUSD,
 			WeeklyUsedUSD:  sub.WeeklyUsageUSD,

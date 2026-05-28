@@ -72,6 +72,8 @@ type Tx struct {
 	Setting *SettingClient
 	// SiteMessage is the client for interacting with the SiteMessage builders.
 	SiteMessage *SiteMessageClient
+	// SubscriptionCreditLedger is the client for interacting with the SubscriptionCreditLedger builders.
+	SubscriptionCreditLedger *SubscriptionCreditLedgerClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
@@ -250,6 +252,7 @@ func (tx *Tx) init() {
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
 	tx.SiteMessage = NewSiteMessageClient(tx.config)
+	tx.SubscriptionCreditLedger = NewSubscriptionCreditLedgerClient(tx.config)
 	tx.SubscriptionPlan = NewSubscriptionPlanClient(tx.config)
 	tx.TLSFingerprintProfile = NewTLSFingerprintProfileClient(tx.config)
 	tx.UsageCleanupTask = NewUsageCleanupTaskClient(tx.config)

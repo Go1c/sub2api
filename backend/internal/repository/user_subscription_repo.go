@@ -27,15 +27,29 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	client := clientFromContext(ctx, r.client)
 	builder := client.UserSubscription.Create().
 		SetUserID(sub.UserID).
-		SetGroupID(sub.GroupID).
+		SetNillableGroupID(sub.GroupID).
 		SetExpiresAt(sub.ExpiresAt).
 		SetNillableDailyWindowStart(sub.DailyWindowStart).
 		SetNillableWeeklyWindowStart(sub.WeeklyWindowStart).
-		SetNillableMonthlyWindowStart(sub.MonthlyWindowStart).
 		SetDailyUsageUsd(sub.DailyUsageUSD).
 		SetWeeklyUsageUsd(sub.WeeklyUsageUSD).
-		SetMonthlyUsageUsd(sub.MonthlyUsageUSD).
 		SetNillableAssignedBy(sub.AssignedBy)
+	// 额度池字段
+	if sub.PlanID != nil {
+		builder.SetNillablePlanID(sub.PlanID)
+	}
+	if sub.ScopeType != "" {
+		builder.SetScopeType(sub.ScopeType)
+	}
+	if sub.ScopeConfig != nil {
+		builder.SetScopeConfig(sub.ScopeConfig)
+	}
+	builder.SetQuotaLimitUsd(sub.QuotaLimitUSD).
+		SetQuotaUsedUsd(sub.QuotaUsedUSD).
+		SetNillableDailyLimitUsd(sub.DailyLimitUSD).
+		SetNillableWeeklyLimitUsd(sub.WeeklyLimitUSD).
+		SetNillableExhaustedAt(sub.ExhaustedAt).
+		SetNillableExpiredCreditLoggedAt(sub.ExpiredCreditLoggedAt)
 
 	if sub.StartsAt.IsZero() {
 		builder.SetStartsAt(time.Now())
@@ -109,19 +123,39 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 	client := clientFromContext(ctx, r.client)
 	builder := client.UserSubscription.UpdateOneID(sub.ID).
 		SetUserID(sub.UserID).
-		SetGroupID(sub.GroupID).
 		SetStartsAt(sub.StartsAt).
 		SetExpiresAt(sub.ExpiresAt).
 		SetStatus(sub.Status).
 		SetNillableDailyWindowStart(sub.DailyWindowStart).
 		SetNillableWeeklyWindowStart(sub.WeeklyWindowStart).
-		SetNillableMonthlyWindowStart(sub.MonthlyWindowStart).
 		SetDailyUsageUsd(sub.DailyUsageUSD).
 		SetWeeklyUsageUsd(sub.WeeklyUsageUSD).
-		SetMonthlyUsageUsd(sub.MonthlyUsageUSD).
 		SetNillableAssignedBy(sub.AssignedBy).
 		SetAssignedAt(sub.AssignedAt).
 		SetNotes(sub.Notes)
+	if sub.GroupID != nil {
+		builder.SetGroupID(*sub.GroupID)
+	} else {
+		builder.ClearGroupID()
+	}
+	// 额度池字段
+	if sub.PlanID != nil {
+		builder.SetNillablePlanID(sub.PlanID)
+	} else {
+		builder.ClearPlanID()
+	}
+	if sub.ScopeType != "" {
+		builder.SetScopeType(sub.ScopeType)
+	}
+	if sub.ScopeConfig != nil {
+		builder.SetScopeConfig(sub.ScopeConfig)
+	}
+	builder.SetQuotaLimitUsd(sub.QuotaLimitUSD).
+		SetQuotaUsedUsd(sub.QuotaUsedUSD).
+		SetNillableDailyLimitUsd(sub.DailyLimitUSD).
+		SetNillableWeeklyLimitUsd(sub.WeeklyLimitUSD).
+		SetNillableExhaustedAt(sub.ExhaustedAt).
+		SetNillableExpiredCreditLoggedAt(sub.ExpiredCreditLoggedAt)
 
 	updated, err := builder.Save(ctx)
 	if err == nil {
@@ -301,10 +335,10 @@ func (r *userSubscriptionRepository) UpdateNotes(ctx context.Context, subscripti
 
 func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int64, start time.Time) error {
 	client := clientFromContext(ctx, r.client)
+	// 月窗口字段已移除（订阅最长 30 天，月限≡总额度）
 	_, err := client.UserSubscription.UpdateOneID(id).
 		SetDailyWindowStart(start).
 		SetWeeklyWindowStart(start).
-		SetMonthlyWindowStart(start).
 		Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
@@ -328,12 +362,11 @@ func (r *userSubscriptionRepository) ResetWeeklyUsage(ctx context.Context, id in
 }
 
 func (r *userSubscriptionRepository) ResetMonthlyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
-	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(id).
-		SetMonthlyUsageUsd(0).
-		SetMonthlyWindowStart(newWindowStart).
-		Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	// 月窗口已从 schema 移除（订阅最长 30 天，月限≡总额度）。
+	// 此方法保留接口兼容性，调用即为 no-op，旧调用方应迁移到 ResetDaily/Weekly。
+	_ = id
+	_ = newWindowStart
+	return nil
 }
 
 // IncrementUsage 原子性地累加订阅用量。
@@ -430,23 +463,31 @@ func userSubscriptionEntityToService(m *dbent.UserSubscription) *service.UserSub
 		return nil
 	}
 	out := &service.UserSubscription{
-		ID:                 m.ID,
-		UserID:             m.UserID,
-		GroupID:            m.GroupID,
-		StartsAt:           m.StartsAt,
-		ExpiresAt:          m.ExpiresAt,
-		Status:             m.Status,
-		DailyWindowStart:   m.DailyWindowStart,
-		WeeklyWindowStart:  m.WeeklyWindowStart,
-		MonthlyWindowStart: m.MonthlyWindowStart,
-		DailyUsageUSD:      m.DailyUsageUsd,
-		WeeklyUsageUSD:     m.WeeklyUsageUsd,
-		MonthlyUsageUSD:    m.MonthlyUsageUsd,
-		AssignedBy:         m.AssignedBy,
-		AssignedAt:         m.AssignedAt,
-		Notes:              derefString(m.Notes),
-		CreatedAt:          m.CreatedAt,
-		UpdatedAt:          m.UpdatedAt,
+		ID:                    m.ID,
+		UserID:                m.UserID,
+		GroupID:               m.GroupID,
+		PlanID:                m.PlanID,
+		ScopeType:             m.ScopeType,
+		ScopeConfig:           m.ScopeConfig,
+		QuotaLimitUSD:         m.QuotaLimitUsd,
+		QuotaUsedUSD:          m.QuotaUsedUsd,
+		DailyLimitUSD:         m.DailyLimitUsd,
+		WeeklyLimitUSD:        m.WeeklyLimitUsd,
+		StartsAt:              m.StartsAt,
+		ExpiresAt:             m.ExpiresAt,
+		Status:                m.Status,
+		ExhaustedAt:           m.ExhaustedAt,
+		ExpiredCreditLoggedAt: m.ExpiredCreditLoggedAt,
+		DailyWindowStart:      m.DailyWindowStart,
+		WeeklyWindowStart:     m.WeeklyWindowStart,
+		// MonthlyWindowStart / MonthlyUsageUSD 已从 schema 移除
+		DailyUsageUSD:  m.DailyUsageUsd,
+		WeeklyUsageUSD: m.WeeklyUsageUsd,
+		AssignedBy:     m.AssignedBy,
+		AssignedAt:     m.AssignedAt,
+		Notes:          derefString(m.Notes),
+		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

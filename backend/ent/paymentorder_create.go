@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -242,6 +243,82 @@ func (_c *PaymentOrderCreate) SetNillableProviderKey(v *string) *PaymentOrderCre
 // SetProviderSnapshot sets the "provider_snapshot" field.
 func (_c *PaymentOrderCreate) SetProviderSnapshot(v map[string]interface{}) *PaymentOrderCreate {
 	_c.mutation.SetProviderSnapshot(v)
+	return _c
+}
+
+// SetSubscriptionQuotaUsd sets the "subscription_quota_usd" field.
+func (_c *PaymentOrderCreate) SetSubscriptionQuotaUsd(v float64) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionQuotaUsd(v)
+	return _c
+}
+
+// SetNillableSubscriptionQuotaUsd sets the "subscription_quota_usd" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableSubscriptionQuotaUsd(v *float64) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetSubscriptionQuotaUsd(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field.
+func (_c *PaymentOrderCreate) SetSubscriptionDailyLimitUsd(v float64) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionDailyLimitUsd(v)
+	return _c
+}
+
+// SetNillableSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableSubscriptionDailyLimitUsd(v *float64) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetSubscriptionDailyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field.
+func (_c *PaymentOrderCreate) SetSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionWeeklyLimitUsd(v)
+	return _c
+}
+
+// SetNillableSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableSubscriptionWeeklyLimitUsd(v *float64) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetSubscriptionWeeklyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionScopeType sets the "subscription_scope_type" field.
+func (_c *PaymentOrderCreate) SetSubscriptionScopeType(v string) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionScopeType(v)
+	return _c
+}
+
+// SetNillableSubscriptionScopeType sets the "subscription_scope_type" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableSubscriptionScopeType(v *string) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetSubscriptionScopeType(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionScopeConfig sets the "subscription_scope_config" field.
+func (_c *PaymentOrderCreate) SetSubscriptionScopeConfig(v map[string]interface{}) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionScopeConfig(v)
+	return _c
+}
+
+// SetSubscriptionValidityDays sets the "subscription_validity_days" field.
+func (_c *PaymentOrderCreate) SetSubscriptionValidityDays(v int) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionValidityDays(v)
+	return _c
+}
+
+// SetNillableSubscriptionValidityDays sets the "subscription_validity_days" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableSubscriptionValidityDays(v *int) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetSubscriptionValidityDays(*v)
+	}
 	return _c
 }
 
@@ -478,6 +555,21 @@ func (_c *PaymentOrderCreate) SetUser(v *User) *PaymentOrderCreate {
 	return _c.SetUserID(v.ID)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_c *PaymentOrderCreate) AddSubscriptionCreditLedgerIDs(ids ...int64) *PaymentOrderCreate {
+	_c.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _c
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_c *PaymentOrderCreate) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *PaymentOrderCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // Mutation returns the PaymentOrderMutation object of the builder.
 func (_c *PaymentOrderCreate) Mutation() *PaymentOrderMutation {
 	return _c.mutation
@@ -524,6 +616,10 @@ func (_c *PaymentOrderCreate) defaults() {
 	if _, ok := _c.mutation.OrderType(); !ok {
 		v := paymentorder.DefaultOrderType
 		_c.mutation.SetOrderType(v)
+	}
+	if _, ok := _c.mutation.SubscriptionScopeConfig(); !ok {
+		v := paymentorder.DefaultSubscriptionScopeConfig
+		_c.mutation.SetSubscriptionScopeConfig(v)
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := paymentorder.DefaultStatus
@@ -626,6 +722,14 @@ func (_c *PaymentOrderCreate) check() error {
 		if err := paymentorder.ProviderKeyValidator(v); err != nil {
 			return &ValidationError{Name: "provider_key", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_key": %w`, err)}
 		}
+	}
+	if v, ok := _c.mutation.SubscriptionScopeType(); ok {
+		if err := paymentorder.SubscriptionScopeTypeValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_scope_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.subscription_scope_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SubscriptionScopeConfig(); !ok {
+		return &ValidationError{Name: "subscription_scope_config", err: errors.New(`ent: missing required field "PaymentOrder.subscription_scope_config"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "PaymentOrder.status"`)}
@@ -781,6 +885,30 @@ func (_c *PaymentOrderCreate) createSpec() (*PaymentOrder, *sqlgraph.CreateSpec)
 		_spec.SetField(paymentorder.FieldProviderSnapshot, field.TypeJSON, value)
 		_node.ProviderSnapshot = value
 	}
+	if value, ok := _c.mutation.SubscriptionQuotaUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionQuotaUsd, field.TypeFloat64, value)
+		_node.SubscriptionQuotaUsd = &value
+	}
+	if value, ok := _c.mutation.SubscriptionDailyLimitUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionDailyLimitUsd, field.TypeFloat64, value)
+		_node.SubscriptionDailyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.SubscriptionWeeklyLimitUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionWeeklyLimitUsd, field.TypeFloat64, value)
+		_node.SubscriptionWeeklyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.SubscriptionScopeType(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionScopeType, field.TypeString, value)
+		_node.SubscriptionScopeType = &value
+	}
+	if value, ok := _c.mutation.SubscriptionScopeConfig(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionScopeConfig, field.TypeJSON, value)
+		_node.SubscriptionScopeConfig = value
+	}
+	if value, ok := _c.mutation.SubscriptionValidityDays(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionValidityDays, field.TypeInt, value)
+		_node.SubscriptionValidityDays = &value
+	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(paymentorder.FieldStatus, field.TypeString, value)
 		_node.Status = value
@@ -868,6 +996,22 @@ func (_c *PaymentOrderCreate) createSpec() (*PaymentOrder, *sqlgraph.CreateSpec)
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.UserID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionCreditLedgersTable,
+			Columns: []string{paymentorder.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -1267,6 +1411,132 @@ func (u *PaymentOrderUpsert) UpdateProviderSnapshot() *PaymentOrderUpsert {
 // ClearProviderSnapshot clears the value of the "provider_snapshot" field.
 func (u *PaymentOrderUpsert) ClearProviderSnapshot() *PaymentOrderUpsert {
 	u.SetNull(paymentorder.FieldProviderSnapshot)
+	return u
+}
+
+// SetSubscriptionQuotaUsd sets the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsert) SetSubscriptionQuotaUsd(v float64) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionQuotaUsd, v)
+	return u
+}
+
+// UpdateSubscriptionQuotaUsd sets the "subscription_quota_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionQuotaUsd() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionQuotaUsd)
+	return u
+}
+
+// AddSubscriptionQuotaUsd adds v to the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsert) AddSubscriptionQuotaUsd(v float64) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldSubscriptionQuotaUsd, v)
+	return u
+}
+
+// ClearSubscriptionQuotaUsd clears the value of the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsert) ClearSubscriptionQuotaUsd() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldSubscriptionQuotaUsd)
+	return u
+}
+
+// SetSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsert) SetSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionDailyLimitUsd, v)
+	return u
+}
+
+// UpdateSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionDailyLimitUsd() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionDailyLimitUsd)
+	return u
+}
+
+// AddSubscriptionDailyLimitUsd adds v to the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsert) AddSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldSubscriptionDailyLimitUsd, v)
+	return u
+}
+
+// ClearSubscriptionDailyLimitUsd clears the value of the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsert) ClearSubscriptionDailyLimitUsd() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldSubscriptionDailyLimitUsd)
+	return u
+}
+
+// SetSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsert) SetSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionWeeklyLimitUsd, v)
+	return u
+}
+
+// UpdateSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionWeeklyLimitUsd() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionWeeklyLimitUsd)
+	return u
+}
+
+// AddSubscriptionWeeklyLimitUsd adds v to the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsert) AddSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldSubscriptionWeeklyLimitUsd, v)
+	return u
+}
+
+// ClearSubscriptionWeeklyLimitUsd clears the value of the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsert) ClearSubscriptionWeeklyLimitUsd() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldSubscriptionWeeklyLimitUsd)
+	return u
+}
+
+// SetSubscriptionScopeType sets the "subscription_scope_type" field.
+func (u *PaymentOrderUpsert) SetSubscriptionScopeType(v string) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionScopeType, v)
+	return u
+}
+
+// UpdateSubscriptionScopeType sets the "subscription_scope_type" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionScopeType() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionScopeType)
+	return u
+}
+
+// ClearSubscriptionScopeType clears the value of the "subscription_scope_type" field.
+func (u *PaymentOrderUpsert) ClearSubscriptionScopeType() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldSubscriptionScopeType)
+	return u
+}
+
+// SetSubscriptionScopeConfig sets the "subscription_scope_config" field.
+func (u *PaymentOrderUpsert) SetSubscriptionScopeConfig(v map[string]interface{}) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionScopeConfig, v)
+	return u
+}
+
+// UpdateSubscriptionScopeConfig sets the "subscription_scope_config" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionScopeConfig() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionScopeConfig)
+	return u
+}
+
+// SetSubscriptionValidityDays sets the "subscription_validity_days" field.
+func (u *PaymentOrderUpsert) SetSubscriptionValidityDays(v int) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionValidityDays, v)
+	return u
+}
+
+// UpdateSubscriptionValidityDays sets the "subscription_validity_days" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionValidityDays() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionValidityDays)
+	return u
+}
+
+// AddSubscriptionValidityDays adds v to the "subscription_validity_days" field.
+func (u *PaymentOrderUpsert) AddSubscriptionValidityDays(v int) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldSubscriptionValidityDays, v)
+	return u
+}
+
+// ClearSubscriptionValidityDays clears the value of the "subscription_validity_days" field.
+func (u *PaymentOrderUpsert) ClearSubscriptionValidityDays() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldSubscriptionValidityDays)
 	return u
 }
 
@@ -1988,6 +2258,153 @@ func (u *PaymentOrderUpsertOne) UpdateProviderSnapshot() *PaymentOrderUpsertOne 
 func (u *PaymentOrderUpsertOne) ClearProviderSnapshot() *PaymentOrderUpsertOne {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearProviderSnapshot()
+	})
+}
+
+// SetSubscriptionQuotaUsd sets the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionQuotaUsd(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionQuotaUsd(v)
+	})
+}
+
+// AddSubscriptionQuotaUsd adds v to the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsertOne) AddSubscriptionQuotaUsd(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionQuotaUsd(v)
+	})
+}
+
+// UpdateSubscriptionQuotaUsd sets the "subscription_quota_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionQuotaUsd() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionQuotaUsd()
+	})
+}
+
+// ClearSubscriptionQuotaUsd clears the value of the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsertOne) ClearSubscriptionQuotaUsd() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionQuotaUsd()
+	})
+}
+
+// SetSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionDailyLimitUsd(v)
+	})
+}
+
+// AddSubscriptionDailyLimitUsd adds v to the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsertOne) AddSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionDailyLimitUsd(v)
+	})
+}
+
+// UpdateSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionDailyLimitUsd() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionDailyLimitUsd()
+	})
+}
+
+// ClearSubscriptionDailyLimitUsd clears the value of the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsertOne) ClearSubscriptionDailyLimitUsd() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionDailyLimitUsd()
+	})
+}
+
+// SetSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionWeeklyLimitUsd(v)
+	})
+}
+
+// AddSubscriptionWeeklyLimitUsd adds v to the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsertOne) AddSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionWeeklyLimitUsd() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionWeeklyLimitUsd()
+	})
+}
+
+// ClearSubscriptionWeeklyLimitUsd clears the value of the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsertOne) ClearSubscriptionWeeklyLimitUsd() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionWeeklyLimitUsd()
+	})
+}
+
+// SetSubscriptionScopeType sets the "subscription_scope_type" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionScopeType(v string) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionScopeType(v)
+	})
+}
+
+// UpdateSubscriptionScopeType sets the "subscription_scope_type" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionScopeType() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionScopeType()
+	})
+}
+
+// ClearSubscriptionScopeType clears the value of the "subscription_scope_type" field.
+func (u *PaymentOrderUpsertOne) ClearSubscriptionScopeType() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionScopeType()
+	})
+}
+
+// SetSubscriptionScopeConfig sets the "subscription_scope_config" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionScopeConfig(v map[string]interface{}) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionScopeConfig(v)
+	})
+}
+
+// UpdateSubscriptionScopeConfig sets the "subscription_scope_config" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionScopeConfig() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionScopeConfig()
+	})
+}
+
+// SetSubscriptionValidityDays sets the "subscription_validity_days" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionValidityDays(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionValidityDays(v)
+	})
+}
+
+// AddSubscriptionValidityDays adds v to the "subscription_validity_days" field.
+func (u *PaymentOrderUpsertOne) AddSubscriptionValidityDays(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionValidityDays(v)
+	})
+}
+
+// UpdateSubscriptionValidityDays sets the "subscription_validity_days" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionValidityDays() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionValidityDays()
+	})
+}
+
+// ClearSubscriptionValidityDays clears the value of the "subscription_validity_days" field.
+func (u *PaymentOrderUpsertOne) ClearSubscriptionValidityDays() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionValidityDays()
 	})
 }
 
@@ -2920,6 +3337,153 @@ func (u *PaymentOrderUpsertBulk) UpdateProviderSnapshot() *PaymentOrderUpsertBul
 func (u *PaymentOrderUpsertBulk) ClearProviderSnapshot() *PaymentOrderUpsertBulk {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearProviderSnapshot()
+	})
+}
+
+// SetSubscriptionQuotaUsd sets the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionQuotaUsd(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionQuotaUsd(v)
+	})
+}
+
+// AddSubscriptionQuotaUsd adds v to the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsertBulk) AddSubscriptionQuotaUsd(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionQuotaUsd(v)
+	})
+}
+
+// UpdateSubscriptionQuotaUsd sets the "subscription_quota_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionQuotaUsd() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionQuotaUsd()
+	})
+}
+
+// ClearSubscriptionQuotaUsd clears the value of the "subscription_quota_usd" field.
+func (u *PaymentOrderUpsertBulk) ClearSubscriptionQuotaUsd() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionQuotaUsd()
+	})
+}
+
+// SetSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionDailyLimitUsd(v)
+	})
+}
+
+// AddSubscriptionDailyLimitUsd adds v to the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsertBulk) AddSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionDailyLimitUsd(v)
+	})
+}
+
+// UpdateSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionDailyLimitUsd() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionDailyLimitUsd()
+	})
+}
+
+// ClearSubscriptionDailyLimitUsd clears the value of the "subscription_daily_limit_usd" field.
+func (u *PaymentOrderUpsertBulk) ClearSubscriptionDailyLimitUsd() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionDailyLimitUsd()
+	})
+}
+
+// SetSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionWeeklyLimitUsd(v)
+	})
+}
+
+// AddSubscriptionWeeklyLimitUsd adds v to the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsertBulk) AddSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionWeeklyLimitUsd() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionWeeklyLimitUsd()
+	})
+}
+
+// ClearSubscriptionWeeklyLimitUsd clears the value of the "subscription_weekly_limit_usd" field.
+func (u *PaymentOrderUpsertBulk) ClearSubscriptionWeeklyLimitUsd() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionWeeklyLimitUsd()
+	})
+}
+
+// SetSubscriptionScopeType sets the "subscription_scope_type" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionScopeType(v string) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionScopeType(v)
+	})
+}
+
+// UpdateSubscriptionScopeType sets the "subscription_scope_type" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionScopeType() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionScopeType()
+	})
+}
+
+// ClearSubscriptionScopeType clears the value of the "subscription_scope_type" field.
+func (u *PaymentOrderUpsertBulk) ClearSubscriptionScopeType() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionScopeType()
+	})
+}
+
+// SetSubscriptionScopeConfig sets the "subscription_scope_config" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionScopeConfig(v map[string]interface{}) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionScopeConfig(v)
+	})
+}
+
+// UpdateSubscriptionScopeConfig sets the "subscription_scope_config" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionScopeConfig() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionScopeConfig()
+	})
+}
+
+// SetSubscriptionValidityDays sets the "subscription_validity_days" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionValidityDays(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionValidityDays(v)
+	})
+}
+
+// AddSubscriptionValidityDays adds v to the "subscription_validity_days" field.
+func (u *PaymentOrderUpsertBulk) AddSubscriptionValidityDays(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionValidityDays(v)
+	})
+}
+
+// UpdateSubscriptionValidityDays sets the "subscription_validity_days" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionValidityDays() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionValidityDays()
+	})
+}
+
+// ClearSubscriptionValidityDays clears the value of the "subscription_validity_days" field.
+func (u *PaymentOrderUpsertBulk) ClearSubscriptionValidityDays() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionValidityDays()
 	})
 }
 

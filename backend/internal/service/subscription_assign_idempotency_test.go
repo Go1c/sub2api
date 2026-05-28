@@ -157,7 +157,11 @@ func (s *subscriptionUserSubRepoStub) seed(sub *UserSubscription) {
 		s.nextID++
 	}
 	s.byID[cp.ID] = &cp
-	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
+	var gid int64
+	if cp.GroupID != nil {
+		gid = *cp.GroupID
+	}
+	s.byUserGroup[s.key(cp.UserID, gid)] = &cp
 }
 
 func (s *subscriptionUserSubRepoStub) ExistsByUserIDAndGroupID(_ context.Context, userID, groupID int64) (bool, error) {
@@ -186,7 +190,11 @@ func (s *subscriptionUserSubRepoStub) Create(_ context.Context, sub *UserSubscri
 	}
 	sub.ID = cp.ID
 	s.byID[cp.ID] = &cp
-	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
+	var gid int64
+	if cp.GroupID != nil {
+		gid = *cp.GroupID
+	}
+	s.byUserGroup[s.key(cp.UserID, gid)] = &cp
 	return nil
 }
 
@@ -205,10 +213,11 @@ func TestAssignSubscriptionReuseWhenSemanticsMatch(t *testing.T) {
 		group: &Group{ID: 1, SubscriptionType: SubscriptionTypeSubscription},
 	}
 	subRepo := newSubscriptionUserSubRepoStub()
+	gid1 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        10,
 		UserID:    1001,
-		GroupID:   1,
+		GroupID:   &gid1,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "init",
@@ -232,10 +241,11 @@ func TestAssignSubscriptionConflictWhenSemanticsMismatch(t *testing.T) {
 		group: &Group{ID: 1, SubscriptionType: SubscriptionTypeSubscription},
 	}
 	subRepo := newSubscriptionUserSubRepoStub()
+	gid2 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        11,
 		UserID:    2001,
-		GroupID:   1,
+		GroupID:   &gid2,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "old-note",
@@ -260,19 +270,21 @@ func TestBulkAssignSubscriptionCreatedReusedAndConflict(t *testing.T) {
 	}
 	subRepo := newSubscriptionUserSubRepoStub()
 	// user 1: 语义一致，可 reused
+	gid3 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        21,
 		UserID:    1,
-		GroupID:   1,
+		GroupID:   &gid3,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "same-note",
 	})
 	// user 3: 语义冲突（有效期不一致），应 failed
+	gid4 := int64(1)
 	subRepo.seed(&UserSubscription{
 		ID:        23,
 		UserID:    3,
-		GroupID:   1,
+		GroupID:   &gid4,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 60),
 		Notes:     "same-note",
@@ -328,9 +340,10 @@ func TestNormalizeAssignValidityDays(t *testing.T) {
 
 func TestDetectAssignSemanticConflictCases(t *testing.T) {
 	start := time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC)
+	gid5 := int64(1)
 	base := &UserSubscription{
 		UserID:    1,
-		GroupID:   1,
+		GroupID:   &gid5,
 		StartsAt:  start,
 		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "same",

@@ -87,6 +87,8 @@ const (
 	EdgePromoCodeUsages = "promo_code_usages"
 	// EdgePaymentOrders holds the string denoting the payment_orders edge name in mutations.
 	EdgePaymentOrders = "payment_orders"
+	// EdgeSubscriptionCreditLedgers holds the string denoting the subscription_credit_ledgers edge name in mutations.
+	EdgeSubscriptionCreditLedgers = "subscription_credit_ledgers"
 	// EdgeAuthIdentities holds the string denoting the auth_identities edge name in mutations.
 	EdgeAuthIdentities = "auth_identities"
 	// EdgePendingAuthSessions holds the string denoting the pending_auth_sessions edge name in mutations.
@@ -177,6 +179,13 @@ const (
 	PaymentOrdersInverseTable = "payment_orders"
 	// PaymentOrdersColumn is the table column denoting the payment_orders relation/edge.
 	PaymentOrdersColumn = "user_id"
+	// SubscriptionCreditLedgersTable is the table that holds the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersInverseTable is the table name for the SubscriptionCreditLedger entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptioncreditledger" package.
+	SubscriptionCreditLedgersInverseTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersColumn is the table column denoting the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersColumn = "user_id"
 	// AuthIdentitiesTable is the table that holds the auth_identities relation/edge.
 	AuthIdentitiesTable = "auth_identities"
 	// AuthIdentitiesInverseTable is the table name for the AuthIdentity entity.
@@ -597,6 +606,20 @@ func ByPaymentOrders(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// BySubscriptionCreditLedgersCount orders the results by subscription_credit_ledgers count.
+func BySubscriptionCreditLedgersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionCreditLedgersStep(), opts...)
+	}
+}
+
+// BySubscriptionCreditLedgers orders the results by subscription_credit_ledgers terms.
+func BySubscriptionCreditLedgers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionCreditLedgersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAuthIdentitiesCount orders the results by auth_identities count.
 func ByAuthIdentitiesCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -720,6 +743,13 @@ func newPaymentOrdersStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PaymentOrdersInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PaymentOrdersTable, PaymentOrdersColumn),
+	)
+}
+func newSubscriptionCreditLedgersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionCreditLedgersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionCreditLedgersTable, SubscriptionCreditLedgersColumn),
 	)
 }
 func newAuthIdentitiesStep() *sqlgraph.Step {

@@ -35,6 +35,16 @@ const (
 	FieldForSale = "for_sale"
 	// FieldSortOrder holds the string denoting the sort_order field in the database.
 	FieldSortOrder = "sort_order"
+	// FieldQuotaUsd holds the string denoting the quota_usd field in the database.
+	FieldQuotaUsd = "quota_usd"
+	// FieldDailyLimitUsd holds the string denoting the daily_limit_usd field in the database.
+	FieldDailyLimitUsd = "daily_limit_usd"
+	// FieldWeeklyLimitUsd holds the string denoting the weekly_limit_usd field in the database.
+	FieldWeeklyLimitUsd = "weekly_limit_usd"
+	// FieldScopeType holds the string denoting the scope_type field in the database.
+	FieldScopeType = "scope_type"
+	// FieldScopeConfig holds the string denoting the scope_config field in the database.
+	FieldScopeConfig = "scope_config"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -57,6 +67,11 @@ var Columns = []string{
 	FieldProductName,
 	FieldForSale,
 	FieldSortOrder,
+	FieldQuotaUsd,
+	FieldDailyLimitUsd,
+	FieldWeeklyLimitUsd,
+	FieldScopeType,
+	FieldScopeConfig,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -92,6 +107,14 @@ var (
 	DefaultForSale bool
 	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
 	DefaultSortOrder int
+	// DefaultQuotaUsd holds the default value on creation for the "quota_usd" field.
+	DefaultQuotaUsd float64
+	// DefaultScopeType holds the default value on creation for the "scope_type" field.
+	DefaultScopeType string
+	// ScopeTypeValidator is a validator for the "scope_type" field. It is called by the builders before save.
+	ScopeTypeValidator func(string) error
+	// DefaultScopeConfig holds the default value on creation for the "scope_config" field.
+	DefaultScopeConfig map[string]interface{}
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -161,6 +184,26 @@ func ByForSale(opts ...sql.OrderTermOption) OrderOption {
 // BySortOrder orders the results by the sort_order field.
 func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
+}
+
+// ByQuotaUsd orders the results by the quota_usd field.
+func ByQuotaUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaUsd, opts...).ToFunc()
+}
+
+// ByDailyLimitUsd orders the results by the daily_limit_usd field.
+func ByDailyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyLimitUsd, opts...).ToFunc()
+}
+
+// ByWeeklyLimitUsd orders the results by the weekly_limit_usd field.
+func ByWeeklyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWeeklyLimitUsd, opts...).ToFunc()
+}
+
+// ByScopeType orders the results by the scope_type field.
+func ByScopeType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScopeType, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

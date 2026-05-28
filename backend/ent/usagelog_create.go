@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -337,6 +338,34 @@ func (_c *UsageLogCreate) SetNillableActualCost(v *float64) *UsageLogCreate {
 	return _c
 }
 
+// SetSubscriptionCostUsd sets the "subscription_cost_usd" field.
+func (_c *UsageLogCreate) SetSubscriptionCostUsd(v float64) *UsageLogCreate {
+	_c.mutation.SetSubscriptionCostUsd(v)
+	return _c
+}
+
+// SetNillableSubscriptionCostUsd sets the "subscription_cost_usd" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableSubscriptionCostUsd(v *float64) *UsageLogCreate {
+	if v != nil {
+		_c.SetSubscriptionCostUsd(*v)
+	}
+	return _c
+}
+
+// SetBalanceCostUsd sets the "balance_cost_usd" field.
+func (_c *UsageLogCreate) SetBalanceCostUsd(v float64) *UsageLogCreate {
+	_c.mutation.SetBalanceCostUsd(v)
+	return _c
+}
+
+// SetNillableBalanceCostUsd sets the "balance_cost_usd" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableBalanceCostUsd(v *float64) *UsageLogCreate {
+	if v != nil {
+		_c.SetBalanceCostUsd(*v)
+	}
+	return _c
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_c *UsageLogCreate) SetRateMultiplier(v float64) *UsageLogCreate {
 	_c.mutation.SetRateMultiplier(v)
@@ -530,6 +559,21 @@ func (_c *UsageLogCreate) SetSubscription(v *UserSubscription) *UsageLogCreate {
 	return _c.SetSubscriptionID(v.ID)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_c *UsageLogCreate) AddSubscriptionCreditLedgerIDs(ids ...int64) *UsageLogCreate {
+	_c.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _c
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_c *UsageLogCreate) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *UsageLogCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // Mutation returns the UsageLogMutation object of the builder.
 func (_c *UsageLogCreate) Mutation() *UsageLogMutation {
 	return _c.mutation
@@ -612,6 +656,14 @@ func (_c *UsageLogCreate) defaults() {
 	if _, ok := _c.mutation.ActualCost(); !ok {
 		v := usagelog.DefaultActualCost
 		_c.mutation.SetActualCost(v)
+	}
+	if _, ok := _c.mutation.SubscriptionCostUsd(); !ok {
+		v := usagelog.DefaultSubscriptionCostUsd
+		_c.mutation.SetSubscriptionCostUsd(v)
+	}
+	if _, ok := _c.mutation.BalanceCostUsd(); !ok {
+		v := usagelog.DefaultBalanceCostUsd
+		_c.mutation.SetBalanceCostUsd(v)
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		v := usagelog.DefaultRateMultiplier
@@ -726,6 +778,12 @@ func (_c *UsageLogCreate) check() error {
 	}
 	if _, ok := _c.mutation.ActualCost(); !ok {
 		return &ValidationError{Name: "actual_cost", err: errors.New(`ent: missing required field "UsageLog.actual_cost"`)}
+	}
+	if _, ok := _c.mutation.SubscriptionCostUsd(); !ok {
+		return &ValidationError{Name: "subscription_cost_usd", err: errors.New(`ent: missing required field "UsageLog.subscription_cost_usd"`)}
+	}
+	if _, ok := _c.mutation.BalanceCostUsd(); !ok {
+		return &ValidationError{Name: "balance_cost_usd", err: errors.New(`ent: missing required field "UsageLog.balance_cost_usd"`)}
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "UsageLog.rate_multiplier"`)}
@@ -876,6 +934,14 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldActualCost, field.TypeFloat64, value)
 		_node.ActualCost = value
 	}
+	if value, ok := _c.mutation.SubscriptionCostUsd(); ok {
+		_spec.SetField(usagelog.FieldSubscriptionCostUsd, field.TypeFloat64, value)
+		_node.SubscriptionCostUsd = value
+	}
+	if value, ok := _c.mutation.BalanceCostUsd(); ok {
+		_spec.SetField(usagelog.FieldBalanceCostUsd, field.TypeFloat64, value)
+		_node.BalanceCostUsd = value
+	}
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
@@ -1007,6 +1073,22 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.SubscriptionID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.SubscriptionCreditLedgersTable,
+			Columns: []string{usagelog.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -1484,6 +1566,42 @@ func (u *UsageLogUpsert) UpdateActualCost() *UsageLogUpsert {
 // AddActualCost adds v to the "actual_cost" field.
 func (u *UsageLogUpsert) AddActualCost(v float64) *UsageLogUpsert {
 	u.Add(usagelog.FieldActualCost, v)
+	return u
+}
+
+// SetSubscriptionCostUsd sets the "subscription_cost_usd" field.
+func (u *UsageLogUpsert) SetSubscriptionCostUsd(v float64) *UsageLogUpsert {
+	u.Set(usagelog.FieldSubscriptionCostUsd, v)
+	return u
+}
+
+// UpdateSubscriptionCostUsd sets the "subscription_cost_usd" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateSubscriptionCostUsd() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldSubscriptionCostUsd)
+	return u
+}
+
+// AddSubscriptionCostUsd adds v to the "subscription_cost_usd" field.
+func (u *UsageLogUpsert) AddSubscriptionCostUsd(v float64) *UsageLogUpsert {
+	u.Add(usagelog.FieldSubscriptionCostUsd, v)
+	return u
+}
+
+// SetBalanceCostUsd sets the "balance_cost_usd" field.
+func (u *UsageLogUpsert) SetBalanceCostUsd(v float64) *UsageLogUpsert {
+	u.Set(usagelog.FieldBalanceCostUsd, v)
+	return u
+}
+
+// UpdateBalanceCostUsd sets the "balance_cost_usd" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateBalanceCostUsd() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldBalanceCostUsd)
+	return u
+}
+
+// AddBalanceCostUsd adds v to the "balance_cost_usd" field.
+func (u *UsageLogUpsert) AddBalanceCostUsd(v float64) *UsageLogUpsert {
+	u.Add(usagelog.FieldBalanceCostUsd, v)
 	return u
 }
 
@@ -2230,6 +2348,48 @@ func (u *UsageLogUpsertOne) AddActualCost(v float64) *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) UpdateActualCost() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateActualCost()
+	})
+}
+
+// SetSubscriptionCostUsd sets the "subscription_cost_usd" field.
+func (u *UsageLogUpsertOne) SetSubscriptionCostUsd(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSubscriptionCostUsd(v)
+	})
+}
+
+// AddSubscriptionCostUsd adds v to the "subscription_cost_usd" field.
+func (u *UsageLogUpsertOne) AddSubscriptionCostUsd(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddSubscriptionCostUsd(v)
+	})
+}
+
+// UpdateSubscriptionCostUsd sets the "subscription_cost_usd" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateSubscriptionCostUsd() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSubscriptionCostUsd()
+	})
+}
+
+// SetBalanceCostUsd sets the "balance_cost_usd" field.
+func (u *UsageLogUpsertOne) SetBalanceCostUsd(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBalanceCostUsd(v)
+	})
+}
+
+// AddBalanceCostUsd adds v to the "balance_cost_usd" field.
+func (u *UsageLogUpsertOne) AddBalanceCostUsd(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddBalanceCostUsd(v)
+	})
+}
+
+// UpdateBalanceCostUsd sets the "balance_cost_usd" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateBalanceCostUsd() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBalanceCostUsd()
 	})
 }
 
@@ -3176,6 +3336,48 @@ func (u *UsageLogUpsertBulk) AddActualCost(v float64) *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) UpdateActualCost() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateActualCost()
+	})
+}
+
+// SetSubscriptionCostUsd sets the "subscription_cost_usd" field.
+func (u *UsageLogUpsertBulk) SetSubscriptionCostUsd(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSubscriptionCostUsd(v)
+	})
+}
+
+// AddSubscriptionCostUsd adds v to the "subscription_cost_usd" field.
+func (u *UsageLogUpsertBulk) AddSubscriptionCostUsd(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddSubscriptionCostUsd(v)
+	})
+}
+
+// UpdateSubscriptionCostUsd sets the "subscription_cost_usd" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateSubscriptionCostUsd() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSubscriptionCostUsd()
+	})
+}
+
+// SetBalanceCostUsd sets the "balance_cost_usd" field.
+func (u *UsageLogUpsertBulk) SetBalanceCostUsd(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBalanceCostUsd(v)
+	})
+}
+
+// AddBalanceCostUsd adds v to the "balance_cost_usd" field.
+func (u *UsageLogUpsertBulk) AddBalanceCostUsd(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddBalanceCostUsd(v)
+	})
+}
+
+// UpdateBalanceCostUsd sets the "balance_cost_usd" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateBalanceCostUsd() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBalanceCostUsd()
 	})
 }
 

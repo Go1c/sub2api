@@ -357,6 +357,18 @@ func (f SiteMessageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SiteMessageMutation", m)
 }
 
+// The SubscriptionCreditLedgerFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionCreditLedger mutator.
+type SubscriptionCreditLedgerFunc func(context.Context, *ent.SubscriptionCreditLedgerMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionCreditLedgerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionCreditLedgerMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionCreditLedgerMutation", m)
+}
+
 // The SubscriptionPlanFunc type is an adapter to allow the use of ordinary
 // function as SubscriptionPlan mutator.
 type SubscriptionPlanFunc func(context.Context, *ent.SubscriptionPlanMutation) (ent.Value, error)

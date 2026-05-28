@@ -134,6 +134,15 @@ func (s *SubscriptionService) jitteredTTL(ttl time.Duration) time.Duration {
 	return time.Duration(float64(ttl) * factor)
 }
 
+// subscriptionGroupIDOrZero 解引用订阅 GroupID；nil（额度池订阅）返回 0。
+// 0 不会与真实分组 ID 冲突（分组 ID 由 BIGSERIAL 从 1 起），可安全用作缓存 key。
+func subscriptionGroupIDOrZero(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
 // InvalidateSubCache 失效指定用户+分组的订阅 L1 缓存
 func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 	if s.subCacheL1 == nil {
@@ -300,9 +309,10 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 		expiresAt = MaxExpiresAt
 	}
 
+	gid := input.GroupID
 	sub := &UserSubscription{
 		UserID:     input.UserID,
-		GroupID:    input.GroupID,
+		GroupID:    &gid,
 		StartsAt:   now,
 		ExpiresAt:  expiresAt,
 		Status:     SubscriptionStatusActive,
@@ -474,10 +484,11 @@ func (s *SubscriptionService) RevokeSubscription(ctx context.Context, subscripti
 		return err
 	}
 
-	// 失效订阅缓存
-	s.InvalidateSubCache(sub.UserID, sub.GroupID)
+	// 失效订阅缓存（额度池订阅 group_id 可为 nil，传 0 表示无分组）
+	subGroupID := subscriptionGroupIDOrZero(sub.GroupID)
+	s.InvalidateSubCache(sub.UserID, subGroupID)
 	if s.billingCacheService != nil {
-		userID, groupID := sub.UserID, sub.GroupID
+		userID, groupID := sub.UserID, subGroupID
 		go func() {
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -541,10 +552,11 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 		}
 	}
 
-	// 失效订阅缓存
-	s.InvalidateSubCache(sub.UserID, sub.GroupID)
+	// 失效订阅缓存（额度池订阅 group_id 可为 nil，传 0 表示无分组）
+	subGroupID := subscriptionGroupIDOrZero(sub.GroupID)
+	s.InvalidateSubCache(sub.UserID, subGroupID)
 	if s.billingCacheService != nil {
-		userID, groupID := sub.UserID, sub.GroupID
+		userID, groupID := sub.UserID, subGroupID
 		go func() {
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -725,12 +737,13 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 	// Invalidate L1 ristretto cache. Ristretto's Del() is asynchronous by design,
 	// so call Wait() immediately after to flush pending operations and guarantee
 	// the deleted key is not returned on the very next Get() call.
-	s.InvalidateSubCache(sub.UserID, sub.GroupID)
+	gid := subscriptionGroupIDOrZero(sub.GroupID)
+	s.InvalidateSubCache(sub.UserID, gid)
 	if s.subCacheL1 != nil {
 		s.subCacheL1.Wait()
 	}
 	if s.billingCacheService != nil {
-		_ = s.billingCacheService.InvalidateSubscription(ctx, sub.UserID, sub.GroupID)
+		_ = s.billingCacheService.InvalidateSubscription(ctx, sub.UserID, gid)
 	}
 	// Return the refreshed subscription from DB
 	return s.userSubRepo.GetByID(ctx, subscriptionID)
@@ -774,9 +787,10 @@ func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *Use
 
 	// 如果有窗口被重置，失效缓存以保持一致性
 	if needsInvalidateCache {
-		s.InvalidateSubCache(sub.UserID, sub.GroupID)
+		gid := subscriptionGroupIDOrZero(sub.GroupID)
+		s.InvalidateSubCache(sub.UserID, gid)
 		if s.billingCacheService != nil {
-			_ = s.billingCacheService.InvalidateSubscription(ctx, sub.UserID, sub.GroupID)
+			_ = s.billingCacheService.InvalidateSubscription(ctx, sub.UserID, gid)
 		}
 	}
 
@@ -884,7 +898,7 @@ func (s *SubscriptionService) doWindowMaintenance(sub *UserSubscription) {
 	}
 
 	// 失效 L1 缓存，确保后续请求拿到更新后的数据
-	s.InvalidateSubCache(sub.UserID, sub.GroupID)
+	s.InvalidateSubCache(sub.UserID, subscriptionGroupIDOrZero(sub.GroupID))
 }
 
 // RecordUsage 记录使用量到订阅
@@ -922,8 +936,8 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 	}
 
 	group := sub.Group
-	if group == nil {
-		group, err = s.groupRepo.GetByID(ctx, sub.GroupID)
+	if group == nil && sub.GroupID != nil {
+		group, err = s.groupRepo.GetByID(ctx, *sub.GroupID)
 		if err != nil {
 			return nil, err
 		}
