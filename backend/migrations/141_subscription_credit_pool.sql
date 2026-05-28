@@ -139,7 +139,8 @@ CREATE TABLE IF NOT EXISTS subscription_credit_ledger (
 );
 
 -- type 取值约束：
---   purchase / consume / limit_reached / expire / admin_adjust
+--   purchase / consume / limit_reached / expire / window_reset / admin_adjust
+-- window_reset 用于日/周窗口重置时记录被重置窗口的"浪费量"（运营定价分析）。
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -147,7 +148,7 @@ BEGIN
     ) THEN
         ALTER TABLE subscription_credit_ledger
             ADD CONSTRAINT subscription_credit_ledger_type_check
-            CHECK (type IN ('purchase', 'consume', 'limit_reached', 'expire', 'admin_adjust'));
+            CHECK (type IN ('purchase', 'consume', 'limit_reached', 'expire', 'window_reset', 'admin_adjust'));
     END IF;
 END $$;
 

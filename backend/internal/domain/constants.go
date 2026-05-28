@@ -81,7 +81,11 @@ const (
 	SubscriptionCreditLedgerConsume      = "consume"
 	SubscriptionCreditLedgerLimitReached = "limit_reached"
 	SubscriptionCreditLedgerExpire       = "expire"
-	SubscriptionCreditLedgerAdminAdjust  = "admin_adjust"
+	// SubscriptionCreditLedgerWindowReset 日/周窗口重置时记录被重置窗口的浪费量。
+	// metadata: {window, limit_usd, used_before_reset_usd, wasted_usd, wasted_ratio, old_window_start}
+	// 仅供后台浪费率统计，不发通知；event_key 归集到旧窗口起点保证幂等。
+	SubscriptionCreditLedgerWindowReset = "window_reset"
+	SubscriptionCreditLedgerAdminAdjust = "admin_adjust"
 )
 
 // LimitReached 事件维度（用于 event_key 前缀和 outbox payload kind 后缀）

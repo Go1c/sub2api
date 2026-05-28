@@ -159,6 +159,7 @@ CREATE UNIQUE INDEX subscription_credit_ledger_event_key_unique
 - `consume`：请求消费订阅额度（`delta_usd < 0`，`balance_delta_usd < 0` 表示同次请求余额扣减部分）
 - `limit_reached`：总额度、日限或周限到达上限（`delta_usd = 0`，幂等事件，靠 `event_key` 去重）
 - `expire`：订阅到期销毁剩余额度（`delta_usd <= 0`，等于过期时刻的剩余）
+- `window_reset`：日/周窗口重置时记录被重置窗口的浪费（`delta_usd = 0`，metadata 装 `window/limit_usd/used_before_reset_usd/wasted_usd/wasted_ratio`；用于定价分析）
 - `admin_adjust`：管理员手动调整额度（符号视方向）
 
 **`event_key` 格式（UTC RFC3339）：**
@@ -167,6 +168,7 @@ CREATE UNIQUE INDEX subscription_credit_ledger_event_key_unique
 - 日限耗尽：`daily:{subscription_id}:{daily_window_start_rfc3339}`，例如 `daily:123:2026-05-28T00:00:00Z`
 - 周限耗尽：`weekly:{subscription_id}:{weekly_window_start_rfc3339}`
 - 过期销毁：`expire:{subscription_id}:{expires_at_rfc3339}`
+- 窗口重置：`window_reset_{daily|weekly}:{subscription_id}:{old_window_start_rfc3339}`（归集到旧窗口起点）
 
 **`delta_usd` 符号约定：**
 
@@ -323,6 +325,38 @@ if just_hit_daily {
 ```
 
 ledger `event_key` 唯一索引保证幂等：如果 ledger 这次插不进去（已存在），整个 if 分支无副作用。
+
+### 窗口重置时写浪费记录
+
+当 `resetDaily=true` 或 `resetWeekly=true` 时，**在同一事务内、UPDATE 之前**先写一条 `window_reset` ledger，归集到旧窗口起点（语义"那一周/那一天的浪费"）：
+
+```go
+if resetDaily && state.DailyLimitUSD != nil && state.DailyWindowStart != nil {
+    oldUsed := state.DailyUsageUSD
+    limit := *state.DailyLimitUSD
+    wasted := limit - oldUsed
+    if wasted < 0 { wasted = 0 }
+    eventKey := fmt.Sprintf("window_reset_daily:%d:%s", subID, state.DailyWindowStart.UTC().Format(time.RFC3339))
+    ledgerRepo.CreateLimitReachedEvent(ctx, tx, &SubscriptionCreditLedgerEntry{
+        UserID: cmd.UserID, SubscriptionID: subID,
+        Type: SubscriptionCreditLedgerWindowReset,
+        DeltaUSD: 0, RemainingAfterUSD: state.QuotaLimitUSD - state.QuotaUsedUSD,
+        EventKey: &eventKey,
+        Reason: "daily window reset",
+        Metadata: map[string]any{
+            "window":                "daily",
+            "limit_usd":             limit,
+            "used_before_reset_usd": oldUsed,
+            "wasted_usd":            wasted,
+            "wasted_ratio":          wasted / limit,
+            "old_window_start":      state.DailyWindowStart.UTC().Format(time.RFC3339),
+        },
+    })
+}
+// weekly 同理
+```
+
+`CreateLimitReachedEvent`（沿用 `ON CONFLICT DO NOTHING` 机制）保证幂等：并发请求同时触发重置时只会留一条 ledger。`window_reset` 不发通知，仅供后台统计。
 
 ---
 
@@ -684,6 +718,7 @@ const (
     SubscriptionCreditLedgerConsume      = "consume"
     SubscriptionCreditLedgerLimitReached = "limit_reached"
     SubscriptionCreditLedgerExpire       = "expire"
+    SubscriptionCreditLedgerWindowReset  = "window_reset"
     SubscriptionCreditLedgerAdminAdjust  = "admin_adjust"
 
     // LimitReached 事件类型（用于 event_key 前缀和 outbox payload kind）
@@ -1406,8 +1441,13 @@ git commit -m "feat: show subscription credit pool"
 **Files:**
 - Modify: `backend/internal/handler/admin/subscription_handler.go`
 - Modify: `backend/internal/handler/admin/payment_handler.go`
+- Create: `backend/internal/handler/admin/subscription_waste_stats_handler.go`
+- Create: `backend/internal/service/subscription_waste_stats.go`
+- Create: `backend/internal/repository/subscription_waste_stats_repo.go`
 - Modify: `frontend/src/views/admin/orders/PlanEditDialog.vue`
 - Modify: `frontend/src/views/admin/SubscriptionsView.vue`
+- Create: `frontend/src/views/admin/SubscriptionWasteStatsView.vue`
+- Modify: `frontend/src/router/index.ts`（新增菜单项）
 
 - [ ] **Step 1: 套餐编辑器**
 
@@ -1424,26 +1464,166 @@ git commit -m "feat: show subscription credit pool"
 
 `SubscriptionsView.vue`（admin 版）展示所有用户订阅：
 
-- 列：用户 / 状态 / `exhausted_at` / `expires_at` / 总额度 / 已用 / 当前窗口用量；
-- 操作：调整额度（`admin_adjust` ledger）、暂停 / 恢复（修改 status）、查看 ledger。
+- 列：用户邮箱 / 状态（active+可消费 / active+已耗尽 / expired / suspended）/ `exhausted_at` / `expires_at` / `quota_limit_usd` / `quota_used_usd` / 剩余 / 当前日用量 / 当前周用量 / 最近 30 天浪费金额
+- 筛选：状态 / 套餐 / 邮箱关键字 / 创建时间范围
+- 操作：调整额度（`admin_adjust` ledger）/ 暂停 / 恢复（修改 status）/ 查看 ledger 详情
 
-- [ ] **Step 3: Run tests**
+- [ ] **Step 3: 浪费率统计页（新增独立菜单项）**
+
+**菜单：** 订阅管理 → 浪费率统计
+
+**后端 service：**
+
+`subscription_waste_stats.go` 提供聚合查询，输入参数：
+
+```go
+type WasteStatsQuery struct {
+    StartTime time.Time
+    EndTime   time.Time
+    PlanID    *int64    // 可选：按套餐过滤
+    UserID    *int64    // 可选：按用户过滤
+    Window    string    // "daily" / "weekly" / "total" / "all"
+}
+
+type WasteStatsResult struct {
+    // 总览
+    TotalSubscriptionsPurchased int64   // 期间内购买订阅数
+    TotalQuotaPurchasedUSD      float64 // 总额度（purchase ledger 累计）
+    TotalQuotaConsumedUSD       float64 // 实际消费（consume ledger 累计）
+    TotalQuotaWastedUSD         float64 // 总额度浪费（expire ledger 累计）
+
+    // 窗口浪费（来自 window_reset ledger）
+    DailyResetCount        int64
+    DailyAverageWasteRatio float64  // 平均浪费率（0-1）
+    DailyTotalWastedUSD    float64
+    WeeklyResetCount       int64
+    WeeklyAverageWasteRatio float64
+    WeeklyTotalWastedUSD   float64
+
+    // 维度聚合（按套餐）
+    ByPlan []PlanWasteBucket  // 每个套餐的浪费率排行
+
+    // 时间序列（按周 bucket）
+    TimeSeries []WasteTimeBucket
+}
+
+type PlanWasteBucket struct {
+    PlanID                  int64
+    PlanName                string
+    PurchaseCount           int64
+    AverageDailyWasteRatio  float64
+    AverageWeeklyWasteRatio float64
+    TotalQuotaWastedRatio   float64  // SUM(expire.wasted_usd) / SUM(purchase.delta_usd)
+}
+
+type WasteTimeBucket struct {
+    BucketStart           time.Time
+    DailyAverageWasteRatio  float64
+    WeeklyAverageWasteRatio float64
+    TotalWastedUSD        float64
+}
+```
+
+**SQL 实现（subscription_waste_stats_repo.go）：**
+
+主查询从 `subscription_credit_ledger` 聚合，**按 created_at 落在 `[StartTime, EndTime]` 区间内的 `window_reset` / `expire` / `purchase` / `consume` 事件**统计。
+
+关键 SQL：
+
+```sql
+-- 日浪费率：window='daily' 的 window_reset 事件
+WITH daily_resets AS (
+  SELECT
+    subscription_id,
+    (metadata->>'wasted_usd')::DECIMAL AS wasted_usd,
+    (metadata->>'wasted_ratio')::DECIMAL AS wasted_ratio
+  FROM subscription_credit_ledger
+  WHERE type = 'window_reset'
+    AND metadata->>'window' = 'daily'
+    AND created_at >= $1 AND created_at < $2
+)
+SELECT
+  COUNT(*) AS reset_count,
+  AVG(wasted_ratio) AS avg_waste_ratio,
+  SUM(wasted_usd) AS total_wasted_usd
+FROM daily_resets;
+```
+
+**按套餐聚合：**
+
+```sql
+SELECT
+  us.plan_id,
+  sp.name,
+  COUNT(DISTINCT us.id) AS purchase_count,
+  -- 套餐下所有订阅的窗口浪费聚合
+  AVG(CASE WHEN scl.metadata->>'window'='daily'  THEN (scl.metadata->>'wasted_ratio')::DECIMAL END) AS avg_daily_waste_ratio,
+  AVG(CASE WHEN scl.metadata->>'window'='weekly' THEN (scl.metadata->>'wasted_ratio')::DECIMAL END) AS avg_weekly_waste_ratio,
+  SUM(CASE WHEN scl.type='expire' THEN -scl.delta_usd END) /
+    NULLIF(SUM(CASE WHEN scl.type='purchase' THEN scl.delta_usd END), 0) AS total_quota_wasted_ratio
+FROM user_subscriptions us
+LEFT JOIN subscription_plans sp ON sp.id = us.plan_id
+LEFT JOIN subscription_credit_ledger scl ON scl.subscription_id = us.id
+  AND scl.created_at >= $1 AND scl.created_at < $2
+WHERE us.plan_id IS NOT NULL
+  AND us.created_at >= $1
+GROUP BY us.plan_id, sp.name
+ORDER BY total_quota_wasted_ratio DESC NULLS LAST;
+```
+
+**前端 SubscriptionWasteStatsView.vue 展示：**
+
+1. **筛选条**：时间范围（最近 7/30/90 天 / 自定义）/ 套餐下拉 / 用户搜索
+2. **总览卡片**（4 张）：
+   - 总购买额度 / 总消费 / 总浪费金额 / 整体浪费率
+3. **窗口浪费率卡片**（2 张）：
+   - 日限平均浪费率 + reset 次数 + 浪费金额
+   - 周限平均浪费率 + reset 次数 + 浪费金额
+4. **套餐浪费排行表**：按 `total_quota_wasted_ratio` 降序排列，列：套餐名 / 购买数 / 日浪费率 / 周浪费率 / 总浪费率
+5. **时间趋势图**（ECharts 折线）：横轴时间 bucket，纵轴浪费率，三条线（日/周/总）
+
+- [ ] **Step 4: API 端点**
+
+```
+GET /admin/subscriptions
+  ?status=&plan_id=&email=&page=&page_size=
+GET /admin/subscriptions/:id/ledger
+  ?type=&page=&page_size=
+PATCH /admin/subscriptions/:id
+  body: {quota_limit_usd?, daily_limit_usd?, weekly_limit_usd?, expires_at?, status?, reason}
+GET /admin/subscriptions/waste-stats
+  ?start=&end=&plan_id=&user_id=&window=
+GET /admin/subscriptions/waste-stats/by-plan
+  ?start=&end=
+GET /admin/subscriptions/waste-stats/time-series
+  ?start=&end=&bucket=week
+```
+
+PATCH 调整额度时自动写 `admin_adjust` ledger（`delta_usd` = new_limit - old_limit）。
+
+- [ ] **Step 5: Run tests**
 
 ```bash
 cd backend
-go test ./internal/handler/admin -run 'TestAdminSubscription|TestAdminPayment.*Plan' -count=1
+go test ./internal/service -run 'TestSubscriptionWasteStats' -count=1
+go test ./internal/handler/admin -run 'TestAdminSubscription|TestAdminPayment.*Plan|TestAdminWasteStats' -count=1
 cd ../frontend
 pnpm typecheck
 pnpm build
 ```
 
-Expected: PASS。
+Expected: PASS。后端测试覆盖：
 
-- [ ] **Step 4: Commit**
+- 浪费率计算正确（mock ledger 数据后查聚合）；
+- 时间范围过滤；
+- 按套餐分组聚合；
+- 空数据返回 NaN 处理（avg_ratio 用 NULLIF 防除零）。
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add backend/internal/handler/admin frontend/src/views/admin
-git commit -m "feat: admin subscription credit management"
+git add backend/internal/handler/admin backend/internal/service/subscription_waste_stats* backend/internal/repository/subscription_waste_stats_repo.go frontend/src/views/admin frontend/src/router
+git commit -m "feat: admin subscription credit management with waste stats"
 ```
 
 ---
