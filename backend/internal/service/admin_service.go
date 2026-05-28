@@ -31,6 +31,7 @@ type AdminService interface {
 	ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error)
 	GetUserBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error)
 	GetUser(ctx context.Context, id int64) (*User, error)
+	GetUserIncludeDeleted(ctx context.Context, id int64) (*User, error)
 	CreateUser(ctx context.Context, input *CreateUserInput) (*User, error)
 	UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error)
 	DeleteUser(ctx context.Context, id int64) error
@@ -688,6 +689,10 @@ func (s *adminServiceImpl) GetUser(ctx context.Context, id int64) (*User, error)
 		}
 	}
 	return user, nil
+}
+
+func (s *adminServiceImpl) GetUserIncludeDeleted(ctx context.Context, id int64) (*User, error) {
+	return s.userRepo.GetByIDIncludeDeleted(ctx, id)
 }
 
 func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
