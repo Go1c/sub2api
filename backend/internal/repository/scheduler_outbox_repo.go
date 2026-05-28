@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -18,6 +19,18 @@ const schedulerOutboxDedupWindow = time.Second
 func NewSchedulerOutboxRepository(db *sql.DB) service.SchedulerOutboxRepository {
 	return &schedulerOutboxRepository{db: db}
 }
+
+// NewSubscriptionNotifyOutboxRepository 复用底层 scheduler_outbox 表，但暴露
+// 按 event_type='subscription_notify' 过滤的查询，供独立 worker 维护自己的 watermark。
+func NewSubscriptionNotifyOutboxRepository(db *sql.DB) service.SubscriptionNotifyOutboxRepository {
+	return &schedulerOutboxRepository{db: db}
+}
+
+// 编译期断言：同一实现满足两类轮询接口。
+var (
+	_ service.SchedulerOutboxRepository          = (*schedulerOutboxRepository)(nil)
+	_ service.SubscriptionNotifyOutboxRepository = (*schedulerOutboxRepository)(nil)
+)
 
 func (r *schedulerOutboxRepository) ListAfter(ctx context.Context, afterID int64, limit int) ([]service.SchedulerOutboxEvent, error) {
 	if limit <= 0 {
@@ -124,4 +137,71 @@ func schedulerOutboxEventSupportsDedup(eventType string) bool {
 	default:
 		return false
 	}
+}
+
+// ListSubscriptionNotifyAfter 拉取 event_type='subscription_notify' 且 id > afterID 的事件。
+// 与 ListAfter 不同：仅返回订阅通知类型，由独立 worker 维护自己的 watermark。
+func (r *schedulerOutboxRepository) ListSubscriptionNotifyAfter(ctx context.Context, afterID int64, limit int) ([]service.SchedulerOutboxEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, event_type, account_id, group_id, payload, created_at
+		FROM scheduler_outbox
+		WHERE id > $1 AND event_type = $2
+		ORDER BY id ASC
+		LIMIT $3
+	`, afterID, domain.SchedulerOutboxEventSubscriptionNotify, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	events := make([]service.SchedulerOutboxEvent, 0, limit)
+	for rows.Next() {
+		var (
+			payloadRaw []byte
+			accountID  sql.NullInt64
+			groupID    sql.NullInt64
+			event      service.SchedulerOutboxEvent
+		)
+		if err := rows.Scan(&event.ID, &event.EventType, &accountID, &groupID, &payloadRaw, &event.CreatedAt); err != nil {
+			return nil, err
+		}
+		if accountID.Valid {
+			v := accountID.Int64
+			event.AccountID = &v
+		}
+		if groupID.Valid {
+			v := groupID.Int64
+			event.GroupID = &v
+		}
+		if len(payloadRaw) > 0 {
+			var payload map[string]any
+			if err := json.Unmarshal(payloadRaw, &payload); err != nil {
+				return nil, err
+			}
+			event.Payload = payload
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+// MaxSubscriptionNotifyID 返回 event_type='subscription_notify' 的最大事件 id。
+// worker 启动时调用，避免历史事件被重发。
+func (r *schedulerOutboxRepository) MaxSubscriptionNotifyID(ctx context.Context) (int64, error) {
+	var maxID int64
+	if err := r.db.QueryRowContext(ctx,
+		"SELECT COALESCE(MAX(id), 0) FROM scheduler_outbox WHERE event_type = $1",
+		domain.SchedulerOutboxEventSubscriptionNotify,
+	).Scan(&maxID); err != nil {
+		return 0, err
+	}
+	return maxID, nil
 }

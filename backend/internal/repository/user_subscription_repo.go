@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -13,10 +15,14 @@ import (
 
 type userSubscriptionRepository struct {
 	client *dbent.Client
+	db     *sql.DB
 }
 
-func NewUserSubscriptionRepository(client *dbent.Client) service.UserSubscriptionRepository {
-	return &userSubscriptionRepository{client: client}
+// NewUserSubscriptionRepository 构造用户订阅仓储。
+// sqlDB 用于额度池扩展方法（LockUserForSubscriptionWrite 等需要直接 SQL 操作）；
+// 传 nil 时这些方法会返回 ErrSQLDBUnavailable。
+func NewUserSubscriptionRepository(client *dbent.Client, sqlDB *sql.DB) service.UserSubscriptionRepository {
+	return &userSubscriptionRepository{client: client, db: sqlDB}
 }
 
 func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.UserSubscription) error {
@@ -518,4 +524,131 @@ func applyUserSubscriptionEntityToService(dst *service.UserSubscription, src *db
 	dst.ID = src.ID
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
+}
+
+// ====================================================================================
+// 订阅额度池扩展方法（实现 service.SubscriptionCreditExtension）
+// ====================================================================================
+
+// GetUsableCreditSubscription 返回用户当前的"可消费"订阅。
+//
+//	可消费 = status='active' AND exhausted_at IS NULL
+//	       AND expires_at > now AND deleted_at IS NULL
+//
+// 由部分唯一索引 user_subscriptions_user_active_usable 保证最多 1 条。
+// 不存在时返回 (nil, ErrSubscriptionNotFound)。
+func (r *userSubscriptionRepository) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	client := clientFromContext(ctx, r.client)
+	m, err := client.UserSubscription.Query().
+		Where(
+			usersubscription.UserIDEQ(userID),
+			usersubscription.StatusEQ(service.SubscriptionStatusActive),
+			usersubscription.ExhaustedAtIsNil(),
+			usersubscription.ExpiresAtGT(time.Now()),
+		).
+		WithUser().
+		WithGroup().
+		Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	return userSubscriptionEntityToService(m), nil
+}
+
+// HasUsableCreditSubscription 用户是否当前有可消费订阅。
+func (r *userSubscriptionRepository) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
+	client := clientFromContext(ctx, r.client)
+	count, err := client.UserSubscription.Query().
+		Where(
+			usersubscription.UserIDEQ(userID),
+			usersubscription.StatusEQ(service.SubscriptionStatusActive),
+			usersubscription.ExhaustedAtIsNil(),
+			usersubscription.ExpiresAtGT(time.Now()),
+		).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// GetRenewalEligibility 用户是否允许购买新订阅。
+//
+// 判定顺序（与 plan 设计原则 #8 / #9 对齐）：
+//  1. 当前 active 订阅存在 → 看是否仍可消费：
+//     - 已耗尽（exhausted_at != nil）→ Allowed=true, Reason=exhausted
+//     - 已过期（expires_at <= now）→ Allowed=true, Reason=expired
+//     - 仍可消费 → Allowed=false, Reason=not_exhausted
+//  2. 没有 active 订阅 → Allowed=true, Reason=no_subscription
+//
+// "active 订阅" 包含 exhausted（status=active + exhausted_at != nil）和 expired
+// （status=active + expires_at <= now，过期任务尚未推进 status='expired'）两种状态。
+func (r *userSubscriptionRepository) GetRenewalEligibility(ctx context.Context, userID int64) (service.RenewalEligibility, error) {
+	client := clientFromContext(ctx, r.client)
+	// 取用户最新的 active 订阅（包含已耗尽 / 已到期但未推进状态的）
+	m, err := client.UserSubscription.Query().
+		Where(
+			usersubscription.UserIDEQ(userID),
+			usersubscription.StatusEQ(service.SubscriptionStatusActive),
+		).
+		WithUser().
+		WithGroup().
+		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
+		First(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return service.RenewalEligibility{
+				Allowed: true,
+				Reason:  service.RenewalReasonNoSubscription,
+			}, nil
+		}
+		return service.RenewalEligibility{}, err
+	}
+	sub := userSubscriptionEntityToService(m)
+	now := time.Now()
+	// 优先判断耗尽，再判断过期（与 plan 一致：触顶才允许提前重订）
+	if sub.ExhaustedAt != nil {
+		return service.RenewalEligibility{
+			Allowed:      true,
+			Reason:       service.RenewalReasonExhausted,
+			Subscription: sub,
+		}, nil
+	}
+	if !sub.ExpiresAt.After(now) {
+		return service.RenewalEligibility{
+			Allowed:      true,
+			Reason:       service.RenewalReasonExpired,
+			Subscription: sub,
+		}, nil
+	}
+	return service.RenewalEligibility{
+		Allowed:      false,
+		Reason:       service.RenewalReasonNotExhausted,
+		Subscription: sub,
+	}, nil
+}
+
+// LockUserForSubscriptionWrite 在事务内对 users 行加 FOR UPDATE 行锁。
+// 用于订阅履约 / 余额扣费等关键路径，防止并发购买写入两条订阅。
+//
+// 调用方必须持有 *sql.Tx；锁会随事务提交/回滚自动释放。
+func (r *userSubscriptionRepository) LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error {
+	if tx == nil {
+		return errors.New("tx is required for LockUserForSubscriptionWrite")
+	}
+	var id int64
+	err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return service.ErrUserNotFound
+	}
+	return err
+}
+
+// MarkExpiredCreditLogged 标记过期销毁 ledger 已写入。
+func (r *userSubscriptionRepository) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
+	client := clientFromContext(ctx, r.client)
+	_, err := client.UserSubscription.UpdateOneID(id).
+		SetExpiredCreditLoggedAt(loggedAt).
+		Save(ctx)
+	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }

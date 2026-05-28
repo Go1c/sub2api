@@ -37,6 +37,10 @@ var (
 	ErrMonthlyLimitExceeded       = infraerrors.TooManyRequests("MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
 	ErrSubscriptionNilInput       = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
 	ErrAdjustWouldExpire          = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
+	// 订阅额度池新增错误
+	ErrSQLDBUnavailable                = infraerrors.InternalServer("SQL_DB_UNAVAILABLE", "sql.DB not wired into repository")
+	ErrSubscriptionRenewalNotAllowed   = infraerrors.Conflict("SUBSCRIPTION_RENEWAL_NOT_ALLOWED", "current subscription is still usable, cannot purchase a new one before exhaustion or expiration")
+	ErrAlreadyHasUsableSubscription    = infraerrors.Conflict("ALREADY_HAS_USABLE_SUBSCRIPTION", "user already has a usable subscription")
 )
 
 // SubscriptionService 订阅服务

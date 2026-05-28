@@ -25,7 +25,7 @@ func (s *UserSubscriptionRepoSuite) SetupTest() {
 	s.ctx = context.Background()
 	tx := testEntTx(s.T())
 	s.client = tx.Client()
-	s.repo = NewUserSubscriptionRepository(s.client).(*userSubscriptionRepository)
+	s.repo = NewUserSubscriptionRepository(s.client, integrationDB).(*userSubscriptionRepository)
 }
 
 func TestUserSubscriptionRepoSuite(t *testing.T) {
@@ -88,9 +88,10 @@ func (s *UserSubscriptionRepoSuite) TestCreate() {
 	user := s.mustCreateUser("sub-create@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-create")
 
+	gid := group.ID
 	sub := &service.UserSubscription{
 		UserID:    user.ID,
-		GroupID:   group.ID,
+		GroupID:   &gid,
 		Status:    service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
@@ -102,7 +103,8 @@ func (s *UserSubscriptionRepoSuite) TestCreate() {
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal(sub.UserID, got.UserID)
-	s.Require().Equal(sub.GroupID, got.GroupID)
+	s.Require().NotNil(got.GroupID)
+	s.Require().Equal(*sub.GroupID, *got.GroupID)
 }
 
 func (s *UserSubscriptionRepoSuite) TestGetByID_WithPreloads() {

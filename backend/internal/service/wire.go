@@ -552,6 +552,10 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
+	ProvideSubscriptionNotifyMessenger,
+	ProvideSubscriptionNotifyEmailer,
+	ProvideSubscriptionNotifyService,
+	ProvideSubscriptionNotifyWorker,
 )
 
 // ProvidePaymentConfigService wraps NewPaymentConfigService to accept the named
@@ -570,6 +574,37 @@ func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService) *PaymentOrderE
 	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
 	svc.Start()
 	return svc
+}
+
+// ProvideSubscriptionNotifyMessenger 适配 SiteMessageRepository → SubscriptionNotifyMessenger。
+// 直接走 repository.Create，避免 SiteMessageService.Send 的 admin/限频校验。
+func ProvideSubscriptionNotifyMessenger(repo SiteMessageRepository) SubscriptionNotifyMessenger {
+	return &subscriptionNotifyMessengerAdapter{repo: repo}
+}
+
+// ProvideSubscriptionNotifyEmailer 适配 *EmailService → SubscriptionNotifyEmailer。
+func ProvideSubscriptionNotifyEmailer(email *EmailService) SubscriptionNotifyEmailer {
+	return &subscriptionNotifyEmailerAdapter{email: email}
+}
+
+// ProvideSubscriptionNotifyService 构造订阅通知服务（站内信 + 邮件）。
+func ProvideSubscriptionNotifyService(
+	users UserRepository,
+	messenger SubscriptionNotifyMessenger,
+	emailer SubscriptionNotifyEmailer,
+	settings SettingRepository,
+) *SubscriptionNotifyService {
+	return NewSubscriptionNotifyService(users, messenger, emailer, settings)
+}
+
+// ProvideSubscriptionNotifyWorker 构造并启动订阅通知 outbox worker。
+func ProvideSubscriptionNotifyWorker(
+	repo SubscriptionNotifyOutboxRepository,
+	handler *SubscriptionNotifyService,
+) *SubscriptionNotifyWorker {
+	w := NewSubscriptionNotifyWorker(repo, handler, 0, 0)
+	w.Start()
+	return w
 }
 
 // ProvideChannelMonitorService 创建渠道监控服务（CRUD + RunCheck + 用户视图聚合）。

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -185,6 +186,23 @@ func (f fakeGoogleSubscriptionRepo) IncrementUsage(ctx context.Context, id int64
 }
 func (f fakeGoogleSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
 	return 0, errors.New("not implemented")
+}
+
+// SubscriptionCreditExtension stubs (订阅额度池扩展；本测试不触发)
+func (f fakeGoogleSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	return nil, service.ErrSubscriptionNotFound
+}
+func (f fakeGoogleSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
+	return false, nil
+}
+func (f fakeGoogleSubscriptionRepo) GetRenewalEligibility(ctx context.Context, userID int64) (service.RenewalEligibility, error) {
+	return service.RenewalEligibility{Allowed: true, Reason: service.RenewalReasonNoSubscription}, nil
+}
+func (f fakeGoogleSubscriptionRepo) LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error {
+	return nil
+}
+func (f fakeGoogleSubscriptionRepo) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
+	return nil
 }
 
 type googleErrorResponse struct {

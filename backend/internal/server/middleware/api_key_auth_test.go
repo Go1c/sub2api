@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -65,10 +66,11 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 
 		past := time.Now().Add(-48 * time.Hour)
+		gid := group.ID
 		sub := &service.UserSubscription{
 			ID:               55,
 			UserID:           user.ID,
-			GroupID:          group.ID,
+			GroupID:          &gid,
 			Status:           service.SubscriptionStatusActive,
 			ExpiresAt:        time.Now().Add(24 * time.Hour),
 			DailyWindowStart: &past,
@@ -141,10 +143,11 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 
 		now := time.Now()
+		gid2 := group.ID
 		sub := &service.UserSubscription{
 			ID:               55,
 			UserID:           user.ID,
-			GroupID:          group.ID,
+			GroupID:          &gid2,
 			Status:           service.SubscriptionStatusActive,
 			ExpiresAt:        now.Add(24 * time.Hour),
 			DailyWindowStart: &now,
@@ -152,7 +155,7 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		}
 		subscriptionRepo := &stubUserSubscriptionRepo{
 			getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
-				if userID != sub.UserID || groupID != sub.GroupID {
+				if userID != sub.UserID || sub.GroupID == nil || groupID != *sub.GroupID {
 					return nil, service.ErrSubscriptionNotFound
 				}
 				clone := *sub
@@ -749,4 +752,21 @@ func (r *stubUserSubscriptionRepo) IncrementUsage(ctx context.Context, id int64,
 
 func (r *stubUserSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
 	return 0, errors.New("not implemented")
+}
+
+// SubscriptionCreditExtension stubs（额度池扩展；本测试用 legacy 路径，默认返回 not found）
+func (r *stubUserSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	return nil, service.ErrSubscriptionNotFound
+}
+func (r *stubUserSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
+	return false, nil
+}
+func (r *stubUserSubscriptionRepo) GetRenewalEligibility(ctx context.Context, userID int64) (service.RenewalEligibility, error) {
+	return service.RenewalEligibility{Allowed: true, Reason: service.RenewalReasonNoSubscription}, nil
+}
+func (r *stubUserSubscriptionRepo) LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error {
+	return nil
+}
+func (r *stubUserSubscriptionRepo) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
+	return nil
 }

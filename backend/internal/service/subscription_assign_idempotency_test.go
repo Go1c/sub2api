@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"strconv"
 	"testing"
 	"time"
@@ -122,6 +123,23 @@ func (userSubRepoNoop) ResetMonthlyUsage(context.Context, int64, time.Time) erro
 func (userSubRepoNoop) IncrementUsage(context.Context, int64, float64) error {
 	panic("unexpected IncrementUsage call")
 }
+// 订阅额度池扩展（默认 panic，测试需要时由具体 stub override）
+func (userSubRepoNoop) GetUsableCreditSubscription(context.Context, int64) (*UserSubscription, error) {
+	panic("unexpected GetUsableCreditSubscription call")
+}
+func (userSubRepoNoop) HasUsableCreditSubscription(context.Context, int64) (bool, error) {
+	panic("unexpected HasUsableCreditSubscription call")
+}
+func (userSubRepoNoop) GetRenewalEligibility(context.Context, int64) (RenewalEligibility, error) {
+	panic("unexpected GetRenewalEligibility call")
+}
+func (userSubRepoNoop) LockUserForSubscriptionWrite(context.Context, *sql.Tx, int64) error {
+	panic("unexpected LockUserForSubscriptionWrite call")
+}
+func (userSubRepoNoop) MarkExpiredCreditLogged(context.Context, int64, time.Time) error {
+	panic("unexpected MarkExpiredCreditLogged call")
+}
+
 func (userSubRepoNoop) BatchUpdateExpiredStatus(context.Context) (int64, error) {
 	panic("unexpected BatchUpdateExpiredStatus call")
 }

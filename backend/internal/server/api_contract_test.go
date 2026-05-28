@@ -5,6 +5,7 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"math"
@@ -355,7 +356,7 @@ func TestAPIContracts(t *testing.T) {
 					{
 						ID:              501,
 						UserID:          1,
-						GroupID:         10,
+						GroupID:         func() *int64 { v := int64(10); return &v }(),
 						StartsAt:        deps.now,
 						ExpiresAt:       time.Date(2099, 1, 2, 3, 4, 5, 0, time.UTC), // 使用未来日期避免 normalizeSubscriptionStatus 标记为过期
 						Status:          service.SubscriptionStatusActive,
@@ -1961,6 +1962,23 @@ func (stubUserSubscriptionRepo) IncrementUsage(ctx context.Context, id int64, co
 }
 func (stubUserSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
 	return 0, errors.New("not implemented")
+}
+
+// SubscriptionCreditExtension stubs（订阅额度池扩展）
+func (stubUserSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	return nil, service.ErrSubscriptionNotFound
+}
+func (stubUserSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
+	return false, nil
+}
+func (stubUserSubscriptionRepo) GetRenewalEligibility(ctx context.Context, userID int64) (service.RenewalEligibility, error) {
+	return service.RenewalEligibility{Allowed: true, Reason: service.RenewalReasonNoSubscription}, nil
+}
+func (stubUserSubscriptionRepo) LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error {
+	return nil
+}
+func (stubUserSubscriptionRepo) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
+	return nil
 }
 
 type stubApiKeyRepo struct {
