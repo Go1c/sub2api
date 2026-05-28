@@ -10,6 +10,45 @@
 
 ---
 
+## 实施进度（截至 2026-05-28）
+
+**分支：** `feat/subscription-credit-pool`
+**PR：** https://github.com/Go1c/sub2api/pull/44
+
+| Task | 状态 | 备注 |
+|------|------|------|
+| Task 1 — DB migration + Ent schema | ✅ 完成 | commit `a21a610e` |
+| Task 2 — 领域模型 + AllocateSubscriptionCredit 纯函数 | ✅ 完成 | commit `737940c3`，13 case 测试 PASS |
+| Task 3 — Repository 查询 + ledger repo | ✅ 完成 | commit `ca6d4d84`，含 5 个 SubscriptionCreditExtension 方法 + 4 个 ledger repo 方法 + 集成测试 |
+| Task 4 — 原子混合扣费（核心 SQL 改造）| 🟡 待实施 | 依赖：Task 3 ✅ |
+| Task 5 — 鉴权 + 双资金源 | 🟡 待实施 | 依赖：Task 3 ✅ |
+| Task 6 — 购买订阅履约 | 🟡 待实施 | 依赖：Task 3 ✅ |
+| Task 7 — 过期销毁与审计 | 🟡 待实施 | 依赖：Task 3 ✅ + Task 8 ✅ |
+| Task 8 — 通知 worker handler | ✅ 完成 | commit `ca6d4d84`，复用 `scheduler_outbox`，失败仅记日志不重试 |
+| Task 9 — API DTO + 前端展示 | 🟡 待实施 | 依赖：Task 3-7 |
+| Task 10 — 管理后台 + 浪费率统计页 | 🟡 待实施 | 依赖：Task 3 ✅，可并行启动 |
+
+**已交付：**
+- 5 个 commit（plan 文档 + window_reset 扩展 + schema + 纯函数 + repo&worker）
+- 数据库 migration 141：`user_subscriptions` 改造 / `subscription_credit_ledger` 新表 / `payment_orders` 订阅快照字段 / `usage_logs` 拆分字段
+- 部分唯一索引 `user_subscriptions_user_active_usable`：每用户最多 1 条可消费订阅
+- service.SubscriptionCreditExtension + SubscriptionCreditLedgerRepository
+- service.SubscriptionNotifyService + SubscriptionNotifyWorker（独立轮询，watermark in-memory）
+- service.RenewalEligibility 类型 + 错误码
+- 通知文案（中文站内信 + HTML 邮件，brand 渐变 `#4f8cff → #1a2f5a`）
+
+**已验证：**
+- `go build ./...` / `go vet ./...` PASS
+- `go test ./... -short` PASS（默认 tag）
+- `go test -tags=unit ./... -short` PASS（修复了 7 处 stub 实现新接口）
+- `go test -tags=integration` 编译 PASS（实际跑需 Docker）
+
+**剩余 Task 4-7、9-10 可分两波启动：**
+- 第二波（可并行）：Task 4（扣费 SQL）/ Task 5（鉴权）/ Task 6（履约）/ Task 10 后端（浪费率聚合）
+- 第三波：Task 7（过期任务）/ Task 9（前端）/ Task 10 前端
+
+---
+
 ## 背景与现状
 
 当前订阅实现是"分组订阅"：
@@ -626,7 +665,7 @@ OpenAI/Anthropic 兼容接口应尽量保持各自错误格式，同时带上 `c
 
 ## 实施任务
 
-### Task 1: 数据库迁移与 Ent schema
+### Task 1: 数据库迁移与 Ent schema ✅ 已完成（commit a21a610e）
 
 **Files:**
 - Create: `backend/migrations/141_subscription_credit_pool.sql`
@@ -687,7 +726,7 @@ git add backend/migrations/141_subscription_credit_pool.sql backend/ent
 git commit -m "feat: add subscription credit pool schema"
 ```
 
-### Task 2: 订阅领域模型与纯分配逻辑
+### Task 2: 订阅领域模型与纯分配逻辑 ✅ 已完成（commit 737940c3）
 
 **Files:**
 - Modify: `backend/internal/service/user_subscription.go`
@@ -835,7 +874,7 @@ git add backend/internal/service/subscription_credit*.go backend/internal/servic
 git commit -m "feat: model subscription credit allocation"
 ```
 
-### Task 3: Repository 查询与流水写入
+### Task 3: Repository 查询与流水写入 ✅ 已完成（commit ca6d4d84）
 
 **Files:**
 - Modify: `backend/internal/repository/user_subscription_repo.go`
@@ -1277,7 +1316,7 @@ git add backend/internal/service/subscription_expiry_service.go backend/internal
 git commit -m "feat: log expired subscription credit"
 ```
 
-### Task 8: 通知 worker
+### Task 8: 通知 worker ✅ 已完成（commit ca6d4d84）
 
 **Files:**
 - Create: `backend/internal/service/subscription_notify_worker.go`
