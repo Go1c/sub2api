@@ -180,6 +180,20 @@ func (_u *SubscriptionPlanUpdate) SetNillableFeatures(v *string) *SubscriptionPl
 	return _u
 }
 
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (_u *SubscriptionPlanUpdate) SetPurchaseNotice(v string) *SubscriptionPlanUpdate {
+	_u.mutation.SetPurchaseNotice(v)
+	return _u
+}
+
+// SetNillablePurchaseNotice sets the "purchase_notice" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillablePurchaseNotice(v *string) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetPurchaseNotice(*v)
+	}
+	return _u
+}
+
 // SetProductName sets the "product_name" field.
 func (_u *SubscriptionPlanUpdate) SetProductName(v string) *SubscriptionPlanUpdate {
 	_u.mutation.SetProductName(v)
@@ -450,6 +464,9 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if value, ok := _u.mutation.Features(); ok {
 		_spec.SetField(subscriptionplan.FieldFeatures, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.PurchaseNotice(); ok {
+		_spec.SetField(subscriptionplan.FieldPurchaseNotice, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.ProductName(); ok {
 		_spec.SetField(subscriptionplan.FieldProductName, field.TypeString, value)
 	}
@@ -663,6 +680,20 @@ func (_u *SubscriptionPlanUpdateOne) SetFeatures(v string) *SubscriptionPlanUpda
 func (_u *SubscriptionPlanUpdateOne) SetNillableFeatures(v *string) *SubscriptionPlanUpdateOne {
 	if v != nil {
 		_u.SetFeatures(*v)
+	}
+	return _u
+}
+
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (_u *SubscriptionPlanUpdateOne) SetPurchaseNotice(v string) *SubscriptionPlanUpdateOne {
+	_u.mutation.SetPurchaseNotice(v)
+	return _u
+}
+
+// SetNillablePurchaseNotice sets the "purchase_notice" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillablePurchaseNotice(v *string) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetPurchaseNotice(*v)
 	}
 	return _u
 }
@@ -966,6 +997,9 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	}
 	if value, ok := _u.mutation.Features(); ok {
 		_spec.SetField(subscriptionplan.FieldFeatures, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PurchaseNotice(); ok {
+		_spec.SetField(subscriptionplan.FieldPurchaseNotice, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ProductName(); ok {
 		_spec.SetField(subscriptionplan.FieldProductName, field.TypeString, value)

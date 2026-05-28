@@ -189,7 +189,7 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	b := s.entClient.SubscriptionPlan.Create().
 		SetName(req.Name).SetDescription(req.Description).
 		SetPrice(req.Price).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
-		SetFeatures(req.Features).SetProductName(req.ProductName).
+		SetFeatures(req.Features).SetPurchaseNotice(req.PurchaseNotice).SetProductName(req.ProductName).
 		SetQuotaUsd(req.QuotaUSD).
 		SetNillableDailyLimitUsd(req.DailyLimitUSD).
 		SetNillableWeeklyLimitUsd(req.WeeklyLimitUSD).
@@ -263,6 +263,9 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	}
 	if req.Features != nil {
 		u.SetFeatures(*req.Features)
+	}
+	if req.PurchaseNotice != nil {
+		u.SetPurchaseNotice(*req.PurchaseNotice)
 	}
 	if req.ProductName != nil {
 		u.SetProductName(*req.ProductName)

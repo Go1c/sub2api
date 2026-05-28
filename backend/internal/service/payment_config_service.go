@@ -158,6 +158,7 @@ type CreatePlanRequest struct {
 	ScopeType      string         `json:"scope_type"`
 	ScopeConfig    map[string]any `json:"scope_config"`
 	Features       string         `json:"features"`
+	PurchaseNotice string         `json:"purchase_notice"`
 	ProductName    string         `json:"product_name"`
 	ForSale        bool           `json:"for_sale"`
 	SortOrder      int            `json:"sort_order"`
@@ -177,6 +178,7 @@ type UpdatePlanRequest struct {
 	ScopeType      *string        `json:"scope_type"`
 	ScopeConfig    map[string]any `json:"scope_config"`
 	Features       *string        `json:"features"`
+	PurchaseNotice *string        `json:"purchase_notice"`
 	ProductName    *string        `json:"product_name"`
 	ForSale        *bool          `json:"for_sale"`
 	SortOrder      *int           `json:"sort_order"`

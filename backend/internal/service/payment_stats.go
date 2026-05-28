@@ -12,6 +12,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 )
 
 // --- Dashboard & Analytics ---
@@ -56,7 +57,8 @@ func (s *PaymentService) dashboardStatsForRange(ctx context.Context, since, unti
 	}
 
 	st := &DashboardStats{}
-	computeBasicStats(st, orders, todayStart)
+	revenueOrders := filterRevenueOrders(orders)
+	computeBasicStats(st, revenueOrders, todayStart)
 
 	st.PendingOrders, err = s.entClient.PaymentOrder.Query().
 		Where(paymentorder.StatusEQ(OrderStatusPending)).
@@ -65,11 +67,25 @@ func (s *PaymentService) dashboardStatsForRange(ctx context.Context, since, unti
 		return nil, err
 	}
 
-	st.DailySeries = buildDailySeries(orders, firstDay, days)
-	st.PaymentMethods = buildMethodDistribution(orders)
-	st.TopUsers = buildTopUsers(orders)
+	st.DailySeries = buildDailySeries(revenueOrders, firstDay, days)
+	st.PaymentMethods = buildMethodDistribution(revenueOrders)
+	st.TopUsers = buildTopUsers(revenueOrders)
 
 	return st, nil
+}
+
+func filterRevenueOrders(orders []*dbent.PaymentOrder) []*dbent.PaymentOrder {
+	if len(orders) == 0 {
+		return nil
+	}
+	filtered := make([]*dbent.PaymentOrder, 0, len(orders))
+	for _, order := range orders {
+		if order == nil || order.PaymentType == payment.TypeBalance {
+			continue
+		}
+		filtered = append(filtered, order)
+	}
+	return filtered
 }
 
 func computeBasicStats(st *DashboardStats, orders []*dbent.PaymentOrder, todayStart time.Time) {
