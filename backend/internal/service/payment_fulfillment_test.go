@@ -7,10 +7,12 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type paymentFulfillmentTestProvider struct {
@@ -410,4 +412,86 @@ func TestValidateProviderNotificationMetadataRejectsMapaySnapshotMismatch(t *tes
 		"pid": "pid-other",
 	})
 	assert.ErrorContains(t, err, "mapay pid mismatch")
+}
+
+type subscriptionCreditPurchaseFulfillerStub struct {
+	order *dbent.PaymentOrder
+	err   error
+}
+
+func (s *subscriptionCreditPurchaseFulfillerStub) FulfillOrder(ctx context.Context, order *dbent.PaymentOrder) error {
+	s.order = order
+	return s.err
+}
+
+func TestExecuteSubscriptionFulfillmentUsesCreditPurchaseSnapshot(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
+	fulfiller := &subscriptionCreditPurchaseFulfillerStub{}
+	svc := &PaymentService{entClient: client, subscriptionCreditPurchaseSvc: fulfiller}
+
+	err := svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+
+	require.NoError(t, err)
+	require.NotNil(t, fulfiller.order)
+	require.Equal(t, order.ID, fulfiller.order.ID)
+	got, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, got.Status)
+	require.NotNil(t, got.CompletedAt)
+}
+
+func TestExecuteSubscriptionFulfillmentMarksCreditPurchaseBlockAsFulfillmentFailed(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
+	fulfiller := &subscriptionCreditPurchaseFulfillerStub{err: ErrAlreadyHasUsableSubscription}
+	svc := &PaymentService{entClient: client, subscriptionCreditPurchaseSvc: fulfiller}
+
+	err := svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+
+	require.ErrorIs(t, err, ErrAlreadyHasUsableSubscription)
+	got, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusFulfillmentFailed, got.Status)
+	require.NotNil(t, got.FailedReason)
+	require.Contains(t, *got.FailedReason, "ALREADY_HAS_USABLE_SUBSCRIPTION")
+}
+
+func createPaidCreditSubscriptionOrderForFulfillmentTest(t *testing.T, ctx context.Context, client *dbent.Client) *dbent.PaymentOrder {
+	t.Helper()
+	user := client.User.Create().
+		SetEmail("credit-buyer@example.com").
+		SetPasswordHash("hash").
+		SetUsername("credit-buyer").
+		SaveX(ctx)
+	quota := 25.0
+	daily := 3.5
+	weekly := 10.0
+	scopeType := SubscriptionScopeAllAvailableGroups
+	validityDays := 30
+	return client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(10).
+		SetPayAmount(10).
+		SetRechargeCode("SUB-CREDIT-ORDER").
+		SetOutTradeNo("sub2_credit_order").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("trade-credit").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetStatus(OrderStatusPaid).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("example.test").
+		SetPlanID(77).
+		SetSubscriptionQuotaUsd(quota).
+		SetSubscriptionDailyLimitUsd(daily).
+		SetSubscriptionWeeklyLimitUsd(weekly).
+		SetSubscriptionScopeType(scopeType).
+		SetSubscriptionScopeConfig(map[string]any{}).
+		SetSubscriptionValidityDays(validityDays).
+		SaveX(ctx)
 }

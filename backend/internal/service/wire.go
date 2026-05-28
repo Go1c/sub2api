@@ -434,6 +434,34 @@ func ProvideAPIKeyService(
 	return svc
 }
 
+// ProvideSubscriptionCreditPurchaseService wires the credit-pool purchase
+// fulfiller with the raw SQL transaction boundary required by repository locks.
+func ProvideSubscriptionCreditPurchaseService(
+	db *sql.DB,
+	userSubRepo UserSubscriptionRepository,
+	ledgerRepo SubscriptionCreditLedgerRepository,
+) *SubscriptionCreditPurchaseService {
+	return NewSubscriptionCreditPurchaseService(db, userSubRepo, ledgerRepo)
+}
+
+// ProvidePaymentService wires payment fulfillment with the credit-pool purchase path.
+func ProvidePaymentService(
+	entClient *dbent.Client,
+	registry *payment.Registry,
+	loadBalancer payment.LoadBalancer,
+	redeemService *RedeemService,
+	subscriptionSvc *SubscriptionService,
+	configService *PaymentConfigService,
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	affiliateService *AffiliateService,
+	subscriptionCreditPurchaseSvc *SubscriptionCreditPurchaseService,
+) *PaymentService {
+	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
+	svc.subscriptionCreditPurchaseSvc = subscriptionCreditPurchaseSvc
+	return svc
+}
+
 func ProvideSiteMessageUserRepository(userRepo UserRepository) SiteMessageUserRepository {
 	return userRepo
 }
@@ -546,7 +574,8 @@ var ProviderSet = wire.NewSet(
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
-	NewPaymentService,
+	ProvideSubscriptionCreditPurchaseService,
+	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
 	ProvideChannelMonitorService,

@@ -630,6 +630,14 @@ func (s *SubscriptionService) GetUsableCreditSubscription(ctx context.Context, u
 	return &cp, nil
 }
 
+// GetRenewalEligibility 返回用户是否允许购买新的额度池订阅。
+func (s *SubscriptionService) GetRenewalEligibility(ctx context.Context, userID int64) (RenewalEligibility, error) {
+	if s == nil || s.userSubRepo == nil {
+		return RenewalEligibility{Allowed: true, Reason: RenewalReasonNoSubscription}, nil
+	}
+	return s.userSubRepo.GetRenewalEligibility(ctx, userID)
+}
+
 // ListUserSubscriptions 获取用户的所有订阅
 func (s *SubscriptionService) ListUserSubscriptions(ctx context.Context, userID int64) ([]UserSubscription, error) {
 	subs, err := s.userSubRepo.ListByUserID(ctx, userID)

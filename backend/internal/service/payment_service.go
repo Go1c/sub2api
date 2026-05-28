@@ -180,18 +180,19 @@ type TopUserStat struct {
 // --- Service ---
 
 type PaymentService struct {
-	providerMu       sync.Mutex
-	providersLoaded  bool
-	entClient        *dbent.Client
-	registry         *payment.Registry
-	loadBalancer     payment.LoadBalancer
-	redeemService    *RedeemService
-	subscriptionSvc  *SubscriptionService
-	configService    *PaymentConfigService
-	userRepo         UserRepository
-	groupRepo        GroupRepository
-	resumeService    *PaymentResumeService
-	affiliateService *AffiliateService
+	providerMu                    sync.Mutex
+	providersLoaded               bool
+	entClient                     *dbent.Client
+	registry                      *payment.Registry
+	loadBalancer                  payment.LoadBalancer
+	redeemService                 *RedeemService
+	subscriptionSvc               *SubscriptionService
+	subscriptionCreditPurchaseSvc SubscriptionCreditPurchaseFulfiller
+	configService                 *PaymentConfigService
+	userRepo                      UserRepository
+	groupRepo                     GroupRepository
+	resumeService                 *PaymentResumeService
+	affiliateService              *AffiliateService
 
 	fulfillmentRetryDelays []time.Duration
 	fulfillmentRetrySleep  func(context.Context, time.Duration) bool

@@ -66,6 +66,10 @@ type SubscriptionCreditExtension interface {
 	// 用于订阅履约 / 余额扣费等关键路径，防止并发购买写入两条订阅。
 	LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error
 
+	// InsertCreditSubscription 在调用方事务内插入一条额度池订阅。
+	// 仅用于购买履约路径；调用方负责先锁用户行并做二次可消费订阅校验。
+	InsertCreditSubscription(ctx context.Context, tx *sql.Tx, sub *UserSubscription) (*UserSubscription, error)
+
 	// MarkExpiredCreditLogged 标记过期销毁 ledger 已写入，避免重复写。
 	MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error
 }

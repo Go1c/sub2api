@@ -61,7 +61,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	billingCache := repository.NewBillingCache(redisClient)
 	userSubscriptionRepository := repository.NewUserSubscriptionRepository(client, db)
 	subscriptionCreditLedgerRepository := repository.NewSubscriptionCreditLedgerRepository(db)
-	_ = subscriptionCreditLedgerRepository // Task 3-end: 由 Task 4/6/7/10 后续 service 注入消费
 	apiKeyRepository := repository.NewAPIKeyRepository(client, db)
 	userRPMCache := repository.NewUserRPMCache(redisClient)
 	userGroupRateRepository := repository.NewUserGroupRateRepository(db)
@@ -215,7 +214,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	paymentConfigService := service.ProvidePaymentConfigService(client, settingRepository, encryptionKey)
 	registry := payment.ProvideRegistry()
 	defaultLoadBalancer := payment.ProvideDefaultLoadBalancer(client, encryptionKey)
-	paymentService := service.NewPaymentService(client, registry, defaultLoadBalancer, redeemService, subscriptionService, paymentConfigService, userRepository, groupRepository, affiliateService)
+	subscriptionCreditPurchaseService := service.ProvideSubscriptionCreditPurchaseService(db, userSubscriptionRepository, subscriptionCreditLedgerRepository)
+	paymentService := service.ProvidePaymentService(client, registry, defaultLoadBalancer, redeemService, subscriptionService, paymentConfigService, userRepository, groupRepository, affiliateService, subscriptionCreditPurchaseService)
 	settingHandler := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService)
 	opsUserRequestCaptureLimiter := repository.NewOpsUserRequestCaptureLimiter(redisClient)
 	opsUserRequestMonitorService := service.ProvideOpsUserRequestMonitorService(opsRepository, userRepository, opsUserRequestCaptureLimiter)

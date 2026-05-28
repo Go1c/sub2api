@@ -123,6 +123,7 @@ func (userSubRepoNoop) ResetMonthlyUsage(context.Context, int64, time.Time) erro
 func (userSubRepoNoop) IncrementUsage(context.Context, int64, float64) error {
 	panic("unexpected IncrementUsage call")
 }
+
 // 订阅额度池扩展（默认 panic，测试需要时由具体 stub override）
 func (userSubRepoNoop) GetUsableCreditSubscription(context.Context, int64) (*UserSubscription, error) {
 	panic("unexpected GetUsableCreditSubscription call")
@@ -135,6 +136,9 @@ func (userSubRepoNoop) GetRenewalEligibility(context.Context, int64) (RenewalEli
 }
 func (userSubRepoNoop) LockUserForSubscriptionWrite(context.Context, *sql.Tx, int64) error {
 	panic("unexpected LockUserForSubscriptionWrite call")
+}
+func (userSubRepoNoop) InsertCreditSubscription(context.Context, *sql.Tx, *UserSubscription) (*UserSubscription, error) {
+	panic("unexpected InsertCreditSubscription call")
 }
 func (userSubRepoNoop) MarkExpiredCreditLogged(context.Context, int64, time.Time) error {
 	panic("unexpected MarkExpiredCreditLogged call")

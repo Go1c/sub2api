@@ -890,6 +890,9 @@ func (r *stubUserSubscriptionRepo) GetRenewalEligibility(ctx context.Context, us
 func (r *stubUserSubscriptionRepo) LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error {
 	return nil
 }
+func (r *stubUserSubscriptionRepo) InsertCreditSubscription(ctx context.Context, tx *sql.Tx, sub *service.UserSubscription) (*service.UserSubscription, error) {
+	return nil, errors.New("not implemented")
+}
 func (r *stubUserSubscriptionRepo) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
 	return nil
 }

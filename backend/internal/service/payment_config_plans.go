@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -16,7 +17,7 @@ func validatePlanRequired(name string, groupID int64, price float64, validityDay
 	if strings.TrimSpace(name) == "" {
 		return infraerrors.BadRequest("PLAN_NAME_REQUIRED", "plan name is required")
 	}
-	if groupID <= 0 {
+	if groupID < 0 {
 		return infraerrors.BadRequest("PLAN_GROUP_REQUIRED", "group is required")
 	}
 	if price <= 0 {
@@ -34,12 +35,22 @@ func validatePlanRequired(name string, groupID int64, price float64, validityDay
 	return nil
 }
 
+func validatePlanCreate(req CreatePlanRequest) error {
+	if err := validatePlanRequired(req.Name, req.GroupID, req.Price, req.ValidityDays, req.ValidityUnit, req.OriginalPrice); err != nil {
+		return err
+	}
+	if err := validatePlanValidityLimit(req.ValidityDays, req.ValidityUnit); err != nil {
+		return err
+	}
+	return validatePlanCreditFields(&req.QuotaUSD, req.DailyLimitUSD, req.WeeklyLimitUSD, &req.ScopeType)
+}
+
 // validatePlanPatch validates only the non-nil fields in a patch update.
 func validatePlanPatch(req UpdatePlanRequest) error {
 	if req.Name != nil && strings.TrimSpace(*req.Name) == "" {
 		return infraerrors.BadRequest("PLAN_NAME_REQUIRED", "plan name is required")
 	}
-	if req.GroupID != nil && *req.GroupID <= 0 {
+	if req.GroupID != nil && *req.GroupID < 0 {
 		return infraerrors.BadRequest("PLAN_GROUP_REQUIRED", "group is required")
 	}
 	if req.Price != nil && *req.Price <= 0 {
@@ -53,6 +64,46 @@ func validatePlanPatch(req UpdatePlanRequest) error {
 	}
 	if req.OriginalPrice != nil && *req.OriginalPrice < 0 {
 		return infraerrors.BadRequest("PLAN_ORIGINAL_PRICE_INVALID", "original price must be >= 0")
+	}
+	if req.ValidityDays != nil {
+		unit := "day"
+		if req.ValidityUnit != nil {
+			unit = *req.ValidityUnit
+		}
+		if err := validatePlanValidityLimit(*req.ValidityDays, unit); err != nil {
+			return err
+		}
+	}
+	if err := validatePlanCreditFields(req.QuotaUSD, req.DailyLimitUSD, req.WeeklyLimitUSD, req.ScopeType); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePlanValidityLimit(days int, unit string) error {
+	if psComputeValidityDays(days, strings.TrimSpace(unit)) > 30 {
+		return infraerrors.BadRequest("PLAN_VALIDITY_TOO_LONG", "validity days must be <= 30 days")
+	}
+	return nil
+}
+
+func validatePlanCreditFields(quota *float64, daily *float64, weekly *float64, scopeType *string) error {
+	if quota != nil && (*quota <= 0 || math.IsNaN(*quota) || math.IsInf(*quota, 0)) {
+		return infraerrors.BadRequest("PLAN_QUOTA_INVALID", "quota must be > 0")
+	}
+	if daily != nil && (*daily <= 0 || math.IsNaN(*daily) || math.IsInf(*daily, 0)) {
+		return infraerrors.BadRequest("PLAN_DAILY_LIMIT_INVALID", "daily limit must be > 0")
+	}
+	if weekly != nil && (*weekly <= 0 || math.IsNaN(*weekly) || math.IsInf(*weekly, 0)) {
+		return infraerrors.BadRequest("PLAN_WEEKLY_LIMIT_INVALID", "weekly limit must be > 0")
+	}
+	if scopeType != nil {
+		switch strings.TrimSpace(*scopeType) {
+		case "", SubscriptionScopeAllAvailableGroups, SubscriptionScopeSelectedGroups, SubscriptionScopePlatforms:
+			return nil
+		default:
+			return infraerrors.BadRequest("PLAN_SCOPE_TYPE_INVALID", "scope type is invalid")
+		}
 	}
 	return nil
 }
@@ -126,14 +177,22 @@ func (s *PaymentConfigService) ListPlansForSale(ctx context.Context) ([]*dbent.S
 }
 
 func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanRequest) (*dbent.SubscriptionPlan, error) {
-	if err := validatePlanRequired(req.Name, req.GroupID, req.Price, req.ValidityDays, req.ValidityUnit, req.OriginalPrice); err != nil {
+	if err := validatePlanCreate(req); err != nil {
 		return nil, err
 	}
 	b := s.entClient.SubscriptionPlan.Create().
-		SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
+		SetName(req.Name).SetDescription(req.Description).
 		SetPrice(req.Price).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
 		SetFeatures(req.Features).SetProductName(req.ProductName).
+		SetQuotaUsd(req.QuotaUSD).
+		SetNillableDailyLimitUsd(req.DailyLimitUSD).
+		SetNillableWeeklyLimitUsd(req.WeeklyLimitUSD).
+		SetScopeType(normalizePlanScopeType(req.ScopeType)).
+		SetScopeConfig(planScopeConfigOrDefault(req.ScopeConfig)).
 		SetForSale(req.ForSale).SetSortOrder(req.SortOrder)
+	if req.GroupID > 0 {
+		b.SetGroupID(req.GroupID)
+	}
 	if req.OriginalPrice != nil {
 		b.SetOriginalPrice(*req.OriginalPrice)
 	}
@@ -149,7 +208,11 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	}
 	u := s.entClient.SubscriptionPlan.UpdateOneID(id)
 	if req.GroupID != nil {
-		u.SetGroupID(*req.GroupID)
+		if *req.GroupID > 0 {
+			u.SetGroupID(*req.GroupID)
+		} else {
+			u.ClearGroupID()
+		}
 	}
 	if req.Name != nil {
 		u.SetName(*req.Name)
@@ -169,6 +232,21 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if req.ValidityUnit != nil {
 		u.SetValidityUnit(*req.ValidityUnit)
 	}
+	if req.QuotaUSD != nil {
+		u.SetQuotaUsd(*req.QuotaUSD)
+	}
+	if req.DailyLimitUSD != nil {
+		u.SetDailyLimitUsd(*req.DailyLimitUSD)
+	}
+	if req.WeeklyLimitUSD != nil {
+		u.SetWeeklyLimitUsd(*req.WeeklyLimitUSD)
+	}
+	if req.ScopeType != nil {
+		u.SetScopeType(normalizePlanScopeType(*req.ScopeType))
+	}
+	if req.ScopeConfig != nil {
+		u.SetScopeConfig(planScopeConfigOrDefault(req.ScopeConfig))
+	}
 	if req.Features != nil {
 		u.SetFeatures(*req.Features)
 	}
@@ -182,6 +260,21 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		u.SetSortOrder(*req.SortOrder)
 	}
 	return u.Save(ctx)
+}
+
+func normalizePlanScopeType(scopeType string) string {
+	scopeType = strings.TrimSpace(scopeType)
+	if scopeType == "" {
+		return SubscriptionScopeAllAvailableGroups
+	}
+	return scopeType
+}
+
+func planScopeConfigOrDefault(scopeConfig map[string]any) map[string]any {
+	if scopeConfig == nil {
+		return map[string]any{}
+	}
+	return scopeConfig
 }
 
 func (s *PaymentConfigService) DeletePlan(ctx context.Context, id int64) error {

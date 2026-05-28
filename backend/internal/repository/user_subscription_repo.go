@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -642,6 +644,88 @@ func (r *userSubscriptionRepository) LockUserForSubscriptionWrite(ctx context.Co
 		return service.ErrUserNotFound
 	}
 	return err
+}
+
+// InsertCreditSubscription 在调用方事务内插入一条额度池订阅。
+func (r *userSubscriptionRepository) InsertCreditSubscription(ctx context.Context, tx *sql.Tx, sub *service.UserSubscription) (*service.UserSubscription, error) {
+	if tx == nil {
+		return nil, errors.New("tx is required for InsertCreditSubscription")
+	}
+	if sub == nil {
+		return nil, service.ErrSubscriptionNilInput
+	}
+	scopeConfig := sub.ScopeConfig
+	if scopeConfig == nil {
+		scopeConfig = map[string]any{}
+	}
+	scopeJSON, err := json.Marshal(scopeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("encode subscription scope_config: %w", err)
+	}
+	assignedAt := sub.AssignedAt
+	if assignedAt.IsZero() {
+		assignedAt = time.Now().UTC()
+	}
+	var (
+		id        int64
+		createdAt time.Time
+		updatedAt time.Time
+	)
+	err = tx.QueryRowContext(ctx, `
+INSERT INTO user_subscriptions (
+    user_id, group_id, plan_id, scope_type, scope_config,
+    quota_limit_usd, quota_used_usd, daily_limit_usd, weekly_limit_usd,
+    starts_at, expires_at, status, exhausted_at, expired_credit_logged_at,
+    daily_window_start, weekly_window_start, daily_usage_usd, weekly_usage_usd,
+    assigned_by, assigned_at, notes, created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5,
+    $6, $7, $8, $9,
+    $10, $11, $12, $13, $14,
+    $15, $16, $17, $18,
+    $19, $20, $21, NOW(), NOW()
+)
+RETURNING id, created_at, updated_at
+`,
+		sub.UserID,
+		nullableInt64Arg(sub.GroupID),
+		nullableInt64Arg(sub.PlanID),
+		sub.ScopeType,
+		scopeJSON,
+		sub.QuotaLimitUSD,
+		sub.QuotaUsedUSD,
+		nullableArg(sub.DailyLimitUSD),
+		nullableArg(sub.WeeklyLimitUSD),
+		sub.StartsAt,
+		sub.ExpiresAt,
+		sub.Status,
+		nullableTimeArg(sub.ExhaustedAt),
+		nullableTimeArg(sub.ExpiredCreditLoggedAt),
+		nullableTimeArg(sub.DailyWindowStart),
+		nullableTimeArg(sub.WeeklyWindowStart),
+		sub.DailyUsageUSD,
+		sub.WeeklyUsageUSD,
+		nullableInt64Arg(sub.AssignedBy),
+		assignedAt,
+		sub.Notes,
+	).Scan(&id, &createdAt, &updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("insert credit subscription: %w", err)
+	}
+	cp := *sub
+	cp.ID = id
+	cp.CreatedAt = createdAt
+	cp.UpdatedAt = updatedAt
+	cp.AssignedAt = assignedAt
+	cp.ScopeConfig = scopeConfig
+	return &cp, nil
+}
+
+func nullableTimeArg(v *time.Time) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 // MarkExpiredCreditLogged 标记过期销毁 ledger 已写入。
