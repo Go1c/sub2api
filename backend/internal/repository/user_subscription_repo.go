@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -719,6 +720,173 @@ RETURNING id, created_at, updated_at
 	cp.AssignedAt = assignedAt
 	cp.ScopeConfig = scopeConfig
 	return &cp, nil
+}
+
+type expiredCreditSubscriptionRow struct {
+	ID                    int64
+	UserID                int64
+	GroupID               *int64
+	QuotaLimitUSD         float64
+	QuotaUsedUSD          float64
+	ExpiresAt             time.Time
+	ExpiredCreditLoggedAt *time.Time
+}
+
+// ExpireCreditSubscriptions 推进已到期 active 订阅，并记录剩余额度销毁流水与通知 outbox。
+//
+// 事务内先 SELECT ... FOR UPDATE SKIP LOCKED 锁定待处理订阅，再逐条更新状态、
+// 写 expire ledger、写 subscription_notify outbox、标记 expired_credit_logged_at。
+func (r *userSubscriptionRepository) ExpireCreditSubscriptions(ctx context.Context) (int64, error) {
+	if r.db == nil {
+		return 0, service.ErrSQLDBUnavailable
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rows, err := tx.QueryContext(ctx, `
+SELECT id, user_id, group_id, quota_limit_usd, quota_used_usd, expires_at, expired_credit_logged_at
+FROM user_subscriptions
+WHERE deleted_at IS NULL
+  AND status = $1
+  AND expires_at <= NOW()
+ORDER BY expires_at ASC, id ASC
+FOR UPDATE SKIP LOCKED
+`, service.SubscriptionStatusActive)
+	if err != nil {
+		return 0, err
+	}
+	expiredRows, err := scanExpiredCreditSubscriptionRows(rows)
+	if err != nil {
+		return 0, err
+	}
+
+	var updated int64
+	for _, row := range expiredRows {
+		affected, err := expireCreditSubscriptionRow(ctx, tx, row.ID)
+		if err != nil {
+			return 0, err
+		}
+		if affected == 0 {
+			continue
+		}
+		updated += affected
+
+		remaining := math.Max(row.QuotaLimitUSD-row.QuotaUsedUSD, 0)
+		if remaining <= 0 || row.ExpiredCreditLoggedAt != nil {
+			continue
+		}
+		if err := r.recordExpiredCredit(ctx, tx, row, remaining); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	committed = true
+	return updated, nil
+}
+
+func scanExpiredCreditSubscriptionRows(rows *sql.Rows) (_ []expiredCreditSubscriptionRow, err error) {
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	out := make([]expiredCreditSubscriptionRow, 0)
+	for rows.Next() {
+		var (
+			row                   expiredCreditSubscriptionRow
+			groupID               sql.NullInt64
+			expiredCreditLoggedAt sql.NullTime
+		)
+		if err = rows.Scan(
+			&row.ID,
+			&row.UserID,
+			&groupID,
+			&row.QuotaLimitUSD,
+			&row.QuotaUsedUSD,
+			&row.ExpiresAt,
+			&expiredCreditLoggedAt,
+		); err != nil {
+			return nil, err
+		}
+		if groupID.Valid {
+			v := groupID.Int64
+			row.GroupID = &v
+		}
+		if expiredCreditLoggedAt.Valid {
+			v := expiredCreditLoggedAt.Time
+			row.ExpiredCreditLoggedAt = &v
+		}
+		out = append(out, row)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func expireCreditSubscriptionRow(ctx context.Context, tx *sql.Tx, id int64) (int64, error) {
+	res, err := tx.ExecContext(ctx, `
+UPDATE user_subscriptions
+SET status = $1,
+    updated_at = NOW()
+WHERE id = $2
+  AND status = $3
+`, service.SubscriptionStatusExpired, id, service.SubscriptionStatusActive)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+func (r *userSubscriptionRepository) recordExpiredCredit(ctx context.Context, tx *sql.Tx, row expiredCreditSubscriptionRow, remaining float64) error {
+	eventKey := fmt.Sprintf("expire:%d:%s", row.ID, row.ExpiresAt.UTC().Format(time.RFC3339))
+	created, err := NewSubscriptionCreditLedgerRepository(r.db).CreateLimitReachedEvent(ctx, tx, &service.SubscriptionCreditLedgerEntry{
+		UserID:            row.UserID,
+		SubscriptionID:    row.ID,
+		GroupID:           row.GroupID,
+		Type:              service.SubscriptionCreditLedgerExpire,
+		DeltaUSD:          -remaining,
+		RemainingAfterUSD: 0,
+		Reason:            "subscription expired",
+		EventKey:          &eventKey,
+		Metadata: map[string]any{
+			"quota_limit_usd": row.QuotaLimitUSD,
+			"quota_used_usd":  row.QuotaUsedUSD,
+			"remaining_usd":   remaining,
+			"expires_at":      row.ExpiresAt.UTC().Format(time.RFC3339),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if created {
+		if err := enqueueSchedulerOutbox(ctx, tx, service.SchedulerOutboxEventSubscriptionNotify, nil, nil, map[string]any{
+			"user_id":         row.UserID,
+			"subscription_id": row.ID,
+			"kind":            "expired",
+		}); err != nil {
+			return err
+		}
+	}
+	_, err = tx.ExecContext(ctx, `
+UPDATE user_subscriptions
+SET expired_credit_logged_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+  AND expired_credit_logged_at IS NULL
+`, row.ID)
+	return err
 }
 
 func nullableTimeArg(v *time.Time) any {

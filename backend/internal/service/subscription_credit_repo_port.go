@@ -70,6 +70,9 @@ type SubscriptionCreditExtension interface {
 	// 仅用于购买履约路径；调用方负责先锁用户行并做二次可消费订阅校验。
 	InsertCreditSubscription(ctx context.Context, tx *sql.Tx, sub *UserSubscription) (*UserSubscription, error)
 
+	// ExpireCreditSubscriptions 推进已到期 active 订阅，并在同一事务内记录剩余额度销毁流水与通知 outbox。
+	ExpireCreditSubscriptions(ctx context.Context) (int64, error)
+
 	// MarkExpiredCreditLogged 标记过期销毁 ledger 已写入，避免重复写。
 	MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error
 }

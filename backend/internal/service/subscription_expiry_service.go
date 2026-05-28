@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// SubscriptionExpiryService periodically updates expired subscription status.
+// SubscriptionExpiryService periodically expires subscriptions and records credit-pool expiry audit events.
 type SubscriptionExpiryService struct {
 	userSubRepo UserSubscriptionRepository
 	interval    time.Duration
@@ -60,7 +60,7 @@ func (s *SubscriptionExpiryService) runOnce() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	updated, err := s.userSubRepo.BatchUpdateExpiredStatus(ctx)
+	updated, err := s.userSubRepo.ExpireCreditSubscriptions(ctx)
 	if err != nil {
 		log.Printf("[SubscriptionExpiry] Update expired subscriptions failed: %v", err)
 		return

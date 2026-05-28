@@ -23,7 +23,7 @@
 | Task 4 — 原子混合扣费（核心 SQL 改造） | ✅ 完成 | commit `625e372b`，事务内 `SELECT FOR UPDATE` + 混合拆分 + usage_log 拆分字段 |
 | Task 5 — 鉴权 + 双资金源 | ✅ 完成 | 本次提交，用户级可消费订阅 + scope 校验 + 订阅/余额双资金源 fallback |
 | Task 6 — 购买订阅履约 | ✅ 完成 | 本次提交，套餐额度快照 + 续费拦截 + 额度池 INSERT 履约 + purchase ledger |
-| Task 7 — 过期销毁与审计 | 🟡 待实施 | 依赖：Task 3 ✅ + Task 8 ✅ |
+| Task 7 — 过期销毁与审计 | ✅ 完成 | 本次提交，事务化过期 + expire ledger + expired 通知 outbox |
 | Task 8 — 通知 worker handler | ✅ 完成 | commit `ca6d4d84`，复用 `scheduler_outbox`，失败仅记日志不重试 |
 | Task 9 — API DTO + 前端展示 | 🟡 待实施 | 依赖：Task 3-7 |
 | Task 10 — 管理后台 + 浪费率统计页 | 🟡 待实施 | 依赖：Task 3 ✅，可并行启动 |
@@ -39,6 +39,7 @@
 - Task 4：扣费事务内锁定订阅、重置日/周窗口、计算订阅/余额拆分、写 consume / limit_reached / window_reset ledger、写 subscription notify outbox、回填 `usage_logs.subscription_cost_usd` / `balance_cost_usd`
 - Task 5：鉴权改为始终查询用户级可消费订阅；新增 `SubscriptionCoversGroup`；订阅不可用时回落余额；记录 usage 时不再依赖分组 `subscription_type`
 - Task 6：套餐/checkout DTO 暴露额度字段；下单写入 `payment_orders.subscription_*` 快照；`GetRenewalEligibility` 拦截未耗尽订阅；支付履约创建额度池订阅并写 `purchase` ledger
+- Task 7：过期任务改走 `ExpireCreditSubscriptions`；事务内锁定到期订阅，更新 `expired` 状态，销毁剩余额度并写 `expire` ledger / `subscription_notify` outbox / `expired_credit_logged_at`
 
 **已验证：**
 - `go build ./...` / `go vet ./...` PASS
@@ -60,9 +61,18 @@
 - Task 6：`go test -tags=unit ./internal/server ./internal/server/middleware -count=1` PASS
 - Task 6：`go test ./internal/server ./internal/server/middleware -count=1` PASS
 - Task 6：`go test ./cmd/server -count=1` PASS
+- Task 7：`go test ./internal/service -run TestSubscriptionCreditExpiry -count=1` PASS
+- Task 7：`go test ./internal/repository -run TestSubscriptionCreditExpiry -count=1` PASS
+- Task 7：`go test -tags=unit ./internal/service -run TestSubscriptionCreditExpiry -count=1` PASS
+- Task 7：`go test -tags=unit ./internal/service -count=1` PASS
+- Task 7：`go test ./internal/repository -count=1` PASS
+- Task 7：`go test ./internal/service ./internal/handler -count=1` PASS
+- Task 7：`go test -tags=unit ./internal/server ./internal/server/middleware -count=1` PASS
+- Task 7：`go test ./internal/server ./internal/server/middleware -count=1` PASS
+- Task 7：`go test ./cmd/server -count=1` PASS
 
-**剩余 Task 7、9-10 可分两波启动：**
-- 第二波（可并行）：Task 7（过期任务）/ Task 10 后端（浪费率聚合）
+**剩余 Task 9-10 可分两波启动：**
+- 第二波（可并行）：Task 10 后端（浪费率聚合）
 - 第三波：Task 9（前端）/ Task 10 前端
 
 ---
@@ -1315,14 +1325,15 @@ go test ./cmd/server -count=1
 
 Expected: PASS。
 
-### Task 7: 过期销毁与审计
+### Task 7: 过期销毁与审计 ✅ 已完成（本次提交）
 
 **Files:**
 - Modify: `backend/internal/service/subscription_expiry_service.go`
 - Modify: `backend/internal/repository/user_subscription_repo.go`
 - Test: `backend/internal/service/subscription_credit_expiry_test.go`
+- Test: `backend/internal/repository/user_subscription_repo_expiry_test.go`
 
-- [ ] **Step 1: 扩展过期任务**
+- [x] **Step 1: 扩展过期任务**
 
 过期任务发现 `expires_at <= NOW() AND status='active'` 的订阅时：
 
@@ -1336,19 +1347,27 @@ Expected: PASS。
 
 `event_key` 唯一索引保证过期事件幂等（多个 worker 同时运行也安全）。
 
-- [ ] **Step 2: Run expiry tests**
+- [x] **Step 2: Run expiry tests**
 
 ```bash
 cd backend
 go test ./internal/service -run TestSubscriptionCreditExpiry -count=1
+go test ./internal/repository -run TestSubscriptionCreditExpiry -count=1
+go test -tags=unit ./internal/service -run TestSubscriptionCreditExpiry -count=1
+go test -tags=unit ./internal/service -count=1
+go test ./internal/repository -count=1
+go test ./internal/service ./internal/handler -count=1
+go test -tags=unit ./internal/server ./internal/server/middleware -count=1
+go test ./internal/server ./internal/server/middleware -count=1
+go test ./cmd/server -count=1
 ```
 
 Expected: PASS。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
-git add backend/internal/service/subscription_expiry_service.go backend/internal/repository/user_subscription_repo.go
+git add backend/internal/service/subscription_expiry_service.go backend/internal/repository/user_subscription_repo.go backend/internal/service/subscription_credit_expiry_test.go backend/internal/repository/user_subscription_repo_expiry_test.go backend/internal/service/subscription_credit_repo_port.go
 git commit -m "feat: log expired subscription credit"
 ```
 

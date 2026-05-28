@@ -208,6 +208,9 @@ func (f fakeGoogleSubscriptionRepo) LockUserForSubscriptionWrite(ctx context.Con
 func (f fakeGoogleSubscriptionRepo) InsertCreditSubscription(ctx context.Context, tx *sql.Tx, sub *service.UserSubscription) (*service.UserSubscription, error) {
 	return nil, errors.New("not implemented")
 }
+func (f fakeGoogleSubscriptionRepo) ExpireCreditSubscriptions(ctx context.Context) (int64, error) {
+	return 0, errors.New("not implemented")
+}
 func (f fakeGoogleSubscriptionRepo) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
 	return nil
 }

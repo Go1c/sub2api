@@ -140,6 +140,9 @@ func (userSubRepoNoop) LockUserForSubscriptionWrite(context.Context, *sql.Tx, in
 func (userSubRepoNoop) InsertCreditSubscription(context.Context, *sql.Tx, *UserSubscription) (*UserSubscription, error) {
 	panic("unexpected InsertCreditSubscription call")
 }
+func (userSubRepoNoop) ExpireCreditSubscriptions(context.Context) (int64, error) {
+	panic("unexpected ExpireCreditSubscriptions call")
+}
 func (userSubRepoNoop) MarkExpiredCreditLogged(context.Context, int64, time.Time) error {
 	panic("unexpected MarkExpiredCreditLogged call")
 }
