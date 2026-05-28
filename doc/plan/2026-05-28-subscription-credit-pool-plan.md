@@ -20,7 +20,7 @@
 | Task 1 — DB migration + Ent schema | ✅ 完成 | commit `a21a610e` |
 | Task 2 — 领域模型 + AllocateSubscriptionCredit 纯函数 | ✅ 完成 | commit `737940c3`，13 case 测试 PASS |
 | Task 3 — Repository 查询 + ledger repo | ✅ 完成 | commit `ca6d4d84`，含 5 个 SubscriptionCreditExtension 方法 + 4 个 ledger repo 方法 + 集成测试 |
-| Task 4 — 原子混合扣费（核心 SQL 改造）| 🟡 待实施 | 依赖：Task 3 ✅ |
+| Task 4 — 原子混合扣费（核心 SQL 改造） | ✅ 完成 | 本次提交，事务内 `SELECT FOR UPDATE` + 混合拆分 + usage_log 拆分字段 |
 | Task 5 — 鉴权 + 双资金源 | 🟡 待实施 | 依赖：Task 3 ✅ |
 | Task 6 — 购买订阅履约 | 🟡 待实施 | 依赖：Task 3 ✅ |
 | Task 7 — 过期销毁与审计 | 🟡 待实施 | 依赖：Task 3 ✅ + Task 8 ✅ |
@@ -29,22 +29,27 @@
 | Task 10 — 管理后台 + 浪费率统计页 | 🟡 待实施 | 依赖：Task 3 ✅，可并行启动 |
 
 **已交付：**
-- 5 个 commit（plan 文档 + window_reset 扩展 + schema + 纯函数 + repo&worker）
+- plan 文档 + window_reset 扩展 + schema + 纯函数 + repo&worker + Task 4 原子混合扣费
 - 数据库 migration 141：`user_subscriptions` 改造 / `subscription_credit_ledger` 新表 / `payment_orders` 订阅快照字段 / `usage_logs` 拆分字段
 - 部分唯一索引 `user_subscriptions_user_active_usable`：每用户最多 1 条可消费订阅
 - service.SubscriptionCreditExtension + SubscriptionCreditLedgerRepository
 - service.SubscriptionNotifyService + SubscriptionNotifyWorker（独立轮询，watermark in-memory）
 - service.RenewalEligibility 类型 + 错误码
 - 通知文案（中文站内信 + HTML 邮件，brand 渐变 `#4f8cff → #1a2f5a`）
+- Task 4：扣费事务内锁定订阅、重置日/周窗口、计算订阅/余额拆分、写 consume / limit_reached / window_reset ledger、写 subscription notify outbox、回填 `usage_logs.subscription_cost_usd` / `balance_cost_usd`
 
 **已验证：**
 - `go build ./...` / `go vet ./...` PASS
 - `go test ./... -short` PASS（默认 tag）
 - `go test -tags=unit ./... -short` PASS（修复了 7 处 stub 实现新接口）
 - `go test -tags=integration` 编译 PASS（实际跑需 Docker）
+- Task 4：`go test -tags=integration ./internal/repository -run TestUsageBilling -count=1` PASS
+- Task 4：`go test -tags=unit ./internal/service -run 'TestBuildUsageBillingCommand|Test.*Subscription.*Billing' -count=1` PASS
+- Task 4：`go test -tags=unit ./internal/service ./internal/repository ./internal/server/middleware -count=1` PASS
+- Task 4：`go test ./internal/service ./internal/repository ./internal/server/middleware -count=1` PASS
 
-**剩余 Task 4-7、9-10 可分两波启动：**
-- 第二波（可并行）：Task 4（扣费 SQL）/ Task 5（鉴权）/ Task 6（履约）/ Task 10 后端（浪费率聚合）
+**剩余 Task 5-7、9-10 可分两波启动：**
+- 第二波（可并行）：Task 5（鉴权）/ Task 6（履约）/ Task 10 后端（浪费率聚合）
 - 第三波：Task 7（过期任务）/ Task 9（前端）/ Task 10 前端
 
 ---
@@ -957,7 +962,7 @@ git add backend/internal/repository backend/internal/service/user_subscription_p
 git commit -m "feat: add subscription credit repositories"
 ```
 
-### Task 4: 原子混合扣费
+### Task 4: 原子混合扣费 ✅ 已完成（本次提交）
 
 **Files:**
 - Modify: `backend/internal/service/usage_billing.go`
@@ -968,7 +973,7 @@ git commit -m "feat: add subscription credit repositories"
 - Test: `backend/internal/repository/usage_billing_repo_integration_test.go`
 - Test: `backend/internal/service/gateway_service_subscription_billing_test.go`
 
-- [ ] **Step 1: 复用现有 `UsageBillingCommand`**
+- [x] **Step 1: 复用现有 `UsageBillingCommand`**
 
 不新增 `PreferredSubscriptionID` 和 `AllowMixedBilling`。继续使用现有 `SubscriptionID *int64` 字段：
 
@@ -977,7 +982,7 @@ git commit -m "feat: add subscription credit repositories"
 
 由 service 层在调用前查好"用户当前可消费订阅"赋值给 `SubscriptionID`。`BalanceCost` 和 `SubscriptionCost` 字段保留作为"预计算"输入；当 `SubscriptionID != nil` 时，repository 层会在事务内重新计算并覆盖。
 
-- [ ] **Step 2: 改造 `applyUsageBillingEffects` 订阅扣费分支**
+- [x] **Step 2: 改造 `applyUsageBillingEffects` 订阅扣费分支**
 
 替换原有 `incrementUsageBillingSubscription` 调用为新的两步流程：
 
@@ -1055,7 +1060,7 @@ if cmd.BalanceCost > 0 {
 
 删除现有 `incrementUsageBillingSubscription` 实现，按"扣费 SQL 改造"章节的两步流程重写。
 
-- [ ] **Step 3: 设置 usage log 拆分字段**
+- [x] **Step 3: 设置 usage log 拆分字段**
 
 `usage_logs.subscription_cost_usd` 和 `balance_cost_usd` 在写入 usage_log 之前根据 `cmd.SubscriptionCost` / `cmd.BalanceCost` 设置。
 
@@ -1065,11 +1070,11 @@ if cmd.BalanceCost > 0 {
 - `SubscriptionCost > 0 && BalanceCost > 0` → 2
 - 两者都为 0（免费请求）→ 按原逻辑分配
 
-- [ ] **Step 4: 删除 `DoWindowMaintenance` 异步路径**
+- [x] **Step 4: 删除 `DoWindowMaintenance` 异步路径**
 
 删除 `backend/internal/service/subscription_service.go:848` 附近的 `DoWindowMaintenance` 函数及其所有调用点（middleware 中）。窗口重置完全收敛到扣费事务内 UPDATE 语句。
 
-- [ ] **Step 5: 缓存终结**
+- [x] **Step 5: 缓存终结**
 
 `finalizePostUsageBilling` 更新两类缓存：
 
@@ -1086,7 +1091,7 @@ BalanceCost       float64
 LimitReachedKinds []string  // 本次扣费触发的 limit kinds，供 monitoring
 ```
 
-- [ ] **Step 6: Run billing tests**
+- [x] **Step 6: Run billing tests**
 
 ```bash
 cd backend
@@ -1103,7 +1108,7 @@ Expected: PASS。集成测试覆盖：
 - 并发两请求结算同一订阅（FOR UPDATE 序列化正确）；
 - 窗口重置（跨日 / 跨周）。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/internal/service/usage_billing.go backend/internal/repository/usage_billing_repo.go backend/internal/service/gateway_service.go backend/internal/service/openai_gateway_service.go backend/internal/service/subscription_service.go

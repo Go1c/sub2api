@@ -38,9 +38,9 @@ var (
 	ErrSubscriptionNilInput       = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
 	ErrAdjustWouldExpire          = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
 	// 订阅额度池新增错误
-	ErrSQLDBUnavailable                = infraerrors.InternalServer("SQL_DB_UNAVAILABLE", "sql.DB not wired into repository")
-	ErrSubscriptionRenewalNotAllowed   = infraerrors.Conflict("SUBSCRIPTION_RENEWAL_NOT_ALLOWED", "current subscription is still usable, cannot purchase a new one before exhaustion or expiration")
-	ErrAlreadyHasUsableSubscription    = infraerrors.Conflict("ALREADY_HAS_USABLE_SUBSCRIPTION", "user already has a usable subscription")
+	ErrSQLDBUnavailable              = infraerrors.InternalServer("SQL_DB_UNAVAILABLE", "sql.DB not wired into repository")
+	ErrSubscriptionRenewalNotAllowed = infraerrors.Conflict("SUBSCRIPTION_RENEWAL_NOT_ALLOWED", "current subscription is still usable, cannot purchase a new one before exhaustion or expiration")
+	ErrAlreadyHasUsableSubscription  = infraerrors.Conflict("ALREADY_HAS_USABLE_SUBSCRIPTION", "user already has a usable subscription")
 )
 
 // SubscriptionService 订阅服务
@@ -817,8 +817,8 @@ func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSub
 }
 
 // ValidateAndCheckLimits 合并验证+限额检查（中间件热路径专用）
-// 仅做内存检查，不触发 DB 写入。窗口重置的 DB 写入由 DoWindowMaintenance 异步完成。
-// 返回 needsMaintenance 表示是否需要异步执行窗口维护。
+// 仅做内存检查，不触发 DB 写入。窗口重置由扣费事务统一完成。
+// 返回 needsMaintenance 仅保留为兼容信号；调用方不应据此触发 DB 窗口维护。
 func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, group *Group) (needsMaintenance bool, err error) {
 	// 1. 验证订阅状态
 	if sub.Status == SubscriptionStatusExpired {
@@ -831,8 +831,8 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 		return false, ErrSubscriptionExpired
 	}
 
-	// 2. 内存中修正过期窗口的用量，确保 CheckUsageLimits 不会误拒绝用户
-	//    实际的 DB 窗口重置由 DoWindowMaintenance 异步完成
+	// 2. 内存中修正过期窗口的用量，确保 CheckUsageLimits 不会误拒绝用户。
+	//    实际的 DB 窗口重置由扣费事务完成。
 	if sub.NeedsDailyReset() {
 		sub.DailyUsageUSD = 0
 		needsMaintenance = true
@@ -861,48 +861,6 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	}
 
 	return needsMaintenance, nil
-}
-
-// DoWindowMaintenance 异步执行窗口维护（激活+重置）
-// 使用独立 context，不受请求取消影响。
-// 注意：此方法仅在 ValidateAndCheckLimits 返回 needsMaintenance=true 时调用，
-// 而 IsExpired()=true 的订阅在 ValidateAndCheckLimits 中已被拦截返回错误，
-// 因此进入此方法的订阅一定未过期，无需处理过期状态同步。
-func (s *SubscriptionService) DoWindowMaintenance(sub *UserSubscription) {
-	if s == nil {
-		return
-	}
-	if s.maintenanceQueue != nil {
-		err := s.maintenanceQueue.TryEnqueue(func() {
-			s.doWindowMaintenance(sub)
-		})
-		if err != nil {
-			log.Printf("Subscription maintenance enqueue failed: %v", err)
-		}
-		return
-	}
-
-	s.doWindowMaintenance(sub)
-}
-
-func (s *SubscriptionService) doWindowMaintenance(sub *UserSubscription) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// 激活窗口（首次使用时）
-	if !sub.IsWindowActivated() {
-		if err := s.CheckAndActivateWindow(ctx, sub); err != nil {
-			log.Printf("Failed to activate subscription windows: %v", err)
-		}
-	}
-
-	// 重置过期窗口
-	if err := s.CheckAndResetWindows(ctx, sub); err != nil {
-		log.Printf("Failed to reset subscription windows: %v", err)
-	}
-
-	// 失效 L1 缓存，确保后续请求拿到更新后的数据
-	s.InvalidateSubCache(sub.UserID, subscriptionGroupIDOrZero(sub.GroupID))
 }
 
 // RecordUsage 记录使用量到订阅

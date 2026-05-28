@@ -58,10 +58,8 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		},
 	}
 
-	t.Run("standard_mode_needs_maintenance_does_not_block_request", func(t *testing.T) {
+	t.Run("standard_mode_stale_window_does_not_block_request", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeStandard}
-		cfg.SubscriptionMaintenance.WorkerCount = 1
-		cfg.SubscriptionMaintenance.QueueSize = 1
 
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 
@@ -76,7 +74,6 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 			DailyWindowStart: &past,
 			DailyUsageUSD:    0,
 		}
-		maintenanceCalled := make(chan struct{}, 1)
 		subscriptionRepo := &stubUserSubscriptionRepo{
 			getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 				clone := *sub
@@ -84,12 +81,9 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 			},
 			updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
 			activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
-			resetDaily: func(ctx context.Context, id int64, start time.Time) error {
-				maintenanceCalled <- struct{}{}
-				return nil
-			},
-			resetWeekly:  func(ctx context.Context, id int64, start time.Time) error { return nil },
-			resetMonthly: func(ctx context.Context, id int64, start time.Time) error { return nil },
+			resetDaily:     func(ctx context.Context, id int64, start time.Time) error { return nil },
+			resetWeekly:    func(ctx context.Context, id int64, start time.Time) error { return nil },
+			resetMonthly:   func(ctx context.Context, id int64, start time.Time) error { return nil },
 		}
 		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
 		t.Cleanup(subscriptionService.Stop)
@@ -102,12 +96,6 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
-		select {
-		case <-maintenanceCalled:
-			// ok
-		case <-time.After(time.Second):
-			t.Fatalf("expected maintenance to be scheduled")
-		}
 	})
 
 	t.Run("simple_mode_bypasses_quota_check", func(t *testing.T) {
