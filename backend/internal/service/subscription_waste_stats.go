@@ -13,15 +13,20 @@ const (
 	WasteStatsWindowWeekly = "weekly"
 	WasteStatsWindowTotal  = "total"
 	WasteStatsWindowAll    = "all"
+
+	WasteStatsProjectionFull       = "full"
+	WasteStatsProjectionByPlan     = "by_plan"
+	WasteStatsProjectionTimeSeries = "time_series"
 )
 
 // WasteStatsQuery scopes subscription credit waste analytics.
 type WasteStatsQuery struct {
-	StartTime time.Time
-	EndTime   time.Time
-	PlanID    *int64
-	UserID    *int64
-	Window    string
+	StartTime  time.Time
+	EndTime    time.Time
+	PlanID     *int64
+	UserID     *int64
+	Window     string
+	Projection string
 }
 
 // WasteStatsResult contains the summary plus plan and time projections.
@@ -115,6 +120,12 @@ func (s *SubscriptionWasteStatsService) GetWasteStats(ctx context.Context, query
 	if !isValidWasteStatsWindow(query.Window) {
 		return WasteStatsResult{}, infraerrors.BadRequest("INVALID_WASTE_STATS_WINDOW", "window must be daily, weekly, total, or all")
 	}
+	if query.Projection == "" {
+		query.Projection = WasteStatsProjectionFull
+	}
+	if !isValidWasteStatsProjection(query.Projection) {
+		return WasteStatsResult{}, infraerrors.BadRequest("INVALID_WASTE_STATS_PROJECTION", "projection must be full, by_plan, or time_series")
+	}
 	if s == nil || s.repo == nil {
 		return WasteStatsResult{}, infraerrors.InternalServer("WASTE_STATS_REPOSITORY_UNAVAILABLE", "subscription waste stats repository is not configured")
 	}
@@ -133,6 +144,15 @@ func (s *SubscriptionWasteStatsService) GetWasteStats(ctx context.Context, query
 func isValidWasteStatsWindow(window string) bool {
 	switch window {
 	case WasteStatsWindowDaily, WasteStatsWindowWeekly, WasteStatsWindowTotal, WasteStatsWindowAll:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidWasteStatsProjection(projection string) bool {
+	switch projection {
+	case WasteStatsProjectionFull, WasteStatsProjectionByPlan, WasteStatsProjectionTimeSeries:
 		return true
 	default:
 		return false

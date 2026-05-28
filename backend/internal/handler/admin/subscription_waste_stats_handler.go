@@ -33,6 +33,7 @@ func (h *SubscriptionWasteStatsHandler) Get(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	query.Projection = service.WasteStatsProjectionFull
 	result, err := h.service.GetWasteStats(c.Request.Context(), query)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -48,6 +49,7 @@ func (h *SubscriptionWasteStatsHandler) GetByPlan(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	query.Projection = service.WasteStatsProjectionByPlan
 	result, err := h.service.GetWasteStats(c.Request.Context(), query)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -63,6 +65,7 @@ func (h *SubscriptionWasteStatsHandler) GetTimeSeries(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	query.Projection = service.WasteStatsProjectionTimeSeries
 	result, err := h.service.GetWasteStats(c.Request.Context(), query)
 	if err != nil {
 		response.ErrorFrom(c, err)

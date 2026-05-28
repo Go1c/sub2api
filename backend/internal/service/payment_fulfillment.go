@@ -455,9 +455,9 @@ func (s *PaymentService) doCreditSub(ctx context.Context, o *dbent.PaymentOrder)
 	if err := s.subscriptionCreditPurchaseSvc.FulfillOrder(ctx, o); err != nil {
 		if isAlreadyHasUsableSubscription(err) {
 			slog.Warn("subscription credit purchase blocked by usable subscription", "orderID", o.ID, "userID", o.UserID, "error", err)
-			}
-			return fmt.Errorf("fulfill subscription credit purchase: %w", err)
 		}
+		return fmt.Errorf("fulfill subscription credit purchase: %w", err)
+	}
 	if s.subscriptionSvc != nil {
 		s.subscriptionSvc.InvalidateSubCache(o.UserID, 0)
 	}

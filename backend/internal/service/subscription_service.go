@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
 	"math/rand/v2"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -57,6 +59,7 @@ type SubscriptionService struct {
 	subCacheGroup  singleflight.Group
 	subCacheTTL    time.Duration
 	subCacheJitter int // 抖动百分比
+	creditSubMiss  sync.Map
 
 	maintenanceQueue *SubscriptionMaintenanceQueue
 }
@@ -128,6 +131,42 @@ func subCacheKey(userID, groupID int64) string {
 	return "sub:" + strconv.FormatInt(userID, 10) + ":" + strconv.FormatInt(groupID, 10)
 }
 
+func creditSubCacheKey(userID int64) string {
+	return "credit-sub:" + strconv.FormatInt(userID, 10)
+}
+
+type creditSubCacheEntry struct {
+	found bool
+	sub   *UserSubscription
+}
+
+func (s *SubscriptionService) cacheCreditSubscriptionMiss(userID int64) {
+	if s == nil || s.subCacheTTL <= 0 {
+		return
+	}
+	s.creditSubMiss.Store(userID, time.Now().Add(s.jitteredTTL(s.subCacheTTL)))
+}
+
+func (s *SubscriptionService) hasCachedCreditSubscriptionMiss(userID int64) bool {
+	if s == nil {
+		return false
+	}
+	value, ok := s.creditSubMiss.Load(userID)
+	if !ok {
+		return false
+	}
+	expiresAt, ok := value.(time.Time)
+	if !ok {
+		s.creditSubMiss.Delete(userID)
+		return false
+	}
+	if time.Now().Before(expiresAt) {
+		return true
+	}
+	s.creditSubMiss.Delete(userID)
+	return false
+}
+
 // jitteredTTL 为 TTL 添加抖动，避免集中过期
 func (s *SubscriptionService) jitteredTTL(ttl time.Duration) time.Duration {
 	if ttl <= 0 || s.subCacheJitter <= 0 {
@@ -160,6 +199,8 @@ func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 		return
 	}
 	s.subCacheL1.Del(subCacheKey(userID, groupID))
+	s.subCacheL1.Del(creditSubCacheKey(userID))
+	s.creditSubMiss.Delete(userID)
 }
 
 // AssignSubscriptionInput 分配订阅输入
@@ -629,11 +670,54 @@ func (s *SubscriptionService) GetUsableCreditSubscription(ctx context.Context, u
 	if s == nil || s.userSubRepo == nil {
 		return nil, ErrSubscriptionNotFound
 	}
-	sub, err := s.userSubRepo.GetUsableCreditSubscription(ctx, userID)
+	key := creditSubCacheKey(userID)
+	if s.hasCachedCreditSubscriptionMiss(userID) {
+		return nil, ErrSubscriptionNotFound
+	}
+	if s.subCacheL1 != nil {
+		if v, ok := s.subCacheL1.Get(key); ok {
+			switch cached := v.(type) {
+			case creditSubCacheEntry:
+				if !cached.found || cached.sub == nil {
+					return nil, ErrSubscriptionNotFound
+				}
+				cp := *cached.sub
+				return &cp, nil
+			case *creditSubCacheEntry:
+				if cached == nil || !cached.found || cached.sub == nil {
+					return nil, ErrSubscriptionNotFound
+				}
+				cp := *cached.sub
+				return &cp, nil
+			}
+		}
+	}
+
+	value, err, _ := s.subCacheGroup.Do(key, func() (any, error) {
+		sub, err := s.userSubRepo.GetUsableCreditSubscription(ctx, userID)
+		if err != nil {
+			if errors.Is(err, ErrSubscriptionNotFound) {
+				s.cacheCreditSubscriptionMiss(userID)
+				return &creditSubCacheEntry{}, nil
+			}
+			return nil, err
+		}
+		s.creditSubMiss.Delete(userID)
+		entry := &creditSubCacheEntry{found: true, sub: sub}
+		if s.subCacheL1 != nil {
+			_ = s.subCacheL1.SetWithTTL(key, entry, 1, s.jitteredTTL(s.subCacheTTL))
+			s.subCacheL1.Wait()
+		}
+		return entry, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	cp := *sub
+	entry, ok := value.(*creditSubCacheEntry)
+	if !ok || entry == nil || !entry.found || entry.sub == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	cp := *entry.sub
 	return &cp, nil
 }
 

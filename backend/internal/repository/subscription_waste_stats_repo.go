@@ -20,6 +20,22 @@ func NewSubscriptionWasteStatsRepository(db *sql.DB) service.SubscriptionWasteSt
 
 func (r *subscriptionWasteStatsRepository) GetWasteStats(ctx context.Context, query service.WasteStatsQuery) (service.WasteStatsResult, error) {
 	var result service.WasteStatsResult
+	if query.Projection == service.WasteStatsProjectionByPlan {
+		byPlan, err := r.queryByPlan(ctx, query)
+		if err != nil {
+			return result, err
+		}
+		result.ByPlan = byPlan
+		return result, nil
+	}
+	if query.Projection == service.WasteStatsProjectionTimeSeries {
+		timeSeries, err := r.queryTimeSeries(ctx, query)
+		if err != nil {
+			return result, err
+		}
+		result.TimeSeries = timeSeries
+		return result, nil
+	}
 	summary, err := r.querySummary(ctx, query, "")
 	if err != nil {
 		return result, err

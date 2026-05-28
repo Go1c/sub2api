@@ -47,6 +47,21 @@ func TestSubscriptionWasteStatsRejectsInvalidWindow(t *testing.T) {
 	}
 }
 
+func TestSubscriptionWasteStatsRejectsInvalidProjection(t *testing.T) {
+	svc := NewSubscriptionWasteStatsService(&wasteStatsRepoStub{})
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+
+	_, err := svc.GetWasteStats(context.Background(), WasteStatsQuery{
+		StartTime:  now.Add(-24 * time.Hour),
+		EndTime:    now,
+		Window:     WasteStatsWindowAll,
+		Projection: "summary_only",
+	})
+	if err == nil {
+		t.Fatal("expected invalid projection error")
+	}
+}
+
 func TestSubscriptionWasteStatsNormalizesEmptyAndNaNResult(t *testing.T) {
 	start := time.Date(2026, 4, 28, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)
@@ -76,6 +91,9 @@ func TestSubscriptionWasteStatsNormalizesEmptyAndNaNResult(t *testing.T) {
 	}
 	if got.Window != "all" {
 		t.Fatalf("expected default window all, got %q", got.Window)
+	}
+	if repo.query.Projection != WasteStatsProjectionFull {
+		t.Fatalf("expected default projection full, got %q", repo.query.Projection)
 	}
 	if !got.StartTime.Equal(start) || !got.EndTime.Equal(end) {
 		t.Fatalf("expected service to preserve query range, got %s - %s", got.StartTime, got.EndTime)

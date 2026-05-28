@@ -459,6 +459,50 @@ func TestExecuteSubscriptionFulfillmentMarksCreditPurchaseBlockAsFulfillmentFail
 	require.Contains(t, *got.FailedReason, "ALREADY_HAS_USABLE_SUBSCRIPTION")
 }
 
+func TestExecuteSubscriptionFulfillmentRecoversCreditPurchaseFromLedger(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
+
+	sub := client.UserSubscription.Create().
+		SetUserID(order.UserID).
+		SetPlanID(*order.PlanID).
+		SetScopeType(*order.SubscriptionScopeType).
+		SetScopeConfig(order.SubscriptionScopeConfig).
+		SetQuotaLimitUsd(*order.SubscriptionQuotaUsd).
+		SetQuotaUsedUsd(0).
+		SetNillableDailyLimitUsd(order.SubscriptionDailyLimitUsd).
+		SetNillableWeeklyLimitUsd(order.SubscriptionWeeklyLimitUsd).
+		SetStartsAt(time.Now().UTC()).
+		SetExpiresAt(time.Now().UTC().AddDate(0, 0, *order.SubscriptionValidityDays)).
+		SetStatus(SubscriptionStatusActive).
+		SetAssignedAt(time.Now().UTC()).
+		SetNotes("payment order 1").
+		SaveX(ctx)
+	client.SubscriptionCreditLedger.Create().
+		SetUserID(order.UserID).
+		SetSubscriptionID(sub.ID).
+		SetOrderID(order.ID).
+		SetType(SubscriptionCreditLedgerPurchase).
+		SetDeltaUsd(*order.SubscriptionQuotaUsd).
+		SetBalanceDeltaUsd(0).
+		SetRemainingAfterUsd(*order.SubscriptionQuotaUsd).
+		SetReason("payment order 1").
+		ExecX(ctx)
+
+	fulfiller := &subscriptionCreditPurchaseFulfillerStub{err: ErrAlreadyHasUsableSubscription}
+	svc := &PaymentService{entClient: client, subscriptionCreditPurchaseSvc: fulfiller}
+
+	err := svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+
+	require.NoError(t, err)
+	require.Nil(t, fulfiller.order, "purchase ledger anchor should skip the second fulfillment attempt")
+	got, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, got.Status)
+	require.NotNil(t, got.CompletedAt)
+}
+
 func createPaidCreditSubscriptionOrderForFulfillmentTest(t *testing.T, ctx context.Context, client *dbent.Client) *dbent.PaymentOrder {
 	t.Helper()
 	user := client.User.Create().

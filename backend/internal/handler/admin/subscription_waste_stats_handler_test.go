@@ -50,6 +50,9 @@ func TestAdminWasteStatsDefaultsRangeToLast30Days(t *testing.T) {
 	if stub.query.Window != "all" {
 		t.Fatalf("expected default window all, got %q", stub.query.Window)
 	}
+	if stub.query.Projection != service.WasteStatsProjectionFull {
+		t.Fatalf("expected full projection, got %q", stub.query.Projection)
+	}
 }
 
 func TestAdminWasteStatsParsesFiltersAndReturnsProjection(t *testing.T) {
@@ -110,5 +113,40 @@ func TestAdminWasteStatsDateOnlyEndIsExclusiveNextDay(t *testing.T) {
 	want := time.Date(2026, 5, 29, 0, 0, 0, 0, time.UTC)
 	if !stub.query.EndTime.Equal(want) {
 		t.Fatalf("expected date-only end to become %s, got %s", want, stub.query.EndTime)
+	}
+}
+
+func TestAdminWasteStatsProjectionEndpointsSetFocusedProjection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	stub := &wasteStatsServiceStub{result: service.WasteStatsResult{
+		ByPlan: []service.PlanWasteBucket{{PlanName: "starter"}},
+		TimeSeries: []service.WasteTimeBucket{{
+			BucketStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		}},
+	}}
+	handler := NewSubscriptionWasteStatsHandler(stub)
+
+	router := gin.New()
+	router.GET("/admin/subscriptions/waste-stats/by-plan", handler.GetByPlan)
+	router.GET("/admin/subscriptions/waste-stats/time-series", handler.GetTimeSeries)
+
+	byPlanReq := httptest.NewRequest(http.MethodGet, "/admin/subscriptions/waste-stats/by-plan", nil)
+	byPlanResp := httptest.NewRecorder()
+	router.ServeHTTP(byPlanResp, byPlanReq)
+	if byPlanResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for by-plan, got %d body=%s", byPlanResp.Code, byPlanResp.Body.String())
+	}
+	if stub.query.Projection != service.WasteStatsProjectionByPlan {
+		t.Fatalf("expected by-plan projection, got %q", stub.query.Projection)
+	}
+
+	timeReq := httptest.NewRequest(http.MethodGet, "/admin/subscriptions/waste-stats/time-series", nil)
+	timeResp := httptest.NewRecorder()
+	router.ServeHTTP(timeResp, timeReq)
+	if timeResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for time-series, got %d body=%s", timeResp.Code, timeResp.Body.String())
+	}
+	if stub.query.Projection != service.WasteStatsProjectionTimeSeries {
+		t.Fatalf("expected time-series projection, got %q", stub.query.Projection)
 	}
 }
