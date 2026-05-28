@@ -94,6 +94,11 @@ func Features(v string) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldFeatures, v))
 }
 
+// PurchaseNotice applies equality check predicate on the "purchase_notice" field. It's identical to PurchaseNoticeEQ.
+func PurchaseNotice(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseNotice, v))
+}
+
 // ProductName applies equality check predicate on the "product_name" field. It's identical to ProductNameEQ.
 func ProductName(v string) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldProductName, v))
@@ -577,6 +582,71 @@ func FeaturesEqualFold(v string) predicate.SubscriptionPlan {
 // FeaturesContainsFold applies the ContainsFold predicate on the "features" field.
 func FeaturesContainsFold(v string) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldContainsFold(FieldFeatures, v))
+}
+
+// PurchaseNoticeEQ applies the EQ predicate on the "purchase_notice" field.
+func PurchaseNoticeEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeNEQ applies the NEQ predicate on the "purchase_notice" field.
+func PurchaseNoticeNEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeIn applies the In predicate on the "purchase_notice" field.
+func PurchaseNoticeIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldPurchaseNotice, vs...))
+}
+
+// PurchaseNoticeNotIn applies the NotIn predicate on the "purchase_notice" field.
+func PurchaseNoticeNotIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldPurchaseNotice, vs...))
+}
+
+// PurchaseNoticeGT applies the GT predicate on the "purchase_notice" field.
+func PurchaseNoticeGT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeGTE applies the GTE predicate on the "purchase_notice" field.
+func PurchaseNoticeGTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeLT applies the LT predicate on the "purchase_notice" field.
+func PurchaseNoticeLT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeLTE applies the LTE predicate on the "purchase_notice" field.
+func PurchaseNoticeLTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeContains applies the Contains predicate on the "purchase_notice" field.
+func PurchaseNoticeContains(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContains(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeHasPrefix applies the HasPrefix predicate on the "purchase_notice" field.
+func PurchaseNoticeHasPrefix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasPrefix(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeHasSuffix applies the HasSuffix predicate on the "purchase_notice" field.
+func PurchaseNoticeHasSuffix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasSuffix(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeEqualFold applies the EqualFold predicate on the "purchase_notice" field.
+func PurchaseNoticeEqualFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEqualFold(FieldPurchaseNotice, v))
+}
+
+// PurchaseNoticeContainsFold applies the ContainsFold predicate on the "purchase_notice" field.
+func PurchaseNoticeContainsFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContainsFold(FieldPurchaseNotice, v))
 }
 
 // ProductNameEQ applies the EQ predicate on the "product_name" field.

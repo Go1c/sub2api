@@ -34,6 +34,8 @@ type SubscriptionPlan struct {
 	ValidityUnit string `json:"validity_unit,omitempty"`
 	// Features holds the value of the "features" field.
 	Features string `json:"features,omitempty"`
+	// PurchaseNotice holds the value of the "purchase_notice" field.
+	PurchaseNotice string `json:"purchase_notice,omitempty"`
 	// ProductName holds the value of the "product_name" field.
 	ProductName string `json:"product_name,omitempty"`
 	// ForSale holds the value of the "for_sale" field.
@@ -70,7 +72,7 @@ func (*SubscriptionPlan) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case subscriptionplan.FieldID, subscriptionplan.FieldGroupID, subscriptionplan.FieldValidityDays, subscriptionplan.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case subscriptionplan.FieldName, subscriptionplan.FieldDescription, subscriptionplan.FieldValidityUnit, subscriptionplan.FieldFeatures, subscriptionplan.FieldProductName, subscriptionplan.FieldScopeType:
+		case subscriptionplan.FieldName, subscriptionplan.FieldDescription, subscriptionplan.FieldValidityUnit, subscriptionplan.FieldFeatures, subscriptionplan.FieldPurchaseNotice, subscriptionplan.FieldProductName, subscriptionplan.FieldScopeType:
 			values[i] = new(sql.NullString)
 		case subscriptionplan.FieldCreatedAt, subscriptionplan.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -144,6 +146,12 @@ func (_m *SubscriptionPlan) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field features", values[i])
 			} else if value.Valid {
 				_m.Features = value.String
+			}
+		case subscriptionplan.FieldPurchaseNotice:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field purchase_notice", values[i])
+			} else if value.Valid {
+				_m.PurchaseNotice = value.String
 			}
 		case subscriptionplan.FieldProductName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -272,6 +280,9 @@ func (_m *SubscriptionPlan) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("features=")
 	builder.WriteString(_m.Features)
+	builder.WriteString(", ")
+	builder.WriteString("purchase_notice=")
+	builder.WriteString(_m.PurchaseNotice)
 	builder.WriteString(", ")
 	builder.WriteString("product_name=")
 	builder.WriteString(_m.ProductName)

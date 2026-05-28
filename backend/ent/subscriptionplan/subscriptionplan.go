@@ -29,6 +29,8 @@ const (
 	FieldValidityUnit = "validity_unit"
 	// FieldFeatures holds the string denoting the features field in the database.
 	FieldFeatures = "features"
+	// FieldPurchaseNotice holds the string denoting the purchase_notice field in the database.
+	FieldPurchaseNotice = "purchase_notice"
 	// FieldProductName holds the string denoting the product_name field in the database.
 	FieldProductName = "product_name"
 	// FieldForSale holds the string denoting the for_sale field in the database.
@@ -64,6 +66,7 @@ var Columns = []string{
 	FieldValidityDays,
 	FieldValidityUnit,
 	FieldFeatures,
+	FieldPurchaseNotice,
 	FieldProductName,
 	FieldForSale,
 	FieldSortOrder,
@@ -99,6 +102,8 @@ var (
 	ValidityUnitValidator func(string) error
 	// DefaultFeatures holds the default value on creation for the "features" field.
 	DefaultFeatures string
+	// DefaultPurchaseNotice holds the default value on creation for the "purchase_notice" field.
+	DefaultPurchaseNotice string
 	// DefaultProductName holds the default value on creation for the "product_name" field.
 	DefaultProductName string
 	// ProductNameValidator is a validator for the "product_name" field. It is called by the builders before save.
@@ -169,6 +174,11 @@ func ByValidityUnit(opts ...sql.OrderTermOption) OrderOption {
 // ByFeatures orders the results by the features field.
 func ByFeatures(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFeatures, opts...).ToFunc()
+}
+
+// ByPurchaseNotice orders the results by the purchase_notice field.
+func ByPurchaseNotice(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurchaseNotice, opts...).ToFunc()
 }
 
 // ByProductName orders the results by the product_name field.

@@ -118,6 +118,20 @@ func (_c *SubscriptionPlanCreate) SetNillableFeatures(v *string) *SubscriptionPl
 	return _c
 }
 
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (_c *SubscriptionPlanCreate) SetPurchaseNotice(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetPurchaseNotice(v)
+	return _c
+}
+
+// SetNillablePurchaseNotice sets the "purchase_notice" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillablePurchaseNotice(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetPurchaseNotice(*v)
+	}
+	return _c
+}
+
 // SetProductName sets the "product_name" field.
 func (_c *SubscriptionPlanCreate) SetProductName(v string) *SubscriptionPlanCreate {
 	_c.mutation.SetProductName(v)
@@ -301,6 +315,10 @@ func (_c *SubscriptionPlanCreate) defaults() {
 		v := subscriptionplan.DefaultFeatures
 		_c.mutation.SetFeatures(v)
 	}
+	if _, ok := _c.mutation.PurchaseNotice(); !ok {
+		v := subscriptionplan.DefaultPurchaseNotice
+		_c.mutation.SetPurchaseNotice(v)
+	}
 	if _, ok := _c.mutation.ProductName(); !ok {
 		v := subscriptionplan.DefaultProductName
 		_c.mutation.SetProductName(v)
@@ -364,6 +382,9 @@ func (_c *SubscriptionPlanCreate) check() error {
 	}
 	if _, ok := _c.mutation.Features(); !ok {
 		return &ValidationError{Name: "features", err: errors.New(`ent: missing required field "SubscriptionPlan.features"`)}
+	}
+	if _, ok := _c.mutation.PurchaseNotice(); !ok {
+		return &ValidationError{Name: "purchase_notice", err: errors.New(`ent: missing required field "SubscriptionPlan.purchase_notice"`)}
 	}
 	if _, ok := _c.mutation.ProductName(); !ok {
 		return &ValidationError{Name: "product_name", err: errors.New(`ent: missing required field "SubscriptionPlan.product_name"`)}
@@ -457,6 +478,10 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.Features(); ok {
 		_spec.SetField(subscriptionplan.FieldFeatures, field.TypeString, value)
 		_node.Features = value
+	}
+	if value, ok := _c.mutation.PurchaseNotice(); ok {
+		_spec.SetField(subscriptionplan.FieldPurchaseNotice, field.TypeString, value)
+		_node.PurchaseNotice = value
 	}
 	if value, ok := _c.mutation.ProductName(); ok {
 		_spec.SetField(subscriptionplan.FieldProductName, field.TypeString, value)
@@ -679,6 +704,18 @@ func (u *SubscriptionPlanUpsert) SetFeatures(v string) *SubscriptionPlanUpsert {
 // UpdateFeatures sets the "features" field to the value that was provided on create.
 func (u *SubscriptionPlanUpsert) UpdateFeatures() *SubscriptionPlanUpsert {
 	u.SetExcluded(subscriptionplan.FieldFeatures)
+	return u
+}
+
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (u *SubscriptionPlanUpsert) SetPurchaseNotice(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldPurchaseNotice, v)
+	return u
+}
+
+// UpdatePurchaseNotice sets the "purchase_notice" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdatePurchaseNotice() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldPurchaseNotice)
 	return u
 }
 
@@ -1022,6 +1059,20 @@ func (u *SubscriptionPlanUpsertOne) SetFeatures(v string) *SubscriptionPlanUpser
 func (u *SubscriptionPlanUpsertOne) UpdateFeatures() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateFeatures()
+	})
+}
+
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (u *SubscriptionPlanUpsertOne) SetPurchaseNotice(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseNotice(v)
+	})
+}
+
+// UpdatePurchaseNotice sets the "purchase_notice" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdatePurchaseNotice() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseNotice()
 	})
 }
 
@@ -1555,6 +1606,20 @@ func (u *SubscriptionPlanUpsertBulk) SetFeatures(v string) *SubscriptionPlanUpse
 func (u *SubscriptionPlanUpsertBulk) UpdateFeatures() *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateFeatures()
+	})
+}
+
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (u *SubscriptionPlanUpsertBulk) SetPurchaseNotice(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseNotice(v)
+	})
+}
+
+// UpdatePurchaseNotice sets the "purchase_notice" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdatePurchaseNotice() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseNotice()
 	})
 }
 

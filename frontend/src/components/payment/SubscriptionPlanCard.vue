@@ -45,11 +45,11 @@
         </div>
         <div class="grid grid-cols-2 gap-x-3 gap-y-1">
           <div class="flex items-center justify-between">
-            <span class="text-gray-400 dark:text-dark-500">Validity</span>
+            <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.validity') }}</span>
             <span class="font-medium text-gray-700 dark:text-gray-300">{{ validitySuffix }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-gray-400 dark:text-dark-500">Scope</span>
+            <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.scope') }}</span>
             <span :class="['rounded-full px-1.5 py-0.5 text-[10px] font-semibold', badgeLightClass]">{{ scopeLabel }}</span>
           </div>
         </div>
@@ -151,8 +151,18 @@ const creditDisplay = computed(() => {
 
 const scopeLabel = computed(() => {
   const type = props.plan.scope_type || 'all_available_groups'
-  if (type === 'group') return props.plan.group_name || 'Group'
-  if (type === 'all_available_groups') return 'All'
+  if (type === 'group') return props.plan.group_name || t('payment.groupFallback', { id: props.plan.group_id ?? '-' })
+  if (type === 'all_available_groups') return t('payment.planCard.scopeAllAvailable')
+  if (type === 'selected_groups') {
+    const groups = Array.isArray(props.plan.scope_config?.group_ids) ? props.plan.scope_config.group_ids : []
+    return t('payment.planCard.scopeSelectedGroups', { count: groups.length })
+  }
+  if (type === 'platforms') {
+    const platforms = Array.isArray(props.plan.scope_config?.platforms) ? props.plan.scope_config.platforms : []
+    return platforms.length > 0
+      ? platforms.map(platform => String(platform)).join(' / ')
+      : t('payment.planCard.scopePlatforms')
+  }
   return type.split('_').join(' ')
 })
 
@@ -180,9 +190,10 @@ const modelScopeLabels = computed(() => {
 })
 
 const validitySuffix = computed(() => {
-  const u = props.plan.validity_unit || 'day'
-  if (u === 'month') return t('payment.perMonth')
-  if (u === 'year') return t('payment.perYear')
+  const unit = (props.plan.validity_unit || 'day').toLowerCase()
+  if (unit === 'month' || unit === 'months') return t('payment.perMonth')
+  if (unit === 'year' || unit === 'years') return t('payment.perYear')
+  if (unit === 'week' || unit === 'weeks') return `${props.plan.validity_days}${t('payment.weeks')}`
   return `${props.plan.validity_days}${t('payment.days')}`
 })
 

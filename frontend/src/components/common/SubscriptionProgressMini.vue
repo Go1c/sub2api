@@ -44,9 +44,9 @@
             :key="subscription.id"
             class="border-b border-gray-50 p-3 last:border-b-0 dark:border-dark-700/50"
           >
-            <div class="mb-2 flex items-center justify-between">
+            <div class="mb-2 flex items-center justify-between gap-3">
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ subscription.group?.name || `Group #${subscription.group_id}` }}
+                {{ subscriptionName(subscription) }}
               </span>
               <span
                 v-if="subscription.expires_at"
@@ -72,90 +72,25 @@
 
               <!-- Progress bars for limited subscriptions -->
               <template v-else>
-                <div v-if="subscription.group?.daily_limit_usd" class="flex items-center gap-2">
-                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
-                    t('subscriptionProgress.daily')
+                <div
+                  v-for="metric in subscriptionMetrics(subscription)"
+                  :key="metric.key"
+                  class="flex items-center gap-2"
+                >
+                  <span class="w-12 flex-shrink-0 text-[10px] text-gray-500">{{
+                    metric.label
                   }}</span>
                   <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="
-                        getProgressBarClass(
-                          subscription.daily_usage_usd,
-                          subscription.group?.daily_limit_usd
-                        )
-                      "
+                      :class="getProgressBarClass(metric.used, metric.limit)"
                       :style="{
-                        width: getProgressWidth(
-                          subscription.daily_usage_usd,
-                          subscription.group?.daily_limit_usd
-                        )
+                        width: getProgressWidth(metric.used, metric.limit)
                       }"
                     ></div>
                   </div>
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
-                    {{
-                      formatUsage(subscription.daily_usage_usd, subscription.group?.daily_limit_usd)
-                    }}
-                  </span>
-                </div>
-
-                <div v-if="subscription.group?.weekly_limit_usd" class="flex items-center gap-2">
-                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
-                    t('subscriptionProgress.weekly')
-                  }}</span>
-                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
-                    <div
-                      class="h-1.5 rounded-full transition-all"
-                      :class="
-                        getProgressBarClass(
-                          subscription.weekly_usage_usd,
-                          subscription.group?.weekly_limit_usd
-                        )
-                      "
-                      :style="{
-                        width: getProgressWidth(
-                          subscription.weekly_usage_usd,
-                          subscription.group?.weekly_limit_usd
-                        )
-                      }"
-                    ></div>
-                  </div>
-                  <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
-                    {{
-                      formatUsage(subscription.weekly_usage_usd, subscription.group?.weekly_limit_usd)
-                    }}
-                  </span>
-                </div>
-
-                <div v-if="subscription.group?.monthly_limit_usd" class="flex items-center gap-2">
-                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
-                    t('subscriptionProgress.monthly')
-                  }}</span>
-                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
-                    <div
-                      class="h-1.5 rounded-full transition-all"
-                      :class="
-                        getProgressBarClass(
-                          subscription.monthly_usage_usd,
-                          subscription.group?.monthly_limit_usd
-                        )
-                      "
-                      :style="{
-                        width: getProgressWidth(
-                          subscription.monthly_usage_usd,
-                          subscription.group?.monthly_limit_usd
-                        )
-                      }"
-                    ></div>
-                  </div>
-                  <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
-                    {{
-                      formatUsage(
-                        subscription.monthly_usage_usd,
-                        subscription.group?.monthly_limit_usd
-                      )
-                    }}
+                    {{ formatUsage(metric.used, metric.limit) }}
                   </span>
                 </div>
               </template>
@@ -204,26 +139,58 @@ const displaySubscriptions = computed(() => {
   })
 })
 
+interface SubscriptionMetric {
+  key: 'quota' | 'daily' | 'weekly'
+  label: string
+  used: number
+  limit: number | null
+}
+
+function subscriptionName(sub: UserSubscription): string {
+  return sub.group?.name
+    || (sub.group_id != null
+      ? t('payment.groupFallback', { id: sub.group_id })
+      : t('userSubscriptions.creditPoolSubscription'))
+}
+
+function normalizedLimit(value: number | null | undefined): number | null {
+  return value != null && value > 0 ? value : null
+}
+
+function quotaLimit(sub: UserSubscription): number | null {
+  return normalizedLimit(sub.quota_limit_usd)
+}
+
+function quotaUsed(sub: UserSubscription): number {
+  return sub.quota_used_usd ?? 0
+}
+
+function subscriptionMetrics(sub: UserSubscription): SubscriptionMetric[] {
+  const metrics: SubscriptionMetric[] = []
+  const quota = quotaLimit(sub)
+  if (quota != null) {
+    metrics.push({ key: 'quota', label: t('payment.planCard.quota'), used: quotaUsed(sub), limit: quota })
+  }
+  const dailyLimit = normalizedLimit(sub.daily_limit_usd)
+  if (dailyLimit != null) {
+    metrics.push({ key: 'daily', label: t('subscriptionProgress.daily'), used: sub.daily_usage_usd || 0, limit: dailyLimit })
+  }
+  const weeklyLimit = normalizedLimit(sub.weekly_limit_usd)
+  if (weeklyLimit != null) {
+    metrics.push({ key: 'weekly', label: t('subscriptionProgress.weekly'), used: sub.weekly_usage_usd || 0, limit: weeklyLimit })
+  }
+  return metrics
+}
+
 function getMaxUsagePercentage(sub: UserSubscription): number {
-  const percentages: number[] = []
-  if (sub.group?.daily_limit_usd) {
-    percentages.push(((sub.daily_usage_usd || 0) / sub.group.daily_limit_usd) * 100)
-  }
-  if (sub.group?.weekly_limit_usd) {
-    percentages.push(((sub.weekly_usage_usd || 0) / sub.group.weekly_limit_usd) * 100)
-  }
-  if (sub.group?.monthly_limit_usd) {
-    percentages.push(((sub.monthly_usage_usd || 0) / sub.group.monthly_limit_usd) * 100)
-  }
+  const percentages = subscriptionMetrics(sub)
+    .filter(metric => metric.limit != null && metric.limit > 0)
+    .map(metric => ((metric.used || 0) / (metric.limit || 1)) * 100)
   return percentages.length > 0 ? Math.max(...percentages) : 0
 }
 
 function isUnlimited(sub: UserSubscription): boolean {
-  return (
-    !sub.group?.daily_limit_usd &&
-    !sub.group?.weekly_limit_usd &&
-    !sub.group?.monthly_limit_usd
-  )
+  return subscriptionMetrics(sub).length === 0
 }
 
 function getProgressDotClass(sub: UserSubscription): string {
