@@ -20,8 +20,8 @@
 | Task 1 — DB migration + Ent schema | ✅ 完成 | commit `a21a610e` |
 | Task 2 — 领域模型 + AllocateSubscriptionCredit 纯函数 | ✅ 完成 | commit `737940c3`，13 case 测试 PASS |
 | Task 3 — Repository 查询 + ledger repo | ✅ 完成 | commit `ca6d4d84`，含 5 个 SubscriptionCreditExtension 方法 + 4 个 ledger repo 方法 + 集成测试 |
-| Task 4 — 原子混合扣费（核心 SQL 改造） | ✅ 完成 | 本次提交，事务内 `SELECT FOR UPDATE` + 混合拆分 + usage_log 拆分字段 |
-| Task 5 — 鉴权 + 双资金源 | 🟡 待实施 | 依赖：Task 3 ✅ |
+| Task 4 — 原子混合扣费（核心 SQL 改造） | ✅ 完成 | commit `625e372b`，事务内 `SELECT FOR UPDATE` + 混合拆分 + usage_log 拆分字段 |
+| Task 5 — 鉴权 + 双资金源 | ✅ 完成 | 本次提交，用户级可消费订阅 + scope 校验 + 订阅/余额双资金源 fallback |
 | Task 6 — 购买订阅履约 | 🟡 待实施 | 依赖：Task 3 ✅ |
 | Task 7 — 过期销毁与审计 | 🟡 待实施 | 依赖：Task 3 ✅ + Task 8 ✅ |
 | Task 8 — 通知 worker handler | ✅ 完成 | commit `ca6d4d84`，复用 `scheduler_outbox`，失败仅记日志不重试 |
@@ -37,6 +37,7 @@
 - service.RenewalEligibility 类型 + 错误码
 - 通知文案（中文站内信 + HTML 邮件，brand 渐变 `#4f8cff → #1a2f5a`）
 - Task 4：扣费事务内锁定订阅、重置日/周窗口、计算订阅/余额拆分、写 consume / limit_reached / window_reset ledger、写 subscription notify outbox、回填 `usage_logs.subscription_cost_usd` / `balance_cost_usd`
+- Task 5：鉴权改为始终查询用户级可消费订阅；新增 `SubscriptionCoversGroup`；订阅不可用时回落余额；记录 usage 时不再依赖分组 `subscription_type`
 
 **已验证：**
 - `go build ./...` / `go vet ./...` PASS
@@ -47,9 +48,13 @@
 - Task 4：`go test -tags=unit ./internal/service -run 'TestBuildUsageBillingCommand|Test.*Subscription.*Billing' -count=1` PASS
 - Task 4：`go test -tags=unit ./internal/service ./internal/repository ./internal/server/middleware -count=1` PASS
 - Task 4：`go test ./internal/service ./internal/repository ./internal/server/middleware -count=1` PASS
+- Task 5：`go test -tags=unit ./internal/server/middleware -run 'TestAPIKeyAuth|TestApiKeyAuthWithSubscriptionGoogle' -count=1` PASS
+- Task 5：`go test -tags=unit ./internal/service -run 'TestBillingCacheService|TestCheckBillingEligibility|TestSubscriptionCoversGroup|Test.*RecordUsage.*Subscription' -count=1` PASS
+- Task 5：`go test -tags=unit ./internal/service ./internal/server/middleware -count=1` PASS
+- Task 5：`go test ./internal/service ./internal/server/middleware -count=1` PASS
 
-**剩余 Task 5-7、9-10 可分两波启动：**
-- 第二波（可并行）：Task 5（鉴权）/ Task 6（履约）/ Task 10 后端（浪费率聚合）
+**剩余 Task 6-7、9-10 可分两波启动：**
+- 第二波（可并行）：Task 6（履约）/ Task 10 后端（浪费率聚合）
 - 第三波：Task 7（过期任务）/ Task 9（前端）/ Task 10 前端
 
 ---
@@ -1115,7 +1120,7 @@ git add backend/internal/service/usage_billing.go backend/internal/repository/us
 git commit -m "feat: support mixed subscription and balance billing"
 ```
 
-### Task 5: 鉴权与资格检查改造
+### Task 5: 鉴权与资格检查改造 ✅ 已完成（本次提交）
 
 **Files:**
 - Modify: `backend/internal/server/middleware/api_key_auth.go`
@@ -1126,7 +1131,7 @@ git commit -m "feat: support mixed subscription and balance billing"
 - Test: `backend/internal/server/middleware/api_key_auth_google_test.go`
 - Test: `backend/internal/service/billing_cache_service_test.go`
 
-- [ ] **Step 1: 中间件查可消费订阅**
+- [x] **Step 1: 中间件查可消费订阅**
 
 Middleware 不再依赖"API Key 所属分组的 subscription_type"判断是否查订阅。统一调用：
 
@@ -1136,7 +1141,7 @@ sub, err := subscriptionService.GetUsableCreditSubscription(ctx, userID)
 
 `GetUsableCreditSubscription` 内部应用 scope 校验（见 Step 3），返回的订阅必须覆盖当前请求分组才算可用。
 
-- [ ] **Step 2: 资格检查改"双资金源"**
+- [x] **Step 2: 资格检查改"双资金源"**
 
 `CheckBillingEligibility` 允许请求当且仅当任一条件满足：
 
@@ -1147,7 +1152,7 @@ sub, err := subscriptionService.GetUsableCreditSubscription(ctx, userID)
 
 仅当两者都不可用时，按当前订阅不可用的具体原因返回对应错误码（见"API 错误返回"章节）。
 
-- [ ] **Step 3: Scope 校验**
+- [x] **Step 3: Scope 校验**
 
 新增 `SubscriptionCoversGroup(sub, group, user) bool`：
 
@@ -1157,11 +1162,11 @@ sub, err := subscriptionService.GetUsableCreditSubscription(ctx, userID)
 
 未在 scope 中的分组视为"订阅不可用于此请求"，回落余额。
 
-- [ ] **Step 4: 不再依赖分组 subscription_type**
+- [x] **Step 4: 不再依赖分组 subscription_type**
 
 删除 middleware 中 `apiKey.Group.IsSubscriptionType()` 分支判断。所有用户请求统一查 `GetUsableCreditSubscription`，由 service 层和 scope 决定是否扣订阅。
 
-- [ ] **Step 5: Run middleware tests**
+- [x] **Step 5: Run middleware tests**
 
 ```bash
 cd backend
@@ -1171,7 +1176,7 @@ go test ./internal/service -run 'TestBillingCacheService|TestCheckBillingEligibi
 
 Expected: PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/internal/server/middleware backend/internal/service/billing_cache_service.go backend/internal/repository/billing_cache.go

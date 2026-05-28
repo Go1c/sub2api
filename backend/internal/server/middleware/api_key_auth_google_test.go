@@ -26,6 +26,7 @@ type fakeAPIKeyRepo struct {
 
 type fakeGoogleSubscriptionRepo struct {
 	getActive      func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error)
+	getUsable      func(ctx context.Context, userID int64) (*service.UserSubscription, error)
 	updateStatus   func(ctx context.Context, subscriptionID int64, status string) error
 	activateWindow func(ctx context.Context, id int64, start time.Time) error
 	resetDaily     func(ctx context.Context, id int64, start time.Time) error
@@ -190,6 +191,9 @@ func (f fakeGoogleSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context
 
 // SubscriptionCreditExtension stubs (订阅额度池扩展；本测试不触发)
 func (f fakeGoogleSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	if f.getUsable != nil {
+		return f.getUsable(ctx, userID)
+	}
 	return nil, service.ErrSubscriptionNotFound
 }
 func (f fakeGoogleSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
@@ -360,6 +364,53 @@ func TestApiKeyAuthWithSubscriptionGoogle_QueryKeyAllowedOnV1Beta(t *testing.T) 
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test?key=valid", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestApiKeyAuthWithSubscriptionGoogleUsesUsableCreditSubscriptionForRegularGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	group := &service.Group{ID: 101, Status: service.StatusActive, Platform: service.PlatformGemini, Hydrated: true}
+	user := &service.User{ID: 7, Role: service.RoleUser, Status: service.StatusActive, Balance: 0, Concurrency: 3}
+	apiKey := &service.APIKey{ID: 100, UserID: user.ID, Key: "google-credit-key", Status: service.StatusActive, User: user, Group: group}
+	apiKey.GroupID = &group.ID
+	sub := &service.UserSubscription{
+		ID:          55,
+		UserID:      user.ID,
+		Status:      service.SubscriptionStatusActive,
+		ExpiresAt:   time.Now().Add(time.Hour),
+		ScopeType:   service.SubscriptionScopeAllAvailableGroups,
+		ScopeConfig: map[string]any{},
+	}
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			require.Equal(t, apiKey.Key, key)
+			clone := *apiKey
+			return &clone, nil
+		},
+	})
+	subscriptionService := service.NewSubscriptionService(nil, fakeGoogleSubscriptionRepo{
+		getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+			require.Equal(t, user.ID, userID)
+			clone := *sub
+			return &clone, nil
+		},
+	}, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+
+	r := gin.New()
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard}))
+	r.GET("/v1beta/test", func(c *gin.Context) {
+		got, ok := GetSubscriptionFromContext(c)
+		require.True(t, ok)
+		require.Equal(t, sub.ID, got.ID)
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
+	req.Header.Set("x-goog-api-key", apiKey.Key)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -624,7 +675,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_TouchesLastUsedInStandardMode(t *testi
 	require.Equal(t, 1, touchCalls)
 }
 
-func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t *testing.T) {
+func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededWithoutBalanceReturns429(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	limit := 1.0
@@ -641,7 +692,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 		ID:          999,
 		Role:        service.RoleUser,
 		Status:      service.StatusActive,
-		Balance:     10,
+		Balance:     0,
 		Concurrency: 3,
 	}
 	apiKey := &service.APIKey{
@@ -678,6 +729,13 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 	subscriptionService := service.NewSubscriptionService(nil, fakeGoogleSubscriptionRepo{
 		getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 			if userID != user.ID || groupID != group.ID {
+				return nil, service.ErrSubscriptionNotFound
+			}
+			clone := *sub
+			return &clone, nil
+		},
+		getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+			if userID != user.ID {
 				return nil, service.ErrSubscriptionNotFound
 			}
 			clone := *sub

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -667,9 +668,8 @@ func (s *BillingCacheService) QueueUpdateAPIKeyRateLimitUsage(apiKeyID int64, co
 // 统一检查方法
 // ============================================
 
-// CheckBillingEligibility 检查用户是否有资格发起请求
-// 余额模式：检查缓存余额 > 0
-// 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
+// CheckBillingEligibility 检查用户是否有资格发起请求。
+// 订阅额度池与余额是双资金源：订阅不可用时，只要余额满足门槛就放行。
 func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription) error {
 	// 简易模式：跳过所有计费检查
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
@@ -679,12 +679,18 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return ErrBillingServiceUnavailable
 	}
 
-	// 判断计费模式
-	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
-
-	if isSubscriptionMode {
-		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
-			return err
+	var subscriptionErr error
+	if subscription != nil {
+		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err == nil {
+			subscriptionErr = nil
+		} else {
+			subscriptionErr = err
+			if balanceErr := s.checkBalanceEligibility(ctx, user); balanceErr != nil {
+				if errors.Is(balanceErr, ErrInsufficientBalance) || errors.Is(balanceErr, ErrBalanceUsageGateNotMet) {
+					return subscriptionErr
+				}
+				return balanceErr
+			}
 		}
 	} else {
 		if err := s.checkBalanceEligibility(ctx, user); err != nil {
@@ -835,39 +841,25 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, user 
 
 // checkSubscriptionEligibility 检查订阅模式资格
 func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription) error {
-	// 获取订阅缓存数据
-	subData, err := s.GetSubscriptionStatus(ctx, userID, group.ID)
-	if err != nil {
-		if s.circuitBreaker != nil {
-			s.circuitBreaker.OnFailure(err)
-		}
-		logger.LegacyPrintf("service.billing_cache", "ALERT: billing subscription check failed for user %d group %d: %v", userID, group.ID, err)
-		return ErrBillingServiceUnavailable.WithCause(err)
-	}
-	if s.circuitBreaker != nil {
-		s.circuitBreaker.OnSuccess()
-	}
-
-	// 检查订阅状态
-	if subData.Status != SubscriptionStatusActive {
+	if subscription == nil || subscription.UserID != userID {
 		return ErrSubscriptionInvalid
 	}
-
-	// 检查是否过期
-	if time.Now().After(subData.ExpiresAt) {
+	if !SubscriptionCoversGroup(subscription, group, nil) {
 		return ErrSubscriptionInvalid
 	}
-
-	// 检查限额（使用传入的Group限额配置）
-	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
+	if subscription.Status != SubscriptionStatusActive {
+		return ErrSubscriptionInvalid
+	}
+	if time.Now().After(subscription.ExpiresAt) {
+		return ErrSubscriptionInvalid
+	}
+	if !subscription.CheckDailyLimit(group, 0) {
 		return ErrDailyLimitExceeded
 	}
-
-	if group.HasWeeklyLimit() && subData.WeeklyUsage >= *group.WeeklyLimitUSD {
+	if !subscription.CheckWeeklyLimit(group, 0) {
 		return ErrWeeklyLimitExceeded
 	}
-
-	if group.HasMonthlyLimit() && subData.MonthlyUsage >= *group.MonthlyLimitUSD {
+	if !subscription.CheckMonthlyLimit(group, 0) {
 		return ErrMonthlyLimitExceeded
 	}
 

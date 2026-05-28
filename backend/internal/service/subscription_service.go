@@ -616,6 +616,20 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 	return &cp, nil
 }
 
+// GetUsableCreditSubscription 返回用户当前唯一可消费的额度池订阅。
+// Scope 与窗口限额由调用方结合实际请求分组继续检查。
+func (s *SubscriptionService) GetUsableCreditSubscription(ctx context.Context, userID int64) (*UserSubscription, error) {
+	if s == nil || s.userSubRepo == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	sub, err := s.userSubRepo.GetUsableCreditSubscription(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	cp := *sub
+	return &cp, nil
+}
+
 // ListUserSubscriptions 获取用户的所有订阅
 func (s *SubscriptionService) ListUserSubscriptions(ctx context.Context, userID int64) ([]UserSubscription, error) {
 	subs, err := s.userSubRepo.ListByUserID(ctx, userID)

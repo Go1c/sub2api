@@ -79,6 +79,10 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 				clone := *sub
 				return &clone, nil
 			},
+			getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+				clone := *sub
+				return &clone, nil
+			},
 			updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
 			activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetDaily:     func(ctx context.Context, id int64, start time.Time) error { return nil },
@@ -128,13 +132,27 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 
 	t.Run("standard_mode_enforces_quota_check", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeStandard}
-		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+		limitedUser := *user
+		limitedUser.Balance = 0
+		limitedAPIKey := *apiKey
+		limitedAPIKey.User = &limitedUser
+		limitedAPIKey.UserID = limitedUser.ID
+		limitedRepo := &stubApiKeyRepo{
+			getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+				if key != limitedAPIKey.Key {
+					return nil, service.ErrAPIKeyNotFound
+				}
+				clone := limitedAPIKey
+				return &clone, nil
+			},
+		}
+		apiKeyService := service.NewAPIKeyService(limitedRepo, nil, nil, nil, nil, nil, cfg)
 
 		now := time.Now()
 		gid2 := group.ID
 		sub := &service.UserSubscription{
 			ID:               55,
-			UserID:           user.ID,
+			UserID:           limitedUser.ID,
 			GroupID:          &gid2,
 			Status:           service.SubscriptionStatusActive,
 			ExpiresAt:        now.Add(24 * time.Hour),
@@ -144,6 +162,13 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		subscriptionRepo := &stubUserSubscriptionRepo{
 			getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 				if userID != sub.UserID || sub.GroupID == nil || groupID != *sub.GroupID {
+					return nil, service.ErrSubscriptionNotFound
+				}
+				clone := *sub
+				return &clone, nil
+			},
+			getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+				if userID != sub.UserID {
 					return nil, service.ErrSubscriptionNotFound
 				}
 				clone := *sub
@@ -525,6 +550,112 @@ func TestAPIKeyAuthTouchesLastUsedInStandardMode(t *testing.T) {
 	require.Equal(t, 1, touchCalls)
 }
 
+func TestAPIKeyAuthUsesUsableCreditSubscriptionForRegularGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	group := &service.Group{ID: 101, Name: "regular", Status: service.StatusActive, Platform: service.PlatformAnthropic, Hydrated: true}
+	user := &service.User{ID: 7, Role: service.RoleUser, Status: service.StatusActive, Balance: 0, Concurrency: 3}
+	apiKey := &service.APIKey{ID: 100, UserID: user.ID, Key: "credit-key", Status: service.StatusActive, User: user, Group: group}
+	apiKey.GroupID = &group.ID
+	sub := &service.UserSubscription{
+		ID:          55,
+		UserID:      user.ID,
+		Status:      service.SubscriptionStatusActive,
+		ExpiresAt:   time.Now().Add(time.Hour),
+		ScopeType:   service.SubscriptionScopeAllAvailableGroups,
+		ScopeConfig: map[string]any{},
+	}
+	apiKeyService := service.NewAPIKeyService(&stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			require.Equal(t, apiKey.Key, key)
+			clone := *apiKey
+			return &clone, nil
+		},
+	}, nil, nil, nil, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+	subscriptionService := service.NewSubscriptionService(nil, &stubUserSubscriptionRepo{
+		getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+			require.Equal(t, user.ID, userID)
+			clone := *sub
+			return &clone, nil
+		},
+	}, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard})))
+	router.GET("/t", func(c *gin.Context) {
+		got, ok := GetSubscriptionFromContext(c)
+		require.True(t, ok)
+		require.Equal(t, sub.ID, got.ID)
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAPIKeyAuthSubscriptionLimitFallsBackToBalance(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	limit := 1.0
+	group := &service.Group{
+		ID:               101,
+		Name:             "legacy-sub",
+		Status:           service.StatusActive,
+		Platform:         service.PlatformAnthropic,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	}
+	user := &service.User{ID: 7, Role: service.RoleUser, Status: service.StatusActive, Balance: 5, Concurrency: 3}
+	apiKey := &service.APIKey{ID: 100, UserID: user.ID, Key: "fallback-key", Status: service.StatusActive, User: user, Group: group}
+	apiKey.GroupID = &group.ID
+	sub := &service.UserSubscription{
+		ID:            55,
+		UserID:        user.ID,
+		Status:        service.SubscriptionStatusActive,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		ScopeType:     service.SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:   map[string]any{},
+		DailyLimitUSD: &limit,
+		DailyUsageUSD: limit,
+	}
+	apiKeyService := service.NewAPIKeyService(&stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			require.Equal(t, apiKey.Key, key)
+			clone := *apiKey
+			return &clone, nil
+		},
+	}, nil, nil, nil, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+	subscriptionService := service.NewSubscriptionService(nil, &stubUserSubscriptionRepo{
+		getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
+			clone := *sub
+			return &clone, nil
+		},
+		getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+			clone := *sub
+			return &clone, nil
+		},
+	}, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard})))
+	router.GET("/t", func(c *gin.Context) {
+		_, ok := GetSubscriptionFromContext(c)
+		require.False(t, ok)
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
@@ -637,6 +768,7 @@ func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*servi
 
 type stubUserSubscriptionRepo struct {
 	getActive      func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error)
+	getUsable      func(ctx context.Context, userID int64) (*service.UserSubscription, error)
 	updateStatus   func(ctx context.Context, subscriptionID int64, status string) error
 	activateWindow func(ctx context.Context, id int64, start time.Time) error
 	resetDaily     func(ctx context.Context, id int64, start time.Time) error
@@ -744,6 +876,9 @@ func (r *stubUserSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context)
 
 // SubscriptionCreditExtension stubs（额度池扩展；本测试用 legacy 路径，默认返回 not found）
 func (r *stubUserSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	if r.getUsable != nil {
+		return r.getUsable(ctx, userID)
+	}
 	return nil, service.ErrSubscriptionNotFound
 }
 func (r *stubUserSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {

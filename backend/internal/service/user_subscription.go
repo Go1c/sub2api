@@ -145,22 +145,33 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 }
 
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasDailyLimit() {
+	limit := s.dailyLimitUSD(group)
+	if limit == nil {
 		return true
 	}
-	return s.DailyUsageUSD+additionalCost <= *group.DailyLimitUSD
+	if additionalCost <= 0 {
+		return s.DailyUsageUSD < *limit
+	}
+	return s.DailyUsageUSD+additionalCost <= *limit
 }
 
 func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasWeeklyLimit() {
+	limit := s.weeklyLimitUSD(group)
+	if limit == nil {
 		return true
 	}
-	return s.WeeklyUsageUSD+additionalCost <= *group.WeeklyLimitUSD
+	if additionalCost <= 0 {
+		return s.WeeklyUsageUSD < *limit
+	}
+	return s.WeeklyUsageUSD+additionalCost <= *limit
 }
 
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasMonthlyLimit() {
+	if group == nil || !group.HasMonthlyLimit() {
 		return true
+	}
+	if additionalCost <= 0 {
+		return s.MonthlyUsageUSD < *group.MonthlyLimitUSD
 	}
 	return s.MonthlyUsageUSD+additionalCost <= *group.MonthlyLimitUSD
 }
@@ -170,4 +181,24 @@ func (s *UserSubscription) CheckAllLimits(group *Group, additionalCost float64) 
 	weekly = s.CheckWeeklyLimit(group, additionalCost)
 	monthly = s.CheckMonthlyLimit(group, additionalCost)
 	return
+}
+
+func (s *UserSubscription) dailyLimitUSD(group *Group) *float64 {
+	if s != nil && s.DailyLimitUSD != nil && *s.DailyLimitUSD > 0 {
+		return s.DailyLimitUSD
+	}
+	if group != nil && group.HasDailyLimit() {
+		return group.DailyLimitUSD
+	}
+	return nil
+}
+
+func (s *UserSubscription) weeklyLimitUSD(group *Group) *float64 {
+	if s != nil && s.WeeklyLimitUSD != nil && *s.WeeklyLimitUSD > 0 {
+		return s.WeeklyLimitUSD
+	}
+	if group != nil && group.HasWeeklyLimit() {
+		return group.WeeklyLimitUSD
+	}
+	return nil
 }

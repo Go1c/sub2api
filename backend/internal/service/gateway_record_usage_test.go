@@ -141,6 +141,37 @@ func TestGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloadHash(
 	require.Equal(t, payloadHash, billingRepo.lastCmd.RequestPayloadHash)
 }
 
+func TestGatewayServiceRecordUsage_SubscriptionCreditDoesNotRequireSubscriptionGroup(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true, SubscriptionCost: 1}}
+	svc := newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
+
+	group := &Group{ID: 88, Status: StatusActive, Platform: PlatformAnthropic, RateMultiplier: 1.0}
+	subscription := &UserSubscription{ID: 99, ScopeType: SubscriptionScopeAllAvailableGroups}
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_credit_pool_subscription",
+			Usage: ClaudeUsage{
+				InputTokens:  10,
+				OutputTokens: 6,
+			},
+			Model:    "claude-sonnet-4",
+			Duration: time.Second,
+		},
+		APIKey:       &APIKey{ID: 501, GroupID: &group.ID, Group: group, Quota: 100},
+		User:         &User{ID: 601},
+		Account:      &Account{ID: 701},
+		Subscription: subscription,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.NotNil(t, billingRepo.lastCmd.SubscriptionID)
+	require.Equal(t, subscription.ID, *billingRepo.lastCmd.SubscriptionID)
+	require.Positive(t, billingRepo.lastCmd.SubscriptionCost)
+	require.Zero(t, billingRepo.lastCmd.BalanceCost)
+}
+
 func TestGatewayServiceRecordUsage_BillingFingerprintFallsBackToContextRequestID(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
