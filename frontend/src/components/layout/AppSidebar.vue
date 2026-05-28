@@ -774,7 +774,17 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, featureFlag: flagChannelMonitor },
       ],
     },
-    { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
+    {
+      path: '/admin/subscriptions',
+      label: t('nav.subscriptions'),
+      icon: CreditCardIcon,
+      hideInSimpleMode: true,
+      expandOnly: true,
+      children: [
+        { path: '/admin/subscriptions', label: t('nav.subscriptionList'), icon: CreditCardIcon },
+        { path: '/admin/subscriptions/waste-stats', label: t('nav.subscriptionWasteStats'), icon: ChartIcon },
+      ],
+    },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/invoices', label: t('nav.invoiceManagement'), icon: OrderListIcon, hideInSimpleMode: true },

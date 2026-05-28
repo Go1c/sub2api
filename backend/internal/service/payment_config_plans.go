@@ -42,6 +42,12 @@ func validatePlanCreate(req CreatePlanRequest) error {
 	if err := validatePlanValidityLimit(req.ValidityDays, req.ValidityUnit); err != nil {
 		return err
 	}
+	if req.DailyLimitUSD != nil && *req.DailyLimitUSD == 0 {
+		return infraerrors.BadRequest("PLAN_DAILY_LIMIT_INVALID", "daily limit must be > 0")
+	}
+	if req.WeeklyLimitUSD != nil && *req.WeeklyLimitUSD == 0 {
+		return infraerrors.BadRequest("PLAN_WEEKLY_LIMIT_INVALID", "weekly limit must be > 0")
+	}
 	return validatePlanCreditFields(&req.QuotaUSD, req.DailyLimitUSD, req.WeeklyLimitUSD, &req.ScopeType)
 }
 
@@ -91,10 +97,10 @@ func validatePlanCreditFields(quota *float64, daily *float64, weekly *float64, s
 	if quota != nil && (*quota <= 0 || math.IsNaN(*quota) || math.IsInf(*quota, 0)) {
 		return infraerrors.BadRequest("PLAN_QUOTA_INVALID", "quota must be > 0")
 	}
-	if daily != nil && (*daily <= 0 || math.IsNaN(*daily) || math.IsInf(*daily, 0)) {
+	if daily != nil && (*daily < 0 || math.IsNaN(*daily) || math.IsInf(*daily, 0)) {
 		return infraerrors.BadRequest("PLAN_DAILY_LIMIT_INVALID", "daily limit must be > 0")
 	}
-	if weekly != nil && (*weekly <= 0 || math.IsNaN(*weekly) || math.IsInf(*weekly, 0)) {
+	if weekly != nil && (*weekly < 0 || math.IsNaN(*weekly) || math.IsInf(*weekly, 0)) {
 		return infraerrors.BadRequest("PLAN_WEEKLY_LIMIT_INVALID", "weekly limit must be > 0")
 	}
 	if scopeType != nil {
@@ -236,10 +242,18 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		u.SetQuotaUsd(*req.QuotaUSD)
 	}
 	if req.DailyLimitUSD != nil {
-		u.SetDailyLimitUsd(*req.DailyLimitUSD)
+		if *req.DailyLimitUSD > 0 {
+			u.SetDailyLimitUsd(*req.DailyLimitUSD)
+		} else {
+			u.ClearDailyLimitUsd()
+		}
 	}
 	if req.WeeklyLimitUSD != nil {
-		u.SetWeeklyLimitUsd(*req.WeeklyLimitUSD)
+		if *req.WeeklyLimitUSD > 0 {
+			u.SetWeeklyLimitUsd(*req.WeeklyLimitUSD)
+		} else {
+			u.ClearWeeklyLimitUsd()
+		}
 	}
 	if req.ScopeType != nil {
 		u.SetScopeType(normalizePlanScopeType(*req.ScopeType))

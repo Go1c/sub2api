@@ -45,6 +45,9 @@ type UserSubscription struct {
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64 // 兼容字段；DB 已移除
 
+	// 管理后台展示字段：近 30 天窗口重置和过期销毁造成的浪费金额。
+	Recent30dWastedUSD float64
+
 	AssignedBy *int64
 	AssignedAt time.Time
 	Notes      string

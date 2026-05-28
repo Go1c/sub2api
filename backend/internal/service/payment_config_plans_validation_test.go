@@ -231,3 +231,11 @@ func TestValidatePlanPatch_RejectsInvalidQuota(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "quota")
 }
+
+func TestValidatePlanPatch_AllowsZeroDailyWeeklyLimitForClearSentinel(t *testing.T) {
+	err := validatePlanPatch(UpdatePlanRequest{
+		DailyLimitUSD:  ptrFloat(0),
+		WeeklyLimitUSD: ptrFloat(0),
+	})
+	require.NoError(t, err)
+}

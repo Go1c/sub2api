@@ -127,13 +127,25 @@ DO NOTHING
 }
 
 // ListByUserID 按用户列出 ledger，按 created_at DESC 分页。
-func (r *subscriptionCreditLedgerRepository) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
-	return r.list(ctx, "user_id = $1", []any{userID}, params)
+func (r *subscriptionCreditLedgerRepository) ListByUserID(ctx context.Context, userID int64, ledgerType string, params pagination.PaginationParams) ([]service.SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
+	whereClause := "user_id = $1"
+	args := []any{userID}
+	if strings.TrimSpace(ledgerType) != "" {
+		whereClause += " AND type = $2"
+		args = append(args, strings.TrimSpace(ledgerType))
+	}
+	return r.list(ctx, whereClause, args, params)
 }
 
 // ListBySubscriptionID 按订阅列出 ledger，按 created_at DESC 分页。
-func (r *subscriptionCreditLedgerRepository) ListBySubscriptionID(ctx context.Context, subscriptionID int64, params pagination.PaginationParams) ([]service.SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
-	return r.list(ctx, "subscription_id = $1", []any{subscriptionID}, params)
+func (r *subscriptionCreditLedgerRepository) ListBySubscriptionID(ctx context.Context, subscriptionID int64, ledgerType string, params pagination.PaginationParams) ([]service.SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
+	whereClause := "subscription_id = $1"
+	args := []any{subscriptionID}
+	if strings.TrimSpace(ledgerType) != "" {
+		whereClause += " AND type = $2"
+		args = append(args, strings.TrimSpace(ledgerType))
+	}
+	return r.list(ctx, whereClause, args, params)
 }
 
 func (r *subscriptionCreditLedgerRepository) list(ctx context.Context, whereClause string, whereArgs []any, params pagination.PaginationParams) ([]service.SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
@@ -178,13 +190,13 @@ LIMIT $%d OFFSET $%d
 	entries := make([]service.SubscriptionCreditLedgerEntry, 0, pageSize)
 	for rows.Next() {
 		var (
-			e               service.SubscriptionCreditLedgerEntry
-			groupID         sql.NullInt64
-			apiKeyID        sql.NullInt64
-			usageLogID      sql.NullInt64
-			orderID         sql.NullInt64
-			eventKey        sql.NullString
-			metadataRaw     []byte
+			e           service.SubscriptionCreditLedgerEntry
+			groupID     sql.NullInt64
+			apiKeyID    sql.NullInt64
+			usageLogID  sql.NullInt64
+			orderID     sql.NullInt64
+			eventKey    sql.NullString
+			metadataRaw []byte
 		)
 		if err := rows.Scan(
 			&e.ID, &e.UserID, &e.SubscriptionID,

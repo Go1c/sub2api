@@ -11,9 +11,11 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type userSubscriptionRepository struct {
@@ -231,25 +233,89 @@ func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID 
 		return nil, nil, err
 	}
 
-	return userSubscriptionEntitiesToService(subs), paginationResultFromTotal(int64(total), params), nil
+	out := userSubscriptionEntitiesToService(subs)
+	if err := r.attachRecent30dWaste(ctx, out); err != nil {
+		return nil, nil, err
+	}
+	return out, paginationResultFromTotal(int64(total), params), nil
 }
 
-func (r *userSubscriptionRepository) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
+func (r *userSubscriptionRepository) attachRecent30dWaste(ctx context.Context, subs []service.UserSubscription) error {
+	if r.db == nil || len(subs) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(subs))
+	for i := range subs {
+		ids = append(ids, subs[i].ID)
+	}
+	rows, err := r.db.QueryContext(ctx, `
+SELECT
+	subscription_id,
+	COALESCE(SUM(
+		CASE
+			WHEN type = 'expire' THEN ABS(delta_usd)
+			WHEN type = 'window_reset' AND jsonb_typeof(metadata->'wasted_usd') = 'number'
+				THEN (metadata->>'wasted_usd')::double precision
+			ELSE 0
+		END
+	), 0)::double precision AS wasted_usd
+FROM subscription_credit_ledger
+WHERE subscription_id = ANY($1)
+	AND created_at >= $2
+	AND type IN ('expire', 'window_reset')
+GROUP BY subscription_id
+`, pq.Array(ids), time.Now().AddDate(0, 0, -30))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	wasteBySubID := make(map[int64]float64, len(subs))
+	for rows.Next() {
+		var subscriptionID int64
+		var wastedUSD float64
+		if err := rows.Scan(&subscriptionID, &wastedUSD); err != nil {
+			return err
+		}
+		wasteBySubID[subscriptionID] = wastedUSD
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range subs {
+		subs[i].Recent30dWastedUSD = wasteBySubID[subs[i].ID]
+	}
+	return nil
+}
+
+func (r *userSubscriptionRepository) List(ctx context.Context, params pagination.PaginationParams, filters service.UserSubscriptionListFilters) ([]service.UserSubscription, *pagination.PaginationResult, error) {
 	client := clientFromContext(ctx, r.client)
 	q := client.UserSubscription.Query()
-	if userID != nil {
-		q = q.Where(usersubscription.UserIDEQ(*userID))
+	if filters.UserID != nil {
+		q = q.Where(usersubscription.UserIDEQ(*filters.UserID))
 	}
-	if groupID != nil {
-		q = q.Where(usersubscription.GroupIDEQ(*groupID))
+	if filters.GroupID != nil {
+		q = q.Where(usersubscription.GroupIDEQ(*filters.GroupID))
 	}
-	if platform != "" {
-		q = q.Where(usersubscription.HasGroupWith(group.PlatformEQ(platform)))
+	if filters.PlanID != nil {
+		q = q.Where(usersubscription.PlanIDEQ(*filters.PlanID))
+	}
+	if filters.Platform != "" {
+		q = q.Where(usersubscription.HasGroupWith(group.PlatformEQ(filters.Platform)))
+	}
+	if filters.Email != "" {
+		q = q.Where(usersubscription.HasUserWith(user.EmailContainsFold(filters.Email)))
+	}
+	if filters.CreatedStart != nil {
+		q = q.Where(usersubscription.CreatedAtGTE(*filters.CreatedStart))
+	}
+	if filters.CreatedEnd != nil {
+		q = q.Where(usersubscription.CreatedAtLTE(*filters.CreatedEnd))
 	}
 
 	// Status filtering with real-time expiration check
 	now := time.Now()
-	switch status {
+	switch filters.Status {
 	case service.SubscriptionStatusActive:
 		// Active: status is active AND not yet expired
 		q = q.Where(
@@ -271,7 +337,7 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 		// No filter
 	default:
 		// Other status (e.g., revoked)
-		q = q.Where(usersubscription.StatusEQ(status))
+		q = q.Where(usersubscription.StatusEQ(filters.Status))
 	}
 
 	total, err := q.Clone().Count(ctx)
@@ -284,7 +350,7 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 
 	// Determine sort field
 	var field string
-	switch sortBy {
+	switch filters.SortBy {
 	case "expires_at":
 		field = usersubscription.FieldExpiresAt
 	case "status":
@@ -294,7 +360,7 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 	}
 
 	// Determine sort order (default: desc)
-	if sortOrder == "asc" && sortBy != "" {
+	if filters.SortOrder == "asc" && filters.SortBy != "" {
 		q = q.Order(dbent.Asc(field))
 	} else {
 		q = q.Order(dbent.Desc(field))

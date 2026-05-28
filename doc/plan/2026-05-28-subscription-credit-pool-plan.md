@@ -25,8 +25,8 @@
 | Task 6 — 购买订阅履约 | ✅ 完成 | 本次提交，套餐额度快照 + 续费拦截 + 额度池 INSERT 履约 + purchase ledger |
 | Task 7 — 过期销毁与审计 | ✅ 完成 | 本次提交，事务化过期 + expire ledger + expired 通知 outbox |
 | Task 8 — 通知 worker handler | ✅ 完成 | commit `ca6d4d84`，复用 `scheduler_outbox`，失败仅记日志不重试 |
-| Task 9 — API DTO + 前端展示 | 🟡 待实施 | 依赖：Task 3-7 |
-| Task 10 — 管理后台 + 浪费率统计页 | 🟡 待实施 | 依赖：Task 3 ✅，可并行启动 |
+| Task 9 — API DTO + 前端展示 | ✅ 完成 | 本次提交，DTO 暴露额度池字段，用户订阅页/支付页展示 credit pool |
+| Task 10 — 管理后台 + 浪费率统计页 | ✅ 完成 | 本次提交，admin 列表/ledger/PATCH + waste stats 后端聚合与前端页面 |
 
 **已交付：**
 - plan 文档 + window_reset 扩展 + schema + 纯函数 + repo&worker + Task 4 原子混合扣费
@@ -40,6 +40,8 @@
 - Task 5：鉴权改为始终查询用户级可消费订阅；新增 `SubscriptionCoversGroup`；订阅不可用时回落余额；记录 usage 时不再依赖分组 `subscription_type`
 - Task 6：套餐/checkout DTO 暴露额度字段；下单写入 `payment_orders.subscription_*` 快照；`GetRenewalEligibility` 拦截未耗尽订阅；支付履约创建额度池订阅并写 `purchase` ledger
 - Task 7：过期任务改走 `ExpireCreditSubscriptions`；事务内锁定到期订阅，更新 `expired` 状态，销毁剩余额度并写 `expire` ledger / `subscription_notify` outbox / `expired_credit_logged_at`
+- Task 9：用户订阅 DTO 支持 `group_id=null`、`plan_id`、`quota_*`、`daily/weekly_*`、`scope_*`、`is_usable`、`exhausted_at`；前端订阅页/支付页/套餐卡改为额度池展示
+- Task 10：管理后台订阅列表新增状态/计划/邮箱/创建时间筛选、ledger 查看、PATCH 调整额度/限额/状态/过期时间；新增浪费率统计聚合与 `/admin/subscriptions/waste-stats` 页面
 
 **已验证：**
 - `go build ./...` / `go vet ./...` PASS
@@ -70,10 +72,20 @@
 - Task 7：`go test -tags=unit ./internal/server ./internal/server/middleware -count=1` PASS
 - Task 7：`go test ./internal/server ./internal/server/middleware -count=1` PASS
 - Task 7：`go test ./cmd/server -count=1` PASS
+- Task 9/10：`go test ./internal/service -run 'TestAdminSubscriptionUpdate|TestProvideSubscriptionServiceWiresLedgerRepository|TestSubscriptionWasteStats' -count=1` PASS
+- Task 9/10：`go test ./internal/handler/admin -run 'TestParseOptionalAdminEndTime|TestAdminSubscription|TestAdminWasteStats' -count=1` PASS
+- Task 9/10：`go test -tags unit ./internal/service -run 'TestValidatePlanPatch|TestValidatePlanCreate' -count=1` PASS
+- Task 9/10：`go test ./cmd/server -count=1` PASS
+- Task 9/10：`go test ./internal/service ./internal/handler ./internal/handler/admin ./internal/server -count=1` PASS
+- Task 9/10：`go test ./... -count=1` PASS
+- Task 9/10：`go test -tags=unit ./internal/server -run TestAPIContracts -count=1` PASS
+- Task 9/10：`corepack pnpm typecheck` PASS
+- Task 9/10：`corepack pnpm build` PASS（仅 Vite 既有 chunk / dynamic import warnings）
+- Task 9/10：`corepack pnpm vitest run src/components/payment/__tests__/SubscriptionPlanCard.spec.ts src/stores/__tests__/subscriptions.spec.ts src/views/user/__tests__/PaymentView.spec.ts src/api/__tests__/payment.spec.ts` PASS
+- Task 9/10：`git diff --check` PASS（仅 CRLF 提示）
 
-**剩余 Task 9-10 可分两波启动：**
-- 第二波（可并行）：Task 10 后端（浪费率聚合）
-- 第三波：Task 9（前端）/ Task 10 前端
+**剩余：**
+- 代码层 Task 1-10 已完成；剩余仅最终全量验证、提交与 push。
 
 ---
 
@@ -1441,7 +1453,7 @@ git add backend/internal/service/subscription_notify_worker.go
 git commit -m "feat: subscription credit notification worker"
 ```
 
-### Task 9: API DTO 与前端展示
+### Task 9: API DTO 与前端展示 ✅ 已完成（本次提交）
 
 **Files:**
 - Modify: `backend/internal/handler/dto/types.go`
@@ -1530,7 +1542,7 @@ git add backend/internal/handler/dto/types.go backend/internal/handler/subscript
 git commit -m "feat: show subscription credit pool"
 ```
 
-### Task 10: 管理后台
+### Task 10: 管理后台 ✅ 已完成（本次提交）
 
 **Files:**
 - Modify: `backend/internal/handler/admin/subscription_handler.go`

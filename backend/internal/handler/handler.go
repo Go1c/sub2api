@@ -27,6 +27,7 @@ type AdminHandlers struct {
 	Ops                    *admin.OpsHandler
 	System                 *admin.SystemHandler
 	Subscription           *admin.SubscriptionHandler
+	SubscriptionWasteStats *admin.SubscriptionWasteStatsHandler
 	Usage                  *admin.UsageHandler
 	UserAttribute          *admin.UserAttributeHandler
 	ErrorPassthrough       *admin.ErrorPassthroughHandler

@@ -37,8 +37,23 @@
         </div>
       </div>
 
-      <!-- Group quota info (compact) -->
-      <div class="mb-3 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-dark-700/50">
+      <!-- Credit pool info (compact) -->
+      <div class="mb-3 space-y-2 rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-dark-700/50">
+        <div class="flex items-center justify-between">
+          <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.quota') }}</span>
+          <span :class="['text-base font-extrabold', textClass]">{{ creditDisplay }}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-x-3 gap-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-gray-400 dark:text-dark-500">Validity</span>
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ validitySuffix }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-400 dark:text-dark-500">Scope</span>
+            <span :class="['rounded-full px-1.5 py-0.5 text-[10px] font-semibold', badgeLightClass]">{{ scopeLabel }}</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-x-3 gap-y-1">
         <div class="flex items-center justify-between">
           <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.rate') }}</span>
           <span class="font-medium text-gray-700 dark:text-gray-300">{{ rateDisplay }}</span>
@@ -51,13 +66,10 @@
           <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.weeklyLimit') }}</span>
           <span class="font-medium text-gray-700 dark:text-gray-300">${{ plan.weekly_limit_usd }}</span>
         </div>
-        <div v-if="plan.monthly_limit_usd != null" class="flex items-center justify-between">
-          <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.monthlyLimit') }}</span>
-          <span class="font-medium text-gray-700 dark:text-gray-300">${{ plan.monthly_limit_usd }}</span>
-        </div>
-        <div v-if="plan.daily_limit_usd == null && plan.weekly_limit_usd == null && plan.monthly_limit_usd == null" class="flex items-center justify-between">
-          <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.quota') }}</span>
+        <div v-if="plan.daily_limit_usd == null && plan.weekly_limit_usd == null" class="flex items-center justify-between">
+          <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.dailyLimit') }}</span>
           <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.planCard.unlimited') }}</span>
+        </div>
         </div>
         <div v-if="modelScopeLabels.length > 0" class="col-span-2 flex items-center justify-between">
           <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.models') }}</span>
@@ -116,7 +128,11 @@ const { t } = useI18n()
 
 const platform = computed(() => props.plan.group_platform || '')
 const isRenewal = computed(() =>
-  props.activeSubscriptions?.some(s => s.group_id === props.plan.group_id && s.status === 'active') ?? false
+  props.activeSubscriptions?.some(s => {
+    if (s.is_usable !== true) return false
+    if (s.plan_id != null) return s.plan_id === props.plan.id
+    return normalizeScopeType(s.scope_type) === normalizeScopeType(props.plan.scope_type)
+  }) ?? false
 )
 
 // Derived color classes from central config
@@ -128,6 +144,17 @@ const iconClass = computed(() => platformIconClass(platform.value))
 const btnClass = computed(() => platformButtonClass(platform.value))
 const discountClass = computed(() => platformDiscountClass(platform.value))
 const pLabel = computed(() => platformLabel(platform.value))
+const creditDisplay = computed(() => {
+  const quota = props.plan.quota_usd
+  return quota != null && quota > 0 ? `$${formatUsd(quota)}` : t('payment.planCard.unlimited')
+})
+
+const scopeLabel = computed(() => {
+  const type = props.plan.scope_type || 'all_available_groups'
+  if (type === 'group') return props.plan.group_name || 'Group'
+  if (type === 'all_available_groups') return 'All'
+  return type.split('_').join(' ')
+})
 
 const discountText = computed(() => {
   if (!props.plan.original_price || props.plan.original_price <= 0) return ''
@@ -158,4 +185,12 @@ const validitySuffix = computed(() => {
   if (u === 'year') return t('payment.perYear')
   return `${props.plan.validity_days}${t('payment.days')}`
 })
+
+function formatUsd(value: number): string {
+  return Number(value.toFixed(4)).toString()
+}
+
+function normalizeScopeType(scopeType?: string | null): string {
+  return scopeType || 'all_available_groups'
+}
 </script>

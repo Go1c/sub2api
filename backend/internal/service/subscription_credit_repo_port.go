@@ -87,8 +87,8 @@ type SubscriptionCreditLedgerRepository interface {
 	// 返回 created：本次是否首次写入。
 	CreateLimitReachedEvent(ctx context.Context, exec SQLExecer, entry *SubscriptionCreditLedgerEntry) (created bool, err error)
 
-	ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error)
-	ListBySubscriptionID(ctx context.Context, subscriptionID int64, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error)
+	ListByUserID(ctx context.Context, userID int64, ledgerType string, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error)
+	ListBySubscriptionID(ctx context.Context, subscriptionID int64, ledgerType string, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error)
 }
 
 // SQLExecer 抽象 *sql.DB / *sql.Tx 共有的接口。

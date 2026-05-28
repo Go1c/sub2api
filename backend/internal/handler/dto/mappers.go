@@ -727,23 +727,36 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 }
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
-	var gid int64
-	if sub.GroupID != nil {
-		gid = *sub.GroupID
+	scopeConfig := sub.ScopeConfig
+	if scopeConfig == nil {
+		scopeConfig = map[string]any{}
 	}
 	return UserSubscription{
 		ID:                 sub.ID,
 		UserID:             sub.UserID,
-		GroupID:            gid,
+		GroupID:            sub.GroupID,
+		PlanID:             sub.PlanID,
 		StartsAt:           sub.StartsAt,
 		ExpiresAt:          sub.ExpiresAt,
 		Status:             sub.Status,
+		IsUsable:           sub.IsUsable(),
 		DailyWindowStart:   sub.DailyWindowStart,
 		WeeklyWindowStart:  sub.WeeklyWindowStart,
 		MonthlyWindowStart: sub.MonthlyWindowStart,
+		ExhaustedAt:        sub.ExhaustedAt,
+		QuotaLimitUSD:      sub.QuotaLimitUSD,
+		QuotaUsedUSD:       sub.QuotaUsedUSD,
+		QuotaRemainingUSD:  sub.QuotaRemainingUSD(),
+		DailyLimitUSD:      sub.DailyLimitUSD,
 		DailyUsageUSD:      sub.DailyUsageUSD,
+		DailyResetAt:       sub.DailyResetTime(),
+		WeeklyLimitUSD:     sub.WeeklyLimitUSD,
 		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
+		WeeklyResetAt:      sub.WeeklyResetTime(),
 		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
+		Recent30dWastedUSD: sub.Recent30dWastedUSD,
+		ScopeType:          sub.ScopeType,
+		ScopeConfig:        scopeConfig,
 		CreatedAt:          sub.CreatedAt,
 		UpdatedAt:          sub.UpdatedAt,
 		User:               UserFromServiceShallow(sub.User),
@@ -771,6 +784,33 @@ func BulkAssignResultFromService(r *service.BulkAssignResult) *BulkAssignResult 
 		Subscriptions: subs,
 		Errors:        r.Errors,
 		Statuses:      statuses,
+	}
+}
+
+func SubscriptionCreditLedgerEntryFromService(e *service.SubscriptionCreditLedgerEntry) *SubscriptionCreditLedgerEntry {
+	if e == nil {
+		return nil
+	}
+	metadata := e.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	return &SubscriptionCreditLedgerEntry{
+		ID:                e.ID,
+		UserID:            e.UserID,
+		SubscriptionID:    e.SubscriptionID,
+		GroupID:           e.GroupID,
+		APIKeyID:          e.APIKeyID,
+		UsageLogID:        e.UsageLogID,
+		OrderID:           e.OrderID,
+		Type:              e.Type,
+		DeltaUSD:          e.DeltaUSD,
+		BalanceDeltaUSD:   e.BalanceDeltaUSD,
+		RemainingAfterUSD: e.RemainingAfterUSD,
+		Reason:            e.Reason,
+		EventKey:          e.EventKey,
+		Metadata:          metadata,
+		CreatedAt:         e.CreatedAt,
 	}
 }
 

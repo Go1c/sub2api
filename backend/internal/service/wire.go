@@ -444,6 +444,21 @@ func ProvideSubscriptionCreditPurchaseService(
 	return NewSubscriptionCreditPurchaseService(db, userSubRepo, ledgerRepo)
 }
 
+// ProvideSubscriptionService wires the ledger dependency used by admin credit
+// adjustments and ledger listing. Keeping this in Wire prevents regeneration
+// from dropping SetSubscriptionCreditLedgerRepository.
+func ProvideSubscriptionService(
+	groupRepo GroupRepository,
+	userSubRepo UserSubscriptionRepository,
+	ledgerRepo SubscriptionCreditLedgerRepository,
+	billingCacheService *BillingCacheService,
+	entClient *dbent.Client,
+	cfg *config.Config,
+) *SubscriptionService {
+	return NewSubscriptionService(groupRepo, userSubRepo, billingCacheService, entClient, cfg).
+		SetSubscriptionCreditLedgerRepository(ledgerRepo)
+}
+
 // ProvidePaymentService wires payment fulfillment with the credit-pool purchase path.
 func ProvidePaymentService(
 	entClient *dbent.Client,
@@ -540,7 +555,7 @@ var ProviderSet = wire.NewSet(
 	NewEmailService,
 	ProvideEmailQueueService,
 	NewTurnstileService,
-	NewSubscriptionService,
+	ProvideSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	ProvideConcurrencyService,
 	ProvideUserMessageQueueService,
@@ -575,6 +590,7 @@ var ProviderSet = wire.NewSet(
 	NewAffiliateService,
 	ProvidePaymentConfigService,
 	ProvideSubscriptionCreditPurchaseService,
+	NewSubscriptionWasteStatsService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,

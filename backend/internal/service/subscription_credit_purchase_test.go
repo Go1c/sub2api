@@ -53,11 +53,11 @@ func (r *subscriptionPurchaseLedgerRepoStub) CreateLimitReachedEvent(ctx context
 	panic("unexpected CreateLimitReachedEvent call")
 }
 
-func (r *subscriptionPurchaseLedgerRepoStub) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
+func (r *subscriptionPurchaseLedgerRepoStub) ListByUserID(ctx context.Context, userID int64, ledgerType string, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
 	panic("unexpected ListByUserID call")
 }
 
-func (r *subscriptionPurchaseLedgerRepoStub) ListBySubscriptionID(ctx context.Context, subscriptionID int64, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
+func (r *subscriptionPurchaseLedgerRepoStub) ListBySubscriptionID(ctx context.Context, subscriptionID int64, ledgerType string, params pagination.PaginationParams) ([]SubscriptionCreditLedgerEntry, *pagination.PaginationResult, error) {
 	panic("unexpected ListBySubscriptionID call")
 }
 

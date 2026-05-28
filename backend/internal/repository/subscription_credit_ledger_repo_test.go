@@ -82,7 +82,7 @@ func (s *SubscriptionCreditLedgerRepoSuite) TestCreate_Purchase() {
 	})
 	s.Require().NoError(err)
 
-	entries, _, err := s.repo.ListBySubscriptionID(s.ctx, subID, pagination.PaginationParams{Page: 1, PageSize: 20})
+	entries, _, err := s.repo.ListBySubscriptionID(s.ctx, subID, "", pagination.PaginationParams{Page: 1, PageSize: 20})
 	s.Require().NoError(err)
 	s.Require().Len(entries, 1)
 	s.Require().Equal(service.SubscriptionCreditLedgerPurchase, entries[0].Type)
@@ -111,7 +111,7 @@ func (s *SubscriptionCreditLedgerRepoSuite) TestCreate_WithMetadata() {
 	})
 	s.Require().NoError(err)
 
-	entries, _, err := s.repo.ListBySubscriptionID(s.ctx, subID, pagination.PaginationParams{Page: 1, PageSize: 20})
+	entries, _, err := s.repo.ListBySubscriptionID(s.ctx, subID, "", pagination.PaginationParams{Page: 1, PageSize: 20})
 	s.Require().NoError(err)
 	s.Require().Len(entries, 1)
 	s.Require().Equal("daily", entries[0].Metadata["window"])
@@ -150,7 +150,7 @@ func (s *SubscriptionCreditLedgerRepoSuite) TestCreateLimitReachedEvent_Idempote
 	s.Require().False(created2, "second write must be deduplicated")
 
 	// ledger 中只有 1 条
-	entries, _, err := s.repo.ListBySubscriptionID(s.ctx, subID, pagination.PaginationParams{Page: 1, PageSize: 20})
+	entries, _, err := s.repo.ListBySubscriptionID(s.ctx, subID, "", pagination.PaginationParams{Page: 1, PageSize: 20})
 	s.Require().NoError(err)
 	s.Require().Len(entries, 1)
 }
@@ -192,7 +192,7 @@ func (s *SubscriptionCreditLedgerRepoSuite) TestList_OrderByCreatedAtDescAndPagi
 	}
 
 	// 第 1 页（PageSize=2）：拿最新 2 条
-	entries, page, err := s.repo.ListByUserID(s.ctx, userID, pagination.PaginationParams{Page: 1, PageSize: 2})
+	entries, page, err := s.repo.ListByUserID(s.ctx, userID, "", pagination.PaginationParams{Page: 1, PageSize: 2})
 	s.Require().NoError(err)
 	s.Require().Len(entries, 2)
 	s.Require().InDelta(-5.0, entries[0].DeltaUSD, 1e-9)
@@ -201,7 +201,7 @@ func (s *SubscriptionCreditLedgerRepoSuite) TestList_OrderByCreatedAtDescAndPagi
 	s.Require().Equal(3, page.Pages)
 
 	// 第 3 页（PageSize=2）：只剩 1 条（最早的）
-	entries3, _, err := s.repo.ListByUserID(s.ctx, userID, pagination.PaginationParams{Page: 3, PageSize: 2})
+	entries3, _, err := s.repo.ListByUserID(s.ctx, userID, "", pagination.PaginationParams{Page: 3, PageSize: 2})
 	s.Require().NoError(err)
 	s.Require().Len(entries3, 1)
 	s.Require().InDelta(-1.0, entries3[0].DeltaUSD, 1e-9)

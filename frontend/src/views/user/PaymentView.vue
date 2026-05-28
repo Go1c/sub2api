@@ -140,10 +140,12 @@
                 <!-- Rate + Limits grid -->
                 <div class="mt-3 grid grid-cols-2 gap-3">
                   <div>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.rate') }}</span>
-                    <div class="flex items-baseline">
-                      <span :class="['text-lg font-bold', planTextClass]">×{{ selectedPlan.rate_multiplier ?? 1 }}</span>
-                    </div>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.quota') }}</span>
+                    <div :class="['text-lg font-bold', planTextClass]">{{ planCreditDisplay(selectedPlan) }}</div>
+                  </div>
+                  <div>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">Scope</span>
+                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ planScopeLabel(selectedPlan) }}</div>
                   </div>
                   <div v-if="selectedPlan.daily_limit_usd != null">
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.dailyLimit') }}</span>
@@ -153,12 +155,8 @@
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.weeklyLimit') }}</span>
                     <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.weekly_limit_usd }}</div>
                   </div>
-                  <div v-if="selectedPlan.monthly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.monthlyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.monthly_limit_usd }}</div>
-                  </div>
-                  <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null && selectedPlan.monthly_limit_usd == null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.quota') }}</span>
+                  <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null">
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.dailyLimit') }}</span>
                     <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ t('payment.planCard.unlimited') }}</div>
                   </div>
                 </div>
@@ -202,23 +200,23 @@
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
+                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="usableActiveSubscriptions" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
-              <div v-if="activeSubscriptions.length > 0">
+              <div v-if="usableActiveSubscriptions.length > 0">
                 <p class="mb-2 text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.activeSubscription') }}</p>
                 <div class="space-y-2">
-                  <div v-for="sub in activeSubscriptions" :key="sub.id"
+                  <div v-for="sub in usableActiveSubscriptions" :key="sub.id"
                     class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-dark-700 dark:bg-dark-800">
                     <div :class="['h-6 w-1 shrink-0 rounded-full', platformAccentBarClass(sub.group?.platform || '')]" />
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5">
-                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.group?.name || t('payment.groupFallback', { id: sub.group_id }) }}</span>
+                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ subscriptionName(sub) }}</span>
                         <span :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group?.platform || '')]">{{ platformLabel(sub.group?.platform || '') }}</span>
                       </div>
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
                         <span>{{ t('payment.planCard.rate') }}: ×{{ sub.group?.rate_multiplier ?? 1 }}</span>
-                        <span v-if="sub.group?.daily_limit_usd == null && sub.group?.weekly_limit_usd == null && sub.group?.monthly_limit_usd == null">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
+                        <span>{{ t('payment.planCard.quota') }}: ${{ formatUsd(sub.quota_remaining_usd ?? 0) }} / ${{ formatUsd(sub.quota_limit_usd ?? 0) }}</span>
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
                         <span v-else>{{ t('userSubscriptions.noExpiration') }}</span>
                       </div>
@@ -251,7 +249,7 @@
             </button>
             <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
             <div class="space-y-4">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlanFromModal" />
+              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="usableActiveSubscriptions" @select="selectPlanFromModal" />
             </div>
           </div>
         </div>
@@ -276,10 +274,11 @@ import { useAuthStore } from '@/stores/auth'
 import { usePaymentStore } from '@/stores/payment'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { useAppStore } from '@/stores'
-import { paymentAPI } from '@/api/payment'
-import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
+import { paymentAPI, paymentSubscriptionErrorMessages } from '@/api/payment'
+import { extractApiErrorCode, extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
@@ -313,10 +312,32 @@ const appStore = useAppStore()
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
+const usableActiveSubscriptions = computed(() => activeSubscriptions.value.filter(subscription => subscription.is_usable === true))
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+}
+
+function formatUsd(value: number): string {
+  return Number(value.toFixed(4)).toString()
+}
+
+function planCreditDisplay(plan: SubscriptionPlan): string {
+  return plan.quota_usd != null && plan.quota_usd > 0
+    ? `$${formatUsd(plan.quota_usd)}`
+    : t('payment.planCard.unlimited')
+}
+
+function planScopeLabel(plan: SubscriptionPlan): string {
+  const scopeType = plan.scope_type || 'all_available_groups'
+  if (scopeType === 'group') return plan.group_name || 'Group'
+  if (scopeType === 'all_available_groups') return 'All'
+  return scopeType.split('_').join(' ')
+}
+
+function subscriptionName(subscription: UserSubscription): string {
+  return subscription.group?.name || (subscription.group_id != null ? t('payment.groupFallback', { id: subscription.group_id }) : 'Credit pool subscription')
 }
 
 const loading = ref(true)
@@ -684,6 +705,11 @@ function closeRenewalModal() {
   renewGroupId.value = null
 }
 
+function mappedSubscriptionPaymentError(err: unknown): string {
+  const code = extractApiErrorCode(err)
+  return code ? paymentSubscriptionErrorMessages[code] || '' : ''
+}
+
 async function handleSubmitRecharge() {
   if (!canSubmit.value || submitting.value) return
   await createOrder(validAmount.value, 'balance')
@@ -848,7 +874,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         normalizeVisibleMethod(options.paymentType || selectedMethod.value) || selectedMethod.value,
       )
       if (!handled) {
-        errorMessage.value = extractI18nErrorMessage(err, t, 'payment.errors', extractApiErrorMessage(err, t('payment.result.failed')))
+        errorMessage.value = mappedSubscriptionPaymentError(err)
+          || extractI18nErrorMessage(err, t, 'payment.errors', extractApiErrorMessage(err, t('payment.result.failed')))
         errorHintMessage.value = ''
       }
       if (handled) {

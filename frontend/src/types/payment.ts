@@ -93,6 +93,11 @@ export interface PaymentOrder {
   refund_requested_by?: number
   refund_request_reason?: string
   plan_id?: number
+  subscription_quota_usd?: number | null
+  subscription_daily_limit_usd?: number | null
+  subscription_weekly_limit_usd?: number | null
+  subscription_scope_type?: string | null
+  subscription_scope_config?: Record<string, unknown> | null
   provider_instance_id?: string
   provider_key?: string
 }
@@ -101,14 +106,17 @@ export interface PaymentOrder {
 
 export interface SubscriptionPlan {
   id: number
-  group_id: number
+  group_id: number | null
   group_platform?: string
   group_name?: string
   rate_multiplier?: number
+  quota_usd?: number
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
   supported_model_scopes?: string[]
+  scope_type?: string
+  scope_config?: Record<string, unknown> | null
   name: string
   description: string
   price: number

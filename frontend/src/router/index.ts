@@ -493,6 +493,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/subscriptions/waste-stats',
+    name: 'AdminSubscriptionWasteStats',
+    component: () => import('@/views/admin/SubscriptionWasteStatsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Subscription Waste Stats',
+      titleKey: 'admin.subscriptions.wasteStats.title',
+      descriptionKey: 'admin.subscriptions.wasteStats.description'
+    }
+  },
+  {
     path: '/admin/accounts',
     name: 'AdminAccounts',
     component: () => import('@/views/admin/AccountsView.vue'),
