@@ -25,9 +25,27 @@ git fetch upstream
 | `dev`     | 日常开发，所有功能 PR 合入点 | 所有 `feat/*`、`fix/*`、`docs/*` PR → `dev` |
 | `publish` | 源码 tag 语义的稳定发布分支，Zeabur 部署源 | 从 `dev` 定期合并，`git tag vX.Y.Z`，`push --tags` |
 
+## 当前状态（2026-05-29）
+
+- GitHub 默认分支：`dev`
+- `main`：已重新对齐 `upstream/main`
+- `main` 保护策略：
+  - `lock_branch=true`
+  - `enforce_admins=true`
+  - `allow_force_pushes=false`
+  - `allow_fork_syncing=true`
+
+这意味着 `main` 现在只承担 fork sync 基线，不再作为默认开发入口。
+
 **推荐的保护规则**（在 GitHub 上设置）：
-- `main`：禁止直推，禁止 force push，合并前要求通过 CI。
+- `main`：禁止直推，禁止 force push，保持锁定，仅用于同步 upstream。
 - `publish`：同上；建议要求 PR 评审。
+
+## 评估记录
+
+- [`main-vs-dev-assessment-2026-05-29.md`](main-vs-dev-assessment-2026-05-29.md)
+  - 记录 `origin/main` 相对 `origin/dev` 的完整评估
+  - 重点覆盖 upstream `0.1.126` ~ `0.1.133` 演进、`main` 独有迁移、冲突风险与后续吸收建议
 
 ## 同步上游
 

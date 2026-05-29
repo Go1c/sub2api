@@ -1,0 +1,1221 @@
+# Main 合并到 Dev 的深度评测
+
+日期：2026-05-29
+
+## 1. 结论先行
+
+先给结论，不绕弯：
+
+1. 不建议直接把 `origin/main` 整体 merge 到当前 `dev` 并尝试一次性收口。
+2. 值得吸收的是 `origin/main` 里的 bug fix、协议兼容、计费正确性、调度稳定性和部分性能优化。
+3. 不值得在第一轮硬并入的是支付新能力、多币种、与现有 `dev` 产品线正面冲突的上游功能。
+4. 最稳妥的路径不是“分支级合并”，而是“按主题回收 upstream 能力”。
+
+如果一定要做一次 merge 试验，也应当只在临时集成分支上做，用来暴露冲突，不应直接在日常 `dev` 上做。
+
+## 2. 本次评估的基线
+
+评估对象：
+
+- `origin/main`
+- `origin/dev`
+
+当前 refs：
+
+- `dev`: `b40007a8` (`fix: harden subscription payment edge cases`)
+- `origin/dev`: `eb270105` (`fix: localize subscription and balance prompts`)
+- `origin/main`: `f18451e5`
+- `upstream/main`: `f18451e5`
+
+直接含义：
+
+- 你的 `origin/main` 已经与 `upstream/main` 对齐。
+- 你本地 `dev` 还落后 `origin/dev` 6 个提交。
+- 真正应该比较的是 `origin/main` 对 `origin/dev`，不是当前本地 `dev` 对一个不存在的本地 `main`。
+
+merge-base：
+
+- `a466e80ed6e9f498108286203a8a9e3a2d75e58a`
+
+## 3. 定量结果
+
+分叉规模：
+
+- `origin/main` 独有提交：`361`
+- `origin/dev` 独有提交：`272`
+
+只看 `main` 自分叉点以来带来的内容，即：
+
+- `git diff origin/dev...origin/main --shortstat`
+
+结果：
+
+- `682 files changed`
+- `72,144 insertions`
+- `8,466 deletions`
+
+只看 `dev` 自分叉点以来带来的内容，即：
+
+- `git diff origin/main...origin/dev --shortstat`
+
+结果：
+
+- `578 files changed`
+- `106,246 insertions`
+- `10,610 deletions`
+
+说明：
+
+- 这不是“`main` 比 `dev` 多几个修复”的量级。
+- 这是两条都持续演进了一段时间的分支。
+
+`main` 侧热点目录（按 `git diff --dirstat=files,5 origin/dev...origin/main`）：
+
+- `backend/internal/service/` 36.0%
+- `backend/internal/handler/` 13.1%
+- `backend/internal/` 9.9%
+- `frontend/src/components/` 8.2%
+- `backend/ent/` 8.0%
+- `frontend/src/views/` 7.3%
+- `backend/internal/repository/` 5.2%
+
+一个好消息：
+
+- `frontend-dashboard/` 在 `origin/dev...origin/main` 中没有差异。
+
+也就是说，LumioAPI 独立前端不是这次合并的主要冲突源。
+
+## 4. `main` 带来的东西，按优先级划分
+
+下面只按你的目标排序：先 bug 修复、性能优化、正确性；新功能如果冲突大，可以放。
+
+### 4.1 第一优先级：应该优先吸收
+
+这些内容即使不是“新功能”，也会直接影响运行正确性、协议兼容或调度稳定性。
+
+#### 网关与协议正确性
+
+代表提交：
+
+- `d7bed40d` 修复 OpenAI WS 兼容性与 usage 统计
+- `32ea9cfe` API Key Responses 回退 SSE body
+- `20f53407` Responses -> Chat 转换补齐 `completion_tokens_details`
+- `89dffdd2` Anthropic -> Responses token 口径修正
+- `0a521f09` Gemini Messages 流式 `tool_use` / `text` 块闭合修复
+- `27600b1d` 过滤 `count_tokens` generation-only 字段
+- `ed1b57c5` 端点能力 gate routing
+- `37044b83` 端点能力 UI/文案纠偏
+
+判断：
+
+- 这类改动基本都偏 correctness，不是花哨功能。
+- 如果不吸收，后续最容易出现的是“某些模型/端点偶发不兼容、计费偏差、usage 统计错位”。
+
+#### 调度与可用性
+
+代表提交：
+
+- `1e406fed` 优化 OpenAI 账号冷却调度
+- `08061717` OpenAI WS rate limit failover
+- `a31b5074` 模型 404 仅冷却账号-模型组合
+- `ead471d6` 按 5h/7d 用量阈值自动暂停账号调度
+- `56e96fdd` 并发获取失败分类修正
+
+判断：
+
+- 这是上游最有工程价值的一批改动。
+- 它们能提升账号池稳定性，降低错误冷却和错误封禁范围。
+
+#### 计费正确性与 usage 口径
+
+代表提交：
+
+- `b9509e82` `cache_read` 长上下文倍率
+- `ed2aac25` `cache_creation` 长上下文倍率
+- `f7ac5e59` 保留 chat responses usage billing
+- `2bd3125d` Preserve usage request context
+- `bb4c1abe` image billing size normalization
+
+判断：
+
+- 这批改动不一定会在页面上立刻显眼，但会直接影响账单和对账可信度。
+
+#### Auth / 数据完整性
+
+代表提交：
+
+- `6aec5050` OAuth 401 时不覆盖 `credentials JSONB`
+- `11fe7de9` 重新授权保留 `Extra`
+- `0af44ce4` 反代部署下客户端 IP 识别修复
+
+判断：
+
+- 这是偏安全/数据保全的修复。
+- 吸收优先级高。
+
+### 4.2 第二优先级：有价值，但要看你是否要产品化
+
+这些内容不是不能要，而是会带来 schema、Ent、管理端 UI 一起变。
+
+#### 用户 x 平台配额体系
+
+代表提交：
+
+- `6b39b344` 用户 x 平台 USD 配额
+- `f7f5e338` 配额 DB 写聚合 flusher
+- `06fca662` 无配额用户 preflight sentinel 回填
+
+判断：
+
+- 这是“功能 + 性能优化”绑在一起的一组改动。
+- 如果你最终不打算采用平台配额，`flusher` 和 `sentinel` 本身也就没有意义。
+- 如果要采用，就必须成组吸收，不能只拿优化补丁。
+
+#### 分组自定义 `/v1/models`
+
+代表提交：
+
+- `f597c158` 支持自定义 `/v1/models` 模型列表
+
+判断：
+
+- 有产品价值，但会碰 `group` schema、handler、前端页面和 DTO。
+
+#### Channel Monitor 的 OpenAI API mode / 模板
+
+代表提交：
+
+- `3eff5f51` OpenAI API mode migration
+- `b685fe69` 内置 OpenAI 检测模板
+
+判断：
+
+- 功能合理，但会跟你自己的监控扩展、页面和 migration 正面冲突。
+- 建议放到第二轮，不要和核心 bugfix 混在一起。
+
+#### Auth/注册体验增强
+
+代表提交：
+
+- `a5b9b68b` 邮箱白名单后缀通配符
+- `b19da9c7` DingTalk OAuth
+- `a613a587` 订阅到期邮件提醒开关
+
+判断：
+
+- 都是可用能力，但不是第一轮必须项。
+
+#### OpenAI embeddings gateway
+
+代表提交：
+
+- `ccace69d` Add OpenAI embeddings gateway
+
+判断：
+
+- 技术上有价值，但属于能力面扩展，不属于“先修 correctness”那一层。
+
+### 4.3 第三优先级：第一轮建议直接放弃
+
+如果目标是先拿 bugfix/perf，而不是全量追平 upstream，这些东西建议先不碰：
+
+- Airwallex / 多币种支付链路
+- 与支付 UI 深度耦合的新页面/测试
+- Sponsor README / workflow / 文档噪音
+- 纯展示性后台增强，例如某些管理页列展示小改动
+
+原因很简单：
+
+- 支付是当前 `dev` 冲突最密集的区域之一。
+- 你的 `dev` 已经在支付、订阅、余额、信用池方向做了大量 fork 级开发。
+- 在第一轮把上游支付栈并进来，收益不高，冲突成本极高。
+
+## 5. `dev` 分支必须保护的东西
+
+`dev` 不是单纯“落后于 upstream 的分支”，它已经是你自己的产品线。
+
+`dev` 独有重点主题包括：
+
+- 订阅信用池 / balance 混合支付
+- site messages
+- support chat
+- invoice request / export
+- lottery
+- Mapay 支付通道
+- upstream balance 相关 UI
+- external login handoff / public pages
+- OpenAI image routing 策略
+- `frontend-dashboard/`
+
+这意味着：
+
+- 任何 merge 决策都要默认保护这些能力。
+- 在冲突区域里，不能用“上游较新”作为默认取舍标准。
+
+## 6. 结构性阻塞点
+
+### 6.1 migration 编号已经正面撞车
+
+这是最大的硬阻塞。
+
+`main` 的 136-144：
+
+- `136_add_dingtalk_provider_type.sql`
+- `136_remove_ops_retry_replay.sql`
+- `136_usage_log_image_size_metadata.sql`
+- `137_redeem_code_expires_at.sql`
+- `138_channel_monitor_openai_api_mode.sql`
+- `139_seed_openai_monitor_templates.sql`
+- `140_extend_user_provider_default_grants_check.sql`
+- `141_subscription_expiry_notify_enabled.sql`
+- `142_user_platform_quotas.sql`
+- `143_group_models_list_config.sql`
+- `144_add_opus48_to_model_mapping.sql`
+
+`dev` 的 136-143：
+
+- `136_ops_user_request_monitoring.sql`
+- `137_add_site_messages.sql`
+- `138_add_invoice_requests.sql`
+- `139_add_group_expose_upstream_model.sql`
+- `140_add_lottery.sql`
+- `141_subscription_credit_pool.sql`
+- `142_scheduler_outbox_subscription_notify_index.sql`
+- `143_add_subscription_plan_purchase_notice.sql`
+
+直接含义：
+
+- 不能直接 merge migration 文件。
+- 也不能简单 cherry-pick 上游 migration 文件名。
+- 后续若要移植 `main` 的 schema 变更，应该新建 fork 自己的 migration 文件，而不是复用 upstream 已占用文件名。
+
+建议：
+
+- 从现在开始为 fork 预留单独 migration 命名空间，例如 `900_*.sql`。
+- 原因是当前迁移执行器按文件名排序，并按文件名 + checksum 记录；继续共用 14x 区间，只会反复撞车。
+
+### 6.2 Ent / schema 漂移不是局部修补能解决的
+
+`main` 侧涉及：
+
+- `auth_identity`
+- `channel_monitor`
+- `group`
+- `redeem_code`
+- `usage_log`
+- `user`
+- 新增 `user_platform_quota`
+
+`dev` 侧涉及：
+
+- `api_key`
+- `channel_monitor`
+- `group`
+- `payment_order`
+- `subscription_plan`
+- `usage_log`
+- `user`
+- `user_subscription`
+- 新增 `lottery_*`
+- 新增 `site_message`
+- 新增 `subscription_credit_ledger`
+
+判断：
+
+- 这已经不是“改几个 Ent 生成文件”。
+- 正确顺序必须是：定目标 schema -> 新 migration -> 重生 Ent -> 补 repository/service/handler。
+
+### 6.3 真实 merge 冲突数量已经足够说明问题
+
+我做了一次无 checkout 的 merge simulation：
+
+- `git merge-tree --write-tree --name-only origin/dev origin/main`
+
+显式冲突文件数：`95`
+
+按区域看：
+
+- `backend/internal/`: 49
+- `frontend/src/`: 32
+- `backend/ent/`: 6
+- `backend/cmd/`: 2
+- 其余包括 `backend/go.mod`、`backend/go.sum`、`frontend/package.json`、`frontend/vitest.config.ts`、`Dockerfile`
+
+最危险的冲突簇：
+
+#### 后端
+
+- `backend/internal/service/gateway_service.go`
+- `backend/internal/service/openai_gateway_service.go`
+- `backend/internal/service/openai_account_scheduler.go`
+- `backend/internal/service/payment_*`
+- `backend/internal/service/setting_service.go`
+- `backend/internal/service/channel_monitor_*`
+- `backend/internal/service/auth_service.go`
+- `backend/internal/handler/payment_handler.go`
+- `backend/internal/handler/admin/setting_handler.go`
+- `backend/internal/server/http.go`
+- `backend/internal/server/routes/admin.go`
+
+#### 前端
+
+- `frontend/src/components/payment/*`
+- `frontend/src/views/user/PaymentView.vue`
+- `frontend/src/views/user/SubscriptionsView.vue`
+- `frontend/src/views/user/UsageView.vue`
+- `frontend/src/views/admin/SettingsView.vue`
+- `frontend/src/views/admin/RiskControlView.vue`
+- `frontend/src/views/admin/GroupsView.vue`
+- `frontend/src/router/index.ts`
+- `frontend/src/types/payment.ts`
+- `frontend/src/i18n/locales/{en,zh}.ts`
+
+一个关键观察：
+
+- 冲突最密的地方，恰好就是你现在最不想一次性重写的地方：支付、订阅、设置、风控、网关、调度。
+
+## 7. 对“直接 merge main 到 dev”的判断
+
+我的判断非常明确：
+
+- 可以做试验性 merge。
+- 不应该把它当作正式集成路径。
+
+原因：
+
+1. 你当前本地 `dev` 还落后 `origin/dev` 6 个提交。
+2. 工作区还有未提交改动。
+3. 95 个显式冲突已经足够说明这不是“人工收几个文件”能搞定的事情。
+4. migration 与 Ent 的问题，即使把文本冲突都解开，也不代表分支真的可运行。
+
+所以，“直接 merge”最多用来回答一个问题：
+
+- 哪些主题重叠最深，应该改成按专题吸收。
+
+## 8. 推荐策略：按主题吸收，而不是按分支吞并
+
+### 8.1 推荐执行顺序
+
+第一批，只做高价值 bugfix / correctness / perf：
+
+- OpenAI / Responses / WS 兼容修复
+- usage / billing 口径修复
+- scheduler / cooldown / failover 修复
+- OAuth / credentials / Extra 保全修复
+
+第二批，再看中等价值但有 schema 成本的能力：
+
+- 风控阈值
+- `/v1/models` 自定义
+- Channel Monitor API mode
+- 注册/Auth 增强
+
+第三批，最后才讨论真正的新能力：
+
+- 用户 x 平台配额
+- embeddings gateway
+- 其它 upstream UI/后台增强
+
+### 8.2 第一轮建议明确放弃的上游内容
+
+如果你的目标真的是“先修稳”，第一轮就明确不收：
+
+- Airwallex / 多币种支付
+- 与上游支付栈绑定的 UI/测试
+- sponsor / workflow / README 类改动
+
+这样能明显缩小冲突面。
+
+### 8.3 如果你坚持先做一次 merge 试验
+
+那也建议这样做：
+
+1. 先把本地 `dev` 同步到 `origin/dev`
+2. 建一个临时分支，例如 `integration/main-into-dev-20260529`
+3. 在这个临时分支上 merge `origin/main`
+4. 冲突处理时遵循下面的默认规则：
+
+- 默认保 `ours`：
+  - 支付、订阅、信用池、site messages、lottery、invoice、Mapay、public pages
+- 默认偏向 `theirs`：
+  - gateway 协议修复、scheduler、OpenAI WS/Responses 兼容、usage 口径、auth 数据保全
+- 必须人工重构，不能简单选边：
+  - migrations
+  - `backend/ent/*`
+  - `backend/internal/handler/dto/settings.go`
+  - `frontend/src/types/payment.ts`
+  - `frontend/src/views/admin/SettingsView.vue`
+  - `frontend/src/views/user/UsageView.vue`
+
+但我仍然不建议把这条路径作为主路线。
+
+## 9. 我认为最合理的下一步
+
+如果你同意我的优先级，下一步应该不是“直接 merge”，而是：
+
+1. 先同步本地 `dev` 到 `origin/dev`
+2. 做一份“第一轮吸收清单”，只纳入 bugfix / perf / correctness
+3. 我按这份清单逐组回收 upstream 变更
+4. 每组改完后分别做 migration、Ent、后端编译/测试、前端验证
+
+这样做的好处是：
+
+- 风险可控
+- 每组都能独立回滚
+- 不会把支付、订阅、风控、配额一次性搅在一起
+
+## 10. 已确认决策
+
+你已经确认或授权我决定如下：
+
+1. 不收上游“用户 x 平台配额”整套能力
+2. 不收上游支付新能力，尤其多币种 / Airwallex
+3. 接受为 fork 预留单独 migration 命名空间，采用 `900_*.sql`
+
+第 3 点的实际含义：
+
+- 以后 fork 自己新增的数据库结构变更，不再和 upstream 共用 `14x` 这类编号区间
+- upstream 继续走它自己的迁移序列
+- fork 侧新增迁移统一走 `900_*.sql`、`901_*.sql` 这类编号
+- 这样能避免再次出现 `136`~`143` 这种“同编号、不同语义”的正面冲突
+
+基于这个决策，第一轮上游吸收范围可以进一步收紧为：
+
+- 网关协议兼容修复
+- usage / billing 正确性修复
+- scheduler / cooldown / failover 稳定性修复
+- OAuth / auth 数据保全修复
+
+明确排除：
+
+- 平台配额相关 schema / UI / 预检链路
+- Airwallex / 多币种支付链路
+- 与上述两类能力强绑定的前端页面、DTO 和测试
+
+## 11. 线上稳定优先的同步原则
+
+你的要求可以压缩成两条：
+
+1. 当前线上不能因为同步而出问题
+2. 以后重复同步 upstream，也不能越来越难、越来越危险
+
+基于这个要求，后续策略固定为：
+
+### 11.1 不做整分支 merge，只做主题级吸收
+
+默认禁止：
+
+- 直接把 `origin/main` 整体 merge 进 `dev`
+- 为了“省事”一次性收口支付、配额、风控、网关、迁移
+
+默认允许：
+
+- 按主题逐组回收 upstream 的 bugfix / correctness / perf 改动
+- 对需要 schema 变化的上游修复，转写为 fork 自己的迁移
+
+原因：
+
+- 整分支 merge 的冲突面太大，真实冲突文件已经有 `95` 个
+- 真正会炸线上的一般不是文本冲突，而是 migration、计费口径和协议行为错位
+
+### 11.2 以后所有 fork 自有 migration 统一走 `900_*.sql`
+
+这条作为硬规则保留。
+
+作用：
+
+- 把 fork 和 upstream 的数据库演进轨道拆开
+- 避免后续再次与 upstream 的 `14x`、`15x` 编号冲突
+- 让未来同步时可以一眼分清“这是 upstream 迁移”还是“这是 fork 迁移”
+
+### 11.3 每次同步都走同一个筛选流程
+
+每次从 upstream 同步时，把变更分成三类：
+
+#### A 类：直接值得吸收
+
+满足任一条件即可优先考虑：
+
+- 修协议兼容
+- 修计费正确性
+- 修调度稳定性
+- 修 OAuth / auth 数据保全
+- 修明显性能问题
+
+这类改动通常优先进入同步候选清单。
+
+#### B 类：有价值，但必须改写后再吸收
+
+典型特征：
+
+- 需要新 migration
+- 需要改 Ent/schema
+- 会碰现有 `dev` 的支付、订阅、风控、自定义产品能力
+
+这类改动不能直接搬，必须按 fork 现状重写。
+
+#### C 类：明确不吸收
+
+当前已经确定排除：
+
+- 平台配额体系
+- Airwallex / 多币种支付
+- 与这两类能力强绑定的页面、DTO、测试和 Webhook 逻辑
+
+### 11.4 每次同步必须做到“小批次、可回滚、可验证”
+
+后续同步不做“大包更新”，而是按下面的粒度推进：
+
+1. 一次只处理一个主题
+2. 一个主题里同时包含：
+   - 代码改动
+   - 必要 migration
+   - 对应测试
+   - 验证记录
+3. 主题验证通过后再进入下一组
+
+这样即使出问题，也能迅速定位到是哪一组引入的。
+
+### 11.5 进入发布前的最低验证标准
+
+任何准备进入 `publish` 或线上部署的同步改动，至少满足：
+
+- 后端编译通过
+- 前端构建通过
+- 受影响测试通过
+- migration 在本地可执行
+- 受影响核心链路做 smoke test
+
+对这类同步，重点 smoke test 的链路固定为：
+
+- 登录 / 注册 / OAuth 回调
+- OpenAI / Responses / WS 网关请求
+- usage / billing 展示与统计
+- 账号调度 / failover / cooldown
+- 现有支付与订阅流程不得回归
+
+### 11.6 对“不会出问题”的工程化解释
+
+没人能诚实承诺“绝对零风险”，但可以把风险控制在可管理范围内。
+
+这里的实现方式不是追求一次性合并成功，而是：
+
+- 不引入大范围未知变更
+- 不破坏现有 migration 轨道
+- 不让上游新功能挤进现有支付/订阅核心链路
+- 每次同步都可拆、可查、可回滚
+
+这正是后续同步仍然能持续做下去、而不是越同步越危险的关键。
+
+## 12. 第一批可安全吸收的 upstream 提交清单
+
+这一批的筛选标准很保守：
+
+- 不引入你已明确拒绝的能力（平台配额、Airwallex、多币种支付）
+- 不改 migration / Ent / 支付主链路
+- 尽量限定在局部 service / repository / apicompat / test
+- 单个提交的文件面越小越优先
+
+这批不是“最重要的全部改动”，而是“最适合先落地、最不容易伤到线上”的那部分。
+
+### 12.1 建议直接进入第一批
+
+#### A. 账户状态与数据保全
+
+1. `6aec5050` `fix(oauth): don't overwrite credentials JSONB in 401 handler`
+
+- 价值：防止 refresh token 被旧快照写回数据库，导致账号被误禁用
+- 范围：`backend/internal/service/ratelimit_service.go`
+- 风险：低
+- 结论：第一批必收
+
+2. `202aab8e` `fix(accounts): unschedule errored accounts`
+
+- 价值：账号进入错误状态后及时从调度中移除
+- 范围：`backend/internal/repository/account_repo.go` + integration test
+- 风险：低
+- 结论：第一批必收
+
+3. `60f6602b` `fix: clear scheduler cache when deleting accounts`
+
+- 价值：删除账号后清掉 scheduler 缓存，避免残留脏状态
+- 范围：`backend/internal/repository/account_repo.go` + integration test
+- 风险：低
+- 结论：第一批必收
+
+#### B. 协议兼容与 usage 正确性
+
+4. `0a521f09` `fix(gemini): close tool_use block before text in messages streaming`
+
+- 价值：修 Gemini -> Anthropic SSE block 生命周期错误，避免客户端误解析
+- 范围：`gemini_messages_compat_service` + regression test
+- 风险：低
+- 结论：第一批必收
+
+5. `20f53407` `fix(apicompat): Responses→Chat completion_tokens_details 透传`
+
+- 价值：补齐 reasoning/audio/prediction token 细项，方便 usage 对账
+- 范围：`backend/internal/pkg/apicompat/*`
+- 风险：低
+- 结论：第一批必收
+
+6. `89dffdd2` `fix(apicompat): emit OpenAI-semantic input_tokens when converting Anthropic to Responses`
+
+- 价值：修 cached tokens 被漏算的问题，避免 prompt/input token 偏低
+- 范围：`backend/internal/pkg/apicompat/*`
+- 风险：低
+- 结论：第一批必收
+
+7. `32ea9cfe` `fix: fallback to SSE body for API key responses`
+
+- 价值：修 API Key Responses 流式 body 回退
+- 范围：`backend/internal/service/openai_gateway_service.go` + test
+- 风险：低到中
+- 结论：第一批可收
+
+8. `8211aa70` `fix: retry on "thinking block must contain thinking" upstream error`
+
+- 价值：对 Claude thinking block 的上游签名错误自动走现有重试逻辑
+- 范围：`gateway_service.go` + test
+- 风险：低
+- 结论：第一批可收
+
+#### C. 计费与统计正确性
+
+9. `b9509e82` `fix(billing): apply long-context multiplier to cache_read price`
+
+- 价值：修长上下文场景下 `cache_read` 少计费
+- 范围：`billing_service.go` + tests
+- 风险：低
+- 结论：第一批必收
+
+10. `ed2aac25` `fix(billing): apply long-context multiplier to cache_creation price`
+
+- 价值：修长上下文场景下 `cache_creation` 少计费
+- 范围：`billing_service.go` + tests
+- 风险：低
+- 结论：第一批必收
+
+11. `1e6d0b60` `fix(antigravity): capture message_start input_tokens in streaming passthrough`
+
+- 价值：修流式消息的 input-side usage 丢失
+- 范围：`antigravity_gateway_service.go` + tests
+- 风险：低
+- 结论：第一批可收
+
+12. `8a999f43` `fix(ws): exclude terminal events from first-token detection`
+
+- 价值：修 observability 指标，避免把总耗时误记成首字延迟
+- 范围：`openai_ws_forwarder.go` + tests
+- 风险：很低
+- 结论：第一批可收
+
+#### D. 条件吸收
+
+13. `a9c7a3a0` `fix(bedrock): strip context_management when beta is removed`
+
+- 价值：只影响 Bedrock 兼容
+- 前提：你线上确实在跑 Bedrock Claude Code 相关链路
+- 风险：低
+- 结论：若线上使用 Bedrock，则第一批可收；否则先跳过
+
+14. `0af44ce4` `fix: 修复反代部署下拒绝日志客户端 IP 不准确`
+
+- 价值：修拒绝诊断日志中的客户端 IP 记录
+- 前提：更偏可观测性，不影响主业务逻辑
+- 风险：很低
+- 结论：可顺手带上，但优先级低于前 12 个
+
+### 12.2 虽然有价值，但不进入第一批
+
+这些改动不是不要，而是现在先不收，原因是 blast radius 明显更大。
+
+1. `11fe7de9` `fix(account): 重新授权不再清空 Extra 配置`
+
+- 价值高
+- 但它新增管理端接口、改后端路由、改前端重新授权流程
+- 结论：放第二批
+
+2. `56e96fdd` `fix: classify concurrency acquire failures`
+
+- 范围不算大
+- 但会碰 gateway handler 的错误响应语义
+- 结论：放第二批
+
+3. `f7ac5e59` `fix(openai): preserve chat responses usage billing`
+
+- 价值高
+- 但同时碰 `openai_gateway_chat_completions` / `messages` / `apicompat`
+- 结论：放第二批
+
+4. `1e406fed` `fix: optimize OpenAI account cooldown scheduling`
+
+- 价值很高
+- 但改了 29 个文件，是明显的系统级调度改造
+- 结论：不进入第一批
+
+5. `08061717` `fix: enable account failover for OpenAI WS rate limits`
+
+- 价值高
+- 但改动 7 个文件、600+ 行，属于中高风险网关行为变更
+- 结论：不进入第一批
+
+6. `a31b5074` `fix(scheduler): 模型404仅冷却账号模型组合`
+
+- 价值高
+- 但横跨 gateway/service/repository/test 多层
+- 结论：不进入第一批
+
+7. `33ac8eb2` `fix openai http2 response header timeout`
+
+- 价值高
+- 但涉及 `http_upstream`、配置、部署样例和底层传输行为
+- 结论：不进入第一批
+
+8. `fc66cd70` `fix: recognize codex tool outputs in ws continuation`
+
+- 价值明确
+- 但逻辑面较深，先不和第一批混做
+- 结论：不进入第一批
+
+9. `6381f9e3` `fix(openai): 识别上游静默拒绝并触发 failover`
+
+- 价值明确
+- 但会改变 failover 判定语义
+- 结论：不进入第一批
+
+### 12.3 建议的落地顺序
+
+按线上风险从低到高，第一批建议分四小组推进：
+
+1. 账户保全组
+   - `6aec5050`
+   - `202aab8e`
+   - `60f6602b`
+
+2. 协议兼容组
+   - `0a521f09`
+   - `20f53407`
+   - `89dffdd2`
+   - `32ea9cfe`
+   - `8211aa70`
+
+3. 计费正确性组
+   - `b9509e82`
+   - `ed2aac25`
+   - `1e6d0b60`
+
+4. 可观测性 / 条件修复组
+   - `8a999f43`
+   - `a9c7a3a0`（仅 Bedrock 在用时）
+   - `0af44ce4`
+
+### 12.4 第一批为什么这样切
+
+核心原则只有一句：
+
+- 先修“明显会让线上账不对、usage 不对、账号状态错、协议输出错”的问题
+- 暂时不碰“虽然收益高，但会重写调度/路由/前端流程”的问题
+
+这能最大化降低第一轮同步把线上打坏的概率。
+
+## 13. 第一批落地执行方案
+
+这一节把上面的判断收敛成可以执行的工程步骤。
+
+### 13.1 当前本地工作区状态
+
+对当前本地工作区的观察：
+
+- 本地 `dev` 仍然落后 `origin/dev` 6 个提交
+- 工作区已经有一批未提交后端改动
+- 这些改动看起来已经吸收了第一组和第二组的大部分内容
+- 计费正确性组、Antigravity、WS 指标、Bedrock/IP 日志修复尚未看到对应文件改动
+- `doc/branching.md` 也有未提交改动，提交前需要确认是否属于同一批同步说明
+
+当前已在工作区出现的第一批候选：
+
+- `6aec5050` OAuth 401 不回写旧 credentials
+- `202aab8e` errored accounts 不再可调度
+- `60f6602b` 删除账号时清理 scheduler cache
+- `0a521f09` Gemini Messages 流式 block 闭合
+- `20f53407` Responses -> Chat token details
+- `89dffdd2` Anthropic -> Responses input token 语义修正
+- `32ea9cfe` API Key Responses SSE body fallback
+- `8211aa70` thinking block missing content 错误进入重试
+
+当前仍待处理的第一批候选：
+
+- `b9509e82` `cache_read` 长上下文倍率
+- `ed2aac25` `cache_creation` 长上下文倍率
+- `1e6d0b60` Antigravity streaming input usage
+- `8a999f43` WS terminal events 不计入 first-token
+- `a9c7a3a0` Bedrock context management 兼容（仅 Bedrock 在用时）
+- `0af44ce4` 反代下拒绝日志客户端 IP（可选）
+
+所以后续不是“从零执行第一批”，而是：
+
+1. 先保护当前未提交 diff
+2. 验证已经吸收的两组
+3. 再决定是否继续吸收第三组和第四组
+
+### 13.2 执行前置条件
+
+继续动代码前，先满足这些条件：
+
+1. 当前未提交 diff 必须先保护起来
+2. 不要在 dirty `dev` 上继续叠 cherry-pick
+3. 不在第一批里引入 migration / Ent 改动
+4. 每个小组独立提交，不能把所有上游修复揉成一个大提交
+5. 与 `origin/dev` 的 6 个提交要在当前吸收工作被保护后再处理
+
+如果当前改动确认就是第一批同步工作，推荐补救顺序：
+
+```bash
+git fetch origin upstream
+git checkout dev
+git checkout -b sync/upstream-core-fixes-20260529
+git status --short
+```
+
+然后先跑已吸收组的测试。测试通过后，按组提交当前改动，再处理 `origin/dev` 的 6 个提交。
+
+如果当前未提交改动里混有其它工作，不要直接提交。先把非本次同步的改动拆出去，或者 stash 到单独记录后再继续。
+
+### 13.3 不建议无脑 `cherry-pick` 的原因
+
+第一批候选提交都比较小，但仍然不建议机械执行：
+
+```bash
+git cherry-pick 6aec5050 202aab8e 60f6602b ...
+```
+
+原因：
+
+- `dev` 已经改过订阅、余额、网关、调度等关键路径
+- 有些上游测试需要按 fork 现状调整 fixture
+- 有些修复所在文件已经有本地未提交改动
+- cherry-pick 成功不等于行为已经适配 fork
+
+更稳妥的方式是按小组执行：
+
+1. 先 `git show --stat <commit>` 看范围
+2. 再 `git show <commit> -- <files>` 看具体 diff
+3. 可以 cherry-pick，但每个冲突都按 fork 现状人工审查
+4. 每组完成后立即跑对应测试
+5. 只在测试通过后提交该组
+
+### 13.4 第一组：账户保全
+
+目标：
+
+- 修 OAuth 401 覆盖 credentials 的问题
+- 修账号错误状态和删除后的 scheduler 脏缓存问题
+
+提交：
+
+- `6aec5050`
+- `202aab8e`
+- `60f6602b`
+
+重点文件：
+
+- `backend/internal/service/ratelimit_service.go`
+- `backend/internal/repository/account_repo.go`
+- `backend/internal/repository/account_repo_integration_test.go`
+
+验证建议：
+
+```bash
+cd backend
+go test ./internal/service -run 'Test.*RateLimit|Test.*OAuth|Test.*Account' -count=1
+go test ./internal/repository -run 'TestAccount' -count=1
+go test ./cmd/server -count=1
+```
+
+验收标准：
+
+- OAuth 401 不会把旧 credentials 快照写回数据库
+- errored account 不再留在调度候选里
+- 删除 account 后 scheduler cache 被清理
+
+当前状态：
+
+- 已出现在本地未提交 diff 中
+- 尚需跑测试确认
+
+### 13.5 第二组：协议兼容
+
+目标：
+
+- 修 Gemini Messages 流式 block 闭合
+- 修 Responses / Chat / Anthropic usage 互转
+- 修 API Key Responses SSE body 回退
+- 修 thinking block 上游错误重试
+
+提交：
+
+- `0a521f09`
+- `20f53407`
+- `89dffdd2`
+- `32ea9cfe`
+- `8211aa70`
+
+重点文件：
+
+- `backend/internal/service/gemini_messages_compat_service.go`
+- `backend/internal/pkg/apicompat/*`
+- `backend/internal/service/openai_gateway_service.go`
+- `backend/internal/service/gateway_service.go`
+
+验证建议：
+
+```bash
+cd backend
+go test ./internal/pkg/apicompat -count=1
+go test ./internal/service -run 'TestGeminiMessages|TestOpenAI.*Responses|TestGateway.*Thinking|Test.*SSE' -count=1
+go test ./internal/handler -run 'Test.*Gateway|Test.*Responses' -count=1
+```
+
+验收标准：
+
+- Gemini 流式输出中 `tool_use` / `text` block 顺序合法
+- Responses 转 Chat 时保留 token details
+- Anthropic 转 Responses 时 input token 语义符合 OpenAI usage
+- API Key Responses 流式场景有 SSE body fallback
+- thinking block 特定上游错误进入重试逻辑
+
+当前状态：
+
+- 已出现在本地未提交 diff 中
+- 尚需跑测试确认
+
+### 13.6 第三组：计费正确性
+
+目标：
+
+- 修长上下文 `cache_read` / `cache_creation` 倍率
+- 修 Antigravity streaming input usage 丢失
+
+提交：
+
+- `b9509e82`
+- `ed2aac25`
+- `1e6d0b60`
+
+重点文件：
+
+- `backend/internal/service/billing_service.go`
+- `backend/internal/service/antigravity_gateway_service.go`
+
+验证建议：
+
+```bash
+cd backend
+go test ./internal/service -run 'Test.*Billing|Test.*Antigravity|Test.*Usage' -count=1
+go test ./internal/repository -run 'TestUsage' -count=1
+```
+
+验收标准：
+
+- 长上下文 cache read / cache creation 价格倍率正确
+- Antigravity streaming 的 input-side usage 不再丢失
+- 现有订阅信用池 / balance 计费测试不回归
+
+当前状态：
+
+- 尚未出现在本地未提交 diff 中
+- 建议在前两组验证并提交后，再单独处理
+
+### 13.7 第四组：可观测性与条件修复
+
+目标：
+
+- 修 WS 首字延迟指标
+- 可选修 Bedrock context management 兼容
+- 可选修反代下拒绝日志 IP
+
+提交：
+
+- `8a999f43`
+- `a9c7a3a0`
+- `0af44ce4`
+
+其中：
+
+- `a9c7a3a0` 只有线上确实使用 Bedrock Claude Code 链路时才收
+- `0af44ce4` 可顺手带上，但不应该为了它扩大冲突面
+
+验证建议：
+
+```bash
+cd backend
+go test ./internal/service -run 'Test.*WS|Test.*FirstToken|Test.*Bedrock|Test.*ClientIP' -count=1
+```
+
+验收标准：
+
+- WS terminal events 不再污染首字指标
+- Bedrock 场景按实际启用情况决定是否纳入
+- 反代下日志 IP 修复不改变请求鉴权和限流行为
+
+当前状态：
+
+- 尚未出现在本地未提交 diff 中
+- `a9c7a3a0` 和 `0af44ce4` 都可以继续保持可选，不必为了“第一批完整”强行纳入
+
+## 14. 合并过程中的取舍规则
+
+遇到冲突时，按下面规则处理。
+
+### 14.1 默认保留 fork 现状
+
+这些区域默认保留 `dev`：
+
+- 订阅信用池
+- balance 混合支付
+- Mapay 支付
+- invoice request / export
+- site messages
+- support chat
+- lottery
+- `frontend-dashboard/`
+- 当前 fork 已经定制过的支付、订阅、余额 UI
+
+原因：
+
+- 这些是 fork 的产品差异，不是 upstream 的落后代码
+- 上游的支付/配额变更与这些能力重叠很深
+
+### 14.2 默认优先吸收 upstream 修复
+
+这些区域在确认不引入新产品能力时，默认偏向吸收 upstream：
+
+- apicompat token / usage 转换
+- gateway 协议兼容
+- OAuth credentials / Extra 数据保全
+- scheduler cache 清理
+- billing multiplier 修复
+- WS 指标修复
+
+### 14.3 必须人工重构
+
+这些文件或主题不能简单选 `ours` / `theirs`：
+
+- migration 文件
+- `backend/ent/*`
+- `backend/internal/handler/dto/settings.go`
+- `backend/internal/service/openai_account_scheduler.go`
+- `backend/internal/service/gateway_service.go`
+- `backend/internal/service/openai_gateway_service.go`
+- `backend/internal/service/payment_*`
+- `frontend/src/types/payment.ts`
+- `frontend/src/views/user/PaymentView.vue`
+- `frontend/src/views/user/SubscriptionsView.vue`
+- `frontend/src/views/admin/SettingsView.vue`
+
+第一批原则上应避开这些高风险合并面；如果某个小修必须碰这些文件，就把它单独拆出来，不和其它提交混做。
+
+## 15. 发布前验证矩阵
+
+第一批全部完成后，不要只跑单点测试。最低验证矩阵如下。
+
+### 15.1 后端
+
+```bash
+cd backend
+go test ./internal/pkg/apicompat -count=1
+go test ./internal/service -count=1
+go test ./internal/repository -run 'TestAccount|TestUsage|TestBilling' -count=1
+go test ./internal/handler -run 'Test.*Gateway|Test.*Responses' -count=1
+go test ./cmd/server -count=1
+make build
+```
+
+如果本轮改到 Ent / migration，虽然第一批不应该发生，还必须额外跑：
+
+```bash
+cd backend
+go generate ./ent
+go test ./internal/repository -run 'TestMigrations' -count=1
+```
+
+### 15.2 上游原 Vue 前端
+
+第一批理论上不碰 `frontend/`。如果实际执行中没有修改它，可以不跑完整前端构建，只记录：
+
+- `frontend/` 无 diff
+
+如果有任何 `frontend/` diff，至少跑：
+
+```bash
+cd frontend
+pnpm install
+pnpm typecheck
+pnpm build
+```
+
+### 15.3 LumioAPI 前端
+
+第一批理论上不碰 `frontend-dashboard/`。如果没有 diff，只记录：
+
+- `frontend-dashboard/` 无 diff
+
+如果有任何影响 API DTO、用户 usage、订阅或支付展示的后端改动，建议仍跑：
+
+```bash
+cd frontend-dashboard
+pnpm typecheck
+pnpm build
+```
+
+并启动 dev server 做一次 smoke：
+
+```bash
+cd frontend-dashboard
+pnpm dev
+```
+
+重点看：
+
+- 登录态页面能打开
+- 订阅页不报错
+- usage / billing 展示不报错
+- 支付入口不回归
+
+## 16. 回滚边界
+
+第一批必须按组提交，原因是回滚边界清晰。
+
+推荐提交结构：
+
+1. `fix: absorb upstream account state safeguards`
+2. `fix: absorb upstream gateway protocol compatibility fixes`
+3. `fix: absorb upstream usage billing correctness fixes`
+4. `fix: absorb upstream observability compatibility fixes`
+
+如果发布后发现问题：
+
+- 账号状态问题，只回滚第 1 组
+- 协议输出问题，只回滚第 2 组
+- 计费问题，只回滚第 3 组
+- 指标或 Bedrock 问题，只回滚第 4 组
+
+不要把四组压成一个提交，否则线上排障时只能整体回滚，风险反而变大。
+
+## 17. 最终建议
+
+最终建议仍然是“不做整分支 merge”，但结合当前本地状态，实际下一步应改成：
+
+1. 不 merge `origin/main` 到 `dev`
+2. 先从当前 dirty `dev` 切出同步分支，保护已经吸收的第一组/第二组改动
+3. 跑第一组和第二组的测试，确认当前未提交 diff 不是半截状态
+4. 测试通过后，按账户保全、协议兼容两个主题提交当前改动
+5. 提交后再把同步分支对齐 `origin/dev` 的 6 个提交
+6. 再决定是否继续吸收第三组计费正确性和第四组可观测性修复
+7. 坚持不收平台配额和 Airwallex / 多币种支付
+8. 任何 fork 自有 schema 变化统一使用 `900_*.sql` 命名空间
+
+这条路径不能保证“绝对不会出问题”，但它把风险限制在小范围、可测试、可回滚的变更组里。
+
+从线上稳定和后续持续同步的角度看，这是当前最合理的主路线。
