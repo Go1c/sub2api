@@ -122,19 +122,41 @@ func (f *fakeFullCache) getEntry() *UserPlatformQuotaCacheEntry {
 	return f.entry
 }
 
+// getSetCalls 线程安全地读取 setCalls。
+func (f *fakeFullCache) getSetCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.setCalls
+}
+
+// getLastSetTTL 线程安全地读取 lastSetTTL。
+func (f *fakeFullCache) getLastSetTTL() time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.lastSetTTL
+}
+
 func (f *fakeFullCache) GetUserPlatformQuotaCache(_ context.Context, _ int64, _ string) (*UserPlatformQuotaCacheEntry, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.getErr != nil {
+		return nil, false, f.getErr
+	}
 	if f.entry == nil {
 		return nil, false, nil
 	}
 	return f.entry, true, nil
 }
 
-func (f *fakeFullCache) SetUserPlatformQuotaCache(_ context.Context, _ int64, _ string, e *UserPlatformQuotaCacheEntry, _ time.Duration) error {
+func (f *fakeFullCache) SetUserPlatformQuotaCache(_ context.Context, _ int64, _ string, e *UserPlatformQuotaCacheEntry, ttl time.Duration) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.setCalls++
+	if f.setErr != nil {
+		return f.setErr
+	}
 	f.entry = e
+	f.lastSetTTL = ttl
 	return nil
 }
 
