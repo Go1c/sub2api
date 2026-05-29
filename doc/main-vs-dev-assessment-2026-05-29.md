@@ -1222,9 +1222,9 @@ pnpm dev
 
 ## 18. 实际合并记录（2026-05-30）
 
-本节记录本次 selective sync 的实际状态。这里的“已合并”指本次同步分支 `upstream-core-fixes-20260529` 已吸收并验证，随该分支合入 `dev` 后进入 `origin/dev`。
+本节记录本次 selective sync 的实际状态。这里的“已合并”指对应同步主题分支已吸收并验证，随分支合入 `dev` 后进入 `origin/dev`。
 
-### 18.1 已合并到本次同步分支
+### 18.1 已合并到 `dev` 的同步批次
 
 | 主题 | upstream 提交 | 本地提交 | 状态 | 风险 |
 |------|---------------|----------|------|------|
@@ -1232,8 +1232,9 @@ pnpm dev
 | Gateway / Responses / Anthropic / Gemini 协议兼容 | `0a521f09`, `20f53407`, `89dffdd2`, `32ea9cfe`, `8211aa70` | `82e93797` | 已合并 | 低到中 |
 | usage / billing 正确性 | `b9509e82`, `ed2aac25`, `1e6d0b60` | `45fc61d0` | 已合并 | 低 |
 | WS 指标、Bedrock 兼容、反代 IP 日志 | `8a999f43`, `a9c7a3a0`, `0af44ce4` | `2820fc76`, `a6781dad` | 已合并 | 低到中 |
+| 并发获取失败分类 | `56e96fdd` | `a89ad299` | 已合并 | 中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
-| 本评估文档与分支说明 | 本地文档 | `715c75b2` | 已合并 | 低 |
+| 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
 说明：
 
@@ -1242,6 +1243,7 @@ pnpm dev
 - 没有引入 Airwallex / 多币种支付。
 - 没有新增或改写 migration / Ent schema。
 - Bedrock 冲突只吸收 `context_management` 按最终 beta tokens 清理这一项，没有顺手带入 upstream 侧其它 Bedrock CC 兼容扩展。
+- `56e96fdd` 只吸收 handler 层并发 acquire 错误分类：真实并发限制仍返回 429，客户端取消返回 499，Redis / deadline 等 acquire 失败返回 503；未引入调度系统重构。
 
 ### 18.2 本次已验证命令
 
@@ -1270,6 +1272,19 @@ pnpm build
 - `pnpm build` 仅有既有 Vite chunk / dynamic import warning
 - `frontend-dashboard/` 本次无改动，未运行构建
 
+第二批并发错误分类同步追加验证：
+
+```bash
+cd backend
+go test ./internal/handler -run 'TestConcurrencyErrorResponse|TestWaitForSlotWithPingTimeout_ParentContextCanceled|TestWaitForSlotWithPingTimeout_AcquireError' -count=1
+go test ./internal/handler -count=1
+```
+
+结果：
+
+- `backend/internal/handler` 针对性并发错误分类测试通过
+- `backend/internal/handler` 全包测试通过
+
 ### 18.3 明确未合并
 
 | 主题 | 代表提交 / 范围 | 状态 | 原因 / 风险 |
@@ -1287,7 +1302,6 @@ pnpm build
 | 主题 | 代表提交 | 风险 | 后续建议 |
 |------|----------|------|----------|
 | 重新授权保留 `Extra` | `11fe7de9` | 中 | 第二批单独做；涉及管理端接口、后端路由和前端重新授权流程 |
-| 并发获取失败分类 | `56e96fdd` | 中 | 需要确认 gateway handler 错误语义，不与调度大改混做 |
 | chat responses usage billing 保留 | `f7ac5e59`, `2bd3125d` 相关范围 | 中到高 | 价值高，但同时碰 `openai_gateway_chat_completions` / `messages` / `apicompat`，需单独回归 usage/billing |
 | OpenAI 账号冷却调度优化 | `1e406fed` | 高 | 29 个文件级别改动，属于调度系统改造 |
 | OpenAI WS rate-limit failover | `08061717` | 高 | 改变 WS failover 行为，需压测或至少较完整 smoke |
