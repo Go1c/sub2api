@@ -25,7 +25,7 @@ func (s *UserSubscriptionRepoSuite) SetupTest() {
 	s.ctx = context.Background()
 	tx := testEntTx(s.T())
 	s.client = tx.Client()
-	s.repo = NewUserSubscriptionRepository(s.client).(*userSubscriptionRepository)
+	s.repo = NewUserSubscriptionRepository(s.client, integrationDB).(*userSubscriptionRepository)
 }
 
 func TestUserSubscriptionRepoSuite(t *testing.T) {
@@ -88,9 +88,10 @@ func (s *UserSubscriptionRepoSuite) TestCreate() {
 	user := s.mustCreateUser("sub-create@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-create")
 
+	gid := group.ID
 	sub := &service.UserSubscription{
 		UserID:    user.ID,
-		GroupID:   group.ID,
+		GroupID:   &gid,
 		Status:    service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
@@ -102,7 +103,8 @@ func (s *UserSubscriptionRepoSuite) TestCreate() {
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal(sub.UserID, got.UserID)
-	s.Require().Equal(sub.GroupID, got.GroupID)
+	s.Require().NotNil(got.GroupID)
+	s.Require().Equal(*sub.GroupID, *got.GroupID)
 }
 
 func (s *UserSubscriptionRepoSuite) TestGetByID_WithPreloads() {
@@ -340,7 +342,6 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage() {
 	s.Require().NoError(err)
 	s.Require().InDelta(1.25, got.DailyUsageUSD, 1e-6)
 	s.Require().InDelta(1.25, got.WeeklyUsageUSD, 1e-6)
-	s.Require().InDelta(1.25, got.MonthlyUsageUSD, 1e-6)
 }
 
 func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Accumulates() {
@@ -369,7 +370,6 @@ func (s *UserSubscriptionRepoSuite) TestActivateWindows() {
 	s.Require().NoError(err)
 	s.Require().NotNil(got.DailyWindowStart)
 	s.Require().NotNil(got.WeeklyWindowStart)
-	s.Require().NotNil(got.MonthlyWindowStart)
 	s.Require().WithinDuration(activateAt, *got.DailyWindowStart, time.Microsecond)
 }
 
@@ -398,7 +398,6 @@ func (s *UserSubscriptionRepoSuite) TestResetWeeklyUsage() {
 	group := s.mustCreateGroup("g-resetw")
 	sub := s.mustCreateSubscription(user.ID, group.ID, func(c *dbent.UserSubscriptionCreate) {
 		c.SetWeeklyUsageUsd(15.0)
-		c.SetMonthlyUsageUsd(30.0)
 	})
 
 	resetAt := time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
@@ -408,7 +407,6 @@ func (s *UserSubscriptionRepoSuite) TestResetWeeklyUsage() {
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err)
 	s.Require().InDelta(0.0, got.WeeklyUsageUSD, 1e-6)
-	s.Require().InDelta(30.0, got.MonthlyUsageUSD, 1e-6)
 	s.Require().NotNil(got.WeeklyWindowStart)
 	s.Require().WithinDuration(resetAt, *got.WeeklyWindowStart, time.Microsecond)
 }
@@ -416,9 +414,7 @@ func (s *UserSubscriptionRepoSuite) TestResetWeeklyUsage() {
 func (s *UserSubscriptionRepoSuite) TestResetMonthlyUsage() {
 	user := s.mustCreateUser("resetm@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-resetm")
-	sub := s.mustCreateSubscription(user.ID, group.ID, func(c *dbent.UserSubscriptionCreate) {
-		c.SetMonthlyUsageUsd(25.0)
-	})
+	sub := s.mustCreateSubscription(user.ID, group.ID, nil)
 
 	resetAt := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	err := s.repo.ResetMonthlyUsage(s.ctx, sub.ID, resetAt)
@@ -427,8 +423,7 @@ func (s *UserSubscriptionRepoSuite) TestResetMonthlyUsage() {
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err)
 	s.Require().InDelta(0.0, got.MonthlyUsageUSD, 1e-6)
-	s.Require().NotNil(got.MonthlyWindowStart)
-	s.Require().WithinDuration(resetAt, *got.MonthlyWindowStart, time.Microsecond)
+	s.Require().Nil(got.MonthlyWindowStart)
 }
 
 // --- UpdateStatus / ExtendExpiry / UpdateNotes ---
@@ -611,10 +606,8 @@ func (s *UserSubscriptionRepoSuite) TestActiveExpiredBoundaries_UsageAndReset_Ba
 	s.Require().NoError(err, "GetByID")
 	s.Require().InDelta(1.25, after.DailyUsageUSD, 1e-6)
 	s.Require().InDelta(1.25, after.WeeklyUsageUSD, 1e-6)
-	s.Require().InDelta(1.25, after.MonthlyUsageUSD, 1e-6)
 	s.Require().NotNil(after.DailyWindowStart, "expected DailyWindowStart activated")
 	s.Require().NotNil(after.WeeklyWindowStart, "expected WeeklyWindowStart activated")
-	s.Require().NotNil(after.MonthlyWindowStart, "expected MonthlyWindowStart activated")
 
 	resetAt := time.Now().Truncate(time.Microsecond) // truncate to microsecond for DB precision
 	s.Require().NoError(s.repo.ResetDailyUsage(s.ctx, active.ID, resetAt), "ResetDailyUsage")
@@ -700,7 +693,6 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Concurrent() {
 	expectedUsage := float64(numGoroutines) * incrementPerGoroutine
 	s.Require().InDelta(expectedUsage, got.DailyUsageUSD, 1e-6, "daily usage should be correctly accumulated")
 	s.Require().InDelta(expectedUsage, got.WeeklyUsageUSD, 1e-6, "weekly usage should be correctly accumulated")
-	s.Require().InDelta(expectedUsage, got.MonthlyUsageUSD, 1e-6, "monthly usage should be correctly accumulated")
 }
 
 func (s *UserSubscriptionRepoSuite) TestTxContext_RollbackIsolation() {
@@ -727,10 +719,11 @@ func (s *UserSubscriptionRepoSuite) TestTxContext_RollbackIsolation() {
 		Save(txCtx)
 	s.Require().NoError(err, "create group in tx")
 
-	repo := NewUserSubscriptionRepository(baseClient)
+	repo := NewUserSubscriptionRepository(baseClient, integrationDB)
+	groupID := groupEnt.ID
 	sub := &service.UserSubscription{
 		UserID:     userEnt.ID,
-		GroupID:    groupEnt.ID,
+		GroupID:    &groupID,
 		ExpiresAt:  time.Now().AddDate(0, 0, 30),
 		Status:     service.SubscriptionStatusActive,
 		AssignedAt: time.Now(),

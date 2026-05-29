@@ -14,6 +14,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -358,7 +359,8 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed && o.Status != OrderStatusFulfillmentFailed {
 		return infraerrors.BadRequest("INVALID_STATUS", "order cannot fulfill in status "+o.Status)
 	}
-	if o.SubscriptionGroupID == nil || o.SubscriptionDays == nil {
+	isCreditOrder := paymentOrderHasCreditSubscriptionSnapshot(o)
+	if !isCreditOrder && (o.SubscriptionGroupID == nil || o.SubscriptionDays == nil) {
 		return infraerrors.BadRequest("INVALID_STATUS", "missing subscription info")
 	}
 	c, err := s.entClient.PaymentOrder.Update().
@@ -373,11 +375,93 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 	if c == 0 {
 		return nil
 	}
-	if err := s.doSub(ctx, o); err != nil {
-		s.markFailed(ctx, oid, err)
-		return err
+	var fulfillErr error
+	if isCreditOrder {
+		fulfillErr = s.doCreditSub(ctx, o)
+	} else {
+		fulfillErr = s.doSub(ctx, o)
+	}
+	if fulfillErr != nil {
+		s.markFailed(ctx, oid, fulfillErr)
+		return fulfillErr
 	}
 	return nil
+}
+
+func paymentOrderHasCreditSubscriptionSnapshot(o *dbent.PaymentOrder) bool {
+	return o != nil &&
+		o.SubscriptionQuotaUsd != nil &&
+		o.SubscriptionScopeType != nil &&
+		o.SubscriptionValidityDays != nil
+}
+
+func (s *PaymentService) findCreditSubscriptionPurchase(ctx context.Context, orderID int64) (*dbent.SubscriptionCreditLedger, error) {
+	if s == nil || s.entClient == nil || orderID <= 0 {
+		return nil, ErrSubscriptionNotFound
+	}
+	entry, err := s.entClient.SubscriptionCreditLedger.Query().
+		Where(
+			subscriptioncreditledger.OrderIDEQ(orderID),
+			subscriptioncreditledger.TypeEQ(SubscriptionCreditLedgerPurchase),
+		).
+		Order(
+			dbent.Desc(subscriptioncreditledger.FieldCreatedAt),
+			dbent.Desc(subscriptioncreditledger.FieldID),
+		).
+		First(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, ErrSubscriptionNotFound
+		}
+		return nil, err
+	}
+	return entry, nil
+}
+
+func (s *PaymentService) findCreditSubscriptionByOrderID(ctx context.Context, orderID int64) (*UserSubscription, error) {
+	if s == nil || s.subscriptionSvc == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	entry, err := s.findCreditSubscriptionPurchase(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	return s.subscriptionSvc.GetByID(ctx, entry.SubscriptionID)
+}
+
+func (s *PaymentService) doCreditSub(ctx context.Context, o *dbent.PaymentOrder) error {
+	if s.hasAuditLog(ctx, o.ID, "SUBSCRIPTION_SUCCESS") {
+		slog.Info("subscription credit already fulfilled for order, skipping", "orderID", o.ID)
+		if s.subscriptionSvc != nil {
+			s.subscriptionSvc.InvalidateSubCache(o.UserID, 0)
+		}
+		return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
+	}
+	if entry, err := s.findCreditSubscriptionPurchase(ctx, o.ID); err == nil {
+		slog.Info("subscription credit fulfillment already anchored by purchase ledger, recovering order status",
+			"orderID", o.ID,
+			"subscriptionID", entry.SubscriptionID,
+		)
+		if s.subscriptionSvc != nil {
+			s.subscriptionSvc.InvalidateSubCache(o.UserID, 0)
+		}
+		return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
+	} else if !errors.Is(err, ErrSubscriptionNotFound) {
+		return fmt.Errorf("lookup subscription credit purchase: %w", err)
+	}
+	if s.subscriptionCreditPurchaseSvc == nil {
+		return infraerrors.InternalServer("SUBSCRIPTION_PURCHASE_SERVICE_UNAVAILABLE", "subscription purchase service is not configured")
+	}
+	if err := s.subscriptionCreditPurchaseSvc.FulfillOrder(ctx, o); err != nil {
+		if isAlreadyHasUsableSubscription(err) {
+			slog.Warn("subscription credit purchase blocked by usable subscription", "orderID", o.ID, "userID", o.UserID, "error", err)
+		}
+		return fmt.Errorf("fulfill subscription credit purchase: %w", err)
+	}
+	if s.subscriptionSvc != nil {
+		s.subscriptionSvc.InvalidateSubCache(o.UserID, 0)
+	}
+	return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
 }
 
 func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error {

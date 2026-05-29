@@ -8040,6 +8040,13 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	return cmd
 }
 
+func resolveUsageBillingSubscriptionQuotaResetConfig(ctx context.Context, deps *billingDeps) SubscriptionQuotaResetConfig {
+	if deps == nil || deps.settingService == nil {
+		return SubscriptionQuotaResetConfig{}
+	}
+	return deps.settingService.GetSubscriptionQuotaResetConfig(ctx)
+}
+
 func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps, repo UsageBillingRepository) (bool, error) {
 	if p == nil || deps == nil {
 		return false, nil
@@ -8050,6 +8057,7 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		postUsageBilling(ctx, p, deps)
 		return true, nil
 	}
+	cmd.SubscriptionQuotaResetConfig = resolveUsageBillingSubscriptionQuotaResetConfig(ctx, deps)
 
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
@@ -8060,7 +8068,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	}
 
 	if result == nil || !result.Applied {
-		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+		if deps.deferredService != nil && p.Account != nil {
+			deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+		}
 		return false, nil
 	}
 
@@ -8070,8 +8080,25 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		}
 	}
 
+	applyUsageBillingSplitToUsageLog(usageLog, result)
 	finalizePostUsageBilling(p, deps, result)
 	return true, nil
+}
+
+func applyUsageBillingSplitToUsageLog(usageLog *UsageLog, result *UsageBillingApplyResult) {
+	if usageLog == nil || result == nil {
+		return
+	}
+	usageLog.SubscriptionCostUSD = result.SubscriptionCost
+	usageLog.BalanceCostUSD = result.BalanceCost
+	switch {
+	case result.SubscriptionCost > 0 && result.BalanceCost > 0:
+		usageLog.BillingType = BillingTypeMixed
+	case result.SubscriptionCost > 0:
+		usageLog.BillingType = BillingTypeSubscription
+	case result.BalanceCost > 0:
+		usageLog.BillingType = BillingTypeBalance
+	}
 }
 
 func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
@@ -8079,24 +8106,41 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, resu
 		return
 	}
 
-	if p.IsSubscriptionBill {
-		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
-			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
+	subscriptionCost, balanceCost := usageBillingSplitCosts(p, result)
+	if deps.billingCacheService != nil {
+		if subscriptionCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
+			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, subscriptionCost)
 		}
-	} else if p.Cost.ActualCost > 0 && p.User != nil {
-		deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
+		if balanceCost > 0 && p.User != nil {
+			deps.billingCacheService.QueueDeductBalance(p.User.ID, balanceCost)
+		}
 	}
 
-	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
+	if deps.billingCacheService != nil && p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
 	}
 
-	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+	if deps.deferredService != nil && p.Account != nil {
+		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+	}
 
 	// Notification checks run async — all parameters are already captured,
 	// no dependency on the request context or upstream connection.
 	go notifyBalanceLow(p, deps, result)
 	go notifyAccountQuota(p, deps, result)
+}
+
+func usageBillingSplitCosts(p *postUsageBillingParams, result *UsageBillingApplyResult) (subscriptionCost, balanceCost float64) {
+	if result != nil {
+		return result.SubscriptionCost, result.BalanceCost
+	}
+	if p == nil || p.Cost == nil {
+		return 0, 0
+	}
+	if p.IsSubscriptionBill {
+		return p.Cost.ActualCost, 0
+	}
+	return 0, p.Cost.ActualCost
 }
 
 // notifyBalanceLow sends balance low notification after deduction.
@@ -8108,33 +8152,33 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 			slog.Error("panic in notifyBalanceLow", "recover", r)
 		}
 	}()
-	if p.IsSubscriptionBill || p.Cost.ActualCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
+	_, balanceCost := usageBillingSplitCosts(p, result)
+	if balanceCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
 		slog.Debug("notifyBalanceLow: skipped",
-			"is_subscription", p.IsSubscriptionBill,
-			"actual_cost", p.Cost.ActualCost,
+			"balance_cost", balanceCost,
 			"user_nil", p.User == nil,
 			"service_nil", deps.balanceNotifyService == nil,
 		)
 		return
 	}
 
-	oldBalance := resolveOldBalance(p, result)
+	oldBalance := resolveOldBalance(p, result, balanceCost)
 	slog.Debug("notifyBalanceLow: calling CheckBalanceAfterDeduction",
 		"user_id", p.User.ID,
 		"old_balance", oldBalance,
-		"cost", p.Cost.ActualCost,
+		"cost", balanceCost,
 		"notify_enabled", p.User.BalanceNotifyEnabled,
 		"threshold", p.User.BalanceNotifyThreshold,
 		"result_has_new_balance", result != nil && result.NewBalance != nil,
 	)
-	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
+	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, balanceCost)
 }
 
 // resolveOldBalance returns the pre-deduction balance.
 // Prefers the DB transaction result (newBalance + cost) over snapshot.
-func resolveOldBalance(p *postUsageBillingParams, result *UsageBillingApplyResult) float64 {
+func resolveOldBalance(p *postUsageBillingParams, result *UsageBillingApplyResult, balanceCost float64) float64 {
 	if result != nil && result.NewBalance != nil {
-		return *result.NewBalance + p.Cost.ActualCost
+		return *result.NewBalance + balanceCost
 	}
 	// Legacy fallback: snapshot balance from request context
 	return p.User.Balance
@@ -8201,6 +8245,7 @@ type billingDeps struct {
 	accountRepo          AccountRepository
 	userRepo             UserRepository
 	userSubRepo          UserSubscriptionRepository
+	settingService       *SettingService
 	billingCacheService  *BillingCacheService
 	deferredService      *DeferredService
 	balanceNotifyService *BalanceNotifyService
@@ -8211,6 +8256,7 @@ func (s *GatewayService) billingDeps() *billingDeps {
 		accountRepo:          s.accountRepo,
 		userRepo:             s.userRepo,
 		userSubRepo:          s.userSubRepo,
+		settingService:       s.settingService,
 		billingCacheService:  s.billingCacheService,
 		deferredService:      s.deferredService,
 		balanceNotifyService: s.balanceNotifyService,
@@ -8394,7 +8440,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
 
 	// 判断计费方式：订阅模式 vs 余额模式
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	isSubscriptionBilling := SubscriptionCoversGroup(subscription, apiKey.Group, user)
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription

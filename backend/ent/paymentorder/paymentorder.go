@@ -56,6 +56,18 @@ const (
 	FieldProviderKey = "provider_key"
 	// FieldProviderSnapshot holds the string denoting the provider_snapshot field in the database.
 	FieldProviderSnapshot = "provider_snapshot"
+	// FieldSubscriptionQuotaUsd holds the string denoting the subscription_quota_usd field in the database.
+	FieldSubscriptionQuotaUsd = "subscription_quota_usd"
+	// FieldSubscriptionDailyLimitUsd holds the string denoting the subscription_daily_limit_usd field in the database.
+	FieldSubscriptionDailyLimitUsd = "subscription_daily_limit_usd"
+	// FieldSubscriptionWeeklyLimitUsd holds the string denoting the subscription_weekly_limit_usd field in the database.
+	FieldSubscriptionWeeklyLimitUsd = "subscription_weekly_limit_usd"
+	// FieldSubscriptionScopeType holds the string denoting the subscription_scope_type field in the database.
+	FieldSubscriptionScopeType = "subscription_scope_type"
+	// FieldSubscriptionScopeConfig holds the string denoting the subscription_scope_config field in the database.
+	FieldSubscriptionScopeConfig = "subscription_scope_config"
+	// FieldSubscriptionValidityDays holds the string denoting the subscription_validity_days field in the database.
+	FieldSubscriptionValidityDays = "subscription_validity_days"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldRefundAmount holds the string denoting the refund_amount field in the database.
@@ -94,6 +106,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
+	// EdgeSubscriptionCreditLedgers holds the string denoting the subscription_credit_ledgers edge name in mutations.
+	EdgeSubscriptionCreditLedgers = "subscription_credit_ledgers"
 	// Table holds the table name of the paymentorder in the database.
 	Table = "payment_orders"
 	// UserTable is the table that holds the user relation/edge.
@@ -103,6 +117,13 @@ const (
 	UserInverseTable = "users"
 	// UserColumn is the table column denoting the user relation/edge.
 	UserColumn = "user_id"
+	// SubscriptionCreditLedgersTable is the table that holds the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersInverseTable is the table name for the SubscriptionCreditLedger entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptioncreditledger" package.
+	SubscriptionCreditLedgersInverseTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersColumn is the table column denoting the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersColumn = "order_id"
 )
 
 // Columns holds all SQL columns for paymentorder fields.
@@ -129,6 +150,12 @@ var Columns = []string{
 	FieldProviderInstanceID,
 	FieldProviderKey,
 	FieldProviderSnapshot,
+	FieldSubscriptionQuotaUsd,
+	FieldSubscriptionDailyLimitUsd,
+	FieldSubscriptionWeeklyLimitUsd,
+	FieldSubscriptionScopeType,
+	FieldSubscriptionScopeConfig,
+	FieldSubscriptionValidityDays,
 	FieldStatus,
 	FieldRefundAmount,
 	FieldRefundReason,
@@ -184,6 +211,10 @@ var (
 	ProviderInstanceIDValidator func(string) error
 	// ProviderKeyValidator is a validator for the "provider_key" field. It is called by the builders before save.
 	ProviderKeyValidator func(string) error
+	// SubscriptionScopeTypeValidator is a validator for the "subscription_scope_type" field. It is called by the builders before save.
+	SubscriptionScopeTypeValidator func(string) error
+	// DefaultSubscriptionScopeConfig holds the default value on creation for the "subscription_scope_config" field.
+	DefaultSubscriptionScopeConfig map[string]interface{}
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -314,6 +345,31 @@ func ByProviderKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProviderKey, opts...).ToFunc()
 }
 
+// BySubscriptionQuotaUsd orders the results by the subscription_quota_usd field.
+func BySubscriptionQuotaUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionQuotaUsd, opts...).ToFunc()
+}
+
+// BySubscriptionDailyLimitUsd orders the results by the subscription_daily_limit_usd field.
+func BySubscriptionDailyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionDailyLimitUsd, opts...).ToFunc()
+}
+
+// BySubscriptionWeeklyLimitUsd orders the results by the subscription_weekly_limit_usd field.
+func BySubscriptionWeeklyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionWeeklyLimitUsd, opts...).ToFunc()
+}
+
+// BySubscriptionScopeType orders the results by the subscription_scope_type field.
+func BySubscriptionScopeType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionScopeType, opts...).ToFunc()
+}
+
+// BySubscriptionValidityDays orders the results by the subscription_validity_days field.
+func BySubscriptionValidityDays(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionValidityDays, opts...).ToFunc()
+}
+
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
@@ -410,10 +466,31 @@ func ByUserField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUserStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// BySubscriptionCreditLedgersCount orders the results by subscription_credit_ledgers count.
+func BySubscriptionCreditLedgersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionCreditLedgersStep(), opts...)
+	}
+}
+
+// BySubscriptionCreditLedgers orders the results by subscription_credit_ledgers terms.
+func BySubscriptionCreditLedgers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionCreditLedgersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UserInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, UserTable, UserColumn),
+	)
+}
+func newSubscriptionCreditLedgersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionCreditLedgersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionCreditLedgersTable, SubscriptionCreditLedgersColumn),
 	)
 }

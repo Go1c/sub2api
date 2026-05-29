@@ -493,6 +493,30 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/subscriptions/waste-stats',
+    name: 'AdminSubscriptionWasteStats',
+    component: () => import('@/views/admin/SubscriptionWasteStatsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Subscription Waste Stats',
+      titleKey: 'admin.subscriptions.wasteStats.title',
+      descriptionKey: 'admin.subscriptions.wasteStats.description'
+    }
+  },
+  {
+    path: '/admin/subscriptions/plans',
+    name: 'AdminPaymentPlans',
+    component: () => import('@/views/admin/orders/AdminPaymentPlansView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Subscription Plans',
+      titleKey: 'nav.paymentPlans',
+      requiresPayment: true
+    }
+  },
+  {
     path: '/admin/accounts',
     name: 'AdminAccounts',
     component: () => import('@/views/admin/AccountsView.vue'),
@@ -694,15 +718,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/orders/plans',
-    name: 'AdminPaymentPlans',
-    component: () => import('@/views/admin/orders/AdminPaymentPlansView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Subscription Plans',
-      titleKey: 'nav.paymentPlans',
-      requiresPayment: true
-    }
+    redirect: '/admin/subscriptions/plans'
   },
 
   // ==================== 404 Not Found ====================

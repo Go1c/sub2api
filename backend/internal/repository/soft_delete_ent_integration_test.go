@@ -134,10 +134,11 @@ func TestEntSoftDelete_UserSubscription_DefaultFilterAndSkip(t *testing.T) {
 	u := createEntUser(t, ctx, client, uniqueSoftDeleteValue(t, "sd-sub-user")+"@example.com")
 	g := createEntGroup(t, ctx, client, uniqueSoftDeleteValue(t, "sd-sub-group"))
 
-	repo := NewUserSubscriptionRepository(client)
+	repo := NewUserSubscriptionRepository(client, integrationDB)
+	groupID := g.ID
 	sub := &service.UserSubscription{
 		UserID:    u.ID,
-		GroupID:   g.ID,
+		GroupID:   &groupID,
 		Status:    service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
@@ -166,10 +167,11 @@ func TestEntSoftDelete_UserSubscription_DeleteIdempotent(t *testing.T) {
 	u := createEntUser(t, ctx, client, uniqueSoftDeleteValue(t, "sd-sub-user2")+"@example.com")
 	g := createEntGroup(t, ctx, client, uniqueSoftDeleteValue(t, "sd-sub-group2"))
 
-	repo := NewUserSubscriptionRepository(client)
+	repo := NewUserSubscriptionRepository(client, integrationDB)
+	groupID := g.ID
 	sub := &service.UserSubscription{
 		UserID:    u.ID,
-		GroupID:   g.ID,
+		GroupID:   &groupID,
 		Status:    service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
@@ -187,19 +189,21 @@ func TestEntSoftDelete_UserSubscription_ListExcludesDeleted(t *testing.T) {
 	g1 := createEntGroup(t, ctx, client, uniqueSoftDeleteValue(t, "sd-sub-group3a"))
 	g2 := createEntGroup(t, ctx, client, uniqueSoftDeleteValue(t, "sd-sub-group3b"))
 
-	repo := NewUserSubscriptionRepository(client)
+	repo := NewUserSubscriptionRepository(client, integrationDB)
 
+	group1ID := g1.ID
 	sub1 := &service.UserSubscription{
 		UserID:    u.ID,
-		GroupID:   g1.ID,
+		GroupID:   &group1ID,
 		Status:    service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	require.NoError(t, repo.Create(ctx, sub1), "create subscription 1")
 
+	group2ID := g2.ID
 	sub2 := &service.UserSubscription{
 		UserID:    u.ID,
-		GroupID:   g2.ID,
+		GroupID:   &group2ID,
 		Status:    service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}

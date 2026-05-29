@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 )
 
@@ -81,5 +82,51 @@ func TestBuildUsageBillingCommand_SubscriptionAppliesRateMultiplier(t *testing.T
 				t.Errorf("BalanceCost = %v, want %v", cmd.BalanceCost, tt.wantBalance)
 			}
 		})
+	}
+}
+
+func TestApplyUsageBilling_PropagatesMixedSplitToUsageLog(t *testing.T) {
+	t.Parallel()
+
+	groupID := int64(7)
+	subID := int64(42)
+	usageLog := &UsageLog{
+		BillingType:    BillingTypeSubscription,
+		SubscriptionID: &subID,
+	}
+	billingRepo := &openAIRecordUsageBillingRepoStub{
+		result: &UsageBillingApplyResult{
+			Applied:          true,
+			SubscriptionCost: 2,
+			BalanceCost:      3,
+		},
+	}
+
+	applied, err := applyUsageBilling(context.Background(), "req-mixed", usageLog, &postUsageBillingParams{
+		Cost:               &CostBreakdown{TotalCost: 5, ActualCost: 5},
+		User:               &User{ID: 1},
+		APIKey:             &APIKey{ID: 2, GroupID: &groupID},
+		Account:            &Account{ID: 3},
+		Subscription:       &UserSubscription{ID: subID},
+		IsSubscriptionBill: true,
+	}, &billingDeps{
+		billingCacheService: nil,
+		deferredService:     &DeferredService{},
+	}, billingRepo)
+
+	if err != nil {
+		t.Fatalf("applyUsageBilling returned error: %v", err)
+	}
+	if !applied {
+		t.Fatalf("applyUsageBilling applied = false, want true")
+	}
+	if usageLog.SubscriptionCostUSD != 2 {
+		t.Fatalf("usageLog.SubscriptionCostUSD = %v, want 2", usageLog.SubscriptionCostUSD)
+	}
+	if usageLog.BalanceCostUSD != 3 {
+		t.Fatalf("usageLog.BalanceCostUSD = %v, want 3", usageLog.BalanceCostUSD)
+	}
+	if usageLog.BillingType != BillingTypeMixed {
+		t.Fatalf("usageLog.BillingType = %v, want %v", usageLog.BillingType, BillingTypeMixed)
 	}
 }

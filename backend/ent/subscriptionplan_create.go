@@ -28,6 +28,14 @@ func (_c *SubscriptionPlanCreate) SetGroupID(v int64) *SubscriptionPlanCreate {
 	return _c
 }
 
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableGroupID(v *int64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
 // SetName sets the "name" field.
 func (_c *SubscriptionPlanCreate) SetName(v string) *SubscriptionPlanCreate {
 	_c.mutation.SetName(v)
@@ -110,6 +118,20 @@ func (_c *SubscriptionPlanCreate) SetNillableFeatures(v *string) *SubscriptionPl
 	return _c
 }
 
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (_c *SubscriptionPlanCreate) SetPurchaseNotice(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetPurchaseNotice(v)
+	return _c
+}
+
+// SetNillablePurchaseNotice sets the "purchase_notice" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillablePurchaseNotice(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetPurchaseNotice(*v)
+	}
+	return _c
+}
+
 // SetProductName sets the "product_name" field.
 func (_c *SubscriptionPlanCreate) SetProductName(v string) *SubscriptionPlanCreate {
 	_c.mutation.SetProductName(v)
@@ -149,6 +171,68 @@ func (_c *SubscriptionPlanCreate) SetNillableSortOrder(v *int) *SubscriptionPlan
 	if v != nil {
 		_c.SetSortOrder(*v)
 	}
+	return _c
+}
+
+// SetQuotaUsd sets the "quota_usd" field.
+func (_c *SubscriptionPlanCreate) SetQuotaUsd(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetQuotaUsd(v)
+	return _c
+}
+
+// SetNillableQuotaUsd sets the "quota_usd" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableQuotaUsd(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetQuotaUsd(*v)
+	}
+	return _c
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (_c *SubscriptionPlanCreate) SetDailyLimitUsd(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetDailyLimitUsd(v)
+	return _c
+}
+
+// SetNillableDailyLimitUsd sets the "daily_limit_usd" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableDailyLimitUsd(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetDailyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (_c *SubscriptionPlanCreate) SetWeeklyLimitUsd(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetWeeklyLimitUsd(v)
+	return _c
+}
+
+// SetNillableWeeklyLimitUsd sets the "weekly_limit_usd" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableWeeklyLimitUsd(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetWeeklyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetScopeType sets the "scope_type" field.
+func (_c *SubscriptionPlanCreate) SetScopeType(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetScopeType(v)
+	return _c
+}
+
+// SetNillableScopeType sets the "scope_type" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableScopeType(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetScopeType(*v)
+	}
+	return _c
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (_c *SubscriptionPlanCreate) SetScopeConfig(v map[string]interface{}) *SubscriptionPlanCreate {
+	_c.mutation.SetScopeConfig(v)
 	return _c
 }
 
@@ -231,6 +315,10 @@ func (_c *SubscriptionPlanCreate) defaults() {
 		v := subscriptionplan.DefaultFeatures
 		_c.mutation.SetFeatures(v)
 	}
+	if _, ok := _c.mutation.PurchaseNotice(); !ok {
+		v := subscriptionplan.DefaultPurchaseNotice
+		_c.mutation.SetPurchaseNotice(v)
+	}
 	if _, ok := _c.mutation.ProductName(); !ok {
 		v := subscriptionplan.DefaultProductName
 		_c.mutation.SetProductName(v)
@@ -242,6 +330,18 @@ func (_c *SubscriptionPlanCreate) defaults() {
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		v := subscriptionplan.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
+	}
+	if _, ok := _c.mutation.QuotaUsd(); !ok {
+		v := subscriptionplan.DefaultQuotaUsd
+		_c.mutation.SetQuotaUsd(v)
+	}
+	if _, ok := _c.mutation.ScopeType(); !ok {
+		v := subscriptionplan.DefaultScopeType
+		_c.mutation.SetScopeType(v)
+	}
+	if _, ok := _c.mutation.ScopeConfig(); !ok {
+		v := subscriptionplan.DefaultScopeConfig
+		_c.mutation.SetScopeConfig(v)
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionplan.DefaultCreatedAt()
@@ -255,9 +355,6 @@ func (_c *SubscriptionPlanCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *SubscriptionPlanCreate) check() error {
-	if _, ok := _c.mutation.GroupID(); !ok {
-		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "SubscriptionPlan.group_id"`)}
-	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "SubscriptionPlan.name"`)}
 	}
@@ -286,6 +383,9 @@ func (_c *SubscriptionPlanCreate) check() error {
 	if _, ok := _c.mutation.Features(); !ok {
 		return &ValidationError{Name: "features", err: errors.New(`ent: missing required field "SubscriptionPlan.features"`)}
 	}
+	if _, ok := _c.mutation.PurchaseNotice(); !ok {
+		return &ValidationError{Name: "purchase_notice", err: errors.New(`ent: missing required field "SubscriptionPlan.purchase_notice"`)}
+	}
 	if _, ok := _c.mutation.ProductName(); !ok {
 		return &ValidationError{Name: "product_name", err: errors.New(`ent: missing required field "SubscriptionPlan.product_name"`)}
 	}
@@ -299,6 +399,20 @@ func (_c *SubscriptionPlanCreate) check() error {
 	}
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		return &ValidationError{Name: "sort_order", err: errors.New(`ent: missing required field "SubscriptionPlan.sort_order"`)}
+	}
+	if _, ok := _c.mutation.QuotaUsd(); !ok {
+		return &ValidationError{Name: "quota_usd", err: errors.New(`ent: missing required field "SubscriptionPlan.quota_usd"`)}
+	}
+	if _, ok := _c.mutation.ScopeType(); !ok {
+		return &ValidationError{Name: "scope_type", err: errors.New(`ent: missing required field "SubscriptionPlan.scope_type"`)}
+	}
+	if v, ok := _c.mutation.ScopeType(); ok {
+		if err := subscriptionplan.ScopeTypeValidator(v); err != nil {
+			return &ValidationError{Name: "scope_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.scope_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ScopeConfig(); !ok {
+		return &ValidationError{Name: "scope_config", err: errors.New(`ent: missing required field "SubscriptionPlan.scope_config"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SubscriptionPlan.created_at"`)}
@@ -335,7 +449,7 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(subscriptionplan.FieldGroupID, field.TypeInt64, value)
-		_node.GroupID = value
+		_node.GroupID = &value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(subscriptionplan.FieldName, field.TypeString, value)
@@ -365,6 +479,10 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 		_spec.SetField(subscriptionplan.FieldFeatures, field.TypeString, value)
 		_node.Features = value
 	}
+	if value, ok := _c.mutation.PurchaseNotice(); ok {
+		_spec.SetField(subscriptionplan.FieldPurchaseNotice, field.TypeString, value)
+		_node.PurchaseNotice = value
+	}
 	if value, ok := _c.mutation.ProductName(); ok {
 		_spec.SetField(subscriptionplan.FieldProductName, field.TypeString, value)
 		_node.ProductName = value
@@ -376,6 +494,26 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.SortOrder(); ok {
 		_spec.SetField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
 		_node.SortOrder = value
+	}
+	if value, ok := _c.mutation.QuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldQuotaUsd, field.TypeFloat64, value)
+		_node.QuotaUsd = value
+	}
+	if value, ok := _c.mutation.DailyLimitUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyLimitUsd, field.TypeFloat64, value)
+		_node.DailyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.WeeklyLimitUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldWeeklyLimitUsd, field.TypeFloat64, value)
+		_node.WeeklyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.ScopeType(); ok {
+		_spec.SetField(subscriptionplan.FieldScopeType, field.TypeString, value)
+		_node.ScopeType = value
+	}
+	if value, ok := _c.mutation.ScopeConfig(); ok {
+		_spec.SetField(subscriptionplan.FieldScopeConfig, field.TypeJSON, value)
+		_node.ScopeConfig = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldCreatedAt, field.TypeTime, value)
@@ -452,6 +590,12 @@ func (u *SubscriptionPlanUpsert) UpdateGroupID() *SubscriptionPlanUpsert {
 // AddGroupID adds v to the "group_id" field.
 func (u *SubscriptionPlanUpsert) AddGroupID(v int64) *SubscriptionPlanUpsert {
 	u.Add(subscriptionplan.FieldGroupID, v)
+	return u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *SubscriptionPlanUpsert) ClearGroupID() *SubscriptionPlanUpsert {
+	u.SetNull(subscriptionplan.FieldGroupID)
 	return u
 }
 
@@ -563,6 +707,18 @@ func (u *SubscriptionPlanUpsert) UpdateFeatures() *SubscriptionPlanUpsert {
 	return u
 }
 
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (u *SubscriptionPlanUpsert) SetPurchaseNotice(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldPurchaseNotice, v)
+	return u
+}
+
+// UpdatePurchaseNotice sets the "purchase_notice" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdatePurchaseNotice() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldPurchaseNotice)
+	return u
+}
+
 // SetProductName sets the "product_name" field.
 func (u *SubscriptionPlanUpsert) SetProductName(v string) *SubscriptionPlanUpsert {
 	u.Set(subscriptionplan.FieldProductName, v)
@@ -602,6 +758,96 @@ func (u *SubscriptionPlanUpsert) UpdateSortOrder() *SubscriptionPlanUpsert {
 // AddSortOrder adds v to the "sort_order" field.
 func (u *SubscriptionPlanUpsert) AddSortOrder(v int) *SubscriptionPlanUpsert {
 	u.Add(subscriptionplan.FieldSortOrder, v)
+	return u
+}
+
+// SetQuotaUsd sets the "quota_usd" field.
+func (u *SubscriptionPlanUpsert) SetQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldQuotaUsd, v)
+	return u
+}
+
+// UpdateQuotaUsd sets the "quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateQuotaUsd() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldQuotaUsd)
+	return u
+}
+
+// AddQuotaUsd adds v to the "quota_usd" field.
+func (u *SubscriptionPlanUpsert) AddQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldQuotaUsd, v)
+	return u
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsert) SetDailyLimitUsd(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldDailyLimitUsd, v)
+	return u
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateDailyLimitUsd() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldDailyLimitUsd)
+	return u
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsert) AddDailyLimitUsd(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldDailyLimitUsd, v)
+	return u
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsert) ClearDailyLimitUsd() *SubscriptionPlanUpsert {
+	u.SetNull(subscriptionplan.FieldDailyLimitUsd)
+	return u
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsert) SetWeeklyLimitUsd(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldWeeklyLimitUsd, v)
+	return u
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateWeeklyLimitUsd() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldWeeklyLimitUsd)
+	return u
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsert) AddWeeklyLimitUsd(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldWeeklyLimitUsd, v)
+	return u
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsert) ClearWeeklyLimitUsd() *SubscriptionPlanUpsert {
+	u.SetNull(subscriptionplan.FieldWeeklyLimitUsd)
+	return u
+}
+
+// SetScopeType sets the "scope_type" field.
+func (u *SubscriptionPlanUpsert) SetScopeType(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldScopeType, v)
+	return u
+}
+
+// UpdateScopeType sets the "scope_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateScopeType() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldScopeType)
+	return u
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (u *SubscriptionPlanUpsert) SetScopeConfig(v map[string]interface{}) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldScopeConfig, v)
+	return u
+}
+
+// UpdateScopeConfig sets the "scope_config" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateScopeConfig() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldScopeConfig)
 	return u
 }
 
@@ -680,6 +926,13 @@ func (u *SubscriptionPlanUpsertOne) AddGroupID(v int64) *SubscriptionPlanUpsertO
 func (u *SubscriptionPlanUpsertOne) UpdateGroupID() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateGroupID()
+	})
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (u *SubscriptionPlanUpsertOne) ClearGroupID() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.ClearGroupID()
 	})
 }
 
@@ -809,6 +1062,20 @@ func (u *SubscriptionPlanUpsertOne) UpdateFeatures() *SubscriptionPlanUpsertOne 
 	})
 }
 
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (u *SubscriptionPlanUpsertOne) SetPurchaseNotice(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseNotice(v)
+	})
+}
+
+// UpdatePurchaseNotice sets the "purchase_notice" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdatePurchaseNotice() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseNotice()
+	})
+}
+
 // SetProductName sets the "product_name" field.
 func (u *SubscriptionPlanUpsertOne) SetProductName(v string) *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
@@ -855,6 +1122,111 @@ func (u *SubscriptionPlanUpsertOne) AddSortOrder(v int) *SubscriptionPlanUpsertO
 func (u *SubscriptionPlanUpsertOne) UpdateSortOrder() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetQuotaUsd sets the "quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) SetQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetQuotaUsd(v)
+	})
+}
+
+// AddQuotaUsd adds v to the "quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) AddQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddQuotaUsd(v)
+	})
+}
+
+// UpdateQuotaUsd sets the "quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateQuotaUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateQuotaUsd()
+	})
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsertOne) SetDailyLimitUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyLimitUsd(v)
+	})
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsertOne) AddDailyLimitUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyLimitUsd(v)
+	})
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateDailyLimitUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyLimitUsd()
+	})
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsertOne) ClearDailyLimitUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.ClearDailyLimitUsd()
+	})
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsertOne) SetWeeklyLimitUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetWeeklyLimitUsd(v)
+	})
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsertOne) AddWeeklyLimitUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateWeeklyLimitUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateWeeklyLimitUsd()
+	})
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsertOne) ClearWeeklyLimitUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.ClearWeeklyLimitUsd()
+	})
+}
+
+// SetScopeType sets the "scope_type" field.
+func (u *SubscriptionPlanUpsertOne) SetScopeType(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetScopeType(v)
+	})
+}
+
+// UpdateScopeType sets the "scope_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateScopeType() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateScopeType()
+	})
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (u *SubscriptionPlanUpsertOne) SetScopeConfig(v map[string]interface{}) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetScopeConfig(v)
+	})
+}
+
+// UpdateScopeConfig sets the "scope_config" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateScopeConfig() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateScopeConfig()
 	})
 }
 
@@ -1104,6 +1476,13 @@ func (u *SubscriptionPlanUpsertBulk) UpdateGroupID() *SubscriptionPlanUpsertBulk
 	})
 }
 
+// ClearGroupID clears the value of the "group_id" field.
+func (u *SubscriptionPlanUpsertBulk) ClearGroupID() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.ClearGroupID()
+	})
+}
+
 // SetName sets the "name" field.
 func (u *SubscriptionPlanUpsertBulk) SetName(v string) *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
@@ -1230,6 +1609,20 @@ func (u *SubscriptionPlanUpsertBulk) UpdateFeatures() *SubscriptionPlanUpsertBul
 	})
 }
 
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (u *SubscriptionPlanUpsertBulk) SetPurchaseNotice(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetPurchaseNotice(v)
+	})
+}
+
+// UpdatePurchaseNotice sets the "purchase_notice" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdatePurchaseNotice() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdatePurchaseNotice()
+	})
+}
+
 // SetProductName sets the "product_name" field.
 func (u *SubscriptionPlanUpsertBulk) SetProductName(v string) *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
@@ -1276,6 +1669,111 @@ func (u *SubscriptionPlanUpsertBulk) AddSortOrder(v int) *SubscriptionPlanUpsert
 func (u *SubscriptionPlanUpsertBulk) UpdateSortOrder() *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetQuotaUsd sets the "quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) SetQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetQuotaUsd(v)
+	})
+}
+
+// AddQuotaUsd adds v to the "quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) AddQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddQuotaUsd(v)
+	})
+}
+
+// UpdateQuotaUsd sets the "quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateQuotaUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateQuotaUsd()
+	})
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsertBulk) SetDailyLimitUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyLimitUsd(v)
+	})
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsertBulk) AddDailyLimitUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyLimitUsd(v)
+	})
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateDailyLimitUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyLimitUsd()
+	})
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *SubscriptionPlanUpsertBulk) ClearDailyLimitUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.ClearDailyLimitUsd()
+	})
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsertBulk) SetWeeklyLimitUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetWeeklyLimitUsd(v)
+	})
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsertBulk) AddWeeklyLimitUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateWeeklyLimitUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateWeeklyLimitUsd()
+	})
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *SubscriptionPlanUpsertBulk) ClearWeeklyLimitUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.ClearWeeklyLimitUsd()
+	})
+}
+
+// SetScopeType sets the "scope_type" field.
+func (u *SubscriptionPlanUpsertBulk) SetScopeType(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetScopeType(v)
+	})
+}
+
+// UpdateScopeType sets the "scope_type" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateScopeType() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateScopeType()
+	})
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (u *SubscriptionPlanUpsertBulk) SetScopeConfig(v map[string]interface{}) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetScopeConfig(v)
+	})
+}
+
+// UpdateScopeConfig sets the "scope_config" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateScopeConfig() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateScopeConfig()
 	})
 }
 

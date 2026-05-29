@@ -161,6 +161,35 @@ func TestCalculateProgress_NoWindowStart_NoProgress(t *testing.T) {
 	assert.Nil(t, progress.Weekly, "无 WeeklyWindowStart 时 Weekly 应为 nil")
 }
 
+func TestCalculateProgress_CreditPoolWithoutGroupUsesSubscriptionLimits(t *testing.T) {
+	svc := newTestSubscriptionService()
+	now := time.Now()
+	dailyStart := now.Add(-3 * time.Hour)
+	weeklyStart := now.Add(-2 * 24 * time.Hour)
+
+	sub := &UserSubscription{
+		ID:                1,
+		ExpiresAt:         now.Add(10 * 24 * time.Hour),
+		DailyLimitUSD:     ptrFloat64(10),
+		WeeklyLimitUSD:    ptrFloat64(50),
+		DailyUsageUSD:     4,
+		WeeklyUsageUSD:    15,
+		DailyWindowStart:  ptrTime(dailyStart),
+		WeeklyWindowStart: ptrTime(weeklyStart),
+	}
+
+	progress := svc.calculateProgress(sub, nil)
+
+	require.NotNil(t, progress)
+	assert.Equal(t, "", progress.GroupName)
+	require.NotNil(t, progress.Daily)
+	assert.Equal(t, 10.0, progress.Daily.LimitUSD)
+	assert.Equal(t, 4.0, progress.Daily.UsedUSD)
+	require.NotNil(t, progress.Weekly)
+	assert.Equal(t, 50.0, progress.Weekly.LimitUSD)
+	assert.Equal(t, 15.0, progress.Weekly.UsedUSD)
+}
+
 func TestCalculateProgress_AllLimits(t *testing.T) {
 	svc := newTestSubscriptionService()
 	now := time.Now()

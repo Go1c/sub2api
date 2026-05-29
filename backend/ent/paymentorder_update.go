@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
@@ -417,6 +418,140 @@ func (_u *PaymentOrderUpdate) ClearProviderSnapshot() *PaymentOrderUpdate {
 	return _u
 }
 
+// SetSubscriptionQuotaUsd sets the "subscription_quota_usd" field.
+func (_u *PaymentOrderUpdate) SetSubscriptionQuotaUsd(v float64) *PaymentOrderUpdate {
+	_u.mutation.ResetSubscriptionQuotaUsd()
+	_u.mutation.SetSubscriptionQuotaUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionQuotaUsd sets the "subscription_quota_usd" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableSubscriptionQuotaUsd(v *float64) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetSubscriptionQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionQuotaUsd adds value to the "subscription_quota_usd" field.
+func (_u *PaymentOrderUpdate) AddSubscriptionQuotaUsd(v float64) *PaymentOrderUpdate {
+	_u.mutation.AddSubscriptionQuotaUsd(v)
+	return _u
+}
+
+// ClearSubscriptionQuotaUsd clears the value of the "subscription_quota_usd" field.
+func (_u *PaymentOrderUpdate) ClearSubscriptionQuotaUsd() *PaymentOrderUpdate {
+	_u.mutation.ClearSubscriptionQuotaUsd()
+	return _u
+}
+
+// SetSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field.
+func (_u *PaymentOrderUpdate) SetSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpdate {
+	_u.mutation.ResetSubscriptionDailyLimitUsd()
+	_u.mutation.SetSubscriptionDailyLimitUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableSubscriptionDailyLimitUsd(v *float64) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetSubscriptionDailyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionDailyLimitUsd adds value to the "subscription_daily_limit_usd" field.
+func (_u *PaymentOrderUpdate) AddSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpdate {
+	_u.mutation.AddSubscriptionDailyLimitUsd(v)
+	return _u
+}
+
+// ClearSubscriptionDailyLimitUsd clears the value of the "subscription_daily_limit_usd" field.
+func (_u *PaymentOrderUpdate) ClearSubscriptionDailyLimitUsd() *PaymentOrderUpdate {
+	_u.mutation.ClearSubscriptionDailyLimitUsd()
+	return _u
+}
+
+// SetSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field.
+func (_u *PaymentOrderUpdate) SetSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpdate {
+	_u.mutation.ResetSubscriptionWeeklyLimitUsd()
+	_u.mutation.SetSubscriptionWeeklyLimitUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableSubscriptionWeeklyLimitUsd(v *float64) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetSubscriptionWeeklyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionWeeklyLimitUsd adds value to the "subscription_weekly_limit_usd" field.
+func (_u *PaymentOrderUpdate) AddSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpdate {
+	_u.mutation.AddSubscriptionWeeklyLimitUsd(v)
+	return _u
+}
+
+// ClearSubscriptionWeeklyLimitUsd clears the value of the "subscription_weekly_limit_usd" field.
+func (_u *PaymentOrderUpdate) ClearSubscriptionWeeklyLimitUsd() *PaymentOrderUpdate {
+	_u.mutation.ClearSubscriptionWeeklyLimitUsd()
+	return _u
+}
+
+// SetSubscriptionScopeType sets the "subscription_scope_type" field.
+func (_u *PaymentOrderUpdate) SetSubscriptionScopeType(v string) *PaymentOrderUpdate {
+	_u.mutation.SetSubscriptionScopeType(v)
+	return _u
+}
+
+// SetNillableSubscriptionScopeType sets the "subscription_scope_type" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableSubscriptionScopeType(v *string) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetSubscriptionScopeType(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionScopeType clears the value of the "subscription_scope_type" field.
+func (_u *PaymentOrderUpdate) ClearSubscriptionScopeType() *PaymentOrderUpdate {
+	_u.mutation.ClearSubscriptionScopeType()
+	return _u
+}
+
+// SetSubscriptionScopeConfig sets the "subscription_scope_config" field.
+func (_u *PaymentOrderUpdate) SetSubscriptionScopeConfig(v map[string]interface{}) *PaymentOrderUpdate {
+	_u.mutation.SetSubscriptionScopeConfig(v)
+	return _u
+}
+
+// SetSubscriptionValidityDays sets the "subscription_validity_days" field.
+func (_u *PaymentOrderUpdate) SetSubscriptionValidityDays(v int) *PaymentOrderUpdate {
+	_u.mutation.ResetSubscriptionValidityDays()
+	_u.mutation.SetSubscriptionValidityDays(v)
+	return _u
+}
+
+// SetNillableSubscriptionValidityDays sets the "subscription_validity_days" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableSubscriptionValidityDays(v *int) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetSubscriptionValidityDays(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionValidityDays adds value to the "subscription_validity_days" field.
+func (_u *PaymentOrderUpdate) AddSubscriptionValidityDays(v int) *PaymentOrderUpdate {
+	_u.mutation.AddSubscriptionValidityDays(v)
+	return _u
+}
+
+// ClearSubscriptionValidityDays clears the value of the "subscription_validity_days" field.
+func (_u *PaymentOrderUpdate) ClearSubscriptionValidityDays() *PaymentOrderUpdate {
+	_u.mutation.ClearSubscriptionValidityDays()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *PaymentOrderUpdate) SetStatus(v string) *PaymentOrderUpdate {
 	_u.mutation.SetStatus(v)
@@ -719,6 +854,21 @@ func (_u *PaymentOrderUpdate) SetUser(v *User) *PaymentOrderUpdate {
 	return _u.SetUserID(v.ID)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *PaymentOrderUpdate) AddSubscriptionCreditLedgerIDs(ids ...int64) *PaymentOrderUpdate {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *PaymentOrderUpdate) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *PaymentOrderUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // Mutation returns the PaymentOrderMutation object of the builder.
 func (_u *PaymentOrderUpdate) Mutation() *PaymentOrderMutation {
 	return _u.mutation
@@ -728,6 +878,27 @@ func (_u *PaymentOrderUpdate) Mutation() *PaymentOrderMutation {
 func (_u *PaymentOrderUpdate) ClearUser() *PaymentOrderUpdate {
 	_u.mutation.ClearUser()
 	return _u
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *PaymentOrderUpdate) ClearSubscriptionCreditLedgers() *PaymentOrderUpdate {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *PaymentOrderUpdate) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *PaymentOrderUpdate {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *PaymentOrderUpdate) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *PaymentOrderUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -811,6 +982,11 @@ func (_u *PaymentOrderUpdate) check() error {
 	if v, ok := _u.mutation.ProviderKey(); ok {
 		if err := paymentorder.ProviderKeyValidator(v); err != nil {
 			return &ValidationError{Name: "provider_key", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_key": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SubscriptionScopeType(); ok {
+		if err := paymentorder.SubscriptionScopeTypeValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_scope_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.subscription_scope_type": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Status(); ok {
@@ -959,6 +1135,51 @@ func (_u *PaymentOrderUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if _u.mutation.ProviderSnapshotCleared() {
 		_spec.ClearField(paymentorder.FieldProviderSnapshot, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.SubscriptionQuotaUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionQuotaUsd(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionQuotaUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.SubscriptionQuotaUsdCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionQuotaUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.SubscriptionDailyLimitUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionDailyLimitUsd(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.SubscriptionDailyLimitUsdCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionDailyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.SubscriptionWeeklyLimitUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionWeeklyLimitUsd(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.SubscriptionWeeklyLimitUsdCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionWeeklyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.SubscriptionScopeType(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionScopeType, field.TypeString, value)
+	}
+	if _u.mutation.SubscriptionScopeTypeCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionScopeType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubscriptionScopeConfig(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionScopeConfig, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.SubscriptionValidityDays(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionValidityDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionValidityDays(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionValidityDays, field.TypeInt, value)
+	}
+	if _u.mutation.SubscriptionValidityDaysCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionValidityDays, field.TypeInt)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(paymentorder.FieldStatus, field.TypeString, value)
 	}
@@ -1065,6 +1286,51 @@ func (_u *PaymentOrderUpdate) sqlSave(ctx context.Context) (_node int, err error
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionCreditLedgersTable,
+			Columns: []string{paymentorder.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionCreditLedgersTable,
+			Columns: []string{paymentorder.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionCreditLedgersTable,
+			Columns: []string{paymentorder.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1480,6 +1746,140 @@ func (_u *PaymentOrderUpdateOne) ClearProviderSnapshot() *PaymentOrderUpdateOne 
 	return _u
 }
 
+// SetSubscriptionQuotaUsd sets the "subscription_quota_usd" field.
+func (_u *PaymentOrderUpdateOne) SetSubscriptionQuotaUsd(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.ResetSubscriptionQuotaUsd()
+	_u.mutation.SetSubscriptionQuotaUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionQuotaUsd sets the "subscription_quota_usd" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableSubscriptionQuotaUsd(v *float64) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionQuotaUsd adds value to the "subscription_quota_usd" field.
+func (_u *PaymentOrderUpdateOne) AddSubscriptionQuotaUsd(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.AddSubscriptionQuotaUsd(v)
+	return _u
+}
+
+// ClearSubscriptionQuotaUsd clears the value of the "subscription_quota_usd" field.
+func (_u *PaymentOrderUpdateOne) ClearSubscriptionQuotaUsd() *PaymentOrderUpdateOne {
+	_u.mutation.ClearSubscriptionQuotaUsd()
+	return _u
+}
+
+// SetSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field.
+func (_u *PaymentOrderUpdateOne) SetSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.ResetSubscriptionDailyLimitUsd()
+	_u.mutation.SetSubscriptionDailyLimitUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionDailyLimitUsd sets the "subscription_daily_limit_usd" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableSubscriptionDailyLimitUsd(v *float64) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionDailyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionDailyLimitUsd adds value to the "subscription_daily_limit_usd" field.
+func (_u *PaymentOrderUpdateOne) AddSubscriptionDailyLimitUsd(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.AddSubscriptionDailyLimitUsd(v)
+	return _u
+}
+
+// ClearSubscriptionDailyLimitUsd clears the value of the "subscription_daily_limit_usd" field.
+func (_u *PaymentOrderUpdateOne) ClearSubscriptionDailyLimitUsd() *PaymentOrderUpdateOne {
+	_u.mutation.ClearSubscriptionDailyLimitUsd()
+	return _u
+}
+
+// SetSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field.
+func (_u *PaymentOrderUpdateOne) SetSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.ResetSubscriptionWeeklyLimitUsd()
+	_u.mutation.SetSubscriptionWeeklyLimitUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionWeeklyLimitUsd sets the "subscription_weekly_limit_usd" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableSubscriptionWeeklyLimitUsd(v *float64) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionWeeklyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionWeeklyLimitUsd adds value to the "subscription_weekly_limit_usd" field.
+func (_u *PaymentOrderUpdateOne) AddSubscriptionWeeklyLimitUsd(v float64) *PaymentOrderUpdateOne {
+	_u.mutation.AddSubscriptionWeeklyLimitUsd(v)
+	return _u
+}
+
+// ClearSubscriptionWeeklyLimitUsd clears the value of the "subscription_weekly_limit_usd" field.
+func (_u *PaymentOrderUpdateOne) ClearSubscriptionWeeklyLimitUsd() *PaymentOrderUpdateOne {
+	_u.mutation.ClearSubscriptionWeeklyLimitUsd()
+	return _u
+}
+
+// SetSubscriptionScopeType sets the "subscription_scope_type" field.
+func (_u *PaymentOrderUpdateOne) SetSubscriptionScopeType(v string) *PaymentOrderUpdateOne {
+	_u.mutation.SetSubscriptionScopeType(v)
+	return _u
+}
+
+// SetNillableSubscriptionScopeType sets the "subscription_scope_type" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableSubscriptionScopeType(v *string) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionScopeType(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionScopeType clears the value of the "subscription_scope_type" field.
+func (_u *PaymentOrderUpdateOne) ClearSubscriptionScopeType() *PaymentOrderUpdateOne {
+	_u.mutation.ClearSubscriptionScopeType()
+	return _u
+}
+
+// SetSubscriptionScopeConfig sets the "subscription_scope_config" field.
+func (_u *PaymentOrderUpdateOne) SetSubscriptionScopeConfig(v map[string]interface{}) *PaymentOrderUpdateOne {
+	_u.mutation.SetSubscriptionScopeConfig(v)
+	return _u
+}
+
+// SetSubscriptionValidityDays sets the "subscription_validity_days" field.
+func (_u *PaymentOrderUpdateOne) SetSubscriptionValidityDays(v int) *PaymentOrderUpdateOne {
+	_u.mutation.ResetSubscriptionValidityDays()
+	_u.mutation.SetSubscriptionValidityDays(v)
+	return _u
+}
+
+// SetNillableSubscriptionValidityDays sets the "subscription_validity_days" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableSubscriptionValidityDays(v *int) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionValidityDays(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionValidityDays adds value to the "subscription_validity_days" field.
+func (_u *PaymentOrderUpdateOne) AddSubscriptionValidityDays(v int) *PaymentOrderUpdateOne {
+	_u.mutation.AddSubscriptionValidityDays(v)
+	return _u
+}
+
+// ClearSubscriptionValidityDays clears the value of the "subscription_validity_days" field.
+func (_u *PaymentOrderUpdateOne) ClearSubscriptionValidityDays() *PaymentOrderUpdateOne {
+	_u.mutation.ClearSubscriptionValidityDays()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *PaymentOrderUpdateOne) SetStatus(v string) *PaymentOrderUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -1782,6 +2182,21 @@ func (_u *PaymentOrderUpdateOne) SetUser(v *User) *PaymentOrderUpdateOne {
 	return _u.SetUserID(v.ID)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *PaymentOrderUpdateOne) AddSubscriptionCreditLedgerIDs(ids ...int64) *PaymentOrderUpdateOne {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *PaymentOrderUpdateOne) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *PaymentOrderUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // Mutation returns the PaymentOrderMutation object of the builder.
 func (_u *PaymentOrderUpdateOne) Mutation() *PaymentOrderMutation {
 	return _u.mutation
@@ -1791,6 +2206,27 @@ func (_u *PaymentOrderUpdateOne) Mutation() *PaymentOrderMutation {
 func (_u *PaymentOrderUpdateOne) ClearUser() *PaymentOrderUpdateOne {
 	_u.mutation.ClearUser()
 	return _u
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *PaymentOrderUpdateOne) ClearSubscriptionCreditLedgers() *PaymentOrderUpdateOne {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *PaymentOrderUpdateOne) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *PaymentOrderUpdateOne {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *PaymentOrderUpdateOne) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *PaymentOrderUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // Where appends a list predicates to the PaymentOrderUpdate builder.
@@ -1887,6 +2323,11 @@ func (_u *PaymentOrderUpdateOne) check() error {
 	if v, ok := _u.mutation.ProviderKey(); ok {
 		if err := paymentorder.ProviderKeyValidator(v); err != nil {
 			return &ValidationError{Name: "provider_key", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_key": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SubscriptionScopeType(); ok {
+		if err := paymentorder.SubscriptionScopeTypeValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_scope_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.subscription_scope_type": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Status(); ok {
@@ -2052,6 +2493,51 @@ func (_u *PaymentOrderUpdateOne) sqlSave(ctx context.Context) (_node *PaymentOrd
 	if _u.mutation.ProviderSnapshotCleared() {
 		_spec.ClearField(paymentorder.FieldProviderSnapshot, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.SubscriptionQuotaUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionQuotaUsd(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionQuotaUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.SubscriptionQuotaUsdCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionQuotaUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.SubscriptionDailyLimitUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionDailyLimitUsd(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.SubscriptionDailyLimitUsdCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionDailyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.SubscriptionWeeklyLimitUsd(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionWeeklyLimitUsd(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.SubscriptionWeeklyLimitUsdCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionWeeklyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.SubscriptionScopeType(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionScopeType, field.TypeString, value)
+	}
+	if _u.mutation.SubscriptionScopeTypeCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionScopeType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubscriptionScopeConfig(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionScopeConfig, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.SubscriptionValidityDays(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionValidityDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionValidityDays(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionValidityDays, field.TypeInt, value)
+	}
+	if _u.mutation.SubscriptionValidityDaysCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionValidityDays, field.TypeInt)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(paymentorder.FieldStatus, field.TypeString, value)
 	}
@@ -2158,6 +2644,51 @@ func (_u *PaymentOrderUpdateOne) sqlSave(ctx context.Context) (_node *PaymentOrd
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionCreditLedgersTable,
+			Columns: []string{paymentorder.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionCreditLedgersTable,
+			Columns: []string{paymentorder.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionCreditLedgersTable,
+			Columns: []string{paymentorder.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

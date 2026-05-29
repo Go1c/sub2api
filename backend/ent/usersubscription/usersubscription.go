@@ -25,24 +25,38 @@ const (
 	FieldUserID = "user_id"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldPlanID holds the string denoting the plan_id field in the database.
+	FieldPlanID = "plan_id"
+	// FieldScopeType holds the string denoting the scope_type field in the database.
+	FieldScopeType = "scope_type"
+	// FieldScopeConfig holds the string denoting the scope_config field in the database.
+	FieldScopeConfig = "scope_config"
+	// FieldQuotaLimitUsd holds the string denoting the quota_limit_usd field in the database.
+	FieldQuotaLimitUsd = "quota_limit_usd"
+	// FieldQuotaUsedUsd holds the string denoting the quota_used_usd field in the database.
+	FieldQuotaUsedUsd = "quota_used_usd"
+	// FieldDailyLimitUsd holds the string denoting the daily_limit_usd field in the database.
+	FieldDailyLimitUsd = "daily_limit_usd"
+	// FieldWeeklyLimitUsd holds the string denoting the weekly_limit_usd field in the database.
+	FieldWeeklyLimitUsd = "weekly_limit_usd"
 	// FieldStartsAt holds the string denoting the starts_at field in the database.
 	FieldStartsAt = "starts_at"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldExhaustedAt holds the string denoting the exhausted_at field in the database.
+	FieldExhaustedAt = "exhausted_at"
+	// FieldExpiredCreditLoggedAt holds the string denoting the expired_credit_logged_at field in the database.
+	FieldExpiredCreditLoggedAt = "expired_credit_logged_at"
 	// FieldDailyWindowStart holds the string denoting the daily_window_start field in the database.
 	FieldDailyWindowStart = "daily_window_start"
 	// FieldWeeklyWindowStart holds the string denoting the weekly_window_start field in the database.
 	FieldWeeklyWindowStart = "weekly_window_start"
-	// FieldMonthlyWindowStart holds the string denoting the monthly_window_start field in the database.
-	FieldMonthlyWindowStart = "monthly_window_start"
 	// FieldDailyUsageUsd holds the string denoting the daily_usage_usd field in the database.
 	FieldDailyUsageUsd = "daily_usage_usd"
 	// FieldWeeklyUsageUsd holds the string denoting the weekly_usage_usd field in the database.
 	FieldWeeklyUsageUsd = "weekly_usage_usd"
-	// FieldMonthlyUsageUsd holds the string denoting the monthly_usage_usd field in the database.
-	FieldMonthlyUsageUsd = "monthly_usage_usd"
 	// FieldAssignedBy holds the string denoting the assigned_by field in the database.
 	FieldAssignedBy = "assigned_by"
 	// FieldAssignedAt holds the string denoting the assigned_at field in the database.
@@ -57,6 +71,8 @@ const (
 	EdgeAssignedByUser = "assigned_by_user"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeCreditLedger holds the string denoting the credit_ledger edge name in mutations.
+	EdgeCreditLedger = "credit_ledger"
 	// Table holds the table name of the usersubscription in the database.
 	Table = "user_subscriptions"
 	// UserTable is the table that holds the user relation/edge.
@@ -87,6 +103,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "subscription_id"
+	// CreditLedgerTable is the table that holds the credit_ledger relation/edge.
+	CreditLedgerTable = "subscription_credit_ledger"
+	// CreditLedgerInverseTable is the table name for the SubscriptionCreditLedger entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptioncreditledger" package.
+	CreditLedgerInverseTable = "subscription_credit_ledger"
+	// CreditLedgerColumn is the table column denoting the credit_ledger relation/edge.
+	CreditLedgerColumn = "subscription_id"
 )
 
 // Columns holds all SQL columns for usersubscription fields.
@@ -97,15 +120,22 @@ var Columns = []string{
 	FieldDeletedAt,
 	FieldUserID,
 	FieldGroupID,
+	FieldPlanID,
+	FieldScopeType,
+	FieldScopeConfig,
+	FieldQuotaLimitUsd,
+	FieldQuotaUsedUsd,
+	FieldDailyLimitUsd,
+	FieldWeeklyLimitUsd,
 	FieldStartsAt,
 	FieldExpiresAt,
 	FieldStatus,
+	FieldExhaustedAt,
+	FieldExpiredCreditLoggedAt,
 	FieldDailyWindowStart,
 	FieldWeeklyWindowStart,
-	FieldMonthlyWindowStart,
 	FieldDailyUsageUsd,
 	FieldWeeklyUsageUsd,
-	FieldMonthlyUsageUsd,
 	FieldAssignedBy,
 	FieldAssignedAt,
 	FieldNotes,
@@ -135,6 +165,16 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultScopeType holds the default value on creation for the "scope_type" field.
+	DefaultScopeType string
+	// ScopeTypeValidator is a validator for the "scope_type" field. It is called by the builders before save.
+	ScopeTypeValidator func(string) error
+	// DefaultScopeConfig holds the default value on creation for the "scope_config" field.
+	DefaultScopeConfig map[string]interface{}
+	// DefaultQuotaLimitUsd holds the default value on creation for the "quota_limit_usd" field.
+	DefaultQuotaLimitUsd float64
+	// DefaultQuotaUsedUsd holds the default value on creation for the "quota_used_usd" field.
+	DefaultQuotaUsedUsd float64
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -143,8 +183,6 @@ var (
 	DefaultDailyUsageUsd float64
 	// DefaultWeeklyUsageUsd holds the default value on creation for the "weekly_usage_usd" field.
 	DefaultWeeklyUsageUsd float64
-	// DefaultMonthlyUsageUsd holds the default value on creation for the "monthly_usage_usd" field.
-	DefaultMonthlyUsageUsd float64
 	// DefaultAssignedAt holds the default value on creation for the "assigned_at" field.
 	DefaultAssignedAt func() time.Time
 )
@@ -182,6 +220,36 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
+// ByPlanID orders the results by the plan_id field.
+func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlanID, opts...).ToFunc()
+}
+
+// ByScopeType orders the results by the scope_type field.
+func ByScopeType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScopeType, opts...).ToFunc()
+}
+
+// ByQuotaLimitUsd orders the results by the quota_limit_usd field.
+func ByQuotaLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaLimitUsd, opts...).ToFunc()
+}
+
+// ByQuotaUsedUsd orders the results by the quota_used_usd field.
+func ByQuotaUsedUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaUsedUsd, opts...).ToFunc()
+}
+
+// ByDailyLimitUsd orders the results by the daily_limit_usd field.
+func ByDailyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyLimitUsd, opts...).ToFunc()
+}
+
+// ByWeeklyLimitUsd orders the results by the weekly_limit_usd field.
+func ByWeeklyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWeeklyLimitUsd, opts...).ToFunc()
+}
+
 // ByStartsAt orders the results by the starts_at field.
 func ByStartsAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStartsAt, opts...).ToFunc()
@@ -197,6 +265,16 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
+// ByExhaustedAt orders the results by the exhausted_at field.
+func ByExhaustedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExhaustedAt, opts...).ToFunc()
+}
+
+// ByExpiredCreditLoggedAt orders the results by the expired_credit_logged_at field.
+func ByExpiredCreditLoggedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiredCreditLoggedAt, opts...).ToFunc()
+}
+
 // ByDailyWindowStart orders the results by the daily_window_start field.
 func ByDailyWindowStart(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDailyWindowStart, opts...).ToFunc()
@@ -207,11 +285,6 @@ func ByWeeklyWindowStart(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWeeklyWindowStart, opts...).ToFunc()
 }
 
-// ByMonthlyWindowStart orders the results by the monthly_window_start field.
-func ByMonthlyWindowStart(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMonthlyWindowStart, opts...).ToFunc()
-}
-
 // ByDailyUsageUsd orders the results by the daily_usage_usd field.
 func ByDailyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDailyUsageUsd, opts...).ToFunc()
@@ -220,11 +293,6 @@ func ByDailyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 // ByWeeklyUsageUsd orders the results by the weekly_usage_usd field.
 func ByWeeklyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWeeklyUsageUsd, opts...).ToFunc()
-}
-
-// ByMonthlyUsageUsd orders the results by the monthly_usage_usd field.
-func ByMonthlyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMonthlyUsageUsd, opts...).ToFunc()
 }
 
 // ByAssignedBy orders the results by the assigned_by field.
@@ -276,6 +344,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByCreditLedgerCount orders the results by credit_ledger count.
+func ByCreditLedgerCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newCreditLedgerStep(), opts...)
+	}
+}
+
+// ByCreditLedger orders the results by credit_ledger terms.
+func ByCreditLedger(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCreditLedgerStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -302,5 +384,12 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newCreditLedgerStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(CreditLedgerInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CreditLedgerTable, CreditLedgerColumn),
 	)
 }
