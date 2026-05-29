@@ -8040,6 +8040,13 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	return cmd
 }
 
+func resolveUsageBillingSubscriptionQuotaResetConfig(ctx context.Context, deps *billingDeps) SubscriptionQuotaResetConfig {
+	if deps == nil || deps.settingService == nil {
+		return SubscriptionQuotaResetConfig{}
+	}
+	return deps.settingService.GetSubscriptionQuotaResetConfig(ctx)
+}
+
 func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps, repo UsageBillingRepository) (bool, error) {
 	if p == nil || deps == nil {
 		return false, nil
@@ -8050,6 +8057,7 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		postUsageBilling(ctx, p, deps)
 		return true, nil
 	}
+	cmd.SubscriptionQuotaResetConfig = resolveUsageBillingSubscriptionQuotaResetConfig(ctx, deps)
 
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
@@ -8237,6 +8245,7 @@ type billingDeps struct {
 	accountRepo          AccountRepository
 	userRepo             UserRepository
 	userSubRepo          UserSubscriptionRepository
+	settingService       *SettingService
 	billingCacheService  *BillingCacheService
 	deferredService      *DeferredService
 	balanceNotifyService *BalanceNotifyService
@@ -8247,6 +8256,7 @@ func (s *GatewayService) billingDeps() *billingDeps {
 		accountRepo:          s.accountRepo,
 		userRepo:             s.userRepo,
 		userSubRepo:          s.userSubRepo,
+		settingService:       s.settingService,
 		billingCacheService:  s.billingCacheService,
 		deferredService:      s.deferredService,
 		balanceNotifyService: s.balanceNotifyService,

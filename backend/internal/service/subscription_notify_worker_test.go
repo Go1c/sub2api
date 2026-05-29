@@ -38,6 +38,14 @@ func (s *stubSubNotifySettings) GetValue(_ context.Context, key string) (string,
 	return "", nil
 }
 
+type stubSubNotifyFrontendURLResolver struct {
+	url string
+}
+
+func (s *stubSubNotifyFrontendURLResolver) GetFrontendURL(_ context.Context) string {
+	return s.url
+}
+
 type mockSubscriptionNotifyUserReader struct {
 	mu     sync.Mutex
 	users  map[int64]*User
@@ -136,7 +144,7 @@ func newSubNotifyHarness(t *testing.T) (*SubscriptionNotifyService, *mockSubscri
 	messenger := &mockSubscriptionNotifyMessenger{}
 	emailer := &mockSubscriptionNotifyEmailer{}
 	settings := newStubSubNotifySettings()
-	svc := NewSubscriptionNotifyService(users, messenger, emailer, settings)
+	svc := NewSubscriptionNotifyService(users, messenger, emailer, settings, "")
 	return svc, users, messenger, emailer, settings
 }
 
@@ -151,7 +159,7 @@ func mustMarshalPayload(t *testing.T, p SubscriptionNotifyPayload) json.RawMessa
 
 // ─── Tests ───
 
-func TestSubscriptionNotifyService_Handle_AllKindsSendBothChannels(t *testing.T) {
+func TestSubscriptionNotifyService_Handle_AllKindsSendBothChannelsWhenEmailEnabled(t *testing.T) {
 	kinds := []struct {
 		kind          string
 		expectSubject string
@@ -166,6 +174,7 @@ func TestSubscriptionNotifyService_Handle_AllKindsSendBothChannels(t *testing.T)
 		t.Run(tc.kind, func(t *testing.T) {
 			svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
 			settings.set(SettingKeySubscriptionCreditPoolRepurchaseURL, "https://example.com/buy")
+			settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
 
 			payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
 				UserID:         42,
@@ -208,6 +217,27 @@ func TestSubscriptionNotifyService_Handle_AllKindsSendBothChannels(t *testing.T)
 				t.Errorf("email body should contain repurchase URL")
 			}
 		})
+	}
+}
+
+func TestSubscriptionNotifyService_Handle_DefaultDoesNotSendEmail(t *testing.T) {
+	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
+	settings.set(SettingKeySubscriptionCreditPoolRepurchaseURL, "https://example.com/buy")
+
+	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
+		UserID:         42,
+		SubscriptionID: 123,
+		Kind:           "limit_reached_total",
+	})
+	if err := svc.Handle(context.Background(), payload); err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+
+	if got := messenger.calls(); len(got) != 1 {
+		t.Fatalf("site message expected 1 call, got %d", len(got))
+	}
+	if got := emailer.calls(); len(got) != 0 {
+		t.Fatalf("email expected 0 calls when toggle disabled, got %d", len(got))
 	}
 }
 
@@ -259,8 +289,9 @@ func TestSubscriptionNotifyService_Handle_MissingRequiredFieldsSkips(t *testing.
 }
 
 func TestSubscriptionNotifyService_Handle_MessengerFailureDoesNotStopEmail(t *testing.T) {
-	svc, _, messenger, emailer, _ := newSubNotifyHarness(t)
+	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
 	messenger.sendErr = errors.New("site db down")
+	settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
 
 	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
 		UserID:         42,
@@ -277,8 +308,9 @@ func TestSubscriptionNotifyService_Handle_MessengerFailureDoesNotStopEmail(t *te
 }
 
 func TestSubscriptionNotifyService_Handle_EmailFailureDoesNotStopMessage(t *testing.T) {
-	svc, _, messenger, emailer, _ := newSubNotifyHarness(t)
+	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
 	emailer.sendErr = errors.New("smtp timeout")
+	settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
 
 	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
 		UserID:         42,
@@ -295,9 +327,10 @@ func TestSubscriptionNotifyService_Handle_EmailFailureDoesNotStopMessage(t *test
 }
 
 func TestSubscriptionNotifyService_Handle_BothChannelsFailingReturnsNil(t *testing.T) {
-	svc, _, messenger, emailer, _ := newSubNotifyHarness(t)
+	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
 	messenger.sendErr = errors.New("site db down")
 	emailer.sendErr = errors.New("smtp timeout")
+	settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
 
 	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
 		UserID:         42,
@@ -310,7 +343,8 @@ func TestSubscriptionNotifyService_Handle_BothChannelsFailingReturnsNil(t *testi
 }
 
 func TestSubscriptionNotifyService_Handle_UnknownKindStillSends(t *testing.T) {
-	svc, _, messenger, emailer, _ := newSubNotifyHarness(t)
+	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
+	settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
 
 	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
 		UserID:         42,
@@ -348,12 +382,39 @@ func TestSubscriptionNotifyService_Handle_RepurchaseURLFallsBackToFrontend(t *te
 		t.Fatalf("expected 1 site message, got %d", len(messenger.calls()))
 	}
 	body := messenger.calls()[0].Content
-	if !strings.Contains(body, "https://app.example.com/subscriptions") {
-		t.Errorf("body should fall back to frontend subscriptions page, got: %s", body)
+	if !strings.Contains(body, "https://app.example.com/purchase") {
+		t.Errorf("body should fall back to frontend purchase page, got: %s", body)
 	}
 }
 
-func TestSubscriptionNotifyService_Handle_RepurchaseURLNoFallbackWhenAllEmpty(t *testing.T) {
+func TestSubscriptionNotifyService_Handle_RepurchaseURLFallsBackToConfiguredFrontendURL(t *testing.T) {
+	users := newMockSubNotifyUsers()
+	users.users[42] = &User{ID: 42, Email: "user42@example.com"}
+	messenger := &mockSubscriptionNotifyMessenger{}
+	emailer := &mockSubscriptionNotifyEmailer{}
+	settings := newStubSubNotifySettings()
+	resolver := &stubSubNotifyFrontendURLResolver{url: "https://cfg.example.com/base"}
+	svc := NewSubscriptionNotifyService(users, messenger, emailer, settings, resolver.GetFrontendURL(context.Background()))
+
+	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
+		UserID:         42,
+		SubscriptionID: 1,
+		Kind:           "limit_reached_total",
+	})
+	if err := svc.Handle(context.Background(), payload); err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+
+	if len(messenger.calls()) != 1 {
+		t.Fatalf("expected 1 site message, got %d", len(messenger.calls()))
+	}
+	body := messenger.calls()[0].Content
+	if !strings.Contains(body, "https://cfg.example.com/base/purchase") {
+		t.Errorf("body should fall back to configured frontend url, got: %s", body)
+	}
+}
+
+func TestSubscriptionNotifyService_Handle_RepurchaseURLDefaultsToPurchaseWhenAllEmpty(t *testing.T) {
 	svc, _, messenger, _, _ := newSubNotifyHarness(t)
 
 	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
@@ -369,10 +430,15 @@ func TestSubscriptionNotifyService_Handle_RepurchaseURLNoFallbackWhenAllEmpty(t 
 	if len(messenger.calls()) != 1 {
 		t.Fatalf("expected 1 site message, got %d", len(messenger.calls()))
 	}
+	body := messenger.calls()[0].Content
+	if !strings.Contains(body, "/purchase") {
+		t.Errorf("body should include default purchase link, got: %s", body)
+	}
 }
 
 func TestSubscriptionNotifyService_Handle_UserMissingSkipsEmailOnly(t *testing.T) {
-	svc, _, messenger, emailer, _ := newSubNotifyHarness(t)
+	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
+	settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
 
 	payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
 		UserID:         9999, // 不在 mock 里
@@ -450,7 +516,8 @@ func (f *fakeSubscriptionNotifyOutboxRepo) MaxSubscriptionNotifyID(_ context.Con
 }
 
 func TestSubscriptionNotifyWorker_PollOnce_DispatchesEvents(t *testing.T) {
-	svc, _, messenger, emailer, _ := newSubNotifyHarness(t)
+	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
+	settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
 
 	repo := &fakeSubscriptionNotifyOutboxRepo{
 		events: []SchedulerOutboxEvent{

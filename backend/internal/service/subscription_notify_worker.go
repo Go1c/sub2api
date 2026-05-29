@@ -19,6 +19,7 @@ const (
 	defaultSubscriptionNotifyInterval = 5 * time.Second
 	defaultSubscriptionNotifyBatch    = 50
 	subscriptionNotifyEventTimeout    = 30 * time.Second
+	defaultSubscriptionRepurchasePath = "/purchase"
 )
 
 // SubscriptionNotifyPayload 是 scheduler_outbox 中 subscription_notify
@@ -70,10 +71,11 @@ type SubscriptionNotifyOutboxRepository interface {
 //   - 任一渠道失败不影响另一渠道；
 //   - invalid payload 直接吞错返回 nil（避免 worker 卡在坏数据上）。
 type SubscriptionNotifyService struct {
-	users     SubscriptionNotifyUserReader
-	messenger SubscriptionNotifyMessenger
-	emailer   SubscriptionNotifyEmailer
-	settings  SubscriptionNotifySettingsReader
+	users           SubscriptionNotifyUserReader
+	messenger       SubscriptionNotifyMessenger
+	emailer         SubscriptionNotifyEmailer
+	settings        SubscriptionNotifySettingsReader
+	frontendBaseURL string
 }
 
 // NewSubscriptionNotifyService 构造通知服务。任一依赖可为 nil，但相应渠道会被跳过。
@@ -82,12 +84,18 @@ func NewSubscriptionNotifyService(
 	messenger SubscriptionNotifyMessenger,
 	emailer SubscriptionNotifyEmailer,
 	settings SubscriptionNotifySettingsReader,
+	frontendBaseURL ...string,
 ) *SubscriptionNotifyService {
+	configuredFrontendURL := ""
+	if len(frontendBaseURL) > 0 {
+		configuredFrontendURL = strings.TrimSpace(frontendBaseURL[0])
+	}
 	return &SubscriptionNotifyService{
-		users:     users,
-		messenger: messenger,
-		emailer:   emailer,
-		settings:  settings,
+		users:           users,
+		messenger:       messenger,
+		emailer:         emailer,
+		settings:        settings,
+		frontendBaseURL: configuredFrontendURL,
 	}
 }
 
@@ -130,7 +138,7 @@ func (s *SubscriptionNotifyService) Handle(ctx context.Context, payload json.Raw
 	}
 
 	// 邮件：需要先把 user_id 解析为 email。失败仅记日志。
-	if s.emailer != nil {
+	if s.emailer != nil && s.subscriptionNotifyEmailEnabled(ctx) {
 		email := s.resolveUserEmail(ctx, p.UserID)
 		if email == "" {
 			slog.Warn("subscription_notify: user has no email, skipping email channel",
@@ -147,6 +155,18 @@ func (s *SubscriptionNotifyService) Handle(ctx context.Context, payload json.Raw
 	}
 
 	return nil
+}
+
+func (s *SubscriptionNotifyService) subscriptionNotifyEmailEnabled(ctx context.Context) bool {
+	if s.settings == nil {
+		return false
+	}
+	raw, err := s.settings.GetValue(ctx, SettingKeySubscriptionNotifyEmailEnabled)
+	if err != nil {
+		slog.Warn("subscription_notify: read email toggle failed", "error", err)
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(raw), "true")
 }
 
 // resolveUserEmail 取用户邮箱；用户查询失败时返回空串（调用方会跳过邮件渠道）。
@@ -239,23 +259,34 @@ func (s *SubscriptionNotifyService) buildContent(ctx context.Context, p Subscrip
 
 // resolveRepurchaseURL 读取重新订阅链接。优先级：
 //  1. SettingKeySubscriptionCreditPoolRepurchaseURL
-//  2. SettingKeyFrontendURL（前端订阅页路径作为锚点：/subscriptions）
-//  3. 空字符串（文案不包含链接时仍可读，但无跳转）
+//  2. SettingKeyFrontendURL + /purchase
+//  3. 构造时注入的 server.frontend_url + /purchase
+//  4. /purchase
 func (s *SubscriptionNotifyService) resolveRepurchaseURL(ctx context.Context) string {
-	if s.settings == nil {
-		return ""
-	}
-	if raw, err := s.settings.GetValue(ctx, SettingKeySubscriptionCreditPoolRepurchaseURL); err == nil {
-		if v := strings.TrimSpace(raw); v != "" {
-			return v
+	if s.settings != nil {
+		if raw, err := s.settings.GetValue(ctx, SettingKeySubscriptionCreditPoolRepurchaseURL); err == nil {
+			if v := strings.TrimSpace(raw); v != "" {
+				return v
+			}
+		}
+		if frontend, err := s.settings.GetValue(ctx, SettingKeyFrontendURL); err == nil {
+			if v := buildSubscriptionPurchaseURL(frontend); v != "" {
+				return v
+			}
 		}
 	}
-	frontend, err := s.settings.GetValue(ctx, SettingKeyFrontendURL)
-	if err != nil || strings.TrimSpace(frontend) == "" {
+	if v := buildSubscriptionPurchaseURL(s.frontendBaseURL); v != "" {
+		return v
+	}
+	return defaultSubscriptionRepurchasePath
+}
+
+func buildSubscriptionPurchaseURL(frontendBaseURL string) string {
+	base := strings.TrimRight(strings.TrimSpace(frontendBaseURL), "/")
+	if base == "" {
 		return ""
 	}
-	base := strings.TrimRight(strings.TrimSpace(frontend), "/")
-	return base + "/subscriptions"
+	return base + defaultSubscriptionRepurchasePath
 }
 
 // renderSubscriptionNotifyEmail 渲染统一风格的通知邮件正文。

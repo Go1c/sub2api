@@ -5591,6 +5591,11 @@ export default {
           enabledHint: '關閉後隱藏「我的訂閱」入口並攔截直鏈訪問，不影響支付充值入口。',
           balancePaymentEnabled: '允許餘額支付訂閱',
           balancePaymentEnabledHint: '開啟後，用戶可按當前充值倍率消耗賬戶餘額購買訂閱套餐。',
+          notifyEmailEnabled: '同步發送訂閱通知郵件',
+          notifyEmailHint: '開啟後，訂閱額度用完、觸達日/週限或過期時，除站內信外也會發送到用戶註冊郵箱。',
+          resetUTCOffset: '限額刷新 UTC 偏移',
+          resetHour: '限額刷新小時',
+          resetHint: '日限額每天在所選時區的該小時刷新；周限額每周一在同一時間刷新。',
         },
         siteMessages: {
           title: '站內信',

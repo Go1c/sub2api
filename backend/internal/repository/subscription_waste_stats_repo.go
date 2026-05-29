@@ -224,8 +224,8 @@ ORDER BY bucket_start
 }
 
 func wasteStatsWhere(query service.WasteStatsQuery) (string, []any) {
-	args := []any{query.StartTime, query.EndTime}
-	parts := []string{"l.created_at >= $1", "l.created_at < $2"}
+	args := []any{query.StartTime, query.EndTime, service.SubscriptionStatusRevoked}
+	parts := []string{"l.created_at >= $1", "l.created_at < $2", "us.deleted_at IS NULL", "us.status <> $3"}
 	if query.PlanID != nil {
 		args = append(args, *query.PlanID)
 		parts = append(parts, fmt.Sprintf("us.plan_id = $%d", len(args)))

@@ -544,6 +544,9 @@ export interface SystemSettings {
 
   // Payment configuration
   user_subscriptions_visible: boolean;
+  subscription_notify_email_enabled: boolean;
+  subscription_quota_reset_utc_offset_minutes: number;
+  subscription_quota_reset_hour: number;
   payment_enabled: boolean;
   risk_control_enabled: boolean;
   payment_min_amount: number;
@@ -768,6 +771,9 @@ export interface UpdateSettingsRequest {
   enable_anthropic_cache_ttl_1h_injection?: boolean;
   // Payment configuration
   user_subscriptions_visible?: boolean;
+  subscription_notify_email_enabled?: boolean;
+  subscription_quota_reset_utc_offset_minutes?: number;
+  subscription_quota_reset_hour?: number;
   payment_enabled?: boolean;
   risk_control_enabled?: boolean;
   payment_min_amount?: number;

@@ -5445,6 +5445,11 @@ export default {
           enabledHint: 'When off, My Subscriptions is hidden and direct access is blocked. Payment top-up remains available.',
           balancePaymentEnabled: 'Allow balance subscription payment',
           balancePaymentEnabledHint: 'When enabled, users can spend account balance at the current recharge rate to buy subscription plans.',
+          notifyEmailEnabled: 'Email subscription notifications',
+          notifyEmailHint: 'Also send subscription quota, daily/weekly limit, and expiry notices to the user registered email.',
+          resetUTCOffset: 'Quota reset UTC offset',
+          resetHour: 'Quota reset hour',
+          resetHint: 'Daily quota resets every day at this hour in the selected offset. Weekly quota resets every Monday at the same time.',
         },
         siteMessages: {
           title: 'Site Messages',

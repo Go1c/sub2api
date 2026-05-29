@@ -5608,6 +5608,11 @@ export default {
           enabledHint: '关闭后隐藏“我的订阅”入口并拦截直链访问，不影响支付充值入口。',
           balancePaymentEnabled: '允许余额支付订阅',
           balancePaymentEnabledHint: '开启后，用户可按当前充值倍率消耗账户余额购买订阅套餐。',
+          notifyEmailEnabled: '同步发送订阅通知邮件',
+          notifyEmailHint: '开启后，订阅额度用完、触达日/周限或过期时，除站内信外也会发送到用户注册邮箱。',
+          resetUTCOffset: '限额刷新 UTC 偏移',
+          resetHour: '限额刷新小时',
+          resetHint: '日限额每天在所选时区的该小时刷新；周限额每周一在同一时间刷新。',
         },
         siteMessages: {
           title: '站内信',

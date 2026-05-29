@@ -348,6 +348,9 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		UserSubscriptionsVisible:               settings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:            settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                settings.PurchaseSubscriptionURL,
+		SubscriptionNotifyEmailEnabled:         settings.SubscriptionNotifyEmailEnabled,
+		SubscriptionQuotaResetUTCOffsetMinutes: settings.SubscriptionQuotaResetUTCOffsetMinutes,
+		SubscriptionQuotaResetHour:             settings.SubscriptionQuotaResetHour,
 		TableDefaultPageSize:                   settings.TableDefaultPageSize,
 		TablePageSizeOptions:                   settings.TablePageSizeOptions,
 		CustomMenuItems:                        dto.ParseCustomMenuItems(settings.CustomMenuItems),
@@ -597,35 +600,38 @@ type UpdateSettingsRequest struct {
 	GoogleOAuthFrontendRedirectURL string `json:"google_oauth_frontend_redirect_url"`
 
 	// OEM设置
-	SiteName                              string                `json:"site_name"`
-	SiteLogo                              *string               `json:"site_logo"`
-	SiteSubtitle                          string                `json:"site_subtitle"`
-	APIBaseURL                            string                `json:"api_base_url"`
-	ContactInfo                           string                `json:"contact_info"`
-	ContactChannels                       *[]dto.ContactChannel `json:"contact_channels"`
-	SupportChatEnabled                    bool                  `json:"support_chat_enabled"`
-	SupportChatGatewayURL                 string                `json:"support_chat_gateway_url"`
-	SupportChatTitle                      string                `json:"support_chat_title"`
-	SupportChatWelcomeMessage             string                `json:"support_chat_welcome_message"`
-	SupportChatOfficialContactText        string                `json:"support_chat_official_contact_text"`
-	SupportChatOfficialContactURL         string                `json:"support_chat_official_contact_url"`
-	DocURL                                string                `json:"doc_url"`
-	SitePages                             *[]dto.SitePage       `json:"site_pages"`
-	HomeContent                           string                `json:"home_content"`
-	HideCcsImportButton                   bool                  `json:"hide_ccs_import_button"`
-	FrontendLocales                       []string              `json:"frontend_locales"`
-	CCSwitchDefaultModelAnthropic         string                `json:"ccswitch_default_model_anthropic"`
-	CCSwitchDefaultModelOpenAI            string                `json:"ccswitch_default_model_openai"`
-	CCSwitchDefaultModelGemini            string                `json:"ccswitch_default_model_gemini"`
-	CCSwitchDefaultModelAntigravity       string                `json:"ccswitch_default_model_antigravity"`
-	CCSwitchDefaultModelAntigravityGemini string                `json:"ccswitch_default_model_antigravity_gemini"`
-	UserSubscriptionsVisible              *bool                 `json:"user_subscriptions_visible"`
-	PurchaseSubscriptionEnabled           *bool                 `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL               *string               `json:"purchase_subscription_url"`
-	TableDefaultPageSize                  int                   `json:"table_default_page_size"`
-	TablePageSizeOptions                  []int                 `json:"table_page_size_options"`
-	CustomMenuItems                       *[]dto.CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints                       *[]dto.CustomEndpoint `json:"custom_endpoints"`
+	SiteName                               string                `json:"site_name"`
+	SiteLogo                               *string               `json:"site_logo"`
+	SiteSubtitle                           string                `json:"site_subtitle"`
+	APIBaseURL                             string                `json:"api_base_url"`
+	ContactInfo                            string                `json:"contact_info"`
+	ContactChannels                        *[]dto.ContactChannel `json:"contact_channels"`
+	SupportChatEnabled                     bool                  `json:"support_chat_enabled"`
+	SupportChatGatewayURL                  string                `json:"support_chat_gateway_url"`
+	SupportChatTitle                       string                `json:"support_chat_title"`
+	SupportChatWelcomeMessage              string                `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText         string                `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL          string                `json:"support_chat_official_contact_url"`
+	DocURL                                 string                `json:"doc_url"`
+	SitePages                              *[]dto.SitePage       `json:"site_pages"`
+	HomeContent                            string                `json:"home_content"`
+	HideCcsImportButton                    bool                  `json:"hide_ccs_import_button"`
+	FrontendLocales                        []string              `json:"frontend_locales"`
+	CCSwitchDefaultModelAnthropic          string                `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI             string                `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini             string                `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity        string                `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini  string                `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible               *bool                 `json:"user_subscriptions_visible"`
+	PurchaseSubscriptionEnabled            *bool                 `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL                *string               `json:"purchase_subscription_url"`
+	SubscriptionNotifyEmailEnabled         *bool                 `json:"subscription_notify_email_enabled"`
+	SubscriptionQuotaResetUTCOffsetMinutes *int                  `json:"subscription_quota_reset_utc_offset_minutes"`
+	SubscriptionQuotaResetHour             *int                  `json:"subscription_quota_reset_hour"`
+	TableDefaultPageSize                   int                   `json:"table_default_page_size"`
+	TablePageSizeOptions                   []int                 `json:"table_page_size_options"`
+	CustomMenuItems                        *[]dto.CustomMenuItem `json:"custom_menu_items"`
+	CustomEndpoints                        *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
 	// 默认配置
 	DefaultConcurrency                       int                               `json:"default_concurrency"`
@@ -1343,6 +1349,14 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	if req.PurchaseSubscriptionURL != nil {
 		purchaseURL = strings.TrimSpace(*req.PurchaseSubscriptionURL)
 	}
+	subscriptionQuotaResetUTCOffsetMinutes := previousSettings.SubscriptionQuotaResetUTCOffsetMinutes
+	if req.SubscriptionQuotaResetUTCOffsetMinutes != nil {
+		subscriptionQuotaResetUTCOffsetMinutes = *req.SubscriptionQuotaResetUTCOffsetMinutes
+	}
+	subscriptionQuotaResetHour := previousSettings.SubscriptionQuotaResetHour
+	if req.SubscriptionQuotaResetHour != nil {
+		subscriptionQuotaResetHour = *req.SubscriptionQuotaResetHour
+	}
 
 	// - 启用时要求 URL 合法且非空
 	// - 禁用时允许为空；若提供了 URL 也做基本校验，避免误配置
@@ -1655,6 +1669,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		siteLogo = *req.SiteLogo
 	}
 	userSubscriptionsVisible := boolValueOrDefault(req.UserSubscriptionsVisible, previousSettings.UserSubscriptionsVisible)
+	subscriptionNotifyEmailEnabled := boolValueOrDefault(req.SubscriptionNotifyEmailEnabled, previousSettings.SubscriptionNotifyEmailEnabled)
 
 	// Ops metrics collector interval validation (seconds).
 	if req.OpsMetricsIntervalSeconds != nil {
@@ -1700,116 +1715,119 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	}
 
 	settings := &service.SystemSettings{
-		RegistrationEnabled:                   req.RegistrationEnabled,
-		EmailVerifyEnabled:                    req.EmailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist:      req.RegistrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                      req.PromoCodeEnabled,
-		PasswordResetEnabled:                  req.PasswordResetEnabled,
-		FrontendURL:                           req.FrontendURL,
-		InvitationCodeEnabled:                 req.InvitationCodeEnabled,
-		InvitationRegistrationMode:            req.InvitationRegistrationMode,
-		TotpEnabled:                           req.TotpEnabled,
-		LoginAgreementEnabled:                 req.LoginAgreementEnabled,
-		LoginAgreementMode:                    loginAgreementMode,
-		LoginAgreementUpdatedAt:               loginAgreementUpdatedAt,
-		LoginAgreementDocuments:               loginAgreementDocuments,
-		SMTPHost:                              req.SMTPHost,
-		SMTPPort:                              req.SMTPPort,
-		SMTPUsername:                          req.SMTPUsername,
-		SMTPPassword:                          req.SMTPPassword,
-		SMTPFrom:                              req.SMTPFrom,
-		SMTPFromName:                          req.SMTPFromName,
-		SMTPUseTLS:                            req.SMTPUseTLS,
-		TurnstileEnabled:                      req.TurnstileEnabled,
-		TurnstileSiteKey:                      req.TurnstileSiteKey,
-		TurnstileSecretKey:                    req.TurnstileSecretKey,
-		LinuxDoConnectEnabled:                 req.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID:                req.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecret:            req.LinuxDoConnectClientSecret,
-		LinuxDoConnectRedirectURL:             req.LinuxDoConnectRedirectURL,
-		WeChatConnectEnabled:                  req.WeChatConnectEnabled,
-		WeChatConnectAppID:                    req.WeChatConnectAppID,
-		WeChatConnectAppSecret:                req.WeChatConnectAppSecret,
-		WeChatConnectOpenAppID:                req.WeChatConnectOpenAppID,
-		WeChatConnectOpenAppSecret:            req.WeChatConnectOpenAppSecret,
-		WeChatConnectMPAppID:                  req.WeChatConnectMPAppID,
-		WeChatConnectMPAppSecret:              req.WeChatConnectMPAppSecret,
-		WeChatConnectMobileAppID:              req.WeChatConnectMobileAppID,
-		WeChatConnectMobileAppSecret:          req.WeChatConnectMobileAppSecret,
-		WeChatConnectOpenEnabled:              wechatOpenEnabled,
-		WeChatConnectMPEnabled:                wechatMPEnabled,
-		WeChatConnectMobileEnabled:            wechatMobileEnabled,
-		WeChatConnectMode:                     req.WeChatConnectMode,
-		WeChatConnectScopes:                   req.WeChatConnectScopes,
-		WeChatConnectRedirectURL:              req.WeChatConnectRedirectURL,
-		WeChatConnectFrontendRedirectURL:      req.WeChatConnectFrontendRedirectURL,
-		OIDCConnectEnabled:                    req.OIDCConnectEnabled,
-		OIDCConnectProviderName:               req.OIDCConnectProviderName,
-		OIDCConnectClientID:                   req.OIDCConnectClientID,
-		OIDCConnectClientSecret:               req.OIDCConnectClientSecret,
-		OIDCConnectIssuerURL:                  req.OIDCConnectIssuerURL,
-		OIDCConnectDiscoveryURL:               req.OIDCConnectDiscoveryURL,
-		OIDCConnectAuthorizeURL:               req.OIDCConnectAuthorizeURL,
-		OIDCConnectTokenURL:                   req.OIDCConnectTokenURL,
-		OIDCConnectUserInfoURL:                req.OIDCConnectUserInfoURL,
-		OIDCConnectJWKSURL:                    req.OIDCConnectJWKSURL,
-		OIDCConnectScopes:                     req.OIDCConnectScopes,
-		OIDCConnectRedirectURL:                req.OIDCConnectRedirectURL,
-		OIDCConnectFrontendRedirectURL:        req.OIDCConnectFrontendRedirectURL,
-		OIDCConnectTokenAuthMethod:            req.OIDCConnectTokenAuthMethod,
-		OIDCConnectUsePKCE:                    oidcUsePKCE,
-		OIDCConnectValidateIDToken:            oidcValidateIDToken,
-		OIDCConnectAllowedSigningAlgs:         req.OIDCConnectAllowedSigningAlgs,
-		OIDCConnectClockSkewSeconds:           req.OIDCConnectClockSkewSeconds,
-		OIDCConnectRequireEmailVerified:       req.OIDCConnectRequireEmailVerified,
-		OIDCConnectUserInfoEmailPath:          req.OIDCConnectUserInfoEmailPath,
-		OIDCConnectUserInfoIDPath:             req.OIDCConnectUserInfoIDPath,
-		OIDCConnectUserInfoUsernamePath:       req.OIDCConnectUserInfoUsernamePath,
-		GitHubOAuthEnabled:                    req.GitHubOAuthEnabled,
-		GitHubOAuthClientID:                   req.GitHubOAuthClientID,
-		GitHubOAuthClientSecret:               req.GitHubOAuthClientSecret,
-		GitHubOAuthRedirectURL:                req.GitHubOAuthRedirectURL,
-		GitHubOAuthFrontendRedirectURL:        req.GitHubOAuthFrontendRedirectURL,
-		GoogleOAuthEnabled:                    req.GoogleOAuthEnabled,
-		GoogleOAuthClientID:                   req.GoogleOAuthClientID,
-		GoogleOAuthClientSecret:               req.GoogleOAuthClientSecret,
-		GoogleOAuthRedirectURL:                req.GoogleOAuthRedirectURL,
-		GoogleOAuthFrontendRedirectURL:        req.GoogleOAuthFrontendRedirectURL,
-		SiteName:                              req.SiteName,
-		SiteLogo:                              siteLogo,
-		SiteSubtitle:                          req.SiteSubtitle,
-		APIBaseURL:                            req.APIBaseURL,
-		ContactInfo:                           req.ContactInfo,
-		ContactChannels:                       contactChannelsJSON,
-		SupportChatEnabled:                    req.SupportChatEnabled,
-		SupportChatGatewayURL:                 req.SupportChatGatewayURL,
-		SupportChatTitle:                      req.SupportChatTitle,
-		SupportChatWelcomeMessage:             req.SupportChatWelcomeMessage,
-		SupportChatOfficialContactText:        req.SupportChatOfficialContactText,
-		SupportChatOfficialContactURL:         req.SupportChatOfficialContactURL,
-		DocURL:                                req.DocURL,
-		SitePages:                             sitePagesJSON,
-		HomeContent:                           req.HomeContent,
-		HideCcsImportButton:                   req.HideCcsImportButton,
-		FrontendLocales:                       req.FrontendLocales,
-		CCSwitchDefaultModelAnthropic:         req.CCSwitchDefaultModelAnthropic,
-		CCSwitchDefaultModelOpenAI:            req.CCSwitchDefaultModelOpenAI,
-		CCSwitchDefaultModelGemini:            req.CCSwitchDefaultModelGemini,
-		CCSwitchDefaultModelAntigravity:       req.CCSwitchDefaultModelAntigravity,
-		CCSwitchDefaultModelAntigravityGemini: req.CCSwitchDefaultModelAntigravityGemini,
-		UserSubscriptionsVisible:              userSubscriptionsVisible,
-		PurchaseSubscriptionEnabled:           purchaseEnabled,
-		PurchaseSubscriptionURL:               purchaseURL,
-		TableDefaultPageSize:                  req.TableDefaultPageSize,
-		TablePageSizeOptions:                  req.TablePageSizeOptions,
-		CustomMenuItems:                       customMenuJSON,
-		CustomEndpoints:                       customEndpointsJSON,
-		DefaultConcurrency:                    req.DefaultConcurrency,
-		DefaultBalance:                        req.DefaultBalance,
-		AffiliateRebateRate:                   affiliateRebateRate,
-		AffiliateRebateFreezeHours:            affiliateRebateFreezeHours,
-		AffiliateRebateDurationDays:           affiliateRebateDurationDays,
-		AffiliateRebatePerInviteeCap:          affiliateRebatePerInviteeCap,
+		RegistrationEnabled:                    req.RegistrationEnabled,
+		EmailVerifyEnabled:                     req.EmailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:       req.RegistrationEmailSuffixWhitelist,
+		PromoCodeEnabled:                       req.PromoCodeEnabled,
+		PasswordResetEnabled:                   req.PasswordResetEnabled,
+		FrontendURL:                            req.FrontendURL,
+		InvitationCodeEnabled:                  req.InvitationCodeEnabled,
+		InvitationRegistrationMode:             req.InvitationRegistrationMode,
+		TotpEnabled:                            req.TotpEnabled,
+		LoginAgreementEnabled:                  req.LoginAgreementEnabled,
+		LoginAgreementMode:                     loginAgreementMode,
+		LoginAgreementUpdatedAt:                loginAgreementUpdatedAt,
+		LoginAgreementDocuments:                loginAgreementDocuments,
+		SMTPHost:                               req.SMTPHost,
+		SMTPPort:                               req.SMTPPort,
+		SMTPUsername:                           req.SMTPUsername,
+		SMTPPassword:                           req.SMTPPassword,
+		SMTPFrom:                               req.SMTPFrom,
+		SMTPFromName:                           req.SMTPFromName,
+		SMTPUseTLS:                             req.SMTPUseTLS,
+		TurnstileEnabled:                       req.TurnstileEnabled,
+		TurnstileSiteKey:                       req.TurnstileSiteKey,
+		TurnstileSecretKey:                     req.TurnstileSecretKey,
+		LinuxDoConnectEnabled:                  req.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID:                 req.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecret:             req.LinuxDoConnectClientSecret,
+		LinuxDoConnectRedirectURL:              req.LinuxDoConnectRedirectURL,
+		WeChatConnectEnabled:                   req.WeChatConnectEnabled,
+		WeChatConnectAppID:                     req.WeChatConnectAppID,
+		WeChatConnectAppSecret:                 req.WeChatConnectAppSecret,
+		WeChatConnectOpenAppID:                 req.WeChatConnectOpenAppID,
+		WeChatConnectOpenAppSecret:             req.WeChatConnectOpenAppSecret,
+		WeChatConnectMPAppID:                   req.WeChatConnectMPAppID,
+		WeChatConnectMPAppSecret:               req.WeChatConnectMPAppSecret,
+		WeChatConnectMobileAppID:               req.WeChatConnectMobileAppID,
+		WeChatConnectMobileAppSecret:           req.WeChatConnectMobileAppSecret,
+		WeChatConnectOpenEnabled:               wechatOpenEnabled,
+		WeChatConnectMPEnabled:                 wechatMPEnabled,
+		WeChatConnectMobileEnabled:             wechatMobileEnabled,
+		WeChatConnectMode:                      req.WeChatConnectMode,
+		WeChatConnectScopes:                    req.WeChatConnectScopes,
+		WeChatConnectRedirectURL:               req.WeChatConnectRedirectURL,
+		WeChatConnectFrontendRedirectURL:       req.WeChatConnectFrontendRedirectURL,
+		OIDCConnectEnabled:                     req.OIDCConnectEnabled,
+		OIDCConnectProviderName:                req.OIDCConnectProviderName,
+		OIDCConnectClientID:                    req.OIDCConnectClientID,
+		OIDCConnectClientSecret:                req.OIDCConnectClientSecret,
+		OIDCConnectIssuerURL:                   req.OIDCConnectIssuerURL,
+		OIDCConnectDiscoveryURL:                req.OIDCConnectDiscoveryURL,
+		OIDCConnectAuthorizeURL:                req.OIDCConnectAuthorizeURL,
+		OIDCConnectTokenURL:                    req.OIDCConnectTokenURL,
+		OIDCConnectUserInfoURL:                 req.OIDCConnectUserInfoURL,
+		OIDCConnectJWKSURL:                     req.OIDCConnectJWKSURL,
+		OIDCConnectScopes:                      req.OIDCConnectScopes,
+		OIDCConnectRedirectURL:                 req.OIDCConnectRedirectURL,
+		OIDCConnectFrontendRedirectURL:         req.OIDCConnectFrontendRedirectURL,
+		OIDCConnectTokenAuthMethod:             req.OIDCConnectTokenAuthMethod,
+		OIDCConnectUsePKCE:                     oidcUsePKCE,
+		OIDCConnectValidateIDToken:             oidcValidateIDToken,
+		OIDCConnectAllowedSigningAlgs:          req.OIDCConnectAllowedSigningAlgs,
+		OIDCConnectClockSkewSeconds:            req.OIDCConnectClockSkewSeconds,
+		OIDCConnectRequireEmailVerified:        req.OIDCConnectRequireEmailVerified,
+		OIDCConnectUserInfoEmailPath:           req.OIDCConnectUserInfoEmailPath,
+		OIDCConnectUserInfoIDPath:              req.OIDCConnectUserInfoIDPath,
+		OIDCConnectUserInfoUsernamePath:        req.OIDCConnectUserInfoUsernamePath,
+		GitHubOAuthEnabled:                     req.GitHubOAuthEnabled,
+		GitHubOAuthClientID:                    req.GitHubOAuthClientID,
+		GitHubOAuthClientSecret:                req.GitHubOAuthClientSecret,
+		GitHubOAuthRedirectURL:                 req.GitHubOAuthRedirectURL,
+		GitHubOAuthFrontendRedirectURL:         req.GitHubOAuthFrontendRedirectURL,
+		GoogleOAuthEnabled:                     req.GoogleOAuthEnabled,
+		GoogleOAuthClientID:                    req.GoogleOAuthClientID,
+		GoogleOAuthClientSecret:                req.GoogleOAuthClientSecret,
+		GoogleOAuthRedirectURL:                 req.GoogleOAuthRedirectURL,
+		GoogleOAuthFrontendRedirectURL:         req.GoogleOAuthFrontendRedirectURL,
+		SiteName:                               req.SiteName,
+		SiteLogo:                               siteLogo,
+		SiteSubtitle:                           req.SiteSubtitle,
+		APIBaseURL:                             req.APIBaseURL,
+		ContactInfo:                            req.ContactInfo,
+		ContactChannels:                        contactChannelsJSON,
+		SupportChatEnabled:                     req.SupportChatEnabled,
+		SupportChatGatewayURL:                  req.SupportChatGatewayURL,
+		SupportChatTitle:                       req.SupportChatTitle,
+		SupportChatWelcomeMessage:              req.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:         req.SupportChatOfficialContactText,
+		SupportChatOfficialContactURL:          req.SupportChatOfficialContactURL,
+		DocURL:                                 req.DocURL,
+		SitePages:                              sitePagesJSON,
+		HomeContent:                            req.HomeContent,
+		HideCcsImportButton:                    req.HideCcsImportButton,
+		FrontendLocales:                        req.FrontendLocales,
+		CCSwitchDefaultModelAnthropic:          req.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:             req.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:             req.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:        req.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini:  req.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:               userSubscriptionsVisible,
+		PurchaseSubscriptionEnabled:            purchaseEnabled,
+		PurchaseSubscriptionURL:                purchaseURL,
+		SubscriptionNotifyEmailEnabled:         subscriptionNotifyEmailEnabled,
+		SubscriptionQuotaResetUTCOffsetMinutes: subscriptionQuotaResetUTCOffsetMinutes,
+		SubscriptionQuotaResetHour:             subscriptionQuotaResetHour,
+		TableDefaultPageSize:                   req.TableDefaultPageSize,
+		TablePageSizeOptions:                   req.TablePageSizeOptions,
+		CustomMenuItems:                        customMenuJSON,
+		CustomEndpoints:                        customEndpointsJSON,
+		DefaultConcurrency:                     req.DefaultConcurrency,
+		DefaultBalance:                         req.DefaultBalance,
+		AffiliateRebateRate:                    affiliateRebateRate,
+		AffiliateRebateFreezeHours:             affiliateRebateFreezeHours,
+		AffiliateRebateDurationDays:            affiliateRebateDurationDays,
+		AffiliateRebatePerInviteeCap:           affiliateRebatePerInviteeCap,
 		AffiliateSignupBonusEnabled: func() bool {
 			if req.AffiliateSignupBonusEnabled != nil {
 				return *req.AffiliateSignupBonusEnabled
@@ -2225,6 +2243,9 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		UserSubscriptionsVisible:               updatedSettings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                updatedSettings.PurchaseSubscriptionURL,
+		SubscriptionNotifyEmailEnabled:         updatedSettings.SubscriptionNotifyEmailEnabled,
+		SubscriptionQuotaResetUTCOffsetMinutes: updatedSettings.SubscriptionQuotaResetUTCOffsetMinutes,
+		SubscriptionQuotaResetHour:             updatedSettings.SubscriptionQuotaResetHour,
 		TableDefaultPageSize:                   updatedSettings.TableDefaultPageSize,
 		TablePageSizeOptions:                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
@@ -2715,6 +2736,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.PurchaseSubscriptionURL != after.PurchaseSubscriptionURL {
 		changed = append(changed, "purchase_subscription_url")
+	}
+	if before.SubscriptionNotifyEmailEnabled != after.SubscriptionNotifyEmailEnabled {
+		changed = append(changed, "subscription_notify_email_enabled")
+	}
+	if before.SubscriptionQuotaResetUTCOffsetMinutes != after.SubscriptionQuotaResetUTCOffsetMinutes {
+		changed = append(changed, "subscription_quota_reset_utc_offset_minutes")
+	}
+	if before.SubscriptionQuotaResetHour != after.SubscriptionQuotaResetHour {
+		changed = append(changed, "subscription_quota_reset_hour")
 	}
 	if before.TableDefaultPageSize != after.TableDefaultPageSize {
 		changed = append(changed, "table_default_page_size")

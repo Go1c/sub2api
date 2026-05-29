@@ -5143,6 +5143,52 @@
               </div>
               <Toggle v-model="form.payment_subscription_balance_enabled" />
             </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.userSubscriptions.notifyEmailEnabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.userSubscriptions.notifyEmailHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.subscription_notify_email_enabled" />
+            </div>
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.userSubscriptions.resetUTCOffset') }}
+                </label>
+                <select
+                  v-model.number="form.subscription_quota_reset_utc_offset_minutes"
+                  class="input"
+                >
+                  <option
+                    v-for="option in subscriptionQuotaResetUTCOffsetOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.userSubscriptions.resetHour') }}
+                </label>
+                <input
+                  v-model.number="form.subscription_quota_reset_hour"
+                  type="number"
+                  min="0"
+                  max="23"
+                  class="input"
+                />
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.userSubscriptions.resetHint') }}
+            </p>
           </div>
         </div>
 
@@ -7114,6 +7160,22 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_enabled: boolean;
 };
 
+function formatUTCOffsetLabel(minutes: number): string {
+  const sign = minutes >= 0 ? "+" : "-";
+  const abs = Math.abs(minutes);
+  const hours = Math.floor(abs / 60);
+  const mins = abs % 60;
+  return `UTC${sign}${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+}
+
+const subscriptionQuotaResetUTCOffsetOptions = Array.from(
+  { length: (14 * 60 - -12 * 60) / 15 + 1 },
+  (_, index) => -12 * 60 + index * 15,
+).map((value) => ({
+  value,
+  label: formatUTCOffsetLabel(value),
+}));
+
 const form = reactive<SettingsForm>({
   registration_enabled: true,
   email_verify_enabled: false,
@@ -7161,6 +7223,9 @@ const form = reactive<SettingsForm>({
   home_content: "",
   backend_mode_enabled: false,
   user_subscriptions_visible: true,
+  subscription_notify_email_enabled: false,
+  subscription_quota_reset_utc_offset_minutes: 0,
+  subscription_quota_reset_hour: 0,
   hide_ccs_import_button: false,
   ccswitch_default_model_anthropic: "",
   ccswitch_default_model_openai: "gpt-5.4",
@@ -8577,6 +8642,10 @@ async function saveSettings() {
       backend_mode_enabled: form.backend_mode_enabled,
       user_subscriptions_visible: form.user_subscriptions_visible,
       payment_subscription_balance_enabled: form.payment_subscription_balance_enabled,
+      subscription_notify_email_enabled: form.subscription_notify_email_enabled,
+      subscription_quota_reset_utc_offset_minutes:
+        form.subscription_quota_reset_utc_offset_minutes,
+      subscription_quota_reset_hour: form.subscription_quota_reset_hour,
       hide_ccs_import_button: form.hide_ccs_import_button,
       ccswitch_default_model_anthropic: form.ccswitch_default_model_anthropic,
       ccswitch_default_model_openai: form.ccswitch_default_model_openai,
