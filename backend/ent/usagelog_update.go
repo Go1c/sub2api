@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -521,6 +522,48 @@ func (_u *UsageLogUpdate) AddActualCost(v float64) *UsageLogUpdate {
 	return _u
 }
 
+// SetSubscriptionCostUsd sets the "subscription_cost_usd" field.
+func (_u *UsageLogUpdate) SetSubscriptionCostUsd(v float64) *UsageLogUpdate {
+	_u.mutation.ResetSubscriptionCostUsd()
+	_u.mutation.SetSubscriptionCostUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionCostUsd sets the "subscription_cost_usd" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableSubscriptionCostUsd(v *float64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetSubscriptionCostUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionCostUsd adds value to the "subscription_cost_usd" field.
+func (_u *UsageLogUpdate) AddSubscriptionCostUsd(v float64) *UsageLogUpdate {
+	_u.mutation.AddSubscriptionCostUsd(v)
+	return _u
+}
+
+// SetBalanceCostUsd sets the "balance_cost_usd" field.
+func (_u *UsageLogUpdate) SetBalanceCostUsd(v float64) *UsageLogUpdate {
+	_u.mutation.ResetBalanceCostUsd()
+	_u.mutation.SetBalanceCostUsd(v)
+	return _u
+}
+
+// SetNillableBalanceCostUsd sets the "balance_cost_usd" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableBalanceCostUsd(v *float64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetBalanceCostUsd(*v)
+	}
+	return _u
+}
+
+// AddBalanceCostUsd adds value to the "balance_cost_usd" field.
+func (_u *UsageLogUpdate) AddBalanceCostUsd(v float64) *UsageLogUpdate {
+	_u.mutation.AddBalanceCostUsd(v)
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *UsageLogUpdate) SetRateMultiplier(v float64) *UsageLogUpdate {
 	_u.mutation.ResetRateMultiplier()
@@ -778,6 +821,21 @@ func (_u *UsageLogUpdate) SetSubscription(v *UserSubscription) *UsageLogUpdate {
 	return _u.SetSubscriptionID(v.ID)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *UsageLogUpdate) AddSubscriptionCreditLedgerIDs(ids ...int64) *UsageLogUpdate {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *UsageLogUpdate) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *UsageLogUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // Mutation returns the UsageLogMutation object of the builder.
 func (_u *UsageLogUpdate) Mutation() *UsageLogMutation {
 	return _u.mutation
@@ -811,6 +869,27 @@ func (_u *UsageLogUpdate) ClearGroup() *UsageLogUpdate {
 func (_u *UsageLogUpdate) ClearSubscription() *UsageLogUpdate {
 	_u.mutation.ClearSubscription()
 	return _u
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *UsageLogUpdate) ClearSubscriptionCreditLedgers() *UsageLogUpdate {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *UsageLogUpdate) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *UsageLogUpdate {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *UsageLogUpdate) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *UsageLogUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1033,6 +1112,18 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedActualCost(); ok {
 		_spec.AddField(usagelog.FieldActualCost, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.SubscriptionCostUsd(); ok {
+		_spec.SetField(usagelog.FieldSubscriptionCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionCostUsd(); ok {
+		_spec.AddField(usagelog.FieldSubscriptionCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BalanceCostUsd(); ok {
+		_spec.SetField(usagelog.FieldBalanceCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceCostUsd(); ok {
+		_spec.AddField(usagelog.FieldBalanceCostUsd, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)
 	}
@@ -1240,6 +1331,51 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usersubscription.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.SubscriptionCreditLedgersTable,
+			Columns: []string{usagelog.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.SubscriptionCreditLedgersTable,
+			Columns: []string{usagelog.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.SubscriptionCreditLedgersTable,
+			Columns: []string{usagelog.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1756,6 +1892,48 @@ func (_u *UsageLogUpdateOne) AddActualCost(v float64) *UsageLogUpdateOne {
 	return _u
 }
 
+// SetSubscriptionCostUsd sets the "subscription_cost_usd" field.
+func (_u *UsageLogUpdateOne) SetSubscriptionCostUsd(v float64) *UsageLogUpdateOne {
+	_u.mutation.ResetSubscriptionCostUsd()
+	_u.mutation.SetSubscriptionCostUsd(v)
+	return _u
+}
+
+// SetNillableSubscriptionCostUsd sets the "subscription_cost_usd" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableSubscriptionCostUsd(v *float64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionCostUsd(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionCostUsd adds value to the "subscription_cost_usd" field.
+func (_u *UsageLogUpdateOne) AddSubscriptionCostUsd(v float64) *UsageLogUpdateOne {
+	_u.mutation.AddSubscriptionCostUsd(v)
+	return _u
+}
+
+// SetBalanceCostUsd sets the "balance_cost_usd" field.
+func (_u *UsageLogUpdateOne) SetBalanceCostUsd(v float64) *UsageLogUpdateOne {
+	_u.mutation.ResetBalanceCostUsd()
+	_u.mutation.SetBalanceCostUsd(v)
+	return _u
+}
+
+// SetNillableBalanceCostUsd sets the "balance_cost_usd" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableBalanceCostUsd(v *float64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetBalanceCostUsd(*v)
+	}
+	return _u
+}
+
+// AddBalanceCostUsd adds value to the "balance_cost_usd" field.
+func (_u *UsageLogUpdateOne) AddBalanceCostUsd(v float64) *UsageLogUpdateOne {
+	_u.mutation.AddBalanceCostUsd(v)
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *UsageLogUpdateOne) SetRateMultiplier(v float64) *UsageLogUpdateOne {
 	_u.mutation.ResetRateMultiplier()
@@ -2013,6 +2191,21 @@ func (_u *UsageLogUpdateOne) SetSubscription(v *UserSubscription) *UsageLogUpdat
 	return _u.SetSubscriptionID(v.ID)
 }
 
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *UsageLogUpdateOne) AddSubscriptionCreditLedgerIDs(ids ...int64) *UsageLogUpdateOne {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *UsageLogUpdateOne) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *UsageLogUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
+}
+
 // Mutation returns the UsageLogMutation object of the builder.
 func (_u *UsageLogUpdateOne) Mutation() *UsageLogMutation {
 	return _u.mutation
@@ -2046,6 +2239,27 @@ func (_u *UsageLogUpdateOne) ClearGroup() *UsageLogUpdateOne {
 func (_u *UsageLogUpdateOne) ClearSubscription() *UsageLogUpdateOne {
 	_u.mutation.ClearSubscription()
 	return _u
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *UsageLogUpdateOne) ClearSubscriptionCreditLedgers() *UsageLogUpdateOne {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *UsageLogUpdateOne) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *UsageLogUpdateOne {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *UsageLogUpdateOne) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *UsageLogUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // Where appends a list predicates to the UsageLogUpdate builder.
@@ -2298,6 +2512,18 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	if value, ok := _u.mutation.AddedActualCost(); ok {
 		_spec.AddField(usagelog.FieldActualCost, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.SubscriptionCostUsd(); ok {
+		_spec.SetField(usagelog.FieldSubscriptionCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionCostUsd(); ok {
+		_spec.AddField(usagelog.FieldSubscriptionCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BalanceCostUsd(); ok {
+		_spec.SetField(usagelog.FieldBalanceCostUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceCostUsd(); ok {
+		_spec.AddField(usagelog.FieldBalanceCostUsd, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)
 	}
@@ -2505,6 +2731,51 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usersubscription.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.SubscriptionCreditLedgersTable,
+			Columns: []string{usagelog.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.SubscriptionCreditLedgersTable,
+			Columns: []string{usagelog.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usagelog.SubscriptionCreditLedgersTable,
+			Columns: []string{usagelog.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

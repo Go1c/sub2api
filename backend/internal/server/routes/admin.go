@@ -563,8 +563,13 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	subscriptions := admin.Group("/subscriptions")
 	{
 		subscriptions.GET("", h.Admin.Subscription.List)
+		subscriptions.GET("/waste-stats", h.Admin.SubscriptionWasteStats.Get)
+		subscriptions.GET("/waste-stats/by-plan", h.Admin.SubscriptionWasteStats.GetByPlan)
+		subscriptions.GET("/waste-stats/time-series", h.Admin.SubscriptionWasteStats.GetTimeSeries)
+		subscriptions.GET("/:id/ledger", h.Admin.Subscription.GetLedger)
 		subscriptions.GET("/:id", h.Admin.Subscription.GetByID)
 		subscriptions.GET("/:id/progress", h.Admin.Subscription.GetProgress)
+		subscriptions.PATCH("/:id", h.Admin.Subscription.Update)
 		subscriptions.POST("/assign", h.Admin.Subscription.Assign)
 		subscriptions.POST("/bulk-assign", h.Admin.Subscription.BulkAssign)
 		subscriptions.POST("/:id/extend", h.Admin.Subscription.Extend)

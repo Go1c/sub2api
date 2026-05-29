@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -79,6 +80,104 @@ func (_c *UserSubscriptionCreate) SetGroupID(v int64) *UserSubscriptionCreate {
 	return _c
 }
 
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableGroupID(v *int64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
+// SetPlanID sets the "plan_id" field.
+func (_c *UserSubscriptionCreate) SetPlanID(v int64) *UserSubscriptionCreate {
+	_c.mutation.SetPlanID(v)
+	return _c
+}
+
+// SetNillablePlanID sets the "plan_id" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillablePlanID(v *int64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetPlanID(*v)
+	}
+	return _c
+}
+
+// SetScopeType sets the "scope_type" field.
+func (_c *UserSubscriptionCreate) SetScopeType(v string) *UserSubscriptionCreate {
+	_c.mutation.SetScopeType(v)
+	return _c
+}
+
+// SetNillableScopeType sets the "scope_type" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableScopeType(v *string) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetScopeType(*v)
+	}
+	return _c
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (_c *UserSubscriptionCreate) SetScopeConfig(v map[string]interface{}) *UserSubscriptionCreate {
+	_c.mutation.SetScopeConfig(v)
+	return _c
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetQuotaLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetQuotaLimitUsd(v)
+	return _c
+}
+
+// SetNillableQuotaLimitUsd sets the "quota_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableQuotaLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetQuotaLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (_c *UserSubscriptionCreate) SetQuotaUsedUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetQuotaUsedUsd(v)
+	return _c
+}
+
+// SetNillableQuotaUsedUsd sets the "quota_used_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableQuotaUsedUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetQuotaUsedUsd(*v)
+	}
+	return _c
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetDailyLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetDailyLimitUsd(v)
+	return _c
+}
+
+// SetNillableDailyLimitUsd sets the "daily_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableDailyLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetDailyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (_c *UserSubscriptionCreate) SetWeeklyLimitUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetWeeklyLimitUsd(v)
+	return _c
+}
+
+// SetNillableWeeklyLimitUsd sets the "weekly_limit_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWeeklyLimitUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWeeklyLimitUsd(*v)
+	}
+	return _c
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (_c *UserSubscriptionCreate) SetStartsAt(v time.Time) *UserSubscriptionCreate {
 	_c.mutation.SetStartsAt(v)
@@ -101,6 +200,34 @@ func (_c *UserSubscriptionCreate) SetStatus(v string) *UserSubscriptionCreate {
 func (_c *UserSubscriptionCreate) SetNillableStatus(v *string) *UserSubscriptionCreate {
 	if v != nil {
 		_c.SetStatus(*v)
+	}
+	return _c
+}
+
+// SetExhaustedAt sets the "exhausted_at" field.
+func (_c *UserSubscriptionCreate) SetExhaustedAt(v time.Time) *UserSubscriptionCreate {
+	_c.mutation.SetExhaustedAt(v)
+	return _c
+}
+
+// SetNillableExhaustedAt sets the "exhausted_at" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableExhaustedAt(v *time.Time) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetExhaustedAt(*v)
+	}
+	return _c
+}
+
+// SetExpiredCreditLoggedAt sets the "expired_credit_logged_at" field.
+func (_c *UserSubscriptionCreate) SetExpiredCreditLoggedAt(v time.Time) *UserSubscriptionCreate {
+	_c.mutation.SetExpiredCreditLoggedAt(v)
+	return _c
+}
+
+// SetNillableExpiredCreditLoggedAt sets the "expired_credit_logged_at" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableExpiredCreditLoggedAt(v *time.Time) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetExpiredCreditLoggedAt(*v)
 	}
 	return _c
 }
@@ -133,20 +260,6 @@ func (_c *UserSubscriptionCreate) SetNillableWeeklyWindowStart(v *time.Time) *Us
 	return _c
 }
 
-// SetMonthlyWindowStart sets the "monthly_window_start" field.
-func (_c *UserSubscriptionCreate) SetMonthlyWindowStart(v time.Time) *UserSubscriptionCreate {
-	_c.mutation.SetMonthlyWindowStart(v)
-	return _c
-}
-
-// SetNillableMonthlyWindowStart sets the "monthly_window_start" field if the given value is not nil.
-func (_c *UserSubscriptionCreate) SetNillableMonthlyWindowStart(v *time.Time) *UserSubscriptionCreate {
-	if v != nil {
-		_c.SetMonthlyWindowStart(*v)
-	}
-	return _c
-}
-
 // SetDailyUsageUsd sets the "daily_usage_usd" field.
 func (_c *UserSubscriptionCreate) SetDailyUsageUsd(v float64) *UserSubscriptionCreate {
 	_c.mutation.SetDailyUsageUsd(v)
@@ -171,20 +284,6 @@ func (_c *UserSubscriptionCreate) SetWeeklyUsageUsd(v float64) *UserSubscription
 func (_c *UserSubscriptionCreate) SetNillableWeeklyUsageUsd(v *float64) *UserSubscriptionCreate {
 	if v != nil {
 		_c.SetWeeklyUsageUsd(*v)
-	}
-	return _c
-}
-
-// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
-func (_c *UserSubscriptionCreate) SetMonthlyUsageUsd(v float64) *UserSubscriptionCreate {
-	_c.mutation.SetMonthlyUsageUsd(v)
-	return _c
-}
-
-// SetNillableMonthlyUsageUsd sets the "monthly_usage_usd" field if the given value is not nil.
-func (_c *UserSubscriptionCreate) SetNillableMonthlyUsageUsd(v *float64) *UserSubscriptionCreate {
-	if v != nil {
-		_c.SetMonthlyUsageUsd(*v)
 	}
 	return _c
 }
@@ -275,6 +374,21 @@ func (_c *UserSubscriptionCreate) AddUsageLogs(v ...*UsageLog) *UserSubscription
 	return _c.AddUsageLogIDs(ids...)
 }
 
+// AddCreditLedgerIDs adds the "credit_ledger" edge to the SubscriptionCreditLedger entity by IDs.
+func (_c *UserSubscriptionCreate) AddCreditLedgerIDs(ids ...int64) *UserSubscriptionCreate {
+	_c.mutation.AddCreditLedgerIDs(ids...)
+	return _c
+}
+
+// AddCreditLedger adds the "credit_ledger" edges to the SubscriptionCreditLedger entity.
+func (_c *UserSubscriptionCreate) AddCreditLedger(v ...*SubscriptionCreditLedger) *UserSubscriptionCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddCreditLedgerIDs(ids...)
+}
+
 // Mutation returns the UserSubscriptionMutation object of the builder.
 func (_c *UserSubscriptionCreate) Mutation() *UserSubscriptionMutation {
 	return _c.mutation
@@ -326,6 +440,22 @@ func (_c *UserSubscriptionCreate) defaults() error {
 		v := usersubscription.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.ScopeType(); !ok {
+		v := usersubscription.DefaultScopeType
+		_c.mutation.SetScopeType(v)
+	}
+	if _, ok := _c.mutation.ScopeConfig(); !ok {
+		v := usersubscription.DefaultScopeConfig
+		_c.mutation.SetScopeConfig(v)
+	}
+	if _, ok := _c.mutation.QuotaLimitUsd(); !ok {
+		v := usersubscription.DefaultQuotaLimitUsd
+		_c.mutation.SetQuotaLimitUsd(v)
+	}
+	if _, ok := _c.mutation.QuotaUsedUsd(); !ok {
+		v := usersubscription.DefaultQuotaUsedUsd
+		_c.mutation.SetQuotaUsedUsd(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := usersubscription.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -337,10 +467,6 @@ func (_c *UserSubscriptionCreate) defaults() error {
 	if _, ok := _c.mutation.WeeklyUsageUsd(); !ok {
 		v := usersubscription.DefaultWeeklyUsageUsd
 		_c.mutation.SetWeeklyUsageUsd(v)
-	}
-	if _, ok := _c.mutation.MonthlyUsageUsd(); !ok {
-		v := usersubscription.DefaultMonthlyUsageUsd
-		_c.mutation.SetMonthlyUsageUsd(v)
 	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
 		if usersubscription.DefaultAssignedAt == nil {
@@ -363,8 +489,22 @@ func (_c *UserSubscriptionCreate) check() error {
 	if _, ok := _c.mutation.UserID(); !ok {
 		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "UserSubscription.user_id"`)}
 	}
-	if _, ok := _c.mutation.GroupID(); !ok {
-		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "UserSubscription.group_id"`)}
+	if _, ok := _c.mutation.ScopeType(); !ok {
+		return &ValidationError{Name: "scope_type", err: errors.New(`ent: missing required field "UserSubscription.scope_type"`)}
+	}
+	if v, ok := _c.mutation.ScopeType(); ok {
+		if err := usersubscription.ScopeTypeValidator(v); err != nil {
+			return &ValidationError{Name: "scope_type", err: fmt.Errorf(`ent: validator failed for field "UserSubscription.scope_type": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ScopeConfig(); !ok {
+		return &ValidationError{Name: "scope_config", err: errors.New(`ent: missing required field "UserSubscription.scope_config"`)}
+	}
+	if _, ok := _c.mutation.QuotaLimitUsd(); !ok {
+		return &ValidationError{Name: "quota_limit_usd", err: errors.New(`ent: missing required field "UserSubscription.quota_limit_usd"`)}
+	}
+	if _, ok := _c.mutation.QuotaUsedUsd(); !ok {
+		return &ValidationError{Name: "quota_used_usd", err: errors.New(`ent: missing required field "UserSubscription.quota_used_usd"`)}
 	}
 	if _, ok := _c.mutation.StartsAt(); !ok {
 		return &ValidationError{Name: "starts_at", err: errors.New(`ent: missing required field "UserSubscription.starts_at"`)}
@@ -386,17 +526,11 @@ func (_c *UserSubscriptionCreate) check() error {
 	if _, ok := _c.mutation.WeeklyUsageUsd(); !ok {
 		return &ValidationError{Name: "weekly_usage_usd", err: errors.New(`ent: missing required field "UserSubscription.weekly_usage_usd"`)}
 	}
-	if _, ok := _c.mutation.MonthlyUsageUsd(); !ok {
-		return &ValidationError{Name: "monthly_usage_usd", err: errors.New(`ent: missing required field "UserSubscription.monthly_usage_usd"`)}
-	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
 		return &ValidationError{Name: "assigned_at", err: errors.New(`ent: missing required field "UserSubscription.assigned_at"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "UserSubscription.user"`)}
-	}
-	if len(_c.mutation.GroupIDs()) == 0 {
-		return &ValidationError{Name: "group", err: errors.New(`ent: missing required edge "UserSubscription.group"`)}
 	}
 	return nil
 }
@@ -437,6 +571,34 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 		_spec.SetField(usersubscription.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
 	}
+	if value, ok := _c.mutation.PlanID(); ok {
+		_spec.SetField(usersubscription.FieldPlanID, field.TypeInt64, value)
+		_node.PlanID = &value
+	}
+	if value, ok := _c.mutation.ScopeType(); ok {
+		_spec.SetField(usersubscription.FieldScopeType, field.TypeString, value)
+		_node.ScopeType = value
+	}
+	if value, ok := _c.mutation.ScopeConfig(); ok {
+		_spec.SetField(usersubscription.FieldScopeConfig, field.TypeJSON, value)
+		_node.ScopeConfig = value
+	}
+	if value, ok := _c.mutation.QuotaLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldQuotaLimitUsd, field.TypeFloat64, value)
+		_node.QuotaLimitUsd = value
+	}
+	if value, ok := _c.mutation.QuotaUsedUsd(); ok {
+		_spec.SetField(usersubscription.FieldQuotaUsedUsd, field.TypeFloat64, value)
+		_node.QuotaUsedUsd = value
+	}
+	if value, ok := _c.mutation.DailyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldDailyLimitUsd, field.TypeFloat64, value)
+		_node.DailyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.WeeklyLimitUsd(); ok {
+		_spec.SetField(usersubscription.FieldWeeklyLimitUsd, field.TypeFloat64, value)
+		_node.WeeklyLimitUsd = &value
+	}
 	if value, ok := _c.mutation.StartsAt(); ok {
 		_spec.SetField(usersubscription.FieldStartsAt, field.TypeTime, value)
 		_node.StartsAt = value
@@ -449,6 +611,14 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 		_spec.SetField(usersubscription.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
+	if value, ok := _c.mutation.ExhaustedAt(); ok {
+		_spec.SetField(usersubscription.FieldExhaustedAt, field.TypeTime, value)
+		_node.ExhaustedAt = &value
+	}
+	if value, ok := _c.mutation.ExpiredCreditLoggedAt(); ok {
+		_spec.SetField(usersubscription.FieldExpiredCreditLoggedAt, field.TypeTime, value)
+		_node.ExpiredCreditLoggedAt = &value
+	}
 	if value, ok := _c.mutation.DailyWindowStart(); ok {
 		_spec.SetField(usersubscription.FieldDailyWindowStart, field.TypeTime, value)
 		_node.DailyWindowStart = &value
@@ -457,10 +627,6 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 		_spec.SetField(usersubscription.FieldWeeklyWindowStart, field.TypeTime, value)
 		_node.WeeklyWindowStart = &value
 	}
-	if value, ok := _c.mutation.MonthlyWindowStart(); ok {
-		_spec.SetField(usersubscription.FieldMonthlyWindowStart, field.TypeTime, value)
-		_node.MonthlyWindowStart = &value
-	}
 	if value, ok := _c.mutation.DailyUsageUsd(); ok {
 		_spec.SetField(usersubscription.FieldDailyUsageUsd, field.TypeFloat64, value)
 		_node.DailyUsageUsd = value
@@ -468,10 +634,6 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.WeeklyUsageUsd(); ok {
 		_spec.SetField(usersubscription.FieldWeeklyUsageUsd, field.TypeFloat64, value)
 		_node.WeeklyUsageUsd = value
-	}
-	if value, ok := _c.mutation.MonthlyUsageUsd(); ok {
-		_spec.SetField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
-		_node.MonthlyUsageUsd = value
 	}
 	if value, ok := _c.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -512,7 +674,7 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.GroupID = nodes[0]
+		_node.GroupID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.AssignedByUserIDs(); len(nodes) > 0 {
@@ -541,6 +703,22 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.CreditLedgerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usersubscription.CreditLedgerTable,
+			Columns: []string{usersubscription.CreditLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -654,6 +832,144 @@ func (u *UserSubscriptionUpsert) UpdateGroupID() *UserSubscriptionUpsert {
 	return u
 }
 
+// ClearGroupID clears the value of the "group_id" field.
+func (u *UserSubscriptionUpsert) ClearGroupID() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldGroupID)
+	return u
+}
+
+// SetPlanID sets the "plan_id" field.
+func (u *UserSubscriptionUpsert) SetPlanID(v int64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldPlanID, v)
+	return u
+}
+
+// UpdatePlanID sets the "plan_id" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdatePlanID() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldPlanID)
+	return u
+}
+
+// AddPlanID adds v to the "plan_id" field.
+func (u *UserSubscriptionUpsert) AddPlanID(v int64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldPlanID, v)
+	return u
+}
+
+// ClearPlanID clears the value of the "plan_id" field.
+func (u *UserSubscriptionUpsert) ClearPlanID() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldPlanID)
+	return u
+}
+
+// SetScopeType sets the "scope_type" field.
+func (u *UserSubscriptionUpsert) SetScopeType(v string) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldScopeType, v)
+	return u
+}
+
+// UpdateScopeType sets the "scope_type" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateScopeType() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldScopeType)
+	return u
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (u *UserSubscriptionUpsert) SetScopeConfig(v map[string]interface{}) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldScopeConfig, v)
+	return u
+}
+
+// UpdateScopeConfig sets the "scope_config" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateScopeConfig() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldScopeConfig)
+	return u
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetQuotaLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldQuotaLimitUsd, v)
+	return u
+}
+
+// UpdateQuotaLimitUsd sets the "quota_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateQuotaLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldQuotaLimitUsd)
+	return u
+}
+
+// AddQuotaLimitUsd adds v to the "quota_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddQuotaLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldQuotaLimitUsd, v)
+	return u
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (u *UserSubscriptionUpsert) SetQuotaUsedUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldQuotaUsedUsd, v)
+	return u
+}
+
+// UpdateQuotaUsedUsd sets the "quota_used_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateQuotaUsedUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldQuotaUsedUsd)
+	return u
+}
+
+// AddQuotaUsedUsd adds v to the "quota_used_usd" field.
+func (u *UserSubscriptionUpsert) AddQuotaUsedUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldQuotaUsedUsd, v)
+	return u
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetDailyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldDailyLimitUsd, v)
+	return u
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateDailyLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldDailyLimitUsd)
+	return u
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddDailyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldDailyLimitUsd, v)
+	return u
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsert) ClearDailyLimitUsd() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldDailyLimitUsd)
+	return u
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsert) SetWeeklyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWeeklyLimitUsd, v)
+	return u
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWeeklyLimitUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWeeklyLimitUsd)
+	return u
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsert) AddWeeklyLimitUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldWeeklyLimitUsd, v)
+	return u
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsert) ClearWeeklyLimitUsd() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldWeeklyLimitUsd)
+	return u
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (u *UserSubscriptionUpsert) SetStartsAt(v time.Time) *UserSubscriptionUpsert {
 	u.Set(usersubscription.FieldStartsAt, v)
@@ -687,6 +1003,42 @@ func (u *UserSubscriptionUpsert) SetStatus(v string) *UserSubscriptionUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *UserSubscriptionUpsert) UpdateStatus() *UserSubscriptionUpsert {
 	u.SetExcluded(usersubscription.FieldStatus)
+	return u
+}
+
+// SetExhaustedAt sets the "exhausted_at" field.
+func (u *UserSubscriptionUpsert) SetExhaustedAt(v time.Time) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldExhaustedAt, v)
+	return u
+}
+
+// UpdateExhaustedAt sets the "exhausted_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateExhaustedAt() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldExhaustedAt)
+	return u
+}
+
+// ClearExhaustedAt clears the value of the "exhausted_at" field.
+func (u *UserSubscriptionUpsert) ClearExhaustedAt() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldExhaustedAt)
+	return u
+}
+
+// SetExpiredCreditLoggedAt sets the "expired_credit_logged_at" field.
+func (u *UserSubscriptionUpsert) SetExpiredCreditLoggedAt(v time.Time) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldExpiredCreditLoggedAt, v)
+	return u
+}
+
+// UpdateExpiredCreditLoggedAt sets the "expired_credit_logged_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateExpiredCreditLoggedAt() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldExpiredCreditLoggedAt)
+	return u
+}
+
+// ClearExpiredCreditLoggedAt clears the value of the "expired_credit_logged_at" field.
+func (u *UserSubscriptionUpsert) ClearExpiredCreditLoggedAt() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldExpiredCreditLoggedAt)
 	return u
 }
 
@@ -726,24 +1078,6 @@ func (u *UserSubscriptionUpsert) ClearWeeklyWindowStart() *UserSubscriptionUpser
 	return u
 }
 
-// SetMonthlyWindowStart sets the "monthly_window_start" field.
-func (u *UserSubscriptionUpsert) SetMonthlyWindowStart(v time.Time) *UserSubscriptionUpsert {
-	u.Set(usersubscription.FieldMonthlyWindowStart, v)
-	return u
-}
-
-// UpdateMonthlyWindowStart sets the "monthly_window_start" field to the value that was provided on create.
-func (u *UserSubscriptionUpsert) UpdateMonthlyWindowStart() *UserSubscriptionUpsert {
-	u.SetExcluded(usersubscription.FieldMonthlyWindowStart)
-	return u
-}
-
-// ClearMonthlyWindowStart clears the value of the "monthly_window_start" field.
-func (u *UserSubscriptionUpsert) ClearMonthlyWindowStart() *UserSubscriptionUpsert {
-	u.SetNull(usersubscription.FieldMonthlyWindowStart)
-	return u
-}
-
 // SetDailyUsageUsd sets the "daily_usage_usd" field.
 func (u *UserSubscriptionUpsert) SetDailyUsageUsd(v float64) *UserSubscriptionUpsert {
 	u.Set(usersubscription.FieldDailyUsageUsd, v)
@@ -777,24 +1111,6 @@ func (u *UserSubscriptionUpsert) UpdateWeeklyUsageUsd() *UserSubscriptionUpsert 
 // AddWeeklyUsageUsd adds v to the "weekly_usage_usd" field.
 func (u *UserSubscriptionUpsert) AddWeeklyUsageUsd(v float64) *UserSubscriptionUpsert {
 	u.Add(usersubscription.FieldWeeklyUsageUsd, v)
-	return u
-}
-
-// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
-func (u *UserSubscriptionUpsert) SetMonthlyUsageUsd(v float64) *UserSubscriptionUpsert {
-	u.Set(usersubscription.FieldMonthlyUsageUsd, v)
-	return u
-}
-
-// UpdateMonthlyUsageUsd sets the "monthly_usage_usd" field to the value that was provided on create.
-func (u *UserSubscriptionUpsert) UpdateMonthlyUsageUsd() *UserSubscriptionUpsert {
-	u.SetExcluded(usersubscription.FieldMonthlyUsageUsd)
-	return u
-}
-
-// AddMonthlyUsageUsd adds v to the "monthly_usage_usd" field.
-func (u *UserSubscriptionUpsert) AddMonthlyUsageUsd(v float64) *UserSubscriptionUpsert {
-	u.Add(usersubscription.FieldMonthlyUsageUsd, v)
 	return u
 }
 
@@ -954,6 +1270,167 @@ func (u *UserSubscriptionUpsertOne) UpdateGroupID() *UserSubscriptionUpsertOne {
 	})
 }
 
+// ClearGroupID clears the value of the "group_id" field.
+func (u *UserSubscriptionUpsertOne) ClearGroupID() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearGroupID()
+	})
+}
+
+// SetPlanID sets the "plan_id" field.
+func (u *UserSubscriptionUpsertOne) SetPlanID(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPlanID(v)
+	})
+}
+
+// AddPlanID adds v to the "plan_id" field.
+func (u *UserSubscriptionUpsertOne) AddPlanID(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddPlanID(v)
+	})
+}
+
+// UpdatePlanID sets the "plan_id" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdatePlanID() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePlanID()
+	})
+}
+
+// ClearPlanID clears the value of the "plan_id" field.
+func (u *UserSubscriptionUpsertOne) ClearPlanID() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPlanID()
+	})
+}
+
+// SetScopeType sets the "scope_type" field.
+func (u *UserSubscriptionUpsertOne) SetScopeType(v string) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetScopeType(v)
+	})
+}
+
+// UpdateScopeType sets the "scope_type" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateScopeType() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateScopeType()
+	})
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (u *UserSubscriptionUpsertOne) SetScopeConfig(v map[string]interface{}) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetScopeConfig(v)
+	})
+}
+
+// UpdateScopeConfig sets the "scope_config" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateScopeConfig() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateScopeConfig()
+	})
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetQuotaLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetQuotaLimitUsd(v)
+	})
+}
+
+// AddQuotaLimitUsd adds v to the "quota_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddQuotaLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddQuotaLimitUsd(v)
+	})
+}
+
+// UpdateQuotaLimitUsd sets the "quota_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateQuotaLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateQuotaLimitUsd()
+	})
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (u *UserSubscriptionUpsertOne) SetQuotaUsedUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetQuotaUsedUsd(v)
+	})
+}
+
+// AddQuotaUsedUsd adds v to the "quota_used_usd" field.
+func (u *UserSubscriptionUpsertOne) AddQuotaUsedUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddQuotaUsedUsd(v)
+	})
+}
+
+// UpdateQuotaUsedUsd sets the "quota_used_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateQuotaUsedUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateQuotaUsedUsd()
+	})
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetDailyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyLimitUsd(v)
+	})
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddDailyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyLimitUsd(v)
+	})
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateDailyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyLimitUsd()
+	})
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) ClearDailyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearDailyLimitUsd()
+	})
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) SetWeeklyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWeeklyLimitUsd(v)
+	})
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) AddWeeklyLimitUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWeeklyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWeeklyLimitUsd()
+	})
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertOne) ClearWeeklyLimitUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWeeklyLimitUsd()
+	})
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (u *UserSubscriptionUpsertOne) SetStartsAt(v time.Time) *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
@@ -993,6 +1470,48 @@ func (u *UserSubscriptionUpsertOne) SetStatus(v string) *UserSubscriptionUpsertO
 func (u *UserSubscriptionUpsertOne) UpdateStatus() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetExhaustedAt sets the "exhausted_at" field.
+func (u *UserSubscriptionUpsertOne) SetExhaustedAt(v time.Time) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetExhaustedAt(v)
+	})
+}
+
+// UpdateExhaustedAt sets the "exhausted_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateExhaustedAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateExhaustedAt()
+	})
+}
+
+// ClearExhaustedAt clears the value of the "exhausted_at" field.
+func (u *UserSubscriptionUpsertOne) ClearExhaustedAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearExhaustedAt()
+	})
+}
+
+// SetExpiredCreditLoggedAt sets the "expired_credit_logged_at" field.
+func (u *UserSubscriptionUpsertOne) SetExpiredCreditLoggedAt(v time.Time) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetExpiredCreditLoggedAt(v)
+	})
+}
+
+// UpdateExpiredCreditLoggedAt sets the "expired_credit_logged_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateExpiredCreditLoggedAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateExpiredCreditLoggedAt()
+	})
+}
+
+// ClearExpiredCreditLoggedAt clears the value of the "expired_credit_logged_at" field.
+func (u *UserSubscriptionUpsertOne) ClearExpiredCreditLoggedAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearExpiredCreditLoggedAt()
 	})
 }
 
@@ -1038,27 +1557,6 @@ func (u *UserSubscriptionUpsertOne) ClearWeeklyWindowStart() *UserSubscriptionUp
 	})
 }
 
-// SetMonthlyWindowStart sets the "monthly_window_start" field.
-func (u *UserSubscriptionUpsertOne) SetMonthlyWindowStart(v time.Time) *UserSubscriptionUpsertOne {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.SetMonthlyWindowStart(v)
-	})
-}
-
-// UpdateMonthlyWindowStart sets the "monthly_window_start" field to the value that was provided on create.
-func (u *UserSubscriptionUpsertOne) UpdateMonthlyWindowStart() *UserSubscriptionUpsertOne {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.UpdateMonthlyWindowStart()
-	})
-}
-
-// ClearMonthlyWindowStart clears the value of the "monthly_window_start" field.
-func (u *UserSubscriptionUpsertOne) ClearMonthlyWindowStart() *UserSubscriptionUpsertOne {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.ClearMonthlyWindowStart()
-	})
-}
-
 // SetDailyUsageUsd sets the "daily_usage_usd" field.
 func (u *UserSubscriptionUpsertOne) SetDailyUsageUsd(v float64) *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
@@ -1098,27 +1596,6 @@ func (u *UserSubscriptionUpsertOne) AddWeeklyUsageUsd(v float64) *UserSubscripti
 func (u *UserSubscriptionUpsertOne) UpdateWeeklyUsageUsd() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateWeeklyUsageUsd()
-	})
-}
-
-// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
-func (u *UserSubscriptionUpsertOne) SetMonthlyUsageUsd(v float64) *UserSubscriptionUpsertOne {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.SetMonthlyUsageUsd(v)
-	})
-}
-
-// AddMonthlyUsageUsd adds v to the "monthly_usage_usd" field.
-func (u *UserSubscriptionUpsertOne) AddMonthlyUsageUsd(v float64) *UserSubscriptionUpsertOne {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.AddMonthlyUsageUsd(v)
-	})
-}
-
-// UpdateMonthlyUsageUsd sets the "monthly_usage_usd" field to the value that was provided on create.
-func (u *UserSubscriptionUpsertOne) UpdateMonthlyUsageUsd() *UserSubscriptionUpsertOne {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.UpdateMonthlyUsageUsd()
 	})
 }
 
@@ -1452,6 +1929,167 @@ func (u *UserSubscriptionUpsertBulk) UpdateGroupID() *UserSubscriptionUpsertBulk
 	})
 }
 
+// ClearGroupID clears the value of the "group_id" field.
+func (u *UserSubscriptionUpsertBulk) ClearGroupID() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearGroupID()
+	})
+}
+
+// SetPlanID sets the "plan_id" field.
+func (u *UserSubscriptionUpsertBulk) SetPlanID(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetPlanID(v)
+	})
+}
+
+// AddPlanID adds v to the "plan_id" field.
+func (u *UserSubscriptionUpsertBulk) AddPlanID(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddPlanID(v)
+	})
+}
+
+// UpdatePlanID sets the "plan_id" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdatePlanID() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdatePlanID()
+	})
+}
+
+// ClearPlanID clears the value of the "plan_id" field.
+func (u *UserSubscriptionUpsertBulk) ClearPlanID() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearPlanID()
+	})
+}
+
+// SetScopeType sets the "scope_type" field.
+func (u *UserSubscriptionUpsertBulk) SetScopeType(v string) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetScopeType(v)
+	})
+}
+
+// UpdateScopeType sets the "scope_type" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateScopeType() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateScopeType()
+	})
+}
+
+// SetScopeConfig sets the "scope_config" field.
+func (u *UserSubscriptionUpsertBulk) SetScopeConfig(v map[string]interface{}) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetScopeConfig(v)
+	})
+}
+
+// UpdateScopeConfig sets the "scope_config" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateScopeConfig() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateScopeConfig()
+	})
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetQuotaLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetQuotaLimitUsd(v)
+	})
+}
+
+// AddQuotaLimitUsd adds v to the "quota_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddQuotaLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddQuotaLimitUsd(v)
+	})
+}
+
+// UpdateQuotaLimitUsd sets the "quota_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateQuotaLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateQuotaLimitUsd()
+	})
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetQuotaUsedUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetQuotaUsedUsd(v)
+	})
+}
+
+// AddQuotaUsedUsd adds v to the "quota_used_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddQuotaUsedUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddQuotaUsedUsd(v)
+	})
+}
+
+// UpdateQuotaUsedUsd sets the "quota_used_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateQuotaUsedUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateQuotaUsedUsd()
+	})
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetDailyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyLimitUsd(v)
+	})
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddDailyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyLimitUsd(v)
+	})
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateDailyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyLimitUsd()
+	})
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) ClearDailyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearDailyLimitUsd()
+	})
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetWeeklyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWeeklyLimitUsd(v)
+	})
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddWeeklyLimitUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWeeklyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWeeklyLimitUsd()
+	})
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *UserSubscriptionUpsertBulk) ClearWeeklyLimitUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWeeklyLimitUsd()
+	})
+}
+
 // SetStartsAt sets the "starts_at" field.
 func (u *UserSubscriptionUpsertBulk) SetStartsAt(v time.Time) *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
@@ -1491,6 +2129,48 @@ func (u *UserSubscriptionUpsertBulk) SetStatus(v string) *UserSubscriptionUpsert
 func (u *UserSubscriptionUpsertBulk) UpdateStatus() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetExhaustedAt sets the "exhausted_at" field.
+func (u *UserSubscriptionUpsertBulk) SetExhaustedAt(v time.Time) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetExhaustedAt(v)
+	})
+}
+
+// UpdateExhaustedAt sets the "exhausted_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateExhaustedAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateExhaustedAt()
+	})
+}
+
+// ClearExhaustedAt clears the value of the "exhausted_at" field.
+func (u *UserSubscriptionUpsertBulk) ClearExhaustedAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearExhaustedAt()
+	})
+}
+
+// SetExpiredCreditLoggedAt sets the "expired_credit_logged_at" field.
+func (u *UserSubscriptionUpsertBulk) SetExpiredCreditLoggedAt(v time.Time) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetExpiredCreditLoggedAt(v)
+	})
+}
+
+// UpdateExpiredCreditLoggedAt sets the "expired_credit_logged_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateExpiredCreditLoggedAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateExpiredCreditLoggedAt()
+	})
+}
+
+// ClearExpiredCreditLoggedAt clears the value of the "expired_credit_logged_at" field.
+func (u *UserSubscriptionUpsertBulk) ClearExpiredCreditLoggedAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearExpiredCreditLoggedAt()
 	})
 }
 
@@ -1536,27 +2216,6 @@ func (u *UserSubscriptionUpsertBulk) ClearWeeklyWindowStart() *UserSubscriptionU
 	})
 }
 
-// SetMonthlyWindowStart sets the "monthly_window_start" field.
-func (u *UserSubscriptionUpsertBulk) SetMonthlyWindowStart(v time.Time) *UserSubscriptionUpsertBulk {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.SetMonthlyWindowStart(v)
-	})
-}
-
-// UpdateMonthlyWindowStart sets the "monthly_window_start" field to the value that was provided on create.
-func (u *UserSubscriptionUpsertBulk) UpdateMonthlyWindowStart() *UserSubscriptionUpsertBulk {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.UpdateMonthlyWindowStart()
-	})
-}
-
-// ClearMonthlyWindowStart clears the value of the "monthly_window_start" field.
-func (u *UserSubscriptionUpsertBulk) ClearMonthlyWindowStart() *UserSubscriptionUpsertBulk {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.ClearMonthlyWindowStart()
-	})
-}
-
 // SetDailyUsageUsd sets the "daily_usage_usd" field.
 func (u *UserSubscriptionUpsertBulk) SetDailyUsageUsd(v float64) *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
@@ -1596,27 +2255,6 @@ func (u *UserSubscriptionUpsertBulk) AddWeeklyUsageUsd(v float64) *UserSubscript
 func (u *UserSubscriptionUpsertBulk) UpdateWeeklyUsageUsd() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateWeeklyUsageUsd()
-	})
-}
-
-// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
-func (u *UserSubscriptionUpsertBulk) SetMonthlyUsageUsd(v float64) *UserSubscriptionUpsertBulk {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.SetMonthlyUsageUsd(v)
-	})
-}
-
-// AddMonthlyUsageUsd adds v to the "monthly_usage_usd" field.
-func (u *UserSubscriptionUpsertBulk) AddMonthlyUsageUsd(v float64) *UserSubscriptionUpsertBulk {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.AddMonthlyUsageUsd(v)
-	})
-}
-
-// UpdateMonthlyUsageUsd sets the "monthly_usage_usd" field to the value that was provided on create.
-func (u *UserSubscriptionUpsertBulk) UpdateMonthlyUsageUsd() *UserSubscriptionUpsertBulk {
-	return u.Update(func(s *UserSubscriptionUpsert) {
-		s.UpdateMonthlyUsageUsd()
 	})
 }
 

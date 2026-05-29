@@ -539,9 +539,9 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 		Group:        GroupFromServiceShallow(rc.Group),
 	}
 
-	// For admin_balance/admin_concurrency types, include notes so users can see
-	// why they were charged or credited by admin
-	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency") && rc.Notes != "" {
+	// Include notes for adjustment and balance-payment history items so users can
+	// see why their balance changed.
+	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency" || rc.Type == "balance_payment") && rc.Notes != "" {
 		out.Notes = &rc.Notes
 	}
 
@@ -727,19 +727,36 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 }
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
+	scopeConfig := sub.ScopeConfig
+	if scopeConfig == nil {
+		scopeConfig = map[string]any{}
+	}
 	return UserSubscription{
 		ID:                 sub.ID,
 		UserID:             sub.UserID,
 		GroupID:            sub.GroupID,
+		PlanID:             sub.PlanID,
 		StartsAt:           sub.StartsAt,
 		ExpiresAt:          sub.ExpiresAt,
 		Status:             sub.Status,
+		IsUsable:           sub.IsUsable(),
 		DailyWindowStart:   sub.DailyWindowStart,
 		WeeklyWindowStart:  sub.WeeklyWindowStart,
 		MonthlyWindowStart: sub.MonthlyWindowStart,
+		ExhaustedAt:        sub.ExhaustedAt,
+		QuotaLimitUSD:      sub.QuotaLimitUSD,
+		QuotaUsedUSD:       sub.QuotaUsedUSD,
+		QuotaRemainingUSD:  sub.QuotaRemainingUSD(),
+		DailyLimitUSD:      sub.DailyLimitUSD,
 		DailyUsageUSD:      sub.DailyUsageUSD,
+		DailyResetAt:       sub.DailyResetTime(),
+		WeeklyLimitUSD:     sub.WeeklyLimitUSD,
 		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
+		WeeklyResetAt:      sub.WeeklyResetTime(),
 		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
+		Recent30dWastedUSD: sub.Recent30dWastedUSD,
+		ScopeType:          sub.ScopeType,
+		ScopeConfig:        scopeConfig,
 		CreatedAt:          sub.CreatedAt,
 		UpdatedAt:          sub.UpdatedAt,
 		User:               UserFromServiceShallow(sub.User),
@@ -767,6 +784,33 @@ func BulkAssignResultFromService(r *service.BulkAssignResult) *BulkAssignResult 
 		Subscriptions: subs,
 		Errors:        r.Errors,
 		Statuses:      statuses,
+	}
+}
+
+func SubscriptionCreditLedgerEntryFromService(e *service.SubscriptionCreditLedgerEntry) *SubscriptionCreditLedgerEntry {
+	if e == nil {
+		return nil
+	}
+	metadata := e.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	return &SubscriptionCreditLedgerEntry{
+		ID:                e.ID,
+		UserID:            e.UserID,
+		SubscriptionID:    e.SubscriptionID,
+		GroupID:           e.GroupID,
+		APIKeyID:          e.APIKeyID,
+		UsageLogID:        e.UsageLogID,
+		OrderID:           e.OrderID,
+		Type:              e.Type,
+		DeltaUSD:          e.DeltaUSD,
+		BalanceDeltaUSD:   e.BalanceDeltaUSD,
+		RemainingAfterUSD: e.RemainingAfterUSD,
+		Reason:            e.Reason,
+		EventKey:          e.EventKey,
+		Metadata:          metadata,
+		CreatedAt:         e.CreatedAt,
 	}
 }
 

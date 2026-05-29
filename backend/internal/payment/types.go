@@ -9,6 +9,7 @@ type PaymentType = string
 
 // Supported payment type constants.
 const (
+	TypeBalance      PaymentType = "balance"
 	TypeAlipay       PaymentType = "alipay"
 	TypeWxpay        PaymentType = "wxpay"
 	TypeAlipayDirect PaymentType = "alipay_direct"

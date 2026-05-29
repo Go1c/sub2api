@@ -67,6 +67,7 @@ const (
 // Redeem type constants
 const (
 	RedeemTypeBalance          = domain.RedeemTypeBalance
+	RedeemTypeBalancePayment   = domain.RedeemTypeBalancePayment
 	RedeemTypeConcurrency      = domain.RedeemTypeConcurrency
 	RedeemTypeSubscription     = domain.RedeemTypeSubscription
 	RedeemTypeInvitation       = domain.RedeemTypeInvitation
@@ -96,6 +97,7 @@ const (
 	SubscriptionStatusActive    = domain.SubscriptionStatusActive
 	SubscriptionStatusExpired   = domain.SubscriptionStatusExpired
 	SubscriptionStatusSuspended = domain.SubscriptionStatusSuspended
+	SubscriptionStatusRevoked   = "revoked"
 )
 
 // LinuxDoConnectSyntheticEmailDomain 是 LinuxDo Connect 用户的合成邮箱后缀（RFC 保留域名）。
@@ -219,36 +221,38 @@ const (
 	SettingKeyGoogleOAuthFrontendRedirectURL = "google_oauth_frontend_redirect_url"
 
 	// OEM设置
-	SettingKeySiteName                              = "site_name"                                 // 网站名称
-	SettingKeySiteLogo                              = "site_logo"                                 // 网站Logo (base64)
-	SettingKeySiteSubtitle                          = "site_subtitle"                             // 网站副标题
-	SettingKeyAPIBaseURL                            = "api_base_url"                              // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                           = "contact_info"                              // 客服联系方式
-	SettingKeyContactChannels                       = "contact_channels"                          // 客服联系渠道（JSON 数组）
-	SettingKeySupportChatEnabled                    = "support_chat_enabled"                      // 是否启用 AI 客服气泡
-	SettingKeySupportChatGatewayURL                 = "support_chat_gateway_url"                  // AI 客服 support-gateway 公网地址
-	SettingKeySupportChatTitle                      = "support_chat_title"                        // AI 客服标题覆盖
-	SettingKeySupportChatWelcomeMessage             = "support_chat_welcome_message"              // AI 客服欢迎语覆盖
-	SettingKeySupportChatOfficialContactText        = "support_chat_official_contact_text"        // AI 客服人工联系文案覆盖
-	SettingKeySupportChatOfficialContactURL         = "support_chat_official_contact_url"         // AI 客服人工联系按钮 URL 覆盖
-	SettingKeyDocURL                                = "doc_url"                                   // 文档链接
-	SettingKeySitePages                             = "site_pages"                                // 公开站点页面（JSON 数组，Markdown 或链接）
-	SettingKeyHomeContent                           = "home_content"                              // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton                   = "hide_ccs_import_button"                    // 是否隐藏 API Keys 页面的导入 CCS 按钮
-	SettingKeyFrontendLocales                       = "frontend_locales"                          // 前端可用语言（JSON 数组）
-	SettingKeyUserSubscriptionsVisible              = "user_subscriptions_visible"                // 是否展示用户侧“我的订阅”入口
-	SettingKeyPurchaseSubscriptionEnabled           = "purchase_subscription_enabled"             // 是否展示"购买订阅"页面入口
-	SettingKeyPurchaseSubscriptionURL               = "purchase_subscription_url"                 // "购买订阅"页面 URL（作为 iframe src）
-	SettingKeyTableDefaultPageSize                  = "table_default_page_size"                   // 表格默认每页条数
-	SettingKeyTablePageSizeOptions                  = "table_page_size_options"                   // 表格可选每页条数（JSON 数组）
-	SettingKeyCustomMenuItems                       = "custom_menu_items"                         // 自定义菜单项（JSON 数组）
-	SettingKeyCustomEndpoints                       = "custom_endpoints"                          // 自定义端点列表（JSON 数组）
-	SettingKeyPublicModelPricing                    = "public_model_pricing"                      // 首页公开模型定价（JSON）
-	SettingKeyCCSwitchDefaultModelAnthropic         = "ccswitch_default_model_anthropic"          // CCSwitch 导入默认 Claude 模型
-	SettingKeyCCSwitchDefaultModelOpenAI            = "ccswitch_default_model_openai"             // CCSwitch 导入默认 OpenAI/Codex 模型
-	SettingKeyCCSwitchDefaultModelGemini            = "ccswitch_default_model_gemini"             // CCSwitch 导入默认 Gemini 模型
-	SettingKeyCCSwitchDefaultModelAntigravity       = "ccswitch_default_model_antigravity"        // CCSwitch 导入默认 Antigravity Claude 模型
-	SettingKeyCCSwitchDefaultModelAntigravityGemini = "ccswitch_default_model_antigravity_gemini" // CCSwitch 导入默认 Antigravity Gemini 模型
+	SettingKeySiteName                               = "site_name"                                   // 网站名称
+	SettingKeySiteLogo                               = "site_logo"                                   // 网站Logo (base64)
+	SettingKeySiteSubtitle                           = "site_subtitle"                               // 网站副标题
+	SettingKeyAPIBaseURL                             = "api_base_url"                                // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo                            = "contact_info"                                // 客服联系方式
+	SettingKeyContactChannels                        = "contact_channels"                            // 客服联系渠道（JSON 数组）
+	SettingKeySupportChatEnabled                     = "support_chat_enabled"                        // 是否启用 AI 客服气泡
+	SettingKeySupportChatGatewayURL                  = "support_chat_gateway_url"                    // AI 客服 support-gateway 公网地址
+	SettingKeySupportChatTitle                       = "support_chat_title"                          // AI 客服标题覆盖
+	SettingKeySupportChatWelcomeMessage              = "support_chat_welcome_message"                // AI 客服欢迎语覆盖
+	SettingKeySupportChatOfficialContactText         = "support_chat_official_contact_text"          // AI 客服人工联系文案覆盖
+	SettingKeySupportChatOfficialContactURL          = "support_chat_official_contact_url"           // AI 客服人工联系按钮 URL 覆盖
+	SettingKeyDocURL                                 = "doc_url"                                     // 文档链接
+	SettingKeySitePages                              = "site_pages"                                  // 公开站点页面（JSON 数组，Markdown 或链接）
+	SettingKeyHomeContent                            = "home_content"                                // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyHideCcsImportButton                    = "hide_ccs_import_button"                      // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeyFrontendLocales                        = "frontend_locales"                            // 前端可用语言（JSON 数组）
+	SettingKeyUserSubscriptionsVisible               = "user_subscriptions_visible"                  // 是否展示用户侧“我的订阅”入口
+	SettingKeyPurchaseSubscriptionEnabled            = "purchase_subscription_enabled"               // 是否展示"购买订阅"页面入口
+	SettingKeyPurchaseSubscriptionURL                = "purchase_subscription_url"                   // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeySubscriptionQuotaResetUTCOffsetMinutes = "subscription_quota_reset_utc_offset_minutes" // 订阅限额刷新 UTC 偏移（分钟）
+	SettingKeySubscriptionQuotaResetHour             = "subscription_quota_reset_hour"               // 订阅限额刷新小时（0-23）
+	SettingKeyTableDefaultPageSize                   = "table_default_page_size"                     // 表格默认每页条数
+	SettingKeyTablePageSizeOptions                   = "table_page_size_options"                     // 表格可选每页条数（JSON 数组）
+	SettingKeyCustomMenuItems                        = "custom_menu_items"                           // 自定义菜单项（JSON 数组）
+	SettingKeyCustomEndpoints                        = "custom_endpoints"                            // 自定义端点列表（JSON 数组）
+	SettingKeyPublicModelPricing                     = "public_model_pricing"                        // 首页公开模型定价（JSON）
+	SettingKeyCCSwitchDefaultModelAnthropic          = "ccswitch_default_model_anthropic"            // CCSwitch 导入默认 Claude 模型
+	SettingKeyCCSwitchDefaultModelOpenAI             = "ccswitch_default_model_openai"               // CCSwitch 导入默认 OpenAI/Codex 模型
+	SettingKeyCCSwitchDefaultModelGemini             = "ccswitch_default_model_gemini"               // CCSwitch 导入默认 Gemini 模型
+	SettingKeyCCSwitchDefaultModelAntigravity        = "ccswitch_default_model_antigravity"          // CCSwitch 导入默认 Antigravity Claude 模型
+	SettingKeyCCSwitchDefaultModelAntigravityGemini  = "ccswitch_default_model_antigravity_gemini"   // CCSwitch 导入默认 Antigravity Gemini 模型
 
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
@@ -422,6 +426,13 @@ const (
 	// Account Quota Notification
 	SettingKeyAccountQuotaNotifyEnabled = "account_quota_notify_enabled" // 全局开关
 	SettingKeyAccountQuotaNotifyEmails  = "account_quota_notify_emails"  // 管理员通知邮箱列表（JSON 数组）
+
+	// Subscription Credit Pool Notification
+	// 订阅触顶 / 过期通知正文里的"重新订阅"链接。
+	// 为空时回退到 SettingKeyFrontendURL + /purchase，再退到 /purchase。
+	SettingKeySubscriptionCreditPoolRepurchaseURL = "subscription_credit_pool_repurchase_url"
+	// 订阅额度池通知邮件开关。站内信始终发送，邮件默认关闭。
+	SettingKeySubscriptionNotifyEmailEnabled = "subscription_notify_email_enabled"
 
 	// Web Search Emulation
 	SettingKeyWebSearchEmulationConfig = "web_search_emulation_config" // JSON 配置

@@ -70,8 +70,8 @@
                   <div class="space-y-5">
                     <PaymentMethodSelector
                       :methods="methodOptions"
-                      :selected="selectedMethod"
-                      @select="selectedMethod = $event"
+                      :selected="selectedRechargeMethod"
+                      @select="selectedRechargeMethod = $event"
                     />
 
                     <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -140,10 +140,12 @@
                 <!-- Rate + Limits grid -->
                 <div class="mt-3 grid grid-cols-2 gap-3">
                   <div>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.rate') }}</span>
-                    <div class="flex items-baseline">
-                      <span :class="['text-lg font-bold', planTextClass]">×{{ selectedPlan.rate_multiplier ?? 1 }}</span>
-                    </div>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.quota') }}</span>
+                    <div :class="['text-lg font-bold', planTextClass]">{{ planCreditDisplay(selectedPlan) }}</div>
+                  </div>
+                  <div>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.scope') }}</span>
+                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ planScopeLabel(selectedPlan) }}</div>
                   </div>
                   <div v-if="selectedPlan.daily_limit_usd != null">
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.dailyLimit') }}</span>
@@ -153,24 +155,20 @@
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.weeklyLimit') }}</span>
                     <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.weekly_limit_usd }}</div>
                   </div>
-                  <div v-if="selectedPlan.monthly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.monthlyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.monthly_limit_usd }}</div>
-                  </div>
-                  <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null && selectedPlan.monthly_limit_usd == null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.quota') }}</span>
+                  <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null">
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.dailyLimit') }}</span>
                     <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ t('payment.planCard.unlimited') }}</div>
                   </div>
                 </div>
               </div>
-              <div v-if="enabledMethods.length >= 1" class="card p-6">
+              <div v-if="subMethodOptions.length >= 1" class="card p-6">
                 <PaymentMethodSelector
                   :methods="subMethodOptions"
-                  :selected="selectedMethod"
-                  @select="selectedMethod = $event"
+                  :selected="selectedSubscriptionMethod"
+                  @select="selectedSubscriptionMethod = $event"
                 />
               </div>
-              <div v-if="feeRate > 0 && selectedPlan.price > 0" class="card p-6">
+              <div v-if="!selectedSubscriptionMethodIsBalance && feeRate > 0 && selectedPlan.price > 0" class="card p-6">
                 <div class="space-y-2 text-sm">
                   <div class="flex justify-between">
                     <span class="text-gray-500 dark:text-gray-400">{{ t('payment.amountLabel') }}</span>
@@ -186,12 +184,35 @@
                   </div>
                 </div>
               </div>
-              <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmitSubscription || submitting" @click="confirmSubscribe">
+              <div v-if="selectedSubscriptionMethodIsBalance" class="card p-6">
+                <div class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.balancePaymentRequired') }}</span>
+                    <span class="text-gray-900 dark:text-white">${{ subscriptionBalanceRequired.toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.currentBalance') }}</span>
+                    <span :class="canSubmitSubscriptionWithBalance ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-300'">
+                      ${{ currentUserBalance.toFixed(2) }}
+                    </span>
+                  </div>
+                  <p v-if="!canSubmitSubscriptionWithBalance" class="text-xs text-amber-600 dark:text-amber-300">
+                    {{ t('payment.balancePaymentInsufficient', { required: subscriptionBalanceRequired.toFixed(2) }) }}
+                  </p>
+                </div>
+              </div>
+              <div v-if="selectedPlan.purchase_notice" class="card p-6">
+                <div class="space-y-2">
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('payment.purchaseNotice') }}</p>
+                  <p class="whitespace-pre-line text-sm leading-relaxed text-gray-500 dark:text-gray-400">{{ selectedPlan.purchase_notice }}</p>
+                </div>
+              </div>
+              <button :class="['btn w-full py-3 text-base font-medium', subscriptionPaymentButtonClass]" :disabled="!canSubmitSubscription || submitting" @click="confirmSubscribe">
                 <span v-if="submitting" class="flex items-center justify-center gap-2">
                   <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
                   {{ t('common.processing') }}
                 </span>
-                <span v-else>{{ t('payment.createOrder') }} ¥{{ (feeRate > 0 ? subTotalAmount : selectedPlan.price).toFixed(2) }}</span>
+                <span v-else>{{ t('payment.createOrder') }} {{ subscriptionConfirmAmountLabel }}</span>
               </button>
               <button class="btn btn-secondary w-full" @click="selectedPlan = null">{{ t('common.cancel') }}</button>
             </template>
@@ -202,23 +223,23 @@
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
+                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="usableActiveSubscriptions" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
-              <div v-if="activeSubscriptions.length > 0">
+              <div v-if="usableActiveSubscriptions.length > 0">
                 <p class="mb-2 text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.activeSubscription') }}</p>
                 <div class="space-y-2">
-                  <div v-for="sub in activeSubscriptions" :key="sub.id"
+                  <div v-for="sub in usableActiveSubscriptions" :key="sub.id"
                     class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-dark-700 dark:bg-dark-800">
                     <div :class="['h-6 w-1 shrink-0 rounded-full', platformAccentBarClass(sub.group?.platform || '')]" />
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5">
-                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.group?.name || t('payment.groupFallback', { id: sub.group_id }) }}</span>
+                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ subscriptionName(sub) }}</span>
                         <span :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group?.platform || '')]">{{ platformLabel(sub.group?.platform || '') }}</span>
                       </div>
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
                         <span>{{ t('payment.planCard.rate') }}: ×{{ sub.group?.rate_multiplier ?? 1 }}</span>
-                        <span v-if="sub.group?.daily_limit_usd == null && sub.group?.weekly_limit_usd == null && sub.group?.monthly_limit_usd == null">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
+                        <span>{{ t('payment.planCard.quota') }}: ${{ formatUsd(sub.quota_remaining_usd ?? 0) }} / ${{ formatUsd(sub.quota_limit_usd ?? 0) }}</span>
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
                         <span v-else>{{ t('userSubscriptions.noExpiration') }}</span>
                       </div>
@@ -251,7 +272,7 @@
             </button>
             <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
             <div class="space-y-4">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlanFromModal" />
+              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="usableActiveSubscriptions" @select="selectPlanFromModal" />
             </div>
           </div>
         </div>
@@ -280,6 +301,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
@@ -313,10 +335,47 @@ const appStore = useAppStore()
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
+const usableActiveSubscriptions = computed(() => activeSubscriptions.value.filter(subscription => subscription.is_usable === true))
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+}
+
+function formatUsd(value: number): string {
+  return Number(value.toFixed(4)).toString()
+}
+
+function planCreditDisplay(plan: SubscriptionPlan): string {
+  return plan.quota_usd != null && plan.quota_usd > 0
+    ? `$${formatUsd(plan.quota_usd)}`
+    : t('payment.planCard.unlimited')
+}
+
+function planScopeLabel(plan: SubscriptionPlan): string {
+  const scopeType = plan.scope_type || 'all_available_groups'
+  if (scopeType === 'group') {
+    return plan.group_name || t('payment.groupFallback', { id: plan.group_id ?? '-' })
+  }
+  if (scopeType === 'all_available_groups') return t('payment.planCard.scopeAllAvailable')
+  if (scopeType === 'selected_groups') {
+    const groups = Array.isArray(plan.scope_config?.group_ids) ? plan.scope_config.group_ids : []
+    return t('payment.planCard.scopeSelectedGroups', { count: groups.length })
+  }
+  if (scopeType === 'platforms') {
+    const platforms = Array.isArray(plan.scope_config?.platforms) ? plan.scope_config.platforms : []
+    return platforms.length > 0
+      ? platforms.map(platform => String(platform)).join(' / ')
+      : t('payment.planCard.scopePlatforms')
+  }
+  return scopeType.split('_').join(' ')
+}
+
+function subscriptionName(subscription: UserSubscription): string {
+  return subscription.group?.name
+    || (subscription.group_id != null
+      ? t('payment.groupFallback', { id: subscription.group_id })
+      : t('userSubscriptions.creditPoolSubscription'))
 }
 
 const loading = ref(true)
@@ -325,7 +384,8 @@ const errorMessage = ref('')
 const errorHintMessage = ref('')
 const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
-const selectedMethod = ref('')
+const selectedRechargeMethod = ref('')
+const selectedSubscriptionMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
 
@@ -501,7 +561,7 @@ function onPaymentSettled() {
 // All checkout data from single API call
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
-  plans: [], balance_disabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
+  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
 })
 
 const userSubscriptionsVisible = computed(() => appStore.cachedPublicSettings?.user_subscriptions_visible !== false)
@@ -528,6 +588,15 @@ const planGridClass = computed(() => {
   return 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3'
 })
 
+function sortPaymentMethods(methods: string[]): string[] {
+  const order: readonly string[] = METHOD_ORDER
+  return [...methods].sort((a, b) => {
+    const ai = order.indexOf(a)
+    const bi = order.indexOf(b)
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+  })
+}
+
 // Check if an amount fits a method's [min, max]. 0 = no limit.
 function amountFitsMethod(amt: number, methodType: string): boolean {
   if (amt <= 0) return true
@@ -553,7 +622,7 @@ const globalMaxAmount = computed(() => {
 })
 
 // Selected method's limits (for validation and error messages)
-const selectedLimit = computed(() => visibleMethods.value[selectedMethod.value])
+const selectedRechargeLimit = computed(() => visibleMethods.value[selectedRechargeMethod.value])
 
 const methodOptions = computed<PaymentMethodOption[]>(() =>
   enabledMethods.value.map((type) => {
@@ -585,7 +654,7 @@ const amountError = computed(() => {
     return t('payment.amountNoMethod')
   }
   // Selected method can't handle this amount (but others can)
-  const ml = selectedLimit.value
+  const ml = selectedRechargeLimit.value
   if (ml) {
     if (ml.single_min > 0 && validAmount.value < ml.single_min) return t('payment.amountTooLow', { min: ml.single_min })
     if (ml.single_max > 0 && validAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: ml.single_max })
@@ -595,14 +664,14 @@ const amountError = computed(() => {
 
 const canSubmit = computed(() =>
   validAmount.value > 0
-    && amountFitsMethod(validAmount.value, selectedMethod.value)
-    && selectedLimit.value?.available !== false
+    && amountFitsMethod(validAmount.value, selectedRechargeMethod.value)
+    && selectedRechargeLimit.value?.available !== false
 )
 
 // Subscription-specific: method options based on plan price
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   const planPrice = selectedPlan.value?.price ?? 0
-  return enabledMethods.value.map((type) => {
+  const options = enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
     return {
       type,
@@ -610,6 +679,16 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
       available: ml?.available !== false && amountFitsMethod(planPrice, type),
     }
   })
+  if (subscriptionBalancePaymentEnabled.value) {
+    options.push({
+      type: 'balance',
+      fee_rate: 0,
+      available: true,
+    })
+  }
+  return sortPaymentMethods(options.map(option => option.type)).map((type) =>
+    options.find(option => option.type === type)!,
+  )
 })
 
 const subFeeAmount = computed(() => {
@@ -624,27 +703,78 @@ const subTotalAmount = computed(() => {
   return Math.round((price + subFeeAmount.value) * 100) / 100
 })
 
+const subscriptionBalancePaymentEnabled = computed(() => checkout.value.subscription_balance_payment_enabled === true)
+const currentUserBalance = computed(() => user.value?.balance ?? 0)
+const subscriptionBalanceRequired = computed(() => {
+  const price = selectedPlan.value?.price ?? 0
+  if (price <= 0) return 0
+  return Math.round(price * balanceRechargeMultiplier.value * 100) / 100
+})
+const selectedSubscriptionMethodIsBalance = computed(() => selectedSubscriptionMethod.value === 'balance')
 const canSubmitSubscription = computed(() =>
+  selectedPlan.value !== null && (
+    selectedSubscriptionMethodIsBalance.value
+      ? canSubmitSubscriptionWithBalance.value
+      : amountFitsMethod(selectedPlan.value.price, selectedSubscriptionMethod.value)
+        && visibleMethods.value[selectedSubscriptionMethod.value]?.available !== false
+  )
+)
+
+const canSubmitSubscriptionWithBalance = computed(() =>
   selectedPlan.value !== null
-    && amountFitsMethod(selectedPlan.value.price, selectedMethod.value)
-    && selectedLimit.value?.available !== false
+    && subscriptionBalancePaymentEnabled.value
+    && currentUserBalance.value + 0.000001 >= subscriptionBalanceRequired.value
 )
 
 // Auto-switch to first available method when current selection can't handle the amount
-watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) => {
+watch(() => [validAmount.value, selectedRechargeMethod.value] as const, ([amt, method]) => {
   if (amt <= 0 || amountFitsMethod(amt, method)) return
   const available = enabledMethods.value.find((m) => amountFitsMethod(amt, m))
-  if (available) selectedMethod.value = available
+  if (available) selectedRechargeMethod.value = available
 })
 
-// Payment button class: follows selected payment method color
-const paymentButtonClass = computed(() => {
-  const m = selectedMethod.value
+watch(methodOptions, (options) => {
+  if (options.some(option => option.type === selectedRechargeMethod.value && option.available)) {
+    return
+  }
+  selectedRechargeMethod.value = sortPaymentMethods(
+    options.filter(option => option.available).map(option => option.type),
+  )[0] || ''
+}, { immediate: true })
+
+watch(subMethodOptions, (options) => {
+  const current = options.find(option => option.type === selectedSubscriptionMethod.value)
+  if (current && (current.available || current.type === 'balance')) {
+    return
+  }
+  const preferredExternal = sortPaymentMethods(
+    options.filter(option => option.type !== 'balance' && option.available).map(option => option.type),
+  )[0]
+  selectedSubscriptionMethod.value = preferredExternal
+    || options.find(option => option.type === 'balance')?.type
+    || sortPaymentMethods(options.filter(option => option.available).map(option => option.type))[0]
+    || ''
+}, { immediate: true })
+
+function paymentButtonClassFor(method: string): string {
+  const m = method
   if (!m) return 'btn-primary'
+  if (m === 'balance') return 'btn-primary'
   if (m.includes('alipay')) return 'btn-alipay'
   if (m.includes('wxpay')) return 'btn-wxpay'
   if (m === 'stripe') return 'btn-stripe'
   return 'btn-primary'
+}
+
+// Payment button class: follows selected payment method color
+const paymentButtonClass = computed(() => paymentButtonClassFor(selectedRechargeMethod.value))
+const subscriptionPaymentButtonClass = computed(() => paymentButtonClassFor(selectedSubscriptionMethod.value))
+const subscriptionConfirmAmountLabel = computed(() => {
+  if (!selectedPlan.value) return ''
+  if (selectedSubscriptionMethodIsBalance.value) {
+    return `$${subscriptionBalanceRequired.value.toFixed(2)}`
+  }
+  return `¥${(feeRate.value > 0 ? subTotalAmount.value : selectedPlan.value.price).toFixed(2)}`
 })
 
 // Subscription confirm: platform accent colors (clean card, no gradient)
@@ -661,9 +791,10 @@ const renewalPlans = computed(() => {
 
 const planValiditySuffix = computed(() => {
   if (!selectedPlan.value) return ''
-  const u = selectedPlan.value.validity_unit || 'day'
-  if (u === 'month') return t('payment.perMonth')
-  if (u === 'year') return t('payment.perYear')
+  const unit = (selectedPlan.value.validity_unit || 'day').toLowerCase()
+  if (unit === 'month' || unit === 'months') return t('payment.perMonth')
+  if (unit === 'year' || unit === 'years') return t('payment.perYear')
+  if (unit === 'week' || unit === 'weeks') return `${selectedPlan.value.validity_days}${t('payment.weeks')}`
   return `${selectedPlan.value.validity_days}${t('payment.days')}`
 })
 
@@ -686,19 +817,22 @@ function closeRenewalModal() {
 
 async function handleSubmitRecharge() {
   if (!canSubmit.value || submitting.value) return
-  await createOrder(validAmount.value, 'balance')
+  await createOrder(validAmount.value, 'balance', undefined, { paymentType: selectedRechargeMethod.value })
 }
 
 async function confirmSubscribe() {
   if (!selectedPlan.value || submitting.value) return
-  await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
+  await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id, { paymentType: selectedSubscriptionMethod.value })
 }
 
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
   submitting.value = true
   errorMessage.value = ''
   errorHintMessage.value = ''
-  const requestType = normalizeVisibleMethod(options.paymentType || selectedMethod.value) || options.paymentType || selectedMethod.value
+  const selectedMethod = orderType === 'subscription'
+    ? selectedSubscriptionMethod.value
+    : selectedRechargeMethod.value
+  const requestType = normalizeVisibleMethod(options.paymentType || selectedMethod) || options.paymentType || selectedMethod
   try {
     const payload = buildCreateOrderPayload({
       amount: orderAmount,
@@ -717,6 +851,17 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
 
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
+    if (requestType === 'balance') {
+      await authStore.refreshUser().catch(() => undefined)
+      if (orderType === 'subscription') {
+        await subscriptionStore.fetchActiveSubscriptions(true).catch(() => undefined)
+      }
+      await router.push({
+        path: '/payment/result',
+        query: { order_id: String(result.order_id) },
+      })
+      return
+    }
     const openWindow = (url: string) => {
       const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
       if (!win || win.closed) {
@@ -845,7 +990,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     } else {
       const handled = applyScenarioError(
         err,
-        normalizeVisibleMethod(options.paymentType || selectedMethod.value) || selectedMethod.value,
+        normalizeVisibleMethod(options.paymentType || selectedMethod) || selectedMethod,
       )
       if (!handled) {
         errorMessage.value = extractI18nErrorMessage(err, t, 'payment.errors', extractApiErrorMessage(err, t('payment.result.failed')))
@@ -979,7 +1124,11 @@ async function resumeWechatPaymentFromQuery() {
     return
   }
 
-  selectedMethod.value = resume.paymentType
+  if (resume.orderType === 'subscription') {
+    selectedSubscriptionMethod.value = resume.paymentType
+  } else {
+    selectedRechargeMethod.value = resume.paymentType
+  }
   if (resume.orderType === 'balance' && resume.orderAmount > 0) {
     amount.value = resume.orderAmount
   }
@@ -1011,15 +1160,9 @@ onMounted(async () => {
   try {
     const res = await paymentAPI.getCheckoutInfo()
     checkout.value = res.data
-    if (enabledMethods.value.length) {
-      const order: readonly string[] = METHOD_ORDER
-      const sorted = [...enabledMethods.value].sort((a, b) => {
-        const ai = order.indexOf(a)
-        const bi = order.indexOf(b)
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
-      })
-      selectedMethod.value = sorted[0]
-    }
+    const defaultExternalMethod = sortPaymentMethods(enabledMethods.value)[0] || ''
+    selectedRechargeMethod.value = defaultExternalMethod
+    selectedSubscriptionMethod.value = defaultExternalMethod || (subscriptionBalancePaymentEnabled.value ? 'balance' : '')
     if (typeof window !== 'undefined') {
       if (hasWechatResumeQuery(route.query)) {
         removeRecoverySnapshot()
@@ -1036,9 +1179,13 @@ onMounted(async () => {
       if (restored) {
         paymentState.value = restored
         paymentPhase.value = 'paying'
-        const restoredMethod = normalizeVisibleMethod(restored.paymentType)
+        const restoredMethod = normalizeVisibleMethod(restored.paymentType) || restored.paymentType
         if (restoredMethod) {
-          selectedMethod.value = restoredMethod
+          if (restored.orderType === 'subscription') {
+            selectedSubscriptionMethod.value = restoredMethod
+          } else {
+            selectedRechargeMethod.value = restoredMethod
+          }
         }
       } else {
         removeRecoverySnapshot()

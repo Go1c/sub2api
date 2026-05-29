@@ -544,6 +544,9 @@ export interface SystemSettings {
 
   // Payment configuration
   user_subscriptions_visible: boolean;
+  subscription_notify_email_enabled: boolean;
+  subscription_quota_reset_utc_offset_minutes: number;
+  subscription_quota_reset_hour: number;
   payment_enabled: boolean;
   risk_control_enabled: boolean;
   payment_min_amount: number;
@@ -553,6 +556,7 @@ export interface SystemSettings {
   payment_max_pending_orders: number;
   payment_enabled_types: string[];
   payment_balance_disabled: boolean;
+  payment_subscription_balance_enabled: boolean;
   payment_balance_recharge_multiplier: number;
   payment_recharge_fee_rate: number;
   payment_load_balance_strategy: string;
@@ -767,6 +771,9 @@ export interface UpdateSettingsRequest {
   enable_anthropic_cache_ttl_1h_injection?: boolean;
   // Payment configuration
   user_subscriptions_visible?: boolean;
+  subscription_notify_email_enabled?: boolean;
+  subscription_quota_reset_utc_offset_minutes?: number;
+  subscription_quota_reset_hour?: number;
   payment_enabled?: boolean;
   risk_control_enabled?: boolean;
   payment_min_amount?: number;
@@ -776,6 +783,7 @@ export interface UpdateSettingsRequest {
   payment_max_pending_orders?: number;
   payment_enabled_types?: string[];
   payment_balance_disabled?: boolean;
+  payment_subscription_balance_enabled?: boolean;
   payment_balance_recharge_multiplier?: number;
   payment_recharge_fee_rate?: number;
   payment_load_balance_strategy?: string;

@@ -224,6 +224,83 @@ func TestSettingService_UpdateSettings_TablePreferences(t *testing.T) {
 	require.Equal(t, "[20,100]", repo.updates[SettingKeyTablePageSizeOptions])
 }
 
+func TestSettingService_UpdateSettings_SubscriptionQuotaResetSettings(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		SubscriptionQuotaResetUTCOffsetMinutes: 480,
+		SubscriptionQuotaResetHour:             4,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "480", repo.updates[SettingKeySubscriptionQuotaResetUTCOffsetMinutes])
+	require.Equal(t, "4", repo.updates[SettingKeySubscriptionQuotaResetHour])
+}
+
+func TestSettingService_UpdateSettings_SubscriptionNotifyEmailEnabled(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		SubscriptionNotifyEmailEnabled: true,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "true", repo.updates[SettingKeySubscriptionNotifyEmailEnabled])
+}
+
+func TestSettingService_UpdateSettings_RejectsInvalidSubscriptionQuotaResetSettings(t *testing.T) {
+	svc := NewSettingService(&settingUpdateRepoStub{}, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{SubscriptionQuotaResetUTCOffsetMinutes: 481})
+	require.Error(t, err)
+	require.Equal(t, "INVALID_SUBSCRIPTION_QUOTA_RESET_UTC_OFFSET", infraerrors.Reason(err))
+
+	err = svc.UpdateSettings(context.Background(), &SystemSettings{SubscriptionQuotaResetHour: 24})
+	require.Error(t, err)
+	require.Equal(t, "INVALID_SUBSCRIPTION_QUOTA_RESET_HOUR", infraerrors.Reason(err))
+}
+
+func TestSettingService_ParseSettings_SubscriptionQuotaResetDefaultsAndValues(t *testing.T) {
+	svc := NewSettingService(&settingUpdateRepoStub{}, &config.Config{})
+
+	defaults := svc.parseSettings(map[string]string{})
+	require.Equal(t, 0, defaults.SubscriptionQuotaResetUTCOffsetMinutes)
+	require.Equal(t, 0, defaults.SubscriptionQuotaResetHour)
+
+	parsed := svc.parseSettings(map[string]string{
+		SettingKeySubscriptionQuotaResetUTCOffsetMinutes: "480",
+		SettingKeySubscriptionQuotaResetHour:             "4",
+	})
+	require.Equal(t, 480, parsed.SubscriptionQuotaResetUTCOffsetMinutes)
+	require.Equal(t, 4, parsed.SubscriptionQuotaResetHour)
+}
+
+func TestSettingService_ParseSettings_SubscriptionNotifyEmailDefaultsAndValues(t *testing.T) {
+	svc := NewSettingService(&settingUpdateRepoStub{}, &config.Config{})
+
+	defaults := svc.parseSettings(map[string]string{})
+	require.False(t, defaults.SubscriptionNotifyEmailEnabled)
+
+	parsed := svc.parseSettings(map[string]string{
+		SettingKeySubscriptionNotifyEmailEnabled: "true",
+	})
+	require.True(t, parsed.SubscriptionNotifyEmailEnabled)
+}
+
+func TestSettingService_GetSubscriptionQuotaResetConfig(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{
+		SettingKeySubscriptionQuotaResetUTCOffsetMinutes: "480",
+		SettingKeySubscriptionQuotaResetHour:             "4",
+	}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	got := svc.GetSubscriptionQuotaResetConfig(context.Background())
+
+	require.Equal(t, SubscriptionQuotaResetConfig{UTCOffsetMinutes: 480, ResetHour: 4}, got)
+}
+
 func TestSettingService_UpdateSettings_FrontendLocales(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	svc := NewSettingService(repo, &config.Config{})

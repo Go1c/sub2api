@@ -12,6 +12,26 @@ import (
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
 
+const (
+	SubscriptionQuotaResetMinOffsetMinutes = -12 * 60
+	SubscriptionQuotaResetMaxOffsetMinutes = 14 * 60
+)
+
+type SubscriptionQuotaResetConfig struct {
+	UTCOffsetMinutes int
+	ResetHour        int
+}
+
+func NormalizeSubscriptionQuotaResetConfig(cfg SubscriptionQuotaResetConfig) SubscriptionQuotaResetConfig {
+	if cfg.UTCOffsetMinutes < SubscriptionQuotaResetMinOffsetMinutes || cfg.UTCOffsetMinutes > SubscriptionQuotaResetMaxOffsetMinutes || cfg.UTCOffsetMinutes%15 != 0 {
+		cfg.UTCOffsetMinutes = 0
+	}
+	if cfg.ResetHour < 0 || cfg.ResetHour > 23 {
+		cfg.ResetHour = 0
+	}
+	return cfg
+}
+
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
 	RequestID          string
@@ -19,9 +39,10 @@ type UsageBillingCommand struct {
 	RequestFingerprint string
 	RequestPayloadHash string
 
-	UserID              int64
-	AccountID           int64
-	SubscriptionID      *int64
+	UserID         int64
+	AccountID      int64
+	SubscriptionID *int64
+	SubscriptionQuotaResetConfig
 	AccountType         string
 	Model               string
 	ServiceTier         string
@@ -116,6 +137,9 @@ type UsageBillingApplyResult struct {
 	APIKeyQuotaExhausted bool
 	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
 	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	SubscriptionCost     float64
+	BalanceCost          float64
+	LimitReachedKinds    []string
 }
 
 type UsageBillingRepository interface {

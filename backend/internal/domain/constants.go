@@ -36,10 +36,11 @@ const (
 
 // Redeem type constants
 const (
-	RedeemTypeBalance      = "balance"
-	RedeemTypeConcurrency  = "concurrency"
-	RedeemTypeSubscription = "subscription"
-	RedeemTypeInvitation   = "invitation"
+	RedeemTypeBalance        = "balance"
+	RedeemTypeBalancePayment = "balance_payment"
+	RedeemTypeConcurrency    = "concurrency"
+	RedeemTypeSubscription   = "subscription"
+	RedeemTypeInvitation     = "invitation"
 )
 
 // PromoCode status constants
@@ -66,6 +67,40 @@ const (
 	SubscriptionStatusExpired   = "expired"
 	SubscriptionStatusSuspended = "suspended"
 )
+
+// Subscription scope types
+// 描述订阅额度池覆盖范围。
+const (
+	SubscriptionScopeAllAvailableGroups = "all_available_groups"
+	SubscriptionScopeSelectedGroups     = "selected_groups"
+	SubscriptionScopePlatforms          = "platforms"
+)
+
+// Subscription credit ledger types
+const (
+	SubscriptionCreditLedgerPurchase     = "purchase"
+	SubscriptionCreditLedgerConsume      = "consume"
+	SubscriptionCreditLedgerLimitReached = "limit_reached"
+	SubscriptionCreditLedgerExpire       = "expire"
+	// SubscriptionCreditLedgerWindowReset 日/周窗口重置时记录被重置窗口的浪费量。
+	// metadata: {window, limit_usd, used_before_reset_usd, wasted_usd, wasted_ratio, old_window_start}
+	// 仅供后台浪费率统计，不发通知；event_key 归集到旧窗口起点保证幂等。
+	SubscriptionCreditLedgerWindowReset = "window_reset"
+	SubscriptionCreditLedgerAdminAdjust = "admin_adjust"
+)
+
+// LimitReached 事件维度（用于 event_key 前缀和 outbox payload kind 后缀）
+const (
+	SubscriptionLimitReachedTotal  = "total"
+	SubscriptionLimitReachedDaily  = "daily"
+	SubscriptionLimitReachedWeekly = "weekly"
+)
+
+// SchedulerOutboxEventSubscriptionNotify 是订阅通知专用的 outbox event_type。
+// payload 结构：
+//
+//	{"user_id":..., "subscription_id":..., "kind":"limit_reached_total|limit_reached_daily|limit_reached_weekly|expired"}
+const SchedulerOutboxEventSubscriptionNotify = "subscription_notify"
 
 // DefaultAntigravityModelMapping 是 Antigravity 平台的默认模型映射
 // 当账号未配置 model_mapping 时使用此默认值

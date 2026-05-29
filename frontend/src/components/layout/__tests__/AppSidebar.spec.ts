@@ -52,3 +52,16 @@ describe('AppSidebar invoice navigation', () => {
     expect(componentSource).toContain("t('nav.invoiceManagement')")
   })
 })
+
+describe('AppSidebar admin subscription navigation', () => {
+  it('shows payment plans under subscriptions but still gates them by payment settings', () => {
+    const paymentPlansItemMatch = componentSource.match(
+      /\{ path: '\/admin\/subscriptions\/plans'[^}]*\}/,
+    )
+
+    expect(paymentPlansItemMatch).not.toBeNull()
+    expect(paymentPlansItemMatch?.[0]).toContain("t('nav.paymentPlans')")
+    expect(paymentPlansItemMatch?.[0]).toContain('featureFlag: flagAdminPayment')
+    expect(componentSource).not.toContain("path: '/admin/orders/plans', label: t('nav.paymentPlans')")
+  })
+})

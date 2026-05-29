@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -31,6 +32,7 @@ type UserSubscriptionQuery struct {
 	withGroup          *GroupQuery
 	withAssignedByUser *UserQuery
 	withUsageLogs      *UsageLogQuery
+	withCreditLedger   *SubscriptionCreditLedgerQuery
 	modifiers          []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -149,6 +151,28 @@ func (_q *UserSubscriptionQuery) QueryUsageLogs() *UsageLogQuery {
 			sqlgraph.From(usersubscription.Table, usersubscription.FieldID, selector),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, usersubscription.UsageLogsTable, usersubscription.UsageLogsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryCreditLedger chains the current query on the "credit_ledger" edge.
+func (_q *UserSubscriptionQuery) QueryCreditLedger() *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usersubscription.Table, usersubscription.FieldID, selector),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usersubscription.CreditLedgerTable, usersubscription.CreditLedgerColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -352,6 +376,7 @@ func (_q *UserSubscriptionQuery) Clone() *UserSubscriptionQuery {
 		withGroup:          _q.withGroup.Clone(),
 		withAssignedByUser: _q.withAssignedByUser.Clone(),
 		withUsageLogs:      _q.withUsageLogs.Clone(),
+		withCreditLedger:   _q.withCreditLedger.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -399,6 +424,17 @@ func (_q *UserSubscriptionQuery) WithUsageLogs(opts ...func(*UsageLogQuery)) *Us
 		opt(query)
 	}
 	_q.withUsageLogs = query
+	return _q
+}
+
+// WithCreditLedger tells the query-builder to eager-load the nodes that are connected to
+// the "credit_ledger" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserSubscriptionQuery) WithCreditLedger(opts ...func(*SubscriptionCreditLedgerQuery)) *UserSubscriptionQuery {
+	query := (&SubscriptionCreditLedgerClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withCreditLedger = query
 	return _q
 }
 
@@ -480,11 +516,12 @@ func (_q *UserSubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	var (
 		nodes       = []*UserSubscription{}
 		_spec       = _q.querySpec()
-		loadedTypes = [4]bool{
+		loadedTypes = [5]bool{
 			_q.withUser != nil,
 			_q.withGroup != nil,
 			_q.withAssignedByUser != nil,
 			_q.withUsageLogs != nil,
+			_q.withCreditLedger != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -533,6 +570,15 @@ func (_q *UserSubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 			return nil, err
 		}
 	}
+	if query := _q.withCreditLedger; query != nil {
+		if err := _q.loadCreditLedger(ctx, query, nodes,
+			func(n *UserSubscription) { n.Edges.CreditLedger = []*SubscriptionCreditLedger{} },
+			func(n *UserSubscription, e *SubscriptionCreditLedger) {
+				n.Edges.CreditLedger = append(n.Edges.CreditLedger, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
@@ -569,7 +615,10 @@ func (_q *UserSubscriptionQuery) loadGroup(ctx context.Context, query *GroupQuer
 	ids := make([]int64, 0, len(nodes))
 	nodeids := make(map[int64][]*UserSubscription)
 	for i := range nodes {
-		fk := nodes[i].GroupID
+		if nodes[i].GroupID == nil {
+			continue
+		}
+		fk := *nodes[i].GroupID
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -654,6 +703,36 @@ func (_q *UserSubscriptionQuery) loadUsageLogs(ctx context.Context, query *Usage
 		node, ok := nodeids[*fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "subscription_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserSubscriptionQuery) loadCreditLedger(ctx context.Context, query *SubscriptionCreditLedgerQuery, nodes []*UserSubscription, init func(*UserSubscription), assign func(*UserSubscription, *SubscriptionCreditLedger)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*UserSubscription)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(subscriptioncreditledger.FieldSubscriptionID)
+	}
+	query.Where(predicate.SubscriptionCreditLedger(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(usersubscription.CreditLedgerColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SubscriptionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "subscription_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

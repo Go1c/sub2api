@@ -225,6 +225,13 @@
             </span>
           </template>
 
+          <template #cell-deduction_mode="{ row }">
+            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+                  :class="getDeductionModeBadgeClass(row.billing_type)">
+              {{ getDeductionModeLabel(row.billing_type) }}
+            </span>
+          </template>
+
           <template #cell-tokens="{ row }">
             <!-- 图片生成请求（仅按次计费时显示图片格式） -->
             <div v-if="row.image_count > 0 && row.billing_mode === 'image'" class="flex items-center gap-1.5">
@@ -594,6 +601,7 @@ const columns = computed<Column[]>(() => [
   { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
   { key: 'stream', label: t('usage.type'), sortable: false },
   { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
+  { key: 'deduction_mode', label: t('usage.deductionMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },
   { key: 'cost', label: t('usage.cost'), sortable: false },
   { key: 'first_token', label: t('usage.firstToken'), sortable: false },
@@ -693,6 +701,20 @@ const getRequestTypeBadgeClass = (log: UsageLog): string => {
   if (requestType === 'stream') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
   if (requestType === 'sync') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
   return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+}
+
+const getDeductionModeLabel = (billingType: number | null | undefined): string => {
+  if (billingType === 0) return t('usage.deductionModeBalance')
+  if (billingType === 1) return t('usage.deductionModeSubscription')
+  if (billingType === 2) return t('usage.deductionModeMixed')
+  return '-'
+}
+
+const getDeductionModeBadgeClass = (billingType: number | null | undefined): string => {
+  if (billingType === 0) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+  if (billingType === 1) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
+  if (billingType === 2) return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+  return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
 }
 
 
@@ -904,6 +926,7 @@ const exportToCSV = async () => {
       'Inbound Endpoint',
       'Type',
       'Billing Mode',
+      'Deduction Mode',
       'Input Tokens',
       'Output Tokens',
       'Cache Read Tokens',
@@ -923,6 +946,7 @@ const exportToCSV = async () => {
         log.inbound_endpoint || '',
         getRequestTypeExportText(log),
         getBillingModeLabel(log.billing_mode, t),
+        getDeductionModeLabel(log.billing_type),
         log.input_tokens,
         log.output_tokens,
         log.cache_read_tokens,

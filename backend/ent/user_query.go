@@ -23,6 +23,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/sitemessage"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
@@ -33,26 +34,27 @@ import (
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx                       *QueryContext
-	order                     []user.OrderOption
-	inters                    []Interceptor
-	predicates                []predicate.User
-	withAPIKeys               *APIKeyQuery
-	withRedeemCodes           *RedeemCodeQuery
-	withSubscriptions         *UserSubscriptionQuery
-	withAssignedSubscriptions *UserSubscriptionQuery
-	withAnnouncementReads     *AnnouncementReadQuery
-	withSentSiteMessages      *SiteMessageQuery
-	withReceivedSiteMessages  *SiteMessageQuery
-	withAllowedGroups         *GroupQuery
-	withUsageLogs             *UsageLogQuery
-	withAttributeValues       *UserAttributeValueQuery
-	withPromoCodeUsages       *PromoCodeUsageQuery
-	withPaymentOrders         *PaymentOrderQuery
-	withAuthIdentities        *AuthIdentityQuery
-	withPendingAuthSessions   *PendingAuthSessionQuery
-	withUserAllowedGroups     *UserAllowedGroupQuery
-	modifiers                 []func(*sql.Selector)
+	ctx                           *QueryContext
+	order                         []user.OrderOption
+	inters                        []Interceptor
+	predicates                    []predicate.User
+	withAPIKeys                   *APIKeyQuery
+	withRedeemCodes               *RedeemCodeQuery
+	withSubscriptions             *UserSubscriptionQuery
+	withAssignedSubscriptions     *UserSubscriptionQuery
+	withAnnouncementReads         *AnnouncementReadQuery
+	withSentSiteMessages          *SiteMessageQuery
+	withReceivedSiteMessages      *SiteMessageQuery
+	withAllowedGroups             *GroupQuery
+	withUsageLogs                 *UsageLogQuery
+	withAttributeValues           *UserAttributeValueQuery
+	withPromoCodeUsages           *PromoCodeUsageQuery
+	withPaymentOrders             *PaymentOrderQuery
+	withSubscriptionCreditLedgers *SubscriptionCreditLedgerQuery
+	withAuthIdentities            *AuthIdentityQuery
+	withPendingAuthSessions       *PendingAuthSessionQuery
+	withUserAllowedGroups         *UserAllowedGroupQuery
+	modifiers                     []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -353,6 +355,28 @@ func (_q *UserQuery) QueryPaymentOrders() *PaymentOrderQuery {
 	return query
 }
 
+// QuerySubscriptionCreditLedgers chains the current query on the "subscription_credit_ledgers" edge.
+func (_q *UserQuery) QuerySubscriptionCreditLedgers() *SubscriptionCreditLedgerQuery {
+	query := (&SubscriptionCreditLedgerClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(subscriptioncreditledger.Table, subscriptioncreditledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SubscriptionCreditLedgersTable, user.SubscriptionCreditLedgersColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryAuthIdentities chains the current query on the "auth_identities" edge.
 func (_q *UserQuery) QueryAuthIdentities() *AuthIdentityQuery {
 	query := (&AuthIdentityClient{config: _q.config}).Query()
@@ -606,26 +630,27 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:                    _q.config,
-		ctx:                       _q.ctx.Clone(),
-		order:                     append([]user.OrderOption{}, _q.order...),
-		inters:                    append([]Interceptor{}, _q.inters...),
-		predicates:                append([]predicate.User{}, _q.predicates...),
-		withAPIKeys:               _q.withAPIKeys.Clone(),
-		withRedeemCodes:           _q.withRedeemCodes.Clone(),
-		withSubscriptions:         _q.withSubscriptions.Clone(),
-		withAssignedSubscriptions: _q.withAssignedSubscriptions.Clone(),
-		withAnnouncementReads:     _q.withAnnouncementReads.Clone(),
-		withSentSiteMessages:      _q.withSentSiteMessages.Clone(),
-		withReceivedSiteMessages:  _q.withReceivedSiteMessages.Clone(),
-		withAllowedGroups:         _q.withAllowedGroups.Clone(),
-		withUsageLogs:             _q.withUsageLogs.Clone(),
-		withAttributeValues:       _q.withAttributeValues.Clone(),
-		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
-		withPaymentOrders:         _q.withPaymentOrders.Clone(),
-		withAuthIdentities:        _q.withAuthIdentities.Clone(),
-		withPendingAuthSessions:   _q.withPendingAuthSessions.Clone(),
-		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
+		config:                        _q.config,
+		ctx:                           _q.ctx.Clone(),
+		order:                         append([]user.OrderOption{}, _q.order...),
+		inters:                        append([]Interceptor{}, _q.inters...),
+		predicates:                    append([]predicate.User{}, _q.predicates...),
+		withAPIKeys:                   _q.withAPIKeys.Clone(),
+		withRedeemCodes:               _q.withRedeemCodes.Clone(),
+		withSubscriptions:             _q.withSubscriptions.Clone(),
+		withAssignedSubscriptions:     _q.withAssignedSubscriptions.Clone(),
+		withAnnouncementReads:         _q.withAnnouncementReads.Clone(),
+		withSentSiteMessages:          _q.withSentSiteMessages.Clone(),
+		withReceivedSiteMessages:      _q.withReceivedSiteMessages.Clone(),
+		withAllowedGroups:             _q.withAllowedGroups.Clone(),
+		withUsageLogs:                 _q.withUsageLogs.Clone(),
+		withAttributeValues:           _q.withAttributeValues.Clone(),
+		withPromoCodeUsages:           _q.withPromoCodeUsages.Clone(),
+		withPaymentOrders:             _q.withPaymentOrders.Clone(),
+		withSubscriptionCreditLedgers: _q.withSubscriptionCreditLedgers.Clone(),
+		withAuthIdentities:            _q.withAuthIdentities.Clone(),
+		withPendingAuthSessions:       _q.withPendingAuthSessions.Clone(),
+		withUserAllowedGroups:         _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -764,6 +789,17 @@ func (_q *UserQuery) WithPaymentOrders(opts ...func(*PaymentOrderQuery)) *UserQu
 	return _q
 }
 
+// WithSubscriptionCreditLedgers tells the query-builder to eager-load the nodes that are connected to
+// the "subscription_credit_ledgers" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSubscriptionCreditLedgers(opts ...func(*SubscriptionCreditLedgerQuery)) *UserQuery {
+	query := (&SubscriptionCreditLedgerClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSubscriptionCreditLedgers = query
+	return _q
+}
+
 // WithAuthIdentities tells the query-builder to eager-load the nodes that are connected to
 // the "auth_identities" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithAuthIdentities(opts ...func(*AuthIdentityQuery)) *UserQuery {
@@ -875,7 +911,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [15]bool{
+		loadedTypes = [16]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -888,6 +924,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withAttributeValues != nil,
 			_q.withPromoCodeUsages != nil,
 			_q.withPaymentOrders != nil,
+			_q.withSubscriptionCreditLedgers != nil,
 			_q.withAuthIdentities != nil,
 			_q.withPendingAuthSessions != nil,
 			_q.withUserAllowedGroups != nil,
@@ -997,6 +1034,15 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadPaymentOrders(ctx, query, nodes,
 			func(n *User) { n.Edges.PaymentOrders = []*PaymentOrder{} },
 			func(n *User, e *PaymentOrder) { n.Edges.PaymentOrders = append(n.Edges.PaymentOrders, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSubscriptionCreditLedgers; query != nil {
+		if err := _q.loadSubscriptionCreditLedgers(ctx, query, nodes,
+			func(n *User) { n.Edges.SubscriptionCreditLedgers = []*SubscriptionCreditLedger{} },
+			func(n *User, e *SubscriptionCreditLedger) {
+				n.Edges.SubscriptionCreditLedgers = append(n.Edges.SubscriptionCreditLedgers, e)
+			}); err != nil {
 			return nil, err
 		}
 	}
@@ -1408,6 +1454,36 @@ func (_q *UserQuery) loadPaymentOrders(ctx context.Context, query *PaymentOrderQ
 	}
 	query.Where(predicate.PaymentOrder(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.PaymentOrdersColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSubscriptionCreditLedgers(ctx context.Context, query *SubscriptionCreditLedgerQuery, nodes []*User, init func(*User), assign func(*User, *SubscriptionCreditLedger)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(subscriptioncreditledger.FieldUserID)
+	}
+	query.Where(predicate.SubscriptionCreditLedger(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SubscriptionCreditLedgersColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

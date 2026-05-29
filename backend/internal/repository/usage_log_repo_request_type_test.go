@@ -64,6 +64,8 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			log.CacheReadCost,
 			log.TotalCost,
 			log.ActualCost,
+			log.SubscriptionCostUSD,
+			log.BalanceCostUSD,
 			log.RateMultiplier,
 			log.AccountRateMultiplier,
 			log.BillingType,
@@ -143,6 +145,8 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			log.CacheReadCost,
 			log.TotalCost,
 			log.ActualCost,
+			log.SubscriptionCostUSD,
+			log.BalanceCostUSD,
 			log.RateMultiplier,
 			log.AccountRateMultiplier,
 			log.BillingType,
@@ -555,6 +559,8 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			0.4,               // cache_read_cost
 			1.0,               // total_cost
 			0.9,               // actual_cost
+			0.7,               // subscription_cost_usd
+			0.2,               // balance_cost_usd
 			1.0,               // rate_multiplier
 			sql.NullFloat64{}, // account_rate_multiplier
 			int16(service.BillingTypeBalance),
@@ -603,6 +609,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			1, 2, 3, 4, 5, 6,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0.1, 0.2, 0.3, 0.4, 1.0, 0.9,
+			0.0, 0.9, // subscription_cost_usd, balance_cost_usd
 			1.0,
 			sql.NullFloat64{},
 			int16(service.BillingTypeBalance),
@@ -651,6 +658,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			1, 2, 3, 4, 5, 6,
 			0, 0.0, // image_output_tokens, image_output_cost
 			0.1, 0.2, 0.3, 0.4, 1.0, 0.9,
+			0.0, 0.9, // subscription_cost_usd, balance_cost_usd
 			1.0,
 			sql.NullFloat64{},
 			int16(service.BillingTypeBalance),

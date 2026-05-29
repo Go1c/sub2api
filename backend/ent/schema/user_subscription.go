@@ -16,6 +16,13 @@ import (
 )
 
 // UserSubscription holds the schema definition for the UserSubscription entity.
+//
+// 订阅额度池模型（详见 doc/plan/2026-05-28-subscription-credit-pool-plan.md）：
+//   - 用户级订阅，group_id 可空（额度池订阅不绑定具体分组）
+//   - quota_limit_usd / quota_used_usd 表达总额度
+//   - daily_limit_usd / weekly_limit_usd 表达窗口节流（NULL 表示无限制）
+//   - exhausted_at 时间戳标记总额度耗尽时刻；NULL 表示订阅当前仍可消费
+//   - 月限字段已删除（订阅最长 30 天，月限≡总额度）
 type UserSubscription struct {
 	ent.Schema
 }
@@ -36,8 +43,40 @@ func (UserSubscription) Mixin() []ent.Mixin {
 func (UserSubscription) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
-		field.Int64("group_id"),
+		field.Int64("group_id").
+			Optional().
+			Nillable(),
 
+		// 套餐与覆盖范围
+		field.Int64("plan_id").
+			Optional().
+			Nillable(),
+		field.String("scope_type").
+			MaxLen(32).
+			Default(domain.SubscriptionScopeAllAvailableGroups),
+		field.JSON("scope_config", map[string]any{}).
+			Default(map[string]any{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
+
+		// 总额度（DB CHECK 约束 >= 0；业务层创建额度池订阅时强制 > 0）
+		field.Float("quota_limit_usd").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
+			Default(0),
+		field.Float("quota_used_usd").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
+			Default(0),
+
+		// 窗口节流（NULL 表示该窗口无限制）
+		field.Float("daily_limit_usd").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		field.Float("weekly_limit_usd").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+
+		// 生命周期
 		field.Time("starts_at").
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Time("expires_at").
@@ -46,15 +85,23 @@ func (UserSubscription) Fields() []ent.Field {
 			MaxLen(20).
 			Default(domain.SubscriptionStatusActive),
 
+		// 耗尽时间戳（总额度耗尽时写入；NULL = 仍可消费）
+		field.Time("exhausted_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		// 过期销毁 ledger 已写入标记（避免重复写）
+		field.Time("expired_credit_logged_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+
+		// 窗口状态（按 UTC date_trunc 对齐）
 		field.Time("daily_window_start").
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Time("weekly_window_start").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
-		field.Time("monthly_window_start").
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
@@ -65,10 +112,8 @@ func (UserSubscription) Fields() []ent.Field {
 		field.Float("weekly_usage_usd").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
 			Default(0),
-		field.Float("monthly_usage_usd").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
-			Default(0),
 
+		// 审计信息
 		field.Int64("assigned_by").
 			Optional().
 			Nillable(),
@@ -92,13 +137,13 @@ func (UserSubscription) Edges() []ent.Edge {
 		edge.From("group", Group.Type).
 			Ref("subscriptions").
 			Field("group_id").
-			Unique().
-			Required(),
+			Unique(),
 		edge.From("assigned_by_user", User.Type).
 			Ref("assigned_subscriptions").
 			Field("assigned_by").
 			Unique(),
 		edge.To("usage_logs", UsageLog.Type),
+		edge.To("credit_ledger", SubscriptionCreditLedger.Type),
 	}
 }
 
@@ -108,12 +153,10 @@ func (UserSubscription) Indexes() []ent.Index {
 		index.Fields("group_id"),
 		index.Fields("status"),
 		index.Fields("expires_at"),
-		// 活跃订阅查询复合索引（线上由 SQL 迁移创建部分索引，schema 仅用于模型可读性对齐）
 		index.Fields("user_id", "status", "expires_at"),
 		index.Fields("assigned_by"),
-		// 唯一约束通过部分索引实现（WHERE deleted_at IS NULL），支持软删除后重新订阅
-		// 见迁移文件 016_soft_delete_partial_unique_indexes.sql
-		index.Fields("user_id", "group_id"),
+		// 部分唯一索引 user_subscriptions_user_active_usable 由 SQL 迁移创建
+		// （Ent 不支持基于 NULL/状态的部分唯一索引，必须由 migration 维护）
 		index.Fields("deleted_at"),
 	}
 }

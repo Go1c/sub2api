@@ -107,6 +107,7 @@ function checkoutInfoFixture() {
       global_max: 0,
       plans: [],
       balance_disabled: false,
+      subscription_balance_payment_enabled: false,
       balance_recharge_multiplier: 1,
       recharge_fee_rate: 0,
       help_text: '',

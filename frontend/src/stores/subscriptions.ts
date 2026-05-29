@@ -29,6 +29,10 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
 
   // Computed
   const hasActiveSubscriptions = computed(() => activeSubscriptions.value.length > 0)
+  const usableSubscriptions = computed(() =>
+    activeSubscriptions.value.filter(subscription => subscription.is_usable === true)
+  )
+  const hasUsableSubscriptions = computed(() => usableSubscriptions.value.length > 0)
 
   /**
    * Fetch active subscriptions with caching and deduplication
@@ -129,6 +133,8 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
     activeSubscriptions,
     loading,
     hasActiveSubscriptions,
+    usableSubscriptions,
+    hasUsableSubscriptions,
 
     // Actions
     fetchActiveSubscriptions,

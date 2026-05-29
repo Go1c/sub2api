@@ -113,45 +113,48 @@ type SystemSettings struct {
 	OIDCConnectUserInfoIDPath         string `json:"oidc_connect_userinfo_id_path"`
 	OIDCConnectUserInfoUsernamePath   string `json:"oidc_connect_userinfo_username_path"`
 
-	SiteName                              string           `json:"site_name"`
-	SiteLogo                              string           `json:"site_logo"`
-	SiteSubtitle                          string           `json:"site_subtitle"`
-	APIBaseURL                            string           `json:"api_base_url"`
-	ContactInfo                           string           `json:"contact_info"`
-	ContactChannels                       []ContactChannel `json:"contact_channels"`
-	SupportChatEnabled                    bool             `json:"support_chat_enabled"`
-	SupportChatGatewayURL                 string           `json:"support_chat_gateway_url"`
-	SupportChatTitle                      string           `json:"support_chat_title"`
-	SupportChatWelcomeMessage             string           `json:"support_chat_welcome_message"`
-	SupportChatOfficialContactText        string           `json:"support_chat_official_contact_text"`
-	SupportChatOfficialContactURL         string           `json:"support_chat_official_contact_url"`
-	DocURL                                string           `json:"doc_url"`
-	SitePages                             []SitePage       `json:"site_pages"`
-	HomeContent                           string           `json:"home_content"`
-	HideCcsImportButton                   bool             `json:"hide_ccs_import_button"`
-	FrontendLocales                       []string         `json:"frontend_locales"`
-	CCSwitchDefaultModelAnthropic         string           `json:"ccswitch_default_model_anthropic"`
-	CCSwitchDefaultModelOpenAI            string           `json:"ccswitch_default_model_openai"`
-	CCSwitchDefaultModelGemini            string           `json:"ccswitch_default_model_gemini"`
-	CCSwitchDefaultModelAntigravity       string           `json:"ccswitch_default_model_antigravity"`
-	CCSwitchDefaultModelAntigravityGemini string           `json:"ccswitch_default_model_antigravity_gemini"`
-	UserSubscriptionsVisible              bool             `json:"user_subscriptions_visible"`
-	PurchaseSubscriptionEnabled           bool             `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL               string           `json:"purchase_subscription_url"`
-	TableDefaultPageSize                  int              `json:"table_default_page_size"`
-	TablePageSizeOptions                  []int            `json:"table_page_size_options"`
-	CustomMenuItems                       []CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints                       []CustomEndpoint `json:"custom_endpoints"`
-	GitHubOAuthEnabled                    bool             `json:"github_oauth_enabled"`
-	GitHubOAuthClientID                   string           `json:"github_oauth_client_id"`
-	GitHubOAuthClientSecretConfigured     bool             `json:"github_oauth_client_secret_configured"`
-	GitHubOAuthRedirectURL                string           `json:"github_oauth_redirect_url"`
-	GitHubOAuthFrontendRedirectURL        string           `json:"github_oauth_frontend_redirect_url"`
-	GoogleOAuthEnabled                    bool             `json:"google_oauth_enabled"`
-	GoogleOAuthClientID                   string           `json:"google_oauth_client_id"`
-	GoogleOAuthClientSecretConfigured     bool             `json:"google_oauth_client_secret_configured"`
-	GoogleOAuthRedirectURL                string           `json:"google_oauth_redirect_url"`
-	GoogleOAuthFrontendRedirectURL        string           `json:"google_oauth_frontend_redirect_url"`
+	SiteName                               string           `json:"site_name"`
+	SiteLogo                               string           `json:"site_logo"`
+	SiteSubtitle                           string           `json:"site_subtitle"`
+	APIBaseURL                             string           `json:"api_base_url"`
+	ContactInfo                            string           `json:"contact_info"`
+	ContactChannels                        []ContactChannel `json:"contact_channels"`
+	SupportChatEnabled                     bool             `json:"support_chat_enabled"`
+	SupportChatGatewayURL                  string           `json:"support_chat_gateway_url"`
+	SupportChatTitle                       string           `json:"support_chat_title"`
+	SupportChatWelcomeMessage              string           `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText         string           `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL          string           `json:"support_chat_official_contact_url"`
+	DocURL                                 string           `json:"doc_url"`
+	SitePages                              []SitePage       `json:"site_pages"`
+	HomeContent                            string           `json:"home_content"`
+	HideCcsImportButton                    bool             `json:"hide_ccs_import_button"`
+	FrontendLocales                        []string         `json:"frontend_locales"`
+	CCSwitchDefaultModelAnthropic          string           `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI             string           `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini             string           `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity        string           `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini  string           `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible               bool             `json:"user_subscriptions_visible"`
+	PurchaseSubscriptionEnabled            bool             `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL                string           `json:"purchase_subscription_url"`
+	SubscriptionNotifyEmailEnabled         bool             `json:"subscription_notify_email_enabled"`
+	SubscriptionQuotaResetUTCOffsetMinutes int              `json:"subscription_quota_reset_utc_offset_minutes"`
+	SubscriptionQuotaResetHour             int              `json:"subscription_quota_reset_hour"`
+	TableDefaultPageSize                   int              `json:"table_default_page_size"`
+	TablePageSizeOptions                   []int            `json:"table_page_size_options"`
+	CustomMenuItems                        []CustomMenuItem `json:"custom_menu_items"`
+	CustomEndpoints                        []CustomEndpoint `json:"custom_endpoints"`
+	GitHubOAuthEnabled                     bool             `json:"github_oauth_enabled"`
+	GitHubOAuthClientID                    string           `json:"github_oauth_client_id"`
+	GitHubOAuthClientSecretConfigured      bool             `json:"github_oauth_client_secret_configured"`
+	GitHubOAuthRedirectURL                 string           `json:"github_oauth_redirect_url"`
+	GitHubOAuthFrontendRedirectURL         string           `json:"github_oauth_frontend_redirect_url"`
+	GoogleOAuthEnabled                     bool             `json:"google_oauth_enabled"`
+	GoogleOAuthClientID                    string           `json:"google_oauth_client_id"`
+	GoogleOAuthClientSecretConfigured      bool             `json:"google_oauth_client_secret_configured"`
+	GoogleOAuthRedirectURL                 string           `json:"google_oauth_redirect_url"`
+	GoogleOAuthFrontendRedirectURL         string           `json:"google_oauth_frontend_redirect_url"`
 
 	DefaultConcurrency           int                          `json:"default_concurrency"`
 	DefaultBalance               float64                      `json:"default_balance"`
@@ -214,21 +217,22 @@ type SystemSettings struct {
 	OpenAIAdvancedSchedulerEnabled bool `json:"openai_advanced_scheduler_enabled"`
 
 	// Payment configuration
-	PaymentEnabled                   bool     `json:"payment_enabled"`
-	PaymentMinAmount                 float64  `json:"payment_min_amount"`
-	PaymentMaxAmount                 float64  `json:"payment_max_amount"`
-	PaymentDailyLimit                float64  `json:"payment_daily_limit"`
-	PaymentOrderTimeoutMin           int      `json:"payment_order_timeout_minutes"`
-	PaymentMaxPendingOrders          int      `json:"payment_max_pending_orders"`
-	PaymentEnabledTypes              []string `json:"payment_enabled_types"`
-	PaymentBalanceDisabled           bool     `json:"payment_balance_disabled"`
-	PaymentBalanceRechargeMultiplier float64  `json:"payment_balance_recharge_multiplier"`
-	PaymentRechargeFeeRate           float64  `json:"payment_recharge_fee_rate"`
-	PaymentLoadBalanceStrat          string   `json:"payment_load_balance_strategy"`
-	PaymentProductNamePrefix         string   `json:"payment_product_name_prefix"`
-	PaymentProductNameSuffix         string   `json:"payment_product_name_suffix"`
-	PaymentHelpImageURL              string   `json:"payment_help_image_url"`
-	PaymentHelpText                  string   `json:"payment_help_text"`
+	PaymentEnabled                    bool     `json:"payment_enabled"`
+	PaymentMinAmount                  float64  `json:"payment_min_amount"`
+	PaymentMaxAmount                  float64  `json:"payment_max_amount"`
+	PaymentDailyLimit                 float64  `json:"payment_daily_limit"`
+	PaymentOrderTimeoutMin            int      `json:"payment_order_timeout_minutes"`
+	PaymentMaxPendingOrders           int      `json:"payment_max_pending_orders"`
+	PaymentEnabledTypes               []string `json:"payment_enabled_types"`
+	PaymentBalanceDisabled            bool     `json:"payment_balance_disabled"`
+	PaymentSubscriptionBalanceEnabled bool     `json:"payment_subscription_balance_enabled"`
+	PaymentBalanceRechargeMultiplier  float64  `json:"payment_balance_recharge_multiplier"`
+	PaymentRechargeFeeRate            float64  `json:"payment_recharge_fee_rate"`
+	PaymentLoadBalanceStrat           string   `json:"payment_load_balance_strategy"`
+	PaymentProductNamePrefix          string   `json:"payment_product_name_prefix"`
+	PaymentProductNameSuffix          string   `json:"payment_product_name_suffix"`
+	PaymentHelpImageURL               string   `json:"payment_help_image_url"`
+	PaymentHelpText                   string   `json:"payment_help_text"`
 
 	// Cancel rate limit
 	PaymentCancelRateLimitEnabled bool   `json:"payment_cancel_rate_limit_enabled"`

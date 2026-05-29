@@ -93,6 +93,9 @@ type Setting func(*sql.Selector)
 // SiteMessage is the predicate function for sitemessage builders.
 type SiteMessage func(*sql.Selector)
 
+// SubscriptionCreditLedger is the predicate function for subscriptioncreditledger builders.
+type SubscriptionCreditLedger func(*sql.Selector)
+
 // SubscriptionPlan is the predicate function for subscriptionplan builders.
 type SubscriptionPlan func(*sql.Selector)
 

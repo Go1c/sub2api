@@ -1624,11 +1624,23 @@ export interface ChangePasswordRequest {
 export interface UserSubscription {
   id: number
   user_id: number
-  group_id: number
-  status: 'active' | 'expired' | 'revoked'
+  group_id: number | null
+  plan_id?: number | null
+  status: 'active' | 'expired' | 'revoked' | 'suspended'
+  is_usable?: boolean
+  exhausted_at?: string | null
+  quota_limit_usd?: number
+  quota_used_usd?: number
+  quota_remaining_usd?: number
+  daily_limit_usd?: number | null
   daily_usage_usd: number
+  daily_reset_at?: string | null
+  weekly_limit_usd?: number | null
   weekly_usage_usd: number
+  weekly_reset_at?: string | null
   monthly_usage_usd: number
+  scope_type?: string
+  scope_config?: Record<string, unknown> | null
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null

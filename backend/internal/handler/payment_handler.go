@@ -54,28 +54,42 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 	}
 	// Enrich plans with group platform for frontend color coding
 	type planWithPlatform struct {
-		ID            int64    `json:"id"`
-		GroupID       int64    `json:"group_id"`
-		GroupPlatform string   `json:"group_platform"`
-		Name          string   `json:"name"`
-		Description   string   `json:"description"`
-		Price         float64  `json:"price"`
-		OriginalPrice *float64 `json:"original_price,omitempty"`
-		ValidityDays  int      `json:"validity_days"`
-		ValidityUnit  string   `json:"validity_unit"`
-		Features      string   `json:"features"`
-		ProductName   string   `json:"product_name"`
-		ForSale       bool     `json:"for_sale"`
-		SortOrder     int      `json:"sort_order"`
+		ID             int64          `json:"id"`
+		GroupID        int64          `json:"group_id"`
+		GroupPlatform  string         `json:"group_platform"`
+		Name           string         `json:"name"`
+		Description    string         `json:"description"`
+		Price          float64        `json:"price"`
+		OriginalPrice  *float64       `json:"original_price,omitempty"`
+		ValidityDays   int            `json:"validity_days"`
+		ValidityUnit   string         `json:"validity_unit"`
+		QuotaUSD       float64        `json:"quota_usd"`
+		DailyLimitUSD  *float64       `json:"daily_limit_usd"`
+		WeeklyLimitUSD *float64       `json:"weekly_limit_usd"`
+		ScopeType      string         `json:"scope_type"`
+		ScopeConfig    map[string]any `json:"scope_config"`
+		Features       string         `json:"features"`
+		PurchaseNotice string         `json:"purchase_notice"`
+		ProductName    string         `json:"product_name"`
+		ForSale        bool           `json:"for_sale"`
+		SortOrder      int            `json:"sort_order"`
 	}
 	platformMap := h.configService.GetGroupPlatformMap(c.Request.Context(), plans)
 	result := make([]planWithPlatform, 0, len(plans))
 	for _, p := range plans {
+		var gid int64
+		if p.GroupID != nil {
+			gid = *p.GroupID
+		}
 		result = append(result, planWithPlatform{
-			ID: int64(p.ID), GroupID: p.GroupID, GroupPlatform: platformMap[p.GroupID],
+			ID: int64(p.ID), GroupID: gid, GroupPlatform: platformMap[gid],
 			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
-			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit, Features: p.Features,
-			ProductName: p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
+			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit,
+			QuotaUSD: p.QuotaUsd, DailyLimitUSD: p.DailyLimitUsd, WeeklyLimitUSD: p.WeeklyLimitUsd,
+			ScopeType: planScopeTypeForResponse(p.ScopeType), ScopeConfig: planScopeConfigForResponse(p.ScopeConfig),
+			Features:       p.Features,
+			PurchaseNotice: p.PurchaseNotice,
+			ProductName:    p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
 		})
 	}
 	response.Success(c, result)
@@ -117,64 +131,108 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	groupInfo := h.configService.GetGroupInfoMap(ctx, plans)
 	planList := make([]checkoutPlan, 0, len(plans))
 	for _, p := range plans {
-		gi := groupInfo[p.GroupID]
-		planList = append(planList, checkoutPlan{
-			ID: int64(p.ID), GroupID: p.GroupID,
-			GroupPlatform: gi.Platform, GroupName: gi.Name,
-			RateMultiplier: gi.RateMultiplier, DailyLimitUSD: gi.DailyLimitUSD,
-			WeeklyLimitUSD: gi.WeeklyLimitUSD, MonthlyLimitUSD: gi.MonthlyLimitUSD,
-			ModelScopes: gi.ModelScopes,
-			Name:        p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
-			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit, Features: parseFeatures(p.Features),
-			ProductName: p.ProductName,
-		})
+		var gid int64
+		if p.GroupID != nil {
+			gid = *p.GroupID
+		}
+		gi := groupInfo[gid]
+		planList = append(planList, checkoutPlanFromSubscriptionPlan(p, gid, gi))
 	}
 
 	response.Success(c, checkoutInfoResponse{
-		Methods:                   limitsResp.Methods,
-		GlobalMin:                 limitsResp.GlobalMin,
-		GlobalMax:                 limitsResp.GlobalMax,
-		Plans:                     planList,
-		BalanceDisabled:           cfg.BalanceDisabled,
-		BalanceRechargeMultiplier: cfg.BalanceRechargeMultiplier,
-		RechargeFeeRate:           cfg.RechargeFeeRate,
-		HelpText:                  cfg.HelpText,
-		HelpImageURL:              cfg.HelpImageURL,
-		StripePublishableKey:      cfg.StripePublishableKey,
+		Methods:                           limitsResp.Methods,
+		GlobalMin:                         limitsResp.GlobalMin,
+		GlobalMax:                         limitsResp.GlobalMax,
+		Plans:                             planList,
+		BalanceDisabled:                   cfg.BalanceDisabled,
+		SubscriptionBalancePaymentEnabled: cfg.SubscriptionBalancePaymentEnabled,
+		BalanceRechargeMultiplier:         cfg.BalanceRechargeMultiplier,
+		RechargeFeeRate:                   cfg.RechargeFeeRate,
+		HelpText:                          cfg.HelpText,
+		HelpImageURL:                      cfg.HelpImageURL,
+		StripePublishableKey:              cfg.StripePublishableKey,
 	})
 }
 
 type checkoutInfoResponse struct {
-	Methods                   map[string]service.MethodLimits `json:"methods"`
-	GlobalMin                 float64                         `json:"global_min"`
-	GlobalMax                 float64                         `json:"global_max"`
-	Plans                     []checkoutPlan                  `json:"plans"`
-	BalanceDisabled           bool                            `json:"balance_disabled"`
-	BalanceRechargeMultiplier float64                         `json:"balance_recharge_multiplier"`
-	RechargeFeeRate           float64                         `json:"recharge_fee_rate"`
-	HelpText                  string                          `json:"help_text"`
-	HelpImageURL              string                          `json:"help_image_url"`
-	StripePublishableKey      string                          `json:"stripe_publishable_key"`
+	Methods                           map[string]service.MethodLimits `json:"methods"`
+	GlobalMin                         float64                         `json:"global_min"`
+	GlobalMax                         float64                         `json:"global_max"`
+	Plans                             []checkoutPlan                  `json:"plans"`
+	BalanceDisabled                   bool                            `json:"balance_disabled"`
+	SubscriptionBalancePaymentEnabled bool                            `json:"subscription_balance_payment_enabled"`
+	BalanceRechargeMultiplier         float64                         `json:"balance_recharge_multiplier"`
+	RechargeFeeRate                   float64                         `json:"recharge_fee_rate"`
+	HelpText                          string                          `json:"help_text"`
+	HelpImageURL                      string                          `json:"help_image_url"`
+	StripePublishableKey              string                          `json:"stripe_publishable_key"`
 }
 
 type checkoutPlan struct {
-	ID              int64    `json:"id"`
-	GroupID         int64    `json:"group_id"`
-	GroupPlatform   string   `json:"group_platform"`
-	GroupName       string   `json:"group_name"`
-	RateMultiplier  float64  `json:"rate_multiplier"`
-	DailyLimitUSD   *float64 `json:"daily_limit_usd"`
-	WeeklyLimitUSD  *float64 `json:"weekly_limit_usd"`
-	MonthlyLimitUSD *float64 `json:"monthly_limit_usd"`
-	ModelScopes     []string `json:"supported_model_scopes"`
-	Name            string   `json:"name"`
-	Description     string   `json:"description"`
-	Price           float64  `json:"price"`
-	OriginalPrice   *float64 `json:"original_price,omitempty"`
-	ValidityDays    int      `json:"validity_days"`
-	ValidityUnit    string   `json:"validity_unit"`
-	Features        []string `json:"features"`
-	ProductName     string   `json:"product_name"`
+	ID              int64          `json:"id"`
+	GroupID         int64          `json:"group_id"`
+	GroupPlatform   string         `json:"group_platform"`
+	GroupName       string         `json:"group_name"`
+	RateMultiplier  float64        `json:"rate_multiplier"`
+	DailyLimitUSD   *float64       `json:"daily_limit_usd"`
+	WeeklyLimitUSD  *float64       `json:"weekly_limit_usd"`
+	MonthlyLimitUSD *float64       `json:"monthly_limit_usd"`
+	ModelScopes     []string       `json:"supported_model_scopes"`
+	QuotaUSD        float64        `json:"quota_usd"`
+	ScopeType       string         `json:"scope_type"`
+	ScopeConfig     map[string]any `json:"scope_config"`
+	Name            string         `json:"name"`
+	Description     string         `json:"description"`
+	Price           float64        `json:"price"`
+	OriginalPrice   *float64       `json:"original_price,omitempty"`
+	ValidityDays    int            `json:"validity_days"`
+	ValidityUnit    string         `json:"validity_unit"`
+	Features        []string       `json:"features"`
+	PurchaseNotice  string         `json:"purchase_notice"`
+	ProductName     string         `json:"product_name"`
+}
+
+func checkoutPlanFromSubscriptionPlan(p *dbent.SubscriptionPlan, gid int64, gi service.PlanGroupInfo) checkoutPlan {
+	if p == nil {
+		return checkoutPlan{}
+	}
+	return checkoutPlan{
+		ID:              int64(p.ID),
+		GroupID:         gid,
+		GroupPlatform:   gi.Platform,
+		GroupName:       gi.Name,
+		RateMultiplier:  gi.RateMultiplier,
+		DailyLimitUSD:   p.DailyLimitUsd,
+		WeeklyLimitUSD:  p.WeeklyLimitUsd,
+		MonthlyLimitUSD: gi.MonthlyLimitUSD,
+		ModelScopes:     gi.ModelScopes,
+		QuotaUSD:        p.QuotaUsd,
+		ScopeType:       planScopeTypeForResponse(p.ScopeType),
+		ScopeConfig:     planScopeConfigForResponse(p.ScopeConfig),
+		Name:            p.Name,
+		Description:     p.Description,
+		Price:           p.Price,
+		OriginalPrice:   p.OriginalPrice,
+		ValidityDays:    p.ValidityDays,
+		ValidityUnit:    p.ValidityUnit,
+		Features:        parseFeatures(p.Features),
+		PurchaseNotice:  p.PurchaseNotice,
+		ProductName:     p.ProductName,
+	}
+}
+
+func planScopeTypeForResponse(scopeType string) string {
+	if strings.TrimSpace(scopeType) == "" {
+		return service.SubscriptionScopeAllAvailableGroups
+	}
+	return scopeType
+}
+
+func planScopeConfigForResponse(scopeConfig map[string]any) map[string]any {
+	if scopeConfig == nil {
+		return map[string]any{}
+	}
+	return scopeConfig
 }
 
 // parseFeatures splits a newline-separated features string into a string slice.

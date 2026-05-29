@@ -500,21 +500,38 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID      int64 `json:"id"`
-	UserID  int64 `json:"user_id"`
-	GroupID int64 `json:"group_id"`
+	ID      int64  `json:"id"`
+	UserID  int64  `json:"user_id"`
+	GroupID *int64 `json:"group_id"`
+	PlanID  *int64 `json:"plan_id,omitempty"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Status    string    `json:"status"`
+	IsUsable  bool      `json:"is_usable"`
 
 	DailyWindowStart   *time.Time `json:"daily_window_start"`
 	WeeklyWindowStart  *time.Time `json:"weekly_window_start"`
 	MonthlyWindowStart *time.Time `json:"monthly_window_start"`
 
-	DailyUsageUSD   float64 `json:"daily_usage_usd"`
-	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
-	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
+	ExhaustedAt *time.Time `json:"exhausted_at"`
+
+	QuotaLimitUSD     float64 `json:"quota_limit_usd"`
+	QuotaUsedUSD      float64 `json:"quota_used_usd"`
+	QuotaRemainingUSD float64 `json:"quota_remaining_usd"`
+
+	DailyLimitUSD   *float64   `json:"daily_limit_usd"`
+	DailyUsageUSD   float64    `json:"daily_usage_usd"`
+	DailyResetAt    *time.Time `json:"daily_reset_at"`
+	WeeklyLimitUSD  *float64   `json:"weekly_limit_usd"`
+	WeeklyUsageUSD  float64    `json:"weekly_usage_usd"`
+	WeeklyResetAt   *time.Time `json:"weekly_reset_at"`
+	MonthlyUsageUSD float64    `json:"monthly_usage_usd"`
+
+	Recent30dWastedUSD float64 `json:"recent_30d_wasted_usd"`
+
+	ScopeType   string         `json:"scope_type"`
+	ScopeConfig map[string]any `json:"scope_config"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -543,6 +560,24 @@ type BulkAssignResult struct {
 	Subscriptions []AdminUserSubscription `json:"subscriptions"`
 	Errors        []string                `json:"errors"`
 	Statuses      map[string]string       `json:"statuses,omitempty"`
+}
+
+type SubscriptionCreditLedgerEntry struct {
+	ID                int64          `json:"id"`
+	UserID            int64          `json:"user_id"`
+	SubscriptionID    int64          `json:"subscription_id"`
+	GroupID           *int64         `json:"group_id,omitempty"`
+	APIKeyID          *int64         `json:"api_key_id,omitempty"`
+	UsageLogID        *int64         `json:"usage_log_id,omitempty"`
+	OrderID           *int64         `json:"order_id,omitempty"`
+	Type              string         `json:"type"`
+	DeltaUSD          float64        `json:"delta_usd"`
+	BalanceDeltaUSD   float64        `json:"balance_delta_usd"`
+	RemainingAfterUSD float64        `json:"remaining_after_usd"`
+	Reason            string         `json:"reason"`
+	EventKey          *string        `json:"event_key,omitempty"`
+	Metadata          map[string]any `json:"metadata"`
+	CreatedAt         time.Time      `json:"created_at"`
 }
 
 // PromoCode 注册优惠码
