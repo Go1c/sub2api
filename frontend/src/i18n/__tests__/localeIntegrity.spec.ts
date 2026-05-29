@@ -46,4 +46,12 @@ describe('locale integrity', () => {
       expect(mojibake, `${locale} mojibake paths: ${mojibake.map(({ path }) => path).join(', ')}`).toEqual([])
     }
   })
+
+  it('keeps the simplified Chinese exhausted-subscription prompt actionable', () => {
+    expect(zh.userSubscriptions.exhaustedAwaitingExpiry).toBe(
+      '{count} 个已耗尽订阅等待到期，您可以前往购买一个新的订阅',
+    )
+    expect(en.userSubscriptions.exhaustedAwaitingExpiry).toBe('{count} exhausted subscription(s) waiting to expire')
+    expect(zhHant.userSubscriptions.exhaustedAwaitingExpiry).toBe('{count} 個已耗盡訂閱等待到期')
+  })
 })

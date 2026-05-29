@@ -13,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const insufficientBalanceMessage = "账户余额不足，请先充值后再使用。"
+
 // NewAPIKeyAuthMiddleware 创建 API Key 认证中间件
 func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
 	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg))
@@ -182,7 +184,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 						AbortWithError(c, status, code, subscriptionErr.Error())
 						return
 					}
-					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", insufficientBalanceMessage)
 					return
 				}
 			}

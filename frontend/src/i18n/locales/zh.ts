@@ -6894,7 +6894,7 @@ export default {
     expiresOn: '{date} 到期',
     remainingOf: '剩余 {remaining} / {total}',
     exhaustedAt: '额度耗尽于 {date}',
-    exhaustedAwaitingExpiry: '{count} 个已耗尽订阅等待到期',
+    exhaustedAwaitingExpiry: '{count} 个已耗尽订阅等待到期，您可以前往购买一个新的订阅',
     exhaustedSummary: '已用 {used} / {limit}，到期于 {expires}',
     resetIn: '{time} 后重置',
     resetAt: '下次重置：{time}',
