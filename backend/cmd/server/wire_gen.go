@@ -292,7 +292,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	subscriptionNotifyOutboxRepository := repository.NewSubscriptionNotifyOutboxRepository(db)
 	subscriptionNotifyMessenger := service.ProvideSubscriptionNotifyMessenger(siteMessageRepository)
 	subscriptionNotifyEmailer := service.ProvideSubscriptionNotifyEmailer(emailService)
-	subscriptionNotifyService := service.ProvideSubscriptionNotifyService(userRepository, subscriptionNotifyMessenger, subscriptionNotifyEmailer, settingRepository)
+	subscriptionNotifyService := service.ProvideSubscriptionNotifyService(userRepository, subscriptionNotifyMessenger, subscriptionNotifyEmailer, settingRepository, configConfig)
 	subscriptionNotifyWorker := service.ProvideSubscriptionNotifyWorker(subscriptionNotifyOutboxRepository, subscriptionNotifyService)
 	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsUserRequestMonitorService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, subscriptionNotifyWorker)
 	application := &Application{

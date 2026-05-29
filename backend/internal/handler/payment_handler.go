@@ -69,6 +69,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		ScopeType      string         `json:"scope_type"`
 		ScopeConfig    map[string]any `json:"scope_config"`
 		Features       string         `json:"features"`
+		PurchaseNotice string         `json:"purchase_notice"`
 		ProductName    string         `json:"product_name"`
 		ForSale        bool           `json:"for_sale"`
 		SortOrder      int            `json:"sort_order"`
@@ -86,8 +87,9 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit,
 			QuotaUSD: p.QuotaUsd, DailyLimitUSD: p.DailyLimitUsd, WeeklyLimitUSD: p.WeeklyLimitUsd,
 			ScopeType: planScopeTypeForResponse(p.ScopeType), ScopeConfig: planScopeConfigForResponse(p.ScopeConfig),
-			Features:    p.Features,
-			ProductName: p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
+			Features:       p.Features,
+			PurchaseNotice: p.PurchaseNotice,
+			ProductName:    p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
 		})
 	}
 	response.Success(c, result)
@@ -186,6 +188,7 @@ type checkoutPlan struct {
 	ValidityDays    int            `json:"validity_days"`
 	ValidityUnit    string         `json:"validity_unit"`
 	Features        []string       `json:"features"`
+	PurchaseNotice  string         `json:"purchase_notice"`
 	ProductName     string         `json:"product_name"`
 }
 
@@ -213,6 +216,7 @@ func checkoutPlanFromSubscriptionPlan(p *dbent.SubscriptionPlan, gid int64, gi s
 		ValidityDays:    p.ValidityDays,
 		ValidityUnit:    p.ValidityUnit,
 		Features:        parseFeatures(p.Features),
+		PurchaseNotice:  p.PurchaseNotice,
 		ProductName:     p.ProductName,
 	}
 }

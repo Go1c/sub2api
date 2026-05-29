@@ -511,6 +511,7 @@ func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 		accountRepo:          s.accountRepo,
 		userRepo:             s.userRepo,
 		userSubRepo:          s.userSubRepo,
+		settingService:       s.settingService,
 		billingCacheService:  s.billingCacheService,
 		deferredService:      s.deferredService,
 		balanceNotifyService: s.balanceNotifyService,

@@ -99,7 +99,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 					abortWithGoogleError(c, status, subscriptionErr.Error())
 					return
 				}
-				abortWithGoogleError(c, 403, "Insufficient account balance")
+				abortWithGoogleError(c, 403, insufficientBalanceMessage)
 				return
 			}
 		}

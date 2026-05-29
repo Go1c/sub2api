@@ -36714,6 +36714,7 @@ type SubscriptionPlanMutation struct {
 	addvalidity_days    *int
 	validity_unit       *string
 	features            *string
+	purchase_notice     *string
 	product_name        *string
 	for_sale            *bool
 	sort_order          *int
@@ -37228,6 +37229,42 @@ func (m *SubscriptionPlanMutation) ResetFeatures() {
 	m.features = nil
 }
 
+// SetPurchaseNotice sets the "purchase_notice" field.
+func (m *SubscriptionPlanMutation) SetPurchaseNotice(s string) {
+	m.purchase_notice = &s
+}
+
+// PurchaseNotice returns the value of the "purchase_notice" field in the mutation.
+func (m *SubscriptionPlanMutation) PurchaseNotice() (r string, exists bool) {
+	v := m.purchase_notice
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurchaseNotice returns the old "purchase_notice" field's value of the SubscriptionPlan entity.
+// If the SubscriptionPlan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPlanMutation) OldPurchaseNotice(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurchaseNotice is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurchaseNotice requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurchaseNotice: %w", err)
+	}
+	return oldValue.PurchaseNotice, nil
+}
+
+// ResetPurchaseNotice resets all changes to the "purchase_notice" field.
+func (m *SubscriptionPlanMutation) ResetPurchaseNotice() {
+	m.purchase_notice = nil
+}
+
 // SetProductName sets the "product_name" field.
 func (m *SubscriptionPlanMutation) SetProductName(s string) {
 	m.product_name = &s
@@ -37730,7 +37767,7 @@ func (m *SubscriptionPlanMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionPlanMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.group_id != nil {
 		fields = append(fields, subscriptionplan.FieldGroupID)
 	}
@@ -37754,6 +37791,9 @@ func (m *SubscriptionPlanMutation) Fields() []string {
 	}
 	if m.features != nil {
 		fields = append(fields, subscriptionplan.FieldFeatures)
+	}
+	if m.purchase_notice != nil {
+		fields = append(fields, subscriptionplan.FieldPurchaseNotice)
 	}
 	if m.product_name != nil {
 		fields = append(fields, subscriptionplan.FieldProductName)
@@ -37809,6 +37849,8 @@ func (m *SubscriptionPlanMutation) Field(name string) (ent.Value, bool) {
 		return m.ValidityUnit()
 	case subscriptionplan.FieldFeatures:
 		return m.Features()
+	case subscriptionplan.FieldPurchaseNotice:
+		return m.PurchaseNotice()
 	case subscriptionplan.FieldProductName:
 		return m.ProductName()
 	case subscriptionplan.FieldForSale:
@@ -37854,6 +37896,8 @@ func (m *SubscriptionPlanMutation) OldField(ctx context.Context, name string) (e
 		return m.OldValidityUnit(ctx)
 	case subscriptionplan.FieldFeatures:
 		return m.OldFeatures(ctx)
+	case subscriptionplan.FieldPurchaseNotice:
+		return m.OldPurchaseNotice(ctx)
 	case subscriptionplan.FieldProductName:
 		return m.OldProductName(ctx)
 	case subscriptionplan.FieldForSale:
@@ -37938,6 +37982,13 @@ func (m *SubscriptionPlanMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFeatures(v)
+		return nil
+	case subscriptionplan.FieldPurchaseNotice:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurchaseNotice(v)
 		return nil
 	case subscriptionplan.FieldProductName:
 		v, ok := value.(string)
@@ -38207,6 +38258,9 @@ func (m *SubscriptionPlanMutation) ResetField(name string) error {
 		return nil
 	case subscriptionplan.FieldFeatures:
 		m.ResetFeatures()
+		return nil
+	case subscriptionplan.FieldPurchaseNotice:
+		m.ResetPurchaseNotice()
 		return nil
 	case subscriptionplan.FieldProductName:
 		m.ResetProductName()

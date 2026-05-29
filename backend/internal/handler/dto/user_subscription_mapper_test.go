@@ -9,7 +9,7 @@ import (
 )
 
 func TestUserSubscriptionFromServiceIncludesCreditPoolFields(t *testing.T) {
-	now := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	planID := int64(77)
 	dailyLimit := 10.0
 	weeklyLimit := 50.0
@@ -17,26 +17,26 @@ func TestUserSubscriptionFromServiceIncludesCreditPoolFields(t *testing.T) {
 	weeklyWindow := time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)
 
 	out := UserSubscriptionFromService(&service.UserSubscription{
-		ID:                123,
-		UserID:            456,
-		GroupID:           nil,
-		PlanID:            &planID,
-		ScopeType:         service.SubscriptionScopeSelectedGroups,
-		ScopeConfig:       map[string]any{"group_ids": []any{float64(1), float64(2)}},
-		QuotaLimitUSD:     100,
-		QuotaUsedUSD:      25,
-		DailyLimitUSD:     &dailyLimit,
-		WeeklyLimitUSD:    &weeklyLimit,
-		StartsAt:          now.Add(-time.Hour),
-		ExpiresAt:         now.Add(24 * time.Hour),
-		Status:            service.SubscriptionStatusActive,
-		DailyWindowStart:  &dailyWindow,
-		WeeklyWindowStart: &weeklyWindow,
-		DailyUsageUSD:     3,
-		WeeklyUsageUSD:    12,
+		ID:                 123,
+		UserID:             456,
+		GroupID:            nil,
+		PlanID:             &planID,
+		ScopeType:          service.SubscriptionScopeSelectedGroups,
+		ScopeConfig:        map[string]any{"group_ids": []any{float64(1), float64(2)}},
+		QuotaLimitUSD:      100,
+		QuotaUsedUSD:       25,
+		DailyLimitUSD:      &dailyLimit,
+		WeeklyLimitUSD:     &weeklyLimit,
+		StartsAt:           now.Add(-time.Hour),
+		ExpiresAt:          now.Add(24 * time.Hour),
+		Status:             service.SubscriptionStatusActive,
+		DailyWindowStart:   &dailyWindow,
+		WeeklyWindowStart:  &weeklyWindow,
+		DailyUsageUSD:      3,
+		WeeklyUsageUSD:     12,
 		Recent30dWastedUSD: 3.25,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	})
 
 	require.NotNil(t, out)

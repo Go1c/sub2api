@@ -168,8 +168,7 @@ func (r *usageBillingRepository) applyUsageBillingSubscription(ctx context.Conte
 		return err
 	}
 
-	dailyStart := startOfUTCDay(now)
-	weeklyStart := startOfUTCWeek(now)
+	dailyStart, weeklyStart := subscriptionQuotaWindowStarts(now, cmd.SubscriptionQuotaResetConfig)
 	resetDaily := needResetSubscriptionWindow(state.DailyWindowStart, dailyStart)
 	resetWeekly := needResetSubscriptionWindow(state.WeeklyWindowStart, weeklyStart)
 
@@ -503,6 +502,26 @@ func startOfUTCWeek(t time.Time) time.Time {
 		weekday = 7
 	}
 	return day.AddDate(0, 0, -(weekday - 1))
+}
+
+func subscriptionQuotaWindowStarts(t time.Time, cfg service.SubscriptionQuotaResetConfig) (time.Time, time.Time) {
+	cfg = service.NormalizeSubscriptionQuotaResetConfig(cfg)
+	offset := time.Duration(cfg.UTCOffsetMinutes) * time.Minute
+	local := t.UTC().Add(offset)
+
+	dailyLocal := time.Date(local.Year(), local.Month(), local.Day(), cfg.ResetHour, 0, 0, 0, time.UTC)
+	if local.Before(dailyLocal) {
+		dailyLocal = dailyLocal.AddDate(0, 0, -1)
+	}
+
+	weekday := int(dailyLocal.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	weeklyLocal := time.Date(dailyLocal.Year(), dailyLocal.Month(), dailyLocal.Day(), cfg.ResetHour, 0, 0, 0, time.UTC).
+		AddDate(0, 0, -(weekday - 1))
+
+	return dailyLocal.Add(-offset), weeklyLocal.Add(-offset)
 }
 
 func needResetSubscriptionWindow(windowStart sql.NullTime, currentStart time.Time) bool {

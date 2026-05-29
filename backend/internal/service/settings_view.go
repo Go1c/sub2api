@@ -108,35 +108,38 @@ type SystemSettings struct {
 	GoogleOAuthRedirectURL            string
 	GoogleOAuthFrontendRedirectURL    string
 
-	SiteName                              string
-	SiteLogo                              string
-	SiteSubtitle                          string
-	APIBaseURL                            string
-	ContactInfo                           string
-	ContactChannels                       string
-	SupportChatEnabled                    bool
-	SupportChatGatewayURL                 string
-	SupportChatTitle                      string
-	SupportChatWelcomeMessage             string
-	SupportChatOfficialContactText        string
-	SupportChatOfficialContactURL         string
-	DocURL                                string
-	SitePages                             string
-	HomeContent                           string
-	HideCcsImportButton                   bool
-	FrontendLocales                       []string
-	UserSubscriptionsVisible              bool
-	PurchaseSubscriptionEnabled           bool
-	PurchaseSubscriptionURL               string
-	TableDefaultPageSize                  int
-	TablePageSizeOptions                  []int
-	CustomMenuItems                       string // JSON array of custom menu items
-	CustomEndpoints                       string // JSON array of custom endpoints
-	CCSwitchDefaultModelAnthropic         string
-	CCSwitchDefaultModelOpenAI            string
-	CCSwitchDefaultModelGemini            string
-	CCSwitchDefaultModelAntigravity       string
-	CCSwitchDefaultModelAntigravityGemini string
+	SiteName                               string
+	SiteLogo                               string
+	SiteSubtitle                           string
+	APIBaseURL                             string
+	ContactInfo                            string
+	ContactChannels                        string
+	SupportChatEnabled                     bool
+	SupportChatGatewayURL                  string
+	SupportChatTitle                       string
+	SupportChatWelcomeMessage              string
+	SupportChatOfficialContactText         string
+	SupportChatOfficialContactURL          string
+	DocURL                                 string
+	SitePages                              string
+	HomeContent                            string
+	HideCcsImportButton                    bool
+	FrontendLocales                        []string
+	UserSubscriptionsVisible               bool
+	PurchaseSubscriptionEnabled            bool
+	PurchaseSubscriptionURL                string
+	SubscriptionNotifyEmailEnabled         bool
+	SubscriptionQuotaResetUTCOffsetMinutes int
+	SubscriptionQuotaResetHour             int
+	TableDefaultPageSize                   int
+	TablePageSizeOptions                   []int
+	CustomMenuItems                        string // JSON array of custom menu items
+	CustomEndpoints                        string // JSON array of custom endpoints
+	CCSwitchDefaultModelAnthropic          string
+	CCSwitchDefaultModelOpenAI             string
+	CCSwitchDefaultModelGemini             string
+	CCSwitchDefaultModelAntigravity        string
+	CCSwitchDefaultModelAntigravityGemini  string
 
 	DefaultConcurrency                int
 	DefaultBalance                    float64

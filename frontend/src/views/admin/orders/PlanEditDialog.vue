@@ -81,6 +81,10 @@
       </div>
 
       <div><label class="input-label">{{ t('payment.admin.planDescription') }} <span class="text-red-500">*</span></label><textarea v-model="planForm.description" rows="2" class="input" required></textarea></div>
+      <div>
+        <label class="input-label">{{ t('payment.admin.purchaseNotice') }}</label>
+        <textarea v-model="planForm.purchase_notice" rows="3" class="input" :placeholder="t('payment.admin.purchaseNoticePlaceholder')"></textarea>
+      </div>
       <div class="grid grid-cols-2 gap-4">
         <div><label class="input-label">{{ t('payment.admin.price') }} <span class="text-red-500">*</span></label><input v-model.number="planForm.price" type="number" step="0.01" min="0.01" class="input" required /></div>
         <div><label class="input-label">{{ t('payment.admin.originalPrice') }}</label><input v-model.number="planForm.original_price" type="number" step="0.01" min="0" class="input" /></div>
@@ -162,19 +166,20 @@ const planForm = reactive({
   daily_limit_usd: null as number | null | '',
   weekly_limit_usd: null as number | null | '',
   validity_days: 30,
-  validity_unit: 'days',
+  validity_unit: 'day',
   scope_type: 'all_available_groups',
   scope_group_ids: [] as number[],
   scope_platforms: [] as string[],
+  purchase_notice: '',
   sort_order: 0,
   for_sale: true
 })
 const planFeaturesText = ref('')
 
 const validityUnitOptions = computed(() => [
-  { value: 'days', label: t('payment.admin.days') },
-  { value: 'weeks', label: t('payment.admin.weeks') },
-  { value: 'months', label: t('payment.admin.months') },
+  { value: 'day', label: t('payment.admin.days') },
+  { value: 'week', label: t('payment.admin.weeks') },
+  { value: 'month', label: t('payment.admin.months') },
 ])
 
 const groupOptions = computed(() =>
@@ -223,10 +228,11 @@ watch(() => props.show, (visible) => {
       daily_limit_usd: props.plan.daily_limit_usd ?? null,
       weekly_limit_usd: props.plan.weekly_limit_usd ?? null,
       validity_days: props.plan.validity_days,
-      validity_unit: props.plan.validity_unit || 'days',
+      validity_unit: props.plan.validity_unit || 'day',
       scope_type: props.plan.scope_type || 'all_available_groups',
       scope_group_ids: Array.isArray(scopeConfig.group_ids) ? scopeConfig.group_ids : [],
       scope_platforms: Array.isArray(scopeConfig.platforms) ? scopeConfig.platforms : [],
+      purchase_notice: props.plan.purchase_notice || '',
       sort_order: props.plan.sort_order || 0,
       for_sale: props.plan.for_sale
     })
@@ -242,10 +248,11 @@ watch(() => props.show, (visible) => {
       daily_limit_usd: null,
       weekly_limit_usd: null,
       validity_days: 30,
-      validity_unit: 'days',
+      validity_unit: 'day',
       scope_type: 'all_available_groups',
       scope_group_ids: [],
       scope_platforms: [],
+      purchase_notice: '',
       sort_order: 0,
       for_sale: true
     })
@@ -293,6 +300,7 @@ function buildPlanPayload() {
     validity_unit: planForm.validity_unit,
     scope_type: planForm.scope_type,
     scope_config: buildScopeConfig(),
+    purchase_notice: planForm.purchase_notice.trim(),
     sort_order: planForm.sort_order,
     for_sale: planForm.for_sale,
     features,

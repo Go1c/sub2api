@@ -63,6 +63,9 @@ func (SubscriptionPlan) Fields() []ent.Field {
 		field.String("features").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Default(""),
+		field.String("purchase_notice").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Default(""),
 		field.String("product_name").
 			MaxLen(100).
 			Default(""),

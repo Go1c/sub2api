@@ -638,8 +638,13 @@ func ProvideSubscriptionNotifyService(
 	messenger SubscriptionNotifyMessenger,
 	emailer SubscriptionNotifyEmailer,
 	settings SettingRepository,
+	cfg *config.Config,
 ) *SubscriptionNotifyService {
-	return NewSubscriptionNotifyService(users, messenger, emailer, settings)
+	frontendURL := ""
+	if cfg != nil {
+		frontendURL = cfg.Server.FrontendURL
+	}
+	return NewSubscriptionNotifyService(users, messenger, emailer, settings, frontendURL)
 }
 
 // ProvideSubscriptionNotifyWorker 构造并启动订阅通知 outbox worker。

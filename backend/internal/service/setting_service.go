@@ -141,6 +141,17 @@ func parseFrontendLocales(raw string) []string {
 	return result
 }
 
+func parseSubscriptionQuotaResetConfig(settings map[string]string) SubscriptionQuotaResetConfig {
+	cfg := SubscriptionQuotaResetConfig{}
+	if v, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeySubscriptionQuotaResetUTCOffsetMinutes])); err == nil {
+		cfg.UTCOffsetMinutes = v
+	}
+	if v, err := strconv.Atoi(strings.TrimSpace(settings[SettingKeySubscriptionQuotaResetHour])); err == nil {
+		cfg.ResetHour = v
+	}
+	return NormalizeSubscriptionQuotaResetConfig(cfg)
+}
+
 const backendModeErrorTTL = 5 * time.Second
 const backendModeDBTimeout = 5 * time.Second
 
@@ -626,6 +637,21 @@ func (s *SettingService) GetAllSettings(ctx context.Context) (*SystemSettings, e
 	}
 
 	return s.parseSettings(settings), nil
+}
+
+func (s *SettingService) GetSubscriptionQuotaResetConfig(ctx context.Context) SubscriptionQuotaResetConfig {
+	if s == nil || s.settingRepo == nil {
+		return SubscriptionQuotaResetConfig{}
+	}
+	values, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeySubscriptionQuotaResetUTCOffsetMinutes,
+		SettingKeySubscriptionQuotaResetHour,
+	})
+	if err != nil {
+		slog.Warn("get subscription quota reset config failed", "error", err)
+		return SubscriptionQuotaResetConfig{}
+	}
+	return parseSubscriptionQuotaResetConfig(values)
 }
 
 // GetFrontendURL 获取前端基础URL（数据库优先，fallback 到配置文件）
@@ -1613,6 +1639,14 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 			return nil, infraerrors.BadRequest("INVALID_SUPPORT_CHAT_OFFICIAL_CONTACT_URL", "support chat official contact URL must be an absolute HTTP(S) URL")
 		}
 	}
+	if settings.SubscriptionQuotaResetUTCOffsetMinutes < SubscriptionQuotaResetMinOffsetMinutes ||
+		settings.SubscriptionQuotaResetUTCOffsetMinutes > SubscriptionQuotaResetMaxOffsetMinutes ||
+		settings.SubscriptionQuotaResetUTCOffsetMinutes%15 != 0 {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUOTA_RESET_UTC_OFFSET", "subscription quota reset UTC offset must be between UTC-12:00 and UTC+14:00 in 15-minute increments")
+	}
+	if settings.SubscriptionQuotaResetHour < 0 || settings.SubscriptionQuotaResetHour > 23 {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUOTA_RESET_HOUR", "subscription quota reset hour must be between 0 and 23")
+	}
 
 	updates := make(map[string]string)
 
@@ -1773,6 +1807,9 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyUserSubscriptionsVisible] = strconv.FormatBool(settings.UserSubscriptionsVisible)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
+	updates[SettingKeySubscriptionNotifyEmailEnabled] = strconv.FormatBool(settings.SubscriptionNotifyEmailEnabled)
+	updates[SettingKeySubscriptionQuotaResetUTCOffsetMinutes] = strconv.Itoa(settings.SubscriptionQuotaResetUTCOffsetMinutes)
+	updates[SettingKeySubscriptionQuotaResetHour] = strconv.Itoa(settings.SubscriptionQuotaResetHour)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(
 		settings.TableDefaultPageSize,
 		settings.TablePageSizeOptions,
@@ -2704,6 +2741,8 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyUserSubscriptionsVisible:                 "true",
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
 		SettingKeyPurchaseSubscriptionURL:                  "",
+		SettingKeySubscriptionQuotaResetUTCOffsetMinutes:   "0",
+		SettingKeySubscriptionQuotaResetHour:               "0",
 		SettingKeyTableDefaultPageSize:                     "20",
 		SettingKeyTablePageSizeOptions:                     "[10,20,50,100]",
 		SettingKeyCustomMenuItems:                          "[]",
@@ -2859,8 +2898,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingPaymentVisibleMethodWxpayEnabled:      "false",
 		openAIAdvancedSchedulerSettingKey:            "false",
 
-		// 订阅额度池通知 - 重新订阅链接（空表示回退到前端订阅页）
+		// 订阅额度池通知 - 重新订阅链接（空表示回退到购买订阅页）
 		SettingKeySubscriptionCreditPoolRepurchaseURL: "",
+		SettingKeySubscriptionNotifyEmailEnabled:      "false",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
@@ -2875,56 +2915,59 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		loginAgreementUpdatedAt = defaultLoginAgreementDate
 	}
 	result := &SystemSettings{
-		RegistrationEnabled:                   settings[SettingKeyRegistrationEnabled] == "true",
-		EmailVerifyEnabled:                    emailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist:      ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
-		PromoCodeEnabled:                      settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
-		PasswordResetEnabled:                  emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
-		FrontendURL:                           settings[SettingKeyFrontendURL],
-		InvitationCodeEnabled:                 settings[SettingKeyInvitationCodeEnabled] == "true",
-		InvitationRegistrationMode:            normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
-		TotpEnabled:                           settings[SettingKeyTotpEnabled] == "true",
-		LoginAgreementEnabled:                 settings[SettingKeyLoginAgreementEnabled] == "true",
-		LoginAgreementMode:                    normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
-		LoginAgreementUpdatedAt:               loginAgreementUpdatedAt,
-		LoginAgreementDocuments:               loginAgreementDocuments,
-		SMTPHost:                              settings[SettingKeySMTPHost],
-		SMTPUsername:                          settings[SettingKeySMTPUsername],
-		SMTPFrom:                              settings[SettingKeySMTPFrom],
-		SMTPFromName:                          settings[SettingKeySMTPFromName],
-		SMTPUseTLS:                            settings[SettingKeySMTPUseTLS] == "true",
-		SMTPPasswordConfigured:                settings[SettingKeySMTPPassword] != "",
-		TurnstileEnabled:                      settings[SettingKeyTurnstileEnabled] == "true",
-		TurnstileSiteKey:                      settings[SettingKeyTurnstileSiteKey],
-		TurnstileSecretKeyConfigured:          settings[SettingKeyTurnstileSecretKey] != "",
-		SiteName:                              s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
-		SiteLogo:                              settings[SettingKeySiteLogo],
-		SiteSubtitle:                          s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
-		APIBaseURL:                            settings[SettingKeyAPIBaseURL],
-		ContactInfo:                           settings[SettingKeyContactInfo],
-		ContactChannels:                       settings[SettingKeyContactChannels],
-		SupportChatEnabled:                    settings[SettingKeySupportChatEnabled] == "true",
-		SupportChatGatewayURL:                 strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
-		SupportChatTitle:                      strings.TrimSpace(settings[SettingKeySupportChatTitle]),
-		SupportChatWelcomeMessage:             strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage]),
-		SupportChatOfficialContactText:        strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText]),
-		SupportChatOfficialContactURL:         strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatOfficialContactURL]), "/"),
-		DocURL:                                settings[SettingKeyDocURL],
-		SitePages:                             settings[SettingKeySitePages],
-		HomeContent:                           settings[SettingKeyHomeContent],
-		HideCcsImportButton:                   settings[SettingKeyHideCcsImportButton] == "true",
-		FrontendLocales:                       parseFrontendLocales(settings[SettingKeyFrontendLocales]),
-		CCSwitchDefaultModelAnthropic:         settings[SettingKeyCCSwitchDefaultModelAnthropic],
-		CCSwitchDefaultModelOpenAI:            s.getStringOrDefault(settings, SettingKeyCCSwitchDefaultModelOpenAI, "gpt-5.4"),
-		CCSwitchDefaultModelGemini:            settings[SettingKeyCCSwitchDefaultModelGemini],
-		CCSwitchDefaultModelAntigravity:       settings[SettingKeyCCSwitchDefaultModelAntigravity],
-		CCSwitchDefaultModelAntigravityGemini: settings[SettingKeyCCSwitchDefaultModelAntigravityGemini],
-		UserSubscriptionsVisible:              !isFalseSettingValue(settings[SettingKeyUserSubscriptionsVisible]),
-		PurchaseSubscriptionEnabled:           settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
-		PurchaseSubscriptionURL:               strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
-		CustomMenuItems:                       settings[SettingKeyCustomMenuItems],
-		CustomEndpoints:                       settings[SettingKeyCustomEndpoints],
-		BackendModeEnabled:                    settings[SettingKeyBackendModeEnabled] == "true",
+		RegistrationEnabled:                    settings[SettingKeyRegistrationEnabled] == "true",
+		EmailVerifyEnabled:                     emailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:       ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
+		PromoCodeEnabled:                       settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
+		PasswordResetEnabled:                   emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
+		FrontendURL:                            settings[SettingKeyFrontendURL],
+		InvitationCodeEnabled:                  settings[SettingKeyInvitationCodeEnabled] == "true",
+		InvitationRegistrationMode:             normalizeInvitationRegistrationMode(settings[SettingKeyInvitationRegistrationMode]),
+		TotpEnabled:                            settings[SettingKeyTotpEnabled] == "true",
+		LoginAgreementEnabled:                  settings[SettingKeyLoginAgreementEnabled] == "true",
+		LoginAgreementMode:                     normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
+		LoginAgreementUpdatedAt:                loginAgreementUpdatedAt,
+		LoginAgreementDocuments:                loginAgreementDocuments,
+		SMTPHost:                               settings[SettingKeySMTPHost],
+		SMTPUsername:                           settings[SettingKeySMTPUsername],
+		SMTPFrom:                               settings[SettingKeySMTPFrom],
+		SMTPFromName:                           settings[SettingKeySMTPFromName],
+		SMTPUseTLS:                             settings[SettingKeySMTPUseTLS] == "true",
+		SMTPPasswordConfigured:                 settings[SettingKeySMTPPassword] != "",
+		TurnstileEnabled:                       settings[SettingKeyTurnstileEnabled] == "true",
+		TurnstileSiteKey:                       settings[SettingKeyTurnstileSiteKey],
+		TurnstileSecretKeyConfigured:           settings[SettingKeyTurnstileSecretKey] != "",
+		SiteName:                               s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteLogo:                               settings[SettingKeySiteLogo],
+		SiteSubtitle:                           s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
+		APIBaseURL:                             settings[SettingKeyAPIBaseURL],
+		ContactInfo:                            settings[SettingKeyContactInfo],
+		ContactChannels:                        settings[SettingKeyContactChannels],
+		SupportChatEnabled:                     settings[SettingKeySupportChatEnabled] == "true",
+		SupportChatGatewayURL:                  strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
+		SupportChatTitle:                       strings.TrimSpace(settings[SettingKeySupportChatTitle]),
+		SupportChatWelcomeMessage:              strings.TrimSpace(settings[SettingKeySupportChatWelcomeMessage]),
+		SupportChatOfficialContactText:         strings.TrimSpace(settings[SettingKeySupportChatOfficialContactText]),
+		SupportChatOfficialContactURL:          strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatOfficialContactURL]), "/"),
+		DocURL:                                 settings[SettingKeyDocURL],
+		SitePages:                              settings[SettingKeySitePages],
+		HomeContent:                            settings[SettingKeyHomeContent],
+		HideCcsImportButton:                    settings[SettingKeyHideCcsImportButton] == "true",
+		FrontendLocales:                        parseFrontendLocales(settings[SettingKeyFrontendLocales]),
+		CCSwitchDefaultModelAnthropic:          settings[SettingKeyCCSwitchDefaultModelAnthropic],
+		CCSwitchDefaultModelOpenAI:             s.getStringOrDefault(settings, SettingKeyCCSwitchDefaultModelOpenAI, "gpt-5.4"),
+		CCSwitchDefaultModelGemini:             settings[SettingKeyCCSwitchDefaultModelGemini],
+		CCSwitchDefaultModelAntigravity:        settings[SettingKeyCCSwitchDefaultModelAntigravity],
+		CCSwitchDefaultModelAntigravityGemini:  settings[SettingKeyCCSwitchDefaultModelAntigravityGemini],
+		UserSubscriptionsVisible:               !isFalseSettingValue(settings[SettingKeyUserSubscriptionsVisible]),
+		PurchaseSubscriptionEnabled:            settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
+		PurchaseSubscriptionURL:                strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
+		SubscriptionNotifyEmailEnabled:         settings[SettingKeySubscriptionNotifyEmailEnabled] == "true",
+		SubscriptionQuotaResetUTCOffsetMinutes: parseSubscriptionQuotaResetConfig(settings).UTCOffsetMinutes,
+		SubscriptionQuotaResetHour:             parseSubscriptionQuotaResetConfig(settings).ResetHour,
+		CustomMenuItems:                        settings[SettingKeyCustomMenuItems],
+		CustomEndpoints:                        settings[SettingKeyCustomEndpoints],
+		BackendModeEnabled:                     settings[SettingKeyBackendModeEnabled] == "true",
 	}
 	result.TableDefaultPageSize, result.TablePageSizeOptions = parseTablePreferences(
 		settings[SettingKeyTableDefaultPageSize],

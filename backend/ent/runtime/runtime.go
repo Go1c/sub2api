@@ -1703,40 +1703,44 @@ func init() {
 	subscriptionplanDescFeatures := subscriptionplanFields[7].Descriptor()
 	// subscriptionplan.DefaultFeatures holds the default value on creation for the features field.
 	subscriptionplan.DefaultFeatures = subscriptionplanDescFeatures.Default.(string)
+	// subscriptionplanDescPurchaseNotice is the schema descriptor for purchase_notice field.
+	subscriptionplanDescPurchaseNotice := subscriptionplanFields[8].Descriptor()
+	// subscriptionplan.DefaultPurchaseNotice holds the default value on creation for the purchase_notice field.
+	subscriptionplan.DefaultPurchaseNotice = subscriptionplanDescPurchaseNotice.Default.(string)
 	// subscriptionplanDescProductName is the schema descriptor for product_name field.
-	subscriptionplanDescProductName := subscriptionplanFields[8].Descriptor()
+	subscriptionplanDescProductName := subscriptionplanFields[9].Descriptor()
 	// subscriptionplan.DefaultProductName holds the default value on creation for the product_name field.
 	subscriptionplan.DefaultProductName = subscriptionplanDescProductName.Default.(string)
 	// subscriptionplan.ProductNameValidator is a validator for the "product_name" field. It is called by the builders before save.
 	subscriptionplan.ProductNameValidator = subscriptionplanDescProductName.Validators[0].(func(string) error)
 	// subscriptionplanDescForSale is the schema descriptor for for_sale field.
-	subscriptionplanDescForSale := subscriptionplanFields[9].Descriptor()
+	subscriptionplanDescForSale := subscriptionplanFields[10].Descriptor()
 	// subscriptionplan.DefaultForSale holds the default value on creation for the for_sale field.
 	subscriptionplan.DefaultForSale = subscriptionplanDescForSale.Default.(bool)
 	// subscriptionplanDescSortOrder is the schema descriptor for sort_order field.
-	subscriptionplanDescSortOrder := subscriptionplanFields[10].Descriptor()
+	subscriptionplanDescSortOrder := subscriptionplanFields[11].Descriptor()
 	// subscriptionplan.DefaultSortOrder holds the default value on creation for the sort_order field.
 	subscriptionplan.DefaultSortOrder = subscriptionplanDescSortOrder.Default.(int)
 	// subscriptionplanDescQuotaUsd is the schema descriptor for quota_usd field.
-	subscriptionplanDescQuotaUsd := subscriptionplanFields[11].Descriptor()
+	subscriptionplanDescQuotaUsd := subscriptionplanFields[12].Descriptor()
 	// subscriptionplan.DefaultQuotaUsd holds the default value on creation for the quota_usd field.
 	subscriptionplan.DefaultQuotaUsd = subscriptionplanDescQuotaUsd.Default.(float64)
 	// subscriptionplanDescScopeType is the schema descriptor for scope_type field.
-	subscriptionplanDescScopeType := subscriptionplanFields[14].Descriptor()
+	subscriptionplanDescScopeType := subscriptionplanFields[15].Descriptor()
 	// subscriptionplan.DefaultScopeType holds the default value on creation for the scope_type field.
 	subscriptionplan.DefaultScopeType = subscriptionplanDescScopeType.Default.(string)
 	// subscriptionplan.ScopeTypeValidator is a validator for the "scope_type" field. It is called by the builders before save.
 	subscriptionplan.ScopeTypeValidator = subscriptionplanDescScopeType.Validators[0].(func(string) error)
 	// subscriptionplanDescScopeConfig is the schema descriptor for scope_config field.
-	subscriptionplanDescScopeConfig := subscriptionplanFields[15].Descriptor()
+	subscriptionplanDescScopeConfig := subscriptionplanFields[16].Descriptor()
 	// subscriptionplan.DefaultScopeConfig holds the default value on creation for the scope_config field.
 	subscriptionplan.DefaultScopeConfig = subscriptionplanDescScopeConfig.Default.(map[string]interface{})
 	// subscriptionplanDescCreatedAt is the schema descriptor for created_at field.
-	subscriptionplanDescCreatedAt := subscriptionplanFields[16].Descriptor()
+	subscriptionplanDescCreatedAt := subscriptionplanFields[17].Descriptor()
 	// subscriptionplan.DefaultCreatedAt holds the default value on creation for the created_at field.
 	subscriptionplan.DefaultCreatedAt = subscriptionplanDescCreatedAt.Default.(func() time.Time)
 	// subscriptionplanDescUpdatedAt is the schema descriptor for updated_at field.
-	subscriptionplanDescUpdatedAt := subscriptionplanFields[17].Descriptor()
+	subscriptionplanDescUpdatedAt := subscriptionplanFields[18].Descriptor()
 	// subscriptionplan.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	subscriptionplan.DefaultUpdatedAt = subscriptionplanDescUpdatedAt.Default.(func() time.Time)
 	// subscriptionplan.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

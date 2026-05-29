@@ -27,7 +27,7 @@
                   <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', platformBadgeClass(currentUsable.group?.platform || '')]">
                     {{ platformLabel(currentUsable.group?.platform || '') }}
                   </span>
-                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Usable</span>
+                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ t('userSubscriptions.currentlyUsable') }}</span>
                   <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold', platformBadgeLightClass(currentUsable.group?.platform || '')]">{{ scopeSummary(currentUsable) }}</span>
                 </div>
                 <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
@@ -46,18 +46,18 @@
             </div>
 
             <div class="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
-              <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
-                <div class="mb-3 flex items-end justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-dark-400">Total credit</p>
-                    <p class="mt-1 text-3xl font-black text-gray-900 dark:text-white">${{ formatUsd(quotaRemaining(currentUsable)) }}</p>
+                <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
+                  <div class="mb-3 flex items-end justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-dark-400">{{ t('userSubscriptions.totalCredit') }}</p>
+                      <p class="mt-1 text-3xl font-black text-gray-900 dark:text-white">${{ formatUsd(quotaRemaining(currentUsable)) }}</p>
+                    </div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-dark-400">
+                      {{ t('userSubscriptions.usageOf', { used: `$${formatUsd(quotaUsed(currentUsable))}`, limit: `$${formatUsd(quotaLimit(currentUsable))}` }) }}
+                    </p>
                   </div>
-                  <p class="text-sm font-medium text-gray-500 dark:text-dark-400">
-                    ${{ formatUsd(quotaUsed(currentUsable)) }} / ${{ formatUsd(quotaLimit(currentUsable)) }}
-                  </p>
-                </div>
-                <ProgressBar :used="quotaUsed(currentUsable)" :limit="quotaLimit(currentUsable)" />
-                <p v-if="currentUsable.exhausted_at" class="mt-2 text-xs text-amber-600 dark:text-amber-300">Exhausted {{ formatDate(currentUsable.exhausted_at) }}</p>
+                  <ProgressBar :used="quotaUsed(currentUsable)" :limit="quotaLimit(currentUsable)" />
+                <p v-if="currentUsable.exhausted_at" class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ t('userSubscriptions.exhaustedAt', { date: formatDateTimeValue(currentUsable.exhausted_at) }) }}</p>
               </div>
 
               <div class="rounded-2xl bg-gray-50 p-4 text-sm dark:bg-dark-700/50">
@@ -66,16 +66,19 @@
                   <span :class="getExpirationClass(currentUsable.expires_at)">{{ expirationDisplay(currentUsable.expires_at) }}</span>
                 </div>
                 <div class="mt-3 flex items-center justify-between">
-                  <span class="text-gray-500 dark:text-dark-400">Scope</span>
+                  <span class="text-gray-500 dark:text-dark-400">{{ t('payment.planCard.scope') }}</span>
                   <span class="font-medium text-gray-800 dark:text-gray-200">{{ scopeSummary(currentUsable) }}</span>
                 </div>
               </div>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
-              <LimitPanel title="Daily" :used="currentUsable.daily_usage_usd" :limit="currentUsable.daily_limit_usd ?? undefined" :reset-at="currentUsable.daily_reset_at ?? undefined" />
-              <LimitPanel title="Weekly" :used="currentUsable.weekly_usage_usd" :limit="currentUsable.weekly_limit_usd ?? undefined" :reset-at="currentUsable.weekly_reset_at ?? undefined" />
+              <LimitPanel :title="t('userSubscriptions.daily')" :used="currentUsable.daily_usage_usd" :limit="currentUsable.daily_limit_usd ?? undefined" :reset-at="currentUsable.daily_reset_at ?? undefined" />
+              <LimitPanel :title="t('userSubscriptions.weekly')" :used="currentUsable.weekly_usage_usd" :limit="currentUsable.weekly_limit_usd ?? undefined" :reset-at="currentUsable.weekly_reset_at ?? undefined" />
             </div>
+            <p v-if="currentUsable.weekly_limit_usd != null" class="text-xs text-gray-500 dark:text-dark-400">
+              {{ weeklyResetHint(currentUsable) }}
+            </p>
           </div>
         </section>
 
@@ -84,7 +87,7 @@
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="font-semibold text-gray-900 dark:text-white">{{ subscriptionName(subscription) }}</p>
-                <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">${{ formatUsd(quotaRemaining(subscription)) }} remaining of ${{ formatUsd(quotaLimit(subscription)) }}</p>
+                <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.remainingOf', { remaining: `$${formatUsd(quotaRemaining(subscription))}`, total: `$${formatUsd(quotaLimit(subscription))}` }) }}</p>
               </div>
               <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', platformBadgeClass(subscription.group?.platform || '')]">{{ platformLabel(subscription.group?.platform || '') }}</span>
             </div>
@@ -94,12 +97,12 @@
 
         <details v-if="exhaustedSubscriptions.length > 0" class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-900/10">
           <summary class="cursor-pointer text-sm font-semibold text-amber-800 dark:text-amber-200">
-            Exhausted subscriptions awaiting expiry ({{ exhaustedSubscriptions.length }})
+            {{ t('userSubscriptions.exhaustedAwaitingExpiry', { count: exhaustedSubscriptions.length }) }}
           </summary>
           <div class="mt-3 space-y-2">
             <div v-for="subscription in exhaustedSubscriptions" :key="subscription.id" class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm dark:bg-dark-800">
               <span class="font-medium text-gray-900 dark:text-white">{{ subscriptionName(subscription) }}</span>
-              <span class="text-gray-500 dark:text-dark-400">Used ${{ formatUsd(quotaUsed(subscription)) }} / ${{ formatUsd(quotaLimit(subscription)) }} · expires {{ expirationDisplay(subscription.expires_at) }}</span>
+              <span class="text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.exhaustedSummary', { used: `$${formatUsd(quotaUsed(subscription))}`, limit: `$${formatUsd(quotaLimit(subscription))}`, expires: expirationDisplay(subscription.expires_at) }) }}</span>
             </div>
           </div>
         </details>
@@ -118,7 +121,7 @@ import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { formatDateOnly } from '@/utils/format'
+import { formatDateOnly, formatDateTime } from '@/utils/format'
 import { platformAccentBarClass, platformBadgeClass, platformBadgeLightClass, platformBorderClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
 
 const ProgressBar = defineComponent({
@@ -144,10 +147,12 @@ const LimitPanel = defineComponent({
     return () => h('div', { class: 'rounded-2xl border border-gray-100 p-4 dark:border-dark-700' }, [
       h('div', { class: 'mb-2 flex items-center justify-between' }, [
         h('span', { class: 'text-sm font-semibold text-gray-700 dark:text-gray-300' }, props.title),
-        h('span', { class: 'text-sm text-gray-500 dark:text-dark-400' }, props.limit == null ? 'Unlimited' : `$${formatUsd(props.used)} / $${formatUsd(props.limit)}`),
+        h('span', { class: 'text-sm text-gray-500 dark:text-dark-400' }, props.limit == null
+          ? t('userSubscriptions.unlimited')
+          : t('userSubscriptions.usageOf', { used: `$${formatUsd(props.used)}`, limit: `$${formatUsd(props.limit)}` })),
       ]),
       props.limit == null ? null : h(ProgressBar, { used: props.used, limit: props.limit }),
-      props.resetAt ? h('p', { class: 'mt-2 text-xs text-gray-500 dark:text-dark-400' }, `Resets ${formatDate(props.resetAt)}`) : null,
+      h('p', { class: 'mt-2 text-xs text-gray-500 dark:text-dark-400' }, formatResetLabel(props.resetAt || '')),
     ])
   },
 })
@@ -187,7 +192,10 @@ function isVisibleSubscription(subscription: UserSubscription): boolean {
 }
 
 function subscriptionName(subscription: UserSubscription): string {
-  return subscription.group?.name || (subscription.group_id != null ? `Group #${subscription.group_id}` : 'Credit pool subscription')
+  return subscription.group?.name
+    || (subscription.group_id != null
+      ? t('payment.groupFallback', { id: subscription.group_id })
+      : t('userSubscriptions.creditPoolSubscription'))
 }
 
 function quotaLimit(subscription: UserSubscription): number {
@@ -205,8 +213,22 @@ function quotaRemaining(subscription: UserSubscription): number {
 
 function scopeSummary(subscription: UserSubscription): string {
   const scopeType = subscription.scope_type || 'group'
-  if (scopeType === 'group') return subscription.group?.name || (subscription.group_id != null ? `Group #${subscription.group_id}` : 'Group')
-  if (scopeType === 'all_available_groups') return 'All available groups'
+  if (scopeType === 'group') {
+    return subscription.group?.name || (subscription.group_id != null
+      ? t('payment.groupFallback', { id: subscription.group_id })
+      : t('userSubscriptions.groupScopeFallback'))
+  }
+  if (scopeType === 'all_available_groups') return t('userSubscriptions.allAvailableGroups')
+  if (scopeType === 'selected_groups') {
+    const groups = Array.isArray(subscription.scope_config?.group_ids) ? subscription.scope_config.group_ids : []
+    return t('payment.planCard.scopeSelectedGroups', { count: groups.length })
+  }
+  if (scopeType === 'platforms') {
+    const platforms = Array.isArray(subscription.scope_config?.platforms) ? subscription.scope_config.platforms : []
+    return platforms.length > 0
+      ? platforms.map(platform => String(platform)).join(' / ')
+      : t('payment.planCard.scopePlatforms')
+  }
   return scopeType.split('_').join(' ')
 }
 
@@ -234,7 +256,7 @@ function expirationDisplay(expiresAt: string | null | undefined): string {
   const dateStr = formatDateOnly(expires)
   if (days === 0) return `${dateStr} (${t('common.today')})`
   if (days === 1) return `${dateStr} (${t('common.tomorrow')})`
-  return `${days} days (${dateStr})`
+  return t('userSubscriptions.daysRemainingWithDate', { days, date: dateStr })
 }
 
 function getExpirationClass(expiresAt: string | null | undefined): string {
@@ -250,8 +272,20 @@ function formatUsd(value: number | null | undefined): string {
   return Number((value || 0).toFixed(4)).toString()
 }
 
-function formatDate(value: string): string {
-  return formatDateOnly(new Date(value))
+function formatDateTimeValue(value: string): string {
+  return formatDateTime(new Date(value))
+}
+
+function formatResetLabel(resetAt: string): string {
+  if (!resetAt) return t('userSubscriptions.windowNotActive')
+  return t('userSubscriptions.resetAt', { time: formatDateTimeValue(resetAt) })
+}
+
+function weeklyResetHint(subscription: UserSubscription): string {
+  if (!subscription.weekly_reset_at) {
+    return t('userSubscriptions.weeklyResetHint', { time: t('userSubscriptions.windowNotActive') })
+  }
+  return t('userSubscriptions.weeklyResetHint', { time: formatDateTimeValue(subscription.weekly_reset_at) })
 }
 
 onMounted(() => {
