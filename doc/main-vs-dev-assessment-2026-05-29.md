@@ -1233,6 +1233,7 @@ pnpm dev
 | usage / billing 正确性 | `b9509e82`, `ed2aac25`, `1e6d0b60` | `45fc61d0` | 已合并 | 低 |
 | WS 指标、Bedrock 兼容、反代 IP 日志 | `8a999f43`, `a9c7a3a0`, `0af44ce4` | `2820fc76`, `a6781dad` | 已合并 | 低到中 |
 | 并发获取失败分类 | `56e96fdd` | `a89ad299` | 已合并 | 中 |
+| 重新授权保留 `Extra` | `11fe7de9` | `3049896e` | 已合并 | 中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1244,6 +1245,7 @@ pnpm dev
 - 没有新增或改写 migration / Ent schema。
 - Bedrock 冲突只吸收 `context_management` 按最终 beta tokens 清理这一项，没有顺手带入 upstream 侧其它 Bedrock CC 兼容扩展。
 - `56e96fdd` 只吸收 handler 层并发 acquire 错误分类：真实并发限制仍返回 429，客户端取消返回 499，Redis / deadline 等 acquire 失败返回 503；未引入调度系统重构。
+- `11fe7de9` 新增专用重新授权落库接口，只做 credentials 更新与 `Extra` key 级合并，并让前端重新授权流程改走该接口；未引入 migration / Ent / 支付链路变更。
 
 ### 18.2 本次已验证命令
 
@@ -1285,6 +1287,23 @@ go test ./internal/handler -count=1
 - `backend/internal/handler` 针对性并发错误分类测试通过
 - `backend/internal/handler` 全包测试通过
 
+第二批重新授权保留 `Extra` 同步追加验证：
+
+```bash
+cd backend
+go test ./internal/handler/admin ./internal/service ./internal/server -count=1
+
+cd ../frontend
+pnpm typecheck
+pnpm build
+```
+
+结果：
+
+- `backend/internal/handler/admin`、`backend/internal/service`、`backend/internal/server` 测试通过
+- 上游 Vue 前端 typecheck / build 通过
+- `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
+
 ### 18.3 明确未合并
 
 | 主题 | 代表提交 / 范围 | 状态 | 原因 / 风险 |
@@ -1301,7 +1320,6 @@ go test ./internal/handler -count=1
 
 | 主题 | 代表提交 | 风险 | 后续建议 |
 |------|----------|------|----------|
-| 重新授权保留 `Extra` | `11fe7de9` | 中 | 第二批单独做；涉及管理端接口、后端路由和前端重新授权流程 |
 | chat responses usage billing 保留 | `f7ac5e59`, `2bd3125d` 相关范围 | 中到高 | 价值高，但同时碰 `openai_gateway_chat_completions` / `messages` / `apicompat`，需单独回归 usage/billing |
 | OpenAI 账号冷却调度优化 | `1e406fed` | 高 | 29 个文件级别改动，属于调度系统改造 |
 | OpenAI WS rate-limit failover | `08061717` | 高 | 改变 WS failover 行为，需压测或至少较完整 smoke |
