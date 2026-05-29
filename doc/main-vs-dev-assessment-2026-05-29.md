@@ -1219,3 +1219,92 @@ pnpm dev
 这条路径不能保证“绝对不会出问题”，但它把风险限制在小范围、可测试、可回滚的变更组里。
 
 从线上稳定和后续持续同步的角度看，这是当前最合理的主路线。
+
+## 18. 实际合并记录（2026-05-30）
+
+本节记录本次 selective sync 的实际状态。这里的“已合并”指本次同步分支 `upstream-core-fixes-20260529` 已吸收并验证，随该分支合入 `dev` 后进入 `origin/dev`。
+
+### 18.1 已合并到本次同步分支
+
+| 主题 | upstream 提交 | 本地提交 | 状态 | 风险 |
+|------|---------------|----------|------|------|
+| 账户状态与 OAuth 数据保全 | `6aec5050`, `202aab8e`, `60f6602b` | `a8ba443b` | 已合并 | 低 |
+| Gateway / Responses / Anthropic / Gemini 协议兼容 | `0a521f09`, `20f53407`, `89dffdd2`, `32ea9cfe`, `8211aa70` | `82e93797` | 已合并 | 低到中 |
+| usage / billing 正确性 | `b9509e82`, `ed2aac25`, `1e6d0b60` | `45fc61d0` | 已合并 | 低 |
+| WS 指标、Bedrock 兼容、反代 IP 日志 | `8a999f43`, `a9c7a3a0`, `0af44ce4` | `2820fc76`, `a6781dad` | 已合并 | 低到中 |
+| subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
+| 本评估文档与分支说明 | 本地文档 | `715c75b2` | 已合并 | 低 |
+
+说明：
+
+- 没有整分支 merge `origin/main`。
+- 没有引入 upstream 平台配额。
+- 没有引入 Airwallex / 多币种支付。
+- 没有新增或改写 migration / Ent schema。
+- Bedrock 冲突只吸收 `context_management` 按最终 beta tokens 清理这一项，没有顺手带入 upstream 侧其它 Bedrock CC 兼容扩展。
+
+### 18.2 本次已验证命令
+
+本次同步分支合入 `origin/dev` 前已跑：
+
+```bash
+cd backend
+go test ./internal/pkg/apicompat -count=1
+go test ./internal/service -count=1
+go test ./cmd/server -count=1
+go test ./internal/repository -count=1
+go test ./internal/handler ./internal/handler/admin -count=1
+go test ./internal/server ./internal/server/middleware -count=1
+make build
+
+cd ../frontend
+pnpm typecheck
+pnpm build
+```
+
+结果：
+
+- 后端测试通过
+- 后端 build 通过
+- 上游 Vue 前端 typecheck / build 通过
+- `pnpm build` 仅有既有 Vite chunk / dynamic import warning
+- `frontend-dashboard/` 本次无改动，未运行构建
+
+### 18.3 明确未合并
+
+| 主题 | 代表提交 / 范围 | 状态 | 原因 / 风险 |
+|------|-----------------|------|-------------|
+| 用户 x 平台配额体系 | `6b39b344`, `f7f5e338`, `06fca662` | 不合并 | 已决策排除；会引入 schema、Ent、preflight 和 UI 变更 |
+| Airwallex / 多币种支付 | 支付 provider、webhook、支付 UI、DTO、测试 | 不合并 | 与 fork 现有 Mapay、订阅信用池、balance 混合支付冲突密集 |
+| 与支付新能力强绑定的前端页面 | `frontend/src/components/payment/*`, `PaymentView.vue`, `SubscriptionsView.vue` 等 | 不合并 | 第一轮目标是 correctness，不重写支付/订阅产品线 |
+| sponsor / workflow / README 噪音 | sponsor 文案、CI/workflow、上游 README 变化 | 不合并 | 对线上正确性无直接收益 |
+| upstream migration `136`~`144` 原文件 | `backend/migrations/136_*.sql` ~ `144_*.sql` | 不直接合并 | 已与 fork migration 编号撞车；后续 schema 变更必须转写到 `900_*.sql` 命名空间 |
+
+### 18.4 未合并但后续可评估
+
+这些不是“不要”，而是本次不和第一批混做。
+
+| 主题 | 代表提交 | 风险 | 后续建议 |
+|------|----------|------|----------|
+| 重新授权保留 `Extra` | `11fe7de9` | 中 | 第二批单独做；涉及管理端接口、后端路由和前端重新授权流程 |
+| 并发获取失败分类 | `56e96fdd` | 中 | 需要确认 gateway handler 错误语义，不与调度大改混做 |
+| chat responses usage billing 保留 | `f7ac5e59`, `2bd3125d` 相关范围 | 中到高 | 价值高，但同时碰 `openai_gateway_chat_completions` / `messages` / `apicompat`，需单独回归 usage/billing |
+| OpenAI 账号冷却调度优化 | `1e406fed` | 高 | 29 个文件级别改动，属于调度系统改造 |
+| OpenAI WS rate-limit failover | `08061717` | 高 | 改变 WS failover 行为，需压测或至少较完整 smoke |
+| 模型 404 仅冷却账号模型组合 | `a31b5074` | 高 | 横跨 gateway/service/repository/test，需要单独主题分支 |
+| OpenAI HTTP/2 response header timeout | `33ac8eb2` | 中到高 | 涉及底层传输、配置和部署样例 |
+| Codex tool outputs in WS continuation | `fc66cd70` | 中 | 逻辑面较深，适合独立回归 Codex WS continuation |
+| 上游静默拒绝 failover | `6381f9e3` | 中到高 | 会改变 failover 判定语义，需先定义线上期望 |
+| embeddings gateway | `ccace69d` | 中 | 能力扩展，不属于 correctness 第一批 |
+| `/v1/models` 自定义模型列表 | `f597c158` | 中 | 会碰 group schema、handler、DTO、前端页面 |
+| Channel Monitor OpenAI API mode / 模板 | `3eff5f51`, `b685fe69` | 中到高 | 会与已有监控页面、migration、设置项冲突 |
+
+### 18.5 后续同步规则
+
+后续继续按这条规则推进：
+
+1. 继续禁止直接 merge `origin/main` 到 `dev`
+2. 每次只吸收一个主题
+3. 每个主题都更新本节状态
+4. 涉及 schema 时不复用 upstream migration 文件名，统一走 `900_*.sql`
+5. 只要碰支付、订阅、余额、风控、调度或 gateway 行为语义，就必须单独验证并记录风险
