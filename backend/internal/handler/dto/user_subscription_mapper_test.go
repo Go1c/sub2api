@@ -9,7 +9,7 @@ import (
 )
 
 func TestUserSubscriptionFromServiceIncludesCreditPoolFields(t *testing.T) {
-	now := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	planID := int64(77)
 	dailyLimit := 10.0
 	weeklyLimit := 50.0
