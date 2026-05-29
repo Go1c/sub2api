@@ -302,8 +302,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService)
 	channelMonitorRunner := service.ProvideChannelMonitorRunner(channelMonitorService, settingService)
+	userPlatformQuotaUsageFlusher := service.ProvideUserPlatformQuotaUsageFlusher(configConfig, billingCache, serviceUserPlatformQuotaRepository, timingWheelService)
 	accountErrorHistoryWiring := service.ProvideAccountErrorHistoryWiring(accountErrorHistoryService, gatewayService, openAIGatewayService, accountTestService, tokenRefreshService, adminService)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsAccountErrorAlertService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsUserRequestMonitorService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, accountErrorHistoryWiring)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsAccountErrorAlertService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsUserRequestMonitorService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher, accountErrorHistoryWiring)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -360,6 +361,7 @@ func provideCleanup(
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
 	channelMonitorRunner *service.ChannelMonitorRunner,
+	quotaFlusher *service.UserPlatformQuotaUsageFlusher,
 	_ service.AccountErrorHistoryWiring,
 ) func() {
 	return func() {
@@ -517,6 +519,12 @@ func provideCleanup(
 			{"ChannelMonitorRunner", func() error {
 				if channelMonitorRunner != nil {
 					channelMonitorRunner.Stop()
+				}
+				return nil
+			}},
+			{"UserPlatformQuotaUsageFlusher", func() error {
+				if quotaFlusher != nil {
+					quotaFlusher.Stop()
 				}
 				return nil
 			}},
