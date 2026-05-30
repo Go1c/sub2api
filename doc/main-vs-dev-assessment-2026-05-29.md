@@ -1243,6 +1243,7 @@ pnpm dev
 | Gateway models / stream keepalive / OpenAI usage parsing | `2ec1d331`, `164e2f61`, `0393bd7c` | `4e689527`, `2fd34f1b`, `09af7387` | 已合并 | 中 |
 | setup 初始化完成后的路由保护 | `a9a357e9` | `b756ac63` | 已合并 | 低到中 |
 | apicompat 参数清洗 / count_tokens 过滤 | `fe3283a1`, `276b5c77`, `27600b1d` | `dbffb71c`, `da287da3`, `a2cc7dfe` | 已合并 | 中 |
+| frontend / deploy / dependency 小修复 | `18790386`, `a5acefcc`, `44995404`, `e46d2c21`, `ffd53343` | `4dcbeba8`, `e9e674f7`, `50c4647e`, `d26594ee`, `45590f24` | 已合并 | 低到中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1264,6 +1265,7 @@ pnpm dev
 - `2ec1d331` / `164e2f61` / `0393bd7c` 只吸收三项网关兼容小修复：Gemini 分组 `/v1/models` 按平台过滤并回退 Gemini 默认模型、Anthropic API key passthrough 流式空闲 keepalive、OpenAI-compatible usage 兼容 `prompt_tokens` / `completion_tokens` 形状。未引入 upstream 自定义 `/v1/models` schema 功能、WS rate-limit failover 或调度冷却重构。
 - `a9a357e9` 只吸收 setup 初始化完成后阻止继续访问 `/setup` 的路由保护。冲突点在 `frontend/src/router/index.ts` 与 `frontend/src/router/__tests__/guards.spec.ts` 的 import / mock state 并列新增，解决时保留本地 external auth handoff、feature flags、backend mode 路由限制，并加入上游 `getSetupStatus()` 检查。
 - `fe3283a1` / `276b5c77` / `27600b1d` 只吸收 apicompat 与 Anthropic passthrough 小范围请求清洗：reasoning content 转换 errcheck、Responses 转换时对 reasoning 模型剥离 `temperature` / `top_p`、`count_tokens` 透传前过滤生成字段。`276b5c77` 的测试冲突只发生在 `anthropic_responses_test.go`，解决时保留本地 cache token 语义测试并加入 upstream 参数剥离测试。`c4d7edba` 已尝试但跳过，因为它修改的 `chatcompletions_responses_bridge.go` 在当前 `dev` 不存在，实际依赖未合入的 Responses/Chat fallback bridge 大功能。
+- `18790386` / `a5acefcc` / `44995404` / `e46d2c21` / `ffd53343` 只吸收低耦合维护修复：Docker Compose 不再暴露 PostgreSQL/Redis 到宿主机、安装脚本提前检查 Bash 4+、Docker frontend builder 固定 pnpm v9、Ops deep link 状态初始化顺序修正、`js-cookie` 通过 pnpm override 升级到 `3.0.7`。`44995404` 的 Dockerfile 冲突中，本地原为 `pnpm@10.30.3`，按 upstream 与仓库 pnpm v9 构建约束改为 `pnpm@9`；`ffd53343` 的 `package.json` 冲突中保留本地 `onlyBuiltDependencies` 并新增 `overrides.js-cookie`。
 
 ### 18.2 本次已验证命令
 
@@ -1444,6 +1446,26 @@ go test ./internal/pkg/apicompat ./internal/service -count=1
 - `backend/internal/pkg/apicompat`、`backend/internal/service` 聚焦回归测试通过
 - `backend/internal/pkg/apicompat`、`backend/internal/service` 全包测试通过
 
+第十批 frontend / deploy / dependency 小修复同步追加验证：
+
+```bash
+bash -n deploy/install.sh
+POSTGRES_PASSWORD=test docker compose -f deploy/docker-compose.yml config
+
+cd frontend
+CI=true pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm build
+```
+
+结果：
+
+- `deploy/install.sh` Bash 语法检查通过
+- `CI=true pnpm install --frozen-lockfile` 通过；第一次沙箱内执行因 registry DNS 受限失败，联网重跑后完成并恢复 `node_modules`
+- 上游 Vue 前端 typecheck / build 通过
+- `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
+- `docker compose config` 未能执行：本机没有 `docker` 命令
+
 ### 18.3 明确未合并
 
 | 主题 | 代表提交 / 范围 | 状态 | 原因 / 风险 |
@@ -1469,6 +1491,7 @@ go test ./internal/pkg/apicompat ./internal/service -count=1
 | `/v1/models` 自定义模型列表 | `f597c158` | 中 | 会碰 group schema、handler、DTO、前端页面 |
 | Channel Monitor OpenAI API mode / 模板 | `3eff5f51`, `b685fe69` | 中到高 | 会与已有监控页面、migration、设置项冲突 |
 | Responses/Chat bridge developer role 修正 | `c4d7edba` | 中 | 当前 `dev` 没有 `chatcompletions_responses_bridge.go`；依赖未合入的 Responses/Chat fallback bridge 功能链 |
+| Settings 暗色 tab shell 修复 | `b0c77233` | 低到中 | 当前 `dev` 的 `SettingsView.vue` 已是另一套 tab 结构，没有 upstream 的 `.settings-tabs-shell`，不适合机械套用 |
 
 ### 18.5 后续同步规则
 
