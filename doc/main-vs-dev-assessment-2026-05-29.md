@@ -1240,6 +1240,8 @@ pnpm dev
 | service correctness 小修复 | `2a17c0b2`, `f788e6bd`, `6d69ae87`, `f97b8534`, `c3a14717`, `297b54d0` | `9396e620`, `e7368e43`, `d6f92c77`, `2e08ca1a`, `ebd16099`, `f787ed02` | 已合并 | 中 |
 | OpenAI / Responses 兼容小修复 | `679c0865`, `df82a3bc`, `1d47fd63`, `e9a25e7b`, `a6117429`, `be15a3e6` | `0b2a6d37`, `e48af74a`, `37e04bb6`, `4c920673`, `0400f5f4`, `1959c6d1` | 已合并 | 中 |
 | 上游 Vue 前端 auth / 编辑兼容小修复 | `44679221`, `224e9fc6`, `4d51e53d`, `3ca232ad` | `2a4d1fad`, `21d84467`, `0bdb6784`, `f842049c` | 已合并 | 中 |
+| Gateway models / stream keepalive / OpenAI usage parsing | `2ec1d331`, `164e2f61`, `0393bd7c` | `4e689527`, `2fd34f1b`, `09af7387` | 已合并 | 中 |
+| setup 初始化完成后的路由保护 | `a9a357e9` | `b756ac63` | 已合并 | 低到中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1258,6 +1260,8 @@ pnpm dev
 - `2a17c0b2` / `f788e6bd` / `6d69ae87` / `f97b8534` / `c3a14717` / `297b54d0` 作为 service correctness 小批次合入：包含 Vertex token exchange 走账号代理、未知默认 transport 类型保护、未定价模型零成本 usage 记录、mimic tool_use 名称同步改写、OpenAI usage-limit plan type 同步，以及相关测试补强。`f788e6bd` 对 `account_codex_import.go` 的改动被明确排除，因为该文件属于未合入的 OAuth 导入功能；本批只吸收 `vertex_service_account.go` 的 transport 检查。
 - `679c0865` / `df82a3bc` / `1d47fd63` / `e9a25e7b` / `a6117429` / `be15a3e6` 只吸收 OpenAI/Responses 小范围兼容修复：versioned compatible base URL、chat completions 转 Responses 时避免 `null` content、DeepSeek `reasoning_content` 透传、空 thinking block 保留、图片生成 upstream context detach、WS passthrough 首字时间修正。未带入 `cc5328c4` 这类更大 SSE 终止事件语义改造。
 - `44679221` / `224e9fc6` / `4d51e53d` / `3ca232ad` 只吸收上游 Vue 前端小兼容修复：TOTP 自动填充、OIDC pending flow 使用 compat email、兑换码批量复制兼容、编辑账号弹窗在旧后端未返回 `credentials_status` 时回退旧 credentials 结构。`3ca232ad` 的测试冲突中保留了本地 upstream-balance 覆盖测试。`65493df9` 没有机械合入，因为本地已有 `frontend/src/utils/ccswitch.ts`，并且已覆盖 OpenAI Codex 默认模型、defaultModels、`/v1` suffix 和 usageBaseUrl，比 upstream 新增的 `ccswitchImport.ts` 更完整。
+- `2ec1d331` / `164e2f61` / `0393bd7c` 只吸收三项网关兼容小修复：Gemini 分组 `/v1/models` 按平台过滤并回退 Gemini 默认模型、Anthropic API key passthrough 流式空闲 keepalive、OpenAI-compatible usage 兼容 `prompt_tokens` / `completion_tokens` 形状。未引入 upstream 自定义 `/v1/models` schema 功能、WS rate-limit failover 或调度冷却重构。
+- `a9a357e9` 只吸收 setup 初始化完成后阻止继续访问 `/setup` 的路由保护。冲突点在 `frontend/src/router/index.ts` 与 `frontend/src/router/__tests__/guards.spec.ts` 的 import / mock state 并列新增，解决时保留本地 external auth handoff、feature flags、backend mode 路由限制，并加入上游 `getSetupStatus()` 检查。
 
 ### 18.2 本次已验证命令
 
@@ -1401,6 +1405,27 @@ pnpm build
 结果：
 
 - Vitest 实际跑完全量前端测试：125 个 test files / 685 个 tests 全部通过
+- 上游 Vue 前端 typecheck / build 通过
+- `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
+
+第八批 Gateway / setup 兼容小修复同步追加验证：
+
+```bash
+cd backend
+go test ./internal/handler ./internal/service -run 'TestGatewayModels|TestGatewayService_AnthropicAPIKeyPassthrough_Streaming(SendsKeepaliveDuringIdle|KeepaliveDoesNotInterleavePartialEvent)|TestParseSSEUsage_SelectiveParsing|TestExtractOpenAIUsageFromJSONBytes_AcceptsResponseAndChatUsageShapes|TestParseOpenAIWSResponseUsageFromCompletedEvent|TestForwardAsAnthropic_MappedClaudeModelAcceptsChatUsageShape' -count=1
+go test ./internal/handler ./internal/service ./internal/pkg/apicompat -count=1
+
+cd ../frontend
+pnpm test:run -- src/router/__tests__/guards.spec.ts
+pnpm typecheck
+pnpm build
+```
+
+结果：
+
+- `backend/internal/handler`、`backend/internal/service` 聚焦回归测试通过
+- `backend/internal/handler`、`backend/internal/service`、`backend/internal/pkg/apicompat` 全包测试通过
+- Vitest 实际跑完全量前端测试：125 个 test files / 687 个 tests 全部通过
 - 上游 Vue 前端 typecheck / build 通过
 - `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
 
