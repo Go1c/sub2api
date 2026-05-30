@@ -1236,6 +1236,7 @@ pnpm dev
 | 重新授权保留 `Extra` | `11fe7de9` | `3049896e` | 已合并 | 中 |
 | chat responses usage billing / request context 保留 | `2bd3125d`, `f7ac5e59` | `613842c8`, `0fd7c29d` | 已合并 | 中到高 |
 | OpenAI / Codex tool continuation 兼容 | `16a31557`, `87d73236`, `348a4877`, `fc66cd70`, `a729752d` | `84139594`, `245b08c3`, `d30b35e4`, `c15fdadc`, `bd7c0b38` | 已合并 | 中 |
+| admin 账号 credentials 脱敏 | `0f8e2d09` | `69c26b94` | 已合并 | 中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1250,6 +1251,7 @@ pnpm dev
 - `11fe7de9` 新增专用重新授权落库接口，只做 credentials 更新与 `Extra` key 级合并，并让前端重新授权流程改走该接口；未引入 migration / Ent / 支付链路变更。
 - `2bd3125d` / `f7ac5e59` 只吸收 usage request context 透传与 Responses 顶层 `usage` 计费修复；冲突处理中未引入 upstream 平台配额字段、未恢复 `openai_embeddings.go`、未带入额外 WS failover 逻辑和不属于本主题的 raw chat 大块测试扩展。
 - `16a31557` / `87d73236` / `348a4877` / `fc66cd70` / `a729752d` 只吸收 OpenAI/Codex continuation、tool output 识别与 `call_*` ID 保留相关修复；未引入 WS rate-limit failover、调度冷却、平台配额或 schema 变更。`a729752d` 是 `348a4877` 对应测试断言修正，行为变更来自 `348a4877`。
+- `0f8e2d09` 只吸收 admin 账号响应 credentials 脱敏和全对象编辑时敏感 credentials 保留语义：新增 `credentials_status` 暴露存在性，前端留空敏感字段时由后端保留旧 token；未引入 schema / migration / 支付 / 平台配额变更。
 
 ### 18.2 本次已验证命令
 
@@ -1338,6 +1340,23 @@ go test ./internal/service -count=1
 
 - 第一次聚焦测试发现 `348a4877` 需要同步上游测试断言修正 `a729752d`，补入后聚焦测试通过
 - `backend/internal/service` 全包测试通过
+
+第四批 admin credentials redaction 同步追加验证：
+
+```bash
+cd backend
+go test ./internal/handler/dto ./internal/service -count=1
+
+cd ../frontend
+pnpm typecheck
+pnpm build
+```
+
+结果：
+
+- `backend/internal/handler/dto`、`backend/internal/service` 测试通过
+- 上游 Vue 前端 typecheck / build 通过
+- `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
 
 ### 18.3 明确未合并
 
