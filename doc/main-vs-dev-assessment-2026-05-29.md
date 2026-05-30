@@ -1242,6 +1242,7 @@ pnpm dev
 | 上游 Vue 前端 auth / 编辑兼容小修复 | `44679221`, `224e9fc6`, `4d51e53d`, `3ca232ad` | `2a4d1fad`, `21d84467`, `0bdb6784`, `f842049c` | 已合并 | 中 |
 | Gateway models / stream keepalive / OpenAI usage parsing | `2ec1d331`, `164e2f61`, `0393bd7c` | `4e689527`, `2fd34f1b`, `09af7387` | 已合并 | 中 |
 | setup 初始化完成后的路由保护 | `a9a357e9` | `b756ac63` | 已合并 | 低到中 |
+| apicompat 参数清洗 / count_tokens 过滤 | `fe3283a1`, `276b5c77`, `27600b1d` | `dbffb71c`, `da287da3`, `a2cc7dfe` | 已合并 | 中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1262,6 +1263,7 @@ pnpm dev
 - `44679221` / `224e9fc6` / `4d51e53d` / `3ca232ad` 只吸收上游 Vue 前端小兼容修复：TOTP 自动填充、OIDC pending flow 使用 compat email、兑换码批量复制兼容、编辑账号弹窗在旧后端未返回 `credentials_status` 时回退旧 credentials 结构。`3ca232ad` 的测试冲突中保留了本地 upstream-balance 覆盖测试。`65493df9` 没有机械合入，因为本地已有 `frontend/src/utils/ccswitch.ts`，并且已覆盖 OpenAI Codex 默认模型、defaultModels、`/v1` suffix 和 usageBaseUrl，比 upstream 新增的 `ccswitchImport.ts` 更完整。
 - `2ec1d331` / `164e2f61` / `0393bd7c` 只吸收三项网关兼容小修复：Gemini 分组 `/v1/models` 按平台过滤并回退 Gemini 默认模型、Anthropic API key passthrough 流式空闲 keepalive、OpenAI-compatible usage 兼容 `prompt_tokens` / `completion_tokens` 形状。未引入 upstream 自定义 `/v1/models` schema 功能、WS rate-limit failover 或调度冷却重构。
 - `a9a357e9` 只吸收 setup 初始化完成后阻止继续访问 `/setup` 的路由保护。冲突点在 `frontend/src/router/index.ts` 与 `frontend/src/router/__tests__/guards.spec.ts` 的 import / mock state 并列新增，解决时保留本地 external auth handoff、feature flags、backend mode 路由限制，并加入上游 `getSetupStatus()` 检查。
+- `fe3283a1` / `276b5c77` / `27600b1d` 只吸收 apicompat 与 Anthropic passthrough 小范围请求清洗：reasoning content 转换 errcheck、Responses 转换时对 reasoning 模型剥离 `temperature` / `top_p`、`count_tokens` 透传前过滤生成字段。`276b5c77` 的测试冲突只发生在 `anthropic_responses_test.go`，解决时保留本地 cache token 语义测试并加入 upstream 参数剥离测试。`c4d7edba` 已尝试但跳过，因为它修改的 `chatcompletions_responses_bridge.go` 在当前 `dev` 不存在，实际依赖未合入的 Responses/Chat fallback bridge 大功能。
 
 ### 18.2 本次已验证命令
 
@@ -1429,6 +1431,19 @@ pnpm build
 - 上游 Vue 前端 typecheck / build 通过
 - `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
 
+第九批 apicompat 参数清洗 / count_tokens 过滤同步追加验证：
+
+```bash
+cd backend
+go test ./internal/pkg/apicompat ./internal/service -run 'Test(AnthropicToResponses_TemperatureStripped|ChatCompletionsToResponses_Temperature|ChatCompletionsToResponses_AssistantReasoningContentPreserved|GatewayService_AnthropicAPIKeyPassthrough_CountTokensFiltersGenerationFields)' -count=1
+go test ./internal/pkg/apicompat ./internal/service -count=1
+```
+
+结果：
+
+- `backend/internal/pkg/apicompat`、`backend/internal/service` 聚焦回归测试通过
+- `backend/internal/pkg/apicompat`、`backend/internal/service` 全包测试通过
+
 ### 18.3 明确未合并
 
 | 主题 | 代表提交 / 范围 | 状态 | 原因 / 风险 |
@@ -1453,6 +1468,7 @@ pnpm build
 | embeddings gateway | `ccace69d` | 中 | 能力扩展，不属于 correctness 第一批 |
 | `/v1/models` 自定义模型列表 | `f597c158` | 中 | 会碰 group schema、handler、DTO、前端页面 |
 | Channel Monitor OpenAI API mode / 模板 | `3eff5f51`, `b685fe69` | 中到高 | 会与已有监控页面、migration、设置项冲突 |
+| Responses/Chat bridge developer role 修正 | `c4d7edba` | 中 | 当前 `dev` 没有 `chatcompletions_responses_bridge.go`；依赖未合入的 Responses/Chat fallback bridge 功能链 |
 
 ### 18.5 后续同步规则
 
