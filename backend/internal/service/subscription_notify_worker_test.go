@@ -220,6 +220,74 @@ func TestSubscriptionNotifyService_Handle_AllKindsSendBothChannelsWhenEmailEnabl
 	}
 }
 
+func TestSubscriptionNotifyService_Handle_LimitWindowCopyUsesConfiguredResetSchedule(t *testing.T) {
+	cases := []struct {
+		name     string
+		kind     string
+		expected string
+	}{
+		{
+			name:     "daily",
+			kind:     "limit_reached_daily",
+			expected: "日限会在 UTC+8 4 点重置",
+		},
+		{
+			name:     "weekly",
+			kind:     "limit_reached_weekly",
+			expected: "周限会在下周 UTC+8 周一 4 点重置",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
+			settings.set(SettingKeySubscriptionNotifyEmailEnabled, "true")
+			settings.set(SettingKeySubscriptionCreditPoolRepurchaseURL, "https://example.com/purchase")
+			settings.set(SettingKeySubscriptionQuotaResetUTCOffsetMinutes, "480")
+			settings.set(SettingKeySubscriptionQuotaResetHour, "4")
+
+			payload := mustMarshalPayload(t, SubscriptionNotifyPayload{
+				UserID:         42,
+				SubscriptionID: 123,
+				Kind:           tc.kind,
+			})
+			if err := svc.Handle(context.Background(), payload); err != nil {
+				t.Fatalf("Handle returned error: %v", err)
+			}
+
+			msgs := messenger.calls()
+			if len(msgs) != 1 {
+				t.Fatalf("site message expected 1 call, got %d", len(msgs))
+			}
+			if !strings.Contains(msgs[0].Content, tc.expected) {
+				t.Fatalf("site message should describe configured reset schedule %q, got: %s", tc.expected, msgs[0].Content)
+			}
+			if strings.Contains(msgs[0].Content, "UTC 0 点") {
+				t.Fatalf("site message should not hard-code UTC 0 reset, got: %s", msgs[0].Content)
+			}
+
+			emails := emailer.calls()
+			if len(emails) != 1 {
+				t.Fatalf("email expected 1 call, got %d", len(emails))
+			}
+			if !strings.Contains(emails[0].Body, tc.expected) {
+				t.Fatalf("email body should describe configured reset schedule %q, got: %s", tc.expected, emails[0].Body)
+			}
+		})
+	}
+}
+
+func TestRenderSubscriptionNotifyEmailUsesViewSubscriptionButtonCopy(t *testing.T) {
+	body := renderSubscriptionNotifyEmail("订阅已到达周限额", "lead", "hint", "https://example.com/purchase")
+
+	if !strings.Contains(body, "查看订阅 / Manage Subscription") {
+		t.Fatalf("email button should say 查看订阅, got: %s", body)
+	}
+	if strings.Contains(body, "重新订阅 / Manage Subscription") {
+		t.Fatalf("email button should not say 重新订阅, got: %s", body)
+	}
+}
+
 func TestSubscriptionNotifyService_Handle_DefaultDoesNotSendEmail(t *testing.T) {
 	svc, _, messenger, emailer, settings := newSubNotifyHarness(t)
 	settings.set(SettingKeySubscriptionCreditPoolRepurchaseURL, "https://example.com/buy")
