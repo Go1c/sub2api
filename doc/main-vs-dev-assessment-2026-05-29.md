@@ -1235,6 +1235,7 @@ pnpm dev
 | 并发获取失败分类 | `56e96fdd` | `a89ad299` | 已合并 | 中 |
 | 重新授权保留 `Extra` | `11fe7de9` | `3049896e` | 已合并 | 中 |
 | chat responses usage billing / request context 保留 | `2bd3125d`, `f7ac5e59` | `613842c8`, `0fd7c29d` | 已合并 | 中到高 |
+| OpenAI / Codex tool continuation 兼容 | `16a31557`, `87d73236`, `348a4877`, `fc66cd70`, `a729752d` | `84139594`, `245b08c3`, `d30b35e4`, `c15fdadc`, `bd7c0b38` | 已合并 | 中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1248,6 +1249,7 @@ pnpm dev
 - `56e96fdd` 只吸收 handler 层并发 acquire 错误分类：真实并发限制仍返回 429，客户端取消返回 499，Redis / deadline 等 acquire 失败返回 503；未引入调度系统重构。
 - `11fe7de9` 新增专用重新授权落库接口，只做 credentials 更新与 `Extra` key 级合并，并让前端重新授权流程改走该接口；未引入 migration / Ent / 支付链路变更。
 - `2bd3125d` / `f7ac5e59` 只吸收 usage request context 透传与 Responses 顶层 `usage` 计费修复；冲突处理中未引入 upstream 平台配额字段、未恢复 `openai_embeddings.go`、未带入额外 WS failover 逻辑和不属于本主题的 raw chat 大块测试扩展。
+- `16a31557` / `87d73236` / `348a4877` / `fc66cd70` / `a729752d` 只吸收 OpenAI/Codex continuation、tool output 识别与 `call_*` ID 保留相关修复；未引入 WS rate-limit failover、调度冷却、平台配额或 schema 变更。`a729752d` 是 `348a4877` 对应测试断言修正，行为变更来自 `348a4877`。
 
 ### 18.2 本次已验证命令
 
@@ -1324,6 +1326,19 @@ go test ./internal/pkg/apicompat ./internal/service -count=1
 - `backend/internal/service` chat responses usage billing 回归测试通过
 - `backend/internal/pkg/apicompat`、`backend/internal/service` 全包测试通过
 
+第三批 OpenAI / Codex tool continuation 同步追加验证：
+
+```bash
+cd backend
+go test ./internal/service -run 'Test(NeedsToolContinuationSignals|HasFunctionCallOutput|HasToolCallContext|FunctionCallOutputCallIDs|HasFunctionCallOutputMissingCallID|HasItemReferenceForCallIDs|ForwardAsAnthropic_PreviousResponseIDKeepsMultiToolCallContext|OpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabled(FunctionCallOutput|ToolSearchOutput|.*FunctionCallOutput)|ApplyCodexOAuthTransform_(ToolContinuation|ToolSearchOutput|CustomAndMCPToolOutputs))' -count=1
+go test ./internal/service -count=1
+```
+
+结果：
+
+- 第一次聚焦测试发现 `348a4877` 需要同步上游测试断言修正 `a729752d`，补入后聚焦测试通过
+- `backend/internal/service` 全包测试通过
+
 ### 18.3 明确未合并
 
 | 主题 | 代表提交 / 范围 | 状态 | 原因 / 风险 |
@@ -1344,7 +1359,6 @@ go test ./internal/pkg/apicompat ./internal/service -count=1
 | OpenAI WS rate-limit failover | `08061717` | 高 | 改变 WS failover 行为，需压测或至少较完整 smoke |
 | 模型 404 仅冷却账号模型组合 | `a31b5074` | 高 | 横跨 gateway/service/repository/test，需要单独主题分支 |
 | OpenAI HTTP/2 response header timeout | `33ac8eb2` | 中到高 | 涉及底层传输、配置和部署样例 |
-| Codex tool outputs in WS continuation | `fc66cd70` | 中 | 逻辑面较深，适合独立回归 Codex WS continuation |
 | 上游静默拒绝 failover | `6381f9e3` | 中到高 | 会改变 failover 判定语义，需先定义线上期望 |
 | embeddings gateway | `ccace69d` | 中 | 能力扩展，不属于 correctness 第一批 |
 | `/v1/models` 自定义模型列表 | `f597c158` | 中 | 会碰 group schema、handler、DTO、前端页面 |
