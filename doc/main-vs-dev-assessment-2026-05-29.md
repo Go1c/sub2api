@@ -1492,30 +1492,30 @@ go test ./internal/handler ./internal/service -run 'TestGatewayModels|TestParseS
 | sponsor / workflow / README 噪音 | sponsor 文案、CI/workflow、上游 README 变化 | 不合并 | 对线上正确性无直接收益 |
 | upstream migration `136`~`144` 原文件 | `backend/migrations/136_*.sql` ~ `144_*.sql` | 不直接合并 | 已与 fork migration 编号撞车；后续 schema 变更必须转写到 `900_*.sql` 命名空间 |
 
-### 18.4 未合并但后续可评估
+### 18.4 本轮剩余提交最终结论：不再合并
 
-这些不是“不要”，而是本次不和第一批混做。
+2026-05-30 收口复核至 `upstream/main` = `f18451e5`。除前面已经合入并验证的安全修复和小范围 correctness 修复外，剩余主题要么属于产品能力、调度、计费、支付、前端体验变化，要么依赖未合入的大功能链。按线上 `dev` 稳定优先原则，本轮不再从这些主题继续合并；后续只有出现安全修复、线上复现严重 bug，或明确要求专项验证时才重新打开。
 
-| 主题 | 代表提交 | 风险 | 后续建议 |
+| 主题 | 代表提交 | 风险 | 本轮结论 |
 |------|----------|------|----------|
-| OpenAI 账号冷却调度优化 | `1e406fed` | 高 | 29 个文件级别改动，属于调度系统改造 |
-| OpenAI WS rate-limit failover | `08061717` | 高 | 改变 WS failover 行为，需压测或至少较完整 smoke |
-| 模型 404 仅冷却账号模型组合 | `a31b5074` | 高 | 横跨 gateway/service/repository/test，需要单独主题分支 |
-| OpenAI HTTP/2 response header timeout | `33ac8eb2` | 中到高 | 涉及底层传输、配置和部署样例 |
-| 上游静默拒绝 failover | `6381f9e3` | 中到高 | 会改变 failover 判定语义，需先定义线上期望 |
-| embeddings gateway | `ccace69d` | 中 | 能力扩展，不属于 correctness 第一批 |
-| `/v1/models` 自定义模型列表 | `f597c158` | 中 | 会碰 group schema、handler、DTO、前端页面 |
-| Channel Monitor OpenAI API mode / 模板 | `3eff5f51`, `b685fe69` | 中到高 | 会与已有监控页面、migration、设置项冲突 |
-| Responses/Chat bridge developer role 修正 | `c4d7edba` | 中 | 当前 `dev` 没有 `chatcompletions_responses_bridge.go`；依赖未合入的 Responses/Chat fallback bridge 功能链 |
-| Settings 暗色 tab shell 修复 | `b0c77233` | 低到中 | 当前 `dev` 的 `SettingsView.vue` 已是另一套 tab 结构，没有 upstream 的 `.settings-tabs-shell`，不适合机械套用 |
-| OpenAI `service_tier` 默认透传 | `e9637148` | 中 | 会改变默认请求参数和成本/策略语义；不是安全修复，线上稳定优先，暂不合并 |
-| 分组可用账号数量展示修正 | `df2b02e6`, `5465003d` | 中 | 可能是真实 admin observability bug，但会碰 repository / admin 统计语义；非严重线上故障，后续单独评估 |
-| OpenAI OAuth 缺失 `refresh_token` 处理 | `bec1e2b6` | 中到高 | 可能修复账号稳定性问题，但会改变账号 disable / 调度行为；需账号级回归测试，暂不混入稳定 dev |
-| 支付 NaN 显示修正 | `6884b03e`, `ba1c6fa5` | 中 | 修复面较小，但触及支付 UI；支付是 fork 定制且线上稳定，除非测试服务复现，否则暂缓 |
-| 账号用量阈值自动暂停 | `ead471d6`, `8b7a8227`, `c9caadb3` | 高 | 新增按 5h / 7d 用量阈值暂停账号调度，横跨 scheduler、settings、OpenAI gateway 和前端；属于产品/调度语义，不是必须 bugfix |
-| 定价 metadata 大更新与测试断言 | `68901cbf`, `5fd9a350` | 中 | `model_prices_and_context_window.json` 大规模改动会改变计费结果；测试断言无运行时收益。除非确认当前线上模型价格错误，否则暂缓 |
-| OpenAI endpoint capability UI / routing | `37044b83`, `ed1b57c5` | 中到高 | 会改变 OpenAI 账号按 endpoint capability 的路由与展示语义；需结合线上账号能力配置单独验证 |
-| 系统更新 already-up-to-date 响应 | `b15375df` | 低到中 | 主要影响 admin update UX；不是安全或严重线上 bug，当前不为此单独引入 upstream 差异 |
+| OpenAI 账号冷却调度优化 | `1e406fed` | 高 | 不合并；29 个文件级别改动，属于调度系统改造 |
+| OpenAI WS rate-limit failover | `08061717` | 高 | 不合并；改变 WS failover 行为，需压测或至少较完整 smoke |
+| 模型 404 仅冷却账号模型组合 | `a31b5074` | 高 | 不合并；横跨 gateway/service/repository/test，需要单独主题分支 |
+| OpenAI HTTP/2 response header timeout | `33ac8eb2` | 中到高 | 不合并；涉及底层传输、配置和部署样例 |
+| 上游静默拒绝 failover | `6381f9e3` | 中到高 | 不合并；会改变 failover 判定语义，需先定义线上期望 |
+| embeddings gateway | `ccace69d` | 中 | 不合并；能力扩展，不是 bugfix |
+| `/v1/models` 自定义模型列表 | `f597c158` | 中 | 不合并；会碰 group schema、handler、DTO、前端页面 |
+| Channel Monitor OpenAI API mode / 模板 | `3eff5f51`, `b685fe69` | 中到高 | 不合并；会与已有监控页面、migration、设置项冲突 |
+| Responses/Chat bridge developer role 修正 | `c4d7edba` | 中 | 不合并；当前 `dev` 没有 `chatcompletions_responses_bridge.go`，依赖未合入的大功能链 |
+| Settings 暗色 tab shell 修复 | `b0c77233` | 低到中 | 不合并；当前 `dev` 的 `SettingsView.vue` 已是另一套 tab 结构，不适合机械套用 |
+| OpenAI `service_tier` 默认透传 | `e9637148` | 中 | 不合并；会改变默认请求参数和成本/策略语义，不是安全修复 |
+| 分组可用账号数量展示修正 | `df2b02e6`, `5465003d` | 中 | 不合并；可能是真实 admin observability bug，但非严重线上故障，会碰 repository / admin 统计语义 |
+| OpenAI OAuth 缺失 `refresh_token` 处理 | `bec1e2b6` | 中到高 | 不合并；会改变账号 disable / 调度行为，需账号级回归测试 |
+| 支付 NaN 显示修正 | `6884b03e`, `ba1c6fa5` | 中 | 不合并；触及支付 UI，支付是 fork 定制且线上稳定 |
+| 账号用量阈值自动暂停 | `ead471d6`, `8b7a8227`, `c9caadb3` | 高 | 不合并；横跨 scheduler、settings、OpenAI gateway 和前端，属于产品/调度语义 |
+| 定价 metadata 大更新与测试断言 | `68901cbf`, `5fd9a350` | 中 | 不合并；`model_prices_and_context_window.json` 大规模改动会改变计费结果，测试断言无运行时收益 |
+| OpenAI endpoint capability UI / routing | `37044b83`, `ed1b57c5` | 中到高 | 不合并；会改变 OpenAI 账号按 endpoint capability 的路由与展示语义 |
+| 系统更新 already-up-to-date 响应 | `b15375df` | 低到中 | 不合并；主要影响 admin update UX，不是安全或严重线上 bug |
 
 ### 18.5 后续同步规则
 
@@ -1526,3 +1526,4 @@ go test ./internal/handler ./internal/service -run 'TestGatewayModels|TestParseS
 3. 每个主题都更新本节状态
 4. 涉及 schema 时不复用 upstream migration 文件名，统一走 `900_*.sql`
 5. 只要碰支付、订阅、余额、风控、调度或 gateway 行为语义，就必须单独验证并记录风险
+6. 本轮 18.4 清单不再作为待办队列；只有安全修复、线上复现严重 bug 或明确专项需求才重新评估
