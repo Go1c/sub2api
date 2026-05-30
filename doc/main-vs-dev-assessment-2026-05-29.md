@@ -1238,6 +1238,7 @@ pnpm dev
 | OpenAI / Codex tool continuation 兼容 | `16a31557`, `87d73236`, `348a4877`, `fc66cd70`, `a729752d` | `84139594`, `245b08c3`, `d30b35e4`, `c15fdadc`, `bd7c0b38` | 已合并 | 中 |
 | admin 账号 credentials 脱敏 | `0f8e2d09` | `69c26b94` | 已合并 | 中 |
 | service correctness 小修复 | `2a17c0b2`, `f788e6bd`, `6d69ae87`, `f97b8534`, `c3a14717`, `297b54d0` | `9396e620`, `e7368e43`, `d6f92c77`, `2e08ca1a`, `ebd16099`, `f787ed02` | 已合并 | 中 |
+| OpenAI / Responses 兼容小修复 | `679c0865`, `df82a3bc`, `1d47fd63`, `e9a25e7b`, `a6117429`, `be15a3e6` | `0b2a6d37`, `e48af74a`, `37e04bb6`, `4c920673`, `0400f5f4`, `1959c6d1` | 已合并 | 中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1254,6 +1255,7 @@ pnpm dev
 - `16a31557` / `87d73236` / `348a4877` / `fc66cd70` / `a729752d` 只吸收 OpenAI/Codex continuation、tool output 识别与 `call_*` ID 保留相关修复；未引入 WS rate-limit failover、调度冷却、平台配额或 schema 变更。`a729752d` 是 `348a4877` 对应测试断言修正，行为变更来自 `348a4877`。
 - `0f8e2d09` 只吸收 admin 账号响应 credentials 脱敏和全对象编辑时敏感 credentials 保留语义：新增 `credentials_status` 暴露存在性，前端留空敏感字段时由后端保留旧 token；未引入 schema / migration / 支付 / 平台配额变更。
 - `2a17c0b2` / `f788e6bd` / `6d69ae87` / `f97b8534` / `c3a14717` / `297b54d0` 作为 service correctness 小批次合入：包含 Vertex token exchange 走账号代理、未知默认 transport 类型保护、未定价模型零成本 usage 记录、mimic tool_use 名称同步改写、OpenAI usage-limit plan type 同步，以及相关测试补强。`f788e6bd` 对 `account_codex_import.go` 的改动被明确排除，因为该文件属于未合入的 OAuth 导入功能；本批只吸收 `vertex_service_account.go` 的 transport 检查。
+- `679c0865` / `df82a3bc` / `1d47fd63` / `e9a25e7b` / `a6117429` / `be15a3e6` 只吸收 OpenAI/Responses 小范围兼容修复：versioned compatible base URL、chat completions 转 Responses 时避免 `null` content、DeepSeek `reasoning_content` 透传、空 thinking block 保留、图片生成 upstream context detach、WS passthrough 首字时间修正。未带入 `cc5328c4` 这类更大 SSE 终止事件语义改造。
 
 ### 18.2 本次已验证命令
 
@@ -1371,6 +1373,19 @@ go test ./internal/service ./internal/pkg/tlsfingerprint -count=1
 
 - `backend/internal/service` 全包测试通过
 - `backend/internal/pkg/tlsfingerprint` 测试通过；外部 capture 测试在未设置 `TLSFINGERPRINT_CAPTURE_URL` 时 skip
+
+第六批 OpenAI / Responses 兼容小修复同步追加验证：
+
+```bash
+cd backend
+go test ./internal/pkg/apicompat ./internal/service ./internal/service/openai_ws_v2 -count=1
+```
+
+结果：
+
+- `backend/internal/pkg/apicompat` 测试通过
+- `backend/internal/service` 全包测试通过
+- `backend/internal/service/openai_ws_v2` 测试通过
 
 ### 18.3 明确未合并
 
