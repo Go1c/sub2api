@@ -1239,6 +1239,7 @@ pnpm dev
 | admin 账号 credentials 脱敏 | `0f8e2d09` | `69c26b94` | 已合并 | 中 |
 | service correctness 小修复 | `2a17c0b2`, `f788e6bd`, `6d69ae87`, `f97b8534`, `c3a14717`, `297b54d0` | `9396e620`, `e7368e43`, `d6f92c77`, `2e08ca1a`, `ebd16099`, `f787ed02` | 已合并 | 中 |
 | OpenAI / Responses 兼容小修复 | `679c0865`, `df82a3bc`, `1d47fd63`, `e9a25e7b`, `a6117429`, `be15a3e6` | `0b2a6d37`, `e48af74a`, `37e04bb6`, `4c920673`, `0400f5f4`, `1959c6d1` | 已合并 | 中 |
+| 上游 Vue 前端 auth / 编辑兼容小修复 | `44679221`, `224e9fc6`, `4d51e53d`, `3ca232ad` | `2a4d1fad`, `21d84467`, `0bdb6784`, `f842049c` | 已合并 | 中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1256,6 +1257,7 @@ pnpm dev
 - `0f8e2d09` 只吸收 admin 账号响应 credentials 脱敏和全对象编辑时敏感 credentials 保留语义：新增 `credentials_status` 暴露存在性，前端留空敏感字段时由后端保留旧 token；未引入 schema / migration / 支付 / 平台配额变更。
 - `2a17c0b2` / `f788e6bd` / `6d69ae87` / `f97b8534` / `c3a14717` / `297b54d0` 作为 service correctness 小批次合入：包含 Vertex token exchange 走账号代理、未知默认 transport 类型保护、未定价模型零成本 usage 记录、mimic tool_use 名称同步改写、OpenAI usage-limit plan type 同步，以及相关测试补强。`f788e6bd` 对 `account_codex_import.go` 的改动被明确排除，因为该文件属于未合入的 OAuth 导入功能；本批只吸收 `vertex_service_account.go` 的 transport 检查。
 - `679c0865` / `df82a3bc` / `1d47fd63` / `e9a25e7b` / `a6117429` / `be15a3e6` 只吸收 OpenAI/Responses 小范围兼容修复：versioned compatible base URL、chat completions 转 Responses 时避免 `null` content、DeepSeek `reasoning_content` 透传、空 thinking block 保留、图片生成 upstream context detach、WS passthrough 首字时间修正。未带入 `cc5328c4` 这类更大 SSE 终止事件语义改造。
+- `44679221` / `224e9fc6` / `4d51e53d` / `3ca232ad` 只吸收上游 Vue 前端小兼容修复：TOTP 自动填充、OIDC pending flow 使用 compat email、兑换码批量复制兼容、编辑账号弹窗在旧后端未返回 `credentials_status` 时回退旧 credentials 结构。`3ca232ad` 的测试冲突中保留了本地 upstream-balance 覆盖测试。`65493df9` 没有机械合入，因为本地已有 `frontend/src/utils/ccswitch.ts`，并且已覆盖 OpenAI Codex 默认模型、defaultModels、`/v1` suffix 和 usageBaseUrl，比 upstream 新增的 `ccswitchImport.ts` 更完整。
 
 ### 18.2 本次已验证命令
 
@@ -1386,6 +1388,21 @@ go test ./internal/pkg/apicompat ./internal/service ./internal/service/openai_ws
 - `backend/internal/pkg/apicompat` 测试通过
 - `backend/internal/service` 全包测试通过
 - `backend/internal/service/openai_ws_v2` 测试通过
+
+第七批上游 Vue 前端小兼容修复同步追加验证：
+
+```bash
+cd frontend
+pnpm test:run -- src/components/account/__tests__/EditAccountModal.spec.ts
+pnpm typecheck
+pnpm build
+```
+
+结果：
+
+- Vitest 实际跑完全量前端测试：125 个 test files / 685 个 tests 全部通过
+- 上游 Vue 前端 typecheck / build 通过
+- `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
 
 ### 18.3 明确未合并
 
