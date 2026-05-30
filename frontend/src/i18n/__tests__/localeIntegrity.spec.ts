@@ -54,4 +54,8 @@ describe('locale integrity', () => {
     expect(en.userSubscriptions.exhaustedAwaitingExpiry).toBe('{count} exhausted subscription(s) waiting to expire')
     expect(zhHant.userSubscriptions.exhaustedAwaitingExpiry).toBe('{count} 個已耗盡訂閱等待到期')
   })
+
+  it('keeps the simplified Chinese no-active-subscription prompt pointing to purchase', () => {
+    expect(zh.userSubscriptions.noActiveSubscriptionsDesc).toBe('您没有任何有效订阅.请前往充值页面订购')
+  })
 })

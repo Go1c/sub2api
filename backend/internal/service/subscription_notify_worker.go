@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -205,27 +206,29 @@ func (s *SubscriptionNotifyService) buildContent(ctx context.Context, p Subscrip
 			link,
 		)
 	case subscriptionNotifyKindLimitDaily():
+		resetDescription := subscriptionDailyResetDescription(s.subscriptionQuotaResetConfig(ctx))
 		subject = "订阅已到达日限额"
 		plainBody = fmt.Sprintf(
 			"您的订阅（订阅 ID #%d）已到达今日的日限额。"+
-				"\n\n本日剩余请求将自动改用账户余额扣费，日限会在 UTC 0 点重置。如需调整订阅或额度，请访问：\n%s",
-			p.SubscriptionID, link)
+				"\n\n本日剩余请求将自动改用账户余额扣费，日限会在 %s重置。如需调整订阅或额度，请访问：\n%s",
+			p.SubscriptionID, resetDescription, link)
 		htmlBody = renderSubscriptionNotifyEmail(
 			"订阅已到达日限额",
 			fmt.Sprintf("您的订阅（订阅 ID <strong>#%d</strong>）已到达今日的日限额。", p.SubscriptionID),
-			"本日剩余请求将自动改用账户余额扣费，日限会在 UTC 0 点重置。",
+			fmt.Sprintf("本日剩余请求将自动改用账户余额扣费，日限会在 %s重置。", resetDescription),
 			link,
 		)
 	case subscriptionNotifyKindLimitWeekly():
+		resetDescription := subscriptionWeeklyResetDescription(s.subscriptionQuotaResetConfig(ctx))
 		subject = "订阅已到达周限额"
 		plainBody = fmt.Sprintf(
 			"您的订阅（订阅 ID #%d）已到达本周的周限额。"+
-				"\n\n本周剩余请求将自动改用账户余额扣费，周限会在下周 UTC 周一 0 点重置。如需调整订阅或额度，请访问：\n%s",
-			p.SubscriptionID, link)
+				"\n\n本周剩余请求将自动改用账户余额扣费，周限会在%s重置。如需调整订阅或额度，请访问：\n%s",
+			p.SubscriptionID, resetDescription, link)
 		htmlBody = renderSubscriptionNotifyEmail(
 			"订阅已到达周限额",
 			fmt.Sprintf("您的订阅（订阅 ID <strong>#%d</strong>）已到达本周的周限额。", p.SubscriptionID),
-			"本周剩余请求将自动改用账户余额扣费，周限会在下周 UTC 周一 0 点重置。",
+			fmt.Sprintf("本周剩余请求将自动改用账户余额扣费，周限会在%s重置。", resetDescription),
 			link,
 		)
 	case subscriptionNotifyKindExpired():
@@ -255,6 +258,53 @@ func (s *SubscriptionNotifyService) buildContent(ctx context.Context, p Subscrip
 		)
 	}
 	return subject, htmlBody, plainBody
+}
+
+func (s *SubscriptionNotifyService) subscriptionQuotaResetConfig(ctx context.Context) SubscriptionQuotaResetConfig {
+	if s == nil || s.settings == nil {
+		return SubscriptionQuotaResetConfig{}
+	}
+	cfg := SubscriptionQuotaResetConfig{}
+	if raw, err := s.settings.GetValue(ctx, SettingKeySubscriptionQuotaResetUTCOffsetMinutes); err == nil {
+		if v, parseErr := strconv.Atoi(strings.TrimSpace(raw)); parseErr == nil {
+			cfg.UTCOffsetMinutes = v
+		}
+	}
+	if raw, err := s.settings.GetValue(ctx, SettingKeySubscriptionQuotaResetHour); err == nil {
+		if v, parseErr := strconv.Atoi(strings.TrimSpace(raw)); parseErr == nil {
+			cfg.ResetHour = v
+		}
+	}
+	return NormalizeSubscriptionQuotaResetConfig(cfg)
+}
+
+func subscriptionDailyResetDescription(cfg SubscriptionQuotaResetConfig) string {
+	cfg = NormalizeSubscriptionQuotaResetConfig(cfg)
+	return fmt.Sprintf("%s %d 点", subscriptionUTCOffsetLabel(cfg.UTCOffsetMinutes), cfg.ResetHour)
+}
+
+func subscriptionWeeklyResetDescription(cfg SubscriptionQuotaResetConfig) string {
+	cfg = NormalizeSubscriptionQuotaResetConfig(cfg)
+	return fmt.Sprintf("下周 %s 周一 %d 点", subscriptionUTCOffsetLabel(cfg.UTCOffsetMinutes), cfg.ResetHour)
+}
+
+func subscriptionUTCOffsetLabel(offsetMinutes int) string {
+	cfg := NormalizeSubscriptionQuotaResetConfig(SubscriptionQuotaResetConfig{UTCOffsetMinutes: offsetMinutes})
+	minutes := cfg.UTCOffsetMinutes
+	if minutes == 0 {
+		return "UTC"
+	}
+	sign := "+"
+	if minutes < 0 {
+		sign = "-"
+		minutes = -minutes
+	}
+	hours := minutes / 60
+	remainder := minutes % 60
+	if remainder == 0 {
+		return fmt.Sprintf("UTC%s%d", sign, hours)
+	}
+	return fmt.Sprintf("UTC%s%d:%02d", sign, hours, remainder)
 }
 
 // resolveRepurchaseURL 读取重新订阅链接。优先级：
@@ -296,7 +346,7 @@ func renderSubscriptionNotifyEmail(title, lead, hint, link string) string {
 	if strings.TrimSpace(link) != "" {
 		safeLink := html.EscapeString(strings.TrimSpace(link))
 		linkBlock = fmt.Sprintf(
-			`<p style="text-align:center;margin-top:24px;"><a href="%s" style="display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#4f8cff 0%%,#1a2f5a 100%%);color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:bold;">重新订阅 / Manage Subscription</a></p>`,
+			`<p style="text-align:center;margin-top:24px;"><a href="%s" style="display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#4f8cff 0%%,#1a2f5a 100%%);color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:bold;">查看订阅 / Manage Subscription</a></p>`,
 			safeLink)
 	}
 	return fmt.Sprintf(`<!DOCTYPE html>
