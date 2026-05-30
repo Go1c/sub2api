@@ -1244,6 +1244,7 @@ pnpm dev
 | setup 初始化完成后的路由保护 | `a9a357e9` | `b756ac63` | 已合并 | 低到中 |
 | apicompat 参数清洗 / count_tokens 过滤 | `fe3283a1`, `276b5c77`, `27600b1d` | `dbffb71c`, `da287da3`, `a2cc7dfe` | 已合并 | 中 |
 | frontend / deploy / dependency 小修复 | `18790386`, `a5acefcc`, `44995404`, `e46d2c21`, `ffd53343` | `4dcbeba8`, `e9e674f7`, `50c4647e`, `d26594ee`, `45590f24` | 已合并 | 低到中 |
+| Go `x/net` 安全依赖修复 | `b6c0b408` | `38b53ab7` | 已合并 | 低到中 |
 | subscription repo 测试适配 | 本地 API 适配 | `074740e1` | 已合并 | 低 |
 | 本评估文档与分支说明 | 本地文档 | `715c75b2`, `098bc053` 起持续更新 | 已合并 | 低 |
 
@@ -1266,6 +1267,7 @@ pnpm dev
 - `a9a357e9` 只吸收 setup 初始化完成后阻止继续访问 `/setup` 的路由保护。冲突点在 `frontend/src/router/index.ts` 与 `frontend/src/router/__tests__/guards.spec.ts` 的 import / mock state 并列新增，解决时保留本地 external auth handoff、feature flags、backend mode 路由限制，并加入上游 `getSetupStatus()` 检查。
 - `fe3283a1` / `276b5c77` / `27600b1d` 只吸收 apicompat 与 Anthropic passthrough 小范围请求清洗：reasoning content 转换 errcheck、Responses 转换时对 reasoning 模型剥离 `temperature` / `top_p`、`count_tokens` 透传前过滤生成字段。`276b5c77` 的测试冲突只发生在 `anthropic_responses_test.go`，解决时保留本地 cache token 语义测试并加入 upstream 参数剥离测试。`c4d7edba` 已尝试但跳过，因为它修改的 `chatcompletions_responses_bridge.go` 在当前 `dev` 不存在，实际依赖未合入的 Responses/Chat fallback bridge 大功能。
 - `18790386` / `a5acefcc` / `44995404` / `e46d2c21` / `ffd53343` 只吸收低耦合维护修复：Docker Compose 不再暴露 PostgreSQL/Redis 到宿主机、安装脚本提前检查 Bash 4+、Docker frontend builder 固定 pnpm v9、Ops deep link 状态初始化顺序修正、`js-cookie` 通过 pnpm override 升级到 `3.0.7`。`44995404` 的 Dockerfile 冲突中，本地原为 `pnpm@10.30.3`，按 upstream 与仓库 pnpm v9 构建约束改为 `pnpm@9`；`ffd53343` 的 `package.json` 冲突中保留本地 `onlyBuiltDependencies` 并新增 `overrides.js-cookie`。
+- `b6c0b408` 只吸收 Go 依赖安全更新：`golang.org/x/net`、`golang.org/x/crypto`、`golang.org/x/term` 等随 upstream 升级，并将 H2C 配置从 `h2c.NewHandler` 改为 Go 标准库 `http.Protocols` + `http2.ConfigureServer`。本地冲突处理中保留既有 `MaxBytesHandler` 包装顺序和 H2C 默认关闭语义；未引入 schema / migration / 支付 / 订阅 / `frontend-dashboard/` 变更。
 
 ### 18.2 本次已验证命令
 
@@ -1466,6 +1468,20 @@ pnpm build
 - `pnpm build` 仍仅有既有 Vite dynamic import / chunk size warning
 - `docker compose config` 未能执行：本机没有 `docker` 命令
 
+第十一批 Go 安全依赖修复同步追加验证：
+
+```bash
+cd backend
+go test ./cmd/server ./internal/server ./internal/server/middleware -count=1
+go test ./internal/handler ./internal/service -run 'TestGatewayModels|TestParseSSEUsage_SelectiveParsing|TestExtractOpenAIUsageFromJSONBytes_AcceptsResponseAndChatUsageShapes' -count=1
+```
+
+结果：
+
+- `backend/cmd/server`、`backend/internal/server`、`backend/internal/server/middleware` 测试通过
+- `backend/internal/handler`、`backend/internal/service` 聚焦网关模型与 OpenAI usage 解析回归测试通过
+- 本批只改后端依赖与 HTTP server 配置，未运行前端构建
+
 ### 18.3 明确未合并
 
 | 主题 | 代表提交 / 范围 | 状态 | 原因 / 风险 |
@@ -1492,6 +1508,14 @@ pnpm build
 | Channel Monitor OpenAI API mode / 模板 | `3eff5f51`, `b685fe69` | 中到高 | 会与已有监控页面、migration、设置项冲突 |
 | Responses/Chat bridge developer role 修正 | `c4d7edba` | 中 | 当前 `dev` 没有 `chatcompletions_responses_bridge.go`；依赖未合入的 Responses/Chat fallback bridge 功能链 |
 | Settings 暗色 tab shell 修复 | `b0c77233` | 低到中 | 当前 `dev` 的 `SettingsView.vue` 已是另一套 tab 结构，没有 upstream 的 `.settings-tabs-shell`，不适合机械套用 |
+| OpenAI `service_tier` 默认透传 | `e9637148` | 中 | 会改变默认请求参数和成本/策略语义；不是安全修复，线上稳定优先，暂不合并 |
+| 分组可用账号数量展示修正 | `df2b02e6`, `5465003d` | 中 | 可能是真实 admin observability bug，但会碰 repository / admin 统计语义；非严重线上故障，后续单独评估 |
+| OpenAI OAuth 缺失 `refresh_token` 处理 | `bec1e2b6` | 中到高 | 可能修复账号稳定性问题，但会改变账号 disable / 调度行为；需账号级回归测试，暂不混入稳定 dev |
+| 支付 NaN 显示修正 | `6884b03e`, `ba1c6fa5` | 中 | 修复面较小，但触及支付 UI；支付是 fork 定制且线上稳定，除非测试服务复现，否则暂缓 |
+| 账号用量阈值自动暂停 | `ead471d6`, `8b7a8227`, `c9caadb3` | 高 | 新增按 5h / 7d 用量阈值暂停账号调度，横跨 scheduler、settings、OpenAI gateway 和前端；属于产品/调度语义，不是必须 bugfix |
+| 定价 metadata 大更新与测试断言 | `68901cbf`, `5fd9a350` | 中 | `model_prices_and_context_window.json` 大规模改动会改变计费结果；测试断言无运行时收益。除非确认当前线上模型价格错误，否则暂缓 |
+| OpenAI endpoint capability UI / routing | `37044b83`, `ed1b57c5` | 中到高 | 会改变 OpenAI 账号按 endpoint capability 的路由与展示语义；需结合线上账号能力配置单独验证 |
+| 系统更新 already-up-to-date 响应 | `b15375df` | 低到中 | 主要影响 admin update UX；不是安全或严重线上 bug，当前不为此单独引入 upstream 差异 |
 
 ### 18.5 后续同步规则
 
