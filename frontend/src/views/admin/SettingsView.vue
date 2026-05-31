@@ -6166,6 +6166,7 @@
                       :placeholder="
                         t('admin.settings.payment.helpImagePlaceholder')
                       "
+                      :max-size="1024 * 1024"
                     />
                   </div>
                   <div>

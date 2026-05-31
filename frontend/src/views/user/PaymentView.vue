@@ -218,11 +218,23 @@
             </template>
             <!-- Plan list -->
             <template v-else>
+              <div v-if="hasCheckoutHelp" data-testid="subscription-pricing-guide" class="card p-3 sm:p-4">
+                <div class="flex flex-col items-center gap-3">
+                  <img
+                    v-if="checkout.help_image_url"
+                    :src="checkout.help_image_url"
+                    alt=""
+                    class="max-h-[70vh] w-full cursor-pointer rounded-xl object-contain transition-opacity hover:opacity-90"
+                    @click="previewImage = checkout.help_image_url"
+                  />
+                  <p v-if="checkout.help_text" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ checkout.help_text }}</p>
+                </div>
+              </div>
               <div v-if="checkout.plans.length === 0" class="card py-16 text-center">
                 <Icon name="gift" size="xl" class="mx-auto mb-3 text-gray-300 dark:text-dark-600" />
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
-              <div v-else :class="planGridClass">
+              <div v-else data-testid="subscription-plan-list" :class="planGridClass">
                 <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="usableActiveSubscriptions" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
@@ -251,7 +263,7 @@
             </template>
           </template>
         </template>
-        <div v-if="(checkout.help_text || checkout.help_image_url) && paymentPhase === 'select' && !selectedPlan" class="card p-4">
+        <div v-if="hasCheckoutHelp && activeTab !== 'subscription' && paymentPhase === 'select' && !selectedPlan" class="card p-4">
           <div class="flex flex-col items-center gap-3">
             <img v-if="checkout.help_image_url" :src="checkout.help_image_url" alt=""
               class="h-40 max-w-full cursor-pointer rounded-lg object-contain transition-opacity hover:opacity-80"
@@ -565,6 +577,7 @@ const checkout = ref<CheckoutInfoResponse>({
 })
 
 const userSubscriptionsVisible = computed(() => appStore.cachedPublicSettings?.user_subscriptions_visible !== false)
+const hasCheckoutHelp = computed(() => Boolean(checkout.value.help_text || checkout.value.help_image_url))
 const tabs = computed(() => {
   const result: { key: 'recharge' | 'subscription'; label: string }[] = []
   if (!checkout.value.balance_disabled) result.push({ key: 'recharge', label: t('payment.tabTopUp') })
