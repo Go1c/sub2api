@@ -249,6 +249,41 @@ describe('PaymentView recharge notices', () => {
     expect(wrapper.text()).not.toContain('payment.noPlans')
   })
 
+  it('shows the checkout help image above subscription plans', async () => {
+    routeState.query = { tab: 'subscription' }
+    getCheckoutInfo.mockResolvedValue({
+      data: {
+        ...checkoutInfoWithPlansFixture().data,
+        help_image_url: 'data:image/png;base64,pricing-guide',
+        help_text: 'Pricing rules',
+      },
+    })
+
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: {
+            template: '<div><slot /></div>',
+          },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+
+    await flushPromises()
+    await flushPromises()
+
+    const guide = wrapper.find('[data-testid="subscription-pricing-guide"]')
+    const planList = wrapper.find('[data-testid="subscription-plan-list"]')
+
+    expect(guide.exists()).toBe(true)
+    expect(planList.exists()).toBe(true)
+    expect(guide.find('img').attributes('src')).toBe('data:image/png;base64,pricing-guide')
+    expect(guide.find('img').classes()).toContain('max-h-[70vh]')
+    expect(guide.element.compareDocumentPosition(planList.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('refreshes user balance when confirming a settled payment panel', async () => {
     window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
       orderId: 999,
