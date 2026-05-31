@@ -98,7 +98,7 @@ Prevents users from repeatedly creating and canceling orders:
 
 | Setting | Description |
 |---------|-------------|
-| **Help Image** | Customer service QR code or help image (supports upload) |
+| **Help Image** | Customer service QR code or help image (supports upload up to 1 MB). On the subscription tab, this image is shown above plans as the pricing guide and can be clicked for preview. |
 | **Help Text** | Instructions displayed on the payment page |
 
 ---

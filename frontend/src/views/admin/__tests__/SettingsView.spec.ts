@@ -410,6 +410,10 @@ const ImageUploadStub = defineComponent({
       type: String,
       default: "",
     },
+    maxSize: {
+      type: Number,
+      default: undefined,
+    },
   },
   setup(props) {
     return () =>
@@ -419,6 +423,7 @@ const ImageUploadStub = defineComponent({
         "data-upload-label": props.uploadLabel,
         "data-remove-label": props.removeLabel,
         "data-placeholder": props.placeholder,
+        "data-max-size": props.maxSize == null ? "" : String(props.maxSize),
       });
   },
 });
@@ -981,6 +986,7 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(paymentHelpImageUpload).toBeDefined();
     expect(paymentHelpImageUpload?.attributes("data-upload-label")).toBe("上传图片");
     expect(paymentHelpImageUpload?.attributes("data-remove-label")).toBe("移除");
+    expect(paymentHelpImageUpload?.attributes("data-max-size")).toBe(String(1024 * 1024));
   });
 });
 
