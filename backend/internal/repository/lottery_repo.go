@@ -59,6 +59,8 @@ func (r *lotteryRepository) CreateCampaign(ctx context.Context, campaign *servic
 		SetMaxParticipants(campaign.MaxParticipants).
 		SetJoinedCount(campaign.JoinedCount).
 		SetWinnerCount(campaign.WinnerCount).
+		SetEarlyBoostParticipantPercent(campaign.EarlyBoostParticipantPercent).
+		SetRechargeBoostCapPercent(campaign.RechargeBoostCapPercent).
 		SetCreatedBy(campaign.CreatedBy)
 	if !campaign.CreatedAt.IsZero() {
 		builder.SetCreatedAt(campaign.CreatedAt)
@@ -192,6 +194,20 @@ func (r *lotteryRepository) GetDrawByCampaignAndUser(ctx context.Context, campai
 	return lotteryDrawEntity(draw), nil
 }
 
+func (r *lotteryRepository) GetUserLotteryProfile(ctx context.Context, userID int64) (*service.LotteryUserProfile, error) {
+	client := clientFromContext(ctx, r.client)
+	u, err := client.User.Query().
+		Where(user.IDEQ(userID)).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &service.LotteryUserProfile{
+		UserID:         u.ID,
+		TotalRecharged: u.TotalRecharged,
+	}, nil
+}
+
 func (r *lotteryRepository) PickUnassignedCode(ctx context.Context, campaignID int64) (*service.LotteryCode, error) {
 	client := clientFromContext(ctx, r.client)
 	code, err := client.LotteryCode.Query().
@@ -281,18 +297,20 @@ func lotteryCampaignEntity(c *dbent.LotteryCampaign) *service.LotteryCampaign {
 		return nil
 	}
 	return &service.LotteryCampaign{
-		ID:              c.ID,
-		Name:            c.Name,
-		Subtitle:        c.Subtitle,
-		Status:          c.Status,
-		PrizeCount:      c.PrizeCount,
-		MaxParticipants: c.MaxParticipants,
-		JoinedCount:     c.JoinedCount,
-		WinnerCount:     c.WinnerCount,
-		CreatedBy:       c.CreatedBy,
-		CreatedAt:       c.CreatedAt,
-		UpdatedAt:       c.UpdatedAt,
-		FinishedAt:      c.FinishedAt,
+		ID:                           c.ID,
+		Name:                         c.Name,
+		Subtitle:                     c.Subtitle,
+		Status:                       c.Status,
+		PrizeCount:                   c.PrizeCount,
+		MaxParticipants:              c.MaxParticipants,
+		JoinedCount:                  c.JoinedCount,
+		WinnerCount:                  c.WinnerCount,
+		EarlyBoostParticipantPercent: c.EarlyBoostParticipantPercent,
+		RechargeBoostCapPercent:      c.RechargeBoostCapPercent,
+		CreatedBy:                    c.CreatedBy,
+		CreatedAt:                    c.CreatedAt,
+		UpdatedAt:                    c.UpdatedAt,
+		FinishedAt:                   c.FinishedAt,
 	}
 }
 

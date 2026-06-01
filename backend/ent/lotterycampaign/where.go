@@ -89,6 +89,16 @@ func WinnerCount(v int) predicate.LotteryCampaign {
 	return predicate.LotteryCampaign(sql.FieldEQ(FieldWinnerCount, v))
 }
 
+// EarlyBoostParticipantPercent applies equality check predicate on the "early_boost_participant_percent" field. It's identical to EarlyBoostParticipantPercentEQ.
+func EarlyBoostParticipantPercent(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldEarlyBoostParticipantPercent, v))
+}
+
+// RechargeBoostCapPercent applies equality check predicate on the "recharge_boost_cap_percent" field. It's identical to RechargeBoostCapPercentEQ.
+func RechargeBoostCapPercent(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldRechargeBoostCapPercent, v))
+}
+
 // CreatedBy applies equality check predicate on the "created_by" field. It's identical to CreatedByEQ.
 func CreatedBy(v int64) predicate.LotteryCampaign {
 	return predicate.LotteryCampaign(sql.FieldEQ(FieldCreatedBy, v))
@@ -462,6 +472,86 @@ func WinnerCountLT(v int) predicate.LotteryCampaign {
 // WinnerCountLTE applies the LTE predicate on the "winner_count" field.
 func WinnerCountLTE(v int) predicate.LotteryCampaign {
 	return predicate.LotteryCampaign(sql.FieldLTE(FieldWinnerCount, v))
+}
+
+// EarlyBoostParticipantPercentEQ applies the EQ predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentEQ(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldEarlyBoostParticipantPercent, v))
+}
+
+// EarlyBoostParticipantPercentNEQ applies the NEQ predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentNEQ(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNEQ(FieldEarlyBoostParticipantPercent, v))
+}
+
+// EarlyBoostParticipantPercentIn applies the In predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentIn(vs ...int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldIn(FieldEarlyBoostParticipantPercent, vs...))
+}
+
+// EarlyBoostParticipantPercentNotIn applies the NotIn predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentNotIn(vs ...int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNotIn(FieldEarlyBoostParticipantPercent, vs...))
+}
+
+// EarlyBoostParticipantPercentGT applies the GT predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentGT(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGT(FieldEarlyBoostParticipantPercent, v))
+}
+
+// EarlyBoostParticipantPercentGTE applies the GTE predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentGTE(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGTE(FieldEarlyBoostParticipantPercent, v))
+}
+
+// EarlyBoostParticipantPercentLT applies the LT predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentLT(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLT(FieldEarlyBoostParticipantPercent, v))
+}
+
+// EarlyBoostParticipantPercentLTE applies the LTE predicate on the "early_boost_participant_percent" field.
+func EarlyBoostParticipantPercentLTE(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLTE(FieldEarlyBoostParticipantPercent, v))
+}
+
+// RechargeBoostCapPercentEQ applies the EQ predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentEQ(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldRechargeBoostCapPercent, v))
+}
+
+// RechargeBoostCapPercentNEQ applies the NEQ predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentNEQ(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNEQ(FieldRechargeBoostCapPercent, v))
+}
+
+// RechargeBoostCapPercentIn applies the In predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentIn(vs ...int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldIn(FieldRechargeBoostCapPercent, vs...))
+}
+
+// RechargeBoostCapPercentNotIn applies the NotIn predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentNotIn(vs ...int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNotIn(FieldRechargeBoostCapPercent, vs...))
+}
+
+// RechargeBoostCapPercentGT applies the GT predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentGT(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGT(FieldRechargeBoostCapPercent, v))
+}
+
+// RechargeBoostCapPercentGTE applies the GTE predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentGTE(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGTE(FieldRechargeBoostCapPercent, v))
+}
+
+// RechargeBoostCapPercentLT applies the LT predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentLT(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLT(FieldRechargeBoostCapPercent, v))
+}
+
+// RechargeBoostCapPercentLTE applies the LTE predicate on the "recharge_boost_cap_percent" field.
+func RechargeBoostCapPercentLTE(v int) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLTE(FieldRechargeBoostCapPercent, v))
 }
 
 // CreatedByEQ applies the EQ predicate on the "created_by" field.

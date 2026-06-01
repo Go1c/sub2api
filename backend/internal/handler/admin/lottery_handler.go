@@ -47,11 +47,13 @@ func (h *LotteryHandler) CreateCampaign(c *gin.Context) {
 		return
 	}
 	created, err := h.lotteryService.CreateCampaign(c.Request.Context(), subject.UserID, service.CreateLotteryCampaignInput{
-		Name:            req.Name,
-		Subtitle:        req.Subtitle,
-		PrizeCount:      req.PrizeCount,
-		MaxParticipants: req.MaxParticipants,
-		Codes:           req.Codes,
+		Name:                         req.Name,
+		Subtitle:                     req.Subtitle,
+		PrizeCount:                   req.PrizeCount,
+		MaxParticipants:              req.MaxParticipants,
+		EarlyBoostParticipantPercent: req.EarlyBoostParticipantPercent,
+		RechargeBoostCapPercent:      req.RechargeBoostCapPercent,
+		Codes:                        req.Codes,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

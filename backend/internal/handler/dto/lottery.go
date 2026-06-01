@@ -12,13 +12,15 @@ type LotterySegment struct {
 }
 
 type LotteryActiveCampaign struct {
-	ID              int64            `json:"id"`
-	Name            string           `json:"name"`
-	Subtitle        string           `json:"subtitle"`
-	PrizeCount      int              `json:"prize_count"`
-	MaxParticipants int              `json:"max_participants"`
-	JoinedCount     int              `json:"joined_count"`
-	Segments        []LotterySegment `json:"segments"`
+	ID                           int64            `json:"id"`
+	Name                         string           `json:"name"`
+	Subtitle                     string           `json:"subtitle"`
+	PrizeCount                   int              `json:"prize_count"`
+	MaxParticipants              int              `json:"max_participants"`
+	JoinedCount                  int              `json:"joined_count"`
+	EarlyBoostParticipantPercent int              `json:"early_boost_participant_percent"`
+	RechargeBoostCapPercent      int              `json:"recharge_boost_cap_percent"`
+	Segments                     []LotterySegment `json:"segments"`
 }
 
 type LotteryActiveResponse struct {
@@ -34,20 +36,22 @@ type LotteryDrawResult struct {
 }
 
 type LotteryCampaign struct {
-	ID              int64         `json:"id"`
-	Name            string        `json:"name"`
-	Subtitle        string        `json:"subtitle"`
-	Status          string        `json:"status"`
-	PrizeCount      int           `json:"prize_count"`
-	MaxParticipants int           `json:"max_participants"`
-	JoinedCount     int           `json:"joined_count"`
-	WinnerCount     int           `json:"winner_count"`
-	CreatedBy       int64         `json:"created_by"`
-	CreatedAt       time.Time     `json:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at"`
-	FinishedAt      *time.Time    `json:"finished_at,omitempty"`
-	Codes           []LotteryCode `json:"codes,omitempty"`
-	Draws           []LotteryDraw `json:"draws,omitempty"`
+	ID                           int64         `json:"id"`
+	Name                         string        `json:"name"`
+	Subtitle                     string        `json:"subtitle"`
+	Status                       string        `json:"status"`
+	PrizeCount                   int           `json:"prize_count"`
+	MaxParticipants              int           `json:"max_participants"`
+	JoinedCount                  int           `json:"joined_count"`
+	WinnerCount                  int           `json:"winner_count"`
+	EarlyBoostParticipantPercent int           `json:"early_boost_participant_percent"`
+	RechargeBoostCapPercent      int           `json:"recharge_boost_cap_percent"`
+	CreatedBy                    int64         `json:"created_by"`
+	CreatedAt                    time.Time     `json:"created_at"`
+	UpdatedAt                    time.Time     `json:"updated_at"`
+	FinishedAt                   *time.Time    `json:"finished_at,omitempty"`
+	Codes                        []LotteryCode `json:"codes,omitempty"`
+	Draws                        []LotteryDraw `json:"draws,omitempty"`
 }
 
 type LotteryCode struct {
@@ -74,11 +78,13 @@ type LotteryDraw struct {
 }
 
 type CreateLotteryCampaignRequest struct {
-	Name            string   `json:"name" binding:"required"`
-	Subtitle        string   `json:"subtitle"`
-	PrizeCount      int      `json:"prize_count" binding:"required"`
-	MaxParticipants int      `json:"max_participants" binding:"required"`
-	Codes           []string `json:"codes" binding:"required"`
+	Name                         string   `json:"name" binding:"required"`
+	Subtitle                     string   `json:"subtitle"`
+	PrizeCount                   int      `json:"prize_count" binding:"required"`
+	MaxParticipants              int      `json:"max_participants" binding:"required"`
+	EarlyBoostParticipantPercent *int     `json:"early_boost_participant_percent"`
+	RechargeBoostCapPercent      int      `json:"recharge_boost_cap_percent"`
+	Codes                        []string `json:"codes" binding:"required"`
 }
 
 func LotteryActiveCampaignFromService(c *service.LotteryActiveCampaign) *LotteryActiveCampaign {
@@ -86,13 +92,15 @@ func LotteryActiveCampaignFromService(c *service.LotteryActiveCampaign) *Lottery
 		return nil
 	}
 	return &LotteryActiveCampaign{
-		ID:              c.ID,
-		Name:            c.Name,
-		Subtitle:        c.Subtitle,
-		PrizeCount:      c.PrizeCount,
-		MaxParticipants: c.MaxParticipants,
-		JoinedCount:     c.JoinedCount,
-		Segments:        LotterySegmentsFromService(c.Segments),
+		ID:                           c.ID,
+		Name:                         c.Name,
+		Subtitle:                     c.Subtitle,
+		PrizeCount:                   c.PrizeCount,
+		MaxParticipants:              c.MaxParticipants,
+		JoinedCount:                  c.JoinedCount,
+		EarlyBoostParticipantPercent: c.EarlyBoostParticipantPercent,
+		RechargeBoostCapPercent:      c.RechargeBoostCapPercent,
+		Segments:                     LotterySegmentsFromService(c.Segments),
 	}
 }
 
@@ -122,20 +130,22 @@ func LotteryCampaignFromService(c *service.LotteryCampaign) *LotteryCampaign {
 		return nil
 	}
 	return &LotteryCampaign{
-		ID:              c.ID,
-		Name:            c.Name,
-		Subtitle:        c.Subtitle,
-		Status:          c.Status,
-		PrizeCount:      c.PrizeCount,
-		MaxParticipants: c.MaxParticipants,
-		JoinedCount:     c.JoinedCount,
-		WinnerCount:     c.WinnerCount,
-		CreatedBy:       c.CreatedBy,
-		CreatedAt:       c.CreatedAt,
-		UpdatedAt:       c.UpdatedAt,
-		FinishedAt:      c.FinishedAt,
-		Codes:           LotteryCodesFromService(c.Codes),
-		Draws:           LotteryDrawsFromService(c.Draws),
+		ID:                           c.ID,
+		Name:                         c.Name,
+		Subtitle:                     c.Subtitle,
+		Status:                       c.Status,
+		PrizeCount:                   c.PrizeCount,
+		MaxParticipants:              c.MaxParticipants,
+		JoinedCount:                  c.JoinedCount,
+		WinnerCount:                  c.WinnerCount,
+		EarlyBoostParticipantPercent: c.EarlyBoostParticipantPercent,
+		RechargeBoostCapPercent:      c.RechargeBoostCapPercent,
+		CreatedBy:                    c.CreatedBy,
+		CreatedAt:                    c.CreatedAt,
+		UpdatedAt:                    c.UpdatedAt,
+		FinishedAt:                   c.FinishedAt,
+		Codes:                        LotteryCodesFromService(c.Codes),
+		Draws:                        LotteryDrawsFromService(c.Draws),
 	}
 }
 
