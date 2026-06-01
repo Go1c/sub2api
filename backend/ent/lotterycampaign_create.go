@@ -88,6 +88,34 @@ func (_c *LotteryCampaignCreate) SetNillableWinnerCount(v *int) *LotteryCampaign
 	return _c
 }
 
+// SetEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field.
+func (_c *LotteryCampaignCreate) SetEarlyBoostParticipantPercent(v int) *LotteryCampaignCreate {
+	_c.mutation.SetEarlyBoostParticipantPercent(v)
+	return _c
+}
+
+// SetNillableEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field if the given value is not nil.
+func (_c *LotteryCampaignCreate) SetNillableEarlyBoostParticipantPercent(v *int) *LotteryCampaignCreate {
+	if v != nil {
+		_c.SetEarlyBoostParticipantPercent(*v)
+	}
+	return _c
+}
+
+// SetRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field.
+func (_c *LotteryCampaignCreate) SetRechargeBoostCapPercent(v int) *LotteryCampaignCreate {
+	_c.mutation.SetRechargeBoostCapPercent(v)
+	return _c
+}
+
+// SetNillableRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field if the given value is not nil.
+func (_c *LotteryCampaignCreate) SetNillableRechargeBoostCapPercent(v *int) *LotteryCampaignCreate {
+	if v != nil {
+		_c.SetRechargeBoostCapPercent(*v)
+	}
+	return _c
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_c *LotteryCampaignCreate) SetCreatedBy(v int64) *LotteryCampaignCreate {
 	_c.mutation.SetCreatedBy(v)
@@ -183,6 +211,14 @@ func (_c *LotteryCampaignCreate) defaults() {
 		v := lotterycampaign.DefaultWinnerCount
 		_c.mutation.SetWinnerCount(v)
 	}
+	if _, ok := _c.mutation.EarlyBoostParticipantPercent(); !ok {
+		v := lotterycampaign.DefaultEarlyBoostParticipantPercent
+		_c.mutation.SetEarlyBoostParticipantPercent(v)
+	}
+	if _, ok := _c.mutation.RechargeBoostCapPercent(); !ok {
+		v := lotterycampaign.DefaultRechargeBoostCapPercent
+		_c.mutation.SetRechargeBoostCapPercent(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := lotterycampaign.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -251,6 +287,22 @@ func (_c *LotteryCampaignCreate) check() error {
 			return &ValidationError{Name: "winner_count", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.winner_count": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.EarlyBoostParticipantPercent(); !ok {
+		return &ValidationError{Name: "early_boost_participant_percent", err: errors.New(`ent: missing required field "LotteryCampaign.early_boost_participant_percent"`)}
+	}
+	if v, ok := _c.mutation.EarlyBoostParticipantPercent(); ok {
+		if err := lotterycampaign.EarlyBoostParticipantPercentValidator(v); err != nil {
+			return &ValidationError{Name: "early_boost_participant_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.early_boost_participant_percent": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RechargeBoostCapPercent(); !ok {
+		return &ValidationError{Name: "recharge_boost_cap_percent", err: errors.New(`ent: missing required field "LotteryCampaign.recharge_boost_cap_percent"`)}
+	}
+	if v, ok := _c.mutation.RechargeBoostCapPercent(); ok {
+		if err := lotterycampaign.RechargeBoostCapPercentValidator(v); err != nil {
+			return &ValidationError{Name: "recharge_boost_cap_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.recharge_boost_cap_percent": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CreatedBy(); !ok {
 		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "LotteryCampaign.created_by"`)}
 	}
@@ -314,6 +366,14 @@ func (_c *LotteryCampaignCreate) createSpec() (*LotteryCampaign, *sqlgraph.Creat
 	if value, ok := _c.mutation.WinnerCount(); ok {
 		_spec.SetField(lotterycampaign.FieldWinnerCount, field.TypeInt, value)
 		_node.WinnerCount = value
+	}
+	if value, ok := _c.mutation.EarlyBoostParticipantPercent(); ok {
+		_spec.SetField(lotterycampaign.FieldEarlyBoostParticipantPercent, field.TypeInt, value)
+		_node.EarlyBoostParticipantPercent = value
+	}
+	if value, ok := _c.mutation.RechargeBoostCapPercent(); ok {
+		_spec.SetField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
+		_node.RechargeBoostCapPercent = value
 	}
 	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(lotterycampaign.FieldCreatedBy, field.TypeInt64, value)
@@ -488,6 +548,42 @@ func (u *LotteryCampaignUpsert) UpdateWinnerCount() *LotteryCampaignUpsert {
 // AddWinnerCount adds v to the "winner_count" field.
 func (u *LotteryCampaignUpsert) AddWinnerCount(v int) *LotteryCampaignUpsert {
 	u.Add(lotterycampaign.FieldWinnerCount, v)
+	return u
+}
+
+// SetEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field.
+func (u *LotteryCampaignUpsert) SetEarlyBoostParticipantPercent(v int) *LotteryCampaignUpsert {
+	u.Set(lotterycampaign.FieldEarlyBoostParticipantPercent, v)
+	return u
+}
+
+// UpdateEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field to the value that was provided on create.
+func (u *LotteryCampaignUpsert) UpdateEarlyBoostParticipantPercent() *LotteryCampaignUpsert {
+	u.SetExcluded(lotterycampaign.FieldEarlyBoostParticipantPercent)
+	return u
+}
+
+// AddEarlyBoostParticipantPercent adds v to the "early_boost_participant_percent" field.
+func (u *LotteryCampaignUpsert) AddEarlyBoostParticipantPercent(v int) *LotteryCampaignUpsert {
+	u.Add(lotterycampaign.FieldEarlyBoostParticipantPercent, v)
+	return u
+}
+
+// SetRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field.
+func (u *LotteryCampaignUpsert) SetRechargeBoostCapPercent(v int) *LotteryCampaignUpsert {
+	u.Set(lotterycampaign.FieldRechargeBoostCapPercent, v)
+	return u
+}
+
+// UpdateRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field to the value that was provided on create.
+func (u *LotteryCampaignUpsert) UpdateRechargeBoostCapPercent() *LotteryCampaignUpsert {
+	u.SetExcluded(lotterycampaign.FieldRechargeBoostCapPercent)
+	return u
+}
+
+// AddRechargeBoostCapPercent adds v to the "recharge_boost_cap_percent" field.
+func (u *LotteryCampaignUpsert) AddRechargeBoostCapPercent(v int) *LotteryCampaignUpsert {
+	u.Add(lotterycampaign.FieldRechargeBoostCapPercent, v)
 	return u
 }
 
@@ -707,6 +803,48 @@ func (u *LotteryCampaignUpsertOne) AddWinnerCount(v int) *LotteryCampaignUpsertO
 func (u *LotteryCampaignUpsertOne) UpdateWinnerCount() *LotteryCampaignUpsertOne {
 	return u.Update(func(s *LotteryCampaignUpsert) {
 		s.UpdateWinnerCount()
+	})
+}
+
+// SetEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field.
+func (u *LotteryCampaignUpsertOne) SetEarlyBoostParticipantPercent(v int) *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetEarlyBoostParticipantPercent(v)
+	})
+}
+
+// AddEarlyBoostParticipantPercent adds v to the "early_boost_participant_percent" field.
+func (u *LotteryCampaignUpsertOne) AddEarlyBoostParticipantPercent(v int) *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.AddEarlyBoostParticipantPercent(v)
+	})
+}
+
+// UpdateEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertOne) UpdateEarlyBoostParticipantPercent() *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdateEarlyBoostParticipantPercent()
+	})
+}
+
+// SetRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field.
+func (u *LotteryCampaignUpsertOne) SetRechargeBoostCapPercent(v int) *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetRechargeBoostCapPercent(v)
+	})
+}
+
+// AddRechargeBoostCapPercent adds v to the "recharge_boost_cap_percent" field.
+func (u *LotteryCampaignUpsertOne) AddRechargeBoostCapPercent(v int) *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.AddRechargeBoostCapPercent(v)
+	})
+}
+
+// UpdateRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertOne) UpdateRechargeBoostCapPercent() *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdateRechargeBoostCapPercent()
 	})
 }
 
@@ -1100,6 +1238,48 @@ func (u *LotteryCampaignUpsertBulk) AddWinnerCount(v int) *LotteryCampaignUpsert
 func (u *LotteryCampaignUpsertBulk) UpdateWinnerCount() *LotteryCampaignUpsertBulk {
 	return u.Update(func(s *LotteryCampaignUpsert) {
 		s.UpdateWinnerCount()
+	})
+}
+
+// SetEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field.
+func (u *LotteryCampaignUpsertBulk) SetEarlyBoostParticipantPercent(v int) *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetEarlyBoostParticipantPercent(v)
+	})
+}
+
+// AddEarlyBoostParticipantPercent adds v to the "early_boost_participant_percent" field.
+func (u *LotteryCampaignUpsertBulk) AddEarlyBoostParticipantPercent(v int) *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.AddEarlyBoostParticipantPercent(v)
+	})
+}
+
+// UpdateEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertBulk) UpdateEarlyBoostParticipantPercent() *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdateEarlyBoostParticipantPercent()
+	})
+}
+
+// SetRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field.
+func (u *LotteryCampaignUpsertBulk) SetRechargeBoostCapPercent(v int) *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetRechargeBoostCapPercent(v)
+	})
+}
+
+// AddRechargeBoostCapPercent adds v to the "recharge_boost_cap_percent" field.
+func (u *LotteryCampaignUpsertBulk) AddRechargeBoostCapPercent(v int) *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.AddRechargeBoostCapPercent(v)
+	})
+}
+
+// UpdateRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertBulk) UpdateRechargeBoostCapPercent() *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdateRechargeBoostCapPercent()
 	})
 }
 

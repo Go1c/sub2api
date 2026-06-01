@@ -17,6 +17,9 @@ const (
 	LotteryLoseLabel       = "谢谢参与"
 	LotteryWinMessage      = "恭喜你中奖！兑换码已通过站内信发放，请前往站内信领取。"
 	LotteryLoseMessage     = "很遗憾，这次没有中奖。"
+
+	LotteryDefaultEarlyBoostParticipantPercent = 25
+	LotteryMaxRechargeBoostCapPercent          = 50
 )
 
 var (
@@ -44,12 +47,15 @@ type LotteryCampaign struct {
 	MaxParticipants int
 	JoinedCount     int
 	WinnerCount     int
-	CreatedBy       int64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	FinishedAt      *time.Time
-	Codes           []LotteryCode
-	Draws           []LotteryDraw
+	// EarlyBoostParticipantPercent is the first N percent of participants who receive boosted odds.
+	EarlyBoostParticipantPercent int
+	RechargeBoostCapPercent      int
+	CreatedBy                    int64
+	CreatedAt                    time.Time
+	UpdatedAt                    time.Time
+	FinishedAt                   *time.Time
+	Codes                        []LotteryCode
+	Draws                        []LotteryDraw
 }
 
 type LotteryCode struct {
@@ -77,21 +83,25 @@ type LotteryDraw struct {
 }
 
 type CreateLotteryCampaignInput struct {
-	Name            string
-	Subtitle        string
-	PrizeCount      int
-	MaxParticipants int
-	Codes           []string
+	Name                         string
+	Subtitle                     string
+	PrizeCount                   int
+	MaxParticipants              int
+	EarlyBoostParticipantPercent *int
+	RechargeBoostCapPercent      int
+	Codes                        []string
 }
 
 type LotteryActiveCampaign struct {
-	ID              int64
-	Name            string
-	Subtitle        string
-	PrizeCount      int
-	MaxParticipants int
-	JoinedCount     int
-	Segments        []LotterySegment
+	ID                           int64
+	Name                         string
+	Subtitle                     string
+	PrizeCount                   int
+	MaxParticipants              int
+	JoinedCount                  int
+	EarlyBoostParticipantPercent int
+	RechargeBoostCapPercent      int
+	Segments                     []LotterySegment
 }
 
 type LotteryDrawResult struct {
@@ -100,6 +110,11 @@ type LotteryDrawResult struct {
 	Label         string
 	Message       string
 	SiteMessageID *int64
+}
+
+type LotteryUserProfile struct {
+	UserID         int64
+	TotalRecharged float64
 }
 
 type LotteryRepository interface {
@@ -111,6 +126,7 @@ type LotteryRepository interface {
 	GetActiveCampaign(ctx context.Context) (*LotteryCampaign, error)
 	GetCampaignForUpdate(ctx context.Context, id int64) (*LotteryCampaign, error)
 	GetDrawByCampaignAndUser(ctx context.Context, campaignID, userID int64) (*LotteryDraw, error)
+	GetUserLotteryProfile(ctx context.Context, userID int64) (*LotteryUserProfile, error)
 	PickUnassignedCode(ctx context.Context, campaignID int64) (*LotteryCode, error)
 	CreateDraw(ctx context.Context, draw *LotteryDraw) error
 	AssignCodeToDraw(ctx context.Context, codeID, userID, drawID int64, assignedAt time.Time) error

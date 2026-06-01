@@ -44,6 +44,12 @@ func (LotteryCampaign) Fields() []ent.Field {
 		field.Int("winner_count").
 			Default(0).
 			NonNegative(),
+		field.Int("early_boost_participant_percent").
+			Default(25).
+			NonNegative(),
+		field.Int("recharge_boost_cap_percent").
+			Default(0).
+			NonNegative(),
 		field.Int64("created_by"),
 		field.Time("created_at").
 			Immutable().

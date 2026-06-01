@@ -27,6 +27,10 @@ const (
 	FieldJoinedCount = "joined_count"
 	// FieldWinnerCount holds the string denoting the winner_count field in the database.
 	FieldWinnerCount = "winner_count"
+	// FieldEarlyBoostParticipantPercent holds the string denoting the early_boost_participant_percent field in the database.
+	FieldEarlyBoostParticipantPercent = "early_boost_participant_percent"
+	// FieldRechargeBoostCapPercent holds the string denoting the recharge_boost_cap_percent field in the database.
+	FieldRechargeBoostCapPercent = "recharge_boost_cap_percent"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
 	FieldCreatedBy = "created_by"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -49,6 +53,8 @@ var Columns = []string{
 	FieldMaxParticipants,
 	FieldJoinedCount,
 	FieldWinnerCount,
+	FieldEarlyBoostParticipantPercent,
+	FieldRechargeBoostCapPercent,
 	FieldCreatedBy,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -86,6 +92,14 @@ var (
 	DefaultWinnerCount int
 	// WinnerCountValidator is a validator for the "winner_count" field. It is called by the builders before save.
 	WinnerCountValidator func(int) error
+	// DefaultEarlyBoostParticipantPercent holds the default value on creation for the "early_boost_participant_percent" field.
+	DefaultEarlyBoostParticipantPercent int
+	// EarlyBoostParticipantPercentValidator is a validator for the "early_boost_participant_percent" field. It is called by the builders before save.
+	EarlyBoostParticipantPercentValidator func(int) error
+	// DefaultRechargeBoostCapPercent holds the default value on creation for the "recharge_boost_cap_percent" field.
+	DefaultRechargeBoostCapPercent int
+	// RechargeBoostCapPercentValidator is a validator for the "recharge_boost_cap_percent" field. It is called by the builders before save.
+	RechargeBoostCapPercentValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -135,6 +149,16 @@ func ByJoinedCount(opts ...sql.OrderTermOption) OrderOption {
 // ByWinnerCount orders the results by the winner_count field.
 func ByWinnerCount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWinnerCount, opts...).ToFunc()
+}
+
+// ByEarlyBoostParticipantPercent orders the results by the early_boost_participant_percent field.
+func ByEarlyBoostParticipantPercent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEarlyBoostParticipantPercent, opts...).ToFunc()
+}
+
+// ByRechargeBoostCapPercent orders the results by the recharge_boost_cap_percent field.
+func ByRechargeBoostCapPercent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRechargeBoostCapPercent, opts...).ToFunc()
 }
 
 // ByCreatedBy orders the results by the created_by field.

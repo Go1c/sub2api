@@ -790,6 +790,8 @@ var (
 		{Name: "max_participants", Type: field.TypeInt},
 		{Name: "joined_count", Type: field.TypeInt, Default: 0},
 		{Name: "winner_count", Type: field.TypeInt, Default: 0},
+		{Name: "early_boost_participant_percent", Type: field.TypeInt, Default: 25},
+		{Name: "recharge_boost_cap_percent", Type: field.TypeInt, Default: 0},
 		{Name: "created_by", Type: field.TypeInt64},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -809,12 +811,12 @@ var (
 			{
 				Name:    "lotterycampaign_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{LotteryCampaignsColumns[9]},
+				Columns: []*schema.Column{LotteryCampaignsColumns[11]},
 			},
 			{
 				Name:    "lotterycampaign_created_by",
 				Unique:  false,
-				Columns: []*schema.Column{LotteryCampaignsColumns[8]},
+				Columns: []*schema.Column{LotteryCampaignsColumns[10]},
 			},
 		},
 	}

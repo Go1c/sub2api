@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useLotteryStore } from '@/stores/lottery'
 import LotteryDialog, { type DrawResult } from './LotteryDialog.vue'
@@ -24,13 +24,19 @@ import type { LotteryActiveCampaign } from '@/types'
 const authStore = useAuthStore()
 const lotteryStore = useLotteryStore()
 
-const SESSION_DISMISS_KEY = 'lottery_dismissed_v2'
+const ACTIVE_REFRESH_INTERVAL_MS = 60_000
+let loginSessionUserId: number | null = null
+let loginSessionToken: string | null = null
+const dismissedCampaignsForLogin = new Set<number>()
+
 const open = ref(false)
 const dialogCampaign = ref<LotteryActiveCampaign | null>(null)
 const drawCompleted = ref(false)
 let refreshToken = 0
+let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 const userId = computed<number | null>(() => authStore.user?.id ?? null)
+const authToken = computed<string | null>(() => authStore.token ?? null)
 const dialogSegments = computed(() =>
   (dialogCampaign.value?.segments ?? []).map((segment) => ({
     label: segment.label,
@@ -38,32 +44,12 @@ const dialogSegments = computed(() =>
   })),
 )
 
-function loadDismissedCampaigns(): number[] {
-  try {
-    const raw = sessionStorage.getItem(SESSION_DISMISS_KEY)
-    if (!raw) return []
-    const list = JSON.parse(raw)
-    if (!Array.isArray(list)) return []
-    return list
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value > 0)
-  } catch {
-    return []
-  }
-}
-
 function isDismissedThisSession(campaignId: number): boolean {
-  return loadDismissedCampaigns().includes(campaignId)
+  return dismissedCampaignsForLogin.has(campaignId)
 }
 
 function markDismissed(campaignId: number) {
-  try {
-    const list = loadDismissedCampaigns()
-    if (!list.includes(campaignId)) list.push(campaignId)
-    sessionStorage.setItem(SESSION_DISMISS_KEY, JSON.stringify(list))
-  } catch {
-    // ignore storage failures
-  }
+  dismissedCampaignsForLogin.add(campaignId)
 }
 
 function syncDialog() {
@@ -84,13 +70,51 @@ function syncDialog() {
   open.value = true
 }
 
-watch(
-  () => [authStore.isAuthenticated, userId.value],
-  async ([isAuthenticated, currentUserId]) => {
-    refreshToken += 1
-    const currentRefresh = refreshToken
+async function refreshActiveCampaign() {
+  if (!authStore.isAuthenticated || !userId.value) return
+  refreshToken += 1
+  const currentRefresh = refreshToken
+  try {
+    await lotteryStore.fetchActive()
+    if (currentRefresh !== refreshToken) return
+    syncDialog()
+  } catch {
+    if (currentRefresh !== refreshToken) return
+    open.value = false
+    dialogCampaign.value = null
+  }
+}
 
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    refreshActiveCampaign()
+  }
+}
+
+function startRefreshHooks() {
+  if (refreshInterval === null) {
+    refreshInterval = setInterval(refreshActiveCampaign, ACTIVE_REFRESH_INTERVAL_MS)
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+}
+
+function stopRefreshHooks() {
+  if (refreshInterval !== null) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+}
+
+watch(
+  () => [authStore.isAuthenticated, userId.value, authToken.value] as const,
+  async ([isAuthenticated, currentUserId, currentToken]) => {
     if (!isAuthenticated || !currentUserId) {
+      loginSessionUserId = null
+      loginSessionToken = null
+      dismissedCampaignsForLogin.clear()
+      stopRefreshHooks()
+      refreshToken += 1
       open.value = false
       dialogCampaign.value = null
       drawCompleted.value = false
@@ -99,15 +123,13 @@ watch(
       return
     }
 
-    try {
-      await lotteryStore.fetchActive()
-      if (currentRefresh !== refreshToken) return
-      syncDialog()
-    } catch {
-      if (currentRefresh !== refreshToken) return
-      open.value = false
-      dialogCampaign.value = null
+    if (loginSessionUserId !== currentUserId || loginSessionToken !== currentToken) {
+      loginSessionUserId = currentUserId
+      loginSessionToken = currentToken
+      dismissedCampaignsForLogin.clear()
     }
+    startRefreshHooks()
+    await refreshActiveCampaign()
   },
   { immediate: true },
 )
@@ -140,4 +162,8 @@ function dismiss() {
   dialogCampaign.value = null
   drawCompleted.value = false
 }
+
+onBeforeUnmount(() => {
+  stopRefreshHooks()
+})
 </script>

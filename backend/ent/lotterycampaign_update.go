@@ -154,6 +154,48 @@ func (_u *LotteryCampaignUpdate) AddWinnerCount(v int) *LotteryCampaignUpdate {
 	return _u
 }
 
+// SetEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field.
+func (_u *LotteryCampaignUpdate) SetEarlyBoostParticipantPercent(v int) *LotteryCampaignUpdate {
+	_u.mutation.ResetEarlyBoostParticipantPercent()
+	_u.mutation.SetEarlyBoostParticipantPercent(v)
+	return _u
+}
+
+// SetNillableEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field if the given value is not nil.
+func (_u *LotteryCampaignUpdate) SetNillableEarlyBoostParticipantPercent(v *int) *LotteryCampaignUpdate {
+	if v != nil {
+		_u.SetEarlyBoostParticipantPercent(*v)
+	}
+	return _u
+}
+
+// AddEarlyBoostParticipantPercent adds value to the "early_boost_participant_percent" field.
+func (_u *LotteryCampaignUpdate) AddEarlyBoostParticipantPercent(v int) *LotteryCampaignUpdate {
+	_u.mutation.AddEarlyBoostParticipantPercent(v)
+	return _u
+}
+
+// SetRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field.
+func (_u *LotteryCampaignUpdate) SetRechargeBoostCapPercent(v int) *LotteryCampaignUpdate {
+	_u.mutation.ResetRechargeBoostCapPercent()
+	_u.mutation.SetRechargeBoostCapPercent(v)
+	return _u
+}
+
+// SetNillableRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field if the given value is not nil.
+func (_u *LotteryCampaignUpdate) SetNillableRechargeBoostCapPercent(v *int) *LotteryCampaignUpdate {
+	if v != nil {
+		_u.SetRechargeBoostCapPercent(*v)
+	}
+	return _u
+}
+
+// AddRechargeBoostCapPercent adds value to the "recharge_boost_cap_percent" field.
+func (_u *LotteryCampaignUpdate) AddRechargeBoostCapPercent(v int) *LotteryCampaignUpdate {
+	_u.mutation.AddRechargeBoostCapPercent(v)
+	return _u
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_u *LotteryCampaignUpdate) SetCreatedBy(v int64) *LotteryCampaignUpdate {
 	_u.mutation.ResetCreatedBy()
@@ -279,6 +321,16 @@ func (_u *LotteryCampaignUpdate) check() error {
 			return &ValidationError{Name: "winner_count", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.winner_count": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.EarlyBoostParticipantPercent(); ok {
+		if err := lotterycampaign.EarlyBoostParticipantPercentValidator(v); err != nil {
+			return &ValidationError{Name: "early_boost_participant_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.early_boost_participant_percent": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RechargeBoostCapPercent(); ok {
+		if err := lotterycampaign.RechargeBoostCapPercentValidator(v); err != nil {
+			return &ValidationError{Name: "recharge_boost_cap_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.recharge_boost_cap_percent": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -326,6 +378,18 @@ func (_u *LotteryCampaignUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.AddedWinnerCount(); ok {
 		_spec.AddField(lotterycampaign.FieldWinnerCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EarlyBoostParticipantPercent(); ok {
+		_spec.SetField(lotterycampaign.FieldEarlyBoostParticipantPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedEarlyBoostParticipantPercent(); ok {
+		_spec.AddField(lotterycampaign.FieldEarlyBoostParticipantPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.RechargeBoostCapPercent(); ok {
+		_spec.SetField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRechargeBoostCapPercent(); ok {
+		_spec.AddField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.CreatedBy(); ok {
 		_spec.SetField(lotterycampaign.FieldCreatedBy, field.TypeInt64, value)
@@ -488,6 +552,48 @@ func (_u *LotteryCampaignUpdateOne) AddWinnerCount(v int) *LotteryCampaignUpdate
 	return _u
 }
 
+// SetEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field.
+func (_u *LotteryCampaignUpdateOne) SetEarlyBoostParticipantPercent(v int) *LotteryCampaignUpdateOne {
+	_u.mutation.ResetEarlyBoostParticipantPercent()
+	_u.mutation.SetEarlyBoostParticipantPercent(v)
+	return _u
+}
+
+// SetNillableEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field if the given value is not nil.
+func (_u *LotteryCampaignUpdateOne) SetNillableEarlyBoostParticipantPercent(v *int) *LotteryCampaignUpdateOne {
+	if v != nil {
+		_u.SetEarlyBoostParticipantPercent(*v)
+	}
+	return _u
+}
+
+// AddEarlyBoostParticipantPercent adds value to the "early_boost_participant_percent" field.
+func (_u *LotteryCampaignUpdateOne) AddEarlyBoostParticipantPercent(v int) *LotteryCampaignUpdateOne {
+	_u.mutation.AddEarlyBoostParticipantPercent(v)
+	return _u
+}
+
+// SetRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field.
+func (_u *LotteryCampaignUpdateOne) SetRechargeBoostCapPercent(v int) *LotteryCampaignUpdateOne {
+	_u.mutation.ResetRechargeBoostCapPercent()
+	_u.mutation.SetRechargeBoostCapPercent(v)
+	return _u
+}
+
+// SetNillableRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field if the given value is not nil.
+func (_u *LotteryCampaignUpdateOne) SetNillableRechargeBoostCapPercent(v *int) *LotteryCampaignUpdateOne {
+	if v != nil {
+		_u.SetRechargeBoostCapPercent(*v)
+	}
+	return _u
+}
+
+// AddRechargeBoostCapPercent adds value to the "recharge_boost_cap_percent" field.
+func (_u *LotteryCampaignUpdateOne) AddRechargeBoostCapPercent(v int) *LotteryCampaignUpdateOne {
+	_u.mutation.AddRechargeBoostCapPercent(v)
+	return _u
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_u *LotteryCampaignUpdateOne) SetCreatedBy(v int64) *LotteryCampaignUpdateOne {
 	_u.mutation.ResetCreatedBy()
@@ -626,6 +732,16 @@ func (_u *LotteryCampaignUpdateOne) check() error {
 			return &ValidationError{Name: "winner_count", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.winner_count": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.EarlyBoostParticipantPercent(); ok {
+		if err := lotterycampaign.EarlyBoostParticipantPercentValidator(v); err != nil {
+			return &ValidationError{Name: "early_boost_participant_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.early_boost_participant_percent": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RechargeBoostCapPercent(); ok {
+		if err := lotterycampaign.RechargeBoostCapPercentValidator(v); err != nil {
+			return &ValidationError{Name: "recharge_boost_cap_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.recharge_boost_cap_percent": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -690,6 +806,18 @@ func (_u *LotteryCampaignUpdateOne) sqlSave(ctx context.Context) (_node *Lottery
 	}
 	if value, ok := _u.mutation.AddedWinnerCount(); ok {
 		_spec.AddField(lotterycampaign.FieldWinnerCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EarlyBoostParticipantPercent(); ok {
+		_spec.SetField(lotterycampaign.FieldEarlyBoostParticipantPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedEarlyBoostParticipantPercent(); ok {
+		_spec.AddField(lotterycampaign.FieldEarlyBoostParticipantPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.RechargeBoostCapPercent(); ok {
+		_spec.SetField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRechargeBoostCapPercent(); ok {
+		_spec.AddField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.CreatedBy(); ok {
 		_spec.SetField(lotterycampaign.FieldCreatedBy, field.TypeInt64, value)

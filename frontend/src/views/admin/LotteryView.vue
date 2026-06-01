@@ -64,6 +64,30 @@
             <span class="input-label">{{ t('admin.lottery.create.maxParticipants') }}</span>
             <input v-model.number="form.maxParticipants" data-test="lottery-max-participants" type="number" min="1" class="input font-mono" />
           </label>
+          <label class="block">
+            <span class="input-label">{{ t('admin.lottery.create.earlyBoostParticipantPercent') }}</span>
+            <input
+              v-model.number="form.earlyBoostParticipantPercent"
+              data-test="lottery-early-boost-percent"
+              type="number"
+              min="0"
+              max="100"
+              class="input font-mono"
+            />
+            <span class="input-hint">{{ t('admin.lottery.create.earlyBoostParticipantPercentHint') }}</span>
+          </label>
+          <label class="block">
+            <span class="input-label">{{ t('admin.lottery.create.rechargeBoostCapPercent') }}</span>
+            <input
+              v-model.number="form.rechargeBoostCapPercent"
+              data-test="lottery-recharge-boost-cap"
+              type="number"
+              min="0"
+              max="50"
+              class="input font-mono"
+            />
+            <span class="input-hint">{{ t('admin.lottery.create.rechargeBoostCapPercentHint') }}</span>
+          </label>
         </div>
 
         <div class="mt-5">
@@ -255,6 +279,8 @@ const form = ref({
   subtitle: '',
   prizeCount: 5,
   maxParticipants: 20,
+  earlyBoostParticipantPercent: 25,
+  rechargeBoostCapPercent: 0,
   codesRaw: ''
 })
 const formError = ref('')
@@ -275,6 +301,10 @@ const canSubmit = computed(
     form.value.name.trim().length > 0 &&
     form.value.prizeCount > 0 &&
     form.value.maxParticipants >= form.value.prizeCount &&
+    form.value.earlyBoostParticipantPercent >= 0 &&
+    form.value.earlyBoostParticipantPercent <= 100 &&
+    form.value.rechargeBoostCapPercent >= 0 &&
+    form.value.rechargeBoostCapPercent <= 50 &&
     codeLines.value.length >= form.value.prizeCount
 )
 
@@ -302,6 +332,8 @@ async function submitCampaign() {
       subtitle: form.value.subtitle.trim(),
       prize_count: form.value.prizeCount,
       max_participants: form.value.maxParticipants,
+      early_boost_participant_percent: form.value.earlyBoostParticipantPercent,
+      recharge_boost_cap_percent: form.value.rechargeBoostCapPercent,
       codes: codeLines.value,
     }
     await lotteryStore.createCampaign(input)
@@ -318,7 +350,15 @@ async function submitCampaign() {
 }
 
 function resetForm() {
-  form.value = { name: '', subtitle: '', prizeCount: 5, maxParticipants: 20, codesRaw: '' }
+  form.value = {
+    name: '',
+    subtitle: '',
+    prizeCount: 5,
+    maxParticipants: 20,
+    earlyBoostParticipantPercent: 25,
+    rechargeBoostCapPercent: 0,
+    codesRaw: '',
+  }
   formError.value = ''
   formSaved.value = false
 }
