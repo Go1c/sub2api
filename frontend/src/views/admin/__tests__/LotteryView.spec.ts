@@ -118,6 +118,8 @@ describe('admin LotteryView', () => {
         name: '五月幸运转盘',
         prize_count: 1,
         max_participants: 3,
+        early_boost_participant_percent: 25,
+        recharge_boost_cap_percent: 0,
         codes: ['CODE-1'],
       }),
     )

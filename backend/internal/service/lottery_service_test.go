@@ -58,6 +58,7 @@ type lotteryRepoStub struct {
 	campaigns      map[int64]*LotteryCampaign
 	codes          map[int64]*LotteryCode
 	draws          map[int64]*LotteryDraw
+	users          map[int64]*LotteryUserProfile
 }
 
 func newLotteryRepoStub() *lotteryRepoStub {
@@ -68,6 +69,7 @@ func newLotteryRepoStub() *lotteryRepoStub {
 		campaigns:      map[int64]*LotteryCampaign{},
 		codes:          map[int64]*LotteryCode{},
 		draws:          map[int64]*LotteryDraw{},
+		users:          map[int64]*LotteryUserProfile{},
 	}
 }
 
@@ -152,6 +154,14 @@ func (r *lotteryRepoStub) GetDrawByCampaignAndUser(_ context.Context, campaignID
 		}
 	}
 	return nil, ErrLotteryDrawNotFound
+}
+
+func (r *lotteryRepoStub) GetUserLotteryProfile(_ context.Context, userID int64) (*LotteryUserProfile, error) {
+	if profile, ok := r.users[userID]; ok {
+		out := *profile
+		return &out, nil
+	}
+	return &LotteryUserProfile{UserID: userID}, nil
 }
 
 func (r *lotteryRepoStub) PickUnassignedCode(_ context.Context, campaignID int64) (*LotteryCode, error) {
@@ -269,6 +279,24 @@ func TestLotteryServiceCreateCampaignFinishesPreviousActive(t *testing.T) {
 	require.Equal(t, LotteryStatusActive, created.Status)
 	require.Equal(t, int64(99), created.CreatedBy)
 	require.Equal(t, 2, created.PrizeCount)
+	require.Equal(t, 25, created.EarlyBoostParticipantPercent)
+	require.Equal(t, 0, created.RechargeBoostCapPercent)
+}
+
+func TestLotteryServiceCreateCampaignRejectsRechargeBoostCapAboveMaximum(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, &lotteryMessengerStub{}, now)
+
+	_, err := svc.CreateCampaign(context.Background(), 99, CreateLotteryCampaignInput{
+		Name:                    "too much boost",
+		PrizeCount:              1,
+		MaxParticipants:         2,
+		Codes:                   []string{"A"},
+		RechargeBoostCapPercent: 51,
+	})
+
+	require.ErrorIs(t, err, ErrLotteryInvalidCampaign)
 }
 
 func TestLotteryServiceCreateCampaignRejectsDuplicateCodes(t *testing.T) {
@@ -362,6 +390,83 @@ func TestLotteryServiceDrawWinSendsSiteMessage(t *testing.T) {
 	require.Equal(t, LotteryStatusFinished, repo.campaigns[campaign.ID].Status)
 	require.Equal(t, 1, repo.campaigns[campaign.ID].JoinedCount)
 	require.Equal(t, 1, repo.campaigns[campaign.ID].WinnerCount)
+}
+
+func TestLotteryServiceDrawBoostsConfiguredEarlyParticipants(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	campaign := seedLotteryCampaign(repo, LotteryCampaign{
+		Name:                         "early boost",
+		Subtitle:                     "subtitle",
+		Status:                       LotteryStatusActive,
+		PrizeCount:                   1,
+		MaxParticipants:              10,
+		EarlyBoostParticipantPercent: 25,
+		CreatedBy:                    99,
+		CreatedAt:                    now,
+		UpdatedAt:                    now,
+	}, "A")
+	messenger := &lotteryMessengerStub{}
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, messenger, now)
+	svc.randFloat = func() float64 { return 0.14 }
+
+	result, err := svc.Draw(context.Background(), 7, campaign.ID)
+
+	require.NoError(t, err)
+	require.True(t, result.Won)
+	require.Len(t, messenger.sent, 1)
+}
+
+func TestLotteryServiceDrawReducesLateParticipantOdds(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	campaign := seedLotteryCampaign(repo, LotteryCampaign{
+		Name:                         "late lower",
+		Subtitle:                     "subtitle",
+		Status:                       LotteryStatusActive,
+		PrizeCount:                   1,
+		MaxParticipants:              10,
+		JoinedCount:                  8,
+		EarlyBoostParticipantPercent: 25,
+		CreatedBy:                    99,
+		CreatedAt:                    now,
+		UpdatedAt:                    now,
+	}, "A")
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, &lotteryMessengerStub{}, now)
+	svc.randFloat = func() float64 { return 0.4 }
+
+	result, err := svc.Draw(context.Background(), 7, campaign.ID)
+
+	require.NoError(t, err)
+	require.False(t, result.Won)
+	require.Equal(t, 0, repo.campaigns[campaign.ID].WinnerCount)
+}
+
+func TestLotteryServiceDrawAddsRechargeWeightedOddsUpToCampaignCap(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	campaign := seedLotteryCampaign(repo, LotteryCampaign{
+		Name:                         "recharge boost",
+		Subtitle:                     "subtitle",
+		Status:                       LotteryStatusActive,
+		PrizeCount:                   1,
+		MaxParticipants:              10,
+		EarlyBoostParticipantPercent: 0,
+		RechargeBoostCapPercent:      50,
+		CreatedBy:                    99,
+		CreatedAt:                    now,
+		UpdatedAt:                    now,
+	}, "A")
+	repo.users[7] = &LotteryUserProfile{UserID: 7, TotalRecharged: 3000}
+	messenger := &lotteryMessengerStub{}
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, messenger, now)
+	svc.randFloat = func() float64 { return 0.35 }
+
+	result, err := svc.Draw(context.Background(), 7, campaign.ID)
+
+	require.NoError(t, err)
+	require.True(t, result.Won)
+	require.Len(t, messenger.sent, 1)
 }
 
 func TestLotteryServiceDrawRejectsDuplicateUserDraw(t *testing.T) {

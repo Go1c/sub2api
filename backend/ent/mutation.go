@@ -20067,29 +20067,33 @@ func (m *IdentityAdoptionDecisionMutation) ResetEdge(name string) error {
 // LotteryCampaignMutation represents an operation that mutates the LotteryCampaign nodes in the graph.
 type LotteryCampaignMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *int64
-	name                *string
-	subtitle            *string
-	status              *string
-	prize_count         *int
-	addprize_count      *int
-	max_participants    *int
-	addmax_participants *int
-	joined_count        *int
-	addjoined_count     *int
-	winner_count        *int
-	addwinner_count     *int
-	created_by          *int64
-	addcreated_by       *int64
-	created_at          *time.Time
-	updated_at          *time.Time
-	finished_at         *time.Time
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*LotteryCampaign, error)
-	predicates          []predicate.LotteryCampaign
+	op                                 Op
+	typ                                string
+	id                                 *int64
+	name                               *string
+	subtitle                           *string
+	status                             *string
+	prize_count                        *int
+	addprize_count                     *int
+	max_participants                   *int
+	addmax_participants                *int
+	joined_count                       *int
+	addjoined_count                    *int
+	winner_count                       *int
+	addwinner_count                    *int
+	early_boost_participant_percent    *int
+	addearly_boost_participant_percent *int
+	recharge_boost_cap_percent         *int
+	addrecharge_boost_cap_percent      *int
+	created_by                         *int64
+	addcreated_by                      *int64
+	created_at                         *time.Time
+	updated_at                         *time.Time
+	finished_at                        *time.Time
+	clearedFields                      map[string]struct{}
+	done                               bool
+	oldValue                           func(context.Context) (*LotteryCampaign, error)
+	predicates                         []predicate.LotteryCampaign
 }
 
 var _ ent.Mutation = (*LotteryCampaignMutation)(nil)
@@ -20522,6 +20526,118 @@ func (m *LotteryCampaignMutation) ResetWinnerCount() {
 	m.addwinner_count = nil
 }
 
+// SetEarlyBoostParticipantPercent sets the "early_boost_participant_percent" field.
+func (m *LotteryCampaignMutation) SetEarlyBoostParticipantPercent(i int) {
+	m.early_boost_participant_percent = &i
+	m.addearly_boost_participant_percent = nil
+}
+
+// EarlyBoostParticipantPercent returns the value of the "early_boost_participant_percent" field in the mutation.
+func (m *LotteryCampaignMutation) EarlyBoostParticipantPercent() (r int, exists bool) {
+	v := m.early_boost_participant_percent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEarlyBoostParticipantPercent returns the old "early_boost_participant_percent" field's value of the LotteryCampaign entity.
+// If the LotteryCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LotteryCampaignMutation) OldEarlyBoostParticipantPercent(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEarlyBoostParticipantPercent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEarlyBoostParticipantPercent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEarlyBoostParticipantPercent: %w", err)
+	}
+	return oldValue.EarlyBoostParticipantPercent, nil
+}
+
+// AddEarlyBoostParticipantPercent adds i to the "early_boost_participant_percent" field.
+func (m *LotteryCampaignMutation) AddEarlyBoostParticipantPercent(i int) {
+	if m.addearly_boost_participant_percent != nil {
+		*m.addearly_boost_participant_percent += i
+	} else {
+		m.addearly_boost_participant_percent = &i
+	}
+}
+
+// AddedEarlyBoostParticipantPercent returns the value that was added to the "early_boost_participant_percent" field in this mutation.
+func (m *LotteryCampaignMutation) AddedEarlyBoostParticipantPercent() (r int, exists bool) {
+	v := m.addearly_boost_participant_percent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetEarlyBoostParticipantPercent resets all changes to the "early_boost_participant_percent" field.
+func (m *LotteryCampaignMutation) ResetEarlyBoostParticipantPercent() {
+	m.early_boost_participant_percent = nil
+	m.addearly_boost_participant_percent = nil
+}
+
+// SetRechargeBoostCapPercent sets the "recharge_boost_cap_percent" field.
+func (m *LotteryCampaignMutation) SetRechargeBoostCapPercent(i int) {
+	m.recharge_boost_cap_percent = &i
+	m.addrecharge_boost_cap_percent = nil
+}
+
+// RechargeBoostCapPercent returns the value of the "recharge_boost_cap_percent" field in the mutation.
+func (m *LotteryCampaignMutation) RechargeBoostCapPercent() (r int, exists bool) {
+	v := m.recharge_boost_cap_percent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRechargeBoostCapPercent returns the old "recharge_boost_cap_percent" field's value of the LotteryCampaign entity.
+// If the LotteryCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LotteryCampaignMutation) OldRechargeBoostCapPercent(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRechargeBoostCapPercent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRechargeBoostCapPercent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRechargeBoostCapPercent: %w", err)
+	}
+	return oldValue.RechargeBoostCapPercent, nil
+}
+
+// AddRechargeBoostCapPercent adds i to the "recharge_boost_cap_percent" field.
+func (m *LotteryCampaignMutation) AddRechargeBoostCapPercent(i int) {
+	if m.addrecharge_boost_cap_percent != nil {
+		*m.addrecharge_boost_cap_percent += i
+	} else {
+		m.addrecharge_boost_cap_percent = &i
+	}
+}
+
+// AddedRechargeBoostCapPercent returns the value that was added to the "recharge_boost_cap_percent" field in this mutation.
+func (m *LotteryCampaignMutation) AddedRechargeBoostCapPercent() (r int, exists bool) {
+	v := m.addrecharge_boost_cap_percent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRechargeBoostCapPercent resets all changes to the "recharge_boost_cap_percent" field.
+func (m *LotteryCampaignMutation) ResetRechargeBoostCapPercent() {
+	m.recharge_boost_cap_percent = nil
+	m.addrecharge_boost_cap_percent = nil
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (m *LotteryCampaignMutation) SetCreatedBy(i int64) {
 	m.created_by = &i
@@ -20733,7 +20849,7 @@ func (m *LotteryCampaignMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *LotteryCampaignMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 13)
 	if m.name != nil {
 		fields = append(fields, lotterycampaign.FieldName)
 	}
@@ -20754,6 +20870,12 @@ func (m *LotteryCampaignMutation) Fields() []string {
 	}
 	if m.winner_count != nil {
 		fields = append(fields, lotterycampaign.FieldWinnerCount)
+	}
+	if m.early_boost_participant_percent != nil {
+		fields = append(fields, lotterycampaign.FieldEarlyBoostParticipantPercent)
+	}
+	if m.recharge_boost_cap_percent != nil {
+		fields = append(fields, lotterycampaign.FieldRechargeBoostCapPercent)
 	}
 	if m.created_by != nil {
 		fields = append(fields, lotterycampaign.FieldCreatedBy)
@@ -20789,6 +20911,10 @@ func (m *LotteryCampaignMutation) Field(name string) (ent.Value, bool) {
 		return m.JoinedCount()
 	case lotterycampaign.FieldWinnerCount:
 		return m.WinnerCount()
+	case lotterycampaign.FieldEarlyBoostParticipantPercent:
+		return m.EarlyBoostParticipantPercent()
+	case lotterycampaign.FieldRechargeBoostCapPercent:
+		return m.RechargeBoostCapPercent()
 	case lotterycampaign.FieldCreatedBy:
 		return m.CreatedBy()
 	case lotterycampaign.FieldCreatedAt:
@@ -20820,6 +20946,10 @@ func (m *LotteryCampaignMutation) OldField(ctx context.Context, name string) (en
 		return m.OldJoinedCount(ctx)
 	case lotterycampaign.FieldWinnerCount:
 		return m.OldWinnerCount(ctx)
+	case lotterycampaign.FieldEarlyBoostParticipantPercent:
+		return m.OldEarlyBoostParticipantPercent(ctx)
+	case lotterycampaign.FieldRechargeBoostCapPercent:
+		return m.OldRechargeBoostCapPercent(ctx)
 	case lotterycampaign.FieldCreatedBy:
 		return m.OldCreatedBy(ctx)
 	case lotterycampaign.FieldCreatedAt:
@@ -20886,6 +21016,20 @@ func (m *LotteryCampaignMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetWinnerCount(v)
 		return nil
+	case lotterycampaign.FieldEarlyBoostParticipantPercent:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEarlyBoostParticipantPercent(v)
+		return nil
+	case lotterycampaign.FieldRechargeBoostCapPercent:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRechargeBoostCapPercent(v)
+		return nil
 	case lotterycampaign.FieldCreatedBy:
 		v, ok := value.(int64)
 		if !ok {
@@ -20934,6 +21078,12 @@ func (m *LotteryCampaignMutation) AddedFields() []string {
 	if m.addwinner_count != nil {
 		fields = append(fields, lotterycampaign.FieldWinnerCount)
 	}
+	if m.addearly_boost_participant_percent != nil {
+		fields = append(fields, lotterycampaign.FieldEarlyBoostParticipantPercent)
+	}
+	if m.addrecharge_boost_cap_percent != nil {
+		fields = append(fields, lotterycampaign.FieldRechargeBoostCapPercent)
+	}
 	if m.addcreated_by != nil {
 		fields = append(fields, lotterycampaign.FieldCreatedBy)
 	}
@@ -20953,6 +21103,10 @@ func (m *LotteryCampaignMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedJoinedCount()
 	case lotterycampaign.FieldWinnerCount:
 		return m.AddedWinnerCount()
+	case lotterycampaign.FieldEarlyBoostParticipantPercent:
+		return m.AddedEarlyBoostParticipantPercent()
+	case lotterycampaign.FieldRechargeBoostCapPercent:
+		return m.AddedRechargeBoostCapPercent()
 	case lotterycampaign.FieldCreatedBy:
 		return m.AddedCreatedBy()
 	}
@@ -20991,6 +21145,20 @@ func (m *LotteryCampaignMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddWinnerCount(v)
+		return nil
+	case lotterycampaign.FieldEarlyBoostParticipantPercent:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddEarlyBoostParticipantPercent(v)
+		return nil
+	case lotterycampaign.FieldRechargeBoostCapPercent:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRechargeBoostCapPercent(v)
 		return nil
 	case lotterycampaign.FieldCreatedBy:
 		v, ok := value.(int64)
@@ -21055,6 +21223,12 @@ func (m *LotteryCampaignMutation) ResetField(name string) error {
 		return nil
 	case lotterycampaign.FieldWinnerCount:
 		m.ResetWinnerCount()
+		return nil
+	case lotterycampaign.FieldEarlyBoostParticipantPercent:
+		m.ResetEarlyBoostParticipantPercent()
+		return nil
+	case lotterycampaign.FieldRechargeBoostCapPercent:
+		m.ResetRechargeBoostCapPercent()
 		return nil
 	case lotterycampaign.FieldCreatedBy:
 		m.ResetCreatedBy()

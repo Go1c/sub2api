@@ -1000,12 +1000,24 @@ func init() {
 	lotterycampaign.DefaultWinnerCount = lotterycampaignDescWinnerCount.Default.(int)
 	// lotterycampaign.WinnerCountValidator is a validator for the "winner_count" field. It is called by the builders before save.
 	lotterycampaign.WinnerCountValidator = lotterycampaignDescWinnerCount.Validators[0].(func(int) error)
+	// lotterycampaignDescEarlyBoostParticipantPercent is the schema descriptor for early_boost_participant_percent field.
+	lotterycampaignDescEarlyBoostParticipantPercent := lotterycampaignFields[7].Descriptor()
+	// lotterycampaign.DefaultEarlyBoostParticipantPercent holds the default value on creation for the early_boost_participant_percent field.
+	lotterycampaign.DefaultEarlyBoostParticipantPercent = lotterycampaignDescEarlyBoostParticipantPercent.Default.(int)
+	// lotterycampaign.EarlyBoostParticipantPercentValidator is a validator for the "early_boost_participant_percent" field. It is called by the builders before save.
+	lotterycampaign.EarlyBoostParticipantPercentValidator = lotterycampaignDescEarlyBoostParticipantPercent.Validators[0].(func(int) error)
+	// lotterycampaignDescRechargeBoostCapPercent is the schema descriptor for recharge_boost_cap_percent field.
+	lotterycampaignDescRechargeBoostCapPercent := lotterycampaignFields[8].Descriptor()
+	// lotterycampaign.DefaultRechargeBoostCapPercent holds the default value on creation for the recharge_boost_cap_percent field.
+	lotterycampaign.DefaultRechargeBoostCapPercent = lotterycampaignDescRechargeBoostCapPercent.Default.(int)
+	// lotterycampaign.RechargeBoostCapPercentValidator is a validator for the "recharge_boost_cap_percent" field. It is called by the builders before save.
+	lotterycampaign.RechargeBoostCapPercentValidator = lotterycampaignDescRechargeBoostCapPercent.Validators[0].(func(int) error)
 	// lotterycampaignDescCreatedAt is the schema descriptor for created_at field.
-	lotterycampaignDescCreatedAt := lotterycampaignFields[8].Descriptor()
+	lotterycampaignDescCreatedAt := lotterycampaignFields[10].Descriptor()
 	// lotterycampaign.DefaultCreatedAt holds the default value on creation for the created_at field.
 	lotterycampaign.DefaultCreatedAt = lotterycampaignDescCreatedAt.Default.(func() time.Time)
 	// lotterycampaignDescUpdatedAt is the schema descriptor for updated_at field.
-	lotterycampaignDescUpdatedAt := lotterycampaignFields[9].Descriptor()
+	lotterycampaignDescUpdatedAt := lotterycampaignFields[11].Descriptor()
 	// lotterycampaign.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	lotterycampaign.DefaultUpdatedAt = lotterycampaignDescUpdatedAt.Default.(func() time.Time)
 	// lotterycampaign.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

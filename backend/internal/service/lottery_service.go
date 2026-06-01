@@ -52,6 +52,16 @@ func (s *LotteryService) CreateCampaign(ctx context.Context, adminID int64, inpu
 		input.MaxParticipants < input.PrizeCount {
 		return nil, ErrLotteryInvalidCampaign
 	}
+	earlyBoostParticipantPercent := LotteryDefaultEarlyBoostParticipantPercent
+	if input.EarlyBoostParticipantPercent != nil {
+		earlyBoostParticipantPercent = *input.EarlyBoostParticipantPercent
+	}
+	if earlyBoostParticipantPercent < 0 ||
+		earlyBoostParticipantPercent > 100 ||
+		input.RechargeBoostCapPercent < 0 ||
+		input.RechargeBoostCapPercent > LotteryMaxRechargeBoostCapPercent {
+		return nil, ErrLotteryInvalidCampaign
+	}
 
 	now := s.now()
 	var created *LotteryCampaign
@@ -60,14 +70,16 @@ func (s *LotteryService) CreateCampaign(ctx context.Context, adminID int64, inpu
 			return err
 		}
 		campaign := &LotteryCampaign{
-			Name:            name,
-			Subtitle:        subtitle,
-			Status:          LotteryStatusActive,
-			PrizeCount:      input.PrizeCount,
-			MaxParticipants: input.MaxParticipants,
-			CreatedBy:       adminID,
-			CreatedAt:       now,
-			UpdatedAt:       now,
+			Name:                         name,
+			Subtitle:                     subtitle,
+			Status:                       LotteryStatusActive,
+			PrizeCount:                   input.PrizeCount,
+			MaxParticipants:              input.MaxParticipants,
+			EarlyBoostParticipantPercent: earlyBoostParticipantPercent,
+			RechargeBoostCapPercent:      input.RechargeBoostCapPercent,
+			CreatedBy:                    adminID,
+			CreatedAt:                    now,
+			UpdatedAt:                    now,
 		}
 		codeRows := make([]LotteryCode, 0, len(codes))
 		for _, code := range codes {
@@ -139,13 +151,15 @@ func (s *LotteryService) GetActiveForUser(ctx context.Context, userID int64) (*L
 		return nil, err
 	}
 	return &LotteryActiveCampaign{
-		ID:              campaign.ID,
-		Name:            campaign.Name,
-		Subtitle:        campaign.Subtitle,
-		PrizeCount:      campaign.PrizeCount,
-		MaxParticipants: campaign.MaxParticipants,
-		JoinedCount:     campaign.JoinedCount,
-		Segments:        BuildLotterySegments(campaign.PrizeCount, 8),
+		ID:                           campaign.ID,
+		Name:                         campaign.Name,
+		Subtitle:                     campaign.Subtitle,
+		PrizeCount:                   campaign.PrizeCount,
+		MaxParticipants:              campaign.MaxParticipants,
+		JoinedCount:                  campaign.JoinedCount,
+		EarlyBoostParticipantPercent: campaign.EarlyBoostParticipantPercent,
+		RechargeBoostCapPercent:      campaign.RechargeBoostCapPercent,
+		Segments:                     BuildLotterySegments(campaign.PrizeCount, 8),
 	}, nil
 }
 
@@ -168,7 +182,11 @@ func (s *LotteryService) Draw(ctx context.Context, userID, campaignID int64) (*L
 		segments := BuildLotterySegments(campaign.PrizeCount, 8)
 		remainingPrizes := campaign.PrizeCount - campaign.WinnerCount
 		remainingSlots := campaign.MaxParticipants - campaign.JoinedCount
-		won := remainingPrizes > 0 && remainingSlots > 0 && s.randFloat() < float64(remainingPrizes)/float64(remainingSlots)
+		winProbability, err := s.winProbability(txCtx, campaign, userID, remainingPrizes, remainingSlots)
+		if err != nil {
+			return err
+		}
+		won := remainingPrizes > 0 && remainingSlots > 0 && s.randFloat() < winProbability
 
 		var code *LotteryCode
 		var codeID *int64
@@ -291,6 +309,80 @@ func normalizeLotteryCodes(rawCodes []string, prizeCount int) ([]string, error) 
 		return nil, ErrLotteryInvalidCampaign
 	}
 	return out, nil
+}
+
+func (s *LotteryService) winProbability(ctx context.Context, campaign *LotteryCampaign, userID int64, remainingPrizes, remainingSlots int) (float64, error) {
+	if campaign == nil || remainingPrizes <= 0 || remainingSlots <= 0 {
+		return 0, nil
+	}
+
+	probability := float64(remainingPrizes) / float64(remainingSlots)
+	probability *= lotteryParticipantPhaseMultiplier(
+		campaign.JoinedCount,
+		campaign.MaxParticipants,
+		campaign.EarlyBoostParticipantPercent,
+	)
+
+	if campaign.RechargeBoostCapPercent > 0 {
+		profile, err := s.repo.GetUserLotteryProfile(ctx, userID)
+		if err != nil {
+			return 0, err
+		}
+		if profile != nil {
+			probability += lotteryRechargeBoost(profile.TotalRecharged, campaign.RechargeBoostCapPercent)
+		}
+	}
+
+	return clampLotteryProbability(probability), nil
+}
+
+func lotteryParticipantPhaseMultiplier(joinedCount, maxParticipants, earlyPercent int) float64 {
+	if maxParticipants <= 0 || earlyPercent <= 0 {
+		return 1
+	}
+	if earlyPercent >= 100 {
+		return 1.5
+	}
+
+	progress := float64(joinedCount) / float64(maxParticipants)
+	earlyCutoff := float64(earlyPercent) / 100
+	if progress < earlyCutoff {
+		return 1.5
+	}
+
+	lateProgress := (progress - earlyCutoff) / (1 - earlyCutoff)
+	if lateProgress < 0 {
+		lateProgress = 0
+	}
+	if lateProgress > 1 {
+		lateProgress = 1
+	}
+	return 1 - 0.5*lateProgress
+}
+
+func lotteryRechargeBoost(totalRecharged float64, capPercent int) float64 {
+	if totalRecharged <= 0 || capPercent <= 0 {
+		return 0
+	}
+	if capPercent > LotteryMaxRechargeBoostCapPercent {
+		capPercent = LotteryMaxRechargeBoostCapPercent
+	}
+	boost := totalRecharged / 10000
+	capProbability := float64(capPercent) / 100
+	if boost > capProbability {
+		return capProbability
+	}
+	return boost
+}
+
+func clampLotteryProbability(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	if value > 1 {
+		return 1
+	}
+	return value
 }
 
 func BuildLotterySegments(prizeCount int, totalSlots int) []LotterySegment {

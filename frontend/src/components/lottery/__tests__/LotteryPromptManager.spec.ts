@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 
 import LotteryPromptManager from '../LotteryPromptManager.vue'
@@ -34,6 +34,7 @@ const LotteryDialogStub = defineComponent({
     <div v-if="open" data-test="lottery-dialog">
       {{ campaignTitle }}
       <button data-test="draw" @click="drawFn()">draw</button>
+      <button data-test="close" @click="$emit('close')">close</button>
     </div>
   `,
 })
@@ -49,6 +50,21 @@ const activeCampaign: LotteryActiveCampaign = {
     { label: '奖品 1', is_prize: true },
     { label: '谢谢参与', is_prize: false },
   ],
+}
+
+const mountedWrappers: VueWrapper[] = []
+
+function mountPromptManager(pinia = createPinia()) {
+  const wrapper = mount(LotteryPromptManager, {
+    global: {
+      plugins: [pinia],
+      stubs: {
+        LotteryDialog: LotteryDialogStub,
+      },
+    },
+  })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 function loginUser() {
@@ -71,6 +87,12 @@ function loginUser() {
   } as any
 }
 
+function logoutUser() {
+  const authStore = useAuthStore()
+  authStore.token = null
+  authStore.user = null
+}
+
 describe('LotteryPromptManager', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -80,19 +102,18 @@ describe('LotteryPromptManager', () => {
     vi.mocked(lotteryAPI.draw).mockReset()
   })
 
+  afterEach(() => {
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
+  })
+
   it('fetches the active campaign after login', async () => {
     vi.mocked(lotteryAPI.getActive).mockResolvedValue({ campaign: activeCampaign })
     const pinia = createPinia()
     setActivePinia(pinia)
 
-    const wrapper = mount(LotteryPromptManager, {
-      global: {
-        plugins: [pinia],
-        stubs: {
-          LotteryDialog: LotteryDialogStub,
-        },
-      },
-    })
+    const wrapper = mountPromptManager(pinia)
 
     loginUser()
     await flushPromises()
@@ -101,25 +122,73 @@ describe('LotteryPromptManager', () => {
     expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(true)
   })
 
-  it('does not open when the campaign was dismissed in this session', async () => {
-    sessionStorage.setItem('lottery_dismissed_v2', JSON.stringify([activeCampaign.id]))
+  it('does not reopen during the same login session after dismissal without draw', async () => {
     vi.mocked(lotteryAPI.getActive).mockResolvedValue({ campaign: activeCampaign })
     const pinia = createPinia()
     setActivePinia(pinia)
 
-    const wrapper = mount(LotteryPromptManager, {
-      global: {
-        plugins: [pinia],
-        stubs: {
-          LotteryDialog: LotteryDialogStub,
-        },
-      },
-    })
+    const wrapper = mountPromptManager(pinia)
 
     loginUser()
     await flushPromises()
+    await wrapper.get('[data-test="close"]').trigger('click')
+    await flushPromises()
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
 
     expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(false)
+  })
+
+  it('opens again on the next login when the previous dismissal had no draw', async () => {
+    vi.mocked(lotteryAPI.getActive).mockResolvedValue({ campaign: activeCampaign })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+
+    const wrapper = mountPromptManager(pinia)
+
+    loginUser()
+    await flushPromises()
+    await wrapper.get('[data-test="close"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(false)
+
+    logoutUser()
+    await flushPromises()
+    loginUser()
+    await flushPromises()
+
+    expect(lotteryAPI.getActive).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(true)
+  })
+
+  it('refetches and opens when an active campaign appears for an already logged-in user', async () => {
+    vi.mocked(lotteryAPI.getActive)
+      .mockResolvedValueOnce({ campaign: null })
+      .mockResolvedValueOnce({ campaign: activeCampaign })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+
+    const wrapper = mountPromptManager(pinia)
+
+    loginUser()
+    await flushPromises()
+    expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(false)
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+
+    expect(lotteryAPI.getActive).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(true)
   })
 
   it('keeps the dialog open after draw resolves so the result can be shown', async () => {
@@ -133,14 +202,7 @@ describe('LotteryPromptManager', () => {
     const pinia = createPinia()
     setActivePinia(pinia)
 
-    const wrapper = mount(LotteryPromptManager, {
-      global: {
-        plugins: [pinia],
-        stubs: {
-          LotteryDialog: LotteryDialogStub,
-        },
-      },
-    })
+    const wrapper = mountPromptManager(pinia)
 
     loginUser()
     await flushPromises()
