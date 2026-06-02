@@ -57,6 +57,14 @@
               <Icon name="edit" size="sm" />
               <span class="text-xs">{{ t('common.edit') }}</span>
             </button>
+            <button
+              data-test="sync-plan-limits"
+              @click="confirmSyncPlanLimits(row)"
+              class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400"
+            >
+              <Icon name="refresh" size="sm" />
+              <span class="text-xs">{{ t('payment.admin.syncPlanLimits') }}</span>
+            </button>
             <button @click="confirmDeletePlan(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400">
               <Icon name="trash" size="sm" />
               <span class="text-xs">{{ t('common.delete') }}</span>
@@ -69,6 +77,15 @@
     <!-- Plan Edit Dialog -->
     <PlanEditDialog :show="showPlanDialog" :plan="editingPlan" :groups="groups" @close="showPlanDialog = false" @saved="loadPlans" />
 
+    <ConfirmDialog
+      :show="showSyncPlanDialog"
+      :title="t('payment.admin.syncPlanLimits')"
+      :message="syncPlanLimitsMessage"
+      :confirm-text="t('payment.admin.syncPlanLimitsConfirm')"
+      @confirm="handleSyncPlanLimits"
+      @cancel="closeSyncPlanDialog"
+    />
+
     <ConfirmDialog :show="showDeletePlanDialog" :title="t('payment.admin.deletePlan')" :message="t('payment.admin.deletePlanConfirm')" :confirm-text="t('common.delete')" danger @confirm="handleDeletePlan" @cancel="showDeletePlanDialog = false" />
   </AppLayout>
 </template>
@@ -77,7 +94,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { adminPaymentAPI } from '@/api/admin/payment'
+import { adminPaymentAPI, type PlanLimitSyncPreview } from '@/api/admin/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import adminAPI from '@/api/admin'
 import type { SubscriptionPlan } from '@/types/payment'
@@ -124,8 +141,12 @@ const plansLoading = ref(false)
 const plans = ref<SubscriptionPlan[]>([])
 const showPlanDialog = ref(false)
 const showDeletePlanDialog = ref(false)
+const showSyncPlanDialog = ref(false)
 const editingPlan = ref<SubscriptionPlan | null>(null)
 const deletingPlanId = ref<number | null>(null)
+const syncingPlan = ref<SubscriptionPlan | null>(null)
+const syncPreview = ref<PlanLimitSyncPreview | null>(null)
+const syncPlanLimitsSubmitting = ref(false)
 
 const planColumns = computed((): Column[] => [
   { key: 'id', label: 'ID' },
@@ -175,6 +196,51 @@ async function handleDeletePlan() {
   if (!deletingPlanId.value) return
   try { await adminPaymentAPI.deletePlan(deletingPlanId.value); appStore.showSuccess(t('common.deleted')); showDeletePlanDialog.value = false; loadPlans() }
   catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
+}
+
+const syncPlanLimitsMessage = computed(() => {
+  if (!syncPreview.value) return ''
+  return t('payment.admin.syncPlanLimitsPreviewMessage', {
+    matched: syncPreview.value.matched_count,
+    changed: syncPreview.value.changed_count,
+    dailyLimit: formatPlanLimit(syncPreview.value.daily_limit_usd),
+    weeklyLimit: formatPlanLimit(syncPreview.value.weekly_limit_usd),
+  })
+})
+
+function formatPlanLimit(value: number | null | undefined): string {
+  return value == null ? t('payment.admin.noLimit') : String(value)
+}
+
+async function confirmSyncPlanLimits(plan: SubscriptionPlan) {
+  syncingPlan.value = plan
+  try {
+    const res = await adminPaymentAPI.previewPlanLimitSync(plan.id)
+    syncPreview.value = res.data
+    showSyncPlanDialog.value = true
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+  }
+}
+
+function closeSyncPlanDialog() {
+  showSyncPlanDialog.value = false
+  syncingPlan.value = null
+  syncPreview.value = null
+}
+
+async function handleSyncPlanLimits() {
+  if (!syncingPlan.value || syncPlanLimitsSubmitting.value) return
+  syncPlanLimitsSubmitting.value = true
+  try {
+    const res = await adminPaymentAPI.syncPlanLimits(syncingPlan.value.id)
+    appStore.showSuccess(t('payment.admin.syncPlanLimitsSuccess', { updated: res.data.updated_count }))
+    closeSyncPlanDialog()
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+  } finally {
+    syncPlanLimitsSubmitting.value = false
+  }
 }
 
 // ==================== Lifecycle ====================

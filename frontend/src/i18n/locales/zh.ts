@@ -7424,6 +7424,12 @@ export default {
       editPlan: '编辑套餐',
       deletePlan: '删除套餐',
       deletePlanConfirm: '确定要删除此套餐吗？',
+      syncPlanLimits: '同步限额',
+      syncPlanLimitsConfirm: '确认同步',
+      syncPlanLimitsPreviewMessage:
+        '将当前套餐日限 {dailyLimit}、周限 {weeklyLimit} 同步到已购订阅。匹配有效订阅 {matched} 个，其中 {changed} 个会更新；不影响总额度、有效期、覆盖范围或已用量。',
+      syncPlanLimitsSuccess: '已同步 {updated} 个订阅的日限/周限',
+      noLimit: '无限制',
       originalPrice: '原价',
       price: '价格',
       validityDays: '有效期（天）',

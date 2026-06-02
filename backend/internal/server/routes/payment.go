@@ -92,6 +92,8 @@ func RegisterPaymentRoutes(
 		{
 			plans.GET("", adminPaymentHandler.ListPlans)
 			plans.POST("", adminPaymentHandler.CreatePlan)
+			plans.POST("/:id/sync-limits/preview", adminPaymentHandler.PreviewPlanLimitSync)
+			plans.POST("/:id/sync-limits", adminPaymentHandler.SyncPlanLimits)
 			plans.PUT("/:id", adminPaymentHandler.UpdatePlan)
 			plans.DELETE("/:id", adminPaymentHandler.DeletePlan)
 		}
