@@ -435,7 +435,7 @@ func (s *PaymentService) doCreditSub(ctx context.Context, o *dbent.PaymentOrder)
 		if s.subscriptionSvc != nil {
 			s.subscriptionSvc.InvalidateSubCache(o.UserID, 0)
 		}
-		return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
+		return s.completeSubscriptionOrder(ctx, o)
 	}
 	if entry, err := s.findCreditSubscriptionPurchase(ctx, o.ID); err == nil {
 		slog.Info("subscription credit fulfillment already anchored by purchase ledger, recovering order status",
@@ -445,7 +445,7 @@ func (s *PaymentService) doCreditSub(ctx context.Context, o *dbent.PaymentOrder)
 		if s.subscriptionSvc != nil {
 			s.subscriptionSvc.InvalidateSubCache(o.UserID, 0)
 		}
-		return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
+		return s.completeSubscriptionOrder(ctx, o)
 	} else if !errors.Is(err, ErrSubscriptionNotFound) {
 		return fmt.Errorf("lookup subscription credit purchase: %w", err)
 	}
@@ -461,7 +461,7 @@ func (s *PaymentService) doCreditSub(ctx context.Context, o *dbent.PaymentOrder)
 	if s.subscriptionSvc != nil {
 		s.subscriptionSvc.InvalidateSubCache(o.UserID, 0)
 	}
-	return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
+	return s.completeSubscriptionOrder(ctx, o)
 }
 
 func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error {
@@ -482,7 +482,28 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error
 	if err != nil {
 		return fmt.Errorf("assign subscription: %w", err)
 	}
+	return s.completeSubscriptionOrder(ctx, o)
+}
+
+func (s *PaymentService) completeSubscriptionOrder(ctx context.Context, o *dbent.PaymentOrder) error {
+	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
+		return err
+	}
 	return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
+}
+
+func isAffiliateRebateEligibleOrder(o *dbent.PaymentOrder) bool {
+	if o == nil {
+		return false
+	}
+	switch o.OrderType {
+	case payment.OrderTypeBalance:
+		return true
+	case payment.OrderTypeSubscription:
+		return !isInternalBalancePaymentType(o.PaymentType)
+	default:
+		return false
+	}
 }
 
 func (s *PaymentService) hasAuditLog(ctx context.Context, orderID int64, action string) bool {
@@ -494,7 +515,7 @@ func (s *PaymentService) hasAuditLog(ctx context.Context, orderID int64, action 
 }
 
 func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *dbent.PaymentOrder) error {
-	if o == nil || o.OrderType != payment.OrderTypeBalance || o.Amount <= 0 {
+	if o == nil || !isAffiliateRebateEligibleOrder(o) || o.Amount <= 0 {
 		return nil
 	}
 	if s.affiliateService == nil {
@@ -580,11 +601,11 @@ func (s *PaymentService) tryClaimAffiliateRebateAudit(ctx context.Context, clien
 	})
 	rows, err := client.QueryContext(ctx, `
 INSERT INTO payment_audit_logs (order_id, action, detail, operator, created_at)
-SELECT $1::text, 'AFFILIATE_REBATE_APPLIED', $2::text, 'system', NOW()
+SELECT $1, 'AFFILIATE_REBATE_APPLIED', $2, 'system', CURRENT_TIMESTAMP
 WHERE NOT EXISTS (
 	SELECT 1
 	FROM payment_audit_logs
-	WHERE order_id = $1::text
+	WHERE order_id = $1
 	  AND action IN ('AFFILIATE_REBATE_APPLIED', 'AFFILIATE_REBATE_SKIPPED')
 )
 ON CONFLICT (order_id, action) DO NOTHING
