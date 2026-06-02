@@ -11,11 +11,12 @@ import (
 )
 
 type invoiceRepoStub struct {
-	items          map[int64]*InvoiceRequest
-	activeTotal    float64
-	completed      *InvoiceRequest
-	completedInput CompleteInvoicePersistInput
-	failedReason   string
+	items                    map[int64]*InvoiceRequest
+	activeTotal              float64
+	subscriptionPaymentTotal float64
+	completed                *InvoiceRequest
+	completedInput           CompleteInvoicePersistInput
+	failedReason             string
 }
 
 func (r *invoiceRepoStub) Create(_ context.Context, req *InvoiceRequest) error {
@@ -50,6 +51,10 @@ func (r *invoiceRepoStub) SumActiveAmountByUser(context.Context, int64) (float64
 
 func (r *invoiceRepoStub) SumCompletedAmountByUser(context.Context, int64) (float64, error) {
 	return 0, nil
+}
+
+func (r *invoiceRepoStub) SumInvoiceableSubscriptionPaymentsByUser(context.Context, int64) (float64, error) {
+	return r.subscriptionPaymentTotal, nil
 }
 
 func (r *invoiceRepoStub) MarkCompletedAndDeduct(_ context.Context, id int64, input CompleteInvoicePersistInput) (*InvoiceRequest, error) {
@@ -106,6 +111,43 @@ func (s *invoiceEmailSenderStub) SendInvoiceAttachment(_ context.Context, to str
 		return errors.New("missing invoice")
 	}
 	return s.err
+}
+
+func TestInvoiceServiceOverviewIncludesExternalSubscriptionPayments(t *testing.T) {
+	repo := &invoiceRepoStub{subscriptionPaymentTotal: 199}
+	svc := NewInvoiceService(repo, invoiceUserReaderStub{user: &User{
+		ID:             7,
+		Email:          "user@example.com",
+		TotalRecharged: 0,
+		InvoiceEnabled: true,
+	}}, nil)
+
+	overview, err := svc.Overview(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Equal(t, 199.0, overview.TotalRecharged)
+	require.Equal(t, 199.0, overview.RemainingAmount)
+}
+
+func TestInvoiceServiceCreateAllowsExternalSubscriptionPayments(t *testing.T) {
+	repo := &invoiceRepoStub{subscriptionPaymentTotal: 199}
+	svc := NewInvoiceService(repo, invoiceUserReaderStub{user: &User{
+		ID:             7,
+		Email:          "user@example.com",
+		TotalRecharged: 0,
+		InvoiceEnabled: true,
+	}}, nil)
+
+	req, err := svc.Create(context.Background(), 7, CreateInvoiceRequestInput{
+		Title:          "Acme Inc.",
+		TaxNumber:      "TAX123",
+		Amount:         199,
+		RecipientEmail: "billing@example.com",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 199.0, req.Amount)
+	require.Equal(t, InvoiceStatusProcessing, req.Status)
 }
 
 func TestInvoiceServiceCreateRejectsDisabledUser(t *testing.T) {
