@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -112,6 +113,32 @@ func (r *invoiceRepository) SumActiveAmountByUser(ctx context.Context, userID in
 
 func (r *invoiceRepository) SumCompletedAmountByUser(ctx context.Context, userID int64) (float64, error) {
 	return r.sumAmountByUser(ctx, userID, []string{service.InvoiceStatusCompleted})
+}
+
+func (r *invoiceRepository) SumInvoiceableSubscriptionPaymentsByUser(ctx context.Context, userID int64) (float64, error) {
+	statuses := invoiceableSubscriptionPaymentStatuses()
+	args := []any{userID, payment.OrderTypeSubscription, payment.TypeBalance}
+	statusPlaceholders := make([]string, 0, len(statuses))
+	for i, status := range statuses {
+		args = append(args, status)
+		statusPlaceholders = append(statusPlaceholders, fmt.Sprintf("$%d", i+4))
+	}
+	var total sql.NullFloat64
+	err := r.db.QueryRowContext(ctx, `
+SELECT COALESCE(SUM(pay_amount), 0) FROM payment_orders
+WHERE user_id = $1
+  AND order_type = $2
+  AND payment_type <> $3
+  AND status IN (`+strings.Join(statusPlaceholders, ",")+`)`,
+		args...,
+	).Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	if !total.Valid {
+		return 0, nil
+	}
+	return total.Float64, nil
 }
 
 func (r *invoiceRepository) sumAmountByUser(ctx context.Context, userID int64, statuses []string) (float64, error) {
@@ -300,7 +327,7 @@ SELECT
 	ir.amount, ir.recipient_email, ir.status, ir.file_name, ir.file_path,
 	ir.file_size, ir.content_type, ir.tax_rate, ir.tax_amount, ir.failure_reason,
 	ir.created_at, ir.updated_at, ir.completed_at,
-	u.email, u.username, u.total_recharged,
+	u.email, u.username, COALESCE(u.total_recharged, 0) + ` + invoiceableSubscriptionPaymentsSQL("ir.user_id") + `,
 	COALESCE((
 		SELECT SUM(ir2.amount)
 		FROM invoice_requests ir2
@@ -308,6 +335,43 @@ SELECT
 	), 0) AS user_completed_invoice_amount
 FROM invoice_requests ir
 LEFT JOIN users u ON u.id = ir.user_id`
+}
+
+func invoiceableSubscriptionPaymentStatuses() []string {
+	return []string{
+		service.OrderStatusCompleted,
+		service.OrderStatusPaid,
+		service.OrderStatusRecharging,
+		service.OrderStatusFulfillmentFailed,
+	}
+}
+
+func invoiceableSubscriptionPaymentsSQL(userIDExpression string) string {
+	return fmt.Sprintf(`COALESCE((
+		SELECT SUM(po.pay_amount)
+		FROM payment_orders po
+		WHERE po.user_id = %s
+		  AND po.order_type = %s
+		  AND po.payment_type <> %s
+		  AND po.status IN (%s)
+	), 0)`,
+		userIDExpression,
+		sqlStringLiteral(payment.OrderTypeSubscription),
+		sqlStringLiteral(payment.TypeBalance),
+		sqlStringLiteralList(invoiceableSubscriptionPaymentStatuses()),
+	)
+}
+
+func sqlStringLiteralList(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, sqlStringLiteral(value))
+	}
+	return strings.Join(quoted, ",")
+}
+
+func sqlStringLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
 func scanInvoiceList(rows *sql.Rows) ([]service.InvoiceRequest, error) {
