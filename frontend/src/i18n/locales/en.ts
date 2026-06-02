@@ -7240,6 +7240,12 @@ export default {
       editPlan: 'Edit Plan',
       deletePlan: 'Delete Plan',
       deletePlanConfirm: 'Are you sure you want to delete this plan?',
+      syncPlanLimits: 'Sync Limits',
+      syncPlanLimitsConfirm: 'Sync Limits',
+      syncPlanLimitsPreviewMessage:
+        'Sync the current plan daily limit {dailyLimit} and weekly limit {weeklyLimit} to purchased subscriptions. {matched} active subscriptions match; {changed} will be updated. Total quota, validity, scope, and usage stay unchanged.',
+      syncPlanLimitsSuccess: 'Synced daily/weekly limits for {updated} subscriptions',
+      noLimit: 'No limit',
       originalPrice: 'Original Price',
       price: 'Price',
       validityDays: 'Validity (days)',

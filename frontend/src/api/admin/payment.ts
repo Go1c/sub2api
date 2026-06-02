@@ -49,6 +49,18 @@ export interface UpdatePaymentConfigRequest {
   help_text?: string
 }
 
+export interface PlanLimitSyncPreview {
+  plan_id: number
+  daily_limit_usd: number | null
+  weekly_limit_usd: number | null
+  matched_count: number
+  changed_count: number
+}
+
+export interface PlanLimitSyncResult extends PlanLimitSyncPreview {
+  updated_count: number
+}
+
 export const adminPaymentAPI = {
   // ==================== Config ====================
 
@@ -148,6 +160,16 @@ export const adminPaymentAPI = {
   /** Update a subscription plan */
   updatePlan(id: number, data: Record<string, unknown>) {
     return apiClient.put<SubscriptionPlan>(`/admin/payment/plans/${id}`, data)
+  },
+
+  /** Preview syncing current plan daily/weekly limits to active purchased subscriptions */
+  previewPlanLimitSync(id: number) {
+    return apiClient.post<PlanLimitSyncPreview>(`/admin/payment/plans/${id}/sync-limits/preview`)
+  },
+
+  /** Sync current plan daily/weekly limits to active purchased subscriptions */
+  syncPlanLimits(id: number) {
+    return apiClient.post<PlanLimitSyncResult>(`/admin/payment/plans/${id}/sync-limits`)
   },
 
   /** Delete a subscription plan */

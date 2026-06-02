@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -125,6 +127,22 @@ type PlanGroupInfo struct {
 	WeeklyLimitUSD  *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD *float64 `json:"monthly_limit_usd"`
 	ModelScopes     []string `json:"supported_model_scopes"`
+}
+
+// PlanLimitSyncPreview describes how many existing subscriptions would receive
+// the current daily/weekly limits from a plan.
+type PlanLimitSyncPreview struct {
+	PlanID         int64    `json:"plan_id"`
+	DailyLimitUSD  *float64 `json:"daily_limit_usd"`
+	WeeklyLimitUSD *float64 `json:"weekly_limit_usd"`
+	MatchedCount   int      `json:"matched_count"`
+	ChangedCount   int      `json:"changed_count"`
+}
+
+// PlanLimitSyncResult is returned after applying a plan limit sync.
+type PlanLimitSyncResult struct {
+	PlanLimitSyncPreview
+	UpdatedCount int `json:"updated_count"`
 }
 
 // GetGroupPlatformMap returns a map of group_id → platform for the given plans.
@@ -277,6 +295,98 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		u.SetSortOrder(*req.SortOrder)
 	}
 	return u.Save(ctx)
+}
+
+// PreviewPlanLimitSync returns the active, unexpired subscription count that
+// would be affected by syncing a plan's daily/weekly limits.
+func (s *PaymentConfigService) PreviewPlanLimitSync(ctx context.Context, planID int64) (*PlanLimitSyncPreview, error) {
+	plan, subscriptions, err := s.getPlanLimitSyncCandidates(ctx, planID, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	preview, _ := buildPlanLimitSyncPreview(plan, subscriptions)
+	return preview, nil
+}
+
+// SyncPlanLimits copies only daily_limit_usd and weekly_limit_usd from the plan
+// to currently active, unexpired purchased subscriptions for that plan.
+func (s *PaymentConfigService) SyncPlanLimits(ctx context.Context, planID int64) (*PlanLimitSyncResult, error) {
+	plan, subscriptions, err := s.getPlanLimitSyncCandidates(ctx, planID, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	preview, changedIDs := buildPlanLimitSyncPreview(plan, subscriptions)
+	result := &PlanLimitSyncResult{
+		PlanLimitSyncPreview: *preview,
+	}
+	if len(changedIDs) == 0 {
+		return result, nil
+	}
+
+	update := s.entClient.UserSubscription.Update().
+		Where(usersubscription.IDIn(changedIDs...)).
+		SetUpdatedAt(time.Now().UTC())
+	if plan.DailyLimitUsd != nil {
+		update.SetDailyLimitUsd(*plan.DailyLimitUsd)
+	} else {
+		update.ClearDailyLimitUsd()
+	}
+	if plan.WeeklyLimitUsd != nil {
+		update.SetWeeklyLimitUsd(*plan.WeeklyLimitUsd)
+	} else {
+		update.ClearWeeklyLimitUsd()
+	}
+	updated, err := update.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("sync plan subscription limits: %w", err)
+	}
+	result.UpdatedCount = updated
+	return result, nil
+}
+
+func (s *PaymentConfigService) getPlanLimitSyncCandidates(ctx context.Context, planID int64, now time.Time) (*dbent.SubscriptionPlan, []*dbent.UserSubscription, error) {
+	plan, err := s.GetPlan(ctx, planID)
+	if err != nil {
+		return nil, nil, err
+	}
+	subscriptions, err := s.entClient.UserSubscription.Query().
+		Where(
+			usersubscription.PlanIDEQ(planID),
+			usersubscription.StatusEQ(SubscriptionStatusActive),
+			usersubscription.ExpiresAtGT(now),
+			usersubscription.DeletedAtIsNil(),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query plan subscription limits: %w", err)
+	}
+	return plan, subscriptions, nil
+}
+
+func buildPlanLimitSyncPreview(plan *dbent.SubscriptionPlan, subscriptions []*dbent.UserSubscription) (*PlanLimitSyncPreview, []int64) {
+	changedIDs := make([]int64, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		if limitUSDChanged(sub.DailyLimitUsd, plan.DailyLimitUsd) || limitUSDChanged(sub.WeeklyLimitUsd, plan.WeeklyLimitUsd) {
+			changedIDs = append(changedIDs, sub.ID)
+		}
+	}
+	return &PlanLimitSyncPreview{
+		PlanID:         plan.ID,
+		DailyLimitUSD:  plan.DailyLimitUsd,
+		WeeklyLimitUSD: plan.WeeklyLimitUsd,
+		MatchedCount:   len(subscriptions),
+		ChangedCount:   len(changedIDs),
+	}, changedIDs
+}
+
+func limitUSDChanged(current, target *float64) bool {
+	if current == nil && target == nil {
+		return false
+	}
+	if current == nil || target == nil {
+		return true
+	}
+	return *current != *target
 }
 
 func normalizePlanScopeType(scopeType string) string {
