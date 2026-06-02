@@ -99,7 +99,7 @@ func TestGatewayHandlerSubmitUsageRecordTask_DroppedTaskSyncFallback(t *testing.
 	pool.Submit(func(ctx context.Context) {})
 
 	var called atomic.Bool
-	h.submitUsageRecordTask(context.Background(), func(ctx context.Context) {
+	h.submitUsageRecordTask(func(ctx context.Context) {
 		called.Store(true)
 	})
 	close(release)
@@ -182,7 +182,7 @@ func TestOpenAIGatewayHandlerSubmitUsageRecordTask_DroppedTaskSyncFallback(t *te
 	pool.Submit(func(ctx context.Context) {})
 
 	var called atomic.Bool
-	h.submitUsageRecordTask(context.Background(), func(ctx context.Context) {
+	h.submitUsageRecordTask(func(ctx context.Context) {
 		called.Store(true)
 	})
 	close(release)
