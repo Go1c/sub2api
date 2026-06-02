@@ -239,6 +239,36 @@ func (h *PaymentHandler) UpdatePlan(c *gin.Context) {
 	response.Success(c, plan)
 }
 
+// PreviewPlanLimitSync previews syncing a plan's daily/weekly limits to existing subscriptions.
+// POST /api/v1/admin/payment/plans/:id/sync-limits/preview
+func (h *PaymentHandler) PreviewPlanLimitSync(c *gin.Context) {
+	id, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	preview, err := h.configService.PreviewPlanLimitSync(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, preview)
+}
+
+// SyncPlanLimits syncs only daily/weekly limits from a plan to existing active subscriptions.
+// POST /api/v1/admin/payment/plans/:id/sync-limits
+func (h *PaymentHandler) SyncPlanLimits(c *gin.Context) {
+	id, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	result, err := h.configService.SyncPlanLimits(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 // DeletePlan deletes a subscription plan.
 // DELETE /api/v1/admin/payment/plans/:id
 func (h *PaymentHandler) DeletePlan(c *gin.Context) {
