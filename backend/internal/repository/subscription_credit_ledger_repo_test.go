@@ -24,12 +24,12 @@ type SubscriptionCreditLedgerRepoSuite struct {
 
 func (s *SubscriptionCreditLedgerRepoSuite) SetupTest() {
 	s.ctx = context.Background()
-	tx := testEntTx(s.T())
-	s.client = tx.Client()
-	// ledger repo 直接走 integrationDB（绕过 tx），保证 ON CONFLICT 真实生效
+	s.client = testEntClient(s.T())
+	// ledger repo 直接走 integrationDB，保证 ON CONFLICT 幂等语义在真实连接上生效。
 	s.repo = NewSubscriptionCreditLedgerRepository(integrationDB)
-	// 清理本测试用的 ledger 行（防止上一次失败 PASS 残留）
+	// 清理本测试用数据（防止上一次失败残留导致唯一索引或 FK 干扰）。
 	_, _ = integrationDB.ExecContext(s.ctx, `DELETE FROM subscription_credit_ledger WHERE reason LIKE 'ledger-test:%'`)
+	_, _ = integrationDB.ExecContext(s.ctx, `DELETE FROM users WHERE email LIKE 'ledger-%@test.com'`)
 }
 
 func TestSubscriptionCreditLedgerRepoSuite(t *testing.T) {

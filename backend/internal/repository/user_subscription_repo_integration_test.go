@@ -296,12 +296,13 @@ func (s *UserSubscriptionRepoSuite) TestList_FilterByUserID() {
 }
 
 func (s *UserSubscriptionRepoSuite) TestList_FilterByGroupID() {
-	user := s.mustCreateUser("grpfilter@test.com", service.RoleUser)
+	user1 := s.mustCreateUser("grpfilter1@test.com", service.RoleUser)
+	user2 := s.mustCreateUser("grpfilter2@test.com", service.RoleUser)
 	g1 := s.mustCreateGroup("g-f1")
 	g2 := s.mustCreateGroup("g-f2")
 
-	s.mustCreateSubscription(user.ID, g1.ID, nil)
-	s.mustCreateSubscription(user.ID, g2.ID, nil)
+	s.mustCreateSubscription(user1.ID, g1.ID, nil)
+	s.mustCreateSubscription(user2.ID, g2.ID, nil)
 
 	subs, _, err := s.repo.List(s.ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, service.UserSubscriptionListFilters{
 		GroupID: &g1.ID,
@@ -346,6 +347,7 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage() {
 
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err)
+	s.Require().InDelta(1.25, got.QuotaUsedUSD, 1e-6)
 	s.Require().InDelta(1.25, got.DailyUsageUSD, 1e-6)
 	s.Require().InDelta(1.25, got.WeeklyUsageUSD, 1e-6)
 }
@@ -360,6 +362,7 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Accumulates() {
 
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err)
+	s.Require().InDelta(3.5, got.QuotaUsedUSD, 1e-6)
 	s.Require().InDelta(3.5, got.DailyUsageUSD, 1e-6)
 }
 
@@ -477,14 +480,15 @@ func (s *UserSubscriptionRepoSuite) TestUpdateNotes() {
 // --- ListExpired / BatchUpdateExpiredStatus ---
 
 func (s *UserSubscriptionRepoSuite) TestListExpired() {
-	user := s.mustCreateUser("listexp@test.com", service.RoleUser)
+	activeUser := s.mustCreateUser("listexp-active@test.com", service.RoleUser)
+	expiredUser := s.mustCreateUser("listexp-expired@test.com", service.RoleUser)
 	groupActive := s.mustCreateGroup("g-listexp-active")
 	groupExpired := s.mustCreateGroup("g-listexp-expired")
 
-	s.mustCreateSubscription(user.ID, groupActive.ID, func(c *dbent.UserSubscriptionCreate) {
+	s.mustCreateSubscription(activeUser.ID, groupActive.ID, func(c *dbent.UserSubscriptionCreate) {
 		c.SetExpiresAt(time.Now().Add(24 * time.Hour))
 	})
-	s.mustCreateSubscription(user.ID, groupExpired.ID, func(c *dbent.UserSubscriptionCreate) {
+	s.mustCreateSubscription(expiredUser.ID, groupExpired.ID, func(c *dbent.UserSubscriptionCreate) {
 		c.SetExpiresAt(time.Now().Add(-24 * time.Hour))
 	})
 
@@ -494,14 +498,15 @@ func (s *UserSubscriptionRepoSuite) TestListExpired() {
 }
 
 func (s *UserSubscriptionRepoSuite) TestBatchUpdateExpiredStatus() {
-	user := s.mustCreateUser("batch@test.com", service.RoleUser)
+	futureUser := s.mustCreateUser("batch-future@test.com", service.RoleUser)
+	pastUser := s.mustCreateUser("batch-past@test.com", service.RoleUser)
 	groupFuture := s.mustCreateGroup("g-batch-future")
 	groupPast := s.mustCreateGroup("g-batch-past")
 
-	active := s.mustCreateSubscription(user.ID, groupFuture.ID, func(c *dbent.UserSubscriptionCreate) {
+	active := s.mustCreateSubscription(futureUser.ID, groupFuture.ID, func(c *dbent.UserSubscriptionCreate) {
 		c.SetExpiresAt(time.Now().Add(24 * time.Hour))
 	})
-	expiredActive := s.mustCreateSubscription(user.ID, groupPast.ID, func(c *dbent.UserSubscriptionCreate) {
+	expiredActive := s.mustCreateSubscription(pastUser.ID, groupPast.ID, func(c *dbent.UserSubscriptionCreate) {
 		c.SetExpiresAt(time.Now().Add(-24 * time.Hour))
 	})
 
@@ -589,18 +594,19 @@ func (s *UserSubscriptionRepoSuite) TestDeleteByGroupID() {
 // --- Combined scenario ---
 
 func (s *UserSubscriptionRepoSuite) TestActiveExpiredBoundaries_UsageAndReset_BatchUpdateExpiredStatus() {
-	user := s.mustCreateUser("subr@example.com", service.RoleUser)
+	activeUser := s.mustCreateUser("subr-active@example.com", service.RoleUser)
+	expiredUser := s.mustCreateUser("subr-expired@example.com", service.RoleUser)
 	groupActive := s.mustCreateGroup("g-subr-active")
 	groupExpired := s.mustCreateGroup("g-subr-expired")
 
-	active := s.mustCreateSubscription(user.ID, groupActive.ID, func(c *dbent.UserSubscriptionCreate) {
+	active := s.mustCreateSubscription(activeUser.ID, groupActive.ID, func(c *dbent.UserSubscriptionCreate) {
 		c.SetExpiresAt(time.Now().Add(2 * time.Hour))
 	})
-	expiredActive := s.mustCreateSubscription(user.ID, groupExpired.ID, func(c *dbent.UserSubscriptionCreate) {
+	expiredActive := s.mustCreateSubscription(expiredUser.ID, groupExpired.ID, func(c *dbent.UserSubscriptionCreate) {
 		c.SetExpiresAt(time.Now().Add(-2 * time.Hour))
 	})
 
-	got, err := s.repo.GetActiveByUserIDAndGroupID(s.ctx, user.ID, groupActive.ID)
+	got, err := s.repo.GetActiveByUserIDAndGroupID(s.ctx, activeUser.ID, groupActive.ID)
 	s.Require().NoError(err, "GetActiveByUserIDAndGroupID")
 	s.Require().Equal(active.ID, got.ID, "expected active subscription")
 
@@ -610,6 +616,7 @@ func (s *UserSubscriptionRepoSuite) TestActiveExpiredBoundaries_UsageAndReset_Ba
 
 	after, err := s.repo.GetByID(s.ctx, active.ID)
 	s.Require().NoError(err, "GetByID")
+	s.Require().InDelta(1.25, after.QuotaUsedUSD, 1e-6)
 	s.Require().InDelta(1.25, after.DailyUsageUSD, 1e-6)
 	s.Require().InDelta(1.25, after.WeeklyUsageUSD, 1e-6)
 	s.Require().NotNil(after.DailyWindowStart, "expected DailyWindowStart activated")
@@ -697,6 +704,7 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Concurrent() {
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err)
 	expectedUsage := float64(numGoroutines) * incrementPerGoroutine
+	s.Require().InDelta(expectedUsage, got.QuotaUsedUSD, 1e-6, "quota usage should be correctly accumulated")
 	s.Require().InDelta(expectedUsage, got.DailyUsageUSD, 1e-6, "daily usage should be correctly accumulated")
 	s.Require().InDelta(expectedUsage, got.WeeklyUsageUSD, 1e-6, "weekly usage should be correctly accumulated")
 }

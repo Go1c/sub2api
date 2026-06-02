@@ -451,15 +451,29 @@ func (r *userSubscriptionRepository) IncrementUsage(ctx context.Context, id int6
 	const updateSQL = `
 		UPDATE user_subscriptions us
 		SET
+			quota_used_usd = us.quota_used_usd + $1,
 			daily_usage_usd = us.daily_usage_usd + $1,
 			weekly_usage_usd = us.weekly_usage_usd + $1,
-			monthly_usage_usd = us.monthly_usage_usd + $1,
+			exhausted_at = CASE
+				WHEN us.exhausted_at IS NULL
+					AND us.quota_limit_usd > 0
+					AND us.quota_used_usd < us.quota_limit_usd
+					AND us.quota_used_usd + $1 >= us.quota_limit_usd
+				THEN NOW()
+				ELSE us.exhausted_at
+			END,
 			updated_at = NOW()
-		FROM groups g
 		WHERE us.id = $2
 			AND us.deleted_at IS NULL
-			AND us.group_id = g.id
-			AND g.deleted_at IS NULL
+			AND (
+				us.group_id IS NULL
+				OR EXISTS (
+					SELECT 1
+					FROM groups g
+					WHERE g.id = us.group_id
+						AND g.deleted_at IS NULL
+				)
+			)
 	`
 
 	client := clientFromContext(ctx, r.client)
