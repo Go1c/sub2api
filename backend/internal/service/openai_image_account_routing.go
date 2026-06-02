@@ -66,7 +66,7 @@ func newOpenAIImageAccountRoutingFailoverError(account *Account, requiresImageGe
 	if account != nil {
 		accountID = account.ID
 	}
-	message := "selected OpenAI account is not compatible with this request"
+	var message string
 	if requiresImageGeneration {
 		message = "selected OpenAI account is not enabled for image generation"
 	} else {

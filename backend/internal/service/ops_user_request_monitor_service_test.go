@@ -565,6 +565,7 @@ func TestSnapshotOpsCaptureClientRequestInputCapsClonedBodyAndPreservesOriginalB
 	})
 	if snapshot == nil {
 		t.Fatalf("snapshot = nil")
+		return
 	}
 	if len(snapshot.Body) != opsUserRequestMonitorMaxBodyBytes {
 		t.Fatalf("snapshot body len = %d, want %d", len(snapshot.Body), opsUserRequestMonitorMaxBodyBytes)

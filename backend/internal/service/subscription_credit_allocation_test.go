@@ -11,10 +11,10 @@ func TestAllocateSubscriptionCredit(t *testing.T) {
 	const eps = 1e-9
 
 	tests := []struct {
-		name      string
-		input     SubscriptionCreditAllocationInput
-		wantSub   float64
-		wantBal   float64
+		name    string
+		input   SubscriptionCreditAllocationInput
+		wantSub float64
+		wantBal float64
 	}{
 		{
 			name: "full subscription when quota and windows sufficient",
