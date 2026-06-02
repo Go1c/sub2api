@@ -309,7 +309,8 @@ func (s *UserSubscriptionRepoSuite) TestList_FilterByGroupID() {
 	})
 	s.Require().NoError(err)
 	s.Require().Len(subs, 1)
-	s.Require().Equal(g1.ID, subs[0].GroupID)
+	s.Require().NotNil(subs[0].GroupID)
+	s.Require().Equal(g1.ID, *subs[0].GroupID)
 }
 
 func (s *UserSubscriptionRepoSuite) TestList_FilterByStatus() {
