@@ -201,7 +201,8 @@ const typeOptions = computed(() => [
   { value: 'admin_balance', label: t('admin.users.typeAdminBalance') },
   { value: 'concurrency', label: t('admin.users.typeConcurrency') },
   { value: 'admin_concurrency', label: t('admin.users.typeAdminConcurrency') },
-  { value: 'subscription', label: t('admin.users.typeSubscription') }
+  { value: 'subscription', label: t('admin.users.typeSubscription') },
+  { value: 'subscription_payment', label: t('admin.users.typeSubscriptionPayment') }
 ])
 
 // Watch modal open
@@ -242,9 +243,13 @@ const isBalanceType = (type: string) => type === 'balance' || type === 'balance_
 // Helper: check if subscription type
 const isSubscriptionType = (type: string) => type === 'subscription'
 
+// Helper: check if external subscription payment type
+const isSubscriptionPaymentType = (type: string) => type === 'subscription_payment'
+
 // Icon name based on type
 const getIconName = (item: BalanceHistoryItem) => {
   if (isBalanceType(item.type)) return 'dollar'
+  if (isSubscriptionPaymentType(item.type)) return 'dollar'
   if (isSubscriptionType(item.type)) return 'badge'
   return 'bolt' // concurrency
 }
@@ -257,6 +262,7 @@ const getIconBg = (item: BalanceHistoryItem) => {
       : 'bg-red-100 dark:bg-red-900/30'
   }
   if (isSubscriptionType(item.type)) return 'bg-purple-100 dark:bg-purple-900/30'
+  if (isSubscriptionPaymentType(item.type)) return 'bg-cyan-100 dark:bg-cyan-900/30'
   return item.value >= 0
     ? 'bg-blue-100 dark:bg-blue-900/30'
     : 'bg-orange-100 dark:bg-orange-900/30'
@@ -270,6 +276,7 @@ const getIconColor = (item: BalanceHistoryItem) => {
       : 'text-red-600 dark:text-red-400'
   }
   if (isSubscriptionType(item.type)) return 'text-purple-600 dark:text-purple-400'
+  if (isSubscriptionPaymentType(item.type)) return 'text-cyan-600 dark:text-cyan-400'
   return item.value >= 0
     ? 'text-blue-600 dark:text-blue-400'
     : 'text-orange-600 dark:text-orange-400'
@@ -283,6 +290,7 @@ const getValueColor = (item: BalanceHistoryItem) => {
       : 'text-red-600 dark:text-red-400'
   }
   if (isSubscriptionType(item.type)) return 'text-purple-600 dark:text-purple-400'
+  if (isSubscriptionPaymentType(item.type)) return 'text-cyan-600 dark:text-cyan-400'
   return item.value >= 0
     ? 'text-blue-600 dark:text-blue-400'
     : 'text-orange-600 dark:text-orange-400'
@@ -307,6 +315,8 @@ const getItemTitle = (item: BalanceHistoryItem) => {
       return item.value >= 0 ? t('redeem.concurrencyAddedAdmin') : t('redeem.concurrencyReducedAdmin')
     case 'subscription':
       return t('redeem.subscriptionAssigned')
+    case 'subscription_payment':
+      return t('redeem.subscriptionPayment')
     default:
       return t('common.unknown')
   }
@@ -322,6 +332,9 @@ const formatValue = (item: BalanceHistoryItem) => {
     const days = item.validity_days || Math.round(item.value)
     const groupName = item.group?.name || ''
     return groupName ? `${days}d - ${groupName}` : `${days}d`
+  }
+  if (isSubscriptionPaymentType(item.type)) {
+    return `¥${item.value.toFixed(2)}`
   }
   // concurrency types
   const sign = item.value >= 0 ? '+' : ''
