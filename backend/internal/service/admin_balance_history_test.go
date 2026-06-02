@@ -1,9 +1,13 @@
 package service
 
 import (
+	"context"
+	"database/sql/driver"
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +52,7 @@ func TestMergeBalanceHistoryCodesIncludesAffiliateTransfersByDefault(t *testing.
 		},
 	}
 
-	got := mergeBalanceHistoryCodes(redeemCodes, affiliateCodes, pagination.PaginationParams{
+	got := mergeBalanceHistoryCodes(redeemCodes, affiliateCodes, nil, pagination.PaginationParams{
 		Page:     1,
 		PageSize: 2,
 	})
@@ -77,12 +81,42 @@ func TestMergeBalanceHistoryCodesPaginatesAfterCombiningSources(t *testing.T) {
 			{ID: -3, Type: RedeemTypeAffiliateBalance, UsedBy: &usedBy, UsedAt: at(3), CreatedAt: *at(3)},
 			{ID: -4, Type: RedeemTypeAffiliateBalance, UsedBy: &usedBy, UsedAt: at(1), CreatedAt: *at(1)},
 		},
+		nil,
 		pagination.PaginationParams{Page: 2, PageSize: 2},
 	)
 
 	require.Len(t, got, 2)
 	require.Equal(t, RedeemTypeConcurrency, got[0].Type)
 	require.Equal(t, int64(-4), got[1].ID)
+}
+
+func TestMergeBalanceHistoryCodesIncludesExternalSubscriptionPaymentsByDefault(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 6, 2, 9, 0, 0, 0, time.UTC)
+	usedBy := int64(10)
+	at := func(minutes int) *time.Time {
+		v := base.Add(time.Duration(minutes) * time.Minute)
+		return &v
+	}
+
+	got := mergeBalanceHistoryCodes(
+		[]RedeemCode{
+			{ID: 1, Type: RedeemTypeBalance, UsedBy: &usedBy, UsedAt: at(10), CreatedAt: *at(10)},
+		},
+		[]RedeemCode{
+			{ID: -2, Type: RedeemTypeAffiliateBalance, UsedBy: &usedBy, UsedAt: at(20), CreatedAt: *at(20)},
+		},
+		[]RedeemCode{
+			{ID: -900000000003, Type: RedeemTypeSubscriptionPayment, UsedBy: &usedBy, UsedAt: at(30), CreatedAt: *at(30)},
+		},
+		pagination.PaginationParams{Page: 1, PageSize: 3},
+	)
+
+	require.Len(t, got, 3)
+	require.Equal(t, RedeemTypeSubscriptionPayment, got[0].Type)
+	require.Equal(t, RedeemTypeAffiliateBalance, got[1].Type)
+	require.Equal(t, RedeemTypeBalance, got[2].Type)
 }
 
 func TestAffiliateBalanceHistoryItemMarksSignupBonusAction(t *testing.T) {
@@ -103,4 +137,72 @@ func TestAffiliateBalanceHistoryItemMarksSignupBonusAction(t *testing.T) {
 	require.Equal(t, createdAt, *got.UsedAt)
 	require.Equal(t, createdAt, got.CreatedAt)
 	require.Equal(t, "signup_bonus", got.Notes)
+}
+
+func TestListSubscriptionPaymentHistoryIncludesPaidExternalSubscriptionOrders(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	paidAt := time.Date(2026, 6, 2, 10, 30, 0, 0, time.UTC)
+	createdAt := paidAt.Add(-5 * time.Minute)
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"code",
+		"pay_amount",
+		"status",
+		"payment_type",
+		"subscription_validity_days",
+		"plan_name",
+		"paid_at",
+		"completed_at",
+		"created_at",
+	}).AddRow(
+		int64(55),
+		"PAY-55-123",
+		199.0,
+		OrderStatusCompleted,
+		payment.TypeAlipay,
+		30,
+		"Pro Plan",
+		paidAt,
+		nil,
+		createdAt,
+	)
+
+	statuses := balanceHistorySubscriptionPaymentStatuses()
+	listArgs := []driver.Value{int64(7), payment.OrderTypeSubscription, payment.TypeBalance}
+	for _, status := range statuses {
+		listArgs = append(listArgs, status)
+	}
+	listArgs = append(listArgs, 0, 10)
+	mock.ExpectQuery("FROM payment_orders po(?s:.*)order_type = \\$2(?s:.*)payment_type <> \\$3(?s:.*)status IN").
+		WithArgs(listArgs...).
+		WillReturnRows(rows)
+
+	countArgs := []driver.Value{int64(7), payment.OrderTypeSubscription, payment.TypeBalance}
+	for _, status := range statuses {
+		countArgs = append(countArgs, status)
+	}
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\)(?s:.*)FROM payment_orders po(?s:.*)order_type = \\$2").
+		WithArgs(countArgs...).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(int64(1)))
+
+	codes, total, err := listSubscriptionPaymentHistory(context.Background(), db, 7, pagination.PaginationParams{Page: 1, PageSize: 10})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, codes, 1)
+	require.Equal(t, int64(-900000000055), codes[0].ID)
+	require.Equal(t, "PAY-55-123", codes[0].Code)
+	require.Equal(t, RedeemTypeSubscriptionPayment, codes[0].Type)
+	require.Equal(t, 199.0, codes[0].Value)
+	require.Equal(t, StatusUsed, codes[0].Status)
+	require.NotNil(t, codes[0].UsedBy)
+	require.Equal(t, int64(7), *codes[0].UsedBy)
+	require.NotNil(t, codes[0].UsedAt)
+	require.Equal(t, paidAt, *codes[0].UsedAt)
+	require.Contains(t, codes[0].Notes, "Pro Plan")
+	require.Contains(t, codes[0].Notes, string(payment.TypeAlipay))
+	require.NoError(t, mock.ExpectationsWereMet())
 }
