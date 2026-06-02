@@ -362,6 +362,49 @@ func TestResolveNotificationPaymentAmountRejectsNonMapayOrderAmountMismatch(t *t
 	assert.False(t, ok)
 }
 
+func TestIsAffiliateRebateEligibleOrder(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		order *dbent.PaymentOrder
+		want  bool
+	}{
+		{
+			name:  "balance recharge is eligible",
+			order: &dbent.PaymentOrder{OrderType: payment.OrderTypeBalance, PaymentType: payment.TypeAlipay},
+			want:  true,
+		},
+		{
+			name:  "external subscription payment is eligible",
+			order: &dbent.PaymentOrder{OrderType: payment.OrderTypeSubscription, PaymentType: payment.TypeWxpay},
+			want:  true,
+		},
+		{
+			name:  "balance paid subscription is not eligible",
+			order: &dbent.PaymentOrder{OrderType: payment.OrderTypeSubscription, PaymentType: payment.TypeBalance},
+			want:  false,
+		},
+		{
+			name:  "unknown order type is not eligible",
+			order: &dbent.PaymentOrder{OrderType: "other", PaymentType: payment.TypeAlipay},
+			want:  false,
+		},
+		{
+			name:  "nil order is not eligible",
+			order: nil,
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, isAffiliateRebateEligibleOrder(tt.order))
+		})
+	}
+}
+
 func TestValidateProviderNotificationMetadataRejectsAlipaySnapshotMismatch(t *testing.T) {
 	t.Parallel()
 
@@ -424,6 +467,57 @@ func (s *subscriptionCreditPurchaseFulfillerStub) FulfillOrder(ctx context.Conte
 	return s.err
 }
 
+type paymentFulfillmentAffiliateRepoStub struct {
+	*affiliateSignupBonusRepoStub
+	accrueCalls []paymentFulfillmentAffiliateAccrueCall
+}
+
+type paymentFulfillmentAffiliateAccrueCall struct {
+	inviterID     int64
+	inviteeUserID int64
+	amount        float64
+	sourceOrderID *int64
+}
+
+func newPaymentFulfillmentAffiliateRepoStub(inviteeUserID int64) *paymentFulfillmentAffiliateRepoStub {
+	inviterID := int64(1)
+	base := newAffiliateSignupBonusRepoStub()
+	now := time.Now()
+	base.profiles = map[int64]*AffiliateSummary{
+		inviterID: {
+			UserID:    inviterID,
+			AffCode:   "INVITER",
+			CreatedAt: now,
+		},
+		inviteeUserID: {
+			UserID:    inviteeUserID,
+			AffCode:   "INVITEE",
+			InviterID: &inviterID,
+			CreatedAt: now,
+		},
+	}
+	return &paymentFulfillmentAffiliateRepoStub{affiliateSignupBonusRepoStub: base}
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, _ int, sourceOrderID *int64) (bool, error) {
+	var copiedOrderID *int64
+	if sourceOrderID != nil {
+		v := *sourceOrderID
+		copiedOrderID = &v
+	}
+	r.accrueCalls = append(r.accrueCalls, paymentFulfillmentAffiliateAccrueCall{
+		inviterID:     inviterID,
+		inviteeUserID: inviteeUserID,
+		amount:        amount,
+		sourceOrderID: copiedOrderID,
+	})
+	return true, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+	return 0, nil
+}
+
 func TestExecuteSubscriptionFulfillmentUsesCreditPurchaseSnapshot(t *testing.T) {
 	ctx := context.Background()
 	client := newOrderNotFoundTestClient(t)
@@ -440,6 +534,38 @@ func TestExecuteSubscriptionFulfillmentUsesCreditPurchaseSnapshot(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusCompleted, got.Status)
 	require.NotNil(t, got.CompletedAt)
+}
+
+func TestExecuteSubscriptionFulfillmentAccruesAffiliateRebateForExternalPayment(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	_, err := client.ExecContext(ctx, `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_audit_logs_order_action_uniq
+ON payment_audit_logs(order_id, action)`)
+	require.NoError(t, err)
+	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
+	fulfiller := &subscriptionCreditPurchaseFulfillerStub{}
+	affiliateRepo := newPaymentFulfillmentAffiliateRepoStub(order.UserID)
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:    "true",
+		SettingKeyAffiliateRebateRate: "10",
+	}}, nil)
+	svc := &PaymentService{
+		entClient:                     client,
+		subscriptionCreditPurchaseSvc: fulfiller,
+		affiliateService:              NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
+	}
+
+	err = svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+
+	require.NoError(t, err)
+	require.Len(t, affiliateRepo.accrueCalls, 1)
+	call := affiliateRepo.accrueCalls[0]
+	require.Equal(t, int64(1), call.inviterID)
+	require.Equal(t, order.UserID, call.inviteeUserID)
+	require.InDelta(t, order.Amount*0.10, call.amount, 1e-9)
+	require.NotNil(t, call.sourceOrderID)
+	require.Equal(t, order.ID, *call.sourceOrderID)
 }
 
 func TestExecuteSubscriptionFulfillmentMarksCreditPurchaseBlockAsFulfillmentFailed(t *testing.T) {
