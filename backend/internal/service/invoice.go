@@ -107,6 +107,7 @@ type InvoiceRepository interface {
 	ListAdmin(ctx context.Context, params pagination.PaginationParams, filter InvoiceListFilter) ([]InvoiceRequest, *pagination.PaginationResult, error)
 	SumActiveAmountByUser(ctx context.Context, userID int64) (float64, error)
 	SumCompletedAmountByUser(ctx context.Context, userID int64) (float64, error)
+	SumInvoiceableSubscriptionPaymentsByUser(ctx context.Context, userID int64) (float64, error)
 	MarkCompletedAndDeduct(ctx context.Context, id int64, input CompleteInvoicePersistInput) (*InvoiceRequest, error)
 	MarkFailed(ctx context.Context, id int64, reason string) (*InvoiceRequest, error)
 }
@@ -138,16 +139,20 @@ func (s *InvoiceService) Overview(ctx context.Context, userID int64) (*InvoiceOv
 	if err != nil {
 		return nil, err
 	}
+	totalInvoiceable, err := s.invoiceableAmount(ctx, user)
+	if err != nil {
+		return nil, err
+	}
 	used, err := s.repo.SumActiveAmountByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	remaining := roundMoney(user.TotalRecharged - used)
+	remaining := roundMoney(totalInvoiceable - used)
 	if remaining < 0 {
 		remaining = 0
 	}
 	return &InvoiceOverview{
-		TotalRecharged:    roundMoney(user.TotalRecharged),
+		TotalRecharged:    totalInvoiceable,
 		UsedInvoiceAmount: roundMoney(used),
 		RemainingAmount:   remaining,
 		Enabled:           user.InvoiceEnabled,
@@ -178,7 +183,11 @@ func (s *InvoiceService) Create(ctx context.Context, userID int64, input CreateI
 	if err != nil {
 		return nil, err
 	}
-	if roundMoney(user.TotalRecharged-activeAmount) < amount {
+	totalInvoiceable, err := s.invoiceableAmount(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	if roundMoney(totalInvoiceable-activeAmount) < amount {
 		return nil, ErrInvoiceAmountExceeded
 	}
 
@@ -195,6 +204,17 @@ func (s *InvoiceService) Create(ctx context.Context, userID int64, input CreateI
 		return nil, err
 	}
 	return req, nil
+}
+
+func (s *InvoiceService) invoiceableAmount(ctx context.Context, user *User) (float64, error) {
+	if user == nil {
+		return 0, nil
+	}
+	subscriptionPayments, err := s.repo.SumInvoiceableSubscriptionPaymentsByUser(ctx, user.ID)
+	if err != nil {
+		return 0, err
+	}
+	return roundMoney(user.TotalRecharged + subscriptionPayments), nil
 }
 
 func (s *InvoiceService) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]InvoiceRequest, *pagination.PaginationResult, error) {
