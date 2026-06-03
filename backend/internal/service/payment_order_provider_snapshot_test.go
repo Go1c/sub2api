@@ -181,6 +181,67 @@ func TestBuildPaymentOrderProviderSnapshot_IncludesMapayMerchantIdentity(t *test
 	require.NotContains(t, snapshot, "pkey")
 }
 
+func TestBuildPaymentOrderProviderSnapshot_IncludesStripeCurrencyAndMultiplier(t *testing.T) {
+	t.Parallel()
+
+	snapshot := buildPaymentOrderProviderSnapshot(&payment.InstanceSelection{
+		InstanceID:  "71",
+		ProviderKey: payment.TypeStripe,
+		Config: map[string]string{
+			"secretKey":                 "sk_test_secret",
+			"currency":                  "usd",
+			"balanceRechargeMultiplier": "7",
+		},
+		PaymentMode: "popup",
+	}, CreateOrderRequest{PaymentType: payment.TypeStripe})
+
+	require.Equal(t, "USD", snapshot["currency"])
+	require.Equal(t, float64(7), snapshot["balance_recharge_multiplier"])
+	require.NotContains(t, snapshot, "secretKey")
+}
+
+func TestResolveExternalOrderAmountUsesStripeInstanceMultiplier(t *testing.T) {
+	t.Parallel()
+
+	got := resolveExternalOrderAmount(
+		CreateOrderRequest{
+			Amount:    1,
+			OrderType: payment.OrderTypeBalance,
+		},
+		nil,
+		&PaymentConfig{BalanceRechargeMultiplier: 1},
+		&payment.InstanceSelection{
+			ProviderKey: payment.TypeStripe,
+			Config: map[string]string{
+				"balanceRechargeMultiplier": "7",
+			},
+		},
+	)
+
+	require.InDelta(t, 7, got, 1e-9)
+}
+
+func TestResolveExternalOrderAmountKeepsGlobalMultiplierForNonStripe(t *testing.T) {
+	t.Parallel()
+
+	got := resolveExternalOrderAmount(
+		CreateOrderRequest{
+			Amount:    1,
+			OrderType: payment.OrderTypeBalance,
+		},
+		nil,
+		&PaymentConfig{BalanceRechargeMultiplier: 1.5},
+		&payment.InstanceSelection{
+			ProviderKey: payment.TypeAlipay,
+			Config: map[string]string{
+				"balanceRechargeMultiplier": "7",
+			},
+		},
+	)
+
+	require.InDelta(t, 1.5, got, 1e-9)
+}
+
 func valueOrEmpty(v *string) string {
 	if v == nil {
 		return ""

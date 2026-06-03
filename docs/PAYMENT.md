@@ -169,6 +169,8 @@ International payment platform supporting multiple payment methods and currencie
 | **Secret Key** | Stripe secret key (`sk_live_...` or `sk_test_...`) | Yes |
 | **Publishable Key** | Stripe publishable key (`pk_live_...` or `pk_test_...`) | Yes |
 | **Webhook Secret** | Stripe Webhook signing secret (`whsec_...`) | Yes |
+| **Currency** | Stripe charge currency, config key `currency`. Currently supports `cny` / `usd`; defaults to `cny` | No |
+| **Balance Recharge Multiplier** | Balance credit multiplier for this Stripe instance, config key `balanceRechargeMultiplier`. For example, with `currency=usd` and `balanceRechargeMultiplier=7`, paying `1.00 USD` credits `7.00` account balance | No |
 
 ---
 

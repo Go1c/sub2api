@@ -169,6 +169,8 @@ Mapay 使用 `/xpay/epay/` 下的 EasyPay 风格接口。系统默认优先调�
 | **Secret Key** | Stripe 密钥（`sk_live_...` 或 `sk_test_...`） | 是 |
 | **Publishable Key** | Stripe 可公开密钥（`pk_live_...` 或 `pk_test_...`） | 是 |
 | **Webhook Secret** | Stripe Webhook 签名密钥（`whsec_...`） | 是 |
+| **Currency** | Stripe 实收币种，配置键为 `currency`，当前支持 `cny` / `usd`，默认 `cny` | 否 |
+| **Balance Recharge Multiplier** | 该 Stripe 实例的余额到账倍率，配置键为 `balanceRechargeMultiplier`。例如 `currency=usd` 且 `balanceRechargeMultiplier=7` 时，用户支付 `1.00 USD` 后账户余额到账 `7.00` | 否 |
 
 ---
 
