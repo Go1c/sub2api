@@ -52,14 +52,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if req.OrderType == payment.OrderTypeSubscription && isInternalBalancePaymentType(req.PaymentType) {
 		return s.createSubscriptionBalanceOrder(ctx, req, user, plan, cfg)
 	}
-	orderAmount := req.Amount
-	limitAmount := req.Amount
-	if plan != nil {
-		orderAmount = plan.Price
-		limitAmount = plan.Price
-	} else if req.OrderType == payment.OrderTypeBalance {
-		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
-	}
+	limitAmount := paymentLimitAmount(req, plan)
 	feeRate := cfg.RechargeFeeRate
 	payAmountStr := payment.CalculatePayAmount(limitAmount, feeRate)
 	payAmount, _ := strconv.ParseFloat(payAmountStr, 64)
@@ -77,6 +70,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if oauthResp != nil {
 		return oauthResp, nil
 	}
+	orderAmount := resolveExternalOrderAmount(req, plan, cfg, sel)
 	order, err := s.createOrderInTx(ctx, req, user, plan, cfg, orderAmount, limitAmount, feeRate, payAmount, sel)
 	if err != nil {
 		return nil, err
@@ -89,6 +83,27 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		return nil, err
 	}
 	return resp, nil
+}
+
+func paymentLimitAmount(req CreateOrderRequest, plan *dbent.SubscriptionPlan) float64 {
+	if plan != nil {
+		return plan.Price
+	}
+	return req.Amount
+}
+
+func resolveExternalOrderAmount(req CreateOrderRequest, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, sel *payment.InstanceSelection) float64 {
+	if plan != nil {
+		return plan.Price
+	}
+	if req.OrderType != payment.OrderTypeBalance {
+		return req.Amount
+	}
+	multiplier := cfg.BalanceRechargeMultiplier
+	if sel != nil {
+		multiplier = payment.ProviderBalanceRechargeMultiplier(sel.ProviderKey, sel.Config, cfg.BalanceRechargeMultiplier)
+	}
+	return calculateCreditedBalance(req.Amount, multiplier)
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
@@ -550,6 +565,12 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 	if providerKey == payment.TypeEasyPay || providerKey == payment.TypeMapay {
 		if merchantID := strings.TrimSpace(sel.Config["pid"]); merchantID != "" {
 			snapshot["merchant_id"] = merchantID
+		}
+	}
+	if providerKey == payment.TypeStripe {
+		snapshot["currency"] = strings.ToUpper(payment.NormalizeStripeCurrency(sel.Config))
+		if multiplier := payment.ProviderBalanceRechargeMultiplier(providerKey, sel.Config, 0); multiplier > 0 {
+			snapshot["balance_recharge_multiplier"] = multiplier
 		}
 	}
 

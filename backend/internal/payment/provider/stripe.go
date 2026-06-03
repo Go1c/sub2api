@@ -14,7 +14,6 @@ import (
 
 // Stripe constants.
 const (
-	stripeCurrency            = "cny"
 	stripeEventPaymentSuccess = "payment_intent.succeeded"
 	stripeEventPaymentFailed  = "payment_intent.payment_failed"
 )
@@ -87,7 +86,7 @@ func (s *Stripe) CreatePayment(ctx context.Context, req payment.CreatePaymentReq
 
 	params := &stripe.PaymentIntentCreateParams{
 		Amount:             stripe.Int64(amountInCents),
-		Currency:           stripe.String(stripeCurrency),
+		Currency:           stripe.String(payment.NormalizeStripeCurrency(s.config)),
 		PaymentMethodTypes: pmTypes,
 		Description:        stripe.String(req.Subject),
 		Metadata:           map[string]string{"orderId": req.OrderID},
