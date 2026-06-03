@@ -405,6 +405,15 @@ func TestIsAffiliateRebateEligibleOrder(t *testing.T) {
 	}
 }
 
+func TestAffiliateRebateAuditClaimSQLCastsParametersAsText(t *testing.T) {
+	t.Parallel()
+
+	sql := affiliateRebateAuditClaimSQL()
+
+	require.Contains(t, sql, "CAST($1 AS TEXT)")
+	require.Contains(t, sql, "CAST($2 AS TEXT)")
+}
+
 func TestValidateProviderNotificationMetadataRejectsAlipaySnapshotMismatch(t *testing.T) {
 	t.Parallel()
 
@@ -470,6 +479,7 @@ func (s *subscriptionCreditPurchaseFulfillerStub) FulfillOrder(ctx context.Conte
 type paymentFulfillmentAffiliateRepoStub struct {
 	*affiliateSignupBonusRepoStub
 	accrueCalls []paymentFulfillmentAffiliateAccrueCall
+	accrueErr   error
 }
 
 type paymentFulfillmentAffiliateAccrueCall struct {
@@ -500,6 +510,9 @@ func newPaymentFulfillmentAffiliateRepoStub(inviteeUserID int64) *paymentFulfill
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, _ int, sourceOrderID *int64) (bool, error) {
+	if r.accrueErr != nil {
+		return false, r.accrueErr
+	}
 	var copiedOrderID *int64
 	if sourceOrderID != nil {
 		v := *sourceOrderID
@@ -516,6 +529,14 @@ func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inv
 
 func (r *paymentFulfillmentAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
 	return 0, nil
+}
+
+func ensurePaymentAuditOrderActionUniqueIndex(t *testing.T, ctx context.Context, client *dbent.Client) {
+	t.Helper()
+	_, err := client.ExecContext(ctx, `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_audit_logs_order_action_uniq
+ON payment_audit_logs(order_id, action)`)
+	require.NoError(t, err)
 }
 
 func TestExecuteSubscriptionFulfillmentUsesCreditPurchaseSnapshot(t *testing.T) {
@@ -539,10 +560,7 @@ func TestExecuteSubscriptionFulfillmentUsesCreditPurchaseSnapshot(t *testing.T) 
 func TestExecuteSubscriptionFulfillmentAccruesAffiliateRebateForExternalPayment(t *testing.T) {
 	ctx := context.Background()
 	client := newOrderNotFoundTestClient(t)
-	_, err := client.ExecContext(ctx, `
-CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_audit_logs_order_action_uniq
-ON payment_audit_logs(order_id, action)`)
-	require.NoError(t, err)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
 	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
 	fulfiller := &subscriptionCreditPurchaseFulfillerStub{}
 	affiliateRepo := newPaymentFulfillmentAffiliateRepoStub(order.UserID)
@@ -556,7 +574,7 @@ ON payment_audit_logs(order_id, action)`)
 		affiliateService:              NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
 	}
 
-	err = svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+	err := svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
 
 	require.NoError(t, err)
 	require.Len(t, affiliateRepo.accrueCalls, 1)
@@ -566,6 +584,72 @@ ON payment_audit_logs(order_id, action)`)
 	require.InDelta(t, order.Amount*0.10, call.amount, 1e-9)
 	require.NotNil(t, call.sourceOrderID)
 	require.Equal(t, order.ID, *call.sourceOrderID)
+}
+
+func TestExecuteSubscriptionFulfillmentCompletesWhenAffiliateRebateFails(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
+	fulfiller := &subscriptionCreditPurchaseFulfillerStub{}
+	affiliateRepo := newPaymentFulfillmentAffiliateRepoStub(order.UserID)
+	affiliateRepo.accrueErr = errors.New("affiliate ledger unavailable")
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:    "true",
+		SettingKeyAffiliateRebateRate: "10",
+	}}, nil)
+	svc := &PaymentService{
+		entClient:                     client,
+		subscriptionCreditPurchaseSvc: fulfiller,
+		affiliateService:              NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
+	}
+
+	err := svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+
+	require.NoError(t, err)
+	got, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, got.Status)
+	require.Nil(t, got.FailedReason)
+	requirePaymentAuditAction(t, ctx, svc, order.ID, "AFFILIATE_REBATE_FAILED")
+	requireNoPaymentAuditAction(t, ctx, svc, order.ID, "FULFILLMENT_FAILED")
+}
+
+func TestExecuteBalanceFulfillmentCompletesWhenAffiliateRebateFails(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+	order := createPaidBalanceOrderForFulfillmentTest(t, ctx, client)
+	affiliateRepo := newPaymentFulfillmentAffiliateRepoStub(order.UserID)
+	affiliateRepo.accrueErr = errors.New("affiliate ledger unavailable")
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:    "true",
+		SettingKeyAffiliateRebateRate: "10",
+	}}, nil)
+	redeemRepo := &paymentOrderLifecycleRedeemRepo{codesByCode: map[string]*RedeemCode{
+		order.RechargeCode: {
+			ID:     1001,
+			Code:   order.RechargeCode,
+			Type:   RedeemTypeBalance,
+			Value:  order.Amount,
+			Status: StatusUsed,
+		},
+	}}
+	svc := &PaymentService{
+		entClient:        client,
+		redeemService:    NewRedeemService(redeemRepo, nil, nil, nil, nil, client, nil, nil),
+		affiliateService: NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
+	}
+
+	err := svc.ExecuteBalanceFulfillment(ctx, order.ID)
+
+	require.NoError(t, err)
+	got, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, got.Status)
+	require.Nil(t, got.FailedReason)
+	requirePaymentAuditAction(t, ctx, svc, order.ID, "AFFILIATE_REBATE_FAILED")
+	requireNoPaymentAuditAction(t, ctx, svc, order.ID, "FULFILLMENT_FAILED")
 }
 
 func TestExecuteSubscriptionFulfillmentMarksCreditPurchaseBlockAsFulfillmentFailed(t *testing.T) {
@@ -627,6 +711,52 @@ func TestExecuteSubscriptionFulfillmentRecoversCreditPurchaseFromLedger(t *testi
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusCompleted, got.Status)
 	require.NotNil(t, got.CompletedAt)
+}
+
+func requirePaymentAuditAction(t *testing.T, ctx context.Context, svc *PaymentService, orderID int64, action string) {
+	t.Helper()
+	logs, err := svc.GetOrderAuditLogs(ctx, orderID)
+	require.NoError(t, err)
+	for _, log := range logs {
+		if log.Action == action {
+			return
+		}
+	}
+	require.Failf(t, "missing audit action", "order %d missing audit action %s", orderID, action)
+}
+
+func requireNoPaymentAuditAction(t *testing.T, ctx context.Context, svc *PaymentService, orderID int64, action string) {
+	t.Helper()
+	logs, err := svc.GetOrderAuditLogs(ctx, orderID)
+	require.NoError(t, err)
+	for _, log := range logs {
+		require.NotEqual(t, action, log.Action)
+	}
+}
+
+func createPaidBalanceOrderForFulfillmentTest(t *testing.T, ctx context.Context, client *dbent.Client) *dbent.PaymentOrder {
+	t.Helper()
+	user := client.User.Create().
+		SetEmail("balance-buyer@example.com").
+		SetPasswordHash("hash").
+		SetUsername("balance-buyer").
+		SaveX(ctx)
+	return client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(10).
+		SetPayAmount(10).
+		SetRechargeCode("BALANCE-ORDER").
+		SetOutTradeNo("sub2_balance_order").
+		SetPaymentType(payment.TypeWxpay).
+		SetPaymentTradeNo("trade-balance").
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusPaid).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("example.test").
+		SaveX(ctx)
 }
 
 func createPaidCreditSubscriptionOrderForFulfillmentTest(t *testing.T, ctx context.Context, client *dbent.Client) *dbent.PaymentOrder {
