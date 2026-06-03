@@ -144,7 +144,7 @@ onMounted(async () => {
     const res = await paymentAPI.getOrder(orderId)
     order.value = res.data
 
-    await paymentStore.fetchConfig()
+    await paymentStore.fetchConfig(true)
     const publishableKey = paymentStore.config?.stripe_publishable_key
     if (!publishableKey) { initError.value = t('payment.stripeNotConfigured'); return }
 
