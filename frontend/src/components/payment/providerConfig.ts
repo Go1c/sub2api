@@ -118,6 +118,8 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'secretKey', label: '', sensitive: true },
     { key: 'publishableKey', label: '', sensitive: false },
     { key: 'webhookSecret', label: '', sensitive: true },
+    { key: 'currency', label: '', sensitive: false, defaultValue: 'usd' },
+    { key: 'balanceRechargeMultiplier', label: '', sensitive: false, defaultValue: '7' },
   ],
 }
 

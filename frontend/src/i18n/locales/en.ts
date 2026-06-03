@@ -6011,6 +6011,8 @@ export default {
         field_secretKey: 'Secret Key',
         field_publishableKey: 'Publishable Key',
         field_webhookSecret: 'Webhook Secret',
+        field_currency: 'Settlement Currency',
+        field_balanceRechargeMultiplier: 'Balance Credit Multiplier',
         field_cid: 'Channel ID',
         field_cidAlipay: 'Alipay Channel ID',
         field_cidWxpay: 'WeChat Channel ID',
