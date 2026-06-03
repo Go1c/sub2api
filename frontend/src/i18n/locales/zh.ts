@@ -6172,6 +6172,8 @@ export default {
         field_secretKey: '密钥',
         field_publishableKey: '公开密钥',
         field_webhookSecret: 'Webhook 密钥',
+        field_currency: '结算币种',
+        field_balanceRechargeMultiplier: '余额到账倍率',
         field_cid: '支付渠道 ID',
         field_cidAlipay: '支付宝渠道 ID',
         field_cidWxpay: '微信渠道 ID',
