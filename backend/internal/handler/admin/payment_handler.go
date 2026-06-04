@@ -130,6 +130,31 @@ func (h *PaymentHandler) RetryFulfillment(c *gin.Context) {
 	response.Success(c, gin.H{"message": "fulfillment retried"})
 }
 
+// AdminManualCompleteOrderRequest is the request body for manual order completion.
+type AdminManualCompleteOrderRequest struct {
+	Reason string `json:"reason"`
+}
+
+// ManualCompleteOrder manually marks an expired paid-offline order as paid and fulfills it.
+// POST /api/v1/admin/payment/orders/:id/manual-complete
+func (h *PaymentHandler) ManualCompleteOrder(c *gin.Context) {
+	orderID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+
+	var req AdminManualCompleteOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := h.paymentService.ManualCompleteOrder(c.Request.Context(), orderID, req.Reason); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "manual completion processed"})
+}
+
 func sanitizeAdminPaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*dbent.PaymentOrder {
 	if len(orders) == 0 {
 		return orders

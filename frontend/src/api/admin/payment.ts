@@ -61,6 +61,10 @@ export interface PlanLimitSyncResult extends PlanLimitSyncPreview {
   updated_count: number
 }
 
+export interface ManualCompleteOrderRequest {
+  reason: string
+}
+
 export const adminPaymentAPI = {
   // ==================== Config ====================
 
@@ -116,6 +120,11 @@ export const adminPaymentAPI = {
   /** Retry recharge for a failed order */
   retryRecharge(id: number) {
     return apiClient.post(`/admin/payment/orders/${id}/retry`)
+  },
+
+  /** Manually complete an expired order after confirming payment externally */
+  manualCompleteOrder(id: number, data: ManualCompleteOrderRequest) {
+    return apiClient.post(`/admin/payment/orders/${id}/manual-complete`, data)
   },
 
   /** Process a refund */
