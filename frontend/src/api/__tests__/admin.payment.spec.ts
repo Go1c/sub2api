@@ -10,7 +10,7 @@ vi.mock('@/api/client', () => ({
   },
 }))
 
-import { adminPaymentAPI, type PlanLimitSyncPreview, type PlanLimitSyncResult } from '@/api/admin/payment'
+import { adminPaymentAPI, type ManualCompleteOrderRequest, type PlanLimitSyncPreview, type PlanLimitSyncResult } from '@/api/admin/payment'
 
 type Assert<T extends true> = T
 type IsExact<T, U> = (
@@ -31,8 +31,13 @@ type ExpectedPlanLimitSyncResult = ExpectedPlanLimitSyncPreview & {
   updated_count: number
 }
 
+type ExpectedManualCompleteOrderRequest = {
+  reason: string
+}
+
 const previewContractExact: Assert<IsExact<PlanLimitSyncPreview, ExpectedPlanLimitSyncPreview>> = true
 const resultContractExact: Assert<IsExact<PlanLimitSyncResult, ExpectedPlanLimitSyncResult>> = true
+const manualCompleteContractExact: Assert<IsExact<ManualCompleteOrderRequest, ExpectedManualCompleteOrderRequest>> = true
 
 describe('admin payment plan limit sync api', () => {
   beforeEach(() => {
@@ -55,5 +60,14 @@ describe('admin payment plan limit sync api', () => {
   it('keeps plan limit sync response types aligned with the backend contract', () => {
     expect(previewContractExact).toBe(true)
     expect(resultContractExact).toBe(true)
+  })
+
+  it('posts manual completion reason to the expired-order supplement endpoint', async () => {
+    await adminPaymentAPI.manualCompleteOrder(1740, { reason: '支付宝已实际到账，回调超过过期宽限期' })
+
+    expect(post).toHaveBeenCalledWith('/admin/payment/orders/1740/manual-complete', {
+      reason: '支付宝已实际到账，回调超过过期宽限期'
+    })
+    expect(manualCompleteContractExact).toBe(true)
   })
 })
