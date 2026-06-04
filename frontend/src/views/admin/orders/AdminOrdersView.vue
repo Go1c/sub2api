@@ -34,6 +34,10 @@
               <Icon name="refresh" size="sm" />
               {{ t('payment.admin.retry') }}
             </button>
+            <button v-if="row.status === 'EXPIRED'" @click="openManualCompleteDialog(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20">
+              <Icon name="check" size="sm" />
+              {{ t('payment.admin.manualComplete') }}
+            </button>
             <template v-if="row.status === 'REFUND_REQUESTED'">
               <span v-if="row.refund_amount" class="rounded-full bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">{{ row.order_type === 'balance' ? '$' : '¥' }}{{ row.refund_amount.toFixed(2) }}</span>
               <button @click="openRefundDialog(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20">
@@ -108,6 +112,30 @@
     </BaseDialog>
 
     <AdminRefundDialog :show="showRefundDialog" :order="selectedOrder" :submitting="refundSubmitting" @confirm="handleRefund" @cancel="showRefundDialog = false" />
+
+    <BaseDialog :show="showManualCompleteDialog" :title="t('payment.admin.manualCompleteTitle')" width="narrow" @close="closeManualCompleteDialog">
+      <div v-if="selectedOrder" class="space-y-4">
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+          {{ t('payment.admin.manualCompleteHint', { orderNo: selectedOrder.out_trade_no, amount: selectedOrder.pay_amount.toFixed(2) }) }}
+        </div>
+        <div>
+          <label class="input-label">{{ t('payment.admin.manualCompleteReason') }}</label>
+          <textarea
+            v-model.trim="manualCompleteReason"
+            rows="3"
+            class="input"
+            :placeholder="t('payment.admin.manualCompleteReasonPlaceholder')"
+          />
+          <p class="input-hint">{{ t('payment.admin.manualCompleteReasonHint') }}</p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button class="btn btn-secondary" :disabled="manualCompleteSubmitting" @click="closeManualCompleteDialog">{{ t('common.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="manualCompleteSubmitting || !manualCompleteReason.trim()" @click="handleManualComplete">
+            {{ manualCompleteSubmitting ? t('common.processing') : t('payment.admin.confirmManualComplete') }}
+          </button>
+        </div>
+      </div>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -148,6 +176,9 @@ const selectedOrder = ref<PaymentOrder | null>(null)
 const showDetailDialog = ref(false)
 const showRefundDialog = ref(false)
 const refundSubmitting = ref(false)
+const showManualCompleteDialog = ref(false)
+const manualCompleteReason = ref('')
+const manualCompleteSubmitting = ref(false)
 const orderAuditLogs = ref<AuditLog[]>([])
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -224,6 +255,39 @@ async function handleRetryOrder(order: PaymentOrder) {
 }
 
 function openRefundDialog(order: PaymentOrder) { selectedOrder.value = order; showRefundDialog.value = true }
+
+function openManualCompleteDialog(order: PaymentOrder) {
+  selectedOrder.value = order
+  manualCompleteReason.value = ''
+  showManualCompleteDialog.value = true
+}
+
+function closeManualCompleteDialog() {
+  if (manualCompleteSubmitting.value) return
+  showManualCompleteDialog.value = false
+  manualCompleteReason.value = ''
+}
+
+async function handleManualComplete() {
+  if (!selectedOrder.value) return
+  const reason = manualCompleteReason.value.trim()
+  if (!reason) {
+    appStore.showError(t('payment.admin.manualCompleteReasonRequired'))
+    return
+  }
+  manualCompleteSubmitting.value = true
+  try {
+    await adminPaymentAPI.manualCompleteOrder(selectedOrder.value.id, { reason })
+    appStore.showSuccess(t('payment.admin.manualCompleteSuccess'))
+    showManualCompleteDialog.value = false
+    manualCompleteReason.value = ''
+    loadOrders()
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+  } finally {
+    manualCompleteSubmitting.value = false
+  }
+}
 
 async function handleRefund(data: { amount: number; reason: string; deduct_balance: boolean; force: boolean }) {
   if (!selectedOrder.value) return

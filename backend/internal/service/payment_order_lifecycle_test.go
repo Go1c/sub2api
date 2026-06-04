@@ -625,6 +625,254 @@ func TestHandlePaymentNotificationRetriesFulfillmentInternallyBeforeManualHandli
 	require.Equal(t, 88.0, userRepo.getByIDUser.Balance)
 }
 
+func TestHandlePaymentNotificationIgnoresExpiredOrderBeyondGrace(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("webhook-expired-beyond-grace@example.com").
+		SetPasswordHash("hash").
+		SetUsername("webhook-expired-beyond-grace-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	updatedAt := time.Now().Add(-(paymentGraceMinutes + 1) * time.Minute)
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(1000).
+		SetPayAmount(1000).
+		SetFeeRate(0).
+		SetRechargeCode("WEBHOOK-EXPIRED-BEYOND-GRACE").
+		SetOutTradeNo("sub2_webhook_expired_beyond_grace").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetProviderKey(payment.TypeAlipay).
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusExpired).
+		SetExpiresAt(time.Now().Add(-time.Hour)).
+		SetUpdatedAt(updatedAt).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	userRepo := &mockUserRepo{
+		getByIDUser: &User{
+			ID:       user.ID,
+			Email:    user.Email,
+			Username: user.Username,
+			Balance:  0,
+		},
+	}
+	redeemRepo := &paymentOrderLifecycleRedeemRepo{
+		codesByCode: map[string]*RedeemCode{
+			order.RechargeCode: {
+				ID:     1,
+				Code:   order.RechargeCode,
+				Type:   RedeemTypeBalance,
+				Value:  order.Amount,
+				Status: StatusUnused,
+			},
+		},
+	}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
+	svc := &PaymentService{
+		entClient:       client,
+		redeemService:   redeemService,
+		userRepo:        userRepo,
+		providersLoaded: true,
+	}
+
+	err = svc.HandlePaymentNotification(ctx, &payment.PaymentNotification{
+		TradeNo: "alipay-paid-too-late",
+		OrderID: order.OutTradeNo,
+		Amount:  1000,
+		Status:  payment.NotificationStatusSuccess,
+	}, payment.TypeAlipay)
+	require.NoError(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusExpired, reloaded.Status)
+	require.Nil(t, reloaded.PaidAt)
+	require.Equal(t, 0.0, userRepo.getByIDUser.Balance)
+	require.Empty(t, redeemRepo.useCalls)
+	require.True(t, paymentLifecycleHasAuditAction(t, ctx, client, order.ID, "PAYMENT_AFTER_EXPIRY"))
+}
+
+func TestManualCompleteExpiredBalanceOrderCreditsBalanceAndStats(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("manual-complete@example.com").
+		SetPasswordHash("hash").
+		SetUsername("manual-complete-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(1000).
+		SetPayAmount(1000).
+		SetFeeRate(0).
+		SetRechargeCode("MANUAL-COMPLETE-EXPIRED").
+		SetOutTradeNo("sub2_manual_complete_expired").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetProviderKey(payment.TypeAlipay).
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusExpired).
+		SetExpiresAt(time.Now().Add(-time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	userRepo := &mockUserRepo{
+		getByIDUser: &User{
+			ID:             user.ID,
+			Email:          user.Email,
+			Username:       user.Username,
+			Balance:        0,
+			TotalRecharged: 0,
+		},
+	}
+	userRepo.updateBalanceFn = func(ctx context.Context, id int64, amount float64) error {
+		require.Equal(t, user.ID, id)
+		userRepo.getByIDUser.Balance += amount
+		if amount > 0 {
+			userRepo.getByIDUser.TotalRecharged += amount
+		}
+		return nil
+	}
+	redeemRepo := &paymentOrderLifecycleRedeemRepo{
+		codesByCode: map[string]*RedeemCode{
+			order.RechargeCode: {
+				ID:     1,
+				Code:   order.RechargeCode,
+				Type:   RedeemTypeBalance,
+				Value:  order.Amount,
+				Status: StatusUnused,
+			},
+		},
+	}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
+	svc := &PaymentService{
+		entClient:       client,
+		redeemService:   redeemService,
+		userRepo:        userRepo,
+		providersLoaded: true,
+	}
+
+	err = svc.ManualCompleteOrder(ctx, order.ID, "支付宝已实际到账，回调超过过期宽限期")
+	require.NoError(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.NotNil(t, reloaded.PaidAt)
+	require.NotNil(t, reloaded.CompletedAt)
+	require.Equal(t, 1000.0, userRepo.getByIDUser.Balance)
+	require.Equal(t, 1000.0, userRepo.getByIDUser.TotalRecharged)
+	require.Len(t, redeemRepo.useCalls, 1)
+	require.True(t, paymentLifecycleHasAuditAction(t, ctx, client, order.ID, "ORDER_MANUAL_SUPPLEMENTED"))
+	require.True(t, paymentLifecycleHasAuditAction(t, ctx, client, order.ID, "RECHARGE_SUCCESS"))
+
+	stats, err := svc.GetDashboardStats(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, 1000.0, stats.TotalAmount)
+	require.Equal(t, 1, stats.TotalCount)
+}
+
+func TestManualCompleteOrderRejectsBlankReason(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("manual-complete-blank@example.com").
+		SetPasswordHash("hash").
+		SetUsername("manual-complete-blank-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(1000).
+		SetPayAmount(1000).
+		SetFeeRate(0).
+		SetRechargeCode("MANUAL-COMPLETE-BLANK").
+		SetOutTradeNo("sub2_manual_complete_blank").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetProviderKey(payment.TypeAlipay).
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusExpired).
+		SetExpiresAt(time.Now().Add(-time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{entClient: client}
+
+	err = svc.ManualCompleteOrder(ctx, order.ID, "   ")
+	require.Error(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusExpired, reloaded.Status)
+	require.Nil(t, reloaded.PaidAt)
+}
+
+func TestManualCompleteOrderRejectsNonExpiredOrder(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("manual-complete-pending@example.com").
+		SetPasswordHash("hash").
+		SetUsername("manual-complete-pending-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(1000).
+		SetPayAmount(1000).
+		SetFeeRate(0).
+		SetRechargeCode("MANUAL-COMPLETE-PENDING").
+		SetOutTradeNo("sub2_manual_complete_pending").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("").
+		SetProviderKey(payment.TypeAlipay).
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusPending).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{entClient: client}
+
+	err = svc.ManualCompleteOrder(ctx, order.ID, "支付宝已实际到账")
+	require.Error(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusPending, reloaded.Status)
+	require.Nil(t, reloaded.PaidAt)
+}
+
 func TestVerifyOrderByOutTradeNoUsesOutTradeNoWhenPaymentTradeNoAlreadyExistsForAlipay(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentOrderLifecycleTestClient(t)
@@ -713,6 +961,19 @@ func TestVerifyOrderByOutTradeNoUsesOutTradeNoWhenPaymentTradeNoAlreadyExistsFor
 	require.NoError(t, err)
 	require.Equal(t, order.OutTradeNo, provider.lastQueryTradeNo)
 	require.Equal(t, "upstream-trade-existing", got.PaymentTradeNo)
+}
+
+func paymentLifecycleHasAuditAction(t *testing.T, ctx context.Context, client *dbent.Client, orderID int64, action string) bool {
+	t.Helper()
+
+	logs, err := (&PaymentService{entClient: client}).GetOrderAuditLogs(ctx, orderID)
+	require.NoError(t, err)
+	for _, log := range logs {
+		if log.Action == action {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPaymentOrderAllowsRegistryFallbackOnlyForLegacyOrdersWithoutPinnedProviderState(t *testing.T) {
