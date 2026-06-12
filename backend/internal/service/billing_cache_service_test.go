@@ -108,6 +108,15 @@ type balanceGateCacheStub struct {
 	subData *SubscriptionCacheData
 }
 
+type balanceGateRechargeReaderStub struct {
+	amount float64
+	err    error
+}
+
+func (s balanceGateRechargeReaderStub) SumBalanceUsageGateRechargeAmount(context.Context, int64) (float64, error) {
+	return s.amount, s.err
+}
+
 func (b *balanceGateCacheStub) GetUserBalance(context.Context, int64) (float64, error) {
 	return b.balance, nil
 }
@@ -210,6 +219,42 @@ func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateAllowsQualif
 	t.Cleanup(svc.Stop)
 
 	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1, TotalRecharged: 6}, nil, &Group{}, nil)
+
+	require.NoError(t, err)
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateCountsExternalSubscriptionPayments(t *testing.T) {
+	resetBalanceUsageGateCacheForTest()
+	settingSvc := NewSettingService(&balanceGateSettingRepoStub{values: map[string]string{
+		"balance_usage_gate_enabled":      "true",
+		"balance_usage_gate_min_balance":  "2",
+		"balance_usage_gate_min_recharge": "10",
+	}}, nil)
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 12}, nil, nil, nil, nil, nil, &config.Config{}, settingSvc)
+	svc.SetBalanceUsageGateRechargeReader(balanceGateRechargeReaderStub{amount: 79})
+	t.Cleanup(svc.Stop)
+
+	limit := 1.0
+	sub := &UserSubscription{
+		ID:            10,
+		UserID:        1,
+		Status:        SubscriptionStatusActive,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		ScopeType:     SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:   map[string]any{},
+		DailyLimitUSD: &limit,
+		DailyUsageUSD: 1,
+		QuotaLimitUSD: 10,
+		QuotaUsedUSD:  1,
+	}
+
+	err := svc.CheckBillingEligibility(
+		context.Background(),
+		&User{ID: 1, TotalRecharged: 0},
+		nil,
+		&Group{ID: 2, Status: StatusActive, Platform: PlatformAnthropic},
+		sub,
+	)
 
 	require.NoError(t, err)
 }

@@ -85,6 +85,12 @@ type apiKeyRateLimitLoader interface {
 	GetRateLimitData(ctx context.Context, keyID int64) (*APIKeyRateLimitData, error)
 }
 
+// BalanceUsageGateRechargeReader returns paid external subscription amounts that
+// should count toward the balance usage gate's historical recharge threshold.
+type BalanceUsageGateRechargeReader interface {
+	SumBalanceUsageGateRechargeAmount(ctx context.Context, userID int64) (float64, error)
+}
+
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
@@ -95,6 +101,7 @@ type BillingCacheService struct {
 	userRPMCache          UserRPMCache
 	userGroupRateRepo     UserGroupRateRepository
 	settingService        *SettingService
+	rechargeReader        BalanceUsageGateRechargeReader
 	cfg                   *config.Config
 	circuitBreaker        *billingCircuitBreaker
 
@@ -126,6 +133,10 @@ func NewBillingCacheService(
 	if len(settingServices) > 0 {
 		settingService = settingServices[0]
 	}
+	var rechargeReader BalanceUsageGateRechargeReader
+	if reader, ok := userRepo.(BalanceUsageGateRechargeReader); ok {
+		rechargeReader = reader
+	}
 	svc := &BillingCacheService{
 		cache:                 cache,
 		userRepo:              userRepo,
@@ -134,11 +145,19 @@ func NewBillingCacheService(
 		userRPMCache:          userRPMCache,
 		userGroupRateRepo:     userGroupRateRepo,
 		settingService:        settingService,
+		rechargeReader:        rechargeReader,
 		cfg:                   cfg,
 	}
 	svc.circuitBreaker = newBillingCircuitBreaker(cfg.Billing.CircuitBreaker)
 	svc.startCacheWriteWorkers()
 	return svc
+}
+
+func (s *BillingCacheService) SetBalanceUsageGateRechargeReader(reader BalanceUsageGateRechargeReader) *BillingCacheService {
+	if s != nil {
+		s.rechargeReader = reader
+	}
+	return s
 }
 
 // Stop 关闭缓存写入工作池
@@ -828,15 +847,41 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, user 
 				fmt.Sprintf("账户余额需大于 %.2f 才能使用余额服务，请先充值。", minBalance),
 			)
 		}
-		if minRecharge > 0 && user.TotalRecharged <= minRecharge {
-			return infraerrors.Forbidden(
-				"BALANCE_USAGE_GATE_NOT_MET",
-				fmt.Sprintf("为防止批量注册，本站最低充值 %.2f 元才可以正常使用赠送余额。您可以放心，充值余额支持无理由退款。", minRecharge),
-			)
+		if minRecharge > 0 {
+			rechargeTotal := user.TotalRecharged
+			if rechargeTotal <= minRecharge {
+				var rechargeErr error
+				rechargeTotal, rechargeErr = s.balanceUsageGateRechargeTotal(ctx, user)
+				if rechargeErr != nil {
+					logger.LegacyPrintf("service.billing_cache", "ALERT: balance usage gate recharge history lookup failed for user %d: %v", user.ID, rechargeErr)
+					return ErrBillingServiceUnavailable.WithCause(rechargeErr)
+				}
+			}
+			if rechargeTotal <= minRecharge {
+				return infraerrors.Forbidden(
+					"BALANCE_USAGE_GATE_NOT_MET",
+					fmt.Sprintf("为防止批量注册，本站最低充值 %.2f 元才可以正常使用赠送余额。您可以放心，充值余额支持无理由退款。", minRecharge),
+				)
+			}
 		}
 	}
 
 	return nil
+}
+
+func (s *BillingCacheService) balanceUsageGateRechargeTotal(ctx context.Context, user *User) (float64, error) {
+	if user == nil {
+		return 0, nil
+	}
+	total := user.TotalRecharged
+	if s == nil || s.rechargeReader == nil || user.ID <= 0 {
+		return total, nil
+	}
+	externalSubscriptionPayments, err := s.rechargeReader.SumBalanceUsageGateRechargeAmount(ctx, user.ID)
+	if err != nil {
+		return 0, err
+	}
+	return total + externalSubscriptionPayments, nil
 }
 
 // checkSubscriptionEligibility 检查订阅模式资格
