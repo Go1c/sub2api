@@ -19,6 +19,7 @@ import (
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
@@ -775,6 +776,53 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 		return service.ErrUserNotFound
 	}
 	return nil
+}
+
+func (r *userRepository) SumBalanceUsageGateRechargeAmount(ctx context.Context, userID int64) (float64, error) {
+	if r == nil || r.sql == nil || userID <= 0 {
+		return 0, nil
+	}
+
+	statuses := []string{
+		service.OrderStatusCompleted,
+		service.OrderStatusPaid,
+		service.OrderStatusRecharging,
+		service.OrderStatusFulfillmentFailed,
+	}
+	args := []any{userID, payment.OrderTypeSubscription, payment.TypeBalance}
+	statusPlaceholders := make([]string, 0, len(statuses))
+	for i, status := range statuses {
+		args = append(args, status)
+		statusPlaceholders = append(statusPlaceholders, fmt.Sprintf("$%d", i+4))
+	}
+
+	rows, err := r.sql.QueryContext(ctx, fmt.Sprintf(`
+SELECT COALESCE(SUM(po.pay_amount), 0)
+FROM payment_orders po
+WHERE po.user_id = $1
+  AND po.order_type = $2
+  AND po.payment_type <> $3
+  AND po.status IN (%s)`, strings.Join(statusPlaceholders, ",")),
+		args...,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var total sql.NullFloat64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if !total.Valid {
+		return 0, nil
+	}
+	return total.Float64, nil
 }
 
 // DeductBalance 扣除用户余额
