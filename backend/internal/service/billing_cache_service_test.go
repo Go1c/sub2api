@@ -343,6 +343,69 @@ func TestBillingCacheServiceCheckBillingEligibility_SubscriptionLimitWithoutBala
 	require.ErrorIs(t, err, ErrDailyLimitExceeded)
 }
 
+// 回归：订阅总额度池耗尽（已用 >= 上限）但日/周窗口仍未触顶时，
+// 订阅必须被判为不可消费并回落到余额闸门——余额不足则直接拒绝，
+// 不能因为窗口未触顶而误判订阅可用、绕过余额检查导致余额被扣成负数。
+func TestBillingCacheServiceCheckBillingEligibility_ExhaustedPoolWithoutBalanceBlocks(t *testing.T) {
+	dailyLimit := 35.0
+	weeklyLimit := 35.0
+	sub := &UserSubscription{
+		ID:             10,
+		UserID:         1,
+		Status:         SubscriptionStatusActive,
+		ExpiresAt:      time.Now().Add(time.Hour),
+		ScopeType:      SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:    map[string]any{},
+		DailyLimitUSD:  &dailyLimit,
+		DailyUsageUSD:  33, // 窗口冻结在上限以下
+		WeeklyLimitUSD: &weeklyLimit,
+		WeeklyUsageUSD: 33,
+		QuotaLimitUSD:  93,
+		QuotaUsedUSD:   93, // 总池耗尽
+	}
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 0}, nil, nil, nil, nil, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(
+		context.Background(),
+		&User{ID: 1},
+		nil,
+		&Group{ID: 2, Status: StatusActive, Platform: PlatformAnthropic},
+		sub,
+	)
+
+	require.Error(t, err)
+}
+
+// 回归：总池耗尽时若用户仍有正余额，则回落到余额计费（允许）。
+func TestBillingCacheServiceCheckBillingEligibility_ExhaustedPoolFallsBackToBalance(t *testing.T) {
+	dailyLimit := 35.0
+	sub := &UserSubscription{
+		ID:            10,
+		UserID:        1,
+		Status:        SubscriptionStatusActive,
+		ExpiresAt:     time.Now().Add(time.Hour),
+		ScopeType:     SubscriptionScopeAllAvailableGroups,
+		ScopeConfig:   map[string]any{},
+		DailyLimitUSD: &dailyLimit,
+		DailyUsageUSD: 33,
+		QuotaLimitUSD: 93,
+		QuotaUsedUSD:  93,
+	}
+	svc := NewBillingCacheService(&balanceGateCacheStub{balance: 5}, nil, nil, nil, nil, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	err := svc.CheckBillingEligibility(
+		context.Background(),
+		&User{ID: 1},
+		nil,
+		&Group{ID: 2, Status: StatusActive, Platform: PlatformAnthropic},
+		sub,
+	)
+
+	require.NoError(t, err)
+}
+
 func TestSettingServiceGetBalanceUsageGateSettingsUsesProcessCache(t *testing.T) {
 	resetBalanceUsageGateCacheForTest()
 	repo := &balanceGateSettingRepoStub{values: map[string]string{
