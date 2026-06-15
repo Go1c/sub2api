@@ -82,6 +82,21 @@ func (s *UserSubscription) IsExhausted() bool {
 	return s.ExhaustedAt != nil
 }
 
+// IsCreditPoolExhausted 总额度池是否已耗尽（订阅应作废、回落到余额闸门）。
+//
+// 仅在以下情况判为耗尽：
+//   - ExhaustedAt 已显式置位；或
+//   - 配置了正的总额度池（QuotaLimitUSD > 0）且剩余 <= 0。
+//
+// QuotaLimitUSD == 0 表示未配置总池（纯日/周窗口订阅），剩余额度恒为 0，
+// 不应据此误判为耗尽——否则这类订阅会被错误地绕过、回落到余额闸门。
+func (s *UserSubscription) IsCreditPoolExhausted() bool {
+	if s.IsExhausted() {
+		return true
+	}
+	return s.QuotaLimitUSD > 0 && s.QuotaRemainingUSD() <= 0
+}
+
 func (s *UserSubscription) DaysRemaining() int {
 	if s.IsExpired() {
 		return 0
