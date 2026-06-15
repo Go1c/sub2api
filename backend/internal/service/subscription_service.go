@@ -1158,6 +1158,11 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	if sub.IsExpired() {
 		return false, ErrSubscriptionExpired
 	}
+	// 总额度池耗尽：订阅作废，回落到余额闸门（ErrSubscriptionInvalid 属于可回落错误）。
+	// 额度池耗尽后日/周窗口用量会冻结在上限以下，单靠窗口检查无法拦截，必须显式判定总池。
+	if sub.IsExhausted() || sub.QuotaRemainingUSD() <= 0 {
+		return false, ErrSubscriptionInvalid
+	}
 
 	// 2. 内存中修正过期窗口的用量，确保 CheckUsageLimits 不会误拒绝用户。
 	//    实际的 DB 窗口重置由扣费事务完成。
