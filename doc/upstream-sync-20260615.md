@@ -143,9 +143,34 @@ upstream 独占逻辑为主，与 fork 自定义重叠小，价值高。
 - **i18n / 单视图冲突**（撞 fork 定制，机械但需逐个核对）：`c256a544` 用量窗口 tooltip · ⭐`cf12bc52` 用量明细虚拟表可空字段崩溃修复（valuable bugfix）· `72c11216` bedrock_cc_compat 开关持久化 · `aea2950b` LinuxDO 登录修复 · `57d9e15e` 添加账号同步上游模型
 - `af19d443` 代理有效期与失败回退（wire_gen 冲突）
 
-- [x] **T2 后端零散修复** — 12+1 已并（见上表），8 个 deferred
-- [x] **T2 前端/用量低风险簇** — 5+1 已并，其余按子特性 deferred（见上）
-- [ ] T2 OpenAI 网关/调度/图像大簇（~33 commit，含 T1 deferred 的 4 个）—— 一次性专项
-- [ ] T2 失败请求观测 + claude-fable-5 + i18n/单视图 deferred 组
-- [ ] ⭐ 安全相关：`1a86c6ce` exclusive group access · `705fe7d8` delete user api keys（DeleteWithAudit）
-- [ ] T3 payment / CI（含 go1.26.4 toolchain bump 修 backend-security；专项评估，可能部分不并入）
+### ⚠️ 关键发现：剩余"看似独立"的提交多是缺失子系统的尾巴
+
+fork 早期分叉、只选择性同步过上游，导致 dev **整段缺失若干上游子系统**。剩下的高价值提交很多是这些子系统的"尾部 commit"，单独 cherry-pick 会因缺前置而失败/不可编译：
+
+| 想要的 commit | 实际依赖的、dev 缺失的子系统 |
+|---|---|
+| `705fe7d8` 删用户带 API key | `ddf06335` 的删除审计链：`deleted_api_key_audits` 表 + `DeleteWithAudit`（dev 无此表/无此方法） |
+| `1a86c6ce` 独占分组访问（安全） | API Key 分组可用性守卫子系统：`abortIfAPIKeyGroupUnavailable` / `validateAPIKeyGroupAvailable`（dev 完全没有） |
+
+**含义**：clean cherry-pick 阶段基本到头了。剩余工作性质变了 —— 不是"挑 commit"，而是**按子系统整体搬迁 + 热路径三方合并**，冲突大、需 Review，属于要先决策范围的大件。
+
+### 剩余大件（每件需单独决策范围，建议 Review 后再开工）
+
+- [ ] **OpenAI 网关/调度/图像大簇**（~33 commit，含 T1 deferred 的 4 个）—— 同一组热路径文件一次性三方合并；单实例可只取正确性/安全、跳过纯优化
+- [ ] **失败请求/错误日志观测子系统**（`ddf06335`+`cfb195c7`+`fe895273`+`b8c89c34`+`705fe7d8`）—— 整段搬迁（含审计表 migration），撞 fork settings/ops
+- [ ] **API Key 分组可用性/独占守卫子系统**（前置 + `1a86c6ce` 安全）—— 整段搬迁
+- [ ] **claude-fable-5**（`d662c973`）—— 模型新增，撞 bedrock/antigravity/白名单
+- [ ] **i18n / 单视图机械冲突**：`c256a544` · ⭐`cf12bc52`(崩溃修复) · `72c11216` · `aea2950b` · `57d9e15e` · `af19d443`
+- [ ] **T3 payment**（fork 命脉，挑着手工 port）
+- [ ] **T3 go1.26.4 toolchain bump**（`13468778`，修 backend-security；动 CI/Docker，结合新部署平台定）
+
+### 已落地汇总（截至 2026-06-16）
+
+| PR | 内容 | commit 数 |
+|---|---|---|
+| #70 | 订阅闸门回归修复（用户本人） | 1 |
+| #69 | T1 安全/正确性 | 9 |
+| #72 | T2 后端零散修复 | 12+1 |
+| #73 | T2 前端/用量低风险 | 5+1 |
+
+clean-cherry-pick 阶段共并 **26 个上游 commit + 3 处适配/修复**，全部经 build/test/vet/typecheck 门禁，CI 仅既有 `backend-security`（go1.26.3）红。
