@@ -1775,6 +1775,16 @@ export default {
       allGroups: '全部分组',
       searchGroups: '搜索分组...',
       fuzzySearch: '模糊搜索',
+      apiKeyGroupFilter: 'API Key 分组',
+      apiKeyGroupExclusive: '专用分组',
+      apiKeyGroupPublic: '公开分组',
+      apiKeyGroupSubscription: '订阅分组',
+      apiKeyGroupDisabled: '已禁用分组',
+      authorizedGroupFilter: '授权分组',
+      allAuthorizedGroups: '全部授权分组',
+      searchAuthorizedGroups: '搜索授权分组...',
+      allApiKeyGroups: '全部 API Key 分组',
+      searchApiKeyGroups: '搜索 API Key 分组...',
       statusFilter: '状态筛选',
       allStatuses: '全部状态',
       admin: '管理员',
@@ -5244,6 +5254,7 @@ export default {
           accountRateLimitedCount: '限流账号数',
           accountErrorCount: '错误账号数（不含临时不可调度）',
           accountErrorRatio: '错误账号比例 (%)',
+          accountTempUnscheduledCount: '临时不可调度账号数',
           overloadAccountCount: '过载账号数'
         },
         metricDescriptions: {
@@ -5261,6 +5272,7 @@ export default {
           accountRateLimitedCount: '统计窗口内被限流的账号数量。',
           accountErrorCount: '统计窗口内产生错误的账号数量（不含临时不可调度）。',
           accountErrorRatio: '统计窗口内错误账号占比（0~100）。',
+          accountTempUnscheduledCount: '当前处于临时不可调度状态的账号数量（如代理/凭据故障被自动摘除）。',
           overloadAccountCount: '统计窗口内过载账号数量。'
         },
         hints: {
