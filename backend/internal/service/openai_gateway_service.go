@@ -2032,7 +2032,15 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	originalBody := body
 	reqModel, reqStream, promptCacheKey := extractOpenAIRequestMetaFromBody(body)
 	originalModel := reqModel
-	requiresImageGeneration := IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, body)
+	requiresImageGeneration := IsImageGenerationIntent(openAIResponsesEndpoint, reqModel, body) ||
+		IsCodexTextImageGenerationIntent(
+			openAIResponsesEndpoint,
+			reqModel,
+			body,
+			c.GetHeader("User-Agent"),
+			c.GetHeader("originator"),
+			s.cfg != nil && s.cfg.Gateway.ForceCodexCLI,
+		)
 	if !s.isOpenAIAccountImageRoutingCompatible(account, requiresImageGeneration) {
 		return nil, newOpenAIImageAccountRoutingFailoverError(account, requiresImageGeneration)
 	}
@@ -5494,6 +5502,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 ) (*CostBreakdown, error) {
 	billingModel := firstUsageBillingModel(billingModels)
 	if result != nil && result.ImageCount > 0 {
+		billingModel = s.resolveOpenAIImageUsageBillingModel(ctx, apiKey, billingModels)
 		return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, imageMultiplier), nil
 	}
 	if len(billingModels) == 0 || billingModel == "" {
@@ -5552,6 +5561,26 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageTokenCost(
 	return s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
 }
 
+func (s *OpenAIGatewayService) resolveOpenAIImageUsageBillingModel(ctx context.Context, apiKey *APIKey, billingModels []string) string {
+	for _, candidate := range billingModels {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if resolved := s.resolveOpenAIChannelPricing(ctx, candidate, apiKey); resolved != nil &&
+			(resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage) {
+			return candidate
+		}
+	}
+	for _, candidate := range billingModels {
+		candidate = strings.TrimSpace(candidate)
+		if isOpenAIImageBillingModelAlias(candidate) {
+			return candidate
+		}
+	}
+	return "gpt-image-2"
+}
+
 func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	ctx context.Context,
 	billingModel string,
@@ -5559,6 +5588,11 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	result *OpenAIForwardResult,
 	multiplier float64,
 ) *CostBreakdown {
+	groupConfig := imagePriceConfigFromGroup(apiKeyGroup(apiKey))
+	if imagePriceConfigHasTierPrice(groupConfig, result.ImageSize) {
+		return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
+	}
+
 	if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil &&
 		(resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage) {
 		gid := apiKey.Group.ID
@@ -5578,14 +5612,6 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 		logger.LegacyPrintf("service.openai_gateway", "Calculate image channel cost failed: %v", err)
 	}
 
-	var groupConfig *ImagePriceConfig
-	if apiKey != nil && apiKey.Group != nil {
-		groupConfig = &ImagePriceConfig{
-			Price1K: apiKey.Group.ImagePrice1K,
-			Price2K: apiKey.Group.ImagePrice2K,
-			Price4K: apiKey.Group.ImagePrice4K,
-		}
-	}
 	return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
 }
 

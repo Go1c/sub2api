@@ -808,6 +808,46 @@ type ImagePriceConfig struct {
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
 }
 
+func imagePriceConfigFromGroup(group *Group) *ImagePriceConfig {
+	if group == nil {
+		return nil
+	}
+	return &ImagePriceConfig{
+		Price1K: group.ImagePrice1K,
+		Price2K: group.ImagePrice2K,
+		Price4K: group.ImagePrice4K,
+	}
+}
+
+func normalizeImageBillingTier(imageSize string) string {
+	switch strings.ToUpper(strings.TrimSpace(imageSize)) {
+	case "1K":
+		return "1K"
+	case "2K", "", "AUTO":
+		return "2K"
+	case "4K":
+		return "4K"
+	default:
+		return normalizeOpenAIImageSizeTier(imageSize)
+	}
+}
+
+func imagePriceConfigHasTierPrice(groupConfig *ImagePriceConfig, imageSize string) bool {
+	if groupConfig == nil {
+		return false
+	}
+	switch normalizeImageBillingTier(imageSize) {
+	case "1K":
+		return groupConfig.Price1K != nil
+	case "2K":
+		return groupConfig.Price2K != nil
+	case "4K":
+		return groupConfig.Price4K != nil
+	default:
+		return false
+	}
+}
+
 // CalculateImageCost 计算图片生成费用
 // model: 请求的模型名称（用于获取 LiteLLM 默认价格）
 // imageSize: 图片尺寸 "1K", "2K", "4K"
@@ -840,6 +880,8 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 
 // getImageUnitPrice 获取图片单价
 func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) float64 {
+	imageSize = normalizeImageBillingTier(imageSize)
+
 	// 优先使用分组配置的价格
 	if groupConfig != nil {
 		switch imageSize {
