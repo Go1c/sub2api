@@ -125,7 +125,27 @@ upstream 独占逻辑为主，与 fork 自定义重叠小，价值高。
 - `57d9e15e` 添加账号同步上游模型 · `ddf06335` ops 错误日志 key 归因 · `fe895273` 管理端错误请求页 · `bf24b611` /admin/usage 提速 · `aea2950b` LinuxDO 登录修复 · `b8c89c34` 契约测试字段 —— 多为 frontend / ops / 契约测试冲突，归 T2e 前端簇或后续
 
 - [x] **T1 安全/正确性** — 9/13 已并（bba86f97 去掉集成测试），4 个转 T2
+### Phase 2b — T2 前端/用量低风险簇（分支 `upstream-t2-frontend-20260616`）
+
+**已 cherry-pick（5 commit + 1 测试适配），验证：`go build` ✅ · `go vet -tags integration` exit 0 ✅ · `pnpm typecheck` ✅ · `pnpm build` ✅ · `go test`（service/handler）全绿。**
+
+| upstream | 说明 | 风险 |
+|---|---|---|
+| `b60d8bb4` | /admin/usage 支持查看已删除用户历史用量（含测试适配 NewUserHandler 2 参） | 低：管理端只读 |
+| `bf24b611` | /admin/usage 打开/刷新提速 | 低：前端性能 |
+| `0760cda9` | i18n 缓存命中/创建/命中率文案 | 低：纯文案 |
+| `f5cecea5` | Select 下拉高度放开，避免选项截断 | 低：UI |
+| `16bc8769` | 5h ResetsAt 对齐 SessionWindowEnd、过期窗口清零 | 低-中：用量窗口边界，确认与 fork 订阅窗口一致 |
+
+**Deferred（cherry-pick 冲突，按子特性分组，需逐组仔细解）：**
+- **失败请求/错误日志可观测性子特性**（互相关联，撞 fork 的 settings/ops 定制）：`cfb195c7`（14 文件大特性）+ `ddf06335` ops key 归因 + `fe895273` 管理端错误请求页 + `b8c89c34` 契约测试字段 —— 建议作为一个子特性一起解
+- **`d662c973` claude-fable-5**（8 文件，撞 bedrock/antigravity/模型白名单）—— 模型新增，单独解
+- **i18n / 单视图冲突**（撞 fork 定制，机械但需逐个核对）：`c256a544` 用量窗口 tooltip · ⭐`cf12bc52` 用量明细虚拟表可空字段崩溃修复（valuable bugfix）· `72c11216` bedrock_cc_compat 开关持久化 · `aea2950b` LinuxDO 登录修复 · `57d9e15e` 添加账号同步上游模型
+- `af19d443` 代理有效期与失败回退（wire_gen 冲突）
+
 - [x] **T2 后端零散修复** — 12+1 已并（见上表），8 个 deferred
+- [x] **T2 前端/用量低风险簇** — 5+1 已并，其余按子特性 deferred（见上）
 - [ ] T2 OpenAI 网关/调度/图像大簇（~33 commit，含 T1 deferred 的 4 个）—— 一次性专项
-- [ ] T2 前端可观测性簇 + 上面 8 个 deferred
+- [ ] T2 失败请求观测 + claude-fable-5 + i18n/单视图 deferred 组
+- [ ] ⭐ 安全相关：`1a86c6ce` exclusive group access · `705fe7d8` delete user api keys（DeleteWithAudit）
 - [ ] T3 payment / CI（含 go1.26.4 toolchain bump 修 backend-security；专项评估，可能部分不并入）
