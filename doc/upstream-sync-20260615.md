@@ -101,6 +101,31 @@ upstream 独占逻辑为主，与 fork 自定义重叠小，价值高。
 - `test`：#67（订阅额度池闸门）合入 dev 时引入回归，已由 **PR #70**（`fix/subscription-gate-tests`，新增 `UserSubscription.IsCreditPoolExhausted()`）修复并入 dev；T1 分支 rebase 后转绿。
 - `backend-security`：dev 上 go1.26.3 标准库漏洞 GO-2026-5039 / GO-2026-5037，每个 dev commit 都红。修复需 go1.26.4 toolchain bump（upstream `13468778`，动 CI/Docker），归 **T3**，本批不处理。
 
+### Phase 2a — T2 后端零散修复（非热路径）（分支 `upstream-t2-backend-fixes-20260615`）
+
+**已 cherry-pick 进分支（12 commit + 1 处测试适配），验证：`go build ./...` ✅ · `go vet -tags integration ./...` exit 0 ✅ · `go test`（handler/service/repository/middleware）全绿。**
+
+| upstream | 说明 | 风险标记（Review 重点） |
+|---|---|---|
+| `0560340b` | balance 改为指针类型 | ⚠️ **类型语义变更**：余额 nil ↔ 0 的区分，确认所有读取点对 nil 的处理 |
+| `d626ccce` | 通过 billing block 识别 Claude Code 客户端（不只看 prompt） | ⚠️ **客户端识别逻辑变更**：影响哪些请求被判为 CC（计费/路由），需确认对现有流量分类无回归 |
+| `bf1a2d6d` | Codex 用量统计对齐 reset 窗口 | ⚠️ 用量记账口径调整，确认与 fork 订阅/窗口统计一致 |
+| `bf3787de` | 网关放行 Claude Code count_tokens | 低：放开一个原被拦的只读端点 |
+| `fb0195f3` | 编辑账号时归一化固定额度窗口 | 低-中：账号额度窗口边界 |
+| `32ef4711` | 允许的代理质量状态计为 pass 而非 warn | 低：代理健康分类 |
+| `bc7ce185` | 管理员清空分组描述时正确持久化 | 低：bugfix |
+| `69b46545` | ops TTFT 分位按流式样本量加权 | 低：监控指标 |
+| `029b6d61` / `7386f38c` | 用量聚合拆分缓存创建/命中 token + 契约测试 | 低：统计维度新增 |
+| `f20e6bf7` | 新增 `account_temp_unscheduled_count` 告警指标 | 低：新增监控 |
+| `329414ea` | /admin/users 按 API Key 所在分组过滤（含测试适配） | 低：新增过滤；测试 `NewUserHandler` 调用适配为 dev 的 2 参签名 |
+
+**本批 deferred（8 个，cherry-pick 冲突，转后续）：**
+- `1a86c6ce` enforce exclusive group access for api keys —— ⭐ **安全相关**（api_key_auth 中间件，4 文件冲突），优先在后续单独处理
+- `705fe7d8` delete user api keys with user —— ⭐ 引入 `APIKeyRepository.DeleteWithAudit`，并入后可补回 T1 丢弃的 bba86f97 集成测试
+- `57d9e15e` 添加账号同步上游模型 · `ddf06335` ops 错误日志 key 归因 · `fe895273` 管理端错误请求页 · `bf24b611` /admin/usage 提速 · `aea2950b` LinuxDO 登录修复 · `b8c89c34` 契约测试字段 —— 多为 frontend / ops / 契约测试冲突，归 T2e 前端簇或后续
+
 - [x] **T1 安全/正确性** — 9/13 已并（bba86f97 去掉集成测试），4 个转 T2
-- [ ] T2 gateway / settings / ent / 前端（含上面 4 个 deferred）
+- [x] **T2 后端零散修复** — 12+1 已并（见上表），8 个 deferred
+- [ ] T2 OpenAI 网关/调度/图像大簇（~33 commit，含 T1 deferred 的 4 个）—— 一次性专项
+- [ ] T2 前端可观测性簇 + 上面 8 个 deferred
 - [ ] T3 payment / CI（含 go1.26.4 toolchain bump 修 backend-security；专项评估，可能部分不并入）
