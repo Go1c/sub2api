@@ -118,12 +118,15 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.BalanceCost > 0 {
-		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+		newBalance, deducted, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
 			return err
 		}
 		result.NewBalance = &newBalance
-		result.BalanceCost = cmd.BalanceCost
+		// 实际扣减可能因余额下限保护而小于请求金额；以实际扣减为准，
+		// 保证用量日志 / 余额缓存 / 通知与 DB 真实余额一致。
+		result.BalanceCost = deducted
+		cmd.BalanceCost = deducted
 	}
 
 	if cmd.APIKeyQuotaCost > 0 {
@@ -189,6 +192,20 @@ func (r *usageBillingRepository) applyUsageBillingSubscription(ctx context.Conte
 			UsedUSD:  effectiveWindowUsage(state.WeeklyUsageUSD, resetWeekly),
 		},
 	})
+
+	// 余额下限保护：订阅额度池覆盖不足时，溢出费用只能在用户正余额范围内扣除，
+	// 绝不把余额扣成负数。超出可用余额的部分由平台吸收。提前在此收紧拆分，
+	// 使消费台账（recordConsumeLedger）与后续实际扣减保持一致。
+	if alloc.BalanceCostUSD > 0 {
+		avail, balErr := lockUserBalanceForUpdate(ctx, tx, state.UserID)
+		if balErr != nil {
+			return balErr
+		}
+		avail = math.Max(avail, 0)
+		if alloc.BalanceCostUSD > avail {
+			alloc.BalanceCostUSD = avail
+		}
+	}
 
 	post, err := updateSubscriptionUsage(ctx, tx, updateSubscriptionUsageInput{
 		SubscriptionID: subID,
@@ -556,22 +573,60 @@ func positiveInt64Ptr(v int64) *int64 {
 	return &v
 }
 
-func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, error) {
-	var newBalance float64
-	err := tx.QueryRowContext(ctx, `
+// deductUsageBillingBalance 扣减用户余额，并以 0 为下限：单次扣减最多扣到余额为 0，
+// 绝不把余额扣成负数（产品语义：订阅扣完→作废→扣余额→余额不足直接拒绝后续请求）。
+// 返回扣减后的余额以及本次实际扣减的金额（可能小于请求金额，差额由平台吸收）。
+func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (newBalance float64, deducted float64, err error) {
+	var current float64
+	err = tx.QueryRowContext(ctx, `
+		SELECT balance FROM users
+		WHERE id = $1 AND deleted_at IS NULL
+		FOR UPDATE
+	`, userID).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, service.ErrUserNotFound
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+
+	deducted = math.Min(math.Max(amount, 0), math.Max(current, 0))
+	if deducted <= 0 {
+		return current, 0, nil
+	}
+
+	err = tx.QueryRowContext(ctx, `
 		UPDATE users
 		SET balance = balance - $1,
 			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
 		RETURNING balance
-	`, amount, userID).Scan(&newBalance)
+	`, deducted, userID).Scan(&newBalance)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, service.ErrUserNotFound
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+	return newBalance, deducted, nil
+}
+
+// lockUserBalanceForUpdate 在当前事务内锁定并读取用户余额（FOR UPDATE）。
+// 用于订阅溢出扣费前确定可用余额，确保扣费拆分与实际扣减一致、且不会把余额扣成负数。
+func lockUserBalanceForUpdate(ctx context.Context, tx *sql.Tx, userID int64) (float64, error) {
+	var balance float64
+	err := tx.QueryRowContext(ctx, `
+		SELECT balance FROM users
+		WHERE id = $1 AND deleted_at IS NULL
+		FOR UPDATE
+	`, userID).Scan(&balance)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, service.ErrUserNotFound
 	}
 	if err != nil {
 		return 0, err
 	}
-	return newBalance, nil
+	return balance, nil
 }
 
 func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64) (bool, error) {
