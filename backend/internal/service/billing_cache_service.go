@@ -896,10 +896,11 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 	if time.Now().After(subscription.ExpiresAt) {
 		return ErrSubscriptionInvalid
 	}
-	// 总额度池耗尽（exhausted_at 已置位或剩余 <= 0）的订阅视为不可消费：
+	// 总额度池耗尽（exhausted_at 已置位，或配置了正的总池且剩余 <= 0）的订阅视为不可消费：
 	// 订阅扣完即"作废"，请求必须回落到余额闸门，而不能因为日/周窗口仍未触顶
 	// （额度池耗尽后窗口用量冻结，永远低于上限）而被误判为可用、从而绕过余额检查。
-	if subscription.IsExhausted() || subscription.QuotaRemainingUSD() <= 0 {
+	// 注意：未配置总池（QuotaLimitUSD == 0）的纯窗口订阅剩余恒为 0，不属于耗尽。
+	if subscription.IsCreditPoolExhausted() {
 		return ErrSubscriptionInvalid
 	}
 	if !subscription.CheckDailyLimit(group, 0) {
