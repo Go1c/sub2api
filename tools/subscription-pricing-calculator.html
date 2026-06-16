@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LumioAPI 订阅计价计算器</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f7fb;
+        --panel: #ffffff;
+        --text: #182233;
+        --muted: #637083;
+        --line: #d9e2ee;
+        --line-strong: #bac8db;
+        --brand: #4f8cff;
+        --brand-dark: #1a2f5a;
+        --green: #0f8a5f;
+        --warn: #a15c00;
+        --shadow: 0 18px 50px rgba(26, 47, 90, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(130deg, rgba(79, 140, 255, 0.14), transparent 38%),
+          linear-gradient(180deg, #ffffff 0%, var(--bg) 46%, #eef4ff 100%);
+        color: var(--text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      main {
+        width: min(1480px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 40px 0 56px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      .header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: end;
+        margin-bottom: 24px;
+      }
+
+      .title {
+        font-size: clamp(30px, 4vw, 52px);
+        line-height: 1.04;
+        letter-spacing: 0;
+        color: var(--brand-dark);
+      }
+
+      .subtitle {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.7;
+        max-width: 720px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      button {
+        min-height: 40px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        padding: 0 14px;
+        background: #ffffff;
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button.primary {
+        border-color: var(--brand);
+        background: var(--brand);
+        color: #ffffff;
+      }
+
+      button:focus-visible,
+      input:focus-visible {
+        outline: 3px solid rgba(79, 140, 255, 0.28);
+        outline-offset: 2px;
+      }
+
+      .settings {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .field {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.76);
+        padding: 12px;
+      }
+
+      label,
+      .label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      input {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: #ffffff;
+        color: var(--text);
+        padding: 0 12px;
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        min-width: 1320px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 14px 12px;
+        text-align: left;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+
+      th {
+        background: #f8fbff;
+        color: #506075;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      td.number,
+      th.number {
+        text-align: right;
+      }
+
+      .plan-name {
+        min-width: 112px;
+        font-weight: 700;
+        color: var(--brand-dark);
+      }
+
+      .money-input {
+        max-width: 132px;
+        margin-left: auto;
+        text-align: right;
+      }
+
+      .mono {
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        border-radius: 999px;
+        padding: 0 10px;
+        background: rgba(79, 140, 255, 0.12);
+        color: var(--brand-dark);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .good {
+        color: var(--green);
+        font-weight: 700;
+      }
+
+      .warn {
+        color: var(--warn);
+        font-weight: 700;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1px;
+        border-top: 1px solid var(--line);
+        background: var(--line);
+      }
+
+      .metric {
+        background: #ffffff;
+        padding: 16px;
+      }
+
+      .metric-value {
+        margin-top: 6px;
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--brand-dark);
+      }
+
+      .notes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .note {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.74);
+        padding: 14px;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .toast {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        transform: translateY(16px);
+        opacity: 0;
+        pointer-events: none;
+        border-radius: 8px;
+        background: var(--brand-dark);
+        color: #ffffff;
+        padding: 12px 14px;
+        transition:
+          opacity 160ms ease,
+          transform 160ms ease;
+      }
+
+      .toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      @media (max-width: 860px) {
+        main {
+          width: min(100vw - 20px, 1180px);
+          padding-top: 24px;
+        }
+
+        .header {
+          grid-template-columns: 1fr;
+          align-items: start;
+        }
+
+        .toolbar {
+          justify-content: flex-start;
+        }
+
+        .settings,
+        .summary,
+        .notes {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="header" aria-labelledby="page-title">
+        <div>
+          <h1 id="page-title" class="title">订阅计价计算器</h1>
+          <p class="subtitle">
+            填写每档实际到账金额，工具按普通充值基准自动计算整数刀额度、日上限、周上限、真实上限金额、套餐折扣和实际单价。
+          </p>
+        </div>
+        <div class="toolbar" aria-label="工具操作">
+          <button id="resetButton" type="button">恢复默认</button>
+          <button id="copyButton" class="primary" type="button">复制表格</button>
+        </div>
+      </section>
+
+      <section class="settings" aria-label="基础参数">
+        <div class="field">
+          <label for="baseRate">普通充值基准，元 / 刀</label>
+          <input id="baseRate" class="mono" type="number" min="0.01" step="0.01" value="0.35" />
+        </div>
+        <div class="field">
+          <span class="label">套餐价格</span>
+          <strong class="mono">¥79 / ¥199 / ¥399 / ¥799</strong>
+        </div>
+        <div class="field">
+          <span class="label">额度口径</span>
+          <strong>可用额度 = floor(实际到账金额 / 普通充值基准)</strong>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="套餐计算结果">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>套餐名称</th>
+                <th class="number">可用额度</th>
+                <th class="number">日上限</th>
+                <th class="number">周上限</th>
+                <th class="number">套餐价格</th>
+                <th class="number">套餐折扣</th>
+                <th class="number">实际单价</th>
+                <th class="number">实际到账金额</th>
+                <th class="number">日上限金额</th>
+                <th class="number">周上限金额</th>
+                <th>限制策略</th>
+              </tr>
+            </thead>
+            <tbody id="plansBody"></tbody>
+          </table>
+        </div>
+        <div class="summary" aria-label="汇总指标">
+          <div class="metric">
+            <span class="label">平均套餐折扣</span>
+            <div id="averageDiscount" class="metric-value mono">-</div>
+          </div>
+          <div class="metric">
+            <span class="label">最低套餐折扣</span>
+            <div id="minimumDiscount" class="metric-value mono">-</div>
+          </div>
+          <div class="metric">
+            <span class="label">最高套餐折扣</span>
+            <div id="maximumDiscount" class="metric-value mono">-</div>
+          </div>
+          <div class="metric">
+            <span class="label">总可用额度</span>
+            <div id="totalQuota" class="metric-value mono">-</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="notes" aria-label="规则说明">
+        <div class="note">
+          套餐折扣按 <span class="mono">套餐价格 / 实际到账金额</span> 计算。比如支付 ¥199，实际到账 ¥240，折扣就是
+          <span class="mono">8.29</span> 折。
+        </div>
+        <div class="note">
+          日上限和周上限只限制套餐额度。超过限制后仍可继续使用普通余额，按普通充值基准扣费。
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const defaultPlans = [
+        {
+          name: "轻享版",
+          price: 79,
+          deposit: 93,
+          dayRatio: 21 / 265,
+          weekRatio: 70 / 265,
+          policy: "性价比入口，卡紧日限和周限",
+        },
+        {
+          name: "标准版",
+          price: 199,
+          deposit: 240,
+          dayRatio: 85 / 685,
+          weekRatio: 230 / 685,
+          policy: "主推跑量，适当限制周消耗",
+        },
+        {
+          name: "专业版",
+          price: 399,
+          deposit: 488,
+          dayRatio: 230 / 1394,
+          weekRatio: 600 / 1394,
+          policy: "高频用户，放宽日限和周限",
+        },
+        {
+          name: "团队版",
+          price: 799,
+          deposit: 999,
+          dayRatio: 520 / 2854,
+          weekRatio: 1300 / 2854,
+          policy: "最优单价，高消耗团队档",
+        },
+      ];
+
+      const storageKey = "lumioapi-pricing-calculator-v2";
+      const plansBody = document.querySelector("#plansBody");
+      const baseRateInput = document.querySelector("#baseRate");
+      const toast = document.querySelector("#toast");
+      let plans = loadPlans();
+
+      function loadPlans() {
+        try {
+          const stored = JSON.parse(localStorage.getItem(storageKey));
+          if (!stored || !Array.isArray(stored.plans)) return structuredClone(defaultPlans);
+          baseRateInput.value = Number(stored.baseRate || 0.35).toFixed(2);
+          return defaultPlans.map((plan, index) => ({
+            ...plan,
+            deposit: Number(stored.plans[index]?.deposit || plan.deposit),
+          }));
+        } catch {
+          return structuredClone(defaultPlans);
+        }
+      }
+
+      function savePlans() {
+        localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            baseRate: getBaseRate(),
+            plans: plans.map((plan) => ({ deposit: plan.deposit })),
+          }),
+        );
+      }
+
+      function getBaseRate() {
+        const value = Number(baseRateInput.value);
+        return Number.isFinite(value) && value > 0 ? value : 0.35;
+      }
+
+      function calculatePlan(plan) {
+        const baseRate = getBaseRate();
+        const quota = Math.floor(plan.deposit / baseRate);
+        const dayLimit = niceLimit(quota * plan.dayRatio, "day");
+        const weekLimit = Math.max(dayLimit, niceLimit(quota * plan.weekRatio, "week"));
+        const discount = plan.price / plan.deposit;
+        const unitPrice = quota > 0 ? plan.price / quota : 0;
+        const dayLimitAmount = dayLimit * baseRate;
+        const weekLimitAmount = weekLimit * baseRate;
+
+        return {
+          quota,
+          dayLimit,
+          weekLimit,
+          dayLimitAmount,
+          weekLimitAmount,
+          discount,
+          unitPrice,
+        };
+      }
+
+      function niceLimit(value, type) {
+        const step =
+          type === "week"
+            ? value >= 100
+              ? 10
+              : value >= 50
+                ? 5
+                : 1
+            : value >= 500
+              ? 10
+              : value >= 50
+                ? 5
+                : 1;
+
+        return Math.max(1, Math.round(value / step) * step);
+      }
+
+      function formatCurrency(value, digits = 2) {
+        return `¥${Number(value).toFixed(digits)}`;
+      }
+
+      function formatDiscount(value) {
+        return `${(value * 10).toFixed(2)} 折`;
+      }
+
+      function render() {
+        plansBody.innerHTML = "";
+        const results = plans.map(calculatePlan);
+
+        plans.forEach((plan, index) => {
+          const result = results[index];
+          const discountClass = result.discount < 0.8 || result.discount > 0.85 ? "warn" : "good";
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td class="plan-name">${plan.name}</td>
+            <td class="number mono">${result.quota} 刀</td>
+            <td class="number mono">${result.dayLimit} 刀</td>
+            <td class="number mono">${result.weekLimit} 刀</td>
+            <td class="number mono">¥${plan.price}/月</td>
+            <td class="number mono ${discountClass}">${formatDiscount(result.discount)}</td>
+            <td class="number mono">${formatCurrency(result.unitPrice, 3)}/刀</td>
+            <td class="number">
+              <input
+                class="money-input mono"
+                type="number"
+                min="${plan.price}"
+                step="0.01"
+                inputmode="decimal"
+                aria-label="${plan.name}实际到账金额"
+                data-index="${index}"
+                value="${Number(plan.deposit).toFixed(2)}"
+              />
+            </td>
+            <td class="number mono">${formatCurrency(result.dayLimitAmount, 2)}</td>
+            <td class="number mono">${formatCurrency(result.weekLimitAmount, 2)}</td>
+            <td><span class="badge">${plan.policy}</span></td>
+          `;
+          plansBody.appendChild(row);
+        });
+
+        renderSummary(results);
+      }
+
+      function renderSummary(results) {
+        const discounts = results.map((result) => result.discount);
+        const average = discounts.reduce((sum, value) => sum + value, 0) / discounts.length;
+        const minimum = Math.min(...discounts);
+        const maximum = Math.max(...discounts);
+        const quota = results.reduce((sum, result) => sum + result.quota, 0);
+
+        document.querySelector("#averageDiscount").textContent = formatDiscount(average);
+        document.querySelector("#minimumDiscount").textContent = formatDiscount(minimum);
+        document.querySelector("#maximumDiscount").textContent = formatDiscount(maximum);
+        document.querySelector("#totalQuota").textContent = `${quota} 刀`;
+      }
+
+      function getTableText() {
+        const rows = [
+          [
+            "套餐名称",
+            "可用额度",
+            "日上限",
+            "周上限",
+            "套餐价格",
+            "套餐折扣",
+            "实际单价",
+            "实际到账金额",
+            "日上限金额",
+            "周上限金额",
+          ],
+          ...plans.map((plan) => {
+            const result = calculatePlan(plan);
+            return [
+              plan.name,
+              `${result.quota} 刀`,
+              `${result.dayLimit} 刀`,
+              `${result.weekLimit} 刀`,
+              `¥${plan.price}/月`,
+              formatDiscount(result.discount),
+              `${formatCurrency(result.unitPrice, 3)}/刀`,
+              formatCurrency(plan.deposit, 2),
+              formatCurrency(result.dayLimitAmount, 2),
+              formatCurrency(result.weekLimitAmount, 2),
+            ];
+          }),
+        ];
+
+        return rows.map((row) => row.join("\t")).join("\n");
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add("show");
+        window.setTimeout(() => toast.classList.remove("show"), 1600);
+      }
+
+      plansBody.addEventListener("change", (event) => {
+        const input = event.target.closest("input[data-index]");
+        if (!input) return;
+        const index = Number(input.dataset.index);
+        const value = Number(input.value);
+        plans[index].deposit = Number.isFinite(value) && value > 0 ? value : defaultPlans[index].deposit;
+        savePlans();
+        render();
+      });
+
+      baseRateInput.addEventListener("input", () => {
+        savePlans();
+        render();
+      });
+
+      document.querySelector("#resetButton").addEventListener("click", () => {
+        plans = structuredClone(defaultPlans);
+        baseRateInput.value = "0.35";
+        savePlans();
+        render();
+        showToast("已恢复默认定价");
+      });
+
+      document.querySelector("#copyButton").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(getTableText());
+          showToast("表格已复制");
+        } catch {
+          showToast("浏览器未允许复制，请手动选择表格");
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>

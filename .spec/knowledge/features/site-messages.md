@@ -1,0 +1,99 @@
+---
+name: site-messages
+description: 站内信功能，类轻量邮件：用户收发读回复，红点未读提醒，管理员可全局开关并从用户表发信。
+metadata:
+  type: doc
+  level: L2
+  status: 已落地
+---
+
+# 站内信（Site Messages）
+简介：在 Sub2API 内提供类邮件的站内信功能——用户可收件、发件、阅读、回复；管理员可全局开关，并从用户管理表向选定用户发信。带未读红点、每日发送上限、30 天默认保留期。
+
+## 背景 / 目标
+让用户在站内进行轻量邮件式沟通；管理员可全局启停并从用户管理表向某用户发信。
+
+需求要点：
+- 功能开启时侧栏出现"站内信"入口；当前用户有未读时显示红点。
+- 用户可查看收件箱/发件箱，打开消息看内容与收发方元数据并回复。
+- 用户通过输入完整邮箱或数字用户 ID 给另一用户发信；普通用户不能模糊搜索或枚举用户。
+- 每收件人有读/未读状态，打开收到的消息即标记已读。
+- 管理员可在系统设置启停；关闭时前端隐藏入口，后端所有站内信 API 返回功能未开启错误。
+- 管理员从用户表"更多"菜单发信，对话框含标题与内容，收件人固定为选中用户。
+- 消息默认保留 30 天；过期消息不被列表/详情 API 返回，可由仓储清理方法删除。
+- 非管理员默认每日最多发 10 条，该上限可在管理设置配置；管理员不受每日上限限制。
+
+非目标：实时推送/websocket；附件、富 HTML、草稿、标签、文件夹、批量选择；多收件人；普通用户模糊搜索；完整的管理员消息管理收件箱。
+
+## 设计
+
+### 设置（DB-backed）
+- `site_messages_enabled`：布尔，默认 `false`，暴露到 public settings + SSR 注入（便于侧栏/路由守卫在异步设置请求完成前隐藏 UI），注册为 opt-in feature flag。
+- `site_messages_daily_send_limit`：整数，默认 `10`，仅管理/系统设置。
+- `site_messages_retention_days`：整数，默认 `30`，仅管理/系统设置。
+
+### 数据模型
+Ent schema 对应表 `site_messages`（迁移 `backend/migrations/137_add_site_messages.sql`）：
+- `id` 主键、`sender_id` 必填、`recipient_id` 必填、`parent_id` 可选（回复）
+- `subject` string max 200 必填、`content` text 必填
+- `read_at` nullable timestamptz（`null` 表示该收件人未读）
+- `created_at` 不可变、`updated_at`
+- 外键：`sender`/`recipient` 来自 `User`，`parent`/`replies` 自引用边
+- 索引：`(recipient_id, created_at)` 收件箱；`(sender_id, created_at)` 发件箱；`(recipient_id, read_at)` 未读计数；`(parent_id, created_at)` 回复链；`(created_at)` 清理
+- 保留期基于 `created_at`，超出窗口的消息从正常读取中排除并由清理删除。
+
+### 后端架构
+`SiteMessageService` 职责：解析收件人、强制功能开关、强制普通用户每日发送上限、创建消息/回复、分页列收件箱/发件箱、仅当当前用户是发件人或收件人时加载详情、标记收到的消息已读、统计未读、清理过期消息。所有设置读取走现有 setting service；功能未开启用稳定域错误 `SITE_MESSAGES_DISABLED`。
+
+仓储接口：`Create`、`GetVisibleByID(messageID, userID, retentionCutoff)`、`ListInbox`、`ListSent`、`ListThread`、`MarkRead`、`CountUnread`、`CountSentSince(userID, since)`、`DeleteOlderThan(cutoff)`。
+
+域错误：
+```go
+ErrSiteMessageNotFound          = infraerrors.NotFound("SITE_MESSAGE_NOT_FOUND", ...)
+ErrSiteMessagesDisabled         = infraerrors.Forbidden("SITE_MESSAGES_DISABLED", ...)
+ErrSiteMessageRecipientNotFound = infraerrors.NotFound("SITE_MESSAGE_RECIPIENT_NOT_FOUND", ...)
+ErrSiteMessageDailyLimitExceeded = infraerrors.Forbidden("SITE_MESSAGE_DAILY_LIMIT_EXCEEDED", ...)
+```
+
+### API 设计
+用户 API：
+- `GET /api/v1/site-messages/inbox?page=&page_size=`
+- `GET /api/v1/site-messages/sent?page=&page_size=`
+- `GET /api/v1/site-messages/unread-count`
+- `GET /api/v1/site-messages/:id`
+- `POST /api/v1/site-messages`
+- `POST /api/v1/site-messages/:id/reply`
+- `POST /api/v1/site-messages/:id/read`
+- `GET /api/v1/site-messages/recipient/resolve?query=`
+
+普通用户收件人解析仅接受：精确数字用户 ID；精确邮箱（规范化后大小写不敏感）。
+
+管理员 API：
+- `POST /api/v1/admin/site-messages/users/:id`（用户表发信用此接口，行已固定收件人）
+- `GET /api/v1/admin/site-messages/recipients?q=`（支持未来管理员撰写流程，模糊匹配邮箱/用户名）
+
+### 前端设计
+- 导航：`AppSidebar.vue` 加"站内信"项，`featureFlags.ts` 注册 `site_messages_enabled`，未读数 >0 时渲染红点；在 public settings 与认证就绪后拉未读数，读/发/回复后刷新。store（`stores/siteMessages.ts`）暴露 `unreadCount`、`hasUnread`、`refreshUnreadCount()`。
+- 用户页 `SiteMessagesView.vue`：收件/发件标签页；收件行显示未读态/发件人/主题/预览/时间；发件行显示收件人等；详情含读态与回复；撰写表单校验收件人/主题/内容，收件人仅精确邮箱或 ID。
+- 管理员用户管理：`UsersView.vue` 的"更多"菜单加"发送站内信"，弹 `UserSiteMessageModal.vue`，收件人固定，提交标题+内容到 `POST /admin/site-messages/users/:id`。
+- 设置页：站内信卡片，含启停开关、每日发送上限（默认 10）、保留天数（默认 30）。
+- 路由 `/site-messages` 带 `requiresSiteMessages: true`，关闭时重定向到 `/dashboard`。
+
+### 错误处理
+- 功能关闭：后端返回 typed 功能未开启错误；前端陈旧页面调用时显示"站内信功能未开启"。
+- 收件人不存在：普通用户见"收件人不存在或不可用"，不暴露部分匹配数据。
+- 自发自收允许（除非实现发现项目既有规则禁止），便于管理员测试和用户自留笔记。
+- 主题空/超长、内容空返回校验错误；超每日上限返回含配置上限的 typed 错误。
+
+## 已决策
+- 功能默认关闭；现有部署收到新表与设置，但管理员启用前不出现用户侧导航。
+- `site_messages_enabled` 进 public settings + SSR 注入；另外两个设置仅管理侧。
+- 服务层独立于 Ent（用内存 stub 测试）。
+- 保留期与发送上限按 `created_at` / 当日计数计算；过滤值保留 `affiliate_balance` 之类既有契约不破坏（指 settings 暴露与审计 diff 更新）。
+
+## 相关
+- [[admin-settings-idempotency]]
+- 迁移：`backend/migrations/137_add_site_messages.sql`
+- 后端：`backend/ent/schema/site_message.go`、`backend/internal/domain/site_message.go`、`backend/internal/service/site_message_service.go`、`backend/internal/repository/site_message_repo.go`、`backend/internal/handler/site_message_handler.go`、`backend/internal/handler/admin/site_message_handler.go`、路由 `backend/internal/server/routes/user.go` + `admin.go`、设置 `backend/internal/service/setting_service.go` 等
+- 前端：`frontend/src/api/siteMessages.ts`、`frontend/src/api/admin/siteMessages.ts`、`frontend/src/stores/siteMessages.ts`、`frontend/src/views/user/SiteMessagesView.vue`、`frontend/src/components/admin/user/UserSiteMessageModal.vue`、`frontend/src/views/admin/SettingsView.vue`、`frontend/src/components/layout/AppSidebar.vue`
+- 技术栈：Go + Gin + Ent + Wire、Vue 3 + Pinia + Vue Router + TS、Vitest、pnpm
