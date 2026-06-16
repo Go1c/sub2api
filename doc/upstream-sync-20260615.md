@@ -160,7 +160,7 @@ fork 早期分叉、只选择性同步过上游，导致 dev **整段缺失若�
 - [ ] **失败请求/错误日志观测子系统**（`ddf06335`+`cfb195c7`+`fe895273`+`b8c89c34`+`705fe7d8`）—— 整段搬迁（含审计表 migration），撞 fork settings/ops
 - [ ] **API Key 分组可用性/独占守卫子系统**（前置 + `1a86c6ce` 安全）—— 整段搬迁
 - [ ] **claude-fable-5**（`d662c973`）—— 模型新增，撞 bedrock/antigravity/白名单
-- [ ] **i18n / 单视图机械冲突**：`c256a544` · ⭐`cf12bc52`(崩溃修复) · `72c11216` · `aea2950b` · `57d9e15e` · `af19d443`
+- [x] **i18n / 单视图机械冲突** —— 见 Phase 2c（2 并 / 1 跳过 / 3 转后续）
 - [ ] **T3 payment**（fork 命脉，挑着手工 port）
 - [x] **T3 go1.26.4 toolchain bump**（`13468778`）—— 见下
 
@@ -170,6 +170,22 @@ cherry-pick `13468778`：go.mod `go 1.26.4` + 3 个 Dockerfile + 3 个 CI workfl
 - **冲突**：`backend/Dockerfile` 之前 fork 停在 `golang:1.25.7-alpine`，解为 `1.26.4`（go.mod 已要求 1.26.4，构建镜像必须 ≥ 它）。
 - **验证**：`go build ./...`（go1.26.4 自动拉取）✅；`govulncheck ./...` → **No vulnerabilities found**，GO-2026-5039/5037 消除。
 - **效果**：一直红的 `backend-security` 应转绿（首次）。单 docker 部署，无 PaaS 顾虑。
+
+### Phase 2c — i18n / 单视图机械冲突（分支 `upstream-t2-views-i18n-20260616`）
+
+**已并（2 commit，手解冲突），验证：`go build` ✅ · `go vet -tags integration` exit 0 ✅ · `pnpm typecheck` ✅ · `pnpm build` ✅。**
+
+| upstream | 冲突解法 |
+|---|---|
+| ⭐`cf12bc52` 用量明细可空字段崩溃 | 核心修复 `DataTable.vue`（scrollRect→空白根因）+ `types/index.ts` **clean 应用**；`UsageView.vue` 只解模板：保留 dev 无 tab 结构（丢弃 dev 没有的 `errorViewEnabled`/`activeTab` 错误页 tab），保留 `?? 0` 空值防御 + 虚拟化 props |
+| `c256a544` 用量窗口 tooltip | i18n 上下文漂移：dev `upstreamBalance` 块与上游 `usageWindowsHint` 同级 key，**keep-both** |
+
+**跳过 / 转后续：**
+- `72c11216` bedrock_cc_compat 开关 —— dev 完全没有该开关特性，加进来是未使用变量，**跳过**
+- ⚠️ `aea2950b` LinuxDO 登录 —— **原以为前端独立，实则也动 `auth_linuxdo_oauth.go`**：调用 `LoginOrRegisterOAuthWithTokenPair` 用了 6 参（带 authSource），dev 签名只有 5 参 → 又是缺失上游签名的尾巴。**撤出本批**，转「auth OAuth 子系统」单独评估
+- `57d9e15e` 添加账号同步上游模型 · `af19d443` 代理有效期/失败回退 —— 动 backend，转后续
+
+> **教训**：cherry-pick 即使「看起来是前端」也可能携带 clean 应用的 backend 文件（引用了 dev 没有的签名）。**每批都必须跑 `go build` + `go vet -tags integration`，不能只跑 pnpm**（aea2950b 因此一度让 #77 的后端 test/golangci 红，已撤出）。
 
 ### 已落地汇总（截至 2026-06-16）
 
