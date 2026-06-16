@@ -37,6 +37,7 @@ export interface ContentModerationConfig {
   non_hit_retention_days: number
   pre_hash_check_enabled: boolean
   model_filter: ContentModerationModelFilter
+  cyber_policy_exclude_from_ban_count: boolean
 }
 
 export type ContentModerationAPIKeyStatusValue = 'unknown' | 'ok' | 'error' | 'frozen'
@@ -110,6 +111,7 @@ export interface UpdateContentModerationConfig {
   non_hit_retention_days?: number
   pre_hash_check_enabled?: boolean
   model_filter?: ContentModerationModelFilter
+  cyber_policy_exclude_from_ban_count?: boolean
 }
 
 export interface ContentModerationRuntimeStatus {

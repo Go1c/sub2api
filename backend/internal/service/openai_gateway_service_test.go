@@ -79,6 +79,30 @@ func (r stubOpenAIAccountRepo) ListSchedulableUngroupedByPlatform(ctx context.Co
 	return r.ListSchedulableByPlatform(ctx, platform)
 }
 
+type groupAwareStubOpenAIAccountRepo struct {
+	stubOpenAIAccountRepo
+}
+
+func (r groupAwareStubOpenAIAccountRepo) ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error) {
+	var result []Account
+	for _, acc := range r.accounts {
+		if acc.Platform == platform && openAIStickyAccountMatchesGroup(&acc, &groupID) {
+			result = append(result, acc)
+		}
+	}
+	return result, nil
+}
+
+func (r groupAwareStubOpenAIAccountRepo) ListSchedulableUngroupedByPlatform(ctx context.Context, platform string) ([]Account, error) {
+	var result []Account
+	for _, acc := range r.accounts {
+		if acc.Platform == platform && openAIStickyAccountMatchesGroup(&acc, nil) {
+			result = append(result, acc)
+		}
+	}
+	return result, nil
+}
+
 type stubConcurrencyCache struct {
 	ConcurrencyCache
 	loadBatchErr    error
@@ -225,6 +249,30 @@ func TestOpenAIGatewayService_GenerateSessionHash_AttachesLegacyHashToContext(t 
 	require.NotNil(t, c.Request)
 	require.NotNil(t, c.Request.Context())
 	require.NotEmpty(t, openAILegacySessionHashFromContext(c.Request.Context()))
+}
+
+func TestExtractOpenAIResponseIDFromJSONBytes(t *testing.T) {
+	require.Equal(t, "resp_json", extractOpenAIResponseIDFromJSONBytes([]byte(`{"id":"resp_json"}`)))
+	require.Equal(t, "resp_sse", extractOpenAIResponseIDFromJSONBytes([]byte(`{"type":"response.completed","response":{"id":"resp_sse"}}`)))
+	require.Empty(t, extractOpenAIResponseIDFromJSONBytes([]byte(`{"response":{}}`)))
+	require.Empty(t, extractOpenAIResponseIDFromJSONBytes([]byte(`not-json`)))
+}
+
+func TestOpenAIGatewayService_BindHTTPResponseAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	groupID := int64(4201)
+	c.Set("api_key", &APIKey{ID: 501, GroupID: &groupID})
+
+	svc := &OpenAIGatewayService{}
+	account := &Account{ID: 37001, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	svc.bindHTTPResponseAccount(context.Background(), c, account, "resp_http_001")
+
+	got, err := svc.getOpenAIWSStateStore().GetResponseAccount(context.Background(), groupID, "resp_http_001")
+	require.NoError(t, err)
+	require.Equal(t, account.ID, got)
 }
 
 func TestOpenAIGatewayService_GenerateExplicitSessionHash_SkipsContentFallback(t *testing.T) {
@@ -424,6 +472,57 @@ func TestOpenAISelectAccountWithLoadAwareness_FiltersUnschedulable(t *testing.T)
 	}
 }
 
+func TestOpenAISelectAccountWithLoadAwareness_ImageRateLimitSkipsOnlyImageRequests(t *testing.T) {
+	future := time.Now().Add(10 * time.Minute).Format(time.RFC3339)
+	groupID := int64(1)
+
+	imageLimited := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		Extra: map[string]any{
+			modelRateLimitsKey: map[string]any{
+				openAIImageGenerationRateLimitKey: map[string]any{
+					"rate_limit_reset_at": future,
+				},
+			},
+		},
+	}
+	available := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{imageLimited, available}},
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{}),
+	}
+
+	imageSelection, err := svc.SelectAccountWithLoadAwareness(WithOpenAIImageGenerationIntent(context.Background()), &groupID, "", "gpt-5.4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, imageSelection)
+	require.Equal(t, available.ID, imageSelection.Account.ID)
+	if imageSelection.ReleaseFunc != nil {
+		imageSelection.ReleaseFunc()
+	}
+
+	textSelection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, "", "gpt-5.4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, textSelection)
+	require.Equal(t, imageLimited.ID, textSelection.Account.ID)
+	if textSelection.ReleaseFunc != nil {
+		textSelection.ReleaseFunc()
+	}
+}
+
 func TestOpenAISelectAccountWithLoadAwareness_FiltersUnschedulableWhenNoConcurrencyService(t *testing.T) {
 	now := time.Now()
 	resetAt := now.Add(10 * time.Minute)
@@ -501,91 +600,39 @@ func TestOpenAISelectAccountForModelWithExclusions_StickyUnschedulableClearsSess
 	}
 }
 
-func TestOpenAISelectAccountWithLoadAwareness_RoutesByImageGenerationPolicy(t *testing.T) {
-	groupID := int64(1)
-	textOnly := Account{
-		ID:          1,
-		Platform:    PlatformOpenAI,
-		Type:        AccountTypeAPIKey,
-		Status:      StatusActive,
-		Schedulable: true,
-		Concurrency: 1,
-		Priority:    0,
-		Extra: map[string]any{
-			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingTextOnly,
+func TestOpenAISelectAccountForModelWithExclusions_StickyOutsideGroupClearsSession(t *testing.T) {
+	sessionHash := "session-outside-group"
+	groupID := int64(1001)
+	repo := groupAwareStubOpenAIAccountRepo{
+		stubOpenAIAccountRepo{
+			accounts: []Account{
+				{ID: 1, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Concurrency: 1},
+				{ID: 2, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Concurrency: 1, AccountGroups: []AccountGroup{{GroupID: groupID}}},
+			},
 		},
 	}
-	imageOnly := Account{
-		ID:          2,
-		Platform:    PlatformOpenAI,
-		Type:        AccountTypeAPIKey,
-		Status:      StatusActive,
-		Schedulable: true,
-		Concurrency: 1,
-		Priority:    10,
-		Extra: map[string]any{
-			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
-		},
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{"openai:" + sessionHash: 1},
 	}
+
 	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{textOnly, imageOnly}},
-		cfg:         &config.Config{},
-	}
-
-	textSelection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, "", "gpt-5.5", nil)
-	require.NoError(t, err)
-	require.NotNil(t, textSelection)
-	require.NotNil(t, textSelection.Account)
-	require.Equal(t, textOnly.ID, textSelection.Account.ID)
-
-	imageSelection, err := svc.SelectAccountWithLoadAwarenessForImageIntent(context.Background(), &groupID, "", "gpt-5.5", nil)
-	require.NoError(t, err)
-	require.NotNil(t, imageSelection)
-	require.NotNil(t, imageSelection.Account)
-	require.Equal(t, imageOnly.ID, imageSelection.Account.ID)
-}
-
-func TestOpenAISelectAccountWithLoadAwareness_ImageIntentSkipsTextOnlySticky(t *testing.T) {
-	groupID := int64(1)
-	sessionHash := "image-session"
-	textOnly := Account{
-		ID:          1,
-		Platform:    PlatformOpenAI,
-		Type:        AccountTypeAPIKey,
-		Status:      StatusActive,
-		Schedulable: true,
-		Concurrency: 1,
-		Priority:    0,
-		Extra: map[string]any{
-			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingTextOnly,
-		},
-	}
-	imageOnly := Account{
-		ID:          2,
-		Platform:    PlatformOpenAI,
-		Type:        AccountTypeAPIKey,
-		Status:      StatusActive,
-		Schedulable: true,
-		Concurrency: 1,
-		Priority:    10,
-		Extra: map[string]any{
-			openAIImageGenerationRoutingExtraKey: OpenAIImageGenerationRoutingImageOnly,
-		},
-	}
-	cache := &stubGatewayCache{sessionBindings: map[string]int64{"openai:" + sessionHash: textOnly.ID}}
-	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{textOnly, imageOnly}},
+		accountRepo: repo,
 		cache:       cache,
-		cfg:         &config.Config{},
 	}
 
-	selection, err := svc.SelectAccountWithLoadAwarenessForImageIntent(context.Background(), &groupID, sessionHash, "gpt-5.5", nil)
-	require.NoError(t, err)
-	require.NotNil(t, selection)
-	require.NotNil(t, selection.Account)
-	require.Equal(t, imageOnly.ID, selection.Account.ID)
-	require.Equal(t, 1, cache.deletedSessions["openai:"+sessionHash])
-	require.Equal(t, imageOnly.ID, cache.sessionBindings["openai:"+sessionHash])
+	acc, err := svc.SelectAccountForModelWithExclusions(context.Background(), &groupID, sessionHash, "gpt-4", nil)
+	if err != nil {
+		t.Fatalf("SelectAccountForModelWithExclusions error: %v", err)
+	}
+	if acc == nil || acc.ID != 2 {
+		t.Fatalf("expected account 2, got %+v", acc)
+	}
+	if cache.deletedSessions["openai:"+sessionHash] != 1 {
+		t.Fatalf("expected sticky session to be deleted")
+	}
+	if cache.sessionBindings["openai:"+sessionHash] != 2 {
+		t.Fatalf("expected sticky session to bind to account 2")
+	}
 }
 
 func TestOpenAISelectAccountWithLoadAwareness_StickyUnschedulableClearsSession(t *testing.T) {
@@ -595,6 +642,45 @@ func TestOpenAISelectAccountWithLoadAwareness_StickyUnschedulableClearsSession(t
 		accounts: []Account{
 			{ID: 1, Platform: PlatformOpenAI, Status: StatusDisabled, Schedulable: true, Concurrency: 1},
 			{ID: 2, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Concurrency: 1},
+		},
+	}
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{"openai:" + sessionHash: 1},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        repo,
+		cache:              cache,
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{}),
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, sessionHash, "gpt-4", nil)
+	if err != nil {
+		t.Fatalf("SelectAccountWithLoadAwareness error: %v", err)
+	}
+	if selection == nil || selection.Account == nil || selection.Account.ID != 2 {
+		t.Fatalf("expected account 2, got %+v", selection)
+	}
+	if cache.deletedSessions["openai:"+sessionHash] != 1 {
+		t.Fatalf("expected sticky session to be deleted")
+	}
+	if cache.sessionBindings["openai:"+sessionHash] != 2 {
+		t.Fatalf("expected sticky session to bind to account 2")
+	}
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_StickyOutsideGroupClearsSession(t *testing.T) {
+	sessionHash := "session-load-outside-group"
+	groupID := int64(1002)
+	repo := groupAwareStubOpenAIAccountRepo{
+		stubOpenAIAccountRepo{
+			accounts: []Account{
+				{ID: 1, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Concurrency: 1},
+				{ID: 2, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Concurrency: 1, AccountGroups: []AccountGroup{{GroupID: groupID}}},
+			},
 		},
 	}
 	cache := &stubGatewayCache{
@@ -1199,6 +1285,47 @@ func TestOpenAIStreamingResponseFailedBeforeOutputReturnsFailover(t *testing.T) 
 	require.ErrorAs(t, err, &failoverErr)
 	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
 	require.Contains(t, string(failoverErr.ResponseBody), "An error occurred while processing your request")
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
+}
+
+func TestOpenAIStreamingResponseFailedBeforeOutputCapacityErrorReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"resp_1"}}`,
+			"",
+			"event: response.in_progress",
+			`data: {"type":"response.in_progress","response":{"id":"resp_1"}}`,
+			"",
+			"event: response.failed",
+			`data: {"type":"response.failed","error":{"message":"Selected model is at capacity. Please try a different model.","type":"invalid_request_error"}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid-capacity-failed"}},
+	}
+
+	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Contains(t, string(failoverErr.ResponseBody), "Selected model is at capacity")
 	require.False(t, c.Writer.Written())
 	require.Empty(t, rec.Body.String())
 }
@@ -1899,7 +2026,7 @@ func TestOpenAIUpdateCodexUsageSnapshotFromHeaders(t *testing.T) {
 
 	select {
 	case updates := <-repo.updateExtraCalls:
-		require.Equal(t, 88.0, updates["codex_5h_used_percent"])
+		require.Equal(t, 12.0, updates["codex_5h_used_percent"])
 		require.Equal(t, 34.0, updates["codex_7d_used_percent"])
 		require.Equal(t, 600, updates["codex_5h_reset_after_seconds"])
 		require.Equal(t, 86400, updates["codex_7d_reset_after_seconds"])
@@ -1966,6 +2093,7 @@ func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesCompactPath(t *test
 	require.Equal(t, "application/json", req.Header.Get("Accept"))
 	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
+	require.Equal(t, HTTPUpstreamProfileOpenAI, HTTPUpstreamProfileFromContext(req.Context()))
 }
 
 func TestOpenAIBuildUpstreamRequestCompactForcesJSONAcceptForOAuth(t *testing.T) {
@@ -1986,57 +2114,7 @@ func TestOpenAIBuildUpstreamRequestCompactForcesJSONAcceptForOAuth(t *testing.T)
 	require.Equal(t, "application/json", req.Header.Get("Accept"))
 	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
-}
-
-func TestOpenAIPassthroughAllowsVersionHeader(t *testing.T) {
-	require.True(t, isOpenAIPassthroughAllowedRequestHeader("version", false))
-}
-
-func TestOpenAIBuildUpstreamRequestsPreserveOrFillCodexVersion(t *testing.T) {
-	tests := []struct {
-		name          string
-		passthrough   bool
-		isCodexCLI    bool
-		clientVersion string
-		wantVersion   string
-	}{
-		{name: "passthrough preserves client version", passthrough: true, isCodexCLI: true, clientVersion: "0.200.0", wantVersion: "0.200.0"},
-		{name: "passthrough fills Codex version", passthrough: true, isCodexCLI: true, wantVersion: codexCLIVersion},
-		{name: "passthrough leaves non-Codex empty", passthrough: true},
-		{name: "normal preserves client version", isCodexCLI: true, clientVersion: "0.200.0", wantVersion: "0.200.0"},
-		{name: "normal fills Codex version", isCodexCLI: true, wantVersion: codexCLIVersion},
-		{name: "normal leaves non-Codex empty"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			rec := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(rec)
-			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader([]byte(`{"model":"gpt-5.6-sol"}`)))
-			if tt.isCodexCLI {
-				c.Request.Header.Set("User-Agent", codexCLIUserAgent)
-				c.Request.Header.Set("originator", "codex_cli_rs")
-			}
-			if tt.clientVersion != "" {
-				c.Request.Header.Set("Version", tt.clientVersion)
-			}
-
-			svc := &OpenAIGatewayService{cfg: &config.Config{
-				Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{Enabled: false}},
-			}}
-			account := &Account{Type: AccountTypeAPIKey, Platform: PlatformOpenAI}
-			var req *http.Request
-			var err error
-			if tt.passthrough {
-				req, err = svc.buildUpstreamRequestOpenAIPassthrough(c.Request.Context(), c, account, []byte(`{"model":"gpt-5.6-sol"}`), "token")
-			} else {
-				req, err = svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5.6-sol"}`), "token", false, "", tt.isCodexCLI)
-			}
-			require.NoError(t, err)
-			require.Equal(t, tt.wantVersion, req.Header.Get("Version"))
-		})
-	}
+	require.Equal(t, HTTPUpstreamProfileOpenAI, HTTPUpstreamProfileFromContext(req.Context()))
 }
 
 func TestOpenAIBuildUpstreamRequestOAuthMessagesBridgeUsesSessionOnly(t *testing.T) {
@@ -2087,25 +2165,15 @@ func TestOpenAIBuildUpstreamRequestPreservesCompactPathForAPIKeyBaseURL(t *testi
 func TestOpenAIBuildUpstreamRequestOAuthOfficialClientOriginatorCompatibility(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// 上游要求 originator 与最终 User-Agent 首段配套（issue #3901）：
-	// originator 一律由最终 UA 推导；推导不出官方身份时整体回退默认 Codex CLI 身份。
 	tests := []struct {
 		name           string
 		userAgent      string
 		originator     string
 		wantOriginator string
-		wantUA         string
 	}{
-		{name: "official ua pairs originator", userAgent: "Codex Desktop/1.2.3", wantOriginator: "Codex Desktop", wantUA: "Codex Desktop/1.2.3"},
-		{
-			name:           "mismatched originator repaired from ua",
-			userAgent:      "codex-tui/0.140.2 (Mac OS X 14.0; arm64) iTerm (codex-tui; 0.140.2)",
-			originator:     "codex_cli_rs",
-			wantOriginator: "codex-tui",
-			wantUA:         "codex-tui/0.140.2 (Mac OS X 14.0; arm64) iTerm (codex-tui; 0.140.2)",
-		},
-		{name: "official originator without ua falls back to default identity", originator: "codex_vscode", wantOriginator: "codex_cli_rs", wantUA: codexCLIUserAgent},
-		{name: "third-party ua masked to default identity", userAgent: "luna/1.2.0", wantOriginator: "codex_cli_rs", wantUA: codexCLIUserAgent},
+		{name: "desktop originator preserved", originator: "Codex Desktop", wantOriginator: "Codex Desktop"},
+		{name: "vscode originator preserved", originator: "codex_vscode", wantOriginator: "codex_vscode"},
+		{name: "official ua fallback to codex_cli_rs", userAgent: "Codex Desktop/1.2.3", wantOriginator: "codex_cli_rs"},
 	}
 
 	for _, tt := range tests {
@@ -2130,7 +2198,6 @@ func TestOpenAIBuildUpstreamRequestOAuthOfficialClientOriginatorCompatibility(t 
 			req, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "token", false, "", isCodexCLI)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantOriginator, req.Header.Get("originator"))
-			require.Equal(t, tt.wantUA, req.Header.Get("User-Agent"))
 		})
 	}
 }
@@ -2403,6 +2470,12 @@ func TestParseSSEUsage_SelectiveParsing(t *testing.T) {
 	require.Equal(t, 15, usage.OutputTokens)
 	require.Equal(t, 4, usage.CacheReadInputTokens)
 
+	// failed 事件在部分上游路径也会携带已消耗 usage，应与 WS/passthrough 保持一致
+	svc.parseSSEUsage(`{"type":"response.failed","response":{"usage":{"input_tokens":17,"output_tokens":19,"input_tokens_details":{"cached_tokens":6}}}}`, usage)
+	require.Equal(t, 17, usage.InputTokens)
+	require.Equal(t, 19, usage.OutputTokens)
+	require.Equal(t, 6, usage.CacheReadInputTokens)
+
 	svc.parseSSEUsage(`{"type":"response.completed","response":{"usage":{"prompt_tokens":21,"completion_tokens":8,"prompt_tokens_details":{"cached_tokens":6}}}}`, usage)
 	require.Equal(t, 21, usage.InputTokens)
 	require.Equal(t, 8, usage.OutputTokens)
@@ -2410,35 +2483,17 @@ func TestParseSSEUsage_SelectiveParsing(t *testing.T) {
 }
 
 func TestExtractOpenAIUsageFromJSONBytes_AcceptsResponseAndChatUsageShapes(t *testing.T) {
-	usage, ok := extractOpenAIUsageFromJSONBytes([]byte(`{"id":"resp_1","usage":{"input_tokens":9,"output_tokens":5,"input_tokens_details":{"cached_tokens":2,"cache_write_tokens":4}}}`))
+	usage, ok := extractOpenAIUsageFromJSONBytes([]byte(`{"id":"resp_1","usage":{"input_tokens":3,"output_tokens":5,"input_tokens_details":{"cached_tokens":2}}}`))
 	require.True(t, ok)
-	require.Equal(t, 9, usage.InputTokens)
+	require.Equal(t, 3, usage.InputTokens)
 	require.Equal(t, 5, usage.OutputTokens)
 	require.Equal(t, 2, usage.CacheReadInputTokens)
-	require.Equal(t, 4, usage.CacheCreationInputTokens)
 
-	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"type":"response.completed","response":{"usage":{"prompt_tokens":13,"completion_tokens":7,"prompt_tokens_details":{"cached_tokens":4,"cache_creation_tokens":3}}}}`))
+	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"type":"response.completed","response":{"usage":{"prompt_tokens":13,"completion_tokens":7,"prompt_tokens_details":{"cached_tokens":4}}}}`))
 	require.True(t, ok)
 	require.Equal(t, 13, usage.InputTokens)
 	require.Equal(t, 7, usage.OutputTokens)
 	require.Equal(t, 4, usage.CacheReadInputTokens)
-	require.Equal(t, 3, usage.CacheCreationInputTokens)
-
-	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":11,"output_tokens":2,"cache_write_input_tokens":6}}`))
-	require.True(t, ok)
-	require.Equal(t, 6, usage.CacheCreationInputTokens)
-
-	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":20,"output_tokens":2,"cache_creation_input_tokens":19,"input_tokens_details":{"cache_write_tokens":7}}}`))
-	require.True(t, ok)
-	require.Equal(t, 7, usage.CacheCreationInputTokens, "官方嵌套字段应优先于兼容顶层别名")
-
-	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":20,"output_tokens":2,"cache_creation_input_tokens":19,"input_tokens_details":{"cache_write_tokens":0}}}`))
-	require.True(t, ok)
-	require.Zero(t, usage.CacheCreationInputTokens, "官方嵌套字段显式为零时仍应优先于兼容顶层别名")
-
-	usage, ok = extractOpenAIUsageFromJSONBytes([]byte(`{"usage":{"input_tokens":20,"output_tokens":2,"cache_read_input_tokens":19,"input_tokens_details":{"cached_tokens":0}}}`))
-	require.True(t, ok)
-	require.Zero(t, usage.CacheReadInputTokens, "官方嵌套缓存读取字段显式为零时仍应优先于兼容顶层别名")
 }
 
 func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
@@ -2497,13 +2552,13 @@ func TestHandleNonStreamingResponse_APIKeyFallsBackToSSEBodyWhenContentTypeIsWro
 		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
 			`data: {"type":"response.output_text.delta","delta":"hel"}`,
 			`data: {"type":"response.output_text.delta","delta":"lo"}`,
-			`data: {"type":"response.completed","response":{"id":"resp_api_key_sse","object":"response","model":"gpt-5.5","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}}`,
+			`data: {"type":"response.completed","response":{"id":"resp_api_key_sse","object":"response","model":"gpt-5.4","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}}`,
 			`data: [DONE]`,
 		}, "\n"))),
 	}
 	account := &Account{ID: 1, Type: AccountTypeAPIKey}
 
-	result, err := svc.handleNonStreamingResponse(context.Background(), resp, c, account, "gpt-5.5", "gpt-5.5")
+	result, err := svc.handleNonStreamingResponse(context.Background(), resp, c, account, "gpt-5.4", "gpt-5.4")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, 3, result.InputTokens)
@@ -2586,4 +2641,136 @@ func TestHandleSSEToJSON_ResponseFailedReturnsProtocolError(t *testing.T) {
 	require.Equal(t, http.StatusBadGateway, rec.Code)
 	require.Contains(t, rec.Body.String(), "upstream rejected request")
 	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+}
+
+func TestOpenAICompatSSEFrameParserResetsEventTypeAtFrameBoundary(t *testing.T) {
+	var parser openAICompatSSEFrameParser
+
+	frame, ok := parser.AddLine("event: response.created")
+	require.False(t, ok)
+	require.Empty(t, frame)
+
+	frame, ok = parser.AddLine(`data: {"response":{"id":"resp_1"}}`)
+	require.False(t, ok)
+	require.Empty(t, frame)
+
+	frame, ok = parser.AddLine("")
+	require.True(t, ok)
+	require.Equal(t, "response.created", frame.EventType)
+	require.JSONEq(t, `{"response":{"id":"resp_1"}}`, frame.Data)
+
+	frame, ok = parser.AddLine(`data: {"delta":"ok"}`)
+	require.False(t, ok)
+	require.Empty(t, frame.EventType)
+
+	frame, ok = parser.AddLine("")
+	require.True(t, ok)
+	require.Empty(t, frame.EventType)
+	require.JSONEq(t, `{"delta":"ok"}`, frame.Data)
+}
+
+func TestStreamingPassthroughCyberPolicyMarksAndPassesThrough(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}
+	svc := &OpenAIGatewayService{cfg: cfg}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"r1"}}`,
+			"",
+			"event: response.failed",
+			`data: {"type":"response.failed","response":{"error":{"code":"cyber_policy","message":"flagged for cyber policy"}}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid-cyber"}},
+	}
+
+	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "a"}, time.Now(), "m", "m")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.False(t, errors.As(err, &failoverErr), "cyber must NOT failover")
+	require.Contains(t, rec.Body.String(), "cyber_policy", "response.failed passed through to client")
+	mark := GetOpsCyberPolicy(c)
+	require.NotNil(t, mark)
+	require.Equal(t, "flagged for cyber policy", mark.Message)
+}
+
+func TestHandleStreamingResponseCyberPolicyMarks(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}
+	svc := &OpenAIGatewayService{cfg: cfg}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"r1"}}`,
+			"",
+			"event: response.failed",
+			`data: {"type":"response.failed","error":{"code":"cyber_policy","message":"flagged"}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid"}},
+	}
+	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "a"}, time.Now(), "m", "m")
+	require.Error(t, err)
+	var fo *UpstreamFailoverError
+	require.False(t, errors.As(err, &fo))
+	require.NotNil(t, GetOpsCyberPolicy(c))
+}
+
+func TestHandleErrorResponseCyberPolicyPassthrough(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	cyberBody := `{"error":{"code":"cyber_policy","message":"flagged for cyber policy"}}`
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Header:     http.Header{"Content-Type": []string{"application/json"}, "X-Request-Id": []string{"rid"}},
+		Body:       io.NopCloser(strings.NewReader(cyberBody)),
+	}
+	_, err := svc.handleErrorResponse(context.Background(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "a"}, nil)
+	require.Error(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code, "passthrough upstream 400, not rewrapped 502")
+	require.Contains(t, rec.Body.String(), "cyber_policy", "client sees original cyber body")
+	require.NotContains(t, rec.Body.String(), "Upstream request failed", "must not 502-rewrap")
+	mark := GetOpsCyberPolicy(c)
+	require.NotNil(t, mark)
+	require.Equal(t, http.StatusBadRequest, mark.UpstreamStatus)
+}
+
+func TestHandleCompatErrorResponseCyberPolicyEarlyReturn(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	cyberBody := `{"error":{"code":"cyber_policy","message":"flagged for cyber policy"}}`
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(cyberBody)),
+	}
+	var gotStatus int
+	var gotType, gotMsg string
+	writeError := func(_ *gin.Context, statusCode int, errType, message string) {
+		gotStatus, gotType, gotMsg = statusCode, errType, message
+	}
+	// cyber 命中应早返回(写兼容错误 + 不冷却账号)，而非落到通用 "Upstream request failed"。
+	_, err := svc.handleCompatErrorResponse(resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "a"}, writeError)
+	require.Error(t, err)
+	require.Equal(t, http.StatusBadRequest, gotStatus)
+	require.Equal(t, "invalid_request_error", gotType)
+	require.Contains(t, gotMsg, "flagged for cyber policy")
+	require.NotContains(t, gotMsg, "Upstream request failed")
+	require.NotNil(t, GetOpsCyberPolicy(c))
 }

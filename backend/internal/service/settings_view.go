@@ -19,7 +19,6 @@ type SystemSettings struct {
 	PasswordResetEnabled             bool
 	FrontendURL                      string
 	InvitationCodeEnabled            bool
-	InvitationRegistrationMode       string
 	TotpEnabled                      bool // TOTP 双因素认证
 	LoginAgreementEnabled            bool
 	LoginAgreementMode               string
@@ -39,6 +38,7 @@ type SystemSettings struct {
 	TurnstileSiteKey             string
 	TurnstileSecretKey           string
 	TurnstileSecretKeyConfigured bool
+	APIKeyACLTrustForwardedIP    bool
 
 	// LinuxDo Connect OAuth 登录
 	LinuxDoConnectEnabled                bool
@@ -46,6 +46,25 @@ type SystemSettings struct {
 	LinuxDoConnectClientSecret           string
 	LinuxDoConnectClientSecretConfigured bool
 	LinuxDoConnectRedirectURL            string
+
+	// DingTalk Connect OAuth 登录
+	DingTalkConnectEnabled                 bool
+	DingTalkConnectClientID                string
+	DingTalkConnectClientSecret            string
+	DingTalkConnectClientSecretConfigured  bool
+	DingTalkConnectRedirectURL             string
+	DingTalkConnectCorpRestrictionPolicy   string
+	DingTalkConnectInternalCorpID          string
+	DingTalkConnectBypassRegistration      bool
+	DingTalkConnectSyncCorpEmail           bool
+	DingTalkConnectSyncDisplayName         bool
+	DingTalkConnectSyncDept                bool
+	DingTalkConnectSyncCorpEmailAttrKey    string
+	DingTalkConnectSyncDisplayNameAttrKey  string
+	DingTalkConnectSyncDeptAttrKey         string
+	DingTalkConnectSyncCorpEmailAttrName   string
+	DingTalkConnectSyncDisplayNameAttrName string
+	DingTalkConnectSyncDeptAttrName        string
 
 	// WeChat Connect OAuth 登录
 	WeChatConnectEnabled                   bool
@@ -108,62 +127,33 @@ type SystemSettings struct {
 	GoogleOAuthRedirectURL            string
 	GoogleOAuthFrontendRedirectURL    string
 
-	SiteName                               string
-	SiteLogo                               string
-	SiteSubtitle                           string
-	APIBaseURL                             string
-	ContactInfo                            string
-	ContactChannels                        string
-	SupportChatEnabled                     bool
-	SupportChatGatewayURL                  string
-	SupportChatTitle                       string
-	SupportChatWelcomeMessage              string
-	SupportChatOfficialContactText         string
-	SupportChatOfficialContactURL          string
-	DocURL                                 string
-	SitePages                              string
-	HomeContent                            string
-	HideCcsImportButton                    bool
-	FrontendLocales                        []string
-	UserSubscriptionsVisible               bool
-	PurchaseSubscriptionEnabled            bool
-	PurchaseSubscriptionURL                string
-	SubscriptionNotifyEmailEnabled         bool
-	SubscriptionMultiplePurchasesEnabled   bool
-	SubscriptionQuotaResetUTCOffsetMinutes int
-	SubscriptionQuotaResetHour             int
-	TableDefaultPageSize                   int
-	TablePageSizeOptions                   []int
-	CustomMenuItems                        string // JSON array of custom menu items
-	CustomEndpoints                        string // JSON array of custom endpoints
-	CCSwitchDefaultModelAnthropic          string
-	CCSwitchDefaultModelOpenAI             string
-	CCSwitchDefaultModelGemini             string
-	CCSwitchDefaultModelAntigravity        string
-	CCSwitchDefaultModelAntigravityGemini  string
+	SiteName                    string
+	SiteLogo                    string
+	SiteSubtitle                string
+	APIBaseURL                  string
+	ContactInfo                 string
+	DocURL                      string
+	HomeContent                 string
+	HideCcsImportButton         bool
+	PurchaseSubscriptionEnabled bool
+	PurchaseSubscriptionURL     string
+	TableDefaultPageSize        int
+	TablePageSizeOptions        []int
+	CustomMenuItems             string // JSON array of custom menu items
+	CustomEndpoints             string // JSON array of custom endpoints
 
-	DefaultConcurrency                int
-	DefaultBalance                    float64
-	RiskControlEnabled                bool
-	SiteMessagesEnabled               bool
-	SiteMessagesDailySendLimit        int
-	SiteMessagesRetentionDays         int
-	SiteMessagesDefaultRecipientEmail string
-	AffiliateEnabled                  bool
-	AffiliateRebateRate               float64
-	AffiliateRebateTiers              []AffiliateRebateTier
-	AffiliateRebateFreezeHours        int
-	AffiliateRebateDurationDays       int
-	AffiliateRebatePerInviteeCap      float64
-	AffiliateSignupBonusEnabled       bool
-	AffiliateSignupBonusAmount        float64
-	AffiliateSignupBonusTotalCap      float64
-	AffiliateSignupBonusDailyCap      float64
-	BalanceUsageGateEnabled           bool
-	BalanceUsageGateMinBalance        float64
-	BalanceUsageGateMinRecharge       float64
-	DefaultUserRPMLimit               int
-	DefaultSubscriptions              []DefaultSubscriptionSetting
+	DefaultConcurrency           int
+	DefaultBalance               float64
+	RiskControlEnabled           bool
+	CyberSessionBlockEnabled     bool
+	CyberSessionBlockTTLSeconds  int
+	AffiliateEnabled             bool
+	AffiliateRebateRate          float64
+	AffiliateRebateFreezeHours   int
+	AffiliateRebateDurationDays  int
+	AffiliateRebatePerInviteeCap float64
+	DefaultUserRPMLimit          int
+	DefaultSubscriptions         []DefaultSubscriptionSetting
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -200,10 +190,17 @@ type SystemSettings struct {
 	BackendModeEnabled bool
 
 	// Gateway forwarding behavior
-	EnableFingerprintUnification       bool // 是否统一 OAuth 账号的指纹头（默认 true）
-	EnableMetadataPassthrough          bool // 是否透传客户端原始 metadata（默认 false）
-	EnableCCHSigning                   bool // 是否对 billing header cch 进行签名（默认 false）
-	EnableAnthropicCacheTTL1hInjection bool // 是否对 Anthropic OAuth/SetupToken 请求体注入 1h cache_control ttl（默认 false）
+	EnableFingerprintUnification           bool   // 是否统一 OAuth 账号的指纹头（默认 true）
+	EnableMetadataPassthrough              bool   // 是否透传客户端原始 metadata（默认 false）
+	EnableCCHSigning                       bool   // 是否对 billing header cch 进行签名（默认 false）
+	EnableClaudeOAuthSystemPromptInjection bool   // 是否对 Claude OAuth mimic 路径注入 Claude Code system blocks（默认 true）
+	ClaudeOAuthSystemPrompt                string // Claude OAuth mimic 路径注入的通用扩展 system prompt；空值使用内置默认
+	ClaudeOAuthSystemPromptBlocks          string // Claude OAuth mimic 路径注入的 system blocks JSON 配置；空值使用内置默认
+	EnableAnthropicCacheTTL1hInjection     bool   // 是否对 Anthropic OAuth/SetupToken 请求体注入 1h cache_control ttl（默认 false）
+	RewriteMessageCacheControl             bool   // 是否改写 messages[*].content[*].cache_control（默认 false）
+	AntigravityUserAgentVersion            string // Antigravity 上游 User-Agent 版本号；空值使用配置/默认值
+	OpenAICodexUserAgent                   string // OpenAI Codex 上游完整 User-Agent；空值使用内置默认
+	OpenAIAllowClaudeCodeCodexPlugin       bool   // 全局开关：是否额外放行 Claude Code 的 Codex 插件（默认 false）
 
 	// Web Search Emulation
 	WebSearchEmulationEnabled bool // 是否启用 web search 模拟
@@ -214,20 +211,26 @@ type SystemSettings struct {
 	PaymentVisibleMethodAlipayEnabled bool
 	PaymentVisibleMethodWxpayEnabled  bool
 
-	// OpenAI account scheduling
+	// OpenAI 账号调度
 	OpenAIAdvancedSchedulerEnabled bool
 
-	// Balance low notification
+	// 余额不足提醒
 	BalanceLowNotifyEnabled     bool
 	BalanceLowNotifyThreshold   float64
 	BalanceLowNotifyRechargeURL string
 
-	// Account quota notification
+	// 订阅到期提醒
+	SubscriptionExpiryNotifyEnabled bool
+
+	// 账号限额通知
 	AccountQuotaNotifyEnabled bool
 	AccountQuotaNotifyEmails  []NotifyEmailEntry
 
 	// 系统全局默认平台配额（key = platform，nil/缺省 = 不限制）
 	DefaultPlatformQuotas map[string]*DefaultPlatformQuotaSetting `json:"default_platform_quotas"`
+
+	// 允许终端用户在用量页查看自己的失败请求
+	AllowUserViewErrorRequests bool
 }
 
 type DefaultSubscriptionSetting struct {
@@ -243,7 +246,6 @@ type PublicSettings struct {
 	PromoCodeEnabled                 bool
 	PasswordResetEnabled             bool
 	InvitationCodeEnabled            bool
-	InvitationRegistrationMode       string
 	TotpEnabled                      bool // TOTP 双因素认证
 	LoginAgreementEnabled            bool
 	LoginAgreementMode               string
@@ -257,33 +259,19 @@ type PublicSettings struct {
 	SiteSubtitle                     string
 	APIBaseURL                       string
 	ContactInfo                      string
-	ContactChannels                  string
-	SupportChatEnabled               bool
-	SupportChatGatewayURL            string
-	SupportChatTitle                 string
-	SupportChatWelcomeMessage        string
-	SupportChatOfficialContactText   string
-	SupportChatOfficialContactURL    string
 	DocURL                           string
-	SitePages                        string
 	HomeContent                      string
 	HideCcsImportButton              bool
-	FrontendLocales                  []string
 
-	UserSubscriptionsVisible              bool
-	PurchaseSubscriptionEnabled           bool
-	PurchaseSubscriptionURL               string
-	TableDefaultPageSize                  int
-	TablePageSizeOptions                  []int
-	CustomMenuItems                       string // JSON array of custom menu items
-	CustomEndpoints                       string // JSON array of custom endpoints
-	CCSwitchDefaultModelAnthropic         string
-	CCSwitchDefaultModelOpenAI            string
-	CCSwitchDefaultModelGemini            string
-	CCSwitchDefaultModelAntigravity       string
-	CCSwitchDefaultModelAntigravityGemini string
+	PurchaseSubscriptionEnabled bool
+	PurchaseSubscriptionURL     string
+	TableDefaultPageSize        int
+	TablePageSizeOptions        []int
+	CustomMenuItems             string // JSON array of custom menu items
+	CustomEndpoints             string // JSON array of custom endpoints
 
 	LinuxDoOAuthEnabled      bool
+	DingTalkOAuthEnabled     bool
 	WeChatOAuthEnabled       bool
 	WeChatOAuthOpenEnabled   bool
 	WeChatOAuthMPEnabled     bool
@@ -314,9 +302,8 @@ type PublicSettings struct {
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
-	// Site messages feature toggle
-	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
-	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
+	// 允许终端用户在用量页查看自己的失败请求
+	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`
 }
 
 type LoginAgreementDocument struct {
@@ -532,7 +519,6 @@ type OpenAIFastPolicyRule struct {
 	ServiceTier          string   `json:"service_tier"`                     // "priority" | "flex" | "auto" | "default" | "scale" | "all"
 	Action               string   `json:"action"`                           // "pass" | "filter" | "block"
 	Scope                string   `json:"scope"`                            // "all" | "oauth" | "apikey" | "bedrock"
-	UserIDs              []int64  `json:"user_ids,omitempty"`               // 空=所有 LumioAPI 用户；非空=仅指定 API Key 所属用户
 	ErrorMessage         string   `json:"error_message,omitempty"`          // 自定义错误消息 (action=block 时生效)
 	ModelWhitelist       []string `json:"model_whitelist,omitempty"`        // 模型匹配模式列表（为空=对所有模型生效）
 	FallbackAction       string   `json:"fallback_action,omitempty"`        // 未匹配白名单的模型的处理方式
@@ -545,25 +531,10 @@ type OpenAIFastPolicySettings struct {
 }
 
 // DefaultOpenAIFastPolicySettings 返回默认的 OpenAI fast 策略配置。
-// 默认对所有模型的 priority（fast）请求执行 filter，即剔除 service_tier 字段，
-// 让上游按 normal 优先级处理。
-//
-// 为什么 ModelWhitelist 为空（=对所有模型生效）：
-// codex 客户端的 service_tier=fast 是用户级开关，与 model 字段正交。即使
-// 用户使用 gpt-4 + fast，priority 配额仍会被消耗。如果默认规则只锁
-// gpt-5.5*，"用 gpt-4 + fast 透传 priority 上游" 这条路径就会绕过策略。
-// 与 codex 真实语义对齐，默认对所有模型生效；管理员若需要只针对特定
-// 模型，可在 admin UI 中显式配置 model_whitelist。
+// 默认不配置任何规则，保留 OpenAI 上游 service_tier 语义；管理员如需
+// 限制 priority/flex，可以在 admin UI 中显式配置 filter 或 block 规则。
 func DefaultOpenAIFastPolicySettings() *OpenAIFastPolicySettings {
 	return &OpenAIFastPolicySettings{
-		Rules: []OpenAIFastPolicyRule{
-			{
-				ServiceTier:    OpenAIFastTierPriority,
-				Action:         BetaPolicyActionFilter,
-				Scope:          BetaPolicyScopeAll,
-				ModelWhitelist: []string{},
-				FallbackAction: BetaPolicyActionPass,
-			},
-		},
+		Rules: []OpenAIFastPolicyRule{},
 	}
 }

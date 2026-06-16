@@ -34,7 +34,7 @@ export interface NotifyEmailEntry {
 
 // ==================== User & Auth Types ====================
 
-export type UserAuthProvider = 'email' | 'linuxdo' | 'oidc' | 'wechat' | 'github' | 'google'
+export type UserAuthProvider = 'email' | 'linuxdo' | 'oidc' | 'wechat' | 'github' | 'google' | 'dingtalk'
 
 export interface UserAuthBindingStatus {
   bound?: boolean
@@ -86,8 +86,6 @@ export interface User {
   wechat_bound?: boolean
   role: 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
-  total_recharged?: number // Historical recharge amount available for invoice checks
-  invoice_enabled?: boolean // Whether the user can access invoice requests
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status
@@ -126,7 +124,6 @@ export interface RegisterRequest {
   promo_code?: string
   invitation_code?: string
   aff_code?: string
-  aff_fingerprint?: string
 }
 
 export interface AffiliateInvitee {
@@ -137,13 +134,6 @@ export interface AffiliateInvitee {
   total_rebate: number
 }
 
-export interface AffiliateRebateTier {
-  level: string
-  min_invitees: number
-  min_recharge: number
-  rebate_rate_percent: number | null
-}
-
 export interface UserAffiliateDetail {
   user_id: number
   aff_code: string
@@ -152,37 +142,14 @@ export interface UserAffiliateDetail {
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
-  invitee_recharge_total: number
-  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖阶梯）。null 表示未配置或未达标。 */
-  effective_rebate_rate_percent: number | null
-  affiliate_tiers: AffiliateRebateTier[]
-  current_affiliate_tier?: AffiliateRebateTier | null
-  next_affiliate_tier?: AffiliateRebateTier | null
+  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
+  effective_rebate_rate_percent: number
   invitees: AffiliateInvitee[]
 }
 
 export interface AffiliateTransferResponse {
   transferred_quota: number
   balance: number
-}
-
-export interface AffiliateInviteLog {
-  id: number
-  inviter_id?: number | null
-  inviter_email?: string
-  inviter_username?: string
-  invitee_id?: number | null
-  invitee_email?: string
-  invitee_username?: string
-  affiliate_code?: string
-  success: boolean
-  failure_reason?: string
-  failure_message?: string
-  bonus_amount: number
-  fingerprint_hash?: string
-  ip_address?: string
-  user_agent?: string
-  created_at: string
 }
 
 export interface SendVerifyCodeRequest {
@@ -213,22 +180,6 @@ export interface CustomEndpoint {
   description: string
 }
 
-export interface ContactChannel {
-  label: string
-  url: string
-}
-
-export type SitePageMode = 'markdown' | 'link'
-
-export interface SitePage {
-  key: string
-  title: string
-  slug: string
-  mode?: SitePageMode
-  content: string
-  enabled: boolean
-}
-
 export interface LoginAgreementDocument {
   id: string
   title: string
@@ -243,7 +194,6 @@ export interface PublicSettings {
   promo_code_enabled: boolean
   password_reset_enabled: boolean
   invitation_code_enabled: boolean
-  invitation_registration_mode?: 'redeem_code' | 'affiliate_link' | 'both' | string
   login_agreement_enabled?: boolean
   login_agreement_mode?: 'modal' | 'checkbox' | string
   login_agreement_updated_at?: string
@@ -256,31 +206,17 @@ export interface PublicSettings {
   site_subtitle: string
   api_base_url: string
   contact_info: string
-  contact_channels: ContactChannel[]
-  support_chat_enabled: boolean
-  support_chat_gateway_url: string
-  support_chat_title: string
-  support_chat_welcome_message: string
-  support_chat_official_contact_text: string
-  support_chat_official_contact_url: string
   doc_url: string
-  site_pages: SitePage[]
   home_content: string
   hide_ccs_import_button: boolean
-  ccswitch_default_model_anthropic?: string
-  ccswitch_default_model_openai?: string
-  ccswitch_default_model_gemini?: string
-  ccswitch_default_model_antigravity?: string
-  ccswitch_default_model_antigravity_gemini?: string
-  user_subscriptions_visible?: boolean
   payment_enabled: boolean
   risk_control_enabled: boolean
   table_default_page_size: number
   table_page_size_options: number[]
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
-  frontend_locales: string[]
   linuxdo_oauth_enabled: boolean
+  dingtalk_oauth_enabled?: boolean
   wechat_oauth_enabled: boolean
   wechat_oauth_open_enabled?: boolean
   wechat_oauth_mp_enabled?: boolean
@@ -297,9 +233,9 @@ export interface PublicSettings {
   channel_monitor_enabled: boolean
   channel_monitor_default_interval_seconds: number
   available_channels_enabled: boolean
+  service_quota_enabled: boolean
   affiliate_enabled: boolean
-  site_messages_enabled?: boolean
-  site_messages_default_recipient_email?: string
+  allow_user_view_error_requests?: boolean
 }
 
 export interface AuthResponse {
@@ -423,176 +359,6 @@ export interface AnnouncementUserReadStatus {
   balance: number
   eligible: boolean
   read_at?: string
-}
-
-// ==================== Site Message Types ====================
-
-export interface SiteMessageRecipient {
-  id: number
-  email: string
-  username: string
-  is_admin?: boolean
-}
-
-export interface SiteMessage {
-  id: number
-  sender_id: number
-  recipient_id: number
-  parent_id?: number
-  subject: string
-  content: string
-  read_at?: string
-  created_at: string
-  updated_at: string
-  sender?: SiteMessageRecipient
-  recipient?: SiteMessageRecipient
-  replies?: SiteMessage[]
-}
-
-export interface CreateSiteMessageRequest {
-  recipient: string
-  subject: string
-  content: string
-}
-
-export interface ReplySiteMessageRequest {
-  content: string
-}
-
-export interface AdminSendSiteMessageRequest {
-  subject: string
-  content: string
-  send_email?: boolean
-}
-
-export interface AdminSendCompensationBatchRequest {
-  recipient_mode: 'selected' | 'all'
-  recipient_emails?: string[]
-  subject: string
-  content: string
-  compensation_enabled: boolean
-  compensation_amount?: number
-  compensation_codes?: string[]
-  compensation_format?: 'block' | 'compact'
-  send_email?: boolean
-  inactive_days?: number
-}
-
-export interface SiteMessageCompensationCodeAssignment {
-  recipient: string
-  code: string
-  status: 'unused' | 'used' | 'reserved' | 'recorded'
-}
-
-export interface SiteMessageCompensationBatchResult {
-  recipient: string
-  user_id?: number
-  code?: string
-  message_id?: number
-  status: 'sent' | 'failed'
-  error_reason?: string
-  error?: string
-}
-
-export interface SiteMessageCompensationBatch {
-  id: string
-  subject: string
-  content: string
-  mode: 'selected' | 'all'
-  audience: string
-  recipient_count: number
-  success_count: number
-  failed_count: number
-  amount: number
-  code_count: number
-  operator: string
-  sent_at: string
-  codes: SiteMessageCompensationCodeAssignment[]
-  results: SiteMessageCompensationBatchResult[]
-  message_ids: number[]
-}
-
-// ==================== Lottery Types ====================
-
-export interface LotterySegment {
-  label: string
-  is_prize: boolean
-}
-
-export interface LotteryActiveCampaign {
-  id: number
-  name: string
-  subtitle: string
-  prize_count: number
-  max_participants: number
-  joined_count: number
-  early_boost_participant_percent?: number
-  recharge_boost_cap_percent?: number
-  segments: LotterySegment[]
-}
-
-export interface LotteryActiveResponse {
-  campaign: LotteryActiveCampaign | null
-}
-
-export interface LotteryDrawResult {
-  won: boolean
-  index: number
-  label: string
-  message: string
-  site_message_id?: number | null
-}
-
-export interface LotteryCode {
-  id: number
-  campaign_id: number
-  code: string
-  assigned_user_id?: number | null
-  assigned_draw_id?: number | null
-  assigned_at?: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface LotteryDraw {
-  id: number
-  campaign_id: number
-  user_id: number
-  user_email?: string
-  won: boolean
-  lottery_code_id?: number | null
-  site_message_id?: number | null
-  result_label: string
-  created_at: string
-}
-
-export interface LotteryCampaign {
-  id: number
-  name: string
-  subtitle: string
-  status: 'active' | 'finished'
-  prize_count: number
-  max_participants: number
-  joined_count: number
-  winner_count: number
-  early_boost_participant_percent?: number
-  recharge_boost_cap_percent?: number
-  created_by: number
-  created_at: string
-  updated_at: string
-  finished_at?: string | null
-  codes?: LotteryCode[]
-  draws?: LotteryDraw[]
-}
-
-export interface CreateLotteryCampaignRequest {
-  name: string
-  subtitle?: string
-  prize_count: number
-  max_participants: number
-  early_boost_participant_percent: number
-  recharge_boost_cap_percent: number
-  codes: string[]
 }
 
 // ==================== Proxy Node Types ====================
@@ -721,7 +487,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
 
 export type SubscriptionType = 'standard' | 'subscription'
 
@@ -739,7 +505,6 @@ export interface Group {
   platform: GroupPlatform
   rate_multiplier: number
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
-  expose_upstream_model_to_user?: boolean
   is_exclusive: boolean
   status: 'active' | 'inactive'
   subscription_type: SubscriptionType
@@ -753,16 +518,10 @@ export interface Group {
   image_price_1k: number | null
   image_price_2k: number | null
   image_price_4k: number | null
-  video_rate_independent: boolean
-  video_rate_multiplier: number
-  video_price_480p: number | null
-  video_price_720p: number | null
-  video_price_1080p: number | null
   // Claude Code 客户端限制
   claude_code_only: boolean
   fallback_group_id: number | null
   fallback_group_id_on_invalid_request: number | null
-  fallback_group_id_on_exhausted: number | null
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
   default_mapped_model?: string
@@ -792,9 +551,15 @@ export interface AdminGroup extends Group {
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
+  models_list_config?: ModelsListConfig
 
   // 分组排序
   sort_order: number
+}
+
+export interface ModelsListConfig {
+  enabled: boolean
+  models: string[]
 }
 
 export interface ApiKey {
@@ -803,9 +568,7 @@ export interface ApiKey {
   key: string
   name: string
   group_id: number | null
-  fallback_key_id: number | null // 兜底密钥 ID（主密钥分组上游全不可用时改用此密钥转发并计费）
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
-  allowed_models: string[]
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
@@ -832,9 +595,7 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
-  fallback_key_id?: number | null // 兜底密钥 ID（null = 不设置）
   custom_key?: string // Optional custom API Key
-  allowed_models?: string[] // Empty = no model restriction
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (0 = unlimited)
@@ -847,9 +608,7 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_id?: number | null
-  fallback_key_id?: number | null // 兜底密钥 ID（编辑时总下发，null = 清除）
   status?: 'active' | 'inactive'
-  allowed_models?: string[] // Empty = clear model restriction
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (null = no change, 0 = unlimited)
@@ -877,19 +636,20 @@ export interface CreateGroupRequest {
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
-  video_rate_independent?: boolean
-  video_rate_multiplier?: number
-  video_price_480p?: number | null
-  video_price_720p?: number | null
-  video_price_1080p?: number | null
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
+  models_list_config?: ModelsListConfig
+  allow_messages_dispatch?: boolean
+  default_mapped_model?: string
+  messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
+  model_routing?: Record<string, number[]> | null
+  model_routing_enabled?: boolean
+  rpm_limit?: number
   require_oauth_only?: boolean
   require_privacy_set?: boolean
-  expose_upstream_model_to_user?: boolean
   // 从指定分组复制账号
   copy_accounts_from_group_ids?: number[]
 }
@@ -911,25 +671,26 @@ export interface UpdateGroupRequest {
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
-  video_rate_independent?: boolean
-  video_rate_multiplier?: number
-  video_price_480p?: number | null
-  video_price_720p?: number | null
-  video_price_1080p?: number | null
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
+  models_list_config?: ModelsListConfig
+  allow_messages_dispatch?: boolean
+  default_mapped_model?: string
+  messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
+  model_routing?: Record<string, number[]> | null
+  model_routing_enabled?: boolean
+  rpm_limit?: number
   require_oauth_only?: boolean
   require_privacy_set?: boolean
-  expose_upstream_model_to_user?: boolean
   copy_accounts_from_group_ids?: number[]
 }
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
@@ -950,7 +711,7 @@ export interface Proxy {
   port: number
   username: string | null
   password?: string | null
-  status: 'active' | 'inactive'
+  status: 'active' | 'inactive' | 'expired'
   account_count?: number // Number of accounts using this proxy
   latency_ms?: number
   latency_status?: 'success' | 'failed'
@@ -965,6 +726,10 @@ export interface Proxy {
   quality_grade?: string
   quality_summary?: string
   quality_checked?: number
+  expires_at: string | null
+  fallback_mode: 'none' | 'proxy' | 'direct'
+  backup_proxy_id?: number | null
+  expiry_warn_days: number
   created_at: string
   updated_at: string
 }
@@ -1070,6 +835,8 @@ export interface Account {
     antigravity_credits_overages?: Record<string, { activated_at: string; active_until: string }>
   } & Record<string, unknown>)
   proxy_id: number | null
+  proxy_fallback_origin_id?: number | null
+  proxy_fallback_origin_name?: string | null
   concurrency: number
   load_factor?: number | null
   current_concurrency?: number // Real-time concurrency count from Redis
@@ -1177,13 +944,6 @@ export interface AntigravityModelQuota {
   reset_time: string  // 重置时间 ISO8601
 }
 
-export interface GrokQuotaWindow {
-  limit?: number
-  remaining?: number
-  reset_unix?: number
-  reset_at?: string
-}
-
 export interface AccountUsageInfo {
   source?: 'passive' | 'active'
   updated_at: string | null
@@ -1197,31 +957,11 @@ export interface AccountUsageInfo {
   gemini_pro_minute?: UsageProgress | null
   gemini_flash_minute?: UsageProgress | null
   antigravity_quota?: Record<string, AntigravityModelQuota> | null
-  grok_request_quota?: GrokQuotaWindow | null
-  grok_token_quota?: GrokQuotaWindow | null
-  grok_retry_after_seconds?: number | null
-  grok_entitlement_status?: string
-  grok_quota_snapshot_state?: string
-  grok_last_quota_probe_at?: string
-  grok_last_headers_seen_at?: string
-  grok_last_status_code?: number
-  grok_local_usage?: WindowStats | null
   ai_credits?: Array<{
     credit_type?: string
     amount?: number
     minimum_balance?: number
   }> | null
-  upstream_balance?: {
-    enabled?: boolean
-    checked_at?: string
-    success?: boolean
-    status_code?: number
-    path?: string
-    balance?: number
-    currency?: string
-    message?: string
-    raw?: string
-  } | null
   // Antigravity 403 forbidden 状态
   is_forbidden?: boolean
   forbidden_reason?: string
@@ -1265,6 +1005,8 @@ export interface CodexUsageSnapshot {
 }
 
 export type OpenAICompactMode = 'auto' | 'force_on' | 'force_off'
+export type OpenAIResponsesMode = 'auto' | 'force_responses' | 'force_chat_completions'
+export type OpenAIEndpointCapability = 'chat_completions' | 'embeddings'
 
 export interface OpenAICompactState {
   openai_compact_mode?: OpenAICompactMode
@@ -1272,6 +1014,11 @@ export interface OpenAICompactState {
   openai_compact_checked_at?: string
   openai_compact_last_status?: number
   openai_compact_last_error?: string
+}
+
+export interface OpenAIResponsesState {
+  openai_responses_mode?: OpenAIResponsesMode
+  openai_responses_supported?: boolean
 }
 
 export interface CreateAccountRequest {
@@ -1338,6 +1085,10 @@ export interface CreateProxyRequest {
   port: number
   username?: string | null
   password?: string | null
+  expires_at?: number | null   // unix 秒；null/0 = 永不过期
+  fallback_mode?: 'none' | 'proxy' | 'direct'
+  backup_proxy_id?: number | null
+  expiry_warn_days?: number
 }
 
 export interface UpdateProxyRequest {
@@ -1348,6 +1099,10 @@ export interface UpdateProxyRequest {
   username?: string | null
   password?: string | null
   status?: 'active' | 'inactive'
+  expires_at?: number | null   // unix 秒；null/0 = 永不过期
+  fallback_mode?: 'none' | 'proxy' | 'direct'
+  backup_proxy_id?: number | null
+  expiry_warn_days?: number
 }
 
 export interface AdminDataPayload {
@@ -1400,10 +1155,57 @@ export interface AdminDataImportResult {
   errors?: AdminDataImportError[]
 }
 
+export interface CodexSessionImportRequest {
+  content?: string
+  contents?: string[]
+  name?: string
+  notes?: string | null
+  group_ids?: number[]
+  proxy_id?: number | null
+  concurrency?: number
+  priority?: number
+  rate_multiplier?: number
+  load_factor?: number | null
+  expires_at?: number | null
+  auto_pause_on_expired?: boolean
+  credential_extras?: Record<string, unknown>
+  extra?: Record<string, unknown>
+  update_existing?: boolean
+  skip_default_group_bind?: boolean
+  confirm_mixed_channel_risk?: boolean
+}
+
+export interface CodexSessionImportMessage {
+  index: number
+  name?: string
+  message: string
+}
+
+export interface CodexSessionImportItem {
+  index: number
+  name?: string
+  action: 'created' | 'updated' | 'skipped' | 'failed'
+  account_id?: number
+  message?: string
+}
+
+export interface CodexSessionImportResult {
+  total: number
+  created: number
+  updated: number
+  skipped: number
+  failed: number
+  items?: CodexSessionImportItem[]
+  warnings?: CodexSessionImportMessage[]
+  errors?: CodexSessionImportMessage[]
+}
+
 // ==================== Usage & Redeem Types ====================
 
 export type RedeemCodeType = 'balance' | 'concurrency' | 'subscription' | 'invitation'
-export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2'
+export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2' | 'cyber'
+export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
+export type ImageSizeBreakdown = Record<string, number>
 
 export interface UsageLog {
   id: number
@@ -1412,8 +1214,6 @@ export interface UsageLog {
   account_id: number | null
   request_id: string
   model: string
-  upstream_model?: string | null
-  model_mapping_chain?: string | null
   service_tier?: string | null
   reasoning_effort?: string | null
   inbound_endpoint?: string | null
@@ -1447,9 +1247,12 @@ export interface UsageLog {
   // 图片生成字段
   image_count: number
   image_size: string | null
-  video_count: number
-  video_resolution: string | null
-  video_duration_seconds: number | null
+  image_input_size: string | null
+  image_output_size: string | null
+  image_size_source: ImageSizeSource | null
+  image_size_breakdown: ImageSizeBreakdown | null
+  image_output_tokens: number
+  image_output_cost: number
 
   // User-Agent
   user_agent: string | null
@@ -1526,11 +1329,13 @@ export interface RedeemCode {
   code: string
   type: RedeemCodeType
   value: number
-  status: 'active' | 'used' | 'expired' | 'unused'
+  status: 'active' | 'used' | 'expired' | 'unused' | 'disabled'
   used_by: number | null
   used_at: string | null
   created_at: string
+  expires_at?: string | null
   updated_at?: string
+  notes?: string
   group_id?: number | null // 订阅类型专用
   validity_days?: number // 订阅类型专用
   user?: User
@@ -1543,6 +1348,20 @@ export interface GenerateRedeemCodesRequest {
   value: number
   group_id?: number | null // 订阅类型专用
   validity_days?: number // 订阅类型专用
+  expires_at?: string | null
+  expires_in_days?: number
+}
+
+export interface BatchUpdateRedeemCodeFields {
+  status?: 'unused' | 'disabled'
+  expires_at?: string | null
+  notes?: string
+  group_id?: number | null
+}
+
+export interface BatchUpdateRedeemCodesRequest {
+  ids: number[]
+  fields: BatchUpdateRedeemCodeFields
 }
 
 export interface RedeemCodeRequest {
@@ -1608,6 +1427,8 @@ export interface UsageStatsResponse {
   total_input_tokens: number
   total_output_tokens: number
   total_cache_tokens: number
+  total_cache_read_tokens: number
+  total_cache_creation_tokens: number
   total_tokens: number
   total_cost: number // 标准计费
   total_actual_cost: number // 实际扣除
@@ -1716,8 +1537,6 @@ export interface UpdateUserRequest {
   role?: 'admin' | 'user'
   balance?: number
   concurrency?: number
-  rpm_limit?: number
-  invoice_enabled?: boolean
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
@@ -1735,25 +1554,12 @@ export interface ChangePasswordRequest {
 export interface UserSubscription {
   id: number
   user_id: number
-  group_id: number | null
-  plan_id?: number | null
-  plan_name?: string
-  plan_product_name?: string
-  status: 'active' | 'expired' | 'revoked' | 'suspended'
-  is_usable?: boolean
-  exhausted_at?: string | null
-  quota_limit_usd?: number
-  quota_used_usd?: number
-  quota_remaining_usd?: number
-  daily_limit_usd?: number | null
+  group_id: number
+  status: 'active' | 'expired' | 'revoked'
+  starts_at: string
   daily_usage_usd: number
-  daily_reset_at?: string | null
-  weekly_limit_usd?: number | null
   weekly_usage_usd: number
-  weekly_reset_at?: string | null
   monthly_usage_usd: number
-  scope_type?: string
-  scope_config?: Record<string, unknown> | null
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null
@@ -1805,6 +1611,36 @@ export interface ExtendSubscriptionRequest {
 }
 
 // ==================== Query Parameters ====================
+
+export interface UserErrorRequest {
+  id: number
+  created_at: string
+  model: string
+  inbound_endpoint: string
+  status_code: number
+  category: string
+  platform: string
+  message: string
+  key_name: string
+  key_deleted: boolean
+}
+
+export interface UserErrorRequestDetail extends UserErrorRequest {
+  error_body: string
+  upstream_status_code?: number
+}
+
+export interface UserErrorListParams {
+  page?: number
+  page_size?: number
+  start_date?: string
+  end_date?: string
+  timezone?: string
+  model?: string
+  status_code?: number
+  category?: string
+  api_key_id?: number
+}
 
 export interface UsageQueryParams {
   page?: number
