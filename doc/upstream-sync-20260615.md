@@ -160,7 +160,7 @@ fork 早期分叉、只选择性同步过上游，导致 dev **整段缺失若�
 
 - [ ] **OpenAI 网关/调度/图像大簇**（~33 commit，含 T1 deferred 的 4 个）—— 同一组热路径文件一次性三方合并；单实例可只取正确性/安全、跳过纯优化
 - [ ] **失败请求/错误日志观测子系统**（`ddf06335`+`cfb195c7`+`fe895273`+`b8c89c34`+`705fe7d8`）—— 整段搬迁（含 `deleted_api_key_audits` 审计表 migration + `DeleteWithAudit`），撞 fork settings/ops
-- [ ] **API Key 分组可用性/独占守卫子系统**（`abortIfAPIKeyGroupUnavailable`/`validateAPIKeyGroupAvailable` 前置 + `1a86c6ce` 安全）—— dev 完全没有，整段搬迁
+- [x] **API Key 分组可用性/独占守卫子系统**（`1a86c6ce` 安全）—— **已做（见 Phase 4c）**：移植 22ff1acd+1a86c6ce 合并效果，越权防护
 - [ ] **auth OAuth token-pair 子系统**（`aea2950b` LinuxDO）—— dev 的 `LoginOrRegisterOAuthWithTokenPair` 是 5 参，上游 6 参（带 authSource）；需先搬签名变更
 - [x] **模型代际 + Bedrock 兼容子系统**（`d662c973`）—— 数据层 Phase 4a + **Bedrock 执行层 Phase 4b 已做**（修 ValidationException bug）。仅剩非必核项不做：Bedrock region 模型 ID 映射、CLI 指纹版本 bump
 
@@ -191,6 +191,18 @@ cherry-pick `13468778`：go.mod `go 1.26.4` + 3 个 Dockerfile + 3 个 CI workfl
 - `57d9e15e` 添加账号同步上游模型 · `af19d443` 代理有效期/失败回退 —— 动 backend，转后续
 
 > **教训**：cherry-pick 即使「看起来是前端」也可能携带 clean 应用的 backend 文件（引用了 dev 没有的签名）。**每批都必须跑 `go build` + `go vet -tags integration`，不能只跑 pnpm**（aea2950b 因此一度让 #77 的后端 test/golangci 红，已撤出）。
+
+### Phase 4c — API Key 独占分组访问守卫（分支 `upstream-apikey-group-guard-20260616`）
+
+**必核(安全)**：API key 绑定的独占分组在用户被移出 allowed_groups / 分组停用删除后仍可用 → 越权。移植 `22ff1acd`+`1a86c6ce` 合并效果。
+
+- 中间件：`abortIfAPIKeyGroupUnavailable`（分组删/停用）+ `abortIfAPIKeyGroupNotAllowed`（用户已无独占分组授权），插在 USER_INACTIVE 检查后；订阅型分组豁免
+- auth snapshot：加 `User.AllowedGroups` + `Group.IsExclusive`，版本 9→10（强制旧缓存刷新）
+- repo：`GetByKey`/`GetByKeyForAuth` 加载 AllowedGroups 边 + IsExclusive，`apiKeyEntityToService` 填充 AllowedGroups
+- admin：用户 allowed_groups 变化时失效 auth 缓存（`sameInt64Set`），与 fork 的 `InvoiceEnabled` keep-both
+- **改造**：丢弃 `MarkOpsClientBusinessLimited`（dev 按响应码自动分类 business-limited）；**不移植** 22ff1acd 的 group_repo DeleteCascade（dev 删分组时清空 key 的 group_id，守卫仍覆盖"停用"和"移出授权"两核心场景）
+- 验证：`go build` ✅ · `go vet -tags integration` exit 0 ✅ · **`go test -tags unit`**（中间件含新越权测试 + service + repository）✅ · 普通 `go test` ✅
+- **踩坑**：dev 的 middleware 测试带 `//go:build unit`，本地默认 `go test` 不编译 → 验证必须带 `-tags unit`（与 `-tags integration` 同理）
 
 ### Phase 4b — Bedrock 执行层（分支 `upstream-bedrock-cc-compat-20260616`）
 
