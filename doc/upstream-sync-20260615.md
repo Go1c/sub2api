@@ -154,12 +154,15 @@ fork 早期分叉、只选择性同步过上游，导致 dev **整段缺失若�
 
 **含义**：clean cherry-pick 阶段基本到头了。剩余工作性质变了 —— 不是"挑 commit"，而是**按子系统整体搬迁 + 热路径三方合并**，冲突大、需 Review，属于要先决策范围的大件。
 
-### 剩余大件（每件需单独决策范围，建议 Review 后再开工）
+### 剩余大件（全部为「整段子系统搬迁」，每件需用户决策范围 + Review）
+
+> **总结论**：clean cherry-pick / 机械冲突阶段**已彻底到头**。dev 落后 upstream 多代，以下子系统**整段缺失**，剩余有价值的上游 commit 几乎都是它们的尾部，无法单独并入——必须按子系统整体搬迁（含 migration / 签名 / 模型代际），属大工程。
 
 - [ ] **OpenAI 网关/调度/图像大簇**（~33 commit，含 T1 deferred 的 4 个）—— 同一组热路径文件一次性三方合并；单实例可只取正确性/安全、跳过纯优化
-- [ ] **失败请求/错误日志观测子系统**（`ddf06335`+`cfb195c7`+`fe895273`+`b8c89c34`+`705fe7d8`）—— 整段搬迁（含审计表 migration），撞 fork settings/ops
-- [ ] **API Key 分组可用性/独占守卫子系统**（前置 + `1a86c6ce` 安全）—— 整段搬迁
-- [ ] **claude-fable-5**（`d662c973`）—— 模型新增，撞 bedrock/antigravity/白名单
+- [ ] **失败请求/错误日志观测子系统**（`ddf06335`+`cfb195c7`+`fe895273`+`b8c89c34`+`705fe7d8`）—— 整段搬迁（含 `deleted_api_key_audits` 审计表 migration + `DeleteWithAudit`），撞 fork settings/ops
+- [ ] **API Key 分组可用性/独占守卫子系统**（`abortIfAPIKeyGroupUnavailable`/`validateAPIKeyGroupAvailable` 前置 + `1a86c6ce` 安全）—— dev 完全没有，整段搬迁
+- [ ] **auth OAuth token-pair 子系统**（`aea2950b` LinuxDO）—— dev 的 `LoginOrRegisterOAuthWithTokenPair` 是 5 参，上游 6 参（带 authSource）；需先搬签名变更
+- [ ] **模型代际 + Bedrock 兼容子系统**（`d662c973` claude-fable-5）—— dev `bedrock_request.go` **完全没有** `sanitizeBedrockThinking`/`isBedrockOpus47OrNewer`/CC 兼容整套函数，domain 连 `claude-opus-4-8` 都没有；fable-5 是其尾巴，需先搬 Bedrock 兼容 + opus-4-7/4-8 模型代际
 - [x] **i18n / 单视图机械冲突** —— 见 Phase 2c（2 并 / 1 跳过 / 3 转后续）
 - [ ] **T3 payment**（fork 命脉，挑着手工 port）
 - [x] **T3 go1.26.4 toolchain bump**（`13468778`）—— 见下
@@ -187,7 +190,7 @@ cherry-pick `13468778`：go.mod `go 1.26.4` + 3 个 Dockerfile + 3 个 CI workfl
 
 > **教训**：cherry-pick 即使「看起来是前端」也可能携带 clean 应用的 backend 文件（引用了 dev 没有的签名）。**每批都必须跑 `go build` + `go vet -tags integration`，不能只跑 pnpm**（aea2950b 因此一度让 #77 的后端 test/golangci 红，已撤出）。
 
-### 已落地汇总（截至 2026-06-16）
+### 已落地汇总（截至 2026-06-16，dev CI 全绿）
 
 | PR | 内容 | commit 数 |
 |---|---|---|
@@ -195,5 +198,10 @@ cherry-pick `13468778`：go.mod `go 1.26.4` + 3 个 Dockerfile + 3 个 CI workfl
 | #69 | T1 安全/正确性 | 9 |
 | #72 | T2 后端零散修复 | 12+1 |
 | #73 | T2 前端/用量低风险 | 5+1 |
+| #75 | T3 go1.26.4 toolchain（修绿 backend-security） | 1 |
+| #76 | form-data ≥4.0.6（修绿 frontend-security） | 1 |
+| #77 | T2c i18n/单视图（手解冲突） | 2 |
 
-clean-cherry-pick 阶段共并 **26 个上游 commit + 3 处适配/修复**，全部经 build/test/vet/typecheck 门禁，CI 仅既有 `backend-security`（go1.26.3）红。
+clean-cherry-pick / 机械冲突阶段共并 **~30 个上游 commit + 适配/修复**，全部经 `go build`/`go test`/`go vet -tags integration`/`pnpm typecheck`/`pnpm build` 门禁。**dev CI 现已全绿**（backend-security、frontend-security 均已修）。
+
+**到此为止**：upstream v0.1.136 中所有「自包含、低风险」的修复已全部并入。剩余都是上方列出的「整段子系统搬迁」大件，每件需用户决策是否要该特性、并接受较大改动范围与 Review 成本。
