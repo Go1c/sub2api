@@ -158,7 +158,7 @@ fork 早期分叉、只选择性同步过上游，导致 dev **整段缺失若�
 
 > **总结论**：clean cherry-pick / 机械冲突阶段**已彻底到头**。dev 落后 upstream 多代，以下子系统**整段缺失**，剩余有价值的上游 commit 几乎都是它们的尾部，无法单独并入——必须按子系统整体搬迁（含 migration / 签名 / 模型代际），属大工程。
 
-- [ ] **OpenAI 网关/调度/图像大簇**（~33 commit，含 T1 deferred 的 4 个）—— 同一组热路径文件一次性三方合并；单实例可只取正确性/安全、跳过纯优化
+- [~] **OpenAI 网关/调度/图像大簇** —— **8 个自包含正确性 fix 已并（见 Phase 4d）**；其余 ~20 个 fix 困在 fork 深度分叉的 `gateway_service.go` 热路径 + 缺失子系统（`MarkResponseCommitted` 防 double-write、codex 路由耦合），需专门的 gateway↔upstream 大对齐，**本次不做**
 - [ ] **失败请求/错误日志观测子系统**（`ddf06335`+`cfb195c7`+`fe895273`+`b8c89c34`+`705fe7d8`）—— 整段搬迁（含 `deleted_api_key_audits` 审计表 migration + `DeleteWithAudit`），撞 fork settings/ops
 - [x] **API Key 分组可用性/独占守卫子系统**（`1a86c6ce` 安全）—— **已做（见 Phase 4c）**：移植 22ff1acd+1a86c6ce 合并效果，越权防护
 - [ ] **auth OAuth token-pair 子系统**（`aea2950b` LinuxDO）—— dev 的 `LoginOrRegisterOAuthWithTokenPair` 是 5 参，上游 6 参（带 authSource）；需先搬签名变更
@@ -191,6 +191,28 @@ cherry-pick `13468778`：go.mod `go 1.26.4` + 3 个 Dockerfile + 3 个 CI workfl
 - `57d9e15e` 添加账号同步上游模型 · `af19d443` 代理有效期/失败回退 —— 动 backend，转后续
 
 > **教训**：cherry-pick 即使「看起来是前端」也可能携带 clean 应用的 backend 文件（引用了 dev 没有的签名）。**每批都必须跑 `go build` + `go vet -tags integration`，不能只跑 pnpm**（aea2950b 因此一度让 #77 的后端 test/golangci 红，已撤出）。
+
+### Phase 4d — OpenAI 自包含正确性 fix（分支 `upstream-openai-fixes-20260616`）
+
+**必核(正确性)**：从 28 个 OpenAI/apicompat fix 里批量 cherry-pick，挑出 **8 个真正自包含**（不撞 fork codex 热路径、不缺前置子系统）的落地：
+
+| upstream | 说明 |
+|---|---|
+| `bbfbb298` | normalize responses streaming terminal output |
+| `12cecca7` | 修正 OpenAI 5h 用量百分比语义（配套已并的 16bc8769） |
+| `50aebced` | avoid websocket usage dedup conflicts |
+| `1ef10c22` | validate stream field type |
+| `0c8c8583` | apicompat: repair tool_use/tool_result pairing（Responses→Anthropic） |
+| `7d191157` | force Content-Type application/json on non-streaming |
+| `46ba89ec` | propagate prompt cache key for chat completions |
+| `c413deed` | avoid double-writing error frame on non-stream upstream errors |
+
+验证：`go build` ✅ · `go vet -tags integration/unit` exit 0 ✅ · `go test`（普通 + `-tags unit`，service/handler/apicompat）全绿。
+
+**其余 ~20 个 deferred（困在 gateway 大对齐，本次不做）**：
+- `20f3f204` complete MarkResponseCommitted coverage —— cherry-pick clean 但 **`MarkResponseCommitted` 子系统 dev 完全没有**（编译失败），已撤出
+- failover/错误透传/ws 桥接/跨组鉴权（`217f8599`/`6c886316`/`08e19bb1`/`87dd5f5d`/`9a0e4398`/`2c45f91d`/`5bd3d904`/`8e27ff20` 等）—— 撞 fork codex 路由热路径，1-6 文件冲突
+- `34de99ee`/`a01686c6`/`1e2e8b1d`/`2a075a85`/`381d1d6d`/`55655b86`/`9b99f6c1`/`2e212d18`
 
 ### Phase 4c — API Key 独占分组访问守卫（分支 `upstream-apikey-group-guard-20260616`）
 
