@@ -162,7 +162,9 @@ fork 早期分叉、只选择性同步过上游，导致 dev **整段缺失若�
 - [ ] **失败请求/错误日志观测子系统**（`ddf06335`+`cfb195c7`+`fe895273`+`b8c89c34`+`705fe7d8`）—— 整段搬迁（含 `deleted_api_key_audits` 审计表 migration + `DeleteWithAudit`），撞 fork settings/ops
 - [ ] **API Key 分组可用性/独占守卫子系统**（`abortIfAPIKeyGroupUnavailable`/`validateAPIKeyGroupAvailable` 前置 + `1a86c6ce` 安全）—— dev 完全没有，整段搬迁
 - [ ] **auth OAuth token-pair 子系统**（`aea2950b` LinuxDO）—— dev 的 `LoginOrRegisterOAuthWithTokenPair` 是 5 参，上游 6 参（带 authSource）；需先搬签名变更
-- [ ] **模型代际 + Bedrock 兼容子系统**（`d662c973` claude-fable-5）—— dev `bedrock_request.go` **完全没有** `sanitizeBedrockThinking`/`isBedrockOpus47OrNewer`/CC 兼容整套函数，domain 连 `claude-opus-4-8` 都没有；fable-5 是其尾巴，需先搬 Bedrock 兼容 + opus-4-7/4-8 模型代际
+- [~] **模型代际 + Bedrock 兼容子系统**（`d662c973` claude-fable-5）—— **可独立部分已做**（见 Phase 4a）：手工把 `claude-opus-4-8` + `claude-fable-5` 两个模型加进数据层（Antigravity 映射/白名单、Claude DefaultModels、前端白名单）。**剩余（属 gateway 大对齐）**：`bedrock_request.go` 的 `sanitizeBedrockThinking`/CC 兼容**函数体**及其 **`gateway_service.go:5875-5878` 调用点**（dev 完全没有）、Bedrock region 模型 ID 映射、CLI 指纹版本 bump
+
+> **关键耦合发现**：选项 2/3 不可分割 —— Bedrock sanitize 函数的调用点在 `gateway_service.go`（fork 深度改造 codex 路由的同一热路径文件）。模型「数据层」可独立同步（已做），但「执行层」（Bedrock 请求处理 + 调用点）必须与 OpenAI 热路径一起做 fork↔upstream 大对齐。
 - [x] **i18n / 单视图机械冲突** —— 见 Phase 2c（2 并 / 1 跳过 / 3 转后续）
 - [ ] **T3 payment**（fork 命脉，挑着手工 port）
 - [x] **T3 go1.26.4 toolchain bump**（`13468778`）—— 见下
@@ -189,6 +191,20 @@ cherry-pick `13468778`：go.mod `go 1.26.4` + 3 个 Dockerfile + 3 个 CI workfl
 - `57d9e15e` 添加账号同步上游模型 · `af19d443` 代理有效期/失败回退 —— 动 backend，转后续
 
 > **教训**：cherry-pick 即使「看起来是前端」也可能携带 clean 应用的 backend 文件（引用了 dev 没有的签名）。**每批都必须跑 `go build` + `go vet -tags integration`，不能只跑 pnpm**（aea2950b 因此一度让 #77 的后端 test/golangci 红，已撤出）。
+
+### Phase 4a — 模型代际「数据层」可独立部分（分支 `upstream-models-opus48-fable5-20260616`）
+
+**手工提取（非 cherry-pick），给 dev 加 `claude-opus-4-8` + `claude-fable-5` 两个模型到数据层；验证：`go build` ✅ · `go vet -tags integration` exit 0 ✅ · `go test`（antigravity/domain/service 映射）✅ · `pnpm typecheck` ✅ · `pnpm build` ✅。**
+
+| 文件 | 改动 |
+|---|---|
+| `domain/constants.go` | `DefaultAntigravityModelMapping` 加 2 模型 |
+| `pkg/antigravity/claude_types.go` | `claudeModels` 加 2 模型 |
+| `pkg/antigravity/request_transformer.go` | `modelInfoMap` 加 fable-5/opus-4-8/opus-4-7；`isAntigravityOpusHighTierModel` 加 opus-4-8 |
+| `pkg/claude/constants.go` | `DefaultModels` 加 2 模型（**未动 CLI 指纹版本**） |
+| `useModelWhitelist.ts` | claude/antigravity 白名单数组加 2 模型（**未带 `splitModelMappingObject` 功能代码**） |
+
+为什么手工提取而非 cherry-pick：upstream 这些文件的 diff 夹带了 fork 不需要/缺前置的功能代码（`splitModelMappingObject`、Bedrock 函数体、CLI 指纹 bump、UseKeyModal 的 codex 配置模板），整体并入会污染或编译失败。
 
 ### 已落地汇总（截至 2026-06-16，dev CI 全绿）
 
