@@ -91,6 +91,19 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	GeoBlock                GeoBlockConfig                `mapstructure:"geo_block"`
+}
+
+// GeoBlockConfig 控制按地区拦截「网页前端」访问的合规开关。
+// 仅作用于浏览器网页请求；中转 API（/v1 等）与管理 API（/api/）不受影响。
+type GeoBlockConfig struct {
+	// Enabled 为 true 时启用地区拦截，默认 false。
+	Enabled bool `mapstructure:"enabled"`
+	// Countries 为需要拦截的 ISO 3166-1 alpha-2 国家码列表，默认 ["CN"]（中国大陆）。
+	Countries []string `mapstructure:"countries"`
+	// Whitelist 为豁免拦截的 IP 或 CIDR 列表（如管理员/办公室出口 IP）。
+	// 命中白名单的客户端即使地处受限地区也始终放行。默认为空。
+	Whitelist []string `mapstructure:"whitelist"`
 }
 
 type LogConfig struct {
@@ -1412,6 +1425,10 @@ func setDefaults() {
 	viper.SetDefault("server.read_header_timeout", 30) // 30秒读取请求头
 	viper.SetDefault("server.idle_timeout", 120)       // 120秒空闲超时
 	viper.SetDefault("server.trusted_proxies", []string{})
+
+	// 地区拦截（合规）：默认关闭；启用时默认拦截中国大陆
+	viper.SetDefault("geo_block.enabled", false)
+	viper.SetDefault("geo_block.countries", []string{"CN"})
 	viper.SetDefault("server.max_request_body_size", int64(256*1024*1024))
 	// H2C 默认配置
 	viper.SetDefault("server.h2c.enabled", false)
