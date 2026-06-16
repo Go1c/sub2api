@@ -61,6 +61,12 @@ func SetupRouter(
 		return nil
 	}))
 
+	// 合规：按地区拦截网页前端访问（仅作用于网页请求，API 接口不受影响）。
+	// 必须在前端服务中间件之前注册，以便在命中受限地区时直接返回阻断页。
+	if cfg.GeoBlock.Enabled {
+		r.Use(middleware2.GeoBlock(cfg.GeoBlock))
+	}
+
 	// Serve embedded frontend with settings injection if available
 	if web.HasEmbeddedFrontend() {
 		frontendServer, err := web.NewFrontendServer(settingService) //nolint:staticcheck // Non-embed builds always return an error here; embed builds can fail while reading assets.
