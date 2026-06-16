@@ -5648,6 +5648,14 @@ func (s *GatewayService) forwardBedrock(
 		return nil, err
 	}
 
+	// Bedrock CC 兼容：修复 Claude Code / 新模型（opus-4.x、fable-5）发送的 thinking、
+	// service_tier/interface_geo、非法 tool_use ID、不支持的 beta token 等 Bedrock 不接受的
+	// 字段，否则上游返回 ValidationException。对所有 Bedrock 请求生效（dev 无渠道级开关）。
+	body = sanitizeBedrockCCFields(body)
+	body = sanitizeBedrockThinking(body, mappedModel)
+	body = sanitizeBedrockToolUseIDs(body)
+	body = sanitizeBedrockCCBetaTokens(body, mappedModel)
+
 	bedrockBody, err := PrepareBedrockRequestBodyWithTokens(body, mappedModel, betaTokens)
 	if err != nil {
 		return nil, fmt.Errorf("prepare bedrock request body: %w", err)
