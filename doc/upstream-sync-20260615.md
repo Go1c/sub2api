@@ -162,7 +162,14 @@ fork 早期分叉、只选择性同步过上游，导致 dev **整段缺失若�
 - [ ] **claude-fable-5**（`d662c973`）—— 模型新增，撞 bedrock/antigravity/白名单
 - [ ] **i18n / 单视图机械冲突**：`c256a544` · ⭐`cf12bc52`(崩溃修复) · `72c11216` · `aea2950b` · `57d9e15e` · `af19d443`
 - [ ] **T3 payment**（fork 命脉，挑着手工 port）
-- [ ] **T3 go1.26.4 toolchain bump**（`13468778`，修 backend-security；动 CI/Docker，结合新部署平台定）
+- [x] **T3 go1.26.4 toolchain bump**（`13468778`）—— 见下
+
+### Phase 3a — go1.26.4 toolchain bump（分支 `upstream-t3-go1264-toolchain-20260616`）
+
+cherry-pick `13468778`：go.mod `go 1.26.4` + 3 个 Dockerfile + 3 个 CI workflow 全部统一到 1.26.4。
+- **冲突**：`backend/Dockerfile` 之前 fork 停在 `golang:1.25.7-alpine`，解为 `1.26.4`（go.mod 已要求 1.26.4，构建镜像必须 ≥ 它）。
+- **验证**：`go build ./...`（go1.26.4 自动拉取）✅；`govulncheck ./...` → **No vulnerabilities found**，GO-2026-5039/5037 消除。
+- **效果**：一直红的 `backend-security` 应转绿（首次）。单 docker 部署，无 PaaS 顾虑。
 
 ### 已落地汇总（截至 2026-06-16）
 
