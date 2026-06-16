@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -626,4 +627,164 @@ func containsBedrockBetaToken(tokens []string, target string) bool {
 		}
 	}
 	return false
+}
+
+var bedrockToolUseIDRe = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+
+// isBedrockOpus47OrNewer 判断 Bedrock 模型 ID 是否为 Claude Opus 4.7 或更新版本。
+// Opus 4.7+ 仅支持 thinking.type: "adaptive"，不支持 "enabled"。
+func isBedrockOpus47OrNewer(modelID string) bool {
+	lower := strings.ToLower(modelID)
+	if !strings.Contains(lower, "opus") {
+		return false
+	}
+	matches := claudeVersionRe.FindStringSubmatch(lower)
+	if matches == nil {
+		return false
+	}
+	major, _ := strconv.Atoi(matches[1])
+	minor, _ := strconv.Atoi(matches[2])
+	return major > 4 || (major == 4 && minor >= 7)
+}
+
+func isBedrockFable5(modelID string) bool {
+	return strings.Contains(strings.ToLower(modelID), "claude-fable-5")
+}
+
+const defaultThinkingBudgetTokens = 10000
+
+// sanitizeBedrockThinking 修复 thinking 字段的 Bedrock 兼容性问题：
+//   - Fable 5: 仅使用 always-on adaptive thinking，不支持手动 budget_tokens
+//   - Opus 4.7+: 仅支持 "adaptive"，将 "enabled" 转换为 "adaptive" 并移除 budget_tokens
+//   - 其他模型: "enabled" 必须带 budget_tokens，缺失时补充默认值
+func sanitizeBedrockThinking(body []byte, modelID string) []byte {
+	thinking := gjson.GetBytes(body, "thinking")
+	if !thinking.Exists() || !thinking.IsObject() {
+		return body
+	}
+
+	thinkingType := thinking.Get("type").String()
+	if thinkingType == "" {
+		return body
+	}
+
+	if isBedrockFable5(modelID) {
+		if thinkingType == "enabled" {
+			body, _ = sjson.SetBytes(body, "thinking.type", "adaptive")
+		}
+		if thinkingType == "enabled" || thinkingType == "adaptive" {
+			body, _ = sjson.DeleteBytes(body, "thinking.budget_tokens")
+		}
+		return body
+	}
+
+	if isBedrockOpus47OrNewer(modelID) {
+		if thinkingType == "enabled" {
+			body, _ = sjson.SetBytes(body, "thinking.type", "adaptive")
+			body, _ = sjson.DeleteBytes(body, "thinking.budget_tokens")
+		}
+		return body
+	}
+
+	if thinkingType == "enabled" && !thinking.Get("budget_tokens").Exists() {
+		body, _ = sjson.SetBytes(body, "thinking.budget_tokens", defaultThinkingBudgetTokens)
+	}
+
+	return body
+}
+
+// sanitizeBedrockToolUseIDs 清理 messages 中 tool_use.id 和 tool_result.tool_use_id
+// 的非法字符。Bedrock 要求 ID 匹配 '^[a-zA-Z0-9_-]+$'。
+func sanitizeBedrockToolUseIDs(body []byte) []byte {
+	messages := gjson.GetBytes(body, "messages")
+	if !messages.Exists() || !messages.IsArray() {
+		return body
+	}
+	for mi, msg := range messages.Array() {
+		content := msg.Get("content")
+		if !content.Exists() || !content.IsArray() {
+			continue
+		}
+		for ci, block := range content.Array() {
+			switch block.Get("type").String() {
+			case "tool_use":
+				body = sanitizeIDField(body, block.Get("id").String(), fmt.Sprintf("messages.%d.content.%d.id", mi, ci))
+			case "tool_result":
+				body = sanitizeIDField(body, block.Get("tool_use_id").String(), fmt.Sprintf("messages.%d.content.%d.tool_use_id", mi, ci))
+			}
+		}
+	}
+	return body
+}
+
+func sanitizeIDField(body []byte, id, path string) []byte {
+	if id == "" {
+		return body
+	}
+	sanitized := bedrockToolUseIDRe.ReplaceAllString(id, "_")
+	if sanitized != id {
+		body, _ = sjson.SetBytes(body, path, sanitized)
+	}
+	return body
+}
+
+const defaultCCMaxTokens = 81920
+
+// sanitizeBedrockCCFields 处理 Claude Code 发送的 Bedrock 不兼容字段：
+//   - 移除 service_tier / interface_geo（Anthropic API 专有，Bedrock 不支持）
+//   - 注入 max_tokens 默认值 81920（CC 可能省略，Bedrock 要求必须提供）
+//
+// 注意（本 fork 改造版）：context_management 的去留交由 sanitizeBedrockFieldsForBetaTokens
+// 按 beta token 精细处理，此处不再无条件删除；anthropic_version 由
+// PrepareBedrockRequestBodyWithTokens 注入，此处不重复设置。
+func sanitizeBedrockCCFields(body []byte) []byte {
+	if gjson.GetBytes(body, "service_tier").Exists() {
+		body, _ = sjson.DeleteBytes(body, "service_tier")
+	}
+	if gjson.GetBytes(body, "interface_geo").Exists() {
+		body, _ = sjson.DeleteBytes(body, "interface_geo")
+	}
+	if !gjson.GetBytes(body, "max_tokens").Exists() {
+		body, _ = sjson.SetBytes(body, "max_tokens", defaultCCMaxTokens)
+	}
+	return body
+}
+
+// sanitizeBedrockCCBetaTokens 清理请求体中的 anthropic_beta 字段，只保留 Bedrock 支持的 beta token。
+// CC 可能在请求体中注入了 Bedrock 不支持的 beta token（如 prompt-caching 等），导致 ValidationException。
+func sanitizeBedrockCCBetaTokens(body []byte, modelID string) []byte {
+	betaField := gjson.GetBytes(body, "anthropic_beta")
+	if !betaField.Exists() {
+		return body
+	}
+
+	var tokens []string
+	if betaField.IsArray() {
+		for _, t := range betaField.Array() {
+			if t.Type == gjson.String {
+				tokens = append(tokens, t.String())
+			}
+		}
+	}
+
+	originalTokens := append([]string(nil), tokens...) // 保存原始 tokens 用于日志
+
+	// 复用现有的 Bedrock beta token 过滤逻辑（自动注入 + 白名单过滤 + 转换）。
+	// 即使 tokens 为空，也要执行自动注入（根据 body 内容补充必要的 beta token）。
+	tokens = autoInjectBedrockBetaTokens(tokens, body, modelID)
+	tokens = filterBedrockBetaTokens(tokens)
+
+	if len(tokens) == 0 {
+		body, _ = sjson.DeleteBytes(body, "anthropic_beta")
+		logger.LegacyPrintf("service.gateway", "[Bedrock CC Compat] Removed all beta tokens: original=%v", originalTokens)
+	} else {
+		body, _ = sjson.SetBytes(body, "anthropic_beta", tokens)
+		if len(originalTokens) > 0 {
+			logger.LegacyPrintf("service.gateway", "[Bedrock CC Compat] Filtered beta tokens: original=%v final=%v", originalTokens, tokens)
+		} else {
+			logger.LegacyPrintf("service.gateway", "[Bedrock CC Compat] Auto-injected beta tokens: %v", tokens)
+		}
+	}
+
+	return body
 }
