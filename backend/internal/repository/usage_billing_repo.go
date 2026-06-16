@@ -330,7 +330,7 @@ func updateSubscriptionUsage(ctx context.Context, tx *sql.Tx, in updateSubscript
 				WHEN exhausted_at IS NULL
 					AND quota_limit_usd > 0
 					AND quota_used_usd < quota_limit_usd
-					AND quota_used_usd + $2 >= quota_limit_usd
+					AND quota_used_usd + $2 >= quota_limit_usd - $11::numeric
 				THEN $7
 				ELSE exhausted_at
 			END,
@@ -360,6 +360,7 @@ func updateSubscriptionUsage(ctx context.Context, tx *sql.Tx, in updateSubscript
 		in.PreExhausted,
 		in.PreDailyUsage,
 		in.PreWeeklyUsage,
+		service.SubscriptionQuotaExhaustionEpsilonUSD,
 	).Scan(
 		&post.QuotaLimitUSD,
 		&post.QuotaUsedUSD,

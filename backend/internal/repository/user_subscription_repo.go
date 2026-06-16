@@ -458,7 +458,7 @@ func (r *userSubscriptionRepository) IncrementUsage(ctx context.Context, id int6
 				WHEN us.exhausted_at IS NULL
 					AND us.quota_limit_usd > 0
 					AND us.quota_used_usd < us.quota_limit_usd
-					AND us.quota_used_usd + $1 >= us.quota_limit_usd
+					AND us.quota_used_usd + $1 >= us.quota_limit_usd - $3::numeric
 				THEN NOW()
 				ELSE us.exhausted_at
 			END,
@@ -477,7 +477,7 @@ func (r *userSubscriptionRepository) IncrementUsage(ctx context.Context, id int6
 	`
 
 	client := clientFromContext(ctx, r.client)
-	result, err := client.ExecContext(ctx, updateSQL, costUSD, id)
+	result, err := client.ExecContext(ctx, updateSQL, costUSD, id, service.SubscriptionQuotaExhaustionEpsilonUSD)
 	if err != nil {
 		return err
 	}
@@ -689,8 +689,13 @@ func (r *userSubscriptionRepository) GetRenewalEligibility(ctx context.Context, 
 	}
 	sub := userSubscriptionEntityToService(m)
 	now := time.Now()
-	// 优先判断耗尽，再判断过期（与 plan 一致：触顶才允许提前重订）
-	if sub.ExhaustedAt != nil {
+	// 优先判断耗尽，再判断过期（与 plan 一致：触顶才允许提前重订）。
+	// 兜底：即使扣费时 exhausted_at 漏盖（浮点精度边界，见
+	// SubscriptionQuotaExhaustionEpsilonUSD），只要 quota_used 已在容差内达到
+	// quota_limit，也按耗尽放行续购，避免用户被永久拦截。
+	quotaExhausted := sub.QuotaLimitUSD > 0 &&
+		sub.QuotaUsedUSD >= sub.QuotaLimitUSD-service.SubscriptionQuotaExhaustionEpsilonUSD
+	if sub.ExhaustedAt != nil || quotaExhausted {
 		return service.RenewalEligibility{
 			Allowed:      true,
 			Reason:       service.RenewalReasonExhausted,
