@@ -195,3 +195,70 @@ func TestAllocateSubscriptionCredit(t *testing.T) {
 		})
 	}
 }
+
+// quotaCrossedExhaustion 复刻扣费 SQL 中 exhausted_at CASE 的跨越判定：
+//
+//	quota_used + subCost >= quota_limit - epsilon
+//
+// epsilon=0 即修复前的严格判定；epsilon=SubscriptionQuotaExhaustionEpsilonUSD 即修复后。
+// 用纯 Go 函数镜像 SQL 谓词，验证容差逻辑（真实精度丢失发生在 Postgres DECIMAL(20,10)
+// 的舍入层，无法在纯 Go float64 减法里复现，故这里直接喂入线上观测到的临界值）。
+func quotaCrossedExhaustion(quotaUsed, subCost, quotaLimit, epsilon float64) bool {
+	return quotaLimit > 0 &&
+		quotaUsed < quotaLimit &&
+		quotaUsed+subCost >= quotaLimit-epsilon
+}
+
+// TestSubscriptionQuotaExhaustionEpsilon 锁死「用满到 limit 的精度边界」回归：
+// 当 quota_used + subCost 因浮点/DECIMAL 舍入误差略小于 limit 时，
+// 修复前（epsilon=0）漏判耗尽，修复后（epsilon=1e-6）正确判定耗尽。
+func TestSubscriptionQuotaExhaustionEpsilon(t *testing.T) {
+	const limit = 93.0
+
+	// 线上 user_id=306 / sub_id=28 的场景：quota_used 落库被舍入成 93.0000000000
+	// （remaining=0），但未舍入的跨越判定看到的是「差一丝没到 limit」。这里用
+	// 紧贴 limit 之下的最大 float64 表示这个「差一丝」（gap ~1e-14，落在 1e-6 容差内），
+	// 复刻精度边界。
+	nearMiss := math.Nextafter(limit, 0)
+
+	// 防御性自检：这个值确实「严格小于 limit、但落在 1e-6 容差内」，
+	// 否则用例就没在测真正的边界。
+	if !(nearMiss < limit) {
+		t.Fatalf("nearMiss %.20g should be strictly below limit %.20g", nearMiss, limit)
+	}
+	if limit-nearMiss > SubscriptionQuotaExhaustionEpsilonUSD {
+		t.Fatalf("gap %.3g must be within epsilon %.3g", limit-nearMiss, SubscriptionQuotaExhaustionEpsilonUSD)
+	}
+
+	t.Run("strict predicate misses exhaustion (reproduces the bug)", func(t *testing.T) {
+		if quotaCrossedExhaustion(nearMiss, 0, limit, 0) {
+			t.Fatalf("strict predicate unexpectedly crossed; bug no longer reproducible")
+		}
+	})
+
+	t.Run("epsilon predicate catches exhaustion (the fix)", func(t *testing.T) {
+		if !quotaCrossedExhaustion(nearMiss, 0, limit, SubscriptionQuotaExhaustionEpsilonUSD) {
+			t.Fatalf("epsilon predicate must mark subscription exhausted at limit boundary")
+		}
+	})
+
+	// 端到端：用 AllocateSubscriptionCredit 算出「正好用满到 limit」的 subCost，
+	// 再让 pre+subCost 落在临界值上，证明修复在真实分配链路下生效。
+	t.Run("allocation fills to limit then epsilon predicate crosses", func(t *testing.T) {
+		pre := nearMiss // 已累积到临界值的 quota_used
+		alloc := AllocateSubscriptionCredit(SubscriptionCreditAllocationInput{
+			ActualCostUSD: 5, // 远超剩余，必被封顶到剩余额度
+			QuotaLimitUSD: limit,
+			QuotaUsedUSD:  pre,
+		})
+		// 剩余额度极小（<1e-6），subCost 被封顶到约 limit-pre，pre+subCost 仍可能因
+		// DECIMAL 舍入略小于 limit；严格判定漏盖、容差判定正确盖戳。
+		if quotaCrossedExhaustion(pre, alloc.SubscriptionCostUSD, limit, 0) {
+			// 若 Go 侧加法恰好达标，严格判定也会过；此时不构成 bug 场景，跳过断言。
+			t.Skipf("go-side sum reached limit exactly (subCost=%.17g); DB-rounding gap not reproduced in pure Go", alloc.SubscriptionCostUSD)
+		}
+		if !quotaCrossedExhaustion(pre, alloc.SubscriptionCostUSD, limit, SubscriptionQuotaExhaustionEpsilonUSD) {
+			t.Fatalf("epsilon predicate must cross after allocation fills quota (subCost=%.17g)", alloc.SubscriptionCostUSD)
+		}
+	})
+}

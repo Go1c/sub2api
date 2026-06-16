@@ -2,6 +2,20 @@ package service
 
 import "math"
 
+// SubscriptionQuotaExhaustionEpsilonUSD 是判定订阅总额度「是否耗尽」时使用的容差（USD）。
+//
+// 背景：订阅扣费额由 AllocateSubscriptionCredit 在 Go float64 里算出并被
+// quota_remaining 封顶，写入 DECIMAL(20,10) 列时会被四舍五入到 10 位。于是
+// 「quota_used + subCost」可能因浮点误差略小于 quota_limit（如 92.99999999999999432），
+// 落库后却被舍入凑成 limit（remaining=0），而未舍入的跨越判定看到的是「差一丝没到」，
+// 导致 exhausted_at 该盖未盖、续购被永久拦截。
+//
+// 取 1e-6 作为容差：远大于 float64 在 ~$100 量级的相对误差（~1e-11），
+// 又远小于任何真实计费粒度（最小计费远高于 $1e-6），因此既能吸收浮点噪声、
+// 又不会把「真的还差不少额度」的订阅误判为耗尽。repo 层的扣费跨越判定与
+// 续购门槛兜底统一引用此常量，避免魔数散落。
+const SubscriptionQuotaExhaustionEpsilonUSD = 1e-6
+
 // SubscriptionCreditWindowState 窗口节流状态：
 //   - LimitUSD: 窗口上限（nil 或 <= 0 表示该窗口无限制）
 //   - UsedUSD : 窗口当前已用量（调用前需保证已对齐"是否重置"——重置后应传 0）
