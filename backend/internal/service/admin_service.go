@@ -27,6 +27,8 @@ import (
 
 // AdminService interface defines admin management operations
 type AdminService interface {
+	// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
+	SetAccountErrorHistoryService(svc *AccountErrorHistoryService)
 	// User management
 	ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error)
 	GetUserBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error)
@@ -545,6 +547,13 @@ type adminServiceImpl struct {
 	defaultSubAssigner   DefaultSubscriptionAssigner
 	userSubRepo          UserSubscriptionRepository
 	privacyClientFactory PrivacyClientFactory
+	// accountErrorHistory 通过 setter 注入（best-effort 监控，可为 nil）。
+	accountErrorHistory *AccountErrorHistoryService
+}
+
+// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
+func (s *adminServiceImpl) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
+	s.accountErrorHistory = svc
 }
 
 type userGroupRateBatchReader interface {
@@ -3134,7 +3143,17 @@ func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Ac
 }
 
 func (s *adminServiceImpl) SetAccountError(ctx context.Context, id int64, errorMsg string) error {
-	return s.accountRepo.SetError(ctx, id, errorMsg)
+	if err := s.accountRepo.SetError(ctx, id, errorMsg); err != nil {
+		return err
+	}
+	if s.accountErrorHistory != nil {
+		s.accountErrorHistory.RecordAccountError(ctx, AccountErrorEvent{
+			AccountID: id,
+			Source:    AccountErrorSourceAdmin,
+			Message:   errorMsg,
+		})
+	}
+	return nil
 }
 
 func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error) {

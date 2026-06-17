@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/accounterrorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
@@ -256,6 +257,40 @@ func init() {
 	accountDescSessionWindowStatus := accountFields[24].Descriptor()
 	// account.SessionWindowStatusValidator is a validator for the "session_window_status" field. It is called by the builders before save.
 	account.SessionWindowStatusValidator = accountDescSessionWindowStatus.Validators[0].(func(string) error)
+	accounterrorhistoryFields := schema.AccountErrorHistory{}.Fields()
+	_ = accounterrorhistoryFields
+	// accounterrorhistoryDescUserEmail is the schema descriptor for user_email field.
+	accounterrorhistoryDescUserEmail := accounterrorhistoryFields[2].Descriptor()
+	// accounterrorhistory.UserEmailValidator is a validator for the "user_email" field. It is called by the builders before save.
+	accounterrorhistory.UserEmailValidator = accounterrorhistoryDescUserEmail.Validators[0].(func(string) error)
+	// accounterrorhistoryDescModel is the schema descriptor for model field.
+	accounterrorhistoryDescModel := accounterrorhistoryFields[3].Descriptor()
+	// accounterrorhistory.ModelValidator is a validator for the "model" field. It is called by the builders before save.
+	accounterrorhistory.ModelValidator = accounterrorhistoryDescModel.Validators[0].(func(string) error)
+	// accounterrorhistoryDescMessage is the schema descriptor for message field.
+	accounterrorhistoryDescMessage := accounterrorhistoryFields[6].Descriptor()
+	// accounterrorhistory.DefaultMessage holds the default value on creation for the message field.
+	accounterrorhistory.DefaultMessage = accounterrorhistoryDescMessage.Default.(string)
+	// accounterrorhistoryDescFingerprint is the schema descriptor for fingerprint field.
+	accounterrorhistoryDescFingerprint := accounterrorhistoryFields[7].Descriptor()
+	// accounterrorhistory.DefaultFingerprint holds the default value on creation for the fingerprint field.
+	accounterrorhistory.DefaultFingerprint = accounterrorhistoryDescFingerprint.Default.(string)
+	// accounterrorhistory.FingerprintValidator is a validator for the "fingerprint" field. It is called by the builders before save.
+	accounterrorhistory.FingerprintValidator = accounterrorhistoryDescFingerprint.Validators[0].(func(string) error)
+	// accounterrorhistoryDescDupCount is the schema descriptor for dup_count field.
+	accounterrorhistoryDescDupCount := accounterrorhistoryFields[8].Descriptor()
+	// accounterrorhistory.DefaultDupCount holds the default value on creation for the dup_count field.
+	accounterrorhistory.DefaultDupCount = accounterrorhistoryDescDupCount.Default.(int)
+	// accounterrorhistoryDescCreatedAt is the schema descriptor for created_at field.
+	accounterrorhistoryDescCreatedAt := accounterrorhistoryFields[9].Descriptor()
+	// accounterrorhistory.DefaultCreatedAt holds the default value on creation for the created_at field.
+	accounterrorhistory.DefaultCreatedAt = accounterrorhistoryDescCreatedAt.Default.(func() time.Time)
+	// accounterrorhistoryDescUpdatedAt is the schema descriptor for updated_at field.
+	accounterrorhistoryDescUpdatedAt := accounterrorhistoryFields[10].Descriptor()
+	// accounterrorhistory.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	accounterrorhistory.DefaultUpdatedAt = accounterrorhistoryDescUpdatedAt.Default.(func() time.Time)
+	// accounterrorhistory.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	accounterrorhistory.UpdateDefaultUpdatedAt = accounterrorhistoryDescUpdatedAt.UpdateDefault.(func() time.Time)
 	accountgroupFields := schema.AccountGroup{}.Fields()
 	_ = accountgroupFields
 	// accountgroupDescPriority is the schema descriptor for priority field.

@@ -541,6 +541,8 @@ var ProviderSet = wire.NewSet(
 	ProvideRateLimitService,
 	NewAccountUsageService,
 	NewAccountTestService,
+	ProvideAccountErrorHistoryService,
+	ProvideAccountErrorHistoryWiring,
 	ProvideSettingService,
 	NewDataManagementService,
 	ProvideBackupService,
@@ -655,6 +657,34 @@ func ProvideSubscriptionNotifyWorker(
 	w := NewSubscriptionNotifyWorker(repo, handler, 0, 0)
 	w.Start()
 	return w
+}
+
+// ProvideAccountErrorHistoryService 创建账号错误历史服务（仅依赖 repo，供 AccountHandler 查询用）。
+func ProvideAccountErrorHistoryService(repo AccountErrorHistoryRepository) *AccountErrorHistoryService {
+	return NewAccountErrorHistoryService(repo)
+}
+
+// AccountErrorHistoryWiring 是 setter 注入的副作用标记类型；由 App 消费以确保注入发生。
+type AccountErrorHistoryWiring struct{}
+
+// ProvideAccountErrorHistoryWiring 把错误历史服务 setter 注入到所有埋点来源
+// （gateway / openai gateway / account test / token refresh / admin）。
+// 用 setter 注入而非改各 service 构造签名，避免波及大量已有测试；
+// 拆成独立 side-effect 提供器，避免 AccountHandler 依赖这些较晚构造的 service。
+func ProvideAccountErrorHistoryWiring(
+	svc *AccountErrorHistoryService,
+	gatewayService *GatewayService,
+	openaiGatewayService *OpenAIGatewayService,
+	accountTestService *AccountTestService,
+	tokenRefreshService *TokenRefreshService,
+	adminService AdminService,
+) AccountErrorHistoryWiring {
+	gatewayService.SetAccountErrorHistoryService(svc)
+	openaiGatewayService.SetAccountErrorHistoryService(svc)
+	accountTestService.SetAccountErrorHistoryService(svc)
+	tokenRefreshService.SetAccountErrorHistoryService(svc)
+	adminService.SetAccountErrorHistoryService(svc)
+	return AccountErrorHistoryWiring{}
 }
 
 // ProvideChannelMonitorService 创建渠道监控服务（CRUD + RunCheck + 用户视图聚合）。

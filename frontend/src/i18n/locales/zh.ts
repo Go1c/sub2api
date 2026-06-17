@@ -4078,6 +4078,30 @@ export default {
       // Stats Modal
       viewStats: '查看统计',
       usageStatistics: '使用统计',
+      errorHistory: {
+        menu: '错误历史',
+        title: '错误历史',
+        subtitle: '最近 20 条错误记录',
+        empty: '暂无错误记录',
+        dupHint: '该错误在短时间内重复了 {count} 次',
+        columns: {
+          time: '时间',
+          userEmail: '用户邮箱',
+          model: '模型',
+          statusCode: '状态码',
+          source: '来源',
+          message: '错误信息',
+          count: '次数'
+        },
+        sources: {
+          gateway: '网关',
+          test: '测试',
+          ratelimit: '限流',
+          refresh: '刷新',
+          schedule: '定时',
+          admin: '管理'
+        }
+      },
       last30DaysUsage: '近30天使用统计（日均基于实际使用天数）',
       stats: {
         totalCost: '30天总费用',
@@ -6442,6 +6466,22 @@ export default {
           testSuccess: 'Google Drive 存储测试成功（上传、访问、删除均正常）',
           testFailed: 'Google Drive 存储测试失败'
         }
+      },
+      geoBlock: {
+        title: '地理拦截',
+        description: '按访问来源的国家或地区拦截网页访问，API 调用不受影响',
+        enabled: '启用地理拦截',
+        enabledHint: '开启后，命中以下国家码且不在白名单内的来源将无法访问网页',
+        countries: '拦截国家 / 地区',
+        countriesHint: '使用 ISO 3166-1 alpha-2 国家码（如 CN），命中即拦截',
+        countriesPlaceholder: '输入国家码',
+        countriesInputHint: '输入两位字母国家码后按回车添加，自动转为大写；点击标签上的 × 可删除',
+        whitelist: 'IP / CIDR 白名单',
+        whitelistHint: '白名单内的 IP 或网段始终放行，不受地理拦截限制',
+        whitelistPlaceholder: '输入 IP 或 CIDR',
+        whitelistInputHint: '支持单个 IP（如 203.0.113.10）或 CIDR 网段（如 198.51.100.0/24），输入后按回车添加',
+        saved: '地理拦截设置保存成功',
+        saveFailed: '保存地理拦截设置失败'
       },
       overloadCooldown: {
         title: '529 过载冷却',

@@ -4045,6 +4045,30 @@ export default {
       // Stats Modal
       viewStats: '查看統計',
       usageStatistics: '使用統計',
+      errorHistory: {
+        menu: '錯誤歷史',
+        title: '錯誤歷史',
+        subtitle: '最近 20 條錯誤記錄',
+        empty: '暫無錯誤記錄',
+        dupHint: '該錯誤在短時間內重複了 {count} 次',
+        columns: {
+          time: '時間',
+          userEmail: '使用者信箱',
+          model: '模型',
+          statusCode: '狀態碼',
+          source: '來源',
+          message: '錯誤訊息',
+          count: '次數'
+        },
+        sources: {
+          gateway: '閘道',
+          test: '測試',
+          ratelimit: '限流',
+          refresh: '刷新',
+          schedule: '定時',
+          admin: '管理'
+        }
+      },
       last30DaysUsage: '近30天使用統計（日均基於實際使用天數）',
       stats: {
         totalCost: '30天總費用',
@@ -6406,6 +6430,22 @@ export default {
           testSuccess: 'Google Drive 存儲測試成功（上傳、訪問、刪除均正常）',
           testFailed: 'Google Drive 存儲測試失敗'
         }
+      },
+      geoBlock: {
+        title: '地理攔截',
+        description: '按訪問來源的國家或地區攔截網頁訪問，API 調用不受影響',
+        enabled: '啟用地理攔截',
+        enabledHint: '開啟後，命中以下國家碼且不在白名單內的來源將無法訪問網頁',
+        countries: '攔截國家 / 地區',
+        countriesHint: '使用 ISO 3166-1 alpha-2 國家碼（如 CN），命中即攔截',
+        countriesPlaceholder: '輸入國家碼',
+        countriesInputHint: '輸入兩位字母國家碼後按回車添加，自動轉為大寫；點擊標籤上的 × 可刪除',
+        whitelist: 'IP / CIDR 白名單',
+        whitelistHint: '白名單內的 IP 或網段始終放行，不受地理攔截限制',
+        whitelistPlaceholder: '輸入 IP 或 CIDR',
+        whitelistInputHint: '支持單個 IP（如 203.0.113.10）或 CIDR 網段（如 198.51.100.0/24），輸入後按回車添加',
+        saved: '地理攔截設置保存成功',
+        saveFailed: '保存地理攔截設置失敗'
       },
       overloadCooldown: {
         title: '529 過載冷卻',

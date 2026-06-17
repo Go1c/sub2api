@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -13,41 +14,51 @@ import (
 
 // GeoBlock 返回一个按地区拦截「网页前端」访问的中间件（合规用途）。
 //
+// 配置在运行时按请求从 get 读取（由 SettingService 提供 DB 设置 + TTL 缓存），
+// 因此管理后台保存后无需重启即时生效。中间件始终挂载，禁用时（rt.Enabled=false）
+// 内部直接放行，成本极低。
+//
 // 仅作用于浏览器网页请求（SPA 页面与静态资源）：命中受限地区的客户端 IP
 // 会收到 451 阻断页。所有 API 接口（中转 /v1 等、管理 /api/、支付 webhook、
 // 健康检查）一律放行，不受影响。
 //
-// 白名单（cfg.Whitelist，IP/CIDR）内的客户端始终放行，即使地处受限地区。
+// 白名单（rt.Whitelist，IP/CIDR）内的客户端始终放行，即使地处受限地区。
 //
 // 行为为 fail-open：当无法确定来源国家（私有 IP、解析失败、库无记录）时放行，
 // 仅在确切判定为受限地区时才拦截，避免误伤。
-func GeoBlock(cfg config.GeoBlockConfig) gin.HandlerFunc {
-	// 预构建受限国家集合（统一大写，便于与 ISO 码比较）。
-	blocked := make(map[string]struct{}, len(cfg.Countries))
-	for _, c := range cfg.Countries {
-		c = strings.ToUpper(strings.TrimSpace(c))
-		if c != "" {
-			blocked[c] = struct{}{}
-		}
-	}
-	// 兜底：开了开关却没配国家时，默认拦截中国大陆，避免静默失效。
-	if len(blocked) == 0 {
-		blocked["CN"] = struct{}{}
-	}
-
-	// 预清洗白名单（IP / CIDR），过滤空白项。
-	whitelist := make([]string, 0, len(cfg.Whitelist))
-	for _, w := range cfg.Whitelist {
-		if w = strings.TrimSpace(w); w != "" {
-			whitelist = append(whitelist, w)
-		}
-	}
-
+func GeoBlock(get func(ctx context.Context) config.GeoBlockConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 仅拦截网页请求；所有 API 路径直接放行。
 		if isAPIPath(c.Request.URL.Path) {
 			c.Next()
 			return
+		}
+
+		rt := get(c.Request.Context())
+		if !rt.Enabled {
+			c.Next()
+			return
+		}
+
+		// 按运行时配置构建受限国家集合（统一大写，便于与 ISO 码比较）。
+		blocked := make(map[string]struct{}, len(rt.Countries))
+		for _, country := range rt.Countries {
+			country = strings.ToUpper(strings.TrimSpace(country))
+			if country != "" {
+				blocked[country] = struct{}{}
+			}
+		}
+		// 兜底：开了开关却没配国家时，默认拦截中国大陆，避免静默失效。
+		if len(blocked) == 0 {
+			blocked["CN"] = struct{}{}
+		}
+
+		// 清洗白名单（IP / CIDR），过滤空白项。
+		whitelist := make([]string, 0, len(rt.Whitelist))
+		for _, w := range rt.Whitelist {
+			if w = strings.TrimSpace(w); w != "" {
+				whitelist = append(whitelist, w)
+			}
 		}
 
 		clientIP := ip.GetTrustedClientIP(c)

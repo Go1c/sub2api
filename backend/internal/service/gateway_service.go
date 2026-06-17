@@ -570,6 +570,14 @@ type GatewayService struct {
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
+	// accountErrorHistory 通过 SetAccountErrorHistoryService 注入（best-effort 监控，可为 nil）。
+	// 用 setter 而非构造参数，避免改动 NewGatewayService 签名波及大量测试。
+	accountErrorHistory *AccountErrorHistoryService
+}
+
+// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
+func (s *GatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
+	s.accountErrorHistory = svc
 }
 
 // NewGatewayService creates a new GatewayService
@@ -6896,6 +6904,40 @@ func isCountTokensUnsupported404(statusCode int, body []byte) bool {
 	return strings.Contains(msg, "count_tokens") && strings.Contains(msg, "not found")
 }
 
+// recordGatewayAccountError best-effort 记录一条 gateway 源的账号错误（真实请求，字段齐全）。
+// 从 ctx 取 model、从 gin.Context 取 apiKey 拿 user 快照；任一缺失则对应字段留空。
+func (s *GatewayService) recordGatewayAccountError(ctx context.Context, c *gin.Context, account *Account, statusCode int, message string) {
+	if s.accountErrorHistory == nil || account == nil {
+		return
+	}
+
+	event := AccountErrorEvent{
+		AccountID:          account.ID,
+		UpstreamStatusCode: &statusCode,
+		Source:             AccountErrorSourceGateway,
+		Message:            message,
+	}
+	if model, ok := ctx.Value(ctxkey.Model).(string); ok && model != "" {
+		event.Model = &model
+	}
+	// 直接从 gin.Context 读 apiKey（key="api_key"，由 middleware 写入），
+	// 避免 import middleware 造成 service<->middleware 循环依赖。
+	if c != nil {
+		if v, ok := c.Get("api_key"); ok {
+			if apiKey, ok := v.(*APIKey); ok && apiKey != nil && apiKey.User != nil {
+				uid := apiKey.User.ID
+				email := apiKey.User.Email
+				event.UserID = &uid
+				if email != "" {
+					event.UserEmail = &email
+				}
+			}
+		}
+	}
+
+	s.accountErrorHistory.RecordAccountError(ctx, event)
+}
+
 func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account) (*ForwardResult, error) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 
@@ -6939,6 +6981,10 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		Message:            upstreamMsg,
 		Detail:             upstreamDetail,
 	})
+
+	// 账号错误历史（gateway 源，字段齐全）：无条件记录，best-effort 异步、非阻塞。
+	// 即使后续 shouldDisable=false（可恢复/限流）也记录。
+	s.recordGatewayAccountError(ctx, c, account, resp.StatusCode, upstreamMsg)
 
 	// 处理上游错误，标记账号状态
 	shouldDisable := false

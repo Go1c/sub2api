@@ -36,7 +36,19 @@ metadata:
 
 ### 配置（开启方式）
 
-`deploy/config.example.yaml` → `geo_block` 段，或用环境变量：
+开关 / 国家 / 白名单现在是 **DB 运行时设置**，管理后台保存后**即时生效，无需重启**：
+
+- Setting keys（`backend/internal/service/domain_constants.go`）：`geo_block_enabled`（"true"/"false"）、`geo_block_countries`（JSON 字符串数组，如 `["CN"]`）、`geo_block_whitelist`（JSON 字符串数组，IP/CIDR）。
+- 读取：`SettingService.GetGeoBlockRuntime(ctx)` 返回 `config.GeoBlockConfig`，带 60s TTL 进程内缓存 + singleflight（与 version-bounds / balance-usage-gate 同一套运行时读取模式）。
+- 写入：`SettingService.UpdateGeoBlockRuntime(ctx, cfg)` 校验+规范化后写三个 key，并**立即刷新缓存**保证生效。校验规则：countries 去空格转大写，必须是 2 位 A-Z（非法报错）；whitelist 每项必须能被 `net.ParseIP` / `net.ParseCIDR` 解析（非法报错）。
+- 默认值回退顺序（逐字段）：**DB 值 → `cfg.GeoBlock` 配置种子 → 内置默认**（enabled=false、countries=`["CN"]`、whitelist 空）。key 从未写过 → 用配置种子；DB 写过空值 → 视为显式重置回内置默认。
+- 管理端点（仿 overload-cooldown 的独立子端点，套 admin 鉴权）：
+  - `GET /api/v1/admin/settings/geo-block` → `{ "enabled": bool, "countries": []string, "whitelist": []string }`
+  - `PUT /api/v1/admin/settings/geo-block` → 同 shape，返回更新后的同 shape。JSON 字段名严格为 `enabled` / `countries` / `whitelist`（全小写）。
+
+中间件**始终挂载**（`router.go`，前端服务中间件之前），运行时禁用（enabled=false）时内部直接放行，成本极低。
+
+`deploy/config.example.yaml` → `geo_block` 段（或同名环境变量）现在仅作为 **DB 未写过时的种子默认**：
 
 ```yaml
 geo_block:
@@ -83,6 +95,7 @@ server:
 - **GeoIP 内置 mmdb（go:embed）**——自托管 + 无 CDN，无法依赖反代头部，且要避免宿主 volume 依赖。
 - **Fail-open**——判不出国家时放行，宁可漏拦也不误伤正常用户。
 - **白名单优先于地区判定**——保证管理员/运维/合规测试始终可达。
+- **配置改为 DB 运行时设置（后台改完即时生效）**——原来「启动时读配置文件、静态判断」改为 `SettingService.GetGeoBlockRuntime` 带 TTL 缓存读取 DB；中间件签名改为 `GeoBlock(get func(ctx) config.GeoBlockConfig)` 并始终挂载。中间件只依赖 `config`，不 import `service`，避免循环依赖。配置文件/环境变量降级为「DB 未写过时的种子默认」。
 
 ## 待解决
 
@@ -123,7 +136,11 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-For: 8.8.8.8" http://lo
 - [合规清单 PDF](../assets/ai-exit-mainland-china-compliance-checklist.pdf)
 - 相关代码：
   - `backend/internal/pkg/geoip/geoip.go` — 内置 mmdb + `LookupCountryISO`
-  - `backend/internal/server/middleware/geoblock.go` — 拦截中间件 + 阻断页
-  - `backend/internal/server/router.go` — 在前端中间件之前接线
-  - `backend/internal/config/config.go` — `GeoBlockConfig` + 默认值
-  - `deploy/config.example.yaml` — `geo_block` 样例配置
+  - `backend/internal/server/middleware/geoblock.go` — 拦截中间件（运行时 getter 签名）+ 阻断页
+  - `backend/internal/server/router.go` — 始终挂载，注入 `GetGeoBlockRuntime` 作为 getter
+  - `backend/internal/service/setting_service_geo_block.go` — `GetGeoBlockRuntime` / `UpdateGeoBlockRuntime` + 校验/规范化 + TTL 缓存
+  - `backend/internal/service/domain_constants.go` — `geo_block_enabled/countries/whitelist` setting keys
+  - `backend/internal/handler/admin/geo_block_handler.go` — GET/PUT `/admin/settings/geo-block`
+  - `backend/internal/handler/dto/settings.go` — `GeoBlockSettings` DTO（enabled/countries/whitelist）
+  - `backend/internal/config/config.go` — `GeoBlockConfig`（现作为 DB 未写时的种子默认）
+  - `deploy/config.example.yaml` — `geo_block` 样例配置（种子默认）

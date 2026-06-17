@@ -1576,6 +1576,186 @@
             </div>
           </div>
 
+          <!-- Geo Block Settings -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.geoBlock.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.geoBlock.description") }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div
+                v-if="geoBlockLoading"
+                class="flex items-center gap-2 text-gray-500"
+              >
+                <div
+                  class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"
+                ></div>
+                {{ t("common.loading") }}
+              </div>
+
+              <template v-else>
+                <!-- Enable Geo Block -->
+                <div class="flex items-center justify-between">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t("admin.settings.geoBlock.enabled")
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.geoBlock.enabledHint") }}
+                    </p>
+                  </div>
+                  <Toggle v-model="geoBlockForm.enabled" />
+                </div>
+
+                <!-- Blocked Countries -->
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.geoBlock.countries")
+                  }}</label>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.geoBlock.countriesHint") }}
+                  </p>
+                  <div
+                    class="mt-3 rounded-lg border border-gray-300 bg-white p-2 dark:border-dark-500 dark:bg-dark-700"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span
+                        v-for="code in geoBlockCountriesTags"
+                        :key="code"
+                        class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-mono text-gray-700 dark:bg-dark-600 dark:text-gray-200"
+                      >
+                        <span>{{ code }}</span>
+                        <button
+                          type="button"
+                          class="rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-300 dark:hover:bg-dark-500 dark:hover:text-white"
+                          @click="removeGeoBlockCountryTag(code)"
+                        >
+                          <Icon
+                            name="x"
+                            size="xs"
+                            class="h-3.5 w-3.5"
+                            :stroke-width="2"
+                          />
+                        </button>
+                      </span>
+
+                      <div
+                        class="flex min-w-[180px] flex-1 items-center gap-1 rounded border border-transparent px-2 py-1 focus-within:border-primary-300 dark:focus-within:border-primary-700"
+                      >
+                        <input
+                          v-model="geoBlockCountryDraft"
+                          type="text"
+                          class="w-full bg-transparent text-sm font-mono uppercase text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500"
+                          :placeholder="
+                            t('admin.settings.geoBlock.countriesPlaceholder')
+                          "
+                          @keydown="handleGeoBlockCountryKeydown"
+                          @blur="commitGeoBlockCountryDraft"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.geoBlock.countriesInputHint") }}
+                  </p>
+                </div>
+
+                <!-- IP / CIDR Whitelist -->
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.geoBlock.whitelist")
+                  }}</label>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.geoBlock.whitelistHint") }}
+                  </p>
+                  <div
+                    class="mt-3 rounded-lg border border-gray-300 bg-white p-2 dark:border-dark-500 dark:bg-dark-700"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span
+                        v-for="entry in geoBlockWhitelistTags"
+                        :key="entry"
+                        class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-mono text-gray-700 dark:bg-dark-600 dark:text-gray-200"
+                      >
+                        <span>{{ entry }}</span>
+                        <button
+                          type="button"
+                          class="rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-300 dark:hover:bg-dark-500 dark:hover:text-white"
+                          @click="removeGeoBlockWhitelistTag(entry)"
+                        >
+                          <Icon
+                            name="x"
+                            size="xs"
+                            class="h-3.5 w-3.5"
+                            :stroke-width="2"
+                          />
+                        </button>
+                      </span>
+
+                      <div
+                        class="flex min-w-[220px] flex-1 items-center gap-1 rounded border border-transparent px-2 py-1 focus-within:border-primary-300 dark:focus-within:border-primary-700"
+                      >
+                        <input
+                          v-model="geoBlockWhitelistDraft"
+                          type="text"
+                          class="w-full bg-transparent text-sm font-mono text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500"
+                          :placeholder="
+                            t('admin.settings.geoBlock.whitelistPlaceholder')
+                          "
+                          @keydown="handleGeoBlockWhitelistKeydown"
+                          @blur="commitGeoBlockWhitelistDraft"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.geoBlock.whitelistInputHint") }}
+                  </p>
+                </div>
+
+                <!-- Save -->
+                <div
+                  class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
+                >
+                  <button
+                    type="button"
+                    @click="saveGeoBlockSettings"
+                    :disabled="geoBlockSaving"
+                    class="btn btn-primary btn-sm"
+                  >
+                    <svg
+                      v-if="geoBlockSaving"
+                      class="mr-1 h-4 w-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {{ geoBlockSaving ? t("common.saving") : t("common.save") }}
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+
           <!-- Cloudflare Turnstile Settings -->
           <div class="card">
             <div
@@ -7028,6 +7208,17 @@ const overloadCooldownForm = reactive({
   cooldown_minutes: 10,
 });
 
+// Geo Block 状态
+const geoBlockLoading = ref(true);
+const geoBlockSaving = ref(false);
+const geoBlockForm = reactive({
+  enabled: false,
+});
+const geoBlockCountriesTags = ref<string[]>(["CN"]);
+const geoBlockCountryDraft = ref("");
+const geoBlockWhitelistTags = ref<string[]>([]);
+const geoBlockWhitelistDraft = ref("");
+
 // Rate Limit Cooldown (429) 状态
 const rateLimit429CooldownLoading = ref(true);
 const rateLimit429CooldownSaving = ref(false);
@@ -7703,6 +7894,74 @@ function handleRegistrationEmailSuffixWhitelistPaste(event: ClipboardEvent) {
   const tokens = parseRegistrationEmailSuffixWhitelistInput(text);
   for (const token of tokens) {
     addRegistrationEmailSuffixWhitelistTag(token);
+  }
+}
+
+// Geo Block tag helpers
+function removeGeoBlockCountryTag(code: string) {
+  geoBlockCountriesTags.value = geoBlockCountriesTags.value.filter(
+    (item) => item !== code,
+  );
+}
+
+function commitGeoBlockCountryDraft() {
+  const code = geoBlockCountryDraft.value.trim().toUpperCase();
+  geoBlockCountryDraft.value = "";
+  // ISO 3166-1 alpha-2: exactly two ASCII letters.
+  if (!/^[A-Z]{2}$/.test(code) || geoBlockCountriesTags.value.includes(code)) {
+    return;
+  }
+  geoBlockCountriesTags.value = [...geoBlockCountriesTags.value, code];
+}
+
+function handleGeoBlockCountryKeydown(event: KeyboardEvent) {
+  if (event.isComposing) {
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    commitGeoBlockCountryDraft();
+    return;
+  }
+  if (
+    event.key === "Backspace" &&
+    !geoBlockCountryDraft.value &&
+    geoBlockCountriesTags.value.length > 0
+  ) {
+    geoBlockCountriesTags.value.pop();
+  }
+}
+
+function removeGeoBlockWhitelistTag(entry: string) {
+  geoBlockWhitelistTags.value = geoBlockWhitelistTags.value.filter(
+    (item) => item !== entry,
+  );
+}
+
+function commitGeoBlockWhitelistDraft() {
+  const entry = geoBlockWhitelistDraft.value.trim();
+  geoBlockWhitelistDraft.value = "";
+  if (!entry || geoBlockWhitelistTags.value.includes(entry)) {
+    return;
+  }
+  geoBlockWhitelistTags.value = [...geoBlockWhitelistTags.value, entry];
+}
+
+function handleGeoBlockWhitelistKeydown(event: KeyboardEvent) {
+  if (event.isComposing) {
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    commitGeoBlockWhitelistDraft();
+    return;
+  }
+  if (
+    event.key === "Backspace" &&
+    !geoBlockWhitelistDraft.value &&
+    geoBlockWhitelistTags.value.length > 0
+  ) {
+    geoBlockWhitelistTags.value.pop();
   }
 }
 
@@ -9082,6 +9341,53 @@ async function saveOverloadCooldownSettings() {
   }
 }
 
+// Geo Block 方法
+async function loadGeoBlockSettings() {
+  geoBlockLoading.value = true;
+  try {
+    const settings = await adminAPI.settings.getGeoBlockSettings();
+    geoBlockForm.enabled = settings.enabled;
+    geoBlockCountriesTags.value = Array.isArray(settings.countries)
+      ? settings.countries
+      : [];
+    geoBlockWhitelistTags.value = Array.isArray(settings.whitelist)
+      ? settings.whitelist
+      : [];
+  } catch (_error: unknown) {
+    // Silent fail - settings will use defaults
+  } finally {
+    geoBlockLoading.value = false;
+  }
+}
+
+async function saveGeoBlockSettings() {
+  // Flush any pending draft input so it is not silently dropped on save.
+  commitGeoBlockCountryDraft();
+  commitGeoBlockWhitelistDraft();
+  geoBlockSaving.value = true;
+  try {
+    const updated = await adminAPI.settings.updateGeoBlockSettings({
+      enabled: geoBlockForm.enabled,
+      countries: geoBlockCountriesTags.value,
+      whitelist: geoBlockWhitelistTags.value,
+    });
+    geoBlockForm.enabled = updated.enabled;
+    geoBlockCountriesTags.value = Array.isArray(updated.countries)
+      ? updated.countries
+      : [];
+    geoBlockWhitelistTags.value = Array.isArray(updated.whitelist)
+      ? updated.whitelist
+      : [];
+    appStore.showSuccess(t("admin.settings.geoBlock.saved"));
+  } catch (error: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(error, t("admin.settings.geoBlock.saveFailed")),
+    );
+  } finally {
+    geoBlockSaving.value = false;
+  }
+}
+
 // Rate Limit Cooldown (429) 方法
 async function loadRateLimit429CooldownSettings() {
   rateLimit429CooldownLoading.value = true;
@@ -9737,6 +10043,7 @@ onMounted(() => {
   loadSubscriptionGroups();
   loadAdminApiKey();
   loadOverloadCooldownSettings();
+  loadGeoBlockSettings();
   loadRateLimit429CooldownSettings();
   loadStreamTimeoutSettings();
   loadRectifierSettings();

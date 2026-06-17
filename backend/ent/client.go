@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/accounterrorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
@@ -67,6 +68,8 @@ type Client struct {
 	APIKey *APIKeyClient
 	// Account is the client for interacting with the Account builders.
 	Account *AccountClient
+	// AccountErrorHistory is the client for interacting with the AccountErrorHistory builders.
+	AccountErrorHistory *AccountErrorHistoryClient
 	// AccountGroup is the client for interacting with the AccountGroup builders.
 	AccountGroup *AccountGroupClient
 	// Announcement is the client for interacting with the Announcement builders.
@@ -154,6 +157,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.APIKey = NewAPIKeyClient(c.config)
 	c.Account = NewAccountClient(c.config)
+	c.AccountErrorHistory = NewAccountErrorHistoryClient(c.config)
 	c.AccountGroup = NewAccountGroupClient(c.config)
 	c.Announcement = NewAnnouncementClient(c.config)
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
@@ -285,6 +289,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:                        cfg,
 		APIKey:                        NewAPIKeyClient(cfg),
 		Account:                       NewAccountClient(cfg),
+		AccountErrorHistory:           NewAccountErrorHistoryClient(cfg),
 		AccountGroup:                  NewAccountGroupClient(cfg),
 		Announcement:                  NewAnnouncementClient(cfg),
 		AnnouncementRead:              NewAnnouncementReadClient(cfg),
@@ -343,6 +348,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:                        cfg,
 		APIKey:                        NewAPIKeyClient(cfg),
 		Account:                       NewAccountClient(cfg),
+		AccountErrorHistory:           NewAccountErrorHistoryClient(cfg),
 		AccountGroup:                  NewAccountGroupClient(cfg),
 		Announcement:                  NewAnnouncementClient(cfg),
 		AnnouncementRead:              NewAnnouncementReadClient(cfg),
@@ -409,8 +415,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
+		c.APIKey, c.Account, c.AccountErrorHistory, c.AccountGroup, c.Announcement,
+		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.LotteryCampaign,
@@ -429,8 +435,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
+		c.APIKey, c.Account, c.AccountErrorHistory, c.AccountGroup, c.Announcement,
+		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.LotteryCampaign,
@@ -452,6 +458,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.APIKey.mutate(ctx, m)
 	case *AccountMutation:
 		return c.Account.mutate(ctx, m)
+	case *AccountErrorHistoryMutation:
+		return c.AccountErrorHistory.mutate(ctx, m)
 	case *AccountGroupMutation:
 		return c.AccountGroup.mutate(ctx, m)
 	case *AnnouncementMutation:
@@ -886,6 +894,22 @@ func (c *AccountClient) QueryUsageLogs(_m *Account) *UsageLogQuery {
 	return query
 }
 
+// QueryErrorHistories queries the error_histories edge of a Account.
+func (c *AccountClient) QueryErrorHistories(_m *Account) *AccountErrorHistoryQuery {
+	query := (&AccountErrorHistoryClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(account.Table, account.FieldID, id),
+			sqlgraph.To(accounterrorhistory.Table, accounterrorhistory.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, account.ErrorHistoriesTable, account.ErrorHistoriesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryAccountGroups queries the account_groups edge of a Account.
 func (c *AccountClient) QueryAccountGroups(_m *Account) *AccountGroupQuery {
 	query := (&AccountGroupClient{config: c.config}).Query()
@@ -926,6 +950,155 @@ func (c *AccountClient) mutate(ctx context.Context, m *AccountMutation) (Value, 
 		return (&AccountDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Account mutation op: %q", m.Op())
+	}
+}
+
+// AccountErrorHistoryClient is a client for the AccountErrorHistory schema.
+type AccountErrorHistoryClient struct {
+	config
+}
+
+// NewAccountErrorHistoryClient returns a client for the AccountErrorHistory from the given config.
+func NewAccountErrorHistoryClient(c config) *AccountErrorHistoryClient {
+	return &AccountErrorHistoryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `accounterrorhistory.Hooks(f(g(h())))`.
+func (c *AccountErrorHistoryClient) Use(hooks ...Hook) {
+	c.hooks.AccountErrorHistory = append(c.hooks.AccountErrorHistory, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `accounterrorhistory.Intercept(f(g(h())))`.
+func (c *AccountErrorHistoryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AccountErrorHistory = append(c.inters.AccountErrorHistory, interceptors...)
+}
+
+// Create returns a builder for creating a AccountErrorHistory entity.
+func (c *AccountErrorHistoryClient) Create() *AccountErrorHistoryCreate {
+	mutation := newAccountErrorHistoryMutation(c.config, OpCreate)
+	return &AccountErrorHistoryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AccountErrorHistory entities.
+func (c *AccountErrorHistoryClient) CreateBulk(builders ...*AccountErrorHistoryCreate) *AccountErrorHistoryCreateBulk {
+	return &AccountErrorHistoryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AccountErrorHistoryClient) MapCreateBulk(slice any, setFunc func(*AccountErrorHistoryCreate, int)) *AccountErrorHistoryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AccountErrorHistoryCreateBulk{err: fmt.Errorf("calling to AccountErrorHistoryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AccountErrorHistoryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AccountErrorHistoryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AccountErrorHistory.
+func (c *AccountErrorHistoryClient) Update() *AccountErrorHistoryUpdate {
+	mutation := newAccountErrorHistoryMutation(c.config, OpUpdate)
+	return &AccountErrorHistoryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AccountErrorHistoryClient) UpdateOne(_m *AccountErrorHistory) *AccountErrorHistoryUpdateOne {
+	mutation := newAccountErrorHistoryMutation(c.config, OpUpdateOne, withAccountErrorHistory(_m))
+	return &AccountErrorHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AccountErrorHistoryClient) UpdateOneID(id int64) *AccountErrorHistoryUpdateOne {
+	mutation := newAccountErrorHistoryMutation(c.config, OpUpdateOne, withAccountErrorHistoryID(id))
+	return &AccountErrorHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AccountErrorHistory.
+func (c *AccountErrorHistoryClient) Delete() *AccountErrorHistoryDelete {
+	mutation := newAccountErrorHistoryMutation(c.config, OpDelete)
+	return &AccountErrorHistoryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AccountErrorHistoryClient) DeleteOne(_m *AccountErrorHistory) *AccountErrorHistoryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AccountErrorHistoryClient) DeleteOneID(id int64) *AccountErrorHistoryDeleteOne {
+	builder := c.Delete().Where(accounterrorhistory.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AccountErrorHistoryDeleteOne{builder}
+}
+
+// Query returns a query builder for AccountErrorHistory.
+func (c *AccountErrorHistoryClient) Query() *AccountErrorHistoryQuery {
+	return &AccountErrorHistoryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAccountErrorHistory},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AccountErrorHistory entity by its id.
+func (c *AccountErrorHistoryClient) Get(ctx context.Context, id int64) (*AccountErrorHistory, error) {
+	return c.Query().Where(accounterrorhistory.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AccountErrorHistoryClient) GetX(ctx context.Context, id int64) *AccountErrorHistory {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryAccount queries the account edge of a AccountErrorHistory.
+func (c *AccountErrorHistoryClient) QueryAccount(_m *AccountErrorHistory) *AccountQuery {
+	query := (&AccountClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(accounterrorhistory.Table, accounterrorhistory.FieldID, id),
+			sqlgraph.To(account.Table, account.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, accounterrorhistory.AccountTable, accounterrorhistory.AccountColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *AccountErrorHistoryClient) Hooks() []Hook {
+	return c.hooks.AccountErrorHistory
+}
+
+// Interceptors returns the client interceptors.
+func (c *AccountErrorHistoryClient) Interceptors() []Interceptor {
+	return c.inters.AccountErrorHistory
+}
+
+func (c *AccountErrorHistoryClient) mutate(ctx context.Context, m *AccountErrorHistoryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AccountErrorHistoryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AccountErrorHistoryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AccountErrorHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AccountErrorHistoryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AccountErrorHistory mutation op: %q", m.Op())
 	}
 }
 
@@ -7013,28 +7186,28 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
-		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
-		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, LotteryCampaign,
-		LotteryCode, LotteryDraw, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Hook
+		APIKey, Account, AccountErrorHistory, AccountGroup, Announcement,
+		AnnouncementRead, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
+		ChannelMonitorDailyRollup, ChannelMonitorHistory,
+		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, LotteryCampaign, LotteryCode, LotteryDraw,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SiteMessage, SubscriptionCreditLedger, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
-		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
-		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, LotteryCampaign,
-		LotteryCode, LotteryDraw, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Interceptor
+		APIKey, Account, AccountErrorHistory, AccountGroup, Announcement,
+		AnnouncementRead, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
+		ChannelMonitorDailyRollup, ChannelMonitorHistory,
+		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, LotteryCampaign, LotteryCode, LotteryDraw,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SiteMessage, SubscriptionCreditLedger, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

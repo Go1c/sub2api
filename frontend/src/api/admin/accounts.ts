@@ -265,6 +265,40 @@ export async function getStats(id: number, days: number = 30): Promise<AccountUs
 }
 
 /**
+ * A single account error-history record (snake_case mirrors the backend contract).
+ */
+export interface AccountErrorHistoryItem {
+  id: number
+  created_at: string
+  user_email: string | null
+  model: string | null
+  upstream_status_code: number | null
+  message: string
+  source: string
+  dup_count: number
+}
+
+/**
+ * Fetch the recent error history for an account (diagnostic, lazy-loaded on demand).
+ * Backend caps limit at 50; default 20.
+ * Tolerates both the wrapped `{ items: [...] }` shape and a bare array fallback.
+ * @param id - Account ID
+ * @param limit - Max records (default 20)
+ * @returns Recent error-history records
+ */
+export async function getErrorHistory(
+  id: number,
+  limit: number = 20
+): Promise<AccountErrorHistoryItem[]> {
+  const { data } = await apiClient.get<
+    { items: AccountErrorHistoryItem[] } | AccountErrorHistoryItem[]
+  >(`/admin/accounts/${id}/error-history`, {
+    params: { limit }
+  })
+  return Array.isArray(data) ? data : data.items ?? []
+}
+
+/**
  * Clear account error
  * @param id - Account ID
  * @returns Updated account
@@ -693,6 +727,7 @@ export const accountsAPI = {
   refreshCredentials,
   applyOAuthCredentials,
   getStats,
+  getErrorHistory,
   clearError,
   getUsage,
   getTodayStats,
