@@ -357,6 +357,23 @@ const (
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
 
 	// =========================
+	// Geo Block (compliance)
+	// =========================
+
+	// SettingKeyGeoBlockEnabled is a DB-backed runtime switch for the region web-block
+	// middleware. Stored as "true"/"false". When unset, falls back to the config seed
+	// (cfg.GeoBlock.Enabled), then to the built-in default (false).
+	SettingKeyGeoBlockEnabled = "geo_block_enabled"
+
+	// SettingKeyGeoBlockCountries stores the blocked ISO 3166-1 alpha-2 country codes as a
+	// JSON string array (e.g. ["CN"]). When unset, falls back to the config seed, then ["CN"].
+	SettingKeyGeoBlockCountries = "geo_block_countries"
+
+	// SettingKeyGeoBlockWhitelist stores exempt IP/CIDR entries as a JSON string array.
+	// When unset, falls back to the config seed, then empty.
+	SettingKeyGeoBlockWhitelist = "geo_block_whitelist"
+
+	// =========================
 	// Overload Cooldown (529)
 	// =========================
 

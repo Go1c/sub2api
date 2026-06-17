@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,11 @@ import (
 
 func init() { gin.SetMode(gin.TestMode) }
 
+// staticGeoBlock wraps a fixed GeoBlockConfig as the runtime getter the middleware expects.
+func staticGeoBlock(cfg config.GeoBlockConfig) func(ctx context.Context) config.GeoBlockConfig {
+	return func(ctx context.Context) config.GeoBlockConfig { return cfg }
+}
+
 // newGeoTestRouter 构造一个挂载了 GeoBlock 中间件的测试路由。
 // 受信任的客户端 IP 取决于 trusted proxies 与 X-Forwarded-For，
 // 这里把 loopback 设为可信代理，使 X-Forwarded-For 生效。
@@ -23,7 +29,7 @@ func newGeoTestRouter(t *testing.T) *gin.Engine {
 	if err := r.SetTrustedProxies([]string{"127.0.0.1"}); err != nil {
 		t.Fatalf("SetTrustedProxies: %v", err)
 	}
-	r.Use(GeoBlock(config.GeoBlockConfig{Enabled: true, Countries: []string{"CN"}}))
+	r.Use(GeoBlock(staticGeoBlock(config.GeoBlockConfig{Enabled: true, Countries: []string{"CN"}})))
 	// 网页与 API 路由都返回 200，方便区分是否被中间件拦截。
 	r.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "page") })
 	r.GET("/dashboard", func(c *gin.Context) { c.String(http.StatusOK, "page") })
@@ -77,11 +83,11 @@ func TestGeoBlockWhitelist(t *testing.T) {
 	if err := r.SetTrustedProxies([]string{"127.0.0.1"}); err != nil {
 		t.Fatalf("SetTrustedProxies: %v", err)
 	}
-	r.Use(GeoBlock(config.GeoBlockConfig{
+	r.Use(GeoBlock(staticGeoBlock(config.GeoBlockConfig{
 		Enabled:   true,
 		Countries: []string{"CN"},
 		Whitelist: []string{"114.114.114.114", "203.0.113.0/24"},
-	}))
+	})))
 	r.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "page") })
 
 	tests := []struct {
@@ -135,11 +141,31 @@ func TestGeoBlockLiveServer(t *testing.T) {
 	}
 }
 
-func TestGeoBlockDisabledIsNotMounted(t *testing.T) {
-	// 当 Enabled=false 时，router.go 不会挂载该中间件；
-	// 这里仅验证空国家列表会兜底为 CN，不会变成「放行一切」。
-	mw := GeoBlock(config.GeoBlockConfig{Enabled: true, Countries: nil})
-	if mw == nil {
-		t.Fatal("GeoBlock returned nil handler")
+func TestGeoBlockDisabledPassesThrough(t *testing.T) {
+	// 中间件始终挂载（router.go），运行时 Enabled=false 时内部直接放行——
+	// 即使来源是受限地区也不拦截。
+	r := gin.New()
+	if err := r.SetTrustedProxies([]string{"127.0.0.1"}); err != nil {
+		t.Fatalf("SetTrustedProxies: %v", err)
+	}
+	r.Use(GeoBlock(staticGeoBlock(config.GeoBlockConfig{Enabled: false, Countries: []string{"CN"}})))
+	r.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "page") })
+
+	if w := doReq(r, "/", "114.114.114.114"); w.Code != http.StatusOK {
+		t.Fatalf("disabled geo block should pass through CN webpage: got %d, want 200", w.Code)
+	}
+}
+
+func TestGeoBlockEmptyCountriesFallsBackToCN(t *testing.T) {
+	// 开了开关但运行时国家列表为空时，仍兜底拦截 CN，不会「放行一切」。
+	r := gin.New()
+	if err := r.SetTrustedProxies([]string{"127.0.0.1"}); err != nil {
+		t.Fatalf("SetTrustedProxies: %v", err)
+	}
+	r.Use(GeoBlock(staticGeoBlock(config.GeoBlockConfig{Enabled: true, Countries: nil})))
+	r.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "page") })
+
+	if w := doReq(r, "/", "114.114.114.114"); w.Code != http.StatusUnavailableForLegalReasons {
+		t.Fatalf("empty countries should fall back to CN block: got %d, want 451", w.Code)
 	}
 }

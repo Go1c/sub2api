@@ -400,6 +400,8 @@ func (s *stubAdminService) SetAccountError(ctx context.Context, id int64, errorM
 	return nil
 }
 
+func (s *stubAdminService) SetAccountErrorHistoryService(svc *service.AccountErrorHistoryService) {}
+
 func (s *stubAdminService) SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*service.Account, error) {
 	account := service.Account{ID: id, Name: "account", Status: service.StatusActive, Schedulable: schedulable}
 	return &account, nil

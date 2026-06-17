@@ -350,6 +350,8 @@ type OpenAIGatewayService struct {
 	channelService        *ChannelService
 	balanceNotifyService  *BalanceNotifyService
 	settingService        *SettingService
+	// accountErrorHistory 通过 setter 注入（best-effort 监控，可为 nil）。
+	accountErrorHistory *AccountErrorHistoryService
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -367,6 +369,11 @@ type OpenAIGatewayService struct {
 	codexSnapshotThrottle               *accountWriteThrottle
 	openaiCompatSessionResponses        sync.Map
 	openaiCompatAnthropicDigestSessions sync.Map
+}
+
+// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
+func (s *OpenAIGatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
+	s.accountErrorHistory = svc
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService

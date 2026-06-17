@@ -77,6 +77,8 @@ const (
 	EdgeProxy = "proxy"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeErrorHistories holds the string denoting the error_histories edge name in mutations.
+	EdgeErrorHistories = "error_histories"
 	// EdgeAccountGroups holds the string denoting the account_groups edge name in mutations.
 	EdgeAccountGroups = "account_groups"
 	// Table holds the table name of the account in the database.
@@ -100,6 +102,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "account_id"
+	// ErrorHistoriesTable is the table that holds the error_histories relation/edge.
+	ErrorHistoriesTable = "account_error_histories"
+	// ErrorHistoriesInverseTable is the table name for the AccountErrorHistory entity.
+	// It exists in this package in order to avoid circular dependency with the "accounterrorhistory" package.
+	ErrorHistoriesInverseTable = "account_error_histories"
+	// ErrorHistoriesColumn is the table column denoting the error_histories relation/edge.
+	ErrorHistoriesColumn = "account_id"
 	// AccountGroupsTable is the table that holds the account_groups relation/edge.
 	AccountGroupsTable = "account_groups"
 	// AccountGroupsInverseTable is the table name for the AccountGroup entity.
@@ -373,6 +382,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByErrorHistoriesCount orders the results by error_histories count.
+func ByErrorHistoriesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newErrorHistoriesStep(), opts...)
+	}
+}
+
+// ByErrorHistories orders the results by error_histories terms.
+func ByErrorHistories(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newErrorHistoriesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAccountGroupsCount orders the results by account_groups count.
 func ByAccountGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -405,6 +428,13 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newErrorHistoriesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ErrorHistoriesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ErrorHistoriesTable, ErrorHistoriesColumn),
 	)
 }
 func newAccountGroupsStep() *sqlgraph.Step {

@@ -45,19 +45,20 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
-	adminService            service.AdminService
-	oauthService            *service.OAuthService
-	openaiOAuthService      *service.OpenAIOAuthService
-	geminiOAuthService      *service.GeminiOAuthService
-	antigravityOAuthService *service.AntigravityOAuthService
-	rateLimitService        *service.RateLimitService
-	accountUsageService     *service.AccountUsageService
-	accountTestService      *service.AccountTestService
-	concurrencyService      *service.ConcurrencyService
-	crsSyncService          *service.CRSSyncService
-	sessionLimitCache       service.SessionLimitCache
-	rpmCache                service.RPMCache
-	tokenCacheInvalidator   service.TokenCacheInvalidator
+	adminService               service.AdminService
+	oauthService               *service.OAuthService
+	openaiOAuthService         *service.OpenAIOAuthService
+	geminiOAuthService         *service.GeminiOAuthService
+	antigravityOAuthService    *service.AntigravityOAuthService
+	rateLimitService           *service.RateLimitService
+	accountUsageService        *service.AccountUsageService
+	accountTestService         *service.AccountTestService
+	concurrencyService         *service.ConcurrencyService
+	crsSyncService             *service.CRSSyncService
+	sessionLimitCache          service.SessionLimitCache
+	rpmCache                   service.RPMCache
+	tokenCacheInvalidator      service.TokenCacheInvalidator
+	accountErrorHistoryService *service.AccountErrorHistoryService
 }
 
 // NewAccountHandler creates a new admin account handler
@@ -75,21 +76,23 @@ func NewAccountHandler(
 	sessionLimitCache service.SessionLimitCache,
 	rpmCache service.RPMCache,
 	tokenCacheInvalidator service.TokenCacheInvalidator,
+	accountErrorHistoryService *service.AccountErrorHistoryService,
 ) *AccountHandler {
 	return &AccountHandler{
-		adminService:            adminService,
-		oauthService:            oauthService,
-		openaiOAuthService:      openaiOAuthService,
-		geminiOAuthService:      geminiOAuthService,
-		antigravityOAuthService: antigravityOAuthService,
-		rateLimitService:        rateLimitService,
-		accountUsageService:     accountUsageService,
-		accountTestService:      accountTestService,
-		concurrencyService:      concurrencyService,
-		crsSyncService:          crsSyncService,
-		sessionLimitCache:       sessionLimitCache,
-		rpmCache:                rpmCache,
-		tokenCacheInvalidator:   tokenCacheInvalidator,
+		adminService:               adminService,
+		oauthService:               oauthService,
+		openaiOAuthService:         openaiOAuthService,
+		geminiOAuthService:         geminiOAuthService,
+		antigravityOAuthService:    antigravityOAuthService,
+		rateLimitService:           rateLimitService,
+		accountUsageService:        accountUsageService,
+		accountTestService:         accountTestService,
+		concurrencyService:         concurrencyService,
+		crsSyncService:             crsSyncService,
+		sessionLimitCache:          sessionLimitCache,
+		rpmCache:                   rpmCache,
+		tokenCacheInvalidator:      tokenCacheInvalidator,
+		accountErrorHistoryService: accountErrorHistoryService,
 	}
 }
 
@@ -1111,6 +1114,72 @@ func (h *AccountHandler) GetStats(c *gin.Context) {
 	}
 
 	response.Success(c, stats)
+}
+
+// accountErrorHistoryItemResponse 单条账号错误历史的响应 DTO（snake_case）。
+// nullable 字段无值时序列化为 null。
+type accountErrorHistoryItemResponse struct {
+	ID                 int64   `json:"id"`
+	CreatedAt          string  `json:"created_at"`
+	UserEmail          *string `json:"user_email"`
+	Model              *string `json:"model"`
+	UpstreamStatusCode *int    `json:"upstream_status_code"`
+	Message            string  `json:"message"`
+	Source             string  `json:"source"`
+	DupCount           int     `json:"dup_count"`
+}
+
+const (
+	accountErrorHistoryDefaultLimit = 20
+	accountErrorHistoryMaxLimit     = 50
+)
+
+// ErrorHistory handles listing recent account error history.
+// GET /api/v1/admin/accounts/:id/error-history?limit=20
+// 懒加载：仅在管理员点开「更多 > 错误历史」弹窗时调用。
+func (h *AccountHandler) ErrorHistory(c *gin.Context) {
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+
+	limit := accountErrorHistoryDefaultLimit
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	if limit > accountErrorHistoryMaxLimit {
+		limit = accountErrorHistoryMaxLimit
+	}
+
+	items := make([]accountErrorHistoryItemResponse, 0)
+	if h.accountErrorHistoryService != nil {
+		entries, err := h.accountErrorHistoryService.ListRecentAccountErrors(c.Request.Context(), accountID, limit)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		for _, e := range entries {
+			items = append(items, accountErrorHistoryEntryToResponse(e))
+		}
+	}
+
+	response.Success(c, gin.H{"items": items})
+}
+
+func accountErrorHistoryEntryToResponse(e *service.AccountErrorHistoryEntry) accountErrorHistoryItemResponse {
+	return accountErrorHistoryItemResponse{
+		ID:                 e.ID,
+		CreatedAt:          e.CreatedAt.UTC().Format(time.RFC3339),
+		UserEmail:          e.UserEmail,
+		Model:              e.Model,
+		UpstreamStatusCode: e.UpstreamStatusCode,
+		Message:            e.Message,
+		Source:             e.Source,
+		DupCount:           e.DupCount,
+	}
 }
 
 // ClearError handles clearing account error

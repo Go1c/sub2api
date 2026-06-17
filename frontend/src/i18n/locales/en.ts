@@ -3950,6 +3950,30 @@ export default {
       // Stats Modal
       viewStats: 'View Stats',
       usageStatistics: 'Usage Statistics',
+      errorHistory: {
+        menu: 'Error History',
+        title: 'Error History',
+        subtitle: 'Most recent 20 error records',
+        empty: 'No error records',
+        dupHint: 'This error repeated {count} times in a short window',
+        columns: {
+          time: 'Time',
+          userEmail: 'User Email',
+          model: 'Model',
+          statusCode: 'Status',
+          source: 'Source',
+          message: 'Error Message',
+          count: 'Count'
+        },
+        sources: {
+          gateway: 'Gateway',
+          test: 'Test',
+          ratelimit: 'Rate Limit',
+          refresh: 'Refresh',
+          schedule: 'Schedule',
+          admin: 'Admin'
+        }
+      },
       last30DaysUsage: 'Last 30 days usage statistics (based on actual usage days)',
       stats: {
         totalCost: '30-Day Total Cost',
@@ -6282,6 +6306,22 @@ export default {
           testSuccess: 'Google Drive storage test passed (upload, access, delete all OK)',
           testFailed: 'Google Drive storage test failed'
         }
+      },
+      geoBlock: {
+        title: 'Geo Block',
+        description: 'Block website access by the visitor\'s country or region; API access is unaffected',
+        enabled: 'Enable Geo Block',
+        enabledHint: 'When enabled, visitors from the listed countries that are not whitelisted cannot access the website',
+        countries: 'Blocked Countries / Regions',
+        countriesHint: 'Use ISO 3166-1 alpha-2 country codes (e.g. CN); matching sources are blocked',
+        countriesPlaceholder: 'Enter country code',
+        countriesInputHint: 'Type a two-letter country code and press Enter to add (auto-uppercased); click × on a tag to remove',
+        whitelist: 'IP / CIDR Whitelist',
+        whitelistHint: 'IPs or ranges in the whitelist are always allowed, bypassing geo blocking',
+        whitelistPlaceholder: 'Enter IP or CIDR',
+        whitelistInputHint: 'Supports a single IP (e.g. 203.0.113.10) or a CIDR range (e.g. 198.51.100.0/24); press Enter to add',
+        saved: 'Geo block settings saved',
+        saveFailed: 'Failed to save geo block settings'
       },
       overloadCooldown: {
         title: '529 Overload Cooldown',

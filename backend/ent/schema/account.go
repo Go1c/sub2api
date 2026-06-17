@@ -211,6 +211,8 @@ func (Account) Edges() []ent.Edge {
 			Unique(),
 		// usage_logs: 该账户的使用日志
 		edge.To("usage_logs", UsageLog.Type),
+		// error_histories: 该账户的错误历史（best-effort 监控数据，随账户删除级联清理）
+		edge.To("error_histories", AccountErrorHistory.Type),
 	}
 }
 

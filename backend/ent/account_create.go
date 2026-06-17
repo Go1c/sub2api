@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/accounterrorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -412,6 +413,21 @@ func (_c *AccountCreate) AddUsageLogs(v ...*UsageLog) *AccountCreate {
 	return _c.AddUsageLogIDs(ids...)
 }
 
+// AddErrorHistoryIDs adds the "error_histories" edge to the AccountErrorHistory entity by IDs.
+func (_c *AccountCreate) AddErrorHistoryIDs(ids ...int64) *AccountCreate {
+	_c.mutation.AddErrorHistoryIDs(ids...)
+	return _c
+}
+
+// AddErrorHistories adds the "error_histories" edges to the AccountErrorHistory entity.
+func (_c *AccountCreate) AddErrorHistories(v ...*AccountErrorHistory) *AccountCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddErrorHistoryIDs(ids...)
+}
+
 // Mutation returns the AccountMutation object of the builder.
 func (_c *AccountCreate) Mutation() *AccountMutation {
 	return _c.mutation
@@ -751,6 +767,22 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ErrorHistoriesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   account.ErrorHistoriesTable,
+			Columns: []string{account.ErrorHistoriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(accounterrorhistory.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
