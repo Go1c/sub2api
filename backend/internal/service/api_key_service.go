@@ -28,6 +28,7 @@ var (
 	ErrAPIKeyInvalidChars = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
 	ErrAPIKeyRateLimited  = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
 	ErrInvalidIPPattern   = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrFallbackKeyInvalid = infraerrors.BadRequest("FALLBACK_KEY_INVALID", "兜底密钥无效：必须是属于你的另一把已有密钥")
 	// ErrAPIKeyExpired        = infraerrors.Forbidden("API_KEY_EXPIRED", "api key has expired")
 	ErrAPIKeyExpired = infraerrors.Forbidden("API_KEY_EXPIRED", "api key 已过期")
 	// ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key quota exhausted")
@@ -150,11 +151,12 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Name          string   `json:"name"`
+	GroupID       *int64   `json:"group_id"`
+	FallbackKeyID *int64   `json:"fallback_key_id"` // 兜底密钥 ID（nil = 无兜底）
+	CustomKey     *string  `json:"custom_key"`      // 可选的自定义key
+	IPWhitelist   []string `json:"ip_whitelist"`    // IP 白名单
+	IPBlacklist   []string `json:"ip_blacklist"`    // IP 黑名单
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -168,11 +170,13 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name        *string  `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	Status      *string  `json:"status"`
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	Name    *string `json:"name"`
+	GroupID *int64  `json:"group_id"`
+	// FallbackKeyID 采用「直接赋值」语义：nil 即清空兜底（前端编辑时总会下发该字段）。
+	FallbackKeyID *int64   `json:"fallback_key_id"`
+	Status        *string  `json:"status"`
+	IPWhitelist   []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist   []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -326,6 +330,30 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 	return user.CanBindGroup(group.ID, group.IsExclusive)
 }
 
+// normalizePositiveID 将 <=0 的 ID 归一为 nil（视为「无」），否则原样返回。
+func normalizePositiveID(id *int64) *int64 {
+	if id == nil || *id <= 0 {
+		return nil
+	}
+	return id
+}
+
+// validateFallbackKey 校验兜底密钥：必须存在、属于同一用户，且不等于 selfID（更新时排除自身）。
+// 不做平台硬校验（平台兼容性告警仅在前端）。selfID <= 0 表示创建场景（无自身可排除）。
+func (s *APIKeyService) validateFallbackKey(ctx context.Context, userID int64, fallbackKeyID int64, selfID int64) error {
+	if selfID > 0 && fallbackKeyID == selfID {
+		return ErrFallbackKeyInvalid
+	}
+	target, err := s.apiKeyRepo.GetByID(ctx, fallbackKeyID)
+	if err != nil {
+		return ErrFallbackKeyInvalid
+	}
+	if target.UserID != userID {
+		return ErrFallbackKeyInvalid
+	}
+	return nil
+}
+
 // Create 创建API Key
 func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIKeyRequest) (*APIKey, error) {
 	// 验证用户存在
@@ -358,6 +386,13 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		// 检查用户是否可以绑定该分组
 		if !s.canUserBindGroup(ctx, user, group) {
 			return nil, ErrGroupNotAllowed
+		}
+	}
+
+	// 校验兜底密钥（如果指定）
+	if req.FallbackKeyID != nil && *req.FallbackKeyID > 0 {
+		if err := s.validateFallbackKey(ctx, userID, *req.FallbackKeyID, 0); err != nil {
+			return nil, err
 		}
 	}
 
@@ -398,18 +433,19 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	// 创建API Key记录
 	apiKey := &APIKey{
-		UserID:      userID,
-		Key:         key,
-		Name:        html.EscapeString(req.Name),
-		GroupID:     req.GroupID,
-		Status:      StatusActive,
-		IPWhitelist: req.IPWhitelist,
-		IPBlacklist: req.IPBlacklist,
-		Quota:       req.Quota,
-		QuotaUsed:   0,
-		RateLimit5h: req.RateLimit5h,
-		RateLimit1d: req.RateLimit1d,
-		RateLimit7d: req.RateLimit7d,
+		UserID:        userID,
+		Key:           key,
+		Name:          html.EscapeString(req.Name),
+		GroupID:       req.GroupID,
+		Status:        StatusActive,
+		FallbackKeyID: normalizePositiveID(req.FallbackKeyID),
+		IPWhitelist:   req.IPWhitelist,
+		IPBlacklist:   req.IPBlacklist,
+		Quota:         req.Quota,
+		QuotaUsed:     0,
+		RateLimit5h:   req.RateLimit5h,
+		RateLimit1d:   req.RateLimit1d,
+		RateLimit7d:   req.RateLimit7d,
 	}
 
 	// Set expiration time if specified
@@ -457,6 +493,12 @@ func (s *APIKeyService) GetByID(ctx context.Context, id int64) (*APIKey, error) 
 	}
 	s.compileAPIKeyIPRules(apiKey)
 	return apiKey, nil
+}
+
+// ResolveAPIKeyByID 按 ID 加载完整 API Key（eager-load Group + User），用于网关密钥兜底切换。
+// 复用 GetByID 的 eager-load（WithUser/WithGroup）并编译 IP 规则。
+func (s *APIKeyService) ResolveAPIKeyByID(ctx context.Context, id int64) (*APIKey, error) {
+	return s.GetByID(ctx, id)
 }
 
 // GetByKey 根据Key字符串获取API Key（用于认证）
@@ -560,6 +602,15 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 
 		apiKey.GroupID = req.GroupID
 	}
+
+	// 兜底密钥采用「直接赋值」语义：nil 即清空。
+	fallbackKeyID := normalizePositiveID(req.FallbackKeyID)
+	if fallbackKeyID != nil {
+		if err := s.validateFallbackKey(ctx, userID, *fallbackKeyID, apiKey.ID); err != nil {
+			return nil, err
+		}
+	}
+	apiKey.FallbackKeyID = fallbackKeyID
 
 	if req.Status != nil {
 		apiKey.Status = *req.Status

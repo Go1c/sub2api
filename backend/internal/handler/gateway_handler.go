@@ -44,6 +44,7 @@ type GatewayHandler struct {
 	billingCacheService       *service.BillingCacheService
 	usageService              *service.UsageService
 	apiKeyService             *service.APIKeyService
+	subscriptionService       *service.SubscriptionService
 	usageRecordWorkerPool     *service.UsageRecordWorkerPool
 	errorPassthroughService   *service.ErrorPassthroughService
 	contentModerationService  *service.ContentModerationService
@@ -66,6 +67,7 @@ func NewGatewayHandler(
 	billingCacheService *service.BillingCacheService,
 	usageService *service.UsageService,
 	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	errorPassthroughService *service.ErrorPassthroughService,
 	contentModerationService *service.ContentModerationService,
@@ -101,6 +103,7 @@ func NewGatewayHandler(
 		billingCacheService:       billingCacheService,
 		usageService:              usageService,
 		apiKeyService:             apiKeyService,
+		subscriptionService:       subscriptionService,
 		usageRecordWorkerPool:     usageRecordWorkerPool,
 		errorPassthroughService:   errorPassthroughService,
 		contentModerationService:  contentModerationService,
@@ -553,6 +556,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		fallbackGroupID = apiKey.Group.FallbackGroupIDOnInvalidRequest
 	}
 	fallbackUsed := false
+	keyFallbackUsed := false // 密钥级兜底单跳保护
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -565,6 +569,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		fs := NewFailoverState(h.maxAccountSwitches, hasBoundSession)
 		retryWithFallback := false
 
+	selectLoop:
 		for {
 			// 选择支持该模型的账号
 			reqLog.Info("sticky.selecting_account",
@@ -583,6 +588,27 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Bool("fallback_used", fallbackUsed),
 						zap.Error(err),
 					)
+					// 上游账号全部不可用：尝试密钥级兜底（切换整把 key 含计费身份）。
+					if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+						return
+					} else if fbKey != nil {
+						// 按"直接请求兜底密钥分组"处理：清除强制平台，允许按兜底分组平台调度。
+						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+						c.Request = c.Request.WithContext(ctx)
+						currentAPIKey = fbKey
+						// tryKeyFallback 已按兜底分组解析并校验过额度池订阅，直接复用同一对象，
+						// 保证校验与计费用的是同一 subscription，且不重复查询额度池。
+						currentSubscription = fbSub
+						// 群组兜底来源跟随当前计费身份，避免后续群组级兜底回退到原始 key。
+						if currentAPIKey.Group != nil {
+							fallbackGroupID = currentAPIKey.Group.FallbackGroupIDOnInvalidRequest
+						} else {
+							fallbackGroupID = nil
+						}
+						keyFallbackUsed = true
+						retryWithFallback = true
+						break selectLoop
+					}
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
 				}
@@ -595,6 +621,27 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				case FailoverCanceled:
 					return
 				default: // FailoverExhausted
+					// 上游账号 failover 耗尽：尝试密钥级兜底。
+					if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+						return
+					} else if fbKey != nil {
+						// 按"直接请求兜底密钥分组"处理：清除强制平台，允许按兜底分组平台调度。
+						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+						c.Request = c.Request.WithContext(ctx)
+						currentAPIKey = fbKey
+						// tryKeyFallback 已按兜底分组解析并校验过额度池订阅，直接复用同一对象，
+						// 保证校验与计费用的是同一 subscription，且不重复查询额度池。
+						currentSubscription = fbSub
+						// 群组兜底来源跟随当前计费身份，避免后续群组级兜底回退到原始 key。
+						if currentAPIKey.Group != nil {
+							fallbackGroupID = currentAPIKey.Group.FallbackGroupIDOnInvalidRequest
+						} else {
+							fallbackGroupID = nil
+						}
+						keyFallbackUsed = true
+						retryWithFallback = true
+						break selectLoop
+					}
 					if fs.LastFailoverErr != nil {
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, platform, streamStarted)
 					} else {
@@ -1012,6 +1059,107 @@ func (h *GatewayHandler) AntigravityModels(c *gin.Context) {
 		"object": "list",
 		"data":   antigravity.DefaultModels(),
 	})
+}
+
+// tryKeyFallback 尝试密钥级兜底：当 currentAPIKey 所属分组的上游账号全部不可用时，
+// 切换到 currentAPIKey.FallbackKeyID 指向的兜底密钥（计费身份一并切换）。
+// 返回 (fallbackKey, fallbackSubscription, errorWritten)：
+//   - errorWritten == true：已向客户端写入错误响应（如 billing 不通过），调用方应直接 return。
+//   - fallbackKey != nil：兜底命中，调用方切换 currentAPIKey 并重试。
+//   - fallbackSubscription：兜底密钥按其分组解析到的用户额度池订阅（best-effort，可能为 nil）；
+//     校验与计费用同一对象，调用方直接用它赋给 currentSubscription，不必再次解析。
+//   - 三者皆零值：无可用兜底，调用方按原错误返回。
+func (h *GatewayHandler) tryKeyFallback(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	keyFallbackUsed bool,
+	streamStarted bool,
+) (*service.APIKey, *service.UserSubscription, bool) {
+	if keyFallbackUsed || currentAPIKey == nil || currentAPIKey.FallbackKeyID == nil || *currentAPIKey.FallbackKeyID <= 0 {
+		return nil, nil, false
+	}
+	fallbackKeyID := *currentAPIKey.FallbackKeyID
+
+	fallbackKey, err := h.apiKeyService.ResolveAPIKeyByID(c.Request.Context(), fallbackKeyID)
+	if err != nil {
+		reqLog.Warn("gateway.resolve_fallback_key_failed",
+			zap.Int64("fallback_key_id", fallbackKeyID),
+			zap.Error(err),
+		)
+		return nil, nil, false
+	}
+
+	// 校验：同一用户、active、未过期、有分组、且不等于当前 key 自身。
+	if fallbackKey.UserID != currentAPIKey.UserID ||
+		fallbackKey.ID == currentAPIKey.ID ||
+		!fallbackKey.IsActive() ||
+		fallbackKey.IsExpired() ||
+		fallbackKey.GroupID == nil ||
+		fallbackKey.Group == nil ||
+		fallbackKey.User == nil {
+		reqLog.Warn("gateway.fallback_key_invalid",
+			zap.Int64("fallback_key_id", fallbackKey.ID),
+			zap.Int64("current_key_id", currentAPIKey.ID),
+			zap.String("fallback_status", fallbackKey.Status),
+			zap.Bool("has_group", fallbackKey.GroupID != nil),
+		)
+		return nil, nil, false
+	}
+
+	// 先解析兜底密钥的额度池订阅（best-effort），再用它做资格校验，
+	// 使「校验口径 == 计费口径」，与鉴权层（先解析订阅再 CheckBillingEligibility）一致：
+	// 覆盖则额度优先 + 不足扣余额；覆盖不到 / 无订阅 / 解析失败则为 nil（按纯余额计费）。
+	// nil 且余额为 0 时 CheckBillingEligibility 仍会（正确地）拒掉（既无额度又无余额）。
+	fallbackSubscription := h.resolveFallbackSubscription(c.Request.Context(), reqLog, fallbackKey)
+
+	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackKey.User, fallbackKey, fallbackKey.Group, fallbackSubscription); err != nil {
+		status, code, message, retryAfter := billingErrorDetails(err)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		reqLog.Warn("gateway.fallback_key_billing_ineligible",
+			zap.Int64("fallback_key_id", fallbackKey.ID),
+			zap.Error(err),
+		)
+		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+		return nil, nil, true
+	}
+
+	reqLog.Warn("gateway.fallback_key_switch",
+		zap.Int64("from_key_id", currentAPIKey.ID),
+		zap.Int64("to_key_id", fallbackKey.ID),
+		zap.Int64p("to_group_id", fallbackKey.GroupID),
+	)
+	return fallbackKey, fallbackSubscription, false
+}
+
+// resolveFallbackSubscription best-effort 解析兜底密钥（fallbackKey）的用户额度池订阅，
+// 并按兜底密钥的分组判断是否覆盖：覆盖则返回订阅（额度优先 + 不足扣余额），
+// 否则返回 nil（按纯余额计费）。窗口 / 限额由扣费层在结算时权威拆分判定，
+// 此处不调用 ValidateAndCheckLimits（对计费无害）。
+//
+// best-effort：subscriptionService 缺失、未找到订阅、或解析出错时一律返回 nil，
+// 绝不让兜底请求因此失败。
+func (h *GatewayHandler) resolveFallbackSubscription(ctx context.Context, reqLog *zap.Logger, fallbackKey *service.APIKey) *service.UserSubscription {
+	if h.subscriptionService == nil || fallbackKey == nil {
+		return nil
+	}
+	sub, err := h.subscriptionService.GetUsableCreditSubscription(ctx, fallbackKey.UserID)
+	if err != nil {
+		if !errors.Is(err, service.ErrSubscriptionNotFound) {
+			reqLog.Warn("gateway.fallback_subscription_resolve_failed",
+				zap.Int64("fallback_key_id", fallbackKey.ID),
+				zap.Int64("user_id", fallbackKey.UserID),
+				zap.Error(err),
+			)
+		}
+		return nil
+	}
+	if !service.SubscriptionCoversGroup(sub, fallbackKey.Group, fallbackKey.User) {
+		return nil
+	}
+	return sub
 }
 
 func cloneAPIKeyWithGroup(apiKey *service.APIKey, group *service.Group) *service.APIKey {

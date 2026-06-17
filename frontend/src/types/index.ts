@@ -739,6 +739,7 @@ export interface ApiKey {
   key: string
   name: string
   group_id: number | null
+  fallback_key_id: number | null // 兜底密钥 ID（主密钥分组上游全不可用时改用此密钥转发并计费）
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
@@ -766,6 +767,7 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
+  fallback_key_id?: number | null // 兜底密钥 ID（null = 不设置）
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -779,6 +781,7 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_id?: number | null
+  fallback_key_id?: number | null // 兜底密钥 ID（编辑时总下发，null = 清除）
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]
