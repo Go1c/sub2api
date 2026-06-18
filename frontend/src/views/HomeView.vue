@@ -253,7 +253,7 @@
       </div>
     </div>
 
-    <section id="features" class="relative order-3 mx-auto max-w-7xl px-6 py-16">
+    <section id="features" class="relative order-4 mx-auto max-w-7xl px-6 py-16">
       <div class="fade-rise mb-16 text-center">
         <div class="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300">
           <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>
@@ -340,7 +340,7 @@
       </div>
     </section>
 
-    <section id="pricing" class="relative order-2 mx-auto max-w-7xl px-6 py-12">
+    <section id="pricing" class="relative order-3 mx-auto max-w-7xl px-6 py-12">
       <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[40rem] bg-[radial-gradient(ellipse_50%_40%_at_50%_0%,rgba(99,102,241,0.10),transparent_70%)]"></div>
 
       <h2 class="text-center text-5xl font-semibold tracking-tight text-gray-900 dark:text-white">
@@ -459,13 +459,13 @@
                   </td>
                   <td class="px-6 py-4 text-center">
                     <div :class="['inline-flex min-w-[6.25rem] items-baseline justify-center gap-1 rounded-lg border px-3 py-1.5 font-bold shadow-sm', pricingTone(row).price]">
-                      <span class="text-[10px] font-semibold opacity-70">CNY</span>
+                      <span class="text-[10px] font-semibold opacity-70">{{ copy.pricingCurrency.unit }}</span>
                       <span class="text-base">{{ formatCny(row.inputPrice) }}</span>
                     </div>
                   </td>
                   <td class="px-6 py-4 text-center">
                     <div :class="['inline-flex min-w-[6.25rem] items-baseline justify-center gap-1 rounded-lg border px-3 py-1.5 font-bold shadow-sm', pricingTone(row).price]">
-                      <span class="text-[10px] font-semibold opacity-70">CNY</span>
+                      <span class="text-[10px] font-semibold opacity-70">{{ copy.pricingCurrency.unit }}</span>
                       <span class="text-base">{{ formatCny(row.outputPrice) }}</span>
                     </div>
                   </td>
@@ -492,28 +492,32 @@
       </div>
     </section>
 
-    <section id="vision" class="relative order-4 mx-auto max-w-7xl px-6 py-16">
-      <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div class="absolute left-1/2 top-1/2 h-[70rem] w-[70rem] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.12),rgba(168,85,247,0.06)_40%,transparent_70%)]"></div>
-        <div class="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-60 [mask-image:radial-gradient(ellipse_50%_40%_at_50%_50%,#000_40%,transparent_80%)] dark:bg-none"></div>
-      </div>
+    <section id="region-notice" class="relative order-2 mx-auto max-w-7xl px-6 py-16">
+      <div class="fade-rise relative overflow-hidden rounded-[1.5rem] border border-indigo-500/20 bg-gradient-to-b from-[#0b1224] to-[#0a0f1f] px-8 py-16 text-center shadow-[0_24px_60px_rgba(2,6,23,0.35)] md:px-12 md:py-20">
+        <div class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(99,102,241,0.18),transparent_70%)]"></div>
 
-      <div class="fade-rise relative overflow-hidden rounded-[2rem] border border-gray-200 bg-white/70 p-12 text-center shadow-[0_12px_40px_rgba(99,102,241,0.08)] backdrop-blur-md dark:border-dark-700 dark:bg-dark-900/70 md:p-16">
-        <div class="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(99,102,241,0.10),transparent_70%)]"></div>
+        <span class="inline-flex items-center rounded-full border border-indigo-400/35 bg-indigo-500/10 px-4 py-1.5 text-xs font-medium tracking-[0.12em] text-indigo-300">
+          {{ copy.regionEyebrow }}
+        </span>
 
-        <p class="mx-auto max-w-4xl text-2xl font-semibold leading-snug tracking-tight text-gray-900 dark:text-white md:text-4xl">
-          "<span>{{ copy.visionLead }}</span><span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{{ copy.visionHighlightOne }}</span><span>{{ copy.visionMiddle }}</span><span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{{ copy.visionHighlightTwo }}</span><span>{{ copy.visionEnd }}</span>"
+        <h2 class="mx-auto mt-7 max-w-3xl text-3xl font-extrabold leading-snug tracking-tight text-white md:text-[2.25rem]">
+          <span>{{ copy.regionTitleLead }}</span><span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{{ copy.regionTitleAccent }}</span><span>{{ copy.regionTitleEnd }}</span>
+        </h2>
+
+        <p class="mt-3.5 text-base text-gray-400 md:text-lg">{{ copy.regionSubtitle }}</p>
+
+        <p class="mx-auto mt-7 max-w-2xl text-sm leading-relaxed text-gray-300 md:text-[15px]">
+          {{ copy.regionBody }}
+        </p>
+        <p class="mx-auto mt-3 max-w-2xl text-xs leading-relaxed text-gray-500 md:text-[13px]">
+          {{ copy.regionBodyEn }}
         </p>
 
-        <p class="mt-6 text-sm text-gray-500 dark:text-dark-400">— {{ copy.visionAuthor }}</p>
-
-        <button class="group relative mt-10 inline-flex items-center gap-2 px-8 py-3.5 transition-all duration-300 hover:scale-[1.02]" @click="goPrimary">
-          <div class="absolute -inset-0.5 rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 opacity-50 blur transition duration-500 group-hover:opacity-100"></div>
-          <div class="absolute inset-0 rounded-full border border-white/20 bg-gradient-to-r from-blue-600 to-purple-600 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]"></div>
-          <span class="relative flex items-center gap-2 font-medium text-white">
-            {{ copy.visionCta }}
-            <Icon name="arrowRight" size="sm" class="transition-transform duration-300 group-hover:translate-x-1" />
-          </span>
+        <button
+          class="mt-9 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-7 py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_28px_rgba(99,102,241,0.35)] transition-all hover:-translate-y-0.5 hover:from-blue-700 hover:to-purple-700"
+          @click="goLegalNotice"
+        >
+          {{ copy.regionCta }}
         </button>
       </div>
     </section>
@@ -598,7 +602,7 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-dark-400">
+        <div class="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-500 dark:text-dark-400">
           <button class="transition-colors hover:text-gray-800 dark:hover:text-white" @click="openDocs">
             {{ copy.docsLabel }}
           </button>
@@ -610,8 +614,18 @@
           >
             GitHub
           </a>
+          <button class="text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200" @click="goLegalNotice">
+            {{ copy.legalLabel }}
+          </button>
           <span>© {{ currentYear }} {{ siteName }}.</span>
         </div>
+      </div>
+
+      <div class="mx-auto mt-6 max-w-7xl border-t border-gray-100 pt-5 text-center text-xs leading-relaxed text-gray-400 dark:border-dark-800 dark:text-dark-500">
+        {{ copy.footerLegalLine }}
+        <button class="ml-1 text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200" @click="goLegalNotice">
+          {{ copy.footerLegalCta }}
+        </button>
       </div>
     </footer>
   </div>
@@ -715,6 +729,7 @@ interface HomeCopy {
   pricingCurrency: {
     usd: string
     cny: string
+    unit: string
   }
   pricingRechargeNote: string
   pricingDiscountFormula: string
@@ -732,17 +747,22 @@ interface HomeCopy {
     discount: string
   }
   pricingRows: PricingRow[]
-  visionLead: string
-  visionHighlightOne: string
-  visionMiddle: string
-  visionHighlightTwo: string
-  visionEnd: string
-  visionAuthor: string
-  visionCta: string
+  regionEyebrow: string
+  regionTitleLead: string
+  regionTitleAccent: string
+  regionTitleEnd: string
+  regionSubtitle: string
+  regionBody: string
+  regionBodyEn: string
+  regionCta: string
   supportTitle: string
   supportSubtitle: string
   supportFallbackLabel: string
   docsLabel: string
+  legalNavLabel: string
+  legalLabel: string
+  footerLegalLine: string
+  footerLegalCta: string
 }
 
 const { t, locale } = useI18n()
@@ -839,12 +859,13 @@ const zhCopy: HomeCopy = {
   ],
   pricingTitleLead: '模型',
   pricingTitleAccent: '定价',
-  pricingNote: '官方原价以美元（USD）标注 · 折合价与 LumioAPI 价格以人民币（CNY）计价 · 单位：百万 tokens',
+  pricingNote: '官方原价以美元（USD）标注 · 折合价与 LumioAPI 价格以积分（Credits）计价 · 单位：百万 tokens',
   pricingCurrency: {
     usd: '美元 USD',
-    cny: '人民币 CNY'
+    cny: '积分 Credits',
+    unit: '积分'
   },
-  pricingRechargeNote: '充值规则：¥1 人民币 = $1 美元额度',
+  pricingRechargeNote: '充值规则：1 积分 (Credit) = $1 美元额度',
   pricingDiscountFormula: '先享 1.43 折，再叠加渠道倍率算最终折扣',
   pricingDiscountBasis: '最终折扣',
   pricingDiscountTag: '最终折扣',
@@ -853,8 +874,8 @@ const zhCopy: HomeCopy = {
     group: '分组',
     officialInput: '官方输入',
     officialOutput: '官方输出',
-    convertedInput: '人民币折合',
-    convertedOutput: '人民币折合',
+    convertedInput: '积分折合',
+    convertedOutput: '积分折合',
     input: 'LumioAPI 输入价',
     output: 'LumioAPI 输出价',
     discount: '最终折扣'
@@ -865,17 +886,22 @@ const zhCopy: HomeCopy = {
     { model: 'GPT5.5', group: 'OpenAI', multiplier: '0.2', officialInput: 5, officialOutput: 30, inputPrice: 1, outputPrice: 6, discount: '0.29折', tone: 'blue' },
     { model: 'GPT5.4', group: 'OpenAI', multiplier: '0.2', officialInput: 2.5, officialOutput: 15, inputPrice: 0.5, outputPrice: 3, discount: '0.29折', tone: 'blue' }
   ],
-  visionLead: '让每一个开发者都能以',
-  visionHighlightOne: '可接受的价格',
-  visionMiddle: '与',
-  visionHighlightTwo: '稳定的服务',
-  visionEnd: '，触达世界上最聪明的 AI。',
-  visionAuthor: 'Lumio · OPC 创业团队',
-  visionCta: '加入我们的愿景',
+  regionEyebrow: '服务区域 · SERVICE REGION',
+  regionTitleLead: '本服务',
+  regionTitleAccent: '不向中国大陆地区',
+  regionTitleEnd: '开放',
+  regionSubtitle: 'Service Not Available in Mainland China',
+  regionBody: '本服务由美国公司 Lumio Games LLC 运营，服务器位于美国、受美国法律保护。我们不向位于中国大陆地区、通常居住于中国大陆地区的用户，以及中国大陆注册或经营的实体提供访问、注册或技术支持。',
+  regionBodyEn: 'Operated by Lumio Games LLC (United States). This service is not offered to users located or ordinarily resident in Mainland China, or to entities registered or operating in Mainland China.',
+  regionCta: '查看完整声明 →',
   supportTitle: '技术支持',
   supportSubtitle: '选择任意联系渠道，直接加入 QQ 群、飞书群或 Telegram 群获取支持。',
   supportFallbackLabel: '客服联系方式',
-  docsLabel: '文档'
+  docsLabel: '文档',
+  legalNavLabel: '法律声明',
+  legalLabel: '公司信息与法律声明',
+  footerLegalLine: '本服务由 Lumio Games LLC（美国科罗拉多州注册）运营 · 服务器位于美国 · 受美国法律管辖与保护',
+  footerLegalCta: '查看完整声明 →'
 }
 
 const enCopy: HomeCopy = {
@@ -936,12 +962,13 @@ const enCopy: HomeCopy = {
   ],
   pricingTitleLead: 'Model',
   pricingTitleAccent: 'pricing',
-  pricingNote: 'Official list price is in USD · converted and LumioAPI prices are in CNY · unit: per million tokens',
+  pricingNote: 'Official list price is in USD · converted and LumioAPI prices are in Credits · unit: per million tokens',
   pricingCurrency: {
     usd: 'USD',
-    cny: 'CNY'
+    cny: 'Credits',
+    unit: 'Credits'
   },
-  pricingRechargeNote: 'Recharge rule: ¥1 CNY = $1 USD credit',
+  pricingRechargeNote: 'Recharge rule: 1 Credit = $1 USD credit',
   pricingDiscountFormula: 'Start at 14.3%, then apply the channel multiplier',
   pricingDiscountBasis: 'Final discount',
   pricingDiscountTag: 'Final',
@@ -950,8 +977,8 @@ const enCopy: HomeCopy = {
     group: 'Group',
     officialInput: 'Official input',
     officialOutput: 'Official output',
-    convertedInput: 'Converted input',
-    convertedOutput: 'Converted output',
+    convertedInput: 'Credits equiv.',
+    convertedOutput: 'Credits equiv.',
     input: 'LumioAPI input',
     output: 'LumioAPI output',
     discount: 'Discount'
@@ -962,17 +989,22 @@ const enCopy: HomeCopy = {
     { model: 'GPT5.5', group: 'OpenAI', multiplier: '0.2', officialInput: 5, officialOutput: 30, inputPrice: 1, outputPrice: 6, discount: '2.86%', tone: 'blue' },
     { model: 'GPT5.4', group: 'OpenAI', multiplier: '0.2', officialInput: 2.5, officialOutput: 15, inputPrice: 0.5, outputPrice: 3, discount: '2.86%', tone: 'blue' }
   ],
-  visionLead: 'We want every developer to reach the world’s smartest AI with',
-  visionHighlightOne: 'pricing they can accept',
-  visionMiddle: 'and',
-  visionHighlightTwo: 'service they can trust',
-  visionEnd: '.',
-  visionAuthor: 'Lumio · OPC founding team',
-  visionCta: 'Join the vision',
+  regionEyebrow: 'SERVICE REGION',
+  regionTitleLead: 'Service ',
+  regionTitleAccent: 'not available',
+  regionTitleEnd: ' in Mainland China',
+  regionSubtitle: 'Service Not Available in Mainland China',
+  regionBody: 'This service is operated by Lumio Games LLC (United States), with servers located in the United States and protected under U.S. law. We do not provide access, registration, or technical support to users located or ordinarily resident in Mainland China, or to entities registered or operating in Mainland China.',
+  regionBodyEn: 'Operated by Lumio Games LLC (United States). This service is not offered to users located or ordinarily resident in Mainland China, or to entities registered or operating in Mainland China.',
+  regionCta: 'View full notice →',
   supportTitle: 'Support',
   supportSubtitle: 'Choose any contact channel to reach the support community directly.',
   supportFallbackLabel: 'Contact',
-  docsLabel: 'Docs'
+  docsLabel: 'Docs',
+  legalNavLabel: 'Legal',
+  legalLabel: 'Company & Legal Notice',
+  footerLegalLine: 'Operated by Lumio Games LLC, registered in Colorado, USA. Servers in the U.S., governed by U.S. law.',
+  footerLegalCta: 'View full notice →'
 }
 
 const copy = computed(() => (locale.value.startsWith('zh') ? zhCopy : enCopy))
@@ -1010,7 +1042,8 @@ const navItems = computed<NavItem[]>(() => [
     target: privacyTarget.value?.target || '#footer',
     dim: true
   },
-  { key: 'image2', label: copy.value.dimNav[2].label, target: image2LoginHandoffTarget, dim: true }
+  { key: 'image2', label: copy.value.dimNav[2].label, target: image2LoginHandoffTarget, dim: true },
+  { key: 'legal', label: copy.value.legalNavLabel, target: '/legal-notice', dim: true }
 ])
 
 const floatingSlots = [
@@ -1085,6 +1118,10 @@ function goConsole() {
 
 function goPrimary() {
   router.push(isAuthenticated.value ? dashboardPath.value : '/register')
+}
+
+function goLegalNotice() {
+  router.push('/legal-notice')
 }
 
 function engineTone(tone: EngineCard['tone']) {
@@ -1228,12 +1265,14 @@ function formatUsd(value: number) {
 }
 
 function formatCny(value: number) {
-  return `¥${value.toFixed(2)}`
+  // 不带货币符号：单位（积分 / Credits）由旁边的标签体现
+  return value.toFixed(2)
 }
 
 function formatConverted(value: number) {
+  // 折合参考划线价：保留 ×7 数值逻辑，仅去掉货币符号
   const converted = (value * 7).toFixed(2)
-  return `¥${converted.replace(/\.00$/, '')}`
+  return converted.replace(/\.00$/, '')
 }
 
 onMounted(() => {

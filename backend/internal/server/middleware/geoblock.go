@@ -116,26 +116,33 @@ const blockPageHTML = `<!DOCTYPE html>
   body{
     display:flex;align-items:center;justify-content:center;
     min-height:100%;padding:24px;box-sizing:border-box;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Noto Sans SC",sans-serif;
-    background:linear-gradient(135deg,#1a2f5a 0%,#0f1c38 100%);
-    color:#e8eefc;
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:
+      radial-gradient(at 30% 12%, rgba(20,184,166,0.16) 0px, transparent 55%),
+      radial-gradient(at 85% 0%, rgba(45,212,191,0.10) 0px, transparent 50%),
+      linear-gradient(135deg,#1e293b 0%,#0f172a 55%,#020617 100%);
+    color:#e2e8f0;
   }
   .card{
     max-width:560px;width:100%;text-align:center;
     background:rgba(255,255,255,0.04);
-    border:1px solid rgba(79,140,255,0.25);
+    backdrop-filter:blur(18px);
+    border:1px solid rgba(20,184,166,0.28);
     border-radius:16px;padding:48px 40px;
-    box-shadow:0 12px 40px rgba(0,0,0,0.35);
+    box-shadow:0 12px 40px rgba(0,0,0,0.45), 0 0 40px rgba(20,184,166,0.10), inset 0 1px 0 rgba(255,255,255,0.06);
   }
   .badge{
-    display:inline-block;font-size:13px;letter-spacing:.08em;
-    color:#4f8cff;border:1px solid rgba(79,140,255,0.4);
+    display:inline-block;font-size:13px;letter-spacing:.08em;font-weight:500;
+    color:#2dd4bf;border:1px solid rgba(45,212,191,0.4);
+    background:rgba(20,184,166,0.08);
     border-radius:999px;padding:4px 14px;margin-bottom:24px;
   }
   h1{font-size:24px;margin:0 0 8px;font-weight:600;color:#fff}
-  h2{font-size:15px;margin:0 0 28px;font-weight:400;color:#9fb4e0}
-  p{font-size:14px;line-height:1.7;margin:0 0 16px;color:#c4d2ee}
-  .en{color:#8aa0cc;font-size:13px}
+  h2{font-size:15px;margin:0 0 28px;font-weight:400;color:#94a3b8}
+  p{font-size:14px;line-height:1.7;margin:0 0 16px;color:#cbd5e1}
+  .en{color:#64748b;font-size:13px}
+  a{color:#2dd4bf;text-decoration:none}
+  a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -143,9 +150,9 @@ const blockPageHTML = `<!DOCTYPE html>
     <span class="badge">451 · REGION RESTRICTED</span>
     <h1>本服务不向中国大陆地区提供</h1>
     <h2>Service Not Available in Mainland China</h2>
-    <p>本服务不向位于中国大陆地区的用户、通常居住于中国大陆地区的用户、中国大陆注册或经营的实体，或代表上述个人/实体使用本服务的人提供访问、注册、充值或技术支持。</p>
+    <p>本服务不向位于中国大陆地区的用户、通常居住于中国大陆地区的用户、中国大陆注册或经营的实体，或代表上述个人/实体使用本服务的人提供访问、注册或技术支持。</p>
     <p class="en">This service is not offered to users located or ordinarily resident in Mainland China, to entities registered or operating in Mainland China, or to anyone using the service on their behalf.</p>
-    <p>如果你认为这是误判，请通过合规申诉渠道联系我们。请勿使用 VPN、代理或其他方式规避地区限制。<br><span class="en">If you believe this is an error, please contact compliance support. Do not use a VPN, proxy or other means to bypass this restriction.</span></p>
+    <p>如果你认为这是误判，请通过合规申诉渠道 <a href="mailto:admin@lumio.games">admin@lumio.games</a> 联系我们。请勿使用 VPN、代理或其他方式规避地区限制。<br><span class="en">If you believe this is an error, please contact compliance support at <a href="mailto:admin@lumio.games">admin@lumio.games</a>. Do not use a VPN, proxy or other means to bypass this restriction.</span></p>
   </div>
 </body>
 </html>`
