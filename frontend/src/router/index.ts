@@ -177,6 +177,15 @@ const routes: RouteRecordRaw[] = [
       title: 'Legal Document'
     }
   },
+  {
+    path: '/legal-notice',
+    name: 'LegalNotice',
+    component: () => import('@/views/public/LegalNoticeView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Company & Legal Notice'
+    }
+  },
 
   // ==================== User Routes ====================
   {
