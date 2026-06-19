@@ -1227,6 +1227,46 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+// ==================== Geo Block Settings ====================
+
+/**
+ * Geo block settings interface.
+ * Mainland-China (and other) geographic access blocking for the website.
+ * - countries: ISO 3166-1 alpha-2 country codes (e.g. ["CN"]).
+ * - whitelist: IP or CIDR strings (e.g. ["203.0.113.10", "198.51.100.0/24"]).
+ */
+export interface GeoBlockSettings {
+  enabled: boolean;
+  countries: string[];
+  whitelist: string[];
+}
+
+/**
+ * Get geo block settings
+ * @returns Geo block settings
+ */
+export async function getGeoBlockSettings(): Promise<GeoBlockSettings> {
+  const { data } = await apiClient.get<GeoBlockSettings>(
+    "/admin/settings/geo-block",
+  );
+  return data;
+}
+
+/**
+ * Update geo block settings
+ * @param settings - Geo block settings to update
+ * @returns Updated settings
+ */
+export async function updateGeoBlockSettings(
+  settings: GeoBlockSettings,
+): Promise<GeoBlockSettings> {
+  const { data } = await apiClient.put<GeoBlockSettings>(
+    "/admin/settings/geo-block",
+    settings,
+  );
+  return data;
+}
+
 export const settingsAPI = {
   getSettings,
   updateSettings,
@@ -1251,6 +1291,8 @@ export const settingsAPI = {
   updateWebSearchEmulationConfig,
   testWebSearchEmulation,
   resetWebSearchUsage,
+  getGeoBlockSettings,
+  updateGeoBlockSettings,
 };
 
 export default settingsAPI;

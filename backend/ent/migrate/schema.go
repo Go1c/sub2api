@@ -17,6 +17,7 @@ var (
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "key", Type: field.TypeString, Unique: true, Size: 128},
 		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "fallback_key_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
 		{Name: "ip_whitelist", Type: field.TypeJSON, Nullable: true},
@@ -44,13 +45,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "api_keys_groups_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[22]},
+				Columns:    []*schema.Column{APIKeysColumns[23]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "api_keys_users_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[23]},
+				Columns:    []*schema.Column{APIKeysColumns[24]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -59,17 +60,22 @@ var (
 			{
 				Name:    "apikey_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[23]},
+				Columns: []*schema.Column{APIKeysColumns[24]},
 			},
 			{
 				Name:    "apikey_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[22]},
+				Columns: []*schema.Column{APIKeysColumns[23]},
+			},
+			{
+				Name:    "apikey_fallback_key_id",
+				Unique:  false,
+				Columns: []*schema.Column{APIKeysColumns[6]},
 			},
 			{
 				Name:    "apikey_status",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[6]},
+				Columns: []*schema.Column{APIKeysColumns[7]},
 			},
 			{
 				Name:    "apikey_deleted_at",
@@ -79,17 +85,17 @@ var (
 			{
 				Name:    "apikey_last_used_at",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[7]},
+				Columns: []*schema.Column{APIKeysColumns[8]},
 			},
 			{
 				Name:    "apikey_quota_quota_used",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[10], APIKeysColumns[11]},
+				Columns: []*schema.Column{APIKeysColumns[11], APIKeysColumns[12]},
 			},
 			{
 				Name:    "apikey_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[12]},
+				Columns: []*schema.Column{APIKeysColumns[13]},
 			},
 		},
 	}
@@ -203,6 +209,47 @@ var (
 				Name:    "account_deleted_at",
 				Unique:  false,
 				Columns: []*schema.Column{AccountsColumns[3]},
+			},
+		},
+	}
+	// AccountErrorHistoriesColumns holds the columns for the "account_error_histories" table.
+	AccountErrorHistoriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_email", Type: field.TypeString, Nullable: true, Size: 255},
+		{Name: "model", Type: field.TypeString, Nullable: true, Size: 200},
+		{Name: "upstream_status_code", Type: field.TypeInt, Nullable: true},
+		{Name: "source", Type: field.TypeEnum, Enums: []string{"gateway", "test", "ratelimit", "refresh", "schedule", "admin"}},
+		{Name: "message", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "fingerprint", Type: field.TypeString, Nullable: true, Size: 64, Default: ""},
+		{Name: "dup_count", Type: field.TypeInt, Default: 1},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "account_id", Type: field.TypeInt64},
+	}
+	// AccountErrorHistoriesTable holds the schema information for the "account_error_histories" table.
+	AccountErrorHistoriesTable = &schema.Table{
+		Name:       "account_error_histories",
+		Columns:    AccountErrorHistoriesColumns,
+		PrimaryKey: []*schema.Column{AccountErrorHistoriesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "account_error_histories_accounts_error_histories",
+				Columns:    []*schema.Column{AccountErrorHistoriesColumns[11]},
+				RefColumns: []*schema.Column{AccountsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "accounterrorhistory_account_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AccountErrorHistoriesColumns[11], AccountErrorHistoriesColumns[9]},
+			},
+			{
+				Name:    "accounterrorhistory_account_id_source_upstream_status_code_fingerprint_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AccountErrorHistoriesColumns[11], AccountErrorHistoriesColumns[5], AccountErrorHistoriesColumns[4], AccountErrorHistoriesColumns[7], AccountErrorHistoriesColumns[9]},
 			},
 		},
 	}
@@ -1969,6 +2016,7 @@ var (
 	Tables = []*schema.Table{
 		APIKeysTable,
 		AccountsTable,
+		AccountErrorHistoriesTable,
 		AccountGroupsTable,
 		AnnouncementsTable,
 		AnnouncementReadsTable,
@@ -2018,6 +2066,10 @@ func init() {
 	AccountsTable.ForeignKeys[0].RefTable = ProxiesTable
 	AccountsTable.Annotation = &entsql.Annotation{
 		Table: "accounts",
+	}
+	AccountErrorHistoriesTable.ForeignKeys[0].RefTable = AccountsTable
+	AccountErrorHistoriesTable.Annotation = &entsql.Annotation{
+		Table: "account_error_histories",
 	}
 	AccountGroupsTable.ForeignKeys[0].RefTable = AccountsTable
 	AccountGroupsTable.ForeignKeys[1].RefTable = GroupsTable

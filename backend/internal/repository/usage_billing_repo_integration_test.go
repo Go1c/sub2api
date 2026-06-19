@@ -102,9 +102,8 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 		Key:     "sk-usage-billing-sub-" + uuid.NewString(),
 		Name:    "billing-sub",
 	})
-	subscription := mustCreateSubscription(t, client, &service.UserSubscription{
-		UserID:  user.ID,
-		GroupID: &group.ID,
+	subscriptionID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD: 100,
 	})
 
 	requestID := uuid.NewString()
@@ -113,7 +112,7 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 		APIKeyID:         apiKey.ID,
 		UserID:           user.ID,
 		AccountID:        0,
-		SubscriptionID:   &subscription.ID,
+		SubscriptionID:   &subscriptionID,
 		SubscriptionCost: 2.5,
 	}
 
@@ -126,7 +125,7 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	require.False(t, result2.Applied)
 
 	var dailyUsage float64
-	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT daily_usage_usd FROM user_subscriptions WHERE id = $1", subscription.ID).Scan(&dailyUsage))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT daily_usage_usd FROM user_subscriptions WHERE id = $1", subscriptionID).Scan(&dailyUsage))
 	require.InDelta(t, 2.5, dailyUsage, 0.000001)
 }
 

@@ -365,6 +365,14 @@ type OverloadCooldownSettings struct {
 	CooldownMinutes int  `json:"cooldown_minutes"`
 }
 
+// GeoBlockSettings 地区拦截（合规）运行时配置 DTO。
+// 字段名与前端契约严格一致：enabled / countries / whitelist（全小写）。
+type GeoBlockSettings struct {
+	Enabled   bool     `json:"enabled"`
+	Countries []string `json:"countries"`
+	Whitelist []string `json:"whitelist"`
+}
+
 // RateLimit429CooldownSettings 429默认回避配置 DTO
 type RateLimit429CooldownSettings struct {
 	Enabled         bool `json:"enabled"`

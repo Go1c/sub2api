@@ -670,6 +670,10 @@ export default {
     namePlaceholder: '我的 API 密钥',
     groupLabel: '分组',
     selectGroup: '选择分组',
+    fallbackKeyLabel: '兜底密钥',
+    fallbackKeyPlaceholder: '选择一把兜底密钥（可选）',
+    fallbackKeyNone: '不设置',
+    fallbackKeyDanger: '危险操作：当本密钥所在分组的上游账号全部不可用时，系统会自动改用所选兜底密钥转发请求并按其计费。请务必确认两把密钥的平台/类型完全一致（如同为 Claude），否则请求会失败（例如一个是 Claude、一个是 Codex 将无法互转）。',
     statusLabel: '状态',
     selectStatus: '选择状态',
     saving: '保存中...',
@@ -823,6 +827,8 @@ export default {
     accountCost: '成本',
     userBilled: '用户扣费',
     accountBilled: '账号计费',
+    resetNow: '现在',
+    resetPending: '待刷新',
     accountMultiplier: '账号倍率',
     avgDuration: '平均耗时',
     inSelectedRange: '所选范围内',
@@ -867,6 +873,9 @@ export default {
     unknown: '未知',
     in: '输入',
     out: '输出',
+    cacheHit: '缓存命中',
+    cacheCreate: '缓存创建',
+    cacheHitRate: '缓存命中率',
     inputTokenPrice: '输入单价',
     outputTokenPrice: '输出单价',
     perMillionTokens: '/ 1M Token',
@@ -1775,6 +1784,16 @@ export default {
       allGroups: '全部分组',
       searchGroups: '搜索分组...',
       fuzzySearch: '模糊搜索',
+      apiKeyGroupFilter: 'API Key 分组',
+      apiKeyGroupExclusive: '专用分组',
+      apiKeyGroupPublic: '公开分组',
+      apiKeyGroupSubscription: '订阅分组',
+      apiKeyGroupDisabled: '已禁用分组',
+      authorizedGroupFilter: '授权分组',
+      allAuthorizedGroups: '全部授权分组',
+      searchAuthorizedGroups: '搜索授权分组...',
+      allApiKeyGroups: '全部 API Key 分组',
+      searchApiKeyGroups: '搜索 API Key 分组...',
       statusFilter: '状态筛选',
       allStatuses: '全部状态',
       admin: '管理员',
@@ -3125,6 +3144,7 @@ export default {
         success: '请求成功',
         failed: '请求失败'
       },
+      usageWindowsHint: '“5h / 7d”是上游账号（如 OpenAI ChatGPT、Claude）官方的滚动用量窗口限制，由上游对账号设定，并非 sub2api 配置，也与你映射的模型无关。窗口滚动到期后用量会自动重置，无法在 sub2api 端解除该限制。',
       allPrivacyModes: '全部Privacy状态',
       privacyUnset: '未设置',
       privacyTrainingOff: '已关闭训练数据共享',
@@ -4062,6 +4082,30 @@ export default {
       // Stats Modal
       viewStats: '查看统计',
       usageStatistics: '使用统计',
+      errorHistory: {
+        menu: '错误历史',
+        title: '错误历史',
+        subtitle: '最近 20 条错误记录',
+        empty: '暂无错误记录',
+        dupHint: '该错误在短时间内重复了 {count} 次',
+        columns: {
+          time: '时间',
+          userEmail: '用户邮箱',
+          model: '模型',
+          statusCode: '状态码',
+          source: '来源',
+          message: '错误信息',
+          count: '次数'
+        },
+        sources: {
+          gateway: '网关',
+          test: '测试',
+          ratelimit: '限流',
+          refresh: '刷新',
+          schedule: '定时',
+          admin: '管理'
+        }
+      },
       last30DaysUsage: '近30天使用统计（日均基于实际使用天数）',
       stats: {
         totalCost: '30天总费用',
@@ -4654,6 +4698,7 @@ export default {
       ipAddress: 'IP',
       clickToViewBalance: '点击查看充值记录',
       failedToLoadUser: '加载用户信息失败',
+      userDeletedBadge: '已删除',
       cleanup: {
         button: '清理',
         title: '清理使用记录',
@@ -5244,6 +5289,7 @@ export default {
           accountRateLimitedCount: '限流账号数',
           accountErrorCount: '错误账号数（不含临时不可调度）',
           accountErrorRatio: '错误账号比例 (%)',
+          accountTempUnscheduledCount: '临时不可调度账号数',
           overloadAccountCount: '过载账号数'
         },
         metricDescriptions: {
@@ -5261,6 +5307,7 @@ export default {
           accountRateLimitedCount: '统计窗口内被限流的账号数量。',
           accountErrorCount: '统计窗口内产生错误的账号数量（不含临时不可调度）。',
           accountErrorRatio: '统计窗口内错误账号占比（0~100）。',
+          accountTempUnscheduledCount: '当前处于临时不可调度状态的账号数量（如代理/凭据故障被自动摘除）。',
           overloadAccountCount: '统计窗口内过载账号数量。'
         },
         hints: {
@@ -6424,6 +6471,22 @@ export default {
           testFailed: 'Google Drive 存储测试失败'
         }
       },
+      geoBlock: {
+        title: '地理拦截',
+        description: '按访问来源的国家或地区拦截网页访问，API 调用不受影响',
+        enabled: '启用地理拦截',
+        enabledHint: '开启后，命中以下国家码且不在白名单内的来源将无法访问网页',
+        countries: '拦截国家 / 地区',
+        countriesHint: '使用 ISO 3166-1 alpha-2 国家码（如 CN），命中即拦截',
+        countriesPlaceholder: '输入国家码',
+        countriesInputHint: '输入两位字母国家码后按回车添加，自动转为大写；点击标签上的 × 可删除',
+        whitelist: 'IP / CIDR 白名单',
+        whitelistHint: '白名单内的 IP 或网段始终放行，不受地理拦截限制',
+        whitelistPlaceholder: '输入 IP 或 CIDR',
+        whitelistInputHint: '支持单个 IP（如 203.0.113.10）或 CIDR 网段（如 198.51.100.0/24），输入后按回车添加',
+        saved: '地理拦截设置保存成功',
+        saveFailed: '保存地理拦截设置失败'
+      },
       overloadCooldown: {
         title: '529 过载冷却',
         description: '配置上游返回 529（过载）时的账号调度暂停策略',
@@ -7238,7 +7301,8 @@ export default {
     balancePaymentInsufficient: '余额不足，当前套餐至少需要 ${required}',
     groupFallback: '分组 #{id}',
     rechargeAccount: '充值账户',
-    rechargeExchangeRule: '充值规则：用户充值 1 元人民币 = 1 美元账户余额',
+    creditUnit: '积分',
+    rechargeExchangeRule: '充值规则：1 积分 (Credit) = 1 美元额度',
     invoiceNotice: '开票须知：此价格不含税，最低 1% 税点，税点可以选择从账户余额扣除。',
     activeSubscription: '当前订阅',
     noActiveSubscription: '暂无有效订阅',
@@ -7252,7 +7316,7 @@ export default {
     amountTooLow: '最低金额为 {min}',
     amountTooHigh: '最高金额为 {max}',
     amountNoMethod: '该金额没有可用的支付方式',
-    rechargeRatePreview: '当前倍率：1 CNY = {usd} USD',
+    rechargeRatePreview: '当前倍率：1 积分 = {usd} 美元额度',
     purchaseNotice: '购买须知',
     refundReason: '退款原因',
     refundReasonPlaceholder: '请描述您的退款原因',

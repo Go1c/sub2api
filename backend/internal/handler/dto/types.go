@@ -18,6 +18,7 @@ type User struct {
 	LastActiveAt  *time.Time `json:"last_active_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
+	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
 
 	// 余额不足通知
 	BalanceNotifyEnabled       bool               `json:"balance_notify_enabled"`
@@ -47,20 +48,21 @@ type AdminUser struct {
 }
 
 type APIKey struct {
-	ID          int64      `json:"id"`
-	UserID      int64      `json:"user_id"`
-	Key         string     `json:"key"`
-	Name        string     `json:"name"`
-	GroupID     *int64     `json:"group_id"`
-	Status      string     `json:"status"`
-	IPWhitelist []string   `json:"ip_whitelist"`
-	IPBlacklist []string   `json:"ip_blacklist"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
-	Quota       float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
-	QuotaUsed   float64    `json:"quota_used"` // Used quota amount in USD
-	ExpiresAt   *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID            int64      `json:"id"`
+	UserID        int64      `json:"user_id"`
+	Key           string     `json:"key"`
+	Name          string     `json:"name"`
+	GroupID       *int64     `json:"group_id"`
+	FallbackKeyID *int64     `json:"fallback_key_id"`
+	Status        string     `json:"status"`
+	IPWhitelist   []string   `json:"ip_whitelist"`
+	IPBlacklist   []string   `json:"ip_blacklist"`
+	LastUsedAt    *time.Time `json:"last_used_at"`
+	Quota         float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
+	QuotaUsed     float64    `json:"quota_used"` // Used quota amount in USD
+	ExpiresAt     *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 
 	// Rate limit fields
 	RateLimit5h   float64    `json:"rate_limit_5h"`
@@ -153,25 +155,28 @@ type AdminGroup struct {
 }
 
 type Account struct {
-	ID                 int64          `json:"id"`
-	Name               string         `json:"name"`
-	Notes              *string        `json:"notes"`
-	Platform           string         `json:"platform"`
-	Type               string         `json:"type"`
-	Credentials        map[string]any `json:"credentials"`
-	Extra              map[string]any `json:"extra"`
-	ProxyID            *int64         `json:"proxy_id"`
-	Concurrency        int            `json:"concurrency"`
-	LoadFactor         *int           `json:"load_factor,omitempty"`
-	Priority           int            `json:"priority"`
-	RateMultiplier     float64        `json:"rate_multiplier"`
-	Status             string         `json:"status"`
-	ErrorMessage       string         `json:"error_message"`
-	LastUsedAt         *time.Time     `json:"last_used_at"`
-	ExpiresAt          *int64         `json:"expires_at"`
-	AutoPauseOnExpired bool           `json:"auto_pause_on_expired"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
+	ID       int64   `json:"id"`
+	Name     string  `json:"name"`
+	Notes    *string `json:"notes"`
+	Platform string  `json:"platform"`
+	Type     string  `json:"type"`
+	// Credentials 经 RedactCredentials 处理后只含非敏感子键；敏感 token / api_key / 私钥
+	// 的存在性通过 CredentialsStatus（has_<key>）暴露，原始值不返回前端。
+	Credentials        map[string]any  `json:"credentials"`
+	CredentialsStatus  map[string]bool `json:"credentials_status,omitempty"`
+	Extra              map[string]any  `json:"extra"`
+	ProxyID            *int64          `json:"proxy_id"`
+	Concurrency        int             `json:"concurrency"`
+	LoadFactor         *int            `json:"load_factor,omitempty"`
+	Priority           int             `json:"priority"`
+	RateMultiplier     float64         `json:"rate_multiplier"`
+	Status             string          `json:"status"`
+	ErrorMessage       string          `json:"error_message"`
+	LastUsedAt         *time.Time      `json:"last_used_at"`
+	ExpiresAt          *int64          `json:"expires_at"`
+	AutoPauseOnExpired bool            `json:"auto_pause_on_expired"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 
 	Schedulable bool `json:"schedulable"`
 

@@ -116,13 +116,15 @@ backend/.installed
 # 其他
 # ===================
 tests
-CLAUDE.md
-.claude
+# LumioAgent framework entrypoints (CLAUDE.md / AGENTS.md) are now tracked.
+# Keep .claude local config ignored, but track the agent/skill discovery symlinks.
+.claude/*
+!.claude/agents
+!.claude/skills
 scripts
 .code-review-state
 #openspec/
 code-reviews/
-AGENTS.md
 backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/

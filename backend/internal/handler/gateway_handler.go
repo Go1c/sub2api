@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	pkgerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -43,6 +44,7 @@ type GatewayHandler struct {
 	billingCacheService       *service.BillingCacheService
 	usageService              *service.UsageService
 	apiKeyService             *service.APIKeyService
+	subscriptionService       *service.SubscriptionService
 	usageRecordWorkerPool     *service.UsageRecordWorkerPool
 	errorPassthroughService   *service.ErrorPassthroughService
 	contentModerationService  *service.ContentModerationService
@@ -65,6 +67,7 @@ func NewGatewayHandler(
 	billingCacheService *service.BillingCacheService,
 	usageService *service.UsageService,
 	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	errorPassthroughService *service.ErrorPassthroughService,
 	contentModerationService *service.ContentModerationService,
@@ -100,6 +103,7 @@ func NewGatewayHandler(
 		billingCacheService:       billingCacheService,
 		usageService:              usageService,
 		apiKeyService:             apiKeyService,
+		subscriptionService:       subscriptionService,
 		usageRecordWorkerPool:     usageRecordWorkerPool,
 		errorPassthroughService:   errorPassthroughService,
 		contentModerationService:  contentModerationService,
@@ -466,12 +470,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						return
 					}
 				}
-				wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
+				upstreamErrorAlreadyCommunicated := gatewayForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
+				wroteFallback := false
+				if !upstreamErrorAlreadyCommunicated {
+					wroteFallback = h.ensureForwardErrorResponse(c, streamStarted)
+				}
 				forwardFailedFields := []zap.Field{
 					zap.Int64("account_id", account.ID),
 					zap.String("account_name", account.Name),
 					zap.String("account_platform", account.Platform),
 					zap.Bool("fallback_error_response_written", wroteFallback),
+					zap.Bool("upstream_error_response_already_written", upstreamErrorAlreadyCommunicated),
 					zap.Error(err),
 				}
 				if account.Proxy != nil {
@@ -509,7 +518,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
-			h.submitUsageRecordTask(func(ctx context.Context) {
+			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					ParsedRequest:      parsedReq,
@@ -547,6 +556,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		fallbackGroupID = apiKey.Group.FallbackGroupIDOnInvalidRequest
 	}
 	fallbackUsed := false
+	keyFallbackUsed := false // 密钥级兜底单跳保护
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -559,6 +569,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		fs := NewFailoverState(h.maxAccountSwitches, hasBoundSession)
 		retryWithFallback := false
 
+	selectLoop:
 		for {
 			// 选择支持该模型的账号
 			reqLog.Info("sticky.selecting_account",
@@ -577,6 +588,27 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Bool("fallback_used", fallbackUsed),
 						zap.Error(err),
 					)
+					// 上游账号全部不可用：尝试密钥级兜底（切换整把 key 含计费身份）。
+					if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+						return
+					} else if fbKey != nil {
+						// 按"直接请求兜底密钥分组"处理：清除强制平台，允许按兜底分组平台调度。
+						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+						c.Request = c.Request.WithContext(ctx)
+						currentAPIKey = fbKey
+						// tryKeyFallback 已按兜底分组解析并校验过额度池订阅，直接复用同一对象，
+						// 保证校验与计费用的是同一 subscription，且不重复查询额度池。
+						currentSubscription = fbSub
+						// 群组兜底来源跟随当前计费身份，避免后续群组级兜底回退到原始 key。
+						if currentAPIKey.Group != nil {
+							fallbackGroupID = currentAPIKey.Group.FallbackGroupIDOnInvalidRequest
+						} else {
+							fallbackGroupID = nil
+						}
+						keyFallbackUsed = true
+						retryWithFallback = true
+						break selectLoop
+					}
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
 				}
@@ -589,6 +621,27 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				case FailoverCanceled:
 					return
 				default: // FailoverExhausted
+					// 上游账号 failover 耗尽：尝试密钥级兜底。
+					if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+						return
+					} else if fbKey != nil {
+						// 按"直接请求兜底密钥分组"处理：清除强制平台，允许按兜底分组平台调度。
+						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+						c.Request = c.Request.WithContext(ctx)
+						currentAPIKey = fbKey
+						// tryKeyFallback 已按兜底分组解析并校验过额度池订阅，直接复用同一对象，
+						// 保证校验与计费用的是同一 subscription，且不重复查询额度池。
+						currentSubscription = fbSub
+						// 群组兜底来源跟随当前计费身份，避免后续群组级兜底回退到原始 key。
+						if currentAPIKey.Group != nil {
+							fallbackGroupID = currentAPIKey.Group.FallbackGroupIDOnInvalidRequest
+						} else {
+							fallbackGroupID = nil
+						}
+						keyFallbackUsed = true
+						retryWithFallback = true
+						break selectLoop
+					}
 					if fs.LastFailoverErr != nil {
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, platform, streamStarted)
 					} else {
@@ -843,12 +896,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						return
 					}
 				}
-				wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
+				upstreamErrorAlreadyCommunicated := gatewayForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
+				wroteFallback := false
+				if !upstreamErrorAlreadyCommunicated {
+					wroteFallback = h.ensureForwardErrorResponse(c, streamStarted)
+				}
 				forwardFailedFields := []zap.Field{
 					zap.Int64("account_id", account.ID),
 					zap.String("account_name", account.Name),
 					zap.String("account_platform", account.Platform),
 					zap.Bool("fallback_error_response_written", wroteFallback),
+					zap.Bool("upstream_error_response_already_written", upstreamErrorAlreadyCommunicated),
 					zap.Error(err),
 				}
 				if account.Proxy != nil {
@@ -897,7 +955,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
-			h.submitUsageRecordTask(func(ctx context.Context) {
+			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					ParsedRequest:      parsedReq,
@@ -950,8 +1008,8 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		platform = forcedPlatform
 	}
 
-	// Get available models from account configurations (without platform filter)
-	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, "")
+	// Get available models from account configurations for the selected group platform.
+	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, platform)
 
 	if len(availableModels) > 0 {
 		// Build model list from whitelist
@@ -972,10 +1030,18 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	}
 
 	// Fallback to default models
-	if platform == "openai" {
+	if platform == service.PlatformOpenAI {
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
 			"data":   openai.DefaultModels,
+		})
+		return
+	}
+
+	if platform == service.PlatformGemini {
+		c.JSON(http.StatusOK, gin.H{
+			"object": "list",
+			"data":   geminicli.DefaultModels,
 		})
 		return
 	}
@@ -993,6 +1059,107 @@ func (h *GatewayHandler) AntigravityModels(c *gin.Context) {
 		"object": "list",
 		"data":   antigravity.DefaultModels(),
 	})
+}
+
+// tryKeyFallback 尝试密钥级兜底：当 currentAPIKey 所属分组的上游账号全部不可用时，
+// 切换到 currentAPIKey.FallbackKeyID 指向的兜底密钥（计费身份一并切换）。
+// 返回 (fallbackKey, fallbackSubscription, errorWritten)：
+//   - errorWritten == true：已向客户端写入错误响应（如 billing 不通过），调用方应直接 return。
+//   - fallbackKey != nil：兜底命中，调用方切换 currentAPIKey 并重试。
+//   - fallbackSubscription：兜底密钥按其分组解析到的用户额度池订阅（best-effort，可能为 nil）；
+//     校验与计费用同一对象，调用方直接用它赋给 currentSubscription，不必再次解析。
+//   - 三者皆零值：无可用兜底，调用方按原错误返回。
+func (h *GatewayHandler) tryKeyFallback(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	keyFallbackUsed bool,
+	streamStarted bool,
+) (*service.APIKey, *service.UserSubscription, bool) {
+	if keyFallbackUsed || currentAPIKey == nil || currentAPIKey.FallbackKeyID == nil || *currentAPIKey.FallbackKeyID <= 0 {
+		return nil, nil, false
+	}
+	fallbackKeyID := *currentAPIKey.FallbackKeyID
+
+	fallbackKey, err := h.apiKeyService.ResolveAPIKeyByID(c.Request.Context(), fallbackKeyID)
+	if err != nil {
+		reqLog.Warn("gateway.resolve_fallback_key_failed",
+			zap.Int64("fallback_key_id", fallbackKeyID),
+			zap.Error(err),
+		)
+		return nil, nil, false
+	}
+
+	// 校验：同一用户、active、未过期、有分组、且不等于当前 key 自身。
+	if fallbackKey.UserID != currentAPIKey.UserID ||
+		fallbackKey.ID == currentAPIKey.ID ||
+		!fallbackKey.IsActive() ||
+		fallbackKey.IsExpired() ||
+		fallbackKey.GroupID == nil ||
+		fallbackKey.Group == nil ||
+		fallbackKey.User == nil {
+		reqLog.Warn("gateway.fallback_key_invalid",
+			zap.Int64("fallback_key_id", fallbackKey.ID),
+			zap.Int64("current_key_id", currentAPIKey.ID),
+			zap.String("fallback_status", fallbackKey.Status),
+			zap.Bool("has_group", fallbackKey.GroupID != nil),
+		)
+		return nil, nil, false
+	}
+
+	// 先解析兜底密钥的额度池订阅（best-effort），再用它做资格校验，
+	// 使「校验口径 == 计费口径」，与鉴权层（先解析订阅再 CheckBillingEligibility）一致：
+	// 覆盖则额度优先 + 不足扣余额；覆盖不到 / 无订阅 / 解析失败则为 nil（按纯余额计费）。
+	// nil 且余额为 0 时 CheckBillingEligibility 仍会（正确地）拒掉（既无额度又无余额）。
+	fallbackSubscription := h.resolveFallbackSubscription(c.Request.Context(), reqLog, fallbackKey)
+
+	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackKey.User, fallbackKey, fallbackKey.Group, fallbackSubscription); err != nil {
+		status, code, message, retryAfter := billingErrorDetails(err)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		reqLog.Warn("gateway.fallback_key_billing_ineligible",
+			zap.Int64("fallback_key_id", fallbackKey.ID),
+			zap.Error(err),
+		)
+		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+		return nil, nil, true
+	}
+
+	reqLog.Warn("gateway.fallback_key_switch",
+		zap.Int64("from_key_id", currentAPIKey.ID),
+		zap.Int64("to_key_id", fallbackKey.ID),
+		zap.Int64p("to_group_id", fallbackKey.GroupID),
+	)
+	return fallbackKey, fallbackSubscription, false
+}
+
+// resolveFallbackSubscription best-effort 解析兜底密钥（fallbackKey）的用户额度池订阅，
+// 并按兜底密钥的分组判断是否覆盖：覆盖则返回订阅（额度优先 + 不足扣余额），
+// 否则返回 nil（按纯余额计费）。窗口 / 限额由扣费层在结算时权威拆分判定，
+// 此处不调用 ValidateAndCheckLimits（对计费无害）。
+//
+// best-effort：subscriptionService 缺失、未找到订阅、或解析出错时一律返回 nil，
+// 绝不让兜底请求因此失败。
+func (h *GatewayHandler) resolveFallbackSubscription(ctx context.Context, reqLog *zap.Logger, fallbackKey *service.APIKey) *service.UserSubscription {
+	if h.subscriptionService == nil || fallbackKey == nil {
+		return nil
+	}
+	sub, err := h.subscriptionService.GetUsableCreditSubscription(ctx, fallbackKey.UserID)
+	if err != nil {
+		if !errors.Is(err, service.ErrSubscriptionNotFound) {
+			reqLog.Warn("gateway.fallback_subscription_resolve_failed",
+				zap.Int64("fallback_key_id", fallbackKey.ID),
+				zap.Int64("user_id", fallbackKey.UserID),
+				zap.Error(err),
+			)
+		}
+		return nil
+	}
+	if !service.SubscriptionCoversGroup(sub, fallbackKey.Group, fallbackKey.User) {
+		return nil
+	}
+	return sub
 }
 
 func cloneAPIKeyWithGroup(apiKey *service.APIKey, group *service.Group) *service.APIKey {
@@ -1338,10 +1505,10 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 	return min
 }
 
-// handleConcurrencyError handles concurrency-related errors with proper 429 response
+// handleConcurrencyError handles concurrency-related acquire errors.
 func (h *GatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotType string, streamStarted bool) {
-	h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error",
-		fmt.Sprintf("Concurrency limit exceeded for %s, please retry later", slotType), streamStarted)
+	status, errType, message := concurrencyErrorResponse(err, slotType)
+	h.handleStreamingAwareError(c, status, errType, message, streamStarted)
 }
 
 func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, platform string, streamStarted bool) {
@@ -1432,6 +1599,31 @@ func (h *GatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarte
 	}
 	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
 	return true
+}
+
+// gatewayForwardErrorAlreadyCommunicated reports whether a Forward implementation
+// has already written a complete error response to the client before returning
+// an error to the handler.
+//
+// This is intentionally narrower than "writer size changed": a stream may have
+// only emitted keepalive pings or partial data, in which case the handler still
+// needs to append a protocol-level terminal error. Non-SSE output from Forward
+// is different: service-level helpers such as handleErrorResponse/writeClaudeError
+// already wrote the client-visible JSON body, so adding the generic streaming
+// fallback would corrupt the response by appending a second `data: ...` frame.
+func gatewayForwardErrorAlreadyCommunicated(c *gin.Context, writerSizeBeforeForward int, err error) bool {
+	if err == nil || c == nil || c.Writer == nil {
+		return false
+	}
+	if c.Writer.Size() == writerSizeBeforeForward {
+		return false
+	}
+
+	contentType := strings.ToLower(strings.TrimSpace(c.Writer.Header().Get("Content-Type")))
+	if contentType == "" {
+		return false
+	}
+	return !strings.Contains(contentType, "text/event-stream")
 }
 
 // checkClaudeCodeVersion 检查 Claude Code 客户端版本是否满足版本要求
@@ -1866,10 +2058,11 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 	)
 }
 
-func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
+func (h *GatewayHandler) submitUsageRecordTask(parent context.Context, task service.UsageRecordTask) {
 	if task == nil {
 		return
 	}
+	task = wrapUsageRecordTaskContext(parent, task)
 	if h.usageRecordWorkerPool != nil {
 		if mode := h.usageRecordWorkerPool.Submit(task); mode != service.UsageRecordSubmitModeDropped {
 			return

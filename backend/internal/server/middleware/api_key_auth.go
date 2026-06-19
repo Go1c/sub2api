@@ -111,6 +111,14 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
+		// 独占分组授权守卫：分组被停用/删除，或 API Key 所属独占分组已不再授权当前用户时拒绝。
+		if abortIfAPIKeyGroupUnavailable(c, apiKey) {
+			return
+		}
+		if abortIfAPIKeyGroupNotAllowed(c, apiKey) {
+			return
+		}
+
 		// ── 4. SimpleMode → early return ─────────────────────────────
 
 		if cfg.RunMode == config.RunModeSimple {
@@ -278,4 +286,51 @@ func subscriptionAuthErrorStatus(err error) (int, string) {
 		return 403, "SUBSCRIPTION_INVALID"
 	}
 	return 500, "INTERNAL_ERROR"
+}
+
+// abortIfAPIKeyGroupUnavailable 在 API Key 所属分组已删除/停用时以 403 拒绝。
+func abortIfAPIKeyGroupUnavailable(c *gin.Context, apiKey *service.APIKey) bool {
+	code, message, ok := validateAPIKeyGroupAvailable(apiKey)
+	if ok {
+		return false
+	}
+	AbortWithError(c, 403, code, message)
+	return true
+}
+
+// abortIfAPIKeyGroupNotAllowed 在 API Key 所属独占分组不再授权当前用户时以 403 拒绝（越权防护）。
+func abortIfAPIKeyGroupNotAllowed(c *gin.Context, apiKey *service.APIKey) bool {
+	if validateAPIKeyGroupAllowed(apiKey) {
+		return false
+	}
+	AbortWithError(c, 403, "GROUP_NOT_ALLOWED", "API Key 所属专属分组不再允许当前用户使用")
+	return true
+}
+
+// validateAPIKeyGroupAllowed 判断 API Key 所属分组是否仍允许其所属用户访问。
+// 订阅型分组直接放行；独占分组要求用户当前仍被授权绑定该分组。
+func validateAPIKeyGroupAllowed(apiKey *service.APIKey) bool {
+	if apiKey == nil || apiKey.GroupID == nil || apiKey.User == nil || apiKey.Group == nil {
+		return true
+	}
+	group := apiKey.Group
+	if group.IsSubscriptionType() {
+		return true
+	}
+	return apiKey.User.CanBindGroup(group.ID, group.IsExclusive)
+}
+
+// validateAPIKeyGroupAvailable 判断 API Key 所属分组是否可用（未删除、未停用）。
+func validateAPIKeyGroupAvailable(apiKey *service.APIKey) (string, string, bool) {
+	if apiKey == nil || apiKey.GroupID == nil {
+		return "", "", true
+	}
+	group := apiKey.Group
+	if group == nil || strings.EqualFold(group.Status, "deleted") {
+		return "GROUP_DELETED", "API Key 所属分组已删除", false
+	}
+	if !group.IsActive() {
+		return "GROUP_DISABLED", "API Key 所属分组已停用", false
+	}
+	return "", "", true
 }

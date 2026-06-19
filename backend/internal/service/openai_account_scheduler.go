@@ -620,8 +620,15 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		}
 		// require_privacy_set: 跳过 privacy 未设置的账号并标记异常
 		if schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
-			_ = s.service.accountRepo.SetError(ctx, account.ID,
-				fmt.Sprintf("Privacy not set, required by group [%s]", schedGroup.Name))
+			privacyErrMsg := fmt.Sprintf("Privacy not set, required by group [%s]", schedGroup.Name)
+			_ = s.service.accountRepo.SetError(ctx, account.ID, privacyErrMsg)
+			if s.service != nil && s.service.accountErrorHistory != nil {
+				s.service.accountErrorHistory.RecordAccountError(ctx, AccountErrorEvent{
+					AccountID: account.ID,
+					Source:    AccountErrorSourceSchedule,
+					Message:   privacyErrMsg,
+				})
+			}
 			continue
 		}
 		if !s.isAccountRequestCompatible(ctx, account, req) {

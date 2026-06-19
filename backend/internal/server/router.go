@@ -61,9 +61,18 @@ func SetupRouter(
 		return nil
 	}))
 
+	// 合规：按地区拦截网页前端访问（仅作用于网页请求，API 接口不受影响）。
+	// 必须在前端服务中间件之前注册，以便在命中受限地区时直接返回阻断页。
+	// 始终挂载：开关/国家/白名单由 DB 设置在运行时提供（带 TTL 缓存），
+	// 管理后台保存后即时生效；禁用时中间件内部直接放行，成本极低。
+	r.Use(middleware2.GeoBlock(func(ctx context.Context) config.GeoBlockConfig {
+		return settingService.GetGeoBlockRuntime(ctx)
+	}))
+
 	// Serve embedded frontend with settings injection if available
 	if web.HasEmbeddedFrontend() {
-		frontendServer, err := web.NewFrontendServer(settingService)
+		frontendServer, err := web.NewFrontendServer(settingService) //nolint:staticcheck // Non-embed builds always return an error here; embed builds can fail while reading assets.
+		//nolint:staticcheck // Non-embed builds make this unreachable, but embed builds can fail while reading assets.
 		if err != nil {
 			log.Printf("Warning: Failed to create frontend server with settings injection: %v, using legacy mode", err)
 			r.Use(web.ServeEmbeddedFrontend())

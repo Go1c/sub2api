@@ -200,6 +200,10 @@ func TestEntSoftDelete_UserSubscription_ListExcludesDeleted(t *testing.T) {
 	}
 	require.NoError(t, repo.Create(ctx, sub1), "create subscription 1")
 
+	// 新额度池模型每个用户同一时间只允许 1 条可消费订阅；先软删除
+	// sub1，再创建 sub2，用于验证 ListByUserID 不返回已删除订阅。
+	require.NoError(t, repo.Delete(ctx, sub1.ID), "soft delete subscription 1")
+
 	group2ID := g2.ID
 	sub2 := &service.UserSubscription{
 		UserID:    u.ID,
@@ -208,9 +212,6 @@ func TestEntSoftDelete_UserSubscription_ListExcludesDeleted(t *testing.T) {
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 	require.NoError(t, repo.Create(ctx, sub2), "create subscription 2")
-
-	// 软删除 sub1
-	require.NoError(t, repo.Delete(ctx, sub1.ID), "soft delete subscription 1")
 
 	// ListByUserID 应只返回未删除的订阅
 	subs, err := repo.ListByUserID(ctx, u.ID)

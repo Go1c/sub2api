@@ -671,6 +671,10 @@ export default {
     namePlaceholder: 'My API Key',
     groupLabel: 'Group',
     selectGroup: 'Select a group',
+    fallbackKeyLabel: 'Fallback Key',
+    fallbackKeyPlaceholder: 'Select a fallback key (optional)',
+    fallbackKeyNone: 'None',
+    fallbackKeyDanger: 'Dangerous: when every upstream account in this key\'s group is unavailable, requests are automatically forwarded through the selected fallback key and billed to it. Make sure both keys share the exact same platform/type (e.g. both Claude); otherwise requests will fail (e.g. one Claude and one Codex cannot interoperate).',
     statusLabel: 'Status',
     selectStatus: 'Select status',
     saving: 'Saving...',
@@ -819,6 +823,8 @@ export default {
     accountCost: 'Cost',
     userBilled: 'User billed',
     accountBilled: 'Account billed',
+    resetNow: 'Now',
+    resetPending: 'Pending refresh',
     accountMultiplier: 'Account rate',
     avgDuration: 'Avg Duration',
     inSelectedRange: 'in selected range',
@@ -863,6 +869,9 @@ export default {
     unknown: 'Unknown',
     in: 'In',
     out: 'Out',
+    cacheHit: 'Cache hit',
+    cacheCreate: 'Cache create',
+    cacheHitRate: 'Cache hit rate',
     inputTokenPrice: 'Input price',
     outputTokenPrice: 'Output price',
     perMillionTokens: '/ 1M tokens',
@@ -1751,6 +1760,16 @@ export default {
       allGroups: 'All Groups',
       searchGroups: 'Search groups...',
       fuzzySearch: 'Fuzzy search',
+      apiKeyGroupFilter: 'API Key Group',
+      apiKeyGroupExclusive: 'Exclusive Groups',
+      apiKeyGroupPublic: 'Public Groups',
+      apiKeyGroupSubscription: 'Subscription Groups',
+      apiKeyGroupDisabled: 'Disabled Groups',
+      authorizedGroupFilter: 'Authorized Group',
+      allAuthorizedGroups: 'All Authorized Groups',
+      searchAuthorizedGroups: 'Search authorized groups...',
+      allApiKeyGroups: 'All API Key Groups',
+      searchApiKeyGroups: 'Search API Key groups...',
       admin: 'Admin',
       user: 'User',
       disabled: 'Disabled',
@@ -3087,6 +3106,7 @@ export default {
         success: 'Request succeeded',
         failed: 'Request failed'
       },
+      usageWindowsHint: '"5h / 7d" are the upstream account\'s official rolling usage windows (e.g. OpenAI ChatGPT, Claude). They are imposed by the upstream provider on the account itself — not configured by sub2api, and unrelated to the models you map. Usage resets automatically once each window rolls over, and the limit cannot be lifted from within sub2api.',
       allPrivacyModes: 'All Privacy States',
       privacyUnset: 'Unset',
       privacyTrainingOff: 'Training data sharing disabled',
@@ -3934,6 +3954,30 @@ export default {
       // Stats Modal
       viewStats: 'View Stats',
       usageStatistics: 'Usage Statistics',
+      errorHistory: {
+        menu: 'Error History',
+        title: 'Error History',
+        subtitle: 'Most recent 20 error records',
+        empty: 'No error records',
+        dupHint: 'This error repeated {count} times in a short window',
+        columns: {
+          time: 'Time',
+          userEmail: 'User Email',
+          model: 'Model',
+          statusCode: 'Status',
+          source: 'Source',
+          message: 'Error Message',
+          count: 'Count'
+        },
+        sources: {
+          gateway: 'Gateway',
+          test: 'Test',
+          ratelimit: 'Rate Limit',
+          refresh: 'Refresh',
+          schedule: 'Schedule',
+          admin: 'Admin'
+        }
+      },
       last30DaysUsage: 'Last 30 days usage statistics (based on actual usage days)',
       stats: {
         totalCost: '30-Day Total Cost',
@@ -4498,6 +4542,7 @@ export default {
       ipAddress: 'IP',
       clickToViewBalance: 'Click to view balance history',
       failedToLoadUser: 'Failed to load user info',
+      userDeletedBadge: 'Deleted',
       cleanup: {
         button: 'Cleanup',
         title: 'Cleanup Usage Records',
@@ -5082,6 +5127,7 @@ export default {
           accountRateLimitedCount: 'Rate-limited Accounts',
           accountErrorCount: 'Error Accounts (excluding temporarily unschedulable)',
           accountErrorRatio: 'Error Account Ratio (%)',
+          accountTempUnscheduledCount: 'Temporarily Unschedulable Accounts',
           overloadAccountCount: 'Overloaded Accounts'
         },
         metricDescriptions: {
@@ -5099,6 +5145,7 @@ export default {
           accountRateLimitedCount: 'Number of rate-limited accounts within the window.',
           accountErrorCount: 'Number of error accounts within the window (excluding temporarily unschedulable).',
           accountErrorRatio: 'Error account ratio within the window (0-100).',
+          accountTempUnscheduledCount: 'Number of accounts currently temporarily unschedulable (e.g. proxy/credential failure auto-eviction).',
           overloadAccountCount: 'Number of overloaded accounts within the window.'
         },
         hints: {
@@ -6264,6 +6311,22 @@ export default {
           testFailed: 'Google Drive storage test failed'
         }
       },
+      geoBlock: {
+        title: 'Geo Block',
+        description: 'Block website access by the visitor\'s country or region; API access is unaffected',
+        enabled: 'Enable Geo Block',
+        enabledHint: 'When enabled, visitors from the listed countries that are not whitelisted cannot access the website',
+        countries: 'Blocked Countries / Regions',
+        countriesHint: 'Use ISO 3166-1 alpha-2 country codes (e.g. CN); matching sources are blocked',
+        countriesPlaceholder: 'Enter country code',
+        countriesInputHint: 'Type a two-letter country code and press Enter to add (auto-uppercased); click × on a tag to remove',
+        whitelist: 'IP / CIDR Whitelist',
+        whitelistHint: 'IPs or ranges in the whitelist are always allowed, bypassing geo blocking',
+        whitelistPlaceholder: 'Enter IP or CIDR',
+        whitelistInputHint: 'Supports a single IP (e.g. 203.0.113.10) or a CIDR range (e.g. 198.51.100.0/24); press Enter to add',
+        saved: 'Geo block settings saved',
+        saveFailed: 'Failed to save geo block settings'
+      },
       overloadCooldown: {
         title: '529 Overload Cooldown',
         description: 'Configure account scheduling pause strategy when upstream returns 529 (overloaded)',
@@ -7053,7 +7116,8 @@ export default {
     balancePaymentInsufficient: 'Insufficient balance. This plan requires at least ${required}',
     groupFallback: 'Group #{id}',
     rechargeAccount: 'Recharge Account',
-    rechargeExchangeRule: 'Recharge rule: 1 CNY = 1 USD account balance',
+    creditUnit: 'Credits',
+    rechargeExchangeRule: 'Top-up rule: 1 Credit = $1 of account balance',
     invoiceNotice: 'Invoice notice: Prices exclude tax. Minimum tax rate is 1%; tax can be deducted from account balance.',
     activeSubscription: 'Active Subscription',
     noActiveSubscription: 'No active subscription',
@@ -7067,7 +7131,7 @@ export default {
     amountTooLow: 'Minimum amount is {min}',
     amountTooHigh: 'Maximum amount is {max}',
     amountNoMethod: 'No payment method available for this amount',
-    rechargeRatePreview: 'Current rate: 1 CNY = {usd} USD',
+    rechargeRatePreview: 'Current rate: 1 Credit = ${usd} of account balance',
     purchaseNotice: 'Purchase Notice',
     refundReason: 'Refund Reason',
     refundReasonPlaceholder: 'Please describe your refund reason',

@@ -90,6 +90,11 @@ func GroupID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldGroupID, v))
 }
 
+// FallbackKeyID applies equality check predicate on the "fallback_key_id" field. It's identical to FallbackKeyIDEQ.
+func FallbackKeyID(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldFallbackKeyID, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
@@ -468,6 +473,56 @@ func GroupIDIsNil() predicate.APIKey {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldGroupID))
+}
+
+// FallbackKeyIDEQ applies the EQ predicate on the "fallback_key_id" field.
+func FallbackKeyIDEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldFallbackKeyID, v))
+}
+
+// FallbackKeyIDNEQ applies the NEQ predicate on the "fallback_key_id" field.
+func FallbackKeyIDNEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldFallbackKeyID, v))
+}
+
+// FallbackKeyIDIn applies the In predicate on the "fallback_key_id" field.
+func FallbackKeyIDIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldFallbackKeyID, vs...))
+}
+
+// FallbackKeyIDNotIn applies the NotIn predicate on the "fallback_key_id" field.
+func FallbackKeyIDNotIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldFallbackKeyID, vs...))
+}
+
+// FallbackKeyIDGT applies the GT predicate on the "fallback_key_id" field.
+func FallbackKeyIDGT(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldFallbackKeyID, v))
+}
+
+// FallbackKeyIDGTE applies the GTE predicate on the "fallback_key_id" field.
+func FallbackKeyIDGTE(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldFallbackKeyID, v))
+}
+
+// FallbackKeyIDLT applies the LT predicate on the "fallback_key_id" field.
+func FallbackKeyIDLT(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldFallbackKeyID, v))
+}
+
+// FallbackKeyIDLTE applies the LTE predicate on the "fallback_key_id" field.
+func FallbackKeyIDLTE(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldFallbackKeyID, v))
+}
+
+// FallbackKeyIDIsNil applies the IsNil predicate on the "fallback_key_id" field.
+func FallbackKeyIDIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldFallbackKeyID))
+}
+
+// FallbackKeyIDNotNil applies the NotNil predicate on the "fallback_key_id" field.
+func FallbackKeyIDNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldFallbackKeyID))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

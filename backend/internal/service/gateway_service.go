@@ -570,6 +570,14 @@ type GatewayService struct {
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
+	// accountErrorHistory 通过 SetAccountErrorHistoryService 注入（best-effort 监控，可为 nil）。
+	// 用 setter 而非构造参数，避免改动 NewGatewayService 签名波及大量测试。
+	accountErrorHistory *AccountErrorHistoryService
+}
+
+// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
+func (s *GatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
+	s.accountErrorHistory = svc
 }
 
 // NewGatewayService creates a new GatewayService
@@ -5334,6 +5342,22 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 		intervalCh = intervalTicker.C
 	}
 
+	keepaliveInterval := time.Duration(0)
+	if s.cfg != nil && s.cfg.Gateway.StreamKeepaliveInterval > 0 {
+		keepaliveInterval = time.Duration(s.cfg.Gateway.StreamKeepaliveInterval) * time.Second
+	}
+	var keepaliveTicker *time.Ticker
+	if keepaliveInterval > 0 {
+		keepaliveTicker = time.NewTicker(keepaliveInterval)
+		defer keepaliveTicker.Stop()
+	}
+	var keepaliveCh <-chan time.Time
+	if keepaliveTicker != nil {
+		keepaliveCh = keepaliveTicker.C
+	}
+	lastDataAt := time.Now()
+	inPartialEvent := false
+
 	for {
 		select {
 		case ev, ok := <-events:
@@ -5399,6 +5423,10 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 				} else if line == "" {
 					// 按 SSE 事件边界刷出，减少每行 flush 带来的 syscall 开销。
 					flusher.Flush()
+					lastDataAt = time.Now()
+					inPartialEvent = false
+				} else {
+					inPartialEvent = true
 				}
 			}
 
@@ -5415,6 +5443,21 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 				s.rateLimitService.HandleStreamTimeout(ctx, account, model)
 			}
 			return &streamingResult{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream data interval timeout")
+
+		case <-keepaliveCh:
+			if clientDisconnected || inPartialEvent {
+				continue
+			}
+			if time.Since(lastDataAt) < keepaliveInterval {
+				continue
+			}
+			if _, err := fmt.Fprint(w, "event: ping\ndata: {\"type\": \"ping\"}\n\n"); err != nil {
+				clientDisconnected = true
+				logger.LegacyPrintf("service.gateway", "[Anthropic passthrough] Client disconnected during keepalive ping, continue draining upstream for usage: account=%d", account.ID)
+				continue
+			}
+			flusher.Flush()
+			lastDataAt = time.Now()
 		}
 	}
 }
@@ -5612,6 +5655,14 @@ func (s *GatewayService) forwardBedrock(
 	if err != nil {
 		return nil, err
 	}
+
+	// Bedrock CC 兼容：修复 Claude Code / 新模型（opus-4.x、fable-5）发送的 thinking、
+	// service_tier/interface_geo、非法 tool_use ID、不支持的 beta token 等 Bedrock 不接受的
+	// 字段，否则上游返回 ValidationException。对所有 Bedrock 请求生效（dev 无渠道级开关）。
+	body = sanitizeBedrockCCFields(body)
+	body = sanitizeBedrockThinking(body, mappedModel)
+	body = sanitizeBedrockToolUseIDs(body)
+	body = sanitizeBedrockCCBetaTokens(body, mappedModel)
 
 	bedrockBody, err := PrepareBedrockRequestBodyWithTokens(body, mappedModel, betaTokens)
 	if err != nil {
@@ -6710,6 +6761,11 @@ func (s *GatewayService) isThinkingBlockSignatureError(respBody []byte) bool {
 		return true
 	}
 
+	if strings.Contains(msg, "thinking block must contain") {
+		logger.LegacyPrintf("service.gateway", "[SignatureCheck] Detected thinking block missing content error")
+		return true
+	}
+
 	return false
 }
 
@@ -6848,6 +6904,40 @@ func isCountTokensUnsupported404(statusCode int, body []byte) bool {
 	return strings.Contains(msg, "count_tokens") && strings.Contains(msg, "not found")
 }
 
+// recordGatewayAccountError best-effort 记录一条 gateway 源的账号错误（真实请求，字段齐全）。
+// 从 ctx 取 model、从 gin.Context 取 apiKey 拿 user 快照；任一缺失则对应字段留空。
+func (s *GatewayService) recordGatewayAccountError(ctx context.Context, c *gin.Context, account *Account, statusCode int, message string) {
+	if s.accountErrorHistory == nil || account == nil {
+		return
+	}
+
+	event := AccountErrorEvent{
+		AccountID:          account.ID,
+		UpstreamStatusCode: &statusCode,
+		Source:             AccountErrorSourceGateway,
+		Message:            message,
+	}
+	if model, ok := ctx.Value(ctxkey.Model).(string); ok && model != "" {
+		event.Model = &model
+	}
+	// 直接从 gin.Context 读 apiKey（key="api_key"，由 middleware 写入），
+	// 避免 import middleware 造成 service<->middleware 循环依赖。
+	if c != nil {
+		if v, ok := c.Get("api_key"); ok {
+			if apiKey, ok := v.(*APIKey); ok && apiKey != nil && apiKey.User != nil {
+				uid := apiKey.User.ID
+				email := apiKey.User.Email
+				event.UserID = &uid
+				if email != "" {
+					event.UserEmail = &email
+				}
+			}
+		}
+	}
+
+	s.accountErrorHistory.RecordAccountError(ctx, event)
+}
+
 func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account) (*ForwardResult, error) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 
@@ -6891,6 +6981,10 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		Message:            upstreamMsg,
 		Detail:             upstreamDetail,
 	})
+
+	// 账号错误历史（gateway 源，字段齐全）：无条件记录，best-effort 异步、非阻塞。
+	// 即使后续 shouldDisable=false（可恢复/限流）也记录。
+	s.recordGatewayAccountError(ctx, c, account, resp.StatusCode, upstreamMsg)
 
 	// 处理上游错误，标记账号状态
 	shouldDisable := false
@@ -9152,6 +9246,7 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 		}
 		targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
 	}
+	body = sanitizeCountTokensRequestBody(body)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -9246,6 +9341,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if ctEnableCCH {
 		body = signBillingHeaderCCH(body)
 	}
+	body = sanitizeCountTokensRequestBody(body)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -9340,6 +9436,25 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	return req, nil
+}
+
+func sanitizeCountTokensRequestBody(body []byte) []byte {
+	out := body
+	for _, path := range []string{
+		"temperature",
+		"top_p",
+		"top_k",
+		"stream",
+		"stop_sequences",
+		"stop",
+	} {
+		if gjson.GetBytes(out, path).Exists() {
+			if next, ok := deleteJSONPathBytes(out, path); ok {
+				out = next
+			}
+		}
+	}
+	return out
 }
 
 // countTokensError 返回 count_tokens 错误响应
