@@ -1564,6 +1564,29 @@ func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.Account {
 	})
 }
 
+// HasErrorHistories applies the HasEdge predicate on the "error_histories" edge.
+func HasErrorHistories() predicate.Account {
+	return predicate.Account(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ErrorHistoriesTable, ErrorHistoriesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasErrorHistoriesWith applies the HasEdge predicate on the "error_histories" edge with a given conditions (other predicates).
+func HasErrorHistoriesWith(preds ...predicate.AccountErrorHistory) predicate.Account {
+	return predicate.Account(func(s *sql.Selector) {
+		step := newErrorHistoriesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasAccountGroups applies the HasEdge predicate on the "account_groups" edge.
 func HasAccountGroups() predicate.Account {
 	return predicate.Account(func(s *sql.Selector) {

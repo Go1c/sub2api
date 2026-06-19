@@ -55,6 +55,38 @@ server:
     max_upload_buffer_per_stream: 524288
 
 # =============================================================================
+# Geo Blocking (Compliance)
+# 地区拦截（合规）
+# =============================================================================
+# Block website (SPA frontend pages) access from specific regions for compliance.
+# 出于合规目的，按地区拦截「网站前端页面」访问。
+# IMPORTANT: This ONLY affects browser webpage requests. API endpoints are NOT blocked —
+#   relay API (/v1, /v1beta, /responses, /images, /antigravity, /backend-api),
+#   management API (/api/), payment webhooks and /health are always allowed.
+# 重要：仅作用于浏览器网页请求；API 接口不受影响——中转 API（/v1 等）、管理 API（/api/）、
+#   支付 webhook、健康检查一律放行。
+# NOTE: Country detection relies on the real client IP. You MUST configure
+#   server.trusted_proxies above (e.g. ["127.0.0.1"] when fronted by Caddy/Nginx),
+#   otherwise the backend only sees the proxy's internal IP and cannot detect the country
+#   (fail-open: such requests are allowed through).
+# 注意：国家判定依赖真实客户端 IP，必须正确配置上面的 server.trusted_proxies
+#   （例如 Caddy/Nginx 反代时填 ["127.0.0.1"]），否则后端只能看到反代的内网 IP，
+#   无法判定国家（fail-open：这类请求会被放行）。
+geo_block:
+  # Enable region blocking. Default: false.
+  # 是否启用地区拦截。默认：false。
+  enabled: false
+  # ISO 3166-1 alpha-2 country codes to block. Default: ["CN"] (Mainland China).
+  # 需要拦截的国家码（ISO 3166-1 alpha-2）。默认：["CN"]（中国大陆）。
+  countries: ["CN"]
+  # IPs or CIDRs exempt from blocking (e.g. admin / office egress IPs).
+  # Whitelisted clients are always allowed, even from a blocked region. Default: empty.
+  # 豁免拦截的 IP 或 CIDR（如管理员/办公室出口 IP）。命中者即使地处受限地区也始终放行。默认为空。
+  whitelist: []
+    # - "203.0.113.10"
+    # - "198.51.100.0/24"
+
+# =============================================================================
 # Run Mode Configuration
 # 运行模式配置
 # =============================================================================

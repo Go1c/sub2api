@@ -508,20 +508,6 @@ func (r *usageBillingRepository) recordConsumeLedger(ctx context.Context, tx *sq
 	})
 }
 
-func startOfUTCDay(t time.Time) time.Time {
-	u := t.UTC()
-	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
-}
-
-func startOfUTCWeek(t time.Time) time.Time {
-	day := startOfUTCDay(t)
-	weekday := int(day.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	return day.AddDate(0, 0, -(weekday - 1))
-}
-
 func subscriptionQuotaWindowStarts(t time.Time, cfg service.SubscriptionQuotaResetConfig) (time.Time, time.Time) {
 	cfg = service.NormalizeSubscriptionQuotaResetConfig(cfg)
 	offset := time.Duration(cfg.UTCOffsetMinutes) * time.Minute

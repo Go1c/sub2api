@@ -700,9 +700,7 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 
 	var subscriptionErr error
 	if subscription != nil {
-		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err == nil {
-			subscriptionErr = nil
-		} else {
+		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
 			subscriptionErr = err
 			if balanceErr := s.checkBalanceEligibility(ctx, user); balanceErr != nil {
 				if errors.Is(balanceErr, ErrInsufficientBalance) || errors.Is(balanceErr, ErrBalanceUsageGateNotMet) {

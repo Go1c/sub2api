@@ -341,9 +341,11 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.POST("/:id/test", h.Admin.Account.Test)
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
 		accounts.POST("/:id/refresh", h.Admin.Account.Refresh)
+		accounts.POST("/:id/apply-oauth-credentials", h.Admin.Account.ApplyOAuthCredentials)
 		accounts.POST("/:id/set-privacy", h.Admin.Account.SetPrivacy)
 		accounts.POST("/:id/refresh-tier", h.Admin.Account.RefreshTier)
 		accounts.GET("/:id/stats", h.Admin.Account.GetStats)
+		accounts.GET("/:id/error-history", h.Admin.Account.ErrorHistory)
 		accounts.POST("/:id/clear-error", h.Admin.Account.ClearError)
 		accounts.GET("/:id/usage", h.Admin.Account.GetUsage)
 		accounts.GET("/:id/today-stats", h.Admin.Account.GetTodayStats)
@@ -478,6 +480,9 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// 首页模型定价配置
 		adminSettings.GET("/public-model-pricing", h.Admin.Setting.GetPublicModelPricingSettings)
 		adminSettings.PUT("/public-model-pricing", h.Admin.Setting.UpdatePublicModelPricingSettings)
+		// 地区拦截（合规）运行时配置
+		adminSettings.GET("/geo-block", h.Admin.Setting.GetGeoBlockSettings)
+		adminSettings.PUT("/geo-block", h.Admin.Setting.UpdateGeoBlockSettings)
 		// 529过载冷却配置
 		adminSettings.GET("/overload-cooldown", h.Admin.Setting.GetOverloadCooldownSettings)
 		adminSettings.PUT("/overload-cooldown", h.Admin.Setting.UpdateOverloadCooldownSettings)

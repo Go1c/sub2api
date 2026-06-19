@@ -121,6 +121,33 @@ func (_u *APIKeyUpdate) ClearGroupID() *APIKeyUpdate {
 	return _u
 }
 
+// SetFallbackKeyID sets the "fallback_key_id" field.
+func (_u *APIKeyUpdate) SetFallbackKeyID(v int64) *APIKeyUpdate {
+	_u.mutation.ResetFallbackKeyID()
+	_u.mutation.SetFallbackKeyID(v)
+	return _u
+}
+
+// SetNillableFallbackKeyID sets the "fallback_key_id" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableFallbackKeyID(v *int64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetFallbackKeyID(*v)
+	}
+	return _u
+}
+
+// AddFallbackKeyID adds value to the "fallback_key_id" field.
+func (_u *APIKeyUpdate) AddFallbackKeyID(v int64) *APIKeyUpdate {
+	_u.mutation.AddFallbackKeyID(v)
+	return _u
+}
+
+// ClearFallbackKeyID clears the value of the "fallback_key_id" field.
+func (_u *APIKeyUpdate) ClearFallbackKeyID() *APIKeyUpdate {
+	_u.mutation.ClearFallbackKeyID()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *APIKeyUpdate) SetStatus(v string) *APIKeyUpdate {
 	_u.mutation.SetStatus(v)
@@ -630,6 +657,15 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.FallbackKeyID(); ok {
+		_spec.SetField(apikey.FieldFallbackKeyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFallbackKeyID(); ok {
+		_spec.AddField(apikey.FieldFallbackKeyID, field.TypeInt64, value)
+	}
+	if _u.mutation.FallbackKeyIDCleared() {
+		_spec.ClearField(apikey.FieldFallbackKeyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 	}
@@ -986,6 +1022,33 @@ func (_u *APIKeyUpdateOne) SetNillableGroupID(v *int64) *APIKeyUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdateOne) ClearGroupID() *APIKeyUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetFallbackKeyID sets the "fallback_key_id" field.
+func (_u *APIKeyUpdateOne) SetFallbackKeyID(v int64) *APIKeyUpdateOne {
+	_u.mutation.ResetFallbackKeyID()
+	_u.mutation.SetFallbackKeyID(v)
+	return _u
+}
+
+// SetNillableFallbackKeyID sets the "fallback_key_id" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableFallbackKeyID(v *int64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetFallbackKeyID(*v)
+	}
+	return _u
+}
+
+// AddFallbackKeyID adds value to the "fallback_key_id" field.
+func (_u *APIKeyUpdateOne) AddFallbackKeyID(v int64) *APIKeyUpdateOne {
+	_u.mutation.AddFallbackKeyID(v)
+	return _u
+}
+
+// ClearFallbackKeyID clears the value of the "fallback_key_id" field.
+func (_u *APIKeyUpdateOne) ClearFallbackKeyID() *APIKeyUpdateOne {
+	_u.mutation.ClearFallbackKeyID()
 	return _u
 }
 
@@ -1527,6 +1590,15 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.FallbackKeyID(); ok {
+		_spec.SetField(apikey.FieldFallbackKeyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFallbackKeyID(); ok {
+		_spec.AddField(apikey.FieldFallbackKeyID, field.TypeInt64, value)
+	}
+	if _u.mutation.FallbackKeyIDCleared() {
+		_spec.ClearField(apikey.FieldFallbackKeyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)

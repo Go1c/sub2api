@@ -145,7 +145,7 @@ func TestRateLimitService_HandleUpstreamError_OAuth401InvalidatorError(t *testin
 	require.True(t, shouldDisable)
 	require.Equal(t, 0, repo.setErrorCalls)
 	require.Equal(t, 1, repo.tempCalls)
-	require.Equal(t, 1, repo.updateCredentialsCalls)
+	require.Zero(t, repo.updateCredentialsCalls)
 	require.Len(t, invalidator.accounts, 1)
 }
 
@@ -167,7 +167,7 @@ func TestRateLimitService_HandleUpstreamError_NonOAuth401(t *testing.T) {
 	require.Empty(t, invalidator.accounts)
 }
 
-func TestRateLimitService_HandleUpstreamError_OAuth401UsesCredentialsUpdater(t *testing.T) {
+func TestRateLimitService_HandleUpstreamError_OAuth401DoesNotRewriteCredentials(t *testing.T) {
 	repo := &rateLimitAccountRepoStub{}
 	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
 	account := &Account{
@@ -182,6 +182,5 @@ func TestRateLimitService_HandleUpstreamError_OAuth401UsesCredentialsUpdater(t *
 	shouldDisable := service.HandleUpstreamError(context.Background(), account, 401, http.Header{}, []byte("unauthorized"))
 
 	require.True(t, shouldDisable)
-	require.Equal(t, 1, repo.updateCredentialsCalls)
-	require.NotEmpty(t, repo.lastCredentials["expires_at"])
+	require.Zero(t, repo.updateCredentialsCalls)
 }

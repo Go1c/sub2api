@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/accounterrorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
@@ -66,6 +67,7 @@ const (
 	// Node types.
 	TypeAPIKey                        = "APIKey"
 	TypeAccount                       = "Account"
+	TypeAccountErrorHistory           = "AccountErrorHistory"
 	TypeAccountGroup                  = "AccountGroup"
 	TypeAnnouncement                  = "Announcement"
 	TypeAnnouncementRead              = "AnnouncementRead"
@@ -116,6 +118,8 @@ type APIKeyMutation struct {
 	deleted_at                         *time.Time
 	key                                *string
 	name                               *string
+	fallback_key_id                    *int64
+	addfallback_key_id                 *int64
 	status                             *string
 	last_used_at                       *time.Time
 	ip_whitelist                       *[]string
@@ -532,6 +536,76 @@ func (m *APIKeyMutation) GroupIDCleared() bool {
 func (m *APIKeyMutation) ResetGroupID() {
 	m.group = nil
 	delete(m.clearedFields, apikey.FieldGroupID)
+}
+
+// SetFallbackKeyID sets the "fallback_key_id" field.
+func (m *APIKeyMutation) SetFallbackKeyID(i int64) {
+	m.fallback_key_id = &i
+	m.addfallback_key_id = nil
+}
+
+// FallbackKeyID returns the value of the "fallback_key_id" field in the mutation.
+func (m *APIKeyMutation) FallbackKeyID() (r int64, exists bool) {
+	v := m.fallback_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFallbackKeyID returns the old "fallback_key_id" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldFallbackKeyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFallbackKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFallbackKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFallbackKeyID: %w", err)
+	}
+	return oldValue.FallbackKeyID, nil
+}
+
+// AddFallbackKeyID adds i to the "fallback_key_id" field.
+func (m *APIKeyMutation) AddFallbackKeyID(i int64) {
+	if m.addfallback_key_id != nil {
+		*m.addfallback_key_id += i
+	} else {
+		m.addfallback_key_id = &i
+	}
+}
+
+// AddedFallbackKeyID returns the value that was added to the "fallback_key_id" field in this mutation.
+func (m *APIKeyMutation) AddedFallbackKeyID() (r int64, exists bool) {
+	v := m.addfallback_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearFallbackKeyID clears the value of the "fallback_key_id" field.
+func (m *APIKeyMutation) ClearFallbackKeyID() {
+	m.fallback_key_id = nil
+	m.addfallback_key_id = nil
+	m.clearedFields[apikey.FieldFallbackKeyID] = struct{}{}
+}
+
+// FallbackKeyIDCleared returns if the "fallback_key_id" field was cleared in this mutation.
+func (m *APIKeyMutation) FallbackKeyIDCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldFallbackKeyID]
+	return ok
+}
+
+// ResetFallbackKeyID resets all changes to the "fallback_key_id" field.
+func (m *APIKeyMutation) ResetFallbackKeyID() {
+	m.fallback_key_id = nil
+	m.addfallback_key_id = nil
+	delete(m.clearedFields, apikey.FieldFallbackKeyID)
 }
 
 // SetStatus sets the "status" field.
@@ -1589,7 +1663,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1610,6 +1684,9 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, apikey.FieldGroupID)
+	}
+	if m.fallback_key_id != nil {
+		fields = append(fields, apikey.FieldFallbackKeyID)
 	}
 	if m.status != nil {
 		fields = append(fields, apikey.FieldStatus)
@@ -1681,6 +1758,8 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case apikey.FieldGroupID:
 		return m.GroupID()
+	case apikey.FieldFallbackKeyID:
+		return m.FallbackKeyID()
 	case apikey.FieldStatus:
 		return m.Status()
 	case apikey.FieldLastUsedAt:
@@ -1736,6 +1815,8 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldName(ctx)
 	case apikey.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case apikey.FieldFallbackKeyID:
+		return m.OldFallbackKeyID(ctx)
 	case apikey.FieldStatus:
 		return m.OldStatus(ctx)
 	case apikey.FieldLastUsedAt:
@@ -1825,6 +1906,13 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case apikey.FieldFallbackKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFallbackKeyID(v)
 		return nil
 	case apikey.FieldStatus:
 		v, ok := value.(string)
@@ -1946,6 +2034,9 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *APIKeyMutation) AddedFields() []string {
 	var fields []string
+	if m.addfallback_key_id != nil {
+		fields = append(fields, apikey.FieldFallbackKeyID)
+	}
 	if m.addquota != nil {
 		fields = append(fields, apikey.FieldQuota)
 	}
@@ -1978,6 +2069,8 @@ func (m *APIKeyMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case apikey.FieldFallbackKeyID:
+		return m.AddedFallbackKeyID()
 	case apikey.FieldQuota:
 		return m.AddedQuota()
 	case apikey.FieldQuotaUsed:
@@ -2003,6 +2096,13 @@ func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *APIKeyMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case apikey.FieldFallbackKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddFallbackKeyID(v)
+		return nil
 	case apikey.FieldQuota:
 		v, ok := value.(float64)
 		if !ok {
@@ -2073,6 +2173,9 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldGroupID) {
 		fields = append(fields, apikey.FieldGroupID)
 	}
+	if m.FieldCleared(apikey.FieldFallbackKeyID) {
+		fields = append(fields, apikey.FieldFallbackKeyID)
+	}
 	if m.FieldCleared(apikey.FieldLastUsedAt) {
 		fields = append(fields, apikey.FieldLastUsedAt)
 	}
@@ -2113,6 +2216,9 @@ func (m *APIKeyMutation) ClearField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case apikey.FieldFallbackKeyID:
+		m.ClearFallbackKeyID()
 		return nil
 	case apikey.FieldLastUsedAt:
 		m.ClearLastUsedAt()
@@ -2163,6 +2269,9 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case apikey.FieldFallbackKeyID:
+		m.ResetFallbackKeyID()
 		return nil
 	case apikey.FieldStatus:
 		m.ResetStatus()
@@ -2408,6 +2517,9 @@ type AccountMutation struct {
 	usage_logs                map[int64]struct{}
 	removedusage_logs         map[int64]struct{}
 	clearedusage_logs         bool
+	error_histories           map[int64]struct{}
+	removederror_histories    map[int64]struct{}
+	clearederror_histories    bool
 	done                      bool
 	oldValue                  func(context.Context) (*Account, error)
 	predicates                []predicate.Account
@@ -3930,6 +4042,60 @@ func (m *AccountMutation) ResetUsageLogs() {
 	m.removedusage_logs = nil
 }
 
+// AddErrorHistoryIDs adds the "error_histories" edge to the AccountErrorHistory entity by ids.
+func (m *AccountMutation) AddErrorHistoryIDs(ids ...int64) {
+	if m.error_histories == nil {
+		m.error_histories = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.error_histories[ids[i]] = struct{}{}
+	}
+}
+
+// ClearErrorHistories clears the "error_histories" edge to the AccountErrorHistory entity.
+func (m *AccountMutation) ClearErrorHistories() {
+	m.clearederror_histories = true
+}
+
+// ErrorHistoriesCleared reports if the "error_histories" edge to the AccountErrorHistory entity was cleared.
+func (m *AccountMutation) ErrorHistoriesCleared() bool {
+	return m.clearederror_histories
+}
+
+// RemoveErrorHistoryIDs removes the "error_histories" edge to the AccountErrorHistory entity by IDs.
+func (m *AccountMutation) RemoveErrorHistoryIDs(ids ...int64) {
+	if m.removederror_histories == nil {
+		m.removederror_histories = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.error_histories, ids[i])
+		m.removederror_histories[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedErrorHistories returns the removed IDs of the "error_histories" edge to the AccountErrorHistory entity.
+func (m *AccountMutation) RemovedErrorHistoriesIDs() (ids []int64) {
+	for id := range m.removederror_histories {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ErrorHistoriesIDs returns the "error_histories" edge IDs in the mutation.
+func (m *AccountMutation) ErrorHistoriesIDs() (ids []int64) {
+	for id := range m.error_histories {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetErrorHistories resets all changes to the "error_histories" edge.
+func (m *AccountMutation) ResetErrorHistories() {
+	m.error_histories = nil
+	m.clearederror_histories = false
+	m.removederror_histories = nil
+}
+
 // Where appends a list predicates to the AccountMutation builder.
 func (m *AccountMutation) Where(ps ...predicate.Account) {
 	m.predicates = append(m.predicates, ps...)
@@ -4666,7 +4832,7 @@ func (m *AccountMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *AccountMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.groups != nil {
 		edges = append(edges, account.EdgeGroups)
 	}
@@ -4675,6 +4841,9 @@ func (m *AccountMutation) AddedEdges() []string {
 	}
 	if m.usage_logs != nil {
 		edges = append(edges, account.EdgeUsageLogs)
+	}
+	if m.error_histories != nil {
+		edges = append(edges, account.EdgeErrorHistories)
 	}
 	return edges
 }
@@ -4699,18 +4868,27 @@ func (m *AccountMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case account.EdgeErrorHistories:
+		ids := make([]ent.Value, 0, len(m.error_histories))
+		for id := range m.error_histories {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *AccountMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedgroups != nil {
 		edges = append(edges, account.EdgeGroups)
 	}
 	if m.removedusage_logs != nil {
 		edges = append(edges, account.EdgeUsageLogs)
+	}
+	if m.removederror_histories != nil {
+		edges = append(edges, account.EdgeErrorHistories)
 	}
 	return edges
 }
@@ -4731,13 +4909,19 @@ func (m *AccountMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case account.EdgeErrorHistories:
+		ids := make([]ent.Value, 0, len(m.removederror_histories))
+		for id := range m.removederror_histories {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *AccountMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.clearedgroups {
 		edges = append(edges, account.EdgeGroups)
 	}
@@ -4746,6 +4930,9 @@ func (m *AccountMutation) ClearedEdges() []string {
 	}
 	if m.clearedusage_logs {
 		edges = append(edges, account.EdgeUsageLogs)
+	}
+	if m.clearederror_histories {
+		edges = append(edges, account.EdgeErrorHistories)
 	}
 	return edges
 }
@@ -4760,6 +4947,8 @@ func (m *AccountMutation) EdgeCleared(name string) bool {
 		return m.clearedproxy
 	case account.EdgeUsageLogs:
 		return m.clearedusage_logs
+	case account.EdgeErrorHistories:
+		return m.clearederror_histories
 	}
 	return false
 }
@@ -4788,8 +4977,1152 @@ func (m *AccountMutation) ResetEdge(name string) error {
 	case account.EdgeUsageLogs:
 		m.ResetUsageLogs()
 		return nil
+	case account.EdgeErrorHistories:
+		m.ResetErrorHistories()
+		return nil
 	}
 	return fmt.Errorf("unknown Account edge %s", name)
+}
+
+// AccountErrorHistoryMutation represents an operation that mutates the AccountErrorHistory nodes in the graph.
+type AccountErrorHistoryMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int64
+	user_id                 *int64
+	adduser_id              *int64
+	user_email              *string
+	model                   *string
+	upstream_status_code    *int
+	addupstream_status_code *int
+	source                  *accounterrorhistory.Source
+	message                 *string
+	fingerprint             *string
+	dup_count               *int
+	adddup_count            *int
+	created_at              *time.Time
+	updated_at              *time.Time
+	clearedFields           map[string]struct{}
+	account                 *int64
+	clearedaccount          bool
+	done                    bool
+	oldValue                func(context.Context) (*AccountErrorHistory, error)
+	predicates              []predicate.AccountErrorHistory
+}
+
+var _ ent.Mutation = (*AccountErrorHistoryMutation)(nil)
+
+// accounterrorhistoryOption allows management of the mutation configuration using functional options.
+type accounterrorhistoryOption func(*AccountErrorHistoryMutation)
+
+// newAccountErrorHistoryMutation creates new mutation for the AccountErrorHistory entity.
+func newAccountErrorHistoryMutation(c config, op Op, opts ...accounterrorhistoryOption) *AccountErrorHistoryMutation {
+	m := &AccountErrorHistoryMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAccountErrorHistory,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAccountErrorHistoryID sets the ID field of the mutation.
+func withAccountErrorHistoryID(id int64) accounterrorhistoryOption {
+	return func(m *AccountErrorHistoryMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AccountErrorHistory
+		)
+		m.oldValue = func(ctx context.Context) (*AccountErrorHistory, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AccountErrorHistory.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAccountErrorHistory sets the old AccountErrorHistory of the mutation.
+func withAccountErrorHistory(node *AccountErrorHistory) accounterrorhistoryOption {
+	return func(m *AccountErrorHistoryMutation) {
+		m.oldValue = func(context.Context) (*AccountErrorHistory, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AccountErrorHistoryMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AccountErrorHistoryMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AccountErrorHistoryMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AccountErrorHistoryMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AccountErrorHistory.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetAccountID sets the "account_id" field.
+func (m *AccountErrorHistoryMutation) SetAccountID(i int64) {
+	m.account = &i
+}
+
+// AccountID returns the value of the "account_id" field in the mutation.
+func (m *AccountErrorHistoryMutation) AccountID() (r int64, exists bool) {
+	v := m.account
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAccountID returns the old "account_id" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldAccountID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAccountID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAccountID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAccountID: %w", err)
+	}
+	return oldValue.AccountID, nil
+}
+
+// ResetAccountID resets all changes to the "account_id" field.
+func (m *AccountErrorHistoryMutation) ResetAccountID() {
+	m.account = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *AccountErrorHistoryMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *AccountErrorHistoryMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldUserID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *AccountErrorHistoryMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *AccountErrorHistoryMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (m *AccountErrorHistoryMutation) ClearUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+	m.clearedFields[accounterrorhistory.FieldUserID] = struct{}{}
+}
+
+// UserIDCleared returns if the "user_id" field was cleared in this mutation.
+func (m *AccountErrorHistoryMutation) UserIDCleared() bool {
+	_, ok := m.clearedFields[accounterrorhistory.FieldUserID]
+	return ok
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *AccountErrorHistoryMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+	delete(m.clearedFields, accounterrorhistory.FieldUserID)
+}
+
+// SetUserEmail sets the "user_email" field.
+func (m *AccountErrorHistoryMutation) SetUserEmail(s string) {
+	m.user_email = &s
+}
+
+// UserEmail returns the value of the "user_email" field in the mutation.
+func (m *AccountErrorHistoryMutation) UserEmail() (r string, exists bool) {
+	v := m.user_email
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserEmail returns the old "user_email" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldUserEmail(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserEmail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserEmail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserEmail: %w", err)
+	}
+	return oldValue.UserEmail, nil
+}
+
+// ClearUserEmail clears the value of the "user_email" field.
+func (m *AccountErrorHistoryMutation) ClearUserEmail() {
+	m.user_email = nil
+	m.clearedFields[accounterrorhistory.FieldUserEmail] = struct{}{}
+}
+
+// UserEmailCleared returns if the "user_email" field was cleared in this mutation.
+func (m *AccountErrorHistoryMutation) UserEmailCleared() bool {
+	_, ok := m.clearedFields[accounterrorhistory.FieldUserEmail]
+	return ok
+}
+
+// ResetUserEmail resets all changes to the "user_email" field.
+func (m *AccountErrorHistoryMutation) ResetUserEmail() {
+	m.user_email = nil
+	delete(m.clearedFields, accounterrorhistory.FieldUserEmail)
+}
+
+// SetModel sets the "model" field.
+func (m *AccountErrorHistoryMutation) SetModel(s string) {
+	m.model = &s
+}
+
+// Model returns the value of the "model" field in the mutation.
+func (m *AccountErrorHistoryMutation) Model() (r string, exists bool) {
+	v := m.model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModel returns the old "model" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldModel(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return oldValue.Model, nil
+}
+
+// ClearModel clears the value of the "model" field.
+func (m *AccountErrorHistoryMutation) ClearModel() {
+	m.model = nil
+	m.clearedFields[accounterrorhistory.FieldModel] = struct{}{}
+}
+
+// ModelCleared returns if the "model" field was cleared in this mutation.
+func (m *AccountErrorHistoryMutation) ModelCleared() bool {
+	_, ok := m.clearedFields[accounterrorhistory.FieldModel]
+	return ok
+}
+
+// ResetModel resets all changes to the "model" field.
+func (m *AccountErrorHistoryMutation) ResetModel() {
+	m.model = nil
+	delete(m.clearedFields, accounterrorhistory.FieldModel)
+}
+
+// SetUpstreamStatusCode sets the "upstream_status_code" field.
+func (m *AccountErrorHistoryMutation) SetUpstreamStatusCode(i int) {
+	m.upstream_status_code = &i
+	m.addupstream_status_code = nil
+}
+
+// UpstreamStatusCode returns the value of the "upstream_status_code" field in the mutation.
+func (m *AccountErrorHistoryMutation) UpstreamStatusCode() (r int, exists bool) {
+	v := m.upstream_status_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamStatusCode returns the old "upstream_status_code" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldUpstreamStatusCode(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamStatusCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamStatusCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamStatusCode: %w", err)
+	}
+	return oldValue.UpstreamStatusCode, nil
+}
+
+// AddUpstreamStatusCode adds i to the "upstream_status_code" field.
+func (m *AccountErrorHistoryMutation) AddUpstreamStatusCode(i int) {
+	if m.addupstream_status_code != nil {
+		*m.addupstream_status_code += i
+	} else {
+		m.addupstream_status_code = &i
+	}
+}
+
+// AddedUpstreamStatusCode returns the value that was added to the "upstream_status_code" field in this mutation.
+func (m *AccountErrorHistoryMutation) AddedUpstreamStatusCode() (r int, exists bool) {
+	v := m.addupstream_status_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearUpstreamStatusCode clears the value of the "upstream_status_code" field.
+func (m *AccountErrorHistoryMutation) ClearUpstreamStatusCode() {
+	m.upstream_status_code = nil
+	m.addupstream_status_code = nil
+	m.clearedFields[accounterrorhistory.FieldUpstreamStatusCode] = struct{}{}
+}
+
+// UpstreamStatusCodeCleared returns if the "upstream_status_code" field was cleared in this mutation.
+func (m *AccountErrorHistoryMutation) UpstreamStatusCodeCleared() bool {
+	_, ok := m.clearedFields[accounterrorhistory.FieldUpstreamStatusCode]
+	return ok
+}
+
+// ResetUpstreamStatusCode resets all changes to the "upstream_status_code" field.
+func (m *AccountErrorHistoryMutation) ResetUpstreamStatusCode() {
+	m.upstream_status_code = nil
+	m.addupstream_status_code = nil
+	delete(m.clearedFields, accounterrorhistory.FieldUpstreamStatusCode)
+}
+
+// SetSource sets the "source" field.
+func (m *AccountErrorHistoryMutation) SetSource(a accounterrorhistory.Source) {
+	m.source = &a
+}
+
+// Source returns the value of the "source" field in the mutation.
+func (m *AccountErrorHistoryMutation) Source() (r accounterrorhistory.Source, exists bool) {
+	v := m.source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSource returns the old "source" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldSource(ctx context.Context) (v accounterrorhistory.Source, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSource: %w", err)
+	}
+	return oldValue.Source, nil
+}
+
+// ResetSource resets all changes to the "source" field.
+func (m *AccountErrorHistoryMutation) ResetSource() {
+	m.source = nil
+}
+
+// SetMessage sets the "message" field.
+func (m *AccountErrorHistoryMutation) SetMessage(s string) {
+	m.message = &s
+}
+
+// Message returns the value of the "message" field in the mutation.
+func (m *AccountErrorHistoryMutation) Message() (r string, exists bool) {
+	v := m.message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMessage returns the old "message" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldMessage(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMessage: %w", err)
+	}
+	return oldValue.Message, nil
+}
+
+// ClearMessage clears the value of the "message" field.
+func (m *AccountErrorHistoryMutation) ClearMessage() {
+	m.message = nil
+	m.clearedFields[accounterrorhistory.FieldMessage] = struct{}{}
+}
+
+// MessageCleared returns if the "message" field was cleared in this mutation.
+func (m *AccountErrorHistoryMutation) MessageCleared() bool {
+	_, ok := m.clearedFields[accounterrorhistory.FieldMessage]
+	return ok
+}
+
+// ResetMessage resets all changes to the "message" field.
+func (m *AccountErrorHistoryMutation) ResetMessage() {
+	m.message = nil
+	delete(m.clearedFields, accounterrorhistory.FieldMessage)
+}
+
+// SetFingerprint sets the "fingerprint" field.
+func (m *AccountErrorHistoryMutation) SetFingerprint(s string) {
+	m.fingerprint = &s
+}
+
+// Fingerprint returns the value of the "fingerprint" field in the mutation.
+func (m *AccountErrorHistoryMutation) Fingerprint() (r string, exists bool) {
+	v := m.fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFingerprint returns the old "fingerprint" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldFingerprint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFingerprint: %w", err)
+	}
+	return oldValue.Fingerprint, nil
+}
+
+// ClearFingerprint clears the value of the "fingerprint" field.
+func (m *AccountErrorHistoryMutation) ClearFingerprint() {
+	m.fingerprint = nil
+	m.clearedFields[accounterrorhistory.FieldFingerprint] = struct{}{}
+}
+
+// FingerprintCleared returns if the "fingerprint" field was cleared in this mutation.
+func (m *AccountErrorHistoryMutation) FingerprintCleared() bool {
+	_, ok := m.clearedFields[accounterrorhistory.FieldFingerprint]
+	return ok
+}
+
+// ResetFingerprint resets all changes to the "fingerprint" field.
+func (m *AccountErrorHistoryMutation) ResetFingerprint() {
+	m.fingerprint = nil
+	delete(m.clearedFields, accounterrorhistory.FieldFingerprint)
+}
+
+// SetDupCount sets the "dup_count" field.
+func (m *AccountErrorHistoryMutation) SetDupCount(i int) {
+	m.dup_count = &i
+	m.adddup_count = nil
+}
+
+// DupCount returns the value of the "dup_count" field in the mutation.
+func (m *AccountErrorHistoryMutation) DupCount() (r int, exists bool) {
+	v := m.dup_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDupCount returns the old "dup_count" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldDupCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDupCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDupCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDupCount: %w", err)
+	}
+	return oldValue.DupCount, nil
+}
+
+// AddDupCount adds i to the "dup_count" field.
+func (m *AccountErrorHistoryMutation) AddDupCount(i int) {
+	if m.adddup_count != nil {
+		*m.adddup_count += i
+	} else {
+		m.adddup_count = &i
+	}
+}
+
+// AddedDupCount returns the value that was added to the "dup_count" field in this mutation.
+func (m *AccountErrorHistoryMutation) AddedDupCount() (r int, exists bool) {
+	v := m.adddup_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDupCount resets all changes to the "dup_count" field.
+func (m *AccountErrorHistoryMutation) ResetDupCount() {
+	m.dup_count = nil
+	m.adddup_count = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AccountErrorHistoryMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AccountErrorHistoryMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AccountErrorHistoryMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *AccountErrorHistoryMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *AccountErrorHistoryMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the AccountErrorHistory entity.
+// If the AccountErrorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountErrorHistoryMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *AccountErrorHistoryMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearAccount clears the "account" edge to the Account entity.
+func (m *AccountErrorHistoryMutation) ClearAccount() {
+	m.clearedaccount = true
+	m.clearedFields[accounterrorhistory.FieldAccountID] = struct{}{}
+}
+
+// AccountCleared reports if the "account" edge to the Account entity was cleared.
+func (m *AccountErrorHistoryMutation) AccountCleared() bool {
+	return m.clearedaccount
+}
+
+// AccountIDs returns the "account" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// AccountID instead. It exists only for internal usage by the builders.
+func (m *AccountErrorHistoryMutation) AccountIDs() (ids []int64) {
+	if id := m.account; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAccount resets all changes to the "account" edge.
+func (m *AccountErrorHistoryMutation) ResetAccount() {
+	m.account = nil
+	m.clearedaccount = false
+}
+
+// Where appends a list predicates to the AccountErrorHistoryMutation builder.
+func (m *AccountErrorHistoryMutation) Where(ps ...predicate.AccountErrorHistory) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AccountErrorHistoryMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AccountErrorHistoryMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AccountErrorHistory, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AccountErrorHistoryMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AccountErrorHistoryMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AccountErrorHistory).
+func (m *AccountErrorHistoryMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AccountErrorHistoryMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.account != nil {
+		fields = append(fields, accounterrorhistory.FieldAccountID)
+	}
+	if m.user_id != nil {
+		fields = append(fields, accounterrorhistory.FieldUserID)
+	}
+	if m.user_email != nil {
+		fields = append(fields, accounterrorhistory.FieldUserEmail)
+	}
+	if m.model != nil {
+		fields = append(fields, accounterrorhistory.FieldModel)
+	}
+	if m.upstream_status_code != nil {
+		fields = append(fields, accounterrorhistory.FieldUpstreamStatusCode)
+	}
+	if m.source != nil {
+		fields = append(fields, accounterrorhistory.FieldSource)
+	}
+	if m.message != nil {
+		fields = append(fields, accounterrorhistory.FieldMessage)
+	}
+	if m.fingerprint != nil {
+		fields = append(fields, accounterrorhistory.FieldFingerprint)
+	}
+	if m.dup_count != nil {
+		fields = append(fields, accounterrorhistory.FieldDupCount)
+	}
+	if m.created_at != nil {
+		fields = append(fields, accounterrorhistory.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, accounterrorhistory.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AccountErrorHistoryMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case accounterrorhistory.FieldAccountID:
+		return m.AccountID()
+	case accounterrorhistory.FieldUserID:
+		return m.UserID()
+	case accounterrorhistory.FieldUserEmail:
+		return m.UserEmail()
+	case accounterrorhistory.FieldModel:
+		return m.Model()
+	case accounterrorhistory.FieldUpstreamStatusCode:
+		return m.UpstreamStatusCode()
+	case accounterrorhistory.FieldSource:
+		return m.Source()
+	case accounterrorhistory.FieldMessage:
+		return m.Message()
+	case accounterrorhistory.FieldFingerprint:
+		return m.Fingerprint()
+	case accounterrorhistory.FieldDupCount:
+		return m.DupCount()
+	case accounterrorhistory.FieldCreatedAt:
+		return m.CreatedAt()
+	case accounterrorhistory.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AccountErrorHistoryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case accounterrorhistory.FieldAccountID:
+		return m.OldAccountID(ctx)
+	case accounterrorhistory.FieldUserID:
+		return m.OldUserID(ctx)
+	case accounterrorhistory.FieldUserEmail:
+		return m.OldUserEmail(ctx)
+	case accounterrorhistory.FieldModel:
+		return m.OldModel(ctx)
+	case accounterrorhistory.FieldUpstreamStatusCode:
+		return m.OldUpstreamStatusCode(ctx)
+	case accounterrorhistory.FieldSource:
+		return m.OldSource(ctx)
+	case accounterrorhistory.FieldMessage:
+		return m.OldMessage(ctx)
+	case accounterrorhistory.FieldFingerprint:
+		return m.OldFingerprint(ctx)
+	case accounterrorhistory.FieldDupCount:
+		return m.OldDupCount(ctx)
+	case accounterrorhistory.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case accounterrorhistory.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown AccountErrorHistory field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AccountErrorHistoryMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case accounterrorhistory.FieldAccountID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAccountID(v)
+		return nil
+	case accounterrorhistory.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case accounterrorhistory.FieldUserEmail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserEmail(v)
+		return nil
+	case accounterrorhistory.FieldModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModel(v)
+		return nil
+	case accounterrorhistory.FieldUpstreamStatusCode:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamStatusCode(v)
+		return nil
+	case accounterrorhistory.FieldSource:
+		v, ok := value.(accounterrorhistory.Source)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSource(v)
+		return nil
+	case accounterrorhistory.FieldMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMessage(v)
+		return nil
+	case accounterrorhistory.FieldFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFingerprint(v)
+		return nil
+	case accounterrorhistory.FieldDupCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDupCount(v)
+		return nil
+	case accounterrorhistory.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case accounterrorhistory.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AccountErrorHistory field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AccountErrorHistoryMutation) AddedFields() []string {
+	var fields []string
+	if m.adduser_id != nil {
+		fields = append(fields, accounterrorhistory.FieldUserID)
+	}
+	if m.addupstream_status_code != nil {
+		fields = append(fields, accounterrorhistory.FieldUpstreamStatusCode)
+	}
+	if m.adddup_count != nil {
+		fields = append(fields, accounterrorhistory.FieldDupCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AccountErrorHistoryMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case accounterrorhistory.FieldUserID:
+		return m.AddedUserID()
+	case accounterrorhistory.FieldUpstreamStatusCode:
+		return m.AddedUpstreamStatusCode()
+	case accounterrorhistory.FieldDupCount:
+		return m.AddedDupCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AccountErrorHistoryMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case accounterrorhistory.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case accounterrorhistory.FieldUpstreamStatusCode:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamStatusCode(v)
+		return nil
+	case accounterrorhistory.FieldDupCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDupCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AccountErrorHistory numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AccountErrorHistoryMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(accounterrorhistory.FieldUserID) {
+		fields = append(fields, accounterrorhistory.FieldUserID)
+	}
+	if m.FieldCleared(accounterrorhistory.FieldUserEmail) {
+		fields = append(fields, accounterrorhistory.FieldUserEmail)
+	}
+	if m.FieldCleared(accounterrorhistory.FieldModel) {
+		fields = append(fields, accounterrorhistory.FieldModel)
+	}
+	if m.FieldCleared(accounterrorhistory.FieldUpstreamStatusCode) {
+		fields = append(fields, accounterrorhistory.FieldUpstreamStatusCode)
+	}
+	if m.FieldCleared(accounterrorhistory.FieldMessage) {
+		fields = append(fields, accounterrorhistory.FieldMessage)
+	}
+	if m.FieldCleared(accounterrorhistory.FieldFingerprint) {
+		fields = append(fields, accounterrorhistory.FieldFingerprint)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AccountErrorHistoryMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AccountErrorHistoryMutation) ClearField(name string) error {
+	switch name {
+	case accounterrorhistory.FieldUserID:
+		m.ClearUserID()
+		return nil
+	case accounterrorhistory.FieldUserEmail:
+		m.ClearUserEmail()
+		return nil
+	case accounterrorhistory.FieldModel:
+		m.ClearModel()
+		return nil
+	case accounterrorhistory.FieldUpstreamStatusCode:
+		m.ClearUpstreamStatusCode()
+		return nil
+	case accounterrorhistory.FieldMessage:
+		m.ClearMessage()
+		return nil
+	case accounterrorhistory.FieldFingerprint:
+		m.ClearFingerprint()
+		return nil
+	}
+	return fmt.Errorf("unknown AccountErrorHistory nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AccountErrorHistoryMutation) ResetField(name string) error {
+	switch name {
+	case accounterrorhistory.FieldAccountID:
+		m.ResetAccountID()
+		return nil
+	case accounterrorhistory.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case accounterrorhistory.FieldUserEmail:
+		m.ResetUserEmail()
+		return nil
+	case accounterrorhistory.FieldModel:
+		m.ResetModel()
+		return nil
+	case accounterrorhistory.FieldUpstreamStatusCode:
+		m.ResetUpstreamStatusCode()
+		return nil
+	case accounterrorhistory.FieldSource:
+		m.ResetSource()
+		return nil
+	case accounterrorhistory.FieldMessage:
+		m.ResetMessage()
+		return nil
+	case accounterrorhistory.FieldFingerprint:
+		m.ResetFingerprint()
+		return nil
+	case accounterrorhistory.FieldDupCount:
+		m.ResetDupCount()
+		return nil
+	case accounterrorhistory.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case accounterrorhistory.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AccountErrorHistory field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AccountErrorHistoryMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.account != nil {
+		edges = append(edges, accounterrorhistory.EdgeAccount)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AccountErrorHistoryMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case accounterrorhistory.EdgeAccount:
+		if id := m.account; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AccountErrorHistoryMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AccountErrorHistoryMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AccountErrorHistoryMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedaccount {
+		edges = append(edges, accounterrorhistory.EdgeAccount)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AccountErrorHistoryMutation) EdgeCleared(name string) bool {
+	switch name {
+	case accounterrorhistory.EdgeAccount:
+		return m.clearedaccount
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AccountErrorHistoryMutation) ClearEdge(name string) error {
+	switch name {
+	case accounterrorhistory.EdgeAccount:
+		m.ClearAccount()
+		return nil
+	}
+	return fmt.Errorf("unknown AccountErrorHistory unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AccountErrorHistoryMutation) ResetEdge(name string) error {
+	switch name {
+	case accounterrorhistory.EdgeAccount:
+		m.ResetAccount()
+		return nil
+	}
+	return fmt.Errorf("unknown AccountErrorHistory edge %s", name)
 }
 
 // AccountGroupMutation represents an operation that mutates the AccountGroup nodes in the graph.

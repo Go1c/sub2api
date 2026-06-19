@@ -439,6 +439,24 @@
           </Select>
         </div>
 
+        <!-- Fallback Key Section -->
+        <div>
+          <label class="input-label">{{ t('keys.fallbackKeyLabel') }}</label>
+          <Select
+            v-model="formData.fallback_key_id"
+            :options="fallbackKeyOptions"
+            :placeholder="t('keys.fallbackKeyPlaceholder')"
+            :searchable="true"
+          />
+          <div
+            v-if="formData.fallback_key_id !== null"
+            class="mt-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20"
+          >
+            <Icon name="exclamationTriangle" size="sm" class="mt-0.5 flex-shrink-0 text-red-600 dark:text-red-400" />
+            <p class="text-sm text-red-600 dark:text-red-400">{{ t('keys.fallbackKeyDanger') }}</p>
+          </div>
+        </div>
+
         <!-- Custom Key Section (only for create) -->
         <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
@@ -1110,6 +1128,8 @@ const columns = computed<Column[]>(() => [
 ])
 
 const apiKeys = ref<ApiKey[]>([])
+// 兜底密钥候选：用户自己的全部密钥（单独拉一页较大 pageSize，避免列表分页导致候选不全）
+const fallbackCandidates = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
 const loading = ref(false)
 const submitting = ref(false)
@@ -1168,6 +1188,7 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
 const formData = ref({
   name: '',
   group_id: null as number | null,
+  fallback_key_id: null as number | null,
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1250,6 +1271,19 @@ const groupOptions = computed(() =>
     platform: group.platform
   }))
 )
+
+// 兜底密钥下拉选项：含「不设置」空选项；排除当前编辑的 key 自身、排除 inactive 的 key
+const fallbackKeyOptions = computed(() => {
+  const options: Array<{ value: number | null; label: string }> = [
+    { value: null, label: t('keys.fallbackKeyNone') }
+  ]
+  for (const key of fallbackCandidates.value) {
+    if (key.status === 'inactive') continue
+    if (showEditModal.value && selectedKey.value && key.id === selectedKey.value.id) continue
+    options.push({ value: key.id, label: key.name })
+  }
+  return options
+})
 
 // Group dropdown search
 const groupSearchQuery = ref('')
@@ -1340,6 +1374,16 @@ const loadGroups = async () => {
   }
 }
 
+// 拉取兜底密钥候选（一页较大 pageSize，避免主列表分页导致候选不全）
+const loadFallbackCandidates = async () => {
+  try {
+    const response = await keysAPI.list(1, 200)
+    fallbackCandidates.value = response.items
+  } catch (error) {
+    console.error('Failed to load fallback key candidates:', error)
+  }
+}
+
 const loadUserGroupRates = async () => {
   try {
     userGroupRates.value = await userGroupsAPI.getUserGroupRates()
@@ -1391,6 +1435,7 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
+    fallback_key_id: key.fallback_key_id ?? null,
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1542,6 +1587,8 @@ const handleSubmit = async () => {
       await keysAPI.update(selectedKey.value.id, {
         name: formData.value.name,
         group_id: formData.value.group_id,
+        // 编辑时总下发：选「不设置」传 null 以清除兜底密钥
+        fallback_key_id: formData.value.fallback_key_id,
         status: formData.value.status,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
@@ -1562,7 +1609,8 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData
+        rateLimitData,
+        formData.value.fallback_key_id
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1608,6 +1656,7 @@ const closeModals = () => {
   formData.value = {
     name: '',
     group_id: null,
+    fallback_key_id: null,
     status: 'active',
     use_custom_key: false,
     custom_key: '',
@@ -1763,6 +1812,7 @@ function formatResetTime(resetAt: string | null): string {
 onMounted(() => {
   loadApiKeys()
   loadGroups()
+  loadFallbackCandidates()
   loadUserGroupRates()
   loadPublicSettings()
   document.addEventListener('click', closeGroupSelector)

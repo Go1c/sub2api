@@ -670,6 +670,10 @@ export default {
     namePlaceholder: '我的 API 密鑰',
     groupLabel: '分組',
     selectGroup: '選擇分組',
+    fallbackKeyLabel: '兜底密鑰',
+    fallbackKeyPlaceholder: '選擇一把兜底密鑰（可選）',
+    fallbackKeyNone: '不設定',
+    fallbackKeyDanger: '危險操作：當本密鑰所在分組的上游帳號全部不可用時，系統會自動改用所選兜底密鑰轉發請求並按其計費。請務必確認兩把密鑰的平台/類型完全一致（如同為 Claude），否則請求會失敗（例如一個是 Claude、一個是 Codex 將無法互轉）。',
     statusLabel: '狀態',
     selectStatus: '選擇狀態',
     saving: '保存中...',
@@ -4045,6 +4049,30 @@ export default {
       // Stats Modal
       viewStats: '查看統計',
       usageStatistics: '使用統計',
+      errorHistory: {
+        menu: '錯誤歷史',
+        title: '錯誤歷史',
+        subtitle: '最近 20 條錯誤記錄',
+        empty: '暫無錯誤記錄',
+        dupHint: '該錯誤在短時間內重複了 {count} 次',
+        columns: {
+          time: '時間',
+          userEmail: '使用者信箱',
+          model: '模型',
+          statusCode: '狀態碼',
+          source: '來源',
+          message: '錯誤訊息',
+          count: '次數'
+        },
+        sources: {
+          gateway: '閘道',
+          test: '測試',
+          ratelimit: '限流',
+          refresh: '刷新',
+          schedule: '定時',
+          admin: '管理'
+        }
+      },
       last30DaysUsage: '近30天使用統計（日均基於實際使用天數）',
       stats: {
         totalCost: '30天總費用',
@@ -6407,6 +6435,22 @@ export default {
           testFailed: 'Google Drive 存儲測試失敗'
         }
       },
+      geoBlock: {
+        title: '地理攔截',
+        description: '按訪問來源的國家或地區攔截網頁訪問，API 調用不受影響',
+        enabled: '啟用地理攔截',
+        enabledHint: '開啟後，命中以下國家碼且不在白名單內的來源將無法訪問網頁',
+        countries: '攔截國家 / 地區',
+        countriesHint: '使用 ISO 3166-1 alpha-2 國家碼（如 CN），命中即攔截',
+        countriesPlaceholder: '輸入國家碼',
+        countriesInputHint: '輸入兩位字母國家碼後按回車添加，自動轉為大寫；點擊標籤上的 × 可刪除',
+        whitelist: 'IP / CIDR 白名單',
+        whitelistHint: '白名單內的 IP 或網段始終放行，不受地理攔截限制',
+        whitelistPlaceholder: '輸入 IP 或 CIDR',
+        whitelistInputHint: '支持單個 IP（如 203.0.113.10）或 CIDR 網段（如 198.51.100.0/24），輸入後按回車添加',
+        saved: '地理攔截設置保存成功',
+        saveFailed: '保存地理攔截設置失敗'
+      },
       overloadCooldown: {
         title: '529 過載冷卻',
         description: '配置上游返回 529（過載）時的賬號調度暫停策略',
@@ -7221,7 +7265,8 @@ export default {
     balancePaymentInsufficient: '餘額不足，當前套餐至少需要 ${required}',
     groupFallback: '分組 #{id}',
     rechargeAccount: '充值賬戶',
-    rechargeExchangeRule: '充值規則：用戶充值 1 元人民幣 = 1 美元賬戶餘額',
+    creditUnit: '積分',
+    rechargeExchangeRule: '充值規則：1 積分 (Credit) = 1 美元額度',
     invoiceNotice: '開票須知：此價格不含稅，最低 1% 稅點，稅點可以選擇從賬戶餘額扣除。',
     activeSubscription: '當前訂閱',
     noActiveSubscription: '暫無有效訂閱',
@@ -7235,7 +7280,7 @@ export default {
     amountTooLow: '最低金額為 {min}',
     amountTooHigh: '最高金額為 {max}',
     amountNoMethod: '該金額沒有可用的支付方式',
-    rechargeRatePreview: '當前倍率：1 CNY = {usd} USD',
+    rechargeRatePreview: '當前倍率：1 積分 = {usd} 美元額度',
     purchaseNotice: '購買須知',
     refundReason: '退款原因',
     refundReasonPlaceholder: '請描述您的退款原因',

@@ -52,6 +52,7 @@ func TestCodexResetAtRFC3339(t *testing.T) {
 		got := codexResetAtRFC3339(base, &sec)
 		if got == nil {
 			t.Fatal("expected non-nil")
+			return
 		}
 		if *got != "2026-02-16T10:01:30Z" {
 			t.Fatalf("got %s, want %s", *got, "2026-02-16T10:01:30Z")
@@ -63,6 +64,7 @@ func TestCodexResetAtRFC3339(t *testing.T) {
 		got := codexResetAtRFC3339(base, &sec)
 		if got == nil {
 			t.Fatal("expected non-nil")
+			return
 		}
 		if *got != "2026-02-16T10:00:00Z" {
 			t.Fatalf("got %s, want %s", *got, "2026-02-16T10:00:00Z")
@@ -101,6 +103,40 @@ func TestBuildCodexUsageExtraUpdates_UsesSnapshotUpdatedAt(t *testing.T) {
 	}
 	if got := updates["codex_7d_reset_at"]; got != "2026-02-17T10:00:00Z" {
 		t.Fatalf("codex_7d_reset_at = %v, want %s", got, "2026-02-17T10:00:00Z")
+	}
+}
+
+func TestBuildCodexUsageExtraUpdates_NormalizesFiveHourRemainingToUsedPercent(t *testing.T) {
+	primaryUsed := 93.0
+	primaryReset := 86400
+	primaryWindow := 10080
+	secondaryRemaining := 6.0
+	secondaryReset := 3600
+	secondaryWindow := 300
+
+	snapshot := &OpenAICodexUsageSnapshot{
+		PrimaryUsedPercent:         &primaryUsed,
+		PrimaryResetAfterSeconds:   &primaryReset,
+		PrimaryWindowMinutes:       &primaryWindow,
+		SecondaryUsedPercent:       &secondaryRemaining,
+		SecondaryResetAfterSeconds: &secondaryReset,
+		SecondaryWindowMinutes:     &secondaryWindow,
+		UpdatedAt:                  "2026-05-30T07:04:09Z",
+	}
+
+	updates := buildCodexUsageExtraUpdates(snapshot, time.Time{})
+	if updates == nil {
+		t.Fatal("expected non-nil updates")
+	}
+
+	if got := updates["codex_secondary_used_percent"]; got != 6.0 {
+		t.Fatalf("codex_secondary_used_percent = %v, want raw upstream value 6", got)
+	}
+	if got := updates["codex_5h_used_percent"]; got != 94.0 {
+		t.Fatalf("codex_5h_used_percent = %v, want 94", got)
+	}
+	if got := updates["codex_7d_used_percent"]; got != 93.0 {
+		t.Fatalf("codex_7d_used_percent = %v, want 93", got)
 	}
 }
 

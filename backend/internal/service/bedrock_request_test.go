@@ -379,6 +379,66 @@ func TestPrepareBedrockRequestBody_BetaFiltering(t *testing.T) {
 	})
 }
 
+func TestPrepareBedrockRequestBodyWithTokens_ContextManagementRequiresSupportedBeta(t *testing.T) {
+	modelID := "us.anthropic.claude-opus-4-6-v1"
+
+	t.Run("strips context_management when final tokens omit context-management beta", func(t *testing.T) {
+		input := `{
+			"messages":[{"role":"user","content":"hi"}],
+			"max_tokens":100,
+			"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all"}]}
+		}`
+		betaTokens := []string{"context-1m-2025-08-07"}
+		originalTokens := append([]string(nil), betaTokens...)
+
+		result, err := PrepareBedrockRequestBodyWithTokens([]byte(input), modelID, betaTokens)
+		require.NoError(t, err)
+
+		assert.False(t, gjson.GetBytes(result, "context_management").Exists())
+		assert.Equal(t, originalTokens, betaTokens)
+		assert.Equal(t, originalTokens, bedrockAnthropicBetaNames(result))
+	})
+
+	t.Run("leaves body without context_management otherwise intact", func(t *testing.T) {
+		input := `{"messages":[{"role":"user","content":"hi"}],"max_tokens":100}`
+
+		result, err := PrepareBedrockRequestBodyWithTokens([]byte(input), modelID, nil)
+		require.NoError(t, err)
+
+		assert.False(t, gjson.GetBytes(result, "context_management").Exists())
+		assert.False(t, gjson.GetBytes(result, "anthropic_beta").Exists())
+		assert.Equal(t, "hi", gjson.GetBytes(result, "messages.0.content").String())
+		assert.Equal(t, int64(100), gjson.GetBytes(result, "max_tokens").Int())
+	})
+
+	t.Run("keeps context_management when final tokens include context-management beta", func(t *testing.T) {
+		input := `{
+			"messages":[{"role":"user","content":"hi"}],
+			"max_tokens":100,
+			"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all"}]}
+		}`
+
+		result, err := PrepareBedrockRequestBodyWithTokens(
+			[]byte(input),
+			modelID,
+			[]string{bedrockContextManagementBetaToken, "context-1m-2025-08-07"},
+		)
+		require.NoError(t, err)
+
+		assert.True(t, gjson.GetBytes(result, "context_management").Exists())
+		assert.Equal(t, []string{bedrockContextManagementBetaToken, "context-1m-2025-08-07"}, bedrockAnthropicBetaNames(result))
+	})
+}
+
+func bedrockAnthropicBetaNames(body []byte) []string {
+	arr := gjson.GetBytes(body, "anthropic_beta").Array()
+	names := make([]string, len(arr))
+	for i, token := range arr {
+		names[i] = token.String()
+	}
+	return names
+}
+
 func TestBedrockCrossRegionPrefix(t *testing.T) {
 	tests := []struct {
 		region string
@@ -656,4 +716,85 @@ func TestAdjustBedrockModelRegionPrefix(t *testing.T) {
 			assert.Equal(t, tt.expect, AdjustBedrockModelRegionPrefix(tt.modelID, tt.region))
 		})
 	}
+}
+
+func TestSanitizeBedrockThinking(t *testing.T) {
+	t.Run("Fable 5 将 enabled 转换为 adaptive 并移除预算", func(t *testing.T) {
+		input := `{"thinking":{"type":"enabled","budget_tokens":10000},"messages":[]}`
+		result := sanitizeBedrockThinking([]byte(input), "anthropic.claude-fable-5")
+		assert.Equal(t, "adaptive", gjson.GetBytes(result, "thinking.type").String())
+		assert.False(t, gjson.GetBytes(result, "thinking.budget_tokens").Exists())
+	})
+
+	t.Run("opus 4.7 converts enabled to adaptive", func(t *testing.T) {
+		input := `{"thinking":{"type":"enabled","budget_tokens":10000},"messages":[]}`
+		result := sanitizeBedrockThinking([]byte(input), "us.anthropic.claude-opus-4-7-v1")
+		assert.Equal(t, "adaptive", gjson.GetBytes(result, "thinking.type").String())
+		assert.False(t, gjson.GetBytes(result, "thinking.budget_tokens").Exists())
+	})
+
+	t.Run("opus 4.8 converts enabled to adaptive", func(t *testing.T) {
+		input := `{"thinking":{"type":"enabled","budget_tokens":10000},"messages":[]}`
+		result := sanitizeBedrockThinking([]byte(input), "us.anthropic.claude-opus-4-8-v1")
+		assert.Equal(t, "adaptive", gjson.GetBytes(result, "thinking.type").String())
+		assert.False(t, gjson.GetBytes(result, "thinking.budget_tokens").Exists())
+	})
+
+	t.Run("opus 4.6 enabled without budget_tokens gets default", func(t *testing.T) {
+		input := `{"thinking":{"type":"enabled"},"messages":[]}`
+		result := sanitizeBedrockThinking([]byte(input), "us.anthropic.claude-opus-4-6-v1")
+		assert.Equal(t, "enabled", gjson.GetBytes(result, "thinking.type").String())
+		assert.Equal(t, int64(defaultThinkingBudgetTokens), gjson.GetBytes(result, "thinking.budget_tokens").Int())
+	})
+
+	t.Run("no thinking field unchanged", func(t *testing.T) {
+		input := `{"messages":[]}`
+		result := sanitizeBedrockThinking([]byte(input), "us.anthropic.claude-opus-4-7-v1")
+		assert.JSONEq(t, input, string(result))
+	})
+}
+
+func TestSanitizeBedrockToolUseIDs(t *testing.T) {
+	t.Run("clean IDs unchanged", func(t *testing.T) {
+		input := `{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01AbCdEf","name":"bash","input":{}}]}]}`
+		result := sanitizeBedrockToolUseIDs([]byte(input))
+		assert.Equal(t, "toolu_01AbCdEf", gjson.GetBytes(result, "messages.0.content.0.id").String())
+	})
+
+	t.Run("special chars in tool_use ID sanitized", func(t *testing.T) {
+		input := `{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"toolu:01@Ab#Cd","name":"bash","input":{}}]}]}`
+		result := sanitizeBedrockToolUseIDs([]byte(input))
+		id := gjson.GetBytes(result, "messages.0.content.0.id").String()
+		assert.Regexp(t, `^[a-zA-Z0-9_-]+$`, id)
+	})
+
+	t.Run("tool_result tool_use_id sanitized", func(t *testing.T) {
+		input := `{"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu.01.Ab","content":"ok"}]}]}`
+		result := sanitizeBedrockToolUseIDs([]byte(input))
+		assert.Equal(t, "toolu_01_Ab", gjson.GetBytes(result, "messages.0.content.0.tool_use_id").String())
+	})
+}
+
+// TestSanitizeBedrockCCFields 验证 fork 改造版：删 service_tier/interface_geo、注入 max_tokens，
+// 但 context_management 不再由它删除（交给 sanitizeBedrockFieldsForBetaTokens 按 beta token 决定）。
+func TestSanitizeBedrockCCFields(t *testing.T) {
+	t.Run("删 service_tier/interface_geo，注入 max_tokens", func(t *testing.T) {
+		input := `{"service_tier":"auto","interface_geo":"us","messages":[]}`
+		result := sanitizeBedrockCCFields([]byte(input))
+		assert.False(t, gjson.GetBytes(result, "service_tier").Exists())
+		assert.False(t, gjson.GetBytes(result, "interface_geo").Exists())
+		assert.Equal(t, int64(defaultCCMaxTokens), gjson.GetBytes(result, "max_tokens").Int())
+	})
+
+	t.Run("已有 max_tokens 不覆盖", func(t *testing.T) {
+		input := `{"max_tokens":4096,"messages":[]}`
+		result := sanitizeBedrockCCFields([]byte(input))
+		assert.Equal(t, int64(4096), gjson.GetBytes(result, "max_tokens").Int())
+	})
+
+	t.Run("context_management 不被本函数删除", func(t *testing.T) {
+		input := `{"context_management":{"edits":[]},"messages":[]}`
+		result := sanitizeBedrockCCFields([]byte(input))
+		assert.True(t, gjson.GetBytes(result, "context_management").Exists())
+	})
 }
