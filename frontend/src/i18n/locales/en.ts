@@ -2216,6 +2216,11 @@ export default {
         hint: 'Triggered only when upstream explicitly returns prompt too long. Leave empty to disable fallback.',
         noFallback: 'No Fallback'
       },
+      exhaustedAccountsFallback: {
+        title: 'Exhausted Accounts Fallback Group',
+        hint: 'When all accounts in the current group are unavailable (rate-limited, model capacity exhausted, etc.), automatically retry with this fallback group. Must be an active group on the same platform without chained fallback. Leave empty to disable.',
+        noFallback: 'No Fallback'
+      },
       copyAccounts: {
         title: 'Copy Accounts from Groups',
         tooltip: 'Select one or more groups of the same platform. After creation, all accounts from these groups will be automatically bound to the new group (deduplicated).',

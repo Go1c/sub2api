@@ -228,6 +228,10 @@ func (s *groupRepoStub) ExistsByName(ctx context.Context, name string) (bool, er
 	panic("unexpected ExistsByName call")
 }
 
+func (s *groupRepoStub) CountExhaustedFallbackReferers(context.Context, int64) (int64, error) {
+	return 0, nil
+}
+
 func (s *groupRepoStub) GetAccountCount(ctx context.Context, groupID int64) (int64, int64, error) {
 	panic("unexpected GetAccountCount call")
 }

@@ -25,7 +25,8 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 
 	requestStart := time.Now()
 
-	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	// 使用可变 currentAPIKey 以支持运行时分组兜底
+	currentAPIKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		h.responsesErrorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
@@ -40,8 +41,8 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		c,
 		"handler.gateway.responses",
 		zap.Int64("user_id", subject.UserID),
-		zap.Int64("api_key_id", apiKey.ID),
-		zap.Any("group_id", apiKey.GroupID),
+		zap.Int64("api_key_id", currentAPIKey.ID),
+		zap.Any("group_id", currentAPIKey.GroupID),
 	)
 
 	// Read request body
@@ -87,7 +88,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	h.captureClientRequest(c, reqModel, body)
 
 	// 解析渠道级模型映射
-	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), currentAPIKey.GroupID, reqModel)
 
 	// Claude Code only restriction:
 	// /v1/responses is never a Claude Code endpoint.
@@ -95,13 +96,13 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	// The existing service-layer checkClaudeCodeRestriction handles degradation
 	// to fallback groups when the Forward path calls SelectAccountForModelWithExclusions.
 	// Here we just reject at handler level since /v1/responses clients can't be Claude Code.
-	if apiKey.Group != nil && apiKey.Group.ClaudeCodeOnly {
+	if currentAPIKey.Group != nil && currentAPIKey.Group.ClaudeCodeOnly {
 		h.responsesErrorResponse(c, http.StatusForbidden, "permission_error",
 			"This group is restricted to Claude Code clients (/v1/messages only)")
 		return
 	}
 
-	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIResponses, reqModel, body); decision != nil && decision.Blocked {
+	if decision := h.checkContentModeration(c, reqLog, currentAPIKey, subject, service.ContentModerationProtocolOpenAIResponses, reqModel, body); decision != nil && decision.Blocked {
 		h.responsesErrorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
 		return
 	}
@@ -112,6 +113,12 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	}
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	// 当前订阅（可能在分组兜底后更新）
+	currentSubscription := subscription
+
+	// 兜底标志（单跳防环）
+	groupFallbackUsed := false
+	keyFallbackUsed := false
 
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 
@@ -150,7 +157,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	}
 
 	// 2. Re-check billing
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), currentAPIKey.User, currentAPIKey, currentAPIKey.Group, currentSubscription); err != nil {
 		reqLog.Info("gateway.responses.billing_check_failed", zap.Error(err))
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -168,7 +175,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	parsedReq.SessionContext = &service.SessionContext{
 		ClientIP:  ip.GetClientIP(c),
 		UserAgent: c.GetHeader("User-Agent"),
-		APIKeyID:  apiKey.ID,
+		APIKeyID:  currentAPIKey.ID,
 	}
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
 
@@ -176,9 +183,30 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	fs := NewFailoverState(h.maxAccountSwitches, false)
 
 	for {
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionHash, reqModel, fs.FailedAccountIDs, "", int64(0))
+		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionHash, reqModel, fs.FailedAccountIDs, "", int64(0))
 		if err != nil {
 			if len(fs.FailedAccountIDs) == 0 {
+				// 上游账号全部不可用：先尝试分组级兜底，再尝试密钥级兜底。
+				if fbKey, fbSub, written := h.tryGroupFallbackResponses(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+					return
+				} else if fbKey != nil {
+					// 分组兜底成功：换 key/订阅，重置 failover，重启选择循环。
+					currentAPIKey = fbKey
+					currentSubscription = fbSub
+					groupFallbackUsed = true
+					fs = NewFailoverState(h.maxAccountSwitches, false)
+					continue
+				}
+				// 分组兜底不可用/未配置：尝试密钥级兜底。
+				if fbKey, fbSub, written := h.tryKeyFallbackResponses(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+					return
+				} else if fbKey != nil {
+					currentAPIKey = fbKey
+					currentSubscription = fbSub
+					keyFallbackUsed = true
+					fs = NewFailoverState(h.maxAccountSwitches, false)
+					continue
+				}
 				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error())
 				return
 			}
@@ -189,6 +217,25 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			case FailoverCanceled:
 				return
 			default:
+				// Failover 耗尽：先尝试分组级兜底，再尝试密钥级兜底。
+				if fbKey, fbSub, written := h.tryGroupFallbackResponses(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+					return
+				} else if fbKey != nil {
+					currentAPIKey = fbKey
+					currentSubscription = fbSub
+					groupFallbackUsed = true
+					fs = NewFailoverState(h.maxAccountSwitches, false)
+					continue
+				}
+				if fbKey, fbSub, written := h.tryKeyFallbackResponses(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+					return
+				} else if fbKey != nil {
+					currentAPIKey = fbKey
+					currentSubscription = fbSub
+					keyFallbackUsed = true
+					fs = NewFailoverState(h.maxAccountSwitches, false)
+					continue
+				}
 				if fs.LastFailoverErr != nil {
 					h.handleResponsesFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
 				} else {
@@ -278,10 +325,10 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 				Result:             result,
-				APIKey:             apiKey,
-				User:               apiKey.User,
+				APIKey:             currentAPIKey,
+				User:               currentAPIKey.User,
 				Account:            account,
-				Subscription:       subscription,
+				Subscription:       currentSubscription,
 				InboundEndpoint:    inboundEndpoint,
 				UpstreamEndpoint:   upstreamEndpoint,
 				UserAgent:          userAgent,

@@ -339,6 +339,7 @@ func TestAPIContracts(t *testing.T) {
 						"allow_messages_dispatch": false,
 						"fallback_group_id": null,
 						"fallback_group_id_on_invalid_request": null,
+						"fallback_group_id_on_exhausted": null,
 						"require_oauth_only": false,
 						"require_privacy_set": false,
 						"rpm_limit": 0,
@@ -1591,6 +1592,10 @@ func (r *stubGroupRepo) ListActiveByPlatform(ctx context.Context, platform strin
 
 func (stubGroupRepo) ExistsByName(ctx context.Context, name string) (bool, error) {
 	return false, errors.New("not implemented")
+}
+
+func (stubGroupRepo) CountExhaustedFallbackReferers(context.Context, int64) (int64, error) {
+	return 0, nil
 }
 
 func (stubGroupRepo) GetAccountCount(ctx context.Context, groupID int64) (int64, int64, error) {

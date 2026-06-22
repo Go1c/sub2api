@@ -556,7 +556,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		fallbackGroupID = apiKey.Group.FallbackGroupIDOnInvalidRequest
 	}
 	fallbackUsed := false
-	keyFallbackUsed := false // 密钥级兜底单跳保护
+	keyFallbackUsed := false       // 密钥级兜底单跳保护
+	groupFallbackUsed := false     // 分组级兜底单跳保护
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -588,7 +589,27 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Bool("fallback_used", fallbackUsed),
 						zap.Error(err),
 					)
-					// 上游账号全部不可用：尝试密钥级兜底（切换整把 key 含计费身份）。
+					// 上游账号全部不可用：先尝试分组级兜底，再尝试密钥级兜底。
+					// 分组级兜底（同 key、换分组、同平台）优先；密钥级兜底（换 key+计费身份）是更大的逃生口。
+					if fbKey, fbSub, written := h.tryGroupFallbackAnthropic(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+						return
+					} else if fbKey != nil {
+						// 分组兜底成功：清除强制平台，换 key/订阅，重置 failover 状态，重启选择循环。
+						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+						c.Request = c.Request.WithContext(ctx)
+						currentAPIKey = fbKey
+						currentSubscription = fbSub
+						// 群组兜底来源跟随新分组
+						if currentAPIKey.Group != nil {
+							fallbackGroupID = currentAPIKey.Group.FallbackGroupIDOnInvalidRequest
+						} else {
+							fallbackGroupID = nil
+						}
+						groupFallbackUsed = true
+						retryWithFallback = true
+						break selectLoop
+					}
+					// 分组兜底不可用/未配置：尝试密钥级兜底（切换整把 key 含计费身份）。
 					if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
 						return
 					} else if fbKey != nil {
@@ -621,7 +642,26 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				case FailoverCanceled:
 					return
 				default: // FailoverExhausted
-					// 上游账号 failover 耗尽：尝试密钥级兜底。
+					// 上游账号 failover 耗尽：先尝试分组级兜底，再尝试密钥级兜底。
+					if fbKey, fbSub, written := h.tryGroupFallbackAnthropic(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+						return
+					} else if fbKey != nil {
+						// 分组兜底成功：清除强制平台，换 key/订阅，重置 failover 状态，重启选择循环。
+						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+						c.Request = c.Request.WithContext(ctx)
+						currentAPIKey = fbKey
+						currentSubscription = fbSub
+						// 群组兜底来源跟随新分组
+						if currentAPIKey.Group != nil {
+							fallbackGroupID = currentAPIKey.Group.FallbackGroupIDOnInvalidRequest
+						} else {
+							fallbackGroupID = nil
+						}
+						groupFallbackUsed = true
+						retryWithFallback = true
+						break selectLoop
+					}
+					// 分组兜底不可用/未配置：尝试密钥级兜底。
 					if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
 						return
 					} else if fbKey != nil {
@@ -1076,6 +1116,29 @@ func (h *GatewayHandler) tryKeyFallback(
 	keyFallbackUsed bool,
 	streamStarted bool,
 ) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryKeyFallbackWithErrWriter(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted, h.claudeBillingErrWriter(c, streamStarted))
+}
+
+// tryKeyFallbackResponses 与 tryKeyFallback 行为一致，但计费错误按 OpenAI Responses 错误格式写出，
+// 供 /v1/responses 链路使用，避免给 Responses 客户端返回 Claude 的 type/error.type schema。
+func (h *GatewayHandler) tryKeyFallbackResponses(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	keyFallbackUsed bool,
+	streamStarted bool,
+) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryKeyFallbackWithErrWriter(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted, h.responsesBillingErrWriter(c, streamStarted))
+}
+
+func (h *GatewayHandler) tryKeyFallbackWithErrWriter(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	keyFallbackUsed bool,
+	streamStarted bool,
+	writeBillingErr func(status int, code, message string, retryAfter int),
+) (*service.APIKey, *service.UserSubscription, bool) {
 	if keyFallbackUsed || currentAPIKey == nil || currentAPIKey.FallbackKeyID == nil || *currentAPIKey.FallbackKeyID <= 0 {
 		return nil, nil, false
 	}
@@ -1115,14 +1178,11 @@ func (h *GatewayHandler) tryKeyFallback(
 
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackKey.User, fallbackKey, fallbackKey.Group, fallbackSubscription); err != nil {
 		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
 		reqLog.Warn("gateway.fallback_key_billing_ineligible",
 			zap.Int64("fallback_key_id", fallbackKey.ID),
 			zap.Error(err),
 		)
-		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+		writeBillingErr(status, code, message, retryAfter)
 		return nil, nil, true
 	}
 
@@ -1132,6 +1192,91 @@ func (h *GatewayHandler) tryKeyFallback(
 		zap.Int64p("to_group_id", fallbackKey.GroupID),
 	)
 	return fallbackKey, fallbackSubscription, false
+}
+
+// tryGroupFallbackAnthropic 尝试分组级兜底（Anthropic/Antigravity/Responses 链路专用）。
+// 当前分组 A 的上游账号全部不可用时，切换到分组 A 配置的兜底分组 B 重试。
+// 返回值：
+//   - APIKey: 克隆到兜底分组 B 的 API Key（nil 表示无兜底）
+//   - Subscription: 重新解析的兜底分组 B 的订阅（可能为 nil，按余额计费）
+//   - ErrorWritten: true 表示已写错误响应，调用方必须立即 return
+func (h *GatewayHandler) tryGroupFallbackAnthropic(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	groupFallbackUsed bool,
+	streamStarted bool,
+) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryGroupFallbackWithErrWriter(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted, h.claudeBillingErrWriter(c, streamStarted))
+}
+
+// tryGroupFallbackResponses 与 tryGroupFallbackAnthropic 行为一致，但计费错误按 OpenAI Responses
+// 错误格式写出，供 /v1/responses 链路使用，避免给 Responses 客户端返回 Claude 的错误 schema。
+func (h *GatewayHandler) tryGroupFallbackResponses(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	groupFallbackUsed bool,
+	streamStarted bool,
+) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryGroupFallbackWithErrWriter(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted, h.responsesBillingErrWriter(c, streamStarted))
+}
+
+func (h *GatewayHandler) tryGroupFallbackWithErrWriter(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	groupFallbackUsed bool,
+	streamStarted bool,
+	writeBillingErr func(status int, code, message string, retryAfter int),
+) (*service.APIKey, *service.UserSubscription, bool) {
+	result := tryGroupFallback(
+		c.Request.Context(),
+		reqLog,
+		currentAPIKey,
+		groupFallbackUsed,
+		streamStarted,
+		// resolveGroup: 使用 GatewayService 的 ResolveGroupByID
+		func(ctx context.Context, groupID int64) (*service.Group, error) {
+			return h.gatewayService.ResolveGroupByID(ctx, groupID)
+		},
+		// resolveSubscription: 重用现有的 resolveFallbackSubscription
+		func(ctx context.Context, key *service.APIKey, group *service.Group) *service.UserSubscription {
+			return h.resolveFallbackSubscription(ctx, reqLog, key)
+		},
+		// checkBilling: 使用 BillingCacheService 的 CheckBillingEligibility
+		func(ctx context.Context, user *service.User, key *service.APIKey, group *service.Group, sub *service.UserSubscription) error {
+			return h.billingCacheService.CheckBillingEligibility(ctx, user, key, group, sub)
+		},
+		// writeBillingErr: 按调用链路的协议格式写入计费错误
+		writeBillingErr,
+	)
+	return result.APIKey, result.Subscription, result.ErrorWritten
+}
+
+// claudeBillingErrWriter 返回写 Claude/Anthropic 错误格式（流感知）的计费错误写入器。
+func (h *GatewayHandler) claudeBillingErrWriter(c *gin.Context, streamStarted bool) func(status int, code, message string, retryAfter int) {
+	return func(status int, code, message string, retryAfter int) {
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+	}
+}
+
+// responsesBillingErrWriter 返回写 OpenAI Responses 错误格式的计费错误写入器。
+// 兜底仅在流开始前发生（tryGroupFallback/tryKeyFallback 的 streamStarted 守卫保证），
+// 这里仍保留守卫：流已开始则不再写 JSON 错误体，避免污染响应。
+func (h *GatewayHandler) responsesBillingErrWriter(c *gin.Context, streamStarted bool) func(status int, code, message string, retryAfter int) {
+	return func(status int, code, message string, retryAfter int) {
+		if streamStarted {
+			return
+		}
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.responsesErrorResponse(c, status, code, message)
+	}
 }
 
 // resolveFallbackSubscription best-effort 解析兜底密钥（fallbackKey）的用户额度池订阅，

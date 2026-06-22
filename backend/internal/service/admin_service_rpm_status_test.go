@@ -37,6 +37,10 @@ func (s *rpmStatusGroupRepoStub) GetByIDLite(_ context.Context, id int64) (*Grou
 	return s.groups[id], nil
 }
 
+func (s *rpmStatusGroupRepoStub) CountExhaustedFallbackReferers(context.Context, int64) (int64, error) {
+	return 0, nil
+}
+
 type rpmStatusRateRepoStub struct {
 	UserGroupRateRepository
 	overrides map[int64]*int

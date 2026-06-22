@@ -213,6 +213,8 @@ type CreateGroupInput struct {
 	FallbackGroupID      *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
+	// 账号全部不可用时兜底分组 ID
+	FallbackGroupIDOnExhausted *int64
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64
 	ModelRoutingEnabled bool // 是否启用模型路由
@@ -255,6 +257,8 @@ type UpdateGroupInput struct {
 	FallbackGroupID      *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
+	// 账号全部不可用时兜底分组 ID
+	FallbackGroupIDOnExhausted *int64
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64
 	ModelRoutingEnabled *bool // 是否启用模型路由
@@ -1958,6 +1962,17 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 	}
 
+	// 校验账号全部不可用时兜底分组
+	fallbackOnExhausted := input.FallbackGroupIDOnExhausted
+	if fallbackOnExhausted != nil && *fallbackOnExhausted <= 0 {
+		fallbackOnExhausted = nil
+	}
+	if fallbackOnExhausted != nil {
+		if err := s.validateFallbackGroupOnExhausted(ctx, 0, platform, *fallbackOnExhausted); err != nil {
+			return nil, err
+		}
+	}
+
 	// MCPXMLInject：默认为 true，仅当显式传入 false 时关闭
 	mcpXMLInject := true
 	if input.MCPXMLInject != nil {
@@ -2016,6 +2031,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
 		FallbackGroupID:                 input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
+		FallbackGroupIDOnExhausted:      fallbackOnExhausted,
 		ModelRouting:                    input.ModelRouting,
 		MCPXMLInject:                    mcpXMLInject,
 		SupportedModelScopes:            input.SupportedModelScopes,
@@ -2149,6 +2165,49 @@ func (s *adminServiceImpl) validateFallbackGroupOnInvalidRequest(ctx context.Con
 	return nil
 }
 
+// validateFallbackGroupOnExhausted 校验账号全部不可用时兜底分组的有效性
+// currentGroupID: 当前分组 ID（新建时为 0）
+// platform: 当前分组的有效平台
+// fallbackGroupID: 兜底分组 ID
+func (s *adminServiceImpl) validateFallbackGroupOnExhausted(ctx context.Context, currentGroupID int64, platform string, fallbackGroupID int64) error {
+	// 仅 anthropic/antigravity 链路在运行时真正消费该字段（见 gateway_handler 的 Messages/Responses 循环）；
+	// 其它平台保存了也不会生效，直接拒绝以免出现「能配但不生效」的假配置。
+	if platform != PlatformAnthropic && platform != PlatformAntigravity {
+		return fmt.Errorf("exhausted accounts fallback only supported for anthropic or antigravity groups")
+	}
+	if currentGroupID > 0 && currentGroupID == fallbackGroupID {
+		return fmt.Errorf("cannot set self as exhausted accounts fallback group")
+	}
+
+	// 防兜底链（反向）：若当前分组已被其它分组设为兜底目标（A -> 当前），
+	// 则当前分组不得再设兜底目标，否则会形成 A -> 当前 -> C，运行时会拒绝使用导致 A 的兜底静默失效。
+	// 新建分组（currentGroupID == 0）尚无任何引用，跳过反向检查。
+	if currentGroupID > 0 {
+		referers, err := s.groupRepo.CountExhaustedFallbackReferers(ctx, currentGroupID)
+		if err != nil {
+			return fmt.Errorf("failed to check exhausted fallback referers: %w", err)
+		}
+		if referers > 0 {
+			return fmt.Errorf("cannot set exhausted accounts fallback: this group is already used as a fallback target by another group (no chaining allowed)")
+		}
+	}
+
+	fallbackGroup, err := s.groupRepo.GetByIDLite(ctx, fallbackGroupID)
+	if err != nil {
+		return fmt.Errorf("fallback group not found: %w", err)
+	}
+	if !fallbackGroup.IsActive() {
+		return fmt.Errorf("fallback group must be active")
+	}
+	if fallbackGroup.Platform != platform {
+		return fmt.Errorf("fallback group must have same platform as source group (expected %s, got %s)", platform, fallbackGroup.Platform)
+	}
+	if fallbackGroup.FallbackGroupIDOnExhausted != nil {
+		return fmt.Errorf("fallback group cannot have exhausted accounts fallback configured (no chaining allowed)")
+	}
+	return nil
+}
+
 func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error) {
 	group, err := s.groupRepo.GetByID(ctx, id)
 	if err != nil {
@@ -2239,6 +2298,22 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 	}
 	group.FallbackGroupIDOnInvalidRequest = fallbackOnInvalidRequest
+
+	// 处理账号全部不可用时兜底分组
+	fallbackOnExhausted := group.FallbackGroupIDOnExhausted
+	if input.FallbackGroupIDOnExhausted != nil {
+		if *input.FallbackGroupIDOnExhausted > 0 {
+			fallbackOnExhausted = input.FallbackGroupIDOnExhausted
+		} else {
+			fallbackOnExhausted = nil
+		}
+	}
+	if fallbackOnExhausted != nil {
+		if err := s.validateFallbackGroupOnExhausted(ctx, id, group.Platform, *fallbackOnExhausted); err != nil {
+			return nil, err
+		}
+	}
+	group.FallbackGroupIDOnExhausted = fallbackOnExhausted
 
 	// 模型路由配置
 	if input.ModelRouting != nil {

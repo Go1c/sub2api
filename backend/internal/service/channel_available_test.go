@@ -53,6 +53,9 @@ func (s *stubGroupRepoForAvailable) ListActiveByPlatform(ctx context.Context, pl
 func (s *stubGroupRepoForAvailable) ExistsByName(ctx context.Context, name string) (bool, error) {
 	return false, nil
 }
+func (s *stubGroupRepoForAvailable) CountExhaustedFallbackReferers(context.Context, int64) (int64, error) {
+	return 0, nil
+}
 func (s *stubGroupRepoForAvailable) GetAccountCount(ctx context.Context, groupID int64) (int64, int64, error) {
 	return 0, 0, nil
 }

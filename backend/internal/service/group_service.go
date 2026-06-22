@@ -28,6 +28,9 @@ type GroupRepository interface {
 
 	ExistsByName(ctx context.Context, name string) (bool, error)
 	GetAccountCount(ctx context.Context, groupID int64) (total int64, active int64, err error)
+	// CountExhaustedFallbackReferers 返回将指定分组设为「账号耗尽兜底」目标的其它分组数量，
+	// 用于在配置时阻止形成兜底链（A -> 当前 -> C）。
+	CountExhaustedFallbackReferers(ctx context.Context, groupID int64) (int64, error)
 	DeleteAccountGroupsByGroupID(ctx context.Context, groupID int64) (int64, error)
 	// GetAccountIDsByGroupIDs 获取多个分组的所有账号 ID（去重）
 	GetAccountIDsByGroupIDs(ctx context.Context, groupIDs []int64) ([]int64, error)

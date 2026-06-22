@@ -2300,6 +2300,11 @@ export default {
         hint: '仅当上游明确返回 prompt too long 时才会触发，留空表示不兜底',
         noFallback: '不兜底'
       },
+      exhaustedAccountsFallback: {
+        title: '账号全部不可用时兜底分组',
+        hint: '当前分组所有账号都不可用（限流/模型容量耗尽等）时，自动切换到此分组重试。兜底分组必须是同平台、未配置链式兜底的活跃分组。留空表示不兜底',
+        noFallback: '不兜底'
+      },
       copyAccounts: {
         title: '从分组复制账号',
         tooltip: '选择一个或多个相同平台的分组，创建后会自动将这些分组的所有账号绑定到新分组（去重）。',

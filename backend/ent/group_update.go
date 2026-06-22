@@ -474,6 +474,33 @@ func (_u *GroupUpdate) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdate {
 	return _u
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdate) SetFallbackGroupIDOnExhausted(v int64) *GroupUpdate {
+	_u.mutation.ResetFallbackGroupIDOnExhausted()
+	_u.mutation.SetFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// SetNillableFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableFallbackGroupIDOnExhausted(v *int64) *GroupUpdate {
+	if v != nil {
+		_u.SetFallbackGroupIDOnExhausted(*v)
+	}
+	return _u
+}
+
+// AddFallbackGroupIDOnExhausted adds value to the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdate) AddFallbackGroupIDOnExhausted(v int64) *GroupUpdate {
+	_u.mutation.AddFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdate) ClearFallbackGroupIDOnExhausted() *GroupUpdate {
+	_u.mutation.ClearFallbackGroupIDOnExhausted()
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdate) SetModelRouting(v map[string][]int64) *GroupUpdate {
 	_u.mutation.SetModelRouting(v)
@@ -1121,6 +1148,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.FallbackGroupIDOnExhausted(); ok {
+		_spec.SetField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFallbackGroupIDOnExhausted(); ok {
+		_spec.AddField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if _u.mutation.FallbackGroupIDOnExhaustedCleared() {
+		_spec.ClearField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -1968,6 +2004,33 @@ func (_u *GroupUpdateOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdateOne
 	return _u
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdateOne) SetFallbackGroupIDOnExhausted(v int64) *GroupUpdateOne {
+	_u.mutation.ResetFallbackGroupIDOnExhausted()
+	_u.mutation.SetFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// SetNillableFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableFallbackGroupIDOnExhausted(v *int64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetFallbackGroupIDOnExhausted(*v)
+	}
+	return _u
+}
+
+// AddFallbackGroupIDOnExhausted adds value to the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdateOne) AddFallbackGroupIDOnExhausted(v int64) *GroupUpdateOne {
+	_u.mutation.AddFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdateOne) ClearFallbackGroupIDOnExhausted() *GroupUpdateOne {
+	_u.mutation.ClearFallbackGroupIDOnExhausted()
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdateOne) SetModelRouting(v map[string][]int64) *GroupUpdateOne {
 	_u.mutation.SetModelRouting(v)
@@ -2645,6 +2708,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.FallbackGroupIDOnExhausted(); ok {
+		_spec.SetField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFallbackGroupIDOnExhausted(); ok {
+		_spec.AddField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if _u.mutation.FallbackGroupIDOnExhaustedCleared() {
+		_spec.ClearField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)

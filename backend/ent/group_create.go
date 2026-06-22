@@ -344,6 +344,20 @@ func (_c *GroupCreate) SetNillableFallbackGroupIDOnInvalidRequest(v *int64) *Gro
 	return _c
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (_c *GroupCreate) SetFallbackGroupIDOnExhausted(v int64) *GroupCreate {
+	_c.mutation.SetFallbackGroupIDOnExhausted(v)
+	return _c
+}
+
+// SetNillableFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableFallbackGroupIDOnExhausted(v *int64) *GroupCreate {
+	if v != nil {
+		_c.SetFallbackGroupIDOnExhausted(*v)
+	}
+	return _c
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_c *GroupCreate) SetModelRouting(v map[string][]int64) *GroupCreate {
 	_c.mutation.SetModelRouting(v)
@@ -957,6 +971,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64, value)
 		_node.FallbackGroupIDOnInvalidRequest = &value
 	}
+	if value, ok := _c.mutation.FallbackGroupIDOnExhausted(); ok {
+		_spec.SetField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+		_node.FallbackGroupIDOnExhausted = &value
+	}
 	if value, ok := _c.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
 		_node.ModelRouting = value
@@ -1564,6 +1582,30 @@ func (u *GroupUpsert) AddFallbackGroupIDOnInvalidRequest(v int64) *GroupUpsert {
 // ClearFallbackGroupIDOnInvalidRequest clears the value of the "fallback_group_id_on_invalid_request" field.
 func (u *GroupUpsert) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsert {
 	u.SetNull(group.FieldFallbackGroupIDOnInvalidRequest)
+	return u
+}
+
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsert) SetFallbackGroupIDOnExhausted(v int64) *GroupUpsert {
+	u.Set(group.FieldFallbackGroupIDOnExhausted, v)
+	return u
+}
+
+// UpdateFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateFallbackGroupIDOnExhausted() *GroupUpsert {
+	u.SetExcluded(group.FieldFallbackGroupIDOnExhausted)
+	return u
+}
+
+// AddFallbackGroupIDOnExhausted adds v to the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsert) AddFallbackGroupIDOnExhausted(v int64) *GroupUpsert {
+	u.Add(group.FieldFallbackGroupIDOnExhausted, v)
+	return u
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsert) ClearFallbackGroupIDOnExhausted() *GroupUpsert {
+	u.SetNull(group.FieldFallbackGroupIDOnExhausted)
 	return u
 }
 
@@ -2226,6 +2268,34 @@ func (u *GroupUpsertOne) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertOne
 func (u *GroupUpsertOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertOne) SetFallbackGroupIDOnExhausted(v int64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// AddFallbackGroupIDOnExhausted adds v to the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertOne) AddFallbackGroupIDOnExhausted(v int64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// UpdateFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateFallbackGroupIDOnExhausted() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateFallbackGroupIDOnExhausted()
+	})
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertOne) ClearFallbackGroupIDOnExhausted() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearFallbackGroupIDOnExhausted()
 	})
 }
 
@@ -3081,6 +3151,34 @@ func (u *GroupUpsertBulk) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertBu
 func (u *GroupUpsertBulk) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertBulk) SetFallbackGroupIDOnExhausted(v int64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// AddFallbackGroupIDOnExhausted adds v to the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertBulk) AddFallbackGroupIDOnExhausted(v int64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// UpdateFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateFallbackGroupIDOnExhausted() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateFallbackGroupIDOnExhausted()
+	})
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertBulk) ClearFallbackGroupIDOnExhausted() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearFallbackGroupIDOnExhausted()
 	})
 }
 
