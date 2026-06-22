@@ -2170,8 +2170,26 @@ func (s *adminServiceImpl) validateFallbackGroupOnInvalidRequest(ctx context.Con
 // platform: 当前分组的有效平台
 // fallbackGroupID: 兜底分组 ID
 func (s *adminServiceImpl) validateFallbackGroupOnExhausted(ctx context.Context, currentGroupID int64, platform string, fallbackGroupID int64) error {
+	// 仅 anthropic/antigravity 链路在运行时真正消费该字段（见 gateway_handler 的 Messages/Responses 循环）；
+	// 其它平台保存了也不会生效，直接拒绝以免出现「能配但不生效」的假配置。
+	if platform != PlatformAnthropic && platform != PlatformAntigravity {
+		return fmt.Errorf("exhausted accounts fallback only supported for anthropic or antigravity groups")
+	}
 	if currentGroupID > 0 && currentGroupID == fallbackGroupID {
 		return fmt.Errorf("cannot set self as exhausted accounts fallback group")
+	}
+
+	// 防兜底链（反向）：若当前分组已被其它分组设为兜底目标（A -> 当前），
+	// 则当前分组不得再设兜底目标，否则会形成 A -> 当前 -> C，运行时会拒绝使用导致 A 的兜底静默失效。
+	// 新建分组（currentGroupID == 0）尚无任何引用，跳过反向检查。
+	if currentGroupID > 0 {
+		referers, err := s.groupRepo.CountExhaustedFallbackReferers(ctx, currentGroupID)
+		if err != nil {
+			return fmt.Errorf("failed to check exhausted fallback referers: %w", err)
+		}
+		if referers > 0 {
+			return fmt.Errorf("cannot set exhausted accounts fallback: this group is already used as a fallback target by another group (no chaining allowed)")
+		}
 	}
 
 	fallbackGroup, err := s.groupRepo.GetByIDLite(ctx, fallbackGroupID)

@@ -1330,8 +1330,11 @@
           </p>
         </div>
 
-        <!-- 账号全部不可用时兜底（所有平台） -->
-        <div class="border-t pt-4">
+        <!-- 账号全部不可用时兜底（仅 anthropic/antigravity，与运行时生效平台一致） -->
+        <div
+          v-if="['anthropic', 'antigravity'].includes(createForm.platform)"
+          class="border-t pt-4"
+        >
           <label class="input-label">{{
             t("admin.groups.exhaustedAccountsFallback.title")
           }}</label>
@@ -2560,13 +2563,16 @@
           </p>
         </div>
 
-        <!-- 账号全部不可用时兜底（所有平台） -->
-        <div class="border-t pt-4">
+        <!-- 账号全部不可用时兜底（仅 anthropic/antigravity，与运行时生效平台一致） -->
+        <div
+          v-if="['anthropic', 'antigravity'].includes(editForm.platform)"
+          class="border-t pt-4"
+        >
           <label class="input-label">{{
             t("admin.groups.exhaustedAccountsFallback.title")
           }}</label>
           <Select
-            v-model="createForm.fallback_group_id_on_exhausted"
+            v-model="editForm.fallback_group_id_on_exhausted"
             :options="exhaustedAccountsFallbackOptions"
             :placeholder="t('admin.groups.exhaustedAccountsFallback.noFallback')"
           />

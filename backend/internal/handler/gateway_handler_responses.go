@@ -187,7 +187,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		if err != nil {
 			if len(fs.FailedAccountIDs) == 0 {
 				// 上游账号全部不可用：先尝试分组级兜底，再尝试密钥级兜底。
-				if fbKey, fbSub, written := h.tryGroupFallbackAnthropic(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+				if fbKey, fbSub, written := h.tryGroupFallbackResponses(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
 					return
 				} else if fbKey != nil {
 					// 分组兜底成功：换 key/订阅，重置 failover，重启选择循环。
@@ -198,7 +198,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 					continue
 				}
 				// 分组兜底不可用/未配置：尝试密钥级兜底。
-				if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+				if fbKey, fbSub, written := h.tryKeyFallbackResponses(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
 					return
 				} else if fbKey != nil {
 					currentAPIKey = fbKey
@@ -218,7 +218,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 				return
 			default:
 				// Failover 耗尽：先尝试分组级兜底，再尝试密钥级兜底。
-				if fbKey, fbSub, written := h.tryGroupFallbackAnthropic(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+				if fbKey, fbSub, written := h.tryGroupFallbackResponses(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
 					return
 				} else if fbKey != nil {
 					currentAPIKey = fbKey
@@ -227,7 +227,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 					fs = NewFailoverState(h.maxAccountSwitches, false)
 					continue
 				}
-				if fbKey, fbSub, written := h.tryKeyFallback(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
+				if fbKey, fbSub, written := h.tryKeyFallbackResponses(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted); written {
 					return
 				} else if fbKey != nil {
 					currentAPIKey = fbKey

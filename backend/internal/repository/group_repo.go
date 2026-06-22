@@ -501,6 +501,18 @@ func (r *groupRepository) ExistsByIDs(ctx context.Context, ids []int64) (map[int
 	return result, nil
 }
 
+// CountExhaustedFallbackReferers 返回将指定分组设为「账号耗尽兜底」目标的其它分组数量。
+// 用于在配置时阻止形成兜底链：若当前分组已被引用，则不允许它再设兜底目标。
+func (r *groupRepository) CountExhaustedFallbackReferers(ctx context.Context, groupID int64) (int64, error) {
+	n, err := r.client.Group.Query().
+		Where(group.FallbackGroupIDOnExhaustedEQ(groupID)).
+		Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int64(n), nil
+}
+
 func (r *groupRepository) GetAccountCount(ctx context.Context, groupID int64) (total int64, active int64, err error) {
 	var rateLimited int64
 	err = scanSingleRow(ctx, r.sql,

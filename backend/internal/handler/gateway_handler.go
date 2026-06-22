@@ -1116,6 +1116,29 @@ func (h *GatewayHandler) tryKeyFallback(
 	keyFallbackUsed bool,
 	streamStarted bool,
 ) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryKeyFallbackWithErrWriter(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted, h.claudeBillingErrWriter(c, streamStarted))
+}
+
+// tryKeyFallbackResponses 与 tryKeyFallback 行为一致，但计费错误按 OpenAI Responses 错误格式写出，
+// 供 /v1/responses 链路使用，避免给 Responses 客户端返回 Claude 的 type/error.type schema。
+func (h *GatewayHandler) tryKeyFallbackResponses(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	keyFallbackUsed bool,
+	streamStarted bool,
+) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryKeyFallbackWithErrWriter(c, reqLog, currentAPIKey, keyFallbackUsed, streamStarted, h.responsesBillingErrWriter(c, streamStarted))
+}
+
+func (h *GatewayHandler) tryKeyFallbackWithErrWriter(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	keyFallbackUsed bool,
+	streamStarted bool,
+	writeBillingErr func(status int, code, message string, retryAfter int),
+) (*service.APIKey, *service.UserSubscription, bool) {
 	if keyFallbackUsed || currentAPIKey == nil || currentAPIKey.FallbackKeyID == nil || *currentAPIKey.FallbackKeyID <= 0 {
 		return nil, nil, false
 	}
@@ -1155,14 +1178,11 @@ func (h *GatewayHandler) tryKeyFallback(
 
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackKey.User, fallbackKey, fallbackKey.Group, fallbackSubscription); err != nil {
 		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
 		reqLog.Warn("gateway.fallback_key_billing_ineligible",
 			zap.Int64("fallback_key_id", fallbackKey.ID),
 			zap.Error(err),
 		)
-		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+		writeBillingErr(status, code, message, retryAfter)
 		return nil, nil, true
 	}
 
@@ -1187,6 +1207,29 @@ func (h *GatewayHandler) tryGroupFallbackAnthropic(
 	groupFallbackUsed bool,
 	streamStarted bool,
 ) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryGroupFallbackWithErrWriter(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted, h.claudeBillingErrWriter(c, streamStarted))
+}
+
+// tryGroupFallbackResponses 与 tryGroupFallbackAnthropic 行为一致，但计费错误按 OpenAI Responses
+// 错误格式写出，供 /v1/responses 链路使用，避免给 Responses 客户端返回 Claude 的错误 schema。
+func (h *GatewayHandler) tryGroupFallbackResponses(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	groupFallbackUsed bool,
+	streamStarted bool,
+) (*service.APIKey, *service.UserSubscription, bool) {
+	return h.tryGroupFallbackWithErrWriter(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted, h.responsesBillingErrWriter(c, streamStarted))
+}
+
+func (h *GatewayHandler) tryGroupFallbackWithErrWriter(
+	c *gin.Context,
+	reqLog *zap.Logger,
+	currentAPIKey *service.APIKey,
+	groupFallbackUsed bool,
+	streamStarted bool,
+	writeBillingErr func(status int, code, message string, retryAfter int),
+) (*service.APIKey, *service.UserSubscription, bool) {
 	result := tryGroupFallback(
 		c.Request.Context(),
 		reqLog,
@@ -1205,15 +1248,35 @@ func (h *GatewayHandler) tryGroupFallbackAnthropic(
 		func(ctx context.Context, user *service.User, key *service.APIKey, group *service.Group, sub *service.UserSubscription) error {
 			return h.billingCacheService.CheckBillingEligibility(ctx, user, key, group, sub)
 		},
-		// writeBillingErr: 使用统一的流感知错误写入
-		func(status int, code, message string, retryAfter int) {
-			if retryAfter > 0 {
-				c.Header("Retry-After", strconv.Itoa(retryAfter))
-			}
-			h.handleStreamingAwareError(c, status, code, message, streamStarted)
-		},
+		// writeBillingErr: 按调用链路的协议格式写入计费错误
+		writeBillingErr,
 	)
 	return result.APIKey, result.Subscription, result.ErrorWritten
+}
+
+// claudeBillingErrWriter 返回写 Claude/Anthropic 错误格式（流感知）的计费错误写入器。
+func (h *GatewayHandler) claudeBillingErrWriter(c *gin.Context, streamStarted bool) func(status int, code, message string, retryAfter int) {
+	return func(status int, code, message string, retryAfter int) {
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+	}
+}
+
+// responsesBillingErrWriter 返回写 OpenAI Responses 错误格式的计费错误写入器。
+// 兜底仅在流开始前发生（tryGroupFallback/tryKeyFallback 的 streamStarted 守卫保证），
+// 这里仍保留守卫：流已开始则不再写 JSON 错误体，避免污染响应。
+func (h *GatewayHandler) responsesBillingErrWriter(c *gin.Context, streamStarted bool) func(status int, code, message string, retryAfter int) {
+	return func(status int, code, message string, retryAfter int) {
+		if streamStarted {
+			return
+		}
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.responsesErrorResponse(c, status, code, message)
+	}
 }
 
 // resolveFallbackSubscription best-effort 解析兜底密钥（fallbackKey）的用户额度池订阅，

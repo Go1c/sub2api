@@ -1592,6 +1592,10 @@ func (stubGroupRepo) ExistsByName(ctx context.Context, name string) (bool, error
 	return false, errors.New("not implemented")
 }
 
+func (stubGroupRepo) CountExhaustedFallbackReferers(context.Context, int64) (int64, error) {
+	return 0, nil
+}
+
 func (stubGroupRepo) GetAccountCount(ctx context.Context, groupID int64) (int64, int64, error) {
 	return 0, 0, errors.New("not implemented")
 }
