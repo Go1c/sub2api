@@ -1330,6 +1330,21 @@
           </p>
         </div>
 
+        <!-- 账号全部不可用时兜底（所有平台） -->
+        <div class="border-t pt-4">
+          <label class="input-label">{{
+            t("admin.groups.exhaustedAccountsFallback.title")
+          }}</label>
+          <Select
+            v-model="createForm.fallback_group_id_on_exhausted"
+            :options="exhaustedAccountsFallbackOptions"
+            :placeholder="t('admin.groups.exhaustedAccountsFallback.noFallback')"
+          />
+          <p class="input-hint">
+            {{ t("admin.groups.exhaustedAccountsFallback.hint") }}
+          </p>
+        </div>
+
         <!-- 模型路由配置（仅 anthropic 平台） -->
         <div v-if="createForm.platform === 'anthropic'" class="border-t pt-4">
           <div class="mb-1.5 flex items-center gap-1">
@@ -2545,6 +2560,21 @@
           </p>
         </div>
 
+        <!-- 账号全部不可用时兜底（所有平台） -->
+        <div class="border-t pt-4">
+          <label class="input-label">{{
+            t("admin.groups.exhaustedAccountsFallback.title")
+          }}</label>
+          <Select
+            v-model="createForm.fallback_group_id_on_exhausted"
+            :options="exhaustedAccountsFallbackOptions"
+            :placeholder="t('admin.groups.exhaustedAccountsFallback.noFallback')"
+          />
+          <p class="input-hint">
+            {{ t("admin.groups.exhaustedAccountsFallback.hint") }}
+          </p>
+        </div>
+
         <!-- 模型路由配置（仅 anthropic 平台） -->
         <div v-if="editForm.platform === 'anthropic'" class="border-t pt-4">
           <div class="mb-1.5 flex items-center gap-1">
@@ -3087,6 +3117,26 @@ const invalidRequestFallbackOptionsForEdit = computed(() => {
   return options;
 });
 
+// 账号全部不可用时兜底分组选项（创建/编辑通用）- 同平台、active、不可自身、B不可再配exhausted
+const exhaustedAccountsFallbackOptions = computed(() => {
+  const options: { value: number | null; label: string }[] = [
+    { value: null, label: t("admin.groups.exhaustedAccountsFallback.noFallback") },
+  ];
+  const currentId = editingGroup.value?.id;
+  const currentPlatform = editingGroup.value?.platform || createForm.platform;
+  const eligibleGroups = groups.value.filter(
+    (g) =>
+      g.platform === currentPlatform &&
+      g.status === "active" &&
+      g.fallback_group_id_on_exhausted === null &&
+      g.id !== currentId,
+  );
+  eligibleGroups.forEach((g) => {
+    options.push({ value: g.id, label: g.name });
+  });
+  return options;
+});
+
 // 复制账号的源分组选项（创建时）- 仅包含相同平台且有账号的分组
 const copyAccountsGroupOptions = computed(() => {
   const eligibleGroups = groups.value.filter(
@@ -3188,6 +3238,7 @@ const createForm = reactive({
   claude_code_only: false,
   fallback_group_id: null as number | null,
   fallback_group_id_on_invalid_request: null as number | null,
+  fallback_group_id_on_exhausted: null as number | null,
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
   opus_mapped_model: createMessagesDispatchDefaults.opus_mapped_model,
@@ -3475,6 +3526,7 @@ const editForm = reactive({
   claude_code_only: false,
   fallback_group_id: null as number | null,
   fallback_group_id_on_invalid_request: null as number | null,
+  fallback_group_id_on_exhausted: null as number | null,
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
   default_mapped_model: '',
@@ -3722,6 +3774,7 @@ const closeCreateModal = () => {
   createForm.claude_code_only = false;
   createForm.fallback_group_id = null;
   createForm.fallback_group_id_on_invalid_request = null;
+  createForm.fallback_group_id_on_exhausted = null;
   resetMessagesDispatchFormState(createForm);
   createForm.require_oauth_only = false;
   createForm.require_privacy_set = false;
@@ -3844,6 +3897,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.fallback_group_id = group.fallback_group_id;
   editForm.fallback_group_id_on_invalid_request =
     group.fallback_group_id_on_invalid_request;
+  editForm.fallback_group_id_on_exhausted = group.fallback_group_id_on_exhausted;
   const messagesDispatchFormState = messagesDispatchConfigToFormState(
     group.messages_dispatch_model_config,
   );
@@ -3914,6 +3968,10 @@ const handleUpdateGroup = async () => {
         editForm.fallback_group_id_on_invalid_request === null
           ? 0
           : editForm.fallback_group_id_on_invalid_request,
+      fallback_group_id_on_exhausted:
+        editForm.fallback_group_id_on_exhausted === null
+          ? 0
+          : editForm.fallback_group_id_on_exhausted,
       model_routing: convertRoutingRulesToApiFormat(
         editModelRoutingRules.value,
       ),
@@ -4013,6 +4071,7 @@ watch(
     if (newVal === "subscription") {
       createForm.is_exclusive = true;
       createForm.fallback_group_id_on_invalid_request = null;
+      // exhausted 兜底不受订阅类型限制，不清空
     }
   },
 );
@@ -4023,6 +4082,7 @@ watch(
     if (!["anthropic", "antigravity"].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null;
     }
+    // exhausted 兜底支持所有平台，不清空
     if (newVal !== "openai") {
       resetMessagesDispatchFormState(createForm);
     }

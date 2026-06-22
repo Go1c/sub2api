@@ -170,6 +170,11 @@ func FallbackGroupIDOnInvalidRequest(v int64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnInvalidRequest, v))
 }
 
+// FallbackGroupIDOnExhausted applies equality check predicate on the "fallback_group_id_on_exhausted" field. It's identical to FallbackGroupIDOnExhaustedEQ.
+func FallbackGroupIDOnExhausted(v int64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnExhausted, v))
+}
+
 // ModelRoutingEnabled applies equality check predicate on the "model_routing_enabled" field. It's identical to ModelRoutingEnabledEQ.
 func ModelRoutingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldModelRoutingEnabled, v))
@@ -1238,6 +1243,56 @@ func FallbackGroupIDOnInvalidRequestIsNil() predicate.Group {
 // FallbackGroupIDOnInvalidRequestNotNil applies the NotNil predicate on the "fallback_group_id_on_invalid_request" field.
 func FallbackGroupIDOnInvalidRequestNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnInvalidRequest))
+}
+
+// FallbackGroupIDOnExhaustedEQ applies the EQ predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedEQ(v int64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedNEQ applies the NEQ predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedNEQ(v int64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedIn applies the In predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedIn(vs ...int64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldFallbackGroupIDOnExhausted, vs...))
+}
+
+// FallbackGroupIDOnExhaustedNotIn applies the NotIn predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedNotIn(vs ...int64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldFallbackGroupIDOnExhausted, vs...))
+}
+
+// FallbackGroupIDOnExhaustedGT applies the GT predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedGT(v int64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedGTE applies the GTE predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedGTE(v int64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedLT applies the LT predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedLT(v int64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedLTE applies the LTE predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedLTE(v int64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedIsNil applies the IsNil predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldFallbackGroupIDOnExhausted))
+}
+
+// FallbackGroupIDOnExhaustedNotNil applies the NotNil predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnExhausted))
 }
 
 // ModelRoutingIsNil applies the IsNil predicate on the "model_routing" field.

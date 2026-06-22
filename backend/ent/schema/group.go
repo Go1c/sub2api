@@ -109,6 +109,10 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("无效请求兜底使用的分组 ID"),
+		field.Int64("fallback_group_id_on_exhausted").
+			Optional().
+			Nillable().
+			Comment("上游账号全部不可用时兜底使用的分组 ID"),
 
 		// 模型路由配置 (added by migration 040)
 		field.JSON("model_routing", map[string][]int64{}).

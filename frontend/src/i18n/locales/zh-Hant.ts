@@ -2285,6 +2285,11 @@ export default {
         hint: '僅當上遊明確返回 prompt too long 時才會觸發，留空表示不兜底',
         noFallback: '不兜底'
       },
+      exhaustedAccountsFallback: {
+        title: '賬號全部不可用時兜底分組',
+        hint: '當前分組所有賬號都不可用（限流/模型容量耗盡等）時，自動切換到此分組重試。兜底分組必須是同平臺、未配置鏈式兜底的活躍分組。留空表示不兜底',
+        noFallback: '不兜底'
+      },
       copyAccounts: {
         title: '從分組複製賬號',
         tooltip: '選擇一個或多個相同平臺的分組，創建後會自動將這些分組的所有賬號綁定到新分組（去重）。',
