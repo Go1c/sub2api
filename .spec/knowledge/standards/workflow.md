@@ -61,12 +61,29 @@ git checkout dev && git merge main && git push origin dev   # 冲突常集中在
 
 ## 发布到 publish
 
+`publish` 是**受保护分支**:不能直推,只能通过 PR 更新(`gh pr create --base publish`)。
+核心不变式 —— **publish ⊆ dev**:promotion 到 publish 的每一处改动都必须**先存在于 dev**。
+publish 可以落后 dev(有未发布的工作),但**绝不能有 dev 没有的内容**。
+
 ```bash
-git checkout publish && git pull
-git merge --no-ff dev -m "release: vX.Y.Z"
-git tag -a vX.Y.Z -m "release X.Y.Z" && git push origin publish --tags
+# 1) 确保要发的内容已经全部在 dev 上、且本地验证通过(见 testing.md)
+git fetch origin
+# 2) 从 dev 当前提交切发布分支(发布分支 = dev 的精确快照,不在其上新增任何 commit)
+git switch -c release/dev-to-publish-$(date +%Y%m%d) origin/dev
+git push origin release/dev-to-publish-$(date +%Y%m%d)
+# 3) 开 PR 合入 publish(release/* → publish 是 promotion 机制,不属于「hotfix 直接 --base publish」红线)
+gh pr create --repo Go1c/sub2api --base publish --head release/dev-to-publish-$(date +%Y%m%d) --title "release: dev → publish YYYY-MM-DD"
+gh pr merge  --repo Go1c/sub2api --merge <PR#>
+# 4) 发版打 tag(release.yml 由 tag 触发);部署由 push 到 publish 触发(lumio-production.yml)
+git tag -a vX.Y.Z -m "release X.Y.Z" && git push origin vX.Y.Z
+# 5) 收口校验:两分支内容必须一致(只看内容,不看 commit 数)
+git diff --stat origin/dev origin/publish    # 必须为空
 ```
 
+> **绝不在 release 分支(或 publish)上现补修复。** 发布过程中发现要改:**先把修复提交到 `dev`**(走 `fix/*` PR),再**从 dev 重切** release 分支。在 release 分支上直接补的 commit 不会回到 dev → 两分支内容漂移、dev 上对应测试失败。`.github/workflows/publish-sync-guard.yml` 会在「PR → publish」时校验 PR head 必须是 dev 的祖先,拦下这种现补提交(建议在 branch protection 里把它设为 required check)。
+>
+> **判断是否漂移只看 `git diff origin/dev origin/publish`(内容),不看 `git rev-list` 的 commit 数。** 每次 promotion 都会在 publish 上产生 merge commit、内容相同的修复也可能各自落成不同 SHA,所以 commit 数差异是正常的图结构假象;**内容 diff 为空**才是两分支一致的唯一标准。
+>
 > 部署平台:历史为 Zeabur,**当前以实际平台为准**(已迁移,部署前确认)。见 [`operations/deployment.md`](../operations/deployment.md)。
 
 ## 改动完成 = 知识已同步

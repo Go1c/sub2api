@@ -12,8 +12,9 @@
 
 ## fork 红线(sub2api / LumioAPI 专属)
 
-- **不得直推 `main` / `publish`。** 这两个分支只接受合并 / tag 操作;日常 commit 全部走 `dev`。
-- **`gh pr create` / `gh pr merge` 必须带 `--repo Go1c/sub2api`。** 缺省会指向 upstream;hotfix 也先进 `dev`,再由 dev 提升到 `publish`,不得用 `--base publish` 开 PR。
+- **不得直推 `main` / `publish`。** 这两个分支只接受合并 / tag 操作;日常 commit 全部走 `dev`。`publish` 是受保护分支,只能经 PR 更新。
+- **`gh pr create` / `gh pr merge` 必须带 `--repo Go1c/sub2api`。** 缺省会指向 upstream;hotfix / feature PR 一律 `--base dev`,**不得用 `--base publish` 开业务 PR**。dev → publish 的发布 promotion 例外:用 `release/dev-to-publish-<date>`(dev 的精确快照)→ `--base publish` 的 release PR,这是唯一被许可的 publish 更新方式。
+- **publish ⊆ dev 不变式:绝不在 release 分支 / publish 上现补提交。** publish 的每处改动都必须**先在 dev**。发布中要改 → 先回 `dev` 提交,再从 dev 重切 release。违反会导致两分支内容漂移、dev 测试失败。判断漂移只看 `git diff origin/dev origin/publish`(内容)必须为空,不看 commit 数。详见 [`standards/workflow.md`](../knowledge/standards/workflow.md) 的「发布到 publish」。
 - **代码改动 commit 前必须本地验证。** 前端改动:`cd frontend && pnpm typecheck && pnpm build`;涉及 UI 必须 dev server 起来 curl 过或请求用户浏览器确认。只凭类型检查不得报"完成"。
 - **改 `backend/` / `frontend/` 必须控制范围。** 优先最小必要改动,不顺手重构,避免增加 upstream 同步负担。
 - **同步上游不得整包合并。** 走 merge-upstream API 同步 `main`,再经 `dev` 的 T1 / T2 / T3 topic 分支分主题带入。
