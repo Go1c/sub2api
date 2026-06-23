@@ -2217,8 +2217,8 @@ export default {
         noFallback: 'No Fallback'
       },
       exhaustedAccountsFallback: {
-        title: 'Exhausted Accounts Fallback Group',
-        hint: 'When all accounts in the current group are unavailable (rate-limited, model capacity exhausted, etc.), automatically retry with this fallback group. Must be an active group on the same platform without chained fallback. Leave empty to disable.',
+        title: 'Unavailable Account Fallback Group',
+        hint: 'When an account in the current group errors or becomes unavailable (rate-limited, model capacity exhausted, etc.) before the response starts, automatically retry with this fallback group. Must be an active group on the same platform without chained fallback. Leave empty to disable.',
         noFallback: 'No Fallback'
       },
       copyAccounts: {

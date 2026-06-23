@@ -1330,7 +1330,7 @@
           </p>
         </div>
 
-        <!-- 账号全部不可用时兜底（仅 anthropic/antigravity，与运行时生效平台一致） -->
+        <!-- 账号不可用时兜底（仅 anthropic/antigravity，与运行时生效平台一致） -->
         <div
           v-if="['anthropic', 'antigravity'].includes(createForm.platform)"
           class="border-t pt-4"
@@ -2563,7 +2563,7 @@
           </p>
         </div>
 
-        <!-- 账号全部不可用时兜底（仅 anthropic/antigravity，与运行时生效平台一致） -->
+        <!-- 账号不可用时兜底（仅 anthropic/antigravity，与运行时生效平台一致） -->
         <div
           v-if="['anthropic', 'antigravity'].includes(editForm.platform)"
           class="border-t pt-4"
@@ -3123,7 +3123,7 @@ const invalidRequestFallbackOptionsForEdit = computed(() => {
   return options;
 });
 
-// 账号全部不可用时兜底分组选项（创建/编辑通用）- 同平台、active、不可自身、B不可再配exhausted
+// 账号不可用时兜底分组选项（创建/编辑通用）- 同平台、active、不可自身、B不可再配exhausted
 const exhaustedAccountsFallbackOptions = computed(() => {
   const options: { value: number | null; label: string }[] = [
     { value: null, label: t("admin.groups.exhaustedAccountsFallback.noFallback") },

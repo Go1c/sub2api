@@ -37,6 +37,7 @@ metadata:
 | [`features/admin-settings-idempotency.md`](features/admin-settings-idempotency.md) | 管理员设置保存的服务端隐式幂等保护(防重复 / 重试重复写) |
 | [`features/compliance-geo-block.md`](features/compliance-geo-block.md) | 中国大陆 IP 网页访问拦截(屏蔽网站、保持 API 开放)的实现与验收 |
 | [`features/account-error-history.md`](features/account-error-history.md) | 账号错误历史:多来源 best-effort 异步记录、去重/节流/裁剪、账号「更多」菜单懒加载弹窗查看 |
+| [`features/group-fallback.md`](features/group-fallback.md) | 分组级兜底:A 分组账号不可用时切到管理员配置的 B 分组重试 |
 | [`features/_TEMPLATE.md`](features/_TEMPLATE.md) | 新功能文档模板——新增功能记录时照此建,放对 领域 / 模块 |
 
 ## operations/(部署与运维)
