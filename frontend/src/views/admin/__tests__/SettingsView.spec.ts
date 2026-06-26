@@ -16,6 +16,8 @@ const {
   getStreamTimeoutSettings,
   getRectifierSettings,
   getBetaPolicySettings,
+  getModelMarket,
+  updateModelMarket,
   getGroups,
   listProxies,
   getProviders,
@@ -38,6 +40,8 @@ const {
   getStreamTimeoutSettings: vi.fn(),
   getRectifierSettings: vi.fn(),
   getBetaPolicySettings: vi.fn(),
+  getModelMarket: vi.fn(),
+  updateModelMarket: vi.fn(),
   getGroups: vi.fn(),
   listProxies: vi.fn(),
   getProviders: vi.fn(),
@@ -77,6 +81,8 @@ vi.mock("@/api", () => ({
       getStreamTimeoutSettings,
       getRectifierSettings,
       getBetaPolicySettings,
+      getModelMarket,
+      updateModelMarket,
     },
     groups: {
       getAll: getGroups,
@@ -123,8 +129,8 @@ vi.mock("@/api/admin/settings", () => {
     getAdminApiKey,
     regenerateAdminApiKey: vi.fn(),
     deleteAdminApiKey: vi.fn(),
-    getPublicModelPricing: vi.fn(),
-    updatePublicModelPricing: vi.fn(),
+    getModelMarket,
+    updateModelMarket,
     getOverloadCooldownSettings,
     updateOverloadCooldownSettings: vi.fn(),
     getStreamTimeoutSettings,
@@ -619,6 +625,16 @@ async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
   await flushPromises();
 }
 
+async function openModelMarketTab(wrapper: ReturnType<typeof mountView>) {
+  const modelMarketTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.pricing"));
+
+  expect(modelMarketTabButton).toBeDefined();
+  await modelMarketTabButton?.trigger("click");
+  await flushPromises();
+}
+
 describe("admin SettingsView payment visible method controls", () => {
   beforeEach(() => {
     getSettings.mockReset();
@@ -632,6 +648,8 @@ describe("admin SettingsView payment visible method controls", () => {
     getStreamTimeoutSettings.mockReset();
     getRectifierSettings.mockReset();
     getBetaPolicySettings.mockReset();
+    getModelMarket.mockReset();
+    updateModelMarket.mockReset();
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
@@ -687,6 +705,22 @@ describe("admin SettingsView payment visible method controls", () => {
     getBetaPolicySettings.mockResolvedValue({
       rules: [],
     });
+    getModelMarket.mockResolvedValue({
+      config: {
+        enabled: true,
+        auto_sync: true,
+        title: "模型广场",
+        description: "按平台、分组和计费类型查看当前可用模型。",
+        selected_models: [],
+      },
+      candidates: [],
+      models: [],
+    });
+    updateModelMarket.mockImplementation(async (payload) => ({
+      config: payload,
+      candidates: [],
+      models: [],
+    }));
     getGroups.mockResolvedValue([]);
     listProxies.mockResolvedValue({
       items: [],
@@ -1249,5 +1283,79 @@ describe("admin SettingsView wechat connect controls", () => {
         oidc_connect_validate_id_token: false,
       }),
     );
+  });
+
+  it("saves model market manual selections without duplicating price config", async () => {
+    getModelMarket.mockResolvedValueOnce({
+      config: {
+        enabled: true,
+        auto_sync: true,
+        title: "模型广场",
+        description: "按平台、分组和计费类型查看当前可用模型。",
+        selected_models: [],
+      },
+      candidates: [
+        {
+          key: "openai:gpt-5.4",
+          name: "gpt-5.4",
+          platform: "openai",
+          billing_mode: "token",
+          pricing: {
+            billing_mode: "token",
+            input_price: 0.000001,
+            output_price: 0.000002,
+            cache_write_price: null,
+            cache_read_price: null,
+            image_output_price: null,
+            per_request_price: null,
+            intervals: [],
+          },
+          groups: [
+            {
+              id: 1,
+              name: "public",
+              platform: "openai",
+              subscription_type: "balance",
+              rate_multiplier: 0.2,
+              is_exclusive: false,
+            },
+          ],
+          channels: ["OpenAI Public"],
+          sort_order: 0,
+        },
+      ],
+      models: [],
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openModelMarketTab(wrapper);
+    await wrapper.get('[data-testid="model-market-auto-sync"]').setValue(false);
+    await flushPromises();
+    await wrapper.get('[data-testid="model-market-select-openai:gpt-5.4"]').setValue(true);
+    await flushPromises();
+    await wrapper.get('[data-testid="model-market-sort-openai:gpt-5.4"]').setValue("20");
+    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
+    await flushPromises();
+
+    expect(updateModelMarket).toHaveBeenCalledTimes(1);
+    expect(updateModelMarket).toHaveBeenCalledWith({
+      enabled: true,
+      auto_sync: false,
+      title: "模型广场",
+      description: "按平台、分组和计费类型查看当前可用模型。",
+      selected_models: [
+        {
+          key: "openai:gpt-5.4",
+          platform: "openai",
+          model: "gpt-5.4",
+          enabled: true,
+          sort_order: 20,
+        },
+      ],
+    });
+    expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("rows");
+    expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("currency");
   });
 });

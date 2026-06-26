@@ -2712,9 +2712,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		return err
 	}
 
-	defaultPublicModelPricing, err := json.Marshal(DefaultPublicModelPricingConfig())
+	defaultModelMarket, err := json.Marshal(DefaultModelMarketConfig())
 	if err != nil {
-		return fmt.Errorf("marshal default public model pricing: %w", err)
+		return fmt.Errorf("marshal default model market: %w", err)
 	}
 
 	// 初始化默认设置
@@ -2747,7 +2747,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyTablePageSizeOptions:                     "[10,20,50,100]",
 		SettingKeyCustomMenuItems:                          "[]",
 		SettingKeyCustomEndpoints:                          "[]",
-		SettingKeyPublicModelPricing:                       string(defaultPublicModelPricing),
+		SettingKeyModelMarket:                              string(defaultModelMarket),
 		SettingKeyWeChatConnectEnabled:                     "false",
 		SettingKeyWeChatConnectAppID:                       "",
 		SettingKeyWeChatConnectAppSecret:                   "",

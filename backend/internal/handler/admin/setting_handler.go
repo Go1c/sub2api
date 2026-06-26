@@ -3258,36 +3258,6 @@ func (h *SettingHandler) DeleteAdminAPIKey(c *gin.Context) {
 	response.Success(c, gin.H{"message": "Admin API key deleted"})
 }
 
-// GetPublicModelPricingSettings 获取首页公开模型定价配置
-// GET /api/v1/admin/settings/public-model-pricing
-func (h *SettingHandler) GetPublicModelPricingSettings(c *gin.Context) {
-	pricing, err := h.settingService.GetPublicModelPricing(c.Request.Context())
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, pricing)
-}
-
-// UpdatePublicModelPricingSettings 更新首页公开模型定价配置
-// PUT /api/v1/admin/settings/public-model-pricing
-func (h *SettingHandler) UpdatePublicModelPricingSettings(c *gin.Context) {
-	var req service.PublicModelPricingConfig
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-
-	updated, err := h.settingService.SetPublicModelPricing(c.Request.Context(), req)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, updated)
-}
-
 // GetOverloadCooldownSettings 获取529过载冷却配置
 // GET /api/v1/admin/settings/overload-cooldown
 func (h *SettingHandler) GetOverloadCooldownSettings(c *gin.Context) {

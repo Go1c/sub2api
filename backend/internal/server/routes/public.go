@@ -17,4 +17,11 @@ func RegisterPublicRoutes(v1 *gin.RouterGroup, h *handler.Handlers) {
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
 	}
+
+	if h.ModelMarket != nil {
+		modelMarket := v1.Group("/model-market")
+		{
+			modelMarket.GET("/public", h.ModelMarket.GetPublic)
+		}
+	}
 }

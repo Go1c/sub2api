@@ -340,158 +340,6 @@
       </div>
     </section>
 
-    <section id="pricing" class="relative order-3 mx-auto max-w-7xl px-6 py-12">
-      <div class="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[40rem] bg-[radial-gradient(ellipse_50%_40%_at_50%_0%,rgba(99,102,241,0.10),transparent_70%)]"></div>
-
-      <h2 class="text-center text-5xl font-semibold tracking-tight text-gray-900 dark:text-white">
-        {{ copy.pricingTitleLead }}
-        <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          {{ copy.pricingTitleAccent }}
-        </span>
-      </h2>
-
-      <p class="mt-4 text-center text-gray-600 dark:text-dark-300">{{ pricingNote }}</p>
-
-      <div class="mx-auto mb-12 mt-5 flex max-w-3xl flex-wrap items-center justify-center gap-2 text-sm">
-        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-          {{ copy.pricingRechargeNote }}
-        </span>
-        <span class="rounded-full border border-purple-200 bg-purple-50 px-3 py-1.5 font-semibold text-purple-700 dark:border-purple-400/30 dark:bg-purple-500/10 dark:text-purple-200">
-          {{ copy.pricingDiscountFormula }}
-        </span>
-      </div>
-
-      <div class="overflow-x-auto">
-        <div class="inline-block min-w-full align-middle">
-          <div class="overflow-hidden rounded-2xl border border-gray-200 shadow-sm dark:border-dark-700">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
-              <thead class="bg-gray-50 dark:bg-dark-900">
-                <tr>
-                  <th class="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.model }}</th>
-                  <th class="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">{{ copy.pricingCols.group }}</th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <span>{{ copy.pricingCols.officialInput }}</span>
-                      <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200">
-                        {{ copy.pricingCurrency.usd }}
-                      </span>
-                    </div>
-                  </th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <span>{{ copy.pricingCols.officialOutput }}</span>
-                      <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200">
-                        {{ copy.pricingCurrency.usd }}
-                      </span>
-                    </div>
-                  </th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <span>{{ copy.pricingCols.convertedInput }}</span>
-                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                        {{ copy.pricingCurrency.cny }}
-                      </span>
-                    </div>
-                  </th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <span>{{ copy.pricingCols.convertedOutput }}</span>
-                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                        {{ copy.pricingCurrency.cny }}
-                      </span>
-                    </div>
-                  </th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-blue-700 dark:text-blue-300">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <span>{{ copy.pricingCols.input }}</span>
-                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                        {{ copy.pricingCurrency.cny }}
-                      </span>
-                    </div>
-                  </th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-blue-700 dark:text-blue-300">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <span>{{ copy.pricingCols.output }}</span>
-                      <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                        {{ copy.pricingCurrency.cny }}
-                      </span>
-                    </div>
-                  </th>
-                  <th class="px-6 py-4 text-center text-sm font-semibold text-gray-900 dark:text-white">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <span>{{ copy.pricingCols.discount }}</span>
-                      <span class="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-700 dark:border-purple-400/30 dark:bg-purple-500/10 dark:text-purple-200">
-                        {{ copy.pricingDiscountBasis }}
-                      </span>
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
-                <tr
-                  v-for="row in pricingRows"
-                  :key="row.model"
-                  :class="['transition-all duration-200', pricingTone(row).row]"
-                >
-                  <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
-                    <div class="flex items-center gap-2">{{ row.model }}</div>
-                  </td>
-                  <td class="px-6 py-4 text-sm text-gray-600 dark:text-dark-300">{{ row.group }}</td>
-                  <td class="px-6 py-4 text-center text-sm">
-                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-amber-200/70 bg-amber-50/80 px-2.5 py-1 font-semibold text-amber-700 shadow-sm dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
-                      {{ formatUsd(row.officialInput) }}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 text-center text-sm">
-                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-amber-200/70 bg-amber-50/80 px-2.5 py-1 font-semibold text-amber-700 shadow-sm dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">
-                      {{ formatUsd(row.officialOutput) }}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 text-center text-sm">
-                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-emerald-200/50 bg-emerald-50/50 px-2.5 py-1 font-semibold text-emerald-700 line-through decoration-2 decoration-red-400/70 shadow-sm dark:border-emerald-400/15 dark:bg-emerald-500/10 dark:text-emerald-300/70">
-                      {{ formatConverted(row.officialInput) }}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 text-center text-sm">
-                    <span class="inline-flex min-w-[4.75rem] items-center justify-center rounded-md border border-emerald-200/50 bg-emerald-50/50 px-2.5 py-1 font-semibold text-emerald-700 line-through decoration-2 decoration-red-400/70 shadow-sm dark:border-emerald-400/15 dark:bg-emerald-500/10 dark:text-emerald-300/70">
-                      {{ formatConverted(row.officialOutput) }}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <div :class="['inline-flex min-w-[6.25rem] items-baseline justify-center gap-1 rounded-lg border px-3 py-1.5 font-bold shadow-sm', pricingTone(row).price]">
-                      <span class="text-[10px] font-semibold opacity-70">{{ copy.pricingCurrency.unit }}</span>
-                      <span class="text-base">{{ formatCny(row.inputPrice) }}</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <div :class="['inline-flex min-w-[6.25rem] items-baseline justify-center gap-1 rounded-lg border px-3 py-1.5 font-bold shadow-sm', pricingTone(row).price]">
-                      <span class="text-[10px] font-semibold opacity-70">{{ copy.pricingCurrency.unit }}</span>
-                      <span class="text-base">{{ formatCny(row.outputPrice) }}</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <div class="flex items-center justify-center gap-2">
-                      <span v-if="pricingTone(row).flame" class="animate-bounce text-xl drop-shadow-md">🔥</span>
-                      <span
-                        :class="[
-                          'inline-flex min-w-[7rem] flex-col items-center justify-center rounded-full bg-gradient-to-r px-5 py-2 text-white shadow-xl ring-2 ring-white/25 dark:ring-white/10',
-                          pricingTone(row).discount,
-                          pricingTone(row).discountText
-                        ]"
-                      >
-                        <span class="text-[10px] font-semibold leading-none text-white/80">{{ copy.pricingDiscountTag }}</span>
-                        <span class="mt-0.5 text-xl font-extrabold leading-none">{{ row.discount }}</span>
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section id="region-notice" class="relative order-2 mx-auto max-w-7xl px-6 py-16">
       <div class="fade-rise relative overflow-hidden rounded-[1.5rem] border border-indigo-500/20 bg-gradient-to-b from-[#0b1224] to-[#0a0f1f] px-8 py-16 text-center shadow-[0_24px_60px_rgba(2,6,23,0.35)] md:px-12 md:py-20">
         <div class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,rgba(99,102,241,0.18),transparent_70%)]"></div>
@@ -638,7 +486,6 @@ import { useRouter } from 'vue-router'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { getPublicPricing, type PublicPricingConfig, type PublicPricingRow } from '@/api/pricing'
 import type { ContactChannel, SitePage } from '@/types'
 import { normalizeSitePages, resolveSitePageNavigationTarget } from '@/utils/sitePages'
 
@@ -687,18 +534,6 @@ interface StatusItem {
   value: string
 }
 
-interface PricingRow {
-  model: string
-  group: string
-  multiplier?: string
-  officialInput: number
-  officialOutput: number
-  inputPrice: number
-  outputPrice: number
-  discount: string
-  tone: 'purple' | 'blue' | 'green'
-}
-
 interface HomeCopy {
   nav: Omit<NavItem, 'target' | 'external' | 'dim'>[]
   dimNav: Omit<NavItem, 'target' | 'external' | 'dim'>[]
@@ -723,30 +558,6 @@ interface HomeCopy {
   engineCards: EngineCard[]
   statusEyebrow: string
   statusItems: StatusItem[]
-  pricingTitleLead: string
-  pricingTitleAccent: string
-  pricingNote: string
-  pricingCurrency: {
-    usd: string
-    cny: string
-    unit: string
-  }
-  pricingRechargeNote: string
-  pricingDiscountFormula: string
-  pricingDiscountBasis: string
-  pricingDiscountTag: string
-  pricingCols: {
-    model: string
-    group: string
-    officialInput: string
-    officialOutput: string
-    convertedInput: string
-    convertedOutput: string
-    input: string
-    output: string
-    discount: string
-  }
-  pricingRows: PricingRow[]
   regionEyebrow: string
   regionTitleLead: string
   regionTitleAccent: string
@@ -799,12 +610,10 @@ const docsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.valu
 const termsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'terms'))
 const privacyTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'privacy'))
 const docsHref = computed(() => docUrl.value || githubUrl)
-const usdToCnyRate = 7
 
 const zhCopy: HomeCopy = {
   nav: [
-    { key: 'features', label: '特性' },
-    { key: 'pricing', label: '定价' },
+    { key: 'models', label: '模型广场' },
     { key: 'status', label: '状态' },
     { key: 'docs', label: '文档' }
   ],
@@ -857,35 +666,6 @@ const zhCopy: HomeCopy = {
     { icon: 'chartBar', label: '月调用次数', value: '100万+' },
     { icon: 'clock', label: '平均响应', value: '16.3ms' }
   ],
-  pricingTitleLead: '模型',
-  pricingTitleAccent: '定价',
-  pricingNote: '官方原价以美元（USD）标注 · 折合价与 LumioAPI 价格以积分（Credits）计价 · 单位：百万 tokens',
-  pricingCurrency: {
-    usd: '美元 USD',
-    cny: '积分 Credits',
-    unit: '积分'
-  },
-  pricingRechargeNote: '充值规则：1 积分 (Credit) = $1 美元额度',
-  pricingDiscountFormula: '先享 1.43 折，再叠加渠道倍率算最终折扣',
-  pricingDiscountBasis: '最终折扣',
-  pricingDiscountTag: '最终折扣',
-  pricingCols: {
-    model: '模型',
-    group: '分组',
-    officialInput: '官方输入',
-    officialOutput: '官方输出',
-    convertedInput: '积分折合',
-    convertedOutput: '积分折合',
-    input: 'LumioAPI 输入价',
-    output: 'LumioAPI 输出价',
-    discount: '最终折扣'
-  },
-  pricingRows: [
-    { model: 'Claude Opus 4.7', group: 'Claude', multiplier: '1.4', officialInput: 5, officialOutput: 25, inputPrice: 7, outputPrice: 35, discount: '2折', tone: 'purple' },
-    { model: 'Claude Sonnet 4.6', group: 'Claude', multiplier: '1.4', officialInput: 3, officialOutput: 15, inputPrice: 4.2, outputPrice: 21, discount: '2折', tone: 'purple' },
-    { model: 'GPT5.5', group: 'OpenAI', multiplier: '0.2', officialInput: 5, officialOutput: 30, inputPrice: 1, outputPrice: 6, discount: '0.29折', tone: 'blue' },
-    { model: 'GPT5.4', group: 'OpenAI', multiplier: '0.2', officialInput: 2.5, officialOutput: 15, inputPrice: 0.5, outputPrice: 3, discount: '0.29折', tone: 'blue' }
-  ],
   regionEyebrow: '服务区域 · SERVICE REGION',
   regionTitleLead: '本服务',
   regionTitleAccent: '不向中国大陆地区',
@@ -906,8 +686,7 @@ const zhCopy: HomeCopy = {
 
 const enCopy: HomeCopy = {
   nav: [
-    { key: 'features', label: 'Features' },
-    { key: 'pricing', label: 'Pricing' },
+    { key: 'models', label: 'Model Market' },
     { key: 'status', label: 'Status' },
     { key: 'docs', label: 'Docs' }
   ],
@@ -960,35 +739,6 @@ const enCopy: HomeCopy = {
     { icon: 'chartBar', label: 'Monthly calls', value: '1M+' },
     { icon: 'clock', label: 'Average latency', value: '16.3ms' }
   ],
-  pricingTitleLead: 'Model',
-  pricingTitleAccent: 'pricing',
-  pricingNote: 'Official list price is in USD · converted and LumioAPI prices are in Credits · unit: per million tokens',
-  pricingCurrency: {
-    usd: 'USD',
-    cny: 'Credits',
-    unit: 'Credits'
-  },
-  pricingRechargeNote: 'Recharge rule: 1 Credit = $1 USD credit',
-  pricingDiscountFormula: 'Start at 14.3%, then apply the channel multiplier',
-  pricingDiscountBasis: 'Final discount',
-  pricingDiscountTag: 'Final',
-  pricingCols: {
-    model: 'Model',
-    group: 'Group',
-    officialInput: 'Official input',
-    officialOutput: 'Official output',
-    convertedInput: 'Credits equiv.',
-    convertedOutput: 'Credits equiv.',
-    input: 'LumioAPI input',
-    output: 'LumioAPI output',
-    discount: 'Discount'
-  },
-  pricingRows: [
-    { model: 'Claude Opus 4.7', group: 'Claude', multiplier: '1.4', officialInput: 5, officialOutput: 25, inputPrice: 7, outputPrice: 35, discount: '20%', tone: 'purple' },
-    { model: 'Claude Sonnet 4.6', group: 'Claude', multiplier: '1.4', officialInput: 3, officialOutput: 15, inputPrice: 4.2, outputPrice: 21, discount: '20%', tone: 'purple' },
-    { model: 'GPT5.5', group: 'OpenAI', multiplier: '0.2', officialInput: 5, officialOutput: 30, inputPrice: 1, outputPrice: 6, discount: '2.86%', tone: 'blue' },
-    { model: 'GPT5.4', group: 'OpenAI', multiplier: '0.2', officialInput: 2.5, officialOutput: 15, inputPrice: 0.5, outputPrice: 3, discount: '2.86%', tone: 'blue' }
-  ],
   regionEyebrow: 'SERVICE REGION',
   regionTitleLead: 'Service ',
   regionTitleAccent: 'not available',
@@ -1010,28 +760,16 @@ const enCopy: HomeCopy = {
 const copy = computed(() => (locale.value.startsWith('zh') ? zhCopy : enCopy))
 const image2ReturnTo = 'https://img.lumio.games/'
 const image2LoginHandoffTarget = `/login?handoff=1&return_to=${encodeURIComponent(image2ReturnTo)}`
-const publicPricing = ref<PublicPricingConfig | null>(null)
-const pricingNote = computed(() => {
-  const configuredNote = normalizePricingNote(publicPricing.value?.rateNote)
-  return configuredNote || copy.value.pricingNote
-})
-const pricingRows = computed<PricingRow[]>(() => {
-  const configuredRows = publicPricing.value?.rows
-  const rows: Array<PricingRow | PublicPricingRow> =
-    configuredRows && configuredRows.length > 0 ? configuredRows : copy.value.pricingRows
-  return rows.map(toPricingRow)
-})
 
 const navItems = computed<NavItem[]>(() => [
-  { ...copy.value.nav[0], target: '#features' },
-  { ...copy.value.nav[1], target: '#pricing' },
-  { ...copy.value.nav[2], key: 'status', target: '/status' },
+  { key: 'models', label: copy.value.nav[0].label, target: '/models' },
+  { ...copy.value.nav[1], key: 'status', target: '/status' },
   docsTarget.value
     ? {
-        ...copy.value.nav[3],
+        ...copy.value.nav[2],
         target: docsTarget.value.target
       }
-    : { ...copy.value.nav[3], target: docsHref.value, external: true },
+    : { ...copy.value.nav[2], target: docsHref.value, external: true },
   {
     ...copy.value.dimNav[0],
     target: termsTarget.value?.target || '#footer',
@@ -1134,151 +872,9 @@ function engineTone(tone: EngineCard['tone']) {
   return { icon: 'text-blue-500 dark:text-blue-300', pill: 'from-blue-500 to-blue-600' }
 }
 
-function pricingTone(row: PricingRow) {
-  if (row.tone === 'purple') {
-    return {
-      row: 'bg-purple-50/30 hover:bg-purple-50/50 dark:bg-purple-950/10 dark:hover:bg-purple-950/20',
-      price: 'border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900/40 dark:bg-purple-950/30 dark:text-purple-300',
-      discount: 'from-purple-500 via-fuchsia-500 to-purple-600',
-      discountText: 'shadow-purple-500/35',
-      flame: false
-    }
-  }
-
-  if (row.tone === 'green') {
-    return {
-      row: 'relative z-10 border-l-4 border-emerald-500 bg-gradient-to-r from-emerald-50 via-green-50/80 to-emerald-50 shadow-[0_0_15px_rgba(16,185,129,0.15)] dark:from-emerald-950/30 dark:via-green-950/20 dark:to-emerald-950/30',
-      price: 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-950/30 dark:text-green-300',
-      discount: 'from-green-500 to-emerald-600',
-      discountText: 'px-5 py-2 text-base shadow-green-500/30',
-      flame: true
-    }
-  }
-
-  return {
-    row: 'hover:bg-gray-50 dark:hover:bg-dark-800',
-    price: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300',
-    discount: 'from-blue-500 via-sky-500 to-blue-600',
-    discountText: 'shadow-blue-500/35',
-    flame: false
-  }
-}
-
-function pricingToneForRow(row: Pick<PricingRow, 'model' | 'group'>): PricingRow['tone'] {
-  const text = `${row.model} ${row.group}`.toLowerCase()
-  if (text.includes('claude') || text.includes('opus') || text.includes('sonnet')) {
-    return 'purple'
-  }
-  if (text.includes('gemini') || text.includes('google')) {
-    return 'green'
-  }
-  return 'blue'
-}
-
-function toPricingRow(row: PricingRow | PublicPricingRow): PricingRow {
-  const officialInput = Number(row.officialInput) || 0
-  const officialOutput = Number(row.officialOutput) || 0
-  const multiplier = parsePricingMultiplier(row.multiplier)
-  const derivedInputPrice = calculateLumioPrice(officialInput, multiplier)
-  const derivedOutputPrice = calculateLumioPrice(officialOutput, multiplier)
-
-  return {
-    model: row.model,
-    group: row.group,
-    multiplier: row.multiplier,
-    officialInput,
-    officialOutput,
-    inputPrice: derivedInputPrice ?? (Number(row.inputPrice) || 0),
-    outputPrice: derivedOutputPrice ?? (Number(row.outputPrice) || 0),
-    discount: multiplier > 0 ? formatFinalDiscount(multiplier) : row.discount || '',
-    tone: 'tone' in row ? row.tone : pricingToneForRow(row)
-  }
-}
-
-async function loadPublicPricing() {
-  try {
-    publicPricing.value = await getPublicPricing()
-  } catch (error) {
-    console.warn('Failed to load public pricing', error)
-  }
-}
-
-function normalizePricingNote(note?: string) {
-  const cleaned = note
-    ?.trim()
-    .replace(/[；;]\s*折扣展示可在管理员后台调整。?$/, '')
-    .replace(/[；;]\s*价格与折扣支持管理员后台配置。?$/, '')
-    .trim()
-
-  if (!cleaned || cleaned === '价格以人民币（¥）计价，单位为百万 tokens') {
-    return ''
-  }
-  return cleaned
-}
-
-function parsePricingMultiplier(value?: string) {
-  const raw = value?.trim()
-  if (!raw) return 0
-
-  const normalized = raw
-    .replace(/倍率/g, '')
-    .replace(/[xX倍\s]/g, '')
-    .trim()
-
-  if (!normalized) return 0
-
-  const numeric = Number.parseFloat(normalized)
-  if (!Number.isFinite(numeric) || numeric <= 0) return 0
-
-  if (normalized.endsWith('%')) {
-    return numeric / 100
-  }
-  if (normalized.endsWith('折')) {
-    return (numeric / 10) * usdToCnyRate
-  }
-  return numeric
-}
-
-function calculateLumioPrice(officialUsd: number, multiplier: number) {
-  if (officialUsd <= 0 || multiplier <= 0) return null
-  return Math.round(officialUsd * multiplier * 100) / 100
-}
-
-function formatFinalDiscount(multiplier: number) {
-  const ratio = multiplier / usdToCnyRate
-  if (locale.value.startsWith('zh')) {
-    return `${formatCompactNumber(ratio * 10)}折`
-  }
-  return `${formatCompactNumber(ratio * 100)}%`
-}
-
-function formatCompactNumber(value: number) {
-  return value
-    .toFixed(value < 1 ? 2 : 1)
-    .replace(/(\.\d*?[1-9])0+$/, '$1')
-    .replace(/\.0$/, '')
-}
-
-function formatUsd(value: number) {
-  const fixed = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(value < 0.1 ? 3 : 2)
-  return `$${fixed.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.00$/, '')}`
-}
-
-function formatCny(value: number) {
-  // 不带货币符号：单位（积分 / Credits）由旁边的标签体现
-  return value.toFixed(2)
-}
-
-function formatConverted(value: number) {
-  // 折合参考划线价：保留 ×7 数值逻辑，仅去掉货币符号
-  const converted = (value * 7).toFixed(2)
-  return converted.replace(/\.00$/, '')
-}
-
 onMounted(() => {
   initTheme()
   authStore.checkAuth()
-  void loadPublicPricing()
   if (!appStore.publicSettingsLoaded) {
     appStore.fetchPublicSettings()
   }

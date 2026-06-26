@@ -477,9 +477,11 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.GET("/admin-api-key", h.Admin.Setting.GetAdminAPIKey)
 		adminSettings.POST("/admin-api-key/regenerate", h.Admin.Setting.RegenerateAdminAPIKey)
 		adminSettings.DELETE("/admin-api-key", h.Admin.Setting.DeleteAdminAPIKey)
-		// 首页模型定价配置
-		adminSettings.GET("/public-model-pricing", h.Admin.Setting.GetPublicModelPricingSettings)
-		adminSettings.PUT("/public-model-pricing", h.Admin.Setting.UpdatePublicModelPricingSettings)
+		// 模型广场配置
+		if h.ModelMarket != nil {
+			adminSettings.GET("/model-market", h.ModelMarket.GetAdmin)
+			adminSettings.PUT("/model-market", h.ModelMarket.UpdateAdmin)
+		}
 		// 地区拦截（合规）运行时配置
 		adminSettings.GET("/geo-block", h.Admin.Setting.GetGeoBlockSettings)
 		adminSettings.PUT("/geo-block", h.Admin.Setting.UpdateGeoBlockSettings)
