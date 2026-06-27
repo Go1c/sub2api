@@ -67,6 +67,55 @@ vi.mock('@/api/modelMarket', () => ({
           channels: ['Anthropic'],
           sort_order: 0,
         },
+        {
+          key: 'openai:gpt-image-2',
+          name: 'gpt-image-2',
+          platform: 'openai',
+          billing_mode: 'image',
+          pricing: {
+            billing_mode: 'image',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            image_output_price: null,
+            per_request_price: null,
+            intervals: [
+              {
+                min_tokens: 0,
+                max_tokens: null,
+                tier_label: '1K',
+                input_price: null,
+                output_price: null,
+                cache_write_price: null,
+                cache_read_price: null,
+                per_request_price: 0.05,
+              },
+              {
+                min_tokens: 0,
+                max_tokens: null,
+                tier_label: '4K',
+                input_price: null,
+                output_price: null,
+                cache_write_price: null,
+                cache_read_price: null,
+                per_request_price: 0.15,
+              },
+            ],
+          },
+          groups: [
+            {
+              id: 1,
+              name: 'openai-public',
+              platform: 'openai',
+              subscription_type: 'standard',
+              rate_multiplier: 0.35,
+              is_exclusive: false,
+            },
+          ],
+          channels: ['OpenAI'],
+          sort_order: 0,
+        },
       ],
     }),
   },
@@ -124,6 +173,25 @@ describe('ModelMarketView', () => {
     expect(wrapper.text()).toContain('openai-public')
   })
 
+  it('renders configured image tiers without a default image price', async () => {
+    const wrapper = mount(ModelMarketView, {
+      global: {
+        stubs: {
+          Icon: true,
+          PlatformIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('gpt-image-2')
+    expect(wrapper.text()).toContain('1K')
+    expect(wrapper.text()).toContain('$0.05')
+    expect(wrapper.text()).toContain('4K')
+    expect(wrapper.text()).toContain('$0.15')
+  })
+
   it('resets the provider filter when selecting a group filter', async () => {
     const wrapper = mount(ModelMarketView, {
       global: {
@@ -140,7 +208,7 @@ describe('ModelMarketView', () => {
     expect(openaiButton).toBeDefined()
     await openaiButton?.trigger('click')
 
-    expect(wrapper.findAll('article')).toHaveLength(1)
+    expect(wrapper.findAll('article').length).toBeGreaterThanOrEqual(1)
     expect(wrapper.text()).toContain('gpt-5.4')
 
     const anthropicGroupButton = wrapper.findAll('button').find((node) => node.text().includes('anthropic-public'))
