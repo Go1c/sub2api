@@ -5464,7 +5464,7 @@ export default {
         displayTitlePlaceholder: 'Model Market',
         displayDescription: 'Page description',
         displayDescriptionPlaceholder: 'Browse current models by platform, group, and billing mode.',
-        readOnlyPricingHint: 'Auto-read model prices are not configured here. Prices come from current billing calculations, group multipliers come from group settings, and private/exclusive groups are not exposed publicly.',
+        readOnlyPricingHint: 'Auto-read models default to current token pricing. You can switch candidate models to per-request or per-image billing and enter the displayed unit price. Group multipliers come from group settings, and private/exclusive groups are not exposed publicly.',
         candidateCount: 'Candidates',
         visibleCount: 'Visible now',
         currentMode: 'Mode',

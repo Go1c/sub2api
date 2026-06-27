@@ -867,6 +867,25 @@ describe("admin SettingsView payment visible method controls", () => {
     );
   });
 
+  it("submits the multiple subscription purchases setting", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      subscription_multiple_purchases_enabled: true,
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscription_multiple_purchases_enabled: true,
+      }),
+    );
+  });
+
   it("submits Anthropic cache TTL injection gateway setting", async () => {
     getSettings.mockResolvedValueOnce({
       ...baseSettingsResponse,
@@ -1379,6 +1398,81 @@ describe("admin SettingsView wechat connect controls", () => {
     });
     expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("rows");
     expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("currency");
+  });
+
+  it("saves model market candidate billing overrides for per-image pricing", async () => {
+    getModelMarket.mockResolvedValueOnce({
+      config: {
+        enabled: true,
+        auto_sync: true,
+        title: "模型广场",
+        description: "按平台、分组和计费类型查看当前可用模型。",
+        selected_models: [],
+        custom_models: [],
+      },
+      candidates: [
+        {
+          key: "openai:gpt-image-2",
+          name: "gpt-image-2",
+          platform: "openai",
+          billing_mode: "token",
+          pricing: {
+            billing_mode: "token",
+            input_price: 0.000005,
+            output_price: 0.00001,
+            cache_write_price: null,
+            cache_read_price: 0.00000125,
+            image_output_price: 0.00003,
+            per_request_price: null,
+            intervals: [],
+          },
+          groups: [
+            {
+              id: 1,
+              name: "public",
+              platform: "openai",
+              subscription_type: "balance",
+              rate_multiplier: 0.2,
+              is_exclusive: false,
+            },
+          ],
+          channels: ["OpenAI Public"],
+          sort_order: 0,
+        },
+      ],
+      models: [],
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openModelMarketTab(wrapper);
+    await wrapper.get('[data-testid="model-market-candidate-billing-openai:gpt-image-2"]').setValue("image");
+    await flushPromises();
+    await wrapper.get('[data-testid="model-market-candidate-image-price-openai:gpt-image-2"]').setValue("30");
+    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
+    await flushPromises();
+
+    expect(updateModelMarket).toHaveBeenCalledTimes(1);
+    expect(updateModelMarket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        auto_sync: true,
+        selected_models: [
+          expect.objectContaining({
+            key: "openai:gpt-image-2",
+            platform: "openai",
+            model: "gpt-image-2",
+            enabled: true,
+            billing_mode: "image",
+            pricing: expect.objectContaining({
+              billing_mode: "image",
+              image_output_price: 30,
+            }),
+          }),
+        ],
+      }),
+    );
   });
 
   it("adds custom model market entries with group, multiplier and pricing", async () => {

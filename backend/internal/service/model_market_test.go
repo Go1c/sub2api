@@ -229,6 +229,90 @@ func TestModelMarket_ManualSelectionFiltersAndOrdersCandidates(t *testing.T) {
 	require.Equal(t, "gpt-a", got.Models[1].Name)
 }
 
+func TestModelMarket_AutoSyncAppliesConfiguredBillingOverrides(t *testing.T) {
+	perRequestPrice := 0.42
+	imagePrice := 0.08
+	groups := []Group{
+		{
+			ID:             10,
+			Name:           "openai-public",
+			Platform:       PlatformOpenAI,
+			RateMultiplier: 0.35,
+			Status:         StatusActive,
+			IsExclusive:    false,
+		},
+	}
+	accountsByGroup := map[int64][]Account{
+		10: {
+			{
+				ID:       1,
+				Name:     "OpenAI",
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-image": "gpt-image",
+						"gpt-once":  "gpt-once",
+					},
+				},
+			},
+		},
+	}
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
+	_, err := svc.SetConfig(context.Background(), ModelMarketConfig{
+		Enabled:  true,
+		AutoSync: true,
+		SelectedModels: []ModelMarketSelection{
+			{
+				Key:         "openai:gpt-once",
+				Platform:    PlatformOpenAI,
+				Model:       "gpt-once",
+				Enabled:     true,
+				BillingMode: string(BillingModePerRequest),
+				Pricing: &ModelMarketPricing{
+					BillingMode:     string(BillingModePerRequest),
+					PerRequestPrice: &perRequestPrice,
+				},
+			},
+			{
+				Key:         "openai:gpt-image",
+				Platform:    PlatformOpenAI,
+				Model:       "gpt-image",
+				Enabled:     true,
+				BillingMode: string(BillingModeImage),
+				Pricing: &ModelMarketPricing{
+					BillingMode:      string(BillingModeImage),
+					ImageOutputPrice: &imagePrice,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got.Models, 2)
+
+	byKey := map[string]ModelMarketModel{}
+	for _, model := range got.Models {
+		byKey[model.Key] = model
+	}
+	perRequestModel := byKey["openai:gpt-once"]
+	require.Equal(t, string(BillingModePerRequest), perRequestModel.BillingMode)
+	require.NotNil(t, perRequestModel.Pricing)
+	require.Equal(t, string(BillingModePerRequest), perRequestModel.Pricing.BillingMode)
+	require.NotNil(t, perRequestModel.Pricing.PerRequestPrice)
+	require.InDelta(t, perRequestPrice, *perRequestModel.Pricing.PerRequestPrice, 1e-12)
+
+	imageModel := byKey["openai:gpt-image"]
+	require.Equal(t, string(BillingModeImage), imageModel.BillingMode)
+	require.NotNil(t, imageModel.Pricing)
+	require.Equal(t, string(BillingModeImage), imageModel.Pricing.BillingMode)
+	require.NotNil(t, imageModel.Pricing.ImageOutputPrice)
+	require.InDelta(t, imagePrice, *imageModel.Pricing.ImageOutputPrice, 1e-12)
+}
+
 func TestModelMarket_AdminCandidatesIncludeExclusiveGroupModelsWithoutPublicGroups(t *testing.T) {
 	groups := []Group{
 		{

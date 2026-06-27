@@ -39,6 +39,34 @@ vi.mock('@/api/modelMarket', () => ({
           channels: ['OpenAI'],
           sort_order: 0,
         },
+        {
+          key: 'anthropic:claude-sonnet-4-6',
+          name: 'claude-sonnet-4-6',
+          platform: 'anthropic',
+          billing_mode: 'token',
+          pricing: {
+            billing_mode: 'token',
+            input_price: 0.000003,
+            output_price: 0.000015,
+            cache_write_price: null,
+            cache_read_price: null,
+            image_output_price: null,
+            per_request_price: null,
+            intervals: [],
+          },
+          groups: [
+            {
+              id: 2,
+              name: 'anthropic-public',
+              platform: 'anthropic',
+              subscription_type: 'standard',
+              rate_multiplier: 1,
+              is_exclusive: false,
+            },
+          ],
+          channels: ['Anthropic'],
+          sort_order: 0,
+        },
       ],
     }),
   },
@@ -94,5 +122,32 @@ describe('ModelMarketView', () => {
     expect(wrapper.text()).toContain('OpenAI')
     expect(wrapper.text()).toContain('gpt-5.4')
     expect(wrapper.text()).toContain('openai-public')
+  })
+
+  it('resets the provider filter when selecting a group filter', async () => {
+    const wrapper = mount(ModelMarketView, {
+      global: {
+        stubs: {
+          Icon: true,
+          PlatformIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const openaiButton = wrapper.findAll('button').find((node) => node.text().includes('OpenAI'))
+    expect(openaiButton).toBeDefined()
+    await openaiButton?.trigger('click')
+
+    expect(wrapper.findAll('article')).toHaveLength(1)
+    expect(wrapper.text()).toContain('gpt-5.4')
+
+    const anthropicGroupButton = wrapper.findAll('button').find((node) => node.text().includes('anthropic-public'))
+    expect(anthropicGroupButton).toBeDefined()
+    await anthropicGroupButton?.trigger('click')
+
+    expect(wrapper.findAll('article')).toHaveLength(1)
+    expect(wrapper.text()).toContain('claude-sonnet-4-6')
   })
 })

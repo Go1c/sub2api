@@ -5591,7 +5591,7 @@ export default {
         displayTitlePlaceholder: '模型廣場',
         displayDescription: '頁面說明',
         displayDescriptionPlaceholder: '按平台、分組和計費類型查看當前可用模型。',
-        readOnlyPricingHint: '這裡不配置自動讀取模型的價格。模型價格讀取當前計算價格，分組倍率讀取分組配置；私有/專屬分組不會進入公開模型廣場。',
+        readOnlyPricingHint: '自動讀取模型默認按 Token 當前價格展示；也可以在候選模型中切換為按次或按次（圖片）並填寫展示單價。分組倍率讀取分組配置，私有/專屬分組不會進入公開模型廣場。',
         candidateCount: '候選模型',
         visibleCount: '當前展示',
         currentMode: '同步模式',

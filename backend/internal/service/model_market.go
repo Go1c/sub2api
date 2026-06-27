@@ -72,11 +72,13 @@ type ModelMarketConfig struct {
 }
 
 type ModelMarketSelection struct {
-	Key       string `json:"key"`
-	Platform  string `json:"platform,omitempty"`
-	Model     string `json:"model,omitempty"`
-	Enabled   bool   `json:"enabled"`
-	SortOrder int    `json:"sort_order"`
+	Key         string              `json:"key"`
+	Platform    string              `json:"platform,omitempty"`
+	Model       string              `json:"model,omitempty"`
+	Enabled     bool                `json:"enabled"`
+	SortOrder   int                 `json:"sort_order"`
+	BillingMode string              `json:"billing_mode,omitempty"`
+	Pricing     *ModelMarketPricing `json:"pricing,omitempty"`
 }
 
 type ModelMarketCustomModel struct {
@@ -178,6 +180,14 @@ func NormalizeModelMarketConfig(cfg ModelMarketConfig) ModelMarketConfig {
 		if selection.Key == "" {
 			continue
 		}
+		selection.BillingMode = strings.TrimSpace(selection.BillingMode)
+		selection.Pricing = normalizeModelMarketPricing(selection.Pricing, selection.BillingMode)
+		if selection.BillingMode == "" && selection.Pricing != nil {
+			selection.BillingMode = selection.Pricing.BillingMode
+		}
+		if selection.Pricing != nil && selection.BillingMode != "" {
+			selection.Pricing.BillingMode = selection.BillingMode
+		}
 		if _, ok := seen[selection.Key]; ok {
 			continue
 		}
@@ -219,6 +229,13 @@ func ValidateModelMarketConfig(cfg ModelMarketConfig) error {
 	for i, selection := range cfg.SelectedModels {
 		if normalizeModelMarketKey(selection.Key) == "" && (strings.TrimSpace(selection.Platform) == "" || strings.TrimSpace(selection.Model) == "") {
 			return infraerrors.BadRequest("MODEL_MARKET_SELECTION_REQUIRED", fmt.Sprintf("model market selection #%d requires key or platform/model", i+1))
+		}
+		normalized := NormalizeModelMarketConfig(ModelMarketConfig{SelectedModels: []ModelMarketSelection{selection}}).SelectedModels
+		if len(normalized) == 0 {
+			continue
+		}
+		if normalized[0].BillingMode != "" && !isModelMarketBillingMode(normalized[0].BillingMode) {
+			return infraerrors.BadRequest("MODEL_MARKET_SELECTION_BILLING_MODE_INVALID", fmt.Sprintf("model market selection #%d has invalid billing mode", i+1))
 		}
 	}
 	for i, custom := range cfg.CustomModels {
@@ -598,6 +615,7 @@ func applyModelMarketConfig(candidates []ModelMarketModel, cfg ModelMarketConfig
 	customModels := modelMarketCustomModels(cfg.CustomModels)
 	if cfg.AutoSync {
 		out := cloneModelMarketModels(candidates)
+		applyModelMarketSelectionOverrides(out, cfg.SelectedModels)
 		out = append(out, customModels...)
 		sortConfiguredModelMarketModels(out)
 		return out
@@ -617,11 +635,54 @@ func applyModelMarketConfig(candidates []ModelMarketModel, cfg ModelMarketConfig
 			continue
 		}
 		candidate.SortOrder = selection.SortOrder
+		applyModelMarketSelectionOverride(&candidate, selection)
 		out = append(out, candidate)
 	}
 	out = append(out, customModels...)
 	sortConfiguredModelMarketModels(out)
 	return out
+}
+
+func applyModelMarketSelectionOverrides(models []ModelMarketModel, selections []ModelMarketSelection) {
+	overrides := make(map[string]ModelMarketSelection, len(selections))
+	for _, selection := range selections {
+		if !selection.Enabled || !hasModelMarketSelectionOverride(selection) {
+			continue
+		}
+		overrides[selection.Key] = selection
+	}
+	for i := range models {
+		if selection, ok := overrides[models[i].Key]; ok {
+			applyModelMarketSelectionOverride(&models[i], selection)
+		}
+	}
+}
+
+func hasModelMarketSelectionOverride(selection ModelMarketSelection) bool {
+	return strings.TrimSpace(selection.BillingMode) != "" || selection.Pricing != nil
+}
+
+func applyModelMarketSelectionOverride(model *ModelMarketModel, selection ModelMarketSelection) {
+	if model == nil || !hasModelMarketSelectionOverride(selection) {
+		return
+	}
+	billingMode := strings.TrimSpace(selection.BillingMode)
+	pricing := cloneModelMarketPricing(selection.Pricing)
+	if billingMode == "" && pricing != nil {
+		billingMode = pricing.BillingMode
+	}
+	if billingMode == "" || !isModelMarketBillingMode(billingMode) {
+		return
+	}
+	if pricing == nil {
+		pricing = cloneModelMarketPricing(model.Pricing)
+	}
+	if pricing == nil {
+		pricing = &ModelMarketPricing{}
+	}
+	pricing.BillingMode = billingMode
+	model.BillingMode = billingMode
+	model.Pricing = pricing
 }
 
 func modelMarketCustomModels(customModels []ModelMarketCustomModel) []ModelMarketModel {

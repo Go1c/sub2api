@@ -81,7 +81,7 @@
                     ? 'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-400/60 dark:bg-teal-500/10 dark:text-teal-200'
                     : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-white hover:text-gray-900 dark:border-dark-700 dark:bg-dark-950/60 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-white'
                 ]"
-                @click="selectedGroup = option.value"
+                @click="selectGroup(option.value)"
               >
                 <span class="truncate">{{ option.label }}</span>
                 <span class="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-dark-700 dark:text-dark-300">
@@ -678,6 +678,11 @@ function resetFilters() {
   selectedGroup.value = 'all'
   selectedBillingMode.value = 'all'
   searchQuery.value = ''
+}
+
+function selectGroup(value: string) {
+  selectedProvider.value = 'all'
+  selectedGroup.value = value
 }
 
 async function copyVisibleModels() {

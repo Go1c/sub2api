@@ -5627,7 +5627,7 @@ export default {
         displayTitlePlaceholder: '模型广场',
         displayDescription: '页面说明',
         displayDescriptionPlaceholder: '按平台、分组和计费类型查看当前可用模型。',
-        readOnlyPricingHint: '这里不配置自动读取模型的价格。模型价格读取当前计算价格，分组倍率读取分组配置；私有/专属分组不会进入公开模型广场。',
+        readOnlyPricingHint: '自动读取模型默认按 Token 当前价格展示；也可以在候选模型中切换为按次或按次（图片）并填写展示单价。分组倍率读取分组配置，私有/专属分组不会进入公开模型广场。',
         candidateCount: '候选模型',
         visibleCount: '当前展示',
         currentMode: '同步模式',

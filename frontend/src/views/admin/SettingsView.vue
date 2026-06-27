@@ -7013,15 +7013,49 @@
                         </div>
                       </td>
                       <td class="px-3 py-3">
-                        <span
-                          class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
-                          :class="modelMarketBillingModeBadgeClass(model.billing_mode)"
+                        <select
+                          :value="modelMarketCandidateBillingMode(model)"
+                          class="input input-sm min-w-[9rem]"
+                          :data-testid="`model-market-candidate-billing-${model.key}`"
+                          @change="updateModelMarketCandidateBillingMode(model, $event)"
                         >
-                          {{ modelMarketBillingModeLabel(model.billing_mode) }}
-                        </span>
+                          <option
+                            v-for="option in modelMarketBillingModeOptions"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ t(option.labelKey) }}
+                          </option>
+                        </select>
                       </td>
                       <td class="px-3 py-3 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
-                        {{ formatModelMarketPrice(model) }}
+                        <div v-if="modelMarketCandidateBillingMode(model) === BILLING_MODE_PER_REQUEST" class="flex min-w-[10rem] items-center gap-2">
+                          <input
+                            :value="modelMarketCandidatePriceDisplay(model, 'per_request_price', 1)"
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            class="input input-sm w-32"
+                            :data-testid="`model-market-candidate-per-request-price-${model.key}`"
+                            @input="updateModelMarketCandidatePrice(model, 'per_request_price', $event, 1)"
+                          />
+                          <span class="whitespace-nowrap text-gray-400">{{ t("admin.settings.modelMarket.perRequestPrice") }}</span>
+                        </div>
+                        <div v-else-if="modelMarketCandidateBillingMode(model) === BILLING_MODE_IMAGE" class="flex min-w-[10rem] items-center gap-2">
+                          <input
+                            :value="modelMarketCandidatePriceDisplay(model, 'image_output_price', 1)"
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            class="input input-sm w-32"
+                            :data-testid="`model-market-candidate-image-price-${model.key}`"
+                            @input="updateModelMarketCandidatePrice(model, 'image_output_price', $event, 1)"
+                          />
+                          <span class="whitespace-nowrap text-gray-400">{{ t("admin.settings.modelMarket.imageOutputPrice") }}</span>
+                        </div>
+                        <span v-else>
+                          {{ formatModelMarketPrice(model) }}
+                        </span>
                       </td>
                     </tr>
                     <tr v-if="modelMarketCandidates.length === 0">
@@ -7442,7 +7476,6 @@ import BackupSettings from "@/views/admin/BackupView.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
-import { getBillingModeBadgeClass, getBillingModeLabel } from "@/utils/billingMode";
 import { formatScaled } from "@/utils/pricing";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
@@ -8601,13 +8634,25 @@ function normalizeModelMarketSelection(
   const platform = selection.platform?.trim();
   const model = selection.model?.trim();
   if (!key && (!platform || !model)) return null;
-  return {
+  const normalized: ModelMarketSelection = {
     key: key || `${platform}:${model}`,
     platform,
     model,
     enabled: selection.enabled !== false,
     sort_order: Math.max(0, Math.floor(Number(selection.sort_order) || 0)),
   };
+  const explicitMode = isModelMarketBillingMode(selection.billing_mode)
+    ? selection.billing_mode
+    : null;
+  const pricingMode = isModelMarketBillingMode(selection.pricing?.billing_mode)
+    ? selection.pricing.billing_mode
+    : null;
+  const billingMode = explicitMode || pricingMode;
+  if (billingMode) {
+    normalized.billing_mode = billingMode;
+    normalized.pricing = normalizeModelMarketCustomPricing(selection.pricing, billingMode);
+  }
+  return normalized;
 }
 
 type ModelMarketCustomPriceField =
@@ -8817,6 +8862,57 @@ function updateModelMarketSortOrder(model: ModelMarketModel, event: Event) {
   selection.sort_order = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
+function ensureModelMarketSelection(model: ModelMarketModel): ModelMarketSelection {
+  const existing = selectionForModel(model);
+  if (existing) {
+    existing.enabled = true;
+    if (!existing.sort_order && !modelMarketConfig.auto_sync) {
+      existing.sort_order = nextModelMarketSortOrder();
+    }
+    return existing;
+  }
+  const selection: ModelMarketSelection = {
+    key: model.key,
+    platform: model.platform,
+    model: model.name,
+    enabled: true,
+    sort_order: modelMarketConfig.auto_sync ? Math.max(0, Number(model.sort_order) || 0) : nextModelMarketSortOrder(),
+  };
+  modelMarketConfig.selected_models.push(selection);
+  return selection;
+}
+
+function modelMarketCandidateBillingMode(model: ModelMarketModel): BillingMode {
+  const selectionMode = selectionForModel(model)?.billing_mode;
+  if (isModelMarketBillingMode(selectionMode)) return selectionMode;
+  if (isModelMarketBillingMode(model.billing_mode)) return model.billing_mode;
+  return BILLING_MODE_TOKEN;
+}
+
+function updateModelMarketCandidateBillingMode(model: ModelMarketModel, event: Event) {
+  const value = String((event.target as HTMLSelectElement | null)?.value || "");
+  const mode = isModelMarketBillingMode(value) ? value : BILLING_MODE_TOKEN;
+  const selection = ensureModelMarketSelection(model);
+  if (mode === BILLING_MODE_TOKEN) {
+    delete selection.billing_mode;
+    selection.pricing = null;
+    return;
+  }
+  selection.billing_mode = mode;
+  selection.pricing = normalizeModelMarketCustomPricing(
+    selection.pricing?.billing_mode === mode ? selection.pricing : createModelMarketPricing(mode),
+    mode,
+  );
+}
+
+function ensureModelMarketCandidatePricing(model: ModelMarketModel): ModelMarketPricing {
+  const mode = modelMarketCandidateBillingMode(model);
+  const selection = ensureModelMarketSelection(model);
+  selection.billing_mode = mode;
+  selection.pricing = normalizeModelMarketCustomPricing(selection.pricing, mode);
+  return selection.pricing;
+}
+
 function addModelMarketCustomModel() {
   const firstGroup = modelMarketGroups.value[0];
   const platform = firstGroup?.platform || "openai";
@@ -8911,6 +9007,16 @@ function modelMarketCustomPriceDisplay(
   return Number((value * scale).toFixed(8));
 }
 
+function modelMarketCandidatePriceDisplay(
+  model: ModelMarketModel,
+  field: ModelMarketCustomPriceField,
+  scale: number,
+): number | "" {
+  const value = selectionForModel(model)?.pricing?.[field];
+  if (value == null) return "";
+  return Number((value * scale).toFixed(8));
+}
+
 function updateModelMarketCustomPrice(
   custom: ModelMarketCustomModel,
   field: ModelMarketCustomPriceField,
@@ -8925,6 +9031,26 @@ function updateModelMarketCustomPrice(
   }
   const value = Number(raw);
   pricing[field] = Number.isFinite(value) && value >= 0 ? value / scale : null;
+}
+
+function updateModelMarketCandidatePrice(
+  model: ModelMarketModel,
+  field: ModelMarketCustomPriceField,
+  event: Event,
+  scale: number,
+) {
+  const raw = (event.target as HTMLInputElement | null)?.value;
+  const pricing = ensureModelMarketCandidatePricing(model);
+  if (raw == null || raw === "") {
+    pricing[field] = null;
+    return;
+  }
+  const value = Number(raw);
+  pricing[field] = Number.isFinite(value) && value >= 0 ? value / scale : null;
+}
+
+function hasModelMarketSelectionOverride(selection: ModelMarketSelection): boolean {
+  return isModelMarketBillingMode(selection.billing_mode) || selection.pricing != null;
 }
 
 function validateModelMarketConfigBeforeSave(): boolean {
@@ -8966,7 +9092,9 @@ function normalizeModelMarketConfigForSave(): ModelMarketConfig {
     auto_sync: modelMarketConfig.auto_sync,
     title: modelMarketConfig.title.trim(),
     description: modelMarketConfig.description.trim(),
-    selected_models: modelMarketConfig.auto_sync ? [] : selected,
+    selected_models: modelMarketConfig.auto_sync
+      ? selected.filter(hasModelMarketSelectionOverride)
+      : selected,
     custom_models: customModels,
   };
 }
@@ -8992,18 +9120,6 @@ function formatModelMarketMultiplier(value: number): string {
   const normalized = Number(value);
   if (!Number.isFinite(normalized)) return "1x";
   return `${normalized.toFixed(3).replace(/\.?0+$/, "")}x`;
-}
-
-function modelMarketBillingModeLabel(mode: ModelMarketModel["billing_mode"]): string {
-  if (mode === "unknown") return t("admin.settings.modelMarket.unknownBillingMode");
-  return getBillingModeLabel(mode, t);
-}
-
-function modelMarketBillingModeBadgeClass(mode: ModelMarketModel["billing_mode"]): string {
-  if (mode === "unknown") {
-    return "bg-gray-100 text-gray-700 dark:bg-dark-800 dark:text-dark-300";
-  }
-  return getBillingModeBadgeClass(mode);
 }
 
 function formatModelMarketPrice(model: ModelMarketModel): string {
