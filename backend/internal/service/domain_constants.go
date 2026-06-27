@@ -248,7 +248,7 @@ const (
 	SettingKeyTablePageSizeOptions                   = "table_page_size_options"                     // 表格可选每页条数（JSON 数组）
 	SettingKeyCustomMenuItems                        = "custom_menu_items"                           // 自定义菜单项（JSON 数组）
 	SettingKeyCustomEndpoints                        = "custom_endpoints"                            // 自定义端点列表（JSON 数组）
-	SettingKeyPublicModelPricing                     = "public_model_pricing"                        // 首页公开模型定价（JSON）
+	SettingKeyModelMarket                            = "model_market"                                // 模型广场配置（JSON）
 	SettingKeyCCSwitchDefaultModelAnthropic          = "ccswitch_default_model_anthropic"            // CCSwitch 导入默认 Claude 模型
 	SettingKeyCCSwitchDefaultModelOpenAI             = "ccswitch_default_model_openai"               // CCSwitch 导入默认 OpenAI/Codex 模型
 	SettingKeyCCSwitchDefaultModelGemini             = "ccswitch_default_model_gemini"               // CCSwitch 导入默认 Gemini 模型

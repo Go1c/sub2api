@@ -118,15 +118,3 @@ func publicLoginAgreementDocumentsToDTO(items []service.LoginAgreementDocument) 
 	}
 	return result
 }
-
-// GetPublicModelPricing 获取首页公开模型定价
-// GET /api/v1/pricing/public
-func (h *SettingHandler) GetPublicModelPricing(c *gin.Context) {
-	pricing, err := h.settingService.GetPublicModelPricing(c.Request.Context())
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, pricing.EnabledRows())
-}

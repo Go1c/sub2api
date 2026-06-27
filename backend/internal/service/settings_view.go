@@ -320,26 +320,6 @@ type LoginAgreementDocument struct {
 	ContentMD string `json:"content_md"`
 }
 
-type PublicModelPricingConfig struct {
-	Currency string                  `json:"currency"`
-	Unit     string                  `json:"unit"`
-	RateNote string                  `json:"rateNote"`
-	Rows     []PublicModelPricingRow `json:"rows"`
-}
-
-type PublicModelPricingRow struct {
-	Model          string  `json:"model"`
-	Group          string  `json:"group"`
-	Multiplier     string  `json:"multiplier"`
-	InputPrice     float64 `json:"inputPrice"`
-	OutputPrice    float64 `json:"outputPrice"`
-	OfficialInput  float64 `json:"officialInput"`
-	OfficialOutput float64 `json:"officialOutput"`
-	Discount       string  `json:"discount"`
-	OpenClaw       bool    `json:"openClaw"`
-	Enabled        bool    `json:"enabled"`
-}
-
 type WeChatConnectOAuthConfig struct {
 	Enabled             bool
 	LegacyAppID         string

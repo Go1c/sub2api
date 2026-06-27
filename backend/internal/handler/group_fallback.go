@@ -15,7 +15,7 @@ type groupFallbackResult struct {
 	ErrorWritten bool                      // true 表示已写错误响应到客户端，调用方必须立即 return
 }
 
-// tryGroupFallback 尝试分组级兜底：当前分组 A 的上游账号全部不可用时，切换到分组 B 重试。
+// tryGroupFallback 尝试分组级兜底：当前分组 A 的上游账号不可用时，切换到分组 B 重试。
 // 参数：
 //   - ctx: 请求上下文
 //   - reqLog: 请求日志记录器
@@ -126,4 +126,12 @@ func tryGroupFallback(
 		Group:        fallbackGroup,
 		ErrorWritten: false,
 	}
+}
+
+func shouldTryGroupFallbackOnAccountError(currentAPIKey *service.APIKey, groupFallbackUsed bool, streamStarted bool) bool {
+	if groupFallbackUsed || streamStarted || currentAPIKey == nil || currentAPIKey.Group == nil {
+		return false
+	}
+	fallbackGroupID := currentAPIKey.Group.FallbackGroupIDOnExhausted
+	return fallbackGroupID != nil && *fallbackGroupID > 0
 }

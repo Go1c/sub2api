@@ -556,8 +556,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		fallbackGroupID = apiKey.Group.FallbackGroupIDOnInvalidRequest
 	}
 	fallbackUsed := false
-	keyFallbackUsed := false       // 密钥级兜底单跳保护
-	groupFallbackUsed := false     // 分组级兜底单跳保护
+	keyFallbackUsed := false   // 密钥级兜底单跳保护
+	groupFallbackUsed := false // 分组级兜底单跳保护
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -924,6 +924,26 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleFailoverExhausted(c, failoverErr, account.Platform, true)
 						return
+					}
+					// A 的当前账号已经报错且响应未写出：若配置了分组兜底，优先切到 B，
+					// 避免单账号 A 继续走同组退避/重试。
+					if shouldTryGroupFallbackOnAccountError(currentAPIKey, groupFallbackUsed, streamStarted) {
+						if fbKey, fbSub, written := h.tryGroupFallbackAnthropic(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+							return
+						} else if fbKey != nil {
+							ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
+							c.Request = c.Request.WithContext(ctx)
+							currentAPIKey = fbKey
+							currentSubscription = fbSub
+							if currentAPIKey.Group != nil {
+								fallbackGroupID = currentAPIKey.Group.FallbackGroupIDOnInvalidRequest
+							} else {
+								fallbackGroupID = nil
+							}
+							groupFallbackUsed = true
+							retryWithFallback = true
+							break selectLoop
+						}
 					}
 					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 					switch action {

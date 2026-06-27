@@ -290,6 +290,18 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 					h.handleResponsesFailoverExhausted(c, failoverErr, true)
 					return
 				}
+				// A 的当前账号已经报错且响应未写出：若配置了分组兜底，优先切到 B。
+				if shouldTryGroupFallbackOnAccountError(currentAPIKey, groupFallbackUsed, streamStarted) {
+					if fbKey, fbSub, written := h.tryGroupFallbackResponses(c, reqLog, currentAPIKey, groupFallbackUsed, streamStarted); written {
+						return
+					} else if fbKey != nil {
+						currentAPIKey = fbKey
+						currentSubscription = fbSub
+						groupFallbackUsed = true
+						fs = NewFailoverState(h.maxAccountSwitches, false)
+						continue
+					}
+				}
 				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 				switch action {
 				case FailoverContinue:

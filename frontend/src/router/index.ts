@@ -41,6 +41,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/models',
+    name: 'ModelMarket',
+    component: () => import('@/views/ModelMarketView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Model Market'
+    }
+  },
+  {
     path: '/doc/:slug(.*)*',
     name: 'SitePage',
     component: () => import('@/views/PublicMarkdownPageView.vue'),

@@ -13,12 +13,28 @@ function homeNavItemsBlock(): string {
 }
 
 describe('HomeView navigation', () => {
+  it('replaces features navigation with the public model market page', () => {
+    const navItems = homeNavItemsBlock()
+
+    expect(navItems).toContain("key: 'models'")
+    expect(navItems).toContain("target: '/models'")
+    expect(navItems).not.toContain("target: '#features'")
+    expect(navItems).not.toContain("key: 'features'")
+  })
+
   it('links status navigation to the standalone public status page', () => {
     const navItems = homeNavItemsBlock()
 
     expect(navItems).toContain("key: 'status'")
     expect(navItems).toContain("target: '/status'")
     expect(navItems).not.toContain("target: '#status'")
+  })
+
+  it('does not keep the removed homepage pricing anchor in navigation', () => {
+    const navItems = homeNavItemsBlock()
+
+    expect(navItems).not.toContain("key: 'pricing'")
+    expect(navItems).not.toContain("target: '#pricing'")
   })
 
   it('replaces support with the Image2 generator authenticated handoff link', () => {

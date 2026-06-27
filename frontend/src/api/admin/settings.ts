@@ -12,6 +12,10 @@ import type {
   NotifyEmailEntry,
   SitePage,
 } from "@/types";
+import type {
+  AdminModelMarketResponse,
+  ModelMarketConfig,
+} from "@/api/modelMarket";
 
 export interface DefaultSubscriptionSetting {
   group_id: number;
@@ -57,26 +61,6 @@ export interface WeChatConnectModeOption {
   value: WeChatConnectMode;
   labelZh: string;
   labelEn: string;
-}
-
-export interface PublicModelPricingRow {
-  model: string;
-  group: string;
-  multiplier: string;
-  inputPrice: number;
-  outputPrice: number;
-  officialInput: number;
-  officialOutput: number;
-  discount: string;
-  openClaw: boolean;
-  enabled: boolean;
-}
-
-export interface PublicModelPricingConfig {
-  currency: string;
-  unit: string;
-  rateNote: string;
-  rows: PublicModelPricingRow[];
 }
 
 export type FrontendLocaleCode = "en" | "zh" | "zh-Hant";
@@ -948,20 +932,20 @@ export async function deleteAdminApiKey(): Promise<{ message: string }> {
   return data;
 }
 
-// ==================== Public Model Pricing ====================
+// ==================== Model Market ====================
 
-export async function getPublicModelPricing(): Promise<PublicModelPricingConfig> {
-  const { data } = await apiClient.get<PublicModelPricingConfig>(
-    "/admin/settings/public-model-pricing",
+export async function getModelMarket(): Promise<AdminModelMarketResponse> {
+  const { data } = await apiClient.get<AdminModelMarketResponse>(
+    "/admin/settings/model-market",
   );
   return data;
 }
 
-export async function updatePublicModelPricing(
-  config: PublicModelPricingConfig,
-): Promise<PublicModelPricingConfig> {
-  const { data } = await apiClient.put<PublicModelPricingConfig>(
-    "/admin/settings/public-model-pricing",
+export async function updateModelMarket(
+  config: ModelMarketConfig,
+): Promise<AdminModelMarketResponse> {
+  const { data } = await apiClient.put<AdminModelMarketResponse>(
+    "/admin/settings/model-market",
     config,
   );
   return data;
@@ -1275,8 +1259,8 @@ export const settingsAPI = {
   getAdminApiKey,
   regenerateAdminApiKey,
   deleteAdminApiKey,
-  getPublicModelPricing,
-  updatePublicModelPricing,
+  getModelMarket,
+  updateModelMarket,
   getOverloadCooldownSettings,
   updateOverloadCooldownSettings,
   getRateLimit429CooldownSettings,

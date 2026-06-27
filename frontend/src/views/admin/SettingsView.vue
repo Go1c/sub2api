@@ -6775,7 +6775,7 @@
         </div>
         <!-- /Tab: Email -->
 
-        <!-- Tab: Public Pricing -->
+        <!-- Tab: Model Market -->
         <div v-show="activeTab === 'pricing'" class="space-y-6">
           <div class="card">
             <div
@@ -6784,17 +6784,17 @@
               <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {{ t("admin.settings.publicPricing.title") }}
+                    {{ t("admin.settings.modelMarket.title") }}
                   </h2>
                   <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {{ t("admin.settings.publicPricing.description") }}
+                    {{ t("admin.settings.modelMarket.description") }}
                   </p>
                 </div>
                 <button
                   type="button"
                   class="btn btn-secondary btn-sm"
-                  :disabled="publicModelPricingLoading"
-                  @click="loadPublicModelPricing"
+                  :disabled="modelMarketLoading"
+                  @click="loadModelMarket"
                 >
                   <Icon name="refresh" size="sm" />
                   {{ t("common.refresh") }}
@@ -6802,155 +6802,480 @@
               </div>
             </div>
 
-            <div v-if="publicModelPricingLoading" class="flex items-center gap-2 p-6 text-gray-500">
+            <div v-if="modelMarketLoading" class="flex items-center gap-2 p-6 text-gray-500">
               <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
               {{ t("common.loading") }}
             </div>
 
             <div v-else class="space-y-6 p-6">
-              <div class="grid gap-4 md:grid-cols-3">
+              <div class="grid gap-4 lg:grid-cols-2">
+                <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <div class="text-sm font-medium text-gray-900 dark:text-white">
+                        {{ t("admin.settings.modelMarket.enabled") }}
+                      </div>
+                      <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                        {{ t("admin.settings.modelMarket.enabledHint") }}
+                      </p>
+                    </div>
+                    <Toggle
+                      v-model="modelMarketConfig.enabled"
+                      data-testid="model-market-enabled"
+                    />
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <div class="text-sm font-medium text-gray-900 dark:text-white">
+                        {{ t("admin.settings.modelMarket.autoSync") }}
+                      </div>
+                      <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                        {{ t("admin.settings.modelMarket.autoSyncHint") }}
+                      </p>
+                    </div>
+                    <Toggle
+                      v-model="modelMarketConfig.auto_sync"
+                      data-testid="model-market-auto-sync"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid gap-4 md:grid-cols-2">
                 <div>
                   <label class="input-label">
-                    {{ t("admin.settings.publicPricing.currency") }}
+                    {{ t("admin.settings.modelMarket.displayTitle") }}
                   </label>
                   <input
-                    v-model="publicModelPricingForm.currency"
+                    v-model="modelMarketConfig.title"
                     type="text"
                     class="input"
-                    placeholder="CNY"
+                    :placeholder="t('admin.settings.modelMarket.displayTitlePlaceholder')"
                   />
                 </div>
                 <div>
                   <label class="input-label">
-                    {{ t("admin.settings.publicPricing.unit") }}
+                    {{ t("admin.settings.modelMarket.displayDescription") }}
                   </label>
                   <input
-                    v-model="publicModelPricingForm.unit"
+                    v-model="modelMarketConfig.description"
                     type="text"
                     class="input"
-                    placeholder="1M tokens"
-                  />
-                </div>
-                <div>
-                  <label class="input-label">
-                    {{ t("admin.settings.publicPricing.rateNote") }}
-                  </label>
-                  <input
-                    v-model="publicModelPricingForm.rateNote"
-                    type="text"
-                    class="input"
-                    :placeholder="t('admin.settings.publicPricing.rateNotePlaceholder')"
+                    :placeholder="t('admin.settings.modelMarket.displayDescriptionPlaceholder')"
                   />
                 </div>
               </div>
 
               <div class="rounded-xl border border-primary-200 bg-primary-50/70 p-4 text-sm text-primary-800 dark:border-primary-800/50 dark:bg-primary-900/20 dark:text-primary-200">
-                {{ t("admin.settings.publicPricing.autoCalcHint") }}
+                {{ t("admin.settings.modelMarket.readOnlyPricingHint") }}
               </div>
 
+              <div class="grid gap-4 md:grid-cols-3">
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/70">
+                  <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.modelMarket.candidateCount") }}
+                  </div>
+                  <div class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                    {{ modelMarketCandidates.length }}
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/70">
+                  <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.modelMarket.visibleCount") }}
+                  </div>
+                  <div class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                    {{ modelMarketVisibleCount }}
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/70">
+                  <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.modelMarket.currentMode") }}
+                  </div>
+                  <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
+                    {{
+                      modelMarketConfig.auto_sync
+                        ? t("admin.settings.modelMarket.autoSyncMode")
+                        : t("admin.settings.modelMarket.manualMode")
+                    }}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{
+                        modelMarketConfig.auto_sync
+                          ? t("admin.settings.modelMarket.autoPreview")
+                          : t("admin.settings.modelMarket.manualSelection")
+                      }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{
+                        modelMarketConfig.auto_sync
+                          ? t("admin.settings.modelMarket.autoPreviewHint")
+                          : t("admin.settings.modelMarket.manualSelectionHint")
+                      }}
+                    </p>
+                  </div>
+                </div>
+
               <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-700">
-                <table class="min-w-[1080px] w-full text-sm">
+                <table class="min-w-[1120px] w-full text-sm">
                   <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-dark-800 dark:text-gray-400">
                     <tr>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.enabled") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.model") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.group") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialInput") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.officialOutput") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.multiplier") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.inputPrice") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.outputPrice") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.discount") }}</th>
-                      <th class="px-3 py-3">{{ t("admin.settings.publicPricing.openClaw") }}</th>
-                      <th class="px-3 py-3"></th>
+                      <th v-if="!modelMarketConfig.auto_sync" class="px-3 py-3">
+                        {{ t("admin.settings.modelMarket.show") }}
+                      </th>
+                      <th v-if="!modelMarketConfig.auto_sync" class="px-3 py-3">
+                        {{ t("admin.settings.modelMarket.sortOrder") }}
+                      </th>
+                      <th class="px-3 py-3">{{ t("admin.settings.modelMarket.platform") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.modelMarket.model") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.modelMarket.channels") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.modelMarket.groups") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.modelMarket.billingMode") }}</th>
+                      <th class="px-3 py-3">{{ t("admin.settings.modelMarket.currentPrice") }}</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
                     <tr
-                      v-for="(row, index) in publicModelPricingForm.rows"
-                      :key="index"
+                      v-for="model in modelMarketCandidates"
+                      :key="model.key"
                       class="bg-white dark:bg-dark-900"
                     >
-                      <td class="px-3 py-3">
+                      <td v-if="!modelMarketConfig.auto_sync" class="px-3 py-3">
                         <input
-                          v-model="row.enabled"
+                          :checked="isModelMarketSelected(model)"
                           type="checkbox"
+                          :data-testid="`model-market-select-${model.key}`"
                           class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          @change="toggleModelMarketSelection(model, $event)"
                         />
                       </td>
-                      <td class="px-3 py-3">
-                        <input v-model="row.model" type="text" class="input input-sm min-w-[150px]" />
-                      </td>
-                      <td class="px-3 py-3">
-                        <input v-model="row.group" type="text" class="input input-sm min-w-[120px]" />
-                      </td>
-                      <td class="px-3 py-3">
-                        <input v-model.number="row.officialInput" type="number" min="0" step="0.01" class="input input-sm w-24" />
-                      </td>
-                      <td class="px-3 py-3">
-                        <input v-model.number="row.officialOutput" type="number" min="0" step="0.01" class="input input-sm w-24" />
-                      </td>
-                      <td class="px-3 py-3">
-                        <input v-model="row.multiplier" type="text" class="input input-sm min-w-[80px]" placeholder="1.4" />
-                      </td>
-                      <td class="px-3 py-3">
-                        <span class="inline-flex min-w-[5.5rem] items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
-                          {{ formatPublicPricingCny(derivePublicPricingInput(row)) }}
-                        </span>
-                      </td>
-                      <td class="px-3 py-3">
-                        <span class="inline-flex min-w-[5.5rem] items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
-                          {{ formatPublicPricingCny(derivePublicPricingOutput(row)) }}
-                        </span>
-                      </td>
-                      <td class="px-3 py-3">
-                        <span class="inline-flex min-w-[5rem] items-center justify-center rounded-full bg-gradient-to-r from-primary-500 to-primary-600 px-3 py-1.5 font-bold text-white shadow-sm">
-                          {{ derivePublicPricingDiscount(row) || "-" }}
-                        </span>
-                      </td>
-                      <td class="px-3 py-3">
+                      <td v-if="!modelMarketConfig.auto_sync" class="px-3 py-3">
                         <input
-                          v-model="row.openClaw"
-                          type="checkbox"
-                          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          :value="selectionForModel(model)?.sort_order ?? 0"
+                          :disabled="!isModelMarketSelected(model)"
+                          type="number"
+                          min="0"
+                          step="1"
+                          :data-testid="`model-market-sort-${model.key}`"
+                          class="input input-sm w-24"
+                          @input="updateModelMarketSortOrder(model, $event)"
                         />
                       </td>
-                      <td class="px-3 py-3 text-right">
-                        <button
-                          type="button"
-                          class="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
-                          @click="removePublicPricingRow(index)"
+                      <td class="px-3 py-3 font-medium text-gray-900 dark:text-white">
+                        {{ model.platform || "-" }}
+                      </td>
+                      <td class="px-3 py-3">
+                        <div class="font-medium text-gray-900 dark:text-white">{{ model.name }}</div>
+                        <div class="mt-1 max-w-[16rem] truncate text-xs text-gray-500 dark:text-gray-400">{{ model.key }}</div>
+                      </td>
+                      <td class="px-3 py-3">
+                        <div class="flex max-w-[14rem] flex-wrap gap-1.5">
+                          <span
+                            v-for="channel in model.channels.slice(0, 3)"
+                            :key="`${model.key}-${channel}`"
+                            class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-dark-800 dark:text-dark-200"
+                          >
+                            {{ channel }}
+                          </span>
+                          <span
+                            v-if="model.channels.length > 3"
+                            class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-500 dark:bg-dark-800 dark:text-dark-400"
+                          >
+                            +{{ model.channels.length - 3 }}
+                          </span>
+                          <span v-if="model.channels.length === 0" class="text-gray-400">-</span>
+                        </div>
+                      </td>
+                      <td class="px-3 py-3">
+                        <div class="flex max-w-[18rem] flex-wrap gap-1.5">
+                          <span
+                            v-for="group in model.groups.slice(0, 4)"
+                            :key="`${model.key}-${group.id}`"
+                            class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300"
+                          >
+                            {{ group.name }} · {{ formatModelMarketMultiplier(group.rate_multiplier) }}
+                          </span>
+                          <span
+                            v-if="model.groups.length > 4"
+                            class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-500 dark:bg-dark-800 dark:text-dark-400"
+                          >
+                            +{{ model.groups.length - 4 }}
+                          </span>
+                          <span v-if="model.groups.length === 0" class="text-gray-400">-</span>
+                        </div>
+                      </td>
+                      <td class="px-3 py-3">
+                        <span
+                          class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
+                          :class="modelMarketBillingModeBadgeClass(model.billing_mode)"
                         >
-                          <Icon name="trash" size="sm" />
-                        </button>
+                          {{ modelMarketBillingModeLabel(model.billing_mode) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-3 text-xs leading-relaxed text-gray-600 dark:text-gray-300">
+                        {{ formatModelMarketPrice(model) }}
                       </td>
                     </tr>
-                    <tr v-if="publicModelPricingForm.rows.length === 0">
-                      <td colspan="11" class="px-3 py-8 text-center text-gray-500">
-                        {{ t("admin.settings.publicPricing.empty") }}
+                    <tr v-if="modelMarketCandidates.length === 0">
+                      <td :colspan="modelMarketConfig.auto_sync ? 6 : 8" class="px-3 py-8 text-center text-gray-500">
+                        {{ t("admin.settings.modelMarket.empty") }}
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+              </div>
 
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  @click="addPublicPricingRow"
-                >
-                  <Icon name="plus" size="sm" />
-                  {{ t("admin.settings.publicPricing.addRow") }}
-                </button>
+              <div class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
+                <div class="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t("admin.settings.modelMarket.customModels") }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.modelMarket.customModelsHint") }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    data-testid="model-market-add-custom"
+                    @click="addModelMarketCustomModel"
+                  >
+                    <Icon name="plus" size="sm" />
+                    {{ t("admin.settings.modelMarket.addCustomModel") }}
+                  </button>
+                </div>
+
+                <div v-if="modelMarketConfig.custom_models.length === 0" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.modelMarket.noCustomModels") }}
+                </div>
+
+                <div v-else class="divide-y divide-gray-100 dark:divide-dark-700">
+                  <div
+                    v-for="(custom, index) in modelMarketConfig.custom_models"
+                    :key="custom.key || `custom-${index}`"
+                    class="space-y-4 px-4 py-4"
+                  >
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div class="grid flex-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.platform") }}
+                          </label>
+                          <select
+                            :value="custom.platform"
+                            class="input"
+                            :data-testid="`model-market-custom-platform-${index}`"
+                            @change="updateModelMarketCustomPlatform(custom, $event)"
+                          >
+                            <option
+                              v-for="option in modelMarketPlatformOptions"
+                              :key="option.value"
+                              :value="option.value"
+                            >
+                              {{ option.label }}
+                            </option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.model") }}
+                          </label>
+                          <input
+                            v-model="custom.model"
+                            type="text"
+                            class="input"
+                            :placeholder="t('admin.settings.modelMarket.customModelPlaceholder')"
+                            :data-testid="`model-market-custom-model-${index}`"
+                            @input="updateModelMarketCustomModelName(custom)"
+                          />
+                        </div>
+
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.billingMode") }}
+                          </label>
+                          <select
+                            :value="custom.billing_mode"
+                            class="input"
+                            :data-testid="`model-market-custom-billing-${index}`"
+                            @change="updateModelMarketCustomBillingMode(custom, $event)"
+                          >
+                            <option
+                              v-for="option in modelMarketBillingModeOptions"
+                              :key="option.value"
+                              :value="option.value"
+                            >
+                              {{ t(option.labelKey) }}
+                            </option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.sortOrder") }}
+                          </label>
+                          <input
+                            v-model.number="custom.sort_order"
+                            type="number"
+                            min="0"
+                            step="1"
+                            class="input"
+                            :data-testid="`model-market-custom-sort-${index}`"
+                          />
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-3">
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <input
+                            v-model="custom.enabled"
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            :data-testid="`model-market-custom-enabled-${index}`"
+                          />
+                          {{ t("admin.settings.modelMarket.show") }}
+                        </label>
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                          :data-testid="`model-market-custom-remove-${index}`"
+                          @click="removeModelMarketCustomModel(index)"
+                        >
+                          <Icon name="trash" size="sm" />
+                          {{ t("common.delete") }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.group") }}
+                        </label>
+                        <select
+                          :value="selectedModelMarketCustomGroupID(custom)"
+                          class="input"
+                          :data-testid="`model-market-custom-group-${index}`"
+                          @change="updateModelMarketCustomGroup(custom, $event)"
+                        >
+                          <option value="">
+                            {{ t("admin.settings.modelMarket.selectGroup") }}
+                          </option>
+                          <option
+                            v-for="group in modelMarketCustomGroupOptions(custom)"
+                            :key="group.id"
+                            :value="group.id"
+                          >
+                            {{ group.name }} · {{ formatModelMarketMultiplier(group.rate_multiplier) }}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.rateMultiplier") }}
+                        </label>
+                        <input
+                          :value="modelMarketCustomRate(custom)"
+                          type="number"
+                          min="0.0001"
+                          step="0.01"
+                          class="input"
+                          :data-testid="`model-market-custom-rate-${index}`"
+                          @input="updateModelMarketCustomRate(custom, $event)"
+                        />
+                      </div>
+
+                      <div v-if="custom.billing_mode === BILLING_MODE_PER_REQUEST">
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.perRequestPrice") }}
+                        </label>
+                        <input
+                          :value="modelMarketCustomPriceDisplay(custom, 'per_request_price', 1)"
+                          type="number"
+                          min="0"
+                          step="0.000001"
+                          class="input"
+                          :data-testid="`model-market-custom-per-request-price-${index}`"
+                          @input="updateModelMarketCustomPrice(custom, 'per_request_price', $event, 1)"
+                        />
+                      </div>
+
+                      <div v-else-if="custom.billing_mode === BILLING_MODE_IMAGE">
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.imageOutputPrice") }}
+                        </label>
+                        <input
+                          :value="modelMarketCustomPriceDisplay(custom, 'image_output_price', 1)"
+                          type="number"
+                          min="0"
+                          step="0.000001"
+                          class="input"
+                          :data-testid="`model-market-custom-image-price-${index}`"
+                          @input="updateModelMarketCustomPrice(custom, 'image_output_price', $event, 1)"
+                        />
+                      </div>
+
+                      <template v-else>
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.inputPrice") }} / 1M
+                          </label>
+                          <input
+                            :value="modelMarketCustomPriceDisplay(custom, 'input_price', 1_000_000)"
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            class="input"
+                            :data-testid="`model-market-custom-input-price-${index}`"
+                            @input="updateModelMarketCustomPrice(custom, 'input_price', $event, 1_000_000)"
+                          />
+                        </div>
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.outputPrice") }} / 1M
+                          </label>
+                          <input
+                            :value="modelMarketCustomPriceDisplay(custom, 'output_price', 1_000_000)"
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            class="input"
+                            :data-testid="`model-market-custom-output-price-${index}`"
+                            @input="updateModelMarketCustomPrice(custom, 'output_price', $event, 1_000_000)"
+                          />
+                        </div>
+                      </template>
+                    </div>
+
+                    <div v-if="custom.key" class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ custom.key }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex justify-end">
                 <button
                   type="button"
                   class="btn btn-primary"
-                  :disabled="publicModelPricingSaving"
-                  @click="savePublicModelPricing"
+                  :disabled="modelMarketSaving"
+                  data-testid="model-market-save"
+                  @click="saveModelMarket"
                 >
                   <svg
-                    v-if="publicModelPricingSaving"
+                    v-if="modelMarketSaving"
                     class="h-4 w-4 animate-spin"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -6969,13 +7294,13 @@
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  {{ t("admin.settings.publicPricing.save") }}
+                  {{ t("admin.settings.modelMarket.save") }}
                 </button>
               </div>
             </div>
           </div>
         </div>
-        <!-- /Tab: Public Pricing -->
+        <!-- /Tab: Model Market -->
 
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
@@ -7072,14 +7397,27 @@ import type {
   SystemSettings,
   UpdateSettingsRequest,
   DefaultSubscriptionSetting,
-  PublicModelPricingConfig,
-  PublicModelPricingRow,
   OpenAIFastPolicyRule,
   WeChatConnectMode,
   WebSearchEmulationConfig,
   WebSearchProviderConfig,
   WebSearchTestResult,
 } from "@/api/admin/settings";
+import type {
+  AdminModelMarketResponse,
+  ModelMarketCustomModel,
+  ModelMarketGroup,
+  ModelMarketConfig,
+  ModelMarketModel,
+  ModelMarketPricing,
+  ModelMarketSelection,
+} from "@/api/modelMarket";
+import {
+  BILLING_MODE_IMAGE,
+  BILLING_MODE_PER_REQUEST,
+  BILLING_MODE_TOKEN,
+} from "@/constants/channel";
+import type { BillingMode } from "@/constants/channel";
 import type {
   AdminGroup,
   ContactChannel,
@@ -7104,6 +7442,8 @@ import BackupSettings from "@/views/admin/BackupView.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
+import { getBillingModeBadgeClass, getBillingModeLabel } from "@/utils/billingMode";
+import { formatScaled } from "@/utils/pricing";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
 import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
@@ -7169,6 +7509,17 @@ const settingsTabs = [
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
+const modelMarketPlatformOptions = [
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "gemini", label: "Gemini" },
+  { value: "antigravity", label: "Antigravity" },
+];
+const modelMarketBillingModeOptions = [
+  { value: BILLING_MODE_TOKEN, labelKey: "admin.channels.form.billingModeToken" },
+  { value: BILLING_MODE_PER_REQUEST, labelKey: "admin.channels.form.billingModePerRequest" },
+  { value: BILLING_MODE_IMAGE, labelKey: "admin.channels.form.billingModeImage" },
+];
 const { copyToClipboard } = useClipboard();
 
 const loading = ref(true);
@@ -7182,15 +7533,29 @@ const registrationEmailSuffixWhitelistTags = ref<string[]>([]);
 const registrationEmailSuffixWhitelistDraft = ref("");
 const tablePageSizeOptionsInput = ref("10, 20, 50, 100");
 const persistedSiteLogo = ref("");
-const publicModelPricingLoading = ref(false);
-const publicModelPricingSaving = ref(false);
-const publicModelPricingForm = reactive<PublicModelPricingConfig>({
-  currency: "CNY",
-  unit: "1M tokens",
-  rateNote: "",
-  rows: [],
+const modelMarketLoading = ref(false);
+const modelMarketSaving = ref(false);
+const modelMarketConfig = reactive<ModelMarketConfig>({
+  enabled: true,
+  auto_sync: true,
+  title: "",
+  description: "",
+  selected_models: [],
+  custom_models: [],
 });
-const publicPricingUsdToCnyRate = 7;
+const modelMarketCandidates = ref<ModelMarketModel[]>([]);
+const modelMarketGroups = ref<AdminGroup[]>([]);
+const modelMarketVisibleCount = computed(() =>
+  modelMarketVisibleChannelCount.value + modelMarketVisibleCustomCount.value,
+);
+const modelMarketVisibleChannelCount = computed(() => {
+  const visibleCandidates = modelMarketCandidates.value.filter((model) => model.groups.length > 0);
+  if (modelMarketConfig.auto_sync) return visibleCandidates.length;
+  return visibleCandidates.filter((model) => isModelMarketSelected(model)).length;
+});
+const modelMarketVisibleCustomCount = computed(() =>
+  modelMarketConfig.custom_models.filter((model) => model.enabled && model.groups.length > 0).length,
+);
 
 // Admin API Key 状态
 const adminApiKeyLoading = ref(true);
@@ -8229,148 +8594,442 @@ function removeSitePage(index: number) {
   form.site_pages.splice(index, 1);
 }
 
-function parsePublicPricingMultiplier(value?: string) {
-  const raw = value?.trim();
-  if (!raw) return 0;
-
-  const normalized = raw
-    .replace(/倍率/g, "")
-    .replace(/[xX倍\s]/g, "")
-    .trim();
-  if (!normalized) return 0;
-
-  const numeric = Number.parseFloat(normalized);
-  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
-  if (normalized.endsWith("%")) return numeric / 100;
-  if (normalized.endsWith("折")) return (numeric / 10) * publicPricingUsdToCnyRate;
-  return numeric;
-}
-
-function roundPublicPricing(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
-function derivePublicPricingInput(row: PublicModelPricingRow) {
-  return roundPublicPricing((Number(row.officialInput) || 0) * parsePublicPricingMultiplier(row.multiplier));
-}
-
-function derivePublicPricingOutput(row: PublicModelPricingRow) {
-  return roundPublicPricing((Number(row.officialOutput) || 0) * parsePublicPricingMultiplier(row.multiplier));
-}
-
-function formatPublicPricingCompact(value: number) {
-  return value
-    .toFixed(value < 1 ? 2 : 1)
-    .replace(/(\.\d*?[1-9])0+$/, "$1")
-    .replace(/\.0$/, "");
-}
-
-function derivePublicPricingDiscount(row: PublicModelPricingRow) {
-  const multiplier = parsePublicPricingMultiplier(row.multiplier);
-  if (multiplier <= 0) return "";
-  const finalDiscount = (multiplier / publicPricingUsdToCnyRate) * 10;
-  return `${formatPublicPricingCompact(finalDiscount)}折`;
-}
-
-function formatPublicPricingCny(value: number) {
-  return `¥${value.toFixed(2)}`;
-}
-
-function createPublicPricingRow(): PublicModelPricingRow {
+function normalizeModelMarketSelection(
+  selection: ModelMarketSelection,
+): ModelMarketSelection | null {
+  const key = selection.key?.trim();
+  const platform = selection.platform?.trim();
+  const model = selection.model?.trim();
+  if (!key && (!platform || !model)) return null;
   return {
-    model: "",
-    group: "",
-    multiplier: "",
-    inputPrice: 0,
-    outputPrice: 0,
-    officialInput: 0,
-    officialOutput: 0,
-    discount: "",
-    openClaw: false,
-    enabled: true,
+    key: key || `${platform}:${model}`,
+    platform,
+    model,
+    enabled: selection.enabled !== false,
+    sort_order: Math.max(0, Math.floor(Number(selection.sort_order) || 0)),
   };
 }
 
-function applyPublicModelPricingConfig(config: PublicModelPricingConfig) {
-  publicModelPricingForm.currency = config.currency || "CNY";
-  publicModelPricingForm.unit = config.unit || "1M tokens";
-  publicModelPricingForm.rateNote = config.rateNote || "";
-  publicModelPricingForm.rows = Array.isArray(config.rows)
-    ? config.rows.map((row) => ({
-        model: row.model || "",
-        group: row.group || "",
-        multiplier: row.multiplier || "",
-        inputPrice: Number(row.inputPrice) || 0,
-        outputPrice: Number(row.outputPrice) || 0,
-        officialInput: Number(row.officialInput) || 0,
-        officialOutput: Number(row.officialOutput) || 0,
-        discount: row.discount || "",
-        openClaw: row.openClaw === true,
-        enabled: row.enabled !== false,
-      }))
-    : [];
+type ModelMarketCustomPriceField =
+  | "input_price"
+  | "output_price"
+  | "cache_write_price"
+  | "cache_read_price"
+  | "image_output_price"
+  | "per_request_price";
+
+function modelMarketCustomKey(platform: string, model: string): string {
+  const normalizedPlatform = platform.trim().toLowerCase();
+  const normalizedModel = model.trim().toLowerCase();
+  if (!normalizedPlatform || !normalizedModel) return "";
+  return `custom:${normalizedPlatform}:${normalizedModel}`;
 }
 
-async function loadPublicModelPricing() {
-  publicModelPricingLoading.value = true;
+function normalizeModelMarketCustomKey(
+  rawKey: string | undefined,
+  platform: string,
+  model: string,
+): string {
+  const generated = modelMarketCustomKey(platform, model);
+  const key = rawKey?.trim().toLowerCase() || "";
+  if (!key) return generated;
+  if (key.startsWith("custom:")) return key;
+  return generated;
+}
+
+function isModelMarketBillingMode(mode: unknown): mode is BillingMode {
+  return (
+    mode === BILLING_MODE_TOKEN ||
+    mode === BILLING_MODE_PER_REQUEST ||
+    mode === BILLING_MODE_IMAGE
+  );
+}
+
+function createModelMarketPricing(mode: BillingMode): ModelMarketPricing {
+  return {
+    billing_mode: mode,
+    input_price: null,
+    output_price: null,
+    cache_write_price: null,
+    cache_read_price: null,
+    image_output_price: null,
+    per_request_price: null,
+    intervals: [],
+  };
+}
+
+function normalizeOptionalPrice(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized < 0) return null;
+  return normalized;
+}
+
+function normalizeModelMarketCustomPricing(
+  pricing: ModelMarketPricing | null | undefined,
+  billingMode: BillingMode,
+): ModelMarketPricing {
+  const source = pricing || createModelMarketPricing(billingMode);
+  return {
+    billing_mode: billingMode,
+    input_price: normalizeOptionalPrice(source.input_price),
+    output_price: normalizeOptionalPrice(source.output_price),
+    cache_write_price: normalizeOptionalPrice(source.cache_write_price),
+    cache_read_price: normalizeOptionalPrice(source.cache_read_price),
+    image_output_price: normalizeOptionalPrice(source.image_output_price),
+    per_request_price: normalizeOptionalPrice(source.per_request_price),
+    intervals: Array.isArray(source.intervals) ? source.intervals : [],
+  };
+}
+
+function adminGroupToModelMarketGroup(
+  group: AdminGroup,
+  rateMultiplier = group.rate_multiplier,
+): ModelMarketGroup {
+  return {
+    id: group.id,
+    name: group.name,
+    platform: group.platform,
+    subscription_type: group.subscription_type,
+    rate_multiplier: Number.isFinite(Number(rateMultiplier)) && Number(rateMultiplier) > 0
+      ? Number(rateMultiplier)
+      : 1,
+    is_exclusive: group.is_exclusive,
+  };
+}
+
+function normalizeModelMarketCustomGroup(group: ModelMarketGroup): ModelMarketGroup | null {
+  const name = group.name?.trim();
+  const platform = group.platform?.trim();
+  if (!name || !platform) return null;
+  const rate = Number(group.rate_multiplier);
+  return {
+    id: Number(group.id) || 0,
+    name,
+    platform,
+    subscription_type: group.subscription_type || "standard",
+    rate_multiplier: Number.isFinite(rate) && rate > 0 ? rate : 1,
+    is_exclusive: group.is_exclusive === true,
+  };
+}
+
+function normalizeModelMarketCustomModel(
+  custom: ModelMarketCustomModel,
+): ModelMarketCustomModel | null {
+  const platform = custom.platform.trim();
+  const model = custom.model.trim();
+  if (!platform || !model) return null;
+  const billingMode = isModelMarketBillingMode(custom.billing_mode)
+    ? custom.billing_mode
+    : BILLING_MODE_TOKEN;
+  const groups = (custom.groups || [])
+    .map(normalizeModelMarketCustomGroup)
+    .filter((group): group is ModelMarketGroup => group !== null);
+  return {
+    key: normalizeModelMarketCustomKey(custom.key, platform, model),
+    platform,
+    model,
+    enabled: custom.enabled !== false,
+    sort_order: Math.max(0, Math.floor(Number(custom.sort_order) || 0)),
+    billing_mode: billingMode,
+    pricing: normalizeModelMarketCustomPricing(custom.pricing, billingMode),
+    groups,
+  };
+}
+
+function applyModelMarketResponse(payload: AdminModelMarketResponse) {
+  modelMarketConfig.enabled = payload.config.enabled !== false;
+  modelMarketConfig.auto_sync = payload.config.auto_sync !== false;
+  modelMarketConfig.title = payload.config.title || "";
+  modelMarketConfig.description = payload.config.description || "";
+  modelMarketConfig.selected_models = (payload.config.selected_models || [])
+    .map(normalizeModelMarketSelection)
+    .filter((selection): selection is ModelMarketSelection => selection !== null);
+  modelMarketConfig.custom_models = (payload.config.custom_models || [])
+    .map(normalizeModelMarketCustomModel)
+    .filter((custom): custom is ModelMarketCustomModel => custom !== null);
+  modelMarketCandidates.value = payload.candidates || [];
+}
+
+async function loadModelMarket() {
+  modelMarketLoading.value = true;
   try {
-    const config = await adminAPI.settings.getPublicModelPricing();
-    applyPublicModelPricingConfig(config);
+    const payload = await adminAPI.settings.getModelMarket();
+    applyModelMarketResponse(payload);
   } catch (error: unknown) {
     appStore.showError(
-      extractApiErrorMessage(error, t("admin.settings.publicPricing.failedToLoad")),
+      extractApiErrorMessage(error, t("admin.settings.modelMarket.failedToLoad")),
     );
   } finally {
-    publicModelPricingLoading.value = false;
+    modelMarketLoading.value = false;
   }
 }
 
-function addPublicPricingRow() {
-  publicModelPricingForm.rows.push(createPublicPricingRow());
+function selectionForModel(model: ModelMarketModel): ModelMarketSelection | undefined {
+  return modelMarketConfig.selected_models.find((selection) => selection.key === model.key);
 }
 
-function removePublicPricingRow(index: number) {
-  publicModelPricingForm.rows.splice(index, 1);
+function isModelMarketSelected(model: ModelMarketModel): boolean {
+  return selectionForModel(model)?.enabled === true;
 }
 
-async function savePublicModelPricing() {
-  const rows = publicModelPricingForm.rows.map((row) => ({
-    ...row,
-    model: row.model.trim(),
-    group: row.group.trim(),
-    multiplier: row.multiplier.trim(),
-    officialInput: Number(row.officialInput) || 0,
-    officialOutput: Number(row.officialOutput) || 0,
-    inputPrice: derivePublicPricingInput(row),
-    outputPrice: derivePublicPricingOutput(row),
-    discount: derivePublicPricingDiscount(row),
-    enabled: row.enabled !== false,
-  }));
-  const invalidIndex = rows.findIndex((row) => row.model === "");
-  if (invalidIndex >= 0) {
-    appStore.showError(
-      t("admin.settings.publicPricing.modelRequired", { index: invalidIndex + 1 }),
-    );
+function nextModelMarketSortOrder(): number {
+  const maxSelectedSort = modelMarketConfig.selected_models.reduce(
+    (max, selection) => Math.max(max, Number(selection.sort_order) || 0),
+    0,
+  );
+  const maxCustomSort = modelMarketConfig.custom_models.reduce(
+    (max, custom) => Math.max(max, Number(custom.sort_order) || 0),
+    0,
+  );
+  return Math.max(maxSelectedSort, maxCustomSort) + 10;
+}
+
+function toggleModelMarketSelection(model: ModelMarketModel, event: Event) {
+  const checked = (event.target as HTMLInputElement | null)?.checked === true;
+  const existing = selectionForModel(model);
+  if (checked) {
+    if (existing) {
+      existing.enabled = true;
+      if (!existing.sort_order) {
+        existing.sort_order = nextModelMarketSortOrder();
+      }
+      return;
+    }
+    modelMarketConfig.selected_models.push({
+      key: model.key,
+      platform: model.platform,
+      model: model.name,
+      enabled: true,
+      sort_order: nextModelMarketSortOrder(),
+    });
     return;
   }
+  modelMarketConfig.selected_models = modelMarketConfig.selected_models.filter(
+    (selection) => selection.key !== model.key,
+  );
+}
 
-  publicModelPricingSaving.value = true;
-  try {
-    const updated = await adminAPI.settings.updatePublicModelPricing({
-      currency: publicModelPricingForm.currency.trim() || "CNY",
-      unit: publicModelPricingForm.unit.trim() || "1M tokens",
-      rateNote: publicModelPricingForm.rateNote.trim(),
-      rows,
+function updateModelMarketSortOrder(model: ModelMarketModel, event: Event) {
+  const selection = selectionForModel(model);
+  if (!selection) return;
+  const value = Number((event.target as HTMLInputElement | null)?.value);
+  selection.sort_order = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function addModelMarketCustomModel() {
+  const firstGroup = modelMarketGroups.value[0];
+  const platform = firstGroup?.platform || "openai";
+  const groups = firstGroup ? [adminGroupToModelMarketGroup(firstGroup)] : [];
+  modelMarketConfig.custom_models.push({
+    key: "",
+    platform,
+    model: "",
+    enabled: true,
+    sort_order: nextModelMarketSortOrder(),
+    billing_mode: BILLING_MODE_TOKEN,
+    pricing: createModelMarketPricing(BILLING_MODE_TOKEN),
+    groups,
+  });
+}
+
+function removeModelMarketCustomModel(index: number) {
+  modelMarketConfig.custom_models.splice(index, 1);
+}
+
+function refreshModelMarketCustomKey(custom: ModelMarketCustomModel) {
+  custom.key = modelMarketCustomKey(custom.platform, custom.model);
+}
+
+function updateModelMarketCustomPlatform(custom: ModelMarketCustomModel, event: Event) {
+  const value = String((event.target as HTMLSelectElement | null)?.value || "").trim();
+  custom.platform = value;
+  custom.groups = custom.groups.filter((group) => group.platform === value);
+  refreshModelMarketCustomKey(custom);
+}
+
+function updateModelMarketCustomModelName(custom: ModelMarketCustomModel) {
+  refreshModelMarketCustomKey(custom);
+}
+
+function updateModelMarketCustomBillingMode(custom: ModelMarketCustomModel, event: Event) {
+  const value = String((event.target as HTMLSelectElement | null)?.value || "");
+  custom.billing_mode = isModelMarketBillingMode(value) ? value : BILLING_MODE_TOKEN;
+  custom.pricing = normalizeModelMarketCustomPricing(custom.pricing, custom.billing_mode);
+}
+
+function modelMarketCustomGroupOptions(custom: ModelMarketCustomModel): AdminGroup[] {
+  return modelMarketGroups.value.filter(
+    (group) => group.status === "active" && (!custom.platform || group.platform === custom.platform),
+  );
+}
+
+function selectedModelMarketCustomGroupID(custom: ModelMarketCustomModel): number | "" {
+  return custom.groups[0]?.id || "";
+}
+
+function updateModelMarketCustomGroup(custom: ModelMarketCustomModel, event: Event) {
+  const value = Number((event.target as HTMLSelectElement | null)?.value);
+  const group = modelMarketGroups.value.find((item) => item.id === value);
+  if (!group) {
+    custom.groups = [];
+    return;
+  }
+  custom.platform = group.platform;
+  custom.groups = [adminGroupToModelMarketGroup(group, custom.groups[0]?.rate_multiplier || group.rate_multiplier)];
+  refreshModelMarketCustomKey(custom);
+}
+
+function updateModelMarketCustomRate(custom: ModelMarketCustomModel, event: Event) {
+  const value = Number((event.target as HTMLInputElement | null)?.value);
+  const normalized = Number.isFinite(value) && value > 0 ? value : 1;
+  if (custom.groups.length === 0) {
+    const group = modelMarketCustomGroupOptions(custom)[0];
+    if (!group) return;
+    custom.groups = [adminGroupToModelMarketGroup(group, normalized)];
+    return;
+  }
+  custom.groups[0].rate_multiplier = normalized;
+}
+
+function modelMarketCustomRate(custom: ModelMarketCustomModel): number {
+  return custom.groups[0]?.rate_multiplier || 1;
+}
+
+function ensureModelMarketCustomPricing(custom: ModelMarketCustomModel): ModelMarketPricing {
+  custom.pricing = normalizeModelMarketCustomPricing(custom.pricing, custom.billing_mode);
+  return custom.pricing;
+}
+
+function modelMarketCustomPriceDisplay(
+  custom: ModelMarketCustomModel,
+  field: ModelMarketCustomPriceField,
+  scale: number,
+): number | "" {
+  const value = custom.pricing?.[field];
+  if (value == null) return "";
+  return Number((value * scale).toFixed(8));
+}
+
+function updateModelMarketCustomPrice(
+  custom: ModelMarketCustomModel,
+  field: ModelMarketCustomPriceField,
+  event: Event,
+  scale: number,
+) {
+  const raw = (event.target as HTMLInputElement | null)?.value;
+  const pricing = ensureModelMarketCustomPricing(custom);
+  if (raw == null || raw === "") {
+    pricing[field] = null;
+    return;
+  }
+  const value = Number(raw);
+  pricing[field] = Number.isFinite(value) && value >= 0 ? value / scale : null;
+}
+
+function validateModelMarketConfigBeforeSave(): boolean {
+  for (const custom of modelMarketConfig.custom_models) {
+    if (!custom.model.trim()) {
+      appStore.showError(t("admin.settings.modelMarket.customModelRequired"));
+      return false;
+    }
+    const normalized = normalizeModelMarketCustomModel(custom);
+    if (!normalized) {
+      appStore.showError(t("admin.settings.modelMarket.customModelRequired"));
+      return false;
+    }
+    if (normalized.enabled && normalized.groups.length === 0) {
+      appStore.showError(t("admin.settings.modelMarket.customGroupRequired"));
+      return false;
+    }
+  }
+  return true;
+}
+
+function normalizeModelMarketConfigForSave(): ModelMarketConfig {
+  const selected = modelMarketConfig.selected_models
+    .map(normalizeModelMarketSelection)
+    .filter((selection): selection is ModelMarketSelection => selection !== null)
+    .sort((left, right) => {
+      if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order;
+      return left.key.localeCompare(right.key);
     });
-    applyPublicModelPricingConfig(updated);
-    appStore.showSuccess(t("admin.settings.publicPricing.saved"));
+  const customModels = modelMarketConfig.custom_models
+    .map(normalizeModelMarketCustomModel)
+    .filter((custom): custom is ModelMarketCustomModel => custom !== null)
+    .sort((left, right) => {
+      if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order;
+      return left.key.localeCompare(right.key);
+    });
+  return {
+    enabled: modelMarketConfig.enabled,
+    auto_sync: modelMarketConfig.auto_sync,
+    title: modelMarketConfig.title.trim(),
+    description: modelMarketConfig.description.trim(),
+    selected_models: modelMarketConfig.auto_sync ? [] : selected,
+    custom_models: customModels,
+  };
+}
+
+async function saveModelMarket() {
+  if (modelMarketSaving.value) return;
+  if (!validateModelMarketConfigBeforeSave()) return;
+  modelMarketSaving.value = true;
+  try {
+    const payload = await adminAPI.settings.updateModelMarket(normalizeModelMarketConfigForSave());
+    applyModelMarketResponse(payload);
+    appStore.showSuccess(t("admin.settings.modelMarket.saved"));
   } catch (error: unknown) {
     appStore.showError(
-      extractApiErrorMessage(error, t("admin.settings.publicPricing.failedToSave")),
+      extractApiErrorMessage(error, t("admin.settings.modelMarket.failedToSave")),
     );
   } finally {
-    publicModelPricingSaving.value = false;
+    modelMarketSaving.value = false;
   }
+}
+
+function formatModelMarketMultiplier(value: number): string {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return "1x";
+  return `${normalized.toFixed(3).replace(/\.?0+$/, "")}x`;
+}
+
+function modelMarketBillingModeLabel(mode: ModelMarketModel["billing_mode"]): string {
+  if (mode === "unknown") return t("admin.settings.modelMarket.unknownBillingMode");
+  return getBillingModeLabel(mode, t);
+}
+
+function modelMarketBillingModeBadgeClass(mode: ModelMarketModel["billing_mode"]): string {
+  if (mode === "unknown") {
+    return "bg-gray-100 text-gray-700 dark:bg-dark-800 dark:text-dark-300";
+  }
+  return getBillingModeBadgeClass(mode);
+}
+
+function formatModelMarketPrice(model: ModelMarketModel): string {
+  const pricing = model.pricing;
+  if (!pricing) return t("admin.settings.modelMarket.noPricing");
+  if (pricing.billing_mode === BILLING_MODE_PER_REQUEST) {
+    return `${t("admin.settings.modelMarket.perRequestPrice")}: ${formatScaled(pricing.per_request_price, 1)}`;
+  }
+  if (pricing.billing_mode === BILLING_MODE_IMAGE) {
+    return `${t("admin.settings.modelMarket.imageOutputPrice")}: ${formatScaled(pricing.image_output_price, 1)}`;
+  }
+  return formatModelMarketTokenPrice(pricing);
+}
+
+function formatModelMarketTokenPrice(pricing: ModelMarketPricing): string {
+  const parts = [
+    `${t("admin.settings.modelMarket.inputPrice")}: ${formatScaled(pricing.input_price, 1_000_000)}/1M`,
+    `${t("admin.settings.modelMarket.outputPrice")}: ${formatScaled(pricing.output_price, 1_000_000)}/1M`,
+  ];
+  if (pricing.cache_read_price != null) {
+    parts.push(`${t("admin.settings.modelMarket.cacheReadPrice")}: ${formatScaled(pricing.cache_read_price, 1_000_000)}/1M`);
+  }
+  if (pricing.cache_write_price != null) {
+    parts.push(`${t("admin.settings.modelMarket.cacheWritePrice")}: ${formatScaled(pricing.cache_write_price, 1_000_000)}/1M`);
+  }
+  return parts.join(" · ");
 }
 
 function addLoginAgreementDocument() {
@@ -8584,11 +9243,14 @@ async function loadSettings() {
 async function loadSubscriptionGroups() {
   try {
     const groups = await adminAPI.groups.getAll();
-    subscriptionGroups.value = groups.filter(
+    const activeGroups = groups.filter((group) => group.status === "active");
+    modelMarketGroups.value = activeGroups;
+    subscriptionGroups.value = activeGroups.filter(
       (group) =>
-        group.subscription_type === "subscription" && group.status === "active",
+        group.subscription_type === "subscription",
     );
   } catch (_error: unknown) {
+    modelMarketGroups.value = [];
     subscriptionGroups.value = [];
   }
 }
@@ -10048,7 +10710,7 @@ onMounted(() => {
   loadStreamTimeoutSettings();
   loadRectifierSettings();
   loadBetaPolicySettings();
-  loadPublicModelPricing();
+  loadModelMarket();
   loadProviders();
 });
 

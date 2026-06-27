@@ -23,6 +23,10 @@ async function mountHeader() {
         component: { template: '<div />' }
       },
       {
+        path: '/models',
+        component: { template: '<div />' }
+      },
+      {
         path: '/login',
         component: { template: '<div />' }
       }
@@ -58,6 +62,24 @@ async function mountHeader() {
 }
 
 describe('AppHeader home navigation', () => {
+  it('links the former pricing slot directly to model market', async () => {
+    const wrapper = await mountHeader()
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    const modelMarketLink = links.find((routerLink) => routerLink.text() === '模型广场')
+
+    expect(wrapper.text()).not.toContain('定价')
+    expect(wrapper.text()).not.toContain('特性')
+    expect(modelMarketLink).toBeTruthy()
+    expect(modelMarketLink?.props('to')).toEqual({ path: '/models' })
+    expect(
+      links.some((routerLink) => JSON.stringify(routerLink.props('to')).includes('#pricing'))
+    ).toBe(false)
+    expect(
+      links.some((routerLink) => JSON.stringify(routerLink.props('to')).includes('#features'))
+    ).toBe(false)
+  })
+
   it('renders Image2 generation as an authenticated handoff navigation link', async () => {
     const wrapper = await mountHeader()
 
