@@ -58,6 +58,8 @@ export interface ModelMarketSelection {
   model?: string
   enabled: boolean
   sort_order: number
+  billing_mode?: BillingMode
+  pricing?: ModelMarketPricing | null
 }
 
 export interface ModelMarketCustomModel {
