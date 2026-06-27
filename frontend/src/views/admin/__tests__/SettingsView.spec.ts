@@ -712,6 +712,7 @@ describe("admin SettingsView payment visible method controls", () => {
         title: "模型广场",
         description: "按平台、分组和计费类型查看当前可用模型。",
         selected_models: [],
+        custom_models: [],
       },
       candidates: [],
       models: [],
@@ -1037,6 +1038,8 @@ describe("admin SettingsView wechat connect controls", () => {
     getStreamTimeoutSettings.mockReset();
     getRectifierSettings.mockReset();
     getBetaPolicySettings.mockReset();
+    getModelMarket.mockReset();
+    updateModelMarket.mockReset();
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
@@ -1095,6 +1098,23 @@ describe("admin SettingsView wechat connect controls", () => {
     getBetaPolicySettings.mockResolvedValue({
       rules: [],
     });
+    getModelMarket.mockResolvedValue({
+      config: {
+        enabled: true,
+        auto_sync: true,
+        title: "模型广场",
+        description: "按平台、分组和计费类型查看当前可用模型。",
+        selected_models: [],
+        custom_models: [],
+      },
+      candidates: [],
+      models: [],
+    });
+    updateModelMarket.mockImplementation(async (payload) => ({
+      config: payload,
+      candidates: [],
+      models: [],
+    }));
     getGroups.mockResolvedValue([]);
     listProxies.mockResolvedValue({
       items: [],
@@ -1293,6 +1313,7 @@ describe("admin SettingsView wechat connect controls", () => {
         title: "模型广场",
         description: "按平台、分组和计费类型查看当前可用模型。",
         selected_models: [],
+        custom_models: [],
       },
       candidates: [
         {
@@ -1354,8 +1375,71 @@ describe("admin SettingsView wechat connect controls", () => {
           sort_order: 20,
         },
       ],
+      custom_models: [],
     });
     expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("rows");
     expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("currency");
+  });
+
+  it("adds custom model market entries with group, multiplier and pricing", async () => {
+    getGroups.mockResolvedValue([
+      {
+        id: 42,
+        name: "OpenAI Pro",
+        platform: "openai",
+        status: "active",
+        subscription_type: "standard",
+        rate_multiplier: 0.3,
+        is_exclusive: false,
+      },
+    ]);
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openModelMarketTab(wrapper);
+    await wrapper.get('[data-testid="model-market-add-custom"]').trigger("click");
+    await flushPromises();
+
+    await wrapper.get('[data-testid="model-market-custom-platform-0"]').setValue("openai");
+    await wrapper.get('[data-testid="model-market-custom-model-0"]').setValue("gpt-custom");
+    await wrapper.get('[data-testid="model-market-custom-group-0"]').setValue("42");
+    await wrapper.get('[data-testid="model-market-custom-rate-0"]').setValue("0.55");
+    await wrapper.get('[data-testid="model-market-custom-input-price-0"]').setValue("4");
+    await wrapper.get('[data-testid="model-market-custom-output-price-0"]').setValue("12");
+    await wrapper.get('[data-testid="model-market-custom-sort-0"]').setValue("30");
+    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
+    await flushPromises();
+
+    expect(updateModelMarket).toHaveBeenCalledTimes(1);
+    expect(updateModelMarket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        custom_models: [
+          expect.objectContaining({
+            key: "custom:openai:gpt-custom",
+            platform: "openai",
+            model: "gpt-custom",
+            enabled: true,
+            sort_order: 30,
+            billing_mode: "token",
+            pricing: expect.objectContaining({
+              billing_mode: "token",
+              input_price: 0.000004,
+              output_price: 0.000012,
+            }),
+            groups: [
+              expect.objectContaining({
+                id: 42,
+                name: "OpenAI Pro",
+                platform: "openai",
+                subscription_type: "standard",
+                rate_multiplier: 0.55,
+                is_exclusive: false,
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
   });
 });

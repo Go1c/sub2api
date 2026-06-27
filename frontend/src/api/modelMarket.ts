@@ -49,6 +49,7 @@ export interface ModelMarketConfig {
   title: string
   description: string
   selected_models: ModelMarketSelection[]
+  custom_models: ModelMarketCustomModel[]
 }
 
 export interface ModelMarketSelection {
@@ -57,6 +58,17 @@ export interface ModelMarketSelection {
   model?: string
   enabled: boolean
   sort_order: number
+}
+
+export interface ModelMarketCustomModel {
+  key: string
+  platform: string
+  model: string
+  enabled: boolean
+  sort_order: number
+  billing_mode: BillingMode
+  pricing: ModelMarketPricing | null
+  groups: ModelMarketGroup[]
 }
 
 export interface PublicModelMarketResponse {

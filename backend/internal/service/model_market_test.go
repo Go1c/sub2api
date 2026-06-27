@@ -169,3 +169,90 @@ func TestModelMarket_ManualSelectionFiltersAndOrdersCandidates(t *testing.T) {
 	require.Equal(t, "gpt-b", got.Models[0].Name)
 	require.Equal(t, "gpt-a", got.Models[1].Name)
 }
+
+func TestModelMarket_AdminCandidatesIncludeChannelModelsWithoutPublicGroups(t *testing.T) {
+	inputPrice := 0.000001
+	channels := []AvailableChannel{
+		{
+			ID:     1,
+			Name:   "OpenAI Internal",
+			Status: StatusActive,
+			Groups: []AvailableGroupRef{
+				{ID: 20, Name: "openai-vip", Platform: PlatformOpenAI, RateMultiplier: 0.2, IsExclusive: true},
+			},
+			SupportedModels: []SupportedModel{
+				{
+					Name:     "gpt-private",
+					Platform: PlatformOpenAI,
+					Pricing:  &ChannelModelPricing{BillingMode: BillingModeToken, InputPrice: &inputPrice},
+				},
+			},
+		},
+	}
+	svc, _ := newModelMarketTestService(channels, nil)
+
+	admin, err := svc.GetAdmin(context.Background())
+	require.NoError(t, err)
+	require.Len(t, admin.Candidates, 1)
+	require.Equal(t, "openai:gpt-private", admin.Candidates[0].Key)
+	require.Empty(t, admin.Candidates[0].Groups)
+	require.Len(t, admin.Models, 0)
+
+	public, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+	require.Len(t, public.Models, 0)
+}
+
+func TestModelMarket_CustomModelsAreDisplayedWithConfiguredPricingAndGroups(t *testing.T) {
+	inputPrice := 0.000004
+	outputPrice := 0.000012
+	svc, _ := newModelMarketTestService(nil, nil)
+
+	_, err := svc.SetConfig(context.Background(), ModelMarketConfig{
+		Enabled:  true,
+		AutoSync: true,
+		CustomModels: []ModelMarketCustomModel{
+			{
+				Platform:    PlatformOpenAI,
+				Model:       "gpt-custom",
+				Enabled:     true,
+				SortOrder:   15,
+				BillingMode: string(BillingModeToken),
+				Pricing: &ModelMarketPricing{
+					BillingMode: string(BillingModeToken),
+					InputPrice:  &inputPrice,
+					OutputPrice: &outputPrice,
+				},
+				Groups: []ModelMarketGroup{
+					{
+						ID:               101,
+						Name:             "自定义公开组",
+						Platform:         PlatformOpenAI,
+						SubscriptionType: SubscriptionTypeStandard,
+						RateMultiplier:   0.6,
+						IsExclusive:      false,
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, got.Models, 1)
+	model := got.Models[0]
+	require.Equal(t, "custom:openai:gpt-custom", model.Key)
+	require.Equal(t, "gpt-custom", model.Name)
+	require.Equal(t, PlatformOpenAI, model.Platform)
+	require.Equal(t, string(BillingModeToken), model.BillingMode)
+	require.Equal(t, 15, model.SortOrder)
+	require.Equal(t, []string{"自定义"}, model.Channels)
+	require.NotNil(t, model.Pricing)
+	require.InDelta(t, inputPrice, *model.Pricing.InputPrice, 1e-12)
+	require.InDelta(t, outputPrice, *model.Pricing.OutputPrice, 1e-12)
+	require.Len(t, model.Groups, 1)
+	require.Equal(t, "自定义公开组", model.Groups[0].Name)
+	require.InDelta(t, 0.6, model.Groups[0].RateMultiplier, 1e-12)
+}

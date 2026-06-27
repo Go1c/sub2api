@@ -7034,6 +7034,238 @@
               </div>
               </div>
 
+              <div class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
+                <div class="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t("admin.settings.modelMarket.customModels") }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.modelMarket.customModelsHint") }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    data-testid="model-market-add-custom"
+                    @click="addModelMarketCustomModel"
+                  >
+                    <Icon name="plus" size="sm" />
+                    {{ t("admin.settings.modelMarket.addCustomModel") }}
+                  </button>
+                </div>
+
+                <div v-if="modelMarketConfig.custom_models.length === 0" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.modelMarket.noCustomModels") }}
+                </div>
+
+                <div v-else class="divide-y divide-gray-100 dark:divide-dark-700">
+                  <div
+                    v-for="(custom, index) in modelMarketConfig.custom_models"
+                    :key="custom.key || `custom-${index}`"
+                    class="space-y-4 px-4 py-4"
+                  >
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div class="grid flex-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.platform") }}
+                          </label>
+                          <select
+                            :value="custom.platform"
+                            class="input"
+                            :data-testid="`model-market-custom-platform-${index}`"
+                            @change="updateModelMarketCustomPlatform(custom, $event)"
+                          >
+                            <option
+                              v-for="option in modelMarketPlatformOptions"
+                              :key="option.value"
+                              :value="option.value"
+                            >
+                              {{ option.label }}
+                            </option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.model") }}
+                          </label>
+                          <input
+                            v-model="custom.model"
+                            type="text"
+                            class="input"
+                            :placeholder="t('admin.settings.modelMarket.customModelPlaceholder')"
+                            :data-testid="`model-market-custom-model-${index}`"
+                            @input="updateModelMarketCustomModelName(custom)"
+                          />
+                        </div>
+
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.billingMode") }}
+                          </label>
+                          <select
+                            :value="custom.billing_mode"
+                            class="input"
+                            :data-testid="`model-market-custom-billing-${index}`"
+                            @change="updateModelMarketCustomBillingMode(custom, $event)"
+                          >
+                            <option
+                              v-for="option in modelMarketBillingModeOptions"
+                              :key="option.value"
+                              :value="option.value"
+                            >
+                              {{ t(option.labelKey) }}
+                            </option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.sortOrder") }}
+                          </label>
+                          <input
+                            v-model.number="custom.sort_order"
+                            type="number"
+                            min="0"
+                            step="1"
+                            class="input"
+                            :data-testid="`model-market-custom-sort-${index}`"
+                          />
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-3">
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <input
+                            v-model="custom.enabled"
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            :data-testid="`model-market-custom-enabled-${index}`"
+                          />
+                          {{ t("admin.settings.modelMarket.show") }}
+                        </label>
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                          :data-testid="`model-market-custom-remove-${index}`"
+                          @click="removeModelMarketCustomModel(index)"
+                        >
+                          <Icon name="trash" size="sm" />
+                          {{ t("common.delete") }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.group") }}
+                        </label>
+                        <select
+                          :value="selectedModelMarketCustomGroupID(custom)"
+                          class="input"
+                          :data-testid="`model-market-custom-group-${index}`"
+                          @change="updateModelMarketCustomGroup(custom, $event)"
+                        >
+                          <option value="">
+                            {{ t("admin.settings.modelMarket.selectGroup") }}
+                          </option>
+                          <option
+                            v-for="group in modelMarketCustomGroupOptions(custom)"
+                            :key="group.id"
+                            :value="group.id"
+                          >
+                            {{ group.name }} · {{ formatModelMarketMultiplier(group.rate_multiplier) }}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.rateMultiplier") }}
+                        </label>
+                        <input
+                          :value="modelMarketCustomRate(custom)"
+                          type="number"
+                          min="0.0001"
+                          step="0.01"
+                          class="input"
+                          :data-testid="`model-market-custom-rate-${index}`"
+                          @input="updateModelMarketCustomRate(custom, $event)"
+                        />
+                      </div>
+
+                      <div v-if="custom.billing_mode === BILLING_MODE_PER_REQUEST">
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.perRequestPrice") }}
+                        </label>
+                        <input
+                          :value="modelMarketCustomPriceDisplay(custom, 'per_request_price', 1)"
+                          type="number"
+                          min="0"
+                          step="0.000001"
+                          class="input"
+                          :data-testid="`model-market-custom-per-request-price-${index}`"
+                          @input="updateModelMarketCustomPrice(custom, 'per_request_price', $event, 1)"
+                        />
+                      </div>
+
+                      <div v-else-if="custom.billing_mode === BILLING_MODE_IMAGE">
+                        <label class="input-label">
+                          {{ t("admin.settings.modelMarket.imageOutputPrice") }}
+                        </label>
+                        <input
+                          :value="modelMarketCustomPriceDisplay(custom, 'image_output_price', 1)"
+                          type="number"
+                          min="0"
+                          step="0.000001"
+                          class="input"
+                          :data-testid="`model-market-custom-image-price-${index}`"
+                          @input="updateModelMarketCustomPrice(custom, 'image_output_price', $event, 1)"
+                        />
+                      </div>
+
+                      <template v-else>
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.inputPrice") }} / 1M
+                          </label>
+                          <input
+                            :value="modelMarketCustomPriceDisplay(custom, 'input_price', 1_000_000)"
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            class="input"
+                            :data-testid="`model-market-custom-input-price-${index}`"
+                            @input="updateModelMarketCustomPrice(custom, 'input_price', $event, 1_000_000)"
+                          />
+                        </div>
+                        <div>
+                          <label class="input-label">
+                            {{ t("admin.settings.modelMarket.outputPrice") }} / 1M
+                          </label>
+                          <input
+                            :value="modelMarketCustomPriceDisplay(custom, 'output_price', 1_000_000)"
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            class="input"
+                            :data-testid="`model-market-custom-output-price-${index}`"
+                            @input="updateModelMarketCustomPrice(custom, 'output_price', $event, 1_000_000)"
+                          />
+                        </div>
+                      </template>
+                    </div>
+
+                    <div v-if="custom.key" class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ custom.key }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="flex justify-end">
                 <button
                   type="button"
@@ -7173,6 +7405,8 @@ import type {
 } from "@/api/admin/settings";
 import type {
   AdminModelMarketResponse,
+  ModelMarketCustomModel,
+  ModelMarketGroup,
   ModelMarketConfig,
   ModelMarketModel,
   ModelMarketPricing,
@@ -7181,7 +7415,9 @@ import type {
 import {
   BILLING_MODE_IMAGE,
   BILLING_MODE_PER_REQUEST,
+  BILLING_MODE_TOKEN,
 } from "@/constants/channel";
+import type { BillingMode } from "@/constants/channel";
 import type {
   AdminGroup,
   ContactChannel,
@@ -7273,6 +7509,17 @@ const settingsTabs = [
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
+const modelMarketPlatformOptions = [
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "gemini", label: "Gemini" },
+  { value: "antigravity", label: "Antigravity" },
+];
+const modelMarketBillingModeOptions = [
+  { value: BILLING_MODE_TOKEN, labelKey: "admin.channels.form.billingModeToken" },
+  { value: BILLING_MODE_PER_REQUEST, labelKey: "admin.channels.form.billingModePerRequest" },
+  { value: BILLING_MODE_IMAGE, labelKey: "admin.channels.form.billingModeImage" },
+];
 const { copyToClipboard } = useClipboard();
 
 const loading = ref(true);
@@ -7294,12 +7541,20 @@ const modelMarketConfig = reactive<ModelMarketConfig>({
   title: "",
   description: "",
   selected_models: [],
+  custom_models: [],
 });
 const modelMarketCandidates = ref<ModelMarketModel[]>([]);
+const modelMarketGroups = ref<AdminGroup[]>([]);
 const modelMarketVisibleCount = computed(() =>
-  modelMarketConfig.auto_sync
-    ? modelMarketCandidates.value.length
-    : modelMarketCandidates.value.filter((model) => isModelMarketSelected(model)).length,
+  modelMarketVisibleChannelCount.value + modelMarketVisibleCustomCount.value,
+);
+const modelMarketVisibleChannelCount = computed(() => {
+  const visibleCandidates = modelMarketCandidates.value.filter((model) => model.groups.length > 0);
+  if (modelMarketConfig.auto_sync) return visibleCandidates.length;
+  return visibleCandidates.filter((model) => isModelMarketSelected(model)).length;
+});
+const modelMarketVisibleCustomCount = computed(() =>
+  modelMarketConfig.custom_models.filter((model) => model.enabled && model.groups.length > 0).length,
 );
 
 // Admin API Key 状态
@@ -8355,6 +8610,133 @@ function normalizeModelMarketSelection(
   };
 }
 
+type ModelMarketCustomPriceField =
+  | "input_price"
+  | "output_price"
+  | "cache_write_price"
+  | "cache_read_price"
+  | "image_output_price"
+  | "per_request_price";
+
+function modelMarketCustomKey(platform: string, model: string): string {
+  const normalizedPlatform = platform.trim().toLowerCase();
+  const normalizedModel = model.trim().toLowerCase();
+  if (!normalizedPlatform || !normalizedModel) return "";
+  return `custom:${normalizedPlatform}:${normalizedModel}`;
+}
+
+function normalizeModelMarketCustomKey(
+  rawKey: string | undefined,
+  platform: string,
+  model: string,
+): string {
+  const generated = modelMarketCustomKey(platform, model);
+  const key = rawKey?.trim().toLowerCase() || "";
+  if (!key) return generated;
+  if (key.startsWith("custom:")) return key;
+  return generated;
+}
+
+function isModelMarketBillingMode(mode: unknown): mode is BillingMode {
+  return (
+    mode === BILLING_MODE_TOKEN ||
+    mode === BILLING_MODE_PER_REQUEST ||
+    mode === BILLING_MODE_IMAGE
+  );
+}
+
+function createModelMarketPricing(mode: BillingMode): ModelMarketPricing {
+  return {
+    billing_mode: mode,
+    input_price: null,
+    output_price: null,
+    cache_write_price: null,
+    cache_read_price: null,
+    image_output_price: null,
+    per_request_price: null,
+    intervals: [],
+  };
+}
+
+function normalizeOptionalPrice(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized < 0) return null;
+  return normalized;
+}
+
+function normalizeModelMarketCustomPricing(
+  pricing: ModelMarketPricing | null | undefined,
+  billingMode: BillingMode,
+): ModelMarketPricing {
+  const source = pricing || createModelMarketPricing(billingMode);
+  return {
+    billing_mode: billingMode,
+    input_price: normalizeOptionalPrice(source.input_price),
+    output_price: normalizeOptionalPrice(source.output_price),
+    cache_write_price: normalizeOptionalPrice(source.cache_write_price),
+    cache_read_price: normalizeOptionalPrice(source.cache_read_price),
+    image_output_price: normalizeOptionalPrice(source.image_output_price),
+    per_request_price: normalizeOptionalPrice(source.per_request_price),
+    intervals: Array.isArray(source.intervals) ? source.intervals : [],
+  };
+}
+
+function adminGroupToModelMarketGroup(
+  group: AdminGroup,
+  rateMultiplier = group.rate_multiplier,
+): ModelMarketGroup {
+  return {
+    id: group.id,
+    name: group.name,
+    platform: group.platform,
+    subscription_type: group.subscription_type,
+    rate_multiplier: Number.isFinite(Number(rateMultiplier)) && Number(rateMultiplier) > 0
+      ? Number(rateMultiplier)
+      : 1,
+    is_exclusive: group.is_exclusive,
+  };
+}
+
+function normalizeModelMarketCustomGroup(group: ModelMarketGroup): ModelMarketGroup | null {
+  const name = group.name?.trim();
+  const platform = group.platform?.trim();
+  if (!name || !platform) return null;
+  const rate = Number(group.rate_multiplier);
+  return {
+    id: Number(group.id) || 0,
+    name,
+    platform,
+    subscription_type: group.subscription_type || "standard",
+    rate_multiplier: Number.isFinite(rate) && rate > 0 ? rate : 1,
+    is_exclusive: group.is_exclusive === true,
+  };
+}
+
+function normalizeModelMarketCustomModel(
+  custom: ModelMarketCustomModel,
+): ModelMarketCustomModel | null {
+  const platform = custom.platform.trim();
+  const model = custom.model.trim();
+  if (!platform || !model) return null;
+  const billingMode = isModelMarketBillingMode(custom.billing_mode)
+    ? custom.billing_mode
+    : BILLING_MODE_TOKEN;
+  const groups = (custom.groups || [])
+    .map(normalizeModelMarketCustomGroup)
+    .filter((group): group is ModelMarketGroup => group !== null);
+  return {
+    key: normalizeModelMarketCustomKey(custom.key, platform, model),
+    platform,
+    model,
+    enabled: custom.enabled !== false,
+    sort_order: Math.max(0, Math.floor(Number(custom.sort_order) || 0)),
+    billing_mode: billingMode,
+    pricing: normalizeModelMarketCustomPricing(custom.pricing, billingMode),
+    groups,
+  };
+}
+
 function applyModelMarketResponse(payload: AdminModelMarketResponse) {
   modelMarketConfig.enabled = payload.config.enabled !== false;
   modelMarketConfig.auto_sync = payload.config.auto_sync !== false;
@@ -8363,6 +8745,9 @@ function applyModelMarketResponse(payload: AdminModelMarketResponse) {
   modelMarketConfig.selected_models = (payload.config.selected_models || [])
     .map(normalizeModelMarketSelection)
     .filter((selection): selection is ModelMarketSelection => selection !== null);
+  modelMarketConfig.custom_models = (payload.config.custom_models || [])
+    .map(normalizeModelMarketCustomModel)
+    .filter((custom): custom is ModelMarketCustomModel => custom !== null);
   modelMarketCandidates.value = payload.candidates || [];
 }
 
@@ -8389,11 +8774,15 @@ function isModelMarketSelected(model: ModelMarketModel): boolean {
 }
 
 function nextModelMarketSortOrder(): number {
-  const maxSort = modelMarketConfig.selected_models.reduce(
+  const maxSelectedSort = modelMarketConfig.selected_models.reduce(
     (max, selection) => Math.max(max, Number(selection.sort_order) || 0),
     0,
   );
-  return maxSort + 10;
+  const maxCustomSort = modelMarketConfig.custom_models.reduce(
+    (max, custom) => Math.max(max, Number(custom.sort_order) || 0),
+    0,
+  );
+  return Math.max(maxSelectedSort, maxCustomSort) + 10;
 }
 
 function toggleModelMarketSelection(model: ModelMarketModel, event: Event) {
@@ -8428,10 +8817,127 @@ function updateModelMarketSortOrder(model: ModelMarketModel, event: Event) {
   selection.sort_order = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
+function addModelMarketCustomModel() {
+  const firstGroup = modelMarketGroups.value[0];
+  const platform = firstGroup?.platform || "openai";
+  const groups = firstGroup ? [adminGroupToModelMarketGroup(firstGroup)] : [];
+  modelMarketConfig.custom_models.push({
+    key: "",
+    platform,
+    model: "",
+    enabled: true,
+    sort_order: nextModelMarketSortOrder(),
+    billing_mode: BILLING_MODE_TOKEN,
+    pricing: createModelMarketPricing(BILLING_MODE_TOKEN),
+    groups,
+  });
+}
+
+function removeModelMarketCustomModel(index: number) {
+  modelMarketConfig.custom_models.splice(index, 1);
+}
+
+function refreshModelMarketCustomKey(custom: ModelMarketCustomModel) {
+  custom.key = modelMarketCustomKey(custom.platform, custom.model);
+}
+
+function updateModelMarketCustomPlatform(custom: ModelMarketCustomModel, event: Event) {
+  const value = String((event.target as HTMLSelectElement | null)?.value || "").trim();
+  custom.platform = value;
+  custom.groups = custom.groups.filter((group) => group.platform === value);
+  refreshModelMarketCustomKey(custom);
+}
+
+function updateModelMarketCustomModelName(custom: ModelMarketCustomModel) {
+  refreshModelMarketCustomKey(custom);
+}
+
+function updateModelMarketCustomBillingMode(custom: ModelMarketCustomModel, event: Event) {
+  const value = String((event.target as HTMLSelectElement | null)?.value || "");
+  custom.billing_mode = isModelMarketBillingMode(value) ? value : BILLING_MODE_TOKEN;
+  custom.pricing = normalizeModelMarketCustomPricing(custom.pricing, custom.billing_mode);
+}
+
+function modelMarketCustomGroupOptions(custom: ModelMarketCustomModel): AdminGroup[] {
+  return modelMarketGroups.value.filter(
+    (group) => group.status === "active" && (!custom.platform || group.platform === custom.platform),
+  );
+}
+
+function selectedModelMarketCustomGroupID(custom: ModelMarketCustomModel): number | "" {
+  return custom.groups[0]?.id || "";
+}
+
+function updateModelMarketCustomGroup(custom: ModelMarketCustomModel, event: Event) {
+  const value = Number((event.target as HTMLSelectElement | null)?.value);
+  const group = modelMarketGroups.value.find((item) => item.id === value);
+  if (!group) {
+    custom.groups = [];
+    return;
+  }
+  custom.platform = group.platform;
+  custom.groups = [adminGroupToModelMarketGroup(group, custom.groups[0]?.rate_multiplier || group.rate_multiplier)];
+  refreshModelMarketCustomKey(custom);
+}
+
+function updateModelMarketCustomRate(custom: ModelMarketCustomModel, event: Event) {
+  const value = Number((event.target as HTMLInputElement | null)?.value);
+  const normalized = Number.isFinite(value) && value > 0 ? value : 1;
+  if (custom.groups.length === 0) {
+    const group = modelMarketCustomGroupOptions(custom)[0];
+    if (!group) return;
+    custom.groups = [adminGroupToModelMarketGroup(group, normalized)];
+    return;
+  }
+  custom.groups[0].rate_multiplier = normalized;
+}
+
+function modelMarketCustomRate(custom: ModelMarketCustomModel): number {
+  return custom.groups[0]?.rate_multiplier || 1;
+}
+
+function ensureModelMarketCustomPricing(custom: ModelMarketCustomModel): ModelMarketPricing {
+  custom.pricing = normalizeModelMarketCustomPricing(custom.pricing, custom.billing_mode);
+  return custom.pricing;
+}
+
+function modelMarketCustomPriceDisplay(
+  custom: ModelMarketCustomModel,
+  field: ModelMarketCustomPriceField,
+  scale: number,
+): number | "" {
+  const value = custom.pricing?.[field];
+  if (value == null) return "";
+  return Number((value * scale).toFixed(8));
+}
+
+function updateModelMarketCustomPrice(
+  custom: ModelMarketCustomModel,
+  field: ModelMarketCustomPriceField,
+  event: Event,
+  scale: number,
+) {
+  const raw = (event.target as HTMLInputElement | null)?.value;
+  const pricing = ensureModelMarketCustomPricing(custom);
+  if (raw == null || raw === "") {
+    pricing[field] = null;
+    return;
+  }
+  const value = Number(raw);
+  pricing[field] = Number.isFinite(value) && value >= 0 ? value / scale : null;
+}
+
 function normalizeModelMarketConfigForSave(): ModelMarketConfig {
   const selected = modelMarketConfig.selected_models
     .map(normalizeModelMarketSelection)
     .filter((selection): selection is ModelMarketSelection => selection !== null)
+    .sort((left, right) => {
+      if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order;
+      return left.key.localeCompare(right.key);
+    });
+  const customModels = modelMarketConfig.custom_models
+    .map(normalizeModelMarketCustomModel)
+    .filter((custom): custom is ModelMarketCustomModel => custom !== null)
     .sort((left, right) => {
       if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order;
       return left.key.localeCompare(right.key);
@@ -8442,6 +8948,7 @@ function normalizeModelMarketConfigForSave(): ModelMarketConfig {
     title: modelMarketConfig.title.trim(),
     description: modelMarketConfig.description.trim(),
     selected_models: modelMarketConfig.auto_sync ? [] : selected,
+    custom_models: customModels,
   };
 }
 
@@ -8715,11 +9222,14 @@ async function loadSettings() {
 async function loadSubscriptionGroups() {
   try {
     const groups = await adminAPI.groups.getAll();
-    subscriptionGroups.value = groups.filter(
+    const activeGroups = groups.filter((group) => group.status === "active");
+    modelMarketGroups.value = activeGroups;
+    subscriptionGroups.value = activeGroups.filter(
       (group) =>
-        group.subscription_type === "subscription" && group.status === "active",
+        group.subscription_type === "subscription",
     );
   } catch (_error: unknown) {
+    modelMarketGroups.value = [];
     subscriptionGroups.value = [];
   }
 }

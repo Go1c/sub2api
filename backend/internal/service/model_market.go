@@ -13,8 +13,10 @@ import (
 
 const (
 	maxModelMarketSelections = 1000
+	maxModelMarketCustom     = 200
 	defaultModelMarketTitle  = "模型广场"
 	defaultModelMarketDesc   = "按平台、分组和计费类型查看当前可用模型。价格和倍率实时读取渠道配置。"
+	modelMarketCustomChannel = "自定义"
 )
 
 type ModelMarketChannelLister interface {
@@ -34,11 +36,12 @@ func NewModelMarketService(settingService *SettingService, channelLister ModelMa
 }
 
 type ModelMarketConfig struct {
-	Enabled        bool                   `json:"enabled"`
-	AutoSync       bool                   `json:"auto_sync"`
-	Title          string                 `json:"title"`
-	Description    string                 `json:"description"`
-	SelectedModels []ModelMarketSelection `json:"selected_models"`
+	Enabled        bool                     `json:"enabled"`
+	AutoSync       bool                     `json:"auto_sync"`
+	Title          string                   `json:"title"`
+	Description    string                   `json:"description"`
+	SelectedModels []ModelMarketSelection   `json:"selected_models"`
+	CustomModels   []ModelMarketCustomModel `json:"custom_models"`
 }
 
 type ModelMarketSelection struct {
@@ -47,6 +50,17 @@ type ModelMarketSelection struct {
 	Model     string `json:"model,omitempty"`
 	Enabled   bool   `json:"enabled"`
 	SortOrder int    `json:"sort_order"`
+}
+
+type ModelMarketCustomModel struct {
+	Key         string              `json:"key"`
+	Platform    string              `json:"platform"`
+	Model       string              `json:"model"`
+	Enabled     bool                `json:"enabled"`
+	SortOrder   int                 `json:"sort_order"`
+	BillingMode string              `json:"billing_mode"`
+	Pricing     *ModelMarketPricing `json:"pricing"`
+	Groups      []ModelMarketGroup  `json:"groups"`
 }
 
 type ModelMarketResponse struct {
@@ -147,6 +161,24 @@ func NormalizeModelMarketConfig(cfg ModelMarketConfig) ModelMarketConfig {
 		}
 	}
 	cfg.SelectedModels = selections
+
+	customModels := make([]ModelMarketCustomModel, 0, len(cfg.CustomModels))
+	seenCustom := make(map[string]struct{}, len(cfg.CustomModels))
+	for _, custom := range cfg.CustomModels {
+		normalized, ok := normalizeModelMarketCustomModel(custom)
+		if !ok {
+			continue
+		}
+		if _, exists := seenCustom[normalized.Key]; exists {
+			continue
+		}
+		seenCustom[normalized.Key] = struct{}{}
+		customModels = append(customModels, normalized)
+		if len(customModels) >= maxModelMarketCustom {
+			break
+		}
+	}
+	cfg.CustomModels = customModels
 	return cfg
 }
 
@@ -154,9 +186,24 @@ func ValidateModelMarketConfig(cfg ModelMarketConfig) error {
 	if len(cfg.SelectedModels) > maxModelMarketSelections {
 		return infraerrors.BadRequest("MODEL_MARKET_TOO_MANY_SELECTIONS", fmt.Sprintf("model market supports at most %d selected models", maxModelMarketSelections))
 	}
+	if len(cfg.CustomModels) > maxModelMarketCustom {
+		return infraerrors.BadRequest("MODEL_MARKET_TOO_MANY_CUSTOM_MODELS", fmt.Sprintf("model market supports at most %d custom models", maxModelMarketCustom))
+	}
 	for i, selection := range cfg.SelectedModels {
 		if normalizeModelMarketKey(selection.Key) == "" && (strings.TrimSpace(selection.Platform) == "" || strings.TrimSpace(selection.Model) == "") {
 			return infraerrors.BadRequest("MODEL_MARKET_SELECTION_REQUIRED", fmt.Sprintf("model market selection #%d requires key or platform/model", i+1))
+		}
+	}
+	for i, custom := range cfg.CustomModels {
+		normalized, ok := normalizeModelMarketCustomModel(custom)
+		if !ok {
+			return infraerrors.BadRequest("MODEL_MARKET_CUSTOM_MODEL_REQUIRED", fmt.Sprintf("model market custom model #%d requires platform and model", i+1))
+		}
+		if !isModelMarketBillingMode(normalized.BillingMode) {
+			return infraerrors.BadRequest("MODEL_MARKET_CUSTOM_BILLING_MODE_INVALID", fmt.Sprintf("model market custom model #%d has invalid billing mode", i+1))
+		}
+		if normalized.Enabled && len(normalized.Groups) == 0 {
+			return infraerrors.BadRequest("MODEL_MARKET_CUSTOM_GROUP_REQUIRED", fmt.Sprintf("model market custom model #%d requires at least one group", i+1))
 		}
 	}
 	return nil
@@ -229,7 +276,7 @@ func (s *ModelMarketService) GetPublic(ctx context.Context) (*ModelMarketRespons
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := s.candidates(ctx)
+	candidates, err := s.candidates(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -255,18 +302,22 @@ func (s *ModelMarketService) GetAdmin(ctx context.Context) (*ModelMarketAdminRes
 }
 
 func (s *ModelMarketService) buildAdminResponse(ctx context.Context, cfg ModelMarketConfig) (*ModelMarketAdminResponse, error) {
-	candidates, err := s.candidates(ctx)
+	adminCandidates, err := s.candidates(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	publicCandidates, err := s.candidates(ctx, false)
 	if err != nil {
 		return nil, err
 	}
 	return &ModelMarketAdminResponse{
 		Config:     cfg,
-		Candidates: candidates,
-		Models:     applyModelMarketConfig(candidates, cfg),
+		Candidates: adminCandidates,
+		Models:     applyModelMarketConfig(publicCandidates, cfg),
 	}, nil
 }
 
-func (s *ModelMarketService) candidates(ctx context.Context) ([]ModelMarketModel, error) {
+func (s *ModelMarketService) candidates(ctx context.Context, includeWithoutPublicGroups bool) ([]ModelMarketModel, error) {
 	if s == nil || s.channelLister == nil {
 		return []ModelMarketModel{}, nil
 	}
@@ -281,15 +332,18 @@ func (s *ModelMarketService) candidates(ctx context.Context) ([]ModelMarketModel
 			continue
 		}
 		groupsByPlatform := publicGroupsByPlatform(ch.Groups)
-		if len(groupsByPlatform) == 0 {
+		if len(groupsByPlatform) == 0 && !includeWithoutPublicGroups {
 			continue
 		}
 		for _, model := range ch.SupportedModels {
 			groups := groupsByPlatform[model.Platform]
-			if len(groups) == 0 {
+			if len(groups) == 0 && !includeWithoutPublicGroups {
 				continue
 			}
 			key := modelMarketKey(model.Platform, model.Name)
+			if key == "" {
+				continue
+			}
 			existing := byKey[key]
 			if existing == nil {
 				existing = &ModelMarketModel{
@@ -348,9 +402,11 @@ func publicGroupsByPlatform(groups []AvailableGroupRef) map[string][]ModelMarket
 
 func applyModelMarketConfig(candidates []ModelMarketModel, cfg ModelMarketConfig) []ModelMarketModel {
 	cfg = NormalizeModelMarketConfig(cfg)
+	customModels := modelMarketCustomModels(cfg.CustomModels)
 	if cfg.AutoSync {
 		out := cloneModelMarketModels(candidates)
-		sortModelMarketModels(out)
+		out = append(out, customModels...)
+		sortConfiguredModelMarketModels(out)
 		return out
 	}
 
@@ -370,15 +426,40 @@ func applyModelMarketConfig(candidates []ModelMarketModel, cfg ModelMarketConfig
 		candidate.SortOrder = selection.SortOrder
 		out = append(out, candidate)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].SortOrder != out[j].SortOrder {
-			return out[i].SortOrder < out[j].SortOrder
+	out = append(out, customModels...)
+	sortConfiguredModelMarketModels(out)
+	return out
+}
+
+func modelMarketCustomModels(customModels []ModelMarketCustomModel) []ModelMarketModel {
+	out := make([]ModelMarketModel, 0, len(customModels))
+	for _, custom := range customModels {
+		custom, ok := normalizeModelMarketCustomModel(custom)
+		if !ok || !custom.Enabled || len(custom.Groups) == 0 {
+			continue
 		}
-		if out[i].Platform != out[j].Platform {
-			return out[i].Platform < out[j].Platform
+		pricing := cloneModelMarketPricing(custom.Pricing)
+		billingMode := custom.BillingMode
+		if billingMode == "" && pricing != nil {
+			billingMode = pricing.BillingMode
 		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
-	})
+		if billingMode == "" {
+			billingMode = "unknown"
+		}
+		if pricing != nil && pricing.BillingMode == "" && billingMode != "unknown" {
+			pricing.BillingMode = billingMode
+		}
+		out = append(out, ModelMarketModel{
+			Key:         custom.Key,
+			Name:        custom.Model,
+			Platform:    custom.Platform,
+			BillingMode: billingMode,
+			Pricing:     pricing,
+			Groups:      append([]ModelMarketGroup(nil), custom.Groups...),
+			Channels:    []string{modelMarketCustomChannel},
+			SortOrder:   custom.SortOrder,
+		})
+	}
 	return out
 }
 
@@ -386,14 +467,36 @@ func cloneModelMarketModels(src []ModelMarketModel) []ModelMarketModel {
 	out := make([]ModelMarketModel, len(src))
 	for i := range src {
 		out[i] = src[i]
+		out[i].Pricing = cloneModelMarketPricing(src[i].Pricing)
 		out[i].Groups = append([]ModelMarketGroup(nil), src[i].Groups...)
 		out[i].Channels = append([]string(nil), src[i].Channels...)
 	}
 	return out
 }
 
+func cloneModelMarketPricing(src *ModelMarketPricing) *ModelMarketPricing {
+	if src == nil {
+		return nil
+	}
+	out := *src
+	out.Intervals = append([]ModelMarketPricingInterval(nil), src.Intervals...)
+	return &out
+}
+
 func sortModelMarketModels(models []ModelMarketModel) {
 	sort.SliceStable(models, func(i, j int) bool {
+		if models[i].Platform != models[j].Platform {
+			return models[i].Platform < models[j].Platform
+		}
+		return strings.ToLower(models[i].Name) < strings.ToLower(models[j].Name)
+	})
+}
+
+func sortConfiguredModelMarketModels(models []ModelMarketModel) {
+	sort.SliceStable(models, func(i, j int) bool {
+		if models[i].SortOrder != models[j].SortOrder {
+			return models[i].SortOrder < models[j].SortOrder
+		}
 		if models[i].Platform != models[j].Platform {
 			return models[i].Platform < models[j].Platform
 		}
@@ -428,12 +531,118 @@ func modelMarketKey(platform, model string) string {
 	return platform + ":" + model
 }
 
+func customModelMarketKey(platform, model string) string {
+	key := modelMarketKey(platform, model)
+	if key == "" {
+		return ""
+	}
+	return "custom:" + key
+}
+
 func normalizeModelMarketKey(key string) string {
 	parts := strings.SplitN(strings.ToLower(strings.TrimSpace(key)), ":", 2)
 	if len(parts) != 2 {
 		return ""
 	}
 	return modelMarketKey(parts[0], parts[1])
+}
+
+func normalizeCustomModelMarketKey(key string) string {
+	key = strings.ToLower(strings.TrimSpace(key))
+	if key == "" {
+		return ""
+	}
+	key = strings.TrimPrefix(key, "custom:")
+	base := normalizeModelMarketKey(key)
+	if base == "" {
+		return ""
+	}
+	return "custom:" + base
+}
+
+func normalizeModelMarketCustomModel(custom ModelMarketCustomModel) (ModelMarketCustomModel, bool) {
+	custom.Platform = strings.TrimSpace(custom.Platform)
+	custom.Model = strings.TrimSpace(custom.Model)
+	if custom.Platform == "" || custom.Model == "" {
+		return ModelMarketCustomModel{}, false
+	}
+	custom.Key = normalizeCustomModelMarketKey(custom.Key)
+	if custom.Key == "" {
+		custom.Key = customModelMarketKey(custom.Platform, custom.Model)
+	}
+	if custom.Key == "" {
+		return ModelMarketCustomModel{}, false
+	}
+	if custom.SortOrder < 0 {
+		custom.SortOrder = 0
+	}
+	custom.BillingMode = strings.TrimSpace(custom.BillingMode)
+	custom.Pricing = normalizeModelMarketPricing(custom.Pricing, custom.BillingMode)
+	if custom.BillingMode == "" && custom.Pricing != nil {
+		custom.BillingMode = custom.Pricing.BillingMode
+	}
+	if custom.BillingMode == "" {
+		custom.BillingMode = string(BillingModeToken)
+	}
+	if custom.Pricing != nil {
+		custom.Pricing.BillingMode = custom.BillingMode
+	}
+	custom.Groups = normalizeModelMarketCustomGroups(custom.Groups, custom.Platform)
+	return custom, true
+}
+
+func normalizeModelMarketPricing(pricing *ModelMarketPricing, billingMode string) *ModelMarketPricing {
+	if pricing == nil {
+		return nil
+	}
+	out := *pricing
+	out.BillingMode = strings.TrimSpace(out.BillingMode)
+	if out.BillingMode == "" {
+		out.BillingMode = strings.TrimSpace(billingMode)
+	}
+	if out.BillingMode == "" {
+		out.BillingMode = string(BillingModeToken)
+	}
+	out.Intervals = append([]ModelMarketPricingInterval(nil), pricing.Intervals...)
+	return &out
+}
+
+func normalizeModelMarketCustomGroups(groups []ModelMarketGroup, fallbackPlatform string) []ModelMarketGroup {
+	out := make([]ModelMarketGroup, 0, len(groups))
+	seen := make(map[string]struct{}, len(groups))
+	for _, group := range groups {
+		group.Name = strings.TrimSpace(group.Name)
+		group.Platform = strings.TrimSpace(group.Platform)
+		if group.Platform == "" {
+			group.Platform = fallbackPlatform
+		}
+		group.SubscriptionType = strings.TrimSpace(group.SubscriptionType)
+		if group.RateMultiplier <= 0 {
+			group.RateMultiplier = 1
+		}
+		if group.Name == "" || group.Platform == "" {
+			continue
+		}
+		key := fmt.Sprintf("%d:%s:%s", group.ID, group.Platform, strings.ToLower(group.Name))
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, group)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+	})
+	return out
+}
+
+func isModelMarketBillingMode(mode string) bool {
+	switch BillingMode(mode) {
+	case BillingModeToken, BillingModePerRequest, BillingModeImage:
+		return true
+	default:
+		return false
+	}
 }
 
 func modelMarketBillingMode(pricing *ChannelModelPricing) string {
