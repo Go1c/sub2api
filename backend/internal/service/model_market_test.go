@@ -231,7 +231,10 @@ func TestModelMarket_ManualSelectionFiltersAndOrdersCandidates(t *testing.T) {
 
 func TestModelMarket_AutoSyncAppliesConfiguredBillingOverrides(t *testing.T) {
 	perRequestPrice := 0.42
-	imagePrice := 0.08
+	image1KPrice := 0.05
+	image4KPrice := 0.15
+	inputPrice := 0.0000015
+	outputPrice := 0.000009
 	groups := []Group{
 		{
 			ID:             10,
@@ -253,6 +256,7 @@ func TestModelMarket_AutoSyncAppliesConfiguredBillingOverrides(t *testing.T) {
 				Credentials: map[string]any{
 					"model_mapping": map[string]any{
 						"gpt-image": "gpt-image",
+						"gpt-manual": "gpt-manual",
 						"gpt-once":  "gpt-once",
 					},
 				},
@@ -276,14 +280,29 @@ func TestModelMarket_AutoSyncAppliesConfiguredBillingOverrides(t *testing.T) {
 				},
 			},
 			{
+				Key:         "openai:gpt-manual",
+				Platform:    PlatformOpenAI,
+				Model:       "gpt-manual",
+				Enabled:     true,
+				BillingMode: string(BillingModeToken),
+				Pricing: &ModelMarketPricing{
+					BillingMode: string(BillingModeToken),
+					InputPrice:  &inputPrice,
+					OutputPrice: &outputPrice,
+				},
+			},
+			{
 				Key:         "openai:gpt-image",
 				Platform:    PlatformOpenAI,
 				Model:       "gpt-image",
 				Enabled:     true,
 				BillingMode: string(BillingModeImage),
 				Pricing: &ModelMarketPricing{
-					BillingMode:      string(BillingModeImage),
-					ImageOutputPrice: &imagePrice,
+					BillingMode: string(BillingModeImage),
+					Intervals: []ModelMarketPricingInterval{
+						{TierLabel: "1K", PerRequestPrice: &image1KPrice},
+						{TierLabel: "4K", PerRequestPrice: &image4KPrice},
+					},
 				},
 			},
 		},
@@ -292,7 +311,7 @@ func TestModelMarket_AutoSyncAppliesConfiguredBillingOverrides(t *testing.T) {
 
 	got, err := svc.GetPublic(context.Background())
 	require.NoError(t, err)
-	require.Len(t, got.Models, 2)
+	require.Len(t, got.Models, 3)
 
 	byKey := map[string]ModelMarketModel{}
 	for _, model := range got.Models {
@@ -305,12 +324,26 @@ func TestModelMarket_AutoSyncAppliesConfiguredBillingOverrides(t *testing.T) {
 	require.NotNil(t, perRequestModel.Pricing.PerRequestPrice)
 	require.InDelta(t, perRequestPrice, *perRequestModel.Pricing.PerRequestPrice, 1e-12)
 
+	tokenModel := byKey["openai:gpt-manual"]
+	require.Equal(t, string(BillingModeToken), tokenModel.BillingMode)
+	require.NotNil(t, tokenModel.Pricing)
+	require.Equal(t, string(BillingModeToken), tokenModel.Pricing.BillingMode)
+	require.NotNil(t, tokenModel.Pricing.InputPrice)
+	require.NotNil(t, tokenModel.Pricing.OutputPrice)
+	require.InDelta(t, inputPrice, *tokenModel.Pricing.InputPrice, 1e-12)
+	require.InDelta(t, outputPrice, *tokenModel.Pricing.OutputPrice, 1e-12)
+
 	imageModel := byKey["openai:gpt-image"]
 	require.Equal(t, string(BillingModeImage), imageModel.BillingMode)
 	require.NotNil(t, imageModel.Pricing)
 	require.Equal(t, string(BillingModeImage), imageModel.Pricing.BillingMode)
-	require.NotNil(t, imageModel.Pricing.ImageOutputPrice)
-	require.InDelta(t, imagePrice, *imageModel.Pricing.ImageOutputPrice, 1e-12)
+	require.Len(t, imageModel.Pricing.Intervals, 2)
+	require.Equal(t, "1K", imageModel.Pricing.Intervals[0].TierLabel)
+	require.NotNil(t, imageModel.Pricing.Intervals[0].PerRequestPrice)
+	require.InDelta(t, image1KPrice, *imageModel.Pricing.Intervals[0].PerRequestPrice, 1e-12)
+	require.Equal(t, "4K", imageModel.Pricing.Intervals[1].TierLabel)
+	require.NotNil(t, imageModel.Pricing.Intervals[1].PerRequestPrice)
+	require.InDelta(t, image4KPrice, *imageModel.Pricing.Intervals[1].PerRequestPrice, 1e-12)
 }
 
 func TestModelMarket_AdminCandidatesIncludeExclusiveGroupModelsWithoutPublicGroups(t *testing.T) {

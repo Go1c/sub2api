@@ -638,7 +638,12 @@ function priceLines(model: MarketModel) {
     return [{ label: labels.value.perRequestPrice, value: `${formatScaled(pricing.per_request_price, 1)} ${labels.value.unitPerRequest}` }]
   }
   if (pricing.billing_mode === BILLING_MODE_IMAGE) {
-    return [{ label: labels.value.imageOutputPrice, value: `${formatScaled(pricing.image_output_price, 1)} ${labels.value.unitPerImage}` }]
+    const tierLines = imageTierPriceLines(pricing)
+    if (tierLines.length > 0) return tierLines
+    if (pricing.image_output_price != null) {
+      return [{ label: labels.value.imageOutputPrice, value: `${formatScaled(pricing.image_output_price, 1)} ${labels.value.unitPerImage}` }]
+    }
+    return [{ label: labels.value.price, value: labels.value.noPricing }]
   }
 
   const lines = [
@@ -655,6 +660,29 @@ function priceLines(model: MarketModel) {
     lines.push({ label: labels.value.imageOutputPrice, value: `${formatScaled(pricing.image_output_price, 1_000_000)} ${labels.value.unitPerMillion}` })
   }
   return lines
+}
+
+function imageTierPriceLines(pricing: ModelMarketPricing) {
+  const tierOrder = new Map([
+    ['1K', 1],
+    ['2K', 2],
+    ['4K', 3],
+  ])
+  return (pricing.intervals || [])
+    .filter((interval) => interval.per_request_price != null && String(interval.tier_label || '').trim())
+    .map((interval) => {
+      const label = String(interval.tier_label || '').trim().toUpperCase()
+      return {
+        label,
+        value: `${formatScaled(interval.per_request_price, 1)} ${labels.value.unitPerImage}`,
+      }
+    })
+    .sort((left, right) => {
+      const leftOrder = tierOrder.get(left.label) || 99
+      const rightOrder = tierOrder.get(right.label) || 99
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder
+      return left.label.localeCompare(right.label)
+    })
 }
 
 async function loadModelMarket() {

@@ -1400,7 +1400,72 @@ describe("admin SettingsView wechat connect controls", () => {
     expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("currency");
   });
 
-  it("saves model market candidate billing overrides for per-image pricing", async () => {
+  it("saves model market candidate billing overrides for token pricing", async () => {
+    getModelMarket.mockResolvedValueOnce({
+      config: {
+        enabled: true,
+        auto_sync: true,
+        title: "模型广场",
+        description: "按平台、分组和计费类型查看当前可用模型。",
+        selected_models: [],
+        custom_models: [],
+      },
+      candidates: [
+        {
+          key: "gemini:gemini-3.5-flash-high",
+          name: "gemini-3.5-flash-high",
+          platform: "gemini",
+          billing_mode: "token",
+          pricing: null,
+          groups: [
+            {
+              id: 1,
+              name: "Gemini",
+              platform: "gemini",
+              subscription_type: "balance",
+              rate_multiplier: 0.35,
+              is_exclusive: false,
+            },
+          ],
+          channels: ["Gemini"],
+          sort_order: 0,
+        },
+      ],
+      models: [],
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openModelMarketTab(wrapper);
+    expect(wrapper.text()).not.toContain("admin.channels.form");
+    await wrapper.get('[data-testid="model-market-candidate-input-price-gemini:gemini-3.5-flash-high"]').setValue("1.5");
+    await wrapper.get('[data-testid="model-market-candidate-output-price-gemini:gemini-3.5-flash-high"]').setValue("9");
+    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
+    await flushPromises();
+
+    expect(updateModelMarket).toHaveBeenCalledTimes(1);
+    expect(updateModelMarket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selected_models: [
+          expect.objectContaining({
+            key: "gemini:gemini-3.5-flash-high",
+            platform: "gemini",
+            model: "gemini-3.5-flash-high",
+            enabled: true,
+            billing_mode: "token",
+            pricing: expect.objectContaining({
+              billing_mode: "token",
+              input_price: 0.0000015,
+              output_price: 0.000009,
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("saves model market candidate billing overrides for per-image tier pricing", async () => {
     getModelMarket.mockResolvedValueOnce({
       config: {
         enabled: true,
@@ -1449,7 +1514,8 @@ describe("admin SettingsView wechat connect controls", () => {
     await openModelMarketTab(wrapper);
     await wrapper.get('[data-testid="model-market-candidate-billing-openai:gpt-image-2"]').setValue("image");
     await flushPromises();
-    await wrapper.get('[data-testid="model-market-candidate-image-price-openai:gpt-image-2"]').setValue("30");
+    await wrapper.get('[data-testid="model-market-candidate-image-tier-1k-openai:gpt-image-2"]').setValue("0.05");
+    await wrapper.get('[data-testid="model-market-candidate-image-tier-4k-openai:gpt-image-2"]').setValue("0.15");
     await wrapper.get('[data-testid="model-market-save"]').trigger("click");
     await flushPromises();
 
@@ -1467,7 +1533,16 @@ describe("admin SettingsView wechat connect controls", () => {
             billing_mode: "image",
             pricing: expect.objectContaining({
               billing_mode: "image",
-              image_output_price: 30,
+              intervals: [
+                expect.objectContaining({
+                  tier_label: "1K",
+                  per_request_price: 0.05,
+                }),
+                expect.objectContaining({
+                  tier_label: "4K",
+                  per_request_price: 0.15,
+                }),
+              ],
             }),
           }),
         ],
