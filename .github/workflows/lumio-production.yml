@@ -100,5 +100,8 @@ jobs:
           PROD_HOST: ${{ secrets.PROD_HOST }}
           PROD_USER: ${{ secrets.PROD_USER }}
         run: |
-          ssh "${PROD_USER:-deploy}@${PROD_HOST}" \
+          ssh \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            "${PROD_USER:-deploy}@${PROD_HOST}" \
             "/opt/lumio/bin/deploy-service.sh sub2api '${{ env.IMAGE_NAME }}:sha-${{ github.sha }}' '${{ github.sha }}'"
