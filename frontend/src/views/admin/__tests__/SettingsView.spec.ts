@@ -1442,4 +1442,48 @@ describe("admin SettingsView wechat connect controls", () => {
       }),
     );
   });
+
+  it("blocks model market custom save when the model name is empty", async () => {
+    getGroups.mockResolvedValue([
+      {
+        id: 42,
+        name: "OpenAI Pro",
+        platform: "openai",
+        status: "active",
+        subscription_type: "standard",
+        rate_multiplier: 0.3,
+        is_exclusive: false,
+      },
+    ]);
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openModelMarketTab(wrapper);
+    await wrapper.get('[data-testid="model-market-add-custom"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
+    await flushPromises();
+
+    expect(updateModelMarket).not.toHaveBeenCalled();
+    expect(showError).toHaveBeenCalledWith("admin.settings.modelMarket.customModelRequired");
+    expect(wrapper.find('[data-testid="model-market-custom-model-0"]').exists()).toBe(true);
+  });
+
+  it("blocks enabled model market custom save when no group is selected", async () => {
+    getGroups.mockResolvedValue([]);
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openModelMarketTab(wrapper);
+    await wrapper.get('[data-testid="model-market-add-custom"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="model-market-custom-model-0"]').setValue("gpt-custom");
+    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
+    await flushPromises();
+
+    expect(updateModelMarket).not.toHaveBeenCalled();
+    expect(showError).toHaveBeenCalledWith("admin.settings.modelMarket.customGroupRequired");
+  });
 });

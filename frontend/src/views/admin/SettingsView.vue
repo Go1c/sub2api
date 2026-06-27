@@ -8927,6 +8927,25 @@ function updateModelMarketCustomPrice(
   pricing[field] = Number.isFinite(value) && value >= 0 ? value / scale : null;
 }
 
+function validateModelMarketConfigBeforeSave(): boolean {
+  for (const custom of modelMarketConfig.custom_models) {
+    if (!custom.model.trim()) {
+      appStore.showError(t("admin.settings.modelMarket.customModelRequired"));
+      return false;
+    }
+    const normalized = normalizeModelMarketCustomModel(custom);
+    if (!normalized) {
+      appStore.showError(t("admin.settings.modelMarket.customModelRequired"));
+      return false;
+    }
+    if (normalized.enabled && normalized.groups.length === 0) {
+      appStore.showError(t("admin.settings.modelMarket.customGroupRequired"));
+      return false;
+    }
+  }
+  return true;
+}
+
 function normalizeModelMarketConfigForSave(): ModelMarketConfig {
   const selected = modelMarketConfig.selected_models
     .map(normalizeModelMarketSelection)
@@ -8953,6 +8972,8 @@ function normalizeModelMarketConfigForSave(): ModelMarketConfig {
 }
 
 async function saveModelMarket() {
+  if (modelMarketSaving.value) return;
+  if (!validateModelMarketConfigBeforeSave()) return;
   modelMarketSaving.value = true;
   try {
     const payload = await adminAPI.settings.updateModelMarket(normalizeModelMarketConfigForSave());

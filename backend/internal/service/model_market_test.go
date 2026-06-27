@@ -46,72 +46,118 @@ func (s *modelMarketRepoStub) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-type modelMarketChannelListerStub struct {
-	channels []AvailableChannel
-	err      error
+type modelMarketGroupListerStub struct {
+	groups []Group
+	err    error
 }
 
-func (s modelMarketChannelListerStub) ListAvailable(context.Context) ([]AvailableChannel, error) {
-	return s.channels, s.err
+func (s modelMarketGroupListerStub) ListActive(context.Context) ([]Group, error) {
+	return s.groups, s.err
 }
 
-func newModelMarketTestService(channels []AvailableChannel, values map[string]string) (*ModelMarketService, *modelMarketRepoStub) {
+type modelMarketAccountListerStub struct {
+	accountsByGroup map[int64][]Account
+	err             error
+}
+
+func (s modelMarketAccountListerStub) ListSchedulableByGroupIDAndPlatform(_ context.Context, groupID int64, platform string) ([]Account, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	accounts := s.accountsByGroup[groupID]
+	out := make([]Account, 0, len(accounts))
+	for _, account := range accounts {
+		if account.Platform == platform {
+			out = append(out, account)
+		}
+	}
+	return out, nil
+}
+
+func newModelMarketTestService(groups []Group, accountsByGroup map[int64][]Account, values map[string]string) (*ModelMarketService, *modelMarketRepoStub) {
 	repo := &modelMarketRepoStub{values: values}
 	settings := NewSettingService(repo, &config.Config{})
-	return NewModelMarketService(settings, modelMarketChannelListerStub{channels: channels}), repo
+	billing := NewBillingService(&config.Config{}, nil)
+	return NewModelMarketService(
+		settings,
+		modelMarketGroupListerStub{groups: groups},
+		modelMarketAccountListerStub{accountsByGroup: accountsByGroup},
+		billing,
+	), repo
 }
 
-func TestModelMarket_DefaultAutoSyncReadsPublicChannelPricingAndGroupRates(t *testing.T) {
-	inputPrice := 0.000003
-	outputPrice := 0.000015
-	privatePrice := 0.99
-	channels := []AvailableChannel{
+func TestModelMarket_DefaultAutoSyncReadsPublicGroupAccountModelsAndRates(t *testing.T) {
+	groups := []Group{
 		{
-			ID:     1,
-			Name:   "Claude",
-			Status: StatusActive,
-			Groups: []AvailableGroupRef{
-				{ID: 10, Name: "claude-public", Platform: PlatformAnthropic, RateMultiplier: 1.4, IsExclusive: false},
-				{ID: 11, Name: "claude-private", Platform: PlatformAnthropic, RateMultiplier: 0.7, IsExclusive: true},
-			},
-			SupportedModels: []SupportedModel{
-				{
-					Name:     "claude-sonnet-4-6",
-					Platform: PlatformAnthropic,
-					Pricing: &ChannelModelPricing{
-						BillingMode: BillingModeToken,
-						InputPrice:  &inputPrice,
-						OutputPrice: &outputPrice,
+			ID:             10,
+			Name:           "claude-public",
+			Platform:       PlatformAnthropic,
+			RateMultiplier: 1.4,
+			Status:         StatusActive,
+			IsExclusive:    false,
+		},
+		{
+			ID:             20,
+			Name:           "openai-vip",
+			Platform:       PlatformOpenAI,
+			RateMultiplier: 0.2,
+			Status:         StatusActive,
+			IsExclusive:    true,
+		},
+		{
+			ID:             30,
+			Name:           "disabled-public",
+			Platform:       PlatformGemini,
+			RateMultiplier: 1,
+			Status:         StatusDisabled,
+			IsExclusive:    false,
+		},
+	}
+	accountsByGroup := map[int64][]Account{
+		10: {
+			{
+				ID:       1,
+				Name:     "Claude account",
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"claude-sonnet-4-6": "claude-sonnet-4-6",
 					},
 				},
 			},
 		},
-		{
-			ID:     2,
-			Name:   "Private OpenAI",
-			Status: StatusActive,
-			Groups: []AvailableGroupRef{
-				{ID: 20, Name: "openai-vip", Platform: PlatformOpenAI, RateMultiplier: 0.2, IsExclusive: true},
-			},
-			SupportedModels: []SupportedModel{
-				{
-					Name:     "gpt-private",
-					Platform: PlatformOpenAI,
-					Pricing:  &ChannelModelPricing{BillingMode: BillingModePerRequest, PerRequestPrice: &privatePrice},
+		20: {
+			{
+				ID:       2,
+				Name:     "OpenAI private account",
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-private": "gpt-private",
+					},
 				},
 			},
 		},
-		{
-			ID:     3,
-			Name:   "Disabled",
-			Status: StatusDisabled,
-			Groups: []AvailableGroupRef{
-				{ID: 30, Name: "disabled-public", Platform: PlatformGemini, RateMultiplier: 1, IsExclusive: false},
+		30: {
+			{
+				ID:       3,
+				Name:     "Gemini disabled account",
+				Platform: PlatformGemini,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gemini-disabled": "gemini-disabled",
+					},
+				},
 			},
-			SupportedModels: []SupportedModel{{Name: "gemini-disabled", Platform: PlatformGemini}},
 		},
 	}
-	svc, _ := newModelMarketTestService(channels, nil)
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
 
 	got, err := svc.GetPublic(context.Background())
 	require.NoError(t, err)
@@ -122,11 +168,11 @@ func TestModelMarket_DefaultAutoSyncReadsPublicChannelPricingAndGroupRates(t *te
 	require.Equal(t, "anthropic:claude-sonnet-4-6", model.Key)
 	require.Equal(t, "claude-sonnet-4-6", model.Name)
 	require.Equal(t, PlatformAnthropic, model.Platform)
-	require.Equal(t, []string{"Claude"}, model.Channels)
+	require.Equal(t, []string{"Claude account"}, model.Channels)
 	require.NotNil(t, model.Pricing)
 	require.Equal(t, string(BillingModeToken), model.BillingMode)
-	require.InDelta(t, inputPrice, *model.Pricing.InputPrice, 1e-12)
-	require.InDelta(t, outputPrice, *model.Pricing.OutputPrice, 1e-12)
+	require.NotNil(t, model.Pricing.InputPrice)
+	require.NotNil(t, model.Pricing.OutputPrice)
 	require.Len(t, model.Groups, 1)
 	require.Equal(t, int64(10), model.Groups[0].ID)
 	require.Equal(t, 1.4, model.Groups[0].RateMultiplier)
@@ -134,22 +180,35 @@ func TestModelMarket_DefaultAutoSyncReadsPublicChannelPricingAndGroupRates(t *te
 }
 
 func TestModelMarket_ManualSelectionFiltersAndOrdersCandidates(t *testing.T) {
-	channels := []AvailableChannel{
+	groups := []Group{
 		{
-			ID:     1,
-			Name:   "OpenAI",
-			Status: StatusActive,
-			Groups: []AvailableGroupRef{
-				{ID: 10, Name: "openai-public", Platform: PlatformOpenAI, RateMultiplier: 0.35, IsExclusive: false},
-			},
-			SupportedModels: []SupportedModel{
-				{Name: "gpt-a", Platform: PlatformOpenAI},
-				{Name: "gpt-b", Platform: PlatformOpenAI},
-				{Name: "gpt-c", Platform: PlatformOpenAI},
+			ID:             10,
+			Name:           "openai-public",
+			Platform:       PlatformOpenAI,
+			RateMultiplier: 0.35,
+			Status:         StatusActive,
+			IsExclusive:    false,
+		},
+	}
+	accountsByGroup := map[int64][]Account{
+		10: {
+			{
+				ID:       1,
+				Name:     "OpenAI",
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-a": "gpt-a",
+						"gpt-b": "gpt-b",
+						"gpt-c": "gpt-c",
+					},
+				},
 			},
 		},
 	}
-	svc, _ := newModelMarketTestService(channels, nil)
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
 	_, err := svc.SetConfig(context.Background(), ModelMarketConfig{
 		Enabled:  true,
 		AutoSync: false,
@@ -170,26 +229,34 @@ func TestModelMarket_ManualSelectionFiltersAndOrdersCandidates(t *testing.T) {
 	require.Equal(t, "gpt-a", got.Models[1].Name)
 }
 
-func TestModelMarket_AdminCandidatesIncludeChannelModelsWithoutPublicGroups(t *testing.T) {
-	inputPrice := 0.000001
-	channels := []AvailableChannel{
+func TestModelMarket_AdminCandidatesIncludeExclusiveGroupModelsWithoutPublicGroups(t *testing.T) {
+	groups := []Group{
 		{
-			ID:     1,
-			Name:   "OpenAI Internal",
-			Status: StatusActive,
-			Groups: []AvailableGroupRef{
-				{ID: 20, Name: "openai-vip", Platform: PlatformOpenAI, RateMultiplier: 0.2, IsExclusive: true},
-			},
-			SupportedModels: []SupportedModel{
-				{
-					Name:     "gpt-private",
-					Platform: PlatformOpenAI,
-					Pricing:  &ChannelModelPricing{BillingMode: BillingModeToken, InputPrice: &inputPrice},
+			ID:             20,
+			Name:           "openai-vip",
+			Platform:       PlatformOpenAI,
+			RateMultiplier: 0.2,
+			Status:         StatusActive,
+			IsExclusive:    true,
+		},
+	}
+	accountsByGroup := map[int64][]Account{
+		20: {
+			{
+				ID:       1,
+				Name:     "OpenAI Internal",
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-private": "gpt-private",
+					},
 				},
 			},
 		},
 	}
-	svc, _ := newModelMarketTestService(channels, nil)
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
 
 	admin, err := svc.GetAdmin(context.Background())
 	require.NoError(t, err)
@@ -206,7 +273,7 @@ func TestModelMarket_AdminCandidatesIncludeChannelModelsWithoutPublicGroups(t *t
 func TestModelMarket_CustomModelsAreDisplayedWithConfiguredPricingAndGroups(t *testing.T) {
 	inputPrice := 0.000004
 	outputPrice := 0.000012
-	svc, _ := newModelMarketTestService(nil, nil)
+	svc, _ := newModelMarketTestService(nil, nil, nil)
 
 	_, err := svc.SetConfig(context.Background(), ModelMarketConfig{
 		Enabled:  true,
@@ -255,4 +322,34 @@ func TestModelMarket_CustomModelsAreDisplayedWithConfiguredPricingAndGroups(t *t
 	require.Len(t, model.Groups, 1)
 	require.Equal(t, "自定义公开组", model.Groups[0].Name)
 	require.InDelta(t, 0.6, model.Groups[0].RateMultiplier, 1e-12)
+}
+
+func TestModelMarket_DefaultAutoSyncReadsExactGroupRoutingWithoutChannels(t *testing.T) {
+	groups := []Group{
+		{
+			ID:                  10,
+			Name:                "claude-routed",
+			Platform:            PlatformAnthropic,
+			RateMultiplier:      1.2,
+			Status:              StatusActive,
+			IsExclusive:         false,
+			ModelRoutingEnabled: true,
+			ModelRouting: map[string][]int64{
+				"claude-sonnet-4-6": {1},
+				"claude-opus-*":     {2},
+			},
+		},
+	}
+	svc, _ := newModelMarketTestService(groups, nil, nil)
+
+	got, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, got.Models, 1)
+	model := got.Models[0]
+	require.Equal(t, "anthropic:claude-sonnet-4-6", model.Key)
+	require.Equal(t, []string{"分组路由"}, model.Channels)
+	require.Len(t, model.Groups, 1)
+	require.Equal(t, int64(10), model.Groups[0].ID)
+	require.NotNil(t, model.Pricing)
 }

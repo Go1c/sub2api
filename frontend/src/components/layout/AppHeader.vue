@@ -296,7 +296,6 @@ const homeNavItems = computed(() => {
   const privacy = privacyTarget.value
   return [
     { key: 'models', label: isZh ? '模型广场' : 'Model Market', to: { path: '/models' }, href: '', external: false },
-    { key: 'features', label: isZh ? '特性' : 'Features', to: { path: '/home', hash: '#features' }, href: '', external: false },
     { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/status' }, href: '', external: false },
     docs
       ? {

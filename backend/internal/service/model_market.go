@@ -8,31 +8,58 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 const (
 	maxModelMarketSelections = 1000
 	maxModelMarketCustom     = 200
 	defaultModelMarketTitle  = "模型广场"
-	defaultModelMarketDesc   = "按平台、分组和计费类型查看当前可用模型。价格和倍率实时读取渠道配置。"
+	defaultModelMarketDesc   = "按平台、分组和计费类型查看当前可用模型。价格读取当前计算价格，倍率读取分组配置。"
 	modelMarketCustomChannel = "自定义"
+	modelMarketRoutingSource = "分组路由"
 )
 
-type ModelMarketChannelLister interface {
-	ListAvailable(ctx context.Context) ([]AvailableChannel, error)
+type ModelMarketGroupLister interface {
+	ListActive(ctx context.Context) ([]Group, error)
+}
+
+type ModelMarketAccountLister interface {
+	ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error)
 }
 
 type ModelMarketService struct {
 	settingService *SettingService
-	channelLister  ModelMarketChannelLister
+	groupLister    ModelMarketGroupLister
+	accountLister  ModelMarketAccountLister
+	billingService *BillingService
 }
 
-func NewModelMarketService(settingService *SettingService, channelLister ModelMarketChannelLister) *ModelMarketService {
+func NewModelMarketService(
+	settingService *SettingService,
+	groupLister ModelMarketGroupLister,
+	accountLister ModelMarketAccountLister,
+	billingService *BillingService,
+) *ModelMarketService {
 	return &ModelMarketService{
 		settingService: settingService,
-		channelLister:  channelLister,
+		groupLister:    groupLister,
+		accountLister:  accountLister,
+		billingService: billingService,
 	}
+}
+
+func ProvideModelMarketService(
+	settingService *SettingService,
+	groupRepo GroupRepository,
+	accountRepo AccountRepository,
+	billingService *BillingService,
+) *ModelMarketService {
+	return NewModelMarketService(settingService, groupRepo, accountRepo, billingService)
 }
 
 type ModelMarketConfig struct {
@@ -318,53 +345,80 @@ func (s *ModelMarketService) buildAdminResponse(ctx context.Context, cfg ModelMa
 }
 
 func (s *ModelMarketService) candidates(ctx context.Context, includeWithoutPublicGroups bool) ([]ModelMarketModel, error) {
-	if s == nil || s.channelLister == nil {
+	if s == nil || s.groupLister == nil {
 		return []ModelMarketModel{}, nil
 	}
-	channels, err := s.channelLister.ListAvailable(ctx)
+	groups, err := s.groupLister.ListActive(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list model market channels: %w", err)
+		return nil, fmt.Errorf("list model market groups: %w", err)
 	}
 
 	byKey := make(map[string]*ModelMarketModel)
-	for _, ch := range channels {
-		if ch.Status != "" && ch.Status != StatusActive {
+	for _, group := range groups {
+		if group.Status != "" && group.Status != StatusActive {
 			continue
 		}
-		groupsByPlatform := publicGroupsByPlatform(ch.Groups)
-		if len(groupsByPlatform) == 0 && !includeWithoutPublicGroups {
+		group.Platform = strings.TrimSpace(group.Platform)
+		if group.Platform == "" {
 			continue
 		}
-		for _, model := range ch.SupportedModels {
-			groups := groupsByPlatform[model.Platform]
-			if len(groups) == 0 && !includeWithoutPublicGroups {
+
+		modelSources, err := s.modelSourcesForGroup(ctx, group)
+		if err != nil {
+			return nil, err
+		}
+		if len(modelSources) == 0 {
+			continue
+		}
+
+		marketGroups := []ModelMarketGroup{}
+		if !group.IsExclusive {
+			marketGroups = []ModelMarketGroup{toModelMarketGroup(group)}
+		}
+		if len(marketGroups) == 0 && !includeWithoutPublicGroups {
+			continue
+		}
+
+		modelNames := make([]string, 0, len(modelSources))
+		for name := range modelSources {
+			modelNames = append(modelNames, name)
+		}
+		sort.Strings(modelNames)
+
+		for _, modelName := range modelNames {
+			if modelName == "" {
 				continue
 			}
-			key := modelMarketKey(model.Platform, model.Name)
+			key := modelMarketKey(group.Platform, modelName)
 			if key == "" {
 				continue
 			}
 			existing := byKey[key]
 			if existing == nil {
+				pricing := s.pricingForModel(modelName)
 				existing = &ModelMarketModel{
 					Key:         key,
-					Name:        model.Name,
-					Platform:    model.Platform,
-					BillingMode: modelMarketBillingMode(model.Pricing),
-					Pricing:     toModelMarketPricing(model.Pricing),
+					Name:        modelName,
+					Platform:    group.Platform,
+					BillingMode: modelMarketBillingMode(pricing),
+					Pricing:     toModelMarketPricing(pricing),
 					Groups:      []ModelMarketGroup{},
 					Channels:    []string{},
 				}
 				byKey[key] = existing
 			}
-			existing.Groups = mergeModelMarketGroups(existing.Groups, groups)
-			if ch.Name != "" && !containsString(existing.Channels, ch.Name) {
-				existing.Channels = append(existing.Channels, ch.Name)
-				sort.Strings(existing.Channels)
+			existing.Groups = mergeModelMarketGroups(existing.Groups, marketGroups)
+			for source := range modelSources[modelName] {
+				if source != "" && !containsString(existing.Channels, source) {
+					existing.Channels = append(existing.Channels, source)
+					sort.Strings(existing.Channels)
+				}
 			}
-			if existing.Pricing == nil && model.Pricing != nil {
-				existing.Pricing = toModelMarketPricing(model.Pricing)
-				existing.BillingMode = modelMarketBillingMode(model.Pricing)
+			if existing.Pricing == nil {
+				if pricing := s.pricingForModel(modelName); pricing != nil {
+					existing.Pricing = toModelMarketPricing(pricing)
+					existing.BillingMode = modelMarketBillingMode(pricing)
+				}
 			}
 		}
 	}
@@ -377,27 +431,166 @@ func (s *ModelMarketService) candidates(ctx context.Context, includeWithoutPubli
 	return out, nil
 }
 
-func publicGroupsByPlatform(groups []AvailableGroupRef) map[string][]ModelMarketGroup {
-	out := make(map[string][]ModelMarketGroup)
-	for _, group := range groups {
-		if group.IsExclusive || group.Platform == "" {
+func (s *ModelMarketService) modelSourcesForGroup(ctx context.Context, group Group) (map[string]map[string]struct{}, error) {
+	out := make(map[string]map[string]struct{})
+	add := func(model, source string) {
+		model = strings.TrimSpace(model)
+		if model == "" || isWildcardModelPattern(model) {
+			return
+		}
+		source = strings.TrimSpace(source)
+		if source == "" {
+			source = group.Name
+		}
+		if out[model] == nil {
+			out[model] = make(map[string]struct{})
+		}
+		out[model][source] = struct{}{}
+	}
+
+	if group.ModelRoutingEnabled {
+		for pattern := range group.ModelRouting {
+			add(pattern, modelMarketRoutingSource)
+		}
+	}
+
+	if s == nil || s.accountLister == nil {
+		return out, nil
+	}
+	accounts, err := s.accountLister.ListSchedulableByGroupIDAndPlatform(ctx, group.ID, group.Platform)
+	if err != nil {
+		return nil, fmt.Errorf("list model market accounts for group %d: %w", group.ID, err)
+	}
+	for _, account := range accounts {
+		source := strings.TrimSpace(account.Name)
+		if source == "" {
+			source = fmt.Sprintf("账号#%d", account.ID)
+		}
+		for _, model := range accountModelMarketModels(account, group) {
+			add(model, source)
+		}
+	}
+	return out, nil
+}
+
+func accountModelMarketModels(account Account, group Group) []string {
+	switch account.Platform {
+	case PlatformOpenAI:
+		if account.IsOpenAIPassthroughEnabled() {
+			return openai.DefaultModelIDs()
+		}
+		return modelMarketMappingModelsOrDefault(account, openai.DefaultModelIDs())
+	case PlatformGemini:
+		return modelMarketMappingModelsOrDefault(account, geminiDefaultModelIDs())
+	case PlatformAntigravity:
+		models := modelMarketMappingModelsOrDefault(account, antigravityDefaultModelIDs())
+		return filterAntigravityModelMarketModels(models, group.SupportedModelScopes)
+	case PlatformAnthropic:
+		return modelMarketMappingModelsOrDefault(account, claude.DefaultModelIDs())
+	default:
+		return exactModelMarketMappingKeys(account.GetModelMapping())
+	}
+}
+
+func modelMarketMappingModelsOrDefault(account Account, defaults []string) []string {
+	models := exactModelMarketMappingKeys(account.GetModelMapping())
+	if len(models) > 0 {
+		return models
+	}
+	return defaults
+}
+
+func exactModelMarketMappingKeys(mapping map[string]string) []string {
+	if len(mapping) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(mapping))
+	for model := range mapping {
+		model = strings.TrimSpace(model)
+		if model == "" || isWildcardModelPattern(model) {
 			continue
 		}
-		out[group.Platform] = append(out[group.Platform], ModelMarketGroup{
-			ID:               group.ID,
-			Name:             group.Name,
-			Platform:         group.Platform,
-			SubscriptionType: group.SubscriptionType,
-			RateMultiplier:   group.RateMultiplier,
-			IsExclusive:      group.IsExclusive,
-		})
+		out = append(out, model)
 	}
-	for platform := range out {
-		sort.SliceStable(out[platform], func(i, j int) bool {
-			return strings.ToLower(out[platform][i].Name) < strings.ToLower(out[platform][j].Name)
-		})
+	sort.Strings(out)
+	return out
+}
+
+func geminiDefaultModelIDs() []string {
+	ids := make([]string, len(geminicli.DefaultModels))
+	for i, model := range geminicli.DefaultModels {
+		ids[i] = model.ID
+	}
+	return ids
+}
+
+func antigravityDefaultModelIDs() []string {
+	models := antigravity.DefaultModels()
+	ids := make([]string, len(models))
+	for i, model := range models {
+		ids[i] = model.ID
+	}
+	return ids
+}
+
+func filterAntigravityModelMarketModels(models []string, scopes []string) []string {
+	if len(scopes) == 0 {
+		return models
+	}
+	allowed := make(map[string]struct{}, len(scopes))
+	for _, scope := range scopes {
+		allowed[strings.TrimSpace(scope)] = struct{}{}
+	}
+	out := make([]string, 0, len(models))
+	for _, model := range models {
+		lower := strings.ToLower(model)
+		switch {
+		case strings.HasPrefix(lower, "claude-"):
+			if _, ok := allowed["claude"]; ok {
+				out = append(out, model)
+			}
+		case strings.HasPrefix(lower, "gemini-") && strings.Contains(lower, "image"):
+			if _, ok := allowed["gemini_image"]; ok {
+				out = append(out, model)
+			}
+		case strings.HasPrefix(lower, "gemini-"):
+			if _, ok := allowed["gemini_text"]; ok {
+				out = append(out, model)
+			}
+		default:
+			out = append(out, model)
+		}
 	}
 	return out
+}
+
+func (s *ModelMarketService) pricingForModel(model string) *ChannelModelPricing {
+	if s == nil || s.billingService == nil {
+		return nil
+	}
+	pricing, err := s.billingService.GetModelPricing(model)
+	if err != nil || pricing == nil {
+		return nil
+	}
+	return &ChannelModelPricing{
+		BillingMode:      BillingModeToken,
+		InputPrice:       nonZeroPtr(pricing.InputPricePerToken),
+		OutputPrice:      nonZeroPtr(pricing.OutputPricePerToken),
+		CacheWritePrice:  nonZeroPtr(pricing.CacheCreationPricePerToken),
+		CacheReadPrice:   nonZeroPtr(pricing.CacheReadPricePerToken),
+		ImageOutputPrice: nonZeroPtr(pricing.ImageOutputPricePerToken),
+	}
+}
+
+func toModelMarketGroup(group Group) ModelMarketGroup {
+	return ModelMarketGroup{
+		ID:               group.ID,
+		Name:             group.Name,
+		Platform:         group.Platform,
+		SubscriptionType: group.SubscriptionType,
+		RateMultiplier:   group.RateMultiplier,
+		IsExclusive:      group.IsExclusive,
+	}
 }
 
 func applyModelMarketConfig(candidates []ModelMarketModel, cfg ModelMarketConfig) []ModelMarketModel {
@@ -529,6 +722,10 @@ func modelMarketKey(platform, model string) string {
 		return ""
 	}
 	return platform + ":" + model
+}
+
+func isWildcardModelPattern(model string) bool {
+	return strings.Contains(strings.TrimSpace(model), "*")
 }
 
 func customModelMarketKey(platform, model string) string {

@@ -69,10 +69,14 @@ describe('AppHeader home navigation', () => {
     const modelMarketLink = links.find((routerLink) => routerLink.text() === '模型广场')
 
     expect(wrapper.text()).not.toContain('定价')
+    expect(wrapper.text()).not.toContain('特性')
     expect(modelMarketLink).toBeTruthy()
     expect(modelMarketLink?.props('to')).toEqual({ path: '/models' })
     expect(
       links.some((routerLink) => JSON.stringify(routerLink.props('to')).includes('#pricing'))
+    ).toBe(false)
+    expect(
+      links.some((routerLink) => JSON.stringify(routerLink.props('to')).includes('#features'))
     ).toBe(false)
   })
 
