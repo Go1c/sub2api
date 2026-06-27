@@ -681,6 +681,7 @@ func TestAPIContracts(t *testing.T) {
 						"smtp_host": "smtp.example.com",
 						"smtp_port": 587,
 						"smtp_username": "user",
+						"subscription_multiple_purchases_enabled": false,
 						"subscription_notify_email_enabled": false,
 						"subscription_quota_reset_utc_offset_minutes": 0,
 						"subscription_quota_reset_hour": 0,
@@ -958,6 +959,7 @@ func TestAPIContracts(t *testing.T) {
 						"smtp_host": "",
 						"smtp_port": 587,
 						"smtp_username": "",
+						"subscription_multiple_purchases_enabled": false,
 						"subscription_notify_email_enabled": false,
 						"subscription_quota_reset_utc_offset_minutes": 0,
 						"subscription_quota_reset_hour": 0,
@@ -2004,6 +2006,9 @@ func (stubUserSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context) (i
 // SubscriptionCreditExtension stubs（订阅额度池扩展）
 func (stubUserSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
 	return nil, service.ErrSubscriptionNotFound
+}
+func (stubUserSubscriptionRepo) ListUsableCreditSubscriptions(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
+	return nil, nil
 }
 func (stubUserSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
 	return false, nil

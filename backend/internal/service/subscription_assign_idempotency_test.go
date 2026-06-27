@@ -131,6 +131,9 @@ func (userSubRepoNoop) IncrementUsage(context.Context, int64, float64) error {
 func (userSubRepoNoop) GetUsableCreditSubscription(context.Context, int64) (*UserSubscription, error) {
 	panic("unexpected GetUsableCreditSubscription call")
 }
+func (userSubRepoNoop) ListUsableCreditSubscriptions(context.Context, int64) ([]UserSubscription, error) {
+	panic("unexpected ListUsableCreditSubscriptions call")
+}
 func (userSubRepoNoop) HasUsableCreditSubscription(context.Context, int64) (bool, error) {
 	panic("unexpected HasUsableCreditSubscription call")
 }

@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -70,9 +72,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		var subscription *service.UserSubscription
+		var subscriptionCandidateIDs []int64
 		var subscriptionErr error
 		if subscriptionService != nil {
-			sub, subErr := loadUsableCreditSubscriptionForAuth(
+			sub, candidateIDs, subErr := loadUsableCreditSubscriptionForAuth(
 				c.Request.Context(),
 				subscriptionService,
 				apiKey.User.ID,
@@ -88,10 +91,14 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				subscriptionErr = subErr
 			} else {
 				subscription = sub
+				subscriptionCandidateIDs = candidateIDs
 			}
 		}
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
+			if len(subscriptionCandidateIDs) > 0 {
+				c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.SubscriptionCandidateIDs, subscriptionCandidateIDs))
+			}
 		} else {
 			if apiKey.User.Balance <= 0 {
 				if subscriptionErr != nil {

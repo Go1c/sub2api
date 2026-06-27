@@ -613,12 +613,11 @@ func applyUserSubscriptionEntityToService(dst *service.UserSubscription, src *db
 // 订阅额度池扩展方法（实现 service.SubscriptionCreditExtension）
 // ====================================================================================
 
-// GetUsableCreditSubscription 返回用户当前的"可消费"订阅。
+// GetUsableCreditSubscription 返回用户当前最早创建的"可消费"订阅。
 //
 //	可消费 = status='active' AND exhausted_at IS NULL
 //	       AND expires_at > now AND deleted_at IS NULL
 //
-// 由部分唯一索引 user_subscriptions_user_active_usable 保证最多 1 条。
 // 不存在时返回 (nil, ErrSubscriptionNotFound)。
 func (r *userSubscriptionRepository) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
 	client := clientFromContext(ctx, r.client)
@@ -631,11 +630,32 @@ func (r *userSubscriptionRepository) GetUsableCreditSubscription(ctx context.Con
 		).
 		WithUser().
 		WithGroup().
-		Only(ctx)
+		Order(dbent.Asc(usersubscription.FieldCreatedAt), dbent.Asc(usersubscription.FieldID)).
+		First(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
 	return userSubscriptionEntityToService(m), nil
+}
+
+// ListUsableCreditSubscriptions 返回用户当前全部"可消费"订阅，按创建时间从早到晚排序。
+func (r *userSubscriptionRepository) ListUsableCreditSubscriptions(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
+	client := clientFromContext(ctx, r.client)
+	subs, err := client.UserSubscription.Query().
+		Where(
+			usersubscription.UserIDEQ(userID),
+			usersubscription.StatusEQ(service.SubscriptionStatusActive),
+			usersubscription.ExhaustedAtIsNil(),
+			usersubscription.ExpiresAtGT(time.Now()),
+		).
+		WithUser().
+		WithGroup().
+		Order(dbent.Asc(usersubscription.FieldCreatedAt), dbent.Asc(usersubscription.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return userSubscriptionEntitiesToService(subs), nil
 }
 
 // HasUsableCreditSubscription 用户是否当前有可消费订阅。

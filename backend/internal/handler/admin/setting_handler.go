@@ -349,6 +349,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PurchaseSubscriptionEnabled:            settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                settings.PurchaseSubscriptionURL,
 		SubscriptionNotifyEmailEnabled:         settings.SubscriptionNotifyEmailEnabled,
+		SubscriptionMultiplePurchasesEnabled:   settings.SubscriptionMultiplePurchasesEnabled,
 		SubscriptionQuotaResetUTCOffsetMinutes: settings.SubscriptionQuotaResetUTCOffsetMinutes,
 		SubscriptionQuotaResetHour:             settings.SubscriptionQuotaResetHour,
 		TableDefaultPageSize:                   settings.TableDefaultPageSize,
@@ -626,6 +627,7 @@ type UpdateSettingsRequest struct {
 	PurchaseSubscriptionEnabled            *bool                 `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL                *string               `json:"purchase_subscription_url"`
 	SubscriptionNotifyEmailEnabled         *bool                 `json:"subscription_notify_email_enabled"`
+	SubscriptionMultiplePurchasesEnabled   *bool                 `json:"subscription_multiple_purchases_enabled"`
 	SubscriptionQuotaResetUTCOffsetMinutes *int                  `json:"subscription_quota_reset_utc_offset_minutes"`
 	SubscriptionQuotaResetHour             *int                  `json:"subscription_quota_reset_hour"`
 	TableDefaultPageSize                   int                   `json:"table_default_page_size"`
@@ -1670,6 +1672,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	}
 	userSubscriptionsVisible := boolValueOrDefault(req.UserSubscriptionsVisible, previousSettings.UserSubscriptionsVisible)
 	subscriptionNotifyEmailEnabled := boolValueOrDefault(req.SubscriptionNotifyEmailEnabled, previousSettings.SubscriptionNotifyEmailEnabled)
+	subscriptionMultiplePurchasesEnabled := boolValueOrDefault(req.SubscriptionMultiplePurchasesEnabled, previousSettings.SubscriptionMultiplePurchasesEnabled)
 
 	// Ops metrics collector interval validation (seconds).
 	if req.OpsMetricsIntervalSeconds != nil {
@@ -1816,6 +1819,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		PurchaseSubscriptionEnabled:            purchaseEnabled,
 		PurchaseSubscriptionURL:                purchaseURL,
 		SubscriptionNotifyEmailEnabled:         subscriptionNotifyEmailEnabled,
+		SubscriptionMultiplePurchasesEnabled:   subscriptionMultiplePurchasesEnabled,
 		SubscriptionQuotaResetUTCOffsetMinutes: subscriptionQuotaResetUTCOffsetMinutes,
 		SubscriptionQuotaResetHour:             subscriptionQuotaResetHour,
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
@@ -2244,6 +2248,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		PurchaseSubscriptionEnabled:            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                updatedSettings.PurchaseSubscriptionURL,
 		SubscriptionNotifyEmailEnabled:         updatedSettings.SubscriptionNotifyEmailEnabled,
+		SubscriptionMultiplePurchasesEnabled:   updatedSettings.SubscriptionMultiplePurchasesEnabled,
 		SubscriptionQuotaResetUTCOffsetMinutes: updatedSettings.SubscriptionQuotaResetUTCOffsetMinutes,
 		SubscriptionQuotaResetHour:             updatedSettings.SubscriptionQuotaResetHour,
 		TableDefaultPageSize:                   updatedSettings.TableDefaultPageSize,
@@ -2739,6 +2744,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SubscriptionNotifyEmailEnabled != after.SubscriptionNotifyEmailEnabled {
 		changed = append(changed, "subscription_notify_email_enabled")
+	}
+	if before.SubscriptionMultiplePurchasesEnabled != after.SubscriptionMultiplePurchasesEnabled {
+		changed = append(changed, "subscription_multiple_purchases_enabled")
 	}
 	if before.SubscriptionQuotaResetUTCOffsetMinutes != after.SubscriptionQuotaResetUTCOffsetMinutes {
 		changed = append(changed, "subscription_quota_reset_utc_offset_minutes")

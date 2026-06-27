@@ -242,6 +242,7 @@ const (
 	SettingKeyUserSubscriptionsVisible               = "user_subscriptions_visible"                  // 是否展示用户侧“我的订阅”入口
 	SettingKeyPurchaseSubscriptionEnabled            = "purchase_subscription_enabled"               // 是否展示"购买订阅"页面入口
 	SettingKeyPurchaseSubscriptionURL                = "purchase_subscription_url"                   // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeySubscriptionMultiplePurchasesEnabled   = "subscription_multiple_purchases_enabled"     // 是否允许用户同时购买多个可消费订阅
 	SettingKeySubscriptionQuotaResetUTCOffsetMinutes = "subscription_quota_reset_utc_offset_minutes" // 订阅限额刷新 UTC 偏移（分钟）
 	SettingKeySubscriptionQuotaResetHour             = "subscription_quota_reset_hour"               // 订阅限额刷新小时（0-23）
 	SettingKeyTableDefaultPageSize                   = "table_default_page_size"                     // 表格默认每页条数

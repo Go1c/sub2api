@@ -13,10 +13,11 @@ import (
 
 // SubscriptionCreditPurchaseService fulfills paid subscription-credit orders.
 type SubscriptionCreditPurchaseService struct {
-	tx         SQLTxBeginner
-	repo       UserSubscriptionRepository
-	ledgerRepo SubscriptionCreditLedgerRepository
-	now        func() time.Time
+	tx                                   SQLTxBeginner
+	repo                                 UserSubscriptionRepository
+	ledgerRepo                           SubscriptionCreditLedgerRepository
+	now                                  func() time.Time
+	subscriptionMultiplePurchasesEnabled func(context.Context) bool
 }
 
 type SubscriptionCreditPurchaseFulfiller interface {
@@ -30,6 +31,13 @@ func NewSubscriptionCreditPurchaseService(tx SQLTxBeginner, repo UserSubscriptio
 		ledgerRepo: ledgerRepo,
 		now:        func() time.Time { return time.Now().UTC() },
 	}
+}
+
+func (s *SubscriptionCreditPurchaseService) SetSubscriptionMultiplePurchasesEnabledReader(fn func(context.Context) bool) *SubscriptionCreditPurchaseService {
+	if s != nil {
+		s.subscriptionMultiplePurchasesEnabled = fn
+	}
+	return s
 }
 
 func (s *SubscriptionCreditPurchaseService) FulfillOrder(ctx context.Context, order *dbent.PaymentOrder) error {
@@ -55,12 +63,14 @@ func (s *SubscriptionCreditPurchaseService) FulfillOrder(ctx context.Context, or
 	if err := s.repo.LockUserForSubscriptionWrite(ctx, tx, order.UserID); err != nil {
 		return err
 	}
-	hasUsable, err := s.repo.HasUsableCreditSubscription(ctx, order.UserID)
-	if err != nil {
-		return err
-	}
-	if hasUsable {
-		return ErrAlreadyHasUsableSubscription
+	if !s.multiplePurchasesEnabled(ctx) {
+		hasUsable, err := s.repo.HasUsableCreditSubscription(ctx, order.UserID)
+		if err != nil {
+			return err
+		}
+		if hasUsable {
+			return ErrAlreadyHasUsableSubscription
+		}
 	}
 
 	created, err := s.repo.InsertCreditSubscription(ctx, tx, sub)
@@ -85,6 +95,10 @@ func (s *SubscriptionCreditPurchaseService) FulfillOrder(ctx context.Context, or
 	}
 	committed = true
 	return nil
+}
+
+func (s *SubscriptionCreditPurchaseService) multiplePurchasesEnabled(ctx context.Context) bool {
+	return s != nil && s.subscriptionMultiplePurchasesEnabled != nil && s.subscriptionMultiplePurchasesEnabled(ctx)
 }
 
 func subscriptionFromOrderSnapshot(order *dbent.PaymentOrder, now time.Time) (*UserSubscription, error) {

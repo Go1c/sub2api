@@ -421,6 +421,7 @@ export interface SystemSettings {
   table_default_page_size: number;
   table_page_size_options: number[];
   backend_mode_enabled: boolean;
+  subscription_multiple_purchases_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
   frontend_locales: FrontendLocaleCode[];
@@ -670,6 +671,7 @@ export interface UpdateSettingsRequest {
   table_default_page_size?: number;
   table_page_size_options?: number[];
   backend_mode_enabled?: boolean;
+  subscription_multiple_purchases_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
   custom_endpoints?: CustomEndpoint[];
   frontend_locales?: FrontendLocaleCode[];

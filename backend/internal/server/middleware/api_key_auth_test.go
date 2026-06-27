@@ -693,6 +693,66 @@ func TestAPIKeyAuthUsesUsableCreditSubscriptionForRegularGroup(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestAPIKeyAuthStoresAllCoveringSubscriptionCandidates(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	group := &service.Group{ID: 101, Name: "regular", Status: service.StatusActive, Platform: service.PlatformAnthropic, Hydrated: true}
+	user := &service.User{ID: 7, Role: service.RoleUser, Status: service.StatusActive, Balance: 0, Concurrency: 3}
+	apiKey := &service.APIKey{ID: 100, UserID: user.ID, Key: "credit-key", Status: service.StatusActive, User: user, Group: group}
+	apiKey.GroupID = &group.ID
+	now := time.Now()
+	subs := []service.UserSubscription{
+		{
+			ID:          55,
+			UserID:      user.ID,
+			Status:      service.SubscriptionStatusActive,
+			ExpiresAt:   now.Add(time.Hour),
+			ScopeType:   service.SubscriptionScopeAllAvailableGroups,
+			ScopeConfig: map[string]any{},
+		},
+		{
+			ID:          56,
+			UserID:      user.ID,
+			Status:      service.SubscriptionStatusActive,
+			ExpiresAt:   now.Add(2 * time.Hour),
+			ScopeType:   service.SubscriptionScopeAllAvailableGroups,
+			ScopeConfig: map[string]any{},
+		},
+	}
+	apiKeyService := service.NewAPIKeyService(&stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			require.Equal(t, apiKey.Key, key)
+			clone := *apiKey
+			return &clone, nil
+		},
+	}, nil, nil, nil, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+	subscriptionService := service.NewSubscriptionService(nil, &stubUserSubscriptionRepo{
+		listUsable: func(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
+			require.Equal(t, user.ID, userID)
+			return append([]service.UserSubscription(nil), subs...), nil
+		},
+	}, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard})))
+	router.GET("/t", func(c *gin.Context) {
+		got, ok := GetSubscriptionFromContext(c)
+		require.True(t, ok)
+		require.Equal(t, subs[0].ID, got.ID)
+		candidateIDs, ok := c.Request.Context().Value(ctxkey.SubscriptionCandidateIDs).([]int64)
+		require.True(t, ok)
+		require.Equal(t, []int64{subs[0].ID, subs[1].ID}, candidateIDs)
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestAPIKeyAuthSubscriptionLimitFallsBackToBalance(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -865,6 +925,7 @@ func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*servi
 type stubUserSubscriptionRepo struct {
 	getActive      func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error)
 	getUsable      func(ctx context.Context, userID int64) (*service.UserSubscription, error)
+	listUsable     func(ctx context.Context, userID int64) ([]service.UserSubscription, error)
 	updateStatus   func(ctx context.Context, subscriptionID int64, status string) error
 	activateWindow func(ctx context.Context, id int64, start time.Time) error
 	resetDaily     func(ctx context.Context, id int64, start time.Time) error
@@ -976,6 +1037,25 @@ func (r *stubUserSubscriptionRepo) GetUsableCreditSubscription(ctx context.Conte
 		return r.getUsable(ctx, userID)
 	}
 	return nil, service.ErrSubscriptionNotFound
+}
+func (r *stubUserSubscriptionRepo) ListUsableCreditSubscriptions(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
+	if r.listUsable != nil {
+		return r.listUsable(ctx, userID)
+	}
+	if r.getUsable == nil {
+		return nil, nil
+	}
+	sub, err := r.getUsable(ctx, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrSubscriptionNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if sub == nil {
+		return nil, nil
+	}
+	return []service.UserSubscription{*sub}, nil
 }
 func (r *stubUserSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
 	return false, nil

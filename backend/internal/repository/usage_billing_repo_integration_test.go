@@ -429,6 +429,121 @@ func TestUsageBillingRepositoryApply_MixesSubscriptionAndBalanceWhenTotalQuotaIs
 	requireSubscriptionNotifyOutbox(t, ctx, user.ID, subID, "limit_reached_"+service.SubscriptionLimitReachedTotal)
 }
 
+func TestUsageBillingRepositoryApply_ConsumesMultipleSubscriptionsByCreationTime(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-multi-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-multi-" + uuid.NewString(),
+		Name:   "billing-multi",
+	})
+	firstSubID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD: 10,
+		QuotaUsedUSD:  8,
+	})
+	secondSubID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD: 10,
+	})
+	setUsageBillingSubscriptionCreatedAt(t, firstSubID, time.Now().UTC().Add(-2*time.Hour))
+	setUsageBillingSubscriptionCreatedAt(t, secondSubID, time.Now().UTC().Add(-time.Hour))
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:        uuid.NewString(),
+		APIKeyID:         apiKey.ID,
+		UserID:           user.ID,
+		SubscriptionIDs:  []int64{secondSubID, firstSubID},
+		SubscriptionCost: 5,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.InDelta(t, 5.0, result.SubscriptionCost, 0.000001)
+	require.InDelta(t, 0.0, result.BalanceCost, 0.000001)
+	require.ElementsMatch(t, []string{service.SubscriptionLimitReachedTotal}, result.LimitReachedKinds)
+
+	var firstUsed, secondUsed, balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used_usd FROM user_subscriptions WHERE id = $1", firstSubID).Scan(&firstUsed))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used_usd FROM user_subscriptions WHERE id = $1", secondSubID).Scan(&secondUsed))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 10.0, firstUsed, 0.000001)
+	require.InDelta(t, 3.0, secondUsed, 0.000001)
+	require.InDelta(t, 100.0, balance, 0.000001)
+
+	var firstDelta, secondDelta float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT delta_usd
+		FROM subscription_credit_ledger
+		WHERE subscription_id = $1 AND type = $2
+		ORDER BY id DESC
+		LIMIT 1
+	`, firstSubID, service.SubscriptionCreditLedgerConsume).Scan(&firstDelta))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT delta_usd
+		FROM subscription_credit_ledger
+		WHERE subscription_id = $1 AND type = $2
+		ORDER BY id DESC
+		LIMIT 1
+	`, secondSubID, service.SubscriptionCreditLedgerConsume).Scan(&secondDelta))
+	require.InDelta(t, -2.0, firstDelta, 0.000001)
+	require.InDelta(t, -3.0, secondDelta, 0.000001)
+}
+
+func TestUsageBillingRepositoryApply_FallsThroughWhenEarliestSubscriptionWindowLimitReached(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-multi-limit-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-multi-limit-" + uuid.NewString(),
+		Name:   "billing-multi-limit",
+	})
+	dailyLimit := 5.0
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	firstSubID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD:    50,
+		DailyLimitUSD:    &dailyLimit,
+		DailyUsageUSD:    5,
+		DailyWindowStart: &today,
+	})
+	secondSubID := mustCreateUsageBillingCreditSubscription(t, user.ID, usageBillingCreditSubSpec{
+		QuotaLimitUSD: 50,
+	})
+	setUsageBillingSubscriptionCreatedAt(t, firstSubID, time.Now().UTC().Add(-2*time.Hour))
+	setUsageBillingSubscriptionCreatedAt(t, secondSubID, time.Now().UTC().Add(-time.Hour))
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:        uuid.NewString(),
+		APIKeyID:         apiKey.ID,
+		UserID:           user.ID,
+		SubscriptionIDs:  []int64{firstSubID, secondSubID},
+		SubscriptionCost: 4,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.InDelta(t, 4.0, result.SubscriptionCost, 0.000001)
+	require.InDelta(t, 0.0, result.BalanceCost, 0.000001)
+
+	var firstUsed, secondUsed, balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used_usd FROM user_subscriptions WHERE id = $1", firstSubID).Scan(&firstUsed))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT quota_used_usd FROM user_subscriptions WHERE id = $1", secondSubID).Scan(&secondUsed))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 0.0, firstUsed, 0.000001)
+	require.InDelta(t, 4.0, secondUsed, 0.000001)
+	require.InDelta(t, 100.0, balance, 0.000001)
+}
+
 func TestUsageBillingRepositoryApply_RecordsDailyLimitReachedOnce(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -592,6 +707,16 @@ func mustCreateUsageBillingCreditSubscription(t *testing.T, userID int64, spec u
 	).Scan(&id)
 	require.NoError(t, err)
 	return id
+}
+
+func setUsageBillingSubscriptionCreatedAt(t *testing.T, subID int64, createdAt time.Time) {
+	t.Helper()
+	_, err := integrationDB.ExecContext(context.Background(), `
+		UPDATE user_subscriptions
+		SET created_at = $2, updated_at = $2
+		WHERE id = $1
+	`, subID, createdAt.UTC())
+	require.NoError(t, err)
 }
 
 func requireSubscriptionNotifyOutbox(t *testing.T, ctx context.Context, userID int64, subID int64, kind string) {

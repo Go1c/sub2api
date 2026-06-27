@@ -155,8 +155,8 @@ func (UserSubscription) Indexes() []ent.Index {
 		index.Fields("expires_at"),
 		index.Fields("user_id", "status", "expires_at"),
 		index.Fields("assigned_by"),
-		// 部分唯一索引 user_subscriptions_user_active_usable 由 SQL 迁移创建
-		// （Ent 不支持基于 NULL/状态的部分唯一索引，必须由 migration 维护）
+		// 多订阅购买由业务设置控制；历史的 user_active_usable 部分唯一索引
+		// 已由迁移移除，避免阻断允许多订阅时的履约写入。
 		index.Fields("deleted_at"),
 	}
 }
