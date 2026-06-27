@@ -5662,6 +5662,8 @@ export default {
           balancePaymentEnabledHint: '開啟後，用戶可按當前充值倍率消耗賬戶餘額購買訂閱套餐。',
           notifyEmailEnabled: '同步發送訂閱通知郵件',
           notifyEmailHint: '開啟後，訂閱額度用完、觸達日/週限或過期時，除站內信外也會發送到用戶註冊郵箱。',
+          multiplePurchasesEnabled: '允許購買多個有效訂閱',
+          multiplePurchasesEnabledHint: '開啟後，用戶可在當前訂閱未到期、未耗盡時繼續購買訂閱套餐。',
           resetUTCOffset: '限額刷新 UTC 偏移',
           resetHour: '限額刷新小時',
           resetHint: '日限額每天在所選時區的該小時刷新；周限額每周一在同一時間刷新。',

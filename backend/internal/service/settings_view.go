@@ -129,6 +129,7 @@ type SystemSettings struct {
 	PurchaseSubscriptionEnabled            bool
 	PurchaseSubscriptionURL                string
 	SubscriptionNotifyEmailEnabled         bool
+	SubscriptionMultiplePurchasesEnabled   bool
 	SubscriptionQuotaResetUTCOffsetMinutes int
 	SubscriptionQuotaResetHour             int
 	TableDefaultPageSize                   int

@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -69,4 +70,69 @@ func TestSubscriptionRenewalNotAllowedErrorIncludesRemainingAndExpiry(t *testing
 	require.Equal(t, "99", appErr.Metadata["subscription_id"])
 	require.Equal(t, "5.7500000000", appErr.Metadata["quota_remaining_usd"])
 	require.Equal(t, expiresAt.Format(time.RFC3339), appErr.Metadata["expires_at"])
+}
+
+type paymentOrderRenewalRepoStub struct {
+	userSubRepoNoop
+	called      bool
+	eligibility RenewalEligibility
+}
+
+func (r *paymentOrderRenewalRepoStub) GetRenewalEligibility(ctx context.Context, userID int64) (RenewalEligibility, error) {
+	r.called = true
+	return r.eligibility, nil
+}
+
+func TestValidateSubOrderAllowsUsableSubscriptionWhenMultiplePurchasesEnabled(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+	plan, err := client.SubscriptionPlan.Create().
+		SetName("Starter").
+		SetDescription("starter plan").
+		SetPrice(10).
+		SetValidityDays(30).
+		SetValidityUnit("day").
+		SetFeatures("[]").
+		SetProductName("Starter Plan").
+		SetQuotaUsd(25).
+		SetScopeType(SubscriptionScopeAllAvailableGroups).
+		SetScopeConfig(map[string]any{}).
+		SetForSale(true).
+		SetSortOrder(1).
+		Save(ctx)
+	require.NoError(t, err)
+
+	repo := &paymentOrderRenewalRepoStub{
+		eligibility: RenewalEligibility{
+			Allowed: false,
+			Reason:  RenewalReasonNotExhausted,
+			Subscription: &UserSubscription{
+				ID:            99,
+				QuotaLimitUSD: 10,
+				QuotaUsedUSD:  1,
+				ExpiresAt:     time.Now().Add(time.Hour),
+			},
+		},
+	}
+	svc := &PaymentService{
+		configService: &PaymentConfigService{entClient: client},
+		subscriptionSvc: NewSubscriptionService(
+			nil,
+			repo,
+			nil,
+			nil,
+			nil,
+		),
+	}
+	svc.subscriptionMultiplePurchasesEnabled = func(context.Context) bool { return true }
+
+	got, err := svc.validateSubOrder(ctx, CreateOrderRequest{
+		UserID:    7,
+		OrderType: "subscription",
+		PlanID:    plan.ID,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, plan.ID, got.ID)
+	require.False(t, repo.called, "multiple purchase mode should skip renewal eligibility blocking")
 }

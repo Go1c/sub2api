@@ -12,6 +12,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type usageBillingRepository struct {
@@ -109,7 +110,7 @@ func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *s
 }
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
-	if cmd.SubscriptionID != nil {
+	if cmd.SubscriptionID != nil || len(cmd.SubscriptionIDs) > 0 {
 		if err := r.applyUsageBillingSubscription(ctx, tx, cmd, result); err != nil {
 			return err
 		}
@@ -155,7 +156,6 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 }
 
 func (r *usageBillingRepository) applyUsageBillingSubscription(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
-	subID := *cmd.SubscriptionID
 	actualCost := math.Max(cmd.SubscriptionCost+cmd.BalanceCost, 0)
 	if actualCost <= 0 {
 		cmd.SubscriptionCost = 0
@@ -164,7 +164,11 @@ func (r *usageBillingRepository) applyUsageBillingSubscription(ctx context.Conte
 		result.BalanceCost = 0
 		return nil
 	}
+	if len(cmd.SubscriptionIDs) > 1 {
+		return r.applyUsageBillingMultipleSubscriptions(ctx, tx, cmd, result, actualCost)
+	}
 
+	subID := *cmd.SubscriptionID
 	now := time.Now().UTC()
 	state, err := lockAndReadSubscription(ctx, tx, subID)
 	if err != nil {
@@ -237,6 +241,127 @@ func (r *usageBillingRepository) applyUsageBillingSubscription(ctx context.Conte
 	return nil
 }
 
+type subscriptionBillingAllocation struct {
+	state       *subscriptionBillingState
+	resetDaily  bool
+	resetWeekly bool
+	dailyStart  time.Time
+	weeklyStart time.Time
+	subCostUSD  float64
+	balanceUSD  float64
+}
+
+func (r *usageBillingRepository) applyUsageBillingMultipleSubscriptions(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult, actualCost float64) error {
+	now := time.Now().UTC()
+	states, err := lockAndReadSubscriptions(ctx, tx, cmd.UserID, cmd.SubscriptionIDs, now)
+	if err != nil {
+		return err
+	}
+	if len(states) == 0 {
+		cmd.SubscriptionCost = 0
+		cmd.BalanceCost = actualCost
+		result.SubscriptionCost = 0
+		result.BalanceCost = actualCost
+		return nil
+	}
+
+	remaining := actualCost
+	allocations := make([]subscriptionBillingAllocation, 0, len(states))
+	totalSubCost := 0.0
+	for _, state := range states {
+		if remaining <= service.SubscriptionQuotaExhaustionEpsilonUSD {
+			break
+		}
+		dailyStart, weeklyStart := subscriptionQuotaWindowStarts(now, cmd.SubscriptionQuotaResetConfig)
+		resetDaily := needResetSubscriptionWindow(state.DailyWindowStart, dailyStart)
+		resetWeekly := needResetSubscriptionWindow(state.WeeklyWindowStart, weeklyStart)
+		alloc := service.AllocateSubscriptionCredit(service.SubscriptionCreditAllocationInput{
+			ActualCostUSD: remaining,
+			QuotaLimitUSD: state.QuotaLimitUSD,
+			QuotaUsedUSD:  state.QuotaUsedUSD,
+			Daily: service.SubscriptionCreditWindowState{
+				LimitUSD: nullableFloatPtr(state.DailyLimitUSD),
+				UsedUSD:  effectiveWindowUsage(state.DailyUsageUSD, resetDaily),
+			},
+			Weekly: service.SubscriptionCreditWindowState{
+				LimitUSD: nullableFloatPtr(state.WeeklyLimitUSD),
+				UsedUSD:  effectiveWindowUsage(state.WeeklyUsageUSD, resetWeekly),
+			},
+		})
+		subCost := math.Min(math.Max(alloc.SubscriptionCostUSD, 0), remaining)
+		allocations = append(allocations, subscriptionBillingAllocation{
+			state:       state,
+			resetDaily:  resetDaily,
+			resetWeekly: resetWeekly,
+			dailyStart:  dailyStart,
+			weeklyStart: weeklyStart,
+			subCostUSD:  subCost,
+		})
+		totalSubCost += subCost
+		remaining = math.Max(remaining-subCost, 0)
+	}
+
+	balanceCost := remaining
+	if balanceCost > 0 {
+		avail, balErr := lockUserBalanceForUpdate(ctx, tx, cmd.UserID)
+		if balErr != nil {
+			return balErr
+		}
+		avail = math.Max(avail, 0)
+		if balanceCost > avail {
+			balanceCost = avail
+		}
+	}
+	if balanceCost > 0 && len(allocations) > 0 {
+		allocations[len(allocations)-1].balanceUSD = balanceCost
+	}
+
+	previousSubscriptionID := cmd.SubscriptionID
+	defer func() {
+		cmd.SubscriptionID = previousSubscriptionID
+	}()
+	for _, alloc := range allocations {
+		if alloc.subCostUSD <= 0 && alloc.balanceUSD <= 0 && !alloc.resetDaily && !alloc.resetWeekly {
+			continue
+		}
+		subID := alloc.state.ID
+		cmd.SubscriptionID = &subID
+		if err := r.recordWindowResetEvents(ctx, tx, cmd, alloc.state, alloc.resetDaily, alloc.resetWeekly); err != nil {
+			return err
+		}
+		post, err := updateSubscriptionUsage(ctx, tx, updateSubscriptionUsageInput{
+			SubscriptionID: subID,
+			SubCostUSD:     alloc.subCostUSD,
+			ResetDaily:     alloc.resetDaily,
+			ResetWeekly:    alloc.resetWeekly,
+			DailyStart:     alloc.dailyStart,
+			WeeklyStart:    alloc.weeklyStart,
+			Now:            now,
+			PreExhausted:   alloc.state.ExhaustedAt.Valid,
+			PreDailyUsage:  effectiveWindowUsage(alloc.state.DailyUsageUSD, alloc.resetDaily),
+			PreWeeklyUsage: effectiveWindowUsage(alloc.state.WeeklyUsageUSD, alloc.resetWeekly),
+		})
+		if err != nil {
+			return err
+		}
+		if err := r.recordLimitReachedEvents(ctx, tx, cmd, post, result); err != nil {
+			return err
+		}
+		if err := r.recordConsumeLedger(ctx, tx, cmd, service.SubscriptionCreditAllocation{
+			SubscriptionCostUSD: alloc.subCostUSD,
+			BalanceCostUSD:      alloc.balanceUSD,
+		}, post, actualCost); err != nil {
+			return err
+		}
+	}
+
+	cmd.SubscriptionCost = totalSubCost
+	cmd.BalanceCost = balanceCost
+	result.SubscriptionCost = totalSubCost
+	result.BalanceCost = balanceCost
+	return nil
+}
+
 type subscriptionBillingState struct {
 	ID                int64
 	UserID            int64
@@ -301,6 +426,58 @@ func lockAndReadSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int
 		return nil, err
 	}
 	return &state, nil
+}
+
+func lockAndReadSubscriptions(ctx context.Context, tx *sql.Tx, userID int64, subscriptionIDs []int64, now time.Time) ([]*subscriptionBillingState, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT
+			id, user_id,
+			quota_limit_usd, quota_used_usd,
+			daily_limit_usd, weekly_limit_usd,
+			daily_window_start, weekly_window_start,
+			daily_usage_usd, weekly_usage_usd,
+			exhausted_at
+		FROM user_subscriptions
+		WHERE id = ANY($1)
+			AND user_id = $2
+			AND deleted_at IS NULL
+			AND status = $3
+			AND exhausted_at IS NULL
+			AND expires_at > $4
+		ORDER BY created_at ASC, id ASC
+		FOR UPDATE
+	`, pq.Array(subscriptionIDs), userID, service.SubscriptionStatusActive, now)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var states []*subscriptionBillingState
+	for rows.Next() {
+		var state subscriptionBillingState
+		if err := rows.Scan(
+			&state.ID,
+			&state.UserID,
+			&state.QuotaLimitUSD,
+			&state.QuotaUsedUSD,
+			&state.DailyLimitUSD,
+			&state.WeeklyLimitUSD,
+			&state.DailyWindowStart,
+			&state.WeeklyWindowStart,
+			&state.DailyUsageUSD,
+			&state.WeeklyUsageUSD,
+			&state.ExhaustedAt,
+		); err != nil {
+			return nil, err
+		}
+		states = append(states, &state)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return states, nil
 }
 
 type updateSubscriptionUsageInput struct {

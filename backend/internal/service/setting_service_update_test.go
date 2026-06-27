@@ -250,6 +250,18 @@ func TestSettingService_UpdateSettings_SubscriptionNotifyEmailEnabled(t *testing
 	require.Equal(t, "true", repo.updates[SettingKeySubscriptionNotifyEmailEnabled])
 }
 
+func TestSettingService_UpdateSettings_SubscriptionMultiplePurchasesEnabled(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		SubscriptionMultiplePurchasesEnabled: true,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "true", repo.updates[SettingKeySubscriptionMultiplePurchasesEnabled])
+}
+
 func TestSettingService_UpdateSettings_RejectsInvalidSubscriptionQuotaResetSettings(t *testing.T) {
 	svc := NewSettingService(&settingUpdateRepoStub{}, &config.Config{})
 
@@ -282,11 +294,23 @@ func TestSettingService_ParseSettings_SubscriptionNotifyEmailDefaultsAndValues(t
 
 	defaults := svc.parseSettings(map[string]string{})
 	require.False(t, defaults.SubscriptionNotifyEmailEnabled)
+	require.False(t, defaults.SubscriptionMultiplePurchasesEnabled)
 
 	parsed := svc.parseSettings(map[string]string{
-		SettingKeySubscriptionNotifyEmailEnabled: "true",
+		SettingKeySubscriptionNotifyEmailEnabled:       "true",
+		SettingKeySubscriptionMultiplePurchasesEnabled: "true",
 	})
 	require.True(t, parsed.SubscriptionNotifyEmailEnabled)
+	require.True(t, parsed.SubscriptionMultiplePurchasesEnabled)
+}
+
+func TestSettingService_GetSubscriptionMultiplePurchasesEnabled(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{
+		SettingKeySubscriptionMultiplePurchasesEnabled: "true",
+	}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	require.True(t, svc.GetSubscriptionMultiplePurchasesEnabled(context.Background()))
 }
 
 func TestSettingService_GetSubscriptionQuotaResetConfig(t *testing.T) {

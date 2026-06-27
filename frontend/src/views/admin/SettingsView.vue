@@ -5335,6 +5335,17 @@
               </div>
               <Toggle v-model="form.subscription_notify_email_enabled" />
             </div>
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.userSubscriptions.multiplePurchasesEnabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.userSubscriptions.multiplePurchasesEnabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.subscription_multiple_purchases_enabled" />
+            </div>
             <div class="grid gap-4 md:grid-cols-2">
               <div>
                 <label class="input-label">
@@ -7866,6 +7877,7 @@ const form = reactive<SettingsForm>({
   backend_mode_enabled: false,
   user_subscriptions_visible: true,
   subscription_notify_email_enabled: false,
+  subscription_multiple_purchases_enabled: false,
   subscription_quota_reset_utc_offset_minutes: 0,
   subscription_quota_reset_hour: 0,
   hide_ccs_import_button: false,
@@ -9855,6 +9867,8 @@ async function saveSettings() {
       user_subscriptions_visible: form.user_subscriptions_visible,
       payment_subscription_balance_enabled: form.payment_subscription_balance_enabled,
       subscription_notify_email_enabled: form.subscription_notify_email_enabled,
+      subscription_multiple_purchases_enabled:
+        form.subscription_multiple_purchases_enabled,
       subscription_quota_reset_utc_offset_minutes:
         form.subscription_quota_reset_utc_offset_minutes,
       subscription_quota_reset_hour: form.subscription_quota_reset_hour,

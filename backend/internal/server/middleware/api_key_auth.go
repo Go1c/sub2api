@@ -140,10 +140,11 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		skipBilling := isGatewayUsagePath(c.Request.URL.Path)
 
 		var subscription *service.UserSubscription
+		var subscriptionCandidateIDs []int64
 		var subscriptionErr error
 
 		if subscriptionService != nil {
-			sub, subErr := loadUsableCreditSubscriptionForAuth(
+			sub, candidateIDs, subErr := loadUsableCreditSubscriptionForAuth(
 				c.Request.Context(),
 				subscriptionService,
 				apiKey.User.ID,
@@ -159,6 +160,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				subscriptionErr = subErr
 			} else {
 				subscription = sub
+				subscriptionCandidateIDs = candidateIDs
 			}
 		}
 
@@ -202,6 +204,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
+		}
+		if len(subscriptionCandidateIDs) > 0 {
+			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.SubscriptionCandidateIDs, subscriptionCandidateIDs))
 		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
@@ -247,24 +252,49 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 	c.Request = c.Request.WithContext(ctx)
 }
 
-func loadUsableCreditSubscriptionForAuth(ctx context.Context, subscriptionService *service.SubscriptionService, userID int64, group *service.Group, user *service.User) (*service.UserSubscription, error) {
+func loadUsableCreditSubscriptionForAuth(ctx context.Context, subscriptionService *service.SubscriptionService, userID int64, group *service.Group, user *service.User) (*service.UserSubscription, []int64, error) {
 	if subscriptionService == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	sub, err := subscriptionService.GetUsableCreditSubscription(ctx, userID)
+	subs, err := subscriptionService.ListUsableCreditSubscriptions(ctx, userID)
 	if err != nil {
 		if errors.Is(err, service.ErrSubscriptionNotFound) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
-	if !service.SubscriptionCoversGroup(sub, group, user) {
-		return nil, service.ErrSubscriptionInvalid
+	var firstErr error
+	var selected *service.UserSubscription
+	candidateIDs := make([]int64, 0, len(subs))
+	for i := range subs {
+		sub := subs[i]
+		if !service.SubscriptionCoversGroup(&sub, group, user) {
+			if firstErr == nil {
+				firstErr = service.ErrSubscriptionInvalid
+			}
+			continue
+		}
+		candidateIDs = append(candidateIDs, sub.ID)
+		if _, err := subscriptionService.ValidateAndCheckLimits(&sub, group); err != nil {
+			if !isFallbackableSubscriptionAuthError(err) {
+				return nil, nil, err
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if selected == nil {
+			selected = &sub
+		}
 	}
-	if _, err := subscriptionService.ValidateAndCheckLimits(sub, group); err != nil {
-		return nil, err
+	if selected != nil {
+		return selected, candidateIDs, nil
 	}
-	return sub, nil
+	if firstErr != nil {
+		return nil, candidateIDs, firstErr
+	}
+	return nil, nil, nil
 }
 
 func isFallbackableSubscriptionAuthError(err error) bool {

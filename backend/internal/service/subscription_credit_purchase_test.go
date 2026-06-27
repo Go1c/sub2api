@@ -150,3 +150,37 @@ func TestSubscriptionCreditPurchaseFulfillOrderBlocksWhenUsableSubscriptionExist
 	require.Nil(t, ledger.entry)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestSubscriptionCreditPurchaseFulfillOrderAllowsUsableSubscriptionWhenMultiplePurchasesEnabled(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	mock.ExpectBegin()
+	mock.ExpectCommit()
+
+	quota := 10.0
+	scopeType := SubscriptionScopeAllAvailableGroups
+	validityDays := 30
+	planID := int64(9)
+	order := &dbent.PaymentOrder{
+		ID:                       100,
+		UserID:                   7,
+		OrderType:                payment.OrderTypeSubscription,
+		PlanID:                   &planID,
+		SubscriptionQuotaUsd:     &quota,
+		SubscriptionScopeType:    &scopeType,
+		SubscriptionScopeConfig:  map[string]any{},
+		SubscriptionValidityDays: &validityDays,
+	}
+	repo := &subscriptionPurchaseRepoStub{hasUsable: true}
+	ledger := &subscriptionPurchaseLedgerRepoStub{}
+	svc := NewSubscriptionCreditPurchaseService(db, repo, ledger)
+	svc.subscriptionMultiplePurchasesEnabled = func(context.Context) bool { return true }
+
+	err = svc.FulfillOrder(context.Background(), order)
+
+	require.NoError(t, err)
+	require.NotNil(t, repo.inserted)
+	require.NotNil(t, ledger.entry)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

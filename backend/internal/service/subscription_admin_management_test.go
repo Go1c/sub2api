@@ -86,6 +86,9 @@ func (r *adminUpdateUserSubRepoStub) BatchUpdateExpiredStatus(context.Context) (
 func (r *adminUpdateUserSubRepoStub) GetUsableCreditSubscription(context.Context, int64) (*UserSubscription, error) {
 	panic("unexpected GetUsableCreditSubscription")
 }
+func (r *adminUpdateUserSubRepoStub) ListUsableCreditSubscriptions(context.Context, int64) ([]UserSubscription, error) {
+	panic("unexpected ListUsableCreditSubscriptions")
+}
 func (r *adminUpdateUserSubRepoStub) HasUsableCreditSubscription(context.Context, int64) (bool, error) {
 	panic("unexpected HasUsableCreditSubscription")
 }

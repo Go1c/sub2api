@@ -8141,6 +8141,31 @@ func resolveUsageBillingSubscriptionQuotaResetConfig(ctx context.Context, deps *
 	return deps.settingService.GetSubscriptionQuotaResetConfig(ctx)
 }
 
+func resolveUsageBillingSubscriptionCandidateIDs(ctx context.Context, selected *UserSubscription) []int64 {
+	if ctx == nil || selected == nil {
+		return nil
+	}
+	raw, ok := ctx.Value(ctxkey.SubscriptionCandidateIDs).([]int64)
+	if !ok || len(raw) == 0 {
+		return nil
+	}
+	out := make([]int64, 0, len(raw))
+	containsSelected := false
+	for _, id := range raw {
+		if id <= 0 {
+			continue
+		}
+		if id == selected.ID {
+			containsSelected = true
+		}
+		out = append(out, id)
+	}
+	if !containsSelected {
+		return nil
+	}
+	return out
+}
+
 func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps, repo UsageBillingRepository) (bool, error) {
 	if p == nil || deps == nil {
 		return false, nil
@@ -8152,6 +8177,11 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		return true, nil
 	}
 	cmd.SubscriptionQuotaResetConfig = resolveUsageBillingSubscriptionQuotaResetConfig(ctx, deps)
+	if ids := resolveUsageBillingSubscriptionCandidateIDs(ctx, p.Subscription); len(ids) > 0 {
+		cmd.SubscriptionIDs = ids
+		cmd.RequestFingerprint = ""
+		cmd.Normalize()
+	}
 
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()

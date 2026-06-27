@@ -144,7 +144,7 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 			return nil, infraerrors.BadRequest("GROUP_TYPE_MISMATCH", "group is not a subscription type")
 		}
 	}
-	if s.subscriptionSvc != nil {
+	if s.subscriptionSvc != nil && !s.multipleSubscriptionPurchasesEnabled(ctx) {
 		eligibility, err := s.subscriptionSvc.GetRenewalEligibility(ctx, req.UserID)
 		if err != nil {
 			return nil, err

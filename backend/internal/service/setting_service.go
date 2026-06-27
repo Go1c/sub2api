@@ -654,6 +654,18 @@ func (s *SettingService) GetSubscriptionQuotaResetConfig(ctx context.Context) Su
 	return parseSubscriptionQuotaResetConfig(values)
 }
 
+func (s *SettingService) GetSubscriptionMultiplePurchasesEnabled(ctx context.Context) bool {
+	if s == nil || s.settingRepo == nil {
+		return false
+	}
+	values, err := s.settingRepo.GetMultiple(ctx, []string{SettingKeySubscriptionMultiplePurchasesEnabled})
+	if err != nil {
+		slog.Warn("get subscription multiple purchases setting failed", "error", err)
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(values[SettingKeySubscriptionMultiplePurchasesEnabled]), "true")
+}
+
 // GetFrontendURL 获取前端基础URL（数据库优先，fallback 到配置文件）
 func (s *SettingService) GetFrontendURL(ctx context.Context) string {
 	val, err := s.settingRepo.GetValue(ctx, SettingKeyFrontendURL)
@@ -1808,6 +1820,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
 	updates[SettingKeySubscriptionNotifyEmailEnabled] = strconv.FormatBool(settings.SubscriptionNotifyEmailEnabled)
+	updates[SettingKeySubscriptionMultiplePurchasesEnabled] = strconv.FormatBool(settings.SubscriptionMultiplePurchasesEnabled)
 	updates[SettingKeySubscriptionQuotaResetUTCOffsetMinutes] = strconv.Itoa(settings.SubscriptionQuotaResetUTCOffsetMinutes)
 	updates[SettingKeySubscriptionQuotaResetHour] = strconv.Itoa(settings.SubscriptionQuotaResetHour)
 	tableDefaultPageSize, tablePageSizeOptions := normalizeTablePreferences(
@@ -2741,6 +2754,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyUserSubscriptionsVisible:                 "true",
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
 		SettingKeyPurchaseSubscriptionURL:                  "",
+		SettingKeySubscriptionMultiplePurchasesEnabled:     "false",
 		SettingKeySubscriptionQuotaResetUTCOffsetMinutes:   "0",
 		SettingKeySubscriptionQuotaResetHour:               "0",
 		SettingKeyTableDefaultPageSize:                     "20",
@@ -2963,6 +2977,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		PurchaseSubscriptionEnabled:            settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:                strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		SubscriptionNotifyEmailEnabled:         settings[SettingKeySubscriptionNotifyEmailEnabled] == "true",
+		SubscriptionMultiplePurchasesEnabled:   settings[SettingKeySubscriptionMultiplePurchasesEnabled] == "true",
 		SubscriptionQuotaResetUTCOffsetMinutes: parseSubscriptionQuotaResetConfig(settings).UTCOffsetMinutes,
 		SubscriptionQuotaResetHour:             parseSubscriptionQuotaResetConfig(settings).ResetHour,
 		CustomMenuItems:                        settings[SettingKeyCustomMenuItems],

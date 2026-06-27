@@ -139,6 +139,7 @@ type SystemSettings struct {
 	PurchaseSubscriptionEnabled            bool             `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL                string           `json:"purchase_subscription_url"`
 	SubscriptionNotifyEmailEnabled         bool             `json:"subscription_notify_email_enabled"`
+	SubscriptionMultiplePurchasesEnabled   bool             `json:"subscription_multiple_purchases_enabled"`
 	SubscriptionQuotaResetUTCOffsetMinutes int              `json:"subscription_quota_reset_utc_offset_minutes"`
 	SubscriptionQuotaResetHour             int              `json:"subscription_quota_reset_hour"`
 	TableDefaultPageSize                   int              `json:"table_default_page_size"`

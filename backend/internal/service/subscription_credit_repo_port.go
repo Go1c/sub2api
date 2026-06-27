@@ -51,6 +51,9 @@ type SubscriptionCreditExtension interface {
 	// 不存在时返回 (nil, ErrSubscriptionNotFound)。
 	GetUsableCreditSubscription(ctx context.Context, userID int64) (*UserSubscription, error)
 
+	// ListUsableCreditSubscriptions 返回用户当前全部可消费订阅，按创建时间从早到晚排序。
+	ListUsableCreditSubscriptions(ctx context.Context, userID int64) ([]UserSubscription, error)
+
 	// HasUsableCreditSubscription 用户是否当前有可消费订阅。
 	// 等价于 GetUsableCreditSubscription 返回非 nil；提供单独方法避免不必要的字段读取。
 	HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error)

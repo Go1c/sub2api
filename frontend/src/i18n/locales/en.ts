@@ -5535,6 +5535,8 @@ export default {
           balancePaymentEnabledHint: 'When enabled, users can spend account balance at the current recharge rate to buy subscription plans.',
           notifyEmailEnabled: 'Email subscription notifications',
           notifyEmailHint: 'Also send subscription quota, daily/weekly limit, and expiry notices to the user registered email.',
+          multiplePurchasesEnabled: 'Allow multiple active subscriptions',
+          multiplePurchasesEnabledHint: 'When enabled, users can buy another subscription before the current one expires or is exhausted.',
           resetUTCOffset: 'Quota reset UTC offset',
           resetHour: 'Quota reset hour',
           resetHint: 'Daily quota resets every day at this hour in the selected offset. Weekly quota resets every Monday at the same time.',

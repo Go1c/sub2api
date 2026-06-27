@@ -182,19 +182,20 @@ type TopUserStat struct {
 // --- Service ---
 
 type PaymentService struct {
-	providerMu                    sync.Mutex
-	providersLoaded               bool
-	entClient                     *dbent.Client
-	registry                      *payment.Registry
-	loadBalancer                  payment.LoadBalancer
-	redeemService                 *RedeemService
-	subscriptionSvc               *SubscriptionService
-	subscriptionCreditPurchaseSvc SubscriptionCreditPurchaseFulfiller
-	configService                 *PaymentConfigService
-	userRepo                      UserRepository
-	groupRepo                     GroupRepository
-	resumeService                 *PaymentResumeService
-	affiliateService              *AffiliateService
+	providerMu                           sync.Mutex
+	providersLoaded                      bool
+	entClient                            *dbent.Client
+	registry                             *payment.Registry
+	loadBalancer                         payment.LoadBalancer
+	redeemService                        *RedeemService
+	subscriptionSvc                      *SubscriptionService
+	subscriptionCreditPurchaseSvc        SubscriptionCreditPurchaseFulfiller
+	subscriptionMultiplePurchasesEnabled func(context.Context) bool
+	configService                        *PaymentConfigService
+	userRepo                             UserRepository
+	groupRepo                            GroupRepository
+	resumeService                        *PaymentResumeService
+	affiliateService                     *AffiliateService
 
 	fulfillmentRetryDelays []time.Duration
 	fulfillmentRetrySleep  func(context.Context, time.Duration) bool
@@ -205,6 +206,17 @@ func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, load
 	svc := &PaymentService{entClient: entClient, registry: registry, loadBalancer: newVisibleMethodLoadBalancer(loadBalancer, configService), redeemService: redeemService, subscriptionSvc: subscriptionSvc, configService: configService, userRepo: userRepo, groupRepo: groupRepo, affiliateService: affiliateService}
 	svc.resumeService = psNewPaymentResumeService(configService)
 	return svc
+}
+
+func (s *PaymentService) SetSubscriptionMultiplePurchasesEnabledReader(fn func(context.Context) bool) *PaymentService {
+	if s != nil {
+		s.subscriptionMultiplePurchasesEnabled = fn
+	}
+	return s
+}
+
+func (s *PaymentService) multipleSubscriptionPurchasesEnabled(ctx context.Context) bool {
+	return s != nil && s.subscriptionMultiplePurchasesEnabled != nil && s.subscriptionMultiplePurchasesEnabled(ctx)
 }
 
 // --- Provider Registry ---

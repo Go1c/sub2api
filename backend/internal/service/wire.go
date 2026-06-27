@@ -440,8 +440,13 @@ func ProvideSubscriptionCreditPurchaseService(
 	db *sql.DB,
 	userSubRepo UserSubscriptionRepository,
 	ledgerRepo SubscriptionCreditLedgerRepository,
+	settingService *SettingService,
 ) *SubscriptionCreditPurchaseService {
-	return NewSubscriptionCreditPurchaseService(db, userSubRepo, ledgerRepo)
+	svc := NewSubscriptionCreditPurchaseService(db, userSubRepo, ledgerRepo)
+	if settingService != nil {
+		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
+	}
+	return svc
 }
 
 // ProvideSubscriptionService wires the ledger dependency used by admin credit
@@ -471,9 +476,13 @@ func ProvidePaymentService(
 	groupRepo GroupRepository,
 	affiliateService *AffiliateService,
 	subscriptionCreditPurchaseSvc *SubscriptionCreditPurchaseService,
+	settingService *SettingService,
 ) *PaymentService {
 	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
 	svc.subscriptionCreditPurchaseSvc = subscriptionCreditPurchaseSvc
+	if settingService != nil {
+		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
+	}
 	return svc
 }
 

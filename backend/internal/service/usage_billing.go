@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -39,9 +41,10 @@ type UsageBillingCommand struct {
 	RequestFingerprint string
 	RequestPayloadHash string
 
-	UserID         int64
-	AccountID      int64
-	SubscriptionID *int64
+	UserID          int64
+	AccountID       int64
+	SubscriptionID  *int64
+	SubscriptionIDs []int64
 	SubscriptionQuotaResetConfig
 	AccountType         string
 	Model               string
@@ -67,6 +70,11 @@ func (c *UsageBillingCommand) Normalize() {
 		return
 	}
 	c.RequestID = strings.TrimSpace(c.RequestID)
+	c.SubscriptionIDs = normalizeUsageBillingSubscriptionIDs(c.SubscriptionID, c.SubscriptionIDs)
+	if c.SubscriptionID == nil && len(c.SubscriptionIDs) == 1 {
+		id := c.SubscriptionIDs[0]
+		c.SubscriptionID = &id
+	}
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildUsageBillingFingerprint(c)
 	}
@@ -77,7 +85,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -92,7 +100,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.CacheReadTokens,
 		c.ImageCount,
 		strings.TrimSpace(c.MediaType),
-		valueOrZero(c.SubscriptionID),
+		subscriptionIDsFingerprintValue(c),
 		c.BalanceCost,
 		c.SubscriptionCost,
 		c.APIKeyQuotaCost,
@@ -106,19 +114,58 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func normalizeUsageBillingSubscriptionIDs(single *int64, ids []int64) []int64 {
+	seen := make(map[int64]struct{}, len(ids)+1)
+	out := make([]int64, 0, len(ids)+1)
+	add := func(id int64) {
+		if id <= 0 {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	if single != nil {
+		add(*single)
+	}
+	for _, id := range ids {
+		add(id)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+func subscriptionIDsFingerprintValue(c *UsageBillingCommand) string {
+	if c == nil {
+		return ""
+	}
+	ids := c.SubscriptionIDs
+	if len(ids) == 0 && c.SubscriptionID != nil {
+		ids = []int64{*c.SubscriptionID}
+	}
+	if len(ids) == 0 {
+		return "0"
+	}
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id > 0 {
+			parts = append(parts, strconv.FormatInt(id, 10))
+		}
+	}
+	if len(parts) == 0 {
+		return "0"
+	}
+	return strings.Join(parts, ",")
+}
+
 func HashUsageRequestPayload(payload []byte) string {
 	if len(payload) == 0 {
 		return ""
 	}
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
-}
-
-func valueOrZero(v *int64) int64 {
-	if v == nil {
-		return 0
-	}
-	return *v
 }
 
 // AccountQuotaState holds the post-increment quota state returned by the DB transaction.

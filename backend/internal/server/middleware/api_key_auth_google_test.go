@@ -27,6 +27,7 @@ type fakeAPIKeyRepo struct {
 type fakeGoogleSubscriptionRepo struct {
 	getActive      func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error)
 	getUsable      func(ctx context.Context, userID int64) (*service.UserSubscription, error)
+	listUsable     func(ctx context.Context, userID int64) ([]service.UserSubscription, error)
 	updateStatus   func(ctx context.Context, subscriptionID int64, status string) error
 	activateWindow func(ctx context.Context, id int64, start time.Time) error
 	resetDaily     func(ctx context.Context, id int64, start time.Time) error
@@ -195,6 +196,25 @@ func (f fakeGoogleSubscriptionRepo) GetUsableCreditSubscription(ctx context.Cont
 		return f.getUsable(ctx, userID)
 	}
 	return nil, service.ErrSubscriptionNotFound
+}
+func (f fakeGoogleSubscriptionRepo) ListUsableCreditSubscriptions(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
+	if f.listUsable != nil {
+		return f.listUsable(ctx, userID)
+	}
+	if f.getUsable == nil {
+		return nil, nil
+	}
+	sub, err := f.getUsable(ctx, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrSubscriptionNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if sub == nil {
+		return nil, nil
+	}
+	return []service.UserSubscription{*sub}, nil
 }
 func (f fakeGoogleSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
 	return false, nil
