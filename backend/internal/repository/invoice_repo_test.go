@@ -36,6 +36,39 @@ func TestInvoiceRepositorySumInvoiceableSubscriptionPaymentsByUserCountsPaidExte
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestInvoiceRepositorySumInvoiceableBalanceRechargePaymentsByUserCountsPaidExternalRecharges(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	repo := &invoiceRepository{db: db}
+	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(pay_amount\\), 0\\) FROM payment_orders(?s:.*)order_type = \\$2(?s:.*)payment_type <> \\$3(?s:.*)status IN").
+		WithArgs(
+			int64(7),
+			payment.OrderTypeBalance,
+			payment.TypeBalance,
+			service.OrderStatusCompleted,
+			service.OrderStatusPaid,
+			service.OrderStatusRecharging,
+			service.OrderStatusFulfillmentFailed,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(120.0))
+
+	total, err := repo.SumInvoiceableBalanceRechargePaymentsByUser(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Equal(t, 120.0, total)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestInvoiceSelectSQLUsesPaymentOrdersForUserInvoiceableAmount(t *testing.T) {
+	query := invoiceSelectSQL()
+
+	require.NotContains(t, query, "u.total_recharged")
+	require.Contains(t, query, "po.order_type = 'balance'")
+	require.Contains(t, query, "po.order_type = 'subscription'")
+}
+
 func TestInvoiceRepositoryMarkCompletedAndDeductRecordsTaxLedger(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

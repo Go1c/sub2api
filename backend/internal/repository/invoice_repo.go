@@ -115,9 +115,17 @@ func (r *invoiceRepository) SumCompletedAmountByUser(ctx context.Context, userID
 	return r.sumAmountByUser(ctx, userID, []string{service.InvoiceStatusCompleted})
 }
 
+func (r *invoiceRepository) SumInvoiceableBalanceRechargePaymentsByUser(ctx context.Context, userID int64) (float64, error) {
+	return r.sumInvoiceablePaymentOrdersByUser(ctx, userID, payment.OrderTypeBalance)
+}
+
 func (r *invoiceRepository) SumInvoiceableSubscriptionPaymentsByUser(ctx context.Context, userID int64) (float64, error) {
-	statuses := invoiceableSubscriptionPaymentStatuses()
-	args := []any{userID, payment.OrderTypeSubscription, payment.TypeBalance}
+	return r.sumInvoiceablePaymentOrdersByUser(ctx, userID, payment.OrderTypeSubscription)
+}
+
+func (r *invoiceRepository) sumInvoiceablePaymentOrdersByUser(ctx context.Context, userID int64, orderType string) (float64, error) {
+	statuses := invoiceablePaymentOrderStatuses()
+	args := []any{userID, orderType, payment.TypeBalance}
 	statusPlaceholders := make([]string, 0, len(statuses))
 	for i, status := range statuses {
 		args = append(args, status)
@@ -327,7 +335,7 @@ SELECT
 	ir.amount, ir.recipient_email, ir.status, ir.file_name, ir.file_path,
 	ir.file_size, ir.content_type, ir.tax_rate, ir.tax_amount, ir.failure_reason,
 	ir.created_at, ir.updated_at, ir.completed_at,
-	u.email, u.username, COALESCE(u.total_recharged, 0) + ` + invoiceableSubscriptionPaymentsSQL("ir.user_id") + `,
+	u.email, u.username, ` + invoiceablePaymentOrdersSQL("ir.user_id") + `,
 	COALESCE((
 		SELECT SUM(ir2.amount)
 		FROM invoice_requests ir2
@@ -337,7 +345,7 @@ FROM invoice_requests ir
 LEFT JOIN users u ON u.id = ir.user_id`
 }
 
-func invoiceableSubscriptionPaymentStatuses() []string {
+func invoiceablePaymentOrderStatuses() []string {
 	return []string{
 		service.OrderStatusCompleted,
 		service.OrderStatusPaid,
@@ -346,7 +354,19 @@ func invoiceableSubscriptionPaymentStatuses() []string {
 	}
 }
 
+func invoiceablePaymentOrdersSQL(userIDExpression string) string {
+	return invoiceableBalanceRechargePaymentsSQL(userIDExpression) + " + " + invoiceableSubscriptionPaymentsSQL(userIDExpression)
+}
+
+func invoiceableBalanceRechargePaymentsSQL(userIDExpression string) string {
+	return invoiceablePaymentOrdersByTypeSQL(userIDExpression, payment.OrderTypeBalance)
+}
+
 func invoiceableSubscriptionPaymentsSQL(userIDExpression string) string {
+	return invoiceablePaymentOrdersByTypeSQL(userIDExpression, payment.OrderTypeSubscription)
+}
+
+func invoiceablePaymentOrdersByTypeSQL(userIDExpression, orderType string) string {
 	return fmt.Sprintf(`COALESCE((
 		SELECT SUM(po.pay_amount)
 		FROM payment_orders po
@@ -356,9 +376,9 @@ func invoiceableSubscriptionPaymentsSQL(userIDExpression string) string {
 		  AND po.status IN (%s)
 	), 0)`,
 		userIDExpression,
-		sqlStringLiteral(payment.OrderTypeSubscription),
+		sqlStringLiteral(orderType),
 		sqlStringLiteral(payment.TypeBalance),
-		sqlStringLiteralList(invoiceableSubscriptionPaymentStatuses()),
+		sqlStringLiteralList(invoiceablePaymentOrderStatuses()),
 	)
 }
 

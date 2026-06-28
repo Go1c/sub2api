@@ -107,6 +107,7 @@ type InvoiceRepository interface {
 	ListAdmin(ctx context.Context, params pagination.PaginationParams, filter InvoiceListFilter) ([]InvoiceRequest, *pagination.PaginationResult, error)
 	SumActiveAmountByUser(ctx context.Context, userID int64) (float64, error)
 	SumCompletedAmountByUser(ctx context.Context, userID int64) (float64, error)
+	SumInvoiceableBalanceRechargePaymentsByUser(ctx context.Context, userID int64) (float64, error)
 	SumInvoiceableSubscriptionPaymentsByUser(ctx context.Context, userID int64) (float64, error)
 	MarkCompletedAndDeduct(ctx context.Context, id int64, input CompleteInvoicePersistInput) (*InvoiceRequest, error)
 	MarkFailed(ctx context.Context, id int64, reason string) (*InvoiceRequest, error)
@@ -210,11 +211,15 @@ func (s *InvoiceService) invoiceableAmount(ctx context.Context, user *User) (flo
 	if user == nil {
 		return 0, nil
 	}
+	balancePayments, err := s.repo.SumInvoiceableBalanceRechargePaymentsByUser(ctx, user.ID)
+	if err != nil {
+		return 0, err
+	}
 	subscriptionPayments, err := s.repo.SumInvoiceableSubscriptionPaymentsByUser(ctx, user.ID)
 	if err != nil {
 		return 0, err
 	}
-	return roundMoney(user.TotalRecharged + subscriptionPayments), nil
+	return roundMoney(balancePayments + subscriptionPayments), nil
 }
 
 func (s *InvoiceService) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]InvoiceRequest, *pagination.PaginationResult, error) {
