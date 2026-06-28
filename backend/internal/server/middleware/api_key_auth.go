@@ -307,11 +307,6 @@ func isFallbackableSubscriptionAuthError(err error) bool {
 }
 
 func subscriptionAuthErrorStatus(err error) (int, string) {
-	if errors.Is(err, service.ErrDailyLimitExceeded) ||
-		errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-		errors.Is(err, service.ErrMonthlyLimitExceeded) {
-		return 429, "USAGE_LIMIT_EXCEEDED"
-	}
 	if isFallbackableSubscriptionAuthError(err) {
 		return 403, "SUBSCRIPTION_INVALID"
 	}

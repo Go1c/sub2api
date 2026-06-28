@@ -128,7 +128,7 @@ CREATE UNIQUE INDEX user_subscriptions_user_active_usable
 
 通知仅两处触发：请求后结算发现某维度首次触顶（SQL `RETURNING` 跨越 bool，事务内写 ledger + outbox）；过期任务发现订阅过期销毁剩余额度。预检阶段不写 ledger。幂等靠 `event_key` 唯一索引。worker 拉 `scheduler_outbox` 的 `subscription_notify` 事件发站内信 + 邮件，**失败仅记日志不重试**（通知非关键路径）。通知正文带「重新订阅」链接（来自设置项 `subscription_credit_pool_repurchase_url`，空则回退前端订阅页）；即使余额仍可用也发通知。
 
-API 错误（订阅不可用且余额不可用）返回结构化 `error.code` + `error.details`（`reason` / `subscription_id` / `renewal_allowed` / `repurchase_url` / `recharge_url` / `reset_at` / `expires_at`）。错误码：`SUBSCRIPTION_CREDIT_EXHAUSTED` / `SUBSCRIPTION_DAILY_LIMIT_REACHED` / `SUBSCRIPTION_WEEKLY_LIMIT_REACHED` / `SUBSCRIPTION_EXPIRED` / `SUBSCRIPTION_RENEWAL_NOT_ALLOWED`。OpenAI/Anthropic 兼容接口尽量保持各自错误格式同时带 `code` 和 `details`。
+API 错误（订阅不可用且余额不可用）返回结构化 `error.code` + `error.details`（`reason` / `subscription_id` / `renewal_allowed` / `repurchase_url` / `recharge_url` / `reset_at` / `expires_at`）。错误码：`SUBSCRIPTION_CREDIT_EXHAUSTED` / `SUBSCRIPTION_DAILY_LIMIT_REACHED` / `SUBSCRIPTION_WEEKLY_LIMIT_REACHED` / `SUBSCRIPTION_EXPIRED` / `SUBSCRIPTION_RENEWAL_NOT_ALLOWED`。网关鉴权层把订阅不可用（包括日/周窗口限额触顶）统一视为无有效订阅，余额也不可用时返回 HTTP 403 / `SUBSCRIPTION_INVALID`；HTTP 429 保留给真正的速率限制语义。OpenAI/Anthropic 兼容接口尽量保持各自错误格式同时带 `code` 和 `details`。
 
 ### 关键边界行为
 

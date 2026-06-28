@@ -131,7 +131,7 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 	})
 
-	t.Run("standard_mode_enforces_quota_check", func(t *testing.T) {
+	t.Run("standard_mode_treats_subscription_limit_as_no_valid_subscription", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeStandard}
 		limitedUser := *user
 		limitedUser.Balance = 0
@@ -189,8 +189,8 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		req.Header.Set("x-api-key", apiKey.Key)
 		router.ServeHTTP(w, req)
 
-		require.Equal(t, http.StatusTooManyRequests, w.Code)
-		require.Contains(t, w.Body.String(), "USAGE_LIMIT_EXCEEDED")
+		require.Equal(t, http.StatusForbidden, w.Code)
+		require.Contains(t, w.Body.String(), "SUBSCRIPTION_INVALID")
 	})
 }
 

@@ -160,10 +160,13 @@ func (userSubRepoNoop) BatchUpdateExpiredStatus(context.Context) (int64, error) 
 type subscriptionUserSubRepoStub struct {
 	userSubRepoNoop
 
-	nextID      int64
-	byID        map[int64]*UserSubscription
-	byUserGroup map[string]*UserSubscription
-	createCalls int
+	nextID               int64
+	byID                 map[int64]*UserSubscription
+	byUserGroup          map[string]*UserSubscription
+	createCalls          int
+	hasUsable            bool
+	guardedCreateCalls   int
+	guardedAllowMultiple bool
 }
 
 func newSubscriptionUserSubRepoStub() *subscriptionUserSubRepoStub {
@@ -227,6 +230,23 @@ func (s *subscriptionUserSubRepoStub) Create(_ context.Context, sub *UserSubscri
 	}
 	s.byUserGroup[s.key(cp.UserID, gid)] = &cp
 	return nil
+}
+
+func (s *subscriptionUserSubRepoStub) HasUsableCreditSubscription(context.Context, int64) (bool, error) {
+	return s.hasUsable, nil
+}
+
+func (s *subscriptionUserSubRepoStub) CreateSubscriptionWithUsableGuard(ctx context.Context, sub *UserSubscription, allowMultiple bool) (*UserSubscription, error) {
+	s.guardedCreateCalls++
+	s.guardedAllowMultiple = allowMultiple
+	if !allowMultiple && s.hasUsable {
+		return nil, ErrAlreadyHasUsableSubscription
+	}
+	if err := s.Create(ctx, sub); err != nil {
+		return nil, err
+	}
+	cp := *sub
+	return &cp, nil
 }
 
 func (s *subscriptionUserSubRepoStub) GetByID(_ context.Context, id int64) (*UserSubscription, error) {
@@ -422,6 +442,52 @@ func TestAssignSubscriptionGroupTypeValidation(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Equal(t, infraerrors.Code(ErrGroupNotSubscriptionType), infraerrors.Code(err))
+}
+
+func TestAssignOrExtendSubscriptionRejectsSecondUsableWhenMultiplePurchasesDisabled(t *testing.T) {
+	groupRepo := &subscriptionGroupRepoStub{
+		group: &Group{ID: 2, SubscriptionType: SubscriptionTypeSubscription},
+	}
+	subRepo := newSubscriptionUserSubRepoStub()
+	subRepo.hasUsable = true
+	svc := NewSubscriptionService(groupRepo, subRepo, nil, nil, nil).
+		SetSubscriptionMultiplePurchasesEnabledReader(func(context.Context) bool { return false })
+
+	_, _, err := svc.AssignOrExtendSubscription(context.Background(), &AssignSubscriptionInput{
+		UserID:       1001,
+		GroupID:      2,
+		ValidityDays: 30,
+		Notes:        "blocked",
+	})
+
+	require.ErrorIs(t, err, ErrAlreadyHasUsableSubscription)
+	require.Equal(t, 1, subRepo.guardedCreateCalls)
+	require.False(t, subRepo.guardedAllowMultiple)
+	require.Equal(t, 0, subRepo.createCalls)
+}
+
+func TestAssignOrExtendSubscriptionAllowsSecondUsableWhenMultiplePurchasesEnabled(t *testing.T) {
+	groupRepo := &subscriptionGroupRepoStub{
+		group: &Group{ID: 2, SubscriptionType: SubscriptionTypeSubscription},
+	}
+	subRepo := newSubscriptionUserSubRepoStub()
+	subRepo.hasUsable = true
+	svc := NewSubscriptionService(groupRepo, subRepo, nil, nil, nil).
+		SetSubscriptionMultiplePurchasesEnabledReader(func(context.Context) bool { return true })
+
+	sub, reused, err := svc.AssignOrExtendSubscription(context.Background(), &AssignSubscriptionInput{
+		UserID:       1001,
+		GroupID:      2,
+		ValidityDays: 30,
+		Notes:        "allowed",
+	})
+
+	require.NoError(t, err)
+	require.False(t, reused)
+	require.NotNil(t, sub)
+	require.Equal(t, 1, subRepo.guardedCreateCalls)
+	require.True(t, subRepo.guardedAllowMultiple)
+	require.Equal(t, 1, subRepo.createCalls)
 }
 
 func strconvFormatInt(v int64) string {

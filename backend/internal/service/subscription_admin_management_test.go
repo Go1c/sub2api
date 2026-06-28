@@ -214,7 +214,7 @@ func TestProvideSubscriptionServiceWiresLedgerRepository(t *testing.T) {
 	repo := &adminUpdateUserSubRepoStub{}
 	ledger := &adminUpdateLedgerRepoStub{}
 
-	svc := ProvideSubscriptionService(nil, repo, ledger, nil, nil, nil)
+	svc := ProvideSubscriptionService(nil, repo, ledger, nil, nil, nil, nil)
 
 	require.NotNil(t, svc)
 	require.Same(t, ledger, svc.creditLedgerRepo)

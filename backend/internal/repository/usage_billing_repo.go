@@ -269,7 +269,7 @@ func (r *usageBillingRepository) applyUsageBillingMultipleSubscriptions(ctx cont
 	allocations := make([]subscriptionBillingAllocation, 0, len(states))
 	totalSubCost := 0.0
 	for _, state := range states {
-		if remaining <= service.SubscriptionQuotaExhaustionEpsilonUSD {
+		if remaining <= 0 {
 			break
 		}
 		dailyStart, weeklyStart := subscriptionQuotaWindowStarts(now, cmd.SubscriptionQuotaResetConfig)
@@ -312,8 +312,13 @@ func (r *usageBillingRepository) applyUsageBillingMultipleSubscriptions(ctx cont
 			balanceCost = avail
 		}
 	}
-	if balanceCost > 0 && len(allocations) > 0 {
-		allocations[len(allocations)-1].balanceUSD = balanceCost
+	if balanceCost > 0 {
+		for i := len(allocations) - 1; i >= 0; i-- {
+			if allocations[i].subCostUSD > 0 {
+				allocations[i].balanceUSD = balanceCost
+				break
+			}
+		}
 	}
 
 	previousSubscriptionID := cmd.SubscriptionID
@@ -665,7 +670,8 @@ func (r *usageBillingRepository) recordLimitReachedEvent(ctx context.Context, tx
 }
 
 func (r *usageBillingRepository) recordConsumeLedger(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, alloc service.SubscriptionCreditAllocation, post *subscriptionBillingPostState, actualCost float64) error {
-	if actualCost <= 0 {
+	allocatedCost := alloc.SubscriptionCostUSD + alloc.BalanceCostUSD
+	if actualCost <= 0 || allocatedCost <= 0 {
 		return nil
 	}
 	return NewSubscriptionCreditLedgerRepository(r.db).Create(ctx, tx, &service.SubscriptionCreditLedgerEntry{
@@ -678,9 +684,10 @@ func (r *usageBillingRepository) recordConsumeLedger(ctx context.Context, tx *sq
 		RemainingAfterUSD: math.Max(post.QuotaLimitUSD-post.QuotaUsedUSD, 0),
 		Reason:            "usage billing",
 		Metadata: map[string]any{
-			"actual_cost_usd":       actualCost,
-			"subscription_cost_usd": alloc.SubscriptionCostUSD,
-			"balance_cost_usd":      alloc.BalanceCostUSD,
+			"actual_cost_usd":         allocatedCost,
+			"request_actual_cost_usd": actualCost,
+			"subscription_cost_usd":   alloc.SubscriptionCostUSD,
+			"balance_cost_usd":        alloc.BalanceCostUSD,
 		},
 	})
 }

@@ -48,11 +48,12 @@ var (
 
 // SubscriptionService 订阅服务
 type SubscriptionService struct {
-	groupRepo           GroupRepository
-	userSubRepo         UserSubscriptionRepository
-	creditLedgerRepo    SubscriptionCreditLedgerRepository
-	billingCacheService *BillingCacheService
-	entClient           *dbent.Client
+	groupRepo                            GroupRepository
+	userSubRepo                          UserSubscriptionRepository
+	creditLedgerRepo                     SubscriptionCreditLedgerRepository
+	billingCacheService                  *BillingCacheService
+	entClient                            *dbent.Client
+	subscriptionMultiplePurchasesEnabled func(context.Context) bool
 
 	// L1 缓存：加速中间件热路径的订阅查询
 	subCacheL1     *ristretto.Cache
@@ -67,6 +68,17 @@ type SubscriptionService struct {
 func (s *SubscriptionService) SetSubscriptionCreditLedgerRepository(repo SubscriptionCreditLedgerRepository) *SubscriptionService {
 	s.creditLedgerRepo = repo
 	return s
+}
+
+func (s *SubscriptionService) SetSubscriptionMultiplePurchasesEnabledReader(fn func(context.Context) bool) *SubscriptionService {
+	if s != nil {
+		s.subscriptionMultiplePurchasesEnabled = fn
+	}
+	return s
+}
+
+func (s *SubscriptionService) multiplePurchasesEnabled(ctx context.Context) bool {
+	return s != nil && s.subscriptionMultiplePurchasesEnabled != nil && s.subscriptionMultiplePurchasesEnabled(ctx)
 }
 
 // NewSubscriptionService 创建订阅服务
@@ -378,12 +390,32 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 		sub.AssignedBy = &input.AssignedBy
 	}
 
+	if creator, ok := s.userSubRepo.(subscriptionUsableGuardedCreator); ok {
+		created, err := creator.CreateSubscriptionWithUsableGuard(ctx, sub, s.multiplePurchasesEnabled(ctx))
+		if err != nil {
+			return nil, err
+		}
+		return s.userSubRepo.GetByID(ctx, created.ID)
+	}
+	if !s.multiplePurchasesEnabled(ctx) {
+		hasUsable, err := s.userSubRepo.HasUsableCreditSubscription(ctx, input.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if hasUsable {
+			return nil, ErrAlreadyHasUsableSubscription
+		}
+	}
 	if err := s.userSubRepo.Create(ctx, sub); err != nil {
 		return nil, err
 	}
 
 	// 重新获取完整订阅信息（包含关联）
 	return s.userSubRepo.GetByID(ctx, sub.ID)
+}
+
+type subscriptionUsableGuardedCreator interface {
+	CreateSubscriptionWithUsableGuard(ctx context.Context, sub *UserSubscription, allowMultiple bool) (*UserSubscription, error)
 }
 
 // BulkAssignSubscriptionInput 批量分配订阅输入
