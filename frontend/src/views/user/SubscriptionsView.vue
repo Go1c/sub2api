@@ -18,89 +18,76 @@
       </div>
 
       <template v-else>
-        <section v-if="currentUsable" class="overflow-hidden rounded-3xl border bg-white shadow-sm dark:bg-dark-800" :class="platformBorderClass(currentUsable.group?.platform || '')">
-          <div :class="['h-2', platformAccentBarClass(currentUsable.group?.platform || '')]" />
-          <div class="space-y-6 p-5 sm:p-7">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div class="min-w-0">
-                <div class="mb-2 flex flex-wrap items-center gap-2">
-                  <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', platformBadgeClass(currentUsable.group?.platform || '')]">
-                    {{ platformLabel(currentUsable.group?.platform || '') }}
-                  </span>
-                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ t('userSubscriptions.currentlyUsable') }}</span>
-                  <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold', platformBadgeLightClass(currentUsable.group?.platform || '')]">{{ scopeSummary(currentUsable) }}</span>
+        <div v-if="orderedUsableSubscriptions.length > 0" class="space-y-4">
+          <section
+            v-for="subscription in orderedUsableSubscriptions"
+            :key="subscription.id"
+            class="overflow-hidden rounded-3xl border bg-white shadow-sm dark:bg-dark-800"
+            :class="platformBorderClass(subscription.group?.platform || '')"
+          >
+            <div :class="['h-2', platformAccentBarClass(subscription.group?.platform || '')]" />
+            <div class="space-y-6 p-5 sm:p-7">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                  <div class="mb-2 flex flex-wrap items-center gap-2">
+                    <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', platformBadgeClass(subscription.group?.platform || '')]">
+                      {{ platformLabel(subscription.group?.platform || '') }}
+                    </span>
+                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ t('userSubscriptions.currentlyUsable') }}</span>
+                    <span :class="['rounded-full px-2 py-0.5 text-xs font-semibold', platformBadgeLightClass(subscription.group?.platform || '')]">{{ scopeSummary(subscription) }}</span>
+                  </div>
+                  <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    {{ subscriptionName(subscription) }}
+                  </h2>
+                  <p v-if="subscription.group?.description" class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+                    {{ subscription.group.description }}
+                  </p>
                 </div>
-                <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-                  {{ subscriptionName(currentUsable) }}
-                </h2>
-                <p v-if="currentUsable.group?.description" class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-                  {{ currentUsable.group.description }}
-                </p>
+                <button
+                  :class="['rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
+                  @click="router.push({ path: '/purchase', query: { tab: 'subscription' } })"
+                >
+                  {{ t('payment.renewNow') }}
+                </button>
               </div>
-              <button
-                :class="['rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors', platformButtonClass(currentUsable.group?.platform || '')]"
-                @click="router.push({ path: '/purchase', query: { tab: 'subscription' } })"
-              >
-                {{ t('payment.renewNow') }}
-              </button>
-            </div>
 
-            <div class="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
+              <div class="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
                 <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
                   <div class="mb-3 flex items-end justify-between gap-3">
                     <div>
                       <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-dark-400">{{ t('userSubscriptions.totalCredit') }}</p>
-                      <p class="mt-1 text-3xl font-black text-gray-900 dark:text-white">${{ formatUsd(quotaRemaining(currentUsable)) }}</p>
+                      <p class="mt-1 text-3xl font-black text-gray-900 dark:text-white">${{ formatUsd(quotaRemaining(subscription)) }}</p>
                     </div>
                     <p class="text-sm font-medium text-gray-500 dark:text-dark-400">
-                      {{ t('userSubscriptions.usageOf', { used: `$${formatUsd(quotaUsed(currentUsable))}`, limit: `$${formatUsd(quotaLimit(currentUsable))}` }) }}
+                      {{ t('userSubscriptions.usageOf', { used: `$${formatUsd(quotaUsed(subscription))}`, limit: `$${formatUsd(quotaLimit(subscription))}` }) }}
                     </p>
                   </div>
-                  <ProgressBar :used="quotaUsed(currentUsable)" :limit="quotaLimit(currentUsable)" />
-                <p v-if="currentUsable.exhausted_at" class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ t('userSubscriptions.exhaustedAt', { date: formatDateTimeValue(currentUsable.exhausted_at) }) }}</p>
+                  <ProgressBar :used="quotaUsed(subscription)" :limit="quotaLimit(subscription)" />
+                  <p v-if="subscription.exhausted_at" class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ t('userSubscriptions.exhaustedAt', { date: formatDateTimeValue(subscription.exhausted_at) }) }}</p>
+                </div>
+
+                <div class="rounded-2xl bg-gray-50 p-4 text-sm dark:bg-dark-700/50">
+                  <div class="flex items-center justify-between">
+                    <span class="text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.expires') }}</span>
+                    <span :class="getExpirationClass(subscription.expires_at)">{{ expirationDisplay(subscription.expires_at) }}</span>
+                  </div>
+                  <div class="mt-3 flex items-center justify-between">
+                    <span class="text-gray-500 dark:text-dark-400">{{ t('payment.planCard.scope') }}</span>
+                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ scopeSummary(subscription) }}</span>
+                  </div>
+                </div>
               </div>
 
-              <div class="rounded-2xl bg-gray-50 p-4 text-sm dark:bg-dark-700/50">
-                <div class="flex items-center justify-between">
-                  <span class="text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.expires') }}</span>
-                  <span :class="getExpirationClass(currentUsable.expires_at)">{{ expirationDisplay(currentUsable.expires_at) }}</span>
-                </div>
-                <div class="mt-3 flex items-center justify-between">
-                  <span class="text-gray-500 dark:text-dark-400">{{ t('payment.planCard.scope') }}</span>
-                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ scopeSummary(currentUsable) }}</span>
-                </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <LimitPanel :title="t('userSubscriptions.daily')" :used="subscription.daily_usage_usd" :limit="subscription.daily_limit_usd ?? undefined" :reset-at="subscription.daily_reset_at ?? undefined" />
+                <LimitPanel :title="t('userSubscriptions.weekly')" :used="subscription.weekly_usage_usd" :limit="subscription.weekly_limit_usd ?? undefined" :reset-at="subscription.weekly_reset_at ?? undefined" />
               </div>
+              <p v-if="subscription.weekly_limit_usd != null" class="text-xs text-gray-500 dark:text-dark-400">
+                {{ weeklyResetHint(subscription) }}
+              </p>
             </div>
-
-            <div class="grid gap-4 sm:grid-cols-2">
-              <LimitPanel :title="t('userSubscriptions.daily')" :used="currentUsable.daily_usage_usd" :limit="currentUsable.daily_limit_usd ?? undefined" :reset-at="currentUsable.daily_reset_at ?? undefined" />
-              <LimitPanel :title="t('userSubscriptions.weekly')" :used="currentUsable.weekly_usage_usd" :limit="currentUsable.weekly_limit_usd ?? undefined" :reset-at="currentUsable.weekly_reset_at ?? undefined" />
-            </div>
-            <p v-if="currentUsable.weekly_limit_usd != null" class="text-xs text-gray-500 dark:text-dark-400">
-              {{ weeklyResetHint(currentUsable) }}
-            </p>
-          </div>
-        </section>
-
-        <section v-if="additionalUsable.length > 0" class="grid gap-4 lg:grid-cols-2">
-          <div v-for="subscription in additionalUsable" :key="subscription.id" class="rounded-2xl border bg-white p-4 dark:bg-dark-800" :class="platformBorderClass(subscription.group?.platform || '')">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="mb-1 flex flex-wrap items-center gap-2">
-                  <p class="font-semibold text-gray-900 dark:text-white">{{ subscriptionName(subscription) }}</p>
-                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ t('userSubscriptions.currentlyUsable') }}</span>
-                </div>
-                <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.remainingOf', { remaining: `$${formatUsd(quotaRemaining(subscription))}`, total: `$${formatUsd(quotaLimit(subscription))}` }) }}</p>
-                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
-                  <span>{{ expirationDisplay(subscription.expires_at) }}</span>
-                  <span>{{ scopeSummary(subscription) }}</span>
-                </div>
-              </div>
-              <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', platformBadgeClass(subscription.group?.platform || '')]">{{ platformLabel(subscription.group?.platform || '') }}</span>
-            </div>
-            <div class="mt-3"><ProgressBar :used="quotaUsed(subscription)" :limit="quotaLimit(subscription)" /></div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         <details v-if="exhaustedSubscriptions.length > 0" class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-900/10">
           <summary class="cursor-pointer text-sm font-semibold text-amber-800 dark:text-amber-200">
@@ -175,8 +162,6 @@ const loading = ref(true)
 const visibleSubscriptions = computed(() => subscriptions.value.filter(isVisibleSubscription))
 const usableSubscriptions = computed(() => visibleSubscriptions.value.filter(subscription => subscription.is_usable === true))
 const orderedUsableSubscriptions = computed(() => [...usableSubscriptions.value].sort(compareSubscriptionRecency))
-const currentUsable = computed(() => orderedUsableSubscriptions.value[0] || null)
-const additionalUsable = computed(() => orderedUsableSubscriptions.value.slice(1))
 const exhaustedSubscriptions = computed(() => visibleSubscriptions.value.filter(subscription => subscription.exhausted_at && subscription.is_usable !== true))
 
 async function loadSubscriptions() {
@@ -205,8 +190,8 @@ function subscriptionName(subscription: UserSubscription): string {
 }
 
 function compareSubscriptionRecency(a: UserSubscription, b: UserSubscription): number {
-  const diff = subscriptionCreatedAt(b) - subscriptionCreatedAt(a)
-  return diff !== 0 ? diff : b.id - a.id
+  const diff = subscriptionCreatedAt(a) - subscriptionCreatedAt(b)
+  return diff !== 0 ? diff : a.id - b.id
 }
 
 function subscriptionCreatedAt(subscription: UserSubscription): number {
