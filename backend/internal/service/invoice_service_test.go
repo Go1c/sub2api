@@ -13,6 +13,7 @@ import (
 type invoiceRepoStub struct {
 	items                    map[int64]*InvoiceRequest
 	activeTotal              float64
+	balancePaymentTotal      float64
 	subscriptionPaymentTotal float64
 	completed                *InvoiceRequest
 	completedInput           CompleteInvoicePersistInput
@@ -51,6 +52,10 @@ func (r *invoiceRepoStub) SumActiveAmountByUser(context.Context, int64) (float64
 
 func (r *invoiceRepoStub) SumCompletedAmountByUser(context.Context, int64) (float64, error) {
 	return 0, nil
+}
+
+func (r *invoiceRepoStub) SumInvoiceableBalanceRechargePaymentsByUser(context.Context, int64) (float64, error) {
+	return r.balancePaymentTotal, nil
 }
 
 func (r *invoiceRepoStub) SumInvoiceableSubscriptionPaymentsByUser(context.Context, int64) (float64, error) {
@@ -127,6 +132,22 @@ func TestInvoiceServiceOverviewIncludesExternalSubscriptionPayments(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, 199.0, overview.TotalRecharged)
 	require.Equal(t, 199.0, overview.RemainingAmount)
+}
+
+func TestInvoiceServiceOverviewUsesOnlyInvoiceablePaymentOrders(t *testing.T) {
+	repo := &invoiceRepoStub{balancePaymentTotal: 120, subscriptionPaymentTotal: 80}
+	svc := NewInvoiceService(repo, invoiceUserReaderStub{user: &User{
+		ID:             7,
+		Email:          "user@example.com",
+		TotalRecharged: 999,
+		InvoiceEnabled: true,
+	}}, nil)
+
+	overview, err := svc.Overview(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Equal(t, 200.0, overview.TotalRecharged)
+	require.Equal(t, 200.0, overview.RemainingAmount)
 }
 
 func TestInvoiceServiceCreateAllowsExternalSubscriptionPayments(t *testing.T) {
