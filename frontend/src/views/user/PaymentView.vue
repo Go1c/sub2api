@@ -330,6 +330,7 @@ import {
   writePaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 import { platformAccentBarClass, platformBadgeLightClass, platformBadgeClass, platformTextClass, platformLabel } from '@/utils/platformColors'
+import { subscriptionDisplayName } from '@/utils/subscriptionDisplay'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -384,10 +385,7 @@ function planScopeLabel(plan: SubscriptionPlan): string {
 }
 
 function subscriptionName(subscription: UserSubscription): string {
-  return subscription.group?.name
-    || (subscription.group_id != null
-      ? t('payment.groupFallback', { id: subscription.group_id })
-      : t('userSubscriptions.creditPoolSubscription'))
+  return subscriptionDisplayName(subscription, t)
 }
 
 const loading = ref(true)

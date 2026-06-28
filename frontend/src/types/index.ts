@@ -1642,6 +1642,8 @@ export interface UserSubscription {
   user_id: number
   group_id: number | null
   plan_id?: number | null
+  plan_name?: string
+  plan_product_name?: string
   status: 'active' | 'expired' | 'revoked' | 'suspended'
   is_usable?: boolean
   exhausted_at?: string | null

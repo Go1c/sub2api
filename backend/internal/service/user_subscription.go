@@ -19,13 +19,15 @@ type UserSubscription struct {
 	GroupID *int64 // 额度池订阅可空（不绑定具体分组）
 
 	// 额度池字段（新模型）
-	PlanID         *int64
-	ScopeType      string
-	ScopeConfig    map[string]any
-	QuotaLimitUSD  float64
-	QuotaUsedUSD   float64
-	DailyLimitUSD  *float64
-	WeeklyLimitUSD *float64
+	PlanID          *int64
+	PlanName        string
+	PlanProductName string
+	ScopeType       string
+	ScopeConfig     map[string]any
+	QuotaLimitUSD   float64
+	QuotaUsedUSD    float64
+	DailyLimitUSD   *float64
+	WeeklyLimitUSD  *float64
 
 	// 生命周期
 	StartsAt  time.Time

@@ -85,9 +85,16 @@
         <section v-if="additionalUsable.length > 0" class="grid gap-4 lg:grid-cols-2">
           <div v-for="subscription in additionalUsable" :key="subscription.id" class="rounded-2xl border bg-white p-4 dark:bg-dark-800" :class="platformBorderClass(subscription.group?.platform || '')">
             <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="font-semibold text-gray-900 dark:text-white">{{ subscriptionName(subscription) }}</p>
+              <div class="min-w-0">
+                <div class="mb-1 flex flex-wrap items-center gap-2">
+                  <p class="font-semibold text-gray-900 dark:text-white">{{ subscriptionName(subscription) }}</p>
+                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ t('userSubscriptions.currentlyUsable') }}</span>
+                </div>
                 <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.remainingOf', { remaining: `$${formatUsd(quotaRemaining(subscription))}`, total: `$${formatUsd(quotaLimit(subscription))}` }) }}</p>
+                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
+                  <span>{{ expirationDisplay(subscription.expires_at) }}</span>
+                  <span>{{ scopeSummary(subscription) }}</span>
+                </div>
               </div>
               <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', platformBadgeClass(subscription.group?.platform || '')]">{{ platformLabel(subscription.group?.platform || '') }}</span>
             </div>
@@ -123,6 +130,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateOnly, formatDateTime } from '@/utils/format'
 import { platformAccentBarClass, platformBadgeClass, platformBadgeLightClass, platformBorderClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
+import { subscriptionDisplayName } from '@/utils/subscriptionDisplay'
 
 const ProgressBar = defineComponent({
   props: { used: { type: Number, default: 0 }, limit: { type: Number, default: 0 } },
@@ -166,8 +174,9 @@ const loading = ref(true)
 
 const visibleSubscriptions = computed(() => subscriptions.value.filter(isVisibleSubscription))
 const usableSubscriptions = computed(() => visibleSubscriptions.value.filter(subscription => subscription.is_usable === true))
-const currentUsable = computed(() => [...usableSubscriptions.value].sort((a, b) => quotaRemaining(b) - quotaRemaining(a))[0] || null)
-const additionalUsable = computed(() => usableSubscriptions.value.filter(subscription => subscription.id !== currentUsable.value?.id))
+const orderedUsableSubscriptions = computed(() => [...usableSubscriptions.value].sort(compareSubscriptionRecency))
+const currentUsable = computed(() => orderedUsableSubscriptions.value[0] || null)
+const additionalUsable = computed(() => orderedUsableSubscriptions.value.slice(1))
 const exhaustedSubscriptions = computed(() => visibleSubscriptions.value.filter(subscription => subscription.exhausted_at && subscription.is_usable !== true))
 
 async function loadSubscriptions() {
@@ -192,10 +201,17 @@ function isVisibleSubscription(subscription: UserSubscription): boolean {
 }
 
 function subscriptionName(subscription: UserSubscription): string {
-  return subscription.group?.name
-    || (subscription.group_id != null
-      ? t('payment.groupFallback', { id: subscription.group_id })
-      : t('userSubscriptions.creditPoolSubscription'))
+  return subscriptionDisplayName(subscription, t)
+}
+
+function compareSubscriptionRecency(a: UserSubscription, b: UserSubscription): number {
+  const diff = subscriptionCreatedAt(b) - subscriptionCreatedAt(a)
+  return diff !== 0 ? diff : b.id - a.id
+}
+
+function subscriptionCreatedAt(subscription: UserSubscription): number {
+  const timestamp = Date.parse(subscription.created_at || '')
+  return Number.isFinite(timestamp) ? timestamp : 0
 }
 
 function quotaLimit(subscription: UserSubscription): number {
