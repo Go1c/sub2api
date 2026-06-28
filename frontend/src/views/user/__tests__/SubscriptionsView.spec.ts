@@ -68,8 +68,19 @@ function subscription(overrides: Partial<UserSubscription>): UserSubscription {
 }
 
 describe('SubscriptionsView', () => {
-  it('shows each usable subscription with its plan name and promotes the newest one', async () => {
+  it('prioritizes usable subscriptions, orders them by earliest purchase, and shows full usage details on every usable subscription', async () => {
     getMySubscriptions.mockResolvedValueOnce([
+      subscription({
+        id: 0,
+        plan_id: 100,
+        plan_name: '已耗尽套餐',
+        is_usable: false,
+        quota_limit_usd: 100,
+        quota_used_usd: 100,
+        quota_remaining_usd: 0,
+        exhausted_at: '2026-06-26T01:00:00Z',
+        created_at: '2026-06-26T00:00:00Z',
+      }),
       subscription({
         id: 1,
         plan_id: 101,
@@ -77,6 +88,10 @@ describe('SubscriptionsView', () => {
         quota_limit_usd: 240,
         quota_used_usd: 4.15,
         quota_remaining_usd: 235.85,
+        daily_limit_usd: 90,
+        daily_usage_usd: 4.15,
+        weekly_limit_usd: 90,
+        weekly_usage_usd: 4.15,
         created_at: '2026-06-27T00:00:00Z',
       }),
       subscription({
@@ -86,6 +101,10 @@ describe('SubscriptionsView', () => {
         quota_limit_usd: 93,
         quota_used_usd: 0,
         quota_remaining_usd: 93,
+        daily_limit_usd: 35,
+        daily_usage_usd: 1.25,
+        weekly_limit_usd: 35,
+        weekly_usage_usd: 2.5,
         created_at: '2026-06-28T00:00:00Z',
       }),
     ])
@@ -101,8 +120,16 @@ describe('SubscriptionsView', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('h2').text()).toBe('轻享版')
-    expect(wrapper.text()).toContain('标准版')
-    expect(wrapper.text()).toContain('userSubscriptions.currentlyUsable')
+    const text = wrapper.text()
+
+    expect(wrapper.findAll('h2').map(heading => heading.text())).toEqual(['标准版', '轻享版'])
+    expect(text).toContain('已耗尽套餐')
+    expect(text).toContain('userSubscriptions.exhaustedAwaitingExpiry')
+    expect((text.match(/userSubscriptions\.currentlyUsable/g) || []).length).toBe(2)
+    expect((text.match(/userSubscriptions\.totalCredit/g) || []).length).toBe(2)
+    expect((text.match(/payment\.renewNow/g) || []).length).toBe(2)
+    expect((text.match(/payment\.planCard\.scope/g) || []).length).toBe(2)
+    expect(text).toContain('userSubscriptions.usageOf:{"used":"$1.25","limit":"$35"}')
+    expect(text).toContain('userSubscriptions.usageOf:{"used":"$2.5","limit":"$35"}')
   })
 })
