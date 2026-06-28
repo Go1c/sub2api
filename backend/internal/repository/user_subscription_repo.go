@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -94,7 +96,11 @@ func (r *userSubscriptionRepository) GetByID(ctx context.Context, id int64) (*se
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToService(m), nil
+	sub := userSubscriptionEntityToService(m)
+	if err := r.attachPlanSummary(ctx, sub); err != nil {
+		return nil, err
+	}
+	return sub, nil
 }
 
 func (r *userSubscriptionRepository) GetByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
@@ -106,7 +112,11 @@ func (r *userSubscriptionRepository) GetByUserIDAndGroupID(ctx context.Context, 
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToService(m), nil
+	sub := userSubscriptionEntityToService(m)
+	if err := r.attachPlanSummary(ctx, sub); err != nil {
+		return nil, err
+	}
+	return sub, nil
 }
 
 func (r *userSubscriptionRepository) GetActiveByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
@@ -123,7 +133,11 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndGroupID(ctx context.Con
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToService(m), nil
+	sub := userSubscriptionEntityToService(m)
+	if err := r.attachPlanSummary(ctx, sub); err != nil {
+		return nil, err
+	}
+	return sub, nil
 }
 
 func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.UserSubscription) error {
@@ -193,7 +207,11 @@ func (r *userSubscriptionRepository) ListByUserID(ctx context.Context, userID in
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	out := userSubscriptionEntitiesToService(subs)
+	if err := r.attachPlanSummaries(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
@@ -210,7 +228,11 @@ func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, use
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	out := userSubscriptionEntitiesToService(subs)
+	if err := r.attachPlanSummaries(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]service.UserSubscription, *pagination.PaginationResult, error) {
@@ -374,7 +396,11 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 		return nil, nil, err
 	}
 
-	return userSubscriptionEntitiesToService(subs), paginationResultFromTotal(int64(total), params), nil
+	out := userSubscriptionEntitiesToService(subs)
+	if err := r.attachPlanSummaries(ctx, out); err != nil {
+		return nil, nil, err
+	}
+	return out, paginationResultFromTotal(int64(total), params), nil
 }
 
 func (r *userSubscriptionRepository) ExistsByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (bool, error) {
@@ -600,6 +626,69 @@ func userSubscriptionEntitiesToService(models []*dbent.UserSubscription) []servi
 	return out
 }
 
+func (r *userSubscriptionRepository) attachPlanSummary(ctx context.Context, sub *service.UserSubscription) error {
+	if sub == nil {
+		return nil
+	}
+	subs := []service.UserSubscription{*sub}
+	if err := r.attachPlanSummaries(ctx, subs); err != nil {
+		return err
+	}
+	*sub = subs[0]
+	return nil
+}
+
+func (r *userSubscriptionRepository) attachPlanSummaries(ctx context.Context, subs []service.UserSubscription) error {
+	planIDSet := make(map[int64]struct{})
+	for i := range subs {
+		if subs[i].PlanID != nil {
+			planIDSet[*subs[i].PlanID] = struct{}{}
+		}
+	}
+	if len(planIDSet) == 0 {
+		return nil
+	}
+
+	planIDs := make([]int64, 0, len(planIDSet))
+	for id := range planIDSet {
+		planIDs = append(planIDs, id)
+	}
+
+	client := clientFromContext(ctx, r.client)
+	plans, err := client.SubscriptionPlan.Query().
+		Where(subscriptionplan.IDIn(planIDs...)).
+		All(ctx)
+	if err != nil {
+		return err
+	}
+
+	type planSummary struct {
+		name        string
+		productName string
+	}
+	byID := make(map[int64]planSummary, len(plans))
+	for _, plan := range plans {
+		if plan == nil {
+			continue
+		}
+		byID[plan.ID] = planSummary{
+			name:        strings.TrimSpace(plan.Name),
+			productName: strings.TrimSpace(plan.ProductName),
+		}
+	}
+
+	for i := range subs {
+		if subs[i].PlanID == nil {
+			continue
+		}
+		if summary, ok := byID[*subs[i].PlanID]; ok {
+			subs[i].PlanName = summary.name
+			subs[i].PlanProductName = summary.productName
+		}
+	}
+	return nil
+}
+
 func applyUserSubscriptionEntityToService(dst *service.UserSubscription, src *dbent.UserSubscription) {
 	if dst == nil || src == nil {
 		return
@@ -635,7 +724,11 @@ func (r *userSubscriptionRepository) GetUsableCreditSubscription(ctx context.Con
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToService(m), nil
+	sub := userSubscriptionEntityToService(m)
+	if err := r.attachPlanSummary(ctx, sub); err != nil {
+		return nil, err
+	}
+	return sub, nil
 }
 
 // ListUsableCreditSubscriptions 返回用户当前全部"可消费"订阅，按创建时间从早到晚排序。
@@ -655,7 +748,11 @@ func (r *userSubscriptionRepository) ListUsableCreditSubscriptions(ctx context.C
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	out := userSubscriptionEntitiesToService(subs)
+	if err := r.attachPlanSummaries(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // HasUsableCreditSubscription 用户是否当前有可消费订阅。

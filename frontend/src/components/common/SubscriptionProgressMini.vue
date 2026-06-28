@@ -118,6 +118,7 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useSubscriptionStore } from '@/stores'
 import type { UserSubscription } from '@/types'
+import { subscriptionDisplayName } from '@/utils/subscriptionDisplay'
 
 const { t } = useI18n()
 
@@ -147,10 +148,7 @@ interface SubscriptionMetric {
 }
 
 function subscriptionName(sub: UserSubscription): string {
-  return sub.group?.name
-    || (sub.group_id != null
-      ? t('payment.groupFallback', { id: sub.group_id })
-      : t('userSubscriptions.creditPoolSubscription'))
+  return subscriptionDisplayName(sub, t)
 }
 
 function normalizedLimit(value: number | null | undefined): number | null {

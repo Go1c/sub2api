@@ -175,7 +175,7 @@ API 错误（订阅不可用且余额不可用）返回结构化 `error.code` + 
 - **Task 6** — 购买订阅履约：套餐额度快照 + 续费拦截（`GetRenewalEligibility`）+ 额度池 INSERT + `purchase` ledger。
 - **Task 7** — 过期销毁与审计：`ExpireCreditSubscriptions` 事务化过期 + `expire` ledger + `expired` 通知 outbox + `expired_credit_logged_at`。
 - **Task 8** — 通知 worker handler：复用 `scheduler_outbox`，失败仅记日志不重试。commit `ca6d4d84`。
-- **Task 9** — API DTO + 前端展示：DTO 暴露 `group_id=null`/`plan_id`/`quota_*`/`daily|weekly_*`/`scope_*`/`is_usable`/`exhausted_at`；用户订阅页/支付页/套餐卡改额度池展示。
+- **Task 9** — API DTO + 前端展示：DTO 暴露 `group_id=null`/`plan_id`/`plan_name`/`plan_product_name`/`quota_*`/`daily|weekly_*`/`scope_*`/`is_usable`/`exhausted_at`；用户订阅页/支付页/套餐卡改额度池展示，多订阅展示优先使用套餐名而不是空 `group_id` 的通用兜底名。
 - **Task 10** — 管理后台 + 浪费率统计：admin 列表（状态/计划/邮箱/创建时间筛选）/ ledger 查看 / PATCH（调额度/限额/状态/过期时间，自动写 `admin_adjust` ledger）+ `/admin/subscriptions/waste-stats`(`/by-plan`/`/time-series`) 聚合与前端页面。
 - **Task 11** — 多订阅购买与按时间扣费：管理员设置 `subscription_multiple_purchases_enabled`；migration `155_allow_multiple_active_credit_subscriptions.sql` 删除单可消费订阅唯一索引；鉴权收集候选订阅 ID；扣费事务按创建时间顺序跨订阅分配，额度或日/周限不足时递补到后一条订阅。
 

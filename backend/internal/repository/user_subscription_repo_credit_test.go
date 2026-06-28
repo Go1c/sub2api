@@ -69,6 +69,26 @@ func (s *UserSubscriptionCreditSuite) mustCreateCreditSub(userID int64, mutate f
 	return sub
 }
 
+func (s *UserSubscriptionCreditSuite) mustCreatePlan(name, productName string) *dbent.SubscriptionPlan {
+	s.T().Helper()
+	plan, err := s.client.SubscriptionPlan.Create().
+		SetName(name).
+		SetDescription(name).
+		SetPrice(10).
+		SetValidityDays(30).
+		SetValidityUnit("day").
+		SetFeatures("[]").
+		SetProductName(productName).
+		SetQuotaUsd(10).
+		SetScopeType(service.SubscriptionScopeAllAvailableGroups).
+		SetScopeConfig(map[string]any{}).
+		SetForSale(true).
+		SetSortOrder(1).
+		Save(s.ctx)
+	s.Require().NoError(err)
+	return plan
+}
+
 // ====================================================================================
 // GetUsableCreditSubscription
 // ====================================================================================
@@ -84,6 +104,32 @@ func (s *UserSubscriptionCreditSuite) TestGetUsableCreditSubscription_HappyPath(
 	s.Require().Equal(service.SubscriptionScopeAllAvailableGroups, got.ScopeType)
 	s.Require().InDelta(10.0, got.QuotaLimitUSD, 1e-9)
 	s.Require().Nil(got.ExhaustedAt)
+}
+
+func (s *UserSubscriptionCreditSuite) TestListActiveByUserIDIncludesMultiplePlanNames() {
+	user := s.mustCreateUser("credit-list-active-plans@test.com")
+	light := s.mustCreatePlan("Light", "Light Product")
+	standard := s.mustCreatePlan("Standard", "Standard Product")
+	s.mustCreateCreditSub(user.ID, func(c *dbent.UserSubscriptionCreate) {
+		c.SetPlanID(light.ID)
+	})
+	s.mustCreateCreditSub(user.ID, func(c *dbent.UserSubscriptionCreate) {
+		c.SetPlanID(standard.ID)
+	})
+
+	got, err := s.repo.ListActiveByUserID(s.ctx, user.ID)
+
+	s.Require().NoError(err)
+	s.Require().Len(got, 2)
+	byPlanID := make(map[int64]service.UserSubscription, len(got))
+	for i := range got {
+		s.Require().NotNil(got[i].PlanID)
+		byPlanID[*got[i].PlanID] = got[i]
+	}
+	s.Require().Equal("Light", byPlanID[light.ID].PlanName)
+	s.Require().Equal("Light Product", byPlanID[light.ID].PlanProductName)
+	s.Require().Equal("Standard", byPlanID[standard.ID].PlanName)
+	s.Require().Equal("Standard Product", byPlanID[standard.ID].PlanProductName)
 }
 
 func (s *UserSubscriptionCreditSuite) TestGetUsableCreditSubscription_ExhaustedExcluded() {

@@ -507,10 +507,12 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID      int64  `json:"id"`
-	UserID  int64  `json:"user_id"`
-	GroupID *int64 `json:"group_id"`
-	PlanID  *int64 `json:"plan_id,omitempty"`
+	ID              int64  `json:"id"`
+	UserID          int64  `json:"user_id"`
+	GroupID         *int64 `json:"group_id"`
+	PlanID          *int64 `json:"plan_id,omitempty"`
+	PlanName        string `json:"plan_name,omitempty"`
+	PlanProductName string `json:"plan_product_name,omitempty"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`

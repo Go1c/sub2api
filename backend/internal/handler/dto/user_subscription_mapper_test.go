@@ -21,6 +21,8 @@ func TestUserSubscriptionFromServiceIncludesCreditPoolFields(t *testing.T) {
 		UserID:             456,
 		GroupID:            nil,
 		PlanID:             &planID,
+		PlanName:           "轻享版",
+		PlanProductName:    "Light Plan",
 		ScopeType:          service.SubscriptionScopeSelectedGroups,
 		ScopeConfig:        map[string]any{"group_ids": []any{float64(1), float64(2)}},
 		QuotaLimitUSD:      100,
@@ -42,6 +44,8 @@ func TestUserSubscriptionFromServiceIncludesCreditPoolFields(t *testing.T) {
 	require.NotNil(t, out)
 	require.Nil(t, out.GroupID)
 	require.Equal(t, planID, *out.PlanID)
+	require.Equal(t, "轻享版", out.PlanName)
+	require.Equal(t, "Light Plan", out.PlanProductName)
 	require.True(t, out.IsUsable)
 	require.Nil(t, out.ExhaustedAt)
 	require.Equal(t, 100.0, out.QuotaLimitUSD)
