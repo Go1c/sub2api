@@ -772,6 +772,78 @@ func (r *userSubscriptionRepository) HasUsableCreditSubscription(ctx context.Con
 	return count > 0, nil
 }
 
+// CreateSubscriptionWithUsableGuard inserts a subscription after enforcing the
+// single usable-subscription invariant when multiple purchases are disabled.
+func (r *userSubscriptionRepository) CreateSubscriptionWithUsableGuard(ctx context.Context, sub *service.UserSubscription, allowMultiple bool) (*service.UserSubscription, error) {
+	if sub == nil {
+		return nil, service.ErrSubscriptionNilInput
+	}
+	if r.db == nil {
+		if !allowMultiple {
+			hasUsable, err := r.HasUsableCreditSubscription(ctx, sub.UserID)
+			if err != nil {
+				return nil, err
+			}
+			if hasUsable {
+				return nil, service.ErrAlreadyHasUsableSubscription
+			}
+		}
+		if err := r.Create(ctx, sub); err != nil {
+			return nil, err
+		}
+		return sub, nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if !allowMultiple {
+		if err := r.LockUserForSubscriptionWrite(ctx, tx, sub.UserID); err != nil {
+			return nil, err
+		}
+		hasUsable, err := hasUsableCreditSubscriptionSQL(ctx, tx, sub.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if hasUsable {
+			return nil, service.ErrAlreadyHasUsableSubscription
+		}
+	}
+	created, err := r.InsertCreditSubscription(ctx, tx, sub)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+	return created, nil
+}
+
+func hasUsableCreditSubscriptionSQL(ctx context.Context, q service.SQLExecer, userID int64) (bool, error) {
+	var hasUsable bool
+	err := q.QueryRowContext(ctx, `
+SELECT EXISTS (
+	SELECT 1
+	FROM user_subscriptions
+	WHERE user_id = $1
+		AND status = $2
+		AND exhausted_at IS NULL
+		AND expires_at > NOW()
+		AND deleted_at IS NULL
+)
+`, userID, service.SubscriptionStatusActive).Scan(&hasUsable)
+	return hasUsable, err
+}
+
 // GetRenewalEligibility 用户是否允许购买新订阅。
 //
 // 判定顺序（与 plan 设计原则 #8 / #9 对齐）：
@@ -861,6 +933,10 @@ func (r *userSubscriptionRepository) InsertCreditSubscription(ctx context.Contex
 	if scopeConfig == nil {
 		scopeConfig = map[string]any{}
 	}
+	scopeType := strings.TrimSpace(sub.ScopeType)
+	if scopeType == "" {
+		scopeType = service.SubscriptionScopeAllAvailableGroups
+	}
 	scopeJSON, err := json.Marshal(scopeConfig)
 	if err != nil {
 		return nil, fmt.Errorf("encode subscription scope_config: %w", err)
@@ -893,7 +969,7 @@ RETURNING id, created_at, updated_at
 		sub.UserID,
 		nullableInt64Arg(sub.GroupID),
 		nullableInt64Arg(sub.PlanID),
-		sub.ScopeType,
+		scopeType,
 		scopeJSON,
 		sub.QuotaLimitUSD,
 		sub.QuotaUsedUSD,
@@ -920,6 +996,7 @@ RETURNING id, created_at, updated_at
 	cp.CreatedAt = createdAt
 	cp.UpdatedAt = updatedAt
 	cp.AssignedAt = assignedAt
+	cp.ScopeType = scopeType
 	cp.ScopeConfig = scopeConfig
 	return &cp, nil
 }

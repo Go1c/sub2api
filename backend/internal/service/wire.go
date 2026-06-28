@@ -459,9 +459,14 @@ func ProvideSubscriptionService(
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
 	cfg *config.Config,
+	settingService *SettingService,
 ) *SubscriptionService {
-	return NewSubscriptionService(groupRepo, userSubRepo, billingCacheService, entClient, cfg).
+	svc := NewSubscriptionService(groupRepo, userSubRepo, billingCacheService, entClient, cfg).
 		SetSubscriptionCreditLedgerRepository(ledgerRepo)
+	if settingService != nil {
+		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
+	}
+	return svc
 }
 
 // ProvidePaymentService wires payment fulfillment with the credit-pool purchase path.
