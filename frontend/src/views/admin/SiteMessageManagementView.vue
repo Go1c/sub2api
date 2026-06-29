@@ -398,11 +398,11 @@
                     <div>
                       <label class="input-label">{{ t('admin.siteMessageManagement.compensationAmount') }}</label>
                       <input
-                        v-model.number="compensationAmount"
-                        type="number"
-                        min="0.01"
-                        step="0.01"
+                        v-model="compensationAmount"
+                        type="text"
+                        inputmode="decimal"
                         class="input"
+                        @blur="normalizeCompensationAmountInput"
                       />
                       <p class="input-hint">{{ t('admin.siteMessageManagement.compensationAmountHint') }}</p>
                     </div>
@@ -562,7 +562,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Toggle from '@/components/common/Toggle.vue'
@@ -623,13 +623,14 @@ const recipientInput = ref('')
 const messageSubject = ref('')
 const messageContent = ref('')
 const compensationEnabled = ref(false)
-const compensationAmount = ref(0)
+const compensationAmount = ref('0.00')
 const compensationFormat = ref<CompensationFormat>('block')
 const compensationCodesInput = ref('')
 const historySearch = ref('')
 const historyStatusFilter = ref<HistoryStatusFilter>('all')
 const selectedHistoryId = ref('')
 const isSending = ref(false)
+const isLoadingHistory = ref(false)
 
 const historyItems = ref<CompensationHistoryItem[]>([])
 
@@ -701,8 +702,7 @@ const visibleRecipientEmails = computed(() => recipientTargets.value.slice(0, 8)
 const remainingRecipientCount = computed(() => Math.max(recipientTargets.value.length - visibleRecipientEmails.value.length, 0))
 
 const normalizedCompensationAmount = computed(() => {
-  const amount = Number(compensationAmount.value)
-  return Number.isFinite(amount) && amount > 0 ? amount : 0
+  return parseMoneyInput(compensationAmount.value)
 })
 
 const formattedCompensationAmount = computed(() => currency(normalizedCompensationAmount.value))
@@ -898,6 +898,23 @@ function currency(value: number): string {
   })
 }
 
+function moneyInputValue(value: number): string {
+  const amount = Number.isFinite(value) && value > 0 ? value : 0
+  return amount.toFixed(2)
+}
+
+function parseMoneyInput(value: string): number {
+  const amount = Number(value.replace(/,/g, '').trim())
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0
+  }
+  return Math.round(amount * 100) / 100
+}
+
+function normalizeCompensationAmountInput() {
+  compensationAmount.value = moneyInputValue(normalizedCompensationAmount.value)
+}
+
 function formatMoney(value: number): string {
   return t('admin.siteMessageManagement.money', { amount: currency(value) })
 }
@@ -949,7 +966,7 @@ function resetDraft() {
   messageSubject.value = ''
   messageContent.value = ''
   compensationEnabled.value = false
-  compensationAmount.value = 0
+  compensationAmount.value = '0.00'
   compensationFormat.value = 'block'
   compensationCodesInput.value = ''
 }
@@ -985,6 +1002,21 @@ function buildHistoryItemFromBatch(batch: SiteMessageCompensationBatch): Compens
   }
 }
 
+async function loadHistory() {
+  isLoadingHistory.value = true
+  try {
+    const page = await adminAPI.siteMessages.listCompensationBatches(1, 100)
+    historyItems.value = page.items.map((batch) => buildHistoryItemFromBatch(batch))
+    if (!selectedHistoryId.value && historyItems.value.length > 0) {
+      selectedHistoryId.value = historyItems.value[0].id
+    }
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.siteMessageManagement.history.loadFailed')))
+  } finally {
+    isLoadingHistory.value = false
+  }
+}
+
 async function handleSend() {
   if (sendDisabled.value) {
     appStore.showError(t('admin.siteMessageManagement.previewBlocked'))
@@ -1004,7 +1036,7 @@ async function handleSend() {
       send_email: false,
     })
     const item = buildHistoryItemFromBatch(batch)
-    historyItems.value.unshift(item)
+    historyItems.value = [item, ...historyItems.value.filter((existing) => existing.id !== item.id)]
     selectedHistoryId.value = item.id
     activeView.value = 'history'
     const toastMessage = t('admin.siteMessageManagement.history.completedToast', {
@@ -1023,6 +1055,10 @@ async function handleSend() {
   }
 }
 
+onMounted(() => {
+  void loadHistory()
+})
+
 function loadHistoryAsDraft() {
   const item = selectedHistory.value
   if (!item) return
@@ -1033,7 +1069,7 @@ function loadHistoryAsDraft() {
   messageSubject.value = item.subject
   messageContent.value = item.content
   compensationEnabled.value = item.codeCount > 0
-  compensationAmount.value = item.amount || 5
+  compensationAmount.value = moneyInputValue(item.amount || 5)
   compensationFormat.value = 'block'
   compensationCodesInput.value = item.codes
     .map((code) => code.code)
