@@ -792,6 +792,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
+    { path: '/admin/site-message-management', label: t('nav.siteMessageManagement'), icon: MailIcon, hideInSimpleMode: true },
     { path: '/admin/invoices', label: t('nav.invoiceManagement'), icon: OrderListIcon, hideInSimpleMode: true },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     { path: '/admin/risk-control', label: t('nav.riskControl'), icon: ShieldIcon, hideInSimpleMode: true, featureFlag: flagRiskControl },

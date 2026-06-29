@@ -76,6 +76,7 @@ ErrSiteMessageDailyLimitExceeded = infraerrors.Forbidden("SITE_MESSAGE_DAILY_LIM
 - 导航：`AppSidebar.vue` 加"站内信"项，`featureFlags.ts` 注册 `site_messages_enabled`，未读数 >0 时渲染红点；在 public settings 与认证就绪后拉未读数，读/发/回复后刷新。store（`stores/siteMessages.ts`）暴露 `unreadCount`、`hasUnread`、`refreshUnreadCount()`。
 - 用户页 `SiteMessagesView.vue`：收件/发件标签页；收件行显示未读态/发件人/主题/预览/时间；发件行显示收件人等；详情含读态与回复；撰写表单校验收件人/主题/内容，收件人仅精确邮箱或 ID。
 - 管理员用户管理：`UsersView.vue` 的"更多"菜单加"发送站内信"，弹 `UserSiteMessageModal.vue`，收件人固定，提交标题+内容到 `POST /admin/site-messages/users/:id`。
+- 管理员站内信管理预览：`/admin/site-message-management` 仅管理员可见，侧栏放在"公告"后。页面提供"历史补偿"与"新增补偿"两个视图，用本地模拟数据展示补偿批次、发送范围、站内信内容、兑换码分配与兑换状态；新增补偿页支持指定邮箱 / 全员站内信、标题 / 内容、是否补偿、补偿额度、已生成兑换码粘贴与发送前数量校验。该页不在站内信页面生成兑换码，只引用管理员先在"兑换码"管理中生成并入库的 `balance` 兑换码；真实发送接入时后端必须再次校验兑换码数量、状态与面值。
 - 设置页：站内信卡片，含启停开关、每日发送上限（默认 10）、保留天数（默认 30）。
 - 路由 `/site-messages` 带 `requiresSiteMessages: true`，关闭时重定向到 `/dashboard`。
 
@@ -90,10 +91,11 @@ ErrSiteMessageDailyLimitExceeded = infraerrors.Forbidden("SITE_MESSAGE_DAILY_LIM
 - `site_messages_enabled` 进 public settings + SSR 注入；另外两个设置仅管理侧。
 - 服务层独立于 Ent（用内存 stub 测试）。
 - 保留期与发送上限按 `created_at` / 当日计数计算；过滤值保留 `affiliate_balance` 之类既有契约不破坏（指 settings 暴露与审计 diff 更新）。
+- 管理员补偿站内信的兑换码来源固定为既有兑换码系统：先由管理员在 `/admin/redeem` 生成 `balance` 兑换码并形成后台记录，再在站内信管理页引用；站内信管理页不得临时伪造或绕过兑换码记录。
 
 ## 相关
 - [[admin-settings-idempotency]]
 - 迁移：`backend/migrations/137_add_site_messages.sql`
 - 后端：`backend/ent/schema/site_message.go`、`backend/internal/domain/site_message.go`、`backend/internal/service/site_message_service.go`、`backend/internal/repository/site_message_repo.go`、`backend/internal/handler/site_message_handler.go`、`backend/internal/handler/admin/site_message_handler.go`、路由 `backend/internal/server/routes/user.go` + `admin.go`、设置 `backend/internal/service/setting_service.go` 等
-- 前端：`frontend/src/api/siteMessages.ts`、`frontend/src/api/admin/siteMessages.ts`、`frontend/src/stores/siteMessages.ts`、`frontend/src/views/user/SiteMessagesView.vue`、`frontend/src/components/admin/user/UserSiteMessageModal.vue`、`frontend/src/views/admin/SettingsView.vue`、`frontend/src/components/layout/AppSidebar.vue`
+- 前端：`frontend/src/api/siteMessages.ts`、`frontend/src/api/admin/siteMessages.ts`、`frontend/src/stores/siteMessages.ts`、`frontend/src/views/user/SiteMessagesView.vue`、`frontend/src/components/admin/user/UserSiteMessageModal.vue`、`frontend/src/views/admin/SiteMessageManagementView.vue`、`frontend/src/views/admin/SettingsView.vue`、`frontend/src/components/layout/AppSidebar.vue`
 - 技术栈：Go + Gin + Ent + Wire、Vue 3 + Pinia + Vue Router + TS、Vitest、pnpm
