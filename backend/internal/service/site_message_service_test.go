@@ -393,9 +393,14 @@ func TestSiteMessageServiceAdminSendCompensationBatchSendsRealMessages(t *testin
 	require.Equal(t, "CMP-20260629-111100", batch.ID)
 	require.Equal(t, "admin@example.com", batch.Operator)
 	require.Equal(t, 2, batch.RecipientCount)
+	require.Equal(t, 2, batch.SuccessCount)
+	require.Equal(t, 0, batch.FailedCount)
 	require.Equal(t, 2, batch.CodeCount)
 	require.Len(t, batch.MessageIDs, 2)
 	require.Len(t, batch.Codes, 2)
+	require.Len(t, batch.Results, 2)
+	require.Equal(t, SiteMessageBatchResultSent, batch.Results[0].Status)
+	require.Equal(t, SiteMessageBatchResultSent, batch.Results[1].Status)
 	require.Len(t, repo.created, 2)
 	require.Equal(t, int64(2), repo.created[0].RecipientID)
 	require.Contains(t, repo.created[0].Content, "CMP-A")
@@ -403,7 +408,7 @@ func TestSiteMessageServiceAdminSendCompensationBatchSendsRealMessages(t *testin
 	require.Contains(t, repo.created[1].Content, "CMP-B")
 }
 
-func TestSiteMessageServiceAdminSendCompensationBatchRejectsInvalidRedeemCodeBeforeCreate(t *testing.T) {
+func TestSiteMessageServiceAdminSendCompensationBatchRecordsInvalidRedeemCode(t *testing.T) {
 	repo := newSiteMessageRepoStub()
 	svc := newSiteMessageTestServiceWithRedeem(
 		repo,
@@ -415,7 +420,7 @@ func TestSiteMessageServiceAdminSendCompensationBatchRejectsInvalidRedeemCodeBef
 		time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC),
 	)
 
-	_, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
 		AdminID:             1,
 		RecipientMode:       SiteMessageRecipientModeSelected,
 		RecipientEmails:     []string{"alice@example.com"},
@@ -427,8 +432,54 @@ func TestSiteMessageServiceAdminSendCompensationBatchRejectsInvalidRedeemCodeBef
 		CompensationFormat:  SiteMessageCompensationFormatBlock,
 	})
 
-	require.ErrorIs(t, err, ErrSiteMessageInvalidRedeemCode)
+	require.NoError(t, err)
+	require.Equal(t, 1, batch.RecipientCount)
+	require.Equal(t, 0, batch.SuccessCount)
+	require.Equal(t, 1, batch.FailedCount)
+	require.Len(t, batch.Results, 1)
+	require.Equal(t, SiteMessageBatchResultFailed, batch.Results[0].Status)
+	require.Equal(t, "SITE_MESSAGE_REDEEM_CODE_INVALID", batch.Results[0].ErrorReason)
 	require.Empty(t, repo.created)
+}
+
+func TestSiteMessageServiceAdminSendCompensationBatchDoesNotBlockOnMissingRecipient(t *testing.T) {
+	repo := newSiteMessageRepoStub()
+	svc := newSiteMessageTestServiceWithRedeem(
+		repo,
+		SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30},
+		siteMessageTestUsers(),
+		map[string]*RedeemCode{
+			"CMP-A": {Code: "CMP-A", Type: RedeemTypeBalance, Value: 5, Status: StatusUnused},
+			"CMP-B": {Code: "CMP-B", Type: RedeemTypeBalance, Value: 5, Status: StatusUnused},
+		},
+		time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC),
+	)
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:             1,
+		RecipientMode:       SiteMessageRecipientModeSelected,
+		RecipientEmails:     []string{"missing@example.com", "alice@example.com"},
+		Subject:             "测试补偿",
+		Content:             "基础内容",
+		CompensationEnabled: true,
+		CompensationAmount:  5,
+		CompensationCodes:   []string{"CMP-A", "CMP-B"},
+		CompensationFormat:  SiteMessageCompensationFormatCompact,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 2, batch.RecipientCount)
+	require.Equal(t, 1, batch.SuccessCount)
+	require.Equal(t, 1, batch.FailedCount)
+	require.Len(t, batch.Results, 2)
+	require.Equal(t, SiteMessageBatchResultFailed, batch.Results[0].Status)
+	require.Equal(t, "missing@example.com", batch.Results[0].Recipient)
+	require.Equal(t, "SITE_MESSAGE_RECIPIENT_NOT_FOUND", batch.Results[0].ErrorReason)
+	require.Equal(t, SiteMessageBatchResultSent, batch.Results[1].Status)
+	require.Equal(t, "alice@example.com", batch.Results[1].Recipient)
+	require.Len(t, repo.created, 1)
+	require.Equal(t, int64(2), repo.created[0].RecipientID)
+	require.Contains(t, repo.created[0].Content, "CMP-B")
 }
 
 func TestSiteMessageServiceAdminSendCompensationBatchAllUsersLoopsActiveUsers(t *testing.T) {
@@ -452,6 +503,8 @@ func TestSiteMessageServiceAdminSendCompensationBatchAllUsersLoopsActiveUsers(t 
 
 	require.NoError(t, err)
 	require.Equal(t, 3, batch.RecipientCount)
+	require.Equal(t, 3, batch.SuccessCount)
+	require.Equal(t, 0, batch.FailedCount)
 	require.Len(t, repo.created, 3)
 	for _, message := range repo.created {
 		require.NotEqual(t, int64(4), message.RecipientID)

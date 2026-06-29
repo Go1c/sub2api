@@ -4630,15 +4630,20 @@ export default {
         audience: '发送范围',
         amount: '补偿额度',
         codes: '兑换码',
+        sentResult: '发送结果',
+        resultSummary: '成功 {success}，失败 {failed}',
         codesCount: '{count} 个码',
         batchesCount: '{count} 批',
         operator: '操作人：{operator}',
         sentAt: '发送时间：{time}',
         codeAssignments: '兑换码分配',
         noCodes: '该批次没有占用兑换码',
+        failures: '失败记录',
+        noFailures: '该批次没有失败记录',
         copyContent: '复制内容',
         resend: '按此再发',
         addedToast: '站内信已发送，并已写入历史补偿',
+        completedToast: '批量发送完成：成功 {success}，失败 {failed}',
         loadedAsDraftToast: '已按历史补偿载入草稿',
         copiedToast: '已复制补偿内容',
         copyFallbackToast: '当前浏览器不支持自动复制，请手动选择内容',
@@ -4651,6 +4656,8 @@ export default {
         },
         status: {
           sent: '已发送',
+          partial: '部分失败',
+          failed: '发送失败',
           sending: '发送中',
           cancelled: '已取消'
         },
@@ -4659,6 +4666,16 @@ export default {
           used: '已兑换',
           reserved: '已预留',
           recorded: '记录完整'
+        },
+        failureReason: {
+          SITE_MESSAGE_RECIPIENTS_INVALID: '邮箱格式错误',
+          SITE_MESSAGE_RECIPIENT_NOT_FOUND: '收件人不存在',
+          SITE_MESSAGE_RECIPIENT_LOOKUP_FAILED: '收件人查询失败',
+          SITE_MESSAGE_REDEEM_CODE_SHORTAGE: '缺少兑换码',
+          SITE_MESSAGE_REDEEM_CODE_INVALID: '兑换码无效',
+          SITE_MESSAGE_SEND_FAILED: '站内信写入失败',
+          SITE_MESSAGE_EMAIL_ENQUEUE_FAILED: '邮件通知入队失败',
+          unknown: '发送失败'
         }
       }
     },

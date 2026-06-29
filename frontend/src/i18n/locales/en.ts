@@ -4474,15 +4474,20 @@ export default {
         audience: 'Audience',
         amount: 'Amount',
         codes: 'Redeem codes',
+        sentResult: 'Send result',
+        resultSummary: 'Success {success}, failed {failed}',
         codesCount: '{count} code(s)',
         batchesCount: '{count} batch(es)',
         operator: 'Operator: {operator}',
         sentAt: 'Sent at: {time}',
         codeAssignments: 'Redeem code assignments',
         noCodes: 'This batch did not reserve redeem codes',
+        failures: 'Failures',
+        noFailures: 'No failures in this batch',
         copyContent: 'Copy content',
         resend: 'Send again',
         addedToast: 'Site messages sent and added to compensation history',
+        completedToast: 'Batch sending complete: success {success}, failed {failed}',
         loadedAsDraftToast: 'Loaded this compensation as a draft',
         copiedToast: 'Compensation content copied',
         copyFallbackToast: 'Automatic copy is unavailable; select the content manually',
@@ -4495,6 +4500,8 @@ export default {
         },
         status: {
           sent: 'Sent',
+          partial: 'Partial failure',
+          failed: 'Failed',
           sending: 'Sending',
           cancelled: 'Cancelled'
         },
@@ -4503,6 +4510,16 @@ export default {
           used: 'Used',
           reserved: 'Reserved',
           recorded: 'Recorded'
+        },
+        failureReason: {
+          SITE_MESSAGE_RECIPIENTS_INVALID: 'Invalid email',
+          SITE_MESSAGE_RECIPIENT_NOT_FOUND: 'Recipient not found',
+          SITE_MESSAGE_RECIPIENT_LOOKUP_FAILED: 'Recipient lookup failed',
+          SITE_MESSAGE_REDEEM_CODE_SHORTAGE: 'Missing redeem code',
+          SITE_MESSAGE_REDEEM_CODE_INVALID: 'Invalid redeem code',
+          SITE_MESSAGE_SEND_FAILED: 'Site message write failed',
+          SITE_MESSAGE_EMAIL_ENQUEUE_FAILED: 'Email notification failed',
+          unknown: 'Send failed'
         }
       }
     },
