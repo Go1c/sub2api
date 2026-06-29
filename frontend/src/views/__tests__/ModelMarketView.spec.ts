@@ -171,6 +171,13 @@ describe('ModelMarketView', () => {
     expect(wrapper.text()).toContain('OpenAI')
     expect(wrapper.text()).toContain('gpt-5.4')
     expect(wrapper.text()).toContain('openai-public')
+    expect(wrapper.text()).toContain('输入价格（官方价）')
+    expect(wrapper.text()).toContain('折扣倍率')
+    expect(wrapper.text()).toContain('0.35x')
+    expect(wrapper.text()).toContain('充值倍率')
+    expect(wrapper.text()).toContain('1积分 = 1美元')
+    expect(wrapper.text()).not.toContain('官方价 × 0.35')
+    expect(wrapper.text()).not.toContain('充值单位：积分')
   })
 
   it('renders configured image tiers without a default image price', async () => {
@@ -190,6 +197,11 @@ describe('ModelMarketView', () => {
     expect(wrapper.text()).toContain('$0.05')
     expect(wrapper.text()).toContain('4K')
     expect(wrapper.text()).toContain('$0.15')
+
+    const imageArticle = wrapper.findAll('article').find((node) => node.text().includes('gpt-image-2'))
+    expect(imageArticle).toBeDefined()
+    expect(imageArticle?.text()).not.toContain('折扣倍率')
+    expect(imageArticle?.text()).not.toContain('0.35x')
   })
 
   it('resets the provider filter when selecting a group filter', async () => {
