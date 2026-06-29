@@ -45,6 +45,18 @@ func (s *siteMessageEmailSenderStub) EnqueueSiteMessage(email, subject, content 
 	return s.err
 }
 
+type siteMessageRedeemCodeReaderStub struct {
+	codes map[string]*RedeemCode
+}
+
+func (s siteMessageRedeemCodeReaderStub) GetByCode(_ context.Context, code string) (*RedeemCode, error) {
+	if item, ok := s.codes[code]; ok {
+		copy := *item
+		return &copy, nil
+	}
+	return nil, ErrRedeemCodeNotFound
+}
+
 func (s siteMessageUserRepoStub) GetByID(_ context.Context, id int64) (*User, error) {
 	if user, ok := s.users[id]; ok {
 		copy := *user
@@ -68,6 +80,12 @@ func (s siteMessageUserRepoStub) ListWithFilters(_ context.Context, params pagin
 	search := strings.ToLower(strings.TrimSpace(filters.Search))
 	out := make([]User, 0)
 	for _, user := range s.users {
+		if filters.Status != "" && user.Status != filters.Status {
+			continue
+		}
+		if filters.Role != "" && user.Role != filters.Role {
+			continue
+		}
 		if search == "" ||
 			strings.Contains(strings.ToLower(user.Email), search) ||
 			strings.Contains(strings.ToLower(user.Username), search) {
@@ -187,7 +205,19 @@ func (s *siteMessageRepoStub) DeleteOlderThan(_ context.Context, cutoff time.Tim
 }
 
 func newSiteMessageTestService(repo *siteMessageRepoStub, settings SiteMessageSettings, users map[int64]*User, now time.Time) *SiteMessageService {
-	svc := NewSiteMessageService(repo, siteMessageUserRepoStub{users: users}, siteMessageSettingsStub{settings: settings}, nil)
+	svc := NewSiteMessageService(repo, siteMessageUserRepoStub{users: users}, siteMessageSettingsStub{settings: settings}, nil, nil)
+	svc.now = func() time.Time { return now }
+	return svc
+}
+
+func newSiteMessageTestServiceWithRedeem(repo *siteMessageRepoStub, settings SiteMessageSettings, users map[int64]*User, redeemCodes map[string]*RedeemCode, now time.Time) *SiteMessageService {
+	svc := NewSiteMessageService(
+		repo,
+		siteMessageUserRepoStub{users: users},
+		siteMessageSettingsStub{settings: settings},
+		nil,
+		siteMessageRedeemCodeReaderStub{codes: redeemCodes},
+	)
 	svc.now = func() time.Time { return now }
 	return svc
 }
@@ -332,6 +362,102 @@ func TestSiteMessageServiceAdminSendToUserSkipsEmailCopyWhenNotRequested(t *test
 	require.Empty(t, emailSender.calls)
 }
 
+func TestSiteMessageServiceAdminSendCompensationBatchSendsRealMessages(t *testing.T) {
+	now := time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	svc := newSiteMessageTestServiceWithRedeem(
+		repo,
+		SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30},
+		siteMessageTestUsers(),
+		map[string]*RedeemCode{
+			"CMP-A": {Code: "CMP-A", Type: RedeemTypeBalance, Value: 5, Status: StatusUnused},
+			"CMP-B": {Code: "CMP-B", Type: RedeemTypeBalance, Value: 5, Status: StatusUnused},
+		},
+		now,
+	)
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:             1,
+		RecipientMode:       SiteMessageRecipientModeSelected,
+		RecipientEmails:     []string{"ALICE@example.com", "bob@example.com"},
+		Subject:             "测试补偿",
+		Content:             "基础内容",
+		CompensationEnabled: true,
+		CompensationAmount:  5,
+		CompensationCodes:   []string{"CMP-A", "CMP-B"},
+		CompensationFormat:  SiteMessageCompensationFormatCompact,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, batch)
+	require.Equal(t, "CMP-20260629-111100", batch.ID)
+	require.Equal(t, "admin@example.com", batch.Operator)
+	require.Equal(t, 2, batch.RecipientCount)
+	require.Equal(t, 2, batch.CodeCount)
+	require.Len(t, batch.MessageIDs, 2)
+	require.Len(t, batch.Codes, 2)
+	require.Len(t, repo.created, 2)
+	require.Equal(t, int64(2), repo.created[0].RecipientID)
+	require.Contains(t, repo.created[0].Content, "CMP-A")
+	require.Equal(t, int64(3), repo.created[1].RecipientID)
+	require.Contains(t, repo.created[1].Content, "CMP-B")
+}
+
+func TestSiteMessageServiceAdminSendCompensationBatchRejectsInvalidRedeemCodeBeforeCreate(t *testing.T) {
+	repo := newSiteMessageRepoStub()
+	svc := newSiteMessageTestServiceWithRedeem(
+		repo,
+		SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30},
+		siteMessageTestUsers(),
+		map[string]*RedeemCode{
+			"CMP-USED": {Code: "CMP-USED", Type: RedeemTypeBalance, Value: 5, Status: StatusUsed},
+		},
+		time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC),
+	)
+
+	_, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:             1,
+		RecipientMode:       SiteMessageRecipientModeSelected,
+		RecipientEmails:     []string{"alice@example.com"},
+		Subject:             "测试补偿",
+		Content:             "基础内容",
+		CompensationEnabled: true,
+		CompensationAmount:  5,
+		CompensationCodes:   []string{"CMP-USED"},
+		CompensationFormat:  SiteMessageCompensationFormatBlock,
+	})
+
+	require.ErrorIs(t, err, ErrSiteMessageInvalidRedeemCode)
+	require.Empty(t, repo.created)
+}
+
+func TestSiteMessageServiceAdminSendCompensationBatchAllUsersLoopsActiveUsers(t *testing.T) {
+	repo := newSiteMessageRepoStub()
+	users := siteMessageTestUsers()
+	users[4] = &User{ID: 4, Email: "disabled@example.com", Username: "disabled", Role: RoleUser, Status: StatusDisabled}
+	svc := newSiteMessageTestServiceWithRedeem(
+		repo,
+		SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30},
+		users,
+		nil,
+		time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC),
+	)
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:       1,
+		RecipientMode: SiteMessageRecipientModeAll,
+		Subject:       "全员通知",
+		Content:       "基础内容",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 3, batch.RecipientCount)
+	require.Len(t, repo.created, 3)
+	for _, message := range repo.created {
+		require.NotEqual(t, int64(4), message.RecipientID)
+	}
+}
+
 func TestSiteMessageServiceOpenMarksRecipientMessageRead(t *testing.T) {
 	now := time.Unix(1778000000, 0)
 	repo := newSiteMessageRepoStub()
@@ -436,7 +562,7 @@ func TestSiteMessageServiceUnreadCountIgnoresReadAndExpired(t *testing.T) {
 }
 
 func TestSiteMessageServicePropagatesSettingsError(t *testing.T) {
-	svc := NewSiteMessageService(newSiteMessageRepoStub(), siteMessageUserRepoStub{users: siteMessageTestUsers()}, siteMessageSettingsStub{err: errors.New("settings down")}, nil)
+	svc := NewSiteMessageService(newSiteMessageRepoStub(), siteMessageUserRepoStub{users: siteMessageTestUsers()}, siteMessageSettingsStub{err: errors.New("settings down")}, nil, nil)
 
 	_, err := svc.UnreadCount(context.Background(), 3)
 

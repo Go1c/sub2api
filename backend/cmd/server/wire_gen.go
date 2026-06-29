@@ -97,7 +97,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	siteMessageRepository := repository.NewSiteMessageRepository(client)
 	siteMessageUserRepository := service.ProvideSiteMessageUserRepository(userRepository)
 	siteMessageSettingsReader := service.ProvideSiteMessageSettingsReader(settingService)
-	siteMessageService := service.NewSiteMessageService(siteMessageRepository, siteMessageUserRepository, siteMessageSettingsReader, emailQueueService)
+	siteMessageService := service.NewSiteMessageService(siteMessageRepository, siteMessageUserRepository, siteMessageSettingsReader, emailQueueService, redeemCodeRepository)
 	siteMessageHandler := handler.NewSiteMessageHandler(siteMessageService)
 	lotteryRepository := repository.NewLotteryRepository(client)
 	lotterySettingsReader := service.ProvideLotterySettingsReader(settingService)

@@ -4,8 +4,10 @@
 
 import { apiClient } from '../client'
 import type {
+  AdminSendCompensationBatchRequest,
   AdminSendSiteMessageRequest,
   SiteMessage,
+  SiteMessageCompensationBatch,
   SiteMessageRecipient
 } from '@/types'
 
@@ -21,9 +23,15 @@ async function searchRecipients(query: string, limit: number = 20): Promise<Site
   return data
 }
 
+async function sendCompensationBatch(request: AdminSendCompensationBatchRequest): Promise<SiteMessageCompensationBatch> {
+  const { data } = await apiClient.post<SiteMessageCompensationBatch>('/admin/site-messages/compensation-batches', request)
+  return data
+}
+
 export const adminSiteMessagesAPI = {
   sendToUser,
   searchRecipients,
+  sendCompensationBatch,
 }
 
 export default adminSiteMessagesAPI

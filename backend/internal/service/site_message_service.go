@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ type SiteMessageService struct {
 	userRepo    SiteMessageUserRepository
 	settings    SiteMessageSettingsReader
 	emailSender SiteMessageEmailSender
+	redeemCodes SiteMessageRedeemCodeReader
 	now         func() time.Time
 }
 
@@ -24,12 +26,14 @@ func NewSiteMessageService(
 	userRepo SiteMessageUserRepository,
 	settings SiteMessageSettingsReader,
 	emailSender SiteMessageEmailSender,
+	redeemCodes SiteMessageRedeemCodeReader,
 ) *SiteMessageService {
 	return &SiteMessageService{
 		repo:        repo,
 		userRepo:    userRepo,
 		settings:    settings,
 		emailSender: emailSender,
+		redeemCodes: redeemCodes,
 		now:         time.Now,
 	}
 }
@@ -83,6 +87,71 @@ func (s *SiteMessageService) AdminSendToUser(ctx context.Context, input AdminSen
 		}
 	}
 	return message, nil
+}
+
+func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, input AdminSendCompensationBatchInput) (*SiteMessageCompensationBatch, error) {
+	if _, err := s.enabledSettings(ctx); err != nil {
+		return nil, err
+	}
+	adminUser, err := s.userRepo.GetByID(ctx, input.AdminID)
+	if err != nil {
+		return nil, err
+	}
+	if !adminUser.IsAdmin() {
+		return nil, ErrSiteMessageNotFound
+	}
+
+	subject, content, err := normalizeSiteMessagePayload(input.Subject, input.Content)
+	if err != nil {
+		return nil, err
+	}
+
+	recipients, err := s.resolveBatchRecipients(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	assignments, err := s.validateCompensationAssignments(ctx, recipients, input)
+	if err != nil {
+		return nil, err
+	}
+
+	sentAt := s.now()
+	messages := make([]int64, 0, len(recipients))
+	for i := range recipients {
+		messageContent := content
+		if input.CompensationEnabled {
+			messageContent = appendCompensationBlock(messageContent, input.CompensationAmount, assignments[i].Code, input.CompensationFormat)
+		}
+		message, err := s.create(ctx, input.AdminID, recipients[i].ID, nil, subject, messageContent)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, message.ID)
+		if input.SendEmail && s.emailSender != nil {
+			if err := s.emailSender.EnqueueSiteMessage(recipients[i].Email, message.Subject, message.Content); err != nil {
+				return nil, fmt.Errorf("enqueue site message email: %w", err)
+			}
+		}
+	}
+
+	amount := 0.0
+	if input.CompensationEnabled {
+		amount = input.CompensationAmount
+	}
+	return &SiteMessageCompensationBatch{
+		ID:             fmt.Sprintf("CMP-%s", sentAt.Format("20060102-150405")),
+		Subject:        subject,
+		Content:        content,
+		Mode:           normalizeRecipientMode(input.RecipientMode),
+		Audience:       batchAudienceLabel(input.RecipientMode, len(recipients)),
+		RecipientCount: len(recipients),
+		Amount:         amount,
+		CodeCount:      len(assignments),
+		Operator:       adminUser.Email,
+		SentAt:         sentAt,
+		Codes:          assignments,
+		MessageIDs:     messages,
+	}, nil
 }
 
 func (s *SiteMessageService) SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code string) (*SiteMessage, error) {
@@ -241,21 +310,17 @@ func (s *SiteMessageService) CleanupExpired(ctx context.Context) (int64, error) 
 }
 
 func (s *SiteMessageService) create(ctx context.Context, senderID, recipientID int64, parentID *int64, subject, content string) (*SiteMessage, error) {
-	subject = strings.TrimSpace(subject)
-	content = strings.TrimSpace(content)
-	if subject == "" || len([]rune(subject)) > 200 {
-		return nil, ErrSiteMessageInvalidSubject
-	}
-	if content == "" {
-		return nil, ErrSiteMessageContentRequired
+	normalizedSubject, normalizedContent, err := normalizeSiteMessagePayload(subject, content)
+	if err != nil {
+		return nil, err
 	}
 	now := s.now()
 	message := &SiteMessage{
 		SenderID:    senderID,
 		RecipientID: recipientID,
 		ParentID:    parentID,
-		Subject:     subject,
-		Content:     content,
+		Subject:     normalizedSubject,
+		Content:     normalizedContent,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -331,4 +396,165 @@ func siteMessageRecipientFromUser(user *User, err error) (*SiteMessageRecipient,
 		Email:    user.Email,
 		Username: user.Username,
 	}, nil
+}
+
+func normalizeSiteMessagePayload(subject, content string) (string, string, error) {
+	subject = strings.TrimSpace(subject)
+	content = strings.TrimSpace(content)
+	if subject == "" || len([]rune(subject)) > 200 {
+		return "", "", ErrSiteMessageInvalidSubject
+	}
+	if content == "" {
+		return "", "", ErrSiteMessageContentRequired
+	}
+	return subject, content, nil
+}
+
+func (s *SiteMessageService) resolveBatchRecipients(ctx context.Context, input AdminSendCompensationBatchInput) ([]SiteMessageRecipient, error) {
+	mode := normalizeRecipientMode(input.RecipientMode)
+	if mode == SiteMessageRecipientModeAll {
+		return s.listAllActiveRecipients(ctx)
+	}
+
+	seen := make(map[string]struct{}, len(input.RecipientEmails))
+	recipients := make([]SiteMessageRecipient, 0, len(input.RecipientEmails))
+	for _, rawEmail := range input.RecipientEmails {
+		email := strings.TrimSpace(rawEmail)
+		if email == "" {
+			continue
+		}
+		normalized := strings.ToLower(email)
+		if !strings.Contains(normalized, "@") || !strings.Contains(normalized, ".") {
+			return nil, ErrSiteMessageInvalidRecipients.WithMetadata(map[string]string{"recipient": email})
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		recipient, err := s.resolveRecipient(ctx, email, false)
+		if err != nil {
+			return nil, err
+		}
+		recipients = append(recipients, *recipient)
+	}
+	if len(recipients) == 0 {
+		return nil, ErrSiteMessageNoRecipients
+	}
+	return recipients, nil
+}
+
+func (s *SiteMessageService) listAllActiveRecipients(ctx context.Context) ([]SiteMessageRecipient, error) {
+	const pageSize = 1000
+	page := 1
+	includeSubscriptions := false
+	recipients := make([]SiteMessageRecipient, 0)
+	for {
+		users, result, err := s.userRepo.ListWithFilters(ctx, pagination.PaginationParams{
+			Page:      page,
+			PageSize:  pageSize,
+			SortBy:    "id",
+			SortOrder: pagination.SortOrderAsc,
+		}, UserListFilters{
+			Status:               StatusActive,
+			IncludeSubscriptions: &includeSubscriptions,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for i := range users {
+			recipients = append(recipients, SiteMessageRecipient{
+				ID:       users[i].ID,
+				Email:    users[i].Email,
+				Username: users[i].Username,
+			})
+		}
+		if len(users) == 0 || result == nil || page >= result.Pages {
+			break
+		}
+		page++
+	}
+	if len(recipients) == 0 {
+		return nil, ErrSiteMessageNoRecipients
+	}
+	return recipients, nil
+}
+
+func (s *SiteMessageService) validateCompensationAssignments(ctx context.Context, recipients []SiteMessageRecipient, input AdminSendCompensationBatchInput) ([]SiteMessageCompensationCodeAssignment, error) {
+	if !input.CompensationEnabled {
+		return []SiteMessageCompensationCodeAssignment{}, nil
+	}
+	if input.CompensationAmount <= 0 {
+		return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"reason": "amount_required"})
+	}
+	codes := normalizeCompensationCodes(input.CompensationCodes)
+	if len(codes) < len(recipients) {
+		return nil, ErrSiteMessageRedeemCodeShortage.WithMetadata(map[string]string{
+			"required": strconv.Itoa(len(recipients)),
+			"provided": strconv.Itoa(len(codes)),
+		})
+	}
+	if s.redeemCodes == nil {
+		return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"reason": "redeem_reader_missing"})
+	}
+
+	assignments := make([]SiteMessageCompensationCodeAssignment, 0, len(recipients))
+	for i := range recipients {
+		code := codes[i]
+		redeemCode, err := s.redeemCodes.GetByCode(ctx, code)
+		if err != nil {
+			return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"code": code})
+		}
+		if redeemCode.Type != RedeemTypeBalance || redeemCode.Status != StatusUnused || !sameMoney(redeemCode.Value, input.CompensationAmount) {
+			return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"code": code})
+		}
+		assignments = append(assignments, SiteMessageCompensationCodeAssignment{
+			Recipient: recipients[i].Email,
+			Code:      code,
+			Status:    redeemCode.Status,
+		})
+	}
+	return assignments, nil
+}
+
+func normalizeCompensationCodes(input []string) []string {
+	seen := make(map[string]struct{}, len(input))
+	codes := make([]string, 0, len(input))
+	for _, rawCode := range input {
+		code := strings.TrimSpace(rawCode)
+		if code == "" {
+			continue
+		}
+		if _, ok := seen[code]; ok {
+			continue
+		}
+		seen[code] = struct{}{}
+		codes = append(codes, code)
+	}
+	return codes
+}
+
+func normalizeRecipientMode(mode string) string {
+	if strings.TrimSpace(mode) == SiteMessageRecipientModeAll {
+		return SiteMessageRecipientModeAll
+	}
+	return SiteMessageRecipientModeSelected
+}
+
+func batchAudienceLabel(mode string, count int) string {
+	if normalizeRecipientMode(mode) == SiteMessageRecipientModeAll {
+		return "全员用户"
+	}
+	return fmt.Sprintf("指定 %d 个用户", count)
+}
+
+func appendCompensationBlock(content string, amount float64, code, format string) string {
+	amountText := fmt.Sprintf("%.2f", amount)
+	if strings.TrimSpace(format) == SiteMessageCompensationFormatCompact {
+		return fmt.Sprintf("%s\n\n补偿 %s 元，兑换码：%s", content, amountText, code)
+	}
+	return fmt.Sprintf("%s\n\n补偿金额：%s 元\n兑换码：%s\n请复制兑换码前往兑换码页面使用。", content, amountText, code)
+}
+
+func sameMoney(a, b float64) bool {
+	return math.Abs(a-b) < 0.000001
 }

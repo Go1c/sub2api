@@ -55,6 +55,40 @@ func (h *SiteMessageHandler) SendToUser(c *gin.Context) {
 	response.Success(c, dto.SiteMessageFromService(message))
 }
 
+// SendCompensationBatch sends admin site messages to selected emails or all active users.
+// POST /api/v1/admin/site-messages/compensation-batches
+func (h *SiteMessageHandler) SendCompensationBatch(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not found in context")
+		return
+	}
+
+	var req dto.AdminSendCompensationBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	batch, err := h.siteMessageService.AdminSendCompensationBatch(c.Request.Context(), service.AdminSendCompensationBatchInput{
+		AdminID:             subject.UserID,
+		RecipientMode:       req.RecipientMode,
+		RecipientEmails:     req.RecipientEmails,
+		Subject:             req.Subject,
+		Content:             req.Content,
+		CompensationEnabled: req.CompensationEnabled,
+		CompensationAmount:  req.CompensationAmount,
+		CompensationCodes:   req.CompensationCodes,
+		CompensationFormat:  req.CompensationFormat,
+		SendEmail:           req.ShouldSendEmail(),
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.SiteMessageCompensationBatchFromService(batch))
+}
+
 // SearchRecipients handles admin fuzzy recipient search.
 // GET /api/v1/admin/site-messages/recipients?query=...
 func (h *SiteMessageHandler) SearchRecipients(c *gin.Context) {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
@@ -24,6 +25,10 @@ var (
 	ErrSiteMessageDailyLimitExceeded = domain.ErrSiteMessageDailyLimitExceeded
 	ErrSiteMessageInvalidSubject     = domain.ErrSiteMessageInvalidSubject
 	ErrSiteMessageContentRequired    = domain.ErrSiteMessageContentRequired
+	ErrSiteMessageInvalidRecipients  = infraerrors.BadRequest("SITE_MESSAGE_RECIPIENTS_INVALID", "site message recipients are invalid")
+	ErrSiteMessageNoRecipients       = infraerrors.BadRequest("SITE_MESSAGE_RECIPIENTS_EMPTY", "site message recipients are empty")
+	ErrSiteMessageInvalidRedeemCode  = infraerrors.BadRequest("SITE_MESSAGE_REDEEM_CODE_INVALID", "site message redeem code is invalid")
+	ErrSiteMessageRedeemCodeShortage = infraerrors.BadRequest("SITE_MESSAGE_REDEEM_CODE_SHORTAGE", "not enough site message redeem codes")
 )
 
 type SiteMessage struct {
@@ -69,8 +74,54 @@ type AdminSendSiteMessageInput struct {
 	SendEmail   bool
 }
 
+const (
+	SiteMessageRecipientModeSelected = "selected"
+	SiteMessageRecipientModeAll      = "all"
+
+	SiteMessageCompensationFormatBlock   = "block"
+	SiteMessageCompensationFormatCompact = "compact"
+)
+
+type AdminSendCompensationBatchInput struct {
+	AdminID             int64
+	RecipientMode       string
+	RecipientEmails     []string
+	Subject             string
+	Content             string
+	CompensationEnabled bool
+	CompensationAmount  float64
+	CompensationCodes   []string
+	CompensationFormat  string
+	SendEmail           bool
+}
+
+type SiteMessageCompensationCodeAssignment struct {
+	Recipient string
+	Code      string
+	Status    string
+}
+
+type SiteMessageCompensationBatch struct {
+	ID             string
+	Subject        string
+	Content        string
+	Mode           string
+	Audience       string
+	RecipientCount int
+	Amount         float64
+	CodeCount      int
+	Operator       string
+	SentAt         time.Time
+	Codes          []SiteMessageCompensationCodeAssignment
+	MessageIDs     []int64
+}
+
 type SiteMessageEmailSender interface {
 	EnqueueSiteMessage(email, subject, content string) error
+}
+
+type SiteMessageRedeemCodeReader interface {
+	GetByCode(ctx context.Context, code string) (*RedeemCode, error)
 }
 
 type SiteMessageRepository interface {

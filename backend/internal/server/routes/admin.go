@@ -277,6 +277,7 @@ func registerSiteMessageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	siteMessages := admin.Group("/site-messages")
 	{
 		siteMessages.POST("/users/:id", h.Admin.SiteMessage.SendToUser)
+		siteMessages.POST("/compensation-batches", h.Admin.SiteMessage.SendCompensationBatch)
 		siteMessages.GET("/recipients", h.Admin.SiteMessage.SearchRecipients)
 	}
 }

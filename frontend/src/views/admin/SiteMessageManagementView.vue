@@ -267,7 +267,7 @@
         <section class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
           <form
             class="rounded-lg border border-gray-100 bg-white p-5 shadow-sm dark:border-dark-700 dark:bg-dark-800/60"
-            @submit.prevent="handlePreviewSend"
+            @submit.prevent="handleSend"
           >
             <div class="mb-5 flex items-center justify-between gap-3">
               <div>
@@ -438,9 +438,9 @@
                   <Icon name="refresh" size="sm" />
                   {{ t('admin.siteMessageManagement.reset') }}
                 </button>
-                <button type="submit" class="btn btn-primary" :disabled="sendDisabled">
+                <button type="submit" class="btn btn-primary" :disabled="sendDisabled || isSending">
                   <Icon name="mail" size="sm" />
-                  {{ t('admin.siteMessageManagement.previewSend') }}
+                  {{ isSending ? t('admin.siteMessageManagement.sending') : t('admin.siteMessageManagement.previewSend') }}
                 </button>
               </div>
             </div>
@@ -541,7 +541,10 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import type { SiteMessageCompensationBatch } from '@/types'
+import { extractApiErrorMessage } from '@/utils/apiError'
 
 type ViewMode = 'history' | 'new'
 type RecipientMode = 'selected' | 'all'
@@ -587,6 +590,7 @@ const compensationCodesInput = ref('')
 const historySearch = ref('')
 const historyStatusFilter = ref<HistoryStatusFilter>('all')
 const selectedHistoryId = ref('')
+const isSending = ref(false)
 
 const historyItems = ref<CompensationHistoryItem[]>([])
 
@@ -813,11 +817,14 @@ const selectedHistoryContent = computed(() => {
 })
 
 const sendDisabled = computed(() => {
-  if (recipientMode.value === 'selected' && recipientEmails.value.length === 0) {
+  if (!messageSubject.value.trim() || !messageContent.value.trim()) {
+    return true
+  }
+  if (recipientMode.value === 'selected' && (recipientEmails.value.length === 0 || invalidRecipientCount.value > 0)) {
     return true
   }
   if (compensationEnabled.value) {
-    return compensationCodes.value.length === 0 || needsMoreCompensationCodes.value
+    return normalizedCompensationAmount.value <= 0 || compensationCodes.value.length === 0 || needsMoreCompensationCodes.value
   }
   return false
 })
@@ -876,56 +883,55 @@ function resetDraft() {
   compensationCodesInput.value = ''
 }
 
-function buildHistoryItemFromDraft(): CompensationHistoryItem {
-  const now = new Date()
-  const dateStamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('')
-  const time = `${dateStamp.slice(0, 4)}-${dateStamp.slice(4, 6)}-${dateStamp.slice(6, 8)} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  const id = `CMP-${dateStamp}-${String(historyItems.value.length + 1).padStart(3, '0')}`
-  const draftCodes = compensationEnabled.value ? compensationCodes.value : []
-  const codes = recipientMode.value === 'all'
-    ? draftCodes.slice(0, 12).map((code, index) => ({
-        recipient: t('admin.siteMessageManagement.history.allUsersBatch', { index: index + 1 }),
-        code,
-        status: 'unused' as CodeStatus,
-      }))
-    : recipientEmails.value.map((recipient, index) => ({
-        recipient,
-        code: draftCodes[index] || t('admin.siteMessageManagement.history.missingCode'),
-        status: 'unused' as CodeStatus,
-      }))
-
+function buildHistoryItemFromBatch(batch: SiteMessageCompensationBatch): CompensationHistoryItem {
   return {
-    id,
-    subject: previewSubject.value,
-    content: baseContent.value,
+    id: batch.id,
+    subject: batch.subject,
+    content: batch.content,
     status: 'sent',
-    mode: recipientMode.value,
-    audience: recipientMode.value === 'all'
-      ? t('admin.siteMessageManagement.allUsers')
-      : t('admin.siteMessageManagement.selectedUsersCount', { count: recipientEmails.value.length }),
-    recipientCount: recipientMode.value === 'all' ? draftCodes.length : recipientEmails.value.length,
-    amount: normalizedCompensationAmount.value,
-    codeCount: draftCodes.length,
-    operator: 'admin@lumioapi.com',
-    sentAt: time,
-    codes,
+    mode: batch.mode,
+    audience: batch.audience,
+    recipientCount: batch.recipient_count,
+    amount: batch.amount,
+    codeCount: batch.code_count,
+    operator: batch.operator,
+    sentAt: formatDisplayTime(batch.sent_at),
+    codes: batch.codes.map((code) => ({
+      recipient: code.recipient,
+      code: code.code,
+      status: code.status as CodeStatus,
+    })),
   }
 }
 
-function handlePreviewSend() {
+async function handleSend() {
   if (sendDisabled.value) {
     appStore.showError(t('admin.siteMessageManagement.previewBlocked'))
     return
   }
-  const item = buildHistoryItemFromDraft()
-  historyItems.value.unshift(item)
-  selectedHistoryId.value = item.id
-  activeView.value = 'history'
-  appStore.showSuccess(t('admin.siteMessageManagement.history.addedToast'))
+  isSending.value = true
+  try {
+    const batch = await adminAPI.siteMessages.sendCompensationBatch({
+      recipient_mode: recipientMode.value,
+      recipient_emails: recipientMode.value === 'selected' ? recipientEmails.value : [],
+      subject: messageSubject.value.trim(),
+      content: messageContent.value.trim(),
+      compensation_enabled: compensationEnabled.value,
+      compensation_amount: compensationEnabled.value ? normalizedCompensationAmount.value : 0,
+      compensation_codes: compensationEnabled.value ? compensationCodes.value : [],
+      compensation_format: compensationFormat.value,
+      send_email: false,
+    })
+    const item = buildHistoryItemFromBatch(batch)
+    historyItems.value.unshift(item)
+    selectedHistoryId.value = item.id
+    activeView.value = 'history'
+    appStore.showSuccess(t('admin.siteMessageManagement.history.addedToast'))
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.siteMessageManagement.sendFailed')))
+  } finally {
+    isSending.value = false
+  }
 }
 
 function loadHistoryAsDraft() {
@@ -942,10 +948,21 @@ function loadHistoryAsDraft() {
   compensationFormat.value = 'block'
   compensationCodesInput.value = item.codes
     .map((code) => code.code)
-    .filter((code) => /^[a-f0-9]{32}$/i.test(code))
+    .filter(Boolean)
     .join('\n')
   activeView.value = 'new'
   appStore.showInfo(t('admin.siteMessageManagement.history.loadedAsDraftToast'))
+}
+
+function formatDisplayTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return [
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+    `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
+  ].join(' ')
 }
 
 async function copySelectedHistory() {
