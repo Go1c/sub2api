@@ -262,17 +262,33 @@
                   </div>
                 </div>
 
-                <div class="mt-4 flex flex-wrap gap-2">
-                  <span
-                    v-for="group in model.groups"
-                    :key="group.id"
-                    class="inline-flex max-w-full items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300"
-                  >
-                    <span class="truncate">{{ group.name }}</span>
-                    <span v-if="group.rateLabel" class="rounded-full bg-white px-1.5 py-0.5 font-mono text-[11px] text-gray-500 dark:bg-dark-800 dark:text-dark-400">
-                      {{ group.rateLabel }}
+                <div class="mt-4 space-y-2 text-xs">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      v-if="tokenDiscountGroups(model).length > 0"
+                      class="shrink-0 font-semibold text-gray-500 dark:text-dark-300"
+                    >
+                      {{ labels.tokenDiscountTitle }}
                     </span>
-                  </span>
+                    <span
+                      v-for="group in model.groups"
+                      :key="group.id"
+                      class="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 font-semibold text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300"
+                    >
+                      <span class="min-w-0 max-w-full truncate">{{ group.name }}</span>
+                      <span v-if="isTokenBilling(model) && group.rateLabel" class="rounded-full bg-blue-600 px-2 py-0.5 font-mono text-[11px] font-bold text-white dark:bg-blue-500">
+                        {{ group.rateLabel }}x
+                      </span>
+                    </span>
+                  </div>
+                  <div v-if="tokenDiscountGroups(model).length > 0" class="flex flex-wrap items-center gap-2">
+                    <span class="shrink-0 font-semibold text-gray-500 dark:text-dark-300">
+                      {{ labels.rechargeRateTitle }}
+                    </span>
+                    <span class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 font-semibold text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300">
+                      {{ labels.rechargeRateValue }}
+                    </span>
+                  </div>
                 </div>
               </article>
             </div>
@@ -313,9 +329,12 @@
                         <span
                           v-for="group in model.groups"
                           :key="group.id"
-                          class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-dark-800 dark:text-dark-300"
+                          class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-dark-800 dark:text-dark-300"
                         >
-                          {{ group.name }}
+                          <span>{{ group.name }}</span>
+                          <span v-if="model.billingMode === BILLING_MODE_TOKEN && group.rateLabel" class="font-mono font-semibold text-blue-600 dark:text-blue-300">
+                            {{ group.rateLabel }}x
+                          </span>
                         </span>
                       </div>
                     </td>
@@ -449,16 +468,19 @@ const labels = computed(() => {
       console: '控制台',
       switchToLight: '切换到浅色模式',
       switchToDark: '切换到深色模式',
-      inputPrice: '输入价格',
-      outputPrice: '输出价格',
-      cacheWritePrice: '缓存创建',
-      cacheReadPrice: '缓存读取',
-      imageOutputPrice: '图片输出',
-      perRequestPrice: '请求价格',
+      inputPrice: '输入价格（官方价）',
+      outputPrice: '输出价格（官方价）',
+      cacheWritePrice: '缓存创建（官方价）',
+      cacheReadPrice: '缓存读取（官方价）',
+      imageOutputPrice: '图片输出（官方价）',
+      perRequestPrice: '请求价格（官方价）',
       noPricing: '暂无定价',
       unitPerMillion: '/ 1M Tokens',
       unitPerRequest: '/ 次',
       unitPerImage: '/ 张',
+      tokenDiscountTitle: '折扣倍率',
+      rechargeRateTitle: '充值倍率',
+      rechargeRateValue: '1积分 = 1美元',
     }
   }
 
@@ -496,16 +518,19 @@ const labels = computed(() => {
     console: 'Console',
     switchToLight: 'Switch to light mode',
     switchToDark: 'Switch to dark mode',
-    inputPrice: 'Input',
-    outputPrice: 'Output',
-    cacheWritePrice: 'Cache write',
-    cacheReadPrice: 'Cache read',
-    imageOutputPrice: 'Image output',
-    perRequestPrice: 'Request',
+    inputPrice: 'Input (official)',
+    outputPrice: 'Output (official)',
+    cacheWritePrice: 'Cache write (official)',
+    cacheReadPrice: 'Cache read (official)',
+    imageOutputPrice: 'Image output (official)',
+    perRequestPrice: 'Request (official)',
     noPricing: 'No pricing',
     unitPerMillion: '/ 1M Tokens',
     unitPerRequest: '/ request',
     unitPerImage: '/ image',
+    tokenDiscountTitle: 'Discount',
+    rechargeRateTitle: 'Recharge rate',
+    rechargeRateValue: '1 credit = $1',
   }
 })
 
@@ -592,7 +617,7 @@ function toMarketGroup(group: ApiModelMarketGroup): MarketGroup {
     name: group.name,
     platform: group.platform,
     rateMultiplier: rate,
-    rateLabel: rate == null ? '' : `${formatCompactNumber(rate)}x`,
+    rateLabel: rate == null ? '' : formatCompactNumber(rate),
     exclusive: Boolean(group.is_exclusive),
   }
 }
@@ -629,6 +654,15 @@ function billingModeLabel(mode: MarketModel['billingMode']) {
     default:
       return labels.value.unknownBilling
   }
+}
+
+function isTokenBilling(model: MarketModel) {
+  return model.billingMode === BILLING_MODE_TOKEN
+}
+
+function tokenDiscountGroups(model: MarketModel) {
+  if (!isTokenBilling(model)) return []
+  return model.groups.filter((group) => group.rateLabel)
 }
 
 function priceLines(model: MarketModel) {
@@ -686,6 +720,15 @@ function imageTierPriceLines(pricing: ModelMarketPricing) {
 }
 
 async function loadModelMarket() {
+  if (shouldUseMockMarket()) {
+    modelMarketEnabled.value = true
+    marketTitle.value = '模型广场'
+    marketDescription.value = '本地预览数据：价格展示官方价，按量计费模型展示分组折扣倍率。'
+    liveModels.value = mockModelMarketModels()
+    loading.value = false
+    return
+  }
+
   loading.value = true
   try {
     const payload = await modelMarketAPI.getPublicModelMarket()
@@ -699,6 +742,102 @@ async function loadModelMarket() {
   } finally {
     loading.value = false
   }
+}
+
+function shouldUseMockMarket() {
+  return import.meta.env.DEV && new URLSearchParams(window.location.search).get('mock') === '1'
+}
+
+function mockModelMarketModels(): ApiModelMarketModel[] {
+  const openaiDemoGroup: ApiModelMarketGroup = {
+    id: 1,
+    name: '【自建】Gpt-Pro20x支持Image2',
+    platform: 'openai',
+    subscription_type: 'standard',
+    rate_multiplier: 0.35,
+    is_exclusive: false,
+  }
+
+  return [
+    {
+      key: 'openai:gpt-5.3-codex',
+      name: 'gpt-5.3-codex',
+      platform: 'openai',
+      billing_mode: BILLING_MODE_TOKEN,
+      pricing: {
+        billing_mode: BILLING_MODE_TOKEN,
+        input_price: 0.00000175,
+        output_price: 0.000014,
+        cache_write_price: null,
+        cache_read_price: 0.000000175,
+        image_output_price: null,
+        per_request_price: null,
+        intervals: [],
+      },
+      groups: [openaiDemoGroup],
+      channels: ['OpenAI'],
+      sort_order: 0,
+    },
+    {
+      key: 'openai:gpt-5.4',
+      name: 'gpt-5.4',
+      platform: 'openai',
+      billing_mode: BILLING_MODE_TOKEN,
+      pricing: {
+        billing_mode: BILLING_MODE_TOKEN,
+        input_price: 0.0000025,
+        output_price: 0.000015,
+        cache_write_price: null,
+        cache_read_price: 0.00000025,
+        image_output_price: null,
+        per_request_price: null,
+        intervals: [],
+      },
+      groups: [openaiDemoGroup],
+      channels: ['OpenAI'],
+      sort_order: 1,
+    },
+    {
+      key: 'openai:gpt-image-2',
+      name: 'gpt-image-2',
+      platform: 'openai',
+      billing_mode: BILLING_MODE_IMAGE,
+      pricing: {
+        billing_mode: BILLING_MODE_IMAGE,
+        input_price: null,
+        output_price: null,
+        cache_write_price: null,
+        cache_read_price: null,
+        image_output_price: null,
+        per_request_price: null,
+        intervals: [
+          {
+            min_tokens: 0,
+            max_tokens: null,
+            tier_label: '1K',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            per_request_price: 0.05,
+          },
+          {
+            min_tokens: 0,
+            max_tokens: null,
+            tier_label: '4K',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            per_request_price: 0.15,
+          },
+        ],
+      },
+      groups: [openaiDemoGroup],
+      channels: ['OpenAI'],
+      sort_order: 2,
+    },
+  ]
 }
 
 function resetFilters() {
