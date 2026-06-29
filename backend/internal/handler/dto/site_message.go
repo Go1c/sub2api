@@ -44,6 +44,43 @@ type AdminSendSiteMessageRequest struct {
 	SendEmail *bool  `json:"send_email"`
 }
 
+type AdminSendCompensationBatchRequest struct {
+	RecipientMode       string   `json:"recipient_mode" binding:"required"`
+	RecipientEmails     []string `json:"recipient_emails"`
+	Subject             string   `json:"subject" binding:"required"`
+	Content             string   `json:"content" binding:"required"`
+	CompensationEnabled bool     `json:"compensation_enabled"`
+	CompensationAmount  float64  `json:"compensation_amount"`
+	CompensationCodes   []string `json:"compensation_codes"`
+	CompensationFormat  string   `json:"compensation_format"`
+	SendEmail           *bool    `json:"send_email"`
+}
+
+func (r AdminSendCompensationBatchRequest) ShouldSendEmail() bool {
+	return r.SendEmail != nil && *r.SendEmail
+}
+
+type SiteMessageCompensationCodeAssignment struct {
+	Recipient string `json:"recipient"`
+	Code      string `json:"code"`
+	Status    string `json:"status"`
+}
+
+type SiteMessageCompensationBatch struct {
+	ID             string                                  `json:"id"`
+	Subject        string                                  `json:"subject"`
+	Content        string                                  `json:"content"`
+	Mode           string                                  `json:"mode"`
+	Audience       string                                  `json:"audience"`
+	RecipientCount int                                     `json:"recipient_count"`
+	Amount         float64                                 `json:"amount"`
+	CodeCount      int                                     `json:"code_count"`
+	Operator       string                                  `json:"operator"`
+	SentAt         time.Time                               `json:"sent_at"`
+	Codes          []SiteMessageCompensationCodeAssignment `json:"codes"`
+	MessageIDs     []int64                                 `json:"message_ids"`
+}
+
 func (r AdminSendSiteMessageRequest) ShouldSendEmail() bool {
 	return r.SendEmail == nil || *r.SendEmail
 }
@@ -107,6 +144,38 @@ func SiteMessageRecipientsFromService(items []service.SiteMessageRecipient) []Si
 		if converted := SiteMessageRecipientFromService(&items[i]); converted != nil {
 			out = append(out, *converted)
 		}
+	}
+	return out
+}
+
+func SiteMessageCompensationBatchFromService(batch *service.SiteMessageCompensationBatch) *SiteMessageCompensationBatch {
+	if batch == nil {
+		return nil
+	}
+	return &SiteMessageCompensationBatch{
+		ID:             batch.ID,
+		Subject:        batch.Subject,
+		Content:        batch.Content,
+		Mode:           batch.Mode,
+		Audience:       batch.Audience,
+		RecipientCount: batch.RecipientCount,
+		Amount:         batch.Amount,
+		CodeCount:      batch.CodeCount,
+		Operator:       batch.Operator,
+		SentAt:         batch.SentAt,
+		Codes:          SiteMessageCompensationCodeAssignmentsFromService(batch.Codes),
+		MessageIDs:     append([]int64(nil), batch.MessageIDs...),
+	}
+}
+
+func SiteMessageCompensationCodeAssignmentsFromService(items []service.SiteMessageCompensationCodeAssignment) []SiteMessageCompensationCodeAssignment {
+	out := make([]SiteMessageCompensationCodeAssignment, 0, len(items))
+	for i := range items {
+		out = append(out, SiteMessageCompensationCodeAssignment{
+			Recipient: items[i].Recipient,
+			Code:      items[i].Code,
+			Status:    items[i].Status,
+		})
 	}
 	return out
 }

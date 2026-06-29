@@ -454,6 +454,39 @@ export interface AdminSendSiteMessageRequest {
   send_email?: boolean
 }
 
+export interface AdminSendCompensationBatchRequest {
+  recipient_mode: 'selected' | 'all'
+  recipient_emails?: string[]
+  subject: string
+  content: string
+  compensation_enabled: boolean
+  compensation_amount?: number
+  compensation_codes?: string[]
+  compensation_format?: 'block' | 'compact'
+  send_email?: boolean
+}
+
+export interface SiteMessageCompensationCodeAssignment {
+  recipient: string
+  code: string
+  status: 'unused' | 'used' | 'reserved' | 'recorded'
+}
+
+export interface SiteMessageCompensationBatch {
+  id: string
+  subject: string
+  content: string
+  mode: 'selected' | 'all'
+  audience: string
+  recipient_count: number
+  amount: number
+  code_count: number
+  operator: string
+  sent_at: string
+  codes: SiteMessageCompensationCodeAssignment[]
+  message_ids: number[]
+}
+
 // ==================== Lottery Types ====================
 
 export interface LotterySegment {
