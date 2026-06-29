@@ -84,7 +84,7 @@ LIMIT $1 OFFSET $2`,
 	if err != nil {
 		return nil, nil, fmt.Errorf("list site message compensation batches: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := make([]service.SiteMessageCompensationBatch, 0)
 	for rows.Next() {
