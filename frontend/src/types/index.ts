@@ -472,6 +472,16 @@ export interface SiteMessageCompensationCodeAssignment {
   status: 'unused' | 'used' | 'reserved' | 'recorded'
 }
 
+export interface SiteMessageCompensationBatchResult {
+  recipient: string
+  user_id?: number
+  code?: string
+  message_id?: number
+  status: 'sent' | 'failed'
+  error_reason?: string
+  error?: string
+}
+
 export interface SiteMessageCompensationBatch {
   id: string
   subject: string
@@ -479,11 +489,14 @@ export interface SiteMessageCompensationBatch {
   mode: 'selected' | 'all'
   audience: string
   recipient_count: number
+  success_count: number
+  failed_count: number
   amount: number
   code_count: number
   operator: string
   sent_at: string
   codes: SiteMessageCompensationCodeAssignment[]
+  results: SiteMessageCompensationBatchResult[]
   message_ids: number[]
 }
 

@@ -66,6 +66,16 @@ type SiteMessageCompensationCodeAssignment struct {
 	Status    string `json:"status"`
 }
 
+type SiteMessageCompensationBatchResult struct {
+	Recipient   string `json:"recipient"`
+	UserID      int64  `json:"user_id,omitempty"`
+	Code        string `json:"code,omitempty"`
+	MessageID   int64  `json:"message_id,omitempty"`
+	Status      string `json:"status"`
+	ErrorReason string `json:"error_reason,omitempty"`
+	Error       string `json:"error,omitempty"`
+}
+
 type SiteMessageCompensationBatch struct {
 	ID             string                                  `json:"id"`
 	Subject        string                                  `json:"subject"`
@@ -73,11 +83,14 @@ type SiteMessageCompensationBatch struct {
 	Mode           string                                  `json:"mode"`
 	Audience       string                                  `json:"audience"`
 	RecipientCount int                                     `json:"recipient_count"`
+	SuccessCount   int                                     `json:"success_count"`
+	FailedCount    int                                     `json:"failed_count"`
 	Amount         float64                                 `json:"amount"`
 	CodeCount      int                                     `json:"code_count"`
 	Operator       string                                  `json:"operator"`
 	SentAt         time.Time                               `json:"sent_at"`
 	Codes          []SiteMessageCompensationCodeAssignment `json:"codes"`
+	Results        []SiteMessageCompensationBatchResult    `json:"results"`
 	MessageIDs     []int64                                 `json:"message_ids"`
 }
 
@@ -159,11 +172,14 @@ func SiteMessageCompensationBatchFromService(batch *service.SiteMessageCompensat
 		Mode:           batch.Mode,
 		Audience:       batch.Audience,
 		RecipientCount: batch.RecipientCount,
+		SuccessCount:   batch.SuccessCount,
+		FailedCount:    batch.FailedCount,
 		Amount:         batch.Amount,
 		CodeCount:      batch.CodeCount,
 		Operator:       batch.Operator,
 		SentAt:         batch.SentAt,
 		Codes:          SiteMessageCompensationCodeAssignmentsFromService(batch.Codes),
+		Results:        SiteMessageCompensationBatchResultsFromService(batch.Results),
 		MessageIDs:     append([]int64(nil), batch.MessageIDs...),
 	}
 }
@@ -175,6 +191,22 @@ func SiteMessageCompensationCodeAssignmentsFromService(items []service.SiteMessa
 			Recipient: items[i].Recipient,
 			Code:      items[i].Code,
 			Status:    items[i].Status,
+		})
+	}
+	return out
+}
+
+func SiteMessageCompensationBatchResultsFromService(items []service.SiteMessageCompensationBatchResult) []SiteMessageCompensationBatchResult {
+	out := make([]SiteMessageCompensationBatchResult, 0, len(items))
+	for i := range items {
+		out = append(out, SiteMessageCompensationBatchResult{
+			Recipient:   items[i].Recipient,
+			UserID:      items[i].UserID,
+			Code:        items[i].Code,
+			MessageID:   items[i].MessageID,
+			Status:      items[i].Status,
+			ErrorReason: items[i].ErrorReason,
+			Error:       items[i].Error,
 		})
 	}
 	return out

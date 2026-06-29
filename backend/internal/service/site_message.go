@@ -80,6 +80,9 @@ const (
 
 	SiteMessageCompensationFormatBlock   = "block"
 	SiteMessageCompensationFormatCompact = "compact"
+
+	SiteMessageBatchResultSent   = "sent"
+	SiteMessageBatchResultFailed = "failed"
 )
 
 type AdminSendCompensationBatchInput struct {
@@ -101,6 +104,16 @@ type SiteMessageCompensationCodeAssignment struct {
 	Status    string
 }
 
+type SiteMessageCompensationBatchResult struct {
+	Recipient   string
+	UserID      int64
+	Code        string
+	MessageID   int64
+	Status      string
+	ErrorReason string
+	Error       string
+}
+
 type SiteMessageCompensationBatch struct {
 	ID             string
 	Subject        string
@@ -108,11 +121,14 @@ type SiteMessageCompensationBatch struct {
 	Mode           string
 	Audience       string
 	RecipientCount int
+	SuccessCount   int
+	FailedCount    int
 	Amount         float64
 	CodeCount      int
 	Operator       string
 	SentAt         time.Time
 	Codes          []SiteMessageCompensationCodeAssignment
+	Results        []SiteMessageCompensationBatchResult
 	MessageIDs     []int64
 }
 

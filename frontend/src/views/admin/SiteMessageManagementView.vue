@@ -113,10 +113,11 @@
                 </div>
                 <div class="mt-3 flex flex-wrap gap-2 text-xs font-medium text-gray-500 dark:text-dark-400">
                   <span>{{ item.sentAt }}</span>
-                  <span>{{ item.audience }}</span>
-                  <span>{{ formatMoney(item.amount) }} / {{ t('admin.siteMessageManagement.history.codesCount', { count: item.codeCount }) }}</span>
-                </div>
-              </button>
+                    <span>{{ item.audience }}</span>
+                    <span>{{ t('admin.siteMessageManagement.history.resultSummary', { success: item.successCount, failed: item.failedCount }) }}</span>
+                    <span>{{ formatMoney(item.amount) }} / {{ t('admin.siteMessageManagement.history.codesCount', { count: item.codeCount }) }}</span>
+                  </div>
+                </button>
 
               <div
                 v-if="filteredHistoryItems.length === 0"
@@ -167,10 +168,10 @@
               </div>
               <div class="rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900/40">
                 <p class="text-xs font-medium text-gray-500 dark:text-dark-400">
-                  {{ t('admin.siteMessageManagement.history.codes') }}
+                  {{ t('admin.siteMessageManagement.history.sentResult') }}
                 </p>
                 <p class="mt-1 truncate text-sm font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.siteMessageManagement.history.codesCount', { count: selectedHistory.codeCount }) }}
+                  {{ t('admin.siteMessageManagement.history.resultSummary', { success: selectedHistory.successCount, failed: selectedHistory.failedCount }) }}
                 </p>
               </div>
             </div>
@@ -223,6 +224,31 @@
                 class="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-600 dark:text-dark-400"
               >
                 {{ t('admin.siteMessageManagement.history.noCodes') }}
+              </div>
+            </div>
+
+            <div class="mt-5">
+              <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.siteMessageManagement.history.failures') }}
+              </p>
+              <div v-if="selectedHistoryFailures.length > 0" class="max-h-56 space-y-2 overflow-auto pr-1">
+                <div
+                  v-for="result in selectedHistoryFailures"
+                  :key="`${selectedHistory.id}-${result.recipient}-${result.code || result.errorReason}`"
+                  class="grid grid-cols-1 gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs dark:border-red-900/40 dark:bg-red-900/10 sm:grid-cols-[minmax(0,1fr)_minmax(160px,auto)_auto] sm:items-center"
+                >
+                  <span class="truncate font-medium text-red-800 dark:text-red-200">{{ result.recipient }}</span>
+                  <span class="truncate font-mono text-red-700 dark:text-red-300">{{ result.code || '-' }}</span>
+                  <span class="badge badge-danger justify-self-start">
+                    {{ failureReasonLabel(result.errorReason, result.error) }}
+                  </span>
+                </div>
+              </div>
+              <div
+                v-else
+                class="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-600 dark:text-dark-400"
+              >
+                {{ t('admin.siteMessageManagement.history.noFailures') }}
               </div>
             </div>
 
@@ -549,8 +575,9 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 type ViewMode = 'history' | 'new'
 type RecipientMode = 'selected' | 'all'
 type CompensationFormat = 'block' | 'compact'
-type CompensationStatus = 'sent' | 'sending' | 'cancelled'
+type CompensationStatus = 'sent' | 'partial' | 'failed' | 'sending' | 'cancelled'
 type CodeStatus = 'unused' | 'used' | 'reserved' | 'recorded'
+type BatchResultStatus = 'sent' | 'failed'
 type HistoryStatusFilter = 'all' | CompensationStatus
 type IconName = 'users' | 'mail' | 'gift' | 'globe' | 'inbox' | 'document' | 'dollar' | 'copy'
 
@@ -568,11 +595,23 @@ interface CompensationHistoryItem {
   mode: RecipientMode
   audience: string
   recipientCount: number
+  successCount: number
+  failedCount: number
   amount: number
   codeCount: number
   operator: string
   sentAt: string
   codes: CompensationCode[]
+  results: CompensationBatchResult[]
+}
+
+interface CompensationBatchResult {
+  recipient: string
+  code?: string
+  messageId?: number
+  status: BatchResultStatus
+  errorReason?: string
+  error?: string
 }
 
 const { t } = useI18n()
@@ -599,7 +638,7 @@ const viewTabs = computed<Array<{ value: ViewMode; label: string }>>(() => [
   { value: 'new', label: t('admin.siteMessageManagement.tabs.new') },
 ])
 
-const compensationStatuses: CompensationStatus[] = ['sent', 'sending', 'cancelled']
+const compensationStatuses: CompensationStatus[] = ['sent', 'partial', 'failed', 'sending', 'cancelled']
 
 const recipientModes = computed<Array<{ value: RecipientMode; label: string; description: string; icon: IconName }>>(() => [
   {
@@ -641,12 +680,25 @@ const recipientEmails = computed(() => {
   return emails
 })
 
+const recipientTargets = computed(() => {
+  const seen = new Set<string>()
+  const targets: string[] = []
+  for (const token of recipientTokens.value) {
+    const normalized = token.toLowerCase()
+    if (!seen.has(normalized)) {
+      seen.add(normalized)
+      targets.push(normalized)
+    }
+  }
+  return targets
+})
+
 const invalidRecipientCount = computed(() =>
   recipientTokens.value.filter((token) => !isEmail(token.toLowerCase())).length,
 )
 
-const visibleRecipientEmails = computed(() => recipientEmails.value.slice(0, 8))
-const remainingRecipientCount = computed(() => Math.max(recipientEmails.value.length - visibleRecipientEmails.value.length, 0))
+const visibleRecipientEmails = computed(() => recipientTargets.value.slice(0, 8))
+const remainingRecipientCount = computed(() => Math.max(recipientTargets.value.length - visibleRecipientEmails.value.length, 0))
 
 const normalizedCompensationAmount = computed(() => {
   const amount = Number(compensationAmount.value)
@@ -669,7 +721,7 @@ const compensationCodes = computed(() => {
 })
 
 const requiredCompensationCodeCount = computed(() =>
-  recipientMode.value === 'selected' ? recipientEmails.value.length : 0,
+  recipientMode.value === 'selected' ? recipientTargets.value.length : 0,
 )
 
 const compensationCodeShortage = computed(() =>
@@ -716,16 +768,16 @@ const previewRecipientLabel = computed(() => {
   if (recipientMode.value === 'all') {
     return t('admin.siteMessageManagement.allUsers')
   }
-  if (recipientEmails.value.length === 1) {
-    return recipientEmails.value[0]
+  if (recipientTargets.value.length === 1) {
+    return recipientTargets.value[0]
   }
-  return t('admin.siteMessageManagement.selectedUsersCount', { count: recipientEmails.value.length })
+  return t('admin.siteMessageManagement.selectedUsersCount', { count: recipientTargets.value.length })
 })
 
 const recipientCountLabel = computed(() =>
   recipientMode.value === 'all'
     ? t('admin.siteMessageManagement.allUsers')
-    : t('admin.siteMessageManagement.countUsers', { count: recipientEmails.value.length }),
+    : t('admin.siteMessageManagement.countUsers', { count: recipientTargets.value.length }),
 )
 
 const compensationSummary = computed(() =>
@@ -792,6 +844,7 @@ const filteredHistoryItems = computed(() => {
       item.operator,
       item.audience,
       ...item.codes.map((code) => `${code.recipient} ${code.code}`),
+      ...item.results.map((result) => `${result.recipient} ${result.code || ''} ${result.errorReason || ''} ${result.error || ''}`),
     ].join(' ').toLowerCase()
     return statusMatched && (!keyword || searchable.includes(keyword))
   })
@@ -816,15 +869,19 @@ const selectedHistoryContent = computed(() => {
   return [item.content, compensation].filter(Boolean).join('\n\n')
 })
 
+const selectedHistoryFailures = computed(() =>
+  selectedHistory.value?.results.filter((result) => result.status === 'failed') ?? [],
+)
+
 const sendDisabled = computed(() => {
   if (!messageSubject.value.trim() || !messageContent.value.trim()) {
     return true
   }
-  if (recipientMode.value === 'selected' && (recipientEmails.value.length === 0 || invalidRecipientCount.value > 0)) {
+  if (recipientMode.value === 'selected' && recipientTargets.value.length === 0) {
     return true
   }
   if (compensationEnabled.value) {
-    return normalizedCompensationAmount.value <= 0 || compensationCodes.value.length === 0 || needsMoreCompensationCodes.value
+    return normalizedCompensationAmount.value <= 0
   }
   return false
 })
@@ -858,6 +915,7 @@ function statusLabel(status: CompensationStatus): string {
 
 function statusBadgeClass(status: CompensationStatus): string {
   if (status === 'sent') return 'badge-success'
+  if (status === 'partial') return 'badge-warning'
   if (status === 'sending') return 'badge-warning'
   return 'badge-danger'
 }
@@ -870,6 +928,19 @@ function historyModeLabel(mode: RecipientMode): string {
   return mode === 'all'
     ? t('admin.siteMessageManagement.mode.all')
     : t('admin.siteMessageManagement.mode.selected')
+}
+
+function batchStatus(batch: SiteMessageCompensationBatch): CompensationStatus {
+  if (batch.failed_count > 0 && batch.success_count > 0) return 'partial'
+  if (batch.failed_count > 0) return 'failed'
+  return 'sent'
+}
+
+function failureReasonLabel(reason?: string, fallback?: string): string {
+  if (!reason) return fallback || t('admin.siteMessageManagement.history.failureReason.unknown')
+  const key = `admin.siteMessageManagement.history.failureReason.${reason}`
+  const translated = t(key)
+  return translated === key ? (fallback || reason) : translated
 }
 
 function resetDraft() {
@@ -888,10 +959,12 @@ function buildHistoryItemFromBatch(batch: SiteMessageCompensationBatch): Compens
     id: batch.id,
     subject: batch.subject,
     content: batch.content,
-    status: 'sent',
+    status: batchStatus(batch),
     mode: batch.mode,
     audience: batch.audience,
     recipientCount: batch.recipient_count,
+    successCount: batch.success_count,
+    failedCount: batch.failed_count,
     amount: batch.amount,
     codeCount: batch.code_count,
     operator: batch.operator,
@@ -900,6 +973,14 @@ function buildHistoryItemFromBatch(batch: SiteMessageCompensationBatch): Compens
       recipient: code.recipient,
       code: code.code,
       status: code.status as CodeStatus,
+    })),
+    results: batch.results.map((result) => ({
+      recipient: result.recipient,
+      code: result.code,
+      messageId: result.message_id,
+      status: result.status,
+      errorReason: result.error_reason,
+      error: result.error,
     })),
   }
 }
@@ -913,7 +994,7 @@ async function handleSend() {
   try {
     const batch = await adminAPI.siteMessages.sendCompensationBatch({
       recipient_mode: recipientMode.value,
-      recipient_emails: recipientMode.value === 'selected' ? recipientEmails.value : [],
+      recipient_emails: recipientMode.value === 'selected' ? recipientTargets.value : [],
       subject: messageSubject.value.trim(),
       content: messageContent.value.trim(),
       compensation_enabled: compensationEnabled.value,
@@ -926,7 +1007,15 @@ async function handleSend() {
     historyItems.value.unshift(item)
     selectedHistoryId.value = item.id
     activeView.value = 'history'
-    appStore.showSuccess(t('admin.siteMessageManagement.history.addedToast'))
+    const toastMessage = t('admin.siteMessageManagement.history.completedToast', {
+      success: batch.success_count,
+      failed: batch.failed_count,
+    })
+    if (batch.failed_count > 0) {
+      appStore.showWarning(toastMessage, 6000)
+    } else {
+      appStore.showSuccess(toastMessage)
+    }
   } catch (error: unknown) {
     appStore.showError(extractApiErrorMessage(error, t('admin.siteMessageManagement.sendFailed')))
   } finally {
@@ -940,7 +1029,7 @@ function loadHistoryAsDraft() {
   recipientMode.value = item.mode
   recipientInput.value = item.mode === 'all'
     ? ''
-    : item.codes.map((code) => code.recipient).filter(isEmail).join('\n')
+    : item.results.map((result) => result.recipient).filter(Boolean).join('\n')
   messageSubject.value = item.subject
   messageContent.value = item.content
   compensationEnabled.value = item.codeCount > 0

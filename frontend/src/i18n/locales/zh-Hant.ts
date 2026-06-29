@@ -4597,15 +4597,20 @@ export default {
         audience: '發送範圍',
         amount: '補償額度',
         codes: '兌換碼',
+        sentResult: '發送結果',
+        resultSummary: '成功 {success}，失敗 {failed}',
         codesCount: '{count} 個碼',
         batchesCount: '{count} 批',
         operator: '操作人：{operator}',
         sentAt: '發送時間：{time}',
         codeAssignments: '兌換碼分配',
         noCodes: '該批次沒有佔用兌換碼',
+        failures: '失敗記錄',
+        noFailures: '該批次沒有失敗記錄',
         copyContent: '複製內容',
         resend: '按此再發',
         addedToast: '站內信已發送，並已寫入歷史補償',
+        completedToast: '批量發送完成：成功 {success}，失敗 {failed}',
         loadedAsDraftToast: '已按歷史補償載入草稿',
         copiedToast: '已複製補償內容',
         copyFallbackToast: '當前瀏覽器不支援自動複製，請手動選擇內容',
@@ -4618,6 +4623,8 @@ export default {
         },
         status: {
           sent: '已發送',
+          partial: '部分失敗',
+          failed: '發送失敗',
           sending: '發送中',
           cancelled: '已取消'
         },
@@ -4626,6 +4633,16 @@ export default {
           used: '已兌換',
           reserved: '已預留',
           recorded: '記錄完整'
+        },
+        failureReason: {
+          SITE_MESSAGE_RECIPIENTS_INVALID: '郵箱格式錯誤',
+          SITE_MESSAGE_RECIPIENT_NOT_FOUND: '收件人不存在',
+          SITE_MESSAGE_RECIPIENT_LOOKUP_FAILED: '收件人查詢失敗',
+          SITE_MESSAGE_REDEEM_CODE_SHORTAGE: '缺少兌換碼',
+          SITE_MESSAGE_REDEEM_CODE_INVALID: '兌換碼無效',
+          SITE_MESSAGE_SEND_FAILED: '站內信寫入失敗',
+          SITE_MESSAGE_EMAIL_ENQUEUE_FAILED: '郵件通知入隊失敗',
+          unknown: '發送失敗'
         }
       }
     },

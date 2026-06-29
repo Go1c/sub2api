@@ -106,50 +106,97 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 		return nil, err
 	}
 
-	recipients, err := s.resolveBatchRecipients(ctx, input)
+	targets, err := s.batchRecipientTargets(ctx, input)
 	if err != nil {
 		return nil, err
 	}
-	assignments, err := s.validateCompensationAssignments(ctx, recipients, input)
-	if err != nil {
-		return nil, err
-	}
+	codes := normalizeCompensationCodes(input.CompensationCodes)
 
 	sentAt := s.now()
-	messages := make([]int64, 0, len(recipients))
-	for i := range recipients {
-		messageContent := content
+	messages := make([]int64, 0, len(targets))
+	assignments := make([]SiteMessageCompensationCodeAssignment, 0, len(targets))
+	results := make([]SiteMessageCompensationBatchResult, 0, len(targets))
+	for i, target := range targets {
+		result := SiteMessageCompensationBatchResult{
+			Recipient: target.Email,
+			Status:    SiteMessageBatchResultFailed,
+		}
+
+		recipient, resultErr := s.resolveBatchTarget(ctx, target)
+		if resultErr != nil {
+			results = append(results, *resultErr)
+			continue
+		}
+		result.Recipient = recipient.Email
+		result.UserID = recipient.ID
+
+		code := ""
 		if input.CompensationEnabled {
-			messageContent = appendCompensationBlock(messageContent, input.CompensationAmount, assignments[i].Code, input.CompensationFormat)
-		}
-		message, err := s.create(ctx, input.AdminID, recipients[i].ID, nil, subject, messageContent)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, message.ID)
-		if input.SendEmail && s.emailSender != nil {
-			if err := s.emailSender.EnqueueSiteMessage(recipients[i].Email, message.Subject, message.Content); err != nil {
-				return nil, fmt.Errorf("enqueue site message email: %w", err)
+			var codeErr *SiteMessageCompensationBatchResult
+			code, codeErr = s.validateCompensationCodeForTarget(ctx, recipient.Email, i, codes, input.CompensationAmount)
+			result.Code = code
+			if codeErr != nil {
+				codeErr.UserID = recipient.ID
+				results = append(results, *codeErr)
+				continue
 			}
 		}
+
+		messageContent := content
+		if input.CompensationEnabled {
+			messageContent = appendCompensationBlock(messageContent, input.CompensationAmount, code, input.CompensationFormat)
+		}
+		message, err := s.create(ctx, input.AdminID, recipient.ID, nil, subject, messageContent)
+		if err != nil {
+			result.ErrorReason = "SITE_MESSAGE_SEND_FAILED"
+			result.Error = "send failed"
+			results = append(results, result)
+			continue
+		}
+		messages = append(messages, message.ID)
+		result.MessageID = message.ID
+		result.Status = SiteMessageBatchResultSent
+		result.ErrorReason = ""
+		result.Error = ""
+		if input.SendEmail && s.emailSender != nil {
+			if err := s.emailSender.EnqueueSiteMessage(recipient.Email, message.Subject, message.Content); err != nil {
+				result.Status = SiteMessageBatchResultFailed
+				result.ErrorReason = "SITE_MESSAGE_EMAIL_ENQUEUE_FAILED"
+				result.Error = "email enqueue failed"
+				results = append(results, result)
+				continue
+			}
+		}
+		if input.CompensationEnabled {
+			assignments = append(assignments, SiteMessageCompensationCodeAssignment{
+				Recipient: recipient.Email,
+				Code:      code,
+				Status:    StatusUnused,
+			})
+		}
+		results = append(results, result)
 	}
 
 	amount := 0.0
 	if input.CompensationEnabled {
 		amount = input.CompensationAmount
 	}
+	successCount, failedCount := countBatchResults(results)
 	return &SiteMessageCompensationBatch{
 		ID:             fmt.Sprintf("CMP-%s", sentAt.Format("20060102-150405")),
 		Subject:        subject,
 		Content:        content,
 		Mode:           normalizeRecipientMode(input.RecipientMode),
-		Audience:       batchAudienceLabel(input.RecipientMode, len(recipients)),
-		RecipientCount: len(recipients),
+		Audience:       batchAudienceLabel(input.RecipientMode, len(targets)),
+		RecipientCount: len(targets),
+		SuccessCount:   successCount,
+		FailedCount:    failedCount,
 		Amount:         amount,
 		CodeCount:      len(assignments),
 		Operator:       adminUser.Email,
 		SentAt:         sentAt,
 		Codes:          assignments,
+		Results:        results,
 		MessageIDs:     messages,
 	}, nil
 }
@@ -410,37 +457,44 @@ func normalizeSiteMessagePayload(subject, content string) (string, string, error
 	return subject, content, nil
 }
 
-func (s *SiteMessageService) resolveBatchRecipients(ctx context.Context, input AdminSendCompensationBatchInput) ([]SiteMessageRecipient, error) {
+type siteMessageBatchTarget struct {
+	Email    string
+	Resolved *SiteMessageRecipient
+}
+
+func (s *SiteMessageService) batchRecipientTargets(ctx context.Context, input AdminSendCompensationBatchInput) ([]siteMessageBatchTarget, error) {
 	mode := normalizeRecipientMode(input.RecipientMode)
 	if mode == SiteMessageRecipientModeAll {
-		return s.listAllActiveRecipients(ctx)
+		recipients, err := s.listAllActiveRecipients(ctx)
+		if err != nil {
+			return nil, err
+		}
+		targets := make([]siteMessageBatchTarget, 0, len(recipients))
+		for i := range recipients {
+			recipient := recipients[i]
+			targets = append(targets, siteMessageBatchTarget{Email: recipient.Email, Resolved: &recipient})
+		}
+		return targets, nil
 	}
 
 	seen := make(map[string]struct{}, len(input.RecipientEmails))
-	recipients := make([]SiteMessageRecipient, 0, len(input.RecipientEmails))
+	targets := make([]siteMessageBatchTarget, 0, len(input.RecipientEmails))
 	for _, rawEmail := range input.RecipientEmails {
 		email := strings.TrimSpace(rawEmail)
 		if email == "" {
 			continue
 		}
 		normalized := strings.ToLower(email)
-		if !strings.Contains(normalized, "@") || !strings.Contains(normalized, ".") {
-			return nil, ErrSiteMessageInvalidRecipients.WithMetadata(map[string]string{"recipient": email})
-		}
 		if _, ok := seen[normalized]; ok {
 			continue
 		}
 		seen[normalized] = struct{}{}
-		recipient, err := s.resolveRecipient(ctx, email, false)
-		if err != nil {
-			return nil, err
-		}
-		recipients = append(recipients, *recipient)
+		targets = append(targets, siteMessageBatchTarget{Email: email})
 	}
-	if len(recipients) == 0 {
+	if len(targets) == 0 {
 		return nil, ErrSiteMessageNoRecipients
 	}
-	return recipients, nil
+	return targets, nil
 }
 
 func (s *SiteMessageService) listAllActiveRecipients(ctx context.Context) ([]SiteMessageRecipient, error) {
@@ -479,41 +533,65 @@ func (s *SiteMessageService) listAllActiveRecipients(ctx context.Context) ([]Sit
 	return recipients, nil
 }
 
-func (s *SiteMessageService) validateCompensationAssignments(ctx context.Context, recipients []SiteMessageRecipient, input AdminSendCompensationBatchInput) ([]SiteMessageCompensationCodeAssignment, error) {
-	if !input.CompensationEnabled {
-		return []SiteMessageCompensationCodeAssignment{}, nil
+func (s *SiteMessageService) resolveBatchTarget(ctx context.Context, target siteMessageBatchTarget) (*SiteMessageRecipient, *SiteMessageCompensationBatchResult) {
+	if target.Resolved != nil {
+		return target.Resolved, nil
 	}
-	if input.CompensationAmount <= 0 {
-		return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"reason": "amount_required"})
+	email := strings.TrimSpace(target.Email)
+	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
+		return nil, failedBatchResult(email, "", "SITE_MESSAGE_RECIPIENTS_INVALID", "recipient email is invalid")
 	}
-	codes := normalizeCompensationCodes(input.CompensationCodes)
-	if len(codes) < len(recipients) {
-		return nil, ErrSiteMessageRedeemCodeShortage.WithMetadata(map[string]string{
-			"required": strconv.Itoa(len(recipients)),
-			"provided": strconv.Itoa(len(codes)),
-		})
+	recipient, err := s.resolveRecipient(ctx, email, false)
+	if err == nil {
+		return recipient, nil
 	}
+	if errors.Is(err, ErrSiteMessageRecipientNotFound) {
+		return nil, failedBatchResult(email, "", "SITE_MESSAGE_RECIPIENT_NOT_FOUND", "recipient not found")
+	}
+	return nil, failedBatchResult(email, "", "SITE_MESSAGE_RECIPIENT_LOOKUP_FAILED", "recipient lookup failed")
+}
+
+func (s *SiteMessageService) validateCompensationCodeForTarget(ctx context.Context, recipient string, index int, codes []string, amount float64) (string, *SiteMessageCompensationBatchResult) {
+	if amount <= 0 {
+		return "", failedBatchResult(recipient, "", "SITE_MESSAGE_REDEEM_CODE_INVALID", "compensation amount is invalid")
+	}
+	if index >= len(codes) {
+		return "", failedBatchResult(recipient, "", "SITE_MESSAGE_REDEEM_CODE_SHORTAGE", "missing redeem code")
+	}
+	code := codes[index]
 	if s.redeemCodes == nil {
-		return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"reason": "redeem_reader_missing"})
+		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_INVALID", "redeem code validation is unavailable")
 	}
 
-	assignments := make([]SiteMessageCompensationCodeAssignment, 0, len(recipients))
-	for i := range recipients {
-		code := codes[i]
-		redeemCode, err := s.redeemCodes.GetByCode(ctx, code)
-		if err != nil {
-			return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"code": code})
-		}
-		if redeemCode.Type != RedeemTypeBalance || redeemCode.Status != StatusUnused || !sameMoney(redeemCode.Value, input.CompensationAmount) {
-			return nil, ErrSiteMessageInvalidRedeemCode.WithMetadata(map[string]string{"code": code})
-		}
-		assignments = append(assignments, SiteMessageCompensationCodeAssignment{
-			Recipient: recipients[i].Email,
-			Code:      code,
-			Status:    redeemCode.Status,
-		})
+	redeemCode, err := s.redeemCodes.GetByCode(ctx, code)
+	if err != nil {
+		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_INVALID", "redeem code not found")
 	}
-	return assignments, nil
+	if redeemCode.Type != RedeemTypeBalance || redeemCode.Status != StatusUnused || !sameMoney(redeemCode.Value, amount) {
+		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_INVALID", "redeem code is not an unused balance code with matching amount")
+	}
+	return code, nil
+}
+
+func failedBatchResult(recipient, code, reason, message string) *SiteMessageCompensationBatchResult {
+	return &SiteMessageCompensationBatchResult{
+		Recipient:   recipient,
+		Code:        code,
+		Status:      SiteMessageBatchResultFailed,
+		ErrorReason: reason,
+		Error:       message,
+	}
+}
+
+func countBatchResults(results []SiteMessageCompensationBatchResult) (success int, failed int) {
+	for i := range results {
+		if results[i].Status == SiteMessageBatchResultSent {
+			success++
+		} else {
+			failed++
+		}
+	}
+	return success, failed
 }
 
 func normalizeCompensationCodes(input []string) []string {
