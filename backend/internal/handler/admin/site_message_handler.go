@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -87,6 +88,21 @@ func (h *SiteMessageHandler) SendCompensationBatch(c *gin.Context) {
 		return
 	}
 	response.Success(c, dto.SiteMessageCompensationBatchFromService(batch))
+}
+
+// ListCompensationBatches returns persisted admin compensation batch history.
+// GET /api/v1/admin/site-messages/compensation-batches
+func (h *SiteMessageHandler) ListCompensationBatches(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	items, result, err := h.siteMessageService.ListCompensationBatches(c.Request.Context(), pagination.PaginationParams{
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, dto.SiteMessageCompensationBatchesFromService(items), result.Total, result.Page, result.PageSize)
 }
 
 // SearchRecipients handles admin fuzzy recipient search.

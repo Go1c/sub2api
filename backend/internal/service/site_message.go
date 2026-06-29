@@ -140,6 +140,11 @@ type SiteMessageRedeemCodeReader interface {
 	GetByCode(ctx context.Context, code string) (*RedeemCode, error)
 }
 
+type SiteMessageCompensationBatchRepository interface {
+	Create(ctx context.Context, batch *SiteMessageCompensationBatch) error
+	List(ctx context.Context, params pagination.PaginationParams) ([]SiteMessageCompensationBatch, *pagination.PaginationResult, error)
+}
+
 type SiteMessageRepository interface {
 	Create(ctx context.Context, message *SiteMessage) error
 	GetVisibleByID(ctx context.Context, messageID, userID int64, retentionCutoff time.Time) (*SiteMessage, error)

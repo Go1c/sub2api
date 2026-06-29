@@ -184,6 +184,16 @@ func SiteMessageCompensationBatchFromService(batch *service.SiteMessageCompensat
 	}
 }
 
+func SiteMessageCompensationBatchesFromService(items []service.SiteMessageCompensationBatch) []SiteMessageCompensationBatch {
+	out := make([]SiteMessageCompensationBatch, 0, len(items))
+	for i := range items {
+		if converted := SiteMessageCompensationBatchFromService(&items[i]); converted != nil {
+			out = append(out, *converted)
+		}
+	}
+	return out
+}
+
 func SiteMessageCompensationCodeAssignmentsFromService(items []service.SiteMessageCompensationCodeAssignment) []SiteMessageCompensationCodeAssignment {
 	out := make([]SiteMessageCompensationCodeAssignment, 0, len(items))
 	for i := range items {

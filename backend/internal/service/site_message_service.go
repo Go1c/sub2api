@@ -13,12 +13,13 @@ import (
 )
 
 type SiteMessageService struct {
-	repo        SiteMessageRepository
-	userRepo    SiteMessageUserRepository
-	settings    SiteMessageSettingsReader
-	emailSender SiteMessageEmailSender
-	redeemCodes SiteMessageRedeemCodeReader
-	now         func() time.Time
+	repo                SiteMessageRepository
+	userRepo            SiteMessageUserRepository
+	settings            SiteMessageSettingsReader
+	emailSender         SiteMessageEmailSender
+	redeemCodes         SiteMessageRedeemCodeReader
+	compensationBatches SiteMessageCompensationBatchRepository
+	now                 func() time.Time
 }
 
 func NewSiteMessageService(
@@ -27,14 +28,16 @@ func NewSiteMessageService(
 	settings SiteMessageSettingsReader,
 	emailSender SiteMessageEmailSender,
 	redeemCodes SiteMessageRedeemCodeReader,
+	compensationBatches SiteMessageCompensationBatchRepository,
 ) *SiteMessageService {
 	return &SiteMessageService{
-		repo:        repo,
-		userRepo:    userRepo,
-		settings:    settings,
-		emailSender: emailSender,
-		redeemCodes: redeemCodes,
-		now:         time.Now,
+		repo:                repo,
+		userRepo:            userRepo,
+		settings:            settings,
+		emailSender:         emailSender,
+		redeemCodes:         redeemCodes,
+		compensationBatches: compensationBatches,
+		now:                 time.Now,
 	}
 }
 
@@ -182,7 +185,7 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 		amount = input.CompensationAmount
 	}
 	successCount, failedCount := countBatchResults(results)
-	return &SiteMessageCompensationBatch{
+	batch := &SiteMessageCompensationBatch{
 		ID:             fmt.Sprintf("CMP-%s", sentAt.Format("20060102-150405")),
 		Subject:        subject,
 		Content:        content,
@@ -198,7 +201,23 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 		Codes:          assignments,
 		Results:        results,
 		MessageIDs:     messages,
-	}, nil
+	}
+	if s.compensationBatches != nil {
+		if err := s.compensationBatches.Create(ctx, batch); err != nil {
+			return nil, fmt.Errorf("record site message compensation batch: %w", err)
+		}
+	}
+	return batch, nil
+}
+
+func (s *SiteMessageService) ListCompensationBatches(ctx context.Context, params pagination.PaginationParams) ([]SiteMessageCompensationBatch, *pagination.PaginationResult, error) {
+	if _, err := s.enabledSettings(ctx); err != nil {
+		return nil, nil, err
+	}
+	if s.compensationBatches == nil {
+		return []SiteMessageCompensationBatch{}, paginationResult(0, params), nil
+	}
+	return s.compensationBatches.List(ctx, params)
 }
 
 func (s *SiteMessageService) SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code string) (*SiteMessage, error) {
@@ -565,10 +584,19 @@ func (s *SiteMessageService) validateCompensationCodeForTarget(ctx context.Conte
 
 	redeemCode, err := s.redeemCodes.GetByCode(ctx, code)
 	if err != nil {
-		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_INVALID", "redeem code not found")
+		if errors.Is(err, ErrRedeemCodeNotFound) {
+			return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_NOT_FOUND", "redeem code not found")
+		}
+		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_LOOKUP_FAILED", "redeem code lookup failed")
 	}
-	if redeemCode.Type != RedeemTypeBalance || redeemCode.Status != StatusUnused || !sameMoney(redeemCode.Value, amount) {
-		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_INVALID", "redeem code is not an unused balance code with matching amount")
+	if redeemCode.Type != RedeemTypeBalance {
+		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_TYPE_INVALID", "redeem code is not a balance code")
+	}
+	if redeemCode.Status != StatusUnused {
+		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_STATUS_INVALID", "redeem code is not unused")
+	}
+	if !sameMoney(redeemCode.Value, amount) {
+		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_AMOUNT_MISMATCH", "redeem code amount does not match compensation amount")
 	}
 	return code, nil
 }
@@ -592,6 +620,27 @@ func countBatchResults(results []SiteMessageCompensationBatchResult) (success in
 		}
 	}
 	return success, failed
+}
+
+func paginationResult(total int64, params pagination.PaginationParams) *pagination.PaginationResult {
+	limit := params.Limit()
+	pages := int(total) / limit
+	if int(total)%limit > 0 {
+		pages++
+	}
+	if pages < 1 {
+		pages = 1
+	}
+	page := params.Page
+	if page < 1 {
+		page = 1
+	}
+	return &pagination.PaginationResult{
+		Total:    total,
+		Page:     page,
+		PageSize: limit,
+		Pages:    pages,
+	}
 }
 
 func normalizeCompensationCodes(input []string) []string {
@@ -634,5 +683,9 @@ func appendCompensationBlock(content string, amount float64, code, format string
 }
 
 func sameMoney(a, b float64) bool {
-	return math.Abs(a-b) < 0.000001
+	return moneyCents(a) == moneyCents(b)
+}
+
+func moneyCents(v float64) int64 {
+	return int64(math.Round(v * 100))
 }

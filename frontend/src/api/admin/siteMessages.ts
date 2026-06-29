@@ -6,6 +6,7 @@ import { apiClient } from '../client'
 import type {
   AdminSendCompensationBatchRequest,
   AdminSendSiteMessageRequest,
+  PaginatedResponse,
   SiteMessage,
   SiteMessageCompensationBatch,
   SiteMessageRecipient
@@ -28,10 +29,21 @@ async function sendCompensationBatch(request: AdminSendCompensationBatchRequest)
   return data
 }
 
+async function listCompensationBatches(page: number = 1, pageSize: number = 100): Promise<PaginatedResponse<SiteMessageCompensationBatch>> {
+  const { data } = await apiClient.get<PaginatedResponse<SiteMessageCompensationBatch>>('/admin/site-messages/compensation-batches', {
+    params: {
+      page,
+      page_size: pageSize
+    }
+  })
+  return data
+}
+
 export const adminSiteMessagesAPI = {
   sendToUser,
   searchRecipients,
   sendCompensationBatch,
+  listCompensationBatches,
 }
 
 export default adminSiteMessagesAPI
