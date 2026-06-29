@@ -577,88 +577,18 @@ const appStore = useAppStore()
 
 const activeView = ref<ViewMode>('history')
 const recipientMode = ref<RecipientMode>('selected')
-const recipientInput = ref('alice@example.com\nbob@example.com\nvip-user@example.com')
+const recipientInput = ref('')
 const messageSubject = ref('')
 const messageContent = ref('')
-const compensationEnabled = ref(true)
-const compensationAmount = ref(5)
+const compensationEnabled = ref(false)
+const compensationAmount = ref(0)
 const compensationFormat = ref<CompensationFormat>('block')
-const compensationCodesInput = ref('9f3a8c1e4b6d0a72c5f9183e2d7b4a60\n62d4f0a9c1e83b57a6d2f49b0c7e5a31\nc8a137f06e4b92d5a0f6c31e7d9b4825')
+const compensationCodesInput = ref('')
 const historySearch = ref('')
 const historyStatusFilter = ref<HistoryStatusFilter>('all')
-const selectedHistoryId = ref('CMP-20260629-001')
+const selectedHistoryId = ref('')
 
-const historyItems = ref<CompensationHistoryItem[]>([
-  {
-    id: 'CMP-20260629-001',
-    subject: '服务补偿通知',
-    content: '您好，\n\n感谢您近期的理解与支持。我们已为本次服务波动准备了一份余额补偿，请在站内信末尾查看兑换码。',
-    status: 'sent',
-    mode: 'selected',
-    audience: '指定 3 个用户',
-    recipientCount: 3,
-    amount: 5,
-    codeCount: 3,
-    operator: 'admin@lumioapi.com',
-    sentAt: '2026-06-29 09:20',
-    codes: [
-      { recipient: 'alice@example.com', code: '9f3a8c1e4b6d0a72c5f9183e2d7b4a60', status: 'unused' },
-      { recipient: 'bob@example.com', code: '62d4f0a9c1e83b57a6d2f49b0c7e5a31', status: 'used' },
-      { recipient: 'vip-user@example.com', code: 'c8a137f06e4b92d5a0f6c31e7d9b4825', status: 'unused' },
-    ],
-  },
-  {
-    id: 'CMP-20260625-004',
-    subject: '模型延迟补偿说明',
-    content: '您好，\n\n6 月 25 日部分模型请求出现延迟。我们已为受影响时段准备余额补偿，兑换码随站内信发放。',
-    status: 'sent',
-    mode: 'all',
-    audience: '全部用户',
-    recipientCount: 26,
-    amount: 3,
-    codeCount: 26,
-    operator: 'admin@lumioapi.com',
-    sentAt: '2026-06-25 18:40',
-    codes: [
-      { recipient: '全员批次 1', code: 'b7613a04c9d84f2180e7a6c5f3b2d910', status: 'unused' },
-      { recipient: '全员批次 2', code: '0fd91e2a7c6b4385a4e019f8d2c5736b', status: 'reserved' },
-      { recipient: '全员批次 3', code: 'd53b0c1a6e8f49a2b7c3081f95e64d20', status: 'used' },
-      { recipient: '还有 23 个兑换码', code: '后端按用户逐个分配', status: 'recorded' },
-    ],
-  },
-  {
-    id: 'CMP-20260618-002',
-    subject: '维护窗口补偿',
-    content: '您好，\n\n本次维护窗口比预计时间更长。我们为受影响用户发放 8 元余额补偿，请在站内信末尾复制兑换码使用。',
-    status: 'sent',
-    mode: 'selected',
-    audience: '指定 6 个用户',
-    recipientCount: 6,
-    amount: 8,
-    codeCount: 6,
-    operator: 'ops@lumioapi.com',
-    sentAt: '2026-06-18 23:10',
-    codes: [
-      { recipient: 'team-a@example.com', code: '4d7a91c063f54a2eb8d0c1359f6e72ab', status: 'used' },
-      { recipient: 'team-b@example.com', code: '18a03f9c52e64d7b8f1a6c0d93e245ab', status: 'used' },
-      { recipient: 'team-c@example.com', code: '8e6f21b0a5c94d37b2f8016a3c9d74e5', status: 'unused' },
-    ],
-  },
-  {
-    id: 'CMP-20260612-001',
-    subject: '小额体验补偿',
-    content: '该批次在发送前取消，未占用兑换码。',
-    status: 'cancelled',
-    mode: 'selected',
-    audience: '指定 3 个用户',
-    recipientCount: 3,
-    amount: 2,
-    codeCount: 0,
-    operator: 'admin@lumioapi.com',
-    sentAt: '2026-06-12 11:06',
-    codes: [],
-  },
-])
+const historyItems = ref<CompensationHistoryItem[]>([])
 
 const viewTabs = computed<Array<{ value: ViewMode; label: string }>>(() => [
   { value: 'history', label: t('admin.siteMessageManagement.tabs.history') },
@@ -937,13 +867,13 @@ function historyModeLabel(mode: RecipientMode): string {
 
 function resetDraft() {
   recipientMode.value = 'selected'
-  recipientInput.value = 'alice@example.com\nbob@example.com\nvip-user@example.com'
+  recipientInput.value = ''
   messageSubject.value = ''
   messageContent.value = ''
-  compensationEnabled.value = true
-  compensationAmount.value = 5
+  compensationEnabled.value = false
+  compensationAmount.value = 0
   compensationFormat.value = 'block'
-  compensationCodesInput.value = '9f3a8c1e4b6d0a72c5f9183e2d7b4a60\n62d4f0a9c1e83b57a6d2f49b0c7e5a31\nc8a137f06e4b92d5a0f6c31e7d9b4825'
+  compensationCodesInput.value = ''
 }
 
 function buildHistoryItemFromDraft(): CompensationHistoryItem {
