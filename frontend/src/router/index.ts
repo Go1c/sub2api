@@ -561,6 +561,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/site-message-management',
+    name: 'AdminSiteMessageManagement',
+    component: () => import('@/views/admin/SiteMessageManagementView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Site Message Management',
+      titleKey: 'admin.siteMessageManagement.title',
+      descriptionKey: 'admin.siteMessageManagement.description'
+    }
+  },
+  {
     path: '/admin/invoices',
     name: 'AdminInvoices',
     component: () => import('@/views/admin/InvoicesView.vue'),
