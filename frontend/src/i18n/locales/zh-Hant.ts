@@ -5569,6 +5569,16 @@ export default {
         evaluationInterval: '評估間隔（秒）',
         evaluationIntervalHint: '檢測任務的執行頻率，建議保持默認',
         alertConfig: '預警配置',
+        accountErrorAlert: '賬號異常 Telegram 告警',
+        enableAccountErrorAlert: '開啟賬號異常告警',
+        telegramBotToken: 'Telegram Bot Token',
+        telegramChatId: 'Telegram Chat ID',
+        accountAlertIntervalMinutes: '掃描間隔（分鐘）',
+        accountAlertWindowMinutes: '統計窗口（分鐘）',
+        accountAlertMinCount: '觸發次數',
+        accountAlertCooldownMinutes: '冷卻時間（分鐘）',
+        accountAlertMaxRows: '最多賬號數',
+        accountAlertMaxUsers: '影響用戶郵箱數',
         enableAlert: '開啟預警',
         alertRecipients: '預警接收郵箱',
         emailPlaceholder: '輸入郵箱地址',
@@ -5632,7 +5642,15 @@ export default {
           slaMinPercentRange: 'SLA最低百分比必須在0-100之間',
           ttftP99MaxRange: 'TTFT P99最大值必須大於等於0',
           requestErrorRateMaxRange: '請求錯誤率最大值必須在0-100之間',
-          upstreamErrorRateMaxRange: '上游錯誤率最大值必須在0-100之間'
+          upstreamErrorRateMaxRange: '上游錯誤率最大值必須在0-100之間',
+          accountAlertIntervalRange: '賬號異常告警掃描間隔必須在 1-1440 分鐘之間',
+          accountAlertWindowRange: '賬號異常告警統計窗口必須在 1-1440 分鐘之間',
+          accountAlertMinCountRange: '賬號異常告警觸發次數必須在 1-100000 之間',
+          accountAlertCooldownRange: '賬號異常告警冷卻時間必須在 0-10080 分鐘之間',
+          accountAlertMaxRowsRange: '賬號異常告警最多賬號數必須在 1-50 之間',
+          accountAlertMaxUsersRange: '賬號異常告警影響用戶郵箱數必須在 0-10 之間',
+          telegramBotTokenRequired: '開啟賬號異常告警時必須填寫 Telegram Bot Token',
+          telegramChatIdRequired: '開啟賬號異常告警時必須填寫 Telegram Chat ID'
         }
       },
       concurrency: {

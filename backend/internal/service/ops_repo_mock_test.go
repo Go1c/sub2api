@@ -7,12 +7,14 @@ import (
 
 // opsRepoMock is a test-only OpsRepository implementation with optional function hooks.
 type opsRepoMock struct {
-	InsertErrorLogFn              func(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error)
-	BatchInsertErrorLogsFn        func(ctx context.Context, inputs []*OpsInsertErrorLogInput) (int64, error)
-	BatchInsertSystemLogsFn       func(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error)
-	ListSystemLogsFn              func(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error)
-	DeleteSystemLogsFn            func(ctx context.Context, filter *OpsSystemLogCleanupFilter) (int64, error)
-	InsertSystemLogCleanupAuditFn func(ctx context.Context, input *OpsSystemLogCleanupAudit) error
+	InsertErrorLogFn                  func(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error)
+	BatchInsertErrorLogsFn            func(ctx context.Context, inputs []*OpsInsertErrorLogInput) (int64, error)
+	BatchInsertSystemLogsFn           func(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error)
+	ListSystemLogsFn                  func(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error)
+	DeleteSystemLogsFn                func(ctx context.Context, filter *OpsSystemLogCleanupFilter) (int64, error)
+	InsertSystemLogCleanupAuditFn     func(ctx context.Context, input *OpsSystemLogCleanupAudit) error
+	ListAccountErrorAlertCandidatesFn func(ctx context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error)
+	ListAccountErrorAlertTopUsersFn   func(ctx context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error)
 
 	CreateUserRequestMonitorFn         func(ctx context.Context, input *OpsCreateUserRequestMonitorRecord) (*OpsUserRequestMonitor, error)
 	ListUserRequestMonitorsFn          func(ctx context.Context, filter *OpsUserRequestMonitorFilter) ([]*OpsUserRequestMonitor, int64, error)
@@ -193,6 +195,20 @@ func (m *opsRepoMock) UpdateAlertEventStatus(ctx context.Context, eventID int64,
 
 func (m *opsRepoMock) UpdateAlertEventEmailSent(ctx context.Context, eventID int64, emailSent bool) error {
 	return nil
+}
+
+func (m *opsRepoMock) ListAccountErrorAlertCandidates(ctx context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error) {
+	if m.ListAccountErrorAlertCandidatesFn != nil {
+		return m.ListAccountErrorAlertCandidatesFn(ctx, filter)
+	}
+	return []*OpsAccountErrorAlertCandidate{}, nil
+}
+
+func (m *opsRepoMock) ListAccountErrorAlertTopUsers(ctx context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error) {
+	if m.ListAccountErrorAlertTopUsersFn != nil {
+		return m.ListAccountErrorAlertTopUsersFn(ctx, filter)
+	}
+	return []*OpsAccountErrorAlertTopUser{}, nil
 }
 
 func (m *opsRepoMock) CreateAlertSilence(ctx context.Context, input *OpsAlertSilence) (*OpsAlertSilence, error) {

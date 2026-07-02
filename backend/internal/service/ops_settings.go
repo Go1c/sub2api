@@ -12,6 +12,9 @@ import (
 const (
 	opsAlertEvaluatorLeaderLockKeyDefault = "ops:alert:evaluator:leader"
 	opsAlertEvaluatorLeaderLockTTLDefault = 30 * time.Second
+
+	opsAccountErrorAlertLeaderLockKeyDefault = "ops:account_error_alert:leader"
+	opsAccountErrorAlertLeaderLockTTLDefault = 2 * time.Minute
 )
 
 // =========================
@@ -349,6 +352,150 @@ func (s *OpsService) UpdateOpsAlertRuntimeSettings(ctx context.Context, cfg *Ops
 
 	// Return a fresh copy (avoid callers holding pointers into internal slices that may be mutated).
 	updated := &OpsAlertRuntimeSettings{}
+	_ = json.Unmarshal(raw, updated)
+	return updated, nil
+}
+
+// =========================
+// Account error Telegram alert config
+// =========================
+
+func defaultOpsAccountErrorAlertConfig() *OpsAccountErrorAlertConfig {
+	return &OpsAccountErrorAlertConfig{
+		Enabled:             false,
+		IntervalMinutes:     10,
+		WindowMinutes:       10,
+		MinErrorCount:       5,
+		CooldownMinutes:     60,
+		MaxAccountsPerAlert: 10,
+		MaxUsersPerAlert:    3,
+		TelegramBotToken:    "",
+		TelegramChatID:      "",
+		DistributedLock: OpsDistributedLockSettings{
+			Enabled:    true,
+			Key:        opsAccountErrorAlertLeaderLockKeyDefault,
+			TTLSeconds: int(opsAccountErrorAlertLeaderLockTTLDefault.Seconds()),
+		},
+	}
+}
+
+func normalizeOpsAccountErrorAlertConfig(cfg *OpsAccountErrorAlertConfig) {
+	if cfg == nil {
+		return
+	}
+	defaultCfg := defaultOpsAccountErrorAlertConfig()
+	if cfg.IntervalMinutes <= 0 {
+		cfg.IntervalMinutes = defaultCfg.IntervalMinutes
+	}
+	if cfg.WindowMinutes <= 0 {
+		cfg.WindowMinutes = defaultCfg.WindowMinutes
+	}
+	if cfg.MinErrorCount <= 0 {
+		cfg.MinErrorCount = defaultCfg.MinErrorCount
+	}
+	if cfg.CooldownMinutes < 0 {
+		cfg.CooldownMinutes = defaultCfg.CooldownMinutes
+	}
+	if cfg.MaxAccountsPerAlert <= 0 {
+		cfg.MaxAccountsPerAlert = defaultCfg.MaxAccountsPerAlert
+	}
+	if cfg.MaxUsersPerAlert < 0 {
+		cfg.MaxUsersPerAlert = defaultCfg.MaxUsersPerAlert
+	}
+	cfg.TelegramBotToken = strings.TrimSpace(cfg.TelegramBotToken)
+	cfg.TelegramChatID = strings.TrimSpace(cfg.TelegramChatID)
+	normalizeOpsDistributedLockSettings(&cfg.DistributedLock, opsAccountErrorAlertLeaderLockKeyDefault, defaultCfg.DistributedLock.TTLSeconds)
+}
+
+func validateOpsAccountErrorAlertConfig(cfg *OpsAccountErrorAlertConfig) error {
+	if cfg == nil {
+		return errors.New("invalid config")
+	}
+	if cfg.IntervalMinutes < 1 || cfg.IntervalMinutes > 1440 {
+		return errors.New("interval_minutes must be between 1 and 1440")
+	}
+	if cfg.WindowMinutes < 1 || cfg.WindowMinutes > 1440 {
+		return errors.New("window_minutes must be between 1 and 1440")
+	}
+	if cfg.MinErrorCount < 1 || cfg.MinErrorCount > 100000 {
+		return errors.New("min_error_count must be between 1 and 100000")
+	}
+	if cfg.CooldownMinutes < 0 || cfg.CooldownMinutes > 10080 {
+		return errors.New("cooldown_minutes must be between 0 and 10080")
+	}
+	if cfg.MaxAccountsPerAlert < 1 || cfg.MaxAccountsPerAlert > 50 {
+		return errors.New("max_accounts_per_alert must be between 1 and 50")
+	}
+	if cfg.MaxUsersPerAlert < 0 || cfg.MaxUsersPerAlert > 10 {
+		return errors.New("max_users_per_alert must be between 0 and 10")
+	}
+	if cfg.Enabled {
+		if strings.TrimSpace(cfg.TelegramBotToken) == "" {
+			return errors.New("telegram_bot_token is required when enabled")
+		}
+		if strings.TrimSpace(cfg.TelegramChatID) == "" {
+			return errors.New("telegram_chat_id is required when enabled")
+		}
+	}
+	if cfg.DistributedLock.Enabled {
+		if err := validateOpsDistributedLockSettings(cfg.DistributedLock); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *OpsService) GetOpsAccountErrorAlertConfig(ctx context.Context) (*OpsAccountErrorAlertConfig, error) {
+	defaultCfg := defaultOpsAccountErrorAlertConfig()
+	if s == nil || s.settingRepo == nil {
+		return defaultCfg, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyOpsAccountErrorAlertConfig)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			if b, mErr := json.Marshal(defaultCfg); mErr == nil {
+				_ = s.settingRepo.Set(ctx, SettingKeyOpsAccountErrorAlertConfig, string(b))
+			}
+			return defaultCfg, nil
+		}
+		return nil, err
+	}
+
+	cfg := defaultOpsAccountErrorAlertConfig()
+	if err := json.Unmarshal([]byte(raw), cfg); err != nil {
+		return defaultCfg, nil
+	}
+	normalizeOpsAccountErrorAlertConfig(cfg)
+	return cfg, nil
+}
+
+func (s *OpsService) UpdateOpsAccountErrorAlertConfig(ctx context.Context, cfg *OpsAccountErrorAlertConfig) (*OpsAccountErrorAlertConfig, error) {
+	if s == nil || s.settingRepo == nil {
+		return nil, errors.New("setting repository not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if cfg == nil {
+		return nil, errors.New("invalid config")
+	}
+
+	normalizeOpsAccountErrorAlertConfig(cfg)
+	if err := validateOpsAccountErrorAlertConfig(cfg); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.settingRepo.Set(ctx, SettingKeyOpsAccountErrorAlertConfig, string(raw)); err != nil {
+		return nil, err
+	}
+	updated := &OpsAccountErrorAlertConfig{}
 	_ = json.Unmarshal(raw, updated)
 	return updated, nil
 }

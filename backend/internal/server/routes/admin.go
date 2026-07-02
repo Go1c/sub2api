@@ -153,6 +153,10 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/email-notification/config", h.Admin.Ops.GetEmailNotificationConfig)
 		ops.PUT("/email-notification/config", h.Admin.Ops.UpdateEmailNotificationConfig)
 
+		// Account error Telegram alert config (DB-backed)
+		ops.GET("/account-error-alert/config", h.Admin.Ops.GetAccountErrorAlertConfig)
+		ops.PUT("/account-error-alert/config", h.Admin.Ops.UpdateAccountErrorAlertConfig)
+
 		// Runtime settings (DB-backed)
 		runtime := ops.Group("/runtime")
 		{

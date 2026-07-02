@@ -90,6 +90,22 @@ type OpsAlertRuntimeSettings struct {
 	Thresholds      OpsMetricThresholds        `json:"thresholds"` // 指标阈值配置
 }
 
+type OpsAccountErrorAlertConfig struct {
+	Enabled bool `json:"enabled"`
+
+	IntervalMinutes     int `json:"interval_minutes"`
+	WindowMinutes       int `json:"window_minutes"`
+	MinErrorCount       int `json:"min_error_count"`
+	CooldownMinutes     int `json:"cooldown_minutes"`
+	MaxAccountsPerAlert int `json:"max_accounts_per_alert"`
+	MaxUsersPerAlert    int `json:"max_users_per_alert"`
+
+	TelegramBotToken string `json:"telegram_bot_token"`
+	TelegramChatID   string `json:"telegram_chat_id"`
+
+	DistributedLock OpsDistributedLockSettings `json:"distributed_lock"`
+}
+
 // OpsAdvancedSettings stores advanced ops configuration (data retention, aggregation).
 type OpsAdvancedSettings struct {
 	DataRetention                   OpsDataRetentionSettings `json:"data_retention"`

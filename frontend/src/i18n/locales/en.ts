@@ -5443,6 +5443,16 @@ export default {
         evaluationInterval: 'Evaluation Interval (seconds)',
         evaluationIntervalHint: 'Frequency of detection tasks, recommended to keep default',
         alertConfig: 'Alert Configuration',
+        accountErrorAlert: 'Account Error Telegram Alert',
+        enableAccountErrorAlert: 'Enable account error alert',
+        telegramBotToken: 'Telegram Bot Token',
+        telegramChatId: 'Telegram Chat ID',
+        accountAlertIntervalMinutes: 'Scan interval (minutes)',
+        accountAlertWindowMinutes: 'Window (minutes)',
+        accountAlertMinCount: 'Trigger count',
+        accountAlertCooldownMinutes: 'Cooldown (minutes)',
+        accountAlertMaxRows: 'Max accounts',
+        accountAlertMaxUsers: 'Top user emails',
         enableAlert: 'Enable Alerts',
         alertRecipients: 'Alert Recipient Emails',
         emailPlaceholder: 'Enter email address',
@@ -5505,7 +5515,15 @@ export default {
           slaMinPercentRange: 'SLA minimum percentage must be between 0 and 100',
           ttftP99MaxRange: 'TTFT P99 maximum must be a number ≥ 0',
           requestErrorRateMaxRange: 'Request error rate maximum must be between 0 and 100',
-          upstreamErrorRateMaxRange: 'Upstream error rate maximum must be between 0 and 100'
+          upstreamErrorRateMaxRange: 'Upstream error rate maximum must be between 0 and 100',
+          accountAlertIntervalRange: 'Account error alert scan interval must be between 1 and 1440 minutes',
+          accountAlertWindowRange: 'Account error alert window must be between 1 and 1440 minutes',
+          accountAlertMinCountRange: 'Account error alert trigger count must be between 1 and 100000',
+          accountAlertCooldownRange: 'Account error alert cooldown must be between 0 and 10080 minutes',
+          accountAlertMaxRowsRange: 'Account error alert max accounts must be between 1 and 50',
+          accountAlertMaxUsersRange: 'Account error alert top user emails must be between 0 and 10',
+          telegramBotTokenRequired: 'Telegram Bot Token is required when account error alert is enabled',
+          telegramChatIdRequired: 'Telegram Chat ID is required when account error alert is enabled'
         }
       },
       concurrency: {
