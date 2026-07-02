@@ -340,6 +340,9 @@ const (
 	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
 	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
 
+	// SettingKeyOpsAccountErrorAlertConfig stores JSON config for account instability Telegram alerts.
+	SettingKeyOpsAccountErrorAlertConfig = "ops_account_error_alert_config"
+
 	// =========================
 	// Channel Monitor (渠道监控)
 	// =========================

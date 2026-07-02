@@ -6,7 +6,7 @@ import { opsAPI } from '@/api/admin/ops'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
-import type { OpsAlertRuntimeSettings, EmailNotificationConfig, AlertSeverity, OpsAdvancedSettings, OpsMetricThresholds } from '../types'
+import type { OpsAlertRuntimeSettings, EmailNotificationConfig, AlertSeverity, OpsAdvancedSettings, OpsMetricThresholds, OpsAccountErrorAlertConfig } from '../types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -27,6 +27,8 @@ const saving = ref(false)
 const runtimeSettings = ref<OpsAlertRuntimeSettings | null>(null)
 // 邮件通知配置
 const emailConfig = ref<EmailNotificationConfig | null>(null)
+// 账号异常 Telegram 告警配置
+const accountErrorAlertConfig = ref<OpsAccountErrorAlertConfig | null>(null)
 // 高级设置
 const advancedSettings = ref<OpsAdvancedSettings | null>(null)
 // 指标阈值配置
@@ -41,14 +43,16 @@ const metricThresholds = ref<OpsMetricThresholds>({
 async function loadAllSettings() {
   loading.value = true
   try {
-    const [runtime, email, advanced, thresholds] = await Promise.all([
+    const [runtime, email, accountErrorAlert, advanced, thresholds] = await Promise.all([
       opsAPI.getAlertRuntimeSettings(),
       opsAPI.getEmailNotificationConfig(),
+      opsAPI.getAccountErrorAlertConfig(),
       opsAPI.getAdvancedSettings(),
       opsAPI.getMetricThresholds()
     ])
     runtimeSettings.value = runtime
     emailConfig.value = email
+    accountErrorAlertConfig.value = accountErrorAlert
     advancedSettings.value = advanced
     // 如果后端返回了阈值，使用后端的值；否则保持默认值
     if (thresholds && Object.keys(thresholds).length > 0) {
@@ -133,6 +137,37 @@ const validation = computed(() => {
 
   // 邮件配置: 启用但无收件人时不阻断保存, 保存时会自动禁用
 
+  // 账号异常 Telegram 告警配置
+  if (accountErrorAlertConfig.value) {
+    const cfg = accountErrorAlertConfig.value
+    if (cfg.interval_minutes < 1 || cfg.interval_minutes > 1440) {
+      errors.push(t('admin.ops.settings.validation.accountAlertIntervalRange'))
+    }
+    if (cfg.window_minutes < 1 || cfg.window_minutes > 1440) {
+      errors.push(t('admin.ops.settings.validation.accountAlertWindowRange'))
+    }
+    if (cfg.min_error_count < 1 || cfg.min_error_count > 100000) {
+      errors.push(t('admin.ops.settings.validation.accountAlertMinCountRange'))
+    }
+    if (cfg.cooldown_minutes < 0 || cfg.cooldown_minutes > 10080) {
+      errors.push(t('admin.ops.settings.validation.accountAlertCooldownRange'))
+    }
+    if (cfg.max_accounts_per_alert < 1 || cfg.max_accounts_per_alert > 50) {
+      errors.push(t('admin.ops.settings.validation.accountAlertMaxRowsRange'))
+    }
+    if (cfg.max_users_per_alert < 0 || cfg.max_users_per_alert > 10) {
+      errors.push(t('admin.ops.settings.validation.accountAlertMaxUsersRange'))
+    }
+    if (cfg.enabled) {
+      if (!cfg.telegram_bot_token?.trim()) {
+        errors.push(t('admin.ops.settings.validation.telegramBotTokenRequired'))
+      }
+      if (!cfg.telegram_chat_id?.trim()) {
+        errors.push(t('admin.ops.settings.validation.telegramChatIdRequired'))
+      }
+    }
+  }
+
   // 验证高级设置
   if (advancedSettings.value) {
     const { error_log_retention_days, minute_metrics_retention_days, hourly_metrics_retention_days } = advancedSettings.value.data_retention
@@ -185,6 +220,7 @@ async function saveAllSettings() {
     await Promise.all([
       runtimeSettings.value ? opsAPI.updateAlertRuntimeSettings(runtimeSettings.value) : Promise.resolve(),
       emailConfig.value ? opsAPI.updateEmailNotificationConfig(emailConfig.value) : Promise.resolve(),
+      accountErrorAlertConfig.value ? opsAPI.updateAccountErrorAlertConfig(accountErrorAlertConfig.value) : Promise.resolve(),
       advancedSettings.value ? opsAPI.updateAdvancedSettings(advancedSettings.value) : Promise.resolve(),
       opsAPI.updateMetricThresholds(metricThresholds.value)
     ])
@@ -206,7 +242,7 @@ async function saveAllSettings() {
       {{ t('common.loading') }}
     </div>
 
-    <div v-else-if="runtimeSettings && emailConfig && advancedSettings" class="space-y-6">
+    <div v-else-if="runtimeSettings && emailConfig && accountErrorAlertConfig && advancedSettings" class="space-y-6">
       <!-- 验证错误 -->
       <div v-if="!validation.valid" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
         <div class="font-bold">{{ t('admin.ops.settings.validation.title') }}</div>
@@ -228,6 +264,106 @@ async function saveAllSettings() {
             class="input"
           />
           <p class="mt-1 text-xs text-gray-500">{{ t('admin.ops.settings.evaluationIntervalHint') }}</p>
+        </div>
+      </div>
+
+      <!-- 账号异常 Telegram 告警 -->
+      <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
+        <h4 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.settings.accountErrorAlert') }}</h4>
+
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="font-medium text-gray-900 dark:text-white">{{ t('admin.ops.settings.enableAccountErrorAlert') }}</label>
+            </div>
+            <Toggle v-model="accountErrorAlertConfig.enabled" />
+          </div>
+
+          <div v-if="accountErrorAlertConfig.enabled" class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.telegramBotToken') }}</label>
+              <input
+                v-model.trim="accountErrorAlertConfig.telegram_bot_token"
+                type="password"
+                autocomplete="off"
+                class="input"
+                placeholder="123456:ABC..."
+              />
+            </div>
+
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.telegramChatId') }}</label>
+              <input
+                v-model.trim="accountErrorAlertConfig.telegram_chat_id"
+                type="text"
+                class="input"
+                placeholder="-1001234567890"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-6">
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.accountAlertIntervalMinutes') }}</label>
+              <input
+                v-model.number="accountErrorAlertConfig.interval_minutes"
+                type="number"
+                min="1"
+                max="1440"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.accountAlertWindowMinutes') }}</label>
+              <input
+                v-model.number="accountErrorAlertConfig.window_minutes"
+                type="number"
+                min="1"
+                max="1440"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.accountAlertMinCount') }}</label>
+              <input
+                v-model.number="accountErrorAlertConfig.min_error_count"
+                type="number"
+                min="1"
+                max="100000"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.accountAlertCooldownMinutes') }}</label>
+              <input
+                v-model.number="accountErrorAlertConfig.cooldown_minutes"
+                type="number"
+                min="0"
+                max="10080"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.accountAlertMaxRows') }}</label>
+              <input
+                v-model.number="accountErrorAlertConfig.max_accounts_per_alert"
+                type="number"
+                min="1"
+                max="50"
+                class="input"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.ops.settings.accountAlertMaxUsers') }}</label>
+              <input
+                v-model.number="accountErrorAlertConfig.max_users_per_alert"
+                type="number"
+                min="0"
+                max="10"
+                class="input"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
