@@ -69,6 +69,24 @@ func (s *PromoService) ValidatePromoCode(ctx context.Context, code string) (*Pro
 	return promoCode, nil
 }
 
+func (s *PromoService) ValidatePromoCodeForUser(ctx context.Context, userID int64, code string) (*PromoCode, error) {
+	promoCode, err := s.ValidatePromoCode(ctx, code)
+	if err != nil || promoCode == nil {
+		return promoCode, err
+	}
+	if userID <= 0 {
+		return nil, ErrPromoCodeInvalid
+	}
+	existing, err := s.promoRepo.GetUsageByPromoCodeAndUser(ctx, promoCode.ID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("check existing usage: %w", err)
+	}
+	if existing != nil {
+		return nil, ErrPromoCodeAlreadyUsed
+	}
+	return promoCode, nil
+}
+
 // validatePromoCodeStatus 验证优惠码状态
 func (s *PromoService) validatePromoCodeStatus(promoCode *PromoCode) error {
 	if !promoCode.CanUse() {
@@ -89,15 +107,23 @@ func (s *PromoService) validatePromoCodeStatus(promoCode *PromoCode) error {
 // ApplyPromoCode 应用优惠码（注册成功后调用）
 // 使用事务和行锁确保并发安全
 func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code string) error {
+	_, err := s.RedeemPromoCode(ctx, userID, code)
+	return err
+}
+
+// RedeemPromoCode applies a promo code for an existing user from the redeem page.
+// It reuses the registration promo constraints: active status, expiry, max uses,
+// and one use per user.
+func (s *PromoService) RedeemPromoCode(ctx context.Context, userID int64, code string) (*PromoCode, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
-		return nil
+		return nil, ErrPromoCodeInvalid
 	}
 
 	// 开启事务
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -106,26 +132,26 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 	// 在事务中获取并锁定优惠码记录（FOR UPDATE）
 	promoCode, err := s.promoRepo.GetByCodeForUpdate(txCtx, code)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 在事务中验证优惠码状态
 	if err := s.validatePromoCodeStatus(promoCode); err != nil {
-		return err
+		return nil, err
 	}
 
 	// 在事务中检查用户是否已使用过此优惠码
 	existing, err := s.promoRepo.GetUsageByPromoCodeAndUser(txCtx, promoCode.ID, userID)
 	if err != nil {
-		return fmt.Errorf("check existing usage: %w", err)
+		return nil, fmt.Errorf("check existing usage: %w", err)
 	}
 	if existing != nil {
-		return ErrPromoCodeAlreadyUsed
+		return nil, ErrPromoCodeAlreadyUsed
 	}
 
 	// 增加用户余额
 	if err := s.userRepo.UpdateBalance(txCtx, userID, promoCode.BonusAmount); err != nil {
-		return fmt.Errorf("update user balance: %w", err)
+		return nil, fmt.Errorf("update user balance: %w", err)
 	}
 
 	// 创建使用记录
@@ -136,16 +162,16 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 		UsedAt:      time.Now(),
 	}
 	if err := s.promoRepo.CreateUsage(txCtx, usage); err != nil {
-		return fmt.Errorf("create usage record: %w", err)
+		return nil, fmt.Errorf("create usage record: %w", err)
 	}
 
 	// 增加使用次数
 	if err := s.promoRepo.IncrementUsedCount(txCtx, promoCode.ID); err != nil {
-		return fmt.Errorf("increment used count: %w", err)
+		return nil, fmt.Errorf("increment used count: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+		return nil, fmt.Errorf("commit transaction: %w", err)
 	}
 
 	s.invalidatePromoCaches(ctx, userID, promoCode.BonusAmount)
@@ -159,7 +185,56 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 		}()
 	}
 
-	return nil
+	promoCode.UsedCount++
+	return promoCode, nil
+}
+
+func (s *PromoService) GetUserHistory(ctx context.Context, userID int64, limit int) ([]RedeemCode, error) {
+	if s == nil || s.promoRepo == nil {
+		return []RedeemCode{}, nil
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	usages, _, err := s.promoRepo.ListUsagesByUser(ctx, userID, pagination.PaginationParams{Page: 1, PageSize: limit})
+	if err != nil {
+		return nil, err
+	}
+	return promoUsagesToRedeemHistory(usages), nil
+}
+
+func promoUsagesToRedeemHistory(usages []PromoCodeUsage) []RedeemCode {
+	out := make([]RedeemCode, 0, len(usages))
+	for i := range usages {
+		out = append(out, promoBalanceHistoryItem(usages[i]))
+	}
+	return out
+}
+
+func promoBalanceHistoryItem(usage PromoCodeUsage) RedeemCode {
+	usedBy := usage.UserID
+	usedAt := usage.UsedAt
+	code := fmt.Sprintf("PROMO-%d", usage.ID)
+	notes := "promo_code"
+	if usage.PromoCode != nil {
+		if trimmed := strings.TrimSpace(usage.PromoCode.Code); trimmed != "" {
+			code = trimmed
+		}
+		if trimmed := strings.TrimSpace(usage.PromoCode.Notes); trimmed != "" {
+			notes = trimmed
+		}
+	}
+	return RedeemCode{
+		ID:        -800000000000 - usage.ID,
+		Code:      code,
+		Type:      RedeemTypePromoBalance,
+		Value:     usage.BonusAmount,
+		Status:    StatusUsed,
+		UsedBy:    &usedBy,
+		UsedAt:    &usedAt,
+		CreatedAt: usage.UsedAt,
+		Notes:     notes,
+	}
 }
 
 func (s *PromoService) invalidatePromoCaches(ctx context.Context, userID int64, bonusAmount float64) {

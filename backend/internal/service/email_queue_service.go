@@ -14,6 +14,9 @@ const (
 	TaskTypeVerifyCode    = "verify_code"
 	TaskTypePasswordReset = "password_reset"
 	TaskTypeSiteMessage   = "site_message"
+
+	defaultEmailQueueBufferSize         = 10000
+	defaultSiteMessageEmailSendInterval = 100 * time.Millisecond
 )
 
 // EmailTask 邮件发送任务
@@ -33,6 +36,12 @@ type EmailQueueService struct {
 	wg           sync.WaitGroup
 	stopChan     chan struct{}
 	workers      int
+	siteMessage  siteMessageEmailThrottle
+}
+
+type siteMessageEmailThrottle struct {
+	mu     sync.Mutex
+	ticker *time.Ticker
 }
 
 // NewEmailQueueService 创建邮件队列服务
@@ -43,9 +52,12 @@ func NewEmailQueueService(emailService *EmailService, workers int) *EmailQueueSe
 
 	service := &EmailQueueService{
 		emailService: emailService,
-		taskChan:     make(chan EmailTask, 100), // 缓冲100个任务
+		taskChan:     make(chan EmailTask, defaultEmailQueueBufferSize),
 		stopChan:     make(chan struct{}),
 		workers:      workers,
+		siteMessage: siteMessageEmailThrottle{
+			ticker: time.NewTicker(defaultSiteMessageEmailSendInterval),
+		},
 	}
 
 	// 启动工作协程
@@ -80,23 +92,31 @@ func (s *EmailQueueService) worker(id int) {
 
 // processTask 处理任务
 func (s *EmailQueueService) processTask(workerID int, task EmailTask) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	switch task.TaskType {
 	case TaskTypeVerifyCode:
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		if err := s.emailService.SendVerifyCode(ctx, task.Email, task.SiteName); err != nil {
 			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d failed to send verify code to %s: %v", workerID, task.Email, err)
 		} else {
 			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d sent verify code to %s", workerID, task.Email)
 		}
 	case TaskTypePasswordReset:
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		if err := s.emailService.SendPasswordResetEmailWithCooldown(ctx, task.Email, task.SiteName, task.ResetURL); err != nil {
 			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d failed to send password reset to %s: %v", workerID, task.Email, err)
 		} else {
 			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d sent password reset to %s", workerID, task.Email)
 		}
 	case TaskTypeSiteMessage:
+		release, ok := s.acquireSiteMessageSendSlot()
+		if !ok {
+			return
+		}
+		defer release()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		if err := s.emailService.SendSiteMessageCopy(ctx, task.Email, task.Subject, task.Body); err != nil {
 			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d failed to send site message copy to %s: %v", workerID, task.Email, err)
 		} else {
@@ -104,6 +124,21 @@ func (s *EmailQueueService) processTask(workerID int, task EmailTask) {
 		}
 	default:
 		logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d unknown task type: %s", workerID, task.TaskType)
+	}
+}
+
+func (s *EmailQueueService) acquireSiteMessageSendSlot() (func(), bool) {
+	if s == nil || s.siteMessage.ticker == nil {
+		return func() {}, true
+	}
+	s.siteMessage.mu.Lock()
+
+	select {
+	case <-s.siteMessage.ticker.C:
+		return s.siteMessage.mu.Unlock, true
+	case <-s.stopChan:
+		s.siteMessage.mu.Unlock()
+		return nil, false
 	}
 }
 
@@ -163,6 +198,9 @@ func (s *EmailQueueService) EnqueueSiteMessage(email, subject, content string) e
 // Stop 停止队列服务
 func (s *EmailQueueService) Stop() {
 	close(s.stopChan)
+	if s.siteMessage.ticker != nil {
+		s.siteMessage.ticker.Stop()
+	}
 	s.wg.Wait()
 	logger.LegacyPrintf("service.email_queue", "%s", "[EmailQueue] All workers stopped")
 }

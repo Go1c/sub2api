@@ -98,7 +98,7 @@
                 <div class="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
                   <p>{{ redeemResult.message }}</p>
                   <div class="mt-3 space-y-1">
-                    <p v-if="redeemResult.type === 'balance'" class="font-medium">
+                    <p v-if="redeemResult.type === 'balance' || redeemResult.type === 'promo'" class="font-medium">
                       {{ t('redeem.added') }}: ${{ redeemResult.value.toFixed(2) }}
                     </p>
                     <p v-else-if="redeemResult.type === 'concurrency'" class="font-medium">
@@ -379,7 +379,7 @@ const contactInfo = ref('')
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
-  return type === 'balance' || type === 'balance_payment' || type === 'admin_balance'
+  return type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'promo' || type === 'promo_balance'
 }
 
 const isSubscriptionType = (type: string) => {
@@ -393,6 +393,8 @@ const isAdminAdjustment = (type: string) => {
 const getHistoryItemTitle = (item: RedeemHistoryItem) => {
   if (item.type === 'balance') {
     return t('redeem.balanceAddedRedeem')
+  } else if (item.type === 'promo_balance') {
+    return t('redeem.balanceAddedPromo')
   } else if (item.type === 'balance_payment') {
     return t('redeem.balancePaymentSubscription')
   } else if (item.type === 'admin_balance') {

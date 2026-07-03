@@ -1075,6 +1075,17 @@ func (s *adminServiceImpl) GetUserUsageStats(ctx context.Context, userID int64, 
 // GetUserBalanceHistory returns paginated balance/concurrency change records for a user.
 func (s *adminServiceImpl) GetUserBalanceHistory(ctx context.Context, userID int64, page, pageSize int, codeType string) ([]RedeemCode, int64, float64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
+	if codeType == RedeemTypePromoBalance {
+		codes, total, err := s.listPromoBalanceHistory(ctx, userID, params)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		totalRecharged, err := s.sumUserRechargeHistoryTotal(ctx, userID)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		return codes, total, totalRecharged, nil
+	}
 	if codeType == RedeemTypeAffiliateBalance {
 		codes, total, err := s.listAffiliateBalanceHistory(ctx, userID, params)
 		if err != nil {
@@ -1133,13 +1144,18 @@ func (s *adminServiceImpl) getAllUserBalanceHistory(ctx context.Context, userID 
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	codes := mergeBalanceHistoryCodes(redeemCodes, affiliateCodes, subscriptionPaymentCodes, params)
+	promoCodes, promoTotal, err := s.listPromoBalanceHistoryForMerge(ctx, userID, needed)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	externalCodes := append(subscriptionPaymentCodes, promoCodes...)
+	codes := mergeBalanceHistoryCodes(redeemCodes, affiliateCodes, externalCodes, params)
 
 	totalRecharged, err := s.sumUserRechargeHistoryTotal(ctx, userID)
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	return codes, redeemTotal + affiliateTotal + subscriptionPaymentTotal, totalRecharged, nil
+	return codes, redeemTotal + affiliateTotal + subscriptionPaymentTotal + promoTotal, totalRecharged, nil
 }
 
 func (s *adminServiceImpl) sumUserRechargeHistoryTotal(ctx context.Context, userID int64) (float64, error) {
@@ -1151,7 +1167,11 @@ func (s *adminServiceImpl) sumUserRechargeHistoryTotal(ctx context.Context, user
 	if err != nil {
 		return 0, err
 	}
-	return total + subscriptionPayments, nil
+	promoBalance, err := s.sumPromoBalanceHistoryAmount(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	return total + subscriptionPayments + promoBalance, nil
 }
 
 func (s *adminServiceImpl) sumExternalSubscriptionPaymentAmount(ctx context.Context, userID int64) (float64, error) {
@@ -1159,6 +1179,13 @@ func (s *adminServiceImpl) sumExternalSubscriptionPaymentAmount(ctx context.Cont
 		return 0, nil
 	}
 	return sumExternalSubscriptionPaymentAmount(ctx, s.entClient, userID)
+}
+
+func (s *adminServiceImpl) sumPromoBalanceHistoryAmount(ctx context.Context, userID int64) (float64, error) {
+	if s == nil || s.entClient == nil || userID <= 0 {
+		return 0, nil
+	}
+	return sumPromoBalanceHistoryAmount(ctx, s.entClient, userID)
 }
 
 func (s *adminServiceImpl) listRedeemBalanceHistoryForMerge(ctx context.Context, userID int64, needed int) ([]RedeemCode, int64, error) {
@@ -1242,6 +1269,93 @@ func (s *adminServiceImpl) listSubscriptionPaymentHistoryForMerge(ctx context.Co
 		out = out[:needed]
 	}
 	return out, total, nil
+}
+
+func (s *adminServiceImpl) listPromoBalanceHistoryForMerge(ctx context.Context, userID int64, needed int) ([]RedeemCode, int64, error) {
+	if needed <= 0 {
+		return nil, 0, nil
+	}
+
+	var (
+		out   []RedeemCode
+		total int64
+	)
+	for page := 1; len(out) < needed; page++ {
+		params := pagination.PaginationParams{Page: page, PageSize: 1000}
+		codes, currentTotal, err := s.listPromoBalanceHistory(ctx, userID, params)
+		if err != nil {
+			return nil, 0, err
+		}
+		total = currentTotal
+		out = append(out, codes...)
+		if len(codes) < params.Limit() || int64(len(out)) >= total {
+			break
+		}
+	}
+	if len(out) > needed {
+		out = out[:needed]
+	}
+	return out, total, nil
+}
+
+func (s *adminServiceImpl) listPromoBalanceHistory(ctx context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, int64, error) {
+	if s == nil || s.entClient == nil || userID <= 0 {
+		return nil, 0, nil
+	}
+	return listPromoBalanceHistory(ctx, s.entClient, userID, params)
+}
+
+func listPromoBalanceHistory(ctx context.Context, q balanceHistorySQLQueryer, userID int64, params pagination.PaginationParams) ([]RedeemCode, int64, error) {
+	if q == nil || userID <= 0 {
+		return nil, 0, nil
+	}
+
+	rows, err := q.QueryContext(ctx, `
+SELECT pcu.id,
+       COALESCE(NULLIF(pc.code, ''), 'PROMO-' || pcu.id::text) AS code,
+       pcu.bonus_amount::double precision,
+       COALESCE(pc.notes, '') AS notes,
+       pcu.used_at
+FROM promo_code_usages pcu
+LEFT JOIN promo_codes pc ON pc.id = pcu.promo_code_id
+WHERE pcu.user_id = $1
+ORDER BY pcu.used_at DESC, pcu.id DESC
+OFFSET $2
+LIMIT $3`, userID, params.Offset(), params.Limit())
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	codes := make([]RedeemCode, 0, params.Limit())
+	for rows.Next() {
+		var (
+			id     int64
+			code   string
+			amount float64
+			notes  string
+			usedAt time.Time
+		)
+		if err := rows.Scan(&id, &code, &amount, &notes, &usedAt); err != nil {
+			return nil, 0, err
+		}
+		codes = append(codes, promoBalanceHistoryItem(PromoCodeUsage{
+			ID:          id,
+			UserID:      userID,
+			BonusAmount: amount,
+			UsedAt:      usedAt,
+			PromoCode:   &PromoCode{Code: code, Notes: notes},
+		}))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	total, err := countPromoBalanceHistory(ctx, q, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return codes, total, nil
 }
 
 func (s *adminServiceImpl) listAffiliateBalanceHistory(ctx context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, int64, error) {
@@ -1401,6 +1515,34 @@ WHERE user_id = $1
 	return total.Int64, nil
 }
 
+func countPromoBalanceHistory(ctx context.Context, q balanceHistorySQLQueryer, userID int64) (int64, error) {
+	if q == nil || userID <= 0 {
+		return 0, nil
+	}
+	rows, err := q.QueryContext(ctx, `
+SELECT COUNT(*)
+FROM promo_code_usages
+WHERE user_id = $1`, userID)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var total sql.NullInt64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if !total.Valid {
+		return 0, nil
+	}
+	return total.Int64, nil
+}
+
 func countSubscriptionPaymentHistory(ctx context.Context, q balanceHistorySQLQueryer, userID int64) (int64, error) {
 	if q == nil || userID <= 0 {
 		return 0, nil
@@ -1465,6 +1607,34 @@ WHERE po.user_id = $1
   AND po.status IN (%s)`, strings.Join(statusPlaceholders, ",")),
 		args...,
 	)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var total sql.NullFloat64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if !total.Valid {
+		return 0, nil
+	}
+	return total.Float64, nil
+}
+
+func sumPromoBalanceHistoryAmount(ctx context.Context, q balanceHistorySQLQueryer, userID int64) (float64, error) {
+	if q == nil || userID <= 0 {
+		return 0, nil
+	}
+	rows, err := q.QueryContext(ctx, `
+SELECT COALESCE(SUM(bonus_amount), 0)::double precision
+FROM promo_code_usages
+WHERE user_id = $1`, userID)
 	if err != nil {
 		return 0, err
 	}

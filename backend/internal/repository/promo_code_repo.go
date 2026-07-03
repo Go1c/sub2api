@@ -239,6 +239,45 @@ func (r *promoCodeRepository) ListUsagesByPromoCode(ctx context.Context, promoCo
 	return outUsages, paginationResultFromTotal(int64(total), params), nil
 }
 
+func (r *promoCodeRepository) ListUsagesByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.PromoCodeUsage, *pagination.PaginationResult, error) {
+	q := r.client.PromoCodeUsage.Query().
+		Where(promocodeusage.UserIDEQ(userID))
+
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	usages, err := q.
+		WithPromoCode().
+		Offset(params.Offset()).
+		Limit(params.Limit()).
+		Order(dbent.Desc(promocodeusage.FieldUsedAt), dbent.Desc(promocodeusage.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return promoCodeUsageEntitiesToService(usages), paginationResultFromTotal(int64(total), params), nil
+}
+
+func (r *promoCodeRepository) SumUsagesByUser(ctx context.Context, userID int64) (float64, error) {
+	var result []struct {
+		Sum float64 `json:"sum"`
+	}
+	err := r.client.PromoCodeUsage.Query().
+		Where(promocodeusage.UserIDEQ(userID)).
+		Aggregate(dbent.As(dbent.Sum(promocodeusage.FieldBonusAmount), "sum")).
+		Scan(ctx, &result)
+	if err != nil {
+		return 0, err
+	}
+	if len(result) == 0 {
+		return 0, nil
+	}
+	return result[0].Sum, nil
+}
+
 func (r *promoCodeRepository) IncrementUsedCount(ctx context.Context, id int64) error {
 	client := clientFromContext(ctx, r.client)
 	_, err := client.PromoCode.UpdateOneID(id).
@@ -290,6 +329,9 @@ func promoCodeUsageEntityToService(m *dbent.PromoCodeUsage) *service.PromoCodeUs
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
+	}
+	if m.Edges.PromoCode != nil {
+		out.PromoCode = promoCodeEntityToService(m.Edges.PromoCode)
 	}
 	return out
 }

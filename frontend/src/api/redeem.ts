@@ -14,7 +14,7 @@ export interface RedeemHistoryItem {
   status: string
   used_at: string
   created_at: string
-  // Notes from admin for admin_balance/admin_concurrency types
+  // Notes from admin/promo/history virtual types
   notes?: string
   // Subscription-specific fields
   group_id?: number
@@ -27,7 +27,7 @@ export interface RedeemHistoryItem {
 
 /**
  * Redeem a code
- * @param code - Redeem code string
+ * @param code - Redeem or promo code string
  * @returns Redemption result with updated balance or concurrency
  */
 export async function redeem(code: string): Promise<{

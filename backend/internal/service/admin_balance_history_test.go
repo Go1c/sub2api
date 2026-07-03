@@ -139,6 +139,96 @@ func TestAffiliateBalanceHistoryItemMarksSignupBonusAction(t *testing.T) {
 	require.Equal(t, "signup_bonus", got.Notes)
 }
 
+func TestPromoBalanceHistoryItemUsesPromoCodeMetadata(t *testing.T) {
+	t.Parallel()
+
+	usedAt := time.Date(2026, 7, 3, 9, 30, 0, 0, time.UTC)
+
+	got := promoBalanceHistoryItem(PromoCodeUsage{
+		ID:          123,
+		UserID:      42,
+		BonusAmount: 1.88,
+		UsedAt:      usedAt,
+		PromoCode: &PromoCode{
+			Code:  " LUMIOAPI ",
+			Notes: "launch_bonus",
+		},
+	})
+
+	require.Equal(t, int64(-800000000123), got.ID)
+	require.Equal(t, "LUMIOAPI", got.Code)
+	require.Equal(t, RedeemTypePromoBalance, got.Type)
+	require.Equal(t, 1.88, got.Value)
+	require.Equal(t, StatusUsed, got.Status)
+	require.NotNil(t, got.UsedBy)
+	require.Equal(t, int64(42), *got.UsedBy)
+	require.NotNil(t, got.UsedAt)
+	require.Equal(t, usedAt, *got.UsedAt)
+	require.Equal(t, usedAt, got.CreatedAt)
+	require.Equal(t, "launch_bonus", got.Notes)
+}
+
+func TestListPromoBalanceHistoryIncludesPromoCodeUsages(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	usedAt := time.Date(2026, 7, 3, 10, 15, 0, 0, time.UTC)
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"code",
+		"bonus_amount",
+		"notes",
+		"used_at",
+	}).AddRow(
+		int64(77),
+		"LUMIOAPI",
+		1.88,
+		"launch_bonus",
+		usedAt,
+	)
+
+	mock.ExpectQuery("FROM promo_code_usages pcu(?s:.*)LEFT JOIN promo_codes pc(?s:.*)WHERE pcu.user_id = \\$1").
+		WithArgs(int64(7), 0, 10).
+		WillReturnRows(rows)
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\)(?s:.*)FROM promo_code_usages(?s:.*)WHERE user_id = \\$1").
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(int64(1)))
+
+	codes, total, err := listPromoBalanceHistory(context.Background(), db, 7, pagination.PaginationParams{Page: 1, PageSize: 10})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, codes, 1)
+	require.Equal(t, int64(-800000000077), codes[0].ID)
+	require.Equal(t, "LUMIOAPI", codes[0].Code)
+	require.Equal(t, RedeemTypePromoBalance, codes[0].Type)
+	require.Equal(t, 1.88, codes[0].Value)
+	require.Equal(t, StatusUsed, codes[0].Status)
+	require.NotNil(t, codes[0].UsedBy)
+	require.Equal(t, int64(7), *codes[0].UsedBy)
+	require.NotNil(t, codes[0].UsedAt)
+	require.Equal(t, usedAt, *codes[0].UsedAt)
+	require.Equal(t, "launch_bonus", codes[0].Notes)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSumPromoBalanceHistoryAmountIncludesPromoUsages(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(bonus_amount\\), 0\\)::double precision(?s:.*)FROM promo_code_usages").
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(3.76))
+
+	total, err := sumPromoBalanceHistoryAmount(context.Background(), db, 7)
+
+	require.NoError(t, err)
+	require.Equal(t, 3.76, total)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestListSubscriptionPaymentHistoryIncludesPaidExternalSubscriptionOrders(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

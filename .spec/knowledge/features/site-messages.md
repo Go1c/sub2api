@@ -77,7 +77,7 @@ ErrSiteMessageDailyLimitExceeded = infraerrors.Forbidden("SITE_MESSAGE_DAILY_LIM
 - 导航：`AppSidebar.vue` 加"站内信"项，`featureFlags.ts` 注册 `site_messages_enabled`，未读数 >0 时渲染红点；在 public settings 与认证就绪后拉未读数，读/发/回复后刷新。store（`stores/siteMessages.ts`）暴露 `unreadCount`、`hasUnread`、`refreshUnreadCount()`。
 - 用户页 `SiteMessagesView.vue`：收件/发件标签页；收件行显示未读态/发件人/主题/预览/时间；发件行显示收件人等；详情含读态与回复；撰写表单校验收件人/主题/内容，收件人仅精确邮箱或 ID。
 - 管理员用户管理：`UsersView.vue` 的"更多"菜单加"发送站内信"，弹 `UserSiteMessageModal.vue`，收件人固定，提交标题+内容到 `POST /admin/site-messages/users/:id`。
-- 管理员站内信管理：`/admin/site-message-management` 仅管理员可见，侧栏放在"公告"后。页面提供"历史补偿"与"新增补偿"两个视图；发布版默认不预置任何补偿历史、收件人或兑换码数据，真实发送后由后端持久化补偿批次，刷新页面通过 `GET /api/v1/admin/site-messages/compensation-batches` 重新加载。新增补偿页支持指定邮箱 / 全员站内信、标题 / 内容、是否同时发送邮箱副本、是否补偿、补偿额度、已生成兑换码粘贴与发送前数量提示。提交走 `POST /api/v1/admin/site-messages/compensation-batches`，后端按收件人循环创建真实站内信；指定邮箱按精确邮箱解析，全员模式分页拉取 active 用户逐个发送，若传 `inactive_days > 0` 则只拉取最近 N 天没有 `usage_logs` 记录的 active 用户（从未使用过服务的用户也包含）。该页不在站内信页面生成兑换码，只引用管理员先在"兑换码"管理中生成并入库的 `balance` 兑换码；后端按收件人校验兑换码状态为 `unused`、类型为 `balance` 且面值按两位金额精度匹配。单个收件人、兑换码或邮件入队失败不会阻塞整批，接口返回并持久化每条成功 / 失败结果供前端历史详情展示。
+- 管理员站内信管理：`/admin/site-message-management` 仅管理员可见，侧栏放在"公告"后。页面提供"历史补偿"与"新增补偿"两个视图；发布版默认不预置任何补偿历史、收件人或补偿码数据，真实发送后由后端持久化补偿批次，刷新页面通过 `GET /api/v1/admin/site-messages/compensation-batches` 重新加载。新增补偿页支持指定邮箱 / 全员站内信、标题 / 内容、是否同时发送邮箱副本、是否补偿、补偿额度、补偿码粘贴与发送前提示。提交走 `POST /api/v1/admin/site-messages/compensation-batches`，后端按收件人循环创建真实站内信；指定邮箱按精确邮箱解析，全员模式分页拉取 active 用户逐个发送，若传 `inactive_days > 0` 则只拉取最近 N 天没有 `usage_logs` 记录的 active 用户（从未使用过服务的用户也包含）。该页不在站内信页面生成补偿码，只引用后台已有记录：`/admin/redeem` 生成的 `balance` 兑换码需一人一码并校验状态 `unused`、类型 `balance`、面值匹配；`/admin/promo-codes` 中的优惠码可单码复用，后端校验优惠码状态、过期、全局次数上限、本批次已分配次数、收件用户是否已使用过该优惠码，以及赠送余额是否匹配。单个收件人、补偿码或邮件入队失败不会阻塞整批，接口返回并持久化每条成功 / 失败结果供前端历史详情展示。
 - 设置页：站内信卡片，含启停开关、每日发送上限（默认 10）、保留天数（默认 30）。
 - 路由 `/site-messages` 带 `requiresSiteMessages: true`，关闭时重定向到 `/dashboard`。
 
@@ -92,7 +92,7 @@ ErrSiteMessageDailyLimitExceeded = infraerrors.Forbidden("SITE_MESSAGE_DAILY_LIM
 - `site_messages_enabled` 进 public settings + SSR 注入；另外两个设置仅管理侧。
 - 服务层独立于 Ent（用内存 stub 测试）。
 - 保留期与发送上限按 `created_at` / 当日计数计算；过滤值保留 `affiliate_balance` 之类既有契约不破坏（指 settings 暴露与审计 diff 更新）。
-- 管理员补偿站内信的兑换码来源固定为既有兑换码系统：先由管理员在 `/admin/redeem` 生成 `balance` 兑换码并形成后台记录，再在站内信管理页引用；站内信管理页不得临时伪造或绕过兑换码记录。
+- 管理员补偿站内信只引用后台已有补偿码，不临时伪造或绕过记录。余额兑换码来源为 `/admin/redeem` 生成的 `balance` 兑换码（一人一码）；优惠码来源为 `/admin/promo-codes`，可在用户侧 `/redeem` 页面兑换，并按优惠码自身使用次数上限与每用户最多一次控制。
 - 管理员回归邮件筛选口径固定为 `usage_logs.created_at`，不是 `users.last_active_at`；即"使用服务"指 API 调用记录，登录过但最近没有 API 调用的用户仍会进入最近 N 天未使用筛选。
 
 ## 相关

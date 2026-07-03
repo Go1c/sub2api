@@ -49,6 +49,11 @@ type siteMessageRedeemCodeReaderStub struct {
 	codes map[string]*RedeemCode
 }
 
+type siteMessagePromoCodeValidatorStub struct {
+	codes  map[string]*PromoCode
+	usages map[string]map[int64]bool
+}
+
 type siteMessageCompensationBatchRepoStub struct {
 	created []*SiteMessageCompensationBatch
 	items   []SiteMessageCompensationBatch
@@ -82,6 +87,17 @@ func (s siteMessageRedeemCodeReaderStub) GetByCode(_ context.Context, code strin
 		return &copy, nil
 	}
 	return nil, ErrRedeemCodeNotFound
+}
+
+func (s siteMessagePromoCodeValidatorStub) ValidatePromoCodeForUser(_ context.Context, userID int64, code string) (*PromoCode, error) {
+	if item, ok := s.codes[code]; ok {
+		if s.usages != nil && s.usages[code][userID] {
+			return nil, ErrPromoCodeAlreadyUsed
+		}
+		copy := *item
+		return &copy, nil
+	}
+	return nil, ErrPromoCodeNotFound
 }
 
 func (s siteMessageUserRepoStub) GetByID(_ context.Context, id int64) (*User, error) {
@@ -235,7 +251,7 @@ func (s *siteMessageRepoStub) DeleteOlderThan(_ context.Context, cutoff time.Tim
 }
 
 func newSiteMessageTestService(repo *siteMessageRepoStub, settings SiteMessageSettings, users map[int64]*User, now time.Time) *SiteMessageService {
-	svc := NewSiteMessageService(repo, siteMessageUserRepoStub{users: users}, siteMessageSettingsStub{settings: settings}, nil, nil, nil)
+	svc := NewSiteMessageService(repo, siteMessageUserRepoStub{users: users}, siteMessageSettingsStub{settings: settings}, nil, nil, nil, nil)
 	svc.now = func() time.Time { return now }
 	return svc
 }
@@ -247,6 +263,7 @@ func newSiteMessageTestServiceWithRedeem(repo *siteMessageRepoStub, settings Sit
 		siteMessageSettingsStub{settings: settings},
 		nil,
 		siteMessageRedeemCodeReaderStub{codes: redeemCodes},
+		nil,
 		nil,
 	)
 	svc.now = func() time.Time { return now }
@@ -451,6 +468,149 @@ func TestSiteMessageServiceAdminSendCompensationBatchSendsRealMessages(t *testin
 	require.Contains(t, repo.created[1].Content, "CMP-B")
 }
 
+func TestSiteMessageServiceAdminSendCompensationBatchAcceptsReusablePromoCode(t *testing.T) {
+	now := time.Date(2026, 7, 3, 11, 11, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	svc := NewSiteMessageService(
+		repo,
+		siteMessageUserRepoStub{users: siteMessageTestUsers()},
+		siteMessageSettingsStub{settings: SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}},
+		nil,
+		siteMessageRedeemCodeReaderStub{codes: map[string]*RedeemCode{}},
+		siteMessagePromoCodeValidatorStub{codes: map[string]*PromoCode{
+			"LUMIOAPI": {
+				Code:        "LUMIOAPI",
+				BonusAmount: 1.88,
+				MaxUses:     100,
+				UsedCount:   0,
+				Status:      PromoCodeStatusActive,
+			},
+		}},
+		nil,
+	)
+	svc.now = func() time.Time { return now }
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:             1,
+		RecipientMode:       SiteMessageRecipientModeSelected,
+		RecipientEmails:     []string{"alice@example.com", "bob@example.com"},
+		Subject:             "优惠码补偿",
+		Content:             "基础内容",
+		CompensationEnabled: true,
+		CompensationAmount:  1.88,
+		CompensationCodes:   []string{"LUMIOAPI"},
+		CompensationFormat:  SiteMessageCompensationFormatBlock,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 2, batch.SuccessCount)
+	require.Equal(t, 0, batch.FailedCount)
+	require.Equal(t, 2, batch.CodeCount)
+	require.Len(t, batch.Codes, 2)
+	require.Equal(t, "LUMIOAPI", batch.Codes[0].Code)
+	require.Equal(t, "LUMIOAPI", batch.Codes[1].Code)
+	require.Len(t, repo.created, 2)
+	require.Contains(t, repo.created[0].Content, "LUMIOAPI")
+	require.Contains(t, repo.created[1].Content, "LUMIOAPI")
+}
+
+func TestSiteMessageServiceAdminSendCompensationBatchEnforcesPromoRemainingUses(t *testing.T) {
+	now := time.Date(2026, 7, 3, 11, 11, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	users := siteMessageTestUsers()
+	svc := NewSiteMessageService(
+		repo,
+		siteMessageUserRepoStub{users: users},
+		siteMessageSettingsStub{settings: SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}},
+		nil,
+		siteMessageRedeemCodeReaderStub{codes: map[string]*RedeemCode{}},
+		siteMessagePromoCodeValidatorStub{codes: map[string]*PromoCode{
+			"LUMIOAPI": {
+				Code:        "LUMIOAPI",
+				BonusAmount: 1.88,
+				MaxUses:     2,
+				UsedCount:   1,
+				Status:      PromoCodeStatusActive,
+			},
+		}},
+		nil,
+	)
+	svc.now = func() time.Time { return now }
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:             1,
+		RecipientMode:       SiteMessageRecipientModeSelected,
+		RecipientEmails:     []string{"alice@example.com", "bob@example.com"},
+		Subject:             "优惠码补偿",
+		Content:             "基础内容",
+		CompensationEnabled: true,
+		CompensationAmount:  1.88,
+		CompensationCodes:   []string{"LUMIOAPI"},
+		CompensationFormat:  SiteMessageCompensationFormatBlock,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, batch.SuccessCount)
+	require.Equal(t, 1, batch.FailedCount)
+	require.Equal(t, 1, batch.CodeCount)
+	require.Len(t, repo.created, 1)
+	require.Len(t, batch.Results, 2)
+	require.Equal(t, SiteMessageBatchResultSent, batch.Results[0].Status)
+	require.Equal(t, SiteMessageBatchResultFailed, batch.Results[1].Status)
+	require.Equal(t, "PROMO_CODE_MAX_USED", batch.Results[1].ErrorReason)
+}
+
+func TestSiteMessageServiceAdminSendCompensationBatchRejectsPromoAlreadyUsedByRecipient(t *testing.T) {
+	now := time.Date(2026, 7, 3, 11, 11, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	svc := NewSiteMessageService(
+		repo,
+		siteMessageUserRepoStub{users: siteMessageTestUsers()},
+		siteMessageSettingsStub{settings: SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}},
+		nil,
+		siteMessageRedeemCodeReaderStub{codes: map[string]*RedeemCode{}},
+		siteMessagePromoCodeValidatorStub{
+			codes: map[string]*PromoCode{
+				"LUMIOAPI": {
+					ID:          10,
+					Code:        "LUMIOAPI",
+					BonusAmount: 1.88,
+					MaxUses:     100,
+					UsedCount:   0,
+					Status:      PromoCodeStatusActive,
+				},
+			},
+			usages: map[string]map[int64]bool{
+				"LUMIOAPI": {2: true},
+			},
+		},
+		nil,
+	)
+	svc.now = func() time.Time { return now }
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:             1,
+		RecipientMode:       SiteMessageRecipientModeSelected,
+		RecipientEmails:     []string{"alice@example.com", "bob@example.com"},
+		Subject:             "优惠码补偿",
+		Content:             "基础内容",
+		CompensationEnabled: true,
+		CompensationAmount:  1.88,
+		CompensationCodes:   []string{"LUMIOAPI"},
+		CompensationFormat:  SiteMessageCompensationFormatBlock,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, batch.SuccessCount)
+	require.Equal(t, 1, batch.FailedCount)
+	require.Len(t, repo.created, 1)
+	require.Equal(t, int64(3), repo.created[0].RecipientID)
+	require.Len(t, batch.Results, 2)
+	require.Equal(t, SiteMessageBatchResultFailed, batch.Results[0].Status)
+	require.Equal(t, "PROMO_CODE_ALREADY_USED", batch.Results[0].ErrorReason)
+	require.Equal(t, SiteMessageBatchResultSent, batch.Results[1].Status)
+}
+
 func TestSiteMessageServiceAdminSendCompensationBatchEnqueuesEmailCopiesWhenRequested(t *testing.T) {
 	now := time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC)
 	repo := newSiteMessageRepoStub()
@@ -489,6 +649,7 @@ func TestSiteMessageServiceAdminSendCompensationBatchPersistsHistory(t *testing.
 		siteMessageRedeemCodeReaderStub{codes: map[string]*RedeemCode{
 			"CMP-A": {Code: "CMP-A", Type: RedeemTypeBalance, Value: 5, Status: StatusUnused},
 		}},
+		nil,
 		historyRepo,
 	)
 	svc.now = func() time.Time { return now }
@@ -540,6 +701,7 @@ func TestSiteMessageServiceListCompensationBatchesReturnsPersistedHistory(t *tes
 		newSiteMessageRepoStub(),
 		siteMessageUserRepoStub{users: siteMessageTestUsers()},
 		siteMessageSettingsStub{settings: SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}},
+		nil,
 		nil,
 		nil,
 		historyRepo,
@@ -855,7 +1017,7 @@ func TestSiteMessageServiceUnreadCountIgnoresReadAndExpired(t *testing.T) {
 }
 
 func TestSiteMessageServicePropagatesSettingsError(t *testing.T) {
-	svc := NewSiteMessageService(newSiteMessageRepoStub(), siteMessageUserRepoStub{users: siteMessageTestUsers()}, siteMessageSettingsStub{err: errors.New("settings down")}, nil, nil, nil)
+	svc := NewSiteMessageService(newSiteMessageRepoStub(), siteMessageUserRepoStub{users: siteMessageTestUsers()}, siteMessageSettingsStub{err: errors.New("settings down")}, nil, nil, nil, nil)
 
 	_, err := svc.UnreadCount(context.Background(), 3)
 

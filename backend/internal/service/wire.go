@@ -529,6 +529,7 @@ var ProviderSet = wire.NewSet(
 	ProvideSiteMessageSettingsReader,
 	NewSiteMessageService,
 	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
+	wire.Bind(new(SiteMessagePromoCodeValidator), new(*PromoService)),
 	ProvideLotterySettingsReader,
 	NewLotteryService,
 	wire.Bind(new(LotteryPrizeMessenger), new(*SiteMessageService)),

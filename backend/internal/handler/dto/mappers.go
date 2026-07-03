@@ -546,7 +546,7 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 
 	// Include notes for adjustment and balance-payment history items so users can
 	// see why their balance changed.
-	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency" || rc.Type == "balance_payment") && rc.Notes != "" {
+	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency" || rc.Type == "balance_payment" || rc.Type == "promo_balance") && rc.Notes != "" {
 		out.Notes = &rc.Notes
 	}
 
