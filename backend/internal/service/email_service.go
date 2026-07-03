@@ -165,12 +165,17 @@ func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) 
 
 // SendSiteMessageCopy sends an email copy for a site message.
 func (s *EmailService) SendSiteMessageCopy(ctx context.Context, to, subject, content string) error {
+	subject = siteMessageCopyEmailSubject(subject)
+	body := s.buildSiteMessageCopyEmailBody(subject, content, s.siteMessageCopyFrontendURL(ctx))
+	return s.SendEmail(ctx, to, subject, body)
+}
+
+func siteMessageCopyEmailSubject(subject string) string {
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
-		subject = "Site Message"
+		return "Site Message"
 	}
-	body := s.buildSiteMessageCopyEmailBody(subject, content, s.siteMessageCopyFrontendURL(ctx))
-	return s.SendEmail(ctx, to, "[Site Message] "+subject, body)
+	return subject
 }
 
 const smtpDialTimeout = 10 * time.Second

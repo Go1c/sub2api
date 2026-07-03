@@ -487,12 +487,20 @@
                   <div>
                     <div class="mb-1.5 flex items-center justify-between gap-3">
                       <label class="input-label mb-0">{{ t('admin.siteMessageManagement.generatedCodes') }}</label>
-                      <router-link
-                        to="/admin/redeem"
-                        class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                      >
-                        {{ t('admin.siteMessageManagement.openRedeemManagement') }}
-                      </router-link>
+                      <div class="flex flex-wrap items-center gap-3">
+                        <router-link
+                          to="/admin/redeem"
+                          class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                        >
+                          {{ t('admin.siteMessageManagement.openRedeemManagement') }}
+                        </router-link>
+                        <router-link
+                          to="/admin/promo-codes"
+                          class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                        >
+                          {{ t('admin.siteMessageManagement.openPromoManagement') }}
+                        </router-link>
+                      </div>
                     </div>
                     <textarea
                       v-model="compensationCodesInput"

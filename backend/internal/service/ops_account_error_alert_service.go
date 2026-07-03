@@ -17,7 +17,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -28,17 +27,17 @@ const (
 	opsAccountErrorAlertSkipLogInterval = time.Minute
 )
 
-var opsAccountErrorAlertReleaseScript = redis.NewScript(`
-if redis.call("GET", KEYS[1]) == ARGV[1] then
-  return redis.call("DEL", KEYS[1])
-end
-return 0
-`)
-
 var accountErrorAlertFingerprintSpaceRE = regexp.MustCompile(`\s+`)
 
 type OpsTelegramSender interface {
 	SendMessage(ctx context.Context, botToken, chatID, text string) error
+}
+
+type OpsAccountErrorAlertLockStore interface {
+	Acquire(ctx context.Context, key, value string, ttl time.Duration) (bool, error)
+	Release(ctx context.Context, key, value string) error
+	Exists(ctx context.Context, key string) (bool, error)
+	SetCooldown(ctx context.Context, key string, ttl time.Duration) error
 }
 
 type telegramOpsSender struct {
@@ -111,9 +110,9 @@ type OpsAccountErrorAlertService struct {
 	opsRepo    OpsRepository
 	sender     OpsTelegramSender
 
-	redisClient *redis.Client
-	cfg         *config.Config
-	instanceID  string
+	lockStore  OpsAccountErrorAlertLockStore
+	cfg        *config.Config
+	instanceID string
 
 	stopCh    chan struct{}
 	startOnce sync.Once
@@ -131,22 +130,22 @@ func NewOpsAccountErrorAlertService(
 	opsService *OpsService,
 	opsRepo OpsRepository,
 	sender OpsTelegramSender,
-	redisClient *redis.Client,
+	lockStore OpsAccountErrorAlertLockStore,
 	cfg *config.Config,
 ) *OpsAccountErrorAlertService {
 	return &OpsAccountErrorAlertService{
-		opsService:  opsService,
-		opsRepo:     opsRepo,
-		sender:      sender,
-		redisClient: redisClient,
-		cfg:         cfg,
-		instanceID:  uuid.NewString(),
-		cooldowns:   map[string]time.Time{},
-		startOnce:   sync.Once{},
-		stopOnce:    sync.Once{},
-		cooldownMu:  sync.Mutex{},
-		skipLogMu:   sync.Mutex{},
-		skipLogAt:   time.Time{},
+		opsService: opsService,
+		opsRepo:    opsRepo,
+		sender:     sender,
+		lockStore:  lockStore,
+		cfg:        cfg,
+		instanceID: uuid.NewString(),
+		cooldowns:  map[string]time.Time{},
+		startOnce:  sync.Once{},
+		stopOnce:   sync.Once{},
+		cooldownMu: sync.Mutex{},
+		skipLogMu:  sync.Mutex{},
+		skipLogAt:  time.Time{},
 	}
 }
 
@@ -154,10 +153,10 @@ func ProvideOpsAccountErrorAlertService(
 	opsService *OpsService,
 	opsRepo OpsRepository,
 	sender OpsTelegramSender,
-	redisClient *redis.Client,
+	lockStore OpsAccountErrorAlertLockStore,
 	cfg *config.Config,
 ) *OpsAccountErrorAlertService {
-	svc := NewOpsAccountErrorAlertService(opsService, opsRepo, sender, redisClient, cfg)
+	svc := NewOpsAccountErrorAlertService(opsService, opsRepo, sender, lockStore, cfg)
 	svc.Start()
 	return svc
 }
@@ -333,7 +332,7 @@ func (s *OpsAccountErrorAlertService) tryAcquireLeaderLock(ctx context.Context, 
 	if !lock.Enabled {
 		return nil, true
 	}
-	if s.redisClient == nil {
+	if s.lockStore == nil {
 		return nil, true
 	}
 	key := strings.TrimSpace(lock.Key)
@@ -344,7 +343,7 @@ func (s *OpsAccountErrorAlertService) tryAcquireLeaderLock(ctx context.Context, 
 	if ttl <= 0 {
 		ttl = opsAccountErrorAlertLeaderLockTTLDefault
 	}
-	ok, err := s.redisClient.SetNX(ctx, key, s.instanceID, ttl).Result()
+	ok, err := s.lockStore.Acquire(ctx, key, s.instanceID, ttl)
 	if err != nil {
 		logger.LegacyPrintf("service.ops_account_error_alert", "[OpsAccountErrorAlert] leader lock SetNX failed; skipping this cycle: %v", err)
 		return nil, false
@@ -356,7 +355,7 @@ func (s *OpsAccountErrorAlertService) tryAcquireLeaderLock(ctx context.Context, 
 	return func() {
 		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer releaseCancel()
-		_, _ = opsAccountErrorAlertReleaseScript.Run(releaseCtx, s.redisClient, []string{key}, s.instanceID).Result()
+		_ = s.lockStore.Release(releaseCtx, key, s.instanceID)
 	}, true
 }
 
@@ -392,10 +391,10 @@ func (s *OpsAccountErrorAlertService) isCoolingDown(ctx context.Context, cfg *Op
 	if key == "" {
 		return false
 	}
-	if s.redisClient != nil {
-		exists, err := s.redisClient.Exists(ctx, key).Result()
+	if s.lockStore != nil {
+		exists, err := s.lockStore.Exists(ctx, key)
 		if err == nil {
-			return exists > 0
+			return exists
 		}
 	}
 
@@ -427,8 +426,8 @@ func (s *OpsAccountErrorAlertService) markCooldown(ctx context.Context, cfg *Ops
 		if key == "" {
 			continue
 		}
-		if s.redisClient != nil {
-			_ = s.redisClient.Set(ctx, key, "1", ttl).Err()
+		if s.lockStore != nil {
+			_ = s.lockStore.SetCooldown(ctx, key, ttl)
 			continue
 		}
 		s.cooldownMu.Lock()

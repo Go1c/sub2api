@@ -18,6 +18,7 @@ type SiteMessageService struct {
 	settings            SiteMessageSettingsReader
 	emailSender         SiteMessageEmailSender
 	redeemCodes         SiteMessageRedeemCodeReader
+	promoCodes          SiteMessagePromoCodeValidator
 	compensationBatches SiteMessageCompensationBatchRepository
 	now                 func() time.Time
 }
@@ -28,6 +29,7 @@ func NewSiteMessageService(
 	settings SiteMessageSettingsReader,
 	emailSender SiteMessageEmailSender,
 	redeemCodes SiteMessageRedeemCodeReader,
+	promoCodes SiteMessagePromoCodeValidator,
 	compensationBatches SiteMessageCompensationBatchRepository,
 ) *SiteMessageService {
 	return &SiteMessageService{
@@ -36,6 +38,7 @@ func NewSiteMessageService(
 		settings:            settings,
 		emailSender:         emailSender,
 		redeemCodes:         redeemCodes,
+		promoCodes:          promoCodes,
 		compensationBatches: compensationBatches,
 		now:                 time.Now,
 	}
@@ -120,6 +123,7 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 	messages := make([]int64, 0, len(targets))
 	assignments := make([]SiteMessageCompensationCodeAssignment, 0, len(targets))
 	results := make([]SiteMessageCompensationBatchResult, 0, len(targets))
+	promoAssignments := make(map[int64]int)
 	for i, target := range targets {
 		result := SiteMessageCompensationBatchResult{
 			Recipient: target.Email,
@@ -135,9 +139,10 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 		result.UserID = recipient.ID
 
 		code := ""
+		var promoCode *PromoCode
 		if input.CompensationEnabled {
 			var codeErr *SiteMessageCompensationBatchResult
-			code, codeErr = s.validateCompensationCodeForTarget(ctx, recipient.Email, i, codes, input.CompensationAmount)
+			code, promoCode, codeErr = s.validateCompensationCodeForTarget(ctx, recipient, i, codes, input.CompensationAmount, promoAssignments)
 			result.Code = code
 			if codeErr != nil {
 				codeErr.UserID = recipient.ID
@@ -177,6 +182,9 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 				Code:      code,
 				Status:    StatusUnused,
 			})
+			if promoCode != nil {
+				promoAssignments[promoCode.ID]++
+			}
 		}
 		results = append(results, result)
 	}
@@ -576,35 +584,108 @@ func (s *SiteMessageService) resolveBatchTarget(ctx context.Context, target site
 	return nil, failedBatchResult(email, "", "SITE_MESSAGE_RECIPIENT_LOOKUP_FAILED", "recipient lookup failed")
 }
 
-func (s *SiteMessageService) validateCompensationCodeForTarget(ctx context.Context, recipient string, index int, codes []string, amount float64) (string, *SiteMessageCompensationBatchResult) {
+func (s *SiteMessageService) validateCompensationCodeForTarget(ctx context.Context, recipient *SiteMessageRecipient, index int, codes []string, amount float64, promoAssignments map[int64]int) (string, *PromoCode, *SiteMessageCompensationBatchResult) {
+	recipientEmail := ""
+	var userID int64
+	if recipient != nil {
+		recipientEmail = recipient.Email
+		userID = recipient.ID
+	}
 	if amount <= 0 {
-		return "", failedBatchResult(recipient, "", "SITE_MESSAGE_REDEEM_CODE_INVALID", "compensation amount is invalid")
+		return "", nil, failedBatchResult(recipientEmail, "", "SITE_MESSAGE_REDEEM_CODE_INVALID", "compensation amount is invalid")
 	}
 	if index >= len(codes) {
-		return "", failedBatchResult(recipient, "", "SITE_MESSAGE_REDEEM_CODE_SHORTAGE", "missing redeem code")
+		if len(codes) == 1 {
+			code := codes[0]
+			if promoCode, found, result := s.validatePromoCompensationCode(ctx, userID, recipientEmail, code, amount, promoAssignments); found {
+				return code, promoCode, result
+			}
+		}
+		return "", nil, failedBatchResult(recipientEmail, "", "SITE_MESSAGE_REDEEM_CODE_SHORTAGE", "missing redeem code")
 	}
 	code := codes[index]
 	if s.redeemCodes == nil {
-		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_INVALID", "redeem code validation is unavailable")
+		if promoCode, found, result := s.validatePromoCompensationCode(ctx, userID, recipientEmail, code, amount, promoAssignments); found {
+			return code, promoCode, result
+		}
+		return code, nil, failedBatchResult(recipientEmail, code, "SITE_MESSAGE_REDEEM_CODE_INVALID", "redeem code validation is unavailable")
 	}
 
 	redeemCode, err := s.redeemCodes.GetByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, ErrRedeemCodeNotFound) {
-			return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_NOT_FOUND", "redeem code not found")
+			if promoCode, found, result := s.validatePromoCompensationCode(ctx, userID, recipientEmail, code, amount, promoAssignments); found {
+				return code, promoCode, result
+			}
+			return code, nil, failedBatchResult(recipientEmail, code, "SITE_MESSAGE_REDEEM_CODE_NOT_FOUND", "redeem code not found")
 		}
-		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_LOOKUP_FAILED", "redeem code lookup failed")
+		return code, nil, failedBatchResult(recipientEmail, code, "SITE_MESSAGE_REDEEM_CODE_LOOKUP_FAILED", "redeem code lookup failed")
 	}
 	if redeemCode.Type != RedeemTypeBalance {
-		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_TYPE_INVALID", "redeem code is not a balance code")
+		return code, nil, failedBatchResult(recipientEmail, code, "SITE_MESSAGE_REDEEM_CODE_TYPE_INVALID", "redeem code is not a balance code")
 	}
 	if redeemCode.Status != StatusUnused {
-		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_STATUS_INVALID", "redeem code is not unused")
+		return code, nil, failedBatchResult(recipientEmail, code, "SITE_MESSAGE_REDEEM_CODE_STATUS_INVALID", "redeem code is not unused")
 	}
 	if !sameMoney(redeemCode.Value, amount) {
-		return code, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_AMOUNT_MISMATCH", "redeem code amount does not match compensation amount")
+		return code, nil, failedBatchResult(recipientEmail, code, "SITE_MESSAGE_REDEEM_CODE_AMOUNT_MISMATCH", "redeem code amount does not match compensation amount")
 	}
-	return code, nil
+	return code, nil, nil
+}
+
+func (s *SiteMessageService) validatePromoCompensationCode(ctx context.Context, userID int64, recipient, code string, amount float64, promoAssignments map[int64]int) (*PromoCode, bool, *SiteMessageCompensationBatchResult) {
+	if s.promoCodes == nil {
+		return nil, false, nil
+	}
+
+	promoCode, err := s.promoCodes.ValidatePromoCodeForUser(ctx, userID, code)
+	if err != nil {
+		if errors.Is(err, ErrPromoCodeNotFound) {
+			return nil, false, nil
+		}
+		return nil, true, failedBatchResult(recipient, code, promoCompensationErrorReason(err), promoCompensationErrorMessage(err))
+	}
+	if !sameMoney(promoCode.BonusAmount, amount) {
+		return promoCode, true, failedBatchResult(recipient, code, "SITE_MESSAGE_REDEEM_CODE_AMOUNT_MISMATCH", "promo code amount does not match compensation amount")
+	}
+	if promoCode.MaxUses > 0 && promoCode.UsedCount+promoAssignments[promoCode.ID] >= promoCode.MaxUses {
+		return promoCode, true, failedBatchResult(recipient, code, "PROMO_CODE_MAX_USED", "promo code has reached maximum uses")
+	}
+	return promoCode, true, nil
+}
+
+func promoCompensationErrorReason(err error) string {
+	switch {
+	case errors.Is(err, ErrPromoCodeExpired):
+		return "PROMO_CODE_EXPIRED"
+	case errors.Is(err, ErrPromoCodeDisabled):
+		return "PROMO_CODE_DISABLED"
+	case errors.Is(err, ErrPromoCodeMaxUsed):
+		return "PROMO_CODE_MAX_USED"
+	case errors.Is(err, ErrPromoCodeAlreadyUsed):
+		return "PROMO_CODE_ALREADY_USED"
+	case errors.Is(err, ErrPromoCodeInvalid):
+		return "PROMO_CODE_INVALID"
+	default:
+		return "SITE_MESSAGE_PROMO_CODE_INVALID"
+	}
+}
+
+func promoCompensationErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrPromoCodeExpired):
+		return "promo code has expired"
+	case errors.Is(err, ErrPromoCodeDisabled):
+		return "promo code is disabled"
+	case errors.Is(err, ErrPromoCodeMaxUsed):
+		return "promo code has reached maximum uses"
+	case errors.Is(err, ErrPromoCodeAlreadyUsed):
+		return "recipient has already used this promo code"
+	case errors.Is(err, ErrPromoCodeInvalid):
+		return "promo code is invalid"
+	default:
+		return "promo code validation failed"
+	}
 }
 
 func failedBatchResult(recipient, code, reason, message string) *SiteMessageCompensationBatchResult {

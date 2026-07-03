@@ -142,6 +142,10 @@ type SiteMessageRedeemCodeReader interface {
 	GetByCode(ctx context.Context, code string) (*RedeemCode, error)
 }
 
+type SiteMessagePromoCodeValidator interface {
+	ValidatePromoCodeForUser(ctx context.Context, userID int64, code string) (*PromoCode, error)
+}
+
 type SiteMessageCompensationBatchRepository interface {
 	Create(ctx context.Context, batch *SiteMessageCompensationBatch) error
 	List(ctx context.Context, params pagination.PaginationParams) ([]SiteMessageCompensationBatch, *pagination.PaginationResult, error)

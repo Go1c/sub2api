@@ -19,6 +19,41 @@ type BuildInfo struct {
 	BuildType string
 }
 
+var opsAccountErrorAlertReleaseScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
+
+type opsAccountErrorAlertRedisStore struct {
+	client *redis.Client
+}
+
+func ProvideOpsAccountErrorAlertLockStore(redisClient *redis.Client) OpsAccountErrorAlertLockStore {
+	if redisClient == nil {
+		return nil
+	}
+	return &opsAccountErrorAlertRedisStore{client: redisClient}
+}
+
+func (s *opsAccountErrorAlertRedisStore) Acquire(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return s.client.SetNX(ctx, key, value, ttl).Result()
+}
+
+func (s *opsAccountErrorAlertRedisStore) Release(ctx context.Context, key, value string) error {
+	return opsAccountErrorAlertReleaseScript.Run(ctx, s.client, []string{key}, value).Err()
+}
+
+func (s *opsAccountErrorAlertRedisStore) Exists(ctx context.Context, key string) (bool, error) {
+	count, err := s.client.Exists(ctx, key).Result()
+	return count > 0, err
+}
+
+func (s *opsAccountErrorAlertRedisStore) SetCooldown(ctx context.Context, key string, ttl time.Duration) error {
+	return s.client.Set(ctx, key, "1", ttl).Err()
+}
+
 // ProvidePricingService creates and initializes PricingService
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
@@ -529,6 +564,7 @@ var ProviderSet = wire.NewSet(
 	ProvideSiteMessageSettingsReader,
 	NewSiteMessageService,
 	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
+	wire.Bind(new(SiteMessagePromoCodeValidator), new(*PromoService)),
 	ProvideLotterySettingsReader,
 	NewLotteryService,
 	wire.Bind(new(LotteryPrizeMessenger), new(*SiteMessageService)),
@@ -568,6 +604,7 @@ var ProviderSet = wire.NewSet(
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
 	ProvideOpsAlertEvaluatorService,
+	ProvideOpsAccountErrorAlertLockStore,
 	ProvideOpsAccountErrorAlertService,
 	ProvideOpsCleanupService,
 	ProvideOpsScheduledReportService,

@@ -70,6 +70,11 @@ func TestBuildSiteMessageCopyEmailBodyEscapesFrontendURL(t *testing.T) {
 	require.NotContains(t, body, "%!")
 }
 
+func TestSiteMessageCopyEmailSubjectUsesOriginalSubject(t *testing.T) {
+	require.Equal(t, "LumioAPI 全员通知", siteMessageCopyEmailSubject(" LumioAPI 全员通知 "))
+	require.Equal(t, "Site Message", siteMessageCopyEmailSubject(" "))
+}
+
 func TestSiteMessageCopyFrontendURLReadsConfiguredSetting(t *testing.T) {
 	repo := &emailServiceSettingRepoStub{
 		values: map[string]string{
