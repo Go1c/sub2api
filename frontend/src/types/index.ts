@@ -464,6 +464,7 @@ export interface AdminSendCompensationBatchRequest {
   compensation_codes?: string[]
   compensation_format?: 'block' | 'compact'
   send_email?: boolean
+  inactive_days?: number
 }
 
 export interface SiteMessageCompensationCodeAssignment {

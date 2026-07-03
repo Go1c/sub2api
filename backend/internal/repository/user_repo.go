@@ -539,6 +539,9 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 			apikey.DeletedAtIsNil(),
 		))
 	}
+	if filters.NoUsageSince != nil {
+		q = q.Where(userNoUsageSincePredicate(*filters.NoUsageSince))
+	}
 
 	// If attribute filters are specified, we need to filter by user IDs first
 	var allowedUserIDs []int64
@@ -964,6 +967,18 @@ func userEmailLookupPredicate(email string) predicate.User {
 				Ident(s.C(dbuser.FieldEmail)).
 				WriteString(")) = ").
 				Arg(normalized)
+		}))
+	})
+}
+
+func userNoUsageSincePredicate(cutoff time.Time) predicate.User {
+	return predicate.User(func(s *entsql.Selector) {
+		s.Where(entsql.P(func(b *entsql.Builder) {
+			b.WriteString("NOT EXISTS (SELECT 1 FROM usage_logs ul WHERE ul.user_id = ").
+				Ident(s.C(dbuser.FieldID)).
+				WriteString(" AND ul.created_at >= ").
+				Arg(cutoff.UTC()).
+				WriteString(")")
 		}))
 	})
 }

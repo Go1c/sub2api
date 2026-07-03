@@ -54,6 +54,7 @@ type AdminSendCompensationBatchRequest struct {
 	CompensationCodes   []string `json:"compensation_codes"`
 	CompensationFormat  string   `json:"compensation_format"`
 	SendEmail           *bool    `json:"send_email"`
+	InactiveDays        int      `json:"inactive_days"`
 }
 
 func (r AdminSendCompensationBatchRequest) ShouldSendEmail() bool {

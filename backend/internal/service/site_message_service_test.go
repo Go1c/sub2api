@@ -113,6 +113,9 @@ func (s siteMessageUserRepoStub) ListWithFilters(_ context.Context, params pagin
 		if filters.Role != "" && user.Role != filters.Role {
 			continue
 		}
+		if filters.NoUsageSince != nil && user.LastUsedAt != nil && !user.LastUsedAt.Before(*filters.NoUsageSince) {
+			continue
+		}
 		if search == "" ||
 			strings.Contains(strings.ToLower(user.Email), search) ||
 			strings.Contains(strings.ToLower(user.Username), search) {
@@ -448,6 +451,32 @@ func TestSiteMessageServiceAdminSendCompensationBatchSendsRealMessages(t *testin
 	require.Contains(t, repo.created[1].Content, "CMP-B")
 }
 
+func TestSiteMessageServiceAdminSendCompensationBatchEnqueuesEmailCopiesWhenRequested(t *testing.T) {
+	now := time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC)
+	repo := newSiteMessageRepoStub()
+	emailSender := &siteMessageEmailSenderStub{}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), now)
+	svc.emailSender = emailSender
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:         1,
+		RecipientMode:   SiteMessageRecipientModeSelected,
+		RecipientEmails: []string{"alice@example.com", "bob@example.com"},
+		Subject:         "回归邀请",
+		Content:         "欢迎回来",
+		SendEmail:       true,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 2, batch.SuccessCount)
+	require.Len(t, repo.created, 2)
+	require.Len(t, emailSender.calls, 2)
+	require.Equal(t, "alice@example.com", emailSender.calls[0].email)
+	require.Equal(t, "回归邀请", emailSender.calls[0].subject)
+	require.Equal(t, "欢迎回来", emailSender.calls[0].content)
+	require.Equal(t, "bob@example.com", emailSender.calls[1].email)
+}
+
 func TestSiteMessageServiceAdminSendCompensationBatchPersistsHistory(t *testing.T) {
 	now := time.Date(2026, 6, 29, 11, 11, 0, 0, time.UTC)
 	repo := newSiteMessageRepoStub()
@@ -689,6 +718,37 @@ func TestSiteMessageServiceAdminSendCompensationBatchAllUsersLoopsActiveUsers(t 
 	for _, message := range repo.created {
 		require.NotEqual(t, int64(4), message.RecipientID)
 	}
+}
+
+func TestSiteMessageServiceAdminSendCompensationBatchAllUsersFiltersInactiveDays(t *testing.T) {
+	now := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
+	cutoff := now.AddDate(0, 0, -3)
+	recent := cutoff.Add(time.Hour)
+	old := cutoff.Add(-time.Hour)
+	repo := newSiteMessageRepoStub()
+	users := siteMessageTestUsers()
+	users[1].LastUsedAt = &recent
+	users[2].LastUsedAt = &old
+	users[3].LastUsedAt = &recent
+	users[4] = &User{ID: 4, Email: "never-used@example.com", Username: "never", Role: RoleUser, Status: StatusActive}
+	users[5] = &User{ID: 5, Email: "disabled-old@example.com", Username: "disabled", Role: RoleUser, Status: StatusDisabled, LastUsedAt: &old}
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, users, now)
+
+	batch, err := svc.AdminSendCompensationBatch(context.Background(), AdminSendCompensationBatchInput{
+		AdminID:       1,
+		RecipientMode: SiteMessageRecipientModeAll,
+		Subject:       "回归邀请",
+		Content:       "好久不见",
+		InactiveDays:  3,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "最近 3 天未使用用户", batch.Audience)
+	require.Equal(t, 2, batch.RecipientCount)
+	require.Equal(t, 2, batch.SuccessCount)
+	require.Len(t, repo.created, 2)
+	require.Equal(t, int64(2), repo.created[0].RecipientID)
+	require.Equal(t, int64(4), repo.created[1].RecipientID)
 }
 
 func TestSiteMessageServiceOpenMarksRecipientMessageRead(t *testing.T) {

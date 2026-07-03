@@ -82,6 +82,7 @@ func (h *SiteMessageHandler) SendCompensationBatch(c *gin.Context) {
 		CompensationCodes:   req.CompensationCodes,
 		CompensationFormat:  req.CompensationFormat,
 		SendEmail:           req.ShouldSendEmail(),
+		InactiveDays:        req.InactiveDays,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

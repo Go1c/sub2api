@@ -16,6 +16,7 @@ const (
 	SiteMessagesDailySendLimitMax     = 1000
 	SiteMessagesRetentionDaysMin      = 1
 	SiteMessagesRetentionDaysMax      = 365
+	SiteMessagesInactiveDaysMax       = 3650
 )
 
 var (
@@ -96,6 +97,7 @@ type AdminSendCompensationBatchInput struct {
 	CompensationCodes   []string
 	CompensationFormat  string
 	SendEmail           bool
+	InactiveDays        int
 }
 
 type SiteMessageCompensationCodeAssignment struct {
