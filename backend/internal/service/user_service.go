@@ -81,6 +81,9 @@ type UserListFilters struct {
 	// IncludeDeleted 为 true 时绕过软删除过滤，返回含已删除（deleted_at 非空）的用户。
 	// 仅供 /admin/usage 的 SearchUsers 端点使用，其他列表调用方不要设置。
 	IncludeDeleted bool
+	// NoUsageSince filters users with no usage_logs rows at or after this timestamp.
+	// Users that have never used the service are included.
+	NoUsageSince *time.Time
 }
 
 type UserRepository interface {

@@ -346,6 +346,7 @@
                 </div>
                 <textarea
                   v-model="recipientInput"
+                  data-testid="site-message-recipient-input"
                   rows="7"
                   class="input resize-none"
                   :placeholder="t('admin.siteMessageManagement.recipientPlaceholder')"
@@ -360,10 +361,53 @@
                 </div>
               </div>
 
+              <div v-if="recipientMode === 'all'">
+                <label class="input-label">{{ t('admin.siteMessageManagement.recipientFilter') }}</label>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    v-for="filter in recipientFilters"
+                    :key="filter.value"
+                    :data-testid="`site-message-recipient-filter-${filter.value}`"
+                    type="button"
+                    class="min-h-[76px] rounded-lg border p-4 text-left transition-colors"
+                    :class="recipientFilter === filter.value
+                      ? 'border-primary-500 bg-primary-50 text-primary-900 dark:border-primary-500 dark:bg-primary-900/20 dark:text-primary-100'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-primary-200 hover:bg-primary-50/40 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:border-primary-700 dark:hover:bg-primary-900/10'"
+                    :aria-pressed="recipientFilter === filter.value"
+                    @click="recipientFilter = filter.value"
+                  >
+                    <span class="flex items-center gap-2 font-medium">
+                      <Icon :name="filter.icon" size="sm" />
+                      {{ filter.label }}
+                    </span>
+                    <span class="mt-2 block text-sm text-gray-500 dark:text-dark-400">
+                      {{ filter.description }}
+                    </span>
+                  </button>
+                </div>
+                <div v-if="recipientFilter === 'inactive'" class="mt-3 max-w-xs">
+                  <label class="input-label">{{ t('admin.siteMessageManagement.inactiveDays') }}</label>
+                  <input
+                    v-model="inactiveDaysInput"
+                    data-testid="site-message-inactive-days-input"
+                    type="number"
+                    min="1"
+                    max="3650"
+                    step="1"
+                    class="input"
+                    @blur="normalizeInactiveDaysInput"
+                  />
+                  <p class="input-hint">
+                    {{ t('admin.siteMessageManagement.inactiveDaysHint') }}
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <label class="input-label">{{ t('admin.siteMessageManagement.subject') }}</label>
                 <input
                   v-model="messageSubject"
+                  data-testid="site-message-subject-input"
                   type="text"
                   class="input"
                   :placeholder="t('admin.siteMessageManagement.subjectPlaceholder')"
@@ -374,10 +418,25 @@
                 <label class="input-label">{{ t('admin.siteMessageManagement.content') }}</label>
                 <textarea
                   v-model="messageContent"
+                  data-testid="site-message-content-input"
                   rows="8"
                   class="input resize-none"
                   :placeholder="t('admin.siteMessageManagement.contentPlaceholder')"
                 ></textarea>
+              </div>
+
+              <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <label class="text-sm font-medium text-gray-800 dark:text-gray-200">
+                      {{ t('admin.siteMessageManagement.sendEmail') }}
+                    </label>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+                      {{ t('admin.siteMessageManagement.sendEmailHint') }}
+                    </p>
+                  </div>
+                  <Toggle data-testid="site-message-send-email-toggle" v-model="sendEmail" />
+                </div>
               </div>
 
               <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
@@ -500,6 +559,9 @@
                   <span v-if="compensationEnabled" class="badge badge-success">
                     {{ t('admin.siteMessageManagement.preparedRedeemCodes') }}
                   </span>
+                  <span v-if="sendEmail" class="badge badge-primary">
+                    {{ t('admin.siteMessageManagement.emailCopyBadge') }}
+                  </span>
                 </div>
                 <h3 class="mt-3 text-lg font-semibold text-gray-900 dark:text-white">
                   {{ previewSubject }}
@@ -531,6 +593,12 @@
                   {{ t('admin.siteMessageManagement.previewCompensation') }}
                 </span>
                 <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ compensationSummary }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-900/50">
+                <span class="text-sm text-gray-500 dark:text-dark-400">
+                  {{ t('admin.siteMessageManagement.previewEmail') }}
+                </span>
+                <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ sendEmailSummary }}</span>
               </div>
             </div>
 
@@ -574,12 +642,13 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 
 type ViewMode = 'history' | 'new'
 type RecipientMode = 'selected' | 'all'
+type RecipientFilter = 'all' | 'inactive'
 type CompensationFormat = 'block' | 'compact'
 type CompensationStatus = 'sent' | 'partial' | 'failed' | 'sending' | 'cancelled'
 type CodeStatus = 'unused' | 'used' | 'reserved' | 'recorded'
 type BatchResultStatus = 'sent' | 'failed'
 type HistoryStatusFilter = 'all' | CompensationStatus
-type IconName = 'users' | 'mail' | 'gift' | 'globe' | 'inbox' | 'document' | 'dollar' | 'copy'
+type IconName = 'users' | 'mail' | 'gift' | 'globe' | 'inbox' | 'document' | 'dollar' | 'copy' | 'clock'
 
 interface CompensationCode {
   recipient: string
@@ -619,9 +688,12 @@ const appStore = useAppStore()
 
 const activeView = ref<ViewMode>('history')
 const recipientMode = ref<RecipientMode>('selected')
+const recipientFilter = ref<RecipientFilter>('all')
 const recipientInput = ref('')
 const messageSubject = ref('')
 const messageContent = ref('')
+const sendEmail = ref(false)
+const inactiveDaysInput = ref('3')
 const compensationEnabled = ref(false)
 const compensationAmount = ref('0.00')
 const compensationFormat = ref<CompensationFormat>('block')
@@ -653,6 +725,21 @@ const recipientModes = computed<Array<{ value: RecipientMode; label: string; des
     label: t('admin.siteMessageManagement.mode.all'),
     description: t('admin.siteMessageManagement.mode.allDescription'),
     icon: 'globe',
+  },
+])
+
+const recipientFilters = computed<Array<{ value: RecipientFilter; label: string; description: string; icon: IconName }>>(() => [
+  {
+    value: 'all',
+    label: t('admin.siteMessageManagement.filter.all'),
+    description: t('admin.siteMessageManagement.filter.allDescription'),
+    icon: 'globe',
+  },
+  {
+    value: 'inactive',
+    label: t('admin.siteMessageManagement.filter.inactive'),
+    description: t('admin.siteMessageManagement.filter.inactiveDescription'),
+    icon: 'clock',
   },
 ])
 
@@ -704,6 +791,8 @@ const remainingRecipientCount = computed(() => Math.max(recipientTargets.value.l
 const normalizedCompensationAmount = computed(() => {
   return parseMoneyInput(compensationAmount.value)
 })
+
+const normalizedInactiveDays = computed(() => parseInactiveDaysInput(inactiveDaysInput.value))
 
 const formattedCompensationAmount = computed(() => currency(normalizedCompensationAmount.value))
 
@@ -764,9 +853,15 @@ const recipientModeLabel = computed(() =>
     : t('admin.siteMessageManagement.mode.selected'),
 )
 
+const allRecipientLabel = computed(() =>
+  recipientFilter.value === 'inactive'
+    ? t('admin.siteMessageManagement.inactiveUsersCount', { days: normalizedInactiveDays.value || 0 })
+    : t('admin.siteMessageManagement.allUsers'),
+)
+
 const previewRecipientLabel = computed(() => {
   if (recipientMode.value === 'all') {
-    return t('admin.siteMessageManagement.allUsers')
+    return allRecipientLabel.value
   }
   if (recipientTargets.value.length === 1) {
     return recipientTargets.value[0]
@@ -776,7 +871,7 @@ const previewRecipientLabel = computed(() => {
 
 const recipientCountLabel = computed(() =>
   recipientMode.value === 'all'
-    ? t('admin.siteMessageManagement.allUsers')
+    ? allRecipientLabel.value
     : t('admin.siteMessageManagement.countUsers', { count: recipientTargets.value.length }),
 )
 
@@ -787,6 +882,10 @@ const compensationSummary = computed(() =>
         count: compensationCodes.value.length,
       })
     : t('common.disabled'),
+)
+
+const sendEmailSummary = computed(() =>
+  sendEmail.value ? t('admin.siteMessageManagement.emailEnabled') : t('common.disabled'),
 )
 
 const composeSummaryItems = computed<Array<{ label: string; value: string; icon: IconName; tint: string }>>(() => [
@@ -880,6 +979,9 @@ const sendDisabled = computed(() => {
   if (recipientMode.value === 'selected' && recipientTargets.value.length === 0) {
     return true
   }
+  if (recipientMode.value === 'all' && recipientFilter.value === 'inactive' && normalizedInactiveDays.value <= 0) {
+    return true
+  }
   if (compensationEnabled.value) {
     return normalizedCompensationAmount.value <= 0
   }
@@ -911,8 +1013,20 @@ function parseMoneyInput(value: string): number {
   return Math.round(amount * 100) / 100
 }
 
+function parseInactiveDaysInput(value: string | number): number {
+  const days = Number.parseInt(String(value).trim(), 10)
+  if (!Number.isFinite(days) || days <= 0) {
+    return 0
+  }
+  return Math.min(days, 3650)
+}
+
 function normalizeCompensationAmountInput() {
   compensationAmount.value = moneyInputValue(normalizedCompensationAmount.value)
+}
+
+function normalizeInactiveDaysInput() {
+  inactiveDaysInput.value = String(normalizedInactiveDays.value || 3)
 }
 
 function formatMoney(value: number): string {
@@ -962,9 +1076,12 @@ function failureReasonLabel(reason?: string, fallback?: string): string {
 
 function resetDraft() {
   recipientMode.value = 'selected'
+  recipientFilter.value = 'all'
   recipientInput.value = ''
   messageSubject.value = ''
   messageContent.value = ''
+  sendEmail.value = false
+  inactiveDaysInput.value = '3'
   compensationEnabled.value = false
   compensationAmount.value = '0.00'
   compensationFormat.value = 'block'
@@ -1033,7 +1150,11 @@ async function handleSend() {
       compensation_amount: compensationEnabled.value ? normalizedCompensationAmount.value : 0,
       compensation_codes: compensationEnabled.value ? compensationCodes.value : [],
       compensation_format: compensationFormat.value,
-      send_email: false,
+      send_email: sendEmail.value,
+      inactive_days:
+        recipientMode.value === 'all' && recipientFilter.value === 'inactive'
+          ? normalizedInactiveDays.value
+          : undefined,
     })
     const item = buildHistoryItemFromBatch(batch)
     historyItems.value = [item, ...historyItems.value.filter((existing) => existing.id !== item.id)]
@@ -1063,11 +1184,14 @@ function loadHistoryAsDraft() {
   const item = selectedHistory.value
   if (!item) return
   recipientMode.value = item.mode
+  recipientFilter.value = 'all'
   recipientInput.value = item.mode === 'all'
     ? ''
     : item.results.map((result) => result.recipient).filter(Boolean).join('\n')
   messageSubject.value = item.subject
   messageContent.value = item.content
+  sendEmail.value = false
+  inactiveDaysInput.value = '3'
   compensationEnabled.value = item.codeCount > 0
   compensationAmount.value = moneyInputValue(item.amount || 5)
   compensationFormat.value = 'block'

@@ -133,6 +133,40 @@ func (s *UserRepoSuite) TestGetLatestUsedAtByUserIDs_UsesUsageLogs() {
 	s.Require().True(got[userWithUsage.ID].Equal(newer))
 }
 
+func (s *UserRepoSuite) TestListWithFilters_NoUsageSinceUsesUsageLogs() {
+	cutoff := time.Now().Add(-72 * time.Hour).UTC().Truncate(time.Second)
+	old := cutoff.Add(-time.Hour)
+	recent := cutoff.Add(time.Hour)
+
+	oldUser := s.mustCreateUser(&service.User{Email: "old-usage@example.com", Status: service.StatusActive})
+	recentUser := s.mustCreateUser(&service.User{Email: "recent-usage@example.com", Status: service.StatusActive})
+	neverUsedUser := s.mustCreateUser(&service.User{Email: "never-used@example.com", Status: service.StatusActive})
+	disabledOldUser := s.mustCreateUser(&service.User{Email: "disabled-old-usage@example.com", Status: service.StatusDisabled})
+	s.mustInsertUsageLog(oldUser.ID, old)
+	s.mustInsertUsageLog(recentUser.ID, recent)
+	s.mustInsertUsageLog(disabledOldUser.ID, old)
+
+	users, _, err := s.repo.ListWithFilters(s.ctx, pagination.PaginationParams{
+		Page:      1,
+		PageSize:  10,
+		SortBy:    "email",
+		SortOrder: "asc",
+	}, service.UserListFilters{
+		Status:       service.StatusActive,
+		NoUsageSince: &cutoff,
+	})
+
+	s.Require().NoError(err)
+	emails := make(map[string]struct{}, len(users))
+	for _, user := range users {
+		emails[user.Email] = struct{}{}
+	}
+	s.Require().Contains(emails, oldUser.Email)
+	s.Require().Contains(emails, neverUsedUser.Email)
+	s.Require().NotContains(emails, recentUser.Email)
+	s.Require().NotContains(emails, disabledOldUser.Email)
+}
+
 func (s *UserRepoSuite) TestListWithFilters_SortByLastUsedAtDesc_UsesUsageLogsNotLastActiveAt() {
 	lastUsedOlder := time.Now().Add(-6 * time.Hour).UTC().Truncate(time.Second)
 	lastUsedNewer := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Second)

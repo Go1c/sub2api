@@ -109,6 +109,7 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 		return nil, err
 	}
 
+	input.InactiveDays = normalizeInactiveDays(input.InactiveDays)
 	targets, err := s.batchRecipientTargets(ctx, input)
 	if err != nil {
 		return nil, err
@@ -190,7 +191,7 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 		Subject:        subject,
 		Content:        content,
 		Mode:           normalizeRecipientMode(input.RecipientMode),
-		Audience:       batchAudienceLabel(input.RecipientMode, len(targets)),
+		Audience:       batchAudienceLabel(input.RecipientMode, input.InactiveDays, len(targets)),
 		RecipientCount: len(targets),
 		SuccessCount:   successCount,
 		FailedCount:    failedCount,
@@ -484,7 +485,7 @@ type siteMessageBatchTarget struct {
 func (s *SiteMessageService) batchRecipientTargets(ctx context.Context, input AdminSendCompensationBatchInput) ([]siteMessageBatchTarget, error) {
 	mode := normalizeRecipientMode(input.RecipientMode)
 	if mode == SiteMessageRecipientModeAll {
-		recipients, err := s.listAllActiveRecipients(ctx)
+		recipients, err := s.listAllActiveRecipients(ctx, input.InactiveDays)
 		if err != nil {
 			return nil, err
 		}
@@ -516,21 +517,26 @@ func (s *SiteMessageService) batchRecipientTargets(ctx context.Context, input Ad
 	return targets, nil
 }
 
-func (s *SiteMessageService) listAllActiveRecipients(ctx context.Context) ([]SiteMessageRecipient, error) {
+func (s *SiteMessageService) listAllActiveRecipients(ctx context.Context, inactiveDays int) ([]SiteMessageRecipient, error) {
 	const pageSize = 1000
 	page := 1
 	includeSubscriptions := false
 	recipients := make([]SiteMessageRecipient, 0)
+	filters := UserListFilters{
+		Status:               StatusActive,
+		IncludeSubscriptions: &includeSubscriptions,
+	}
+	if inactiveDays > 0 {
+		cutoff := s.now().AddDate(0, 0, -inactiveDays)
+		filters.NoUsageSince = &cutoff
+	}
 	for {
 		users, result, err := s.userRepo.ListWithFilters(ctx, pagination.PaginationParams{
 			Page:      page,
 			PageSize:  pageSize,
 			SortBy:    "id",
 			SortOrder: pagination.SortOrderAsc,
-		}, UserListFilters{
-			Status:               StatusActive,
-			IncludeSubscriptions: &includeSubscriptions,
-		})
+		}, filters)
 		if err != nil {
 			return nil, err
 		}
@@ -667,8 +673,21 @@ func normalizeRecipientMode(mode string) string {
 	return SiteMessageRecipientModeSelected
 }
 
-func batchAudienceLabel(mode string, count int) string {
+func normalizeInactiveDays(days int) int {
+	if days <= 0 {
+		return 0
+	}
+	if days > SiteMessagesInactiveDaysMax {
+		return SiteMessagesInactiveDaysMax
+	}
+	return days
+}
+
+func batchAudienceLabel(mode string, inactiveDays int, count int) string {
 	if normalizeRecipientMode(mode) == SiteMessageRecipientModeAll {
+		if inactiveDays > 0 {
+			return fmt.Sprintf("最近 %d 天未使用用户", inactiveDays)
+		}
 		return "全员用户"
 	}
 	return fmt.Sprintf("指定 %d 个用户", count)
