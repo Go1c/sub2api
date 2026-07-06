@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1441,109 +1440,6 @@ func TestOpenAIStreamingClientDisconnectDrainsUpstreamUsage(t *testing.T) {
 	}
 }
 
-func TestOpenAIStreamDataStartsClientOutputExcludesTerminalEvents(t *testing.T) {
-	terminalEvents := []string{
-		"response.completed",
-		"response.done",
-		"response.failed",
-		"response.incomplete",
-		"response.cancelled",
-		"response.canceled",
-	}
-	for _, eventType := range terminalEvents {
-		eventType := eventType
-		t.Run(eventType, func(t *testing.T) {
-			data := `{"type":` + strconv.Quote(eventType) + `,"response":{"id":"resp_terminal"}}`
-			require.True(t, openAIStreamEventIsTerminal(data))
-			require.False(t, openAIStreamDataStartsClientOutput(data, eventType))
-		})
-	}
-
-	require.False(t, openAIStreamDataStartsClientOutput(`{"type":"response.created"}`, "response.created"))
-	require.False(t, openAIStreamDataStartsClientOutput(`{"type":"response.in_progress"}`, "response.in_progress"))
-	require.False(t, openAIStreamDataStartsClientOutput(`{"type":"response.output_item.added","item":{"type":"message"}}`, "response.output_item.added"))
-	require.False(t, openAIStreamDataStartsClientOutput(`{"type":"response.output_text.delta","delta":""}`, "response.output_text.delta"))
-	require.True(t, openAIStreamDataStartsClientOutput(`{"type":"response.output_text.delta","delta":"hello"}`, "response.output_text.delta"))
-}
-
-func TestOpenAIStreamingFirstTokenStartsAtFirstOutputDelta(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{
-		Gateway: config.GatewayConfig{
-			StreamDataIntervalTimeout: 0,
-			StreamKeepaliveInterval:   0,
-			MaxLineSize:               defaultMaxLineSize,
-		},
-	}
-	svc := &OpenAIGatewayService{cfg: cfg}
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	pr, pw := io.Pipe()
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       pr,
-		Header:     http.Header{},
-	}
-	start := time.Now()
-	go func() {
-		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_delta\"}}\n\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n"))
-		time.Sleep(75 * time.Millisecond)
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"你\"}\n\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_delta\",\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}}\n\n"))
-	}()
-
-	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, start, "model", "model")
-	_ = pr.Close()
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, result.firstTokenMs)
-	require.GreaterOrEqual(t, *result.firstTokenMs, 50)
-	require.Contains(t, rec.Body.String(), "response.output_item.added")
-	require.Contains(t, rec.Body.String(), `"delta":"你"`)
-}
-
-func TestOpenAIStreamingTerminalOnlyDoesNotSetFirstToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{
-		Gateway: config.GatewayConfig{
-			StreamDataIntervalTimeout: 0,
-			StreamKeepaliveInterval:   0,
-			MaxLineSize:               defaultMaxLineSize,
-		},
-	}
-	svc := &OpenAIGatewayService{cfg: cfg}
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
-			`data: {"type":"response.in_progress","response":{"id":"resp_terminal_only"}}`,
-			"",
-			`data: {"type":"response.completed","response":{"id":"resp_terminal_only","usage":{"input_tokens":3,"output_tokens":5,"input_tokens_details":{"cached_tokens":1}}}}`,
-			"",
-		}, "\n"))),
-		Header: http.Header{},
-	}
-
-	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now().Add(-500*time.Millisecond), "model", "model")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, result.usage)
-	require.Nil(t, result.firstTokenMs)
-	require.Equal(t, 3, result.usage.InputTokens)
-	require.Equal(t, 5, result.usage.OutputTokens)
-	require.Equal(t, 1, result.usage.CacheReadInputTokens)
-	require.Contains(t, rec.Body.String(), "response.completed")
-}
-
 func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
@@ -1568,7 +1464,7 @@ func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T)
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n"))
 	}()
 
 	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "model", "model")
@@ -1600,7 +1496,7 @@ func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t 
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n"))
 	}()
 
 	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "", "")
@@ -1679,8 +1575,6 @@ func TestOpenAIStreamingPassthroughResponseDoneWithoutDoneMarkerStillSucceeds(t 
 	require.Equal(t, 2, result.usage.InputTokens)
 	require.Equal(t, 3, result.usage.OutputTokens)
 	require.Equal(t, 1, result.usage.CacheReadInputTokens)
-	require.Nil(t, result.firstTokenMs)
-	require.Contains(t, rec.Body.String(), "response.done")
 }
 
 func TestOpenAIStreamingPassthroughResponseIncompleteWithoutDoneMarkerStillSucceeds(t *testing.T) {

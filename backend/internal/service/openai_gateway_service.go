@@ -3472,22 +3472,10 @@ func openAIStreamDataStartsClientOutput(data, eventType string) bool {
 	if trimmed == "" {
 		return false
 	}
-	if openAIStreamEventIsTerminal(trimmed) {
+	if strings.TrimSpace(eventType) == "response.failed" {
 		return false
 	}
-	eventType = strings.TrimSpace(eventType)
-	if openAIStreamEventIsPreamble(eventType) || !strings.Contains(eventType, ".delta") {
-		return false
-	}
-	delta := gjson.Get(trimmed, "delta")
-	if !delta.Exists() {
-		return false
-	}
-	if delta.Type == gjson.String {
-		return delta.String() != ""
-	}
-	raw := strings.TrimSpace(delta.Raw)
-	return raw != "" && raw != "null"
+	return !openAIStreamEventIsPreamble(eventType)
 }
 
 func openAIStreamFailedEventShouldFailover(payload []byte, message string) bool {
@@ -3664,9 +3652,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				sawTerminalEvent = true
 			}
 			imageCounter.AddSSEData(dataBytes)
-			isFirstTokenEvent := openAIStreamDataStartsClientOutput(trimmedData, eventType)
-			lineStartsClientOutput = forceFlushFailedEvent || isFirstTokenEvent
-			if firstTokenMs == nil && isFirstTokenEvent {
+			lineStartsClientOutput = forceFlushFailedEvent || openAIStreamDataStartsClientOutput(trimmedData, eventType)
+			if firstTokenMs == nil && lineStartsClientOutput && trimmedData != "[DONE]" {
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
 			}
@@ -3739,11 +3726,6 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				s.newOpenAIStreamFailoverError(c, account, true, upstreamRequestID, nil, "OpenAI stream ended before a terminal event")
 		}
 		return resultWithUsage(), errors.New("stream usage incomplete: missing terminal event")
-	}
-	if !clientDisconnected && len(pendingLines) > 0 {
-		if writePendingLines() {
-			flusher.Flush()
-		}
 	}
 
 	return resultWithUsage(), nil
@@ -4520,13 +4502,12 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if needModelReplace && mappedModel != "" && strings.Contains(line, mappedModel) {
 				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
 			}
-			isFirstTokenEvent := openAIStreamDataStartsClientOutput(data, eventType)
-			startsClientOutput := forceFlushFailedEvent || isFirstTokenEvent
+			startsClientOutput := forceFlushFailedEvent || openAIStreamDataStartsClientOutput(data, eventType)
 
 			// 写入客户端（客户端断开后继续 drain 上游）
 			if !clientDisconnected {
 				shouldFlush := queueDrained && (clientOutputStarted || startsClientOutput)
-				if firstTokenMs == nil && isFirstTokenEvent {
+				if firstTokenMs == nil && startsClientOutput {
 					// 保证首个 token 事件尽快出站，避免影响 TTFT。
 					shouldFlush = true
 				}
@@ -4548,7 +4529,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			}
 
 			// Record first token time
-			if firstTokenMs == nil && isFirstTokenEvent {
+			if firstTokenMs == nil && startsClientOutput {
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
 			}
