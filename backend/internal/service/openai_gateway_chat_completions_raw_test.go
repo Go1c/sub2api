@@ -120,77 +120,6 @@ func TestForwardAsRawChatCompletions_ForcesStreamUsageUpstreamAndPassesUsageDown
 	require.Contains(t, rec.Body.String(), "data: [DONE]")
 }
 
-func TestForwardAsRawChatCompletions_FirstTokenWaitsForOutputDelta(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":true}`)
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	upstream := &httpUpstreamRecorder{resp: &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid_raw_ttft_delta"}},
-		Body: &delayedSSEReadCloser{chunks: []delayedSSEChunk{
-			{data: `data: {"id":"chatcmpl_ttft","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}` + "\n\n"},
-			{delay: 100 * time.Millisecond, data: `data: {"id":"chatcmpl_ttft","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}` + "\n\n"},
-			{data: `data: {"id":"chatcmpl_ttft","object":"chat.completion.chunk","model":"gpt-5.4","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}` + "\n\n"},
-			{data: "data: [DONE]\n\n"},
-		}},
-	}}
-
-	svc := &OpenAIGatewayService{
-		cfg:          rawChatCompletionsTestConfig(),
-		httpUpstream: upstream,
-	}
-	account := rawChatCompletionsTestAccount()
-
-	result, err := svc.forwardAsRawChatCompletions(context.Background(), c, account, body, "")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, result.FirstTokenMs)
-	require.GreaterOrEqual(t, *result.FirstTokenMs, 60)
-	require.Contains(t, rec.Body.String(), `"role":"assistant"`)
-	require.Contains(t, rec.Body.String(), `"content":"ok"`)
-}
-
-func TestForwardAsRawChatCompletions_FinishOnlyDoesNotSetFirstToken(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":true}`)
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	upstreamBody := strings.Join([]string{
-		`data: {"id":"chatcmpl_finish","object":"chat.completion.chunk","model":"gpt-5.4","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
-		"",
-		`data: {"id":"chatcmpl_finish","object":"chat.completion.chunk","model":"gpt-5.4","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":0,"total_tokens":3}}`,
-		"",
-		"data: [DONE]",
-		"",
-	}, "\n")
-	upstream := &httpUpstreamRecorder{resp: &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid_raw_ttft_finish"}},
-		Body:       io.NopCloser(strings.NewReader(upstreamBody)),
-	}}
-
-	svc := &OpenAIGatewayService{
-		cfg:          rawChatCompletionsTestConfig(),
-		httpUpstream: upstream,
-	}
-	account := rawChatCompletionsTestAccount()
-
-	result, err := svc.forwardAsRawChatCompletions(context.Background(), c, account, body, "")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Nil(t, result.FirstTokenMs)
-	require.Contains(t, rec.Body.String(), `"finish_reason":"stop"`)
-}
-
 func TestForwardAsRawChatCompletions_PreservesDeepSeekReasoningContentNonStreaming(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -418,59 +347,6 @@ func TestIsOpenAIChatUsageOnlyStreamChunk(t *testing.T) {
 	require.False(t, isOpenAIChatUsageOnlyStreamChunk(`{"choices":[{"index":0}],"usage":{"prompt_tokens":1,"completion_tokens":2}}`))
 	require.False(t, isOpenAIChatUsageOnlyStreamChunk(`{"choices":[]}`))
 	require.False(t, isOpenAIChatUsageOnlyStreamChunk(``))
-}
-
-func TestOpenAIChatStreamPayloadHasOutputDelta(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		payload string
-		want    bool
-	}{
-		{
-			name:    "role only",
-			payload: `{"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}`,
-			want:    false,
-		},
-		{
-			name:    "finish only",
-			payload: `{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
-			want:    false,
-		},
-		{
-			name:    "usage only",
-			payload: `{"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":2}}`,
-			want:    false,
-		},
-		{
-			name:    "content",
-			payload: `{"choices":[{"index":0,"delta":{"content":"h"},"finish_reason":null}]}`,
-			want:    true,
-		},
-		{
-			name:    "reasoning content",
-			payload: `{"choices":[{"index":0,"delta":{"reasoning_content":"think"},"finish_reason":null}]}`,
-			want:    true,
-		},
-		{
-			name:    "tool arguments",
-			payload: `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":null}]}`,
-			want:    true,
-		},
-		{
-			name:    "tool name only",
-			payload: `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup"}}]},"finish_reason":null}]}`,
-			want:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			require.Equal(t, tt.want, openAIChatStreamPayloadHasOutputDelta(tt.payload))
-		})
-	}
 }
 
 func TestEnsureOpenAIChatStreamUsage(t *testing.T) {

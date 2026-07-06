@@ -32,39 +32,6 @@ func (w *openAIChatFailingWriter) Write(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
-type delayedSSEReadCloser struct {
-	chunks []delayedSSEChunk
-	index  int
-	offset int
-}
-
-type delayedSSEChunk struct {
-	data  string
-	delay time.Duration
-}
-
-func (r *delayedSSEReadCloser) Read(p []byte) (int, error) {
-	for r.index < len(r.chunks) {
-		chunk := r.chunks[r.index]
-		if r.offset == 0 && chunk.delay > 0 {
-			time.Sleep(chunk.delay)
-		}
-		if r.offset >= len(chunk.data) {
-			r.index++
-			r.offset = 0
-			continue
-		}
-		n := copy(p, chunk.data[r.offset:])
-		r.offset += n
-		return n, nil
-	}
-	return 0, io.EOF
-}
-
-func (r *delayedSSEReadCloser) Close() error {
-	return nil
-}
-
 func TestNormalizeResponsesRequestServiceTier(t *testing.T) {
 	t.Parallel()
 
@@ -129,48 +96,6 @@ func TestNormalizeResponsesBodyServiceTier(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, tier)
 	require.False(t, gjson.GetBytes(body, "service_tier").Exists())
-}
-
-func TestForwardAsChatCompletions_FirstTokenWaitsForOutputDelta(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"stream":true}`)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	upstream := &httpUpstreamRecorder{resp: &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid_chat_ttft_delta"}},
-		Body: &delayedSSEReadCloser{chunks: []delayedSSEChunk{
-			{data: `data: {"type":"response.created","response":{"id":"resp_ttft","model":"gpt-5.4","status":"in_progress","output":[]}}` + "\n\n"},
-			{delay: 100 * time.Millisecond, data: `data: {"type":"response.output_text.delta","delta":"ok"}` + "\n\n"},
-			{data: `data: {"type":"response.completed","response":{"id":"resp_ttft","object":"response","model":"gpt-5.4","status":"completed","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}}` + "\n\n"},
-			{data: "data: [DONE]\n\n"},
-		}},
-	}}
-
-	svc := &OpenAIGatewayService{httpUpstream: upstream}
-	account := &Account{
-		ID:          1,
-		Name:        "openai-oauth",
-		Platform:    PlatformOpenAI,
-		Type:        AccountTypeOAuth,
-		Concurrency: 1,
-		Credentials: map[string]any{
-			"access_token":       "oauth-token",
-			"chatgpt_account_id": "chatgpt-acc",
-		},
-	}
-
-	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "gpt-5.1")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, result.FirstTokenMs)
-	require.GreaterOrEqual(t, *result.FirstTokenMs, 60)
-	require.Contains(t, rec.Body.String(), `"role":"assistant"`)
-	require.Contains(t, rec.Body.String(), `"content":"ok"`)
 }
 
 func TestForwardAsChatCompletions_UnknownModelDoesNotUseDefaultMappedModel(t *testing.T) {
