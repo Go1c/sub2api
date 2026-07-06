@@ -346,6 +346,9 @@ func openAIChatStreamPayloadHasOutputDelta(payload string) bool {
 	if strings.TrimSpace(payload) == "" {
 		return false
 	}
+	if isOpenAIChatUsageOnlyStreamChunk(payload) {
+		return false
+	}
 	var chunk apicompat.ChatCompletionsChunk
 	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 		return false
