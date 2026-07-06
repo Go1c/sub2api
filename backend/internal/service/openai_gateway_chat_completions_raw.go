@@ -268,11 +268,10 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		if payload, ok := extractOpenAISSEDataLine(line); ok {
 			trimmedPayload := strings.TrimSpace(payload)
 			if trimmedPayload != "[DONE]" {
-				usageOnlyChunk := isOpenAIChatUsageOnlyStreamChunk(payload)
 				if u := extractCCStreamUsage(payload); u != nil {
 					usage = *u
 				}
-				if firstTokenMs == nil && !usageOnlyChunk {
+				if firstTokenMs == nil && openAIChatStreamPayloadHasOutputDelta(payload) {
 					elapsed := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &elapsed
 				}
@@ -341,6 +340,39 @@ func isOpenAIChatUsageOnlyStreamChunk(payload string) bool {
 	}
 	choices := gjson.Get(payload, "choices")
 	return choices.Exists() && choices.IsArray() && len(choices.Array()) == 0
+}
+
+func openAIChatStreamPayloadHasOutputDelta(payload string) bool {
+	if strings.TrimSpace(payload) == "" {
+		return false
+	}
+	if isOpenAIChatUsageOnlyStreamChunk(payload) {
+		return false
+	}
+	var chunk apicompat.ChatCompletionsChunk
+	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+		return false
+	}
+	return openAIChatChunksHaveOutputDelta([]apicompat.ChatCompletionsChunk{chunk})
+}
+
+func openAIChatChunksHaveOutputDelta(chunks []apicompat.ChatCompletionsChunk) bool {
+	for _, chunk := range chunks {
+		for _, choice := range chunk.Choices {
+			if choice.Delta.Content != nil && *choice.Delta.Content != "" {
+				return true
+			}
+			if choice.Delta.ReasoningContent != nil && *choice.Delta.ReasoningContent != "" {
+				return true
+			}
+			for _, toolCall := range choice.Delta.ToolCalls {
+				if toolCall.Function.Arguments != "" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // extractCCStreamUsage 从单个 CC 流式 chunk 的 payload 中提取 usage 字段。
