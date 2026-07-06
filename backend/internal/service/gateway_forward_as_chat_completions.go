@@ -375,7 +375,6 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 
 	var usage ClaudeUsage
 	var firstTokenMs *int
-	firstChunk := true
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -412,12 +411,6 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	}
 
 	processAnthropicEvent := func(event *apicompat.AnthropicStreamEvent) bool {
-		if firstChunk {
-			firstChunk = false
-			ms := int(time.Since(startTime).Milliseconds())
-			firstTokenMs = &ms
-		}
-
 		// Extract usage from message_delta
 		if event.Type == "message_delta" && event.Usage != nil {
 			mergeAnthropicUsage(&usage, *event.Usage)
@@ -431,6 +424,10 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		responsesEvents := apicompat.AnthropicEventToResponsesEvents(event, anthState)
 		for _, resEvt := range responsesEvents {
 			ccChunks := apicompat.ResponsesEventToChatChunks(&resEvt, ccState)
+			if firstTokenMs == nil && openAIChatChunksHaveOutputDelta(ccChunks) {
+				ms := int(time.Since(startTime).Milliseconds())
+				firstTokenMs = &ms
+			}
 			for _, chunk := range ccChunks {
 				if disconnected := writeChunk(chunk); disconnected {
 					return true

@@ -5400,7 +5400,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 				if anthropicStreamEventIsTerminal("", trimmed) {
 					sawTerminalEvent = true
 				}
-				if firstTokenMs == nil && trimmed != "" && trimmed != "[DONE]" {
+				if firstTokenMs == nil && anthropicStreamDataHasOutputDelta(trimmed) {
 					ms := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &ms
 				}
@@ -7555,7 +7555,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 						lastDataAt = time.Now()
 					}
 					if data != "" {
-						if firstTokenMs == nil && data != "[DONE]" {
+						if firstTokenMs == nil && anthropicStreamDataHasOutputDelta(data) {
 							ms := int(time.Since(startTime).Milliseconds())
 							firstTokenMs = &ms
 						}
