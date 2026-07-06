@@ -546,7 +546,8 @@ func observeUpstreamMessage(
 	}
 	now := nowFn()
 
-	if state.firstTokenMs == nil && isTokenEvent(eventType) {
+	tokenEvent := isTokenMessage(message, eventType)
+	if state.firstTokenMs == nil && tokenEvent {
 		ms := int(now.Sub(startAt).Milliseconds())
 		if ms >= 0 {
 			state.firstTokenMs = &ms
@@ -566,7 +567,7 @@ func observeUpstreamMessage(
 	}
 	if responseID != "" {
 		turnTiming := openAIWSRelayGetOrInitTurnTiming(state, responseID, now)
-		if turnTiming != nil && turnTiming.firstTokenMs == nil && isTokenEvent(eventType) {
+		if turnTiming != nil && turnTiming.firstTokenMs == nil && tokenEvent {
 			ms := int(now.Sub(turnTiming.startAt).Milliseconds())
 			if ms >= 0 {
 				turnTiming.firstTokenMs = &ms
@@ -773,23 +774,30 @@ func shouldParseUsage(eventType string) bool {
 }
 
 func isTokenEvent(eventType string) bool {
-	if eventType == "" {
+	eventType = strings.TrimSpace(eventType)
+	if eventType == "" || isTerminalEvent(eventType) {
 		return false
 	}
 	switch eventType {
 	case "response.created", "response.in_progress", "response.output_item.added", "response.output_item.done":
 		return false
 	}
-	if strings.Contains(eventType, ".delta") {
-		return true
+	return strings.Contains(eventType, ".delta")
+}
+
+func isTokenMessage(message []byte, eventType string) bool {
+	if !isTokenEvent(eventType) {
+		return false
 	}
-	if strings.HasPrefix(eventType, "response.output_text") {
-		return true
+	delta := gjson.GetBytes(message, "delta")
+	if !delta.Exists() {
+		return false
 	}
-	if strings.HasPrefix(eventType, "response.output") {
-		return true
+	if delta.Type == gjson.String {
+		return delta.String() != ""
 	}
-	return eventType == "response.completed" || eventType == "response.done"
+	raw := strings.TrimSpace(delta.Raw)
+	return raw != "" && raw != "null"
 }
 
 func minDuration(a, b time.Duration) time.Duration {
