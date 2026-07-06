@@ -53,6 +53,7 @@ metadata:
 | 文档 | 一句话 |
 |------|--------|
 | [`records/openai-chat-completions-ttft-20260706.md`](records/openai-chat-completions-ttft-20260706.md) | GPT Chat Completions 流式首 token 统计修复:role / finish / usage 不计 TTFT,非空输出 delta 才计 |
+| [`records/openai-http-stream-ttft-forwarding-20260706.md`](records/openai-http-stream-ttft-forwarding-20260706.md) | GPT/OpenAI HTTP 流式转发首 token 修复:publish 转发层只在非空输出 delta 计 TTFT 并立即 flush |
 | [`records/upstream-sync-review-20260616.md`](records/upstream-sync-review-20260616.md) | v0.1.136 同步上线前独立代码复审与 go/no-go 结论(2026-06-16) |
 | [`records/upstream-sync-acceptance-20260615.md`](records/upstream-sync-acceptance-20260615.md) | v0.1.136 同步验收清单:合了什么、风险在哪、怎么验(2026-06-15) |
 | [`records/upstream-sync-20260615.md`](records/upstream-sync-20260615.md) | v0.1.136 同步评估台账与分批处理进度(2026-06-15) |
