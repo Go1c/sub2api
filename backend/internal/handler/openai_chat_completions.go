@@ -86,6 +86,11 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 	h.captureClientRequest(c, reqModel, body)
 
+	if apiKeyModelPermissionDenied(apiKey, reqModel) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", apiKeyModelPermissionDeniedMessage(reqModel))
+		return
+	}
+
 	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIChat, reqModel, body); decision != nil && decision.Blocked {
 		h.errorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
 		return

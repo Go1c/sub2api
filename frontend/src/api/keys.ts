@@ -56,6 +56,7 @@ export async function getById(id: number): Promise<ApiKey> {
  * @param expiresInDays - Optional days until expiry (undefined = never expires)
  * @param rateLimitData - Optional rate limit fields
  * @param fallbackKeyId - Optional fallback key ID (null = none)
+ * @param allowedModels - Optional allowed model list (empty = unrestricted)
  * @returns Created API key
  */
 export async function create(
@@ -67,7 +68,8 @@ export async function create(
   quota?: number,
   expiresInDays?: number,
   rateLimitData?: { rate_limit_5h?: number; rate_limit_1d?: number; rate_limit_7d?: number },
-  fallbackKeyId?: number | null
+  fallbackKeyId?: number | null,
+  allowedModels?: string[]
 ): Promise<ApiKey> {
   const payload: CreateApiKeyRequest = { name }
   if (groupId !== undefined) {
@@ -79,6 +81,9 @@ export async function create(
   }
   if (customKey) {
     payload.custom_key = customKey
+  }
+  if (allowedModels !== undefined) {
+    payload.allowed_models = allowedModels
   }
   if (ipWhitelist && ipWhitelist.length > 0) {
     payload.ip_whitelist = ipWhitelist

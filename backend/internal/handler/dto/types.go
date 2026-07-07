@@ -55,6 +55,7 @@ type APIKey struct {
 	GroupID       *int64     `json:"group_id"`
 	FallbackKeyID *int64     `json:"fallback_key_id"`
 	Status        string     `json:"status"`
+	AllowedModels []string   `json:"allowed_models"`
 	IPWhitelist   []string   `json:"ip_whitelist"`
 	IPBlacklist   []string   `json:"ip_blacklist"`
 	LastUsedAt    *time.Time `json:"last_used_at"`

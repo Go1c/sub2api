@@ -86,6 +86,11 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 	h.captureClientRequest(c, reqModel, body)
 
+	if apiKeyModelPermissionDenied(apiKey, reqModel) {
+		h.chatCompletionsErrorResponse(c, http.StatusForbidden, "permission_error", apiKeyModelPermissionDeniedMessage(reqModel))
+		return
+	}
+
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 

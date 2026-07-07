@@ -195,6 +195,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	if apiKeyModelPermissionDenied(apiKey, reqModel) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", apiKeyModelPermissionDeniedMessage(reqModel))
+		return
+	}
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String())
 	if previousResponseID != "" {
 		previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
@@ -654,6 +658,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	setOpsRequestContext(c, reqModel, reqStream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 	h.captureClientRequest(c, reqModel, body)
+
+	if apiKeyModelPermissionDenied(apiKey, reqModel) {
+		h.anthropicErrorResponse(c, http.StatusForbidden, "permission_error", apiKeyModelPermissionDeniedMessage(reqModel))
+		return
+	}
 
 	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && decision.Blocked {
 		h.anthropicErrorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
@@ -1199,6 +1208,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
+	if apiKeyModelPermissionDenied(apiKey, reqModel) {
+		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, apiKeyModelPermissionDeniedMessage(reqModel))
+		return
+	}
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(firstMessage, "previous_response_id").String())
 	previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 	if previousResponseID != "" && previousResponseIDKind == service.OpenAIPreviousResponseIDKindMessageID {
@@ -1367,6 +1380,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			}
 			if model == "" {
 				model = reqModel
+			}
+			if apiKeyModelPermissionDenied(apiKey, model) {
+				return service.NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, apiKeyModelPermissionDeniedMessage(model), nil)
 			}
 			if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIResponses, model, payload); decision != nil && decision.Blocked {
 				writeContentModerationWSError(ctx, wsConn, decision)
