@@ -789,6 +789,7 @@ export interface ApiKey {
   group_id: number | null
   fallback_key_id: number | null // 兜底密钥 ID（主密钥分组上游全不可用时改用此密钥转发并计费）
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  allowed_models: string[]
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
@@ -817,6 +818,7 @@ export interface CreateApiKeyRequest {
   group_id?: number | null
   fallback_key_id?: number | null // 兜底密钥 ID（null = 不设置）
   custom_key?: string // Optional custom API Key
+  allowed_models?: string[] // Empty = no model restriction
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (0 = unlimited)
@@ -831,6 +833,7 @@ export interface UpdateApiKeyRequest {
   group_id?: number | null
   fallback_key_id?: number | null // 兜底密钥 ID（编辑时总下发，null = 清除）
   status?: 'active' | 'inactive'
+  allowed_models?: string[] // Empty = clear model restriction
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (null = no change, 0 = unlimited)

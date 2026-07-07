@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 12 // v12: include fallback_group_id_on_exhausted for group-level fallback
+const apiKeyAuthSnapshotVersion = 13 // v13: include API key allowed_models restriction
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -213,6 +213,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		FallbackKeyID: apiKey.FallbackKeyID,
 		Name:          apiKey.Name,
 		Status:        apiKey.Status,
+		AllowedModels: NormalizeAPIKeyAllowedModels(apiKey.AllowedModels),
 		IPWhitelist:   apiKey.IPWhitelist,
 		IPBlacklist:   apiKey.IPBlacklist,
 		Quota:         apiKey.Quota,
@@ -294,6 +295,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		Key:           key,
 		Name:          snapshot.Name,
 		Status:        snapshot.Status,
+		AllowedModels: NormalizeAPIKeyAllowedModels(snapshot.AllowedModels),
 		IPWhitelist:   snapshot.IPWhitelist,
 		IPBlacklist:   snapshot.IPBlacklist,
 		Quota:         snapshot.Quota,

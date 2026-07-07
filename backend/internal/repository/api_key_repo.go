@@ -53,6 +53,9 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetRateLimit1d(key.RateLimit1d).
 		SetRateLimit7d(key.RateLimit7d)
 
+	if len(key.AllowedModels) > 0 {
+		builder.SetAllowedModels(key.AllowedModels)
+	}
 	if len(key.IPWhitelist) > 0 {
 		builder.SetIPWhitelist(key.IPWhitelist)
 	}
@@ -133,6 +136,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldFallbackKeyID,
 			apikey.FieldName,
 			apikey.FieldStatus,
+			apikey.FieldAllowedModels,
 			apikey.FieldIPWhitelist,
 			apikey.FieldIPBlacklist,
 			apikey.FieldQuota,
@@ -227,6 +231,7 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		SetUsage5h(key.Usage5h).
 		SetUsage1d(key.Usage1d).
 		SetUsage7d(key.Usage7d).
+		SetAllowedModels(key.AllowedModels).
 		SetUpdatedAt(now)
 	if key.GroupID != nil {
 		builder.SetGroupID(*key.GroupID)
@@ -648,6 +653,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		UpdatedAt:     m.UpdatedAt,
 		GroupID:       m.GroupID,
 		FallbackKeyID: m.FallbackKeyID,
+		AllowedModels: service.NormalizeAPIKeyAllowedModels(m.AllowedModels),
 		Quota:         m.Quota,
 		QuotaUsed:     m.QuotaUsed,
 		ExpiresAt:     m.ExpiresAt,

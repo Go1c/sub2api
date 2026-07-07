@@ -87,6 +87,11 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 	h.captureClientRequest(c, reqModel, body)
 
+	if apiKeyModelPermissionDenied(currentAPIKey, reqModel) {
+		h.responsesErrorResponse(c, http.StatusForbidden, "permission_error", apiKeyModelPermissionDeniedMessage(reqModel))
+		return
+	}
+
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), currentAPIKey.GroupID, reqModel)
 

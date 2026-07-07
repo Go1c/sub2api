@@ -35,6 +35,8 @@ const (
 	FieldStatus = "status"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
 	FieldLastUsedAt = "last_used_at"
+	// FieldAllowedModels holds the string denoting the allowed_models field in the database.
+	FieldAllowedModels = "allowed_models"
 	// FieldIPWhitelist holds the string denoting the ip_whitelist field in the database.
 	FieldIPWhitelist = "ip_whitelist"
 	// FieldIPBlacklist holds the string denoting the ip_blacklist field in the database.
@@ -116,6 +118,7 @@ var Columns = []string{
 	FieldFallbackKeyID,
 	FieldStatus,
 	FieldLastUsedAt,
+	FieldAllowedModels,
 	FieldIPWhitelist,
 	FieldIPBlacklist,
 	FieldQuota,

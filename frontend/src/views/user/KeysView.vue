@@ -407,12 +407,13 @@
         <div>
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
           <Select
-            v-model="formData.group_id"
+            :model-value="formData.group_id"
             :options="groupOptions"
             :placeholder="t('keys.selectGroup')"
             :searchable="true"
             :search-placeholder="t('keys.searchGroup')"
             data-tour="key-form-group"
+            @update:model-value="onFormGroupChange"
           >
             <template #selected="{ option }">
               <GroupBadge
@@ -497,6 +498,126 @@
             :options="statusOptions"
             :placeholder="t('keys.selectStatus')"
           />
+        </div>
+
+        <!-- Model Restriction Section -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <label class="input-label mb-0">{{ t('keys.modelRestriction') }}</label>
+              <p class="input-hint mt-1">{{ t('keys.modelRestrictionHint') }}</p>
+            </div>
+            <button
+              type="button"
+              @click="formData.enable_model_restriction = !formData.enable_model_restriction"
+              :class="[
+                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                formData.enable_model_restriction ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  formData.enable_model_restriction ? 'translate-x-4' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+
+          <div v-if="formData.enable_model_restriction" class="space-y-3 pt-2">
+            <div class="relative">
+              <Icon name="search" size="sm" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                v-model="formData.model_search"
+                type="text"
+                class="input pl-9"
+                :placeholder="t('keys.modelRestrictionSearch')"
+                :disabled="formData.group_id === null || selectedGroupModelOptions.length === 0"
+              />
+            </div>
+
+            <div
+              v-if="selectedAllowedModelOptions.length > 0"
+              class="flex flex-wrap gap-2"
+            >
+              <span
+                v-for="model in selectedAllowedModelOptions"
+                :key="model.value"
+                class="inline-flex max-w-full items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+              >
+                <span class="truncate">{{ model.label }}</span>
+                <button
+                  type="button"
+                  class="text-primary-500 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-100"
+                  :title="t('common.remove')"
+                  @click="toggleAllowedModel(model.value)"
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+
+            <div class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('keys.selectedModelsCount', { count: formData.allowed_models.length }) }}
+            </div>
+
+            <div
+              v-if="formData.group_id === null"
+              class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+            >
+              {{ t('keys.modelRestrictionNoGroup') }}
+            </div>
+            <div
+              v-else-if="modelMarketLoading"
+              class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+            >
+              {{ t('common.loading') }}
+            </div>
+            <div
+              v-else-if="selectedGroupModelOptions.length === 0"
+              class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+            >
+              {{ t('keys.modelRestrictionNoModels') }}
+            </div>
+            <div
+              v-else
+              class="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600"
+            >
+              <button
+                v-for="option in filteredModelOptions"
+                :key="option.value"
+                type="button"
+                class="flex w-full items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 text-left last:border-0 hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-700"
+                @click="toggleAllowedModel(option.value)"
+              >
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium text-gray-900 dark:text-white">{{ option.label }}</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400">{{ option.platform }}</span>
+                </span>
+                <span
+                  :class="[
+                    'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border',
+                    isAllowedModelSelected(option.value)
+                      ? 'border-primary-500 bg-primary-500 text-white'
+                      : 'border-gray-300 dark:border-dark-500'
+                  ]"
+                >
+                  <Icon
+                    v-if="isAllowedModelSelected(option.value)"
+                    name="check"
+                    size="xs"
+                    :stroke-width="3"
+                  />
+                </span>
+              </button>
+              <div
+                v-if="filteredModelOptions.length === 0"
+                class="p-3 text-center text-sm text-gray-500 dark:text-gray-400"
+              >
+                {{ t('keys.modelRestrictionNoMatchedModels') }}
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- IP Restriction Section -->
@@ -1072,6 +1193,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
+import modelMarketAPI, { type ModelMarketModel } from '@/api/modelMarket'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import DataTable from '@/components/common/DataTable.vue'
@@ -1110,6 +1232,12 @@ interface GroupOption {
   platform: GroupPlatform
 }
 
+interface ModelOption {
+  value: string
+  label: string
+  platform: string
+}
+
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
@@ -1131,6 +1259,8 @@ const apiKeys = ref<ApiKey[]>([])
 // 兜底密钥候选：用户自己的全部密钥（单独拉一页较大 pageSize，避免列表分页导致候选不全）
 const fallbackCandidates = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
+const modelMarketModels = ref<ModelMarketModel[]>([])
+const modelMarketLoading = ref(false)
 const loading = ref(false)
 const submitting = ref(false)
 const now = ref(new Date())
@@ -1195,6 +1325,9 @@ const formData = ref({
   enable_ip_restriction: false,
   ip_whitelist: '',
   ip_blacklist: '',
+  enable_model_restriction: false,
+  allowed_models: [] as string[],
+  model_search: '',
   // Quota settings (empty = unlimited)
   enable_quota: false,
   quota: null as number | null,
@@ -1259,6 +1392,12 @@ const onStatusFilterChange = (value: string | number | boolean | null) => {
   onFilterChange()
 }
 
+const onFormGroupChange = (value: string | number | boolean | null) => {
+  formData.value.group_id = typeof value === 'number' ? value : null
+  formData.value.model_search = ''
+  pruneAllowedModelsForSelectedGroup(true)
+}
+
 // Convert groups to Select options format with rate multiplier and subscription type
 const groupOptions = computed(() =>
   groups.value.map((group) => ({
@@ -1271,6 +1410,64 @@ const groupOptions = computed(() =>
     platform: group.platform
   }))
 )
+
+const selectedGroupModelOptions = computed<ModelOption[]>(() => {
+  const groupId = formData.value.group_id
+  if (groupId === null) return []
+  const byName = new Map<string, ModelOption>()
+  for (const model of modelMarketModels.value) {
+    if (!model.groups?.some((group) => group.id === groupId)) continue
+    const name = model.name.trim()
+    if (!name || byName.has(name)) continue
+    byName.set(name, {
+      value: name,
+      label: name,
+      platform: model.platform
+    })
+  }
+  return Array.from(byName.values()).sort((a, b) =>
+    a.platform === b.platform ? a.label.localeCompare(b.label) : a.platform.localeCompare(b.platform)
+  )
+})
+
+const selectedGroupModelValues = computed(() =>
+  new Set(selectedGroupModelOptions.value.map((option) => option.value))
+)
+
+const filteredModelOptions = computed(() => {
+  const query = formData.value.model_search.trim().toLowerCase()
+  if (!query) return selectedGroupModelOptions.value
+  return selectedGroupModelOptions.value.filter((option) =>
+    option.label.toLowerCase().includes(query) || option.platform.toLowerCase().includes(query)
+  )
+})
+
+const selectedAllowedModelOptions = computed(() => {
+  const byValue = new Map(selectedGroupModelOptions.value.map((option) => [option.value, option]))
+  return formData.value.allowed_models.map((model) => byValue.get(model)).filter(Boolean) as ModelOption[]
+})
+
+const pruneAllowedModelsForSelectedGroup = (clearWhenNoOptions = false) => {
+  if (modelMarketModels.value.length === 0) return
+  if (selectedGroupModelOptions.value.length === 0) {
+    if (clearWhenNoOptions) {
+      formData.value.allowed_models = []
+    }
+    return
+  }
+  const available = selectedGroupModelValues.value
+  formData.value.allowed_models = formData.value.allowed_models.filter((model) => available.has(model))
+}
+
+const isAllowedModelSelected = (model: string) => formData.value.allowed_models.includes(model)
+
+const toggleAllowedModel = (model: string) => {
+  if (isAllowedModelSelected(model)) {
+    formData.value.allowed_models = formData.value.allowed_models.filter((item) => item !== model)
+  } else {
+    formData.value.allowed_models = [...formData.value.allowed_models, model]
+  }
+}
 
 // 兜底密钥下拉选项：含「不设置」空选项；排除当前编辑的 key 自身、排除 inactive 的 key
 const fallbackKeyOptions = computed(() => {
@@ -1400,6 +1597,19 @@ const loadPublicSettings = async () => {
   }
 }
 
+const loadModelMarket = async () => {
+  modelMarketLoading.value = true
+  try {
+    const response = await modelMarketAPI.getPublicModelMarket()
+    modelMarketModels.value = response.models || []
+    pruneAllowedModelsForSelectedGroup(false)
+  } catch (error) {
+    console.error('Failed to load model market:', error)
+  } finally {
+    modelMarketLoading.value = false
+  }
+}
+
 const openUseKeyModal = (key: ApiKey) => {
   selectedKey.value = key
   showUseKeyModal.value = true
@@ -1432,6 +1642,7 @@ const editKey = (key: ApiKey) => {
   selectedKey.value = key
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
+  const allowedModels = key.allowed_models || []
   formData.value = {
     name: key.name,
     group_id: key.group_id,
@@ -1442,6 +1653,9 @@ const editKey = (key: ApiKey) => {
     enable_ip_restriction: hasIPRestriction,
     ip_whitelist: (key.ip_whitelist || []).join('\n'),
     ip_blacklist: (key.ip_blacklist || []).join('\n'),
+    enable_model_restriction: allowedModels.length > 0,
+    allowed_models: [...allowedModels],
+    model_search: '',
     enable_quota: key.quota > 0,
     quota: key.quota > 0 ? key.quota : null,
     enable_rate_limit: (key.rate_limit_5h > 0) || (key.rate_limit_1d > 0) || (key.rate_limit_7d > 0),
@@ -1452,6 +1666,7 @@ const editKey = (key: ApiKey) => {
     expiration_preset: 'custom',
     expiration_date: key.expires_at ? formatDateTimeLocal(key.expires_at) : ''
   }
+  pruneAllowedModelsForSelectedGroup(false)
   showEditModal.value = true
 }
 
@@ -1546,6 +1761,11 @@ const handleSubmit = async () => {
     }
   }
 
+  if (formData.value.enable_model_restriction && formData.value.allowed_models.length === 0) {
+    appStore.showError(t('keys.allowedModelsRequired'))
+    return
+  }
+
   // Parse IP lists only if IP restriction is enabled
   const parseIPList = (text: string): string[] =>
     text.split('\n').map(ip => ip.trim()).filter(ip => ip.length > 0)
@@ -1581,6 +1801,8 @@ const handleSubmit = async () => {
     rate_limit_7d: formData.value.rate_limit_7d && formData.value.rate_limit_7d > 0 ? formData.value.rate_limit_7d : 0,
   } : { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
 
+  const allowedModels = formData.value.enable_model_restriction ? formData.value.allowed_models : []
+
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
@@ -1590,6 +1812,7 @@ const handleSubmit = async () => {
         // 编辑时总下发：选「不设置」传 null 以清除兜底密钥
         fallback_key_id: formData.value.fallback_key_id,
         status: formData.value.status,
+        allowed_models: allowedModels,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1610,7 +1833,8 @@ const handleSubmit = async () => {
         quota,
         expiresInDays,
         rateLimitData,
-        formData.value.fallback_key_id
+        formData.value.fallback_key_id,
+        allowedModels
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1663,6 +1887,9 @@ const closeModals = () => {
     enable_ip_restriction: false,
     ip_whitelist: '',
     ip_blacklist: '',
+    enable_model_restriction: false,
+    allowed_models: [],
+    model_search: '',
     enable_quota: false,
     quota: null,
     enable_rate_limit: false,
@@ -1812,6 +2039,7 @@ function formatResetTime(resetAt: string | null): string {
 onMounted(() => {
   loadApiKeys()
   loadGroups()
+  loadModelMarket()
   loadFallbackCandidates()
   loadUserGroupRates()
   loadPublicSettings()

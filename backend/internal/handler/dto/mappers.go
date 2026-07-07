@@ -87,6 +87,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		GroupID:       k.GroupID,
 		FallbackKeyID: k.FallbackKeyID,
 		Status:        k.Status,
+		AllowedModels: apiKeyAllowedModelsForResponse(k.AllowedModels),
 		IPWhitelist:   k.IPWhitelist,
 		IPBlacklist:   k.IPBlacklist,
 		LastUsedAt:    k.LastUsedAt,
@@ -120,6 +121,14 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		out.Reset7dAt = &t
 	}
 	return out
+}
+
+func apiKeyAllowedModelsForResponse(models []string) []string {
+	normalized := service.NormalizeAPIKeyAllowedModels(models)
+	if normalized == nil {
+		return []string{}
+	}
+	return normalized
 }
 
 func GroupFromServiceShallow(g *service.Group) *Group {

@@ -168,9 +168,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	reqStream := parsedReq.Stream
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
-	// 解析渠道级模型映射
-	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
-
 	// 设置 max_tokens=1 + haiku 探测请求标识到 context 中
 	// 必须在 SetClaudeCodeClientContext 之前设置，因为 ClaudeCodeValidator 需要读取此标识进行绕过判断
 	if isMaxTokensOneHaikuRequest(reqModel, parsedReq.MaxTokens, reqStream) {
@@ -199,6 +196,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
+	if apiKeyModelPermissionDenied(apiKey, reqModel) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", apiKeyModelPermissionDeniedMessage(reqModel))
+		return
+	}
+
+	// 解析渠道级模型映射
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 
 	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && decision.Blocked {
 		h.errorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
@@ -1072,6 +1076,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, platform)
 
 	if len(availableModels) > 0 {
+		availableModels = filterModelIDsByAllowedSet(availableModels, apiKeyAllowedModelSet(apiKey))
 		// Build model list from whitelist
 		models := make([]claude.Model, 0, len(availableModels))
 		for _, modelID := range availableModels {
@@ -1090,34 +1095,61 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	}
 
 	// Fallback to default models
+	allowedModels := apiKeyAllowedModelSet(apiKey)
 	if platform == service.PlatformOpenAI {
+		models := make([]openai.Model, 0, len(openai.DefaultModels))
+		for _, model := range openai.DefaultModels {
+			if modelAllowedBySet(allowedModels, model.ID) {
+				models = append(models, model)
+			}
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
-			"data":   openai.DefaultModels,
+			"data":   models,
 		})
 		return
 	}
 
 	if platform == service.PlatformGemini {
+		models := make([]geminicli.Model, 0, len(geminicli.DefaultModels))
+		for _, model := range geminicli.DefaultModels {
+			if modelAllowedBySet(allowedModels, model.ID) {
+				models = append(models, model)
+			}
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
-			"data":   geminicli.DefaultModels,
+			"data":   models,
 		})
 		return
 	}
 
+	models := make([]claude.Model, 0, len(claude.DefaultModels))
+	for _, model := range claude.DefaultModels {
+		if modelAllowedBySet(allowedModels, model.ID) {
+			models = append(models, model)
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"object": "list",
-		"data":   claude.DefaultModels,
+		"data":   models,
 	})
 }
 
 // AntigravityModels 返回 Antigravity 支持的全部模型
 // GET /antigravity/models
 func (h *GatewayHandler) AntigravityModels(c *gin.Context) {
+	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	allowedModels := apiKeyAllowedModelSet(apiKey)
+	models := make([]antigravity.ClaudeModel, 0, len(antigravity.DefaultModels()))
+	for _, model := range antigravity.DefaultModels() {
+		if modelAllowedBySet(allowedModels, model.ID) {
+			models = append(models, model)
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"object": "list",
-		"data":   antigravity.DefaultModels(),
+		"data":   models,
 	})
 }
 
@@ -1902,6 +1934,10 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	// 验证 model 必填
 	if parsedReq.Model == "" {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
+		return
+	}
+	if apiKeyModelPermissionDenied(apiKey, parsedReq.Model) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", apiKeyModelPermissionDeniedMessage(parsedReq.Model))
 		return
 	}
 

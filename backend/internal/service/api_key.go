@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
@@ -37,6 +38,7 @@ type APIKey struct {
 	// 网关改用该兜底密钥继续转发，并将计费切换到兜底密钥（其分组/额度/限速/余额归属）。
 	FallbackKeyID *int64
 	Status        string
+	AllowedModels []string
 	IPWhitelist   []string
 	IPBlacklist   []string
 	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
@@ -63,6 +65,64 @@ type APIKey struct {
 	Window5hStart *time.Time // Start of current 5h window
 	Window1dStart *time.Time // Start of current 1d window
 	Window7dStart *time.Time // Start of current 7d window
+}
+
+func NormalizeAPIKeyAllowedModels(models []string) []string {
+	if len(models) == 0 {
+		return nil
+	}
+	normalized := make([]string, 0, len(models))
+	seen := make(map[string]struct{}, len(models))
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		normalized = append(normalized, model)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func (k *APIKey) AllowsModel(model string) bool {
+	if k == nil {
+		return true
+	}
+	allowedModels := NormalizeAPIKeyAllowedModels(k.AllowedModels)
+	if len(allowedModels) == 0 {
+		return true
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	for _, allowed := range allowedModels {
+		if modelsEquivalentForAPIKeyRestriction(allowed, model) {
+			return true
+		}
+	}
+	return false
+}
+
+func modelsEquivalentForAPIKeyRestriction(allowed string, requested string) bool {
+	allowed = strings.TrimSpace(allowed)
+	requested = strings.TrimSpace(requested)
+	if allowed == requested {
+		return true
+	}
+	if strings.HasPrefix(allowed, "models/") && strings.TrimPrefix(allowed, "models/") == requested {
+		return true
+	}
+	if strings.HasPrefix(requested, "models/") && strings.TrimPrefix(requested, "models/") == allowed {
+		return true
+	}
+	return false
 }
 
 func (k *APIKey) IsActive() bool {

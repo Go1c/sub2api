@@ -55,6 +55,9 @@ func (APIKey) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Last usage time of this API key"),
+		field.JSON("allowed_models", []string{}).
+			Optional().
+			Comment("Models this API key is allowed to request; empty means unrestricted"),
 		field.JSON("ip_whitelist", []string{}).
 			Optional().
 			Comment("Allowed IPs/CIDRs, e.g. [\"192.168.1.100\", \"10.0.0.0/8\"]"),

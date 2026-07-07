@@ -640,6 +640,16 @@ func LastUsedAtNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldLastUsedAt))
 }
 
+// AllowedModelsIsNil applies the IsNil predicate on the "allowed_models" field.
+func AllowedModelsIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldAllowedModels))
+}
+
+// AllowedModelsNotNil applies the NotNil predicate on the "allowed_models" field.
+func AllowedModelsNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldAllowedModels))
+}
+
 // IPWhitelistIsNil applies the IsNil predicate on the "ip_whitelist" field.
 func IPWhitelistIsNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldIsNull(FieldIPWhitelist))

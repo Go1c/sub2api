@@ -155,6 +155,7 @@ type CreateAPIKeyRequest struct {
 	GroupID       *int64   `json:"group_id"`
 	FallbackKeyID *int64   `json:"fallback_key_id"` // 兜底密钥 ID（nil = 无兜底）
 	CustomKey     *string  `json:"custom_key"`      // 可选的自定义key
+	AllowedModels []string `json:"allowed_models"`  // 允许使用的模型（空 = 不限制）
 	IPWhitelist   []string `json:"ip_whitelist"`    // IP 白名单
 	IPBlacklist   []string `json:"ip_blacklist"`    // IP 黑名单
 
@@ -173,10 +174,11 @@ type UpdateAPIKeyRequest struct {
 	Name    *string `json:"name"`
 	GroupID *int64  `json:"group_id"`
 	// FallbackKeyID 采用「直接赋值」语义：nil 即清空兜底（前端编辑时总会下发该字段）。
-	FallbackKeyID *int64   `json:"fallback_key_id"`
-	Status        *string  `json:"status"`
-	IPWhitelist   []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist   []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	FallbackKeyID *int64    `json:"fallback_key_id"`
+	Status        *string   `json:"status"`
+	AllowedModels *[]string `json:"allowed_models"` // nil = no change, empty = clear restriction
+	IPWhitelist   []string  `json:"ip_whitelist"`   // IP 白名单（空数组清空）
+	IPBlacklist   []string  `json:"ip_blacklist"`   // IP 黑名单（空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -439,6 +441,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		GroupID:       req.GroupID,
 		Status:        StatusActive,
 		FallbackKeyID: normalizePositiveID(req.FallbackKeyID),
+		AllowedModels: NormalizeAPIKeyAllowedModels(req.AllowedModels),
 		IPWhitelist:   req.IPWhitelist,
 		IPBlacklist:   req.IPBlacklist,
 		Quota:         req.Quota,
@@ -618,6 +621,9 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		if s.cache != nil {
 			_ = s.cache.DeleteCreateAttemptCount(ctx, apiKey.UserID)
 		}
+	}
+	if req.AllowedModels != nil {
+		apiKey.AllowedModels = NormalizeAPIKeyAllowedModels(*req.AllowedModels)
 	}
 
 	// Update quota fields

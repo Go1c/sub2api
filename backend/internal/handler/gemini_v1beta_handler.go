@@ -48,7 +48,9 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 
 	// 强制 antigravity 模式：返回 antigravity 支持的模型列表
 	if forcePlatform == service.PlatformAntigravity {
-		c.JSON(http.StatusOK, antigravity.FallbackGeminiModelsList())
+		c.JSON(http.StatusOK, antigravity.GeminiModelsListResponse{
+			Models: filterAntigravityGeminiModelsByAllowedSet(antigravity.DefaultGeminiModels(), apiKeyAllowedModelSet(apiKey)),
+		})
 		return
 	}
 
@@ -58,7 +60,9 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		hasAntigravity, _ := h.geminiCompatService.HasAntigravityAccounts(c.Request.Context(), apiKey.GroupID)
 		if hasAntigravity {
 			// antigravity 账户使用静态模型列表
-			c.JSON(http.StatusOK, gemini.FallbackModelsList())
+			c.JSON(http.StatusOK, gemini.ModelsListResponse{
+				Models: filterGeminiModelsByAllowedSet(gemini.DefaultModels(), apiKeyAllowedModelSet(apiKey)),
+			})
 			return
 		}
 		googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts: "+err.Error())
@@ -71,7 +75,9 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		return
 	}
 	if shouldFallbackGeminiModels(res) {
-		c.JSON(http.StatusOK, gemini.FallbackModelsList())
+		c.JSON(http.StatusOK, gemini.ModelsListResponse{
+			Models: filterGeminiModelsByAllowedSet(gemini.DefaultModels(), apiKeyAllowedModelSet(apiKey)),
+		})
 		return
 	}
 	writeUpstreamResponse(c, res)
@@ -95,6 +101,10 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 	modelName := strings.TrimSpace(c.Param("model"))
 	if modelName == "" {
 		googleError(c, http.StatusBadRequest, "Missing model in URL")
+		return
+	}
+	if apiKeyModelPermissionDenied(apiKey, modelName) {
+		googleError(c, http.StatusForbidden, apiKeyModelPermissionDeniedMessage(modelName))
 		return
 	}
 
@@ -162,6 +172,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	modelName, action, err := parseGeminiModelAction(strings.TrimPrefix(c.Param("modelAction"), "/"))
 	if err != nil {
 		googleError(c, http.StatusNotFound, err.Error())
+		return
+	}
+	if apiKeyModelPermissionDenied(apiKey, modelName) {
+		googleError(c, http.StatusForbidden, apiKeyModelPermissionDeniedMessage(modelName))
 		return
 	}
 

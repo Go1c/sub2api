@@ -12,6 +12,7 @@ type APIKeyAuthSnapshot struct {
 	FallbackKeyID *int64                   `json:"fallback_key_id,omitempty"`
 	Name          string                   `json:"name"`
 	Status        string                   `json:"status"`
+	AllowedModels []string                 `json:"allowed_models,omitempty"`
 	IPWhitelist   []string                 `json:"ip_whitelist,omitempty"`
 	IPBlacklist   []string                 `json:"ip_blacklist,omitempty"`
 	User          APIKeyAuthUserSnapshot   `json:"user"`
