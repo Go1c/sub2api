@@ -216,93 +216,51 @@
           </div>
         </div>
 
-        <!-- User Balance Summary -->
+        <!-- Quick Actions -->
         <div class="card p-4">
-          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div class="flex items-start gap-3">
-              <div class="rounded-lg bg-cyan-100 p-2 dark:bg-cyan-900/30">
-                <Icon name="dollar" size="md" class="text-cyan-600 dark:text-cyan-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.totalUserBalance') }}
-                </p>
-                <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
-                  ${{ formatBalance(balanceSummary?.total_balance) }}
-                </p>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.balanceUserCount', { count: balanceSummary?.user_count || 0 }) }}
-                </p>
-              </div>
-            </div>
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.dashboard.quickActions') }}
+            </h2>
+          </div>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <button
+              v-if="canUseBatchImage"
+              type="button"
+              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-sky-50 dark:bg-dark-800/50 dark:hover:bg-sky-900/20"
+              @click="router.push('/batch-image')"
+            >
+              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
+                <Icon name="sparkles" size="md" :stroke-width="2" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t('admin.dashboard.batchImage') }}
+                </span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.batchImageDesc') }}
+                </span>
+              </span>
+              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-sky-500" />
+            </button>
             <button
               type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-700 dark:text-gray-400 dark:hover:bg-dark-700 dark:hover:text-gray-200"
-              :disabled="balanceSummaryLoading"
-              :title="t('common.refresh')"
-              @click="loadBalanceSummary"
+              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-emerald-50 dark:bg-dark-800/50 dark:hover:bg-emerald-900/20"
+              @click="router.push('/admin/groups')"
             >
-              <Icon name="refresh" size="sm" :class="{ 'animate-spin': balanceSummaryLoading }" />
-            </button>
-          </div>
-
-          <div v-if="balanceSummaryLoading && !balanceSummary" class="flex h-44 items-center justify-center">
-            <LoadingSpinner size="md" />
-          </div>
-          <div v-else-if="balanceSummary?.ranking.length" class="overflow-x-auto">
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-                {{ t('admin.dashboard.balanceRankingTop20') }}
-              </h3>
-              <span class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.dashboard.balanceUnit') }}
+              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                <Icon name="grid" size="md" :stroke-width="2" />
               </span>
-            </div>
-            <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
-              <thead>
-                <tr class="text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                  <th class="w-16 px-2 py-2">{{ t('admin.dashboard.rank') }}</th>
-                  <th class="px-2 py-2">{{ t('admin.dashboard.spendingRankingUser') }}</th>
-                  <th class="w-24 px-2 py-2">{{ t('common.status') }}</th>
-                  <th class="w-36 px-2 py-2 text-right">{{ t('common.balance') }}</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
-                <tr
-                  v-for="(item, index) in balanceSummary.ranking"
-                  :key="item.user_id"
-                  class="transition-colors hover:bg-gray-50 dark:hover:bg-dark-800/60"
-                >
-                  <td class="px-2 py-2 font-semibold text-gray-500 dark:text-gray-400">#{{ index + 1 }}</td>
-                  <td class="px-2 py-2">
-                    <div class="min-w-0">
-                      <p class="truncate font-medium text-gray-900 dark:text-white">
-                        {{ getBalanceUserDisplayName(item) }}
-                      </p>
-                      <p class="truncate text-xs text-gray-500 dark:text-gray-400">
-                        {{ item.email || t('common.none') }}
-                      </p>
-                    </div>
-                  </td>
-                  <td class="px-2 py-2">
-                    <span
-                      class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
-                      :class="item.status === 'active'
-                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                        : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'"
-                    >
-                      {{ item.status === 'active' ? t('common.active') : t('common.disabled') }}
-                    </span>
-                  </td>
-                  <td class="px-2 py-2 text-right font-semibold text-cyan-700 dark:text-cyan-300">
-                    ${{ formatBalance(item.balance) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else class="flex h-32 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-            {{ t('admin.dashboard.noDataAvailable') }}
+              <span class="min-w-0 flex-1">
+                <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t('admin.dashboard.groupPricing') }}
+                </span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.groupPricingDesc') }}
+                </span>
+              </span>
+              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-emerald-500" />
+            </button>
           </div>
         </div>
 
@@ -397,7 +355,6 @@ import type {
   UserUsageTrendPoint,
   UserSpendingRankingItem
 } from '@/types'
-import type { UserBalanceRankingItem, UserBalanceSummary } from '@/api/admin/users'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -405,6 +362,7 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
+import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 import {
   Chart as ChartJS,
@@ -431,6 +389,7 @@ ChartJS.register(
 
 const appStore = useAppStore()
 const router = useRouter()
+const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 const stats = ref<DashboardStats | null>(null)
 const loading = ref(false)
 const chartsLoading = ref(false)
@@ -446,14 +405,10 @@ const rankingItems = ref<UserSpendingRankingItem[]>([])
 const rankingTotalActualCost = ref(0)
 const rankingTotalRequests = ref(0)
 const rankingTotalTokens = ref(0)
-const balanceSummary = ref<UserBalanceSummary | null>(null)
-const balanceSummaryLoading = ref(false)
 let chartLoadSeq = 0
 let usersTrendLoadSeq = 0
 let rankingLoadSeq = 0
-let balanceSummaryLoadSeq = 0
 const rankingLimit = 12
-const balanceRankingLimit = 20
 
 // Helper function to format date in local timezone
 const formatLocalDate = (date: Date): string => {
@@ -628,32 +583,25 @@ const formatTokens = (value: number | undefined): string => {
   return value.toLocaleString()
 }
 
-const formatNumber = (value: number): string => {
-  return value.toLocaleString()
+const toFiniteNumber = (value: unknown): number => {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
+const formatNumber = (value: number | null | undefined): string => {
+  return toFiniteNumber(value).toLocaleString()
 }
 
 const formatCost = (value: number | null | undefined): string => {
-  const amount = Number(value ?? 0)
-  if (!Number.isFinite(amount)) return '0.0000'
-  if (amount >= 1000) {
-    return (amount / 1000).toFixed(2) + 'K'
-  } else if (amount >= 1) {
-    return amount.toFixed(2)
-  } else if (amount >= 0.01) {
-    return amount.toFixed(3)
+  const safeValue = toFiniteNumber(value)
+  if (safeValue >= 1000) {
+    return (safeValue / 1000).toFixed(2) + 'K'
+  } else if (safeValue >= 1) {
+    return safeValue.toFixed(2)
+  } else if (safeValue >= 0.01) {
+    return safeValue.toFixed(3)
   }
-  return amount.toFixed(4)
-}
-
-const formatBalance = (value: number | null | undefined): string => {
-  const amount = Number(value ?? 0)
-  if (!Number.isFinite(amount)) {
-    return '0.00'
-  }
-  return amount.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4
-  })
+  return safeValue.toFixed(4)
 }
 
 const formatDuration = (ms: number): string => {
@@ -661,14 +609,6 @@ const formatDuration = (ms: number): string => {
     return `${(ms / 1000).toFixed(2)}s`
   }
   return `${Math.round(ms)}ms`
-}
-
-const getBalanceUserDisplayName = (item: UserBalanceRankingItem): string => {
-  const username = item.username?.trim()
-  if (username) return username
-  const email = item.email?.trim()
-  if (email) return email
-  return t('admin.redeem.userPrefix', { id: item.user_id })
 }
 
 const goToUserUsage = (item: UserSpendingRankingItem) => {
@@ -792,30 +732,11 @@ const loadUserSpendingRanking = async () => {
   }
 }
 
-const loadBalanceSummary = async () => {
-  const currentSeq = ++balanceSummaryLoadSeq
-  balanceSummaryLoading.value = true
-  try {
-    const response = await adminAPI.users.getBalanceSummary(balanceRankingLimit)
-    if (currentSeq !== balanceSummaryLoadSeq) return
-    balanceSummary.value = response
-  } catch (error) {
-    if (currentSeq !== balanceSummaryLoadSeq) return
-    console.error('Error loading user balance summary:', error)
-    balanceSummary.value = null
-  } finally {
-    if (currentSeq === balanceSummaryLoadSeq) {
-      balanceSummaryLoading.value = false
-    }
-  }
-}
-
 const loadDashboardStats = async () => {
   await Promise.all([
     loadDashboardSnapshot(true),
     loadUsersTrend(),
-    loadUserSpendingRanking(),
-    loadBalanceSummary()
+    loadUserSpendingRanking()
   ])
 }
 
@@ -828,6 +749,7 @@ const loadChartData = async () => {
 }
 
 onMounted(() => {
+  void refreshBatchImageAccess()
   loadDashboardStats()
 })
 </script>

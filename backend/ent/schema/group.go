@@ -45,6 +45,22 @@ func (Group) Fields() []ent.Field {
 		field.Float("rate_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0),
+		// 高峰时段倍率（added by migration 158）
+		field.Bool("peak_rate_enabled").
+			Default(false).
+			Comment("是否启用高峰时段倍率"),
+		field.String("peak_start").
+			MaxLen(5).
+			Default("").
+			Comment("高峰开始时间 HH:MM（含），如 14:00；空表示未配置；不支持跨天"),
+		field.String("peak_end").
+			MaxLen(5).
+			Default("").
+			Comment("高峰结束时间 HH:MM（不含），必须大于 peak_start；不支持跨天，如 22:00-02:00"),
+		field.Float("peak_rate_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("高峰时段叠加倍率，仅在 peak_rate_enabled 且处于 [peak_start, peak_end) 时乘入文本倍率"),
 		field.Bool("is_exclusive").
 			Default(false),
 		field.String("status").
@@ -77,6 +93,9 @@ func (Group) Fields() []ent.Field {
 		field.Bool("allow_image_generation").
 			Default(false).
 			Comment("是否允许该分组使用图片生成能力"),
+		field.Bool("allow_batch_image_generation").
+			Default(false).
+			Comment("是否允许该分组使用批量图片生成能力"),
 		field.Bool("image_rate_independent").
 			Default(false).
 			Comment("图片生成是否使用独立倍率；false 表示共享分组有效倍率"),
@@ -96,6 +115,14 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Float("batch_image_discount_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(0.5).
+			Comment("批量图片生成折扣倍率，最终单价会乘以该值；0 表示免费"),
+		field.Float("batch_image_hold_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(0.6).
+			Comment("批量图片生成冻结价格比例，按普通生图原价乘以该比例冻结，结算后释放差额"),
 		field.Bool("video_rate_independent").
 			Default(false).
 			Comment("视频生成是否使用独立倍率；false 表示共享分组有效倍率"),
@@ -115,6 +142,11 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Float("web_search_price_per_call").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Comment("Codex alpha/search 网页搜索单次价格（USD/次）；nil 表示使用默认价 0.01（官方 $10/1000 次）"),
 
 		// Claude Code 客户端限制 (added by migration 029)
 		field.Bool("claude_code_only").
@@ -128,10 +160,6 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("无效请求兜底使用的分组 ID"),
-		field.Int64("fallback_group_id_on_exhausted").
-			Optional().
-			Nillable().
-			Comment("上游账号全部不可用时兜底使用的分组 ID"),
 
 		// 模型路由配置 (added by migration 040)
 		field.JSON("model_routing", map[string][]int64{}).
@@ -178,16 +206,15 @@ func (Group) Fields() []ent.Field {
 			Default(domain.OpenAIMessagesDispatchModelConfig{}).
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
 			Comment("OpenAI Messages 调度模型配置：按 Claude 系列/精确模型映射到目标 GPT 模型"),
+		field.JSON("models_list_config", domain.GroupModelsListConfig{}).
+			Default(domain.GroupModelsListConfig{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("自定义 /v1/models 展示列表配置；仅影响模型列表响应，不影响调度"),
 
 		// 分组级每分钟请求数上限（0 = 不限制）。设置后优先于用户级兜底生效。
 		field.Int("rpm_limit").
 			Default(0).
 			Comment("分组 RPM 上限，0 表示不限制；设置后接管该分组用户的限流"),
-
-		// 是否在用户使用记录页暴露上游模型 (added by migration 139)
-		field.Bool("expose_upstream_model_to_user").
-			Default(false).
-			Comment("是否允许用户在使用记录页看到上游模型与映射链，false 时仅管理员可见"),
 	}
 }
 
@@ -197,7 +224,6 @@ func (Group) Edges() []ent.Edge {
 		edge.To("redeem_codes", RedeemCode.Type),
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("usage_logs", UsageLog.Type),
-		edge.To("subscription_credit_ledgers", SubscriptionCreditLedger.Type),
 		edge.From("accounts", Account.Type).
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),

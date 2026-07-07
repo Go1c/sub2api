@@ -7,12 +7,6 @@ import (
 	"github.com/google/wire"
 )
 
-func ProvideRedeemCodeRedeemer(svc *service.RedeemService) redeemCodeRedeemer { return svc }
-func ProvidePromoCodeRedeemer(svc *service.PromoService) promoCodeRedeemer    { return svc }
-func ProvideSubscriptionWasteStatsService(svc *service.SubscriptionWasteStatsService) admin.SubscriptionWasteStatsService {
-	return svc
-}
-
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
@@ -20,9 +14,6 @@ func ProvideAdminHandlers(
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
-	adminSiteMessageHandler *admin.SiteMessageHandler,
-	adminLotteryHandler *admin.LotteryHandler,
-	adminInvoiceHandler *admin.InvoiceHandler,
 	dataManagementHandler *admin.DataManagementHandler,
 	backupHandler *admin.BackupHandler,
 	oauthHandler *admin.OAuthHandler,
@@ -37,7 +28,6 @@ func ProvideAdminHandlers(
 	opsHandler *admin.OpsHandler,
 	systemHandler *admin.SystemHandler,
 	subscriptionHandler *admin.SubscriptionHandler,
-	subscriptionWasteStatsHandler *admin.SubscriptionWasteStatsHandler,
 	usageHandler *admin.UsageHandler,
 	userAttributeHandler *admin.UserAttributeHandler,
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
@@ -50,6 +40,7 @@ func ProvideAdminHandlers(
 	contentModerationHandler *admin.ContentModerationHandler,
 	paymentHandler *admin.PaymentHandler,
 	affiliateHandler *admin.AffiliateHandler,
+	complianceHandler *admin.ComplianceHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
@@ -57,9 +48,6 @@ func ProvideAdminHandlers(
 		Group:                  groupHandler,
 		Account:                accountHandler,
 		Announcement:           announcementHandler,
-		SiteMessage:            adminSiteMessageHandler,
-		Lottery:                adminLotteryHandler,
-		Invoice:                adminInvoiceHandler,
 		DataManagement:         dataManagementHandler,
 		Backup:                 backupHandler,
 		OAuth:                  oauthHandler,
@@ -74,7 +62,6 @@ func ProvideAdminHandlers(
 		Ops:                    opsHandler,
 		System:                 systemHandler,
 		Subscription:           subscriptionHandler,
-		SubscriptionWasteStats: subscriptionWasteStatsHandler,
 		Usage:                  usageHandler,
 		UserAttribute:          userAttributeHandler,
 		ErrorPassthrough:       errorPassthroughHandler,
@@ -87,6 +74,7 @@ func ProvideAdminHandlers(
 		ContentModeration:      contentModerationHandler,
 		Payment:                paymentHandler,
 		Affiliate:              affiliateHandler,
+		Compliance:             complianceHandler,
 	}
 }
 
@@ -95,13 +83,18 @@ func ProvideSystemHandler(updateService *service.UpdateService, lockService *ser
 	return admin.NewSystemHandler(updateService, lockService)
 }
 
-func ProvideOpsHandler(opsService *service.OpsService, userRequestMonitorService *service.OpsUserRequestMonitorService) *admin.OpsHandler {
-	return admin.NewOpsHandler(opsService).SetUserRequestMonitorService(userRequestMonitorService)
+// ProvideSettingHandler creates SettingHandler with version from BuildInfo
+func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo, notificationEmailService *service.NotificationEmailService) *SettingHandler {
+	h := NewSettingHandler(settingService, buildInfo.Version)
+	h.SetNotificationEmailService(notificationEmailService)
+	return h
 }
 
-// ProvideSettingHandler creates SettingHandler with version from BuildInfo
-func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo) *SettingHandler {
-	return NewSettingHandler(settingService, buildInfo.Version)
+// ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
+func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService) *admin.SettingHandler {
+	h := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService, userAttributeService)
+	h.SetNotificationEmailService(notificationEmailService)
+	return h
 }
 
 // ProvideHandlers creates the Handlers struct
@@ -113,9 +106,6 @@ func ProvideHandlers(
 	redeemHandler *RedeemHandler,
 	subscriptionHandler *SubscriptionHandler,
 	announcementHandler *AnnouncementHandler,
-	siteMessageHandler *SiteMessageHandler,
-	lotteryHandler *LotteryHandler,
-	invoiceHandler *InvoiceHandler,
 	channelMonitorUserHandler *ChannelMonitorUserHandler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
@@ -125,7 +115,7 @@ func ProvideHandlers(
 	paymentHandler *PaymentHandler,
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
-	modelMarketHandler *ModelMarketHandler,
+	batchImageHandler *BatchImageHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -137,9 +127,6 @@ func ProvideHandlers(
 		Redeem:           redeemHandler,
 		Subscription:     subscriptionHandler,
 		Announcement:     announcementHandler,
-		SiteMessage:      siteMessageHandler,
-		Lottery:          lotteryHandler,
-		Invoice:          invoiceHandler,
 		ChannelMonitor:   channelMonitorUserHandler,
 		Admin:            adminHandlers,
 		Gateway:          gatewayHandler,
@@ -149,7 +136,7 @@ func ProvideHandlers(
 		Payment:          paymentHandler,
 		PaymentWebhook:   paymentWebhookHandler,
 		AvailableChannel: availableChannelHandler,
-		ModelMarket:      modelMarketHandler,
+		BatchImage:       batchImageHandler,
 	}
 }
 
@@ -161,13 +148,8 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
-	ProvideRedeemCodeRedeemer,
-	ProvidePromoCodeRedeemer,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
-	NewSiteMessageHandler,
-	NewLotteryHandler,
-	NewInvoiceHandler,
 	NewChannelMonitorUserHandler,
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
@@ -176,7 +158,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentHandler,
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
-	NewModelMarketHandler,
+	NewBatchImageHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
@@ -184,9 +166,6 @@ var ProviderSet = wire.NewSet(
 	admin.NewGroupHandler,
 	admin.ProvideAccountHandler,
 	admin.NewAnnouncementHandler,
-	admin.NewSiteMessageHandler,
-	admin.NewLotteryHandler,
-	admin.NewInvoiceHandler,
 	admin.NewDataManagementHandler,
 	admin.NewBackupHandler,
 	admin.NewOAuthHandler,
@@ -197,12 +176,10 @@ var ProviderSet = wire.NewSet(
 	admin.NewProxyHandler,
 	admin.NewRedeemHandler,
 	admin.NewPromoHandler,
-	admin.NewSettingHandler,
-	ProvideOpsHandler,
+	ProvideAdminSettingHandler,
+	admin.NewOpsHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
-	admin.NewSubscriptionWasteStatsHandler,
-	ProvideSubscriptionWasteStatsService,
 	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
@@ -215,6 +192,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewContentModerationHandler,
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,
+	admin.NewComplianceHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,
