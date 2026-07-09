@@ -136,6 +136,24 @@ func appendRawUsageLogModelQueryFilter(query string, args []any, model string) (
 	return query, args
 }
 
+func appendUsageLogBillingModeWhereCondition(conditions []string, args []any, mode string) ([]string, []any) {
+	if strings.TrimSpace(mode) == "" {
+		return conditions, args
+	}
+	placeholder := fmt.Sprintf("$%d", len(args)+1)
+	switch service.BillingMode(mode) {
+	case service.BillingModeImage:
+		conditions = append(conditions, fmt.Sprintf("(billing_mode = %s OR ((billing_mode IS NULL OR billing_mode = '') AND COALESCE(image_count, 0) > 0))", placeholder))
+	case service.BillingModeVideo:
+		conditions = append(conditions, fmt.Sprintf("billing_mode = %s", placeholder))
+	case service.BillingModeToken:
+		conditions = append(conditions, fmt.Sprintf("(billing_mode = %s OR ((billing_mode IS NULL OR billing_mode = '') AND COALESCE(image_count, 0) <= 0))", placeholder))
+	default:
+		conditions = append(conditions, fmt.Sprintf("billing_mode = %s", placeholder))
+	}
+	return conditions, append(args, mode)
+}
+
 type usageLogRepository struct {
 	client *dbent.Client
 	sql    sqlExecutor
@@ -2700,10 +2718,7 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 		conditions = append(conditions, fmt.Sprintf("billing_type = $%d", len(args)+1))
 		args = append(args, int16(*filters.BillingType))
 	}
-	if filters.BillingMode != "" {
-		conditions = append(conditions, fmt.Sprintf("billing_mode = $%d", len(args)+1))
-		args = append(args, filters.BillingMode)
-	}
+	conditions, args = appendUsageLogBillingModeWhereCondition(conditions, args, filters.BillingMode)
 	if filters.StartTime != nil {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", len(args)+1))
 		args = append(args, *filters.StartTime)
@@ -3401,10 +3416,7 @@ func (r *usageLogRepository) GetStatsWithFilters(ctx context.Context, filters Us
 		conditions = append(conditions, fmt.Sprintf("billing_type = $%d", len(args)+1))
 		args = append(args, int16(*filters.BillingType))
 	}
-	if filters.BillingMode != "" {
-		conditions = append(conditions, fmt.Sprintf("billing_mode = $%d", len(args)+1))
-		args = append(args, filters.BillingMode)
-	}
+	conditions, args = appendUsageLogBillingModeWhereCondition(conditions, args, filters.BillingMode)
 	if filters.StartTime != nil {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", len(args)+1))
 		args = append(args, *filters.StartTime)

@@ -1023,6 +1023,7 @@ export default {
       billingModeToken: 'Per Token',
       billingModePerRequest: 'Per Request',
       billingModeImage: 'Per Image',
+      billingModeVideo: 'Per Video',
       inputPrice: 'Input',
       outputPrice: 'Output',
       cacheWritePrice: 'Cache Write',
@@ -2266,6 +2267,15 @@ export default {
         finalPricePreview: 'Final per-image price preview',
         notConfigured: 'Not configured'
       },
+      videoPricing: {
+        title: 'Video Generation Pricing',
+        description: 'Configure Grok video generation base prices. Leave empty to use default video prices.',
+        independentMultiplier: 'Use independent video multiplier',
+        videoMultiplier: 'Video multiplier',
+        modeHint: 'By default, video billing uses video price × current effective group multiplier. Independent mode uses video price × video multiplier.',
+        finalPricePreview: 'Final per-video price preview',
+        notConfigured: 'Not configured'
+      },
       claudeCode: {
         title: 'Claude Code Client Restriction',
         tooltip: 'When enabled, this group only allows official Claude Code clients. Non-Claude Code requests will be rejected or fallback to the specified group.',
@@ -2387,6 +2397,7 @@ export default {
         billingModeToken: 'Per Token',
         billingModePerRequest: 'Per Request',
         billingModeImage: 'Per Image',
+        billingModeVideo: 'Per Video',
         inputPrice: 'Input',
         outputPrice: 'Output',
         cacheWritePrice: 'Cache Write',
@@ -4839,6 +4850,7 @@ export default {
       billingModeToken: 'Token',
       billingModePerRequest: 'Per Request',
       billingModeImage: 'Image',
+      billingModeVideo: 'Video',
       allBillingModes: 'All Billing Modes',
       ipAddress: 'IP',
       clickToViewBalance: 'Click to view balance history',
