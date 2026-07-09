@@ -50,15 +50,6 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/affiliate-tier-demo',
-    name: 'AffiliateTierDemo',
-    component: () => import('@/views/demo/AffiliateTierDemoView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Affiliate Tier Demo'
-    }
-  },
-  {
     path: '/doc/:slug(.*)*',
     name: 'SitePage',
     component: () => import('@/views/PublicMarkdownPageView.vue'),
@@ -801,7 +792,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/status', '/legal', '/affiliate-tier-demo']
+const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/status', '/legal']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
   '/auth/linuxdo/callback',

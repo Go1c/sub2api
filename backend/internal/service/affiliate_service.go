@@ -542,11 +542,19 @@ func (s *AffiliateService) recordInviteLog(ctx context.Context, entry AffiliateI
 	}
 }
 
+// AccrueInviteRebate is for callers that have already verified the base amount
+// is rebate-eligible and reflected in invitee recharge progress.
 func (s *AffiliateService) AccrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64) (float64, error) {
-	return s.AccrueInviteRebateForOrder(ctx, inviteeUserID, baseRechargeAmount, nil)
+	return s.accrueInviteRebate(ctx, inviteeUserID, baseRechargeAmount, nil, false)
 }
 
+// AccrueInviteRebateForOrder is used before a payment order is marked
+// COMPLETED, so the current order amount must be included for tier resolution.
 func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64, sourceOrderID *int64) (float64, error) {
+	return s.accrueInviteRebate(ctx, inviteeUserID, baseRechargeAmount, sourceOrderID, true)
+}
+
+func (s *AffiliateService) accrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64, sourceOrderID *int64, includeBaseInTierTotal bool) (float64, error) {
 	if s == nil || s.repo == nil {
 		return 0, nil
 	}
@@ -584,7 +592,11 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 	if err != nil {
 		return 0, err
 	}
-	rebateRatePercent := s.resolveRebateRatePercent(ctx, inviterSummary, inviteeRechargeTotal+baseRechargeAmount)
+	tierRechargeTotal := inviteeRechargeTotal
+	if includeBaseInTierTotal {
+		tierRechargeTotal += baseRechargeAmount
+	}
+	rebateRatePercent := s.resolveRebateRatePercent(ctx, inviterSummary, tierRechargeTotal)
 	if rebateRatePercent == nil {
 		return 0, nil
 	}

@@ -26,3 +26,16 @@ func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {
 	require.NotContains(t, content, "parseAffiliateRebateAmount")
 	require.NotContains(t, content, `"current_balance": "u.balance"`)
 }
+
+func TestInviteeRechargeTotalUsesPaidOrderEligibility(t *testing.T) {
+	source, err := os.ReadFile("affiliate_repo.go")
+	require.NoError(t, err)
+	content := string(source)
+
+	require.Contains(t, content, "JOIN payment_orders po ON po.user_id = ua.user_id")
+	require.Contains(t, content, "po.status = 'COMPLETED'")
+	require.Contains(t, content, "po.order_type = 'balance'")
+	require.Contains(t, content, "po.order_type = 'subscription'")
+	require.Contains(t, content, "LOWER(TRIM(po.payment_type)) <> 'balance'")
+	require.NotContains(t, content, "FROM redeem_codes rc")
+}

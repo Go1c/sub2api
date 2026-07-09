@@ -401,7 +401,14 @@ FROM user_affiliates ua
 JOIN payment_orders po ON po.user_id = ua.user_id
 WHERE ua.inviter_id = $1
   AND po.status = 'COMPLETED'
-  AND po.amount > 0`, inviterID)
+  AND po.amount > 0
+  AND (
+      po.order_type = 'balance'
+      OR (
+          po.order_type = 'subscription'
+          AND LOWER(TRIM(po.payment_type)) <> 'balance'
+      )
+  )`, inviterID)
 	if err != nil {
 		return 0, fmt.Errorf("query affiliate invitee recharge total: %w", err)
 	}

@@ -203,6 +203,82 @@ VALUES ($1, $2, 0, 0, NOW(), NOW())`, u.ID, affCode)
 	require.InDelta(t, 3.21, persistedBalance, 1e-9)
 }
 
+func TestAffiliateRepository_GetInviteeRechargeTotalUsesPaidOrdersOnly(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+
+	repo := NewAffiliateRepository(client, integrationDB)
+	suffix := time.Now().UnixNano()
+	inviter := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-progress-inviter-%d@example.com", suffix),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	invitee := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-progress-invitee-%d@example.com", suffix),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	otherUser := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-progress-other-%d@example.com", suffix),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	_, err := repo.EnsureUserAffiliate(txCtx, inviter.ID)
+	require.NoError(t, err)
+	_, err = repo.EnsureUserAffiliate(txCtx, invitee.ID)
+	require.NoError(t, err)
+	bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID)
+	require.NoError(t, err)
+	require.True(t, bound)
+
+	_, err = client.ExecContext(txCtx, `
+INSERT INTO payment_orders (
+    user_id, user_email, user_name, amount, pay_amount, fee_rate,
+    recharge_code, out_trade_no, payment_type, payment_trade_no,
+    order_type, status, expires_at, paid_at, completed_at,
+    client_ip, src_host, created_at, updated_at
+)
+VALUES
+    ($1, $2, $3, 100, 100, 0, $4, $5, 'wxpay', 'trade-balance', 'balance', $6, NOW() + INTERVAL '1 hour', NOW(), NOW(), '127.0.0.1', 'test.local', NOW(), NOW()),
+    ($1, $2, $3, 60, 60, 0, $7, $8, 'stripe', 'trade-sub-paid', 'subscription', $6, NOW() + INTERVAL '1 hour', NOW(), NOW(), '127.0.0.1', 'test.local', NOW(), NOW()),
+    ($1, $2, $3, 30, 30, 0, $9, $10, 'balance', 'trade-sub-balance', 'subscription', $6, NOW() + INTERVAL '1 hour', NOW(), NOW(), '127.0.0.1', 'test.local', NOW(), NOW()),
+    ($1, $2, $3, 200, 200, 0, $11, $12, 'wxpay', 'trade-other', 'other', $6, NOW() + INTERVAL '1 hour', NOW(), NOW(), '127.0.0.1', 'test.local', NOW(), NOW()),
+    ($1, $2, $3, 400, 400, 0, $13, $14, 'wxpay', 'trade-pending', 'balance', 'PENDING', NOW() + INTERVAL '1 hour', NULL, NULL, '127.0.0.1', 'test.local', NOW(), NOW()),
+    ($15, $16, $16, 999, 999, 0, $17, $18, 'wxpay', 'trade-other-user', 'balance', $6, NOW() + INTERVAL '1 hour', NOW(), NOW(), '127.0.0.1', 'test.local', NOW(), NOW())`,
+		invitee.ID, invitee.Email, invitee.Email,
+		fmt.Sprintf("PAID-BALANCE-%d", suffix), fmt.Sprintf("out-balance-%d", suffix),
+		service.OrderStatusCompleted,
+		fmt.Sprintf("PAID-SUB-%d", suffix), fmt.Sprintf("out-sub-paid-%d", suffix),
+		fmt.Sprintf("BALANCE-SUB-%d", suffix), fmt.Sprintf("out-sub-balance-%d", suffix),
+		fmt.Sprintf("OTHER-TYPE-%d", suffix), fmt.Sprintf("out-other-%d", suffix),
+		fmt.Sprintf("PENDING-%d", suffix), fmt.Sprintf("out-pending-%d", suffix),
+		otherUser.ID, otherUser.Email,
+		fmt.Sprintf("OTHER-USER-%d", suffix), fmt.Sprintf("out-other-user-%d", suffix),
+	)
+	require.NoError(t, err)
+
+	_, err = client.ExecContext(txCtx, `
+INSERT INTO redeem_codes (code, type, value, status, used_by, used_at, created_at, validity_days)
+VALUES ($1, $2, 40, $3, $4, NOW(), NOW(), 30)`,
+		fmt.Sprintf("MANUAL-%d", suffix),
+		service.RedeemTypeBalance,
+		service.StatusUsed,
+		invitee.ID,
+	)
+	require.NoError(t, err)
+
+	total, err := repo.GetInviteeRechargeTotal(txCtx, inviter.ID)
+
+	require.NoError(t, err)
+	require.InDelta(t, 160.0, total, 1e-9)
+}
+
 // TestAffiliateRepository_AdminCustomCode covers the success path of admin
 // invite-code rewrite + reset within a shared test transaction:
 // - UpdateUserAffCode replaces aff_code, sets aff_code_custom=true, lookup works

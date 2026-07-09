@@ -106,7 +106,7 @@ func TestGetAffiliateDetailIncludesTierProgress(t *testing.T) {
 	require.Len(t, detail.AffiliateTiers, 4)
 }
 
-func TestAccrueInviteRebateUsesProspectiveRechargeTotal(t *testing.T) {
+func TestAccrueInviteRebateForOrderUsesProspectiveRechargeTotal(t *testing.T) {
 	t.Parallel()
 
 	repo := newAffiliateSignupBonusRepoStub()
@@ -120,6 +120,35 @@ func TestAccrueInviteRebateUsesProspectiveRechargeTotal(t *testing.T) {
 		SettingKeyAffiliateRebateTiers: `[
 			{"level":"L1","min_invitees":5,"min_recharge":500,"rebate_rate_percent":15},
 			{"level":"L2","min_invitees":20,"min_recharge":5000,"rebate_rate_percent":25},
+			{"level":"L3","min_invitees":50,"min_recharge":20000,"rebate_rate_percent":35},
+			{"level":"L4","min_invitees":100,"min_recharge":50000,"rebate_rate_percent":45}
+		]`,
+	}}, nil)
+	svc := NewAffiliateService(repo, settingSvc, nil, nil)
+
+	orderID := int64(99)
+	rebate, err := svc.AccrueInviteRebateForOrder(context.Background(), inviteeID, 10, &orderID)
+
+	require.NoError(t, err)
+	require.InDelta(t, 1.5, rebate, 1e-9)
+	require.Len(t, repo.accrueCalls, 1)
+	require.InDelta(t, 1.5, repo.accrueCalls[0].amount, 1e-9)
+}
+
+func TestAccrueInviteRebateUsesPersistedRechargeTotal(t *testing.T) {
+	t.Parallel()
+
+	repo := newAffiliateSignupBonusRepoStub()
+	inviterID := int64(1)
+	inviteeID := int64(2)
+	repo.profiles[inviteeID].InviterID = &inviterID
+	repo.profiles[inviterID].AffCount = 5
+	repo.inviteeRechargeTotal = 500
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled: "true",
+		SettingKeyAffiliateRebateTiers: `[
+			{"level":"L1","min_invitees":5,"min_recharge":500,"rebate_rate_percent":15},
+			{"level":"L2","min_invitees":5,"min_recharge":510,"rebate_rate_percent":25},
 			{"level":"L3","min_invitees":50,"min_recharge":20000,"rebate_rate_percent":35},
 			{"level":"L4","min_invitees":100,"min_recharge":50000,"rebate_rate_percent":45}
 		]`,

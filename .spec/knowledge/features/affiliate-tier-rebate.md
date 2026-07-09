@@ -30,13 +30,14 @@ metadata:
 - 邀请人数和邀请充值总额必须同时达标。
 - 多档同时达标时取最高档。
 - 发放返利时，用“已完成邀请充值总额 + 本次订单金额”判定等级；一笔订单把用户推过门槛时，该笔订单按新等级计算。
+- 只有用户实际付费订单产生返利：余额充值订单、外部支付购买订阅订单；手工余额兑换码和余额内扣购买订阅不产生返利。
 - 用户专属返利比例仍是显式覆盖：用户 `aff_rebate_rate_percent` 非空时优先使用；清空后回到阶梯配置。
 
 ### API / 前端
 
 - `/api/v1/user/aff` 返回：
   - `effective_rebate_rate_percent`：实际返利比例，未配置或未达标时为 `null`。
-  - `invitee_recharge_total`：被邀请用户已完成订单金额累计。
+  - `invitee_recharge_total`：被邀请用户已完成且可返点的付费订单金额累计；包含余额充值订单和外部支付订阅订单，不包含手工余额兑换码或余额内扣订阅。
   - `affiliate_tiers`、`current_affiliate_tier`、`next_affiliate_tier`：后端计算后的阶梯数据。
 - 管理后台设置页展示 L1-L4 四行，管理员只编辑门槛和返利比例。
 - 用户页不再使用 demo 数值推算等级；只消费 API 返回的配置和进度。
@@ -44,7 +45,7 @@ metadata:
 ## 已决策
 
 - 没有 L0；未达 L1 或未配置任何等级时，实际返利比例返回 `null`，不再静默默认 20%。
-- 邀请充值总额按 `payment_orders.status = 'COMPLETED'` 的 `amount` 汇总。
+- 邀请充值总额按 `payment_orders.status = 'COMPLETED'` 的 `amount` 汇总，仅包含 `order_type = 'balance'` 的余额充值订单和 `order_type = 'subscription'` 且 `payment_type <> 'balance'` 的外部支付订阅订单。
 - 旧字段 `affiliate_rebate_rate` 保留作兼容字段，但阶梯返利的计算与展示以 `affiliate_rebate_tiers` 为准。
 
 ## 待解决
