@@ -5500,23 +5500,74 @@
 
             <div v-if="form.affiliate_enabled" class="space-y-6">
               <div>
-                <label class="input-label">
-                  {{ t('admin.settings.features.affiliate.rebateRate') }}
-                </label>
-                <div class="relative">
-                  <input
-                    v-model.number="form.affiliate_rebate_rate"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    class="input pr-8"
-                    placeholder="20"
-                  />
-                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                <div class="mb-3">
+                  <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                    {{ t('admin.settings.features.affiliate.tiers.title') }}
+                  </h3>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.affiliate.tiers.description') }}
+                  </p>
                 </div>
-                <p class="mt-1 text-xs text-gray-400">
-                  {{ t('admin.settings.features.affiliate.rebateRateHint') }}
+                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-700">
+                  <table class="min-w-[760px] w-full text-sm">
+                    <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-dark-800 dark:text-gray-400">
+                      <tr>
+                        <th class="px-4 py-3">{{ t('admin.settings.features.affiliate.tiers.level') }}</th>
+                        <th class="px-4 py-3">{{ t('admin.settings.features.affiliate.tiers.minInvitees') }}</th>
+                        <th class="px-4 py-3">{{ t('admin.settings.features.affiliate.tiers.minRecharge') }}</th>
+                        <th class="px-4 py-3">{{ t('admin.settings.features.affiliate.tiers.rebateRate') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+                      <tr
+                        v-for="tier in form.affiliate_rebate_tiers"
+                        :key="tier.level"
+                        class="bg-white dark:bg-dark-900"
+                      >
+                        <td class="px-4 py-3">
+                          <span class="inline-flex h-8 min-w-12 items-center justify-center rounded-md bg-primary-50 px-3 font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-200">
+                            {{ tier.level }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-3">
+                          <input
+                            v-model.number="tier.min_invitees"
+                            type="number"
+                            min="0"
+                            step="1"
+                            class="input input-sm w-32"
+                          />
+                        </td>
+                        <td class="px-4 py-3">
+                          <input
+                            v-model.number="tier.min_recharge"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            class="input input-sm w-40"
+                          />
+                        </td>
+                        <td class="px-4 py-3">
+                          <div class="relative w-32">
+                            <input
+                              :value="tier.rebate_rate_percent ?? ''"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              class="input input-sm pr-7"
+                              :placeholder="t('admin.settings.features.affiliate.tiers.unconfigured')"
+                              @input="updateAffiliateTierRate(tier, $event)"
+                            />
+                            <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="mt-2 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.tiers.hint') }}
                 </p>
               </div>
 
@@ -7485,6 +7536,7 @@ import {
 import type {
   AuthSourceDefaultsState,
   AuthSourceType,
+  AffiliateRebateTier,
   SystemSettings,
   UpdateSettingsRequest,
   DefaultSubscriptionSetting,
@@ -7736,6 +7788,52 @@ const openaiFastPolicyLoaded = ref(false);
 const tablePageSizeMin = 5;
 const tablePageSizeMax = 1000;
 const tablePageSizeDefault = 20;
+const affiliateTierLevels = ["L1", "L2", "L3", "L4"] as const;
+
+function defaultAffiliateRebateTiers(): AffiliateRebateTier[] {
+  return affiliateTierLevels.map((level) => ({
+    level,
+    min_invitees: 0,
+    min_recharge: 0,
+    rebate_rate_percent: null,
+  }));
+}
+
+function normalizeAffiliateRebateTiers(
+  tiers: AffiliateRebateTier[] | null | undefined,
+): AffiliateRebateTier[] {
+  const byLevel = new Map<string, AffiliateRebateTier>();
+  for (const tier of tiers || []) {
+    const level = String(tier.level || "").trim().toUpperCase();
+    if (!level) continue;
+    byLevel.set(level, tier);
+  }
+  return affiliateTierLevels.map((level) => {
+    const tier = byLevel.get(level);
+    const rawRate = tier?.rebate_rate_percent;
+    const rate = typeof rawRate === "number" && Number.isFinite(rawRate)
+      ? Math.min(100, Math.max(0, rawRate))
+      : null;
+    return {
+      level,
+      min_invitees: Math.max(0, Math.floor(Number(tier?.min_invitees) || 0)),
+      min_recharge: Math.max(0, Number(tier?.min_recharge) || 0),
+      rebate_rate_percent: rate,
+    };
+  });
+}
+
+function updateAffiliateTierRate(tier: AffiliateRebateTier, event: Event): void {
+  const raw = (event.target as HTMLInputElement).value.trim();
+  if (raw === "") {
+    tier.rebate_rate_percent = null;
+    return;
+  }
+  const value = Number(raw);
+  tier.rebate_rate_percent = Number.isFinite(value)
+    ? Math.min(100, Math.max(0, value))
+    : null;
+}
 
 function defaultLoginAgreementDocuments(): LoginAgreementDocument[] {
   return [
@@ -7845,6 +7943,7 @@ const form = reactive<SettingsForm>({
   login_agreement_documents: defaultLoginAgreementDocuments(),
   default_balance: 0,
   affiliate_rebate_rate: 20,
+  affiliate_rebate_tiers: defaultAffiliateRebateTiers(),
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
   affiliate_rebate_per_invitee_cap: 0,
@@ -9415,6 +9514,9 @@ async function loadSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    form.affiliate_rebate_tiers = normalizeAffiliateRebateTiers(
+      settings.affiliate_rebate_tiers,
+    );
     form.login_agreement_mode =
       settings.login_agreement_mode === "checkbox" ? "checkbox" : "modal";
     form.login_agreement_updated_at =
@@ -9649,6 +9751,9 @@ async function saveSettings() {
 
     form.table_default_page_size = normalizedTableDefaultPageSize;
     form.table_page_size_options = normalizedTablePageSizeOptions;
+    form.affiliate_rebate_tiers = normalizeAffiliateRebateTiers(
+      form.affiliate_rebate_tiers,
+    );
 
     const normalizedLoginAgreementDocuments =
       normalizeLoginAgreementDocumentsForSave();
@@ -9834,6 +9939,9 @@ async function saveSettings() {
       affiliate_rebate_rate: Math.min(
         100,
         Math.max(0, Number(form.affiliate_rebate_rate) || 0),
+      ),
+      affiliate_rebate_tiers: normalizeAffiliateRebateTiers(
+        form.affiliate_rebate_tiers,
       ),
       affiliate_rebate_freeze_hours: Math.max(0, Math.min(720, Number(form.affiliate_rebate_freeze_hours) || 0)),
       affiliate_rebate_duration_days: Math.max(0, Math.min(3650, Math.floor(Number(form.affiliate_rebate_duration_days) || 0))),
@@ -10078,6 +10186,9 @@ async function saveSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    form.affiliate_rebate_tiers = normalizeAffiliateRebateTiers(
+      updated.affiliate_rebate_tiers,
+    );
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
     persistedSiteLogo.value = updated.site_logo || "";
     form.contact_channels = normalizeContactChannels(updated.contact_channels);

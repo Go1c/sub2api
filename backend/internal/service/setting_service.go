@@ -1841,6 +1841,12 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyDefaultBalance] = strconv.FormatFloat(settings.DefaultBalance, 'f', 8, 64)
 	settings.AffiliateRebateRate = clampAffiliateRebateRate(settings.AffiliateRebateRate)
 	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRate, 'f', 8, 64)
+	affiliateRebateTiersJSON, err := marshalAffiliateRebateTiers(settings.AffiliateRebateTiers)
+	if err != nil {
+		return nil, err
+	}
+	settings.AffiliateRebateTiers = parseAffiliateRebateTiers(affiliateRebateTiersJSON)
+	updates[SettingKeyAffiliateRebateTiers] = affiliateRebateTiersJSON
 	if settings.AffiliateRebateFreezeHours < 0 {
 		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursDefault
 	}
@@ -2366,6 +2372,17 @@ func (s *SettingService) GetAffiliateRebateRatePercent(ctx context.Context) floa
 	return clampAffiliateRebateRate(rate)
 }
 
+func (s *SettingService) GetAffiliateRebateTiers(ctx context.Context) []AffiliateRebateTier {
+	if s == nil || s.settingRepo == nil {
+		return defaultAffiliateRebateTiers()
+	}
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateTiers)
+	if err != nil {
+		return defaultAffiliateRebateTiers()
+	}
+	return parseAffiliateRebateTiers(raw)
+}
+
 // GetAffiliateRebateFreezeHours 返回返利冻结期（小时）。
 // 返回 0 表示不冻结（向后兼容）。
 func (s *SettingService) GetAffiliateRebateFreezeHours(ctx context.Context) int {
@@ -2813,6 +2830,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyDefaultConcurrency:                       strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                           strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
 		SettingKeyAffiliateRebateRate:                      strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 8, 64),
+		SettingKeyAffiliateRebateTiers:                     "[]",
 		SettingKeyAffiliateRebateFreezeHours:               strconv.Itoa(AffiliateRebateFreezeHoursDefault),
 		SettingKeyAffiliateRebateDurationDays:              strconv.Itoa(AffiliateRebateDurationDaysDefault),
 		SettingKeyAffiliateRebatePerInviteeCap:             strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 2, 64),
@@ -3017,6 +3035,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.AffiliateRebateRate = AffiliateRebateRateDefault
 	}
+	result.AffiliateRebateTiers = parseAffiliateRebateTiers(settings[SettingKeyAffiliateRebateTiers])
 	if freezeHours, err := strconv.Atoi(settings[SettingKeyAffiliateRebateFreezeHours]); err == nil && freezeHours >= 0 {
 		if freezeHours > AffiliateRebateFreezeHoursMax {
 			freezeHours = AffiliateRebateFreezeHoursMax

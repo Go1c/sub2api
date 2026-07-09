@@ -22,6 +22,13 @@ export interface DefaultSubscriptionSetting {
   validity_days: number;
 }
 
+export interface AffiliateRebateTier {
+  level: "L1" | "L2" | "L3" | "L4" | string;
+  min_invitees: number;
+  min_recharge: number;
+  rebate_rate_percent: number | null;
+}
+
 export type AuthSourceType =
   | "email"
   | "linuxdo"
@@ -352,6 +359,7 @@ export interface SystemSettings {
   // Default settings
   default_balance: number;
   affiliate_rebate_rate: number;
+  affiliate_rebate_tiers: AffiliateRebateTier[];
   affiliate_rebate_freeze_hours: number;
   affiliate_rebate_duration_days: number;
   affiliate_rebate_per_invitee_cap: number;
@@ -603,6 +611,7 @@ export interface UpdateSettingsRequest {
   login_agreement_documents?: LoginAgreementDocument[];
   default_balance?: number;
   affiliate_rebate_rate?: number;
+  affiliate_rebate_tiers?: AffiliateRebateTier[];
   affiliate_rebate_freeze_hours?: number;
   affiliate_rebate_duration_days?: number;
   affiliate_rebate_per_invitee_cap?: number;
