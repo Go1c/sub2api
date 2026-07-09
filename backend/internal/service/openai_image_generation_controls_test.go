@@ -146,6 +146,75 @@ func TestOpenAIGatewayServiceForward_CodexImageInjectionRespectsGroupCapability(
 	}
 }
 
+func TestOpenAIGatewayServiceForward_CodexImageInjectionSkipsLocalImageGenFunction(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name         string
+		body         string
+		toolNamePath string
+	}{
+		{
+			name: "responses flat function",
+			body: `{
+				"model":"gpt-5.4",
+				"input":"draw",
+				"stream":false,
+				"tools":[{
+					"type":"function",
+					"name":"image_gen.imagegen",
+					"description":"Generate or edit an image."
+				}]
+			}`,
+			toolNamePath: "tools.0.name",
+		},
+		{
+			name: "chat completions nested function",
+			body: `{
+				"model":"gpt-5.4",
+				"input":"draw",
+				"stream":false,
+				"tools":[{
+					"type":"function",
+					"function":{
+						"name":"image_gen.imagegen",
+						"description":"Generate or edit an image."
+					}
+				}]
+			}`,
+			toolNamePath: "tools.0.function.name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upstream := &httpUpstreamRecorder{
+				resp: &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(`{"id":"resp_local_imagegen","model":"gpt-5.4","usage":{"input_tokens":1,"output_tokens":1}}`)),
+				},
+			}
+			svc := newOpenAIImageGenerationControlTestService(upstream)
+			svc.cfg.Gateway.CodexImageGenerationBridgeEnabled = true
+			c, _ := newOpenAIImageGenerationControlTestContext(true, "codex_cli_rs/0.98.0")
+			account := newOpenAIImageGenerationControlTestAccount()
+
+			result, err := svc.Forward(context.Background(), c, account, []byte(tt.body))
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.NotNil(t, upstream.lastReq)
+			tools := gjson.GetBytes(upstream.lastBody, "tools").Array()
+			require.Len(t, tools, 1)
+			require.Equal(t, codexImageGenerationFunctionName, gjson.GetBytes(upstream.lastBody, tt.toolNamePath).String())
+			require.False(t, gjson.GetBytes(upstream.lastBody, `tools.#(type=="image_generation")`).Exists())
+			instructions := gjson.GetBytes(upstream.lastBody, "instructions").String()
+			require.NotContains(t, instructions, codexImageGenerationBridgeMarker)
+		})
+	}
+}
+
 func TestOpenAIGatewayServiceForward_CodexImageInjectionSkipsTextOnlyAccounts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

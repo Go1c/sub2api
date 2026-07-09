@@ -85,6 +85,7 @@ type codexOAuthTransformOptions struct {
 const (
 	codexImageGenerationBridgeMarker = "<sub2api-codex-image-generation>"
 	codexImageGenerationBridgeText   = codexImageGenerationBridgeMarker + "\nWhen the user asks for raster image generation or editing, use the OpenAI Responses native `image_generation` tool attached to this request. The local Codex client may not expose an `image_gen` namespace, but that does not mean image generation is unavailable. Do not ask the user to switch to CLI fallback solely because `image_gen` is absent.\n</sub2api-codex-image-generation>"
+	codexImageGenerationFunctionName = "image_gen.imagegen"
 	codexSparkImageUnsupportedMarker = "<sub2api-codex-spark-image-unsupported>"
 	codexSparkImageUnsupportedText   = codexSparkImageUnsupportedMarker + "\nThe current model is gpt-5.3-codex-spark, which does not support image generation, image editing, image input, the `image_generation` tool, or Codex `image_gen`/`$imagegen` workflows. If the user asks for image generation or image editing, clearly explain this model limitation and ask them to switch to a non-Spark Codex model such as gpt-5.3-codex or gpt-5.4. Do not claim that the local environment merely lacks image_gen tooling, and do not suggest CLI fallback as the primary fix while the model remains Spark.\n</sub2api-codex-spark-image-unsupported>"
 )
@@ -703,6 +704,9 @@ func ensureOpenAIResponsesImageGenerationTool(reqBody map[string]any) bool {
 		reqBody["tools"] = []any{tool}
 		return true
 	}
+	if codexToolsContainFunctionName(tools, codexImageGenerationFunctionName) {
+		return false
+	}
 	for _, rawTool := range tools {
 		toolMap, ok := rawTool.(map[string]any)
 		if !ok {
@@ -718,7 +722,7 @@ func ensureOpenAIResponsesImageGenerationTool(reqBody map[string]any) bool {
 }
 
 func applyCodexImageGenerationBridgeInstructions(reqBody map[string]any) bool {
-	if len(reqBody) == 0 || !hasOpenAIImageGenerationTool(reqBody) {
+	if len(reqBody) == 0 || !codexToolsContainType(reqBody["tools"], "image_generation") {
 		return false
 	}
 	if isCodexSparkModel(firstNonEmptyString(reqBody["model"])) {
@@ -758,7 +762,8 @@ func applyCodexSparkImageUnsupportedInstructions(reqBody map[string]any) bool {
 }
 
 func validateOpenAIResponsesImageModel(reqBody map[string]any, model string) error {
-	if !hasOpenAIImageGenerationTool(reqBody) {
+	if !hasOpenAIImageGenerationTool(reqBody) &&
+		!codexToolsContainFunctionName(reqBody["tools"], codexImageGenerationFunctionName) {
 		return nil
 	}
 	model = strings.TrimSpace(model)
@@ -774,6 +779,9 @@ func normalizeOpenAIResponsesImageOnlyModel(reqBody map[string]any) bool {
 	}
 	imageModel := strings.TrimSpace(firstNonEmptyString(reqBody["model"]))
 	if !isOpenAIImageGenerationModel(imageModel) {
+		return false
+	}
+	if codexToolsContainFunctionName(reqBody["tools"], codexImageGenerationFunctionName) {
 		return false
 	}
 
