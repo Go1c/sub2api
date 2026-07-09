@@ -597,6 +597,28 @@ func TestEnsureOpenAIResponsesImageGenerationTool_AppendsToExistingTools(t *test
 	require.Equal(t, "png", second["output_format"])
 }
 
+func TestEnsureOpenAIResponsesImageGenerationTool_DoesNotMatchSimilarFunctionName(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.4",
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"name": "image_gen_imagegen",
+			},
+		},
+	}
+
+	modified := ensureOpenAIResponsesImageGenerationTool(reqBody)
+	require.True(t, modified)
+
+	tools, ok := reqBody["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 2)
+	hostedTool, ok := tools[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "image_generation", hostedTool["type"])
+}
+
 func TestEnsureOpenAIResponsesImageGenerationTool_PreservesExistingImageTool(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.4",
@@ -615,6 +637,54 @@ func TestEnsureOpenAIResponsesImageGenerationTool_PreservesExistingImageTool(t *
 	tool, ok := tools[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "webp", tool["output_format"])
+}
+
+func TestEnsureOpenAIResponsesImageGenerationTool_SkipsCodexImageGenFunction(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.4",
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"name": "image_gen.imagegen",
+			},
+		},
+	}
+
+	modified := ensureOpenAIResponsesImageGenerationTool(reqBody)
+	require.False(t, modified)
+
+	tools, ok := reqBody["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "image_gen.imagegen", tool["name"])
+}
+
+func TestEnsureOpenAIResponsesImageGenerationTool_SkipsNestedCodexImageGenFunction(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.4",
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name": "image_gen.imagegen",
+				},
+			},
+		},
+	}
+
+	modified := ensureOpenAIResponsesImageGenerationTool(reqBody)
+	require.False(t, modified)
+
+	tools, ok := reqBody["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	function, ok := tool["function"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "image_gen.imagegen", function["name"])
 }
 
 func TestApplyCodexImageGenerationBridgeInstructions_AppendsBridgeOnce(t *testing.T) {
@@ -658,6 +728,24 @@ func TestApplyCodexImageGenerationBridgeInstructions_SkipsWithoutImageTool(t *te
 		"instructions": "existing instructions",
 		"tools": []any{
 			map[string]any{"type": "web_search"},
+		},
+	}
+
+	modified := applyCodexImageGenerationBridgeInstructions(reqBody)
+	require.False(t, modified)
+	require.Equal(t, "existing instructions", reqBody["instructions"])
+}
+
+func TestApplyCodexImageGenerationBridgeInstructions_SkipsCodexImageGenFunction(t *testing.T) {
+	reqBody := map[string]any{
+		"model":        "gpt-5.4",
+		"instructions": "existing instructions",
+		"tools": []any{
+			map[string]any{
+				"type":        "function",
+				"name":        "image_gen.imagegen",
+				"description": "Generate or edit an image.",
+			},
 		},
 	}
 
@@ -807,6 +895,34 @@ func TestNormalizeOpenAIResponsesImageOnlyModel_PreservesExistingImageTool(t *te
 	tool, ok := tools[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "gpt-image-1.5", tool["model"])
+}
+
+func TestNormalizeOpenAIResponsesImageOnlyModel_SkipsCodexImageGenFunction(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-image-2",
+		"input": "draw a cat",
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"name": "image_gen.imagegen",
+			},
+		},
+	}
+
+	modified := normalizeOpenAIResponsesImageOnlyModel(reqBody)
+	require.False(t, modified)
+	require.Equal(t, "gpt-image-2", reqBody["model"])
+
+	tools, ok := reqBody["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "function", tool["type"])
+	require.Equal(t, "image_gen.imagegen", tool["name"])
+
+	err := validateOpenAIResponsesImageModel(reqBody, "gpt-image-2")
+	require.ErrorContains(t, err, `/v1/responses image_generation requests require a Responses-capable text model`)
 }
 
 func TestValidateOpenAIResponsesImageModel_RejectsImageOnlyModel(t *testing.T) {
