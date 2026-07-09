@@ -224,6 +224,28 @@ func TestSettingService_UpdateSettings_TablePreferences(t *testing.T) {
 	require.Equal(t, "[20,100]", repo.updates[SettingKeyTablePageSizeOptions])
 }
 
+func TestSettingService_UpdateSettings_AffiliateRebateTiersNormalized(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+	tooHigh := 150.0
+	l2Rate := 25.0
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		AffiliateRebateTiers: []AffiliateRebateTier{
+			{Level: "L2", MinInvitees: 20, MinRecharge: 5000, RebateRatePercent: &l2Rate},
+			{Level: "L1", MinInvitees: -5, MinRecharge: -10, RebateRatePercent: &tooHigh},
+		},
+	})
+
+	require.NoError(t, err)
+	require.JSONEq(t, `[
+		{"level":"L1","min_invitees":0,"min_recharge":0,"rebate_rate_percent":100},
+		{"level":"L2","min_invitees":20,"min_recharge":5000,"rebate_rate_percent":25},
+		{"level":"L3","min_invitees":0,"min_recharge":0,"rebate_rate_percent":null},
+		{"level":"L4","min_invitees":0,"min_recharge":0,"rebate_rate_percent":null}
+	]`, repo.updates[SettingKeyAffiliateRebateTiers])
+}
+
 func TestSettingService_UpdateSettings_SubscriptionQuotaResetSettings(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	svc := NewSettingService(repo, &config.Config{})

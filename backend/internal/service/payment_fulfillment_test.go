@@ -565,8 +565,8 @@ func TestExecuteSubscriptionFulfillmentAccruesAffiliateRebateForExternalPayment(
 	fulfiller := &subscriptionCreditPurchaseFulfillerStub{}
 	affiliateRepo := newPaymentFulfillmentAffiliateRepoStub(order.UserID)
 	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:    "true",
-		SettingKeyAffiliateRebateRate: "10",
+		SettingKeyAffiliateEnabled:     "true",
+		SettingKeyAffiliateRebateTiers: `[{"level":"L1","min_invitees":0,"min_recharge":0,"rebate_rate_percent":10}]`,
 	}}, nil)
 	svc := &PaymentService{
 		entClient:                     client,
@@ -595,8 +595,8 @@ func TestExecuteSubscriptionFulfillmentCompletesWhenAffiliateRebateFails(t *test
 	affiliateRepo := newPaymentFulfillmentAffiliateRepoStub(order.UserID)
 	affiliateRepo.accrueErr = errors.New("affiliate ledger unavailable")
 	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:    "true",
-		SettingKeyAffiliateRebateRate: "10",
+		SettingKeyAffiliateEnabled:     "true",
+		SettingKeyAffiliateRebateTiers: `[{"level":"L1","min_invitees":0,"min_recharge":0,"rebate_rate_percent":10}]`,
 	}}, nil)
 	svc := &PaymentService{
 		entClient:                     client,
@@ -623,8 +623,8 @@ func TestExecuteBalanceFulfillmentCompletesWhenAffiliateRebateFails(t *testing.T
 	affiliateRepo := newPaymentFulfillmentAffiliateRepoStub(order.UserID)
 	affiliateRepo.accrueErr = errors.New("affiliate ledger unavailable")
 	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:    "true",
-		SettingKeyAffiliateRebateRate: "10",
+		SettingKeyAffiliateEnabled:     "true",
+		SettingKeyAffiliateRebateTiers: `[{"level":"L1","min_invitees":0,"min_recharge":0,"rebate_rate_percent":10}]`,
 	}}, nil)
 	redeemRepo := &paymentOrderLifecycleRedeemRepo{codesByCode: map[string]*RedeemCode{
 		order.RechargeCode: {

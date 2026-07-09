@@ -137,6 +137,13 @@ export interface AffiliateInvitee {
   total_rebate: number
 }
 
+export interface AffiliateRebateTier {
+  level: string
+  min_invitees: number
+  min_recharge: number
+  rebate_rate_percent: number | null
+}
+
 export interface UserAffiliateDetail {
   user_id: number
   aff_code: string
@@ -145,8 +152,12 @@ export interface UserAffiliateDetail {
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
-  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
-  effective_rebate_rate_percent: number
+  invitee_recharge_total: number
+  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖阶梯）。null 表示未配置或未达标。 */
+  effective_rebate_rate_percent: number | null
+  affiliate_tiers: AffiliateRebateTier[]
+  current_affiliate_tier?: AffiliateRebateTier | null
+  next_affiliate_tier?: AffiliateRebateTier | null
   invitees: AffiliateInvitee[]
 }
 

@@ -151,6 +151,7 @@ type SystemSettings struct {
 	SiteMessagesDefaultRecipientEmail string
 	AffiliateEnabled                  bool
 	AffiliateRebateRate               float64
+	AffiliateRebateTiers              []AffiliateRebateTier
 	AffiliateRebateFreezeHours        int
 	AffiliateRebateDurationDays       int
 	AffiliateRebatePerInviteeCap      float64

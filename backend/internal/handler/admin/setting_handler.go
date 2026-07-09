@@ -360,6 +360,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		DefaultBalance:                         settings.DefaultBalance,
 		RiskControlEnabled:                     settings.RiskControlEnabled,
 		AffiliateRebateRate:                    settings.AffiliateRebateRate,
+		AffiliateRebateTiers:                   affiliateRebateTierDTOs(settings.AffiliateRebateTiers),
 		AffiliateRebateFreezeHours:             settings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:            settings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:           settings.AffiliateRebatePerInviteeCap,
@@ -639,6 +640,7 @@ type UpdateSettingsRequest struct {
 	DefaultConcurrency                       int                               `json:"default_concurrency"`
 	DefaultBalance                           float64                           `json:"default_balance"`
 	AffiliateRebateRate                      *float64                          `json:"affiliate_rebate_rate"`
+	AffiliateRebateTiers                     *[]service.AffiliateRebateTier    `json:"affiliate_rebate_tiers"`
 	AffiliateRebateFreezeHours               *int                              `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays              *int                              `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap             *float64                          `json:"affiliate_rebate_per_invitee_cap"`
@@ -868,6 +870,10 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 	}
 	if affiliateRebateRate > service.AffiliateRebateRateMax {
 		affiliateRebateRate = service.AffiliateRebateRateMax
+	}
+	affiliateRebateTiers := previousSettings.AffiliateRebateTiers
+	if req.AffiliateRebateTiers != nil {
+		affiliateRebateTiers = *req.AffiliateRebateTiers
 	}
 	affiliateRebateFreezeHours := previousSettings.AffiliateRebateFreezeHours
 	if req.AffiliateRebateFreezeHours != nil {
@@ -1829,6 +1835,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
 		AffiliateRebateRate:                    affiliateRebateRate,
+		AffiliateRebateTiers:                   affiliateRebateTiers,
 		AffiliateRebateFreezeHours:             affiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:            affiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:           affiliateRebatePerInviteeCap,
@@ -2263,6 +2270,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		DefaultConcurrency:                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                         updatedSettings.DefaultBalance,
 		AffiliateRebateRate:                    updatedSettings.AffiliateRebateRate,
+		AffiliateRebateTiers:                   affiliateRebateTierDTOs(updatedSettings.AffiliateRebateTiers),
 		AffiliateRebateFreezeHours:             updatedSettings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:            updatedSettings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:           updatedSettings.AffiliateRebatePerInviteeCap,
@@ -2655,6 +2663,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AffiliateRebateRate != after.AffiliateRebateRate {
 		changed = append(changed, "affiliate_rebate_rate")
 	}
+	if !equalAffiliateRebateTiers(before.AffiliateRebateTiers, after.AffiliateRebateTiers) {
+		changed = append(changed, "affiliate_rebate_tiers")
+	}
 	if before.AffiliateRebateFreezeHours != after.AffiliateRebateFreezeHours {
 		changed = append(changed, "affiliate_rebate_freeze_hours")
 	}
@@ -2945,6 +2956,19 @@ func defaultSubscriptionsValueOrDefault(input *[]dto.DefaultSubscriptionSetting,
 	return result
 }
 
+func affiliateRebateTierDTOs(tiers []service.AffiliateRebateTier) []dto.AffiliateRebateTier {
+	out := make([]dto.AffiliateRebateTier, 0, len(tiers))
+	for _, tier := range tiers {
+		out = append(out, dto.AffiliateRebateTier{
+			Level:             tier.Level,
+			MinInvitees:       tier.MinInvitees,
+			MinRecharge:       tier.MinRecharge,
+			RebateRatePercent: tier.RebateRatePercent,
+		})
+	}
+	return out
+}
+
 func systemSettingsResponseData(settings dto.SystemSettings, authSourceDefaults *service.AuthSourceDefaultSettings) map[string]any {
 	data := make(map[string]any)
 	raw, err := json.Marshal(settings)
@@ -3008,6 +3032,27 @@ func equalDefaultSubscriptions(a, b []service.DefaultSubscriptionSetting) bool {
 	}
 	for i := range a {
 		if a[i].GroupID != b[i].GroupID || a[i].ValidityDays != b[i].ValidityDays {
+			return false
+		}
+	}
+	return true
+}
+
+func equalAffiliateRebateTiers(a, b []service.AffiliateRebateTier) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Level != b[i].Level ||
+			a[i].MinInvitees != b[i].MinInvitees ||
+			a[i].MinRecharge != b[i].MinRecharge {
+			return false
+		}
+		if (a[i].RebateRatePercent == nil) != (b[i].RebateRatePercent == nil) {
+			return false
+		}
+		if a[i].RebateRatePercent != nil && b[i].RebateRatePercent != nil &&
+			*a[i].RebateRatePercent != *b[i].RebateRatePercent {
 			return false
 		}
 	}

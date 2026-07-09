@@ -29,6 +29,7 @@ metadata:
 | [`features/recharge-invoice-balance-gate.md`](features/recharge-invoice-balance-gate.md) | 充值页开票须知提示 + 首次使用余额门槛文案优化 |
 | [`features/admin-invoice-export.md`](features/admin-invoice-export.md) | 管理员发票记录页 Excel 导出(全部 / 正在开票) |
 | [`features/affiliate-signup-bonus.md`](features/affiliate-signup-bonus.md) | 邀请注册赠送纳入返利余额历史框架 + 独立管理员记录页 |
+| [`features/affiliate-tier-rebate.md`](features/affiliate-tier-rebate.md) | 阶梯式邀请返利：管理员配置 L1-L4 门槛与返利比例，用户页展示后端计算进度 |
 | [`features/real-lottery.md`](features/real-lottery.md) | 后端驱动多用户抽奖,中奖兑换码经站内信发放 |
 | [`features/site-messages.md`](features/site-messages.md) | 站内信(类轻量邮件):收发读回复、未读红点、管理员开关与发信 |
 | [`features/support-chat.md`](features/support-chat.md) | 站内 AI 客服浮窗:外部 gateway 接入、登录态修复、品牌配色、附件上传 |

@@ -789,6 +789,12 @@ func TestAPIContracts(t *testing.T) {
 					"default_concurrency": 5,
 					"default_balance": 1.25,
 					"affiliate_rebate_rate": 20,
+					"affiliate_rebate_tiers": [
+						{"level": "L1", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null},
+						{"level": "L2", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null},
+						{"level": "L3", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null},
+						{"level": "L4", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null}
+					],
 					"affiliate_rebate_freeze_hours": 0,
 					"affiliate_rebate_duration_days": 0,
 					"affiliate_rebate_per_invitee_cap": 0,
@@ -1039,6 +1045,12 @@ func TestAPIContracts(t *testing.T) {
 					"default_concurrency": 0,
 					"default_balance": 0,
 					"affiliate_rebate_rate": 20,
+					"affiliate_rebate_tiers": [
+						{"level": "L1", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null},
+						{"level": "L2", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null},
+						{"level": "L3", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null},
+						{"level": "L4", "min_invitees": 0, "min_recharge": 0, "rebate_rate_percent": null}
+					],
 					"affiliate_rebate_freeze_hours": 0,
 					"affiliate_rebate_duration_days": 0,
 					"affiliate_rebate_per_invitee_cap": 0,

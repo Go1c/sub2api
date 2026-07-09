@@ -16,36 +16,122 @@ import (
 // AffRebateRatePercent overrides the global rate, that NULL falls back to the
 // global rate, and that out-of-range exclusive rates are clamped silently.
 //
-// SettingService is left nil here so globalRebateRatePercent returns the
-// documented default (AffiliateRebateRateDefault = 20%) — this exercises the
-// fallback path without spinning up a settings stub.
+// SettingService is left nil here so no tier config exists; this must not fall
+// back to the legacy 20% default.
 func TestResolveRebateRatePercent_PerUserOverride(t *testing.T) {
 	t.Parallel()
 	svc := &AffiliateService{}
 
-	// nil exclusive rate → falls back to global default (20%)
-	require.InDelta(t, AffiliateRebateRateDefault,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{}), 1e-9)
+	// nil exclusive rate + no tier config → unconfigured, not a silent 20% fallback.
+	require.Nil(t,
+		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{}, 0))
 
 	// exclusive rate set → overrides global
 	rate := 50.0
-	require.InDelta(t, 50.0,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &rate}), 1e-9)
+	resolved := svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &rate}, 0)
+	require.NotNil(t, resolved)
+	require.InDelta(t, 50.0, *resolved, 1e-9)
 
 	// exclusive rate 0 → returns 0 (no rebate, intentional)
 	zero := 0.0
-	require.InDelta(t, 0.0,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &zero}), 1e-9)
+	resolved = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &zero}, 0)
+	require.NotNil(t, resolved)
+	require.InDelta(t, 0.0, *resolved, 1e-9)
 
 	// exclusive rate above max → clamped to Max
 	tooHigh := 250.0
-	require.InDelta(t, AffiliateRebateRateMax,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooHigh}), 1e-9)
+	resolved = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooHigh}, 0)
+	require.NotNil(t, resolved)
+	require.InDelta(t, AffiliateRebateRateMax, *resolved, 1e-9)
 
 	// exclusive rate below min → clamped to Min
 	tooLow := -5.0
-	require.InDelta(t, AffiliateRebateRateMin,
-		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooLow}), 1e-9)
+	resolved = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooLow}, 0)
+	require.NotNil(t, resolved)
+	require.InDelta(t, AffiliateRebateRateMin, *resolved, 1e-9)
+}
+
+func TestResolveRebateRatePercent_UsesHighestConfiguredTier(t *testing.T) {
+	t.Parallel()
+
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateRebateTiers: `[
+			{"level":"L1","min_invitees":5,"min_recharge":500,"rebate_rate_percent":15},
+			{"level":"L2","min_invitees":20,"min_recharge":5000,"rebate_rate_percent":25},
+			{"level":"L3","min_invitees":50,"min_recharge":20000,"rebate_rate_percent":35},
+			{"level":"L4","min_invitees":100,"min_recharge":50000,"rebate_rate_percent":45}
+		]`,
+	}}, nil)
+	svc := NewAffiliateService(newAffiliateSignupBonusRepoStub(), settingSvc, nil, nil)
+
+	resolved := svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffCount: 50}, 19999)
+	require.NotNil(t, resolved)
+	require.InDelta(t, 25.0, *resolved, 1e-9, "invite count alone must not advance to L3")
+
+	resolved = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffCount: 20}, 5000)
+	require.NotNil(t, resolved)
+	require.InDelta(t, 25.0, *resolved, 1e-9)
+
+	resolved = svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffCount: 120}, 60000)
+	require.NotNil(t, resolved)
+	require.InDelta(t, 45.0, *resolved, 1e-9)
+}
+
+func TestGetAffiliateDetailIncludesTierProgress(t *testing.T) {
+	t.Parallel()
+
+	repo := newAffiliateSignupBonusRepoStub()
+	repo.profiles[1].AffCount = 20
+	repo.inviteeRechargeTotal = 5000
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateRebateTiers: `[
+			{"level":"L1","min_invitees":5,"min_recharge":500,"rebate_rate_percent":15},
+			{"level":"L2","min_invitees":20,"min_recharge":5000,"rebate_rate_percent":25},
+			{"level":"L3","min_invitees":50,"min_recharge":20000,"rebate_rate_percent":35},
+			{"level":"L4","min_invitees":100,"min_recharge":50000,"rebate_rate_percent":45}
+		]`,
+	}}, nil)
+	svc := NewAffiliateService(repo, settingSvc, nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 1)
+
+	require.NoError(t, err)
+	require.InDelta(t, 5000, detail.InviteeRechargeTotal, 1e-9)
+	require.NotNil(t, detail.EffectiveRebateRatePercent)
+	require.InDelta(t, 25, *detail.EffectiveRebateRatePercent, 1e-9)
+	require.NotNil(t, detail.CurrentAffiliateTier)
+	require.Equal(t, "L2", detail.CurrentAffiliateTier.Level)
+	require.NotNil(t, detail.NextAffiliateTier)
+	require.Equal(t, "L3", detail.NextAffiliateTier.Level)
+	require.Len(t, detail.AffiliateTiers, 4)
+}
+
+func TestAccrueInviteRebateUsesProspectiveRechargeTotal(t *testing.T) {
+	t.Parallel()
+
+	repo := newAffiliateSignupBonusRepoStub()
+	inviterID := int64(1)
+	inviteeID := int64(2)
+	repo.profiles[inviteeID].InviterID = &inviterID
+	repo.profiles[inviterID].AffCount = 5
+	repo.inviteeRechargeTotal = 490
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled: "true",
+		SettingKeyAffiliateRebateTiers: `[
+			{"level":"L1","min_invitees":5,"min_recharge":500,"rebate_rate_percent":15},
+			{"level":"L2","min_invitees":20,"min_recharge":5000,"rebate_rate_percent":25},
+			{"level":"L3","min_invitees":50,"min_recharge":20000,"rebate_rate_percent":35},
+			{"level":"L4","min_invitees":100,"min_recharge":50000,"rebate_rate_percent":45}
+		]`,
+	}}, nil)
+	svc := NewAffiliateService(repo, settingSvc, nil, nil)
+
+	rebate, err := svc.AccrueInviteRebate(context.Background(), inviteeID, 10)
+
+	require.NoError(t, err)
+	require.InDelta(t, 1.5, rebate, 1e-9)
+	require.Len(t, repo.accrueCalls, 1)
+	require.InDelta(t, 1.5, repo.accrueCalls[0].amount, 1e-9)
 }
 
 // TestIsEnabled_NilSettingServiceReturnsDefault verifies that IsEnabled
@@ -309,13 +395,15 @@ func (s *affiliateSignupBonusSettingRepoStub) Delete(context.Context, string) er
 }
 
 type affiliateSignupBonusRepoStub struct {
-	profiles           map[int64]*AffiliateSummary
-	byCode             map[string]*AffiliateSummary
-	bindWithBonusCalls []affiliateSignupBonusBindCall
-	recordedLogs       []AffiliateInviteLogEntry
-	listLogsResult     []AffiliateInviteLog
-	listLogsTotal      int64
-	lastListFilter     AffiliateInviteLogFilter
+	profiles             map[int64]*AffiliateSummary
+	byCode               map[string]*AffiliateSummary
+	bindWithBonusCalls   []affiliateSignupBonusBindCall
+	accrueCalls          []affiliateSignupBonusAccrueCall
+	recordedLogs         []AffiliateInviteLogEntry
+	listLogsResult       []AffiliateInviteLog
+	listLogsTotal        int64
+	lastListFilter       AffiliateInviteLogFilter
+	inviteeRechargeTotal float64
 }
 
 type affiliateSignupBonusBindCall struct {
@@ -323,6 +411,13 @@ type affiliateSignupBonusBindCall struct {
 	inviterID     int64
 	bonusAmount   float64
 	bonusTotalCap float64
+}
+
+type affiliateSignupBonusAccrueCall struct {
+	inviterID     int64
+	inviteeUserID int64
+	amount        float64
+	freezeHours   int
 }
 
 func newAffiliateSignupBonusRepoStub() *affiliateSignupBonusRepoStub {
@@ -390,16 +485,26 @@ func (r *affiliateSignupBonusRepoStub) ListInviteLogs(_ context.Context, filter 
 	return r.listLogsResult, r.listLogsTotal, nil
 }
 
-func (r *affiliateSignupBonusRepoStub) AccrueQuota(context.Context, int64, int64, float64, int, *int64) (bool, error) {
-	panic("unexpected AccrueQuota call")
+func (r *affiliateSignupBonusRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, _ *int64) (bool, error) {
+	r.accrueCalls = append(r.accrueCalls, affiliateSignupBonusAccrueCall{
+		inviterID:     inviterID,
+		inviteeUserID: inviteeUserID,
+		amount:        amount,
+		freezeHours:   freezeHours,
+	})
+	return true, nil
 }
 
 func (r *affiliateSignupBonusRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
 	panic("unexpected GetAccruedRebateFromInvitee call")
 }
 
+func (r *affiliateSignupBonusRepoStub) GetInviteeRechargeTotal(context.Context, int64) (float64, error) {
+	return r.inviteeRechargeTotal, nil
+}
+
 func (r *affiliateSignupBonusRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
-	panic("unexpected ThawFrozenQuota call")
+	return 0, nil
 }
 
 func (r *affiliateSignupBonusRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
@@ -407,7 +512,7 @@ func (r *affiliateSignupBonusRepoStub) TransferQuotaToBalance(context.Context, i
 }
 
 func (r *affiliateSignupBonusRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
-	panic("unexpected ListInvitees call")
+	return nil, nil
 }
 
 func (r *affiliateSignupBonusRepoStub) GetAffiliateUserOverview(context.Context, int64) (*AffiliateUserOverview, error) {

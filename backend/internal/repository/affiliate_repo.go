@@ -393,6 +393,28 @@ func (r *affiliateRepository) GetAccruedRebateFromInvitee(ctx context.Context, i
 	return total, rows.Close()
 }
 
+func (r *affiliateRepository) GetInviteeRechargeTotal(ctx context.Context, inviterID int64) (float64, error) {
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, `
+SELECT COALESCE(SUM(po.amount), 0)::double precision
+FROM user_affiliates ua
+JOIN payment_orders po ON po.user_id = ua.user_id
+WHERE ua.inviter_id = $1
+  AND po.status = 'COMPLETED'
+  AND po.amount > 0`, inviterID)
+	if err != nil {
+		return 0, fmt.Errorf("query affiliate invitee recharge total: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var total float64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			return 0, err
+		}
+	}
+	return total, rows.Close()
+}
+
 func (r *affiliateRepository) ThawFrozenQuota(ctx context.Context, userID int64) (float64, error) {
 	var thawed float64
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
