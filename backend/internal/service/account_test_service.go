@@ -612,11 +612,19 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// Set common headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authToken)
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("OpenAI-Beta", "responses=experimental")
+	req.Header.Set("Originator", "codex_cli_rs")
+	req.Header.Set("Version", codexCLIVersion)
+	userAgent := strings.TrimSpace(account.GetOpenAIUserAgent())
+	if userAgent == "" {
+		userAgent = codexCLIUserAgent
+	}
+	req.Header.Set("User-Agent", userAgent)
 
 	// Set OAuth-specific headers for ChatGPT internal API
 	if isOAuth {
 		req.Host = "chatgpt.com"
-		req.Header.Set("accept", "text/event-stream")
 		if chatgptAccountID != "" {
 			req.Header.Set("chatgpt-account-id", chatgptAccountID)
 		}
