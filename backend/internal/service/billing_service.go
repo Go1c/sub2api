@@ -942,7 +942,7 @@ type ImagePriceConfig struct {
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
 }
 
-// VideoPriceConfig 视频生成计费配置。
+// VideoPriceConfig 视频生成计费配置。所有价格均为每秒单价（USD/s）。
 type VideoPriceConfig struct {
 	Price480P  *float64
 	Price720P  *float64
@@ -1035,13 +1035,14 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 }
 
 // CalculateVideoCost 计算视频生成费用。
-func (s *BillingService) CalculateVideoCost(model string, resolution string, videoCount int, groupConfig *VideoPriceConfig, rateMultiplier float64) *CostBreakdown {
+func (s *BillingService) CalculateVideoCost(model string, resolution string, videoCount int, durationSeconds int, groupConfig *VideoPriceConfig, rateMultiplier float64) *CostBreakdown {
 	if videoCount <= 0 {
 		return &CostBreakdown{}
 	}
 	resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
+	durationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(durationSeconds)
 	unitPrice := s.getVideoUnitPrice(model, resolution, groupConfig)
-	totalCost := unitPrice * float64(videoCount)
+	totalCost := unitPrice * float64(durationSeconds) * float64(videoCount)
 	if rateMultiplier < 0 {
 		rateMultiplier = 0
 	}

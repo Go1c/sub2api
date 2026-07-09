@@ -2269,11 +2269,11 @@ export default {
       },
       videoPricing: {
         title: 'Video Generation Pricing',
-        description: 'Configure Grok video generation base prices. Leave empty to use default video prices.',
+        description: 'Configure Grok video generation prices in USD per second. Leave empty to use default per-second rates.',
         independentMultiplier: 'Use independent video multiplier',
         videoMultiplier: 'Video multiplier',
-        modeHint: 'By default, video billing uses video price × current effective group multiplier. Independent mode uses video price × video multiplier.',
-        finalPricePreview: 'Final per-video price preview',
+        modeHint: 'Videos are billed per second: per-second price × duration (1-15s, default 8s). The group or independent video multiplier then applies.',
+        finalPricePreview: 'Final per-second price preview',
         notConfigured: 'Not configured'
       },
       claudeCode: {

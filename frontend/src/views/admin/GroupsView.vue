@@ -817,7 +817,7 @@
           </div>
           <div class="grid grid-cols-3 gap-3">
             <div v-for="tier in videoPricingTiers" :key="tier.key">
-              <label class="input-label">{{ tier.label }} ($)</label>
+              <label class="input-label">{{ tier.label }} ($/s)</label>
               <input
                 v-model.number="createForm[tier.key]"
                 type="number"
@@ -2106,7 +2106,7 @@
           </div>
           <div class="grid grid-cols-3 gap-3">
             <div v-for="tier in videoPricingTiers" :key="tier.key">
-              <label class="input-label">{{ tier.label }} ($)</label>
+              <label class="input-label">{{ tier.label }} ($/s)</label>
               <input
                 v-model.number="editForm[tier.key]"
                 type="number"
@@ -4046,6 +4046,12 @@ const handleCreateGroup = async () => {
     requestData.video_rate_multiplier = normalizeImageRateMultiplier(
       requestData.video_rate_multiplier,
     );
+    requestData.image_price_1k = emptyToNull(requestData.image_price_1k);
+    requestData.image_price_2k = emptyToNull(requestData.image_price_2k);
+    requestData.image_price_4k = emptyToNull(requestData.image_price_4k);
+    requestData.video_price_480p = emptyToNull(requestData.video_price_480p);
+    requestData.video_price_720p = emptyToNull(requestData.video_price_720p);
+    requestData.video_price_1080p = emptyToNull(requestData.video_price_1080p);
     await adminAPI.groups.create(requestData);
     appStore.showSuccess(t("admin.groups.groupCreated"));
     closeCreateModal();
@@ -4197,6 +4203,13 @@ const handleUpdateGroup = async () => {
     payload.video_rate_multiplier = normalizeImageRateMultiplier(
       payload.video_rate_multiplier,
     );
+    const emptyPriceToClear = (v: any) => (v === "" || v === null ? -1 : v);
+    payload.image_price_1k = emptyPriceToClear(payload.image_price_1k);
+    payload.image_price_2k = emptyPriceToClear(payload.image_price_2k);
+    payload.image_price_4k = emptyPriceToClear(payload.image_price_4k);
+    payload.video_price_480p = emptyPriceToClear(payload.video_price_480p);
+    payload.video_price_720p = emptyPriceToClear(payload.video_price_720p);
+    payload.video_price_1080p = emptyPriceToClear(payload.video_price_1080p);
     await adminAPI.groups.update(editingGroup.value.id, payload);
     appStore.showSuccess(t("admin.groups.groupUpdated"));
     closeEditModal();

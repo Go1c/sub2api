@@ -1447,6 +1447,9 @@ export interface UsageLog {
   // 图片生成字段
   image_count: number
   image_size: string | null
+  video_count: number
+  video_resolution: string | null
+  video_duration_seconds: number | null
 
   // User-Agent
   user_agent: string | null

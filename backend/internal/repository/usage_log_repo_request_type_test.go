@@ -78,6 +78,9 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // ip_address
 			log.ImageCount,
 			sqlmock.AnyArg(), // image_size
+			sqlmock.AnyArg(), // video_count
+			sqlmock.AnyArg(), // video_resolution
+			sqlmock.AnyArg(), // video_duration_seconds
 			sqlmock.AnyArg(), // service_tier
 			sqlmock.AnyArg(), // reasoning_effort
 			sqlmock.AnyArg(), // inbound_endpoint
@@ -158,6 +161,9 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			log.ImageCount,
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			serviceTier,
 			sqlmock.AnyArg(),
@@ -573,6 +579,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			0,
 			sql.NullString{},
+			0,
+			sql.NullString{},
+			sql.NullInt64{},
 			sql.NullString{Valid: true, String: "priority"},
 			sql.NullString{},
 			sql.NullString{},
@@ -622,6 +631,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			0,
 			sql.NullString{},
+			0,
+			sql.NullString{},
+			sql.NullInt64{},
 			sql.NullString{Valid: true, String: "flex"},
 			sql.NullString{},
 			sql.NullString{},
@@ -671,6 +683,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			0,
 			sql.NullString{},
+			0,
+			sql.NullString{},
+			sql.NullInt64{},
 			sql.NullString{Valid: true, String: "priority"},
 			sql.NullString{},
 			sql.NullString{},
