@@ -2,6 +2,7 @@ package apicompat
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -367,7 +368,7 @@ func TestChatCompletionsToResponses_ParallelToolCalls(t *testing.T) {
 
 		payload, err := json.Marshal(resp)
 		require.NoError(t, err)
-		assert.Contains(t, string(payload), `"parallel_tool_calls":`+string(mustMarshalJSON(t, value)))
+		assert.Contains(t, string(payload), fmt.Sprintf(`"parallel_tool_calls":%t`, value))
 	}
 }
 
