@@ -70,6 +70,7 @@ var openaiAllowedHeaders = map[string]bool{
 	"conversation_id":       true,
 	"user-agent":            true,
 	"originator":            true,
+	"version":               true,
 	"session_id":            true,
 	"x-codex-turn-state":    true,
 	"x-codex-turn-metadata": true,
@@ -85,6 +86,7 @@ var openaiPassthroughAllowedHeaders = map[string]bool{
 	"openai-beta":           true,
 	"user-agent":            true,
 	"originator":            true,
+	"version":               true,
 	"session_id":            true,
 	"x-codex-turn-state":    true,
 	"x-codex-turn-metadata": true,
@@ -3225,6 +3227,11 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 			}
 		}
 	}
+	isCodexCLI := s.cfg != nil && s.cfg.Gateway.ForceCodexCLI
+	if c != nil && c.Request != nil {
+		isCodexCLI = isCodexCLI || openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator"))
+	}
+	ensureOpenAICodexVersionHeader(req.Header, isCodexCLI)
 
 	// 覆盖入站鉴权残留，并注入上游认证
 	req.Header.Del("authorization")
@@ -3302,6 +3309,13 @@ func shouldFailoverOpenAIPassthroughResponse(statusCode int) bool {
 	default:
 		return false
 	}
+}
+
+func ensureOpenAICodexVersionHeader(headers http.Header, isCodexCLI bool) {
+	if headers == nil || !isCodexCLI || strings.TrimSpace(headers.Get("version")) != "" {
+		return
+	}
+	headers.Set("version", codexCLIVersion)
 }
 
 func (s *OpenAIGatewayService) handleFailoverErrorResponsePassthrough(
@@ -3946,6 +3960,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 			}
 		}
 	}
+	ensureOpenAICodexVersionHeader(req.Header, isCodexCLI)
 	if account.Type == AccountTypeOAuth {
 		compatMessagesBridge := isOpenAICompatMessagesBridgeContext(c) || isOpenAICompatMessagesBridgeBody(body)
 		// 清除客户端透传的 session 头，后续用隔离后的值重新设置，防止跨用户会话碰撞。
