@@ -73,7 +73,7 @@ func IsImageGenerationIntentMap(endpoint string, requestedModel string, reqBody 
 	if openAIAnyCollectionContainsImageGenerationCapability(reqBody["functions"]) {
 		return true
 	}
-	if inputContainsImageGenNamespace(reqBody["input"]) {
+	if inputContainsImageGenerationTool(reqBody["input"]) {
 		return true
 	}
 	if openAIAnyToolChoiceSelectsImageGeneration(reqBody["tool_choice"]) {
