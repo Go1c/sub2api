@@ -311,7 +311,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	// 因此使用 atomic.Pointer[string] 在 filter（runClientToUpstream
 	// goroutine）和 OnTurnComplete / final result（runUpstreamToClient
 	// goroutine）之间同步当前 turn 的 usage metadata。
-	usageMeta.initFromFirstFrame(firstClientMessage)
+	usageMeta.initFromFirstFrame(firstClientMessage, capturedSessionModel)
 
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
 	if err != nil {
