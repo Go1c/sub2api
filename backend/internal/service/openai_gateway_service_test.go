@@ -1988,6 +1988,57 @@ func TestOpenAIBuildUpstreamRequestCompactForcesJSONAcceptForOAuth(t *testing.T)
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
 }
 
+func TestOpenAIPassthroughAllowsVersionHeader(t *testing.T) {
+	require.True(t, isOpenAIPassthroughAllowedRequestHeader("version", false))
+}
+
+func TestOpenAIBuildUpstreamRequestsPreserveOrFillCodexVersion(t *testing.T) {
+	tests := []struct {
+		name          string
+		passthrough   bool
+		isCodexCLI    bool
+		clientVersion string
+		wantVersion   string
+	}{
+		{name: "passthrough preserves client version", passthrough: true, isCodexCLI: true, clientVersion: "0.200.0", wantVersion: "0.200.0"},
+		{name: "passthrough fills Codex version", passthrough: true, isCodexCLI: true, wantVersion: codexCLIVersion},
+		{name: "passthrough leaves non-Codex empty", passthrough: true},
+		{name: "normal preserves client version", isCodexCLI: true, clientVersion: "0.200.0", wantVersion: "0.200.0"},
+		{name: "normal fills Codex version", isCodexCLI: true, wantVersion: codexCLIVersion},
+		{name: "normal leaves non-Codex empty"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader([]byte(`{"model":"gpt-5.6-sol"}`)))
+			if tt.isCodexCLI {
+				c.Request.Header.Set("User-Agent", codexCLIUserAgent)
+				c.Request.Header.Set("originator", "codex_cli_rs")
+			}
+			if tt.clientVersion != "" {
+				c.Request.Header.Set("Version", tt.clientVersion)
+			}
+
+			svc := &OpenAIGatewayService{cfg: &config.Config{
+				Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{Enabled: false}},
+			}}
+			account := &Account{Type: AccountTypeAPIKey, Platform: PlatformOpenAI}
+			var req *http.Request
+			var err error
+			if tt.passthrough {
+				req, err = svc.buildUpstreamRequestOpenAIPassthrough(c.Request.Context(), c, account, []byte(`{"model":"gpt-5.6-sol"}`), "token")
+			} else {
+				req, err = svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5.6-sol"}`), "token", false, "", tt.isCodexCLI)
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantVersion, req.Header.Get("Version"))
+		})
+	}
+}
+
 func TestOpenAIBuildUpstreamRequestOAuthMessagesBridgeUsesSessionOnly(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
