@@ -705,7 +705,24 @@ func ensureOpenAIResponsesImageGenerationTool(reqBody map[string]any) bool {
 		return true
 	}
 	if codexToolsContainFunctionName(tools, codexImageGenerationFunctionName) {
-		return false
+		filteredTools := make([]any, 0, len(tools))
+		modified := false
+		for _, rawTool := range tools {
+			toolMap, ok := rawTool.(map[string]any)
+			if ok && strings.TrimSpace(firstNonEmptyString(toolMap["type"])) == "image_generation" {
+				modified = true
+				continue
+			}
+			filteredTools = append(filteredTools, rawTool)
+		}
+		if modified {
+			reqBody["tools"] = filteredTools
+		}
+		if existing, ok := reqBody["instructions"].(string); ok && strings.Contains(existing, codexImageGenerationBridgeText) {
+			reqBody["instructions"] = strings.TrimSpace(strings.ReplaceAll(existing, codexImageGenerationBridgeText, ""))
+			modified = true
+		}
+		return modified
 	}
 	for _, rawTool := range tools {
 		toolMap, ok := rawTool.(map[string]any)
