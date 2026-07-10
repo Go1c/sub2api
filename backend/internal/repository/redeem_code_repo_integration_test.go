@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -111,6 +112,29 @@ func (s *RedeemCodeRepoSuite) TestGetByCode_NotFound() {
 	_, err := s.repo.GetByCode(s.ctx, "NON-EXISTENT")
 	s.Require().Error(err, "expected error for non-existent code")
 	s.Require().ErrorIs(err, service.ErrRedeemCodeNotFound)
+}
+
+func (s *RedeemCodeRepoSuite) TestGetByCode_DataConflict() {
+	var result sql.Result
+	err := s.client.Driver().Exec(
+		s.ctx,
+		`ALTER TABLE redeem_codes DROP CONSTRAINT redeem_codes_code_key`,
+		[]any{},
+		&result,
+	)
+	s.Require().NoError(err, "drop unique constraint inside isolated test transaction")
+
+	err = s.client.Driver().Exec(
+		s.ctx,
+		`INSERT INTO redeem_codes (code, type, value, status, created_at, validity_days)
+		 VALUES ($1, $2, 10, $3, NOW(), 30), ($1, $2, 20, $3, NOW(), 30)`,
+		[]any{"DUPLICATE-GET-BY-CODE", service.RedeemTypeBalance, service.StatusUnused},
+		&result,
+	)
+	s.Require().NoError(err, "seed duplicate redeem codes")
+
+	_, err = s.repo.GetByCode(s.ctx, "DUPLICATE-GET-BY-CODE")
+	s.Require().ErrorIs(err, service.ErrRedeemCodeDataConflict)
 }
 
 // --- Delete ---

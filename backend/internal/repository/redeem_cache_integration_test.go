@@ -42,6 +42,54 @@ func (s *RedeemCacheSuite) TestIncrementAndGetRedeemAttemptCount() {
 	s.AssertTTLWithin(ttl, 1*time.Second, redeemRateLimitDuration)
 }
 
+func (s *RedeemCacheSuite) TestIncrementRedeemAttemptCountUsesFixedOneHourWindow() {
+	userID := int64(3)
+	key := redeemRateLimitKey(userID)
+
+	require.NoError(s.T(), s.cache.IncrementRedeemAttemptCount(s.ctx, userID))
+	count, err := s.cache.GetRedeemAttemptCount(s.ctx, userID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 1, count)
+
+	ttl, err := s.rdb.PTTL(s.ctx, key).Result()
+	require.NoError(s.T(), err)
+	s.AssertTTLWithin(ttl, time.Second, time.Hour)
+
+	const shortWindow = 250 * time.Millisecond
+	require.NoError(s.T(), s.rdb.PExpire(s.ctx, key, shortWindow).Err())
+	ttlBeforeSecondFailure, err := s.rdb.PTTL(s.ctx, key).Result()
+	require.NoError(s.T(), err)
+
+	require.NoError(s.T(), s.cache.IncrementRedeemAttemptCount(s.ctx, userID))
+	count, err = s.cache.GetRedeemAttemptCount(s.ctx, userID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 2, count)
+	ttlAfterSecondFailure, err := s.rdb.PTTL(s.ctx, key).Result()
+	require.NoError(s.T(), err)
+	require.LessOrEqual(s.T(), ttlAfterSecondFailure, ttlBeforeSecondFailure)
+	require.LessOrEqual(s.T(), ttlAfterSecondFailure, shortWindow)
+
+	for range 3 {
+		require.NoError(s.T(), s.cache.IncrementRedeemAttemptCount(s.ctx, userID))
+	}
+	ttlAfterRepeatedFailures, err := s.rdb.PTTL(s.ctx, key).Result()
+	require.NoError(s.T(), err)
+	require.LessOrEqual(s.T(), ttlAfterRepeatedFailures, ttlAfterSecondFailure)
+
+	require.Eventually(s.T(), func() bool {
+		count, err = s.cache.GetRedeemAttemptCount(s.ctx, userID)
+		return err == nil && count == 0
+	}, time.Second, 20*time.Millisecond)
+
+	require.NoError(s.T(), s.cache.IncrementRedeemAttemptCount(s.ctx, userID))
+	count, err = s.cache.GetRedeemAttemptCount(s.ctx, userID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), 1, count)
+	ttl, err = s.rdb.PTTL(s.ctx, key).Result()
+	require.NoError(s.T(), err)
+	s.AssertTTLWithin(ttl, time.Second, time.Hour)
+}
+
 func (s *RedeemCacheSuite) TestMultipleIncrements() {
 	userID := int64(2)
 
