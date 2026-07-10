@@ -33,6 +33,8 @@ type userRepository struct {
 	sql    sqlExecutor
 }
 
+var _ service.RedeemUserAdjustmentRepository = (*userRepository)(nil)
+
 func NewUserRepository(client *dbent.Client, sqlDB *sql.DB) service.UserRepository {
 	return newUserRepositoryWithSQL(client, sqlDB)
 }
@@ -824,6 +826,27 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 	return nil
 }
 
+func (r *userRepository) ApplyRedeemBalanceAdjustment(ctx context.Context, id int64, delta float64) error {
+	const updateSQL = `
+		UPDATE users
+		SET balance = GREATEST(balance + $1, 0), updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+	`
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(ctx, updateSQL, delta, id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrUserNotFound
+	}
+	return nil
+}
+
 func (r *userRepository) SumBalanceUsageGateRechargeAmount(ctx context.Context, userID int64) (float64, error) {
 	if r == nil || r.sql == nil || userID <= 0 {
 		return 0, nil
@@ -896,6 +919,27 @@ func (r *userRepository) UpdateConcurrency(ctx context.Context, id int64, amount
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
 	if n == 0 {
+		return service.ErrUserNotFound
+	}
+	return nil
+}
+
+func (r *userRepository) ApplyRedeemConcurrencyAdjustment(ctx context.Context, id int64, delta int) error {
+	const updateSQL = `
+		UPDATE users
+		SET concurrency = GREATEST(concurrency + $1, 0), updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+	`
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(ctx, updateSQL, delta, id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
 		return service.ErrUserNotFound
 	}
 	return nil

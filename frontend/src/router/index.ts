@@ -918,13 +918,15 @@ router.beforeEach(async (to, _from, next) => {
   }
 
 
-  // Check payment requirement (internal payment system only)
-  if (to.meta.requiresPayment) {
-    const paymentEnabled = appStore.cachedPublicSettings?.payment_enabled
-    if (!paymentEnabled) {
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
-      return
-    }
+  // Only an explicit value from successfully loaded settings can disable a route.
+  // A transient settings failure is unknown state, not a confirmed feature toggle.
+  if (
+    to.meta.requiresPayment &&
+    appStore.publicSettingsLoaded &&
+    appStore.cachedPublicSettings?.payment_enabled === false
+  ) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
   }
 
   if (to.meta.requiresUserSubscriptions && !isFeatureFlagEnabled(FeatureFlags.userSubscriptions)) {

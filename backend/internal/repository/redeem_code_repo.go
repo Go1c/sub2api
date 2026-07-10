@@ -86,6 +86,9 @@ func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*ser
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrRedeemCodeNotFound
 		}
+		if dbent.IsNotSingular(err) {
+			return nil, service.ErrRedeemCodeDataConflict
+		}
 		return nil, err
 	}
 	return redeemCodeEntityToService(m), nil

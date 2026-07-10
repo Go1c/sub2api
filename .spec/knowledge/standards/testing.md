@@ -28,14 +28,14 @@ cd backend
 go test -tags=unit ./...           # 单元测试
 go test -tags=integration ./...    # 集成测试(必须带 -tags,否则漏检)
 go vet -tags integration ./...     # 集成代码编译校验
-golangci-lint run ./...            # v2.7
+golangci-lint run ./...            # v2.9
 ```
 
 ## CI 流水线(GitHub Actions)
 
 | Workflow | 触发 | 检查 |
 |----------|------|------|
-| `backend-ci.yml` | push / PR | 单元 + 集成测试 + golangci-lint v2.7 |
+| `backend-ci.yml` | push / PR | 单元 + 集成测试 + golangci-lint v2.9 |
 | `security-scan.yml` | push / PR / 每周一 | govulncheck + gosec + pnpm audit |
 | `release.yml` | tag `v*` | 构建发布(PR 不触发) |
 

@@ -244,6 +244,18 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 		want    string
 	}{
 		{
+			name:    "oauth routes bare GPT-5.6 alias to Sol",
+			account: &Account{Type: AccountTypeOAuth},
+			model:   "gpt-5.6",
+			want:    "gpt-5.6-sol",
+		},
+		{
+			name:    "oauth routes provider-prefixed GPT-5.6 alias to Sol",
+			account: &Account{Type: AccountTypeOAuth},
+			model:   "openai/gpt-5.6",
+			want:    "gpt-5.6-sol",
+		},
+		{
 			name:    "oauth preserves unknown non codex model",
 			account: &Account{Type: AccountTypeOAuth},
 			model:   "gemini-3-flash-preview",

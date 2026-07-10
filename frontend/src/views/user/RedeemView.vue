@@ -471,10 +471,19 @@ const handleRedeem = async () => {
 
     // Show success toast
     appStore.showSuccess(t('redeem.codeRedeemSuccess'))
-  } catch (error: any) {
-    errorMessage.value = error.response?.data?.detail || t('redeem.failedToRedeem')
+  } catch (error: unknown) {
+    const apiError = error && typeof error === 'object'
+      ? error as { message?: unknown; reason?: unknown }
+      : null
+    const message =
+      typeof apiError?.message === 'string' && apiError.message.trim()
+        ? apiError.message.trim()
+        : typeof apiError?.reason === 'string' && apiError.reason.trim()
+          ? apiError.reason.trim()
+          : t('redeem.failedToRedeem')
 
-    appStore.showError(t('redeem.redeemFailed'))
+    errorMessage.value = message
+    appStore.showError(message)
   } finally {
     submitting.value = false
   }

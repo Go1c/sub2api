@@ -274,6 +274,19 @@ export async function resetQuota(
 }
 
 /**
+ * Reset only the current weekly usage window for a subscription.
+ * @param id - Subscription ID
+ * @returns Updated subscription
+ */
+export async function resetWeeklyLimit(id: number): Promise<UserSubscription> {
+  const { data } = await apiClient.post<UserSubscription>(
+    `/admin/subscriptions/${id}/reset-quota`,
+    { daily: false, weekly: true, monthly: false }
+  )
+  return data
+}
+
+/**
  * List subscriptions by group
  * @param groupId - Group ID
  * @param page - Page number
@@ -327,6 +340,7 @@ export const subscriptionsAPI = {
   extend,
   revoke,
   resetQuota,
+  resetWeeklyLimit,
   listByGroup,
   listByUser
 }

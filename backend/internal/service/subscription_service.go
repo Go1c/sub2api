@@ -215,6 +215,15 @@ func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 	s.creditSubMiss.Delete(userID)
 }
 
+// InvalidateSubCacheSync flushes ristretto's asynchronous delete buffer before
+// callers reload a fresh database snapshot.
+func (s *SubscriptionService) InvalidateSubCacheSync(userID, groupID int64) {
+	s.InvalidateSubCache(userID, groupID)
+	if s.subCacheL1 != nil {
+		s.subCacheL1.Wait()
+	}
+}
+
 // AssignSubscriptionInput 分配订阅输入
 type AssignSubscriptionInput struct {
 	UserID       int64
@@ -240,6 +249,10 @@ func (s *SubscriptionService) AssignSubscription(ctx context.Context, input *Ass
 //
 // 如果没有订阅：创建新订阅
 func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
+	return s.assignOrExtendSubscription(ctx, input, false)
+}
+
+func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput, deferCacheInvalidation bool) (*UserSubscription, bool, error) {
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -282,55 +295,32 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 			newExpiresAt = MaxExpiresAt
 		}
 
-		// 开启事务：ExtendExpiry + UpdateStatus + UpdateNotes 在同一事务中完成
-		tx, err := s.entClient.Tx(ctx)
-		if err != nil {
-			return nil, false, fmt.Errorf("begin transaction: %w", err)
-		}
-		txCtx := dbent.NewTxContext(ctx, tx)
-
-		// 更新过期时间
-		if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
-			_ = tx.Rollback()
-			return nil, false, fmt.Errorf("extend subscription: %w", err)
-		}
-
-		// 如果订阅已过期或被暂停，恢复为active状态
-		if existingSub.Status != SubscriptionStatusActive {
-			if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
-				_ = tx.Rollback()
-				return nil, false, fmt.Errorf("update subscription status: %w", err)
+		if err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+			if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
+				return fmt.Errorf("extend subscription: %w", err)
 			}
-		}
-
-		// 追加备注
-		if input.Notes != "" {
-			newNotes := existingSub.Notes
-			if newNotes != "" {
-				newNotes += "\n"
+			if existingSub.Status != SubscriptionStatusActive {
+				if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
+					return fmt.Errorf("update subscription status: %w", err)
+				}
 			}
-			newNotes += input.Notes
-			if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, newNotes); err != nil {
-				_ = tx.Rollback()
-				return nil, false, fmt.Errorf("update subscription notes: %w", err)
+			if input.Notes != "" {
+				newNotes := existingSub.Notes
+				if newNotes != "" {
+					newNotes += "\n"
+				}
+				newNotes += input.Notes
+				if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, newNotes); err != nil {
+					return fmt.Errorf("update subscription notes: %w", err)
+				}
 			}
-		}
-
-		// 提交事务
-		if err := tx.Commit(); err != nil {
-			return nil, false, fmt.Errorf("commit transaction: %w", err)
+			return nil
+		}); err != nil {
+			return nil, false, err
 		}
 
 		// 失效订阅缓存
-		s.InvalidateSubCache(input.UserID, input.GroupID)
-		if s.billingCacheService != nil {
-			userID, groupID := input.UserID, input.GroupID
-			go func() {
-				cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
-			}()
-		}
+		s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, deferCacheInvalidation)
 
 		// 返回更新后的订阅
 		sub, err := s.userSubRepo.GetByID(ctx, existingSub.ID)
@@ -344,17 +334,46 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 	}
 
 	// 失效订阅缓存
-	s.InvalidateSubCache(input.UserID, input.GroupID)
+	s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, deferCacheInvalidation)
+
+	return sub, false, nil // false 表示是新建
+}
+
+func (s *SubscriptionService) maybeInvalidateAssignmentCaches(userID, groupID int64, deferred bool) {
+	// Payment fulfillment owns an outer transaction and performs a synchronous
+	// invalidation after commit. Invalidating inside that transaction can reload
+	// the pre-commit subscription into cache.
+	if deferred {
+		return
+	}
+
+	s.InvalidateSubCache(userID, groupID)
 	if s.billingCacheService != nil {
-		userID, groupID := input.UserID, input.GroupID
 		go func() {
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
 		}()
 	}
+}
 
-	return sub, false, nil // false 表示是新建
+func (s *SubscriptionService) withSubscriptionUpdateTx(ctx context.Context, fn func(context.Context) error) error {
+	if dbent.TxFromContext(ctx) != nil || s.entClient == nil {
+		return fn(ctx)
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := fn(txCtx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
 }
 
 // createSubscription 创建新订阅（内部方法）
@@ -1090,20 +1109,8 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 		return nil, err
 	}
 	windowStart := startOfDay(time.Now())
-	if resetDaily {
-		if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, windowStart); err != nil {
-			return nil, err
-		}
-	}
-	if resetWeekly {
-		if err := s.userSubRepo.ResetWeeklyUsage(ctx, sub.ID, windowStart); err != nil {
-			return nil, err
-		}
-	}
-	if resetMonthly {
-		if err := s.userSubRepo.ResetMonthlyUsage(ctx, sub.ID, windowStart); err != nil {
-			return nil, err
-		}
+	if err := s.userSubRepo.ResetUsageWindows(ctx, sub.ID, resetDaily, resetWeekly, resetMonthly, windowStart); err != nil {
+		return nil, err
 	}
 	// Invalidate L1 ristretto cache. Ristretto's Del() is asynchronous by design,
 	// so call Wait() immediately after to flush pending operations and guarantee
@@ -1128,7 +1135,8 @@ func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *Use
 
 	// 日窗口重置（24小时）
 	if sub.NeedsDailyReset() {
-		if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, windowStart); err != nil {
+		expectedWindowStart := sub.DailyWindowStart
+		if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, expectedWindowStart, windowStart); err != nil {
 			return err
 		}
 		sub.DailyWindowStart = &windowStart
@@ -1138,7 +1146,8 @@ func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *Use
 
 	// 周窗口重置（7天）
 	if sub.NeedsWeeklyReset() {
-		if err := s.userSubRepo.ResetWeeklyUsage(ctx, sub.ID, windowStart); err != nil {
+		expectedWindowStart := sub.WeeklyWindowStart
+		if err := s.userSubRepo.ResetWeeklyUsage(ctx, sub.ID, expectedWindowStart, windowStart); err != nil {
 			return err
 		}
 		sub.WeeklyWindowStart = &windowStart
@@ -1148,7 +1157,8 @@ func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *Use
 
 	// 月窗口重置（30天）
 	if sub.NeedsMonthlyReset() {
-		if err := s.userSubRepo.ResetMonthlyUsage(ctx, sub.ID, windowStart); err != nil {
+		expectedWindowStart := sub.MonthlyWindowStart
+		if err := s.userSubRepo.ResetMonthlyUsage(ctx, sub.ID, expectedWindowStart, windowStart); err != nil {
 			return err
 		}
 		sub.MonthlyWindowStart = &windowStart
@@ -1168,6 +1178,32 @@ func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *Use
 	return nil
 }
 
+// EnsureWindowMaintenance advances expired usage windows before a request is
+// allowed to proceed. It returns a fresh database snapshot because a competing
+// request may have won one of the conditional resets.
+func (s *SubscriptionService) EnsureWindowMaintenance(ctx context.Context, sub *UserSubscription) (*UserSubscription, error) {
+	if sub == nil {
+		return nil, ErrSubscriptionNilInput
+	}
+	if !sub.IsWindowActivated() {
+		if err := s.CheckAndActivateWindow(ctx, sub); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.CheckAndResetWindows(ctx, sub); err != nil {
+		return nil, err
+	}
+
+	// GetByID bypasses the service caches. This prevents a stale loser of the
+	// CAS from validating limits against zeroed in-memory usage.
+	refreshed, err := s.userSubRepo.GetByID(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+	s.InvalidateSubCacheSync(sub.UserID, subscriptionGroupIDOrZero(sub.GroupID))
+	return refreshed, nil
+}
+
 // CheckUsageLimits 检查使用限额（返回错误如果超限）
 // 用于中间件的快速预检查，additionalCost 通常为 0
 func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSubscription, group *Group, additionalCost float64) error {
@@ -1184,8 +1220,9 @@ func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSub
 }
 
 // ValidateAndCheckLimits 合并验证+限额检查（中间件热路径专用）
-// 仅做内存检查，不触发 DB 写入。窗口重置由扣费事务统一完成。
-// 返回 needsMaintenance 仅保留为兼容信号；调用方不应据此触发 DB 窗口维护。
+// 仅做内存检查，不触发 DB 写入。调用方可对已激活且过期的窗口同步推进并
+// 重新读取数据库快照，避免 CAS 失败者基于本地清零值误判限额；全 nil 窗口
+// 仍留给扣费事务首次激活。
 func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, group *Group) (needsMaintenance bool, err error) {
 	// 1. 验证订阅状态
 	if sub.Status == SubscriptionStatusExpired {

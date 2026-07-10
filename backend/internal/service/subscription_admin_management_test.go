@@ -68,13 +68,16 @@ func (r *adminUpdateUserSubRepoStub) UpdateNotes(context.Context, int64, string)
 func (r *adminUpdateUserSubRepoStub) ActivateWindows(context.Context, int64, time.Time) error {
 	panic("unexpected ActivateWindows")
 }
-func (r *adminUpdateUserSubRepoStub) ResetDailyUsage(context.Context, int64, time.Time) error {
+func (r *adminUpdateUserSubRepoStub) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time) error {
+	panic("unexpected ResetUsageWindows")
+}
+func (r *adminUpdateUserSubRepoStub) ResetDailyUsage(context.Context, int64, *time.Time, time.Time) error {
 	panic("unexpected ResetDailyUsage")
 }
-func (r *adminUpdateUserSubRepoStub) ResetWeeklyUsage(context.Context, int64, time.Time) error {
+func (r *adminUpdateUserSubRepoStub) ResetWeeklyUsage(context.Context, int64, *time.Time, time.Time) error {
 	panic("unexpected ResetWeeklyUsage")
 }
-func (r *adminUpdateUserSubRepoStub) ResetMonthlyUsage(context.Context, int64, time.Time) error {
+func (r *adminUpdateUserSubRepoStub) ResetMonthlyUsage(context.Context, int64, *time.Time, time.Time) error {
 	panic("unexpected ResetMonthlyUsage")
 }
 func (r *adminUpdateUserSubRepoStub) IncrementUsage(context.Context, int64, float64) error {

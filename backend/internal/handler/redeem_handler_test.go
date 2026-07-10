@@ -141,6 +141,24 @@ func TestRedeemHandlerKeepsRedeemNotFoundWhenPromoAlsoMissing(t *testing.T) {
 	require.Equal(t, "REDEEM_CODE_NOT_FOUND", body.Reason)
 }
 
+func TestRedeemHandlerReturnsDataConflictWithoutPromoFallback(t *testing.T) {
+	redeemSvc := &redeemCodeRedeemerStub{redeemErr: service.ErrRedeemCodeDataConflict}
+	promoSvc := &promoCodeRedeemerStub{}
+	handler := NewRedeemHandler(redeemSvc, promoSvc)
+
+	rec := postRedeemForTest(t, handler, "DUPLICATE")
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+	var body struct {
+		Reason  string `json:"reason"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "REDEEM_CODE_DATA_CONFLICT", body.Reason)
+	require.Equal(t, "redeem code data conflict, please contact support", body.Message)
+	require.Zero(t, promoSvc.calls)
+}
+
 func TestRedeemHandlerHistoryIncludesPromoBalance(t *testing.T) {
 	redeemUsedAt := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 	promoUsedAt := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
