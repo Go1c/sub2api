@@ -130,6 +130,10 @@ CREATE UNIQUE INDEX user_subscriptions_user_active_usable
 
 API 错误（订阅不可用且余额不可用）返回结构化 `error.code` + `error.details`（`reason` / `subscription_id` / `renewal_allowed` / `repurchase_url` / `recharge_url` / `reset_at` / `expires_at`）。错误码：`SUBSCRIPTION_CREDIT_EXHAUSTED` / `SUBSCRIPTION_DAILY_LIMIT_REACHED` / `SUBSCRIPTION_WEEKLY_LIMIT_REACHED` / `SUBSCRIPTION_EXPIRED` / `SUBSCRIPTION_RENEWAL_NOT_ALLOWED`。网关鉴权层把订阅不可用（包括日/周窗口限额触顶）统一视为无有效订阅，余额也不可用时返回 HTTP 403 / `SUBSCRIPTION_INVALID`；HTTP 429 保留给真正的速率限制语义。OpenAI/Anthropic 兼容接口尽量保持各自错误格式同时带 `code` 和 `details`。
 
+### 管理员重置周限
+
+2026-07-10 起，管理员订阅列表的 active 订阅提供独立「重置周限」操作。确认后复用 `POST /admin/subscriptions/:id/reset-quota`，请求体固定为 `{ daily: false, weekly: true, monthly: false }`，只清零当前每周用量窗口。该操作不修改总额度 `quota_limit_usd`、累计已用额度 `quota_used_usd`、每日用量、订阅状态或到期时间；成功后管理端重新加载订阅列表。原有日/周/月全部重置操作继续保留，两个动作通过独立确认文案区分。
+
 ### 关键边界行为
 
 | 场景 | 行为 |
@@ -142,6 +146,7 @@ API 错误（订阅不可用且余额不可用）返回结构化 `error.code` + 
 | 订阅为 0 / 无可消费订阅 | 全额扣余额，`billing_type=0` |
 | 日限满但总额度仍有 | 全额扣余额，发日限通知，**不**允许买新订阅 |
 | 周限满但仍有效 | 全额扣余额，发周限通知，**不**允许买新订阅 |
+| 管理员重置 active 订阅周限 | 仅清零当前每周用量窗口；总额度、累计已用额度、日用量、状态和到期时间不变 |
 | 总额度耗尽（写 exhausted_at） | 全额扣余额，发 total 通知，**允许**买新订阅 |
 | 订阅过期 | 不用订阅额度，余额可用则扣；过期任务写 `expire` ledger |
 | 余额不足且订阅不可用 | 请求前拒绝 |

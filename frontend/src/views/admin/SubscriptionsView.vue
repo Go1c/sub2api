@@ -452,6 +452,15 @@
               </button>
               <button
                 v-if="row.status === 'active'"
+                @click="handleResetWeeklyLimit(row)"
+                :disabled="resettingWeeklyLimit && weeklyLimitSubscription?.id === row.id"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20 dark:hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Icon name="refresh" size="sm" />
+                <span class="text-xs">{{ t('admin.subscriptions.resetWeeklyLimit') }}</span>
+              </button>
+              <button
+                v-if="row.status === 'active'"
                 @click="handleRevoke(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -708,6 +717,17 @@
       :cancel-text="t('common.cancel')"
       @confirm="confirmResetQuota"
       @cancel="showResetQuotaConfirm = false"
+    />
+
+    <!-- Reset Weekly Limit Confirmation Dialog -->
+    <ConfirmDialog
+      :show="showResetWeeklyLimitConfirm"
+      :title="t('admin.subscriptions.resetWeeklyLimitTitle')"
+      :message="t('admin.subscriptions.resetWeeklyLimitConfirm', { user: weeklyLimitSubscription?.user?.email })"
+      :confirm-text="t('admin.subscriptions.resetWeeklyLimit')"
+      :cancel-text="t('common.cancel')"
+      @confirm="confirmResetWeeklyLimit"
+      @cancel="closeResetWeeklyLimitDialog"
     />
     <!-- Subscription Guide Modal -->
     <teleport to="body">
@@ -1000,9 +1020,12 @@ const showAssignModal = ref(false)
 const showExtendModal = ref(false)
 const showRevokeDialog = ref(false)
 const showResetQuotaConfirm = ref(false)
+const showResetWeeklyLimitConfirm = ref(false)
 const submitting = ref(false)
 const resettingSubscription = ref<UserSubscription | null>(null)
 const resettingQuota = ref(false)
+const weeklyLimitSubscription = ref<UserSubscription | null>(null)
+const resettingWeeklyLimit = ref(false)
 const extendingSubscription = ref<UserSubscription | null>(null)
 const revokingSubscription = ref<UserSubscription | null>(null)
 
@@ -1344,6 +1367,37 @@ const confirmResetQuota = async () => {
     console.error('Error resetting quota:', error)
   } finally {
     resettingQuota.value = false
+  }
+}
+
+const handleResetWeeklyLimit = (subscription: UserSubscription) => {
+  weeklyLimitSubscription.value = subscription
+  showResetWeeklyLimitConfirm.value = true
+}
+
+const closeResetWeeklyLimitDialog = () => {
+  if (resettingWeeklyLimit.value) return
+  showResetWeeklyLimitConfirm.value = false
+  weeklyLimitSubscription.value = null
+}
+
+const confirmResetWeeklyLimit = async () => {
+  if (!weeklyLimitSubscription.value || resettingWeeklyLimit.value) return
+
+  resettingWeeklyLimit.value = true
+  try {
+    await adminAPI.subscriptions.resetWeeklyLimit(weeklyLimitSubscription.value.id)
+    appStore.showSuccess(t('admin.subscriptions.weeklyLimitResetSuccess'))
+    showResetWeeklyLimitConfirm.value = false
+    weeklyLimitSubscription.value = null
+    await loadSubscriptions()
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail || t('admin.subscriptions.failedToResetWeeklyLimit')
+    )
+    console.error('Error resetting weekly subscription limit:', error)
+  } finally {
+    resettingWeeklyLimit.value = false
   }
 }
 
