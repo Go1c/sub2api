@@ -2,6 +2,7 @@ package apicompat
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,6 +52,26 @@ func TestUsageConversionsPreserveCacheWriteTokens(t *testing.T) {
 	require.NotNil(t, roundTrip.InputTokensDetails)
 	require.Equal(t, 200, roundTrip.CacheCreationInputTokens)
 	require.Equal(t, 200, roundTrip.InputTokensDetails.CacheWriteTokens)
+}
+
+func TestResponsesUsageNestedCacheWritePresenceOverridesTopLevelAlias(t *testing.T) {
+	tests := []struct {
+		name       string
+		nestedJSON string
+		want       int
+	}{
+		{name: "explicit zero", nestedJSON: `{"cache_write_tokens":0}`, want: 0},
+		{name: "nonzero", nestedJSON: `{"cache_write_tokens":7}`, want: 7},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var usage ResponsesUsage
+			payload := []byte(`{"input_tokens":20,"output_tokens":2,"cache_creation_input_tokens":19,"input_tokens_details":` + tt.nestedJSON + `}`)
+			require.NoError(t, json.Unmarshal(payload, &usage))
+			require.Equal(t, tt.want, usage.CacheCreationInputTokens)
+		})
+	}
 }
 
 func TestChatCompletionsToResponses_SystemMessage(t *testing.T) {
@@ -350,6 +371,25 @@ func TestChatCompletionsToResponses_ServiceTier(t *testing.T) {
 	resp, err := ChatCompletionsToResponses(req)
 	require.NoError(t, err)
 	assert.Equal(t, "flex", resp.ServiceTier)
+}
+
+func TestChatCompletionsToResponses_ParallelToolCalls(t *testing.T) {
+	for _, value := range []bool{false, true} {
+		req := &ChatCompletionsRequest{
+			Model:             "gpt-4o",
+			ParallelToolCalls: &value,
+			Messages:          []ChatMessage{{Role: "user", Content: json.RawMessage(`"Hi"`)}},
+		}
+
+		resp, err := ChatCompletionsToResponses(req)
+		require.NoError(t, err)
+		require.NotNil(t, resp.ParallelToolCalls)
+		assert.Equal(t, value, *resp.ParallelToolCalls)
+
+		payload, err := json.Marshal(resp)
+		require.NoError(t, err)
+		assert.Contains(t, string(payload), fmt.Sprintf(`"parallel_tool_calls":%t`, value))
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
@@ -74,13 +72,13 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 	}
 	clientStream := gjson.GetBytes(body, "stream").Bool()
 
-	// 1b. Extract reasoning effort and service tier from the raw body before any transformation.
-	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, originalModel)
+	// 1b. Extract service tier from the raw body before any transformation.
 	serviceTier := extractOpenAIServiceTierFromBody(body)
 
 	// 2. Resolve model mapping (same as ForwardAsChatCompletions)
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel)
 
 	// 3. Rewrite model in body (no protocol conversion)
 	upstreamBody := body
@@ -379,16 +377,9 @@ func (s *OpenAIGatewayService) bufferRawChatCompletions(
 		return nil, fmt.Errorf("read upstream body: %w", err)
 	}
 
-	var ccResp apicompat.ChatCompletionsResponse
 	var usage OpenAIUsage
-	if err := json.Unmarshal(respBody, &ccResp); err == nil && ccResp.Usage != nil {
-		usage = OpenAIUsage{
-			InputTokens:  ccResp.Usage.PromptTokens,
-			OutputTokens: ccResp.Usage.CompletionTokens,
-		}
-		if ccResp.Usage.PromptTokensDetails != nil {
-			usage.CacheReadInputTokens = ccResp.Usage.PromptTokensDetails.CachedTokens
-		}
+	if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(respBody); ok {
+		usage = parsedUsage
 	}
 
 	if s.responseHeaderFilter != nil {

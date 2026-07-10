@@ -1101,6 +1101,7 @@ export interface OpenAIFastPolicyRule {
   service_tier: "all" | "priority" | "flex";
   action: "pass" | "filter" | "block";
   scope: "all" | "oauth" | "apikey" | "bedrock";
+  user_ids?: number[];
   error_message?: string;
   model_whitelist?: string[];
   fallback_action?: "pass" | "filter" | "block";

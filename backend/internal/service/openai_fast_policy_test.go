@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 type openAIFastPolicyRepoStub struct {
@@ -129,6 +131,37 @@ func TestEvaluateOpenAIFastPolicy_ScopeFiltersOAuth(t *testing.T) {
 	require.Equal(t, BetaPolicyActionPass, action)
 }
 
+func TestEvaluateOpenAIFastPolicy_UserScopedRuleOverridesGlobalRule(t *testing.T) {
+	settings := &OpenAIFastPolicySettings{
+		Rules: []OpenAIFastPolicyRule{
+			{
+				ServiceTier: OpenAIFastTierPriority,
+				Action:      BetaPolicyActionFilter,
+				Scope:       BetaPolicyScopeAll,
+			},
+			{
+				ServiceTier: OpenAIFastTierPriority,
+				Action:      BetaPolicyActionPass,
+				Scope:       BetaPolicyScopeAll,
+				UserIDs:     []int64{42},
+			},
+		},
+	}
+	svc := newOpenAIGatewayServiceWithSettings(t, settings)
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+
+	allowedUserCtx := context.WithValue(context.Background(), ctxkey.UserID, int64(42))
+	action, _ := svc.evaluateOpenAIFastPolicy(allowedUserCtx, account, "gpt-5.5", OpenAIFastTierPriority)
+	require.Equal(t, BetaPolicyActionPass, action)
+
+	otherUserCtx := context.WithValue(context.Background(), ctxkey.UserID, int64(43))
+	action, _ = svc.evaluateOpenAIFastPolicy(otherUserCtx, account, "gpt-5.5", OpenAIFastTierPriority)
+	require.Equal(t, BetaPolicyActionFilter, action)
+
+	action, _ = svc.evaluateOpenAIFastPolicy(context.Background(), account, "gpt-5.5", OpenAIFastTierPriority)
+	require.Equal(t, BetaPolicyActionFilter, action)
+}
+
 func TestApplyOpenAIFastPolicyToBody_FilterRemovesField(t *testing.T) {
 	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
 	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
@@ -156,6 +189,37 @@ func TestApplyOpenAIFastPolicyToBody_FilterRemovesField(t *testing.T) {
 	updated, err = svc.applyOpenAIFastPolicyToBody(context.Background(), account, "gpt-5.5", body)
 	require.NoError(t, err)
 	require.Equal(t, string(body), string(updated))
+}
+
+func TestApplyOpenAIFastPolicyToBody_UserScopedRuleOverridesGlobalRule(t *testing.T) {
+	settings := &OpenAIFastPolicySettings{
+		Rules: []OpenAIFastPolicyRule{
+			{
+				ServiceTier: OpenAIFastTierPriority,
+				Action:      BetaPolicyActionFilter,
+				Scope:       BetaPolicyScopeAll,
+			},
+			{
+				ServiceTier: OpenAIFastTierPriority,
+				Action:      BetaPolicyActionPass,
+				Scope:       BetaPolicyScopeAll,
+				UserIDs:     []int64{42},
+			},
+		},
+	}
+	svc := newOpenAIGatewayServiceWithSettings(t, settings)
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	body := []byte(`{"model":"gpt-5.5","service_tier":"priority"}`)
+
+	allowedUserCtx := context.WithValue(context.Background(), ctxkey.UserID, int64(42))
+	updated, err := svc.applyOpenAIFastPolicyToBody(allowedUserCtx, account, "gpt-5.5", body)
+	require.NoError(t, err)
+	require.Equal(t, "priority", gjson.GetBytes(updated, "service_tier").String())
+
+	otherUserCtx := context.WithValue(context.Background(), ctxkey.UserID, int64(43))
+	updated, err = svc.applyOpenAIFastPolicyToBody(otherUserCtx, account, "gpt-5.5", body)
+	require.NoError(t, err)
+	require.NotContains(t, string(updated), `"service_tier"`)
 }
 
 // TestApplyOpenAIFastPolicyToBody_OfficialTiersBypassDefaultRule 验证扩展白名单后
@@ -269,12 +333,34 @@ func TestSetOpenAIFastPolicySettings_Validation(t *testing.T) {
 	})
 	require.Error(t, err)
 
+	// Non-positive and duplicate user IDs are rejected.
+	err = svc.SetOpenAIFastPolicySettings(context.Background(), &OpenAIFastPolicySettings{
+		Rules: []OpenAIFastPolicyRule{{
+			ServiceTier: OpenAIFastTierPriority,
+			Action:      BetaPolicyActionPass,
+			Scope:       BetaPolicyScopeAll,
+			UserIDs:     []int64{0},
+		}},
+	})
+	require.Error(t, err)
+
+	err = svc.SetOpenAIFastPolicySettings(context.Background(), &OpenAIFastPolicySettings{
+		Rules: []OpenAIFastPolicyRule{{
+			ServiceTier: OpenAIFastTierPriority,
+			Action:      BetaPolicyActionPass,
+			Scope:       BetaPolicyScopeAll,
+			UserIDs:     []int64{42, 42},
+		}},
+	})
+	require.Error(t, err)
+
 	// Valid settings persisted
 	err = svc.SetOpenAIFastPolicySettings(context.Background(), &OpenAIFastPolicySettings{
 		Rules: []OpenAIFastPolicyRule{{
 			ServiceTier: OpenAIFastTierPriority,
 			Action:      BetaPolicyActionFilter,
 			Scope:       BetaPolicyScopeAll,
+			UserIDs:     []int64{42, 43},
 		}},
 	})
 	require.NoError(t, err)
@@ -283,4 +369,5 @@ func TestSetOpenAIFastPolicySettings_Validation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got.Rules, 1)
 	require.Equal(t, OpenAIFastTierPriority, got.Rules[0].ServiceTier)
+	require.Equal(t, []int64{42, 43}, got.Rules[0].UserIDs)
 }
