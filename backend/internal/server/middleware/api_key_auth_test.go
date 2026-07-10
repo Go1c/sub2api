@@ -113,10 +113,11 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 
 		past := time.Now().Add(-48 * time.Hour)
 		current := time.Now()
+		groupID := group.ID
 		stale := &service.UserSubscription{
 			ID:                 56,
 			UserID:             user.ID,
-			GroupID:            group.ID,
+			GroupID:            &groupID,
 			Status:             service.SubscriptionStatusActive,
 			ExpiresAt:          current.Add(24 * time.Hour),
 			DailyWindowStart:   &past,

@@ -215,6 +215,15 @@ func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 	s.creditSubMiss.Delete(userID)
 }
 
+// InvalidateSubCacheSync flushes ristretto's asynchronous delete buffer before
+// callers reload a fresh database snapshot.
+func (s *SubscriptionService) InvalidateSubCacheSync(userID, groupID int64) {
+	s.InvalidateSubCache(userID, groupID)
+	if s.subCacheL1 != nil {
+		s.subCacheL1.Wait()
+	}
+}
+
 // AssignSubscriptionInput 分配订阅输入
 type AssignSubscriptionInput struct {
 	UserID       int64
@@ -286,43 +295,28 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 			newExpiresAt = MaxExpiresAt
 		}
 
-		// 开启事务：ExtendExpiry + UpdateStatus + UpdateNotes 在同一事务中完成
-		tx, err := s.entClient.Tx(ctx)
-		if err != nil {
-			return nil, false, fmt.Errorf("begin transaction: %w", err)
-		}
-		txCtx := dbent.NewTxContext(ctx, tx)
-
-		// 更新过期时间
-		if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
-			_ = tx.Rollback()
-			return nil, false, fmt.Errorf("extend subscription: %w", err)
-		}
-
-		// 如果订阅已过期或被暂停，恢复为active状态
-		if existingSub.Status != SubscriptionStatusActive {
-			if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
-				_ = tx.Rollback()
-				return nil, false, fmt.Errorf("update subscription status: %w", err)
+		if err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+			if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
+				return fmt.Errorf("extend subscription: %w", err)
 			}
-		}
-
-		// 追加备注
-		if input.Notes != "" {
-			newNotes := existingSub.Notes
-			if newNotes != "" {
-				newNotes += "\n"
+			if existingSub.Status != SubscriptionStatusActive {
+				if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
+					return fmt.Errorf("update subscription status: %w", err)
+				}
 			}
-			newNotes += input.Notes
-			if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, newNotes); err != nil {
-				_ = tx.Rollback()
-				return nil, false, fmt.Errorf("update subscription notes: %w", err)
+			if input.Notes != "" {
+				newNotes := existingSub.Notes
+				if newNotes != "" {
+					newNotes += "\n"
+				}
+				newNotes += input.Notes
+				if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, newNotes); err != nil {
+					return fmt.Errorf("update subscription notes: %w", err)
+				}
 			}
-		}
-
-		// 提交事务
-		if err := tx.Commit(); err != nil {
-			return nil, false, fmt.Errorf("commit transaction: %w", err)
+			return nil
+		}); err != nil {
+			return nil, false, err
 		}
 
 		// 失效订阅缓存
@@ -361,6 +355,25 @@ func (s *SubscriptionService) maybeInvalidateAssignmentCaches(userID, groupID in
 			_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
 		}()
 	}
+}
+
+func (s *SubscriptionService) withSubscriptionUpdateTx(ctx context.Context, fn func(context.Context) error) error {
+	if dbent.TxFromContext(ctx) != nil || s.entClient == nil {
+		return fn(ctx)
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := fn(txCtx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
 }
 
 // createSubscription 创建新订阅（内部方法）
@@ -1187,7 +1200,7 @@ func (s *SubscriptionService) EnsureWindowMaintenance(ctx context.Context, sub *
 	if err != nil {
 		return nil, err
 	}
-	s.InvalidateSubCacheSync(sub.UserID, sub.GroupID)
+	s.InvalidateSubCacheSync(sub.UserID, subscriptionGroupIDOrZero(sub.GroupID))
 	return refreshed, nil
 }
 

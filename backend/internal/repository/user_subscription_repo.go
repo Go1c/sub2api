@@ -453,9 +453,8 @@ func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id i
 	if resetWeekly {
 		update.SetWeeklyUsageUsd(0).SetWeeklyWindowStart(newWindowStart)
 	}
-	if resetMonthly {
-		update.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(newWindowStart)
-	}
+	// Fork schema intentionally has no monthly usage window; monthly reset is a no-op.
+	_ = resetMonthly
 	_, err := update.Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
@@ -490,11 +489,30 @@ func (r *userSubscriptionRepository) ResetWeeklyUsage(ctx context.Context, id in
 	return r.translateConditionalWindowReset(ctx, client, id, n, err)
 }
 
-func (r *userSubscriptionRepository) ResetMonthlyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+func (r *userSubscriptionRepository) ResetMonthlyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
 	// 月窗口已从 schema 移除（订阅最长 30 天，月限≡总额度）。
 	// 此方法保留接口兼容性，调用即为 no-op，旧调用方应迁移到 ResetDaily/Weekly。
+	_ = ctx
 	_ = id
+	_ = expectedWindowStart
 	_ = newWindowStart
+	return nil
+}
+
+func (r *userSubscriptionRepository) translateConditionalWindowReset(ctx context.Context, client *dbent.Client, id int64, affected int, err error) error {
+	if err != nil {
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	if affected > 0 {
+		return nil
+	}
+	exists, err := client.UserSubscription.Query().Where(usersubscription.IDEQ(id)).Exist(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	if !exists {
+		return service.ErrSubscriptionNotFound
+	}
 	return nil
 }
 
