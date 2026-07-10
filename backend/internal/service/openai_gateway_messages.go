@@ -244,7 +244,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	}
 
 	// 6. Build upstream request
-	if account.Type == AccountTypeOAuth && account.Platform != PlatformGrok {
+	if account.Type == AccountTypeOAuth {
 		// Messages 兼容桥即使 body 未带 todo-guard/prompt_cache_key 标记（如映射到非
 		// gpt-5/codex 模型），也必须让 buildUpstreamRequest 走 bridge 分支：不带
 		// originator、User-Agent 逐字透传，避免身份收口（issue #3901）误改本路径

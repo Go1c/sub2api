@@ -3303,9 +3303,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
 		req.Header.Set("user-agent", codexCLIUserAgent)
 	}
-	// OAuth 安全透传：对非 Codex UA 统一兜底，降低被上游风控拦截概率。
-	if account.Type == AccountTypeOAuth && !openai.IsCodexCLIRequest(req.Header.Get("user-agent")) {
-		req.Header.Set("user-agent", codexCLIUserAgent)
+	if account.Type == AccountTypeOAuth {
+		enforceCodexIdentityHeaders(req.Header)
 	}
 
 	if req.Header.Get("content-type") == "" {
@@ -4026,6 +4025,9 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// 用于网关未透传/改写 User-Agent 时，仍能命中 Codex 侧识别逻辑。
 	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
 		req.Header.Set("user-agent", codexCLIUserAgent)
+	}
+	if account.Type == AccountTypeOAuth {
+		enforceCodexIdentityHeaders(req.Header)
 	}
 
 	// Ensure required headers exist
