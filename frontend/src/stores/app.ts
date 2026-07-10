@@ -379,12 +379,7 @@ export const useAppStore = defineStore('app', () => {
         affiliate_enabled: false,
         site_messages_enabled: false,
         site_messages_default_recipient_email: '',
-      }
-    }
-
-    // Prevent duplicate requests
-    if (publicSettingsLoading.value) {
-      return null
+      })
     }
 
     publicSettingsLoading.value = true
