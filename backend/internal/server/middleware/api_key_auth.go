@@ -278,7 +278,11 @@ func loadUsableCreditSubscriptionForAuth(ctx context.Context, subscriptionServic
 		}
 		candidateIDs = append(candidateIDs, sub.ID)
 		needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(&sub, group)
-		if needsMaintenance {
+		// Credit-pool subscriptions may intentionally leave all periodic windows
+		// unactivated until billing. Only revalidate an already-active stale
+		// window here; otherwise auth would turn pure total-quota subscriptions
+		// into a synchronous database-write path.
+		if needsMaintenance && sub.IsWindowActivated() {
 			refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(ctx, &sub)
 			if maintenanceErr != nil {
 				return nil, nil, maintenanceErr
