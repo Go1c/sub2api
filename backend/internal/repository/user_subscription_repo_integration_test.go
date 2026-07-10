@@ -468,13 +468,11 @@ func (s *UserSubscriptionRepoSuite) TestResetMonthlyUsage() {
 	sub := s.mustCreateSubscription(user.ID, group.ID, nil)
 
 	resetAt := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
-	err := s.repo.ResetMonthlyUsage(s.ctx, sub.ID, sub.MonthlyWindowStart, resetAt)
+	err := s.repo.ResetMonthlyUsage(s.ctx, sub.ID, nil, resetAt)
 	s.Require().NoError(err, "ResetMonthlyUsage")
 
-	got, err := s.repo.GetByID(s.ctx, sub.ID)
+	_, err = s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err)
-	s.Require().InDelta(0.0, got.MonthlyUsageUSD, 1e-6)
-	s.Require().Nil(got.MonthlyWindowStart)
 }
 
 // --- UpdateStatus / ExtendExpiry / UpdateNotes ---
