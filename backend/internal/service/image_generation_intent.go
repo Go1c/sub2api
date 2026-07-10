@@ -326,6 +326,13 @@ func openAIJSONInputContainsImageGenTool(input gjson.Result) bool {
 	return found
 }
 
+func openAIJSONString(value gjson.Result) string {
+	if value.Type != gjson.String {
+		return ""
+	}
+	return strings.TrimSpace(value.String())
+}
+
 func openAIJSONToolContainsImageGenerationMCP(tool gjson.Result) bool {
 	if !tool.Exists() || !tool.IsObject() {
 		return false

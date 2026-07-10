@@ -66,7 +66,7 @@ func RegisterGatewayRoutes(
 		// /models endpoint with a client_version query and expect the ChatGPT
 		// Codex manifest format; other clients keep the OpenAI-style list.
 		gateway.GET("/models", func(c *gin.Context) {
-			if isOpenAIGatewayPlatform(c) && c.Query("client_version") != "" {
+			if getGroupPlatform(c) == service.PlatformOpenAI && c.Query("client_version") != "" {
 				h.OpenAIGateway.CodexModels(c)
 				return
 			}
