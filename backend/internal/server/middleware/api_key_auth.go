@@ -277,12 +277,21 @@ func loadUsableCreditSubscriptionForAuth(ctx context.Context, subscriptionServic
 			continue
 		}
 		candidateIDs = append(candidateIDs, sub.ID)
-		if _, err := subscriptionService.ValidateAndCheckLimits(&sub, group); err != nil {
-			if !isFallbackableSubscriptionAuthError(err) {
-				return nil, nil, err
+		needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(&sub, group)
+		if needsMaintenance {
+			refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(ctx, &sub)
+			if maintenanceErr != nil {
+				return nil, nil, maintenanceErr
+			}
+			sub = *refreshed
+			_, validateErr = subscriptionService.ValidateAndCheckLimits(&sub, group)
+		}
+		if validateErr != nil {
+			if !isFallbackableSubscriptionAuthError(validateErr) {
+				return nil, nil, validateErr
 			}
 			if firstErr == nil {
-				firstErr = err
+				firstErr = validateErr
 			}
 			continue
 		}

@@ -109,7 +109,18 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 
 	t.Run("standard_mode_revalidates_cas_loser_from_database", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeStandard}
-		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+		limitedUser := *user
+		limitedUser.Balance = 0
+		limitedAPIKey := *apiKey
+		limitedAPIKey.User = &limitedUser
+		limitedAPIKey.UserID = limitedUser.ID
+		limitedAPIKeyRepo := &stubApiKeyRepo{
+			getByKey: func(context.Context, string) (*service.APIKey, error) {
+				clone := limitedAPIKey
+				return &clone, nil
+			},
+		}
+		apiKeyService := service.NewAPIKeyService(limitedAPIKeyRepo, nil, nil, nil, nil, nil, cfg)
 
 		past := time.Now().Add(-48 * time.Hour)
 		current := time.Now()
@@ -132,6 +143,10 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		fresh.DailyUsageUSD = 2
 
 		subscriptionRepo := &stubUserSubscriptionRepo{
+			getUsable: func(context.Context, int64) (*service.UserSubscription, error) {
+				clone := *stale
+				return &clone, nil
+			},
 			getActive: func(context.Context, int64, int64) (*service.UserSubscription, error) {
 				clone := *stale
 				return &clone, nil
@@ -149,10 +164,11 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/t", nil)
-		req.Header.Set("x-api-key", apiKey.Key)
+		req.Header.Set("x-api-key", limitedAPIKey.Key)
 		router.ServeHTTP(w, req)
 
-		require.Equal(t, http.StatusTooManyRequests, w.Code)
+		require.Equal(t, http.StatusForbidden, w.Code)
+		require.Contains(t, w.Body.String(), "SUBSCRIPTION_INVALID")
 	})
 
 	t.Run("simple_mode_bypasses_quota_check", func(t *testing.T) {

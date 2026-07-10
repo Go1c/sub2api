@@ -1220,8 +1220,8 @@ func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSub
 }
 
 // ValidateAndCheckLimits 合并验证+限额检查（中间件热路径专用）
-// 仅做内存检查，不触发 DB 写入。窗口重置由扣费事务统一完成。
-// 返回 needsMaintenance 仅保留为兼容信号；调用方不应据此触发 DB 窗口维护。
+// 仅做内存检查，不触发 DB 写入。调用方可根据 needsMaintenance 在放行请求前
+// 同步推进窗口并重新读取数据库快照，避免 CAS 失败者基于本地清零值误判限额。
 func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, group *Group) (needsMaintenance bool, err error) {
 	// 1. 验证订阅状态
 	if sub.Status == SubscriptionStatusExpired {
