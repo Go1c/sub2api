@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -15,17 +17,20 @@ import (
 )
 
 var (
-	ErrRedeemCodeNotFound  = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
-	ErrRedeemCodeUsed      = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
-	ErrInsufficientBalance = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
-	ErrRedeemRateLimited   = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrRedeemCodeLocked    = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
+	ErrRedeemCodeNotFound     = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
+	ErrRedeemCodeUsed         = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
+	ErrRedeemCodeDataConflict = infraerrors.Conflict("REDEEM_CODE_DATA_CONFLICT", "redeem code data conflict, please contact support")
+	ErrInsufficientBalance    = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
+	ErrRedeemRateLimited      = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrRedeemCodeLocked       = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
 )
 
+// RedeemRateLimitWindow is shared with the Redis repository so the service policy and key TTL cannot drift.
+const RedeemRateLimitWindow = time.Hour
+
 const (
-	redeemMaxErrorsPerHour  = 20
-	redeemRateLimitDuration = time.Hour
-	redeemLockDuration      = 10 * time.Second // 锁超时时间，防止死锁
+	redeemMaxErrorsPerHour = 20
+	redeemLockDuration     = 10 * time.Second // 锁超时时间，防止死锁
 )
 
 // RedeemCache defines cache operations for redeem service
@@ -279,6 +284,14 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 			s.incrementRedeemErrorCount(ctx, userID)
 			return nil, ErrRedeemCodeNotFound
 		}
+		if errors.Is(err, ErrRedeemCodeDataConflict) {
+			slog.Error(
+				"redeem code data conflict",
+				"user_id", userID,
+				"code_hash", redeemCodeHashForLog(code),
+			)
+			return nil, ErrRedeemCodeDataConflict
+		}
 		return nil, fmt.Errorf("get redeem code: %w", err)
 	}
 
@@ -388,6 +401,11 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	}
 
 	return redeemCode, nil
+}
+
+func redeemCodeHashForLog(code string) string {
+	sum := sha256.Sum256([]byte(code))
+	return hex.EncodeToString(sum[:8])
 }
 
 // invalidateRedeemCaches 失效兑换相关的缓存
