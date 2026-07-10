@@ -444,22 +444,50 @@ func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
 
-func (r *userSubscriptionRepository) ResetDailyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly bool, newWindowStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(id).
-		SetDailyUsageUsd(0).
-		SetDailyWindowStart(newWindowStart).
-		Save(ctx)
+	update := client.UserSubscription.UpdateOneID(id)
+	if resetDaily {
+		update.SetDailyUsageUsd(0).SetDailyWindowStart(newWindowStart)
+	}
+	if resetWeekly {
+		update.SetWeeklyUsageUsd(0).SetWeeklyWindowStart(newWindowStart)
+	}
+	if resetMonthly {
+		update.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(newWindowStart)
+	}
+	_, err := update.Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
 
-func (r *userSubscriptionRepository) ResetWeeklyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+func (r *userSubscriptionRepository) ResetDailyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(id).
+	query := client.UserSubscription.Update().Where(usersubscription.IDEQ(id))
+	if expectedWindowStart == nil {
+		query = query.Where(usersubscription.DailyWindowStartIsNil())
+	} else {
+		query = query.Where(usersubscription.DailyWindowStartEQ(*expectedWindowStart))
+	}
+	n, err := query.
+		SetDailyUsageUsd(0).
+		SetDailyWindowStart(newWindowStart).
+		Save(ctx)
+	return r.translateConditionalWindowReset(ctx, client, id, n, err)
+}
+
+func (r *userSubscriptionRepository) ResetWeeklyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
+	client := clientFromContext(ctx, r.client)
+	query := client.UserSubscription.Update().Where(usersubscription.IDEQ(id))
+	if expectedWindowStart == nil {
+		query = query.Where(usersubscription.WeeklyWindowStartIsNil())
+	} else {
+		query = query.Where(usersubscription.WeeklyWindowStartEQ(*expectedWindowStart))
+	}
+	n, err := query.
 		SetWeeklyUsageUsd(0).
 		SetWeeklyWindowStart(newWindowStart).
 		Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	return r.translateConditionalWindowReset(ctx, client, id, n, err)
 }
 
 func (r *userSubscriptionRepository) ResetMonthlyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {

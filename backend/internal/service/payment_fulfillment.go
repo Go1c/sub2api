@@ -27,6 +27,12 @@ import (
 // misconfigured to point at us, or when our orders table has been wiped).
 var ErrOrderNotFound = errors.New("payment order not found")
 
+const paymentFulfillmentLeaseDuration = 5 * time.Minute
+
+type paymentFulfillmentLease struct {
+	version time.Time
+}
+
 // --- Payment Notification & Fulfillment ---
 
 func (s *PaymentService) HandlePaymentNotification(ctx context.Context, n *payment.PaymentNotification, pk string) error {
@@ -266,16 +272,67 @@ func (s *PaymentService) ExecuteBalanceFulfillment(ctx context.Context, oid int6
 		ClearFailedReason().
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("lock: %w", err)
+		return err
 	}
-	if c == 0 {
+	if lease == nil {
 		return nil
 	}
-	if err := s.doBalance(ctx, o); err != nil {
-		s.markFailed(ctx, oid, err)
+	if err := s.doBalance(ctx, o, lease); err != nil {
+		s.markFailed(ctx, oid, lease, err)
 		return err
 	}
 	return nil
+}
+
+func (s *PaymentService) acquirePaymentFulfillmentLease(ctx context.Context, o *dbent.PaymentOrder) (*paymentFulfillmentLease, error) {
+	if o == nil {
+		return nil, infraerrors.BadRequest("INVALID_STATUS", "nil payment order")
+	}
+
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	staleBefore := now.Add(-paymentFulfillmentLeaseDuration)
+	updated, err := s.entClient.PaymentOrder.Update().
+		Where(
+			paymentorder.IDEQ(o.ID),
+			paymentorder.Or(
+				paymentorder.StatusIn(OrderStatusPaid, OrderStatusFailed),
+				paymentorder.And(
+					paymentorder.StatusEQ(OrderStatusRecharging),
+					paymentorder.UpdatedAtLTE(staleBefore),
+				),
+			),
+		).
+		SetStatus(OrderStatusRecharging).
+		SetUpdatedAt(now).
+		ClearFailedAt().
+		ClearFailedReason().
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acquire fulfillment lease: %w", err)
+	}
+	if updated == 0 {
+		current, getErr := s.entClient.PaymentOrder.Get(ctx, o.ID)
+		if getErr != nil {
+			return nil, fmt.Errorf("reload fulfillment lease: %w", getErr)
+		}
+		if current.Status == OrderStatusCompleted {
+			return nil, nil
+		}
+		if current.Status == OrderStatusRecharging {
+			return nil, infraerrors.Conflict("CONFLICT", "order is being processed")
+		}
+		return nil, infraerrors.Conflict("CONFLICT", "order status changed while acquiring fulfillment lease")
+	}
+
+	// Reload the persisted timestamp instead of trusting application clock precision.
+	claimed, err := s.entClient.PaymentOrder.Get(ctx, o.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reload acquired fulfillment lease: %w", err)
+	}
+	if claimed.Status != OrderStatusRecharging {
+		return nil, infraerrors.Conflict("CONFLICT", "fulfillment lease was lost")
+	}
+	return &paymentFulfillmentLease{version: claimed.UpdatedAt}, nil
 }
 
 // redeemAction represents the idempotency decision for balance fulfillment.
@@ -302,7 +359,7 @@ func resolveRedeemAction(existing *RedeemCode, lookupErr error) redeemAction {
 	return redeemActionRedeem
 }
 
-func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder) error {
+func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, lease *paymentFulfillmentLease) error {
 	// Idempotency: check if redeem code already exists (from a previous partial run)
 	existing, lookupErr := s.redeemService.GetByCode(ctx, o.RechargeCode)
 	action := resolveRedeemAction(existing, lookupErr)
@@ -311,7 +368,7 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder) e
 	case redeemActionSkipCompleted:
 		s.applyAffiliateRebateBestEffort(ctx, o)
 		// Code already created and redeemed — just mark completed
-		return s.markCompleted(ctx, o, "RECHARGE_SUCCESS")
+		return s.markCompleted(ctx, o, lease, "RECHARGE_SUCCESS")
 	case redeemActionCreate:
 		rc := &RedeemCode{Code: o.RechargeCode, Type: RedeemTypeBalance, Value: o.Amount, Status: StatusUnused}
 		if err := s.redeemService.CreateCode(ctx, rc); err != nil {
@@ -327,9 +384,16 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder) e
 	return s.markCompleted(ctx, o, "RECHARGE_SUCCESS")
 }
 
-func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrder, auditAction string) error {
+func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrder, lease *paymentFulfillmentLease, auditAction string) error {
+	if lease == nil {
+		return errors.New("missing payment fulfillment lease")
+	}
 	now := time.Now()
-	_, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusRecharging)).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(ctx)
+	updated, err := s.entClient.PaymentOrder.Update().Where(
+		paymentorder.IDEQ(o.ID),
+		paymentorder.StatusEQ(OrderStatusRecharging),
+		paymentorder.UpdatedAtEQ(lease.version),
+	).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(ctx)
 	if err != nil {
 		return fmt.Errorf("mark completed: %w", err)
 	}
@@ -366,9 +430,9 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 		ClearFailedReason().
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("lock: %w", err)
+		return err
 	}
-	if c == 0 {
+	if lease == nil {
 		return nil
 	}
 	var fulfillErr error
@@ -666,7 +730,11 @@ func (s *PaymentService) updateClaimedAffiliateRebateAudit(ctx context.Context, 
 	return nil
 }
 
-func (s *PaymentService) markFailed(ctx context.Context, oid int64, cause error) {
+func (s *PaymentService) markFailed(ctx context.Context, oid int64, lease *paymentFulfillmentLease, cause error) {
+	if lease == nil {
+		slog.Error("mark FAILED without fulfillment lease", "orderID", oid)
+		return
+	}
 	now := time.Now()
 	r := psErrMsg(cause)
 	// Only mark fulfillment failed if still in RECHARGING state — prevents overwriting
@@ -759,9 +827,6 @@ func (s *PaymentService) RetryFulfillment(ctx context.Context, oid int64) error 
 	}
 	if psIsRefundStatus(o.Status) {
 		return infraerrors.BadRequest("INVALID_STATUS", "refund-related order cannot retry")
-	}
-	if o.Status == OrderStatusRecharging {
-		return infraerrors.Conflict("CONFLICT", "order is being processed")
 	}
 	if o.Status == OrderStatusCompleted {
 		return infraerrors.BadRequest("INVALID_STATUS", "order already completed")
