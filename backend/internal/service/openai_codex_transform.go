@@ -602,10 +602,7 @@ func toolsContainImageGeneration(rawTools any) bool {
 			}
 			continue
 		}
-		if strings.TrimSpace(firstNonEmptyString(toolMap["type"])) == "image_generation" {
-			return true
-		}
-		if isImageGenNamespaceToolMap(toolMap) || openAIAnyToolContainsImageGenerationCapability(toolMap) {
+		if isOpenAIImageGenerationToolMap(toolMap) || openAIAnyToolContainsImageGenerationCapability(toolMap) {
 			return true
 		}
 	}
