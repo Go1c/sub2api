@@ -90,8 +90,8 @@ func TestAccountTestService_OpenAIAPIKeyModelTestUsesCodexHeaders(t *testing.T) 
 	require.Equal(t, "text/event-stream", req.Header.Get("Accept"))
 	require.Equal(t, "responses=experimental", req.Header.Get("OpenAI-Beta"))
 	require.Equal(t, "codex_cli_rs", req.Header.Get("Originator"))
-	require.Equal(t, "0.144.0", req.Header.Get("Version"))
-	require.Equal(t, "codex_cli_rs/0.144.0", req.Header.Get("User-Agent"))
+	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
+	require.Equal(t, codexCLIUserAgent, req.Header.Get("User-Agent"))
 }
 
 type openAIAccountTestRepo struct {

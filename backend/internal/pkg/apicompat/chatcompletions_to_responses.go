@@ -464,3 +464,33 @@ func convertChatFunctionCallToToolChoice(raw json.RawMessage) (json.RawMessage, 
 		"name": obj.Name,
 	})
 }
+
+// ChatUsageToResponsesUsage converts Chat Completions token usage to Responses
+// usage shape.
+func ChatUsageToResponsesUsage(usage *ChatUsage) *ResponsesUsage {
+	if usage == nil {
+		return nil
+	}
+	out := &ResponsesUsage{
+		InputTokens:  usage.PromptTokens,
+		OutputTokens: usage.CompletionTokens,
+		TotalTokens:  usage.TotalTokens,
+	}
+	if out.TotalTokens == 0 {
+		out.TotalTokens = out.InputTokens + out.OutputTokens
+	}
+	if usage.PromptTokensDetails != nil && (usage.PromptTokensDetails.CachedTokens > 0 ||
+		usage.PromptTokensDetails.CacheCreationTokens > 0 || usage.PromptTokensDetails.CacheWriteTokens > 0) {
+		out.InputTokensDetails = &ResponsesInputTokensDetails{
+			CachedTokens:        usage.PromptTokensDetails.CachedTokens,
+			CacheCreationTokens: usage.PromptTokensDetails.CacheCreationTokens,
+			CacheWriteTokens:    usage.PromptTokensDetails.CacheWriteTokens,
+		}
+		if usage.PromptTokensDetails.CacheWriteTokens > 0 {
+			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheWriteTokens
+		} else {
+			out.CacheCreationInputTokens = usage.PromptTokensDetails.CacheCreationTokens
+		}
+	}
+	return out
+}
