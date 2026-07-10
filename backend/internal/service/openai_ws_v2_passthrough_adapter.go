@@ -142,12 +142,12 @@ func newOpenAIWSPassthroughUsageMeta(initialRequestModel string, firstFrame []by
 	return meta
 }
 
-func (m *openAIWSPassthroughUsageMeta) initFromFirstFrame(policyOutput []byte) {
+func (m *openAIWSPassthroughUsageMeta) initFromFirstFrame(policyOutput []byte, mappedModel string) {
 	if m == nil {
 		return
 	}
 	m.serviceTier.Store(extractOpenAIServiceTierFromBody(policyOutput))
-	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, m.sessionRequestModel))
+	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, mappedModel, m.sessionRequestModel))
 }
 
 func (m *openAIWSPassthroughUsageMeta) updateSessionRequestModel(payload []byte) {
@@ -169,12 +169,12 @@ func (m *openAIWSPassthroughUsageMeta) requestModelForFrame(payload []byte) stri
 	return m.sessionRequestModel
 }
 
-func (m *openAIWSPassthroughUsageMeta) updateFromResponseCreate(policyOutput []byte, requestModelForFrame string) {
+func (m *openAIWSPassthroughUsageMeta) updateFromResponseCreate(policyOutput []byte, mappedModel string, requestModelForFrame string) {
 	if m == nil {
 		return
 	}
 	m.serviceTier.Store(extractOpenAIServiceTierFromBody(policyOutput))
-	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, requestModelForFrame))
+	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, mappedModel, requestModelForFrame))
 }
 
 func openAIWSPassthroughRequestModelForFrame(payload []byte) string {
@@ -438,7 +438,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			//     service_tier 时按 default 处理，billing 应如实反映。
 			if policyErr == nil && blocked == nil &&
 				strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.create" {
-				usageMeta.updateFromResponseCreate(out, requestModelForThisFrame)
+				usageMeta.updateFromResponseCreate(out, model, requestModelForThisFrame)
 			}
 			return out, blocked, policyErr
 		},
