@@ -3233,6 +3233,7 @@ export default {
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
         grokOauth: 'Grok OAuth',
+        grokApikey: 'Grok API Key / Upstream',
         antigravityApikey: 'Connect via Base URL + API Key',
         upstream: 'Upstream',
         upstreamDesc: 'Connect via Base URL + API Key'
@@ -3592,8 +3593,8 @@ export default {
         modelRestrictionDisabledByPassthrough: 'Automatic passthrough is enabled: model whitelist/mapping will not take effect.',
       },
       grok: {
-        baseUrlHint: 'Grok OAuth accounts forward to the official xAI API base URL.',
-        apiKeyHint: 'Grok subscription support uses OAuth refresh tokens; API keys are out of scope for this account type.'
+        baseUrlHint: 'Use https://api.x.ai/v1 for official xAI, or any OpenAI-compatible upstream base URL.',
+        apiKeyHint: 'Upstream API key (Bearer). Forwards directly without Grok OAuth.'
       },
       anthropic: {
         apiKeyPassthrough: 'Auto passthrough (auth only)',
@@ -3938,7 +3939,8 @@ export default {
             GROK_OAUTH_PROXY_NOT_FOUND:
               'The selected proxy could not be found. Choose an available proxy and retry.'
           },
-          oauthOnlyHint: 'Initial Grok support is OAuth subscription-backed Responses API text and reasoning traffic only.'
+          oauthOnlyHint: 'Initial Grok support is OAuth subscription-backed Responses API text and reasoning traffic only.',
+          accountTypeHint: 'OAuth uses official xAI subscriptions; API Key forwards via Base URL + Key to official or compatible upstreams.'
         },
         // Gemini specific
 	        gemini: {

@@ -3356,6 +3356,7 @@ export default {
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
         grokOauth: 'Grok OAuth',
+        grokApikey: 'Grok API Key / 上游',
         antigravityApikey: '通过 Base URL + API Key 连接',
         upstream: '对接上游',
         upstreamDesc: '通过 Base URL + API Key 连接上游',
@@ -3662,8 +3663,8 @@ export default {
         modelRestrictionDisabledByPassthrough: '已开启自动透传：模型白名单/映射不会生效。',
       },
       grok: {
-        baseUrlHint: 'Grok OAuth 账号会转发到官方 xAI API Base URL。',
-        apiKeyHint: 'Grok 订阅支持使用 OAuth refresh token；API Key 账号不在本次范围内。'
+        baseUrlHint: '官方 xAI 可填 https://api.x.ai/v1；也可填兼容上游 Base URL（如 https://example.com）。',
+        apiKeyHint: '上游 API Key（Bearer）。用于直接转发，不走 Grok OAuth。'
       },
       anthropic: {
         apiKeyPassthrough: '自动透传（仅替换认证）',
@@ -3998,7 +3999,8 @@ export default {
             GROK_OAUTH_PROXY_NOT_FOUND:
               '找不到所选代理。请选择可用代理后重试。'
           },
-          oauthOnlyHint: '首版 Grok 支持仅包含 OAuth 订阅的 Responses API 文本/推理转发。'
+          oauthOnlyHint: '首版 Grok 支持仅包含 OAuth 订阅的 Responses API 文本/推理转发。',
+          accountTypeHint: 'OAuth 走官方 xAI 订阅；API Key 通过 Base URL + Key 直连官方或兼容上游。'
         },
         // Gemini specific
         gemini: {
