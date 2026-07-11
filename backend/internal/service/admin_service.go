@@ -18,10 +18,15 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/util/httputil"
 )
 
@@ -209,6 +214,11 @@ type CreateGroupInput struct {
 	ImagePrice1K         *float64
 	ImagePrice2K         *float64
 	ImagePrice4K         *float64
+	VideoRateIndependent bool
+	VideoRateMultiplier  *float64
+	VideoPrice480P       *float64
+	VideoPrice720P       *float64
+	VideoPrice1080P      *float64
 	ClaudeCodeOnly       bool   // 仅允许 Claude Code 客户端
 	FallbackGroupID      *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
@@ -253,6 +263,11 @@ type UpdateGroupInput struct {
 	ImagePrice1K         *float64
 	ImagePrice2K         *float64
 	ImagePrice4K         *float64
+	VideoRateIndependent *bool
+	VideoRateMultiplier  *float64
+	VideoPrice480P       *float64
+	VideoPrice720P       *float64
+	VideoPrice1080P      *float64
 	ClaudeCodeOnly       *bool  // 仅允许 Claude Code 客户端
 	FallbackGroupID      *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
@@ -2083,6 +2098,88 @@ func (s *adminServiceImpl) GetGroup(ctx context.Context, id int64) (*Group, erro
 	return s.groupRepo.GetByID(ctx, id)
 }
 
+func (s *adminServiceImpl) GetGroupModelsListCandidates(ctx context.Context, id int64, platform string) ([]string, error) {
+	platform = strings.TrimSpace(platform)
+	if id > 0 {
+		group, err := s.groupRepo.GetByIDLite(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if platform == "" {
+			platform = group.Platform
+		}
+	}
+	if platform == "" {
+		platform = PlatformAnthropic
+	}
+
+	candidates := defaultModelsListCandidateIDs(platform)
+	if id <= 0 || s.accountRepo == nil {
+		return candidates, nil
+	}
+
+	accounts, err := s.accountRepo.ListSchedulableByGroupID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	for _, model := range candidates {
+		seen[model] = struct{}{}
+	}
+	for _, acc := range accounts {
+		if acc.Platform != platform {
+			continue
+		}
+		for model := range acc.GetModelMapping() {
+			model = strings.TrimSpace(model)
+			if model == "" {
+				continue
+			}
+			if _, ok := seen[model]; ok {
+				continue
+			}
+			seen[model] = struct{}{}
+			candidates = append(candidates, model)
+		}
+	}
+	return candidates, nil
+}
+
+func defaultModelsListCandidateIDs(platform string) []string {
+	switch platform {
+	case PlatformOpenAI:
+		return openai.DefaultModelIDs()
+	case PlatformGemini:
+		ids := make([]string, 0, len(geminicli.DefaultModels))
+		for _, model := range geminicli.DefaultModels {
+			ids = append(ids, model.ID)
+		}
+		return ids
+	case PlatformAntigravity:
+		models := antigravity.DefaultModels()
+		ids := make([]string, 0, len(models))
+		for _, model := range models {
+			ids = append(ids, model.ID)
+		}
+		return ids
+	case PlatformGrok:
+		return xai.DefaultModelIDs()
+	default:
+		ids := make([]string, 0, len(claude.DefaultModels))
+		for _, model := range claude.DefaultModels {
+			ids = append(ids, model.ID)
+		}
+		return ids
+	}
+}
+
+func defaultAllowImageGenerationForPlatform(platform string) bool {
+	// Grok image and video generation routes share the legacy image-generation gate.
+	// Older clients send the false zero value, so Grok groups must default enabled.
+	return platform == PlatformGrok
+}
+
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
@@ -2107,12 +2204,22 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	imagePrice1K := normalizePrice(input.ImagePrice1K)
 	imagePrice2K := normalizePrice(input.ImagePrice2K)
 	imagePrice4K := normalizePrice(input.ImagePrice4K)
+	videoPrice480P := normalizePrice(input.VideoPrice480P)
+	videoPrice720P := normalizePrice(input.VideoPrice720P)
+	videoPrice1080P := normalizePrice(input.VideoPrice1080P)
 	imageRateMultiplier := 1.0
 	if input.ImageRateMultiplier != nil {
 		if *input.ImageRateMultiplier < 0 {
 			return nil, errors.New("image_rate_multiplier must be >= 0")
 		}
 		imageRateMultiplier = *input.ImageRateMultiplier
+	}
+	videoRateMultiplier := 1.0
+	if input.VideoRateMultiplier != nil {
+		if *input.VideoRateMultiplier < 0 {
+			return nil, errors.New("video_rate_multiplier must be >= 0")
+		}
+		videoRateMultiplier = *input.VideoRateMultiplier
 	}
 
 	// 校验降级分组
@@ -2148,6 +2255,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if input.MCPXMLInject != nil {
 		mcpXMLInject = *input.MCPXMLInject
 	}
+
+	allowImageGeneration := input.AllowImageGeneration || defaultAllowImageGenerationForPlatform(platform)
 
 	// 如果指定了复制账号的源分组，先获取账号 ID 列表
 	var accountIDsToCopy []int64
@@ -2192,12 +2301,17 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		DailyLimitUSD:                   dailyLimit,
 		WeeklyLimitUSD:                  weeklyLimit,
 		MonthlyLimitUSD:                 monthlyLimit,
-		AllowImageGeneration:            input.AllowImageGeneration,
+		AllowImageGeneration:            allowImageGeneration,
 		ImageRateIndependent:            input.ImageRateIndependent,
 		ImageRateMultiplier:             imageRateMultiplier,
 		ImagePrice1K:                    imagePrice1K,
 		ImagePrice2K:                    imagePrice2K,
 		ImagePrice4K:                    imagePrice4K,
+		VideoRateIndependent:            input.VideoRateIndependent,
+		VideoRateMultiplier:             videoRateMultiplier,
+		VideoPrice480P:                  videoPrice480P,
+		VideoPrice720P:                  videoPrice720P,
+		VideoPrice1080P:                 videoPrice1080P,
 		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
 		FallbackGroupID:                 input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
@@ -2219,7 +2333,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 
 	// require_oauth_only: 过滤掉 apikey 类型账号
-	if group.RequireOAuthOnly && (group.Platform == PlatformOpenAI || group.Platform == PlatformAntigravity || group.Platform == PlatformAnthropic || group.Platform == PlatformGemini) && len(accountIDsToCopy) > 0 {
+	if group.RequireOAuthOnly && (group.Platform == PlatformOpenAI || group.Platform == PlatformAntigravity || group.Platform == PlatformAnthropic || group.Platform == PlatformGemini || group.Platform == PlatformGrok) && len(accountIDsToCopy) > 0 {
 		accounts, err := s.accountRepo.GetByIDs(ctx, accountIDsToCopy)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch accounts for oauth filter: %w", err)
@@ -2437,6 +2551,24 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.ImagePrice4K != nil {
 		group.ImagePrice4K = normalizePrice(input.ImagePrice4K)
 	}
+	if input.VideoRateIndependent != nil {
+		group.VideoRateIndependent = *input.VideoRateIndependent
+	}
+	if input.VideoRateMultiplier != nil {
+		if *input.VideoRateMultiplier < 0 {
+			return nil, errors.New("video_rate_multiplier must be >= 0")
+		}
+		group.VideoRateMultiplier = *input.VideoRateMultiplier
+	}
+	if input.VideoPrice480P != nil {
+		group.VideoPrice480P = normalizePrice(input.VideoPrice480P)
+	}
+	if input.VideoPrice720P != nil {
+		group.VideoPrice720P = normalizePrice(input.VideoPrice720P)
+	}
+	if input.VideoPrice1080P != nil {
+		group.VideoPrice1080P = normalizePrice(input.VideoPrice1080P)
+	}
 
 	// Claude Code 客户端限制
 	if input.ClaudeCodeOnly != nil {
@@ -2573,7 +2705,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 
 		// require_oauth_only: 过滤掉 apikey 类型账号
-		if group.RequireOAuthOnly && (group.Platform == PlatformOpenAI || group.Platform == PlatformAntigravity || group.Platform == PlatformAnthropic || group.Platform == PlatformGemini) && len(accountIDsToCopy) > 0 {
+		if group.RequireOAuthOnly && (group.Platform == PlatformOpenAI || group.Platform == PlatformAntigravity || group.Platform == PlatformAnthropic || group.Platform == PlatformGemini || group.Platform == PlatformGrok) && len(accountIDsToCopy) > 0 {
 			accounts, err := s.accountRepo.GetByIDs(ctx, accountIDsToCopy)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch accounts for oauth filter: %w", err)
@@ -2934,6 +3066,15 @@ func (s *adminServiceImpl) GetAccountsByIDs(ctx context.Context, ids []int64) ([
 	return accounts, nil
 }
 
+func normalizeAccountConcurrency(platform, accountType string, concurrency int) int {
+	if platform == PlatformGrok && accountType == AccountTypeOAuth {
+		if concurrency <= 0 {
+			return 1
+		}
+	}
+	return concurrency
+}
+
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
 	// 绑定分组
 	groupIDs := input.GroupIDs
@@ -2966,7 +3107,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		Credentials: input.Credentials,
 		Extra:       input.Extra,
 		ProxyID:     input.ProxyID,
-		Concurrency: input.Concurrency,
+		Concurrency: normalizeAccountConcurrency(input.Platform, input.Type, input.Concurrency),
 		Priority:    input.Priority,
 		Status:      StatusActive,
 		Schedulable: true,
@@ -3099,7 +3240,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	// 只在指针非 nil 时更新 Concurrency（支持设置为 0）
 	if input.Concurrency != nil {
-		account.Concurrency = *input.Concurrency
+		account.Concurrency = normalizeAccountConcurrency(account.Platform, account.Type, *input.Concurrency)
 	}
 	// 只在指针非 nil 时更新 Priority（支持设置为 0）
 	if input.Priority != nil {

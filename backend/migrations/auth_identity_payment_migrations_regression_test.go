@@ -171,3 +171,14 @@ func TestMigration135AllowsGitHubAndGoogleAuthProviders(t *testing.T) {
 	require.Contains(t, sql, "'github'")
 	require.Contains(t, sql, "'google'")
 }
+
+func TestMigration902BackfillsGrokMediaGenerationGroups(t *testing.T) {
+	content, err := FS.ReadFile("902_enable_grok_media_generation_groups.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "UPDATE groups")
+	require.Contains(t, sql, "SET allow_image_generation = true")
+	require.Contains(t, sql, "WHERE platform = 'grok'")
+	require.Contains(t, sql, "AND allow_image_generation = false")
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
@@ -18,6 +19,38 @@ type APIKeyRateLimitCacheData struct {
 	Window5h int64   `json:"window_5h"` // unix timestamp, 0 = not started
 	Window1d int64   `json:"window_1d"`
 	Window7d int64   `json:"window_7d"`
+}
+
+// UserPlatformQuotaKey 标识一个 user×platform，用于脏集出入与批量读。
+type UserPlatformQuotaKey struct {
+	UserID   int64
+	Platform string
+}
+
+// UserPlatformQuotaCacheEntry Redis hash 反序列化结果。
+//
+// SchemaVersion 用于向后兼容：
+//   - 0（旧 entry，无 SchemaVersion 字段）→ 视为 cache MISS，强制 refresh
+//   - 1（当前版本）→ 包含 limits 和 window_start，可免 DB 查询
+//
+// limit 字段为 nil 表示"无限额"（DB 中对应列为 NULL）。
+const UserPlatformQuotaCacheSchemaV1 = int64(1)
+
+type UserPlatformQuotaCacheEntry struct {
+	DailyUsageUSD   float64
+	WeeklyUsageUSD  float64
+	MonthlyUsageUSD float64
+	Version         int64
+	SchemaVersion   int64
+
+	// 以下字段仅在 SchemaVersion >= 1 时有效
+	DailyLimitUSD   *float64
+	WeeklyLimitUSD  *float64
+	MonthlyLimitUSD *float64
+
+	DailyWindowStart   *time.Time
+	WeeklyWindowStart  *time.Time
+	MonthlyWindowStart *time.Time
 }
 
 // BillingCache defines cache operations for billing service
@@ -39,6 +72,19 @@ type BillingCache interface {
 	SetAPIKeyRateLimit(ctx context.Context, keyID int64, data *APIKeyRateLimitCacheData) error
 	UpdateAPIKeyRateLimitUsage(ctx context.Context, keyID int64, cost float64) error
 	InvalidateAPIKeyRateLimit(ctx context.Context, keyID int64) error
+
+	// user × platform quota 缓存
+	GetUserPlatformQuotaCache(ctx context.Context, userID int64, platform string) (*UserPlatformQuotaCacheEntry, bool, error)
+	SetUserPlatformQuotaCache(ctx context.Context, userID int64, platform string, entry *UserPlatformQuotaCacheEntry, ttl time.Duration) error
+	DeleteUserPlatformQuotaCache(ctx context.Context, userID int64, platform string) error
+	// IncrUserPlatformQuotaUsageCache 在缓存命中时累加用量；缓存未命中（key 不存在）静默返回 nil。
+	// markDirty=true 时将该 key 的 member 写入 Redis 脏集，供 flusher 批量回写 DB。
+	IncrUserPlatformQuotaUsageCache(ctx context.Context, userID int64, platform string, cost float64, ttl time.Duration, markDirty bool) error
+
+	// 脏集读写，供 flusher 使用。
+	PopDirtyUserPlatformQuotaKeys(ctx context.Context, n int) ([]UserPlatformQuotaKey, error)
+	ReaddDirtyUserPlatformQuotaKeys(ctx context.Context, keys []UserPlatformQuotaKey) error
+	BatchGetUserPlatformQuotaCache(ctx context.Context, keys []UserPlatformQuotaKey) ([]*UserPlatformQuotaCacheEntry, error)
 }
 
 // ModelPricing 模型价格配置（per-token价格，与LiteLLM格式一致）
@@ -302,6 +348,30 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerTokenPriority: 0.3e-6,
 		SupportsCacheBreakdown:         false,
 	}
+
+	// xAI Grok 4.5 (official docs: $2 input / $0.50 cached input / $6 output per MTok)
+	s.fallbackPrices["grok-4.5"] = &ModelPricing{
+		InputPricePerToken:     2e-6,
+		OutputPricePerToken:    6e-6,
+		CacheReadPricePerToken: 0.5e-6,
+		SupportsCacheBreakdown: false,
+	}
+
+	// xAI Grok 4.3 (official docs: $1.25 input / $2.50 output per MTok)
+	s.fallbackPrices["grok-4.3"] = &ModelPricing{
+		InputPricePerToken:         1.25e-6,
+		OutputPricePerToken:        2.5e-6,
+		CacheReadPricePerToken:     0,
+		SupportsCacheBreakdown:     false,
+		LongContextInputThreshold:  1000000,
+		LongContextInputMultiplier: 1,
+	}
+	// xAI Grok Build 0.1 (official docs: $1 input / $2 output per MTok)
+	s.fallbackPrices["grok-build-0.1"] = &ModelPricing{
+		InputPricePerToken:     1e-6,
+		OutputPricePerToken:    2e-6,
+		SupportsCacheBreakdown: false,
+	}
 }
 
 // getFallbackPricing 根据模型系列获取回退价格
@@ -363,6 +433,15 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		case "gpt-5.3-codex", "gpt-5.3-codex-spark":
 			return s.fallbackPrices["gpt-5.3-codex"]
 		}
+	}
+
+	switch modelLower {
+	case "grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest":
+		return s.fallbackPrices["grok-4.5"]
+	case "grok-4.3":
+		return s.fallbackPrices["grok-4.3"]
+	case "grok-build", "grok-build-0.1":
+		return s.fallbackPrices["grok-build-0.1"]
 	}
 
 	return nil
@@ -878,6 +957,28 @@ type ImagePriceConfig struct {
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
 }
 
+// VideoPriceConfig 视频生成计费配置。所有价格均为每秒单价（USD/s）。
+type VideoPriceConfig struct {
+	Price480P  *float64
+	Price720P  *float64
+	Price1080P *float64
+}
+
+const (
+	defaultImageGenerationPrice = 0.134
+
+	defaultGrokImagineImagePrice1K        = 0.02
+	defaultGrokImagineImagePrice2K        = 0.02
+	defaultGrokImagineImageQualityPrice1K = 0.05
+	defaultGrokImagineImageQualityPrice2K = 0.07
+
+	defaultGrokImagineVideoPrice480P    = 0.05
+	defaultGrokImagineVideoPrice720P    = 0.07
+	defaultGrokImagineVideo15Price480P  = 0.08
+	defaultGrokImagineVideo15Price720P  = 0.14
+	defaultGrokImagineVideo15Price1080P = 0.25
+)
+
 func imagePriceConfigFromGroup(group *Group) *ImagePriceConfig {
 	if group == nil {
 		return nil
@@ -948,6 +1049,25 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	}
 }
 
+// CalculateVideoCost 计算视频生成费用。
+func (s *BillingService) CalculateVideoCost(model string, resolution string, videoCount int, durationSeconds int, groupConfig *VideoPriceConfig, rateMultiplier float64) *CostBreakdown {
+	if videoCount <= 0 {
+		return &CostBreakdown{}
+	}
+	resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
+	durationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(durationSeconds)
+	unitPrice := s.getVideoUnitPrice(model, resolution, groupConfig)
+	totalCost := unitPrice * float64(durationSeconds) * float64(videoCount)
+	if rateMultiplier < 0 {
+		rateMultiplier = 0
+	}
+	return &CostBreakdown{
+		TotalCost:   totalCost,
+		ActualCost:  totalCost * rateMultiplier,
+		BillingMode: string(BillingModeVideo),
+	}
+}
+
 // getImageUnitPrice 获取图片单价
 func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) float64 {
 	imageSize = normalizeImageBillingTier(imageSize)
@@ -974,8 +1094,31 @@ func (s *BillingService) getImageUnitPrice(model string, imageSize string, group
 	return s.getDefaultImagePrice(model, imageSize)
 }
 
+func (s *BillingService) getVideoUnitPrice(model string, resolution string, groupConfig *VideoPriceConfig) float64 {
+	if groupConfig != nil {
+		switch resolution {
+		case VideoBillingResolution480P:
+			if groupConfig.Price480P != nil {
+				return *groupConfig.Price480P
+			}
+		case VideoBillingResolution720P:
+			if groupConfig.Price720P != nil {
+				return *groupConfig.Price720P
+			}
+		case VideoBillingResolution1080P:
+			if groupConfig.Price1080P != nil {
+				return *groupConfig.Price1080P
+			}
+		}
+	}
+	return s.getDefaultVideoPrice(model, resolution)
+}
+
 // getDefaultImagePrice 获取 LiteLLM 默认图片价格
 func (s *BillingService) getDefaultImagePrice(model string, imageSize string) float64 {
+	if price, ok := getDefaultGrokImagineImagePrice(model, imageSize); ok {
+		return price
+	}
 	basePrice := 0.0
 
 	// 从 PricingService 获取 output_cost_per_image
@@ -988,7 +1131,7 @@ func (s *BillingService) getDefaultImagePrice(model string, imageSize string) fl
 
 	// 如果没有找到价格，使用硬编码默认值（$0.134，来自 gemini-3-pro-image-preview）
 	if basePrice <= 0 {
-		basePrice = 0.134
+		basePrice = defaultImageGenerationPrice
 	}
 
 	// 2K 尺寸 1.5 倍，4K 尺寸翻倍
@@ -1000,4 +1143,52 @@ func (s *BillingService) getDefaultImagePrice(model string, imageSize string) fl
 	}
 
 	return basePrice
+}
+
+func (s *BillingService) getDefaultVideoPrice(model string, resolution string) float64 {
+	if price, ok := getDefaultGrokImagineVideoPrice(model, resolution); ok {
+		return price
+	}
+	return s.getDefaultImagePrice(model, "2K")
+}
+
+func getDefaultGrokImagineImagePrice(model string, imageSize string) (float64, bool) {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "grok-imagine-image-quality":
+		return getGrokImagineImageTierPrice(imageSize, defaultGrokImagineImageQualityPrice1K, defaultGrokImagineImageQualityPrice2K), true
+	case "grok-imagine", "grok-imagine-image", "grok-imagine-edit":
+		return getGrokImagineImageTierPrice(imageSize, defaultGrokImagineImagePrice1K, defaultGrokImagineImagePrice2K), true
+	default:
+		return 0, false
+	}
+}
+
+func getGrokImagineImageTierPrice(imageSize string, price1K float64, price2K float64) float64 {
+	if normalizeImageBillingTier(imageSize) == "1K" {
+		return price1K
+	}
+	return price2K
+}
+
+func getDefaultGrokImagineVideoPrice(model string, resolution string) (float64, bool) {
+	model = strings.ToLower(strings.TrimSpace(model))
+	resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
+	switch {
+	case strings.HasPrefix(model, "grok-imagine-video-1.5"):
+		switch resolution {
+		case VideoBillingResolution720P:
+			return defaultGrokImagineVideo15Price720P, true
+		case VideoBillingResolution1080P:
+			return defaultGrokImagineVideo15Price1080P, true
+		default:
+			return defaultGrokImagineVideo15Price480P, true
+		}
+	case strings.HasPrefix(model, "grok-imagine-video"):
+		if resolution == VideoBillingResolution480P {
+			return defaultGrokImagineVideoPrice480P, true
+		}
+		return defaultGrokImagineVideoPrice720P, true
+	default:
+		return 0, false
+	}
 }

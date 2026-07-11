@@ -461,9 +461,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		UpstreamConn:       upstreamFrameConn,
 		FirstClientMessage: firstClientMessage,
 		Options: openaiwsv2.RelayOptions{
-			WriteTimeout:     s.openAIWSWriteTimeout(),
-			IdleTimeout:      s.openAIWSPassthroughIdleTimeout(),
-			FirstMessageType: coderws.MessageText,
+			WriteTimeout:                    s.openAIWSWriteTimeout(),
+			IdleTimeout:                     s.openAIWSPassthroughIdleTimeout(),
+			FirstMessageType:                coderws.MessageText,
+			StartClientAfterFirstDownstream: true,
 			OnUsageParseFailure: func(eventType string, usageRaw string) {
 				logOpenAIWSV2Passthrough(
 					"usage_parse_failed event_type=%s usage_raw=%s",
@@ -504,6 +505,31 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				)
 				if hooks != nil && hooks.AfterTurn != nil {
 					hooks.AfterTurn(turnNo, turnResult, nil)
+				}
+			},
+			BeforeWriteClient: func(msgType coderws.MessageType, payload []byte, wroteDownstream bool) error {
+				if msgType != coderws.MessageText || wroteDownstream {
+					return nil
+				}
+				if eventType, _, _ := parseOpenAIWSEventEnvelope(payload); eventType != "error" {
+					return nil
+				}
+				errCodeRaw, errTypeRaw, errMsgRaw := parseOpenAIWSErrorEventFields(payload)
+				if !isOpenAIWSRateLimitError(errCodeRaw, errTypeRaw, errMsgRaw) {
+					return nil
+				}
+				s.persistOpenAIWSRateLimitSignal(ctx, account, handshakeHeaders, payload, errCodeRaw, errTypeRaw, errMsgRaw)
+				logOpenAIWSV2Passthrough(
+					"relay_rate_limit_failover account_id=%d err_code=%s err_type=%s err_message=%s",
+					account.ID,
+					truncateOpenAIWSLogValue(errCodeRaw, openAIWSLogValueMaxLen),
+					truncateOpenAIWSLogValue(errTypeRaw, openAIWSLogValueMaxLen),
+					truncateOpenAIWSLogValue(errMsgRaw, openAIWSLogValueMaxLen),
+				)
+				return &UpstreamFailoverError{
+					StatusCode:      http.StatusTooManyRequests,
+					ResponseBody:    append([]byte(nil), payload...),
+					ResponseHeaders: cloneHeader(handshakeHeaders),
 				}
 			},
 			OnTrace: func(event openaiwsv2.RelayTraceEvent) {

@@ -607,6 +607,19 @@ export default {
     hour: '按小时',
     modelDistribution: '模型分布',
     groupDistribution: '分组使用分布',
+    platformBreakdown: '按平台拆分',
+    platformBreakdownEmpty: '暂无平台用量',
+    platformCount: '{count} 个平台',
+    platformOther: '其他',
+    platformQuota: {
+      title: '配额用量',
+      daily: '日',
+      weekly: '周',
+      monthly: '月（近30天）',
+      resetsAt: '{time} 重置',
+      noLimit: '不限制',
+      disabled: '已禁用',
+    },
     tokenUsageTrend: 'Token 使用趋势',
     noDataAvailable: '暂无数据',
     model: '模型',
@@ -1014,6 +1027,7 @@ export default {
       billingModeToken: '按 Token',
       billingModePerRequest: '按次',
       billingModeImage: '按图片',
+      billingModeVideo: '按视频',
       inputPrice: '输入',
       outputPrice: '输出',
       cacheWritePrice: '缓存写入',
@@ -1859,6 +1873,7 @@ export default {
         groups: '分组',
         subscriptions: '订阅分组',
         balance: '余额',
+        balancePlatformQuota: '余额(平台配额)',
         usage: '用量',
         concurrency: '并发数',
         status: '状态',
@@ -2088,6 +2103,41 @@ export default {
         failedToReorder: '更新排序失败',
         keyExists: '属性键已存在',
         dragToReorder: '拖拽排序'
+      },
+      platformQuota: {
+        menuItem: '平台限额',
+        title: '平台限额',
+        subtitle: '为用户 {email} 配置各上游平台的日 / 周 / 月用量上限',
+        columns: {
+          platform: '平台',
+          daily: '日 (USD)',
+          weekly: '周 (USD)',
+          monthly: '月 (USD, 30天滚动)',
+          usage: '当前用量',
+        },
+        placeholder: '不限制',
+        save: '保存',
+        saving: '保存中...',
+        cancel: '取消',
+        clearAll: '全部清空（取消所有限额）',
+        clearAllConfirm: '确认清空全部平台的日 / 周 / 月限额？所有平台将变为"无限额"，本地无法撤销，需要在保存前手动重填。',
+        reset: {
+          button: '重置该窗口',
+          confirm: '确认重置该用户 {platform} 平台的 {window} 用量？此操作立即生效。',
+          success: '已重置 {platform} {window} 用量',
+          failed: '重置失败',
+        },
+        updateSuccess: '平台限额已更新',
+        updateFailed: '保存失败',
+        loadFailed: '加载失败',
+        hint: '留空 = 不限制该窗口。',
+        windowDaily: '日',
+        windowWeekly: '周',
+        windowMonthly: '月',
+        cellNotConfigured: '未配置',
+        cellColumnTooltip: '仅展示已设限额的平台',
+        subscriptionWarning: '此用户有活跃订阅，平台限额仅在余额（标准）模式下生效，订阅模式请求不受此限额约束。',
+        invalidNumber: '以下字段填写不是合法数字，请修正后再保存：{fields}',
       }
     },
 
@@ -2214,6 +2264,7 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
+        grok: 'Grok',
       },
       saving: '保存中...',
       noGroups: '暂无分组',
@@ -2297,6 +2348,15 @@ export default {
         imageMultiplier: '生图独立倍率',
         modeHint: '默认关闭独立倍率时，图片费用 = 图片价格 × 当前分组有效倍率；开启独立倍率后，图片费用 = 图片价格 × 生图独立倍率。',
         finalPricePreview: '最终单张价格预览',
+        notConfigured: '未配置'
+      },
+      videoPricing: {
+        title: '视频生成计费',
+        description: '配置 Grok 视频生成的每秒单价（USD/秒），留空则使用默认每秒价',
+        independentMultiplier: '视频倍率独立',
+        videoMultiplier: '视频独立倍率',
+        modeHint: '视频按秒计费：每秒价格 × 时长（1-15 秒，未指定默认 8 秒），再叠加分组有效倍率或视频独立倍率。',
+        finalPricePreview: '最终每秒价格预览',
         notConfigured: '未配置'
       },
       claudeCode: {
@@ -2414,6 +2474,7 @@ export default {
         billingModeToken: '按 Token',
         billingModePerRequest: '按次',
         billingModeImage: '按图片',
+        billingModeVideo: '按视频',
         inputPrice: '输入',
         outputPrice: '输出',
         cacheWritePrice: '缓存写入',
@@ -3285,6 +3346,7 @@ export default {
         anthropic: 'Anthropic',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
+        grok: 'Grok',
       },
       types: {
         oauth: 'OAuth',
@@ -3293,6 +3355,7 @@ export default {
         googleOauth: 'Google OAuth',
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
+        grokOauth: 'Grok OAuth',
         antigravityApikey: '通过 Base URL + API Key 连接',
         upstream: '对接上游',
         upstreamDesc: '通过 Base URL + API Key 连接上游',
@@ -3372,6 +3435,18 @@ export default {
         gemini3Flash: 'G3F',
         gemini3Image: 'G31FI',
         claude: 'Claude',
+        grokRequests: '请求',
+        grokTokens: 'Token',
+        grokUnknown: 'Grok 配额需等待首次上游响应返回 xAI rate-limit 头后显示。',
+        grokRetryAfter: '{time} 后重试',
+        grokProbe: '探测',
+        grokProbeTooltip: '发送最小 xAI Responses 探测请求并读取配额响应头',
+        grokResetUnsupported: '不支持重置',
+        grokResetUnsupportedTooltip: 'xAI 未向 Grok OAuth 账号开放重置额度接口',
+        grokNoHeaders: '未观察到配额响应头',
+        grokLastStatus: '状态 {status}',
+        grokLastProbe: '探测 {time}',
+        grokLastHeadersSeen: '响应头 {time}',
         passiveSampled: '被动采样',
         activeQuery: '查询'
       },
@@ -3585,6 +3660,10 @@ export default {
         testModeDefault: '常规请求',
         testModeCompact: 'Compact 探测',
         modelRestrictionDisabledByPassthrough: '已开启自动透传：模型白名单/映射不会生效。',
+      },
+      grok: {
+        baseUrlHint: 'Grok OAuth 账号会转发到官方 xAI API Base URL。',
+        apiKeyHint: 'Grok 订阅支持使用 OAuth refresh token；API Key 账号不在本次范围内。'
       },
       anthropic: {
         apiKeyPassthrough: '自动透传（仅替换认证）',
@@ -3880,6 +3959,47 @@ export default {
           pleaseEnterRefreshToken: '请输入 Refresh Token',
           pleaseEnterSessionToken: '请输入 Session Token'
         },
+        grok: {
+          title: 'Grok 账号授权',
+          followSteps: '请按照以下步骤授权您的 xAI/Grok 账号：',
+          step1GenerateUrl: '生成 xAI 授权链接',
+          generateAuthUrl: '生成授权链接',
+          step2OpenUrl: '在浏览器中打开链接并完成授权',
+          openUrlDesc: '在新标签页中打开授权链接，登录 xAI 并授权 API 访问。',
+          importantNotice: '当浏览器跳转到本地 callback URL 后，请复制完整 URL 或 code 参数回填到这里。',
+          step3EnterCode: '输入授权链接或 Code',
+          authCodeDesc: '授权完成后，粘贴 callback URL、查询字符串或授权码：',
+          authCode: '授权链接或 Code',
+          authCodePlaceholder: '粘贴完整 callback URL、?code=... 查询字符串或 code 值',
+          authCodeHint: '支持完整 callback URL、查询字符串或裸 code。',
+          refreshTokenAuth: '手动输入 RT',
+          refreshTokenDesc: '输入已有的 xAI refresh token，支持批量输入（每行一个）。',
+          refreshTokenPlaceholder: '粘贴您的 xAI refresh token...\n支持多个，每行一个',
+          validating: '验证中...',
+          validateAndCreate: '验证并创建账号',
+          pleaseEnterRefreshToken: '请输入 Refresh Token',
+          failedToGenerateUrl: '生成 Grok 授权链接失败',
+          missingExchangeParams: '缺少授权码、state 或 OAuth 会话',
+          failedToExchangeCode: 'Grok 授权码兑换失败',
+          failedToValidateRT: '验证 Grok refresh token 失败',
+          errors: {
+            GROK_OAUTH_SESSION_NOT_FOUND:
+              'Grok OAuth 会话不存在或已过期。请重新生成授权链接，并粘贴最新的回调链接。',
+            GROK_OAUTH_INVALID_STATE:
+              'Grok OAuth state 与当前会话不匹配。请粘贴同一次生成的授权链接返回的回调 URL。',
+            GROK_OAUTH_STATE_REQUIRED:
+              '回调链接缺少 OAuth state。请粘贴完整 callback URL，不要只粘贴 code。',
+            GROK_OAUTH_CODE_REQUIRED:
+              '缺少 Grok 授权码。请粘贴完整 callback URL、查询字符串或 code 值。',
+            GROK_OAUTH_NO_REFRESH_TOKEN:
+              'Grok 响应未返回 refresh token。请重新生成授权链接，并再次确认 offline access 授权。',
+            GROK_OAUTH_PROXY_NOT_AVAILABLE:
+              '无法查询 Grok OAuth 代理配置。请检查选择的代理后重试。',
+            GROK_OAUTH_PROXY_NOT_FOUND:
+              '找不到所选代理。请选择可用代理后重试。'
+          },
+          oauthOnlyHint: '首版 Grok 支持仅包含 OAuth 订阅的 Responses API 文本/推理转发。'
+        },
         // Gemini specific
         gemini: {
           title: 'Gemini 账户授权',
@@ -4096,6 +4216,7 @@ export default {
       openaiAccount: 'OpenAI 账号',
       geminiAccount: 'Gemini 账号',
       antigravityAccount: 'Antigravity 账号',
+      grokAccount: 'Grok 账号',
       inputMethod: '输入方式',
       reAuthorizedSuccess: '账号重新授权成功',
       // Test Modal
@@ -4901,6 +5022,7 @@ export default {
       billingModeToken: '按量',
       billingModePerRequest: '按次',
       billingModeImage: '按次(图片)',
+      billingModeVideo: '按次(视频)',
       allBillingModes: '全部计费模式',
       ipAddress: 'IP',
       clickToViewBalance: '点击查看充值记录',
@@ -6176,7 +6298,17 @@ export default {
         defaultSubscriptionsEmpty: '未配置默认订阅。新用户不会自动获得订阅套餐。',
         defaultSubscriptionsDuplicate: '默认订阅存在重复分组：{groupId}。每个分组只能出现一次。',
         subscriptionGroup: '订阅分组',
-        subscriptionValidityDays: '有效期（天）'
+        subscriptionValidityDays: '有效期（天）',
+        defaultPlatformQuotas: '默认平台限额（注册时分配）',
+        defaultPlatformQuotasHint: '新用户注册时自动写入平台限额记录；已有用户不受影响。留空 = 该平台该窗口不限制。',
+        platformQuotaNotice: '月限额为 30 天滚动窗口，非自然月',
+      },
+      platformQuota: {
+        platform:    '平台',
+        daily:       '日限额 (USD)',
+        weekly:      '周限额 (USD)',
+        monthly:     '月限额 (USD, 30天滚动)',
+        placeholder: '不限',
       },
       claudeCode: {
         title: 'Claude Code 设置',
@@ -6935,7 +7067,9 @@ export default {
         grantOnFirstBindHint: '已有账号首次绑定该来源时发放默认权益。',
         defaultSubscriptionsLabel: '默认订阅',
         defaultSubscriptionsHint: '仅对当前认证来源生效，未配置时不追加来源专属订阅。',
-        noSourceSubscriptions: '当前来源未配置专属默认订阅。'
+        noSourceSubscriptions: '当前来源未配置专属默认订阅。',
+        platformQuotasOverride: '平台限额覆盖',
+        platformQuotasOverrideHint: '留空的字段继承「系统默认平台限额」；填 0 表示禁止该窗口使用。',
       },
       paymentVisibleMethods: {
         methodLabel: '{title} 可见方式',

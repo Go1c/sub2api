@@ -608,6 +608,19 @@ export default {
     hour: 'Hour',
     modelDistribution: 'Model Distribution',
     groupDistribution: 'Group Usage Distribution',
+    platformBreakdown: 'Per-platform Breakdown',
+    platformBreakdownEmpty: 'No platform usage yet',
+    platformCount: '{count} platforms',
+    platformOther: 'Other',
+    platformQuota: {
+      title: 'Quota Usage',
+      daily: 'Daily',
+      weekly: 'Weekly',
+      monthly: 'Monthly (30-day rolling)',
+      resetsAt: 'Resets {time}',
+      noLimit: 'unlimited',
+      disabled: 'Disabled',
+    },
     tokenUsageTrend: 'Token Usage Trend',
     noDataAvailable: 'No data available',
     model: 'Model',
@@ -1010,6 +1023,7 @@ export default {
       billingModeToken: 'Per Token',
       billingModePerRequest: 'Per Request',
       billingModeImage: 'Per Image',
+      billingModeVideo: 'Per Video',
       inputPrice: 'Input',
       outputPrice: 'Output',
       cacheWritePrice: 'Cache Write',
@@ -1883,6 +1897,7 @@ export default {
         groups: 'Groups',
         subscriptions: 'Subscriptions',
         balance: 'Balance',
+        balancePlatformQuota: 'Balance (Platform Quota)',
         usage: 'Usage',
         concurrency: 'Concurrency',
         status: 'Status',
@@ -2093,6 +2108,41 @@ export default {
         failedToReorder: 'Failed to update order',
         keyExists: 'Attribute key already exists',
         dragToReorder: 'Drag to reorder'
+      },
+      platformQuota: {
+        menuItem: 'Platform Quotas',
+        title: 'Platform Quotas',
+        subtitle: 'Configure daily / weekly / monthly USD usage limits for each upstream platform for user {email}',
+        columns: {
+          platform: 'Platform',
+          daily: 'Daily (USD)',
+          weekly: 'Weekly (USD)',
+          monthly: 'Monthly (USD, 30-day rolling)',
+          usage: 'Current Usage',
+        },
+        placeholder: 'unlimited',
+        save: 'Save',
+        saving: 'Saving...',
+        cancel: 'Cancel',
+        clearAll: 'Clear All (remove all limits)',
+        clearAllConfirm: 'Clear daily / weekly / monthly limits for ALL platforms? All platforms will become "unlimited" with no local undo — you must manually re-enter values before saving.',
+        reset: {
+          button: 'Reset window',
+          confirm: 'Reset the {window} usage for {platform} for this user? This is effective immediately.',
+          success: 'Reset {platform} {window} usage',
+          failed: 'Reset failed',
+        },
+        updateSuccess: 'Platform quotas updated',
+        updateFailed: 'Save failed',
+        loadFailed: 'Load failed',
+        hint: 'Empty = no limit for that window.',
+        windowDaily: 'daily',
+        windowWeekly: 'weekly',
+        windowMonthly: 'monthly',
+        cellNotConfigured: 'Not configured',
+        cellColumnTooltip: 'Only platforms with a limit are shown',
+        subscriptionWarning: 'This user has an active subscription. Platform quotas only apply to balance (standard) mode requests; subscription mode requests are not subject to these limits.',
+        invalidNumber: 'The following fields contain invalid numbers. Please fix them before saving: {fields}',
       }
     },
 
@@ -2273,6 +2323,7 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
+        grok: 'Grok',
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
@@ -2301,6 +2352,15 @@ export default {
         imageMultiplier: 'Image multiplier',
         modeHint: 'By default, image billing uses image price × current effective group multiplier. Independent mode uses image price × image multiplier.',
         finalPricePreview: 'Final per-image price preview',
+        notConfigured: 'Not configured'
+      },
+      videoPricing: {
+        title: 'Video Generation Pricing',
+        description: 'Configure Grok video generation prices in USD per second. Leave empty to use default per-second rates.',
+        independentMultiplier: 'Use independent video multiplier',
+        videoMultiplier: 'Video multiplier',
+        modeHint: 'Videos are billed per second: per-second price × duration (1-15s, default 8s). The group or independent video multiplier then applies.',
+        finalPricePreview: 'Final per-second price preview',
         notConfigured: 'Not configured'
       },
       claudeCode: {
@@ -2424,6 +2484,7 @@ export default {
         billingModeToken: 'Per Token',
         billingModePerRequest: 'Per Request',
         billingModeImage: 'Per Image',
+        billingModeVideo: 'Per Video',
         inputPrice: 'Input',
         outputPrice: 'Output',
         cacheWritePrice: 'Cache Write',
@@ -3162,6 +3223,7 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
+        grok: 'Grok',
       },
       types: {
         oauth: 'OAuth',
@@ -3170,6 +3232,7 @@ export default {
         googleOauth: 'Google OAuth',
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
+        grokOauth: 'Grok OAuth',
         antigravityApikey: 'Connect via Base URL + API Key',
         upstream: 'Upstream',
         upstreamDesc: 'Connect via Base URL + API Key'
@@ -3528,6 +3591,10 @@ export default {
         testModeCompact: 'Compact probe',
         modelRestrictionDisabledByPassthrough: 'Automatic passthrough is enabled: model whitelist/mapping will not take effect.',
       },
+      grok: {
+        baseUrlHint: 'Grok OAuth accounts forward to the official xAI API base URL.',
+        apiKeyHint: 'Grok subscription support uses OAuth refresh tokens; API keys are out of scope for this account type.'
+      },
       anthropic: {
         apiKeyPassthrough: 'Auto passthrough (auth only)',
         apiKeyPassthroughDesc:
@@ -3832,6 +3899,47 @@ export default {
           pleaseEnterRefreshToken: 'Please enter Refresh Token',
           pleaseEnterSessionToken: 'Please enter Session Token'
         },
+        grok: {
+          title: 'Grok Account Authorization',
+          followSteps: 'Follow these steps to authorize your xAI/Grok account:',
+          step1GenerateUrl: 'Generate the xAI authorization URL',
+          generateAuthUrl: 'Generate Auth URL',
+          step2OpenUrl: 'Open the URL in your browser and complete authorization',
+          openUrlDesc: 'Open the authorization URL in a new tab, sign in to xAI, and authorize API access.',
+          importantNotice: 'When the browser reaches the local callback URL, copy the full URL or the code query parameter back here.',
+          step3EnterCode: 'Enter Authorization URL or Code',
+          authCodeDesc: 'After authorization, paste the callback URL, query string, or authorization code:',
+          authCode: 'Authorization URL or Code',
+          authCodePlaceholder: 'Paste the full callback URL, ?code=... query string, or code value',
+          authCodeHint: 'Full callback URLs, query strings, and bare codes are accepted.',
+          refreshTokenAuth: 'Manual RT Input',
+          refreshTokenDesc: 'Enter existing xAI refresh token(s). Supports batch input, one per line.',
+          refreshTokenPlaceholder: 'Paste your xAI refresh token...\nSupports multiple, one per line',
+          validating: 'Validating...',
+          validateAndCreate: 'Validate & Create Account',
+          pleaseEnterRefreshToken: 'Please enter Refresh Token',
+          failedToGenerateUrl: 'Failed to generate Grok auth URL',
+          missingExchangeParams: 'Missing authorization code, state, or OAuth session',
+          failedToExchangeCode: 'Failed to exchange Grok authorization code',
+          failedToValidateRT: 'Failed to validate Grok refresh token',
+          errors: {
+            GROK_OAUTH_SESSION_NOT_FOUND:
+              'Grok OAuth session was not found or has expired. Generate a new auth URL and paste the newest callback URL.',
+            GROK_OAUTH_INVALID_STATE:
+              'Grok OAuth state does not match this session. Paste the callback URL from the same generated auth link.',
+            GROK_OAUTH_STATE_REQUIRED:
+              'The callback URL is missing the OAuth state. Paste the full callback URL, not only the code.',
+            GROK_OAUTH_CODE_REQUIRED:
+              'The Grok authorization code is missing. Paste the full callback URL, query string, or code value.',
+            GROK_OAUTH_NO_REFRESH_TOKEN:
+              'The Grok response did not include a refresh token. Generate a new auth URL and approve offline access again.',
+            GROK_OAUTH_PROXY_NOT_AVAILABLE:
+              'Grok OAuth proxy lookup is unavailable. Check the selected proxy and retry.',
+            GROK_OAUTH_PROXY_NOT_FOUND:
+              'The selected proxy could not be found. Choose an available proxy and retry.'
+          },
+          oauthOnlyHint: 'Initial Grok support is OAuth subscription-backed Responses API text and reasoning traffic only.'
+        },
         // Gemini specific
 	        gemini: {
 	          title: 'Gemini Account Authorization',
@@ -4053,6 +4161,7 @@ export default {
       openaiAccount: 'OpenAI Account',
       geminiAccount: 'Gemini Account',
       antigravityAccount: 'Antigravity Account',
+      grokAccount: 'Grok Account',
       inputMethod: 'Input Method',
       reAuthorizedSuccess: 'Account re-authorized successfully',
       // Test Modal
@@ -4151,6 +4260,18 @@ export default {
         gemini3Flash: 'G3F',
         gemini3Image: 'G31FI',
         claude: 'Claude',
+        grokRequests: 'Req',
+        grokTokens: 'Tok',
+        grokUnknown: 'Grok quota is unknown until the first upstream response includes xAI rate-limit headers.',
+        grokRetryAfter: 'Retry after {time}',
+        grokProbe: 'Probe',
+        grokProbeTooltip: 'Send a minimal xAI Responses probe and read quota headers',
+        grokResetUnsupported: 'Reset unsupported',
+        grokResetUnsupportedTooltip: 'xAI does not expose reset credits for Grok OAuth accounts',
+        grokNoHeaders: 'No quota headers observed',
+        grokLastStatus: 'Status {status}',
+        grokLastProbe: 'Probe {time}',
+        grokLastHeadersSeen: 'Headers {time}',
         passiveSampled: 'Passive',
         activeQuery: 'Query'
       },
@@ -4894,6 +5015,7 @@ export default {
       billingModeToken: 'Token',
       billingModePerRequest: 'Per Request',
       billingModeImage: 'Image',
+      billingModeVideo: 'Video',
       allBillingModes: 'All Billing Modes',
       ipAddress: 'IP',
       clickToViewBalance: 'Click to view balance history',
@@ -6164,7 +6286,17 @@ export default {
         defaultSubscriptionsDuplicate:
           'Duplicate subscription group: {groupId}. Each group can only appear once.',
         subscriptionGroup: 'Subscription Group',
-        subscriptionValidityDays: 'Validity (days)'
+        subscriptionValidityDays: 'Validity (days)',
+        defaultPlatformQuotas: 'Default Platform Quotas (on signup)',
+        defaultPlatformQuotasHint: 'Automatically assigned to new users on signup; existing users are not affected. Leave blank = unlimited.',
+        platformQuotaNotice: 'Monthly quota uses a 30-day rolling window, not a calendar month.',
+      },
+      platformQuota: {
+        platform:    'Platform',
+        daily:       'Daily (USD)',
+        weekly:      'Weekly (USD)',
+        monthly:     'Monthly (USD, 30d rolling)',
+        placeholder: 'Unlimited',
       },
       claudeCode: {
         title: 'Claude Code Settings',
@@ -6924,7 +7056,9 @@ export default {
         grantOnFirstBindHint: 'Grant default entitlements when an existing user first binds this source.',
         defaultSubscriptionsLabel: 'Default subscriptions',
         defaultSubscriptionsHint: 'Applies only to this auth source. Leave empty to skip source-specific subscriptions.',
-        noSourceSubscriptions: 'No source-specific default subscriptions configured.'
+        noSourceSubscriptions: 'No source-specific default subscriptions configured.',
+        platformQuotasOverride: 'Platform Quota Overrides',
+        platformQuotasOverrideHint: 'Blank fields inherit the system default. Set to 0 to fully block that window for this auth source.',
       },
       paymentVisibleMethods: {
         methodLabel: '{title} visible method',

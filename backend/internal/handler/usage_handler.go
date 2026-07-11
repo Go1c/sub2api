@@ -96,6 +96,12 @@ func (h *UsageHandler) List(c *gin.Context) {
 		billingType = &bt
 	}
 
+	billingMode := strings.TrimSpace(c.Query("billing_mode"))
+	if billingMode != "" && !service.BillingMode(billingMode).IsValidUsageFilter() {
+		response.BadRequest(c, "Invalid billing_mode")
+		return
+	}
+
 	// Parse date range
 	var startTime, endTime *time.Time
 	userTZ := c.Query("timezone") // Get user's timezone from request
@@ -132,6 +138,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		RequestType: requestType,
 		Stream:      stream,
 		BillingType: billingType,
+		BillingMode: billingMode,
 		StartTime:   startTime,
 		EndTime:     endTime,
 	}

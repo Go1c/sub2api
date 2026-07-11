@@ -37,6 +37,13 @@ export interface UserDashboardStats {
   average_duration_ms: number
   rpm: number // 近5分钟平均每分钟请求数
   tpm: number // 近5分钟平均每分钟Token数
+  by_platform?: Array<{
+    platform: string
+    total_actual_cost: number
+    today_actual_cost: number
+    total_requests: number
+    total_tokens: number
+  }>
 }
 
 export interface TrendParams {

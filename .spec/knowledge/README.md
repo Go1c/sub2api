@@ -58,6 +58,7 @@ metadata:
 | [`records/upstream-sync-review-20260616.md`](records/upstream-sync-review-20260616.md) | v0.1.136 同步上线前独立代码复审与 go/no-go 结论(2026-06-16) |
 | [`records/upstream-sync-acceptance-20260615.md`](records/upstream-sync-acceptance-20260615.md) | v0.1.136 同步验收清单:合了什么、风险在哪、怎么验(2026-06-15) |
 | [`records/upstream-sync-20260615.md`](records/upstream-sync-20260615.md) | v0.1.136 同步评估台账与分批处理进度(2026-06-15) |
+| [`records/upstream-sync-grok-20260711.md`](records/upstream-sync-grok-20260711.md) | Grok/xAI 上游功能链的移植范围、排除项、fork 兼容决策、验证与 dev→publish 交付记录(2026-07-11) |
 | [`records/main-vs-dev-assessment-20260529.md`](records/main-vs-dev-assessment-20260529.md) | main→dev 分叉深度评测、按主题吸收策略与首轮 selective sync 记录(2026-05-29) |
 | [`records/memory-risk-analysis-20260509.md`](records/memory-risk-analysis-20260509.md) | 内存暴涨 / 泄漏、DoS 资源耗尽与 DB 增长风险分析(2026-05-09) |
 | [`records/bugwall-zeabur-migration-checksum-20260423.md`](records/bugwall-zeabur-migration-checksum-20260423.md) | Zeabur 部署 migration 110/112 checksum mismatch 故障墙(2026-04-23) |

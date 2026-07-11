@@ -917,6 +917,15 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
+  // Public settings may still be loading during the first navigation. Feature routes
+  // must wait for that result before deciding whether an explicit toggle disables them.
+  if ((to.meta.requiresPayment || to.meta.requiresRiskControl) && !appStore.publicSettingsLoaded) {
+    try {
+      await appStore.fetchPublicSettings()
+    } catch (error) {
+      console.warn('Failed to load public settings in route guard', error)
+    }
+  }
 
   // Only an explicit value from successfully loaded settings can disable a route.
   // A transient settings failure is unknown state, not a confirmed feature toggle.
@@ -934,12 +943,13 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if (to.meta.requiresRiskControl) {
-    const riskControlEnabled = appStore.cachedPublicSettings?.risk_control_enabled === true
-    if (!riskControlEnabled) {
-      next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
-      return
-    }
+  if (
+    to.meta.requiresRiskControl &&
+    appStore.publicSettingsLoaded &&
+    appStore.cachedPublicSettings?.risk_control_enabled === false
+  ) {
+    next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
+    return
   }
 
   if (to.meta.requiresSiteMessages && !isFeatureFlagEnabled(FeatureFlags.siteMessages)) {
