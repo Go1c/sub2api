@@ -81,3 +81,74 @@ func matchCodexClientHeaderPrefixes(value string, prefixes []string) bool {
 	}
 	return false
 }
+
+var codexPairedOriginators = map[string]struct{}{
+	"codex_cli_rs":          {},
+	"codex_vscode":          {},
+	"codex_app":             {},
+	"codex_chatgpt_desktop": {},
+	"codex_atlas":           {},
+	"codex_exec":            {},
+	"codex_sdk_ts":          {},
+	"codex-tui":             {},
+}
+
+// PairCodexClientIdentity derives an originator paired with the final outbound
+// User-Agent. The Codex upstream rejects mismatched identity pairs with 404.
+func PairCodexClientIdentity(userAgent string) (originator string, pairedUA string, ok bool) {
+	ua := strings.TrimSpace(userAgent)
+	slash := strings.IndexByte(ua, '/')
+	if slash <= 0 {
+		return "", "", false
+	}
+	if leading := strings.TrimSpace(ua[:slash]); saneCodexOriginator(leading) && pairedCodexOriginator(leading) {
+		leading = canonicalPairedCodexOriginator(leading)
+		return leading, leading + ua[slash:], true
+	}
+	if trailer := codexUATrailerName(ua); trailer != "" && !strings.ContainsRune(trailer, '/') && saneCodexOriginator(trailer) && pairedCodexOriginator(trailer) {
+		trailer = canonicalPairedCodexOriginator(trailer)
+		return trailer, trailer + ua[slash:], true
+	}
+	return "", "", false
+}
+
+func codexUATrailerName(ua string) string {
+	lastOpen := strings.LastIndex(ua, "(")
+	lastClose := strings.LastIndex(ua, ")")
+	if lastOpen < 0 || lastClose <= lastOpen {
+		return ""
+	}
+	inside := ua[lastOpen+1 : lastClose]
+	name, _, ok := strings.Cut(inside, ";")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(name)
+}
+
+func saneCodexOriginator(name string) bool {
+	if name == "" || len(name) > 64 {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		if c := name[i]; c < 0x20 || c > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func pairedCodexOriginator(name string) bool {
+	if _, ok := codexPairedOriginators[strings.ToLower(strings.TrimSpace(name))]; ok {
+		return true
+	}
+	return strings.HasPrefix(name, "Codex ")
+}
+
+func canonicalPairedCodexOriginator(name string) string {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if _, ok := codexPairedOriginators[lower]; ok {
+		return lower
+	}
+	return strings.TrimSpace(name)
+}

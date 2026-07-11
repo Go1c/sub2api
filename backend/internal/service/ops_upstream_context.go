@@ -36,6 +36,12 @@ const (
 	// OpsSkipPassthroughKey 由 applyErrorPassthroughRule 在命中 skip_monitoring=true 的规则时设置。
 	// ops_error_logger 中间件检查此 key，为 true 时跳过错误记录。
 	OpsSkipPassthroughKey = "ops_skip_passthrough"
+
+	OpsStreamErrorKey = "ops_stream_error"
+
+	OpsClientBusinessLimitedKey                     = "ops_client_business_limited"
+	OpsClientBusinessLimitedReasonKey               = "ops_client_business_limited_reason"
+	OpsClientBusinessLimitedReasonLocalPolicyDenied = "local_policy_denied"
 )
 
 func setOpsUpstreamRequestBody(c *gin.Context, body []byte) {
@@ -51,6 +57,48 @@ func SetOpsLatencyMs(c *gin.Context, key string, value int64) {
 		return
 	}
 	c.Set(key, value)
+}
+
+func MarkOpsClientBusinessLimited(c *gin.Context, reason string) {
+	if c == nil {
+		return
+	}
+	c.Set(OpsClientBusinessLimitedKey, true)
+	if reason = strings.TrimSpace(reason); reason != "" {
+		c.Set(OpsClientBusinessLimitedReasonKey, reason)
+	}
+}
+
+type OpsStreamError struct {
+	ErrType        string
+	Message        string
+	IntendedStatus int
+}
+
+func MarkOpsStreamError(c *gin.Context, errType, message string, intendedStatus int) {
+	if c == nil {
+		return
+	}
+	if _, exists := c.Get(OpsStreamErrorKey); exists {
+		return
+	}
+	c.Set(OpsStreamErrorKey, OpsStreamError{
+		ErrType:        strings.TrimSpace(errType),
+		Message:        strings.TrimSpace(message),
+		IntendedStatus: intendedStatus,
+	})
+}
+
+func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
+	if c == nil {
+		return OpsStreamError{}, false
+	}
+	v, ok := c.Get(OpsStreamErrorKey)
+	if !ok {
+		return OpsStreamError{}, false
+	}
+	streamErr, ok := v.(OpsStreamError)
+	return streamErr, ok
 }
 
 // SetOpsUpstreamError is the exported wrapper for setOpsUpstreamError, used by

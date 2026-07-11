@@ -118,6 +118,8 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if abortIfAPIKeyGroupNotAllowed(c, apiKey) {
 			return
 		}
+		ctx := context.WithValue(c.Request.Context(), ctxkey.UserID, apiKey.User.ID)
+		c.Request = c.Request.WithContext(ctx)
 
 		// ── 4. SimpleMode → early return ─────────────────────────────
 
@@ -275,12 +277,25 @@ func loadUsableCreditSubscriptionForAuth(ctx context.Context, subscriptionServic
 			continue
 		}
 		candidateIDs = append(candidateIDs, sub.ID)
-		if _, err := subscriptionService.ValidateAndCheckLimits(&sub, group); err != nil {
-			if !isFallbackableSubscriptionAuthError(err) {
-				return nil, nil, err
+		needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(&sub, group)
+		// Credit-pool subscriptions may intentionally leave all periodic windows
+		// unactivated until billing. Only revalidate an already-active stale
+		// window here; otherwise auth would turn pure total-quota subscriptions
+		// into a synchronous database-write path.
+		if needsMaintenance && sub.IsWindowActivated() {
+			refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(ctx, &sub)
+			if maintenanceErr != nil {
+				return nil, nil, maintenanceErr
+			}
+			sub = *refreshed
+			_, validateErr = subscriptionService.ValidateAndCheckLimits(&sub, group)
+		}
+		if validateErr != nil {
+			if !isFallbackableSubscriptionAuthError(validateErr) {
+				return nil, nil, validateErr
 			}
 			if firstErr == nil {
-				firstErr = err
+				firstErr = validateErr
 			}
 			continue
 		}

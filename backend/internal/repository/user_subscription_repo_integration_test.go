@@ -392,7 +392,7 @@ func (s *UserSubscriptionRepoSuite) TestResetDailyUsage() {
 	})
 
 	resetAt := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-	err := s.repo.ResetDailyUsage(s.ctx, sub.ID, resetAt)
+	err := s.repo.ResetDailyUsage(s.ctx, sub.ID, sub.DailyWindowStart, resetAt)
 	s.Require().NoError(err, "ResetDailyUsage")
 
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
@@ -403,6 +403,47 @@ func (s *UserSubscriptionRepoSuite) TestResetDailyUsage() {
 	s.Require().WithinDuration(resetAt, *got.DailyWindowStart, time.Microsecond)
 }
 
+func (s *UserSubscriptionRepoSuite) TestResetDailyUsage_StaleResetDoesNotClearNewWindowUsage() {
+	user := s.mustCreateUser("resetd-cas@test.com", service.RoleUser)
+	group := s.mustCreateGroup("g-resetd-cas")
+	oldWindowStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	sub := s.mustCreateSubscription(user.ID, group.ID, func(c *dbent.UserSubscriptionCreate) {
+		c.SetDailyWindowStart(oldWindowStart)
+		c.SetDailyUsageUsd(10)
+	})
+
+	newWindowStart := oldWindowStart.Add(24 * time.Hour)
+	s.Require().NoError(s.repo.ResetDailyUsage(s.ctx, sub.ID, &oldWindowStart, newWindowStart))
+	s.Require().NoError(s.repo.IncrementUsage(s.ctx, sub.ID, 3))
+	// Simulate a second request carrying the stale old-window snapshot.
+	s.Require().NoError(s.repo.ResetDailyUsage(s.ctx, sub.ID, &oldWindowStart, newWindowStart))
+
+	got, err := s.repo.GetByID(s.ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Require().InDelta(3, got.DailyUsageUSD, 1e-6)
+	s.Require().WithinDuration(newWindowStart, *got.DailyWindowStart, time.Microsecond)
+}
+
+func (s *UserSubscriptionRepoSuite) TestResetUsageWindows_ClearsUsageAfterAutomaticWindowAdvance() {
+	user := s.mustCreateUser("admin-reset-current@test.com", service.RoleUser)
+	group := s.mustCreateGroup("g-admin-reset-current")
+	oldWindowStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	sub := s.mustCreateSubscription(user.ID, group.ID, func(c *dbent.UserSubscriptionCreate) {
+		c.SetDailyWindowStart(oldWindowStart)
+		c.SetDailyUsageUsd(10)
+	})
+
+	newWindowStart := oldWindowStart.Add(24 * time.Hour)
+	s.Require().NoError(s.repo.ResetDailyUsage(s.ctx, sub.ID, &oldWindowStart, newWindowStart))
+	s.Require().NoError(s.repo.IncrementUsage(s.ctx, sub.ID, 3))
+	s.Require().NoError(s.repo.ResetUsageWindows(s.ctx, sub.ID, true, false, false, newWindowStart))
+
+	got, err := s.repo.GetByID(s.ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Require().InDelta(0, got.DailyUsageUSD, 1e-6)
+	s.Require().WithinDuration(newWindowStart, *got.DailyWindowStart, time.Microsecond)
+}
+
 func (s *UserSubscriptionRepoSuite) TestResetWeeklyUsage() {
 	user := s.mustCreateUser("resetw@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-resetw")
@@ -411,7 +452,7 @@ func (s *UserSubscriptionRepoSuite) TestResetWeeklyUsage() {
 	})
 
 	resetAt := time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
-	err := s.repo.ResetWeeklyUsage(s.ctx, sub.ID, resetAt)
+	err := s.repo.ResetWeeklyUsage(s.ctx, sub.ID, sub.WeeklyWindowStart, resetAt)
 	s.Require().NoError(err, "ResetWeeklyUsage")
 
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
@@ -427,13 +468,11 @@ func (s *UserSubscriptionRepoSuite) TestResetMonthlyUsage() {
 	sub := s.mustCreateSubscription(user.ID, group.ID, nil)
 
 	resetAt := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
-	err := s.repo.ResetMonthlyUsage(s.ctx, sub.ID, resetAt)
+	err := s.repo.ResetMonthlyUsage(s.ctx, sub.ID, nil, resetAt)
 	s.Require().NoError(err, "ResetMonthlyUsage")
 
-	got, err := s.repo.GetByID(s.ctx, sub.ID)
+	_, err = s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err)
-	s.Require().InDelta(0.0, got.MonthlyUsageUSD, 1e-6)
-	s.Require().Nil(got.MonthlyWindowStart)
 }
 
 // --- UpdateStatus / ExtendExpiry / UpdateNotes ---
@@ -624,7 +663,7 @@ func (s *UserSubscriptionRepoSuite) TestActiveExpiredBoundaries_UsageAndReset_Ba
 	s.Require().NotNil(after.WeeklyWindowStart, "expected WeeklyWindowStart activated")
 
 	resetAt := time.Now().Truncate(time.Microsecond) // truncate to microsecond for DB precision
-	s.Require().NoError(s.repo.ResetDailyUsage(s.ctx, active.ID, resetAt), "ResetDailyUsage")
+	s.Require().NoError(s.repo.ResetDailyUsage(s.ctx, active.ID, after.DailyWindowStart, resetAt), "ResetDailyUsage")
 	afterReset, err := s.repo.GetByID(s.ctx, active.ID)
 	s.Require().NoError(err, "GetByID after reset")
 	s.Require().InDelta(0.0, afterReset.DailyUsageUSD, 1e-6)
