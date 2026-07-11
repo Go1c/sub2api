@@ -267,6 +267,30 @@ func (s *OpenAIGatewayService) BindGrokMediaVideoRequestAccount(ctx context.Cont
 }
 
 func (e GrokMediaEndpoint) upstreamURL(baseURL, requestID string) (string, error) {
+	return e.upstreamURLForAccount(nil, baseURL, requestID)
+}
+
+// upstreamURLForAccount builds media upstream URLs.
+// OAuth accounts (or nil account) use the official xAI allowlist helpers.
+// API Key accounts use OpenAI-compatible URL assembly so custom base_url works.
+func (e GrokMediaEndpoint) upstreamURLForAccount(account *Account, baseURL, requestID string) (string, error) {
+	if account != nil && account.IsGrokAPIKey() {
+		switch e {
+		case GrokMediaEndpointImagesGenerations:
+			return buildOpenAIEndpointURL(baseURL, "/v1/images/generations"), nil
+		case GrokMediaEndpointImagesEdits:
+			return buildOpenAIEndpointURL(baseURL, "/v1/images/edits"), nil
+		case GrokMediaEndpointVideosGenerations:
+			return buildOpenAIEndpointURL(baseURL, "/v1/videos/generations"), nil
+		case GrokMediaEndpointVideoStatus:
+			if strings.TrimSpace(requestID) == "" {
+				return "", fmt.Errorf("request id is required for video status")
+			}
+			return buildOpenAIEndpointURL(baseURL, "/v1/videos/"+requestID), nil
+		default:
+			return "", fmt.Errorf("unsupported grok media endpoint: %s", e)
+		}
+	}
 	switch e {
 	case GrokMediaEndpointImagesGenerations:
 		return xai.BuildImagesGenerationsURL(baseURL)
@@ -302,7 +326,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if err != nil {
 		return nil, err
 	}
-	targetURL, err := endpoint.upstreamURL(account.GetGrokBaseURL(), requestID)
+	targetURL, err := endpoint.upstreamURLForAccount(account, account.GetGrokBaseURL(), requestID)
 	if err != nil {
 		return nil, err
 	}
