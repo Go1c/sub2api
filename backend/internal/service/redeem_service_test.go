@@ -72,12 +72,14 @@ type redeemServiceCacheStub struct {
 	acquireOK      bool
 	acquireErr     error
 	releaseErr     error
+	getCalls       int
 	incrementCalls int
 	acquireCalls   int
 	releaseCalls   int
 }
 
 func (c *redeemServiceCacheStub) GetRedeemAttemptCount(context.Context, int64) (int, error) {
+	c.getCalls++
 	return c.count, c.getErr
 }
 
@@ -210,7 +212,52 @@ func TestRedeemServiceReturnsTooManyRequestsAfterTwentyFailures(t *testing.T) {
 	require.ErrorIs(t, err, ErrRedeemRateLimited)
 	require.Equal(t, http.StatusTooManyRequests, infraerrors.Code(err))
 	require.Equal(t, "REDEEM_RATE_LIMITED", infraerrors.Reason(err))
+	require.Equal(t, 1, cache.getCalls)
 	require.Zero(t, cache.acquireCalls)
+}
+
+func TestRedeemForPaymentFulfillmentOnlyBypassesManualFailureCounter(t *testing.T) {
+	tests := []struct {
+		name string
+		repo *redeemServiceRepositoryStub
+		err  error
+	}{
+		{
+			name: "missing code",
+			repo: &redeemServiceRepositoryStub{getByCodeErr: ErrRedeemCodeNotFound},
+			err:  ErrRedeemCodeNotFound,
+		},
+		{
+			name: "used code",
+			repo: &redeemServiceRepositoryStub{code: &RedeemCode{
+				ID: 1, Code: "PAYMENT-USED", Type: RedeemTypeBalance, Value: 10, Status: StatusUsed,
+			}},
+			err: ErrRedeemCodeUsed,
+		},
+		{
+			name: "expired code",
+			repo: &redeemServiceRepositoryStub{code: &RedeemCode{
+				ID: 2, Code: "PAYMENT-EXPIRED", Type: RedeemTypeBalance, Value: 10, Status: StatusExpired,
+			}},
+			err: ErrRedeemCodeUsed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := &redeemServiceCacheStub{count: redeemMaxErrorsPerHour, acquireOK: true}
+			svc := NewRedeemService(tt.repo, nil, nil, cache, nil, nil, nil, nil)
+
+			_, err := svc.redeemForPaymentFulfillment(context.Background(), 42, "PAYMENT-CODE")
+
+			require.ErrorIs(t, err, tt.err)
+			require.Zero(t, cache.getCalls)
+			require.Zero(t, cache.incrementCalls)
+			require.Equal(t, 1, cache.acquireCalls)
+			require.Equal(t, 1, cache.releaseCalls)
+			require.Zero(t, tt.repo.useCalls)
+		})
+	}
 }
 
 func TestRedeemServiceFailsOpenWhenRedisIsUnavailable(t *testing.T) {
