@@ -31,8 +31,11 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	reqStream bool,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
-	if account.Type != AccountTypeOAuth {
-		return nil, fmt.Errorf("grok account type %s is not supported by subscription forwarding", account.Type)
+	if account == nil || !account.IsGrok() {
+		return nil, fmt.Errorf("grok account is required")
+	}
+	if !account.IsGrokOAuth() && !account.IsGrokAPIKey() {
+		return nil, fmt.Errorf("grok account type %s is not supported for responses forwarding", account.Type)
 	}
 
 	upstreamModel := account.GetMappedModel(originalModel)
@@ -645,8 +648,25 @@ func addOpenAIUsage(dst *OpenAIUsage, usage OpenAIUsage) {
 	dst.ImageOutputTokens += usage.ImageOutputTokens
 }
 
+// resolveGrokResponsesURL returns the upstream Responses URL for a Grok account.
+// OAuth accounts stay on the official xAI allowlist path; API Key accounts use an
+// OpenAI-compatible base_url so third-party upstreams (URL + Key) can be forwarded.
+func resolveGrokResponsesURL(account *Account) (string, error) {
+	if account == nil || !account.IsGrok() {
+		return "", fmt.Errorf("grok account is required")
+	}
+	baseURL := strings.TrimSpace(account.GetGrokBaseURL())
+	if baseURL == "" {
+		return "", fmt.Errorf("grok base_url is empty")
+	}
+	if account.IsGrokAPIKey() {
+		return buildOpenAIResponsesURL(baseURL), nil
+	}
+	return xai.BuildResponsesURL(baseURL)
+}
+
 func buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string) (*http.Request, error) {
-	targetURL, err := xai.BuildResponsesURL(account.GetGrokBaseURL())
+	targetURL, err := resolveGrokResponsesURL(account)
 	if err != nil {
 		return nil, err
 	}
@@ -684,9 +704,17 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 	}
 	switch statusCode {
 	case http.StatusUnauthorized:
-		s.tempUnscheduleGrok(ctx, account, 10*time.Minute, "grok oauth token unauthorized")
+		reason := "grok oauth token unauthorized"
+		if account.IsGrokAPIKey() {
+			reason = "grok api_key unauthorized"
+		}
+		s.tempUnscheduleGrok(ctx, account, 10*time.Minute, reason)
 	case http.StatusForbidden:
-		s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok entitlement or subscription tier denied")
+		reason := "grok entitlement or subscription tier denied"
+		if account.IsGrokAPIKey() {
+			reason = "grok api_key forbidden"
+		}
+		s.tempUnscheduleGrok(ctx, account, 30*time.Minute, reason)
 	case http.StatusTooManyRequests:
 		cooldown := 2 * time.Minute
 		if snapshot := xai.ParseQuotaHeaders(headers, statusCode); snapshot != nil && snapshot.RetryAfterSeconds != nil && *snapshot.RetryAfterSeconds > 0 {

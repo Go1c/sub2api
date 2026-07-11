@@ -189,6 +189,12 @@ func (a *Account) IsGrokOAuth() bool {
 	return a.IsGrok() && a.Type == AccountTypeOAuth
 }
 
+// IsGrokAPIKey reports a Grok account that authenticates with a static API key
+// and optional OpenAI-compatible base_url (official xAI or third-party upstream).
+func (a *Account) IsGrokAPIKey() bool {
+	return a.IsGrok() && a.Type == AccountTypeAPIKey
+}
+
 func (a *Account) IsOpenAICompatible() bool {
 	return a != nil && (a.Platform == PlatformOpenAI || a.Platform == PlatformGrok)
 }
@@ -1065,6 +1071,13 @@ func (a *Account) GetGrokRefreshToken() string {
 		return ""
 	}
 	return a.GetCredential("refresh_token")
+}
+
+func (a *Account) GetGrokApiKey() string {
+	if !a.IsGrokAPIKey() {
+		return ""
+	}
+	return a.GetCredential("api_key")
 }
 
 func (a *Account) GetOpenAIIDToken() string {

@@ -201,6 +201,134 @@ func TestBuildGrokResponsesRequestRejectsUnsafeAccountBaseURL(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid base url")
 }
 
+func TestBuildGrokResponsesRequestAllowsCustomBaseURLForAPIKeyAccounts(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"base_url": "https://getezo.com",
+			"api_key":  "sk-test",
+		},
+	}
+
+	req, err := buildGrokResponsesRequest(context.Background(), nil, account, []byte(`{"model":"grok-4.3"}`), "sk-test")
+	require.NoError(t, err)
+	require.Equal(t, "https://getezo.com/v1/responses", req.URL.String())
+	require.Equal(t, "Bearer sk-test", req.Header.Get("Authorization"))
+}
+
+func TestResolveGrokResponsesURLForAPIKeyNormalizesV1Suffix(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"base_url": "https://getezo.com/v1/",
+			"api_key":  "sk-test",
+		},
+	}
+	target, err := resolveGrokResponsesURL(account)
+	require.NoError(t, err)
+	require.Equal(t, "https://getezo.com/v1/responses", target)
+}
+
+func TestForwardGrokResponsesSupportsAPIKeyUpstream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	body := []byte(`{"model":"grok","input":"hi","stream":false}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	account := &Account{
+		ID:          71,
+		Name:        "grok-apikey",
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "sk-upstream",
+			"base_url": "https://getezo.com",
+		},
+	}
+	upstreamBody := `{"id":"resp_apikey","object":"response","model":"grok-4.3","output":[],"usage":{"input_tokens":3,"output_tokens":2}}`
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+		},
+		Body: io.NopCloser(strings.NewReader(upstreamBody)),
+	}}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+
+	result, err := svc.forwardGrokResponses(context.Background(), c, account, body, "grok", false, time.Now())
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "https://getezo.com/v1/responses", upstream.lastReq.URL.String())
+	require.Equal(t, "Bearer sk-upstream", upstream.lastReq.Header.Get("Authorization"))
+	// "grok" alias maps to current default Grok model family.
+	require.Equal(t, "grok-4.5", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, "resp_apikey", result.ResponseID)
+	require.Equal(t, 3, result.Usage.InputTokens)
+	require.Equal(t, 2, result.Usage.OutputTokens)
+}
+
+func TestForwardGrokResponsesRejectsUnsupportedAccountType(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	body := []byte(`{"model":"grok","input":"hi"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeSetupToken,
+	}
+	svc := &OpenAIGatewayService{}
+	_, err := svc.forwardGrokResponses(context.Background(), c, account, body, "grok", false, time.Now())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not supported for responses forwarding")
+}
+
+func TestRawChatCompletionsURLSupportsGrokAPIKeyCustomBase(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"base_url": "https://getezo.com",
+			"api_key":  "sk-test",
+		},
+	}
+	svc := &OpenAIGatewayService{}
+	target, err := svc.rawChatCompletionsURL(account)
+	require.NoError(t, err)
+	require.Equal(t, "https://getezo.com/v1/chat/completions", target)
+}
+
+func TestIsGrokAPIKeyHelpers(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": "https://getezo.com/v1",
+		},
+	}
+	require.True(t, account.IsGrokAPIKey())
+	require.False(t, account.IsGrokOAuth())
+	require.Equal(t, "sk-test", account.GetGrokApiKey())
+	require.Equal(t, "https://getezo.com/v1", account.GetGrokBaseURL())
+}
+
 func TestGrokMediaGenerationGateCoversImagesAndVideo(t *testing.T) {
 	tests := []struct {
 		name     string
