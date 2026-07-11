@@ -266,10 +266,6 @@ func (s *OpenAIGatewayService) BindGrokMediaVideoRequestAccount(ctx context.Cont
 	return s.BindStickySession(ctx, groupID, GrokMediaVideoRequestSessionHash(requestID), accountID)
 }
 
-func (e GrokMediaEndpoint) upstreamURL(baseURL, requestID string) (string, error) {
-	return e.upstreamURLForAccount(nil, baseURL, requestID)
-}
-
 // upstreamURLForAccount builds media upstream URLs.
 // OAuth accounts (or nil account) use the official xAI allowlist helpers.
 // API Key accounts use OpenAI-compatible URL assembly so custom base_url works.
