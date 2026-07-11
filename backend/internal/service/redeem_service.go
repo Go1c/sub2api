@@ -266,9 +266,22 @@ func (s *RedeemService) releaseRedeemLock(ctx context.Context, code string) {
 
 // Redeem 使用兑换码
 func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (*RedeemCode, error) {
+	return s.redeem(ctx, userID, code, true)
+}
+
+// redeemForPaymentFulfillment is restricted to trusted payment fulfillment.
+// It skips only the manual failed-attempt counter; all code validation, locking,
+// transactional updates, and cache invalidation remain in the shared flow.
+func (s *RedeemService) redeemForPaymentFulfillment(ctx context.Context, userID int64, code string) (*RedeemCode, error) {
+	return s.redeem(ctx, userID, code, false)
+}
+
+func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, enforceManualFailureLimit bool) (*RedeemCode, error) {
 	// 检查限流
-	if err := s.checkRedeemRateLimit(ctx, userID); err != nil {
-		return nil, err
+	if enforceManualFailureLimit {
+		if err := s.checkRedeemRateLimit(ctx, userID); err != nil {
+			return nil, err
+		}
 	}
 
 	// 获取分布式锁，防止同一兑换码并发使用
@@ -281,7 +294,9 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	redeemCode, err := s.redeemRepo.GetByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, ErrRedeemCodeNotFound) {
-			s.incrementRedeemErrorCount(ctx, userID)
+			if enforceManualFailureLimit {
+				s.incrementRedeemErrorCount(ctx, userID)
+			}
 			return nil, ErrRedeemCodeNotFound
 		}
 		if errors.Is(err, ErrRedeemCodeDataConflict) {
@@ -297,7 +312,9 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 
 	// 检查兑换码状态
 	if !redeemCode.CanUse() {
-		s.incrementRedeemErrorCount(ctx, userID)
+		if enforceManualFailureLimit {
+			s.incrementRedeemErrorCount(ctx, userID)
+		}
 		return nil, ErrRedeemCodeUsed
 	}
 

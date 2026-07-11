@@ -29,6 +29,7 @@ type paymentOrderLifecycleQueryProvider struct {
 
 type paymentOrderLifecycleRedeemRepo struct {
 	codesByCode map[string]*RedeemCode
+	createCalls int
 	useAttempts int
 	useCalls    []struct {
 		id     int64
@@ -72,8 +73,18 @@ func (p *paymentOrderLifecycleQueryProvider) Refund(context.Context, payment.Ref
 	panic("unexpected call")
 }
 
-func (r *paymentOrderLifecycleRedeemRepo) Create(context.Context, *RedeemCode) error {
-	panic("unexpected call")
+func (r *paymentOrderLifecycleRedeemRepo) Create(_ context.Context, code *RedeemCode) error {
+	if r.codesByCode == nil {
+		r.codesByCode = make(map[string]*RedeemCode)
+	}
+	cloned := *code
+	if cloned.ID == 0 {
+		cloned.ID = int64(len(r.codesByCode) + 1)
+	}
+	r.codesByCode[cloned.Code] = &cloned
+	code.ID = cloned.ID
+	r.createCalls++
+	return nil
 }
 
 func (r *paymentOrderLifecycleRedeemRepo) CreateBatch(context.Context, []RedeemCode) error {
@@ -160,6 +171,56 @@ func (r *paymentOrderLifecycleRedeemRepo) ListByUserPaginated(context.Context, i
 
 func (r *paymentOrderLifecycleRedeemRepo) SumPositiveBalanceByUser(context.Context, int64) (float64, error) {
 	panic("unexpected call")
+}
+
+func TestExecuteBalanceFulfillmentBypassesRedeemRateLimitAndRemainsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+	order := createPaidBalanceOrderForFulfillmentTest(t, ctx, client)
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID}}
+	userRepo.updateBalanceFn = func(_ context.Context, userID int64, amount float64) error {
+		require.Equal(t, order.UserID, userID)
+		userRepo.getByIDUser.Balance += amount
+		return nil
+	}
+	redeemRepo := &paymentOrderLifecycleRedeemRepo{codesByCode: map[string]*RedeemCode{}}
+	cache := &redeemServiceCacheStub{count: redeemMaxErrorsPerHour, acquireOK: true}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, cache, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+
+	err := svc.ExecuteBalanceFulfillment(ctx, order.ID)
+	require.NoError(t, err)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.NotNil(t, reloaded.CompletedAt)
+	require.True(t, paymentLifecycleHasAuditAction(t, ctx, client, order.ID, "RECHARGE_SUCCESS"))
+	require.Equal(t, order.Amount, userRepo.getByIDUser.Balance)
+	require.Equal(t, 1, redeemRepo.createCalls)
+	require.Equal(t, 1, redeemRepo.useCallCount())
+	require.Equal(t, StatusUsed, redeemRepo.codesByCode[order.RechargeCode].Status)
+	require.Zero(t, cache.getCalls, "trusted payment fulfillment must not check manual redeem failures")
+	require.Zero(t, cache.incrementCalls, "trusted payment fulfillment must not add manual redeem failures")
+	require.Equal(t, 1, cache.acquireCalls, "distributed redeem lock must remain enabled")
+	require.Equal(t, 1, cache.releaseCalls)
+
+	_, err = client.PaymentOrder.UpdateOneID(order.ID).
+		SetStatus(OrderStatusFulfillmentFailed).
+		ClearCompletedAt().
+		Save(ctx)
+	require.NoError(t, err)
+
+	err = svc.ExecuteBalanceFulfillment(ctx, order.ID)
+	require.NoError(t, err)
+	reloaded, err = client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.Equal(t, order.Amount, userRepo.getByIDUser.Balance)
+	require.Equal(t, 1, redeemRepo.createCalls)
+	require.Equal(t, 1, redeemRepo.useCallCount())
+	require.Zero(t, cache.getCalls)
+	require.Zero(t, cache.incrementCalls)
 }
 
 func TestVerifyOrderByOutTradeNoBackfillsTradeNoFromPaidQuery(t *testing.T) {
