@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: completed
 ---
 
 # Sync All Upstream Grok Changes — 2026-07-10
@@ -38,5 +38,15 @@ status: in_progress
   - `git diff --check` passes.
   - Backend unit/integration tests and `go vet -tags integration ./...` pass; lint/build gates pass where available.
   - Frontend typecheck/build pass.
-  - PR is merged into `dev`; `publish` is not modified.
+  - Topic branch PR is merged into `dev`.
 - Dependency: Tasks 2 and 3.
+
+## Task 5 — Promote the exact dev snapshot to publish
+
+- Scope: after Task 4 is merged, create a release branch directly from the current `origin/dev`, open the repository-approved release PR to `publish`, and merge it without adding commits on the release branch.
+- Acceptance:
+  - Release branch content is the exact current `origin/dev` snapshot.
+  - Release PR is merged into `publish`; neither `publish` nor the release branch receives an independent fix.
+  - `git diff origin/dev origin/publish` is empty after fetching the merged refs.
+  - No release tag is created unless separately requested.
+- Dependency: Task 4.
