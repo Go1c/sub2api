@@ -214,7 +214,7 @@ func (s *emailCacheStub) IncrNotifyCodeUserRate(ctx context.Context, userID int6
 	return 0, nil
 }
 
-func newAuthService(repo *userRepoStub, settings map[string]string, emailCache EmailCache) *AuthService {
+func newAuthService(repo *userRepoStub, settings map[string]string, emailCache EmailCache, quotaRepos ...UserPlatformQuotaRepository) *AuthService {
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
 			Secret:     "test-secret",
@@ -235,6 +235,10 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 	if emailCache != nil {
 		emailService = NewEmailService(&settingRepoStub{values: settings}, emailCache)
 	}
+	var quotaRepo UserPlatformQuotaRepository
+	if len(quotaRepos) > 0 {
+		quotaRepo = quotaRepos[0]
+	}
 
 	return NewAuthService(
 		nil, // entClient
@@ -249,6 +253,7 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 		nil, // promoService
 		nil, // defaultSubAssigner
 		nil, // affiliateService
+		quotaRepo,
 	)
 }
 

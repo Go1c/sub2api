@@ -76,7 +76,8 @@ export type AuthSourceType =
   | "oidc"
   | "wechat"
   | "github"
-  | "google";
+  | "google"
+  | "dingtalk";
 
 export interface AuthSourceDefaultsValue {
   balance: number;
@@ -128,6 +129,7 @@ const AUTH_SOURCE_TYPES: AuthSourceType[] = [
   "wechat",
   "github",
   "google",
+  "dingtalk",
 ];
 const AUTH_SOURCE_DEFAULT_BALANCE = 0;
 const AUTH_SOURCE_DEFAULT_CONCURRENCY = 5;

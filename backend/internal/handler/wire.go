@@ -7,9 +7,9 @@ import (
 	"github.com/google/wire"
 )
 
-func provideRedeemCodeRedeemer(svc *service.RedeemService) redeemCodeRedeemer { return svc }
-func providePromoCodeRedeemer(svc *service.PromoService) promoCodeRedeemer    { return svc }
-func provideSubscriptionWasteStatsService(svc *service.SubscriptionWasteStatsService) admin.SubscriptionWasteStatsService {
+func ProvideRedeemCodeRedeemer(svc *service.RedeemService) redeemCodeRedeemer { return svc }
+func ProvidePromoCodeRedeemer(svc *service.PromoService) promoCodeRedeemer    { return svc }
+func ProvideSubscriptionWasteStatsService(svc *service.SubscriptionWasteStatsService) admin.SubscriptionWasteStatsService {
 	return svc
 }
 
@@ -161,8 +161,8 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
-	provideRedeemCodeRedeemer,
-	providePromoCodeRedeemer,
+	ProvideRedeemCodeRedeemer,
+	ProvidePromoCodeRedeemer,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
 	NewSiteMessageHandler,
@@ -202,7 +202,7 @@ var ProviderSet = wire.NewSet(
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
 	admin.NewSubscriptionWasteStatsHandler,
-	provideSubscriptionWasteStatsService,
+	ProvideSubscriptionWasteStatsService,
 	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
