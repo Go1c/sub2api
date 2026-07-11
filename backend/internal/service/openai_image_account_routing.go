@@ -34,7 +34,13 @@ func (s *OpenAIGatewayService) openAIImageAccountRoutingMode() string {
 }
 
 func (s *OpenAIGatewayService) isOpenAIAccountImageRoutingCompatible(account *Account, requiresImageGeneration bool) bool {
-	if account == nil || !account.IsOpenAI() {
+	if account == nil {
+		return false
+	}
+	if account.IsGrok() {
+		return !requiresImageGeneration
+	}
+	if !account.IsOpenAI() {
 		return false
 	}
 	if account.SupportsOpenAIImageGenerationRouting(requiresImageGeneration) {

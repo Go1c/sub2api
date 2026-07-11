@@ -7,6 +7,12 @@ import (
 	"github.com/google/wire"
 )
 
+func ProvideRedeemCodeRedeemer(svc *service.RedeemService) redeemCodeRedeemer { return svc }
+func ProvidePromoCodeRedeemer(svc *service.PromoService) promoCodeRedeemer    { return svc }
+func ProvideSubscriptionWasteStatsService(svc *service.SubscriptionWasteStatsService) admin.SubscriptionWasteStatsService {
+	return svc
+}
+
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
@@ -23,6 +29,7 @@ func ProvideAdminHandlers(
 	openaiOAuthHandler *admin.OpenAIOAuthHandler,
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
 	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
+	grokOAuthHandler *admin.GrokOAuthHandler,
 	proxyHandler *admin.ProxyHandler,
 	redeemHandler *admin.RedeemHandler,
 	promoHandler *admin.PromoHandler,
@@ -59,6 +66,7 @@ func ProvideAdminHandlers(
 		OpenAIOAuth:            openaiOAuthHandler,
 		GeminiOAuth:            geminiOAuthHandler,
 		AntigravityOAuth:       antigravityOAuthHandler,
+		GrokOAuth:              grokOAuthHandler,
 		Proxy:                  proxyHandler,
 		Redeem:                 redeemHandler,
 		Promo:                  promoHandler,
@@ -153,6 +161,8 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
+	ProvideRedeemCodeRedeemer,
+	ProvidePromoCodeRedeemer,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
 	NewSiteMessageHandler,
@@ -183,6 +193,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewOpenAIOAuthHandler,
 	admin.NewGeminiOAuthHandler,
 	admin.NewAntigravityOAuthHandler,
+	admin.NewGrokOAuthHandler,
 	admin.NewProxyHandler,
 	admin.NewRedeemHandler,
 	admin.NewPromoHandler,
@@ -191,6 +202,7 @@ var ProviderSet = wire.NewSet(
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
 	admin.NewSubscriptionWasteStatsHandler,
+	ProvideSubscriptionWasteStatsService,
 	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,

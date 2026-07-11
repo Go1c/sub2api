@@ -99,28 +99,8 @@ vi.mock("@/api", () => ({
   },
 }));
 
-vi.mock("@/api/admin/settings", () => {
-  const authSourceTypes = ["email", "linuxdo", "oidc", "wechat", "github", "google"] as const;
-  const FRONTEND_LOCALE_OPTIONS = [
-    { value: "en", labelZh: "English", labelEn: "English" },
-    { value: "zh", labelZh: "简体中文", labelEn: "Simplified Chinese" },
-    { value: "zh-Hant", labelZh: "繁體中文", labelEn: "Traditional Chinese" },
-  ];
-  const normalizeDefaultSubscriptionSettings = (
-    subscriptions: Array<{ group_id: number; validity_days: number }> | null | undefined,
-  ) =>
-    Array.isArray(subscriptions)
-      ? subscriptions
-          .filter((item) => item.group_id > 0 && item.validity_days > 0)
-          .map((item) => ({
-            group_id: Math.floor(item.group_id),
-            validity_days: Math.min(36500, Math.max(1, Math.floor(item.validity_days))),
-          }))
-      : [];
-  const normalizeWeChatConnectMode = (source: unknown) => {
-    const normalized = String(source || "").trim().toLowerCase();
-    return normalized === "mp" || normalized === "mobile" ? normalized : "open";
-  };
+vi.mock("@/api/admin/settings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/admin/settings")>();
   const settingsAPI = {
     getSettings,
     updateSettings,
@@ -146,89 +126,9 @@ vi.mock("@/api/admin/settings", () => {
   };
 
   return {
+    ...actual,
     default: settingsAPI,
     settingsAPI,
-    FRONTEND_LOCALE_OPTIONS,
-    normalizeDefaultSubscriptionSettings,
-    buildAuthSourceDefaultsState: (settings: Record<string, unknown>) =>
-      authSourceTypes.reduce(
-        (acc, source) => {
-          acc[source] = {
-            balance: Number(settings[`auth_source_default_${source}_balance`] ?? 0),
-            concurrency: Math.max(1, Number(settings[`auth_source_default_${source}_concurrency`] ?? 5)),
-            subscriptions: normalizeDefaultSubscriptionSettings(
-              settings[`auth_source_default_${source}_subscriptions`] as Array<{
-                group_id: number;
-                validity_days: number;
-              }>,
-            ),
-            grant_on_signup: settings[`auth_source_default_${source}_grant_on_signup`] === true,
-            grant_on_first_bind: settings[`auth_source_default_${source}_grant_on_first_bind`] === true,
-          };
-          return acc;
-        },
-        {} as Record<string, Record<string, unknown>>,
-      ),
-    appendAuthSourceDefaultsToUpdateRequest: (
-      payload: Record<string, unknown>,
-      authSourceDefaults: Record<string, Record<string, unknown>>,
-    ) => {
-      for (const source of authSourceTypes) {
-        const current = authSourceDefaults[source] || {};
-        payload[`auth_source_default_${source}_balance`] = Number(current.balance) || 0;
-        payload[`auth_source_default_${source}_concurrency`] = Math.max(
-          1,
-          Math.floor(Number(current.concurrency) || 5),
-        );
-        payload[`auth_source_default_${source}_subscriptions`] = normalizeDefaultSubscriptionSettings(
-          current.subscriptions as Array<{ group_id: number; validity_days: number }>,
-        );
-        payload[`auth_source_default_${source}_grant_on_signup`] = current.grant_on_signup === true;
-        payload[`auth_source_default_${source}_grant_on_first_bind`] = current.grant_on_first_bind === true;
-      }
-      return payload;
-    },
-    defaultWeChatConnectScopesForMode: (mode: unknown) => {
-      const normalized = normalizeWeChatConnectMode(mode);
-      if (normalized === "mp") return "snsapi_userinfo";
-      if (normalized === "mobile") return "";
-      return "snsapi_login";
-    },
-    deriveWeChatConnectStoredMode: (
-      openEnabled: boolean,
-      mpEnabled: boolean,
-      mobileEnabled: boolean,
-      legacyMode: unknown,
-    ) => {
-      if (mpEnabled) return "mp";
-      if (mobileEnabled) return "mobile";
-      if (openEnabled) return "open";
-      return normalizeWeChatConnectMode(legacyMode);
-    },
-    resolveWeChatConnectModeCapabilities: (
-      openEnabled: unknown,
-      mpEnabled: unknown,
-      mobileEnabled: unknown,
-      legacyMode: unknown,
-    ) => {
-      if (
-        typeof openEnabled === "boolean" ||
-        typeof mpEnabled === "boolean" ||
-        typeof mobileEnabled === "boolean"
-      ) {
-        return {
-          openEnabled: openEnabled === true,
-          mpEnabled: mpEnabled === true,
-          mobileEnabled: mobileEnabled === true,
-        };
-      }
-      const normalized = normalizeWeChatConnectMode(legacyMode);
-      return {
-        openEnabled: normalized === "open",
-        mpEnabled: normalized === "mp",
-        mobileEnabled: normalized === "mobile",
-      };
-    },
   };
 });
 
@@ -313,6 +213,16 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.openaiExperimentalScheduler.description": "默认关闭。开启后仅影响本网关在 OpenAI 账号间的实验性调度选择逻辑，不代表上游 OpenAI 官方能力。",
     "admin.settings.site.uploadImage": "上传图片",
     "admin.settings.site.remove": "移除",
+    "admin.settings.platformQuota.platform": "平台",
+    "admin.settings.platformQuota.daily": "日限额 (USD)",
+    "admin.settings.platformQuota.weekly": "周限额 (USD)",
+    "admin.settings.platformQuota.monthly": "月限额 (USD, 30天滚动)",
+    "admin.settings.platformQuota.placeholder": "不限",
+    "admin.settings.defaults.defaultPlatformQuotas": "默认平台限额（注册时分配）",
+    "admin.settings.defaults.defaultPlatformQuotasHint": "新用户注册时自动写入平台限额记录；已有用户不受影响。留空 = 该平台该窗口不限制。",
+    "admin.settings.defaults.platformQuotaNotice": "月限额为 30 天滚动窗口，非自然月",
+    "admin.settings.authSourceDefaults.platformQuotasOverride": "平台限额覆盖",
+    "admin.settings.authSourceDefaults.platformQuotasOverrideHint": "留空的字段继承「系统默认平台限额」；填 0 表示禁止该窗口使用。",
   };
   return {
     ...actual,
@@ -560,6 +470,13 @@ const baseSettingsResponse = {
   site_messages_daily_send_limit: 10,
   site_messages_retention_days: 30,
   site_messages_default_recipient_email: "",
+  // 平台限额嵌套字段（新后端契约）
+  default_platform_quotas: {
+    anthropic:   { daily: null, weekly: null, monthly: null },
+    openai:      { daily: null, weekly: 12.5, monthly: null },
+    gemini:      { daily: null, weekly: null, monthly: 200 },
+    antigravity: { daily: null, weekly: null, monthly: null },
+  },
 };
 
 function mountView() {
@@ -1654,5 +1571,159 @@ describe("admin SettingsView wechat connect controls", () => {
 
     expect(updateModelMarket).not.toHaveBeenCalled();
     expect(showError).toHaveBeenCalledWith("admin.settings.modelMarket.customGroupRequired");
+  });
+});
+
+describe("admin SettingsView platform quota matrix", () => {
+  beforeEach(() => {
+    getSettings.mockReset();
+    updateSettings.mockReset();
+    getWebSearchEmulationConfig.mockReset();
+    updateWebSearchEmulationConfig.mockReset();
+    getAdminApiKey.mockReset();
+    getOverloadCooldownSettings.mockReset();
+    getRateLimit429CooldownSettings.mockReset();
+    updateRateLimit429CooldownSettings.mockReset();
+    getStreamTimeoutSettings.mockReset();
+    getRectifierSettings.mockReset();
+    getBetaPolicySettings.mockReset();
+    getGroups.mockReset();
+    listProxies.mockReset();
+    getProviders.mockReset();
+    updateProvider.mockReset();
+    createProvider.mockReset();
+    deleteProvider.mockReset();
+    fetchPublicSettings.mockReset();
+    adminSettingsFetch.mockReset();
+    showError.mockReset();
+    showSuccess.mockReset();
+    localeRef.value = "zh-CN";
+
+    getSettings.mockResolvedValue({ ...baseSettingsResponse });
+    updateSettings.mockImplementation(async (payload) => ({
+      ...baseSettingsResponse,
+      ...payload,
+    }));
+    getWebSearchEmulationConfig.mockResolvedValue({ enabled: false, providers: [] });
+    updateWebSearchEmulationConfig.mockResolvedValue({ enabled: false, providers: [] });
+    getAdminApiKey.mockResolvedValue({ exists: false, masked_key: "" });
+    getOverloadCooldownSettings.mockResolvedValue({});
+    getRateLimit429CooldownSettings.mockResolvedValue({});
+    updateRateLimit429CooldownSettings.mockResolvedValue({});
+    getStreamTimeoutSettings.mockResolvedValue({});
+    getRectifierSettings.mockResolvedValue({});
+    getBetaPolicySettings.mockResolvedValue({});
+    getGroups.mockResolvedValue([]);
+    listProxies.mockResolvedValue({ items: [] });
+    getProviders.mockResolvedValue({ data: [] });
+  });
+
+  it("从 baseSettings 加载默认平台配额数据并在 Users tab 渲染 5 平台行", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openUsersTab(wrapper);
+
+    expect(getSettings).toHaveBeenCalled();
+
+    const html = wrapper.html();
+    // 表格行的平台字段：font-mono 渲染纯英文 platform key
+    expect(html).toContain("anthropic");
+    expect(html).toContain("openai");
+    expect(html).toContain("gemini");
+    expect(html).toContain("antigravity");
+  });
+
+  it("保存时 updateSettings payload 应包含嵌套 default_platform_quotas 对象（含全 5 平台）", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openUsersTab(wrapper);
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalled();
+    const lastCallArgs = updateSettings.mock.calls.at(-1);
+    expect(lastCallArgs).toBeDefined();
+    const payload = lastCallArgs![0] as Record<string, unknown>;
+
+    // 应携带嵌套对象，而非扁平字段
+    expect(payload).toHaveProperty("default_platform_quotas");
+    const quotas = payload["default_platform_quotas"] as Record<string, unknown>;
+    const platforms = ["anthropic", "openai", "gemini", "antigravity", "grok"];
+    for (const p of platforms) {
+      expect(quotas).toHaveProperty(p);
+      const pq = quotas[p] as Record<string, unknown>;
+      expect(pq).toHaveProperty("daily");
+      expect(pq).toHaveProperty("weekly");
+      expect(pq).toHaveProperty("monthly");
+    }
+
+    // 不应存在旧扁平字段
+    expect(payload).not.toHaveProperty("default_platform_quota_anthropic_daily");
+    expect(payload).not.toHaveProperty("default_platform_quota_openai_weekly");
+  });
+
+  it("加载后 form.default_platform_quotas 含全 5 平台，从嵌套 JSON 正确读取数值", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      default_platform_quotas: {
+        anthropic: { daily: 5, weekly: null, monthly: null },
+        openai:    { daily: null, weekly: 12.5, monthly: null },
+        // gemini / antigravity 缺失 → 应被归一化为全 null
+      },
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openUsersTab(wrapper);
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    const payload = updateSettings.mock.calls.at(-1)![0] as Record<string, unknown>;
+    const quotas = payload["default_platform_quotas"] as Record<string, Record<string, unknown>>;
+
+    expect(quotas["anthropic"]?.["daily"]).toBe(5);
+    expect(quotas["openai"]?.["weekly"]).toBe(12.5);
+    // 缺失平台应补全为 null
+    expect(quotas["gemini"]).toEqual({ daily: null, weekly: null, monthly: null });
+    expect(quotas["antigravity"]).toEqual({ daily: null, weekly: null, monthly: null });
+  });
+
+  it("空输入（v-model.number 产出 \"\"）在提交时清洗为 null 而非空字符串", async () => {
+    // 模拟后端返回带有 anthropic daily 值的配额
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      default_platform_quotas: {
+        anthropic: { daily: 10, weekly: null, monthly: null },
+        openai:    { daily: null, weekly: null, monthly: null },
+        gemini:    { daily: null, weekly: null, monthly: null },
+        antigravity: { daily: null, weekly: null, monthly: null },
+      },
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    await openUsersTab(wrapper);
+
+    // 找到 anthropic daily 输入框并清空（模拟用户删除值）
+    const inputs = wrapper.findAll('input[type="number"]');
+    const anthropicDailyInput = inputs.find((i) => {
+      const parent = i.element.closest("tr");
+      return parent?.textContent?.includes("anthropic");
+    });
+
+    if (anthropicDailyInput) {
+      // 设置为空字符串，模拟 v-model.number 在清空时产出 ""
+      await anthropicDailyInput.setValue("");
+    }
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    const payload = updateSettings.mock.calls.at(-1)![0] as Record<string, unknown>;
+    const quotas = payload["default_platform_quotas"] as Record<string, Record<string, unknown>>;
+    // 不管输入是什么，提交值应为 null（而非 "" 或 NaN）
+    expect(quotas["anthropic"]?.["daily"]).toBe(null);
   });
 });

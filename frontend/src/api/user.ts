@@ -17,7 +17,8 @@ import type {
   UserAffiliateDetail,
   AffiliateTransferResponse,
   AffiliateInviteLog,
-  PaginatedResponse
+  PaginatedResponse,
+  PlatformQuotasResponse,
 } from '@/types'
 
 /**
@@ -200,6 +201,14 @@ export async function getAffiliateInviteLogs(params: {
   return data
 }
 
+/**
+ * 获取当前用户的平台限额 + 用量。
+ */
+export async function getMyPlatformQuotas(): Promise<PlatformQuotasResponse> {
+  const { data } = await apiClient.get<PlatformQuotasResponse>('/user/platform-quotas')
+  return data
+}
+
 export const userAPI = {
   getProfile,
   updateProfile,
@@ -215,7 +224,8 @@ export const userAPI = {
   startOAuthBinding,
   getAffiliateDetail,
   transferAffiliateQuota,
-  getAffiliateInviteLogs
+  getAffiliateInviteLogs,
+  getMyPlatformQuotas,
 }
 
 export default userAPI
