@@ -11,6 +11,8 @@ package tlsfingerprint
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -18,24 +20,66 @@ import (
 	"time"
 )
 
+func TestExternalServiceUnavailableError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "unexpected EOF", err: io.ErrUnexpectedEOF, want: true},
+		{name: "wrapped EOF", err: fmt.Errorf("read response: %w", io.EOF), want: true},
+		{name: "network timeout", err: errors.New("dial tcp: i/o timeout"), want: true},
+		{name: "malformed JSON", err: &json.SyntaxError{Offset: 1}, want: false},
+		{name: "truncated JSON", err: errors.New("unexpected end of JSON input"), want: false},
+		{name: "JA3 mismatch", err: errors.New("JA3 mismatch"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isExternalServiceUnavailable(tt.err); got != tt.want {
+				t.Fatalf("isExternalServiceUnavailable(%v) = %t, want %t", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+func isExternalServiceUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	errStr := strings.ToLower(err.Error())
+	for _, message := range []string{
+		"certificate has expired",
+		"certificate is not yet valid",
+		"connection refused",
+		"no such host",
+		"network is unreachable",
+		"timeout",
+		"deadline exceeded",
+	} {
+		if strings.Contains(errStr, message) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // skipIfExternalServiceUnavailable checks if the external service is available.
 // If not, it skips the test instead of failing.
 func skipIfExternalServiceUnavailable(t *testing.T, err error) {
 	t.Helper()
-	if err != nil {
-		// Check for common network/TLS errors that indicate external service issues
-		errStr := err.Error()
-		if strings.Contains(errStr, "certificate has expired") ||
-			strings.Contains(errStr, "certificate is not yet valid") ||
-			strings.Contains(errStr, "connection refused") ||
-			strings.Contains(errStr, "no such host") ||
-			strings.Contains(errStr, "network is unreachable") ||
-			strings.Contains(errStr, "timeout") ||
-			strings.Contains(errStr, "deadline exceeded") {
-			t.Skipf("skipping test: external service unavailable: %v", err)
-		}
-		t.Fatalf("failed to get fingerprint: %v", err)
+	if err == nil {
+		return
 	}
+	if isExternalServiceUnavailable(err) {
+		t.Skipf("skipping test: external service unavailable: %v", err)
+	}
+	t.Fatalf("failed to get fingerprint: %v", err)
 }
 
 // TestJA3Fingerprint verifies the JA3/JA4 fingerprint matches expected value.
@@ -74,9 +118,7 @@ func TestJA3Fingerprint(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response: %v", err)
-	}
+	skipIfExternalServiceUnavailable(t, err)
 
 	var fpResp FingerprintResponse
 	if err := json.Unmarshal(body, &fpResp); err != nil {
@@ -207,10 +249,7 @@ func fetchFingerprint(t *testing.T, profile *Profile) *TLSInfo {
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read response: %v", err)
-		return nil
-	}
+	skipIfExternalServiceUnavailable(t, err)
 
 	var fpResp FingerprintResponse
 	if err := json.Unmarshal(body, &fpResp); err != nil {
