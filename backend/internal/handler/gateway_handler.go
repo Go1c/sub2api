@@ -25,7 +25,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -1140,85 +1139,6 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		"object": "list",
 		"data":   models,
 	})
-}
-
-func filterModelsByCustomList(availableModels, fallbackModels, selectedModels []string) []string {
-	if len(selectedModels) == 0 {
-		return availableModels
-	}
-	source := availableModels
-	if len(source) == 0 {
-		source = fallbackModels
-	}
-	if len(source) == 0 {
-		return nil
-	}
-
-	allowed := make([]string, 0, len(source))
-	for _, model := range source {
-		model = strings.TrimSpace(model)
-		if model != "" {
-			allowed = append(allowed, model)
-		}
-	}
-
-	seen := make(map[string]struct{}, len(selectedModels))
-	filtered := make([]string, 0, len(selectedModels))
-	for _, model := range selectedModels {
-		model = strings.TrimSpace(model)
-		if model == "" {
-			continue
-		}
-		if !customModelsListAllowsModel(allowed, model) {
-			continue
-		}
-		if _, ok := seen[model]; ok {
-			continue
-		}
-		seen[model] = struct{}{}
-		filtered = append(filtered, model)
-	}
-	return filtered
-}
-
-func customModelsListAllowsModel(availablePatterns []string, model string) bool {
-	for _, pattern := range availablePatterns {
-		if pattern == model {
-			return true
-		}
-		if strings.HasSuffix(pattern, "*") && strings.HasPrefix(model, strings.TrimSuffix(pattern, "*")) {
-			return true
-		}
-	}
-	return false
-}
-
-func defaultModelIDsForPlatform(platform string) []string {
-	switch platform {
-	case service.PlatformOpenAI:
-		return openai.DefaultModelIDs()
-	case service.PlatformGemini:
-		ids := make([]string, 0, len(geminicli.DefaultModels))
-		for _, model := range geminicli.DefaultModels {
-			ids = append(ids, model.ID)
-		}
-		return ids
-	case service.PlatformAntigravity:
-		models := antigravity.DefaultModels()
-		ids := make([]string, 0, len(models))
-		for _, model := range models {
-			ids = append(ids, model.ID)
-		}
-		return ids
-	case service.PlatformGrok:
-		return xai.DefaultModelIDs()
-	default:
-		ids := make([]string, 0, len(claude.DefaultModels))
-		for _, model := range claude.DefaultModels {
-			ids = append(ids, model.ID)
-		}
-		return ids
-	}
 }
 
 // AntigravityModels 返回 Antigravity 支持的全部模型

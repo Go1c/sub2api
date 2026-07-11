@@ -1597,7 +1597,6 @@ retryAccount:
 		return
 	}
 	reqLog.Info("openai.websocket_ingress_closed", zap.Int64("account_id", account.ID))
-	return
 }
 
 func (h *OpenAIGatewayHandler) recoverResponsesPanic(c *gin.Context, streamStarted *bool) {
