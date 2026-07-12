@@ -183,6 +183,22 @@ var providerAdapters = map[string]providerAdapter{
 		},
 		extractText: extractOpenAIResponseText,
 	},
+	// Grok/xAI 使用 OpenAI 兼容协议：/v1/chat/completions + Bearer auth。
+	MonitorProviderGrok: {
+		buildPath: func(string) string { return providerOpenAIPath },
+		buildBody: func(model, prompt string) ([]byte, error) {
+			return json.Marshal(map[string]any{
+				"model":      model,
+				"messages":   []map[string]string{{"role": "user", "content": prompt}},
+				"max_tokens": monitorChallengeMaxTokens,
+				"stream":     false,
+			})
+		},
+		buildHeaders: func(apiKey string) map[string]string {
+			return map[string]string{"Authorization": "Bearer " + apiKey}
+		},
+		extractText: extractOpenAIResponseText,
+	},
 	MonitorProviderAnthropic: {
 		buildPath: func(string) string { return providerAnthropicPath },
 		buildBody: func(model, prompt string) ([]byte, error) {
@@ -621,6 +637,7 @@ func buildGeminiCompatibilityChallengeBody(prompt string) ([]byte, error) {
 //nolint:gochecknoglobals // 静态查表，初始化后不变。
 var bodyMergeKeyDenyList = map[string]map[string]bool{
 	MonitorProviderOpenAI:    {"model": true, "messages": true, "stream": true},
+	MonitorProviderGrok:      {"model": true, "messages": true, "stream": true},
 	MonitorProviderAnthropic: {"model": true, "messages": true},
 	MonitorProviderGemini:    {"contents": true},
 }
