@@ -26,8 +26,9 @@ type CodexModelsManifest struct {
 	NotModified bool
 }
 
-// FetchCodexModelsManifest fetches the live Codex models manifest from the
-// ChatGPT backend using the account's OAuth credentials.
+// FetchCodexModelsManifest fetches the live Codex models manifest from either
+// the ChatGPT backend using OAuth credentials or an OpenAI-compatible custom
+// upstream using API key credentials.
 //
 // The response body is passed through verbatim: the manifest schema evolves
 // with Codex client releases, and interpreting it here would force the gateway
@@ -37,16 +38,40 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 	if account == nil {
 		return nil, infraerrors.New(http.StatusInternalServerError, "OPENAI_CODEX_MODELS_ACCOUNT_REQUIRED", "account is required")
 	}
-	accessToken := account.GetOpenAIAccessToken()
-	if accessToken == "" {
-		return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_TOKEN_MISSING", "account has no Codex backend access token")
-	}
 
 	clientVersion = strings.TrimSpace(clientVersion)
 	if clientVersion == "" {
 		clientVersion = openAICodexProbeVersion
 	}
-	requestURL := chatgptCodexModelsURL + "?client_version=" + url.QueryEscape(clientVersion)
+
+	requestURL := ""
+	authToken := ""
+	isOAuth := account.IsOpenAIOAuth()
+	switch {
+	case isOAuth:
+		authToken = strings.TrimSpace(account.GetOpenAIAccessToken())
+		if authToken == "" {
+			return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_TOKEN_MISSING", "account has no Codex backend access token")
+		}
+		requestURL = chatgptCodexModelsURL
+	case account.IsOpenAIApiKey():
+		customBaseURL := strings.TrimSpace(account.GetCredential("base_url"))
+		if customBaseURL == "" {
+			return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_UPSTREAM_NOT_CONFIGURED", "account has no custom OpenAI-compatible base_url for Codex models")
+		}
+		authToken = strings.TrimSpace(account.GetOpenAIApiKey())
+		if authToken == "" {
+			return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_TOKEN_MISSING", "account has no OpenAI API key for Codex models upstream")
+		}
+		validatedBaseURL, err := s.validateUpstreamBaseURL(customBaseURL)
+		if err != nil {
+			return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_UPSTREAM_NOT_CONFIGURED", "account Codex models upstream base_url is invalid")
+		}
+		requestURL = buildOpenAIEndpointURL(validatedBaseURL, "/v1/models")
+	default:
+		return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_UPSTREAM_NOT_CONFIGURED", "account cannot provide a Codex models upstream")
+	}
+	requestURL += "?client_version=" + url.QueryEscape(clientVersion)
 
 	reqCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -54,16 +79,21 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusInternalServerError, "OPENAI_CODEX_MODELS_REQUEST_FAILED", "create codex models request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Authorization", "Bearer "+authToken)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Originator", "codex_cli_rs")
-	req.Header.Set("Version", clientVersion)
-	req.Header.Set("User-Agent", codexCLIUserAgent)
+	if isOAuth {
+		req.Header.Set("Originator", "codex_cli_rs")
+		req.Header.Set("Version", clientVersion)
+		req.Header.Set("User-Agent", codexCLIUserAgent)
+	}
 	if ifNoneMatch = strings.TrimSpace(ifNoneMatch); ifNoneMatch != "" {
 		req.Header.Set("If-None-Match", ifNoneMatch)
 	}
-	if chatgptAccountID := account.GetChatGPTAccountID(); chatgptAccountID != "" {
-		req.Header.Set("chatgpt-account-id", chatgptAccountID)
+	if isOAuth {
+		chatgptAccountID := account.GetChatGPTAccountID()
+		if chatgptAccountID != "" {
+			req.Header.Set("chatgpt-account-id", chatgptAccountID)
+		}
 	}
 
 	proxyURL := ""
