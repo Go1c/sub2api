@@ -52,10 +52,12 @@ const (
 	// providerGeminiPathTemplate Gemini streamGenerateContent 路径模板（含 model 占位）。
 	providerGeminiPathTemplate = "/v1beta/models/%s:streamGenerateContent?alt=sse"
 
-	// MonitorProviderOpenAI / Anthropic / Gemini provider 字符串常量（也是 ent enum 的实际值）。
+	// MonitorProviderOpenAI / Anthropic / Gemini / Grok provider 字符串常量（也是 ent enum 的实际值）。
+	// Grok/xAI 走 OpenAI 兼容的 /v1/chat/completions。
 	MonitorProviderOpenAI    = "openai"
 	MonitorProviderAnthropic = "anthropic"
 	MonitorProviderGemini    = "gemini"
+	MonitorProviderGrok      = "grok"
 
 	// MonitorStatusOperational 等监控状态字符串常量（与 ent enum 一致）。
 	MonitorStatusOperational = "operational"
@@ -121,7 +123,7 @@ var (
 		"CHANNEL_MONITOR_NOT_FOUND", "channel monitor not found",
 	)
 	ErrChannelMonitorInvalidProvider = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini",
+		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok",
 	)
 	ErrChannelMonitorInvalidInterval = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_INTERVAL", "interval_seconds must be in [15, 3600]",
