@@ -115,7 +115,7 @@ func ParseGrokMediaRequest(contentType string, body []byte) GrokMediaRequestInfo
 	info.Model = strings.TrimSpace(info.Model)
 	info.Prompt = strings.TrimSpace(info.Prompt)
 	info.Size = strings.TrimSpace(info.Size)
-	info.SizeTier = normalizeImageBillingTier(info.Size)
+	info.SizeTier = NormalizeImageBillingTierOrDefault(info.Size)
 	info.Resolution = NormalizeVideoBillingResolutionOrDefault(info.Resolution)
 	info.DurationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(info.DurationSeconds)
 	if info.N <= 0 {
@@ -266,27 +266,7 @@ func (s *OpenAIGatewayService) BindGrokMediaVideoRequestAccount(ctx context.Cont
 	return s.BindStickySession(ctx, groupID, GrokMediaVideoRequestSessionHash(requestID), accountID)
 }
 
-// upstreamURLForAccount builds media upstream URLs.
-// OAuth accounts (or nil account) use the official xAI allowlist helpers.
-// API Key accounts use OpenAI-compatible URL assembly so custom base_url works.
-func (e GrokMediaEndpoint) upstreamURLForAccount(account *Account, baseURL, requestID string) (string, error) {
-	if account != nil && account.IsGrokAPIKey() {
-		switch e {
-		case GrokMediaEndpointImagesGenerations:
-			return buildOpenAIEndpointURL(baseURL, "/v1/images/generations"), nil
-		case GrokMediaEndpointImagesEdits:
-			return buildOpenAIEndpointURL(baseURL, "/v1/images/edits"), nil
-		case GrokMediaEndpointVideosGenerations:
-			return buildOpenAIEndpointURL(baseURL, "/v1/videos/generations"), nil
-		case GrokMediaEndpointVideoStatus:
-			if strings.TrimSpace(requestID) == "" {
-				return "", fmt.Errorf("request id is required for video status")
-			}
-			return buildOpenAIEndpointURL(baseURL, "/v1/videos/"+requestID), nil
-		default:
-			return "", fmt.Errorf("unsupported grok media endpoint: %s", e)
-		}
-	}
+func (e GrokMediaEndpoint) upstreamURL(baseURL, requestID string) (string, error) {
 	switch e {
 	case GrokMediaEndpointImagesGenerations:
 		return xai.BuildImagesGenerationsURL(baseURL)
@@ -322,7 +302,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if err != nil {
 		return nil, err
 	}
-	targetURL, err := endpoint.upstreamURLForAccount(account, account.GetGrokBaseURL(), requestID)
+	targetURL, err := endpoint.upstreamURL(account.GetGrokBaseURL(), requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +333,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	upstreamReq.Header.Set("Authorization", "Bearer "+token)
 	upstreamReq.Header.Set("Accept", "application/json")
-	upstreamReq.Header.Set("User-Agent", "sub2api-grok/1.0")
+	applyGrokCLIHeaders(upstreamReq.Header)
 	if endpoint.RequiresRequestBody() {
 		contentType = strings.TrimSpace(contentType)
 		if contentType == "" {
@@ -370,18 +350,17 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
-		return nil, s.handleGrokUpstreamTransportError(c, account, err)
+		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	requestIDHeader := firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
 	requestModel := requestInfo.Model
 	if resp.StatusCode >= 400 {
-		s.updateGrokUsageSnapshot(ctx, account.ID, xai.ParseQuotaHeaders(resp.Header, resp.StatusCode))
 		return s.handleGrokMediaErrorResponse(ctx, resp, c, account, requestIDHeader, requestModel)
 	}
 
-	s.updateGrokUsageSnapshot(ctx, account.ID, xai.ParseQuotaHeaders(resp.Header, resp.StatusCode))
+	s.updateGrokUsageSnapshot(ctx, account, xai.ParseQuotaHeaders(resp.Header, resp.StatusCode))
 	respBody, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
@@ -399,6 +378,8 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		Duration:             time.Since(startTime),
 		ImageCount:           usage.ImageCount,
 		ImageSize:            usage.ImageSize,
+		ImageInputSize:       usage.ImageInputSize,
+		ImageOutputSizes:     usage.ImageOutputSizes,
 		VideoCount:           usage.VideoCount,
 		VideoResolution:      usage.VideoResolution,
 		VideoDurationSeconds: usage.VideoDurationSeconds,
@@ -461,7 +442,7 @@ func prepareGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conten
 		payload["mask"] = map[string]string{"image_url": maskImageURL}
 	}
 
-	out, err := json.Marshal(payload)
+	out, err := marshalOpenAIUpstreamJSON(payload)
 	if err != nil {
 		return nil, "", err
 	}
@@ -527,6 +508,8 @@ type grokMediaUsageMetadata struct {
 	Usage                OpenAIUsage
 	ImageCount           int
 	ImageSize            string
+	ImageInputSize       string
+	ImageOutputSizes     []string
 	VideoCount           int
 	VideoResolution      string
 	VideoDurationSeconds int
@@ -546,6 +529,8 @@ func grokMediaUsageFromResponse(endpoint GrokMediaEndpoint, requestInfo GrokMedi
 		}
 		meta.ImageCount = imageCount
 		meta.ImageSize = requestInfo.SizeTier
+		meta.ImageInputSize = requestInfo.Size
+		meta.ImageOutputSizes = collectOpenAIResponseImageOutputSizesFromJSONBytes(responseBody)
 	case GrokMediaEndpointVideosGenerations:
 		meta.ResponseID = extractGrokMediaVideoRequestID(responseBody)
 		meta.VideoCount = 1
@@ -577,7 +562,10 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	requestIDHeader string,
 	requestedModel string,
 ) (*OpenAIForwardResult, error) {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	body := s.readUpstreamErrorBody(resp)
+	// Reconcile readiness before configurable passthrough branches can return;
+	// otherwise a Grok 429 can remain schedulable.
+	s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
 	upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(body)))
 	if upstreamMsg == "" {
 		upstreamMsg = fmt.Sprintf("xAI upstream returned status %d", resp.StatusCode)
@@ -602,6 +590,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
+		MarkResponseCommitted(c)
 		writeGrokMediaErrorResponse(c, status, errType, errMsg)
 		return nil, fmt.Errorf("upstream error: %d (passthrough rule matched) message=%s", resp.StatusCode, upstreamMsg)
 	}
@@ -617,11 +606,11 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 			Message:            upstreamMsg,
 			Detail:             upstreamDetail,
 		})
+		MarkResponseCommitted(c)
 		writeGrokMediaErrorResponse(c, http.StatusInternalServerError, "upstream_error", "Upstream gateway error")
 		return nil, fmt.Errorf("upstream error: %d (not in custom error codes) message=%s", resp.StatusCode, upstreamMsg)
 	}
 
-	s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
 	kind := "http_error"
 	if s.shouldFailoverUpstreamError(resp.StatusCode) {
 		kind = "failover"
@@ -640,10 +629,11 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 		return nil, &UpstreamFailoverError{
 			StatusCode:             resp.StatusCode,
 			ResponseBody:           body,
-			RetryableOnSameAccount: account.IsPoolMode() && isPoolModeRetryableStatus(resp.StatusCode),
+			RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
 		}
 	}
 
+	MarkResponseCommitted(c)
 	writeGrokMediaErrorResponse(c, resp.StatusCode, grokMediaErrorType(resp.StatusCode), upstreamMsg)
 	return nil, fmt.Errorf("upstream error: %d %s", resp.StatusCode, upstreamMsg)
 }
