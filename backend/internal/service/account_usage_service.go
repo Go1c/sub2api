@@ -5,12 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -107,33 +105,15 @@ type antigravityUsageCache struct {
 }
 
 const (
-	apiCacheTTL                 = 3 * time.Minute
-	apiErrorCacheTTL            = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
-	antigravityErrorTTL         = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
-	apiQueryMaxJitter           = 800 * time.Millisecond // 用量查询最大随机延迟
-	windowStatsCacheTTL         = 1 * time.Minute
-	openAIProbeCacheTTL         = 10 * time.Minute
-	openAICodexProbeVersion     = codexCLIVersion
-	upstreamBalanceTimeout      = 10 * time.Second
-	upstreamBalanceLoginTimeout = 10 * time.Second
-	upstreamBalanceBodyMax      = 4096
-	newAPIQuotaPerUnit          = 500000.0
-
-	newAPITokenQuotaNotUserBalanceMessage = "New API token quota is not user account balance; use upstream panel login to fetch user balance credentials"
-	upstreamBalanceCookieCredentialPrefix = "cookie:"
+	apiCacheTTL             = 3 * time.Minute
+	apiErrorCacheTTL        = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
+	antigravityErrorTTL     = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
+	apiQueryMaxJitter       = 800 * time.Millisecond // 用量查询最大随机延迟
+	windowStatsCacheTTL     = 1 * time.Minute
+	openAIProbeCacheTTL     = 10 * time.Minute
+	grokProbeRetryTTL       = 1 * time.Minute
+	openAICodexProbeVersion = "0.144.1"
 )
-
-var upstreamBalancePaths = []string{
-	"/v1/usage",
-	"/api/v1/usage",
-	"/dashboard/billing/credit_grants",
-	"/v1/dashboard/billing/credit_grants",
-	"/api/v1/balance",
-	"/v1/balance",
-	"/usage",
-	"/api/usage/token/",
-	"/api/usage/token",
-}
 
 // UsageCache 封装账户使用量相关的缓存
 type UsageCache struct {
@@ -143,6 +123,7 @@ type UsageCache struct {
 	apiFlight         singleflight.Group // 防止同一账号的并发请求击穿缓存（Anthropic）
 	antigravityFlight singleflight.Group // 防止同一 Antigravity 账号的并发请求击穿缓存
 	openAIProbeCache  sync.Map           // accountID -> time.Time
+	grokProbeCache    sync.Map           // accountID -> last billing probe attempt
 }
 
 // NewUsageCache 创建 UsageCache 实例
@@ -198,38 +179,6 @@ type AICredit struct {
 	MinimumBalance float64 `json:"minimum_balance,omitempty"`
 }
 
-// UpstreamBalanceResult records a lightweight upstream balance probe result.
-type UpstreamBalanceResult struct {
-	Enabled    bool       `json:"enabled"`
-	CheckedAt  *time.Time `json:"checked_at,omitempty"`
-	Success    bool       `json:"success"`
-	StatusCode int        `json:"status_code,omitempty"`
-	Path       string     `json:"path,omitempty"`
-	Balance    *float64   `json:"balance,omitempty"`
-	Currency   string     `json:"currency,omitempty"`
-	Message    string     `json:"message,omitempty"`
-	Raw        string     `json:"raw,omitempty"`
-}
-
-// UpstreamBalanceLoginInput is a one-shot upstream login request used to obtain
-// user balance credentials without persisting the upstream password.
-type UpstreamBalanceLoginInput struct {
-	BaseURL  string
-	Provider string
-	Username string
-	Password string
-}
-
-// UpstreamBalanceLoginCredentials contains the reusable user auth material
-// extracted from a NewAPI/Sub2API login response.
-type UpstreamBalanceLoginCredentials struct {
-	Provider    string   `json:"provider"`
-	AccessToken string   `json:"access_token"`
-	UserID      string   `json:"user_id,omitempty"`
-	Balance     *float64 `json:"balance,omitempty"`
-	Currency    string   `json:"currency,omitempty"`
-}
-
 // UsageInfo 账号使用量信息
 type UsageInfo struct {
 	Source             string         `json:"source,omitempty"`               // "passive" or "active"
@@ -237,6 +186,7 @@ type UsageInfo struct {
 	FiveHour           *UsageProgress `json:"five_hour"`                      // 5小时窗口
 	SevenDay           *UsageProgress `json:"seven_day,omitempty"`            // 7天窗口
 	SevenDaySonnet     *UsageProgress `json:"seven_day_sonnet,omitempty"`     // 7天Sonnet窗口
+	SevenDayFable      *UsageProgress `json:"seven_day_fable,omitempty"`      // 7天Fable窗口（响应头 7d_oi）
 	GeminiSharedDaily  *UsageProgress `json:"gemini_shared_daily,omitempty"`  // Gemini shared pool RPD (Google One / Code Assist)
 	GeminiProDaily     *UsageProgress `json:"gemini_pro_daily,omitempty"`     // Gemini Pro 日配额
 	GeminiFlashDaily   *UsageProgress `json:"gemini_flash_daily,omitempty"`   // Gemini Flash 日配额
@@ -248,15 +198,18 @@ type UsageInfo struct {
 	AntigravityQuota map[string]*AntigravityModelQuota `json:"antigravity_quota,omitempty"`
 
 	// Grok / xAI 被动额度快照
-	GrokRequestQuota       *xai.QuotaWindow `json:"grok_request_quota,omitempty"`
-	GrokTokenQuota         *xai.QuotaWindow `json:"grok_token_quota,omitempty"`
-	GrokRetryAfterSeconds  *int             `json:"grok_retry_after_seconds,omitempty"`
-	GrokEntitlementStatus  string           `json:"grok_entitlement_status,omitempty"`
-	GrokQuotaSnapshotState string           `json:"grok_quota_snapshot_state,omitempty"`
-	GrokLastQuotaProbeAt   string           `json:"grok_last_quota_probe_at,omitempty"`
-	GrokLastHeadersSeenAt  string           `json:"grok_last_headers_seen_at,omitempty"`
-	GrokLastStatusCode     int              `json:"grok_last_status_code,omitempty"`
-	GrokLocalUsage         *WindowStats     `json:"grok_local_usage,omitempty"`
+	GrokRequestQuota       *xai.QuotaWindow    `json:"grok_request_quota,omitempty"`
+	GrokTokenQuota         *xai.QuotaWindow    `json:"grok_token_quota,omitempty"`
+	GrokRetryAfterSeconds  *int                `json:"grok_retry_after_seconds,omitempty"`
+	GrokEntitlementStatus  string              `json:"grok_entitlement_status,omitempty"`
+	GrokQuotaSnapshotState string              `json:"grok_quota_snapshot_state,omitempty"`
+	GrokLastQuotaProbeAt   string              `json:"grok_last_quota_probe_at,omitempty"`
+	GrokLastHeadersSeenAt  string              `json:"grok_last_headers_seen_at,omitempty"`
+	GrokLastStatusCode     int                 `json:"grok_last_status_code,omitempty"`
+	GrokLocalUsage         *WindowStats        `json:"grok_local_usage,omitempty"`
+	GrokLocalUsage7d       *WindowStats        `json:"grok_local_usage_7d,omitempty"`
+	GrokLocalUsageMonthly  *WindowStats        `json:"grok_local_usage_monthly,omitempty"`
+	GrokBilling            *xai.BillingSummary `json:"grok_billing,omitempty"`
 
 	// Antigravity 账号级信息
 	SubscriptionTier    string `json:"subscription_tier,omitempty"`     // 归一化订阅等级: FREE/PRO/ULTRA/UNKNOWN
@@ -267,9 +220,6 @@ type UsageInfo struct {
 
 	// Antigravity AI Credits 余额
 	AICredits []AICredit `json:"ai_credits,omitempty"`
-
-	// 自定义上游余额请求结果（Base URL + API Key 账号可选）
-	UpstreamBalance *UpstreamBalanceResult `json:"upstream_balance,omitempty"`
 
 	// Antigravity 废弃模型转发规则 (old_model_id -> new_model_id)
 	ModelForwardingRules map[string]string `json:"model_forwarding_rules,omitempty"`
@@ -292,6 +242,12 @@ type UsageInfo struct {
 	Error string `json:"error,omitempty"`
 }
 
+// ClaudeUsageWindow Anthropic /api/oauth/usage 返回的单个用量窗口
+type ClaudeUsageWindow struct {
+	Utilization float64 `json:"utilization"`
+	ResetsAt    string  `json:"resets_at"`
+}
+
 // ClaudeUsageResponse Anthropic API返回的usage结构
 type ClaudeUsageResponse struct {
 	FiveHour struct {
@@ -306,6 +262,10 @@ type ClaudeUsageResponse struct {
 		Utilization float64 `json:"utilization"`
 		ResetsAt    string  `json:"resets_at"`
 	} `json:"seven_day_sonnet"`
+	// Fable 专属 7d 窗口（对应响应头 7d_oi，claim 名为 seven_day_overage_included，
+	// 见 anthropic-ratelimit-unified-representative-claim 头）。上游 usage API
+	// 若不下发该字段，GetUsage 会用被动采样数据回填。
+	SevenDayOverageIncluded ClaudeUsageWindow `json:"seven_day_overage_included"`
 }
 
 // ClaudeUsageFetchOptions 包含获取 Claude 用量数据所需的所有选项
@@ -332,6 +292,8 @@ type AccountUsageService struct {
 	geminiQuotaService      *GeminiQuotaService
 	antigravityQuotaFetcher *AntigravityQuotaFetcher
 	grokQuotaFetcher        *GrokQuotaFetcher
+	grokQuotaService        *GrokQuotaService
+	openAIQuotaService      *OpenAIQuotaService
 	cache                   *UsageCache
 	identityCache           IdentityCache
 	tlsFPProfileService     *TLSFingerprintProfileService
@@ -345,6 +307,8 @@ func NewAccountUsageService(
 	geminiQuotaService *GeminiQuotaService,
 	antigravityQuotaFetcher *AntigravityQuotaFetcher,
 	grokQuotaFetcher *GrokQuotaFetcher,
+	grokQuotaService *GrokQuotaService,
+	openAIQuotaService *OpenAIQuotaService,
 	cache *UsageCache,
 	identityCache IdentityCache,
 	tlsFPProfileService *TLSFingerprintProfileService,
@@ -356,6 +320,8 @@ func NewAccountUsageService(
 		geminiQuotaService:      geminiQuotaService,
 		antigravityQuotaFetcher: antigravityQuotaFetcher,
 		grokQuotaFetcher:        grokQuotaFetcher,
+		grokQuotaService:        grokQuotaService,
+		openAIQuotaService:      openAIQuotaService,
 		cache:                   cache,
 		identityCache:           identityCache,
 		tlsFPProfileService:     tlsFPProfileService,
@@ -366,14 +332,16 @@ func NewAccountUsageService(
 // OAuth账号: 调用Anthropic API获取真实数据（需要profile scope），API响应缓存10分钟，窗口统计缓存1分钟
 // Setup Token账号: 根据session_window推算5h窗口，7d数据不可用（没有profile scope）
 // API Key账号: 不支持usage查询
-func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64) (*UsageInfo, error) {
+func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, force ...bool) (*UsageInfo, error) {
+	forceProbe := len(force) > 0 && force[0]
+
 	account, err := s.accountRepo.GetByID(ctx, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("get account failed: %w", err)
 	}
 
 	if account.Platform == PlatformOpenAI && account.Type == AccountTypeOAuth {
-		usage, err := s.getOpenAIUsage(ctx, account)
+		usage, err := s.getOpenAIUsage(ctx, account, forceProbe)
 		if err == nil {
 			s.tryClearRecoverableAccountError(ctx, account)
 		}
@@ -398,8 +366,8 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64) (*U
 	}
 
 	if account.Platform == PlatformGrok {
-		usage, err := s.getGrokUsage(ctx, account)
-		if err == nil {
+		usage, err := s.getGrokUsage(ctx, account, forceProbe)
+		if err == nil && usage != nil && usage.Error == "" {
 			s.tryClearRecoverableAccountError(ctx, account)
 		}
 		return usage, err
@@ -480,6 +448,12 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64) (*U
 		// 5. 将主动查询结果同步到被动缓存，下次 passive 加载即为最新值
 		s.syncActiveToPassive(ctx, account.ID, usage)
 
+		// 6. 上游 usage API 目前不一定下发 Fable 7d 窗口；缺失时回填被动采样
+		// （7d_oi 响应头）的数据，避免主动查询后 7d F 进度条丢失。
+		if usage.SevenDayFable == nil {
+			usage.SevenDayFable = buildPassiveUsageWindow(account.Extra, "passive_usage_7d_oi_utilization", "passive_usage_7d_oi_reset")
+		}
+
 		s.tryClearRecoverableAccountError(ctx, account)
 		return usage, nil
 	}
@@ -493,713 +467,7 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64) (*U
 	}
 
 	// API Key账号不支持usage查询
-	if isUpstreamBalanceEnabled(account) {
-		now := time.Now()
-		usage := &UsageInfo{UpdatedAt: &now}
-		usage.UpstreamBalance = s.fetchUpstreamBalance(ctx, account)
-		return usage, nil
-	}
-
-	// API Key账号不支持usage查询
 	return nil, fmt.Errorf("account type %s does not support usage query", account.Type)
-}
-
-func isUpstreamBalanceEnabled(account *Account) bool {
-	if account == nil || account.Extra == nil {
-		return false
-	}
-	enabled, _ := account.Extra["upstream_balance_enabled"].(bool)
-	if !enabled {
-		return false
-	}
-	return account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream
-}
-
-func upstreamBalanceBaseURL(account *Account) string {
-	if account == nil {
-		return ""
-	}
-	baseURL := strings.TrimSpace(account.GetCredential("base_url"))
-	if baseURL != "" {
-		return baseURL
-	}
-	if account.Type == AccountTypeAPIKey {
-		return account.GetBaseURL()
-	}
-	return ""
-}
-
-func upstreamBalanceBaseURLs(baseURL string) []string {
-	normalized := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if normalized == "" {
-		return nil
-	}
-	candidates := []string{normalized}
-	apiRoot := stripUpstreamBalanceAPISuffix(normalized)
-	if apiRoot != "" && apiRoot != normalized {
-		candidates = append(candidates, apiRoot)
-	}
-	return candidates
-}
-
-func stripUpstreamBalanceAPISuffix(baseURL string) string {
-	lower := strings.ToLower(baseURL)
-	for _, suffix := range []string{"/api/v1", "/api/v1beta", "/v1", "/v1beta"} {
-		if strings.HasSuffix(lower, suffix) {
-			return strings.TrimRight(baseURL[:len(baseURL)-len(suffix)], "/")
-		}
-	}
-	return baseURL
-}
-
-func upstreamBalanceProbePaths(account *Account) []string {
-	paths := make([]string, 0, len(upstreamBalancePaths)+3)
-	switch upstreamBalanceProvider(account) {
-	case "newapi":
-		if hasNewAPIUserBalanceAuth(account) {
-			return append(paths, "/api/user/self")
-		}
-		return paths
-	case "sub2api":
-		if hasUpstreamBalanceUserAccessToken(account) {
-			return append(paths, "/api/v1/user/profile", "/api/user/profile")
-		}
-		return paths
-	case "other":
-		return append(paths, upstreamBalancePaths...)
-	}
-	if hasNewAPIUserBalanceAuth(account) {
-		paths = append(paths, "/api/user/self")
-	}
-	if hasUpstreamBalanceUserAccessToken(account) {
-		paths = append(paths, "/api/v1/user/profile", "/api/user/profile")
-	}
-	paths = append(paths, upstreamBalancePaths...)
-	return paths
-}
-
-func hasNewAPIUserBalanceAuth(account *Account) bool {
-	return upstreamBalanceNewAPIAccessToken(account) != "" && upstreamBalanceNewAPIUserID(account) != ""
-}
-
-func hasUpstreamBalanceUserAccessToken(account *Account) bool {
-	return upstreamBalanceNewAPIAccessToken(account) != ""
-}
-
-func upstreamBalanceNewAPIAccessToken(account *Account) string {
-	if account == nil || account.Extra == nil {
-		return ""
-	}
-	for _, key := range []string{"upstream_balance_access_token", "newapi_access_token"} {
-		if raw, ok := account.Extra[key]; ok {
-			if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" && value != "<nil>" {
-				return value
-			}
-		}
-	}
-	return ""
-}
-
-func upstreamBalanceNewAPIUserID(account *Account) string {
-	if account == nil || account.Extra == nil {
-		return ""
-	}
-	for _, key := range []string{"upstream_balance_user_id", "newapi_user_id"} {
-		if raw, ok := account.Extra[key]; ok {
-			if value := strings.TrimSpace(fmt.Sprint(raw)); value != "" && value != "<nil>" {
-				return value
-			}
-		}
-	}
-	return ""
-}
-
-func upstreamBalanceProvider(account *Account) string {
-	if account == nil || account.Extra == nil {
-		return "auto"
-	}
-	if raw, ok := account.Extra["upstream_balance_provider"]; ok {
-		return normalizeUpstreamBalanceProvider(fmt.Sprint(raw))
-	}
-	return "auto"
-}
-
-func normalizeUpstreamBalanceProvider(provider string) string {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "newapi", "new_api", "new-api":
-		return "newapi"
-	case "sub2api", "sub2_api", "sub2-api":
-		return "sub2api"
-	case "other", "generic":
-		return "other"
-	default:
-		return "auto"
-	}
-}
-
-type upstreamBalanceLoginProbe struct {
-	provider string
-	path     string
-	payload  map[string]string
-}
-
-// FetchUpstreamBalanceLoginCredentials logs into a NewAPI/Sub2API-compatible
-// upstream once and returns reusable balance auth fields. It does not store the
-// upstream password.
-func (s *AccountUsageService) FetchUpstreamBalanceLoginCredentials(ctx context.Context, input UpstreamBalanceLoginInput) (*UpstreamBalanceLoginCredentials, error) {
-	baseURLs := upstreamBalanceBaseURLs(input.BaseURL)
-	username := strings.TrimSpace(input.Username)
-	password := input.Password
-	if len(baseURLs) == 0 {
-		return nil, fmt.Errorf("base_url is empty")
-	}
-	if username == "" || password == "" {
-		return nil, fmt.Errorf("username or password is empty")
-	}
-	provider := normalizeUpstreamBalanceProvider(input.Provider)
-	if provider == "other" {
-		return nil, fmt.Errorf("upstream balance login does not support provider other")
-	}
-
-	reqCtx, cancel := context.WithTimeout(ctx, upstreamBalanceLoginTimeout)
-	defer cancel()
-
-	probes := make([]upstreamBalanceLoginProbe, 0, 2)
-	if provider == "auto" || provider == "newapi" {
-		probes = append(probes, upstreamBalanceLoginProbe{
-			provider: "newapi",
-			path:     "/api/user/login",
-			payload: map[string]string{
-				"username": username,
-				"password": password,
-			},
-		})
-	}
-	if provider == "auto" || provider == "sub2api" {
-		probes = append(probes, upstreamBalanceLoginProbe{
-			provider: "sub2api",
-			path:     "/api/v1/auth/login",
-			payload: map[string]string{
-				"email":    username,
-				"password": password,
-			},
-		})
-	}
-
-	var lastErr error
-	for _, baseURL := range baseURLs {
-		for _, probe := range probes {
-			result, err := fetchUpstreamBalanceLoginPath(reqCtx, baseURL, probe)
-			if err == nil {
-				return result, nil
-			}
-			lastErr = err
-		}
-	}
-	if lastErr != nil {
-		return nil, fmt.Errorf("upstream balance login failed: %w", lastErr)
-	}
-	return nil, fmt.Errorf("upstream balance login failed")
-}
-
-func fetchUpstreamBalanceLoginPath(ctx context.Context, baseURL string, probe upstreamBalanceLoginProbe) (*UpstreamBalanceLoginCredentials, error) {
-	body, err := json.Marshal(probe.payload)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+probe.path, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, upstreamBalanceBodyMax))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%s %s", probe.path, resp.Status)
-	}
-	result, err := parseUpstreamBalanceLoginCredentials(probe.provider, raw, resp.Cookies())
-	if err != nil {
-		return nil, fmt.Errorf("%s %w", probe.path, err)
-	}
-	if probe.provider == "newapi" {
-		if err := verifyNewAPIUpstreamBalanceLogin(ctx, baseURL, result); err != nil {
-			return nil, fmt.Errorf("%s %w", probe.path, err)
-		}
-	}
-	return result, nil
-}
-
-func parseUpstreamBalanceLoginCredentials(provider string, body []byte, cookies []*http.Cookie) (*UpstreamBalanceLoginCredentials, error) {
-	var payload any
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := decoder.Decode(&payload); err != nil {
-		return nil, fmt.Errorf("parse response: %w", err)
-	}
-	if message := upstreamBalanceLoginFailureMessage(payload); message != "" {
-		return nil, fmt.Errorf("%s", message)
-	}
-
-	accessToken := strings.TrimSpace(findStringValue(payload, []string{"access_token", "accessToken", "token"}, 0))
-	if accessToken == "" {
-		accessToken = upstreamBalanceCookieCredential(cookies)
-	}
-	if accessToken == "" {
-		return nil, fmt.Errorf("access token or session cookie not found")
-	}
-	userID := strings.TrimSpace(findStringValue(payload, []string{"user_id", "userId", "uid"}, 0))
-	if userID == "" {
-		if id := findNumericValue(payload, []string{"id"}, 0); id != nil {
-			userID = strconv.FormatInt(int64(*id), 10)
-		}
-	}
-
-	balance, currency := parseUpstreamBalance(body)
-	return &UpstreamBalanceLoginCredentials{
-		Provider:    provider,
-		AccessToken: accessToken,
-		UserID:      userID,
-		Balance:     balance,
-		Currency:    currency,
-	}, nil
-}
-
-func upstreamBalanceCookieCredential(cookies []*http.Cookie) string {
-	for _, cookie := range cookies {
-		if cookie == nil || strings.TrimSpace(cookie.Name) == "" || strings.TrimSpace(cookie.Value) == "" {
-			continue
-		}
-		if strings.Contains(strings.ToLower(cookie.Name), "session") {
-			return upstreamBalanceCookieCredentialPrefix + cookie.Name + "=" + cookie.Value
-		}
-	}
-	for _, cookie := range cookies {
-		if cookie == nil || strings.TrimSpace(cookie.Name) == "" || strings.TrimSpace(cookie.Value) == "" {
-			continue
-		}
-		return upstreamBalanceCookieCredentialPrefix + cookie.Name + "=" + cookie.Value
-	}
-	return ""
-}
-
-func verifyNewAPIUpstreamBalanceLogin(ctx context.Context, baseURL string, credentials *UpstreamBalanceLoginCredentials) error {
-	if credentials == nil || strings.TrimSpace(credentials.AccessToken) == "" {
-		return fmt.Errorf("access token or session cookie not found")
-	}
-	if strings.TrimSpace(credentials.UserID) == "" {
-		return fmt.Errorf("user id not found")
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/user/self", nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/json")
-	if cookie, ok := upstreamBalanceCookieAuthValue(credentials.AccessToken); ok {
-		req.Header.Set("Cookie", cookie)
-	} else {
-		req.Header.Set("Authorization", "Bearer "+credentials.AccessToken)
-	}
-	req.Header.Set("New-Api-User", credentials.UserID)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, upstreamBalanceBodyMax))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("/api/user/self %s", resp.Status)
-	}
-	balance, currency := parseUpstreamBalance(raw)
-	if balance == nil {
-		return fmt.Errorf("/api/user/self user balance not found")
-	}
-	credentials.Balance = balance
-	credentials.Currency = currency
-	return nil
-}
-
-func upstreamBalanceLoginFailureMessage(value any) string {
-	payload, ok := asStringMap(value)
-	if !ok {
-		return ""
-	}
-	if success, ok := payload["success"].(bool); ok && !success {
-		if message := findStringValue(payload, []string{"message", "error"}, 0); message != "" {
-			return message
-		}
-		return "upstream login failed"
-	}
-	if code, ok := numericFromAny(payload["code"]); ok && code != 0 {
-		if message := findStringValue(payload, []string{"message", "error"}, 0); message != "" {
-			return message
-		}
-		return fmt.Sprintf("upstream login failed with code %.0f", code)
-	}
-	return ""
-}
-
-func (s *AccountUsageService) fetchUpstreamBalance(ctx context.Context, account *Account) *UpstreamBalanceResult {
-	checkedAt := time.Now()
-	result := &UpstreamBalanceResult{
-		Enabled:   true,
-		CheckedAt: &checkedAt,
-	}
-
-	baseURL := upstreamBalanceBaseURL(account)
-	apiKey := strings.TrimSpace(account.GetCredential("api_key"))
-	if baseURL == "" || apiKey == "" {
-		result.Message = "base_url or api_key is empty"
-		return result
-	}
-	baseURLs := upstreamBalanceBaseURLs(baseURL)
-
-	reqCtx, cancel := context.WithTimeout(ctx, upstreamBalanceTimeout)
-	defer cancel()
-
-	provider := upstreamBalanceProvider(account)
-	if provider == "newapi" && !hasNewAPIUserBalanceAuth(account) {
-		result.Message = newAPITokenQuotaNotUserBalanceMessage
-		return result
-	}
-	if provider == "sub2api" && !hasUpstreamBalanceUserAccessToken(account) {
-		result.Message = "Sub2API user balance credentials are missing; use upstream panel login to fetch them"
-		return result
-	}
-
-	var lastResult *UpstreamBalanceResult
-	paths := upstreamBalanceProbePaths(account)
-	for _, candidateBaseURL := range baseURLs {
-		for _, path := range paths {
-			current := s.fetchUpstreamBalancePath(reqCtx, account, candidateBaseURL, path, apiKey, checkedAt)
-			lastResult = current
-			if current.Success {
-				return current
-			}
-			if !shouldTryNextUpstreamBalanceProbe(current) {
-				return current
-			}
-		}
-	}
-	if lastResult != nil {
-		return lastResult
-	}
-	result.Message = "request failed"
-	return result
-}
-
-func shouldTryNextUpstreamBalanceProbe(result *UpstreamBalanceResult) bool {
-	if result == nil || result.Success {
-		return false
-	}
-	if result.StatusCode == http.StatusNotFound {
-		return true
-	}
-	if result.Message == newAPITokenQuotaNotUserBalanceMessage {
-		return false
-	}
-	if result.StatusCode >= 200 && result.StatusCode < 300 && result.Balance == nil {
-		return true
-	}
-	return false
-}
-
-func (s *AccountUsageService) fetchUpstreamBalancePath(ctx context.Context, account *Account, baseURL, path, apiKey string, checkedAt time.Time) *UpstreamBalanceResult {
-	result := &UpstreamBalanceResult{
-		Enabled:   true,
-		CheckedAt: &checkedAt,
-		Path:      path,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
-	if err != nil {
-		result.Message = err.Error()
-		return result
-	}
-	req.Header.Set("Accept", "application/json")
-	applyUpstreamBalanceAuthHeaders(req, account, path, apiKey)
-	if account != nil && account.Platform == PlatformAnthropic {
-		req.Header.Set("anthropic-version", "2023-06-01")
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		result.Message = err.Error()
-		return result
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	result.StatusCode = resp.StatusCode
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, upstreamBalanceBodyMax))
-	result.Raw = compactUpstreamBalanceRaw(body)
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		result.Message = resp.Status
-		return result
-	}
-
-	result.Balance, result.Currency = parseUpstreamBalance(body)
-	if result.Balance == nil && isNewAPITokenUsagePayload(body) {
-		result.Message = newAPITokenQuotaNotUserBalanceMessage
-		result.StatusCode = 0
-		result.Raw = ""
-		return result
-	}
-	if result.Balance == nil && result.Raw != "" {
-		result.Message = "unparsed response"
-		return result
-	}
-	result.Success = true
-	return result
-}
-
-func applyUpstreamBalanceAuthHeaders(req *http.Request, account *Account, path, apiKey string) {
-	if isUpstreamBalanceUserAuthPath(path) {
-		if token := upstreamBalanceNewAPIAccessToken(account); token != "" {
-			if cookie, ok := upstreamBalanceCookieAuthValue(token); ok {
-				req.Header.Set("Cookie", cookie)
-			} else {
-				req.Header.Set("Authorization", "Bearer "+token)
-			}
-		}
-		if path == "/api/user/self" {
-			if userID := upstreamBalanceNewAPIUserID(account); userID != "" {
-				req.Header.Set("New-Api-User", userID)
-			}
-		}
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("x-api-key", apiKey)
-}
-
-func upstreamBalanceCookieAuthValue(token string) (string, bool) {
-	trimmed := strings.TrimSpace(token)
-	if trimmed == "" {
-		return "", false
-	}
-	if cookie, ok := strings.CutPrefix(trimmed, upstreamBalanceCookieCredentialPrefix); ok {
-		cookie = strings.TrimSpace(cookie)
-		return cookie, cookie != ""
-	}
-	if strings.HasPrefix(strings.ToLower(trimmed), "session=") {
-		return trimmed, true
-	}
-	return "", false
-}
-
-func isUpstreamBalanceUserAuthPath(path string) bool {
-	switch path {
-	case "/api/user/self", "/api/v1/user/profile", "/api/user/profile":
-		return true
-	default:
-		return false
-	}
-}
-
-func compactUpstreamBalanceRaw(body []byte) string {
-	raw := strings.TrimSpace(string(body))
-	raw = strings.Join(strings.Fields(raw), " ")
-	if len(raw) > upstreamBalanceBodyMax {
-		return raw[:upstreamBalanceBodyMax]
-	}
-	return raw
-}
-
-func parseUpstreamBalance(body []byte) (*float64, string) {
-	var payload any
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := decoder.Decode(&payload); err != nil {
-		return nil, ""
-	}
-	if isNewAPITokenUsageValue(payload) {
-		return nil, ""
-	}
-	if balance, currency, ok := parseNewAPIUserBalance(payload); ok {
-		return balance, currency
-	}
-	if balance := findNumericValue(payload, []string{
-		"wallet_balance",
-		"account_balance",
-		"balance",
-	}, 0); balance != nil {
-		currency := findStringValue(payload, []string{"currency", "unit"}, 0)
-		return balance, currency
-	}
-	if balance, currency, ok := parseGenericUpstreamCreditBalance(payload); ok {
-		return balance, currency
-	}
-	return nil, ""
-}
-
-func isNewAPITokenUsagePayload(body []byte) bool {
-	var payload any
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := decoder.Decode(&payload); err != nil {
-		return false
-	}
-	return isNewAPITokenUsageValue(payload)
-}
-
-func isNewAPITokenUsageValue(value any) bool {
-	data, ok := asStringMap(value)
-	if !ok {
-		return false
-	}
-	if nested, ok := asStringMap(data["data"]); ok {
-		data = nested
-	}
-	return looksLikeNewAPITokenUsage(data)
-}
-
-func parseNewAPIUserBalance(value any) (*float64, string, bool) {
-	payload, ok := asStringMap(value)
-	if !ok {
-		return nil, "", false
-	}
-	data := payload
-	if nested, ok := asStringMap(payload["data"]); ok {
-		data = nested
-	}
-	if looksLikeNewAPITokenUsage(data) {
-		return nil, "", false
-	}
-	quota, hasQuota := numericFromAny(data["quota"])
-	if !hasQuota {
-		return nil, "", false
-	}
-	balance := quota / newAPIQuotaPerUnit
-	return &balance, "USD", true
-}
-
-func parseGenericUpstreamCreditBalance(value any) (*float64, string, bool) {
-	currency := findStringValue(value, []string{"currency", "unit"}, 0)
-	balance := findNumericValue(value, []string{
-		"total_usd_available",
-		"user_usd_available",
-		"usd_available",
-		"total_available",
-		"available_balance",
-		"available",
-		"remaining_balance",
-		"credit",
-		"credits",
-		"amount",
-	}, 0)
-	if balance == nil {
-		return nil, "", false
-	}
-	return balance, currency, true
-}
-
-func asStringMap(value any) (map[string]any, bool) {
-	m, ok := value.(map[string]any)
-	return m, ok
-}
-
-func looksLikeNewAPITokenUsage(data map[string]any) bool {
-	if data == nil {
-		return false
-	}
-	if object, _ := data["object"].(string); object == "token_usage" {
-		return true
-	}
-	if _, ok := data["unlimited_quota"]; ok {
-		if _, hasTotalUsed := data["total_used"]; hasTotalUsed {
-			return true
-		}
-		if _, hasUsedQuota := data["used_quota"]; hasUsedQuota {
-			return true
-		}
-		if _, hasAvailable := data["total_available"]; hasAvailable {
-			return true
-		}
-	}
-	return false
-}
-
-func findNumericValue(value any, keys []string, depth int) *float64 {
-	if depth > 4 {
-		return nil
-	}
-	switch v := value.(type) {
-	case map[string]any:
-		for _, key := range keys {
-			if raw, ok := v[key]; ok {
-				if parsed, ok := numericFromAny(raw); ok {
-					return &parsed
-				}
-			}
-		}
-		for _, raw := range v {
-			if parsed := findNumericValue(raw, keys, depth+1); parsed != nil {
-				return parsed
-			}
-		}
-	case []any:
-		for _, raw := range v {
-			if parsed := findNumericValue(raw, keys, depth+1); parsed != nil {
-				return parsed
-			}
-		}
-	}
-	return nil
-}
-
-func numericFromAny(value any) (float64, bool) {
-	switch v := value.(type) {
-	case json.Number:
-		parsed, err := v.Float64()
-		return parsed, err == nil
-	case float64:
-		return v, true
-	case int:
-		return float64(v), true
-	case int64:
-		return float64(v), true
-	case string:
-		trimmed := strings.TrimSpace(strings.TrimPrefix(v, "$"))
-		parsed, err := strconv.ParseFloat(trimmed, 64)
-		return parsed, err == nil
-	default:
-		return 0, false
-	}
-}
-
-func findStringValue(value any, keys []string, depth int) string {
-	if depth > 4 {
-		return ""
-	}
-	switch v := value.(type) {
-	case map[string]any:
-		for _, key := range keys {
-			if raw, ok := v[key].(string); ok {
-				return raw
-			}
-		}
-		for _, raw := range v {
-			if parsed := findStringValue(raw, keys, depth+1); parsed != "" {
-				return parsed
-			}
-		}
-	case []any:
-		for _, raw := range v {
-			if parsed := findStringValue(raw, keys, depth+1); parsed != "" {
-				return parsed
-			}
-		}
-	}
-	return ""
 }
 
 // GetPassiveUsage 从 Account.Extra 中的被动采样数据构建 UsageInfo，不调用外部 API。
@@ -1228,30 +496,40 @@ func (s *AccountUsageService) GetPassiveUsage(ctx context.Context, accountID int
 	}
 
 	// 构建 7d 窗口（从被动采样数据）
-	util7d := parseExtraFloat64(account.Extra["passive_usage_7d_utilization"])
-	reset7dRaw := parseExtraFloat64(account.Extra["passive_usage_7d_reset"])
-	if util7d > 0 || reset7dRaw > 0 {
-		var resetAt *time.Time
-		var remaining int
-		if reset7dRaw > 0 {
-			t := time.Unix(int64(reset7dRaw), 0)
-			resetAt = &t
-			remaining = int(time.Until(t).Seconds())
-			if remaining < 0 {
-				remaining = 0
-			}
-		}
-		info.SevenDay = &UsageProgress{
-			Utilization:      util7d * 100,
-			ResetsAt:         resetAt,
-			RemainingSeconds: remaining,
-		}
-	}
+	info.SevenDay = buildPassiveUsageWindow(account.Extra, "passive_usage_7d_utilization", "passive_usage_7d_reset")
+
+	// 构建 7d Fable 窗口（从被动采样的 7d_oi 响应头数据）
+	info.SevenDayFable = buildPassiveUsageWindow(account.Extra, "passive_usage_7d_oi_utilization", "passive_usage_7d_oi_reset")
 
 	// 添加窗口统计
 	s.addWindowStats(ctx, account, info)
 
 	return info, nil
+}
+
+// buildPassiveUsageWindow 从 Extra 中的被动采样数据（utilization 为 0-1 小数、reset 为 Unix 秒）
+// 构建用量窗口，无数据时返回 nil。
+func buildPassiveUsageWindow(extra map[string]any, utilKey, resetKey string) *UsageProgress {
+	util := parseExtraFloat64(extra[utilKey])
+	resetRaw := parseExtraFloat64(extra[resetKey])
+	if util <= 0 && resetRaw <= 0 {
+		return nil
+	}
+	var resetAt *time.Time
+	var remaining int
+	if resetRaw > 0 {
+		t := time.Unix(int64(resetRaw), 0)
+		resetAt = &t
+		remaining = int(time.Until(t).Seconds())
+		if remaining < 0 {
+			remaining = 0
+		}
+	}
+	return &UsageProgress{
+		Utilization:      util * 100,
+		ResetsAt:         resetAt,
+		RemainingSeconds: remaining,
+	}
 }
 
 // syncActiveToPassive 将主动查询的最新数据回写到 Extra 被动缓存，
@@ -1266,6 +544,12 @@ func (s *AccountUsageService) syncActiveToPassive(ctx context.Context, accountID
 		extraUpdates["passive_usage_7d_utilization"] = usage.SevenDay.Utilization / 100
 		if usage.SevenDay.ResetsAt != nil {
 			extraUpdates["passive_usage_7d_reset"] = usage.SevenDay.ResetsAt.Unix()
+		}
+	}
+	if usage.SevenDayFable != nil {
+		extraUpdates["passive_usage_7d_oi_utilization"] = usage.SevenDayFable.Utilization / 100
+		if usage.SevenDayFable.ResetsAt != nil {
+			extraUpdates["passive_usage_7d_oi_reset"] = usage.SevenDayFable.ResetsAt.Unix()
 		}
 	}
 
@@ -1285,7 +569,7 @@ func (s *AccountUsageService) syncActiveToPassive(ctx context.Context, accountID
 	}
 }
 
-func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Account) (*UsageInfo, error) {
+func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Account, force bool) (*UsageInfo, error) {
 	now := time.Now()
 	usage := &UsageInfo{UpdatedAt: &now}
 
@@ -1293,24 +577,33 @@ func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Accou
 		return usage, nil
 	}
 
-	if progress := buildCodexUsageProgressFromExtra(account.Extra, "5h", now); progress != nil {
-		usage.FiveHour = progress
-	}
-	if progress := buildCodexUsageProgressFromExtra(account.Extra, "7d", now); progress != nil {
-		usage.SevenDay = progress
-	}
+	applyExtraToUsage(usage, account.Extra, now)
 
-	if shouldRefreshOpenAICodexSnapshot(account, usage, now) && s.shouldProbeOpenAICodexSnapshot(account.ID, now) {
-		if updates, err := s.probeOpenAICodexSnapshot(ctx, account); err == nil && len(updates) > 0 {
-			mergeAccountExtra(account, updates)
-			if usage.UpdatedAt == nil {
-				usage.UpdatedAt = &now
+	if (force || shouldRefreshOpenAICodexSnapshot(account, usage, now)) && s.shouldProbeOpenAICodexSnapshot(account.ID, now, force) {
+		if account.IsShadow() {
+			// Spark shadow accounts fetch usage from /wham/usage (bengalfox channel)
+			// via the shared OpenAIQuotaService, which resolves credentials from the
+			// parent account.  The result is written to the shadow row's own codex_*
+			// Extra keys and immediately reflected in the returned UsageInfo.
+			if s.openAIQuotaService != nil {
+				if quotaUsage, err := s.openAIQuotaService.QueryUsage(ctx, account.ID); err == nil {
+					if updates := buildCodexSparkWindowExtraUpdates(quotaUsage, now); len(updates) > 0 {
+						mergeAccountExtra(account, updates)
+						s.persistOpenAICodexProbeSnapshot(account.ID, updates)
+						if usage.UpdatedAt == nil {
+							usage.UpdatedAt = &now
+						}
+						applyExtraToUsage(usage, account.Extra, now)
+					}
+				}
 			}
-			if progress := buildCodexUsageProgressFromExtra(account.Extra, "5h", now); progress != nil {
-				usage.FiveHour = progress
-			}
-			if progress := buildCodexUsageProgressFromExtra(account.Extra, "7d", now); progress != nil {
-				usage.SevenDay = progress
+		} else {
+			if updates, err := s.probeOpenAICodexSnapshot(ctx, account); err == nil && len(updates) > 0 {
+				mergeAccountExtra(account, updates)
+				if usage.UpdatedAt == nil {
+					usage.UpdatedAt = &now
+				}
+				applyExtraToUsage(usage, account.Extra, now)
 			}
 		}
 	}
@@ -1353,7 +646,14 @@ func shouldRefreshOpenAICodexSnapshot(account *Account, usage *UsageInfo, now ti
 }
 
 func isOpenAICodexSnapshotStale(account *Account, now time.Time) bool {
-	if account == nil || !account.IsOpenAIOAuth() || !account.IsOpenAIResponsesWebSocketV2Enabled() {
+	if account == nil || !account.IsOpenAIOAuth() {
+		return false
+	}
+	// 普通账号的 codex 刷新走 probe(/responses 头),要求 WSv2;但 spark 影子走 QueryUsage
+	// (/wham/usage body 的 codex_bengalfox),与 WSv2 无关——不能用 WSv2 门控其 staleness,否则首刷后
+	// codex_5h/7d 已存在→staleness 恒 false→spark 窗口永久冻结(外审第9轮 P1)。影子改按
+	// codex_usage_updated_at TTL 判定;实际查询频率仍由 shouldProbeOpenAICodexSnapshot 的缓存 TTL 节流。
+	if !account.IsShadow() && !account.IsOpenAIResponsesWebSocketV2Enabled() {
 		return false
 	}
 	if account.Extra == nil {
@@ -1370,13 +670,16 @@ func isOpenAICodexSnapshotStale(account *Account, now time.Time) bool {
 	return now.Sub(ts) >= openAIProbeCacheTTL
 }
 
-func (s *AccountUsageService) shouldProbeOpenAICodexSnapshot(accountID int64, now time.Time) bool {
+func (s *AccountUsageService) shouldProbeOpenAICodexSnapshot(accountID int64, now time.Time, force ...bool) bool {
 	if s == nil || s.cache == nil || accountID <= 0 {
 		return true
 	}
-	if cached, ok := s.cache.openAIProbeCache.Load(accountID); ok {
-		if ts, ok := cached.(time.Time); ok && now.Sub(ts) < openAIProbeCacheTTL {
-			return false
+	forceProbe := len(force) > 0 && force[0]
+	if !forceProbe {
+		if cached, ok := s.cache.openAIProbeCache.Load(accountID); ok {
+			if ts, ok := cached.(time.Time); ok && now.Sub(ts) < openAIProbeCacheTTL {
+				return false
+			}
 		}
 	}
 	s.cache.openAIProbeCache.Store(accountID, now)
@@ -1417,9 +720,10 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 			req.Header.Set("User-Agent", strings.TrimSpace(fp.UserAgent))
 		}
 	}
-	if chatgptAccountID := account.GetChatGPTAccountID(); chatgptAccountID != "" {
-		req.Header.Set("chatgpt-account-id", chatgptAccountID)
-	}
+	// 与真实转发一致：originator 与最终 User-Agent（可能来自指纹缓存，如 codex-tui）首段配套，
+	// 否则探针被上游 404（issue #3901）。
+	enforceCodexIdentityHeaders(req.Header)
+	setOpenAIChatGPTAccountHeaders(req.Header, account)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
@@ -1487,6 +791,21 @@ func mergeAccountExtra(account *Account, updates map[string]any) {
 	}
 	for k, v := range updates {
 		account.Extra[k] = v
+	}
+}
+
+// applyExtraToUsage rebuilds the codex 5h/7d windows in usage from the
+// account's Extra map.  Called after mergeAccountExtra to make the in-memory
+// UsageInfo consistent with the just-persisted Extra values.
+func applyExtraToUsage(usage *UsageInfo, extra map[string]any, now time.Time) {
+	if usage == nil {
+		return
+	}
+	if progress := buildCodexUsageProgressFromExtra(extra, "5h", now); progress != nil {
+		usage.FiveHour = progress
+	}
+	if progress := buildCodexUsageProgressFromExtra(extra, "7d", now); progress != nil {
+		usage.SevenDay = progress
 	}
 }
 
@@ -1619,10 +938,18 @@ func (s *AccountUsageService) getAntigravityUsage(ctx context.Context, account *
 	return usage, nil
 }
 
-func (s *AccountUsageService) getGrokUsage(ctx context.Context, account *Account) (*UsageInfo, error) {
+func (s *AccountUsageService) getGrokUsage(ctx context.Context, account *Account, force bool) (*UsageInfo, error) {
 	if s.grokQuotaFetcher == nil {
 		now := time.Now()
 		return &UsageInfo{UpdatedAt: &now}, nil
+	}
+	if account != nil && account.IsGrokOAuth() && s.grokQuotaService != nil && (force || grokBillingSnapshotNeedsRefresh(account, time.Now())) && s.shouldProbeGrokBilling(account.ID, time.Now(), force) {
+		result, err := s.grokQuotaService.ProbeBilling(ctx, account.ID)
+		if err == nil && result != nil && result.Billing != nil {
+			mergeAccountExtra(account, map[string]any{grokBillingExtraKey: result.Billing})
+		} else if err != nil && force {
+			return nil, err
+		}
 	}
 	usage := s.grokQuotaFetcher.BuildUsageInfo(account)
 	if usage.GrokQuotaSnapshotState == "" {
@@ -1637,10 +964,88 @@ func (s *AccountUsageService) getGrokUsage(ctx context.Context, account *Account
 		if stats, err := s.usageLogRepo.GetAccountTodayStats(ctx, account.ID); err == nil && stats != nil {
 			usage.GrokLocalUsage = windowStatsFromAccountStats(stats)
 		}
+		usage.GrokLocalUsage7d, usage.GrokLocalUsageMonthly = grokLocalUsageForBilling(ctx, s.usageLogRepo, account.ID, usage.GrokBilling, time.Now().UTC())
 	}
 
 	enrichUsageWithAccountError(usage, account)
 	return usage, nil
+}
+
+func grokLocalUsageForBilling(
+	ctx context.Context,
+	repo UsageLogRepository,
+	accountID int64,
+	billing *xai.BillingSummary,
+	now time.Time,
+) (*WindowStats, *WindowStats) {
+	var weekly *WindowStats
+	var monthly *WindowStats
+	if repo == nil || accountID <= 0 {
+		return weekly, monthly
+	}
+	if start, ok := currentGrokBillingWindow(billing, true, now); ok {
+		if stats, err := repo.GetAccountWindowStats(ctx, accountID, start); err == nil {
+			weekly = windowStatsFromAccountStats(stats)
+		} else {
+			slog.Warn("grok_window_usage_query_failed", "account_id", accountID, "window_start", start, "error", err)
+		}
+	}
+	if start, ok := currentGrokBillingWindow(billing, false, now); ok {
+		if stats, err := repo.GetAccountWindowStats(ctx, accountID, start); err == nil {
+			monthly = windowStatsFromAccountStats(stats)
+		} else {
+			slog.Warn("grok_monthly_usage_query_failed", "account_id", accountID, "window_start", start, "error", err)
+		}
+	}
+	return weekly, monthly
+}
+
+func currentGrokBillingWindow(billing *xai.BillingSummary, weekly bool, now time.Time) (time.Time, bool) {
+	if billing == nil {
+		return time.Time{}, false
+	}
+	startRaw, endRaw := billing.BillingPeriodStart, billing.BillingPeriodEnd
+	if weekly {
+		if billing.PeriodType != "weekly" {
+			return time.Time{}, false
+		}
+		startRaw, endRaw = billing.PeriodStart, billing.PeriodEnd
+	}
+	start, startErr := parseTime(strings.TrimSpace(startRaw))
+	end, endErr := parseTime(strings.TrimSpace(endRaw))
+	if startErr != nil || endErr != nil || now.Before(start) || !now.Before(end) {
+		return time.Time{}, false
+	}
+	return start, true
+}
+
+func grokBillingSnapshotNeedsRefresh(account *Account, now time.Time) bool {
+	if account == nil {
+		return false
+	}
+	billing, err := grokBillingSnapshotFromExtra(account.Extra)
+	if err != nil || billing == nil || billing.Partial || len(billing.FailedWindows) > 0 {
+		return true
+	}
+	stamp := strings.TrimSpace(billing.UpdatedAt)
+	if stamp == "" {
+		stamp = strings.TrimSpace(billing.FetchedAt)
+	}
+	updatedAt, err := parseTime(stamp)
+	return err != nil || now.Sub(updatedAt) >= openAIProbeCacheTTL
+}
+
+func (s *AccountUsageService) shouldProbeGrokBilling(accountID int64, now time.Time, force bool) bool {
+	if force || s == nil || s.cache == nil || accountID <= 0 {
+		return true
+	}
+	if cached, ok := s.cache.grokProbeCache.Load(accountID); ok {
+		if ts, ok := cached.(time.Time); ok && now.Sub(ts) < grokProbeRetryTTL {
+			return false
+		}
+	}
+	s.cache.grokProbeCache.Store(accountID, now)
+	return true
 }
 
 // recalcAntigravityRemainingSeconds 重新计算 Antigravity UsageInfo 中各窗口的 RemainingSeconds
@@ -1735,8 +1140,8 @@ func enrichUsageWithAccountError(info *UsageInfo, account *Account) {
 // 使用独立缓存（1 分钟），与 API 缓存分离
 func (s *AccountUsageService) addWindowStats(ctx context.Context, account *Account, usage *UsageInfo) {
 	// 修复：即使 FiveHour 为 nil，也要尝试获取统计数据
-	// 因为 SevenDay/SevenDaySonnet 可能需要
-	if usage.FiveHour == nil && usage.SevenDay == nil && usage.SevenDaySonnet == nil {
+	// 因为 SevenDay/SevenDaySonnet/SevenDayFable 可能需要
+	if usage.FiveHour == nil && usage.SevenDay == nil && usage.SevenDaySonnet == nil && usage.SevenDayFable == nil {
 		return
 	}
 
@@ -2068,6 +1473,22 @@ func (s *AccountUsageService) buildUsageInfo(resp *ClaudeUsageResponse, updatedA
 			log.Printf("Failed to parse SevenDaySonnet.ResetsAt: %s, error: %v", resp.SevenDaySonnet.ResetsAt, err)
 			info.SevenDaySonnet = &UsageProgress{
 				Utilization: resp.SevenDaySonnet.Utilization,
+			}
+		}
+	}
+
+	// 7天Fable窗口（响应头 7d_oi 对应的窗口）
+	if fable := resp.SevenDayOverageIncluded; fable.ResetsAt != "" {
+		if fableReset, err := parseTime(fable.ResetsAt); err == nil {
+			info.SevenDayFable = &UsageProgress{
+				Utilization:      fable.Utilization,
+				ResetsAt:         &fableReset,
+				RemainingSeconds: int(time.Until(fableReset).Seconds()),
+			}
+		} else {
+			log.Printf("Failed to parse SevenDayFable.ResetsAt: %s, error: %v", fable.ResetsAt, err)
+			info.SevenDayFable = &UsageProgress{
+				Utilization: fable.Utilization,
 			}
 		}
 	}
