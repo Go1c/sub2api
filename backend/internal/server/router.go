@@ -60,6 +60,7 @@ func SetupRouter(
 		}
 		return nil
 	}))
+	r.Use(middleware2.ServerTiming(cfg.Server.EnableServerTiming))
 
 	// 合规：按地区拦截网页前端访问（仅作用于网页请求，API 接口不受影响）。
 	// 必须在前端服务中间件之前注册，以便在命中受限地区时直接返回阻断页。
