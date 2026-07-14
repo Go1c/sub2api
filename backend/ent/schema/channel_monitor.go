@@ -36,6 +36,10 @@ func (ChannelMonitor) Fields() []ent.Field {
 			MaxLen(100),
 		field.Enum("provider").
 			Values("openai", "anthropic", "gemini", "grok"),
+		field.String("api_mode").
+			Default("chat_completions").
+			MaxLen(32).
+			Comment("OpenAI request protocol: chat_completions or responses; non-OpenAI uses chat_completions"),
 		field.String("endpoint").
 			NotEmpty().
 			MaxLen(500).
@@ -58,6 +62,10 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Default(true),
 		field.Int("interval_seconds").
 			Range(15, 3600),
+		field.Int("jitter_seconds").
+			Default(0).
+			Range(0, 3600).
+			Comment("每次调度在 interval 基础上 ± [0, jitter] 的均匀随机偏移（秒）；0 表示固定间隔。service 层另保证 interval - jitter >= 15"),
 		field.Time("last_checked_at").
 			Optional().
 			Nillable(),
@@ -82,10 +90,6 @@ func (ChannelMonitor) Fields() []ent.Field {
 		// body_override: 同 ChannelMonitorRequestTemplate.body_override
 		field.JSON("body_override", map[string]any{}).
 			Optional(),
-		// compatibility_probe_enabled: 启用 provider-specific 兼容探测请求体。
-		// 仅在用户明确开启时使用，避免改变普通监控的默认请求形态。
-		field.Bool("compatibility_probe_enabled").
-			Default(false),
 	}
 }
 
@@ -108,6 +112,7 @@ func (ChannelMonitor) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("enabled", "last_checked_at"),
 		index.Fields("provider"),
+		index.Fields("provider", "api_mode"),
 		index.Fields("group_name"),
 		index.Fields("template_id"),
 	}

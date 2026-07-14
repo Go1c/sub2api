@@ -47,20 +47,20 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
-	adminService               service.AdminService
-	oauthService               *service.OAuthService
-	openaiOAuthService         *service.OpenAIOAuthService
-	geminiOAuthService         *service.GeminiOAuthService
-	antigravityOAuthService    *service.AntigravityOAuthService
-	rateLimitService           *service.RateLimitService
-	accountUsageService        *service.AccountUsageService
-	accountTestService         *service.AccountTestService
-	concurrencyService         *service.ConcurrencyService
-	crsSyncService             *service.CRSSyncService
-	sessionLimitCache          service.SessionLimitCache
-	rpmCache                   service.RPMCache
-	tokenCacheInvalidator      service.TokenCacheInvalidator
-	accountErrorHistoryService *service.AccountErrorHistoryService
+	adminService            service.AdminService
+	oauthService            *service.OAuthService
+	openaiOAuthService      *service.OpenAIOAuthService
+	geminiOAuthService      *service.GeminiOAuthService
+	antigravityOAuthService *service.AntigravityOAuthService
+	rateLimitService        *service.RateLimitService
+	accountUsageService     *service.AccountUsageService
+	accountTestService      *service.AccountTestService
+	concurrencyService      *service.ConcurrencyService
+	crsSyncService          *service.CRSSyncService
+	sessionLimitCache       service.SessionLimitCache
+	rpmCache                service.RPMCache
+	tokenCacheInvalidator   service.TokenCacheInvalidator
+	grokImportProber        grokUsageProber
 }
 
 // NewAccountHandler creates a new admin account handler
@@ -78,23 +78,21 @@ func NewAccountHandler(
 	sessionLimitCache service.SessionLimitCache,
 	rpmCache service.RPMCache,
 	tokenCacheInvalidator service.TokenCacheInvalidator,
-	accountErrorHistoryService *service.AccountErrorHistoryService,
 ) *AccountHandler {
 	return &AccountHandler{
-		adminService:               adminService,
-		oauthService:               oauthService,
-		openaiOAuthService:         openaiOAuthService,
-		geminiOAuthService:         geminiOAuthService,
-		antigravityOAuthService:    antigravityOAuthService,
-		rateLimitService:           rateLimitService,
-		accountUsageService:        accountUsageService,
-		accountTestService:         accountTestService,
-		concurrencyService:         concurrencyService,
-		crsSyncService:             crsSyncService,
-		sessionLimitCache:          sessionLimitCache,
-		rpmCache:                   rpmCache,
-		tokenCacheInvalidator:      tokenCacheInvalidator,
-		accountErrorHistoryService: accountErrorHistoryService,
+		adminService:            adminService,
+		oauthService:            oauthService,
+		openaiOAuthService:      openaiOAuthService,
+		geminiOAuthService:      geminiOAuthService,
+		antigravityOAuthService: antigravityOAuthService,
+		rateLimitService:        rateLimitService,
+		accountUsageService:     accountUsageService,
+		accountTestService:      accountTestService,
+		concurrencyService:      concurrencyService,
+		crsSyncService:          crsSyncService,
+		sessionLimitCache:       sessionLimitCache,
+		rpmCache:                rpmCache,
+		tokenCacheInvalidator:   tokenCacheInvalidator,
 	}
 }
 
@@ -171,21 +169,30 @@ type CheckMixedChannelRequest struct {
 	AccountID *int64  `json:"account_id"`
 }
 
-type UpstreamBalanceLoginRequest struct {
-	BaseURL  string `json:"base_url" binding:"required"`
-	Provider string `json:"provider"`
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-}
-
 // AccountWithConcurrency extends Account with real-time concurrency info
 type AccountWithConcurrency struct {
 	*dto.Account
-	CurrentConcurrency int `json:"current_concurrency"`
+	CurrentConcurrency int                          `json:"current_concurrency"`
+	SchedulerScore     *AccountSchedulerScore       `json:"scheduler_score,omitempty"`
+	SchedulerScores    []AccountSchedulerGroupScore `json:"scheduler_scores,omitempty"`
 	// 以下字段仅对 Anthropic OAuth/SetupToken 账号有效，且仅在启用相应功能时返回
 	CurrentWindowCost *float64 `json:"current_window_cost,omitempty"` // 当前窗口费用
 	ActiveSessions    *int     `json:"active_sessions,omitempty"`     // 当前活跃会话数
 	CurrentRPM        *int     `json:"current_rpm,omitempty"`         // 当前分钟 RPM 计数
+}
+
+type AccountSchedulerScore struct {
+	BaseScore             float64 `json:"base_score"`
+	StickyScore           float64 `json:"sticky_score"`
+	StickyScoreInfinity   bool    `json:"sticky_score_infinity"`
+	StickyWeightedEnabled bool    `json:"sticky_weighted_enabled"`
+}
+
+type AccountSchedulerGroupScore struct {
+	GroupID       *int64 `json:"group_id"`
+	GroupName     string `json:"group_name,omitempty"`
+	GroupPriority *int   `json:"group_priority,omitempty"`
+	AccountSchedulerScore
 }
 
 const accountListGroupUngroupedQueryValue = "ungrouped"
@@ -231,7 +238,235 @@ func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, ac
 		}
 	}
 
+	h.enrichShadowParents(ctx, []AccountWithConcurrency{item})
+
 	return item
+}
+
+// scoreOpenAIAccountSchedulerPool 对池内 OpenAI 账号计算调度分数快照。
+// loadMap 为共享的账号负载数据（含池内全部账号即可，多余条目无害）；传 nil 时自行批查。
+func (h *AccountHandler) scoreOpenAIAccountSchedulerPool(ctx context.Context, accounts []service.Account, loadMap map[int64]*service.AccountLoadInfo) map[int64]AccountSchedulerScore {
+	if len(accounts) == 0 {
+		return nil
+	}
+
+	openAIAccounts := make([]*service.Account, 0, len(accounts))
+	for i := range accounts {
+		account := &accounts[i]
+		if account.Platform != service.PlatformOpenAI {
+			continue
+		}
+		openAIAccounts = append(openAIAccounts, account)
+	}
+	if len(openAIAccounts) == 0 {
+		return nil
+	}
+
+	if loadMap == nil {
+		loadMap = h.fetchOpenAIAccountLoadMap(ctx, openAIAccounts)
+	}
+
+	var scores map[int64]service.OpenAIAccountSchedulerScoreSnapshot
+	if h.rateLimitService != nil {
+		scores = h.rateLimitService.BuildOpenAIAccountSchedulerScoreSnapshot(ctx, openAIAccounts, loadMap)
+	} else {
+		scores = service.BuildOpenAIAccountSchedulerScoreSnapshot(openAIAccounts, loadMap)
+	}
+	result := make(map[int64]AccountSchedulerScore, len(scores))
+	for accountID, score := range scores {
+		result[accountID] = AccountSchedulerScore{
+			BaseScore:             score.BaseScore,
+			StickyScore:           score.StickyScore,
+			StickyScoreInfinity:   score.StickyScoreInfinity,
+			StickyWeightedEnabled: score.StickyWeightedEnabled,
+		}
+	}
+	return result
+}
+
+// fetchOpenAIAccountLoadMap 一次性批查给定 OpenAI 账号的负载数据；
+// 失败时记录日志并返回空表（分数按零负载计算，属可接受降级）。
+func (h *AccountHandler) fetchOpenAIAccountLoadMap(ctx context.Context, openAIAccounts []*service.Account) map[int64]*service.AccountLoadInfo {
+	loadMap := map[int64]*service.AccountLoadInfo{}
+	if h.concurrencyService == nil || len(openAIAccounts) == 0 {
+		return loadMap
+	}
+	seen := make(map[int64]struct{}, len(openAIAccounts))
+	loadReq := make([]service.AccountWithConcurrency, 0, len(openAIAccounts))
+	for _, account := range openAIAccounts {
+		if account == nil {
+			continue
+		}
+		if _, ok := seen[account.ID]; ok {
+			continue
+		}
+		seen[account.ID] = struct{}{}
+		loadReq = append(loadReq, service.AccountWithConcurrency{
+			ID:             account.ID,
+			MaxConcurrency: account.EffectiveLoadFactor(),
+		})
+	}
+	if batchLoad, err := h.concurrencyService.GetAccountsLoadBatch(ctx, loadReq); err != nil {
+		slog.Warn("openai_scheduler_score_load_batch_failed", "error", err)
+	} else if batchLoad != nil {
+		loadMap = batchLoad
+	}
+	return loadMap
+}
+
+func (h *AccountHandler) buildOpenAIAccountSchedulerScores(
+	ctx context.Context,
+	accounts []service.Account,
+	filterPool []service.Account,
+) (map[int64]*AccountSchedulerScore, map[int64][]AccountSchedulerGroupScore) {
+	if len(accounts) == 0 {
+		return nil, nil
+	}
+	if len(filterPool) == 0 {
+		filterPool = accounts
+	}
+
+	pageOpenAIAccountIDs := make(map[int64]struct{})
+	groupIDs := make(map[int64]struct{})
+	for i := range accounts {
+		account := &accounts[i]
+		if account.Platform != service.PlatformOpenAI {
+			continue
+		}
+		pageOpenAIAccountIDs[account.ID] = struct{}{}
+		if len(account.AccountGroups) == 0 && len(account.GroupIDs) == 0 {
+			continue
+		}
+		for _, accountGroup := range account.AccountGroups {
+			if accountGroup.GroupID > 0 {
+				groupIDs[accountGroup.GroupID] = struct{}{}
+			}
+		}
+		for _, groupID := range account.GroupIDs {
+			if groupID > 0 {
+				groupIDs[groupID] = struct{}{}
+			}
+		}
+	}
+	if len(pageOpenAIAccountIDs) == 0 {
+		return nil, nil
+	}
+
+	// 先取各分组池，再对"过滤池 ∪ 分组池"的账号并集做一次负载批查，
+	// 避免每个池各查一次 Redis 的 N+1。
+	groupIDList := make([]int64, 0, len(groupIDs))
+	for groupID := range groupIDs {
+		groupIDList = append(groupIDList, groupID)
+	}
+	sort.Slice(groupIDList, func(i, j int) bool { return groupIDList[i] < groupIDList[j] })
+
+	groupPools := make(map[int64][]service.Account, len(groupIDList))
+	if h.adminService != nil {
+		for _, groupID := range groupIDList {
+			gid := groupID
+			pool, err := h.adminService.ListOpenAISchedulableAccountsForSchedulerScore(ctx, &gid)
+			if err != nil {
+				slog.Warn("openai_scheduler_group_score_pool_failed", "group_id", gid, "error", err)
+				continue
+			}
+			groupPools[gid] = pool
+		}
+	}
+
+	loadUnion := make([]*service.Account, 0, len(filterPool))
+	collectOpenAIAccounts := func(pool []service.Account) {
+		for i := range pool {
+			if pool[i].Platform == service.PlatformOpenAI {
+				loadUnion = append(loadUnion, &pool[i])
+			}
+		}
+	}
+	collectOpenAIAccounts(filterPool)
+	for _, pool := range groupPools {
+		collectOpenAIAccounts(pool)
+	}
+	loadMap := h.fetchOpenAIAccountLoadMap(ctx, loadUnion)
+
+	baseScores := make(map[int64]*AccountSchedulerScore)
+	for accountID, score := range h.scoreOpenAIAccountSchedulerPool(ctx, filterPool, loadMap) {
+		copiedScore := score
+		baseScores[accountID] = &copiedScore
+	}
+
+	groupScoresByAccount := make(map[int64][]AccountSchedulerGroupScore)
+	scoreGroupPool := func(groupID *int64, groupNameByID map[int64]string, groupPriorityByAccount map[int64]int, pool []service.Account) {
+		if len(pool) == 0 {
+			return
+		}
+		scores := h.scoreOpenAIAccountSchedulerPool(ctx, pool, loadMap)
+		for accountID, schedulerScore := range scores {
+			if _, ok := pageOpenAIAccountIDs[accountID]; !ok {
+				continue
+			}
+			groupScore := AccountSchedulerGroupScore{
+				GroupID:               groupID,
+				AccountSchedulerScore: schedulerScore,
+			}
+			if groupID != nil {
+				groupScore.GroupName = groupNameByID[*groupID]
+				if priority, ok := groupPriorityByAccount[accountID]; ok {
+					groupScore.GroupPriority = &priority
+				}
+			}
+			groupScoresByAccount[accountID] = append(groupScoresByAccount[accountID], groupScore)
+		}
+	}
+
+	for _, groupID := range groupIDList {
+		gid := groupID
+		pool, ok := groupPools[gid]
+		if !ok {
+			continue
+		}
+		groupNameByID := make(map[int64]string)
+		groupPriorityByAccount := make(map[int64]int)
+		for i := range pool {
+			account := &pool[i]
+			for _, accountGroup := range account.AccountGroups {
+				if accountGroup.GroupID != gid {
+					continue
+				}
+				groupPriorityByAccount[account.ID] = accountGroup.Priority
+				if accountGroup.Group != nil {
+					groupNameByID[gid] = accountGroup.Group.Name
+				}
+			}
+		}
+		scoreGroupPool(&gid, groupNameByID, groupPriorityByAccount, pool)
+	}
+
+	for accountID := range groupScoresByAccount {
+		sort.SliceStable(groupScoresByAccount[accountID], func(i, j int) bool {
+			left := groupScoresByAccount[accountID][i]
+			right := groupScoresByAccount[accountID][j]
+			return *left.GroupID < *right.GroupID
+		})
+	}
+	return baseScores, groupScoresByAccount
+}
+
+func (h *AccountHandler) listAccountSchedulerScoreFilterPool(
+	ctx context.Context,
+	platform, accountType, status, search string,
+	groupID int64,
+	privacyMode string,
+) []service.Account {
+	if h.adminService == nil || (platform != "" && platform != service.PlatformOpenAI) {
+		return nil
+	}
+	// 池只用于 OpenAI 分数计算（非 OpenAI 账号会在打分时被丢弃），
+	// 无论列表页平台过滤为何，查询一律限定 openai，避免无过滤时全表扫描。
+	accounts, err := h.adminService.ListAccountsForSchedulerScoreFilter(ctx, service.PlatformOpenAI, accountType, status, search, groupID, privacyMode)
+	if err != nil {
+		slog.Warn("openai_scheduler_filter_score_pool_failed", "error", err)
+		return nil
+	}
+	return accounts
 }
 
 // List handles listing all accounts with pagination
@@ -251,6 +486,8 @@ func (h *AccountHandler) List(c *gin.Context) {
 		search = search[:100]
 	}
 	lite := parseBoolQueryWithDefault(c.Query("lite"), false)
+	// 调度分需要跨候选池批量打分并读取负载，默认列表不计算；只有前端列可见时才显式开启。
+	includeSchedulerScore := parseBoolQueryWithDefault(c.Query("include_scheduler_score"), false)
 
 	var groupID int64
 	if groupIDStr := c.Query("group"); groupIDStr != "" {
@@ -286,6 +523,20 @@ func (h *AccountHandler) List(c *gin.Context) {
 	var windowCosts map[int64]float64
 	var activeSessions map[int64]int
 	var rpmCounts map[int64]int
+	// 双重门控：用户要看该列，且当前页确实有 OpenAI 账号，才进入昂贵的候选池打分路径。
+	var schedulerScores map[int64]*AccountSchedulerScore
+	var schedulerGroupScores map[int64][]AccountSchedulerGroupScore
+	pageHasOpenAIAccounts := false
+	for i := range accounts {
+		if accounts[i].Platform == service.PlatformOpenAI {
+			pageHasOpenAIAccounts = true
+			break
+		}
+	}
+	if includeSchedulerScore && pageHasOpenAIAccounts {
+		schedulerFilterPool := h.listAccountSchedulerScoreFilterPool(c.Request.Context(), platform, accountType, status, search, groupID, privacyMode)
+		schedulerScores, schedulerGroupScores = h.buildOpenAIAccountSchedulerScores(c.Request.Context(), accounts, schedulerFilterPool)
+	}
 
 	// 始终获取并发数（Redis ZCARD，极低开销）
 	if h.concurrencyService != nil {
@@ -366,6 +617,8 @@ func (h *AccountHandler) List(c *gin.Context) {
 		item := AccountWithConcurrency{
 			Account:            dto.AccountFromService(acc),
 			CurrentConcurrency: concurrencyCounts[acc.ID],
+			SchedulerScore:     schedulerScores[acc.ID],
+			SchedulerScores:    schedulerGroupScores[acc.ID],
 		}
 
 		// 添加窗口费用（仅当启用时）
@@ -391,6 +644,8 @@ func (h *AccountHandler) List(c *gin.Context) {
 
 		result[i] = item
 	}
+
+	h.enrichShadowParents(c.Request.Context(), result)
 
 	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, lite)
 	if etag != "" {
@@ -601,6 +856,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 	// OpenAI APIKey 账号创建后异步探测上游 /v1/responses 能力。
 	// 探测失败不影响账号创建响应。
 	h.scheduleOpenAIResponsesProbe(createdAccount)
+	h.scheduleGrokImportProbe(createdAccount)
 	response.Success(c, result.Data)
 }
 
@@ -848,6 +1104,12 @@ func (h *AccountHandler) refreshSingleAccount(ctx context.Context, account *serv
 	if !account.IsOAuth() {
 		return nil, "", infraerrors.BadRequest("NOT_OAUTH", "cannot refresh non-OAuth account")
 	}
+	// spark 影子凭据由母账号管理、自身恒空,刷新无意义且会先打上游;在调用上游前早拒
+	// (覆盖单账号与批量两入口;批量侧将其计为 failed 并附说明)(外审第6轮)。
+	if account.IsCredentialShadow() {
+		return nil, "", infraerrors.BadRequest("SPARK_SHADOW_NO_REFRESH",
+			"cannot refresh spark shadow account; its credentials are managed by the parent account")
+	}
 
 	var newCredentials map[string]any
 
@@ -865,6 +1127,7 @@ func (h *AccountHandler) refreshSingleAccount(ctx context.Context, account *serv
 				newCredentials[k] = v
 			}
 		}
+		newCredentials = service.NormalizeOpenAIPersonalAccessTokenCredentials(account, tokenInfo, newCredentials)
 	} else if account.Platform == service.PlatformGemini {
 		tokenInfo, err := h.geminiOAuthService.RefreshAccountToken(ctx, account)
 		if err != nil {
@@ -1126,72 +1389,6 @@ func (h *AccountHandler) GetStats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
-// accountErrorHistoryItemResponse 单条账号错误历史的响应 DTO（snake_case）。
-// nullable 字段无值时序列化为 null。
-type accountErrorHistoryItemResponse struct {
-	ID                 int64   `json:"id"`
-	CreatedAt          string  `json:"created_at"`
-	UserEmail          *string `json:"user_email"`
-	Model              *string `json:"model"`
-	UpstreamStatusCode *int    `json:"upstream_status_code"`
-	Message            string  `json:"message"`
-	Source             string  `json:"source"`
-	DupCount           int     `json:"dup_count"`
-}
-
-const (
-	accountErrorHistoryDefaultLimit = 20
-	accountErrorHistoryMaxLimit     = 50
-)
-
-// ErrorHistory handles listing recent account error history.
-// GET /api/v1/admin/accounts/:id/error-history?limit=20
-// 懒加载：仅在管理员点开「更多 > 错误历史」弹窗时调用。
-func (h *AccountHandler) ErrorHistory(c *gin.Context) {
-	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, "Invalid account ID")
-		return
-	}
-
-	limit := accountErrorHistoryDefaultLimit
-	if limitStr := c.Query("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-	if limit > accountErrorHistoryMaxLimit {
-		limit = accountErrorHistoryMaxLimit
-	}
-
-	items := make([]accountErrorHistoryItemResponse, 0)
-	if h.accountErrorHistoryService != nil {
-		entries, err := h.accountErrorHistoryService.ListRecentAccountErrors(c.Request.Context(), accountID, limit)
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-		for _, e := range entries {
-			items = append(items, accountErrorHistoryEntryToResponse(e))
-		}
-	}
-
-	response.Success(c, gin.H{"items": items})
-}
-
-func accountErrorHistoryEntryToResponse(e *service.AccountErrorHistoryEntry) accountErrorHistoryItemResponse {
-	return accountErrorHistoryItemResponse{
-		ID:                 e.ID,
-		CreatedAt:          e.CreatedAt.UTC().Format(time.RFC3339),
-		UserEmail:          e.UserEmail,
-		Model:              e.Model,
-		UpstreamStatusCode: e.UpstreamStatusCode,
-		Message:            e.Message,
-		Source:             e.Source,
-		DupCount:           e.DupCount,
-	}
-}
-
 // ClearError handles clearing account error
 // POST /api/v1/admin/accounts/:id/clear-error
 func (h *AccountHandler) ClearError(c *gin.Context) {
@@ -1216,6 +1413,21 @@ func (h *AccountHandler) ClearError(c *gin.Context) {
 	}
 
 	response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), account))
+}
+
+// RevertProxyFallback handles reverting account proxy to original before fallback.
+// POST /api/v1/admin/accounts/:id/revert-proxy-fallback
+func (h *AccountHandler) RevertProxyFallback(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	if err := h.adminService.RevertAccountProxyFallback(c.Request.Context(), id); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "reverted"})
 }
 
 // BatchClearError handles batch clearing account errors
@@ -1457,6 +1669,7 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 			}
 			// OpenAI APIKey 账号异步探测 /v1/responses 能力。
 			h.scheduleOpenAIResponsesProbe(account)
+			h.scheduleGrokImportProbe(account)
 			success++
 			results = append(results, gin.H{
 				"name":    item.Name,
@@ -1829,7 +2042,7 @@ func (h *OAuthHandler) SetupTokenCookieAuth(c *gin.Context) {
 }
 
 // GetUsage handles getting account usage information
-// GET /api/v1/admin/accounts/:id/usage?source=passive|active
+// GET /api/v1/admin/accounts/:id/usage?source=passive|active&force=true
 func (h *AccountHandler) GetUsage(c *gin.Context) {
 	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -1838,12 +2051,13 @@ func (h *AccountHandler) GetUsage(c *gin.Context) {
 	}
 
 	source := c.DefaultQuery("source", "active")
+	force := c.Query("force") == "true"
 
 	var usage *service.UsageInfo
 	if source == "passive" {
 		usage, err = h.accountUsageService.GetPassiveUsage(c.Request.Context(), accountID)
 	} else {
-		usage, err = h.accountUsageService.GetUsage(c.Request.Context(), accountID)
+		usage, err = h.accountUsageService.GetUsage(c.Request.Context(), accountID, force)
 	}
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -1851,31 +2065,6 @@ func (h *AccountHandler) GetUsage(c *gin.Context) {
 	}
 
 	response.Success(c, usage)
-}
-
-// UpstreamBalanceLogin handles one-shot upstream user login for balance credentials.
-// POST /api/v1/admin/accounts/upstream-balance/login
-func (h *AccountHandler) UpstreamBalanceLogin(c *gin.Context) {
-	if h.accountUsageService == nil {
-		response.InternalError(c, "Account usage service unavailable")
-		return
-	}
-	var req UpstreamBalanceLoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-	result, err := h.accountUsageService.FetchUpstreamBalanceLoginCredentials(c.Request.Context(), service.UpstreamBalanceLoginInput{
-		BaseURL:  req.BaseURL,
-		Provider: req.Provider,
-		Username: req.Username,
-		Password: req.Password,
-	})
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, result)
 }
 
 // ClearRateLimit handles clearing account rate limit status
@@ -1912,7 +2101,7 @@ func (h *AccountHandler) ResetQuota(c *gin.Context) {
 	}
 
 	if err := h.adminService.ResetAccountQuota(c.Request.Context(), accountID); err != nil {
-		response.InternalError(c, "Failed to reset account quota: "+err.Error())
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -2290,6 +2479,56 @@ func (h *AccountHandler) SyncUpstreamModels(c *gin.Context) {
 		}
 
 		slog.Warn("sync_upstream_models_failed", "account_id", accountID)
+		response.Error(c, http.StatusBadGateway, "Failed to sync upstream models from upstream")
+		return
+	}
+
+	response.Success(c, gin.H{"models": models})
+}
+
+// SyncUpstreamModelsPreview handles syncing live supported models using provided credentials (no account ID needed).
+// POST /api/v1/admin/accounts/models/sync-upstream-preview
+func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
+	var req struct {
+		Platform string `json:"platform" binding:"required"`
+		Type     string `json:"type" binding:"required"`
+		BaseURL  string `json:"base_url"`
+		APIKey   string `json:"api_key" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	tempAccount := &service.Account{
+		Platform: req.Platform,
+		Type:     req.Type,
+		Credentials: map[string]any{
+			"api_key":  req.APIKey,
+			"base_url": req.BaseURL,
+		},
+	}
+
+	if h.accountTestService == nil {
+		response.InternalError(c, "Account test service is not configured")
+		return
+	}
+
+	models, err := h.accountTestService.FetchUpstreamSupportedModels(c.Request.Context(), tempAccount)
+	if err != nil {
+		var syncErr *service.UpstreamModelSyncError
+		if errors.As(err, &syncErr) {
+			switch syncErr.Kind {
+			case service.UpstreamModelSyncErrorConfiguration, service.UpstreamModelSyncErrorUnsupported:
+				response.BadRequest(c, syncErr.SafeMessage())
+			default:
+				slog.Warn("sync_upstream_models_preview_failed", "platform", req.Platform, "kind", syncErr.Kind)
+				response.Error(c, http.StatusBadGateway, syncErr.SafeMessage())
+			}
+			return
+		}
+
+		slog.Warn("sync_upstream_models_preview_failed", "platform", req.Platform)
 		response.Error(c, http.StatusBadGateway, "Failed to sync upstream models from upstream")
 		return
 	}
