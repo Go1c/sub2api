@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -72,12 +73,10 @@ type UsageLog struct {
 	TotalCost float64 `json:"total_cost,omitempty"`
 	// ActualCost holds the value of the "actual_cost" field.
 	ActualCost float64 `json:"actual_cost,omitempty"`
-	// SubscriptionCostUsd holds the value of the "subscription_cost_usd" field.
-	SubscriptionCostUsd float64 `json:"subscription_cost_usd,omitempty"`
-	// BalanceCostUsd holds the value of the "balance_cost_usd" field.
-	BalanceCostUsd float64 `json:"balance_cost_usd,omitempty"`
 	// RateMultiplier holds the value of the "rate_multiplier" field.
 	RateMultiplier float64 `json:"rate_multiplier,omitempty"`
+	// Whether long-context pricing changed token prices for this request
+	LongContextBillingApplied bool `json:"long_context_billing_applied,omitempty"`
 	// AccountRateMultiplier holds the value of the "account_rate_multiplier" field.
 	AccountRateMultiplier *float64 `json:"account_rate_multiplier,omitempty"`
 	// BillingType holds the value of the "billing_type" field.
@@ -96,6 +95,14 @@ type UsageLog struct {
 	ImageCount int `json:"image_count,omitempty"`
 	// ImageSize holds the value of the "image_size" field.
 	ImageSize *string `json:"image_size,omitempty"`
+	// ImageInputSize holds the value of the "image_input_size" field.
+	ImageInputSize *string `json:"image_input_size,omitempty"`
+	// ImageOutputSize holds the value of the "image_output_size" field.
+	ImageOutputSize *string `json:"image_output_size,omitempty"`
+	// ImageSizeSource holds the value of the "image_size_source" field.
+	ImageSizeSource *string `json:"image_size_source,omitempty"`
+	// ImageSizeBreakdown holds the value of the "image_size_breakdown" field.
+	ImageSizeBreakdown map[string]int `json:"image_size_breakdown,omitempty"`
 	// 视频生成数量；>0 表示本行是视频生成用量
 	VideoCount int `json:"video_count,omitempty"`
 	// 计费用视频分辨率 480p/720p/1080p
@@ -124,11 +131,9 @@ type UsageLogEdges struct {
 	Group *Group `json:"group,omitempty"`
 	// Subscription holds the value of the subscription edge.
 	Subscription *UserSubscription `json:"subscription,omitempty"`
-	// SubscriptionCreditLedgers holds the value of the subscription_credit_ledgers edge.
-	SubscriptionCreditLedgers []*SubscriptionCreditLedger `json:"subscription_credit_ledgers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [5]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -186,27 +191,20 @@ func (e UsageLogEdges) SubscriptionOrErr() (*UserSubscription, error) {
 	return nil, &NotLoadedError{edge: "subscription"}
 }
 
-// SubscriptionCreditLedgersOrErr returns the SubscriptionCreditLedgers value or an error if the edge
-// was not loaded in eager-loading.
-func (e UsageLogEdges) SubscriptionCreditLedgersOrErr() ([]*SubscriptionCreditLedger, error) {
-	if e.loadedTypes[5] {
-		return e.SubscriptionCreditLedgers, nil
-	}
-	return nil, &NotLoadedError{edge: "subscription_credit_ledgers"}
-}
-
 // scanValues returns the types for scanning values from sql.Rows.
 func (*UsageLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case usagelog.FieldStream, usagelog.FieldCacheTTLOverridden:
+		case usagelog.FieldImageSizeBreakdown:
+			values[i] = new([]byte)
+		case usagelog.FieldLongContextBillingApplied, usagelog.FieldStream, usagelog.FieldCacheTTLOverridden:
 			values[i] = new(sql.NullBool)
-		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldSubscriptionCostUsd, usagelog.FieldBalanceCostUsd, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
+		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
 			values[i] = new(sql.NullFloat64)
 		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount, usagelog.FieldVideoCount, usagelog.FieldVideoDurationSeconds:
 			values[i] = new(sql.NullInt64)
-		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldModelMappingChain, usagelog.FieldBillingTier, usagelog.FieldBillingMode, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldVideoResolution:
+		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldModelMappingChain, usagelog.FieldBillingTier, usagelog.FieldBillingMode, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldImageInputSize, usagelog.FieldImageOutputSize, usagelog.FieldImageSizeSource, usagelog.FieldVideoResolution:
 			values[i] = new(sql.NullString)
 		case usagelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -389,23 +387,17 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ActualCost = value.Float64
 			}
-		case usagelog.FieldSubscriptionCostUsd:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_cost_usd", values[i])
-			} else if value.Valid {
-				_m.SubscriptionCostUsd = value.Float64
-			}
-		case usagelog.FieldBalanceCostUsd:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field balance_cost_usd", values[i])
-			} else if value.Valid {
-				_m.BalanceCostUsd = value.Float64
-			}
 		case usagelog.FieldRateMultiplier:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field rate_multiplier", values[i])
 			} else if value.Valid {
 				_m.RateMultiplier = value.Float64
+			}
+		case usagelog.FieldLongContextBillingApplied:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field long_context_billing_applied", values[i])
+			} else if value.Valid {
+				_m.LongContextBillingApplied = value.Bool
 			}
 		case usagelog.FieldAccountRateMultiplier:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -466,6 +458,35 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ImageSize = new(string)
 				*_m.ImageSize = value.String
+			}
+		case usagelog.FieldImageInputSize:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field image_input_size", values[i])
+			} else if value.Valid {
+				_m.ImageInputSize = new(string)
+				*_m.ImageInputSize = value.String
+			}
+		case usagelog.FieldImageOutputSize:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field image_output_size", values[i])
+			} else if value.Valid {
+				_m.ImageOutputSize = new(string)
+				*_m.ImageOutputSize = value.String
+			}
+		case usagelog.FieldImageSizeSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field image_size_source", values[i])
+			} else if value.Valid {
+				_m.ImageSizeSource = new(string)
+				*_m.ImageSizeSource = value.String
+			}
+		case usagelog.FieldImageSizeBreakdown:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field image_size_breakdown", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ImageSizeBreakdown); err != nil {
+					return fmt.Errorf("unmarshal field image_size_breakdown: %w", err)
+				}
 			}
 		case usagelog.FieldVideoCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -535,11 +556,6 @@ func (_m *UsageLog) QueryGroup() *GroupQuery {
 // QuerySubscription queries the "subscription" edge of the UsageLog entity.
 func (_m *UsageLog) QuerySubscription() *UserSubscriptionQuery {
 	return NewUsageLogClient(_m.config).QuerySubscription(_m)
-}
-
-// QuerySubscriptionCreditLedgers queries the "subscription_credit_ledgers" edge of the UsageLog entity.
-func (_m *UsageLog) QuerySubscriptionCreditLedgers() *SubscriptionCreditLedgerQuery {
-	return NewUsageLogClient(_m.config).QuerySubscriptionCreditLedgers(_m)
 }
 
 // Update returns a builder for updating this UsageLog.
@@ -656,14 +672,11 @@ func (_m *UsageLog) String() string {
 	builder.WriteString("actual_cost=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ActualCost))
 	builder.WriteString(", ")
-	builder.WriteString("subscription_cost_usd=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionCostUsd))
-	builder.WriteString(", ")
-	builder.WriteString("balance_cost_usd=")
-	builder.WriteString(fmt.Sprintf("%v", _m.BalanceCostUsd))
-	builder.WriteString(", ")
 	builder.WriteString("rate_multiplier=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RateMultiplier))
+	builder.WriteString(", ")
+	builder.WriteString("long_context_billing_applied=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LongContextBillingApplied))
 	builder.WriteString(", ")
 	if v := _m.AccountRateMultiplier; v != nil {
 		builder.WriteString("account_rate_multiplier=")
@@ -703,6 +716,24 @@ func (_m *UsageLog) String() string {
 		builder.WriteString("image_size=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	if v := _m.ImageInputSize; v != nil {
+		builder.WriteString("image_input_size=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ImageOutputSize; v != nil {
+		builder.WriteString("image_output_size=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ImageSizeSource; v != nil {
+		builder.WriteString("image_size_source=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("image_size_breakdown=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ImageSizeBreakdown))
 	builder.WriteString(", ")
 	builder.WriteString("video_count=")
 	builder.WriteString(fmt.Sprintf("%v", _m.VideoCount))
