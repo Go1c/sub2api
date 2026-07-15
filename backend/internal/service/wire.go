@@ -8,6 +8,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -17,41 +18,6 @@ import (
 type BuildInfo struct {
 	Version   string
 	BuildType string
-}
-
-var opsAccountErrorAlertReleaseScript = redis.NewScript(`
-if redis.call("GET", KEYS[1]) == ARGV[1] then
-  return redis.call("DEL", KEYS[1])
-end
-return 0
-`)
-
-type opsAccountErrorAlertRedisStore struct {
-	client *redis.Client
-}
-
-func ProvideOpsAccountErrorAlertLockStore(redisClient *redis.Client) OpsAccountErrorAlertLockStore {
-	if redisClient == nil {
-		return nil
-	}
-	return &opsAccountErrorAlertRedisStore{client: redisClient}
-}
-
-func (s *opsAccountErrorAlertRedisStore) Acquire(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
-	return s.client.SetNX(ctx, key, value, ttl).Result()
-}
-
-func (s *opsAccountErrorAlertRedisStore) Release(ctx context.Context, key, value string) error {
-	return opsAccountErrorAlertReleaseScript.Run(ctx, s.client, []string{key}, value).Err()
-}
-
-func (s *opsAccountErrorAlertRedisStore) Exists(ctx context.Context, key string) (bool, error) {
-	count, err := s.client.Exists(ctx, key).Result()
-	return count > 0, err
-}
-
-func (s *opsAccountErrorAlertRedisStore) SetCooldown(ctx context.Context, key string, ttl time.Duration) error {
-	return s.client.Set(ctx, key, "1", ttl).Err()
 }
 
 // ProvidePricingService creates and initializes PricingService
@@ -79,6 +45,27 @@ func ProvideOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiToke
 	return NewOAuthRefreshAPI(accountRepo, tokenCache)
 }
 
+func ProvideBatchImageModelPricingResolver(resolver *ModelPricingResolver) *BatchImageModelPricingResolver {
+	return &BatchImageModelPricingResolver{Resolver: resolver}
+}
+
+func ProvideBatchImageCleanupService(repo BatchImageRepository, accountRepo AccountRepository, cfg *config.Config) *BatchImageCleanupService {
+	svc := NewBatchImageCleanupService(repo, accountRepo, cfg)
+	svc.Start()
+	return svc
+}
+
+// ProvideOpenAIOAuthService creates OpenAIOAuthService with privacy/account enrichment support.
+func ProvideOpenAIOAuthService(
+	proxyRepo ProxyRepository,
+	oauthClient OpenAIOAuthClient,
+	privacyClientFactory PrivacyClientFactory,
+) *OpenAIOAuthService {
+	svc := NewOpenAIOAuthService(proxyRepo, oauthClient)
+	svc.SetPrivacyClientFactory(privacyClientFactory)
+	return svc
+}
+
 // ProvideTokenRefreshService creates and starts TokenRefreshService
 func ProvideTokenRefreshService(
 	accountRepo AccountRepository,
@@ -94,6 +81,7 @@ func ProvideTokenRefreshService(
 	privacyClientFactory PrivacyClientFactory,
 	proxyRepo ProxyRepository,
 	refreshAPI *OAuthRefreshAPI,
+	runtimeBlocker AccountRuntimeBlocker,
 ) *TokenRefreshService {
 	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, schedulerCache, cfg, tempUnschedCache, grokOAuthService)
 	// 注入 OpenAI privacy opt-out 依赖
@@ -102,6 +90,7 @@ func ProvideTokenRefreshService(
 	svc.SetRefreshAPI(refreshAPI)
 	// 调用侧显式注入后台刷新策略，避免策略漂移
 	svc.SetRefreshPolicy(DefaultBackgroundRefreshPolicy())
+	svc.SetAccountRuntimeBlocker(runtimeBlocker)
 	svc.Start()
 	return svc
 }
@@ -132,6 +121,77 @@ func ProvideOpenAITokenProvider(
 	p.SetRefreshAPI(refreshAPI, executor)
 	p.SetRefreshPolicy(OpenAIProviderRefreshPolicy())
 	return p
+}
+
+// ProvideOpenAIQuotaService wires the OpenAI quota query/reset service.
+// It depends on the OpenAI token provider for refreshed access tokens and the
+// privacy client factory for the impersonated upstream HTTP client.
+func ProvideOpenAIQuotaService(
+	accountRepo AccountRepository,
+	proxyRepo ProxyRepository,
+	tokenProvider *OpenAITokenProvider,
+	privacyClientFactory PrivacyClientFactory,
+	openAIGatewayService *OpenAIGatewayService,
+) *OpenAIQuotaService {
+	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, privacyClientFactory)
+	service.agentIdentityWS = openAIGatewayService
+	return service
+}
+
+func ProvideAccountUsageService(
+	accountRepo AccountRepository,
+	usageLogRepo UsageLogRepository,
+	usageFetcher ClaudeUsageFetcher,
+	geminiQuotaService *GeminiQuotaService,
+	antigravityQuotaFetcher *AntigravityQuotaFetcher,
+	grokQuotaFetcher *GrokQuotaFetcher,
+	grokQuotaService *GrokQuotaService,
+	openAIQuotaService *OpenAIQuotaService,
+	cache *UsageCache,
+	identityCache IdentityCache,
+	tlsFPProfileService *TLSFingerprintProfileService,
+	openAIGatewayService *OpenAIGatewayService,
+) *AccountUsageService {
+	service := NewAccountUsageService(
+		accountRepo,
+		usageLogRepo,
+		usageFetcher,
+		geminiQuotaService,
+		antigravityQuotaFetcher,
+		grokQuotaFetcher,
+		grokQuotaService,
+		openAIQuotaService,
+		cache,
+		identityCache,
+		tlsFPProfileService,
+	)
+	service.agentIdentityWS = openAIGatewayService
+	return service
+}
+
+func ProvideAccountTestService(
+	accountRepo AccountRepository,
+	geminiTokenProvider *GeminiTokenProvider,
+	claudeTokenProvider *ClaudeTokenProvider,
+	grokTokenProvider *GrokTokenProvider,
+	antigravityGatewayService *AntigravityGatewayService,
+	httpUpstream HTTPUpstream,
+	cfg *config.Config,
+	tlsFPProfileService *TLSFingerprintProfileService,
+	openAIGatewayService *OpenAIGatewayService,
+) *AccountTestService {
+	service := NewAccountTestService(
+		accountRepo,
+		geminiTokenProvider,
+		claudeTokenProvider,
+		grokTokenProvider,
+		antigravityGatewayService,
+		httpUpstream,
+		cfg,
+		tlsFPProfileService,
+	)
+	service.agentIdentityWS = openAIGatewayService
+	return service
 }
 
 func ProvideGrokQuotaService(
@@ -191,8 +251,9 @@ func ProvideGrokTokenProvider(
 }
 
 // ProvideDashboardAggregationService 创建并启动仪表盘聚合服务
-func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config) *DashboardAggregationService {
+func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, lockCache LeaderLockCache, db *sql.DB, cfg *config.Config) *DashboardAggregationService {
 	svc := NewDashboardAggregationService(repo, timingWheel, cfg)
+	svc.SetLeaderLock(lockCache, db)
 	svc.Start()
 	return svc
 }
@@ -211,9 +272,19 @@ func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpirySe
 	return svc
 }
 
+// ProvideProxyExpiryService creates and starts ProxyExpiryService.
+func ProvideProxyExpiryService(proxyRepo ProxyRepository) *ProxyExpiryService {
+	svc := NewProxyExpiryService(proxyRepo, time.Minute)
+	svc.Start()
+	return svc
+}
+
 // ProvideSubscriptionExpiryService creates and starts SubscriptionExpiryService.
-func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository) *SubscriptionExpiryService {
+func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, settingRepo SettingRepository, notificationEmailService *NotificationEmailService, lockCache LeaderLockCache, db *sql.DB) *SubscriptionExpiryService {
 	svc := NewSubscriptionExpiryService(userSubRepo, time.Minute)
+	svc.SetSettingRepository(settingRepo)
+	svc.SetNotificationEmailService(notificationEmailService)
+	svc.SetLeaderLock(lockCache, db)
 	svc.Start()
 	return svc
 }
@@ -242,6 +313,7 @@ func ProvideConcurrencyService(cache ConcurrencyCache, accountRepo AccountReposi
 		logger.LegacyPrintf("service.concurrency", "Warning: startup cleanup stale process slots failed: %v", err)
 	}
 	if cfg != nil {
+		svc.SetAccountLoadBatchCacheTTL(time.Duration(cfg.Gateway.Scheduling.LoadBatchCacheTTLMS) * time.Millisecond)
 		svc.StartSlotCleanupWorker(accountRepo, cfg.Gateway.Scheduling.SlotCleanupInterval)
 	}
 	return svc
@@ -324,8 +396,9 @@ func ProvideOpsAlertEvaluatorService(
 	emailService *EmailService,
 	redisClient *redis.Client,
 	cfg *config.Config,
+	proxyRepo ProxyRepository,
 ) *OpsAlertEvaluatorService {
-	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg)
+	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg, proxyRepo)
 	svc.Start()
 	return svc
 }
@@ -357,12 +430,6 @@ func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
 	sink.Start()
 	logger.SetSink(sink)
 	return sink
-}
-
-func ProvideOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, limiter OpsUserRequestCaptureLimiter) *OpsUserRequestMonitorService {
-	svc := NewOpsUserRequestMonitorService(opsRepo, userRepo, limiter)
-	svc.Start()
-	return svc
 }
 
 func buildIdempotencyConfig(cfg *config.Config) IdempotencyConfig {
@@ -458,11 +525,61 @@ func ProvideBackupService(
 	return svc
 }
 
+// ProvideOpsService constructs OpsService and wires the SettingService-backed quota
+// auto-pause cache sink. Mirrors the SetCleanupReloader pattern: OpsService doesn't
+// hold a *SettingService reference, but wire injects a tiny callback so writes to
+// ops_advanced_settings immediately propagate into the scheduler hot-path cache.
+func ProvideOpsService(
+	opsRepo OpsRepository,
+	settingRepo SettingRepository,
+	cfg *config.Config,
+	accountRepo AccountRepository,
+	userRepo UserRepository,
+	concurrencyService *ConcurrencyService,
+	gatewayService *GatewayService,
+	openAIGatewayService *OpenAIGatewayService,
+	geminiCompatService *GeminiMessagesCompatService,
+	antigravityGatewayService *AntigravityGatewayService,
+	systemLogSink *OpsSystemLogSink,
+	settingService *SettingService,
+) *OpsService {
+	svc := NewOpsService(
+		opsRepo,
+		settingRepo,
+		cfg,
+		accountRepo,
+		userRepo,
+		concurrencyService,
+		gatewayService,
+		openAIGatewayService,
+		geminiCompatService,
+		antigravityGatewayService,
+		systemLogSink,
+	)
+	if settingService != nil {
+		svc.SetOpenAIQuotaAutoPauseSettingsSink(settingService.SetOpenAIQuotaAutoPauseSettings)
+		// Optional warm-up so the first scheduled request after process start observes
+		// a populated cache rather than zero defaults. Best-effort, sync-bounded.
+		settingService.WarmOpenAIQuotaAutoPauseSettings(context.Background())
+	}
+	return svc
+}
+
 // ProvideSettingService wires SettingService with group reader and proxy repo.
 func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, proxyRepo ProxyRepository, cfg *config.Config) *SettingService {
 	svc := NewSettingService(settingRepo, cfg)
 	svc.SetDefaultSubscriptionGroupReader(groupRepo)
 	svc.SetProxyRepository(proxyRepo)
+	if err := svc.LoadAPIKeyACLTrustForwardedIPSetting(context.Background()); err != nil {
+		logger.LegacyPrintf("service.setting", "Warning: load api key acl forwarded ip setting failed: %v", err)
+	}
+	if err := svc.MigrateOpenAIAllowClaudeCodeCodexPluginSetting(context.Background()); err != nil {
+		logger.LegacyPrintf("service.setting", "Warning: migrate openai allow Claude Code Codex plugin setting failed: %v", err)
+	}
+	if err := svc.MigrateCodexBodyFingerprintToSignals(context.Background()); err != nil {
+		logger.LegacyPrintf("service.setting", "Warning: migrate codex body fingerprint to signals failed: %v", err)
+	}
+	antigravity.SetUserAgentVersionResolver(svc.GetAntigravityUserAgentVersion)
 	return svc
 }
 
@@ -474,83 +591,10 @@ func ProvideBillingCacheService(
 	apiKeyRepo APIKeyRepository,
 	rpmCache UserRPMCache,
 	rateRepo UserGroupRateRepository,
-	settingService *SettingService,
 	cfg *config.Config,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
 ) *BillingCacheService {
-	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, settingService).
-		SetUserPlatformQuotaRepository(userPlatformQuotaRepo)
-}
-
-func ProvideGatewayService(
-	accountRepo AccountRepository,
-	groupRepo GroupRepository,
-	usageLogRepo UsageLogRepository,
-	usageBillingRepo UsageBillingRepository,
-	userRepo UserRepository,
-	userSubRepo UserSubscriptionRepository,
-	userGroupRateRepo UserGroupRateRepository,
-	cache GatewayCache,
-	cfg *config.Config,
-	schedulerSnapshot *SchedulerSnapshotService,
-	concurrencyService *ConcurrencyService,
-	billingService *BillingService,
-	rateLimitService *RateLimitService,
-	billingCacheService *BillingCacheService,
-	identityService *IdentityService,
-	httpUpstream HTTPUpstream,
-	deferredService *DeferredService,
-	claudeTokenProvider *ClaudeTokenProvider,
-	sessionLimitCache SessionLimitCache,
-	rpmCache RPMCache,
-	digestStore *DigestSessionStore,
-	settingService *SettingService,
-	tlsFPProfileService *TLSFingerprintProfileService,
-	channelService *ChannelService,
-	resolver *ModelPricingResolver,
-	balanceNotifyService *BalanceNotifyService,
-	userPlatformQuotaRepo UserPlatformQuotaRepository,
-) *GatewayService {
-	return NewGatewayService(
-		accountRepo, groupRepo, usageLogRepo, usageBillingRepo, userRepo, userSubRepo,
-		userGroupRateRepo, cache, cfg, schedulerSnapshot, concurrencyService, billingService,
-		rateLimitService, billingCacheService, identityService, httpUpstream, deferredService,
-		claudeTokenProvider, sessionLimitCache, rpmCache, digestStore, settingService,
-		tlsFPProfileService, channelService, resolver, balanceNotifyService,
-	).SetUserPlatformQuotaRepository(userPlatformQuotaRepo)
-}
-
-func ProvideOpenAIGatewayService(
-	accountRepo AccountRepository,
-	usageLogRepo UsageLogRepository,
-	usageBillingRepo UsageBillingRepository,
-	userRepo UserRepository,
-	userSubRepo UserSubscriptionRepository,
-	userGroupRateRepo UserGroupRateRepository,
-	cache GatewayCache,
-	cfg *config.Config,
-	schedulerSnapshot *SchedulerSnapshotService,
-	concurrencyService *ConcurrencyService,
-	billingService *BillingService,
-	rateLimitService *RateLimitService,
-	billingCacheService *BillingCacheService,
-	httpUpstream HTTPUpstream,
-	deferredService *DeferredService,
-	openAITokenProvider *OpenAITokenProvider,
-	grokTokenProvider *GrokTokenProvider,
-	resolver *ModelPricingResolver,
-	channelService *ChannelService,
-	balanceNotifyService *BalanceNotifyService,
-	settingService *SettingService,
-	userPlatformQuotaRepo UserPlatformQuotaRepository,
-) *OpenAIGatewayService {
-	return NewOpenAIGatewayService(
-		accountRepo, usageLogRepo, usageBillingRepo, userRepo, userSubRepo, userGroupRateRepo,
-		cache, cfg, schedulerSnapshot, concurrencyService, billingService, rateLimitService,
-		billingCacheService, httpUpstream, deferredService, openAITokenProvider, resolver,
-		channelService, balanceNotifyService, settingService,
-	).SetUserPlatformQuotaRepository(userPlatformQuotaRepo).
-		SetGrokTokenProvider(grokTokenProvider)
+	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
 }
 
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
@@ -571,79 +615,6 @@ func ProvideAPIKeyService(
 	return svc
 }
 
-// ProvideSubscriptionCreditPurchaseService wires the credit-pool purchase
-// fulfiller with the raw SQL transaction boundary required by repository locks.
-func ProvideSubscriptionCreditPurchaseService(
-	db *sql.DB,
-	userSubRepo UserSubscriptionRepository,
-	ledgerRepo SubscriptionCreditLedgerRepository,
-	settingService *SettingService,
-) *SubscriptionCreditPurchaseService {
-	svc := NewSubscriptionCreditPurchaseService(db, userSubRepo, ledgerRepo)
-	if settingService != nil {
-		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
-	}
-	return svc
-}
-
-// ProvideSubscriptionService wires the ledger dependency used by admin credit
-// adjustments and ledger listing. Keeping this in Wire prevents regeneration
-// from dropping SetSubscriptionCreditLedgerRepository.
-func ProvideSubscriptionService(
-	groupRepo GroupRepository,
-	userSubRepo UserSubscriptionRepository,
-	ledgerRepo SubscriptionCreditLedgerRepository,
-	billingCacheService *BillingCacheService,
-	entClient *dbent.Client,
-	cfg *config.Config,
-	settingService *SettingService,
-) *SubscriptionService {
-	svc := NewSubscriptionService(groupRepo, userSubRepo, billingCacheService, entClient, cfg).
-		SetSubscriptionCreditLedgerRepository(ledgerRepo)
-	if settingService != nil {
-		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
-	}
-	return svc
-}
-
-// ProvidePaymentService wires payment fulfillment with the credit-pool purchase path.
-func ProvidePaymentService(
-	entClient *dbent.Client,
-	registry *payment.Registry,
-	loadBalancer payment.LoadBalancer,
-	redeemService *RedeemService,
-	subscriptionSvc *SubscriptionService,
-	configService *PaymentConfigService,
-	userRepo UserRepository,
-	groupRepo GroupRepository,
-	affiliateService *AffiliateService,
-	subscriptionCreditPurchaseSvc *SubscriptionCreditPurchaseService,
-	settingService *SettingService,
-) *PaymentService {
-	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
-	svc.subscriptionCreditPurchaseSvc = subscriptionCreditPurchaseSvc
-	if settingService != nil {
-		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
-	}
-	return svc
-}
-
-func ProvideSiteMessageUserRepository(userRepo UserRepository) SiteMessageUserRepository {
-	return userRepo
-}
-
-func ProvideSiteMessageSettingsReader(settingService *SettingService) SiteMessageSettingsReader {
-	return settingService
-}
-
-func ProvideLotterySettingsReader(settingService *SettingService) LotterySettingsReader {
-	return settingService
-}
-
-func ProvideInvoiceUserReader(userRepo UserRepository) InvoiceUserReader {
-	return userRepo
-}
-
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -662,23 +633,17 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
-	ProvideSiteMessageUserRepository,
-	ProvideSiteMessageSettingsReader,
-	NewSiteMessageService,
-	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
-	wire.Bind(new(SiteMessageRedeemCodeReader), new(*RedeemService)),
-	wire.Bind(new(SiteMessagePromoCodeValidator), new(*PromoService)),
-	ProvideLotterySettingsReader,
-	NewLotteryService,
-	wire.Bind(new(LotteryPrizeMessenger), new(*SiteMessageService)),
-	ProvideInvoiceUserReader,
-	NewInvoiceService,
-	wire.Bind(new(InvoiceEmailSender), new(*EmailService)),
 	NewAdminService,
-	ProvideGatewayService,
-	ProvideOpenAIGatewayService,
+	NewGatewayService,
+	NewOpenAIGatewayService,
+	ProvideBatchImageModelPricingResolver,
+	NewBatchImagePublicService,
+	NewBatchImageDownloadService,
+	ProvideBatchImageCleanupService,
+	ProvideBatchImageWorkerRuntime,
+	wire.Bind(new(AccountRuntimeBlocker), new(*OpenAIGatewayService)),
 	NewOAuthService,
-	NewOpenAIOAuthService,
+	ProvideOpenAIOAuthService,
 	NewGrokOAuthService,
 	NewGeminiOAuthService,
 	NewGeminiQuotaService,
@@ -691,33 +656,28 @@ var ProviderSet = wire.NewSet(
 	ProvideAntigravityTokenProvider,
 	ProvideGrokTokenProvider,
 	ProvideOpenAITokenProvider,
+	ProvideOpenAIQuotaService,
 	ProvideGrokQuotaService,
 	ProvideClaudeTokenProvider,
 	NewAntigravityGatewayService,
 	ProvideRateLimitService,
-	NewAccountUsageService,
-	NewAccountTestService,
-	ProvideAccountErrorHistoryService,
-	ProvideAccountErrorHistoryWiring,
+	ProvideAccountUsageService,
+	ProvideAccountTestService,
 	ProvideSettingService,
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
-	ProvideOpsUserRequestMonitorService,
-	NewOpsService,
-	NewTelegramOpsSender,
-	wire.Bind(new(OpsTelegramSender), new(*telegramOpsSender)),
+	ProvideOpsService,
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
 	ProvideOpsAlertEvaluatorService,
-	ProvideOpsAccountErrorAlertLockStore,
-	ProvideOpsAccountErrorAlertService,
 	ProvideOpsCleanupService,
 	ProvideOpsScheduledReportService,
 	NewEmailService,
+	NewNotificationEmailService,
 	ProvideEmailQueueService,
 	NewTurnstileService,
-	ProvideSubscriptionService,
+	NewSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	ProvideConcurrencyService,
 	ProvideUserMessageQueueService,
@@ -728,6 +688,7 @@ var ProviderSet = wire.NewSet(
 	ProvideUpdateService,
 	ProvideTokenRefreshService,
 	ProvideAccountExpiryService,
+	ProvideProxyExpiryService,
 	ProvideSubscriptionExpiryService,
 	ProvideTimingWheelService,
 	ProvideDashboardAggregationService,
@@ -748,23 +709,16 @@ var ProviderSet = wire.NewSet(
 	ProvideScheduledTestRunnerService,
 	NewGroupCapacityService,
 	NewChannelService,
-	ProvideModelMarketService,
 	NewModelPricingResolver,
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
-	ProvideSubscriptionCreditPurchaseService,
-	NewSubscriptionWasteStatsService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
-	ProvideSubscriptionNotifyMessenger,
-	ProvideSubscriptionNotifyEmailer,
-	ProvideSubscriptionNotifyService,
-	ProvideSubscriptionNotifyWorker,
 	ProvideUserPlatformQuotaUsageFlusher,
 )
 
@@ -782,79 +736,25 @@ func ProvidePaymentConfigService(entClient *dbent.Client, settingRepo SettingRep
 }
 
 // ProvideBalanceNotifyService creates BalanceNotifyService
-func ProvideBalanceNotifyService(emailService *EmailService, settingRepo SettingRepository, accountRepo AccountRepository) *BalanceNotifyService {
-	return NewBalanceNotifyService(emailService, settingRepo, accountRepo)
-}
-
-// ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
-func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService) *PaymentOrderExpiryService {
-	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
-	svc.Start()
+func ProvideBalanceNotifyService(emailService *EmailService, settingRepo SettingRepository, accountRepo AccountRepository, notificationEmailService *NotificationEmailService) *BalanceNotifyService {
+	svc := NewBalanceNotifyService(emailService, settingRepo, accountRepo)
+	svc.SetNotificationEmailService(notificationEmailService)
 	return svc
 }
 
-// ProvideSubscriptionNotifyMessenger 适配 SiteMessageRepository → SubscriptionNotifyMessenger。
-// 直接走 repository.Create，避免 SiteMessageService.Send 的 admin/限频校验。
-func ProvideSubscriptionNotifyMessenger(repo SiteMessageRepository) SubscriptionNotifyMessenger {
-	return &subscriptionNotifyMessengerAdapter{repo: repo}
+// ProvidePaymentService creates PaymentService and attaches notification email delivery.
+func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService, notificationEmailService *NotificationEmailService) *PaymentService {
+	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
+	svc.SetNotificationEmailService(notificationEmailService)
+	return svc
 }
 
-// ProvideSubscriptionNotifyEmailer 适配 *EmailService → SubscriptionNotifyEmailer。
-func ProvideSubscriptionNotifyEmailer(email *EmailService) SubscriptionNotifyEmailer {
-	return &subscriptionNotifyEmailerAdapter{email: email}
-}
-
-// ProvideSubscriptionNotifyService 构造订阅通知服务（站内信 + 邮件）。
-func ProvideSubscriptionNotifyService(
-	users UserRepository,
-	messenger SubscriptionNotifyMessenger,
-	emailer SubscriptionNotifyEmailer,
-	settings SettingRepository,
-	cfg *config.Config,
-) *SubscriptionNotifyService {
-	frontendURL := ""
-	if cfg != nil {
-		frontendURL = cfg.Server.FrontendURL
-	}
-	return NewSubscriptionNotifyService(users, messenger, emailer, settings, frontendURL)
-}
-
-// ProvideSubscriptionNotifyWorker 构造并启动订阅通知 outbox worker。
-func ProvideSubscriptionNotifyWorker(
-	repo SubscriptionNotifyOutboxRepository,
-	handler *SubscriptionNotifyService,
-) *SubscriptionNotifyWorker {
-	w := NewSubscriptionNotifyWorker(repo, handler, 0, 0)
-	w.Start()
-	return w
-}
-
-// ProvideAccountErrorHistoryService 创建账号错误历史服务（仅依赖 repo，供 AccountHandler 查询用）。
-func ProvideAccountErrorHistoryService(repo AccountErrorHistoryRepository) *AccountErrorHistoryService {
-	return NewAccountErrorHistoryService(repo)
-}
-
-// AccountErrorHistoryWiring 是 setter 注入的副作用标记类型；由 App 消费以确保注入发生。
-type AccountErrorHistoryWiring struct{}
-
-// ProvideAccountErrorHistoryWiring 把错误历史服务 setter 注入到所有埋点来源
-// （gateway / openai gateway / account test / token refresh / admin）。
-// 用 setter 注入而非改各 service 构造签名，避免波及大量已有测试；
-// 拆成独立 side-effect 提供器，避免 AccountHandler 依赖这些较晚构造的 service。
-func ProvideAccountErrorHistoryWiring(
-	svc *AccountErrorHistoryService,
-	gatewayService *GatewayService,
-	openaiGatewayService *OpenAIGatewayService,
-	accountTestService *AccountTestService,
-	tokenRefreshService *TokenRefreshService,
-	adminService AdminService,
-) AccountErrorHistoryWiring {
-	gatewayService.SetAccountErrorHistoryService(svc)
-	openaiGatewayService.SetAccountErrorHistoryService(svc)
-	accountTestService.SetAccountErrorHistoryService(svc)
-	tokenRefreshService.SetAccountErrorHistoryService(svc)
-	adminService.SetAccountErrorHistoryService(svc)
-	return AccountErrorHistoryWiring{}
+// ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
+func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache LeaderLockCache, db *sql.DB) *PaymentOrderExpiryService {
+	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
+	svc.SetLeaderLock(lockCache, db)
+	svc.Start()
+	return svc
 }
 
 // ProvideChannelMonitorService 创建渠道监控服务（CRUD + RunCheck + 用户视图聚合）。

@@ -390,6 +390,7 @@ type OpenAIGatewayService struct {
 	openaiWSStateStoreOnce        sync.Once
 	openaiSchedulerOnce           sync.Once
 	openaiWSPassthroughDialerOnce sync.Once
+	agentIdentityTaskMu           sync.Mutex
 	openaiWSPool                  *openAIWSConnPool
 	openaiWSStateStore            OpenAIWSStateStore
 	openaiScheduler               OpenAIAccountScheduler
@@ -589,6 +590,12 @@ func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 func (s *OpenAIGatewayService) CloseOpenAIWSPool() {
 	if s != nil && s.openaiWSPool != nil {
 		s.openaiWSPool.Close()
+	}
+}
+
+func (s *OpenAIGatewayService) InvalidateAgentIdentityWSConnections(accountID int64) {
+	if pool := s.getOpenAIWSConnPool(); pool != nil {
+		pool.ClearAccount(accountID)
 	}
 }
 
@@ -1091,6 +1098,9 @@ func (s *OpenAIGatewayService) GetAccessToken(ctx context.Context, account *Acco
 	}
 	switch account.Type {
 	case AccountTypeOAuth:
+		if account.IsOpenAIAgentIdentity() {
+			return "", OpenAIAuthModeAgentIdentity, nil
+		}
 		if account.Platform == PlatformGrok {
 			if s.grokTokenProvider != nil {
 				accessToken, err := s.grokTokenProvider.GetAccessToken(ctx, account)
