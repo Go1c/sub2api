@@ -2102,6 +2102,17 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 		h.handleFailoverExhaustedSimple(c, http.StatusBadGateway, streamStarted)
 		return
 	}
+	if failoverErr.IsOpenAIRequestBodyTooLarge() {
+		service.SetOpsUpstreamError(c, http.StatusRequestEntityTooLarge, service.OpenAIRequestBodyTooLargeClientMessage, "")
+		h.handleStreamingAwareError(
+			c,
+			http.StatusRequestEntityTooLarge,
+			"invalid_request_error",
+			service.OpenAIRequestBodyTooLargeClientMessage,
+			streamStarted,
+		)
+		return
+	}
 	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	if failoverErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(failoverErr)
