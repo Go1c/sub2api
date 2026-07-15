@@ -30,7 +30,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, subscription_cost_usd, balance_cost_usd, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, created_at"
+const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, image_input_tokens, image_input_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, subscription_cost_usd, balance_cost_usd, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, created_at"
 
 // usageLogInsertArgTypes must stay in the same order as:
 //  1. prepareUsageLogInsert().args
@@ -57,6 +57,8 @@ var usageLogInsertArgTypes = [...]string{
 	"integer",     // cache_creation_1h_tokens
 	"integer",     // image_output_tokens
 	"numeric",     // image_output_cost
+	"integer",     // image_input_tokens
+	"numeric",     // image_input_cost
 	"numeric",     // input_cost
 	"numeric",     // output_cost
 	"numeric",     // cache_creation_cost
@@ -408,6 +410,8 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -856,6 +860,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -943,6 +949,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_creation_1h_tokens,
 				image_output_tokens,
 				image_output_cost,
+				image_input_tokens,
+				image_input_cost,
 				input_cost,
 				output_cost,
 				cache_creation_cost,
@@ -1001,6 +1009,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_creation_1h_tokens,
 				image_output_tokens,
 				image_output_cost,
+				image_input_tokens,
+				image_input_cost,
 				input_cost,
 				output_cost,
 				cache_creation_cost,
@@ -1099,6 +1109,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -1183,6 +1195,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -1241,6 +1255,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -1307,6 +1323,8 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -1427,6 +1445,8 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.CacheCreation1hTokens,
 			log.ImageOutputTokens,
 			log.ImageOutputCost,
+			log.ImageInputTokens,
+			log.ImageInputCost,
 			log.InputCost,
 			log.OutputCost,
 			log.CacheCreationCost,
@@ -4368,6 +4388,8 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		cacheCreation1h       int
 		imageOutputTokens     int
 		imageOutputCost       float64
+		imageInputTokens      int
+		imageInputCost        float64
 		inputCost             float64
 		outputCost            float64
 		cacheCreationCost     float64
@@ -4428,6 +4450,8 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&cacheCreation1h,
 		&imageOutputTokens,
 		&imageOutputCost,
+		&imageInputTokens,
+		&imageInputCost,
 		&inputCost,
 		&outputCost,
 		&cacheCreationCost,
@@ -4472,37 +4496,39 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 	}
 
 	log := &service.UsageLog{
-		ID:                    id,
-		UserID:                userID,
-		APIKeyID:              apiKeyID,
-		AccountID:             accountID,
-		Model:                 model,
-		RequestedModel:        coalesceTrimmedString(requestedModel, model),
-		InputTokens:           inputTokens,
-		OutputTokens:          outputTokens,
-		CacheCreationTokens:   cacheCreationTokens,
-		CacheReadTokens:       cacheReadTokens,
-		CacheCreation5mTokens: cacheCreation5m,
-		CacheCreation1hTokens: cacheCreation1h,
-		ImageOutputTokens:     imageOutputTokens,
-		ImageOutputCost:       imageOutputCost,
-		InputCost:             inputCost,
-		OutputCost:            outputCost,
-		CacheCreationCost:     cacheCreationCost,
-		CacheReadCost:         cacheReadCost,
-		TotalCost:             totalCost,
-		ActualCost:            actualCost,
-		SubscriptionCostUSD:   subscriptionCost,
-		BalanceCostUSD:        balanceCost,
-		RateMultiplier:        rateMultiplier,
-		AccountRateMultiplier: nullFloat64Ptr(accountRateMultiplier),
-		BillingType:           int8(billingType),
-		RequestType:           service.RequestTypeFromInt16(requestTypeRaw),
-		ImageCount:                 imageCount,
-		VideoCount:                 videoCount,
-		CacheTTLOverridden:         cacheTTLOverridden,
-		LongContextBillingApplied:  longContextBilling,
-		CreatedAt:                  createdAt,
+		ID:                        id,
+		UserID:                    userID,
+		APIKeyID:                  apiKeyID,
+		AccountID:                 accountID,
+		Model:                     model,
+		RequestedModel:            coalesceTrimmedString(requestedModel, model),
+		InputTokens:               inputTokens,
+		OutputTokens:              outputTokens,
+		CacheCreationTokens:       cacheCreationTokens,
+		CacheReadTokens:           cacheReadTokens,
+		CacheCreation5mTokens:     cacheCreation5m,
+		CacheCreation1hTokens:     cacheCreation1h,
+		ImageOutputTokens:         imageOutputTokens,
+		ImageOutputCost:           imageOutputCost,
+		ImageInputTokens:          imageInputTokens,
+		ImageInputCost:            imageInputCost,
+		InputCost:                 inputCost,
+		OutputCost:                outputCost,
+		CacheCreationCost:         cacheCreationCost,
+		CacheReadCost:             cacheReadCost,
+		TotalCost:                 totalCost,
+		ActualCost:                actualCost,
+		SubscriptionCostUSD:       subscriptionCost,
+		BalanceCostUSD:            balanceCost,
+		RateMultiplier:            rateMultiplier,
+		AccountRateMultiplier:     nullFloat64Ptr(accountRateMultiplier),
+		BillingType:               int8(billingType),
+		RequestType:               service.RequestTypeFromInt16(requestTypeRaw),
+		ImageCount:                imageCount,
+		VideoCount:                videoCount,
+		CacheTTLOverridden:        cacheTTLOverridden,
+		LongContextBillingApplied: longContextBilling,
+		CreatedAt:                 createdAt,
 	}
 	// 先回填 legacy 字段，再基于 legacy + request_type 计算最终请求类型，保证历史数据兼容。
 	log.Stream = stream
@@ -4728,7 +4754,6 @@ func nullString(v *string) sql.NullString {
 	}
 	return sql.NullString{String: *v, Valid: true}
 }
-
 
 func nullStringIntMapJSON(v map[string]int) any {
 	if len(v) == 0 {

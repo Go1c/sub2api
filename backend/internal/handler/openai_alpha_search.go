@@ -161,9 +161,6 @@ func (h *OpenAIGatewayHandler) AlphaSearch(c *gin.Context) {
 
 		if err == nil {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, account.GetMappedModel(requestedModel), true, nil)
-			if result != nil {
-				h.recordAlphaSearchUsage(c, apiKey, account, subscription, channelMapping, requestedModel, body, result, subject.UserID)
-			}
 			return
 		}
 

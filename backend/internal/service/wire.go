@@ -748,6 +748,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAccountTestService,
 	ProvideAccountErrorHistoryService,
 	ProvideAccountErrorHistoryWiring,
+	ProvideUpstreamBillingProbeService,
 	ProvideSettingService,
 	NewDataManagementService,
 	ProvideBackupService,
