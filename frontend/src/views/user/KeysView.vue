@@ -33,19 +33,51 @@
 
       <template #actions>
         <div class="flex justify-end gap-3">
-        <button
-          @click="loadApiKeys"
-          :disabled="loading"
-          class="btn btn-secondary"
-          :title="t('common.refresh')"
-        >
-          <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-        </button>
-        <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
-          <Icon name="plus" size="md" class="mr-2" />
-          {{ t('keys.createKey') }}
-        </button>
-      </div>
+          <button
+            @click="loadApiKeys"
+            :disabled="loading"
+            class="btn btn-secondary"
+            :title="t('common.refresh')"
+          >
+            <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+          </button>
+          <div class="relative" ref="columnDropdownRef">
+            <button
+              @click="showColumnDropdown = !showColumnDropdown"
+              class="btn btn-secondary px-2 md:px-3"
+              :title="t('keys.columnSettings')"
+            >
+              <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
+              </svg>
+              <span class="hidden md:inline">{{ t('keys.columnSettings') }}</span>
+            </button>
+            <div
+              v-if="showColumnDropdown"
+              class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
+            >
+              <button
+                v-for="col in toggleableColumns"
+                :key="col.key"
+                @click="toggleColumn(col.key)"
+                class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              >
+                <span>{{ col.label }}</span>
+                <Icon
+                  v-if="isColumnVisible(col.key)"
+                  name="check"
+                  size="sm"
+                  class="text-primary-500"
+                  :stroke-width="2"
+                />
+              </button>
+            </div>
+          </div>
+          <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+            <Icon name="plus" size="md" class="mr-2" />
+            {{ t('keys.createKey') }}
+          </button>
+        </div>
       </template>
 
       <template #table>
@@ -58,6 +90,10 @@
           default-sort-order="desc"
           @sort="handleSort"
         >
+          <template #cell-id="{ value }">
+            <span class="font-mono text-xs text-gray-500 dark:text-gray-400">#{{ value }}</span>
+          </template>
+
           <template #cell-key="{ value, row }">
             <div class="flex items-center gap-2">
               <code class="code text-xs">
@@ -112,6 +148,10 @@
                   :subscription-type="row.group.subscription_type"
                   :rate-multiplier="row.group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[row.group.id]"
+                  :peak-rate-enabled="row.group.peak_rate_enabled"
+                  :peak-start="row.group.peak_start"
+                  :peak-end="row.group.peak_end"
+                  :peak-rate-multiplier="row.group.peak_rate_multiplier"
                 />
                 <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
                   t('keys.noGroup')
@@ -318,6 +358,13 @@
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
+          <template #cell-last_used_ip="{ value }">
+            <span v-if="value" class="text-sm text-gray-500 dark:text-dark-400">
+              {{ value }}
+            </span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
+
           <template #cell-created_at="{ value }">
             <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatDateTime(value) }}</span>
           </template>
@@ -420,13 +467,12 @@
         <div>
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
           <Select
-            :model-value="formData.group_id"
+            v-model="formData.group_id"
             :options="groupOptions"
             :placeholder="t('keys.selectGroup')"
             :searchable="true"
             :search-placeholder="t('keys.searchGroup')"
             data-tour="key-form-group"
-            @update:model-value="onFormGroupChange"
           >
             <template #selected="{ option }">
               <GroupBadge
@@ -436,6 +482,10 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
+                :peak-start="(option as unknown as GroupOption).peakStart"
+                :peak-end="(option as unknown as GroupOption).peakEnd"
+                :peak-rate-multiplier="(option as unknown as GroupOption).peakRateMultiplier"
               />
               <span v-else class="text-gray-400">{{ t('keys.selectGroup') }}</span>
             </template>
@@ -446,29 +496,15 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
+                :peak-start="(option as unknown as GroupOption).peakStart"
+                :peak-end="(option as unknown as GroupOption).peakEnd"
+                :peak-rate-multiplier="(option as unknown as GroupOption).peakRateMultiplier"
                 :description="(option as unknown as GroupOption).description"
                 :selected="selected"
               />
             </template>
           </Select>
-        </div>
-
-        <!-- Fallback Key Section -->
-        <div>
-          <label class="input-label">{{ t('keys.fallbackKeyLabel') }}</label>
-          <Select
-            v-model="formData.fallback_key_id"
-            :options="fallbackKeyOptions"
-            :placeholder="t('keys.fallbackKeyPlaceholder')"
-            :searchable="true"
-          />
-          <div
-            v-if="formData.fallback_key_id !== null"
-            class="mt-2 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20"
-          >
-            <Icon name="exclamationTriangle" size="sm" class="mt-0.5 flex-shrink-0 text-red-600 dark:text-red-400" />
-            <p class="text-sm text-red-600 dark:text-red-400">{{ t('keys.fallbackKeyDanger') }}</p>
-          </div>
         </div>
 
         <!-- Custom Key Section (only for create) -->
@@ -511,126 +547,6 @@
             :options="statusOptions"
             :placeholder="t('keys.selectStatus')"
           />
-        </div>
-
-        <!-- Model Restriction Section -->
-        <div class="space-y-3">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <label class="input-label mb-0">{{ t('keys.modelRestriction') }}</label>
-              <p class="input-hint mt-1">{{ t('keys.modelRestrictionHint') }}</p>
-            </div>
-            <button
-              type="button"
-              @click="formData.enable_model_restriction = !formData.enable_model_restriction"
-              :class="[
-                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                formData.enable_model_restriction ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  formData.enable_model_restriction ? 'translate-x-4' : 'translate-x-0'
-                ]"
-              />
-            </button>
-          </div>
-
-          <div v-if="formData.enable_model_restriction" class="space-y-3 pt-2">
-            <div class="relative">
-              <Icon name="search" size="sm" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                v-model="formData.model_search"
-                type="text"
-                class="input pl-9"
-                :placeholder="t('keys.modelRestrictionSearch')"
-                :disabled="formData.group_id === null || selectedGroupModelOptions.length === 0"
-              />
-            </div>
-
-            <div
-              v-if="selectedAllowedModelOptions.length > 0"
-              class="flex flex-wrap gap-2"
-            >
-              <span
-                v-for="model in selectedAllowedModelOptions"
-                :key="model.value"
-                class="inline-flex max-w-full items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
-              >
-                <span class="truncate">{{ model.label }}</span>
-                <button
-                  type="button"
-                  class="text-primary-500 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-100"
-                  :title="t('common.remove')"
-                  @click="toggleAllowedModel(model.value)"
-                >
-                  ×
-                </button>
-              </span>
-            </div>
-
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('keys.selectedModelsCount', { count: formData.allowed_models.length }) }}
-            </div>
-
-            <div
-              v-if="formData.group_id === null"
-              class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
-            >
-              {{ t('keys.modelRestrictionNoGroup') }}
-            </div>
-            <div
-              v-else-if="modelMarketLoading"
-              class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
-            >
-              {{ t('common.loading') }}
-            </div>
-            <div
-              v-else-if="selectedGroupModelOptions.length === 0"
-              class="rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
-            >
-              {{ t('keys.modelRestrictionNoModels') }}
-            </div>
-            <div
-              v-else
-              class="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600"
-            >
-              <button
-                v-for="option in filteredModelOptions"
-                :key="option.value"
-                type="button"
-                class="flex w-full items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 text-left last:border-0 hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-700"
-                @click="toggleAllowedModel(option.value)"
-              >
-                <span class="min-w-0">
-                  <span class="block truncate text-sm font-medium text-gray-900 dark:text-white">{{ option.label }}</span>
-                  <span class="block text-xs text-gray-500 dark:text-gray-400">{{ option.platform }}</span>
-                </span>
-                <span
-                  :class="[
-                    'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border',
-                    isAllowedModelSelected(option.value)
-                      ? 'border-primary-500 bg-primary-500 text-white'
-                      : 'border-gray-300 dark:border-dark-500'
-                  ]"
-                >
-                  <Icon
-                    v-if="isAllowedModelSelected(option.value)"
-                    name="check"
-                    size="xs"
-                    :stroke-width="3"
-                  />
-                </span>
-              </button>
-              <div
-                v-if="filteredModelOptions.length === 0"
-                class="p-3 text-center text-sm text-gray-500 dark:text-gray-400"
-              >
-                {{ t('keys.modelRestrictionNoMatchedModels') }}
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- IP Restriction Section -->
@@ -1179,6 +1095,10 @@
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
               :user-rate-multiplier="option.userRate"
+              :peak-rate-enabled="option.peakRateEnabled"
+              :peak-start="option.peakStart"
+              :peak-end="option.peakEnd"
+              :peak-rate-multiplier="option.peakRateMultiplier"
               :description="option.description"
               :selected="
                 selectedKeyForGroup?.group_id === option.value ||
@@ -1197,7 +1117,7 @@
 </template>
 
 <script setup lang="ts">
-	import { ref, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+	import { ref, reactive, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -1206,7 +1126,6 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
-import modelMarketAPI, { type ModelMarketModel } from '@/api/modelMarket'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import DataTable from '@/components/common/DataTable.vue'
@@ -1218,15 +1137,18 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import SearchInput from '@/components/common/SearchInput.vue'
 	import Icon from '@/components/icons/Icon.vue'
 	import UseKeyModal from '@/components/keys/UseKeyModal.vue'
-	import { buildCcswitchImportUrl } from '@/utils/ccswitch'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform } from '@/types'
+	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
+import {
+  buildCcSwitchImportDeeplink,
+  type CcSwitchClientType
+} from '@/utils/ccswitchImport'
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {
@@ -1241,40 +1163,114 @@ interface GroupOption {
   description: string | null
   rate: number
   userRate: number | null
+  peakRateEnabled: boolean
+  peakStart: string
+  peakEnd: string
+  peakRateMultiplier: number
   subscriptionType: SubscriptionType
   platform: GroupPlatform
-}
-
-interface ModelOption {
-  value: string
-  label: string
-  platform: string
 }
 
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
-const columns = computed<Column[]>(() => [
+const allColumns = computed<Column[]>(() => [
   { key: 'name', label: t('common.name'), sortable: true },
+  { key: 'id', label: t('keys.id'), sortable: true },
   { key: 'key', label: t('keys.apiKey'), sortable: false },
   { key: 'group', label: t('keys.group'), sortable: false },
-  { key: 'current_concurrency', label: t('keys.currentConcurrency'), sortable: false },
+  { key: 'current_concurrency', label: t('keys.currentConcurrency'), sortable: true },
   { key: 'usage', label: t('keys.usage'), sortable: false },
   { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
   { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
   { key: 'status', label: t('common.status'), sortable: true },
   { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
+  { key: 'last_used_ip', label: t('keys.lastUsedIP'), sortable: false },
   { key: 'created_at', label: t('keys.created'), sortable: true },
   { key: 'actions', label: t('common.actions'), sortable: false }
 ])
 
+const ALWAYS_VISIBLE_COLUMNS = new Set(['name', 'actions'])
+const DEFAULT_HIDDEN_COLUMNS = ['id', 'rate_limit', 'last_used_at', 'last_used_ip']
+const HIDDEN_COLUMNS_KEY = 'api-key-hidden-columns'
+const COLUMN_SETTINGS_VERSION_KEY = 'api-key-column-settings-version'
+const COLUMN_SETTINGS_VERSION = 3
+const VERSION_NEW_HIDDEN_COLUMNS: Record<number, string[]> = {
+  2: ['last_used_ip'],
+  3: ['id']
+}
+
+const toggleableColumns = computed(() =>
+  allColumns.value.filter((col) => !ALWAYS_VISIBLE_COLUMNS.has(col.key))
+)
+
+const hiddenColumns = reactive<Set<string>>(new Set())
+
+const saveColumnsToStorage = () => {
+  try {
+    localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify([...hiddenColumns]))
+    localStorage.setItem(COLUMN_SETTINGS_VERSION_KEY, String(COLUMN_SETTINGS_VERSION))
+  } catch (error) {
+    console.error('Failed to save API key table columns:', error)
+  }
+}
+
+const loadSavedColumns = () => {
+  hiddenColumns.clear()
+  try {
+    const saved = localStorage.getItem(HIDDEN_COLUMNS_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved) as string[]
+      const validColumnKeys = new Set(allColumns.value.map((col) => col.key))
+      parsed
+        .filter((key) =>
+          typeof key === 'string' &&
+          validColumnKeys.has(key) &&
+          !ALWAYS_VISIBLE_COLUMNS.has(key)
+        )
+        .forEach((key) => hiddenColumns.add(key))
+      const storedVersion = Number(localStorage.getItem(COLUMN_SETTINGS_VERSION_KEY) ?? '1')
+      if (storedVersion < COLUMN_SETTINGS_VERSION) {
+        for (let v = storedVersion + 1; v <= COLUMN_SETTINGS_VERSION; v++) {
+          for (const key of VERSION_NEW_HIDDEN_COLUMNS[v] ?? []) {
+            if (validColumnKeys.has(key) && !ALWAYS_VISIBLE_COLUMNS.has(key)) {
+              hiddenColumns.add(key)
+            }
+          }
+        }
+        saveColumnsToStorage()
+      } else {
+        localStorage.setItem(COLUMN_SETTINGS_VERSION_KEY, String(COLUMN_SETTINGS_VERSION))
+      }
+    } else {
+      DEFAULT_HIDDEN_COLUMNS.forEach((key) => hiddenColumns.add(key))
+      localStorage.setItem(COLUMN_SETTINGS_VERSION_KEY, String(COLUMN_SETTINGS_VERSION))
+    }
+  } catch (error) {
+    console.error('Failed to load API key table columns:', error)
+    DEFAULT_HIDDEN_COLUMNS.forEach((key) => hiddenColumns.add(key))
+  }
+}
+
+const toggleColumn = (key: string) => {
+  if (ALWAYS_VISIBLE_COLUMNS.has(key)) return
+  if (hiddenColumns.has(key)) {
+    hiddenColumns.delete(key)
+  } else {
+    hiddenColumns.add(key)
+  }
+  saveColumnsToStorage()
+}
+
+const isColumnVisible = (key: string) => !hiddenColumns.has(key)
+
+const columns = computed<Column[]>(() =>
+  allColumns.value.filter((col) => ALWAYS_VISIBLE_COLUMNS.has(col.key) || !hiddenColumns.has(col.key))
+)
+
 const apiKeys = ref<ApiKey[]>([])
-// 兜底密钥候选：用户自己的全部密钥（单独拉一页较大 pageSize，避免列表分页导致候选不全）
-const fallbackCandidates = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
-const modelMarketModels = ref<ModelMarketModel[]>([])
-const modelMarketLoading = ref(false)
 const loading = ref(false)
 const submitting = ref(false)
 const now = ref(new Date())
@@ -1305,12 +1301,14 @@ const showResetQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
+const showColumnDropdown = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
 const publicSettings = ref<PublicSettings | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
+const columnDropdownRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 let abortController: AbortController | null = null
@@ -1332,16 +1330,12 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
 const formData = ref({
   name: '',
   group_id: null as number | null,
-  fallback_key_id: null as number | null,
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
   enable_ip_restriction: false,
   ip_whitelist: '',
   ip_blacklist: '',
-  enable_model_restriction: false,
-  allowed_models: [] as string[],
-  model_search: '',
   // Quota settings (empty = unlimited)
   enable_quota: false,
   quota: null as number | null,
@@ -1376,6 +1370,13 @@ const statusOptions = computed(() => [
   { value: 'inactive', label: t('common.inactive') }
 ])
 
+const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
+  if (key.status === 'quota_exhausted' || key.status === 'expired') {
+    return status === 'active'
+  }
+  return true
+}
+
 // Filter dropdown options
 const groupFilterOptions = computed(() => [
   { value: '', label: t('keys.allGroups') },
@@ -1406,12 +1407,6 @@ const onStatusFilterChange = (value: string | number | boolean | null) => {
   onFilterChange()
 }
 
-const onFormGroupChange = (value: string | number | boolean | null) => {
-  formData.value.group_id = typeof value === 'number' ? value : null
-  formData.value.model_search = ''
-  pruneAllowedModelsForSelectedGroup(true)
-}
-
 // Convert groups to Select options format with rate multiplier and subscription type
 const groupOptions = computed(() =>
   groups.value.map((group) => ({
@@ -1420,81 +1415,14 @@ const groupOptions = computed(() =>
     description: group.description,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
+    peakRateEnabled: group.peak_rate_enabled,
+    peakStart: group.peak_start,
+    peakEnd: group.peak_end,
+    peakRateMultiplier: group.peak_rate_multiplier,
     subscriptionType: group.subscription_type,
     platform: group.platform
   }))
 )
-
-const selectedGroupModelOptions = computed<ModelOption[]>(() => {
-  const groupId = formData.value.group_id
-  if (groupId === null) return []
-  const byName = new Map<string, ModelOption>()
-  for (const model of modelMarketModels.value) {
-    if (!model.groups?.some((group) => group.id === groupId)) continue
-    const name = model.name.trim()
-    if (!name || byName.has(name)) continue
-    byName.set(name, {
-      value: name,
-      label: name,
-      platform: model.platform
-    })
-  }
-  return Array.from(byName.values()).sort((a, b) =>
-    a.platform === b.platform ? a.label.localeCompare(b.label) : a.platform.localeCompare(b.platform)
-  )
-})
-
-const selectedGroupModelValues = computed(() =>
-  new Set(selectedGroupModelOptions.value.map((option) => option.value))
-)
-
-const filteredModelOptions = computed(() => {
-  const query = formData.value.model_search.trim().toLowerCase()
-  if (!query) return selectedGroupModelOptions.value
-  return selectedGroupModelOptions.value.filter((option) =>
-    option.label.toLowerCase().includes(query) || option.platform.toLowerCase().includes(query)
-  )
-})
-
-const selectedAllowedModelOptions = computed(() => {
-  const byValue = new Map(selectedGroupModelOptions.value.map((option) => [option.value, option]))
-  return formData.value.allowed_models.map((model) => byValue.get(model)).filter(Boolean) as ModelOption[]
-})
-
-const pruneAllowedModelsForSelectedGroup = (clearWhenNoOptions = false) => {
-  if (modelMarketModels.value.length === 0) return
-  if (selectedGroupModelOptions.value.length === 0) {
-    if (clearWhenNoOptions) {
-      formData.value.allowed_models = []
-    }
-    return
-  }
-  const available = selectedGroupModelValues.value
-  formData.value.allowed_models = formData.value.allowed_models.filter((model) => available.has(model))
-}
-
-const isAllowedModelSelected = (model: string) => formData.value.allowed_models.includes(model)
-
-const toggleAllowedModel = (model: string) => {
-  if (isAllowedModelSelected(model)) {
-    formData.value.allowed_models = formData.value.allowed_models.filter((item) => item !== model)
-  } else {
-    formData.value.allowed_models = [...formData.value.allowed_models, model]
-  }
-}
-
-// 兜底密钥下拉选项：含「不设置」空选项；排除当前编辑的 key 自身、排除 inactive 的 key
-const fallbackKeyOptions = computed(() => {
-  const options: Array<{ value: number | null; label: string }> = [
-    { value: null, label: t('keys.fallbackKeyNone') }
-  ]
-  for (const key of fallbackCandidates.value) {
-    if (key.status === 'inactive') continue
-    if (showEditModal.value && selectedKey.value && key.id === selectedKey.value.id) continue
-    options.push({ value: key.id, label: key.name })
-  }
-  return options
-})
 
 // Group dropdown search
 const groupSearchQuery = ref('')
@@ -1585,16 +1513,6 @@ const loadGroups = async () => {
   }
 }
 
-// 拉取兜底密钥候选（一页较大 pageSize，避免主列表分页导致候选不全）
-const loadFallbackCandidates = async () => {
-  try {
-    const response = await keysAPI.list(1, 200)
-    fallbackCandidates.value = response.items
-  } catch (error) {
-    console.error('Failed to load fallback key candidates:', error)
-  }
-}
-
 const loadUserGroupRates = async () => {
   try {
     userGroupRates.value = await userGroupsAPI.getUserGroupRates()
@@ -1608,19 +1526,6 @@ const loadPublicSettings = async () => {
     publicSettings.value = await authAPI.getPublicSettings()
   } catch (error) {
     console.error('Failed to load public settings:', error)
-  }
-}
-
-const loadModelMarket = async () => {
-  modelMarketLoading.value = true
-  try {
-    const response = await modelMarketAPI.getPublicModelMarket()
-    modelMarketModels.value = response.models || []
-    pruneAllowedModelsForSelectedGroup(false)
-  } catch (error) {
-    console.error('Failed to load model market:', error)
-  } finally {
-    modelMarketLoading.value = false
   }
 }
 
@@ -1656,20 +1561,15 @@ const editKey = (key: ApiKey) => {
   selectedKey.value = key
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
-  const allowedModels = key.allowed_models || []
   formData.value = {
     name: key.name,
     group_id: key.group_id,
-    fallback_key_id: key.fallback_key_id ?? null,
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
     enable_ip_restriction: hasIPRestriction,
     ip_whitelist: (key.ip_whitelist || []).join('\n'),
     ip_blacklist: (key.ip_blacklist || []).join('\n'),
-    enable_model_restriction: allowedModels.length > 0,
-    allowed_models: [...allowedModels],
-    model_search: '',
     enable_quota: key.quota > 0,
     quota: key.quota > 0 ? key.quota : null,
     enable_rate_limit: (key.rate_limit_5h > 0) || (key.rate_limit_1d > 0) || (key.rate_limit_7d > 0),
@@ -1680,7 +1580,6 @@ const editKey = (key: ApiKey) => {
     expiration_preset: 'custom',
     expiration_date: key.expires_at ? formatDateTimeLocal(key.expires_at) : ''
   }
-  pruneAllowedModelsForSelectedGroup(false)
   showEditModal.value = true
 }
 
@@ -1749,6 +1648,9 @@ const closeGroupSelector = (event: MouseEvent) => {
     groupSelectorKeyId.value = null
     dropdownPosition.value = null
   }
+  if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
+    showColumnDropdown.value = false
+  }
 }
 
 const confirmDelete = (key: ApiKey) => {
@@ -1773,11 +1675,6 @@ const handleSubmit = async () => {
       appStore.showError(customKeyError.value)
       return
     }
-  }
-
-  if (formData.value.enable_model_restriction && formData.value.allowed_models.length === 0) {
-    appStore.showError(t('keys.allowedModelsRequired'))
-    return
   }
 
   // Parse IP lists only if IP restriction is enabled
@@ -1815,18 +1712,12 @@ const handleSubmit = async () => {
     rate_limit_7d: formData.value.rate_limit_7d && formData.value.rate_limit_7d > 0 ? formData.value.rate_limit_7d : 0,
   } : { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
 
-  const allowedModels = formData.value.enable_model_restriction ? formData.value.allowed_models : []
-
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
-      await keysAPI.update(selectedKey.value.id, {
+      const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_id: formData.value.group_id,
-        // 编辑时总下发：选「不设置」传 null 以清除兜底密钥
-        fallback_key_id: formData.value.fallback_key_id,
-        status: formData.value.status,
-        allowed_models: allowedModels,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1834,7 +1725,11 @@ const handleSubmit = async () => {
         rate_limit_5h: rateLimitData.rate_limit_5h,
         rate_limit_1d: rateLimitData.rate_limit_1d,
         rate_limit_7d: rateLimitData.rate_limit_7d,
-      })
+      }
+      if (shouldSubmitEditStatus(selectedKey.value, formData.value.status)) {
+        updates.status = formData.value.status
+      }
+      await keysAPI.update(selectedKey.value.id, updates)
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
@@ -1846,9 +1741,7 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData,
-        formData.value.fallback_key_id,
-        allowedModels
+        rateLimitData
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1894,16 +1787,12 @@ const closeModals = () => {
   formData.value = {
     name: '',
     group_id: null,
-    fallback_key_id: null,
     status: 'active',
     use_custom_key: false,
     custom_key: '',
     enable_ip_restriction: false,
     ip_whitelist: '',
     ip_blacklist: '',
-    enable_model_restriction: false,
-    allowed_models: [],
-    model_search: '',
     enable_quota: false,
     quota: null,
     enable_rate_limit: false,
@@ -1991,23 +1880,34 @@ const importToCcswitch = (row: ApiKey) => {
   executeCcsImport(row, platform === 'gemini' ? 'gemini' : 'claude')
 }
 
-const executeCcsImport = (row: ApiKey, clientType: 'claude' | 'gemini') => {
+const executeCcsImport = (row: ApiKey, clientType: CcSwitchClientType) => {
   const baseUrl = publicSettings.value?.api_base_url || window.location.origin
-  const providerName = (publicSettings.value?.site_name || 'sub2api').trim() || 'sub2api'
-  const deeplink = buildCcswitchImportUrl({
-    apiKey: row.key,
-    baseUrl,
-    providerName,
-    platform: row.group?.platform,
-    clientType,
-    usageEnabled: true,
-    defaultModels: {
-      anthropic: publicSettings.value?.ccswitch_default_model_anthropic,
-      openai: publicSettings.value?.ccswitch_default_model_openai,
-      gemini: publicSettings.value?.ccswitch_default_model_gemini,
-      antigravity: publicSettings.value?.ccswitch_default_model_antigravity,
-      antigravityGemini: publicSettings.value?.ccswitch_default_model_antigravity_gemini
+  const platform = row.group?.platform || 'anthropic'
+
+  const usageScript = `({
+    request: {
+      url: "{{baseUrl}}/v1/usage",
+      method: "GET",
+      headers: { "Authorization": "Bearer {{apiKey}}" }
+    },
+    extractor: function(response) {
+      const remaining = response?.remaining ?? response?.quota?.remaining ?? response?.balance;
+      const unit = response?.unit ?? response?.quota?.unit ?? "USD";
+      return {
+        isValid: response?.is_active ?? response?.isValid ?? true,
+        remaining,
+        unit
+      };
     }
+  })`
+  const providerName = (publicSettings.value?.site_name || 'sub2api').trim() || 'sub2api'
+  const deeplink = buildCcSwitchImportDeeplink({
+    baseUrl,
+    platform,
+    clientType,
+    providerName,
+    apiKey: row.key,
+    usageScript
   })
 
   try {
@@ -2025,7 +1925,7 @@ const executeCcsImport = (row: ApiKey, clientType: 'claude' | 'gemini') => {
   }
 }
 
-const handleCcsClientSelect = (clientType: 'claude' | 'gemini') => {
+const handleCcsClientSelect = (clientType: CcSwitchClientType) => {
   if (pendingCcsRow.value) {
     executeCcsImport(pendingCcsRow.value, clientType)
   }
@@ -2051,10 +1951,9 @@ function formatResetTime(resetAt: string | null): string {
 }
 
 onMounted(() => {
+  loadSavedColumns()
   loadApiKeys()
   loadGroups()
-  loadModelMarket()
-  loadFallbackCandidates()
   loadUserGroupRates()
   loadPublicSettings()
   document.addEventListener('click', closeGroupSelector)
