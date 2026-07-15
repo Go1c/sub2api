@@ -2148,6 +2148,30 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_UsesAccountPriorityWith
 	}
 }
 
+func TestOpenAIAccountScheduler_SkipsAccountBlockedForRequestedModel(t *testing.T) {
+	now := time.Now()
+	account := &Account{ID: 21633, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	svc := &OpenAIGatewayService{openaiModelTransient: newOpenAIAccountModelTransientState(128)}
+	svc.openaiModelTransient.recordFailure(account.ID, "gpt-5.5", now)
+	svc.openaiModelTransient.recordFailure(account.ID, "gpt-5.5", now.Add(time.Millisecond))
+	scheduler := &defaultOpenAIAccountScheduler{service: svc}
+
+	require.False(t, scheduler.isAccountRequestCompatible(context.Background(), account, OpenAIAccountScheduleRequest{RequestedModel: "gpt-5.5"}))
+	require.True(t, scheduler.isAccountRequestCompatible(context.Background(), account, OpenAIAccountScheduleRequest{RequestedModel: "gpt-5.6-sol"}))
+}
+
+func TestReportOpenAIAccountScheduleResult_SuccessClearsModelTransientState(t *testing.T) {
+	svc := &OpenAIGatewayService{openaiModelTransient: newOpenAIAccountModelTransientState(128)}
+	now := time.Now()
+	svc.openaiModelTransient.recordFailure(21636, "gpt-5.5", now)
+	svc.openaiModelTransient.recordFailure(21636, "gpt-5.5", now.Add(time.Millisecond))
+	require.True(t, svc.openaiModelTransient.isBlocked(21636, "gpt-5.5", now.Add(2*time.Millisecond)))
+
+	svc.ReportOpenAIAccountScheduleResult(21636, "gpt-5.5", true, nil)
+
+	require.False(t, svc.openaiModelTransient.isBlocked(21636, "gpt-5.5", now.Add(2*time.Millisecond)))
+}
+
 func TestDefaultOpenAIAccountScheduler_ShouldEscapeStickyAccount_ThresholdBoundary(t *testing.T) {
 	stats := newOpenAIAccountRuntimeStats()
 	accountID := int64(21501)
