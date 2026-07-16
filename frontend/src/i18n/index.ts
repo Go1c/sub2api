@@ -24,6 +24,70 @@ const localeLoaders: Record<LocaleCode, () => Promise<{ default: LocaleMessages 
   'zh-Hant': () => import('./locales/zh-Hant')
 }
 
+/**
+ * Modular locale packs (newer keys live here; monothithic en.ts/zh.ts lag behind
+ * during ordered upstream syncs). Merged over the monothithic bundle at load time
+ * so missing keys like admin.accounts.columns.id / duplicateAccount resolve.
+ */
+async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]> {
+  if (locale === 'en') {
+    const [accounts, ops, overview, dashboard] = await Promise.all([
+      import('./locales/en/admin/accounts'),
+      import('./locales/en/admin/ops'),
+      import('./locales/en/admin/overview'),
+      import('./locales/en/dashboard')
+    ])
+    return [
+      { admin: accounts.default },
+      { admin: ops.default },
+      { admin: overview.default },
+      dashboard.default
+    ]
+  }
+
+  if (locale === 'zh' || locale === 'zh-Hant') {
+    // zh-Hant has no modular tree yet; reuse simplified modular packs so new keys
+    // show Chinese instead of raw i18n paths (better than untranslated keys).
+    const [accounts, ops, overview, dashboard, misc] = await Promise.all([
+      import('./locales/zh/admin/accounts'),
+      import('./locales/zh/admin/ops'),
+      import('./locales/zh/admin/overview'),
+      import('./locales/zh/dashboard'),
+      import('./locales/zh/misc')
+    ])
+    return [
+      { admin: accounts.default },
+      { admin: ops.default },
+      { admin: overview.default },
+      dashboard.default,
+      misc.default
+    ]
+  }
+
+  return []
+}
+
+/** Deep-merge plain objects; arrays/scalars from `source` replace `target`. */
+export function deepMergeMessages(target: LocaleMessages, source: LocaleMessages): LocaleMessages {
+  const out: LocaleMessages = { ...target }
+  for (const [key, value] of Object.entries(source)) {
+    const existing = out[key]
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      existing &&
+      typeof existing === 'object' &&
+      !Array.isArray(existing)
+    ) {
+      out[key] = deepMergeMessages(existing as LocaleMessages, value as LocaleMessages)
+    } else {
+      out[key] = value
+    }
+  }
+  return out
+}
+
 function normalizeLocaleCode(value: string): LocaleCode | null {
   const normalized = value.trim().toLowerCase()
   if (normalized === 'en' || normalized === 'en-us' || normalized === 'en-gb') {
@@ -113,7 +177,14 @@ export async function loadLocaleMessages(locale: LocaleCode): Promise<void> {
 
   const loader = localeLoaders[locale]
   const module = await loader()
-  i18n.global.setLocaleMessage(locale, module.default)
+  let messages: LocaleMessages = module.default
+
+  const overlays = await loadModularOverlays(locale)
+  for (const overlay of overlays) {
+    messages = deepMergeMessages(messages, overlay)
+  }
+
+  i18n.global.setLocaleMessage(locale, messages)
   loadedLocales.add(locale)
 }
 
