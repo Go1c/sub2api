@@ -45,3 +45,19 @@ func TestMissingUpstreamColumnMigrationsSortOrder(t *testing.T) {
 	require.True(t, "171_channel_monitor_openai_api_mode.sql" < "172_scheduler_outbox_dedup_key.sql")
 	require.True(t, "172_scheduler_outbox_dedup_key.sql" < "172a_scheduler_outbox_pending_dedup_key_index_notx.sql")
 }
+
+func TestMigration177OpsSystemLogsAPIKeyID(t *testing.T) {
+	content, err := FS.ReadFile("177_add_ops_system_logs_api_key_id.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS api_key_id BIGINT")
+}
+
+func TestMigration177aOpsSystemLogsAPIKeyIDIndexNotx(t *testing.T) {
+	content, err := FS.ReadFile("177a_add_ops_system_logs_api_key_id_index_notx.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ops_system_logs_api_key_id_created_at")
+}
