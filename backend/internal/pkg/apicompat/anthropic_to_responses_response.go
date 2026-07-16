@@ -99,9 +99,10 @@ func AnthropicToResponsesResponse(resp *AnthropicResponse) *ResponsesResponse {
 		resp.Usage.CacheReadInputTokens +
 		resp.Usage.CacheCreationInputTokens
 	out.Usage = &ResponsesUsage{
-		InputTokens:  totalInputTokens,
-		OutputTokens: resp.Usage.OutputTokens,
-		TotalTokens:  totalInputTokens + resp.Usage.OutputTokens,
+		InputTokens:              totalInputTokens,
+		OutputTokens:             resp.Usage.OutputTokens,
+		TotalTokens:              totalInputTokens + resp.Usage.OutputTokens,
+		CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
 	}
 	if resp.Usage.CacheReadInputTokens > 0 {
 		out.Usage.InputTokensDetails = &ResponsesInputTokensDetails{
@@ -160,6 +161,8 @@ type AnthropicEventToResponsesState struct {
 	OutputTokens             int
 	CacheReadInputTokens     int
 	CacheCreationInputTokens int
+
+	StopReason string
 }
 
 // NewAnthropicEventToResponsesState returns an initialised stream state.
@@ -205,8 +208,8 @@ func FinalizeAnthropicResponsesStream(state *AnthropicEventToResponsesState) []R
 	// Close any open item
 	events = append(events, closeCurrentResponsesItem(state)...)
 
-	// Emit response.completed
-	events = append(events, makeResponsesCompletedEvent(state, "completed", nil))
+	status, incompleteDetails := anthropicResponsesStreamTerminalState(state.StopReason)
+	events = append(events, makeResponsesCompletedEvent(state, status, incompleteDetails))
 	state.CompletedSent = true
 	return events
 }
@@ -401,7 +404,6 @@ func anthToResHandleContentBlockStop(evt *AnthropicStreamEvent, state *Anthropic
 }
 
 func anthToResHandleMessageDelta(evt *AnthropicStreamEvent, state *AnthropicEventToResponsesState) []ResponsesStreamEvent {
-	// Update usage
 	if evt.Usage != nil {
 		state.OutputTokens = evt.Usage.OutputTokens
 		if evt.Usage.InputTokens > 0 {
@@ -414,6 +416,9 @@ func anthToResHandleMessageDelta(evt *AnthropicStreamEvent, state *AnthropicEven
 			state.CacheCreationInputTokens = evt.Usage.CacheCreationInputTokens
 		}
 	}
+	if evt.Delta != nil && evt.Delta.StopReason != "" {
+		state.StopReason = evt.Delta.StopReason
+	}
 
 	return nil
 }
@@ -424,21 +429,22 @@ func anthToResHandleMessageStop(state *AnthropicEventToResponsesState) []Respons
 	}
 
 	var events []ResponsesStreamEvent
-
-	// Close any open item
 	events = append(events, closeCurrentResponsesItem(state)...)
 
-	// Determine status
-	status := "completed"
-	var incompleteDetails *ResponsesIncompleteDetails
-
-	// Emit response.completed
+	status, incompleteDetails := anthropicResponsesStreamTerminalState(state.StopReason)
 	events = append(events, makeResponsesCompletedEvent(state, status, incompleteDetails))
 	state.CompletedSent = true
 	return events
 }
 
 // --- helper functions ---
+
+func anthropicResponsesStreamTerminalState(stopReason string) (string, *ResponsesIncompleteDetails) {
+	if stopReason == "max_tokens" {
+		return "incomplete", &ResponsesIncompleteDetails{Reason: "max_output_tokens"}
+	}
+	return "completed", nil
+}
 
 func closeCurrentResponsesItem(state *AnthropicEventToResponsesState) []ResponsesStreamEvent {
 	if state.CurrentItemType == "" {
@@ -492,9 +498,10 @@ func makeResponsesCompletedEvent(
 
 	totalInputTokens := state.InputTokens + state.CacheReadInputTokens + state.CacheCreationInputTokens
 	usage := &ResponsesUsage{
-		InputTokens:  totalInputTokens,
-		OutputTokens: state.OutputTokens,
-		TotalTokens:  totalInputTokens + state.OutputTokens,
+		InputTokens:              totalInputTokens,
+		OutputTokens:             state.OutputTokens,
+		TotalTokens:              totalInputTokens + state.OutputTokens,
+		CacheCreationInputTokens: state.CacheCreationInputTokens,
 	}
 	if state.CacheReadInputTokens > 0 {
 		usage.InputTokensDetails = &ResponsesInputTokensDetails{
@@ -502,15 +509,20 @@ func makeResponsesCompletedEvent(
 		}
 	}
 
+	eventType := "response.completed"
+	if status == "incomplete" {
+		eventType = "response.incomplete"
+	}
+
 	return ResponsesStreamEvent{
-		Type:           "response.completed",
+		Type:           eventType,
 		SequenceNumber: seq,
 		Response: &ResponsesResponse{
 			ID:                state.ResponseID,
 			Object:            "response",
 			Model:             state.Model,
 			Status:            status,
-			Output:            []ResponsesOutput{}, // Simplified; full output tracking would add complexity
+			Output:            []ResponsesOutput{},
 			Usage:             usage,
 			IncompleteDetails: incompleteDetails,
 		},

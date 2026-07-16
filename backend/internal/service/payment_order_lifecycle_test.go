@@ -172,6 +172,8 @@ func (r *paymentOrderLifecycleRedeemRepo) ListByUserPaginated(context.Context, i
 func (r *paymentOrderLifecycleRedeemRepo) SumPositiveBalanceByUser(context.Context, int64) (float64, error) {
 	panic("unexpected call")
 }
+func (r *paymentOrderLifecycleRedeemRepo) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) { return 0, nil }
+
 
 func TestExecuteBalanceFulfillmentBypassesRedeemRateLimitAndRemainsIdempotent(t *testing.T) {
 	ctx := context.Background()

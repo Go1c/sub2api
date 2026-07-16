@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
-	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -47,7 +46,7 @@ func (h *OpenAIGatewayHandler) CountTokens(c *gin.Context) {
 		return
 	}
 
-	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	body, err := readLenientJSONRequestBodyWithPrealloc(c.Request, h.cfg)
 	if err != nil {
 		if maxErr, ok := extractMaxBytesError(err); ok {
 			h.anthropicErrorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
@@ -61,8 +60,10 @@ func (h *OpenAIGatewayHandler) CountTokens(c *gin.Context) {
 		return
 	}
 
-	parsedReq, err := service.ParseGatewayRequest(body, domain.PlatformAnthropic)
+	bodyRef := service.NewRequestBodyRef(body)
+	parsedReq, err := service.ParseGatewayRequest(bodyRef, domain.PlatformAnthropic)
 	if err != nil {
+		logRequestBodyParseFailure(reqLog, body, err)
 		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
@@ -76,10 +77,11 @@ func (h *OpenAIGatewayHandler) CountTokens(c *gin.Context) {
 	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(apiKey, reqModel)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", parsedReq.Stream))
 
-	setOpsRequestContext(c, reqModel, false, body)
+	setOpsRequestContext(c, reqModel, false)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(false, false)))
 
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	mappedBodyForMessages := newOpenAIModelMappedBodyCache(body, h.gatewayService.ReplaceModelInBody)
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
@@ -108,16 +110,26 @@ func (h *OpenAIGatewayHandler) CountTokens(c *gin.Context) {
 		service.OpenAIUpstreamTransportAny,
 		service.OpenAIEndpointCapabilityChatCompletions,
 		false,
+		false,
 		openAICompatibleRequestPlatform(apiKey),
 	)
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	if err != nil {
-		reqLog.Warn("openai_count_tokens.account_select_failed", zap.Error(err))
-		h.anthropicErrorResponse(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable")
+		requestPlatform := openAICompatibleRequestPlatform(apiKey)
+		reqLog.Warn("openai_count_tokens.account_select_failed", zap.Error(openAICompatibleSelectionErrorForLog(err, requestPlatform)))
+		cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, currentRoutingModel, reqModel)
+		if !cls.ModelNotFound {
+			markOpsRoutingCapacityLimitedIfNoAvailable(c, err)
+		}
+		h.anthropicErrorResponse(c, cls.Status, cls.ErrType, cls.Message)
 		return
 	}
 	if selection == nil || selection.Account == nil {
-		h.anthropicErrorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts")
+		cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, currentRoutingModel, reqModel)
+		if !cls.ModelNotFound {
+			markOpsRoutingCapacityLimited(c)
+		}
+		h.anthropicErrorResponse(c, cls.Status, cls.ErrType, cls.Message)
 		return
 	}
 
@@ -126,10 +138,7 @@ func (h *OpenAIGatewayHandler) CountTokens(c *gin.Context) {
 	if selection.Acquired && selection.ReleaseFunc != nil {
 		defer selection.ReleaseFunc()
 	}
-	forwardBody := body
-	if channelMapping.Mapped {
-		forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
-	}
+	forwardBody := mappedBodyForMessages(channelMapping.Mapped, channelMapping.MappedModel)
 	defaultMappedModel := preferredMappedModel
 
 	if err := h.gatewayService.ForwardCountTokensAsAnthropic(c.Request.Context(), c, account, forwardBody, defaultMappedModel); err != nil {

@@ -39,9 +39,10 @@ type AccountQuotaReader interface {
 
 // BalanceNotifyService handles balance and quota threshold notifications.
 type BalanceNotifyService struct {
-	emailService *EmailService
-	settingRepo  SettingRepository
-	accountRepo  AccountQuotaReader
+	emailService             *EmailService
+	settingRepo              SettingRepository
+	accountRepo              AccountQuotaReader
+	notificationEmailService *NotificationEmailService
 }
 
 // NewBalanceNotifyService creates a new BalanceNotifyService.
@@ -51,6 +52,10 @@ func NewBalanceNotifyService(emailService *EmailService, settingRepo SettingRepo
 		settingRepo:  settingRepo,
 		accountRepo:  accountRepo,
 	}
+}
+
+func (s *BalanceNotifyService) SetNotificationEmailService(notificationEmailService *NotificationEmailService) {
+	s.notificationEmailService = notificationEmailService
 }
 
 // resolveBalanceThreshold returns the effective balance threshold.

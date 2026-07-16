@@ -41,6 +41,7 @@ func (s *fallbackRepoStub) GetByKeyForAuth(ctx context.Context, key string) (*AP
 }
 func (s *fallbackRepoStub) Update(ctx context.Context, key *APIKey) error { panic("unexpected") }
 func (s *fallbackRepoStub) Delete(ctx context.Context, id int64) error    { panic("unexpected") }
+func (s *fallbackRepoStub) DeleteWithAudit(context.Context, int64) error  { panic("unexpected") }
 func (s *fallbackRepoStub) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
 	panic("unexpected")
 }

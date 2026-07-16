@@ -108,7 +108,8 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		// Serve static files normally
+		// Serve static files normally (hashed assets get long-lived cache headers)
+		applyStaticAssetCacheHeaders(c.Writer.Header(), cleanPath)
 		s.fileServer.ServeHTTP(c.Writer, c.Request)
 		c.Abort()
 	}
@@ -272,6 +273,7 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 			if tryServeOverrideFile(c, overrideDir, cleanPath) {
 				return
 			}
+			applyStaticAssetCacheHeaders(c.Writer.Header(), cleanPath)
 			fileServer.ServeHTTP(c.Writer, c.Request)
 			c.Abort()
 			return
@@ -305,8 +307,10 @@ func shouldBypassEmbeddedFrontend(path string) bool {
 		strings.HasPrefix(trimmed, "/antigravity/") ||
 		strings.HasPrefix(trimmed, "/setup/") ||
 		trimmed == "/health" ||
+		trimmed == "/models" ||
 		trimmed == "/responses" ||
 		strings.HasPrefix(trimmed, "/responses/") ||
+		trimmed == "/alpha/search" ||
 		strings.HasPrefix(trimmed, "/images/")
 }
 

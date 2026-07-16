@@ -84,6 +84,13 @@ func (h *OpsHandler) SetUserRequestMonitorService(svc *service.OpsUserRequestMon
 }
 
 // GetErrorLogs lists ops error logs.
+// applyOpsErrorSortParams reads sort_by/sort_order query params into the filter.
+// Column whitelist and order normalization live in the repository; unknown
+// values degrade to the default (created_at DESC), mirroring the usage list.
+func applyOpsErrorSortParams(c *gin.Context, filter *service.OpsErrorLogFilter) {
+	filter.SetSort(c.Query("sort_by"), c.Query("sort_order"))
+}
+
 // GET /api/v1/admin/ops/errors
 func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 	if h.opsService == nil {
@@ -121,11 +128,21 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
 	filter.UserQuery = strings.TrimSpace(c.Query("user_query"))
+	// Model 过滤：admin 走精确匹配（ModelFuzzy 默认 false，保持管理端语义）。
+	// buildOpsErrorLogsWhere 以 COALESCE(requested_model, model) 比对。
+	filter.Model = strings.TrimSpace(c.Query("model"))
 
-	// Force request errors: client-visible status >= 400.
-	// buildOpsErrorLogsWhere already applies this for non-upstream phase.
-	if strings.EqualFold(strings.TrimSpace(filter.Phase), "upstream") {
-		filter.Phase = ""
+	// 请求错误语义:client-visible status>=400 守卫恒生效（未设
+	// IncludeRecoveredUpstream 时 phase=upstream 不再绕过守卫），故
+	// phase=upstream 作为普通过滤条件保留——此前这里清空该值，导致
+	// 错误类型下拉选「上游」等于不过滤。
+
+	// 分类(用户侧粗分类码)→ phase/type ANY 条件,与用户端 /usage/errors 同一映射;
+	// 未知分类返回空切片 = 不过滤。与 phase 参数可同时设置(AND 语义)。
+	if cat := strings.TrimSpace(c.Query("category")); cat != "" {
+		phases, types := service.CategoryToFilter(cat)
+		filter.ErrorPhasesAny = phases
+		filter.ErrorTypesAny = types
 	}
 
 	if platform := strings.TrimSpace(c.Query("platform")); platform != "" {
@@ -148,6 +165,22 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 		filter.AccountID = &id
 	}
 
+	if v := strings.TrimSpace(c.Query("user_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "Invalid user_id")
+			return
+		}
+		filter.UserID = &id
+	}
+	if v := strings.TrimSpace(c.Query("api_key_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "Invalid api_key_id")
+			return
+		}
+		filter.APIKeyID = &id
+	}
 	if v := strings.TrimSpace(c.Query("resolved")); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes":
@@ -178,6 +211,8 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 		}
 		filter.StatusCodes = out
 	}
+
+	applyOpsErrorSortParams(c, filter)
 
 	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
 	if err != nil {
@@ -222,11 +257,21 @@ func (h *OpsHandler) ListRequestErrors(c *gin.Context) {
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
 	filter.UserQuery = strings.TrimSpace(c.Query("user_query"))
+	// Model 过滤：admin 走精确匹配（ModelFuzzy 默认 false，保持管理端语义）。
+	// buildOpsErrorLogsWhere 以 COALESCE(requested_model, model) 比对。
+	filter.Model = strings.TrimSpace(c.Query("model"))
 
-	// Force request errors: client-visible status >= 400.
-	// buildOpsErrorLogsWhere already applies this for non-upstream phase.
-	if strings.EqualFold(strings.TrimSpace(filter.Phase), "upstream") {
-		filter.Phase = ""
+	// 请求错误语义:client-visible status>=400 守卫恒生效（未设
+	// IncludeRecoveredUpstream 时 phase=upstream 不再绕过守卫），故
+	// phase=upstream 作为普通过滤条件保留——此前这里清空该值，导致
+	// 错误类型下拉选「上游」等于不过滤。
+
+	// 分类(用户侧粗分类码)→ phase/type ANY 条件,与用户端 /usage/errors 同一映射;
+	// 未知分类返回空切片 = 不过滤。与 phase 参数可同时设置(AND 语义)。
+	if cat := strings.TrimSpace(c.Query("category")); cat != "" {
+		phases, types := service.CategoryToFilter(cat)
+		filter.ErrorPhasesAny = phases
+		filter.ErrorTypesAny = types
 	}
 
 	if platform := strings.TrimSpace(c.Query("platform")); platform != "" {
@@ -279,6 +324,8 @@ func (h *OpsHandler) ListRequestErrors(c *gin.Context) {
 		}
 		filter.StatusCodes = out
 	}
+
+	applyOpsErrorSortParams(c, filter)
 
 	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
 	if err != nil {
@@ -350,7 +397,9 @@ func (h *OpsHandler) ListRequestErrorUpstreamErrors(c *gin.Context) {
 		filter.EndTime = &endTime
 	}
 	filter.View = "all"
-	filter.Phase = "upstream"
+	filter.ErrorPhasesAny = []string{"upstream", "account_auth"}
+	// Provider-health list includes recovered inference and credential rows.
+	filter.IncludeRecoveredUpstream = true
 	filter.Owner = "provider"
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
@@ -365,6 +414,8 @@ func (h *OpsHandler) ListRequestErrorUpstreamErrors(c *gin.Context) {
 	} else {
 		filter.ClientRequestID = clientRequestID
 	}
+
+	applyOpsErrorSortParams(c, filter)
 
 	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
 	if err != nil {
@@ -391,79 +442,6 @@ func (h *OpsHandler) ListRequestErrorUpstreamErrors(c *gin.Context) {
 	}
 
 	response.Paginated(c, result.Errors, int64(result.Total), result.Page, result.PageSize)
-}
-
-// RetryRequestErrorClient retries the client request based on stored request body.
-// POST /api/v1/admin/ops/request-errors/:id/retry-client
-func (h *OpsHandler) RetryRequestErrorClient(c *gin.Context) {
-	if h.opsService == nil {
-		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
-		return
-	}
-	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	subject, ok := middleware.GetAuthSubjectFromContext(c)
-	if !ok || subject.UserID <= 0 {
-		response.Error(c, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	idStr := strings.TrimSpace(c.Param("id"))
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id <= 0 {
-		response.BadRequest(c, "Invalid error id")
-		return
-	}
-
-	result, err := h.opsService.RetryError(c.Request.Context(), subject.UserID, id, service.OpsRetryModeClient, nil)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, result)
-}
-
-// RetryRequestErrorUpstreamEvent retries a specific upstream attempt using captured upstream_request_body.
-// POST /api/v1/admin/ops/request-errors/:id/upstream-errors/:idx/retry
-func (h *OpsHandler) RetryRequestErrorUpstreamEvent(c *gin.Context) {
-	if h.opsService == nil {
-		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
-		return
-	}
-	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	subject, ok := middleware.GetAuthSubjectFromContext(c)
-	if !ok || subject.UserID <= 0 {
-		response.Error(c, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	idStr := strings.TrimSpace(c.Param("id"))
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id <= 0 {
-		response.BadRequest(c, "Invalid error id")
-		return
-	}
-
-	idxStr := strings.TrimSpace(c.Param("idx"))
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil || idx < 0 {
-		response.BadRequest(c, "Invalid upstream idx")
-		return
-	}
-
-	result, err := h.opsService.RetryUpstreamEvent(c.Request.Context(), subject.UserID, id, idx)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, result)
 }
 
 // ResolveRequestError toggles resolved status.
@@ -503,7 +481,9 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 	}
 
 	filter.View = parseOpsViewParam(c)
-	filter.Phase = "upstream"
+	filter.ErrorPhasesAny = []string{"upstream", "account_auth"}
+	// Provider-health list includes recovered inference and credential rows.
+	filter.IncludeRecoveredUpstream = true
 	filter.Owner = "provider"
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
@@ -559,6 +539,8 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 		filter.StatusCodes = out
 	}
 
+	applyOpsErrorSortParams(c, filter)
+
 	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -571,39 +553,6 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 // GET /api/v1/admin/ops/upstream-errors/:id
 func (h *OpsHandler) GetUpstreamError(c *gin.Context) {
 	h.GetErrorLogByID(c)
-}
-
-// RetryUpstreamError retries upstream error using the original account_id.
-// POST /api/v1/admin/ops/upstream-errors/:id/retry
-func (h *OpsHandler) RetryUpstreamError(c *gin.Context) {
-	if h.opsService == nil {
-		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
-		return
-	}
-	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	subject, ok := middleware.GetAuthSubjectFromContext(c)
-	if !ok || subject.UserID <= 0 {
-		response.Error(c, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	idStr := strings.TrimSpace(c.Param("id"))
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id <= 0 {
-		response.BadRequest(c, "Invalid error id")
-		return
-	}
-
-	result, err := h.opsService.RetryError(c.Request.Context(), subject.UserID, id, service.OpsRetryModeUpstream, nil)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, result)
 }
 
 // ResolveUpstreamError toggles resolved status.
@@ -715,14 +664,238 @@ func (h *OpsHandler) ListRequestDetails(c *gin.Context) {
 	response.Paginated(c, out.Items, out.Total, out.Page, out.PageSize)
 }
 
+type opsResolveRequest struct {
+	Resolved bool `json:"resolved"`
+}
+
+// UpdateErrorResolution allows manual resolve/unresolve.
+// PUT /api/v1/admin/ops/errors/:id/resolve
+func (h *OpsHandler) UpdateErrorResolution(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := strings.TrimSpace(c.Param("id"))
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid error id")
+		return
+	}
+
+	var req opsResolveRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	uid := subject.UserID
+	if err := h.opsService.UpdateErrorResolution(c.Request.Context(), id, req.Resolved, &uid); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func parseOpsTimeRange(c *gin.Context, defaultRange string) (time.Time, time.Time, error) {
+	startStr := strings.TrimSpace(c.Query("start_time"))
+	endStr := strings.TrimSpace(c.Query("end_time"))
+
+	parseTS := func(s string) (time.Time, error) {
+		if s == "" {
+			return time.Time{}, nil
+		}
+		if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+			return t, nil
+		}
+		return time.Parse(time.RFC3339, s)
+	}
+
+	start, err := parseTS(startStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	end, err := parseTS(endStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+
+	// start/end explicitly provided (even partially)
+	if startStr != "" || endStr != "" {
+		if end.IsZero() {
+			end = time.Now()
+		}
+		if start.IsZero() {
+			dur, _ := parseOpsDuration(defaultRange)
+			start = end.Add(-dur)
+		}
+		if start.After(end) {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid time range: start_time must be <= end_time")
+		}
+		if end.Sub(start) > 30*24*time.Hour {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid time range: max window is 30 days")
+		}
+		return start, end, nil
+	}
+
+	// time_range fallback
+	tr := strings.TrimSpace(c.Query("time_range"))
+	if tr == "" {
+		tr = defaultRange
+	}
+	dur, ok := parseOpsDuration(tr)
+	if !ok {
+		dur, _ = parseOpsDuration(defaultRange)
+	}
+
+	end = time.Now()
+	start = end.Add(-dur)
+	if end.Sub(start) > 30*24*time.Hour {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid time range: max window is 30 days")
+	}
+	return start, end, nil
+}
+
+func parseOpsDuration(v string) (time.Duration, bool) {
+	switch strings.TrimSpace(v) {
+	case "5m":
+		return 5 * time.Minute, true
+	case "30m":
+		return 30 * time.Minute, true
+	case "1h":
+		return time.Hour, true
+	case "6h":
+		return 6 * time.Hour, true
+	case "24h":
+		return 24 * time.Hour, true
+	case "7d":
+		return 7 * 24 * time.Hour, true
+	case "30d":
+		return 30 * 24 * time.Hour, true
+	default:
+		return 0, false
+	}
+}
+
+// RetryRequestErrorClient retries the client request based on stored request body.
+// POST /api/v1/admin/ops/request-errors/:id/retry-client
+func (h *OpsHandler) RetryRequestErrorClient(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := strings.TrimSpace(c.Param("id"))
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid error id")
+		return
+	}
+
+	result, err := h.opsService.RetryError(c.Request.Context(), subject.UserID, id, service.OpsRetryModeClient, nil)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
+// RetryRequestErrorUpstreamEvent retries a specific upstream attempt using captured upstream_request_body.
+// POST /api/v1/admin/ops/request-errors/:id/upstream-errors/:idx/retry
+func (h *OpsHandler) RetryRequestErrorUpstreamEvent(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := strings.TrimSpace(c.Param("id"))
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid error id")
+		return
+	}
+
+	idxStr := strings.TrimSpace(c.Param("idx"))
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil || idx < 0 {
+		response.BadRequest(c, "Invalid upstream idx")
+		return
+	}
+
+	result, err := h.opsService.RetryUpstreamEvent(c.Request.Context(), subject.UserID, id, idx)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
+// RetryUpstreamError retries upstream error using the original account_id.
+// POST /api/v1/admin/ops/upstream-errors/:id/retry
+func (h *OpsHandler) RetryUpstreamError(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	idStr := strings.TrimSpace(c.Param("id"))
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid error id")
+		return
+	}
+
+	result, err := h.opsService.RetryError(c.Request.Context(), subject.UserID, id, service.OpsRetryModeUpstream, nil)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 type opsRetryRequest struct {
 	Mode            string `json:"mode"`
 	PinnedAccountID *int64 `json:"pinned_account_id"`
 	Force           bool   `json:"force"`
-}
-
-type opsResolveRequest struct {
-	Resolved bool `json:"resolved"`
 }
 
 // RetryErrorRequest retries a failed request using stored request_body.
@@ -815,120 +988,3 @@ func (h *OpsHandler) ListRetryAttempts(c *gin.Context) {
 	response.Success(c, items)
 }
 
-// UpdateErrorResolution allows manual resolve/unresolve.
-// PUT /api/v1/admin/ops/errors/:id/resolve
-func (h *OpsHandler) UpdateErrorResolution(c *gin.Context) {
-	if h.opsService == nil {
-		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
-		return
-	}
-	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	subject, ok := middleware.GetAuthSubjectFromContext(c)
-	if !ok || subject.UserID <= 0 {
-		response.Error(c, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	idStr := strings.TrimSpace(c.Param("id"))
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id <= 0 {
-		response.BadRequest(c, "Invalid error id")
-		return
-	}
-
-	var req opsResolveRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-	uid := subject.UserID
-	if err := h.opsService.UpdateErrorResolution(c.Request.Context(), id, req.Resolved, &uid, nil); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, gin.H{"ok": true})
-}
-
-func parseOpsTimeRange(c *gin.Context, defaultRange string) (time.Time, time.Time, error) {
-	startStr := strings.TrimSpace(c.Query("start_time"))
-	endStr := strings.TrimSpace(c.Query("end_time"))
-
-	parseTS := func(s string) (time.Time, error) {
-		if s == "" {
-			return time.Time{}, nil
-		}
-		if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
-			return t, nil
-		}
-		return time.Parse(time.RFC3339, s)
-	}
-
-	start, err := parseTS(startStr)
-	if err != nil {
-		return time.Time{}, time.Time{}, err
-	}
-	end, err := parseTS(endStr)
-	if err != nil {
-		return time.Time{}, time.Time{}, err
-	}
-
-	// start/end explicitly provided (even partially)
-	if startStr != "" || endStr != "" {
-		if end.IsZero() {
-			end = time.Now()
-		}
-		if start.IsZero() {
-			dur, _ := parseOpsDuration(defaultRange)
-			start = end.Add(-dur)
-		}
-		if start.After(end) {
-			return time.Time{}, time.Time{}, fmt.Errorf("invalid time range: start_time must be <= end_time")
-		}
-		if end.Sub(start) > 30*24*time.Hour {
-			return time.Time{}, time.Time{}, fmt.Errorf("invalid time range: max window is 30 days")
-		}
-		return start, end, nil
-	}
-
-	// time_range fallback
-	tr := strings.TrimSpace(c.Query("time_range"))
-	if tr == "" {
-		tr = defaultRange
-	}
-	dur, ok := parseOpsDuration(tr)
-	if !ok {
-		dur, _ = parseOpsDuration(defaultRange)
-	}
-
-	end = time.Now()
-	start = end.Add(-dur)
-	if end.Sub(start) > 30*24*time.Hour {
-		return time.Time{}, time.Time{}, fmt.Errorf("invalid time range: max window is 30 days")
-	}
-	return start, end, nil
-}
-
-func parseOpsDuration(v string) (time.Duration, bool) {
-	switch strings.TrimSpace(v) {
-	case "5m":
-		return 5 * time.Minute, true
-	case "30m":
-		return 30 * time.Minute, true
-	case "1h":
-		return time.Hour, true
-	case "6h":
-		return 6 * time.Hour, true
-	case "24h":
-		return 24 * time.Hour, true
-	case "7d":
-		return 7 * 24 * time.Hour, true
-	case "30d":
-		return 30 * 24 * time.Hour, true
-	default:
-		return 0, false
-	}
-}

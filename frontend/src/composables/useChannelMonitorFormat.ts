@@ -78,7 +78,7 @@ export function useChannelMonitorFormat() {
       case PROVIDER_GEMINI:
         return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
       case PROVIDER_GROK:
-        return 'bg-zinc-100 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-200'
+        return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300'
       default:
         return NEUTRAL_BADGE
     }
@@ -86,7 +86,7 @@ export function useChannelMonitorFormat() {
 
   /**
    * Tailwind class for a provider radio-button-style picker (active/inactive state).
-   * Reuses the same emerald/orange/sky/zinc palette as providerBadgeClass to keep
+   * Reuses the same emerald/orange/sky palette as providerBadgeClass to keep
    * visual semantics consistent across badges and pickers.
    */
   function providerPickerClass(p: Provider | string, active: boolean): string {
@@ -105,7 +105,7 @@ export function useChannelMonitorFormat() {
           : 'border-gray-200 bg-white text-gray-600 hover:border-sky-300 hover:text-sky-700 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-sky-500/50'
       case PROVIDER_GROK:
         return active
-          ? 'border-zinc-700 bg-zinc-100 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-200 dark:border-zinc-400'
+          ? 'border-zinc-500 bg-zinc-50 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-200 dark:border-zinc-400'
           : 'border-gray-200 bg-white text-gray-600 hover:border-zinc-400 hover:text-zinc-800 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-zinc-500/50'
       default:
         return active
@@ -179,7 +179,7 @@ export function providerGradient(provider: string): string {
     case PROVIDER_GEMINI:
       return 'bg-gradient-to-br from-sky-50 to-indigo-100 dark:from-sky-500/10 dark:to-indigo-500/20'
     case PROVIDER_GROK:
-      return 'bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-500/10 dark:to-zinc-500/20'
+      return 'bg-gradient-to-br from-zinc-50 to-neutral-200 dark:from-zinc-500/10 dark:to-neutral-500/20'
     default:
       return 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dark-700 dark:to-dark-600'
   }

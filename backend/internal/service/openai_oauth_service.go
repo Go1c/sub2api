@@ -118,9 +118,11 @@ type OpenAITokenInfo struct {
 	ExpiresIn             int64  `json:"expires_in"`
 	ExpiresAt             int64  `json:"expires_at"`
 	ClientID              string `json:"client_id,omitempty"`
+	AuthMode              string `json:"auth_mode,omitempty"`
 	Email                 string `json:"email,omitempty"`
 	ChatGPTAccountID      string `json:"chatgpt_account_id,omitempty"`
 	ChatGPTUserID         string `json:"chatgpt_user_id,omitempty"`
+	ChatGPTAccountFedRAMP bool   `json:"chatgpt_account_is_fedramp,omitempty"`
 	OrganizationID        string `json:"organization_id,omitempty"`
 	PlanType              string `json:"plan_type,omitempty"`
 	SubscriptionExpiresAt string `json:"subscription_expires_at,omitempty"`

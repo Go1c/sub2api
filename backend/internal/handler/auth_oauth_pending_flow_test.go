@@ -2463,6 +2463,10 @@ func (r *oauthPendingFlowRedeemCodeRepo) GetByCode(ctx context.Context, code str
 	}, nil
 }
 
+func (r *oauthPendingFlowRedeemCodeRepo) BatchUpdate(context.Context, []int64, service.RedeemCodeBatchUpdateFields) (int64, error) {
+	return 0, nil
+}
+
 func (r *oauthPendingFlowRedeemCodeRepo) Update(ctx context.Context, code *service.RedeemCode) error {
 	if code == nil {
 		return nil

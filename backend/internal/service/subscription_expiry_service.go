@@ -2,18 +2,37 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+)
+
+const (
+	// subscriptionExpiryReminderLeaderLockKey gates the per-cycle reminder scan so
+	// that only one instance walks all active subscriptions and sends reminder
+	// emails, avoiding redundant full scans and duplicate emails.
+	subscriptionExpiryReminderLeaderLockKey = "subscription:expiry:reminder:leader"
+	// subscriptionExpiryReminderLeaderLockTTL bounds crash recovery; the scan can
+	// page through many subscriptions, so keep it comfortably above one cycle.
+	subscriptionExpiryReminderLeaderLockTTL = 5 * time.Minute
 )
 
 // SubscriptionExpiryService periodically expires subscriptions and records credit-pool expiry audit events.
 type SubscriptionExpiryService struct {
-	userSubRepo UserSubscriptionRepository
-	interval    time.Duration
-	stopCh      chan struct{}
-	stopOnce    sync.Once
-	wg          sync.WaitGroup
+	userSubRepo              UserSubscriptionRepository
+	settingRepo              SettingRepository
+	notificationEmailService *NotificationEmailService
+	interval                 time.Duration
+	stopCh                   chan struct{}
+	stopOnce                 sync.Once
+	wg                       sync.WaitGroup
+
+	lockCache  LeaderLockCache
+	db         *sql.DB
+	instanceID string
 }
 
 func NewSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, interval time.Duration) *SubscriptionExpiryService {
@@ -21,7 +40,27 @@ func NewSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, interv
 		userSubRepo: userSubRepo,
 		interval:    interval,
 		stopCh:      make(chan struct{}),
+		instanceID:  uuid.NewString(),
 	}
+}
+
+// SetLeaderLock injects the leader-lock cache and DB used to elect a single
+// instance for the periodic expiry-reminder scan. When both are nil the scan runs
+// ungated (single-instance / test behavior).
+func (s *SubscriptionExpiryService) SetLeaderLock(lockCache LeaderLockCache, db *sql.DB) {
+	if s == nil {
+		return
+	}
+	s.lockCache = lockCache
+	s.db = db
+}
+
+func (s *SubscriptionExpiryService) SetSettingRepository(settingRepo SettingRepository) {
+	s.settingRepo = settingRepo
+}
+
+func (s *SubscriptionExpiryService) SetNotificationEmailService(notificationEmailService *NotificationEmailService) {
+	s.notificationEmailService = notificationEmailService
 }
 
 func (s *SubscriptionExpiryService) Start() {

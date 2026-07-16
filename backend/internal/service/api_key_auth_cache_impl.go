@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 14 // v14: include group video pricing fields
+const apiKeyAuthSnapshotVersion = 15 // v15: include group web search per-call pricing
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -206,22 +206,20 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		return nil
 	}
 	snapshot := &APIKeyAuthSnapshot{
-		Version:       apiKeyAuthSnapshotVersion,
-		APIKeyID:      apiKey.ID,
-		UserID:        apiKey.UserID,
-		GroupID:       apiKey.GroupID,
-		FallbackKeyID: apiKey.FallbackKeyID,
-		Name:          apiKey.Name,
-		Status:        apiKey.Status,
-		AllowedModels: NormalizeAPIKeyAllowedModels(apiKey.AllowedModels),
-		IPWhitelist:   apiKey.IPWhitelist,
-		IPBlacklist:   apiKey.IPBlacklist,
-		Quota:         apiKey.Quota,
-		QuotaUsed:     apiKey.QuotaUsed,
-		ExpiresAt:     apiKey.ExpiresAt,
-		RateLimit5h:   apiKey.RateLimit5h,
-		RateLimit1d:   apiKey.RateLimit1d,
-		RateLimit7d:   apiKey.RateLimit7d,
+		Version:     apiKeyAuthSnapshotVersion,
+		APIKeyID:    apiKey.ID,
+		UserID:      apiKey.UserID,
+		GroupID:     apiKey.GroupID,
+		Name:        apiKey.Name,
+		Status:      apiKey.Status,
+		IPWhitelist: apiKey.IPWhitelist,
+		IPBlacklist: apiKey.IPBlacklist,
+		Quota:       apiKey.Quota,
+		QuotaUsed:   apiKey.QuotaUsed,
+		ExpiresAt:   apiKey.ExpiresAt,
+		RateLimit5h: apiKey.RateLimit5h,
+		RateLimit1d: apiKey.RateLimit1d,
+		RateLimit7d: apiKey.RateLimit7d,
 		User: APIKeyAuthUserSnapshot{
 			ID:                         apiKey.User.ID,
 			Status:                     apiKey.User.Status,
@@ -261,6 +259,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			WeeklyLimitUSD:                  apiKey.Group.WeeklyLimitUSD,
 			MonthlyLimitUSD:                 apiKey.Group.MonthlyLimitUSD,
 			AllowImageGeneration:            apiKey.Group.AllowImageGeneration,
+			AllowBatchImageGeneration:       apiKey.Group.AllowBatchImageGeneration,
 			ImageRateIndependent:            apiKey.Group.ImageRateIndependent,
 			ImageRateMultiplier:             apiKey.Group.ImageRateMultiplier,
 			ImagePrice1K:                    apiKey.Group.ImagePrice1K,
@@ -271,6 +270,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			VideoPrice480P:                  apiKey.Group.VideoPrice480P,
 			VideoPrice720P:                  apiKey.Group.VideoPrice720P,
 			VideoPrice1080P:                 apiKey.Group.VideoPrice1080P,
+			WebSearchPricePerCall:           apiKey.Group.WebSearchPricePerCall,
 			ClaudeCodeOnly:                  apiKey.Group.ClaudeCodeOnly,
 			FallbackGroupID:                 apiKey.Group.FallbackGroupID,
 			FallbackGroupIDOnInvalidRequest: apiKey.Group.FallbackGroupIDOnInvalidRequest,
@@ -282,7 +282,12 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			AllowMessagesDispatch:           apiKey.Group.AllowMessagesDispatch,
 			DefaultMappedModel:              apiKey.Group.DefaultMappedModel,
 			MessagesDispatchModelConfig:     apiKey.Group.MessagesDispatchModelConfig,
+			ModelsListConfig:                apiKey.Group.ModelsListConfig,
 			RPMLimit:                        apiKey.Group.RPMLimit,
+			PeakRateEnabled:                 apiKey.Group.PeakRateEnabled,
+			PeakStart:                       apiKey.Group.PeakStart,
+			PeakEnd:                         apiKey.Group.PeakEnd,
+			PeakRateMultiplier:              apiKey.Group.PeakRateMultiplier,
 		}
 	}
 	return snapshot
@@ -293,22 +298,20 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
-		ID:            snapshot.APIKeyID,
-		UserID:        snapshot.UserID,
-		GroupID:       snapshot.GroupID,
-		FallbackKeyID: snapshot.FallbackKeyID,
-		Key:           key,
-		Name:          snapshot.Name,
-		Status:        snapshot.Status,
-		AllowedModels: NormalizeAPIKeyAllowedModels(snapshot.AllowedModels),
-		IPWhitelist:   snapshot.IPWhitelist,
-		IPBlacklist:   snapshot.IPBlacklist,
-		Quota:         snapshot.Quota,
-		QuotaUsed:     snapshot.QuotaUsed,
-		ExpiresAt:     snapshot.ExpiresAt,
-		RateLimit5h:   snapshot.RateLimit5h,
-		RateLimit1d:   snapshot.RateLimit1d,
-		RateLimit7d:   snapshot.RateLimit7d,
+		ID:          snapshot.APIKeyID,
+		UserID:      snapshot.UserID,
+		GroupID:     snapshot.GroupID,
+		Key:         key,
+		Name:        snapshot.Name,
+		Status:      snapshot.Status,
+		IPWhitelist: snapshot.IPWhitelist,
+		IPBlacklist: snapshot.IPBlacklist,
+		Quota:       snapshot.Quota,
+		QuotaUsed:   snapshot.QuotaUsed,
+		ExpiresAt:   snapshot.ExpiresAt,
+		RateLimit5h: snapshot.RateLimit5h,
+		RateLimit1d: snapshot.RateLimit1d,
+		RateLimit7d: snapshot.RateLimit7d,
 		User: &User{
 			ID:                         snapshot.User.ID,
 			Status:                     snapshot.User.Status,
@@ -341,6 +344,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			WeeklyLimitUSD:                  snapshot.Group.WeeklyLimitUSD,
 			MonthlyLimitUSD:                 snapshot.Group.MonthlyLimitUSD,
 			AllowImageGeneration:            snapshot.Group.AllowImageGeneration,
+			AllowBatchImageGeneration:       snapshot.Group.AllowBatchImageGeneration,
 			ImageRateIndependent:            snapshot.Group.ImageRateIndependent,
 			ImageRateMultiplier:             snapshot.Group.ImageRateMultiplier,
 			ImagePrice1K:                    snapshot.Group.ImagePrice1K,
@@ -351,6 +355,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			VideoPrice480P:                  snapshot.Group.VideoPrice480P,
 			VideoPrice720P:                  snapshot.Group.VideoPrice720P,
 			VideoPrice1080P:                 snapshot.Group.VideoPrice1080P,
+			WebSearchPricePerCall:           snapshot.Group.WebSearchPricePerCall,
 			ClaudeCodeOnly:                  snapshot.Group.ClaudeCodeOnly,
 			FallbackGroupID:                 snapshot.Group.FallbackGroupID,
 			FallbackGroupIDOnInvalidRequest: snapshot.Group.FallbackGroupIDOnInvalidRequest,
@@ -362,7 +367,12 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			AllowMessagesDispatch:           snapshot.Group.AllowMessagesDispatch,
 			DefaultMappedModel:              snapshot.Group.DefaultMappedModel,
 			MessagesDispatchModelConfig:     snapshot.Group.MessagesDispatchModelConfig,
+			ModelsListConfig:                snapshot.Group.ModelsListConfig,
 			RPMLimit:                        snapshot.Group.RPMLimit,
+			PeakRateEnabled:                 snapshot.Group.PeakRateEnabled,
+			PeakStart:                       snapshot.Group.PeakStart,
+			PeakEnd:                         snapshot.Group.PeakEnd,
+			PeakRateMultiplier:              snapshot.Group.PeakRateMultiplier,
 		}
 	}
 	s.compileAPIKeyIPRules(apiKey)

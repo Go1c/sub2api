@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -42,39 +43,18 @@ func TestIsImageGenerationIntent(t *testing.T) {
 			want:     true,
 		},
 		{
-			name:     "mcp image2 generate image tool",
+			name:     "namespace image_gen tool choice",
 			endpoint: "/v1/responses",
 			model:    "gpt-5.5",
-			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"function","name":"mcp__gpt_image_2__generate_image","description":"generate images with configured gpt-image-2 API"}],"tool_choice":"auto"}`),
+			body:     []byte(`{"model":"gpt-5.5","tool_choice":{"type":"namespace","name":"image_gen"}}`),
 			want:     true,
 		},
 		{
-			name:     "mcp image2 nested tool declaration",
+			name:     "custom imagegen function tool choice is not image intent",
 			endpoint: "/v1/responses",
 			model:    "gpt-5.5",
-			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"mcp","server_label":"gpt_image_2","tools":[{"name":"generate_image"}]}],"tool_choice":"auto"}`),
-			want:     true,
-		},
-		{
-			name:     "mcp image2 nested generate tool name",
-			endpoint: "/v1/responses",
-			model:    "gpt-5.5",
-			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"mcp","server_label":"image2","tools":[{"name":"generate"}]}],"tool_choice":"auto"}`),
-			want:     true,
-		},
-		{
-			name:     "legacy functions image tool",
-			endpoint: "/v1/responses",
-			model:    "gpt-5.5",
-			body:     []byte(`{"model":"gpt-5.5","functions":[{"name":"mcp__image2__generate","description":"Generate an image with Image2"}],"function_call":{"name":"mcp__image2__generate"}}`),
-			want:     true,
-		},
-		{
-			name:     "tool choice mcp generate",
-			endpoint: "/v1/responses",
-			model:    "gpt-5.5",
-			body:     []byte(`{"model":"gpt-5.5","tool_choice":{"type":"function","name":"mcp__image2__generate"}}`),
-			want:     true,
+			body:     []byte(`{"model":"gpt-5.5","tool_choice":{"function":{"name":"imagegen"}}}`),
+			want:     false,
 		},
 		{
 			name:     "required tool choice alone is text",
@@ -127,68 +107,75 @@ func TestIsImageGenerationIntent(t *testing.T) {
 	}
 }
 
-func TestIsImageGenerationIntentMapDetectsMCPImageTool(t *testing.T) {
-	body := map[string]any{
-		"model": "gpt-5.5",
-		"tools": []any{
-			map[string]any{
-				"type":        "function",
-				"name":        "mcp__gpt_image_2__generate_image",
-				"description": "generate images with configured gpt-image-2 API",
-			},
+func TestIsImageGenerationIntentJSONSemantics(t *testing.T) {
+	largeInput := strings.Repeat("x", 1<<20)
+	tests := []struct {
+		name     string
+		endpoint string
+		body     []byte
+		want     bool
+	}{
+		{
+			name:     "chat body image model",
+			endpoint: "/v1/chat/completions",
+			body:     []byte(`{"model":"gpt-image-2"}`),
+			want:     true,
 		},
-		"tool_choice": "auto",
+		{
+			name:     "large responses input with trailing namespace tool choice",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"model":"gpt-5.5","input":"` + largeInput + `","tool_choice":{"type":"namespace","name":"image_gen"}}`),
+			want:     true,
+		},
+		{
+			name:     "invalid json with image tool",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"tools":[{"type":"image_generation"}]`),
+			want:     false,
+		},
+		{
+			name:     "duplicate model uses first value",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"model":"gpt-5.5","model":"gpt-image-2"}`),
+			want:     false,
+		},
+		{
+			name:     "duplicate null model still uses first value",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"model":null,"model":"gpt-image-2"}`),
+			want:     false,
+		},
+		{
+			name:     "duplicate tools uses first value",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"tools":[],"tools":[{"type":"image_generation"}]}`),
+			want:     false,
+		},
+		{
+			name:     "duplicate input uses first value",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"input":[],"input":[{"type":"additional_tools","tools":[{"type":"namespace","name":"image_gen"}]}]}`),
+			want:     false,
+		},
+		{
+			name:     "duplicate tool choice uses first value",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"tool_choice":"required","tool_choice":{"type":"image_generation"}}`),
+			want:     false,
+		},
+		{
+			name:     "escaped top level key",
+			endpoint: "/v1/responses",
+			body:     []byte(`{"tool_\u0063hoice":{"type":"image_generation"}}`),
+			want:     true,
+		},
 	}
 
-	require.True(t, IsImageGenerationIntentMap("/v1/responses", "gpt-5.5", body))
-}
-
-func TestIsImageGenerationIntentMapDetectsLegacyFunctionsImageTool(t *testing.T) {
-	body := map[string]any{
-		"model": "gpt-5.5",
-		"functions": []any{
-			map[string]any{
-				"name":        "mcp__image2__generate",
-				"description": "Generate an image with Image2",
-			},
-		},
-		"function_call": map[string]any{
-			"name": "mcp__image2__generate",
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, IsImageGenerationIntent(tt.endpoint, "gpt-5.5", tt.body))
+		})
 	}
-
-	require.True(t, IsImageGenerationIntentMap("/v1/responses", "gpt-5.5", body))
-}
-
-func TestIsCodexTextImageGenerationIntentDetectsUserPrompt(t *testing.T) {
-	body := []byte(`{
-		"model":"gpt-5.5",
-		"input":[
-			{"type":"message","role":"developer","content":[{"type":"input_text","text":"Tools may mention image generation here."}]},
-			{"type":"message","role":"user","content":[{"type":"input_text","text":"帮我生成一张卡通游戏图标，2K"}]}
-		]
-	}`)
-
-	require.True(t, IsCodexTextImageGenerationIntent("/v1/responses", "gpt-5.5", body, "codex_cli_rs/0.125.0", "", false))
-}
-
-func TestIsCodexTextImageGenerationIntentIgnoresNonCodexAndCodingMentions(t *testing.T) {
-	require.False(t, IsCodexTextImageGenerationIntent(
-		"/v1/responses",
-		"gpt-5.5",
-		[]byte(`{"model":"gpt-5.5","input":"帮我写一个 image generation API 的调用示例"}`),
-		"codex_cli_rs/0.125.0",
-		"",
-		false,
-	))
-	require.False(t, IsCodexTextImageGenerationIntent(
-		"/v1/responses",
-		"gpt-5.5",
-		[]byte(`{"model":"gpt-5.5","input":"generate an image icon"}`),
-		"unit-test-agent/1.0",
-		"",
-		false,
-	))
 }
 
 func TestIsImageGenerationIntentMap_NamespaceImageGen(t *testing.T) {
@@ -297,6 +284,17 @@ func TestResolveOpenAIResponsesImageBillingConfigToolModelWins(t *testing.T) {
 	require.Equal(t, "2K", imageSize)
 }
 
+func TestResolveOpenAIResponsesImageBillingConfigFromBodyIgnoresUnrelatedLargeInput(t *testing.T) {
+	cfg, err := resolveOpenAIResponsesImageBillingConfigDetailedFromBody(
+		[]byte(`{"model":"mapped-text-model","tools":[{"type":"image_generation","model":"gpt-image-2","size":"2048x1152"}],"input":[{"type":"message","content":[{"type":"input_text","text":"hi","nonce":1e1000000}]}]}`),
+		"requested-model",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "gpt-image-2", cfg.Model)
+	require.Equal(t, "2K", cfg.SizeTier)
+	require.Equal(t, "2048x1152", cfg.InputSize)
+}
+
 func TestResolveOpenAIResponsesImageBillingConfigSupportsOfficialAndCustomSizes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -314,14 +312,9 @@ func TestResolveOpenAIResponsesImageBillingConfigSupportsOfficialAndCustomSizes(
 			wantTier: "4K",
 		},
 		{
-			name:     "custom valid 1k",
+			name:     "custom valid 2k",
 			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"image_generation","model":"gpt-image-2","size":"1280x768"}]}`),
-			wantTier: "1K",
-		},
-		{
-			name:     "custom portrait 1k",
-			body:     []byte(`{"model":"gpt-5.5","tools":[{"type":"image_generation","model":"gpt-image-2","size":"720x1280"}]}`),
-			wantTier: "1K",
+			wantTier: "2K",
 		},
 		{
 			name:     "default image tool model supports flexible size",
@@ -358,9 +351,10 @@ func TestResolveOpenAIResponsesImageBillingConfigDoesNotRejectUnknownSizes(t *te
 func TestOpenAIImageOutputCounterDeduplicatesFinalImages(t *testing.T) {
 	counter := newOpenAIImageOutputCounter()
 	counter.AddSSEData([]byte(`{"type":"response.image_generation_call.partial_image","partial_image_b64":"abc"}`))
-	counter.AddSSEData([]byte(`{"type":"response.output_item.done","item":{"id":"ig_1","type":"image_generation_call","result":"final-a"}}`))
-	counter.AddSSEData([]byte(`{"type":"response.completed","response":{"output":[{"id":"ig_1","type":"image_generation_call","result":"final-a"},{"id":"ig_2","type":"image_generation_call","result":"final-b"}]}}`))
+	counter.AddSSEData([]byte(`{"type":"response.output_item.done","item":{"id":"ig_1","type":"image_generation_call","result":"final-a","size":"1024x1024"}}`))
+	counter.AddSSEData([]byte(`{"type":"response.completed","response":{"output":[{"id":"ig_1","type":"image_generation_call","result":"final-a"},{"id":"ig_2","type":"image_generation_call","result":"final-b","size":"3840x2160"}]}}`))
 	require.Equal(t, 2, counter.Count())
+	require.Equal(t, []string{"1024x1024", "3840x2160"}, counter.Sizes())
 }
 
 func TestOpenAIImageOutputCounterCountsImagesAPIStreamShapes(t *testing.T) {
@@ -399,4 +393,37 @@ func TestOpenAIImageOutputCounterFallsBackForInvalidMultilineSSEBody(t *testing.
 			"data: {\"type\":\"image_generation.completed\",\"b64_json\":\"final-b\"}\n\n",
 	)
 	require.Equal(t, 2, counter.Count())
+}
+
+func TestCollectOpenAIResponseImageOutputSizesFromJSONBytes(t *testing.T) {
+	body := []byte(`{
+		"output": [
+			{"id":"ig_1","type":"image_generation_call","result":"final-a","size":"3840x2160"},
+			{"id":"ig_2","type":"image_generation_call","result":"final-b","size":"1024x1024"}
+		]
+	}`)
+
+	require.Equal(t, 2, countOpenAIResponseImageOutputsFromJSONBytes(body))
+	require.Equal(t, []string{"3840x2160", "1024x1024"}, collectOpenAIResponseImageOutputSizesFromJSONBytes(body))
+}
+
+func TestCollectOpenAIResponseImageOutputSizesFromImagesAPIData(t *testing.T) {
+	body := []byte(`{
+		"data": [
+			{"b64_json":"final-a","size":"2048x1152"},
+			{"b64_json":"final-b","size":"2048x1152"}
+		]
+	}`)
+
+	require.Equal(t, 2, countOpenAIResponseImageOutputsFromJSONBytes(body))
+	require.Equal(t, []string{"2048x1152", "2048x1152"}, collectOpenAIResponseImageOutputSizesFromJSONBytes(body))
+}
+
+func TestCollectOpenAIImageOutputSizesFromSSEBody(t *testing.T) {
+	body := "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"ig_1\",\"type\":\"image_generation_call\",\"result\":\"final-a\",\"size\":\"3840x2160\"}}\n\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"id\":\"ig_1\",\"type\":\"image_generation_call\",\"result\":\"final-a\"},{\"id\":\"ig_2\",\"type\":\"image_generation_call\",\"result\":\"final-b\",\"size\":\"1024x1024\"}]}}\n\n" +
+		"data: [DONE]\n\n"
+
+	require.Equal(t, 2, countOpenAIImageOutputsFromSSEBody(body))
+	require.Equal(t, []string{"3840x2160", "1024x1024"}, collectOpenAIImageOutputSizesFromSSEBody(body))
 }

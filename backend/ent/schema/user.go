@@ -49,6 +49,9 @@ func (User) Fields() []ent.Field {
 		field.Float("balance").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Float("frozen_balance").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0),
 		field.Int("concurrency").
 			Default(5),
 		field.String("status").
@@ -77,10 +80,10 @@ func (User) Fields() []ent.Field {
 		field.String("signup_source").
 			Validate(func(value string) error {
 				switch value {
-				case "email", "linuxdo", "wechat", "oidc", "github", "google":
+				case "email", "linuxdo", "wechat", "oidc", "github", "google", "dingtalk":
 					return nil
 				default:
-					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc, github, google")
+					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc, github, google, dingtalk")
 				}
 			}).
 			Default("email"),

@@ -5,28 +5,15 @@
 
 import { apiClient } from "../client";
 import type {
-  ContactChannel,
   CustomEndpoint,
   CustomMenuItem,
   LoginAgreementDocument,
   NotifyEmailEntry,
-  SitePage,
 } from "@/types";
-import type {
-  AdminModelMarketResponse,
-  ModelMarketConfig,
-} from "@/api/modelMarket";
 
 export interface DefaultSubscriptionSetting {
   group_id: number;
   validity_days: number;
-}
-
-export interface AffiliateRebateTier {
-  level: "L1" | "L2" | "L3" | "L4" | string;
-  min_invitees: number;
-  min_recharge: number;
-  rebate_rate_percent: number | null;
 }
 
 // ── 平台限额类型 ──────────────────────────────────────────────────
@@ -114,14 +101,6 @@ export interface WeChatConnectModeOption {
   labelEn: string;
 }
 
-export type FrontendLocaleCode = "en" | "zh" | "zh-Hant";
-
-export interface FrontendLocaleOption {
-  value: FrontendLocaleCode;
-  labelZh: string;
-  labelEn: string;
-}
-
 const AUTH_SOURCE_TYPES: AuthSourceType[] = [
   "email",
   "linuxdo",
@@ -199,11 +178,6 @@ const WECHAT_CONNECT_MODE_OPTIONS: WeChatConnectModeOption[] = [
     labelEn: "Mobile App",
   },
 ];
-export const FRONTEND_LOCALE_OPTIONS: FrontendLocaleOption[] = [
-  { value: "en", labelZh: "English", labelEn: "English" },
-  { value: "zh", labelZh: "简体中文", labelEn: "Simplified Chinese" },
-  { value: "zh-Hant", labelZh: "繁體中文", labelEn: "Traditional Chinese" },
-];
 const WECHAT_CONNECT_MODE_ALIASES: Record<string, WeChatConnectMode> = {
   open: "open",
   open_platform: "open",
@@ -275,13 +249,7 @@ export function appendAuthSourceDefaultsToUpdateRequest(
   const target = payload as Record<string, unknown>;
 
   for (const source of AUTH_SOURCE_TYPES) {
-    const current = authSourceDefaults[source] ?? {
-      balance: AUTH_SOURCE_DEFAULT_BALANCE,
-      concurrency: AUTH_SOURCE_DEFAULT_CONCURRENCY,
-      subscriptions: [],
-      grant_on_signup: false,
-      grant_on_first_bind: false,
-    };
+    const current = authSourceDefaults[source];
     target[`auth_source_default_${source}_balance`] =
       Number(current.balance) || 0;
     target[`auth_source_default_${source}_concurrency`] = Math.max(
@@ -396,7 +364,6 @@ export interface SystemSettings {
   password_reset_enabled: boolean;
   frontend_url: string;
   invitation_code_enabled: boolean;
-  invitation_registration_mode: "redeem_code" | "affiliate_link" | "both" | string;
   totp_enabled: boolean; // TOTP 双因素认证
   totp_encryption_key_configured: boolean; // TOTP 加密密钥是否已配置
   login_agreement_enabled: boolean;
@@ -406,17 +373,9 @@ export interface SystemSettings {
   // Default settings
   default_balance: number;
   affiliate_rebate_rate: number;
-  affiliate_rebate_tiers: AffiliateRebateTier[];
   affiliate_rebate_freeze_hours: number;
   affiliate_rebate_duration_days: number;
   affiliate_rebate_per_invitee_cap: number;
-  affiliate_signup_bonus_enabled: boolean;
-  affiliate_signup_bonus_amount: number;
-  affiliate_signup_bonus_total_cap: number;
-  affiliate_signup_bonus_daily_cap: number;
-  balance_usage_gate_enabled: boolean;
-  balance_usage_gate_min_balance: number;
-  balance_usage_gate_min_recharge: number;
   default_concurrency: number;
   default_user_rpm_limit: number;
   default_subscriptions: DefaultSubscriptionSetting[];
@@ -440,6 +399,11 @@ export interface SystemSettings {
   auth_source_default_wechat_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_wechat_grant_on_signup?: boolean;
   auth_source_default_wechat_grant_on_first_bind?: boolean;
+  auth_source_default_dingtalk_balance?: number;
+  auth_source_default_dingtalk_concurrency?: number;
+  auth_source_default_dingtalk_subscriptions?: DefaultSubscriptionSetting[];
+  auth_source_default_dingtalk_grant_on_signup?: boolean;
+  auth_source_default_dingtalk_grant_on_first_bind?: boolean;
   auth_source_default_github_balance?: number;
   auth_source_default_github_concurrency?: number;
   auth_source_default_github_subscriptions?: DefaultSubscriptionSetting[];
@@ -466,29 +430,14 @@ export interface SystemSettings {
   site_subtitle: string;
   api_base_url: string;
   contact_info: string;
-  contact_channels: ContactChannel[];
-  support_chat_enabled: boolean;
-  support_chat_gateway_url: string;
-  support_chat_title: string;
-  support_chat_welcome_message: string;
-  support_chat_official_contact_text: string;
-  support_chat_official_contact_url: string;
   doc_url: string;
-  site_pages: SitePage[];
   home_content: string;
   hide_ccs_import_button: boolean;
-  ccswitch_default_model_anthropic: string;
-  ccswitch_default_model_openai: string;
-  ccswitch_default_model_gemini: string;
-  ccswitch_default_model_antigravity: string;
-  ccswitch_default_model_antigravity_gemini: string;
   table_default_page_size: number;
   table_page_size_options: number[];
   backend_mode_enabled: boolean;
-  subscription_multiple_purchases_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
-  frontend_locales: FrontendLocaleCode[];
   // SMTP settings
   smtp_host: string;
   smtp_port: number;
@@ -501,12 +450,31 @@ export interface SystemSettings {
   turnstile_enabled: boolean;
   turnstile_site_key: string;
   turnstile_secret_key_configured: boolean;
+  api_key_acl_trust_forwarded_ip: boolean;
 
   // LinuxDo Connect OAuth settings
   linuxdo_connect_enabled: boolean;
   linuxdo_connect_client_id: string;
   linuxdo_connect_client_secret_configured: boolean;
   linuxdo_connect_redirect_url: string;
+
+  // DingTalk Connect OAuth settings
+  dingtalk_connect_enabled: boolean;
+  dingtalk_connect_client_id: string;
+  dingtalk_connect_client_secret_configured: boolean;
+  dingtalk_connect_redirect_url: string;
+  dingtalk_connect_corp_restriction_policy: string;
+  dingtalk_connect_internal_corp_id: string;
+  dingtalk_connect_bypass_registration: boolean;
+  dingtalk_connect_sync_corp_email: boolean;
+  dingtalk_connect_sync_display_name: boolean;
+  dingtalk_connect_sync_dept: boolean;
+  dingtalk_connect_sync_corp_email_attr_key: string;
+  dingtalk_connect_sync_display_name_attr_key: string;
+  dingtalk_connect_sync_dept_attr_key: string;
+  dingtalk_connect_sync_corp_email_attr_name: string;
+  dingtalk_connect_sync_display_name_attr_name: string;
+  dingtalk_connect_sync_dept_attr_name: string;
 
   // WeChat Connect OAuth settings
   wechat_connect_enabled: boolean;
@@ -588,16 +556,31 @@ export interface SystemSettings {
   enable_fingerprint_unification: boolean;
   enable_metadata_passthrough: boolean;
   enable_cch_signing: boolean;
+  enable_claude_oauth_system_prompt_injection: boolean;
+  claude_oauth_system_prompt: string;
+  claude_oauth_system_prompt_blocks: string;
   enable_anthropic_cache_ttl_1h_injection: boolean;
+  rewrite_message_cache_control: boolean;
+  enable_client_dateline_normalization: boolean;
+  antigravity_user_agent_version: string;
+  openai_codex_user_agent: string;
+  // codex_cli_only 加固
+  min_codex_version: string;
+  max_codex_version: string;
+  codex_cli_only_blacklist: string;
+  codex_cli_only_whitelist: string;
+  codex_cli_only_allow_app_server_clients: boolean;
+  codex_cli_only_engine_fingerprint_signals: string;
   web_search_emulation_enabled?: boolean;
 
   // Payment configuration
-  user_subscriptions_visible: boolean;
-  subscription_notify_email_enabled: boolean;
-  subscription_quota_reset_utc_offset_minutes: number;
-  subscription_quota_reset_hour: number;
   payment_enabled: boolean;
   risk_control_enabled: boolean;
+
+  // Cyber session block
+  cyber_session_block_enabled: boolean;
+  cyber_session_block_ttl_seconds: number;
+
   payment_min_amount: number;
   payment_max_amount: number;
   payment_daily_limit: number;
@@ -605,8 +588,8 @@ export interface SystemSettings {
   payment_max_pending_orders: number;
   payment_enabled_types: string[];
   payment_balance_disabled: boolean;
-  payment_subscription_balance_enabled: boolean;
   payment_balance_recharge_multiplier: number;
+  payment_subscription_usd_to_cny_rate: number;
   payment_recharge_fee_rate: number;
   payment_load_balance_strategy: string;
   payment_product_name_prefix: string;
@@ -618,16 +601,40 @@ export interface SystemSettings {
   payment_cancel_rate_limit_window: number;
   payment_cancel_rate_limit_unit: string;
   payment_cancel_rate_limit_window_mode: string;
+  payment_alipay_force_qrcode?: boolean;
   payment_visible_method_alipay_source?: string;
   payment_visible_method_wxpay_source?: string;
   payment_visible_method_alipay_enabled?: boolean;
   payment_visible_method_wxpay_enabled?: boolean;
   openai_advanced_scheduler_enabled?: boolean;
+  openai_advanced_scheduler_sticky_weighted_enabled?: boolean;
+  openai_advanced_scheduler_subscription_priority_enabled?: boolean;
+  openai_advanced_scheduler_lb_top_k?: string;
+  openai_advanced_scheduler_weight_priority?: string;
+  openai_advanced_scheduler_weight_load?: string;
+  openai_advanced_scheduler_weight_queue?: string;
+  openai_advanced_scheduler_weight_error_rate?: string;
+  openai_advanced_scheduler_weight_ttft?: string;
+  openai_advanced_scheduler_weight_reset?: string;
+  openai_advanced_scheduler_weight_quota_headroom?: string;
+  openai_advanced_scheduler_weight_previous_response?: string;
+  openai_advanced_scheduler_weight_session_sticky?: string;
+  openai_advanced_scheduler_effective_lb_top_k?: string;
+  openai_advanced_scheduler_effective_weight_priority?: string;
+  openai_advanced_scheduler_effective_weight_load?: string;
+  openai_advanced_scheduler_effective_weight_queue?: string;
+  openai_advanced_scheduler_effective_weight_error_rate?: string;
+  openai_advanced_scheduler_effective_weight_ttft?: string;
+  openai_advanced_scheduler_effective_weight_reset?: string;
+  openai_advanced_scheduler_effective_weight_quota_headroom?: string;
+  openai_advanced_scheduler_effective_weight_previous_response?: string;
+  openai_advanced_scheduler_effective_weight_session_sticky?: string;
 
-  // Balance & quota notification
+  // 余额、订阅到期与账号限额通知
   balance_low_notify_enabled: boolean;
   balance_low_notify_threshold: number;
   balance_low_notify_recharge_url: string;
+  subscription_expiry_notify_enabled: boolean;
   account_quota_notify_enabled: boolean;
   account_quota_notify_emails: NotifyEmailEntry[];
 
@@ -638,17 +645,14 @@ export interface SystemSettings {
   // Available Channels feature switch
   available_channels_enabled: boolean;
 
-  // Site Messages feature switch
-  site_messages_enabled: boolean;
-  site_messages_daily_send_limit: number;
-  site_messages_retention_days: number;
-  site_messages_default_recipient_email: string;
-
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
 
   // OpenAI fast/flex policy
   openai_fast_policy_settings?: OpenAIFastPolicySettings;
+
+  // Allow user view error requests
+  allow_user_view_error_requests: boolean;
 }
 
 export interface UpdateSettingsRequest {
@@ -659,7 +663,6 @@ export interface UpdateSettingsRequest {
   password_reset_enabled?: boolean;
   frontend_url?: string;
   invitation_code_enabled?: boolean;
-  invitation_registration_mode?: "redeem_code" | "affiliate_link" | "both" | string;
   totp_enabled?: boolean; // TOTP 双因素认证
   login_agreement_enabled?: boolean;
   login_agreement_mode?: "modal" | "checkbox" | string;
@@ -667,17 +670,9 @@ export interface UpdateSettingsRequest {
   login_agreement_documents?: LoginAgreementDocument[];
   default_balance?: number;
   affiliate_rebate_rate?: number;
-  affiliate_rebate_tiers?: AffiliateRebateTier[];
   affiliate_rebate_freeze_hours?: number;
   affiliate_rebate_duration_days?: number;
   affiliate_rebate_per_invitee_cap?: number;
-  affiliate_signup_bonus_enabled?: boolean;
-  affiliate_signup_bonus_amount?: number;
-  affiliate_signup_bonus_total_cap?: number;
-  affiliate_signup_bonus_daily_cap?: number;
-  balance_usage_gate_enabled?: boolean;
-  balance_usage_gate_min_balance?: number;
-  balance_usage_gate_min_recharge?: number;
   default_concurrency?: number;
   default_user_rpm_limit?: number;
   default_subscriptions?: DefaultSubscriptionSetting[];
@@ -701,6 +696,11 @@ export interface UpdateSettingsRequest {
   auth_source_default_wechat_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_wechat_grant_on_signup?: boolean;
   auth_source_default_wechat_grant_on_first_bind?: boolean;
+  auth_source_default_dingtalk_balance?: number;
+  auth_source_default_dingtalk_concurrency?: number;
+  auth_source_default_dingtalk_subscriptions?: DefaultSubscriptionSetting[];
+  auth_source_default_dingtalk_grant_on_signup?: boolean;
+  auth_source_default_dingtalk_grant_on_first_bind?: boolean;
   auth_source_default_github_balance?: number;
   auth_source_default_github_concurrency?: number;
   auth_source_default_github_subscriptions?: DefaultSubscriptionSetting[];
@@ -726,29 +726,14 @@ export interface UpdateSettingsRequest {
   site_subtitle?: string;
   api_base_url?: string;
   contact_info?: string;
-  contact_channels?: ContactChannel[];
-  support_chat_enabled?: boolean;
-  support_chat_gateway_url?: string;
-  support_chat_title?: string;
-  support_chat_welcome_message?: string;
-  support_chat_official_contact_text?: string;
-  support_chat_official_contact_url?: string;
   doc_url?: string;
-  site_pages?: SitePage[];
   home_content?: string;
   hide_ccs_import_button?: boolean;
-  ccswitch_default_model_anthropic?: string;
-  ccswitch_default_model_openai?: string;
-  ccswitch_default_model_gemini?: string;
-  ccswitch_default_model_antigravity?: string;
-  ccswitch_default_model_antigravity_gemini?: string;
   table_default_page_size?: number;
   table_page_size_options?: number[];
   backend_mode_enabled?: boolean;
-  subscription_multiple_purchases_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
   custom_endpoints?: CustomEndpoint[];
-  frontend_locales?: FrontendLocaleCode[];
   smtp_host?: string;
   smtp_port?: number;
   smtp_username?: string;
@@ -759,10 +744,27 @@ export interface UpdateSettingsRequest {
   turnstile_enabled?: boolean;
   turnstile_site_key?: string;
   turnstile_secret_key?: string;
+  api_key_acl_trust_forwarded_ip?: boolean;
   linuxdo_connect_enabled?: boolean;
   linuxdo_connect_client_id?: string;
   linuxdo_connect_client_secret?: string;
   linuxdo_connect_redirect_url?: string;
+  dingtalk_connect_enabled?: boolean;
+  dingtalk_connect_client_id?: string;
+  dingtalk_connect_client_secret?: string;
+  dingtalk_connect_redirect_url?: string;
+  dingtalk_connect_corp_restriction_policy?: string;
+  dingtalk_connect_internal_corp_id?: string;
+  dingtalk_connect_bypass_registration?: boolean;
+  dingtalk_connect_sync_corp_email?: boolean;
+  dingtalk_connect_sync_display_name?: boolean;
+  dingtalk_connect_sync_dept?: boolean;
+  dingtalk_connect_sync_corp_email_attr_key?: string;
+  dingtalk_connect_sync_display_name_attr_key?: string;
+  dingtalk_connect_sync_dept_attr_key?: string;
+  dingtalk_connect_sync_corp_email_attr_name?: string;
+  dingtalk_connect_sync_display_name_attr_name?: string;
+  dingtalk_connect_sync_dept_attr_name?: string;
   wechat_connect_enabled?: boolean;
   wechat_connect_app_id?: string;
   wechat_connect_app_secret?: string;
@@ -828,14 +830,29 @@ export interface UpdateSettingsRequest {
   enable_fingerprint_unification?: boolean;
   enable_metadata_passthrough?: boolean;
   enable_cch_signing?: boolean;
+  enable_claude_oauth_system_prompt_injection?: boolean;
+  claude_oauth_system_prompt?: string;
+  claude_oauth_system_prompt_blocks?: string;
   enable_anthropic_cache_ttl_1h_injection?: boolean;
+  rewrite_message_cache_control?: boolean;
+  enable_client_dateline_normalization?: boolean;
+  antigravity_user_agent_version?: string;
+  openai_codex_user_agent?: string;
+  // codex_cli_only 加固
+  min_codex_version?: string;
+  max_codex_version?: string;
+  codex_cli_only_blacklist?: string;
+  codex_cli_only_whitelist?: string;
+  codex_cli_only_allow_app_server_clients?: boolean;
+  codex_cli_only_engine_fingerprint_signals?: string;
   // Payment configuration
-  user_subscriptions_visible?: boolean;
-  subscription_notify_email_enabled?: boolean;
-  subscription_quota_reset_utc_offset_minutes?: number;
-  subscription_quota_reset_hour?: number;
   payment_enabled?: boolean;
   risk_control_enabled?: boolean;
+
+  // Cyber session block
+  cyber_session_block_enabled?: boolean;
+  cyber_session_block_ttl_seconds?: number;
+
   payment_min_amount?: number;
   payment_max_amount?: number;
   payment_daily_limit?: number;
@@ -843,8 +860,8 @@ export interface UpdateSettingsRequest {
   payment_max_pending_orders?: number;
   payment_enabled_types?: string[];
   payment_balance_disabled?: boolean;
-  payment_subscription_balance_enabled?: boolean;
   payment_balance_recharge_multiplier?: number;
+  payment_subscription_usd_to_cny_rate?: number;
   payment_recharge_fee_rate?: number;
   payment_load_balance_strategy?: string;
   payment_product_name_prefix?: string;
@@ -856,15 +873,29 @@ export interface UpdateSettingsRequest {
   payment_cancel_rate_limit_window?: number;
   payment_cancel_rate_limit_unit?: string;
   payment_cancel_rate_limit_window_mode?: string;
+  payment_alipay_force_qrcode?: boolean;
   payment_visible_method_alipay_source?: string;
   payment_visible_method_wxpay_source?: string;
   payment_visible_method_alipay_enabled?: boolean;
   payment_visible_method_wxpay_enabled?: boolean;
   openai_advanced_scheduler_enabled?: boolean;
-  // Balance & quota notification
+  openai_advanced_scheduler_sticky_weighted_enabled?: boolean;
+  openai_advanced_scheduler_subscription_priority_enabled?: boolean;
+  openai_advanced_scheduler_lb_top_k?: string;
+  openai_advanced_scheduler_weight_priority?: string;
+  openai_advanced_scheduler_weight_load?: string;
+  openai_advanced_scheduler_weight_queue?: string;
+  openai_advanced_scheduler_weight_error_rate?: string;
+  openai_advanced_scheduler_weight_ttft?: string;
+  openai_advanced_scheduler_weight_reset?: string;
+  openai_advanced_scheduler_weight_quota_headroom?: string;
+  openai_advanced_scheduler_weight_previous_response?: string;
+  openai_advanced_scheduler_weight_session_sticky?: string;
+  // 余额、订阅到期与账号限额通知
   balance_low_notify_enabled?: boolean;
   balance_low_notify_threshold?: number;
   balance_low_notify_recharge_url?: string;
+  subscription_expiry_notify_enabled?: boolean;
   account_quota_notify_enabled?: boolean;
   account_quota_notify_emails?: NotifyEmailEntry[];
 
@@ -875,17 +906,13 @@ export interface UpdateSettingsRequest {
   // Available Channels feature switch
   available_channels_enabled?: boolean;
 
-  // Site Messages feature switch
-  site_messages_enabled?: boolean;
-  site_messages_daily_send_limit?: number;
-  site_messages_retention_days?: number;
-  site_messages_default_recipient_email?: string;
-
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;
 
   // OpenAI fast/flex policy
   openai_fast_policy_settings?: OpenAIFastPolicySettings;
+
+  allow_user_view_error_requests?: boolean;
 }
 
 /**
@@ -967,6 +994,107 @@ export async function sendTestEmail(
   return data;
 }
 
+// ==================== Email Template Settings ====================
+
+export interface EmailTemplateOption {
+  value: string;
+  label?: string;
+  description?: string;
+  category?: string;
+  optional?: boolean;
+}
+
+export type EmailTemplateEventOption = string | EmailTemplateOption;
+
+export interface EmailTemplateSummary {
+  event: string;
+  locale: string;
+  subject: string;
+  is_custom?: boolean;
+  updated_at?: string;
+}
+
+export interface EmailTemplateListResponse {
+  events: EmailTemplateEventOption[];
+  locales: string[];
+  templates?: EmailTemplateSummary[];
+  placeholders?: string[];
+}
+
+export interface EmailTemplateDetail {
+  event: string;
+  locale: string;
+  subject: string;
+  html: string;
+  is_custom?: boolean;
+  updated_at?: string;
+  placeholders?: string[];
+}
+
+export interface UpdateEmailTemplateRequest {
+  subject: string;
+  html: string;
+}
+
+export interface PreviewEmailTemplateRequest extends UpdateEmailTemplateRequest {
+  event: string;
+  locale: string;
+}
+
+export interface EmailTemplatePreviewResponse {
+  subject: string;
+  html: string;
+}
+
+export async function getEmailTemplates(): Promise<EmailTemplateListResponse> {
+  const { data } = await apiClient.get<EmailTemplateListResponse>(
+    "/admin/settings/email-templates",
+  );
+  return data;
+}
+
+export async function getEmailTemplate(
+  event: string,
+  locale: string,
+): Promise<EmailTemplateDetail> {
+  const { data } = await apiClient.get<EmailTemplateDetail>(
+    `/admin/settings/email-templates/${encodeURIComponent(event)}/${encodeURIComponent(locale)}`,
+  );
+  return data;
+}
+
+export async function updateEmailTemplate(
+  event: string,
+  locale: string,
+  request: UpdateEmailTemplateRequest,
+): Promise<EmailTemplateDetail> {
+  const { data } = await apiClient.put<EmailTemplateDetail>(
+    `/admin/settings/email-templates/${encodeURIComponent(event)}/${encodeURIComponent(locale)}`,
+    request,
+  );
+  return data;
+}
+
+export async function restoreOfficialEmailTemplate(
+  event: string,
+  locale: string,
+): Promise<EmailTemplateDetail> {
+  const { data } = await apiClient.post<EmailTemplateDetail>(
+    `/admin/settings/email-templates/${encodeURIComponent(event)}/${encodeURIComponent(locale)}/restore-official`,
+  );
+  return data;
+}
+
+export async function previewEmailTemplate(
+  request: PreviewEmailTemplateRequest,
+): Promise<EmailTemplatePreviewResponse> {
+  const { data } = await apiClient.post<EmailTemplatePreviewResponse>(
+    "/admin/settings/email-template-preview",
+    request,
+  );
+  return data;
+}
+
 /**
  * Admin API Key status response
  */
@@ -1004,25 +1132,6 @@ export async function regenerateAdminApiKey(): Promise<{ key: string }> {
 export async function deleteAdminApiKey(): Promise<{ message: string }> {
   const { data } = await apiClient.delete<{ message: string }>(
     "/admin/settings/admin-api-key",
-  );
-  return data;
-}
-
-// ==================== Model Market ====================
-
-export async function getModelMarket(): Promise<AdminModelMarketResponse> {
-  const { data } = await apiClient.get<AdminModelMarketResponse>(
-    "/admin/settings/model-market",
-  );
-  return data;
-}
-
-export async function updateModelMarket(
-  config: ModelMarketConfig,
-): Promise<AdminModelMarketResponse> {
-  const { data } = await apiClient.put<AdminModelMarketResponse>(
-    "/admin/settings/model-market",
-    config,
   );
   return data;
 }
@@ -1164,12 +1273,12 @@ export async function updateRectifierSettings(
  */
 export interface OpenAIFastPolicyRule {
   service_tier: "all" | "priority" | "flex";
-  action: "pass" | "filter" | "block";
+  action: "pass" | "filter" | "block" | "force_priority";
   scope: "all" | "oauth" | "apikey" | "bedrock";
   user_ids?: number[];
   error_message?: string;
   model_whitelist?: string[];
-  fallback_action?: "pass" | "filter" | "block";
+  fallback_action?: "pass" | "filter" | "block" | "force_priority";
   fallback_error_message?: string;
 }
 
@@ -1288,56 +1397,19 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
-// ==================== Geo Block Settings ====================
-
-/**
- * Geo block settings interface.
- * Mainland-China (and other) geographic access blocking for the website.
- * - countries: ISO 3166-1 alpha-2 country codes (e.g. ["CN"]).
- * - whitelist: IP or CIDR strings (e.g. ["203.0.113.10", "198.51.100.0/24"]).
- */
-export interface GeoBlockSettings {
-  enabled: boolean;
-  countries: string[];
-  whitelist: string[];
-}
-
-/**
- * Get geo block settings
- * @returns Geo block settings
- */
-export async function getGeoBlockSettings(): Promise<GeoBlockSettings> {
-  const { data } = await apiClient.get<GeoBlockSettings>(
-    "/admin/settings/geo-block",
-  );
-  return data;
-}
-
-/**
- * Update geo block settings
- * @param settings - Geo block settings to update
- * @returns Updated settings
- */
-export async function updateGeoBlockSettings(
-  settings: GeoBlockSettings,
-): Promise<GeoBlockSettings> {
-  const { data } = await apiClient.put<GeoBlockSettings>(
-    "/admin/settings/geo-block",
-    settings,
-  );
-  return data;
-}
-
 export const settingsAPI = {
   getSettings,
   updateSettings,
   testSmtpConnection,
   sendTestEmail,
+  getEmailTemplates,
+  getEmailTemplate,
+  updateEmailTemplate,
+  restoreOfficialEmailTemplate,
+  previewEmailTemplate,
   getAdminApiKey,
   regenerateAdminApiKey,
   deleteAdminApiKey,
-  getModelMarket,
-  updateModelMarket,
   getOverloadCooldownSettings,
   updateOverloadCooldownSettings,
   getRateLimit429CooldownSettings,
@@ -1352,8 +1424,6 @@ export const settingsAPI = {
   updateWebSearchEmulationConfig,
   testWebSearchEmulation,
   resetWebSearchUsage,
-  getGeoBlockSettings,
-  updateGeoBlockSettings,
 };
 
 export default settingsAPI;

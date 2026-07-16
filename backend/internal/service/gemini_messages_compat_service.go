@@ -56,6 +56,18 @@ type GeminiMessagesCompatService struct {
 	responseHeaderFilter      *responseheaders.CompiledHeaderFilter
 }
 
+func (s *GeminiMessagesCompatService) readUpstreamErrorBody(resp *http.Response) []byte {
+	if resp == nil || resp.Body == nil {
+		return nil
+	}
+	limit := gatewayUpstreamErrorBodyReadLimit
+	if s != nil && s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody && s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes > int(limit) {
+		limit = int64(s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes)
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
+	return body
+}
+
 func NewGeminiMessagesCompatService(
 	accountRepo AccountRepository,
 	groupRepo GroupRepository,
@@ -829,12 +841,12 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				switch signatureRetryStage {
 				case 0:
 					// Stage 1: disable thinking + thinking->text
-					strippedClaudeBody = FilterThinkingBlocksForRetry(originalClaudeBody)
+					strippedClaudeBody = FilterThinkingBlocksForRetry(originalClaudeBody, originalModel)
 					stageName = "thinking-only"
 					signatureRetryStage = 1
 				default:
 					// Stage 2: additionally downgrade tool_use/tool_result blocks to text
-					strippedClaudeBody = FilterSignatureSensitiveBlocksForRetry(originalClaudeBody)
+					strippedClaudeBody = FilterSignatureSensitiveBlocksForRetry(originalClaudeBody, originalModel)
 					stageName = "thinking+tools"
 					signatureRetryStage = 2
 				}
@@ -3461,4 +3473,23 @@ func (s *GeminiMessagesCompatService) extractImageSize(body []byte) string {
 	}
 
 	return "2K"
+}
+
+func (s *GeminiMessagesCompatService) extractImageInputSize(body []byte) string {
+	var req struct {
+		GenerationConfig *struct {
+			ImageConfig *struct {
+				ImageSize string `json:"imageSize"`
+			} `json:"imageConfig"`
+		} `json:"generationConfig"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return ""
+	}
+
+	if req.GenerationConfig != nil && req.GenerationConfig.ImageConfig != nil {
+		return strings.TrimSpace(req.GenerationConfig.ImageConfig.ImageSize)
+	}
+
+	return ""
 }
