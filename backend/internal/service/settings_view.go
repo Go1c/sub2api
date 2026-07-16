@@ -133,6 +133,7 @@ type SystemSettings struct {
 	SiteSubtitle                string
 	APIBaseURL                  string
 	ContactInfo                 string
+	ContactChannels             string
 	SupportChatEnabled          bool
 	SupportChatGatewayURL       string
 	SupportChatTitle            string
@@ -144,6 +145,11 @@ type SystemSettings struct {
 	HomeContent                 string
 	HideCcsImportButton         bool
 	FrontendLocales             []string
+	CCSwitchDefaultModelAnthropic          string
+	CCSwitchDefaultModelOpenAI             string
+	CCSwitchDefaultModelGemini             string
+	CCSwitchDefaultModelAntigravity        string
+	CCSwitchDefaultModelAntigravityGemini  string
 	UserSubscriptionsVisible               bool
 	PurchaseSubscriptionEnabled            bool
 	PurchaseSubscriptionURL                string
@@ -314,6 +320,7 @@ type PublicSettings struct {
 	SiteSubtitle                     string
 	APIBaseURL                       string
 	ContactInfo                      string
+	ContactChannels                  string
 	SupportChatEnabled               bool
 	SupportChatGatewayURL            string
 	SupportChatTitle                 string
@@ -325,6 +332,11 @@ type PublicSettings struct {
 	HomeContent                      string
 	HideCcsImportButton              bool
 	FrontendLocales                  []string
+	CCSwitchDefaultModelAnthropic         string
+	CCSwitchDefaultModelOpenAI            string
+	CCSwitchDefaultModelGemini            string
+	CCSwitchDefaultModelAntigravity       string
+	CCSwitchDefaultModelAntigravityGemini string
 	UserSubscriptionsVisible         bool
 
 	PurchaseSubscriptionEnabled bool

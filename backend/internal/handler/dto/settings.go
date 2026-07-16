@@ -8,6 +8,11 @@ import (
 )
 
 // CustomMenuItem represents a user-configured custom menu entry.
+type ContactChannel struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
+}
+
 type CustomMenuItem struct {
 	ID         string `json:"id"`
 	Label      string `json:"label"`
@@ -143,12 +148,30 @@ type SystemSettings struct {
 	SiteSubtitle                string           `json:"site_subtitle"`
 	APIBaseURL                  string           `json:"api_base_url"`
 	ContactInfo                 string           `json:"contact_info"`
+	ContactChannels                        []ContactChannel `json:"contact_channels"`
+	SupportChatEnabled                     bool             `json:"support_chat_enabled"`
+	SupportChatGatewayURL                  string           `json:"support_chat_gateway_url"`
+	SupportChatTitle                       string           `json:"support_chat_title"`
+	SupportChatWelcomeMessage              string           `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText         string           `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL          string           `json:"support_chat_official_contact_url"`
 	DocURL                      string           `json:"doc_url"`
 	SitePages                   []SitePage       `json:"site_pages"`
 	HomeContent                 string           `json:"home_content"`
 	HideCcsImportButton         bool             `json:"hide_ccs_import_button"`
+	FrontendLocales                        []string         `json:"frontend_locales"`
+	CCSwitchDefaultModelAnthropic          string           `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI             string           `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini             string           `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity        string           `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini  string           `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible               bool             `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled bool             `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     string           `json:"purchase_subscription_url"`
+	SubscriptionNotifyEmailEnabled         bool             `json:"subscription_notify_email_enabled"`
+	SubscriptionMultiplePurchasesEnabled   bool             `json:"subscription_multiple_purchases_enabled"`
+	SubscriptionQuotaResetUTCOffsetMinutes int              `json:"subscription_quota_reset_utc_offset_minutes"`
+	SubscriptionQuotaResetHour             int              `json:"subscription_quota_reset_hour"`
 	TableDefaultPageSize        int              `json:"table_default_page_size"`
 	TablePageSizeOptions        []int            `json:"table_page_size_options"`
 	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
@@ -160,6 +183,13 @@ type SystemSettings struct {
 	AffiliateRebateFreezeHours   int                          `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays  int                          `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap float64                      `json:"affiliate_rebate_per_invitee_cap"`
+	AffiliateSignupBonusEnabled  bool                         `json:"affiliate_signup_bonus_enabled"`
+	AffiliateSignupBonusAmount   float64                      `json:"affiliate_signup_bonus_amount"`
+	AffiliateSignupBonusTotalCap float64                      `json:"affiliate_signup_bonus_total_cap"`
+	AffiliateSignupBonusDailyCap float64                      `json:"affiliate_signup_bonus_daily_cap"`
+	BalanceUsageGateEnabled      bool                         `json:"balance_usage_gate_enabled"`
+	BalanceUsageGateMinBalance   float64                      `json:"balance_usage_gate_min_balance"`
+	BalanceUsageGateMinRecharge  float64                      `json:"balance_usage_gate_min_recharge"`
 	DefaultUserRPMLimit          int                          `json:"default_user_rpm_limit"`
 	DefaultSubscriptions         []DefaultSubscriptionSetting `json:"default_subscriptions"`
 
@@ -253,6 +283,7 @@ type SystemSettings struct {
 	PaymentMaxPendingOrders          int      `json:"payment_max_pending_orders"`
 	PaymentEnabledTypes              []string `json:"payment_enabled_types"`
 	PaymentBalanceDisabled           bool     `json:"payment_balance_disabled"`
+	PaymentSubscriptionBalanceEnabled bool     `json:"payment_subscription_balance_enabled"`
 	PaymentBalanceRechargeMultiplier float64  `json:"payment_balance_recharge_multiplier"`
 	PaymentSubscriptionUSDToCNYRate  float64  `json:"payment_subscription_usd_to_cny_rate"`
 	PaymentRechargeFeeRate           float64  `json:"payment_recharge_fee_rate"`
@@ -294,6 +325,13 @@ type SystemSettings struct {
 	CyberSessionBlockEnabled    bool `json:"cyber_session_block_enabled"`
 	CyberSessionBlockTTLSeconds int  `json:"cyber_session_block_ttl_seconds"`
 
+
+	// Site messages feature switch and limits
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDailySendLimit        int    `json:"site_messages_daily_send_limit"`
+	SiteMessagesRetentionDays         int    `json:"site_messages_retention_days"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
+
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 
@@ -334,10 +372,24 @@ type PublicSettings struct {
 	SiteSubtitle                     string                   `json:"site_subtitle"`
 	APIBaseURL                       string                   `json:"api_base_url"`
 	ContactInfo                      string                   `json:"contact_info"`
+	ContactChannels                       []ContactChannel         `json:"contact_channels"`
+	SupportChatEnabled                    bool                     `json:"support_chat_enabled"`
+	SupportChatGatewayURL                 string                   `json:"support_chat_gateway_url"`
+	SupportChatTitle                      string                   `json:"support_chat_title"`
+	SupportChatWelcomeMessage             string                   `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText        string                   `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL         string                   `json:"support_chat_official_contact_url"`
 	DocURL                           string                   `json:"doc_url"`
 	SitePages                        []SitePage               `json:"site_pages"`
 	HomeContent                      string                   `json:"home_content"`
 	HideCcsImportButton              bool                     `json:"hide_ccs_import_button"`
+	FrontendLocales                       []string                 `json:"frontend_locales"`
+	CCSwitchDefaultModelAnthropic         string                   `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI            string                   `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity       string                   `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini string                   `json:"ccswitch_default_model_antigravity_gemini"`
+	UserSubscriptionsVisible              bool                     `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled      bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL          string                   `json:"purchase_subscription_url"`
 	TableDefaultPageSize             int                      `json:"table_default_page_size"`
@@ -375,6 +427,10 @@ type PublicSettings struct {
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 
 	RiskControlEnabled bool `json:"risk_control_enabled"`
+
+
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
 
 	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`
 }
@@ -522,6 +578,30 @@ func ParseCustomMenuItems(raw string) []CustomMenuItem {
 
 // ParseSitePages parses a JSON string into a slice of SitePage.
 // Returns empty slice on empty/invalid input.
+
+// ParseContactChannels parses a JSON string into a slice of ContactChannel.
+// Invalid or empty input returns an empty slice (never nil for JSON encoding stability).
+func ParseContactChannels(raw string) []ContactChannel {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []ContactChannel{}
+	}
+	var items []ContactChannel
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []ContactChannel{}
+	}
+	out := make([]ContactChannel, 0, len(items))
+	for _, item := range items {
+		label := strings.TrimSpace(item.Label)
+		url := strings.TrimSpace(item.URL)
+		if label == "" && url == "" {
+			continue
+		}
+		out = append(out, ContactChannel{Label: label, URL: url})
+	}
+	return out
+}
+
 func ParseSitePages(raw string) []SitePage {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {

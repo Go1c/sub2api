@@ -177,6 +177,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeySiteSubtitle,
 		SettingKeyAPIBaseURL,
 		SettingKeyContactInfo,
+		SettingKeyContactChannels,
 		SettingKeySupportChatEnabled,
 		SettingKeySupportChatGatewayURL,
 		SettingKeySupportChatTitle,
@@ -188,6 +189,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyHomeContent,
 		SettingKeyHideCcsImportButton,
 		SettingKeyFrontendLocales,
+		SettingKeyCCSwitchDefaultModelAnthropic,
+		SettingKeyCCSwitchDefaultModelOpenAI,
+		SettingKeyCCSwitchDefaultModelGemini,
+		SettingKeyCCSwitchDefaultModelAntigravity,
+		SettingKeyCCSwitchDefaultModelAntigravityGemini,
 		SettingKeyUserSubscriptionsVisible,
 		SettingKeyPurchaseSubscriptionEnabled,
 		SettingKeyPurchaseSubscriptionURL,
@@ -314,6 +320,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
 		ContactInfo:                      settings[SettingKeyContactInfo],
+		ContactChannels:                  settings[SettingKeyContactChannels],
 		SupportChatEnabled:               settings[SettingKeySupportChatEnabled] == "true",
 		SupportChatGatewayURL:            strings.TrimRight(strings.TrimSpace(settings[SettingKeySupportChatGatewayURL]), "/"),
 		SupportChatTitle:                 strings.TrimSpace(settings[SettingKeySupportChatTitle]),
@@ -325,6 +332,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		HomeContent:                      settings[SettingKeyHomeContent],
 		HideCcsImportButton:              settings[SettingKeyHideCcsImportButton] == "true",
 		FrontendLocales:                  parseFrontendLocales(settings[SettingKeyFrontendLocales]),
+		CCSwitchDefaultModelAnthropic:         strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAnthropic]),
+		CCSwitchDefaultModelOpenAI:            firstNonEmpty(strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelOpenAI]), "gpt-5.4"),
+		CCSwitchDefaultModelGemini:            strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelGemini]),
+		CCSwitchDefaultModelAntigravity:       strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravity]),
+		CCSwitchDefaultModelAntigravityGemini: strings.TrimSpace(settings[SettingKeyCCSwitchDefaultModelAntigravityGemini]),
 		UserSubscriptionsVisible:         !isFalseSettingValue(settings[SettingKeyUserSubscriptionsVisible]),
 		PurchaseSubscriptionEnabled:      settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:          strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
@@ -484,6 +496,7 @@ type PublicSettingsInjectionPayload struct {
 	SiteSubtitle                     string                   `json:"site_subtitle"`
 	APIBaseURL                       string                   `json:"api_base_url"`
 	ContactInfo                      string                   `json:"contact_info"`
+	ContactChannels                  json.RawMessage          `json:"contact_channels"`
 	SupportChatEnabled               bool                     `json:"support_chat_enabled"`
 	SupportChatGatewayURL            string                   `json:"support_chat_gateway_url"`
 	SupportChatTitle                 string                   `json:"support_chat_title"`
@@ -495,6 +508,11 @@ type PublicSettingsInjectionPayload struct {
 	HomeContent                      string                   `json:"home_content"`
 	HideCcsImportButton              bool                     `json:"hide_ccs_import_button"`
 	FrontendLocales                  []string                 `json:"frontend_locales"`
+	CCSwitchDefaultModelAnthropic         string                   `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI            string                   `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini            string                   `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity       string                   `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini string                   `json:"ccswitch_default_model_antigravity_gemini"`
 	UserSubscriptionsVisible         bool                     `json:"user_subscriptions_visible"`
 	PurchaseSubscriptionEnabled      bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL          string                   `json:"purchase_subscription_url"`
@@ -565,6 +583,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SiteSubtitle:                     settings.SiteSubtitle,
 		APIBaseURL:                       settings.APIBaseURL,
 		ContactInfo:                      settings.ContactInfo,
+		ContactChannels:                       safeRawJSONArray(settings.ContactChannels),
 		SupportChatEnabled:               settings.SupportChatEnabled,
 		SupportChatGatewayURL:            settings.SupportChatGatewayURL,
 		SupportChatTitle:                 settings.SupportChatTitle,
@@ -576,6 +595,11 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		HomeContent:                      settings.HomeContent,
 		HideCcsImportButton:              settings.HideCcsImportButton,
 		FrontendLocales:                  settings.FrontendLocales,
+		CCSwitchDefaultModelAnthropic:         settings.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:            settings.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:            settings.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:       settings.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini: settings.CCSwitchDefaultModelAntigravityGemini,
 		UserSubscriptionsVisible:         settings.UserSubscriptionsVisible,
 		PurchaseSubscriptionEnabled:      settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:          settings.PurchaseSubscriptionURL,

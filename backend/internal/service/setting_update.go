@@ -281,6 +281,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
+	updates[SettingKeyContactChannels] = settings.ContactChannels
 	updates[SettingKeySupportChatEnabled] = strconv.FormatBool(settings.SupportChatEnabled)
 	updates[SettingKeySupportChatGatewayURL] = settings.SupportChatGatewayURL
 	updates[SettingKeySupportChatTitle] = settings.SupportChatTitle
@@ -301,6 +302,11 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		return nil, fmt.Errorf("marshal frontend locales: %w", err)
 	}
 	updates[SettingKeyFrontendLocales] = string(frontendLocalesJSON)
+	updates[SettingKeyCCSwitchDefaultModelAnthropic] = strings.TrimSpace(settings.CCSwitchDefaultModelAnthropic)
+	updates[SettingKeyCCSwitchDefaultModelOpenAI] = firstNonEmpty(strings.TrimSpace(settings.CCSwitchDefaultModelOpenAI), "gpt-5.4")
+	updates[SettingKeyCCSwitchDefaultModelGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelGemini)
+	updates[SettingKeyCCSwitchDefaultModelAntigravity] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravity)
+	updates[SettingKeyCCSwitchDefaultModelAntigravityGemini] = strings.TrimSpace(settings.CCSwitchDefaultModelAntigravityGemini)
 	updates[SettingKeyUserSubscriptionsVisible] = strconv.FormatBool(settings.UserSubscriptionsVisible)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
