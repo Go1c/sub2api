@@ -4,6 +4,7 @@
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex items-center gap-4">
         <button
+          v-if="showMobileMenu"
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
           aria-label="Toggle Menu"
@@ -21,18 +22,49 @@
         </div>
       </div>
 
+      <nav class="hidden flex-1 justify-center px-4 xl:flex" aria-label="Homepage sections">
+        <div class="inline-flex max-w-full items-center gap-1 overflow-hidden rounded-full border border-gray-200/70 bg-white/70 p-1 shadow-sm backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-900/60">
+          <template v-for="item in homeNavItems" :key="item.key">
+            <a
+              v-if="item.external"
+              :href="item.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="rounded-full px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-white"
+            >
+              {{ item.label }}
+            </a>
+            <router-link
+              v-else
+              :to="item.to"
+              class="rounded-full px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-white"
+            >
+              {{ item.label }}
+            </router-link>
+          </template>
+        </div>
+      </nav>
+
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex items-center gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
-        <!-- Docs Link -->
+        <!-- Docs Link (shown on smaller screens; home nav already has docs on xl) -->
+        <router-link
+          v-if="docsTarget?.kind === 'route'"
+          :to="docsTarget.target"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
+        >
+          <Icon name="book" size="sm" />
+          <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
+        </router-link>
         <a
-          v-if="docUrl"
+          v-else-if="docUrl"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -250,14 +282,22 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
+import type { SitePage } from '@/types'
+import { normalizeSitePages, resolveSitePageNavigationTarget } from '@/utils/sitePages'
 
 const router = useRouter()
 const route = useRoute()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
 const onboardingStore = useOnboardingStore()
+
+withDefaults(defineProps<{
+  showMobileMenu?: boolean
+}>(), {
+  showMobileMenu: true
+})
 
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
@@ -272,6 +312,54 @@ const balanceAvailableText = computed(() => t('common.availableBalance') === 'co
 const balanceFrozenText = computed(() => t('common.frozenBalance') === 'common.frozenBalance' ? '冻结金额' : t('common.frozenBalance'))
 const balanceTotalText = computed(() => t('common.totalBalance') === 'common.totalBalance' ? '总余额' : t('common.totalBalance'))
 const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHeaderMoney(frozenBalance.value)}`)
+const sitePages = computed<SitePage[]>(() => normalizeSitePages(appStore.cachedPublicSettings?.site_pages || []))
+const docsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'docs'))
+const termsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'terms'))
+const privacyTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'privacy'))
+const image2ReturnTo = 'https://img.lumio.games/'
+const image2LoginHandoffTo = computed(() => ({
+  path: '/login',
+  query: {
+    handoff: '1',
+    return_to: image2ReturnTo
+  }
+}))
+const homeNavItems = computed(() => {
+  const isZh = locale.value.startsWith('zh')
+  const docs = docsTarget.value
+  const terms = termsTarget.value
+  const privacy = privacyTarget.value
+  return [
+    { key: 'models', label: isZh ? '模型广场' : 'Model Market', to: { path: '/models' }, href: '', external: false },
+    { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/status' }, href: '', external: false },
+    docs
+      ? {
+          key: 'docs',
+          label: t('nav.docs'),
+          to: docs.target,
+          href: '',
+          external: false
+        }
+      : docUrl.value
+        ? { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: docUrl.value, external: true }
+        : { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: '', external: false },
+    {
+      key: 'terms',
+      label: isZh ? '服务条款' : 'Terms',
+      to: terms?.target || { path: '/home', hash: '#footer' },
+      href: '',
+      external: false
+    },
+    {
+      key: 'privacy',
+      label: isZh ? '隐私保护' : 'Privacy',
+      to: privacy?.target || { path: '/home', hash: '#footer' },
+      href: '',
+      external: false
+    },
+    { key: 'image2', label: 'Image2生图', to: image2LoginHandoffTo.value, href: '', external: false },
+  ]
+})
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
