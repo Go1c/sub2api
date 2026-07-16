@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -104,6 +105,8 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		setOpsRequestContext(c, requestModel, parsed.Stream)
 	}
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(parsed.Stream, false)))
+
+	h.captureClientRequestWithBytes(c, parsed.Model, buildOpenAIImagesMonitorCaptureBody(parsed), len(body))
 
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, requestModel)
 
@@ -412,3 +415,93 @@ func (h *OpenAIGatewayHandler) openAIImagesJSONKeepaliveInterval() time.Duration
 func isMultipartImagesContentType(contentType string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "multipart/form-data")
 }
+
+
+type openAIImagesMonitorCaptureSummary struct {
+	Endpoint          string                             `json:"endpoint,omitempty"`
+	Multipart         bool                               `json:"multipart"`
+	Model             string                             `json:"model,omitempty"`
+	Prompt            string                             `json:"prompt,omitempty"`
+	Stream            bool                               `json:"stream,omitempty"`
+	N                 int                                `json:"n,omitempty"`
+	Size              string                             `json:"size,omitempty"`
+	ResponseFormat    string                             `json:"response_format,omitempty"`
+	Quality           string                             `json:"quality,omitempty"`
+	Background        string                             `json:"background,omitempty"`
+	OutputFormat      string                             `json:"output_format,omitempty"`
+	Moderation        string                             `json:"moderation,omitempty"`
+	InputFidelity     string                             `json:"input_fidelity,omitempty"`
+	Style             string                             `json:"style,omitempty"`
+	HasMask           bool                               `json:"has_mask,omitempty"`
+	InputImageURLs    []string                           `json:"input_image_urls,omitempty"`
+	MaskImageURL      string                             `json:"mask_image_url,omitempty"`
+	Uploads           []openAIImagesMonitorCaptureUpload `json:"uploads,omitempty"`
+	MaskUpload        *openAIImagesMonitorCaptureUpload  `json:"mask_upload,omitempty"`
+	OutputCompression *int                               `json:"output_compression,omitempty"`
+	PartialImages     *int                               `json:"partial_images,omitempty"`
+}
+
+type openAIImagesMonitorCaptureUpload struct {
+	FieldName   string `json:"field_name,omitempty"`
+	FileName    string `json:"file_name,omitempty"`
+	ContentType string `json:"content_type,omitempty"`
+	Bytes       int    `json:"bytes"`
+	Width       int    `json:"width,omitempty"`
+	Height      int    `json:"height,omitempty"`
+}
+
+func buildOpenAIImagesMonitorCaptureBody(parsed *service.OpenAIImagesRequest) []byte {
+	if parsed == nil {
+		return nil
+	}
+	summary := openAIImagesMonitorCaptureSummary{
+		Endpoint:          strings.TrimSpace(parsed.Endpoint),
+		Multipart:         parsed.Multipart,
+		Model:             strings.TrimSpace(parsed.Model),
+		Prompt:            strings.TrimSpace(parsed.Prompt),
+		Stream:            parsed.Stream,
+		N:                 parsed.N,
+		Size:              strings.TrimSpace(parsed.Size),
+		ResponseFormat:    strings.TrimSpace(parsed.ResponseFormat),
+		Quality:           strings.TrimSpace(parsed.Quality),
+		Background:        strings.TrimSpace(parsed.Background),
+		OutputFormat:      strings.TrimSpace(parsed.OutputFormat),
+		Moderation:        strings.TrimSpace(parsed.Moderation),
+		InputFidelity:     strings.TrimSpace(parsed.InputFidelity),
+		Style:             strings.TrimSpace(parsed.Style),
+		HasMask:           parsed.HasMask,
+		InputImageURLs:    append([]string(nil), parsed.InputImageURLs...),
+		MaskImageURL:      strings.TrimSpace(parsed.MaskImageURL),
+		OutputCompression: parsed.OutputCompression,
+		PartialImages:     parsed.PartialImages,
+	}
+	if len(parsed.Uploads) > 0 {
+		summary.Uploads = make([]openAIImagesMonitorCaptureUpload, 0, len(parsed.Uploads))
+		for _, upload := range parsed.Uploads {
+			summary.Uploads = append(summary.Uploads, openAIImagesMonitorCaptureUpload{
+				FieldName:   strings.TrimSpace(upload.FieldName),
+				FileName:    strings.TrimSpace(upload.FileName),
+				ContentType: strings.TrimSpace(upload.ContentType),
+				Bytes:       len(upload.Data),
+				Width:       upload.Width,
+				Height:      upload.Height,
+			})
+		}
+	}
+	if parsed.MaskUpload != nil {
+		summary.MaskUpload = &openAIImagesMonitorCaptureUpload{
+			FieldName:   strings.TrimSpace(parsed.MaskUpload.FieldName),
+			FileName:    strings.TrimSpace(parsed.MaskUpload.FileName),
+			ContentType: strings.TrimSpace(parsed.MaskUpload.ContentType),
+			Bytes:       len(parsed.MaskUpload.Data),
+			Width:       parsed.MaskUpload.Width,
+			Height:      parsed.MaskUpload.Height,
+		}
+	}
+	body, err := json.Marshal(summary)
+	if err != nil {
+		return []byte(`{"multipart":true,"encode_error":"images_monitor_summary_failed"}`)
+	}
+	return body
+}
+

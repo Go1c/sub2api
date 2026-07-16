@@ -1,6 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 type accountCredentialsUpdater interface {
 	UpdateCredentials(ctx context.Context, id int64, credentials map[string]any) error
@@ -8,6 +11,12 @@ type accountCredentialsUpdater interface {
 
 func persistAccountCredentials(ctx context.Context, repo AccountRepository, account *Account, credentials map[string]any) error {
 	if repo == nil || account == nil {
+		return nil
+	}
+
+	if account.IsCredentialShadow() {
+		slog.Warn("skip persisting credentials to spark shadow account",
+			"account_id", account.ID, "parent_id", *account.ParentAccountID)
 		return nil
 	}
 
@@ -25,6 +34,37 @@ func cloneCredentials(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+// sparkShadowAllowedCredentialKeys 是 spark 影子账号唯一可写的凭据键集合（仅模型映射）。
+var sparkShadowAllowedCredentialKeys = map[string]struct{}{
+	"model_mapping":         {},
+	"compact_model_mapping": {},
+}
+
+func isAllowedSparkShadowCredentialsUpdate(credentials map[string]any) bool {
+	if credentials == nil {
+		return true
+	}
+	for key := range credentials {
+		if _, ok := sparkShadowAllowedCredentialKeys[key]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func sanitizeSparkShadowCredentials(credentials map[string]any) map[string]any {
+	if len(credentials) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(sparkShadowAllowedCredentialKeys))
+	for key := range sparkShadowAllowedCredentialKeys {
+		if value, ok := credentials[key]; ok && value != nil {
+			out[key] = value
+		}
 	}
 	return out
 }

@@ -59,6 +59,14 @@ func setupFakeAnthropic(t *testing.T, handler *captureHandler) string {
 	return srv.URL
 }
 
+func setupFakeMonitorProvider(t *testing.T, handler http.Handler) string {
+	t.Helper()
+	swapMonitorHTTPClient(t)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
 type openAICaptureHandler struct {
 	lastBody                  map[string]any
 	lastHeaders               http.Header

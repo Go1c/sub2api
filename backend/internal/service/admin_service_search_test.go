@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
@@ -118,6 +119,17 @@ func (s *proxyRepoStubForAdminList) ListWithFiltersAndAccountCount(_ context.Con
 	return s.listWithFiltersAndAccountCountProxies, result, nil
 }
 
+func (s *proxyRepoStubForAdminList) SweepExpiredProxies(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+func (s *proxyRepoStubForAdminList) ListAllForFallback(context.Context) ([]Proxy, error) {
+	return nil, nil
+}
+func (s *proxyRepoStubForAdminList) CountExpired(context.Context) (int64, error) { return 0, nil }
+func (s *proxyRepoStubForAdminList) CountExpiringSoon(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+
 type redeemRepoStubForAdminList struct {
 	redeemRepoStub
 
@@ -160,6 +172,9 @@ func (s *redeemRepoStubForAdminList) ListByUserPaginated(_ context.Context, user
 
 func (s *redeemRepoStubForAdminList) SumPositiveBalanceByUser(_ context.Context, userID int64) (float64, error) {
 	panic("unexpected SumPositiveBalanceByUser call")
+}
+func (s *redeemRepoStubForAdminList) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) {
+	return 0, nil
 }
 
 func TestAdminService_ListAccounts_WithSearch(t *testing.T) {

@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -735,6 +736,33 @@ func (_u *GroupUpdate) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdate {
 	return _u
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdate) SetFallbackGroupIDOnExhausted(v int64) *GroupUpdate {
+	_u.mutation.ResetFallbackGroupIDOnExhausted()
+	_u.mutation.SetFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// SetNillableFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableFallbackGroupIDOnExhausted(v *int64) *GroupUpdate {
+	if v != nil {
+		_u.SetFallbackGroupIDOnExhausted(*v)
+	}
+	return _u
+}
+
+// AddFallbackGroupIDOnExhausted adds value to the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdate) AddFallbackGroupIDOnExhausted(v int64) *GroupUpdate {
+	_u.mutation.AddFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdate) ClearFallbackGroupIDOnExhausted() *GroupUpdate {
+	_u.mutation.ClearFallbackGroupIDOnExhausted()
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdate) SetModelRouting(v map[string][]int64) *GroupUpdate {
 	_u.mutation.SetModelRouting(v)
@@ -913,6 +941,20 @@ func (_u *GroupUpdate) AddRpmLimit(v int) *GroupUpdate {
 	return _u
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (_u *GroupUpdate) SetExposeUpstreamModelToUser(v bool) *GroupUpdate {
+	_u.mutation.SetExposeUpstreamModelToUser(v)
+	return _u
+}
+
+// SetNillableExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableExposeUpstreamModelToUser(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetExposeUpstreamModelToUser(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *GroupUpdate) AddAPIKeyIDs(ids ...int64) *GroupUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -971,6 +1013,21 @@ func (_u *GroupUpdate) AddUsageLogs(v ...*UsageLog) *GroupUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddUsageLogIDs(ids...)
+}
+
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *GroupUpdate) AddSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdate) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
 }
 
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
@@ -1090,6 +1147,27 @@ func (_u *GroupUpdate) RemoveUsageLogs(v ...*UsageLog) *GroupUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdate) ClearSubscriptionCreditLedgers() *GroupUpdate {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *GroupUpdate) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *GroupUpdate) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // ClearAccounts clears all "accounts" edges to the Account entity.
@@ -1432,6 +1510,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.FallbackGroupIDOnExhausted(); ok {
+		_spec.SetField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFallbackGroupIDOnExhausted(); ok {
+		_spec.AddField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if _u.mutation.FallbackGroupIDOnExhaustedCleared() {
+		_spec.ClearField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
 	}
@@ -1481,6 +1568,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(group.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExposeUpstreamModelToUser(); ok {
+		_spec.SetField(group.FieldExposeUpstreamModelToUser, field.TypeBool, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1655,6 +1745,51 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -2495,6 +2630,33 @@ func (_u *GroupUpdateOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdateOne
 	return _u
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdateOne) SetFallbackGroupIDOnExhausted(v int64) *GroupUpdateOne {
+	_u.mutation.ResetFallbackGroupIDOnExhausted()
+	_u.mutation.SetFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// SetNillableFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableFallbackGroupIDOnExhausted(v *int64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetFallbackGroupIDOnExhausted(*v)
+	}
+	return _u
+}
+
+// AddFallbackGroupIDOnExhausted adds value to the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdateOne) AddFallbackGroupIDOnExhausted(v int64) *GroupUpdateOne {
+	_u.mutation.AddFallbackGroupIDOnExhausted(v)
+	return _u
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (_u *GroupUpdateOne) ClearFallbackGroupIDOnExhausted() *GroupUpdateOne {
+	_u.mutation.ClearFallbackGroupIDOnExhausted()
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdateOne) SetModelRouting(v map[string][]int64) *GroupUpdateOne {
 	_u.mutation.SetModelRouting(v)
@@ -2673,6 +2835,20 @@ func (_u *GroupUpdateOne) AddRpmLimit(v int) *GroupUpdateOne {
 	return _u
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (_u *GroupUpdateOne) SetExposeUpstreamModelToUser(v bool) *GroupUpdateOne {
+	_u.mutation.SetExposeUpstreamModelToUser(v)
+	return _u
+}
+
+// SetNillableExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableExposeUpstreamModelToUser(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetExposeUpstreamModelToUser(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *GroupUpdateOne) AddAPIKeyIDs(ids ...int64) *GroupUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -2731,6 +2907,21 @@ func (_u *GroupUpdateOne) AddUsageLogs(v ...*UsageLog) *GroupUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.AddUsageLogIDs(ids...)
+}
+
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_u *GroupUpdateOne) AddSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdateOne) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddSubscriptionCreditLedgerIDs(ids...)
 }
 
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
@@ -2850,6 +3041,27 @@ func (_u *GroupUpdateOne) RemoveUsageLogs(v ...*UsageLog) *GroupUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearSubscriptionCreditLedgers clears all "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_u *GroupUpdateOne) ClearSubscriptionCreditLedgers() *GroupUpdateOne {
+	_u.mutation.ClearSubscriptionCreditLedgers()
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgerIDs removes the "subscription_credit_ledgers" edge to SubscriptionCreditLedger entities by IDs.
+func (_u *GroupUpdateOne) RemoveSubscriptionCreditLedgerIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.RemoveSubscriptionCreditLedgerIDs(ids...)
+	return _u
+}
+
+// RemoveSubscriptionCreditLedgers removes "subscription_credit_ledgers" edges to SubscriptionCreditLedger entities.
+func (_u *GroupUpdateOne) RemoveSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveSubscriptionCreditLedgerIDs(ids...)
 }
 
 // ClearAccounts clears all "accounts" edges to the Account entity.
@@ -3222,6 +3434,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.FallbackGroupIDOnExhausted(); ok {
+		_spec.SetField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFallbackGroupIDOnExhausted(); ok {
+		_spec.AddField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+	}
+	if _u.mutation.FallbackGroupIDOnExhaustedCleared() {
+		_spec.ClearField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
 	}
@@ -3271,6 +3492,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(group.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ExposeUpstreamModelToUser(); ok {
+		_spec.SetField(group.FieldExposeUpstreamModelToUser, field.TypeBool, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -3445,6 +3669,51 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedSubscriptionCreditLedgersIDs(); len(nodes) > 0 && !_u.mutation.SubscriptionCreditLedgersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

@@ -88,6 +88,8 @@ func (m *concurrencyCacheMock) GetUsersLoadBatch(ctx context.Context, users []se
 	return map[int64]*service.UserLoadInfo{}, nil
 }
 
+func (m *concurrencyCacheMock) CleanupExpiredAccountSlotKeys(ctx context.Context) error { return nil }
+
 func (m *concurrencyCacheMock) CleanupExpiredAccountSlots(ctx context.Context, accountID int64) error {
 	return nil
 }

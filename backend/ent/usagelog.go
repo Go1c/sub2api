@@ -73,6 +73,10 @@ type UsageLog struct {
 	TotalCost float64 `json:"total_cost,omitempty"`
 	// ActualCost holds the value of the "actual_cost" field.
 	ActualCost float64 `json:"actual_cost,omitempty"`
+	// SubscriptionCostUsd holds the value of the "subscription_cost_usd" field.
+	SubscriptionCostUsd float64 `json:"subscription_cost_usd,omitempty"`
+	// BalanceCostUsd holds the value of the "balance_cost_usd" field.
+	BalanceCostUsd float64 `json:"balance_cost_usd,omitempty"`
 	// RateMultiplier holds the value of the "rate_multiplier" field.
 	RateMultiplier float64 `json:"rate_multiplier,omitempty"`
 	// Whether long-context pricing changed token prices for this request
@@ -131,9 +135,11 @@ type UsageLogEdges struct {
 	Group *Group `json:"group,omitempty"`
 	// Subscription holds the value of the subscription edge.
 	Subscription *UserSubscription `json:"subscription,omitempty"`
+	// SubscriptionCreditLedgers holds the value of the subscription_credit_ledgers edge.
+	SubscriptionCreditLedgers []*SubscriptionCreditLedger `json:"subscription_credit_ledgers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [5]bool
+	loadedTypes [6]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -191,6 +197,15 @@ func (e UsageLogEdges) SubscriptionOrErr() (*UserSubscription, error) {
 	return nil, &NotLoadedError{edge: "subscription"}
 }
 
+// SubscriptionCreditLedgersOrErr returns the SubscriptionCreditLedgers value or an error if the edge
+// was not loaded in eager-loading.
+func (e UsageLogEdges) SubscriptionCreditLedgersOrErr() ([]*SubscriptionCreditLedger, error) {
+	if e.loadedTypes[5] {
+		return e.SubscriptionCreditLedgers, nil
+	}
+	return nil, &NotLoadedError{edge: "subscription_credit_ledgers"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*UsageLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -200,7 +215,7 @@ func (*UsageLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case usagelog.FieldLongContextBillingApplied, usagelog.FieldStream, usagelog.FieldCacheTTLOverridden:
 			values[i] = new(sql.NullBool)
-		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
+		case usagelog.FieldInputCost, usagelog.FieldOutputCost, usagelog.FieldCacheCreationCost, usagelog.FieldCacheReadCost, usagelog.FieldTotalCost, usagelog.FieldActualCost, usagelog.FieldSubscriptionCostUsd, usagelog.FieldBalanceCostUsd, usagelog.FieldRateMultiplier, usagelog.FieldAccountRateMultiplier:
 			values[i] = new(sql.NullFloat64)
 		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount, usagelog.FieldVideoCount, usagelog.FieldVideoDurationSeconds:
 			values[i] = new(sql.NullInt64)
@@ -387,6 +402,18 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ActualCost = value.Float64
 			}
+		case usagelog.FieldSubscriptionCostUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_cost_usd", values[i])
+			} else if value.Valid {
+				_m.SubscriptionCostUsd = value.Float64
+			}
+		case usagelog.FieldBalanceCostUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_cost_usd", values[i])
+			} else if value.Valid {
+				_m.BalanceCostUsd = value.Float64
+			}
 		case usagelog.FieldRateMultiplier:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field rate_multiplier", values[i])
@@ -558,6 +585,11 @@ func (_m *UsageLog) QuerySubscription() *UserSubscriptionQuery {
 	return NewUsageLogClient(_m.config).QuerySubscription(_m)
 }
 
+// QuerySubscriptionCreditLedgers queries the "subscription_credit_ledgers" edge of the UsageLog entity.
+func (_m *UsageLog) QuerySubscriptionCreditLedgers() *SubscriptionCreditLedgerQuery {
+	return NewUsageLogClient(_m.config).QuerySubscriptionCreditLedgers(_m)
+}
+
 // Update returns a builder for updating this UsageLog.
 // Note that you need to call UsageLog.Unwrap() before calling this method if this UsageLog
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -671,6 +703,12 @@ func (_m *UsageLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("actual_cost=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ActualCost))
+	builder.WriteString(", ")
+	builder.WriteString("subscription_cost_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionCostUsd))
+	builder.WriteString(", ")
+	builder.WriteString("balance_cost_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BalanceCostUsd))
 	builder.WriteString(", ")
 	builder.WriteString("rate_multiplier=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RateMultiplier))

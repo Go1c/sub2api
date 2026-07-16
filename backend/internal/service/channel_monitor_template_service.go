@@ -31,6 +31,7 @@ type AssociatedMonitorBrief struct {
 	ID       int64
 	Name     string
 	Provider string
+	APIMode  string
 	Enabled  bool
 }
 
@@ -144,7 +145,7 @@ func validateTemplateCreateParams(p ChannelMonitorRequestTemplateCreateParams) e
 	if err := validateProvider(p.Provider); err != nil {
 		return ErrChannelMonitorTemplateInvalidProvider
 	}
-	if err := validateBodyModeParams(p.BodyOverrideMode, p.BodyOverride); err != nil {
+	if err := validateBodyModeForProtocol(p.Provider, "", p.BodyOverrideMode, p.BodyOverride); err != nil {
 		return err
 	}
 	if err := validateExtraHeaders(p.ExtraHeaders); err != nil {
@@ -180,11 +181,25 @@ func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonit
 	if p.BodyOverride != nil {
 		newBody = *p.BodyOverride
 	}
-	if err := validateBodyModeParams(newMode, newBody); err != nil {
+	if err := validateBodyModeForProtocol(existing.Provider, "", newMode, newBody); err != nil {
 		return err
 	}
 	existing.BodyOverrideMode = defaultBodyMode(newMode)
 	existing.BodyOverride = newBody
+	return nil
+}
+
+// validateBodyModeForProtocol 校验 body_override_mode 与 provider/api_mode 的协议特定要求。
+func validateBodyModeForProtocol(provider, apiMode, mode string, body map[string]any) error {
+	if err := validateBodyModeParams(mode, body); err != nil {
+		return err
+	}
+	if defaultBodyMode(mode) != MonitorBodyOverrideModeReplace {
+		return nil
+	}
+	if err := validateReplaceRequestBody(provider, defaultAPIMode(apiMode), body); err != nil {
+		return ErrChannelMonitorInvalidRequestBody
+	}
 	return nil
 }
 

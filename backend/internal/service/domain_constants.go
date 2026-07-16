@@ -33,6 +33,21 @@ const (
 	AffiliateRebateDurationDaysDefault  = 0     // 0 = 永久有效
 	AffiliateRebateDurationDaysMax      = 3650  // ~10 年
 	AffiliateRebatePerInviteeCapDefault = 0.0   // 0 = 无上限
+	AffiliateSignupBonusEnabledDefault  = false // 注册就送默认关闭
+	AffiliateSignupBonusAmountDefault   = 0.0
+	AffiliateSignupBonusTotalCapDefault = 0.0 // 单个邀请人累计上限，0 = 无上限
+	AffiliateSignupBonusDailyCapDefault = 0.0 // 全站每日上限，0 = 无上限
+	BalanceUsageGateEnabledDefault      = false
+	BalanceUsageGateMinBalanceDefault   = 0.0
+	BalanceUsageGateMinRechargeDefault  = 0.0
+)
+
+// Invitation registration mode settings.
+const (
+	InvitationRegistrationModeRedeemCode    = "redeem_code"
+	InvitationRegistrationModeAffiliateLink = "affiliate_link"
+	InvitationRegistrationModeBoth          = "both"
+	InvitationRegistrationModeDefault       = InvitationRegistrationModeRedeemCode
 )
 
 // Platform constants
@@ -77,11 +92,14 @@ const (
 
 // Redeem type constants
 const (
-	RedeemTypeBalance          = domain.RedeemTypeBalance
-	RedeemTypeConcurrency      = domain.RedeemTypeConcurrency
-	RedeemTypeSubscription     = domain.RedeemTypeSubscription
-	RedeemTypeInvitation       = domain.RedeemTypeInvitation
-	RedeemTypeAffiliateBalance = "affiliate_balance"
+	RedeemTypeBalance             = domain.RedeemTypeBalance
+	RedeemTypeBalancePayment      = domain.RedeemTypeBalancePayment
+	RedeemTypeConcurrency         = domain.RedeemTypeConcurrency
+	RedeemTypeSubscription        = domain.RedeemTypeSubscription
+	RedeemTypeInvitation          = domain.RedeemTypeInvitation
+	RedeemTypeAffiliateBalance    = "affiliate_balance"
+	RedeemTypeSubscriptionPayment = "subscription_payment"
+	RedeemTypePromoBalance        = "promo_balance"
 )
 
 // PromoCode status constants
@@ -133,12 +151,25 @@ const (
 	SettingKeyPasswordResetEnabled             = "password_reset_enabled"              // 是否启用忘记密码功能（需要先开启邮件验证）
 	SettingKeyFrontendURL                      = "frontend_url"                        // 前端基础URL，用于生成邮件中的重置密码链接
 	SettingKeyInvitationCodeEnabled            = "invitation_code_enabled"             // 是否启用邀请码注册
+	SettingKeyInvitationRegistrationMode       = "invitation_registration_mode"        // 邀请注册校验方式：redeem_code / affiliate_link / both
 	SettingKeyAffiliateEnabled                 = "affiliate_enabled"                   // 邀请返利功能总开关
 	SettingKeyAffiliateRebateRate              = "affiliate_rebate_rate"               // 邀请返利比例（百分比，0-100）
+	SettingKeyAffiliateRebateTiers             = "affiliate_rebate_tiers"              // 阶梯式邀请返利配置（L1-L4）
 	SettingKeyAffiliateRebateFreezeHours       = "affiliate_rebate_freeze_hours"       // 返利冻结期（小时，0=不冻结）
 	SettingKeyAffiliateRebateDurationDays      = "affiliate_rebate_duration_days"      // 返利有效期（天，0=永久）
 	SettingKeyAffiliateRebatePerInviteeCap     = "affiliate_rebate_per_invitee_cap"    // 单人返利上限（0=无上限）
+	SettingKeyAffiliateSignupBonusEnabled      = "affiliate_signup_bonus_enabled"      // 注册就送开关
+	SettingKeyAffiliateSignupBonusAmount       = "affiliate_signup_bonus_amount"       // 注册就送固定额度
+	SettingKeyAffiliateSignupBonusTotalCap     = "affiliate_signup_bonus_total_cap"    // 单个邀请人累计注册赠送上限（0=无上限）
+	SettingKeyAffiliateSignupBonusDailyCap     = "affiliate_signup_bonus_daily_cap"    // 全站每日注册赠送上限（0=无上限）
+	SettingKeyBalanceUsageGateEnabled          = "balance_usage_gate_enabled"          // 余额使用门槛开关
+	SettingKeyBalanceUsageGateMinBalance       = "balance_usage_gate_min_balance"      // 使用余额服务前需大于的当前余额
+	SettingKeyBalanceUsageGateMinRecharge      = "balance_usage_gate_min_recharge"     // 使用余额服务前需大于的历史充值
 	SettingKeyRiskControlEnabled               = "risk_control_enabled"                // 是否启用风控中心入口与审计链路
+	SettingKeySiteMessagesEnabled               = "site_messages_enabled"                 // 是否启用站内信功能
+	SettingKeySiteMessagesDailySendLimit        = "site_messages_daily_send_limit"        // 非管理员每日站内信发送上限（0=不限制）
+	SettingKeySiteMessagesRetentionDays         = "site_messages_retention_days"          // 站内信保留天数
+	SettingKeySiteMessagesDefaultRecipientEmail = "site_messages_default_recipient_email" // 用户写信时默认填入的收件邮箱
 	SettingKeyContentModerationConfig          = "content_moderation_config"           // 内容审计配置（JSON）
 	SettingKeyCyberSessionBlockEnabled         = "cyber_session_block_enabled"         // cyber 命中后会话级自动屏蔽总开关(默认关)
 	SettingKeyCyberSessionBlockTTLSeconds      = "cyber_session_block_ttl_seconds"     // 会话屏蔽 TTL 秒数(默认 3600)
@@ -246,20 +277,32 @@ const (
 	SettingKeyGoogleOAuthFrontendRedirectURL = "google_oauth_frontend_redirect_url"
 
 	// OEM设置
-	SettingKeySiteName                    = "site_name"                     // 网站名称
-	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
-	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
-	SettingKeyAPIBaseURL                  = "api_base_url"                  // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
-	SettingKeyDocURL                      = "doc_url"                       // 文档链接
-	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
-	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
-	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
-	SettingKeyTableDefaultPageSize        = "table_default_page_size"       // 表格默认每页条数
-	SettingKeyTablePageSizeOptions        = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
-	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
-	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
+	SettingKeySiteName                               = "site_name"                                   // 网站名称
+	SettingKeySiteLogo                               = "site_logo"                                   // 网站Logo (base64)
+	SettingKeySiteSubtitle                           = "site_subtitle"                               // 网站副标题
+	SettingKeyAPIBaseURL                             = "api_base_url"                                // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo                            = "contact_info"                                // 客服联系方式
+	SettingKeySupportChatEnabled                     = "support_chat_enabled"                        // 是否启用 AI 客服气泡
+	SettingKeySupportChatGatewayURL                  = "support_chat_gateway_url"                    // AI 客服 support-gateway 公网地址
+	SettingKeySupportChatTitle                       = "support_chat_title"                          // AI 客服标题覆盖
+	SettingKeySupportChatWelcomeMessage              = "support_chat_welcome_message"                // AI 客服欢迎语覆盖
+	SettingKeySupportChatOfficialContactText         = "support_chat_official_contact_text"          // AI 客服人工联系文案覆盖
+	SettingKeySupportChatOfficialContactURL          = "support_chat_official_contact_url"           // AI 客服人工联系按钮 URL 覆盖
+	SettingKeyDocURL                                 = "doc_url"                                     // 文档链接
+	SettingKeySitePages                              = "site_pages"                                  // 公开站点页面（JSON 数组，Markdown 或链接）
+	SettingKeyHomeContent                            = "home_content"                                // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyHideCcsImportButton                    = "hide_ccs_import_button"                      // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeyFrontendLocales                        = "frontend_locales"                            // 前端可用语言（JSON 数组）
+	SettingKeyUserSubscriptionsVisible               = "user_subscriptions_visible"                  // 是否展示用户侧“我的订阅”入口
+	SettingKeyPurchaseSubscriptionEnabled            = "purchase_subscription_enabled"               // 是否展示"购买订阅"页面入口
+	SettingKeyPurchaseSubscriptionURL                = "purchase_subscription_url"                   // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeySubscriptionMultiplePurchasesEnabled   = "subscription_multiple_purchases_enabled"     // 是否允许用户同时购买多个可消费订阅
+	SettingKeySubscriptionQuotaResetUTCOffsetMinutes = "subscription_quota_reset_utc_offset_minutes" // 订阅限额刷新 UTC 偏移（分钟）
+	SettingKeySubscriptionQuotaResetHour             = "subscription_quota_reset_hour"               // 订阅限额刷新小时（0-23）
+	SettingKeyTableDefaultPageSize                   = "table_default_page_size"                     // 表格默认每页条数
+	SettingKeyTablePageSizeOptions                   = "table_page_size_options"                     // 表格可选每页条数（JSON 数组）
+	SettingKeyCustomMenuItems                        = "custom_menu_items"                           // 自定义菜单项（JSON 数组）
+	SettingKeyCustomEndpoints                        = "custom_endpoints"                            // 自定义端点列表（JSON 数组）
 
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
@@ -311,6 +354,9 @@ const (
 	// Gemini 配额策略（JSON）
 	SettingKeyGeminiQuotaPolicy = "gemini_quota_policy"
 
+	// Model market settings
+	SettingKeyModelMarket = "model_market"
+
 	// Model fallback settings
 	SettingKeyEnableModelFallback      = "enable_model_fallback"
 	SettingKeyFallbackModelAnthropic   = "fallback_model_anthropic"
@@ -350,6 +396,9 @@ const (
 	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
 	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
 
+	// SettingKeyOpsAccountErrorAlertConfig stores JSON config for account error Telegram alerts.
+	SettingKeyOpsAccountErrorAlertConfig = "ops_account_error_alert_config"
+
 	// =========================
 	// Channel Monitor (渠道监控)
 	// =========================
@@ -366,6 +415,30 @@ const (
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
 	SettingKeyAvailableChannelsEnabled = "available_channels_enabled"
+
+	// Subscription Credit Pool Notification
+	// 订阅触顶 / 过期通知正文里的"重新订阅"链接。
+	// 为空时回退到 SettingKeyFrontendURL + /purchase，再退到 /purchase。
+	SettingKeySubscriptionCreditPoolRepurchaseURL = "subscription_credit_pool_repurchase_url"
+	// 订阅额度池通知邮件开关。站内信始终发送，邮件默认关闭。
+	SettingKeySubscriptionNotifyEmailEnabled = "subscription_notify_email_enabled"
+
+	// =========================
+	// Geo Block (compliance)
+	// =========================
+
+	// SettingKeyGeoBlockEnabled is a DB-backed runtime switch for the region web-block
+	// middleware. Stored as "true"/"false". When unset, falls back to the config seed
+	// (cfg.GeoBlock.Enabled), then to the built-in default (false).
+	SettingKeyGeoBlockEnabled = "geo_block_enabled"
+
+	// SettingKeyGeoBlockCountries stores the blocked ISO 3166-1 alpha-2 country codes as a
+	// JSON string array (e.g. ["CN"]). When unset, falls back to the config seed, then ["CN"].
+	SettingKeyGeoBlockCountries = "geo_block_countries"
+
+	// SettingKeyGeoBlockWhitelist stores exempt IP/CIDR entries as a JSON string array.
+	// When unset, falls back to the config seed, then empty.
+	SettingKeyGeoBlockWhitelist = "geo_block_whitelist"
 
 	// =========================
 	// Overload Cooldown (529)

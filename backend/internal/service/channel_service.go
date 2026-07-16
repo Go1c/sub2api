@@ -558,6 +558,22 @@ func checkRestricted(lk *channelLookup, groupID int64, model string) bool {
 }
 
 // ReplaceModelInBody 替换请求体 JSON 中的 model 字段。
+
+// RemovePreviousResponseIDFromBody 删除请求体中的 previous_response_id，用于会话失配时改用完整 input 重建上下文。
+func RemovePreviousResponseIDFromBody(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+	if !gjson.GetBytes(body, "previous_response_id").Exists() {
+		return body
+	}
+	newBody, err := sjson.DeleteBytes(body, "previous_response_id")
+	if err != nil {
+		return body
+	}
+	return newBody
+}
+
 func ReplaceModelInBody(body []byte, newModel string) []byte {
 	if len(body) == 0 {
 		return body

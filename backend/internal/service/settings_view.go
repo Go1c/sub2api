@@ -19,6 +19,7 @@ type SystemSettings struct {
 	PasswordResetEnabled             bool
 	FrontendURL                      string
 	InvitationCodeEnabled            bool
+	InvitationRegistrationMode       string
 	TotpEnabled                      bool // TOTP 双因素认证
 	LoginAgreementEnabled            bool
 	LoginAgreementMode               string
@@ -132,26 +133,51 @@ type SystemSettings struct {
 	SiteSubtitle                string
 	APIBaseURL                  string
 	ContactInfo                 string
+	SupportChatEnabled          bool
+	SupportChatGatewayURL       string
+	SupportChatTitle            string
+	SupportChatWelcomeMessage   string
+	SupportChatOfficialContactText string
+	SupportChatOfficialContactURL  string
 	DocURL                      string
+	SitePages                   string // JSON array of public site pages
 	HomeContent                 string
 	HideCcsImportButton         bool
-	PurchaseSubscriptionEnabled bool
-	PurchaseSubscriptionURL     string
-	TableDefaultPageSize        int
-	TablePageSizeOptions        []int
-	CustomMenuItems             string // JSON array of custom menu items
-	CustomEndpoints             string // JSON array of custom endpoints
+	FrontendLocales             []string
+	UserSubscriptionsVisible               bool
+	PurchaseSubscriptionEnabled            bool
+	PurchaseSubscriptionURL                string
+	SubscriptionNotifyEmailEnabled         bool
+	SubscriptionMultiplePurchasesEnabled   bool
+	SubscriptionQuotaResetUTCOffsetMinutes int
+	SubscriptionQuotaResetHour             int
+	TableDefaultPageSize                   int
+	TablePageSizeOptions                   []int
+	CustomMenuItems                        string // JSON array of custom menu items
+	CustomEndpoints                        string // JSON array of custom endpoints
 
 	DefaultConcurrency           int
 	DefaultBalance               float64
 	RiskControlEnabled           bool
+	SiteMessagesEnabled               bool
+	SiteMessagesDailySendLimit        int
+	SiteMessagesRetentionDays         int
+	SiteMessagesDefaultRecipientEmail string
 	CyberSessionBlockEnabled     bool
 	CyberSessionBlockTTLSeconds  int
 	AffiliateEnabled             bool
 	AffiliateRebateRate          float64
+	AffiliateRebateTiers         []AffiliateRebateTier
 	AffiliateRebateFreezeHours   int
 	AffiliateRebateDurationDays  int
 	AffiliateRebatePerInviteeCap float64
+	AffiliateSignupBonusEnabled  bool
+	AffiliateSignupBonusAmount   float64
+	AffiliateSignupBonusTotalCap float64
+	AffiliateSignupBonusDailyCap float64
+	BalanceUsageGateEnabled      bool
+	BalanceUsageGateMinBalance   float64
+	BalanceUsageGateMinRecharge  float64
 	DefaultUserRPMLimit          int
 	DefaultSubscriptions         []DefaultSubscriptionSetting
 
@@ -274,6 +300,7 @@ type PublicSettings struct {
 	PromoCodeEnabled                 bool
 	PasswordResetEnabled             bool
 	InvitationCodeEnabled            bool
+	InvitationRegistrationMode       string
 	TotpEnabled                      bool // TOTP 双因素认证
 	LoginAgreementEnabled            bool
 	LoginAgreementMode               string
@@ -287,9 +314,18 @@ type PublicSettings struct {
 	SiteSubtitle                     string
 	APIBaseURL                       string
 	ContactInfo                      string
+	SupportChatEnabled               bool
+	SupportChatGatewayURL            string
+	SupportChatTitle                 string
+	SupportChatWelcomeMessage        string
+	SupportChatOfficialContactText   string
+	SupportChatOfficialContactURL    string
 	DocURL                           string
+	SitePages                        string // JSON array of public site pages
 	HomeContent                      string
 	HideCcsImportButton              bool
+	FrontendLocales                  []string
+	UserSubscriptionsVisible         bool
 
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string
@@ -329,6 +365,10 @@ type PublicSettings struct {
 
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
+
+	// 站内信功能
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
 
 	// 允许终端用户在用量页查看自己的失败请求
 	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`

@@ -463,3 +463,14 @@ func maxInt(a, b int) int {
 	}
 	return b
 }
+
+func mapGrokUpstreamStatus(status int) int {
+	switch status {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return status
+	case http.StatusTooManyRequests:
+		return http.StatusTooManyRequests
+	default:
+		return http.StatusBadGateway
+	}
+}

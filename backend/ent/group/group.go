@@ -88,6 +88,8 @@ const (
 	FieldFallbackGroupID = "fallback_group_id"
 	// FieldFallbackGroupIDOnInvalidRequest holds the string denoting the fallback_group_id_on_invalid_request field in the database.
 	FieldFallbackGroupIDOnInvalidRequest = "fallback_group_id_on_invalid_request"
+	// FieldFallbackGroupIDOnExhausted holds the string denoting the fallback_group_id_on_exhausted field in the database.
+	FieldFallbackGroupIDOnExhausted = "fallback_group_id_on_exhausted"
 	// FieldModelRouting holds the string denoting the model_routing field in the database.
 	FieldModelRouting = "model_routing"
 	// FieldModelRoutingEnabled holds the string denoting the model_routing_enabled field in the database.
@@ -112,6 +114,8 @@ const (
 	FieldModelsListConfig = "models_list_config"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
+	// FieldExposeUpstreamModelToUser holds the string denoting the expose_upstream_model_to_user field in the database.
+	FieldExposeUpstreamModelToUser = "expose_upstream_model_to_user"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -120,6 +124,8 @@ const (
 	EdgeSubscriptions = "subscriptions"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeSubscriptionCreditLedgers holds the string denoting the subscription_credit_ledgers edge name in mutations.
+	EdgeSubscriptionCreditLedgers = "subscription_credit_ledgers"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
@@ -158,6 +164,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "group_id"
+	// SubscriptionCreditLedgersTable is the table that holds the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersInverseTable is the table name for the SubscriptionCreditLedger entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptioncreditledger" package.
+	SubscriptionCreditLedgersInverseTable = "subscription_credit_ledger"
+	// SubscriptionCreditLedgersColumn is the table column denoting the subscription_credit_ledgers relation/edge.
+	SubscriptionCreditLedgersColumn = "group_id"
 	// AccountsTable is the table that holds the accounts relation/edge. The primary key declared below.
 	AccountsTable = "account_groups"
 	// AccountsInverseTable is the table name for the Account entity.
@@ -223,6 +236,7 @@ var Columns = []string{
 	FieldClaudeCodeOnly,
 	FieldFallbackGroupID,
 	FieldFallbackGroupIDOnInvalidRequest,
+	FieldFallbackGroupIDOnExhausted,
 	FieldModelRouting,
 	FieldModelRoutingEnabled,
 	FieldMcpXMLInject,
@@ -235,6 +249,7 @@ var Columns = []string{
 	FieldMessagesDispatchModelConfig,
 	FieldModelsListConfig,
 	FieldRpmLimit,
+	FieldExposeUpstreamModelToUser,
 }
 
 var (
@@ -344,6 +359,8 @@ var (
 	DefaultModelsListConfig domain.GroupModelsListConfig
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
+	// DefaultExposeUpstreamModelToUser holds the default value on creation for the "expose_upstream_model_to_user" field.
+	DefaultExposeUpstreamModelToUser bool
 )
 
 // OrderOption defines the ordering options for the Group queries.
@@ -534,6 +551,11 @@ func ByFallbackGroupIDOnInvalidRequest(opts ...sql.OrderTermOption) OrderOption 
 	return sql.OrderByField(FieldFallbackGroupIDOnInvalidRequest, opts...).ToFunc()
 }
 
+// ByFallbackGroupIDOnExhausted orders the results by the fallback_group_id_on_exhausted field.
+func ByFallbackGroupIDOnExhausted(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFallbackGroupIDOnExhausted, opts...).ToFunc()
+}
+
 // ByModelRoutingEnabled orders the results by the model_routing_enabled field.
 func ByModelRoutingEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldModelRoutingEnabled, opts...).ToFunc()
@@ -572,6 +594,11 @@ func ByDefaultMappedModel(opts ...sql.OrderTermOption) OrderOption {
 // ByRpmLimit orders the results by the rpm_limit field.
 func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
+}
+
+// ByExposeUpstreamModelToUser orders the results by the expose_upstream_model_to_user field.
+func ByExposeUpstreamModelToUser(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExposeUpstreamModelToUser, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.
@@ -627,6 +654,20 @@ func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// BySubscriptionCreditLedgersCount orders the results by subscription_credit_ledgers count.
+func BySubscriptionCreditLedgersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionCreditLedgersStep(), opts...)
+	}
+}
+
+// BySubscriptionCreditLedgers orders the results by subscription_credit_ledgers terms.
+func BySubscriptionCreditLedgers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionCreditLedgersStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -711,6 +752,13 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newSubscriptionCreditLedgersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionCreditLedgersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionCreditLedgersTable, SubscriptionCreditLedgersColumn),
 	)
 }
 func newAccountsStep() *sqlgraph.Step {

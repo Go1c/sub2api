@@ -2177,14 +2177,14 @@ function apiKeyStatusBadgeClass(statusValue: ContentModerationAPIKeyStatus['stat
   return classes[statusValue] ?? classes.unknown
 }
 
-function apiKeyStatusDotClass(statusValue: ContentModerationAPIKeyStatus['status']): string {
+function apiKeyStatusDotClass(statusValue: ContentModerationAPIKeyStatus['status'] | undefined): string {
   const classes: Record<ContentModerationAPIKeyStatus['status'], string> = {
     ok: 'bg-emerald-500',
     error: 'bg-amber-500',
     frozen: 'bg-red-500',
     unknown: 'bg-gray-400',
   }
-  return classes[statusValue] ?? classes.unknown
+  return classes[statusValue ?? 'unknown'] ?? classes.unknown
 }
 
 function apiKeyStatusMeta(row: ContentModerationAPIKeyStatus): string {

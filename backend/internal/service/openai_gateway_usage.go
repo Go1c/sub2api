@@ -216,7 +216,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	// Determine billing type
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	// 额度池订阅可覆盖普通分组；不能仅依赖 group.IsSubscriptionType()。
+	isSubscriptionBilling := SubscriptionCoversGroup(subscription, apiKey.Group, user)
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription

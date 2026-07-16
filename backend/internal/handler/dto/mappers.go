@@ -89,6 +89,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		IPWhitelist:        k.IPWhitelist,
 		IPBlacklist:        k.IPBlacklist,
 		LastUsedAt:         k.LastUsedAt,
+		LastUsedIP:         k.LastUsedIP,
 		Quota:              k.Quota,
 		QuotaUsed:          k.QuotaUsed,
 		ExpiresAt:          k.ExpiresAt,
@@ -186,6 +187,8 @@ func groupFromServiceBase(g *service.Group) Group {
 		ImageRateMultiplier:             g.ImageRateMultiplier,
 		BatchImageDiscountMultiplier:    g.BatchImageDiscountMultiplier,
 		BatchImageHoldMultiplier:        g.BatchImageHoldMultiplier,
+		VideoRateIndependent:            g.VideoRateIndependent,
+		VideoRateMultiplier:             g.VideoRateMultiplier,
 		PeakRateEnabled:                 g.PeakRateEnabled,
 		PeakStart:                       g.PeakStart,
 		PeakEnd:                         g.PeakEnd,
@@ -193,6 +196,10 @@ func groupFromServiceBase(g *service.Group) Group {
 		ImagePrice1K:                    g.ImagePrice1K,
 		ImagePrice2K:                    g.ImagePrice2K,
 		ImagePrice4K:                    g.ImagePrice4K,
+		VideoPrice480P:                  g.VideoPrice480P,
+		VideoPrice720P:                  g.VideoPrice720P,
+		VideoPrice1080P:                 g.VideoPrice1080P,
+		WebSearchPricePerCall:           g.WebSearchPricePerCall,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
@@ -200,6 +207,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		RequireOAuthOnly:                g.RequireOAuthOnly,
 		RequirePrivacySet:               g.RequirePrivacySet,
 		RPMLimit:                        g.RPMLimit,
+		ExposeUpstreamModelToUser:       g.ExposeUpstreamModelToUser,
 		CreatedAt:                       g.CreatedAt,
 		UpdatedAt:                       g.UpdatedAt,
 	}
@@ -584,12 +592,19 @@ func AccountSummaryFromService(a *service.Account) *AccountSummary {
 }
 
 func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
-	// 普通用户 DTO：严禁包含管理员字段（例如 account_rate_multiplier、account、upstream_model）。
+	// 普通用户 DTO：严禁包含管理员字段（例如 account_rate_multiplier、account）。
+	// upstream_model / model_mapping_chain 仅在分组开启 expose_upstream_model_to_user 时返回。
 	requestType := l.EffectiveRequestType()
 	stream, openAIWSMode := service.ApplyLegacyRequestFields(requestType, l.Stream, l.OpenAIWSMode)
 	requestedModel := l.RequestedModel
 	if requestedModel == "" {
 		requestedModel = l.Model
+	}
+	var upstreamModel *string
+	var modelMappingChain *string
+	if l.Group != nil && l.Group.ExposeUpstreamModelToUser {
+		upstreamModel = l.UpstreamModel
+		modelMappingChain = l.ModelMappingChain
 	}
 	return UsageLog{
 		ID:                        l.ID,
@@ -601,6 +616,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		ServiceTier:               l.ServiceTier,
 		ReasoningEffort:           l.ReasoningEffort,
 		InboundEndpoint:           l.InboundEndpoint,
+		UpstreamEndpoint:          l.UpstreamEndpoint,
 		GroupID:                   l.GroupID,
 		SubscriptionID:            l.SubscriptionID,
 		InputTokens:               l.InputTokens,
@@ -636,6 +652,8 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		IPAddress:                 l.IPAddress,
 		CacheTTLOverridden:        l.CacheTTLOverridden,
 		BillingMode:               l.BillingMode,
+		UpstreamModel:             upstreamModel,
+		ModelMappingChain:         modelMappingChain,
 		CreatedAt:                 l.CreatedAt,
 		User:                      UserFromServiceShallow(l.User),
 		APIKey:                    APIKeyFromService(l.APIKey),
@@ -750,22 +768,40 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 }
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
+	scopeConfig := sub.ScopeConfig
+	if scopeConfig == nil {
+		scopeConfig = map[string]any{}
+	}
 	return UserSubscription{
 		ID:                 sub.ID,
 		UserID:             sub.UserID,
 		GroupID:            sub.GroupID,
+		PlanID:             sub.PlanID,
+		PlanName:           sub.PlanName,
+		PlanProductName:    sub.PlanProductName,
 		StartsAt:           sub.StartsAt,
 		ExpiresAt:          sub.ExpiresAt,
 		Status:             sub.Status,
+		IsUsable:           sub.IsUsable(),
 		DailyWindowStart:   sub.DailyWindowStart,
 		WeeklyWindowStart:  sub.WeeklyWindowStart,
 		MonthlyWindowStart: sub.MonthlyWindowStart,
+		ExhaustedAt:        sub.ExhaustedAt,
+		QuotaLimitUSD:      sub.QuotaLimitUSD,
+		QuotaUsedUSD:       sub.QuotaUsedUSD,
+		QuotaRemainingUSD:  sub.QuotaRemainingUSD(),
+		DailyLimitUSD:      sub.DailyLimitUSD,
 		DailyUsageUSD:      sub.DailyUsageUSD,
+		DailyResetAt:       sub.DailyResetTime(),
+		WeeklyLimitUSD:     sub.WeeklyLimitUSD,
 		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
+		WeeklyResetAt:      sub.WeeklyResetTime(),
 		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
+		Recent30dWastedUSD: sub.Recent30dWastedUSD,
+		ScopeType:          sub.ScopeType,
+		ScopeConfig:        scopeConfig,
 		CreatedAt:          sub.CreatedAt,
 		UpdatedAt:          sub.UpdatedAt,
-		RevokedAt:          sub.DeletedAt,
 		User:               UserFromServiceShallow(sub.User),
 		Group:              GroupFromServiceShallow(sub.Group),
 	}
@@ -791,6 +827,33 @@ func BulkAssignResultFromService(r *service.BulkAssignResult) *BulkAssignResult 
 		Subscriptions: subs,
 		Errors:        r.Errors,
 		Statuses:      statuses,
+	}
+}
+
+func SubscriptionCreditLedgerEntryFromService(e *service.SubscriptionCreditLedgerEntry) *SubscriptionCreditLedgerEntry {
+	if e == nil {
+		return nil
+	}
+	metadata := e.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	return &SubscriptionCreditLedgerEntry{
+		ID:                e.ID,
+		UserID:            e.UserID,
+		SubscriptionID:    e.SubscriptionID,
+		GroupID:           e.GroupID,
+		APIKeyID:          e.APIKeyID,
+		UsageLogID:        e.UsageLogID,
+		OrderID:           e.OrderID,
+		Type:              e.Type,
+		DeltaUSD:          e.DeltaUSD,
+		BalanceDeltaUSD:   e.BalanceDeltaUSD,
+		RemainingAfterUSD: e.RemainingAfterUSD,
+		Reason:            e.Reason,
+		EventKey:          e.EventKey,
+		Metadata:          metadata,
+		CreatedAt:         e.CreatedAt,
 	}
 }
 

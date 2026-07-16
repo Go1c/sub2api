@@ -190,6 +190,11 @@ func (r *grokQuotaProxyRepo) GetByID(_ context.Context, id int64) (*Proxy, error
 	r.calls++
 	return r.proxies[id], nil
 }
+func (r *grokQuotaProxyRepo) SweepExpiredProxies(context.Context, time.Time) (int64, error) { return 0, nil }
+func (r *grokQuotaProxyRepo) ListAllForFallback(context.Context) ([]Proxy, error) { return nil, nil }
+func (r *grokQuotaProxyRepo) CountExpired(context.Context) (int64, error) { return 0, nil }
+func (r *grokQuotaProxyRepo) CountExpiringSoon(context.Context, time.Time) (int64, error) { return 0, nil }
+
 
 func healthyGrokQuotaOAuthAccount(id int64) *Account {
 	return &Account{

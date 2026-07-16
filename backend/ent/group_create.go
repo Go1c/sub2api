@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -525,6 +526,20 @@ func (_c *GroupCreate) SetNillableFallbackGroupIDOnInvalidRequest(v *int64) *Gro
 	return _c
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (_c *GroupCreate) SetFallbackGroupIDOnExhausted(v int64) *GroupCreate {
+	_c.mutation.SetFallbackGroupIDOnExhausted(v)
+	return _c
+}
+
+// SetNillableFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableFallbackGroupIDOnExhausted(v *int64) *GroupCreate {
+	if v != nil {
+		_c.SetFallbackGroupIDOnExhausted(*v)
+	}
+	return _c
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_c *GroupCreate) SetModelRouting(v map[string][]int64) *GroupCreate {
 	_c.mutation.SetModelRouting(v)
@@ -677,6 +692,20 @@ func (_c *GroupCreate) SetNillableRpmLimit(v *int) *GroupCreate {
 	return _c
 }
 
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (_c *GroupCreate) SetExposeUpstreamModelToUser(v bool) *GroupCreate {
+	_c.mutation.SetExposeUpstreamModelToUser(v)
+	return _c
+}
+
+// SetNillableExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableExposeUpstreamModelToUser(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetExposeUpstreamModelToUser(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *GroupCreate) AddAPIKeyIDs(ids ...int64) *GroupCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -735,6 +764,21 @@ func (_c *GroupCreate) AddUsageLogs(v ...*UsageLog) *GroupCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddUsageLogIDs(ids...)
+}
+
+// AddSubscriptionCreditLedgerIDs adds the "subscription_credit_ledgers" edge to the SubscriptionCreditLedger entity by IDs.
+func (_c *GroupCreate) AddSubscriptionCreditLedgerIDs(ids ...int64) *GroupCreate {
+	_c.mutation.AddSubscriptionCreditLedgerIDs(ids...)
+	return _c
+}
+
+// AddSubscriptionCreditLedgers adds the "subscription_credit_ledgers" edges to the SubscriptionCreditLedger entity.
+func (_c *GroupCreate) AddSubscriptionCreditLedgers(v ...*SubscriptionCreditLedger) *GroupCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSubscriptionCreditLedgerIDs(ids...)
 }
 
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
@@ -938,6 +982,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRpmLimit
 		_c.mutation.SetRpmLimit(v)
 	}
+	if _, ok := _c.mutation.ExposeUpstreamModelToUser(); !ok {
+		v := group.DefaultExposeUpstreamModelToUser
+		_c.mutation.SetExposeUpstreamModelToUser(v)
+	}
 	return nil
 }
 
@@ -1076,6 +1124,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		return &ValidationError{Name: "rpm_limit", err: errors.New(`ent: missing required field "Group.rpm_limit"`)}
+	}
+	if _, ok := _c.mutation.ExposeUpstreamModelToUser(); !ok {
+		return &ValidationError{Name: "expose_upstream_model_to_user", err: errors.New(`ent: missing required field "Group.expose_upstream_model_to_user"`)}
 	}
 	return nil
 }
@@ -1248,6 +1299,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64, value)
 		_node.FallbackGroupIDOnInvalidRequest = &value
 	}
+	if value, ok := _c.mutation.FallbackGroupIDOnExhausted(); ok {
+		_spec.SetField(group.FieldFallbackGroupIDOnExhausted, field.TypeInt64, value)
+		_node.FallbackGroupIDOnExhausted = &value
+	}
 	if value, ok := _c.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
 		_node.ModelRouting = value
@@ -1295,6 +1350,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RpmLimit(); ok {
 		_spec.SetField(group.FieldRpmLimit, field.TypeInt, value)
 		_node.RpmLimit = value
+	}
+	if value, ok := _c.mutation.ExposeUpstreamModelToUser(); ok {
+		_spec.SetField(group.FieldExposeUpstreamModelToUser, field.TypeBool, value)
+		_node.ExposeUpstreamModelToUser = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1353,6 +1412,22 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SubscriptionCreditLedgersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionCreditLedgersTable,
+			Columns: []string{group.SubscriptionCreditLedgersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptioncreditledger.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -2070,6 +2145,30 @@ func (u *GroupUpsert) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsert {
 	return u
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsert) SetFallbackGroupIDOnExhausted(v int64) *GroupUpsert {
+	u.Set(group.FieldFallbackGroupIDOnExhausted, v)
+	return u
+}
+
+// UpdateFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateFallbackGroupIDOnExhausted() *GroupUpsert {
+	u.SetExcluded(group.FieldFallbackGroupIDOnExhausted)
+	return u
+}
+
+// AddFallbackGroupIDOnExhausted adds v to the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsert) AddFallbackGroupIDOnExhausted(v int64) *GroupUpsert {
+	u.Add(group.FieldFallbackGroupIDOnExhausted, v)
+	return u
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsert) ClearFallbackGroupIDOnExhausted() *GroupUpsert {
+	u.SetNull(group.FieldFallbackGroupIDOnExhausted)
+	return u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (u *GroupUpsert) SetModelRouting(v map[string][]int64) *GroupUpsert {
 	u.Set(group.FieldModelRouting, v)
@@ -2229,6 +2328,18 @@ func (u *GroupUpsert) UpdateRpmLimit() *GroupUpsert {
 // AddRpmLimit adds v to the "rpm_limit" field.
 func (u *GroupUpsert) AddRpmLimit(v int) *GroupUpsert {
 	u.Add(group.FieldRpmLimit, v)
+	return u
+}
+
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (u *GroupUpsert) SetExposeUpstreamModelToUser(v bool) *GroupUpsert {
+	u.Set(group.FieldExposeUpstreamModelToUser, v)
+	return u
+}
+
+// UpdateExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateExposeUpstreamModelToUser() *GroupUpsert {
+	u.SetExcluded(group.FieldExposeUpstreamModelToUser)
 	return u
 }
 
@@ -2998,6 +3109,34 @@ func (u *GroupUpsertOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertOne 
 	})
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertOne) SetFallbackGroupIDOnExhausted(v int64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// AddFallbackGroupIDOnExhausted adds v to the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertOne) AddFallbackGroupIDOnExhausted(v int64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// UpdateFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateFallbackGroupIDOnExhausted() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateFallbackGroupIDOnExhausted()
+	})
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertOne) ClearFallbackGroupIDOnExhausted() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearFallbackGroupIDOnExhausted()
+	})
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (u *GroupUpsertOne) SetModelRouting(v map[string][]int64) *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
@@ -3184,6 +3323,20 @@ func (u *GroupUpsertOne) AddRpmLimit(v int) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRpmLimit() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (u *GroupUpsertOne) SetExposeUpstreamModelToUser(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetExposeUpstreamModelToUser(v)
+	})
+}
+
+// UpdateExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateExposeUpstreamModelToUser() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateExposeUpstreamModelToUser()
 	})
 }
 
@@ -4119,6 +4272,34 @@ func (u *GroupUpsertBulk) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertBul
 	})
 }
 
+// SetFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertBulk) SetFallbackGroupIDOnExhausted(v int64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// AddFallbackGroupIDOnExhausted adds v to the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertBulk) AddFallbackGroupIDOnExhausted(v int64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddFallbackGroupIDOnExhausted(v)
+	})
+}
+
+// UpdateFallbackGroupIDOnExhausted sets the "fallback_group_id_on_exhausted" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateFallbackGroupIDOnExhausted() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateFallbackGroupIDOnExhausted()
+	})
+}
+
+// ClearFallbackGroupIDOnExhausted clears the value of the "fallback_group_id_on_exhausted" field.
+func (u *GroupUpsertBulk) ClearFallbackGroupIDOnExhausted() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearFallbackGroupIDOnExhausted()
+	})
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (u *GroupUpsertBulk) SetModelRouting(v map[string][]int64) *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
@@ -4305,6 +4486,20 @@ func (u *GroupUpsertBulk) AddRpmLimit(v int) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRpmLimit() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRpmLimit()
+	})
+}
+
+// SetExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field.
+func (u *GroupUpsertBulk) SetExposeUpstreamModelToUser(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetExposeUpstreamModelToUser(v)
+	})
+}
+
+// UpdateExposeUpstreamModelToUser sets the "expose_upstream_model_to_user" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateExposeUpstreamModelToUser() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateExposeUpstreamModelToUser()
 	})
 }
 

@@ -76,6 +76,11 @@ var ProviderSet = wire.NewSet(
 	NewPromoCodeRepository,
 	NewAnnouncementRepository,
 	NewAnnouncementReadRepository,
+	NewSiteMessageRepository,
+	NewSiteMessageCompensationBatchRepository,
+	NewLotteryRepository,
+	NewInvoiceRepository,
+	NewSubscriptionWasteStatsRepository,
 	NewUsageLogRepository,
 	NewUsageBillingRepository,
 	NewBatchImageRepository,
@@ -95,6 +100,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateRepository,
 	NewContentModerationRepository,
 	NewAffiliateRepository,
+	NewAccountErrorHistoryRepository,
 	NewUserPlatformQuotaRepository,     // T14: user × platform quota
 	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 
@@ -128,6 +134,7 @@ var ProviderSet = wire.NewSet(
 	NewErrorPassthroughCache,
 	NewTLSFingerprintProfileCache,
 	NewContentModerationHashCache,
+	NewOpsUserRequestCaptureLimiter,
 
 	// Encryptors
 	NewAESEncryptor,

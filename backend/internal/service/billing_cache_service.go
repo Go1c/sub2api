@@ -142,11 +142,17 @@ func NewBillingCacheService(
 	userRPMCache UserRPMCache,
 	userGroupRateRepo UserGroupRateRepository,
 	cfg *config.Config,
-	settingServices ...*SettingService,
+	optionalDeps ...any,
 ) *BillingCacheService {
 	var settingService *SettingService
-	if len(settingServices) > 0 {
-		settingService = settingServices[0]
+	var userPlatformQuotaRepo UserPlatformQuotaRepository
+	for _, dep := range optionalDeps {
+		switch v := dep.(type) {
+		case *SettingService:
+			settingService = v
+		case UserPlatformQuotaRepository:
+			userPlatformQuotaRepo = v
+		}
 	}
 	var rechargeReader BalanceUsageGateRechargeReader
 	if reader, ok := userRepo.(BalanceUsageGateRechargeReader); ok {
@@ -162,6 +168,7 @@ func NewBillingCacheService(
 		settingService:        settingService,
 		rechargeReader:        rechargeReader,
 		cfg:                   cfg,
+		userPlatformQuotaRepo: userPlatformQuotaRepo,
 	}
 	svc.circuitBreaker = newBillingCircuitBreaker(cfg.Billing.CircuitBreaker)
 	svc.startCacheWriteWorkers()
@@ -927,6 +934,21 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, user 
 	}
 
 	return nil
+}
+
+func (s *BillingCacheService) minimumBalanceReserve() float64 {
+	if s == nil || s.cfg == nil || s.cfg.Billing.MinimumBalanceReserve <= 0 {
+		return 0
+	}
+	return s.cfg.Billing.MinimumBalanceReserve
+}
+
+func (s *BillingCacheService) balanceBelowEligibilityThreshold(balance float64) bool {
+	if balance <= 0 {
+		return true
+	}
+	minimumReserve := s.minimumBalanceReserve()
+	return minimumReserve > 0 && balance < minimumReserve
 }
 
 func (s *BillingCacheService) balanceUsageGateRechargeTotal(ctx context.Context, user *User) (float64, error) {

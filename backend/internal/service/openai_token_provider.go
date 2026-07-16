@@ -80,6 +80,7 @@ type OpenAITokenProvider struct {
 	accountRepo        AccountRepository
 	tokenCache         OpenAITokenCache
 	openAIOAuthService *OpenAIOAuthService
+	runtimeBlocker     AccountRuntimeBlocker
 	metrics            *openAITokenRuntimeMetricsStore
 	refreshAPI         *OAuthRefreshAPI
 	executor           OAuthRefreshExecutor
@@ -109,6 +110,10 @@ func (p *OpenAITokenProvider) SetRefreshAPI(api *OAuthRefreshAPI, executor OAuth
 // SetRefreshPolicy injects caller-side refresh policy.
 func (p *OpenAITokenProvider) SetRefreshPolicy(policy ProviderRefreshPolicy) {
 	p.refreshPolicy = policy
+}
+
+func (p *OpenAITokenProvider) SetAccountRuntimeBlocker(blocker AccountRuntimeBlocker) {
+	p.runtimeBlocker = blocker
 }
 
 func (p *OpenAITokenProvider) SnapshotRuntimeMetrics() OpenAITokenRuntimeMetrics {

@@ -64,6 +64,8 @@ func (r *redeemServiceRepositoryStub) Use(_ context.Context, id, userID int64) e
 	r.code.UsedAt = &now
 	return nil
 }
+func (r *redeemServiceRepositoryStub) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) { return 0, nil }
+
 
 type redeemServiceCacheStub struct {
 	count          int

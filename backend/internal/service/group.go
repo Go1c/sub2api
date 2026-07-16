@@ -59,6 +59,8 @@ type Group struct {
 	FallbackGroupID *int64
 	// 无效请求兜底分组（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
+	// 账号全部不可用时兜底分组
+	FallbackGroupIDOnExhausted *int64
 
 	// 模型路由配置
 	// key: 模型匹配模式（支持 * 通配符，如 "claude-opus-*"）
@@ -87,6 +89,10 @@ type Group struct {
 	// RPMLimit 分组级每分钟请求数上限（0 = 不限制）。
 	// 一旦设置即接管该分组用户的限流（覆盖用户级 rpm_limit），可被 user-group rpm_override 进一步覆盖。
 	RPMLimit int
+
+	// ExposeUpstreamModelToUser 是否允许用户在使用记录页看到上游模型与映射链。
+	// false 时仅管理员接口返回 upstream_model / model_mapping_chain。
+	ExposeUpstreamModelToUser bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

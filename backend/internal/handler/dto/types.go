@@ -59,6 +59,7 @@ type APIKey struct {
 	IPWhitelist []string   `json:"ip_whitelist"`
 	IPBlacklist []string   `json:"ip_blacklist"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
+	LastUsedIP  *string    `json:"last_used_ip"`
 	Quota       float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
 	QuotaUsed   float64    `json:"quota_used"` // Used quota amount in USD
 	ExpiresAt   *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
@@ -106,6 +107,8 @@ type Group struct {
 	ImageRateMultiplier          float64 `json:"image_rate_multiplier"`
 	BatchImageDiscountMultiplier float64 `json:"batch_image_discount_multiplier"`
 	BatchImageHoldMultiplier     float64 `json:"batch_image_hold_multiplier"`
+	VideoRateIndependent         bool    `json:"video_rate_independent"`
+	VideoRateMultiplier          float64 `json:"video_rate_multiplier"`
 	// 高峰时段倍率配置
 	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
 	PeakStart          string   `json:"peak_start"`
@@ -114,6 +117,11 @@ type Group struct {
 	ImagePrice1K       *float64 `json:"image_price_1k"`
 	ImagePrice2K       *float64 `json:"image_price_2k"`
 	ImagePrice4K       *float64 `json:"image_price_4k"`
+	VideoPrice480P     *float64 `json:"video_price_480p"`
+	VideoPrice720P     *float64 `json:"video_price_720p"`
+	VideoPrice1080P    *float64 `json:"video_price_1080p"`
+	// Codex alpha/search 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
+	WebSearchPricePerCall *float64 `json:"web_search_price_per_call"`
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool   `json:"claude_code_only"`
@@ -130,6 +138,9 @@ type Group struct {
 
 	// RPMLimit 分组级每分钟请求数上限（0 = 不限制），设置后覆盖用户级 rpm_limit。
 	RPMLimit int `json:"rpm_limit"`
+
+	// ExposeUpstreamModelToUser 是否允许用户在使用记录页看到上游模型与映射链。
+	ExposeUpstreamModelToUser bool `json:"expose_upstream_model_to_user"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -512,6 +523,11 @@ type UsageLog struct {
 	// BillingMode 计费模式：token/image
 	BillingMode *string `json:"billing_mode,omitempty"`
 
+	// UpstreamModel is the actual model sent to the upstream provider after mapping.
+	UpstreamModel *string `json:"upstream_model,omitempty"`
+	// ModelMappingChain 模型映射链，如 "a→b→c"
+	ModelMappingChain *string `json:"model_mapping_chain,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
 
 	User         *User             `json:"user,omitempty"`
@@ -582,6 +598,14 @@ type AccountSummary struct {
 	Name string `json:"name"`
 }
 
+
+// GeoBlockSettings is the admin-facing region web-block configuration.
+type GeoBlockSettings struct {
+	Enabled   bool     `json:"enabled"`
+	Countries []string `json:"countries"`
+	Whitelist []string `json:"whitelist"`
+}
+
 type Setting struct {
 	ID        int64     `json:"id"`
 	Key       string    `json:"key"`
@@ -590,25 +614,43 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID      int64 `json:"id"`
-	UserID  int64 `json:"user_id"`
-	GroupID int64 `json:"group_id"`
+	ID              int64  `json:"id"`
+	UserID          int64  `json:"user_id"`
+	GroupID         *int64 `json:"group_id"`
+	PlanID          *int64 `json:"plan_id,omitempty"`
+	PlanName        string `json:"plan_name,omitempty"`
+	PlanProductName string `json:"plan_product_name,omitempty"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Status    string    `json:"status"`
+	IsUsable  bool      `json:"is_usable"`
 
 	DailyWindowStart   *time.Time `json:"daily_window_start"`
 	WeeklyWindowStart  *time.Time `json:"weekly_window_start"`
 	MonthlyWindowStart *time.Time `json:"monthly_window_start"`
 
-	DailyUsageUSD   float64 `json:"daily_usage_usd"`
-	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
-	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
+	ExhaustedAt *time.Time `json:"exhausted_at"`
 
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	QuotaLimitUSD     float64 `json:"quota_limit_usd"`
+	QuotaUsedUSD      float64 `json:"quota_used_usd"`
+	QuotaRemainingUSD float64 `json:"quota_remaining_usd"`
+
+	DailyLimitUSD   *float64   `json:"daily_limit_usd"`
+	DailyUsageUSD   float64    `json:"daily_usage_usd"`
+	DailyResetAt    *time.Time `json:"daily_reset_at"`
+	WeeklyLimitUSD  *float64   `json:"weekly_limit_usd"`
+	WeeklyUsageUSD  float64    `json:"weekly_usage_usd"`
+	WeeklyResetAt   *time.Time `json:"weekly_reset_at"`
+	MonthlyUsageUSD float64    `json:"monthly_usage_usd"`
+
+	Recent30dWastedUSD float64 `json:"recent_30d_wasted_usd"`
+
+	ScopeType   string         `json:"scope_type"`
+	ScopeConfig map[string]any `json:"scope_config"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	User  *User  `json:"user,omitempty"`
 	Group *Group `json:"group,omitempty"`
@@ -634,6 +676,24 @@ type BulkAssignResult struct {
 	Subscriptions []AdminUserSubscription `json:"subscriptions"`
 	Errors        []string                `json:"errors"`
 	Statuses      map[string]string       `json:"statuses,omitempty"`
+}
+
+type SubscriptionCreditLedgerEntry struct {
+	ID                int64          `json:"id"`
+	UserID            int64          `json:"user_id"`
+	SubscriptionID    int64          `json:"subscription_id"`
+	GroupID           *int64         `json:"group_id,omitempty"`
+	APIKeyID          *int64         `json:"api_key_id,omitempty"`
+	UsageLogID        *int64         `json:"usage_log_id,omitempty"`
+	OrderID           *int64         `json:"order_id,omitempty"`
+	Type              string         `json:"type"`
+	DeltaUSD          float64        `json:"delta_usd"`
+	BalanceDeltaUSD   float64        `json:"balance_delta_usd"`
+	RemainingAfterUSD float64        `json:"remaining_after_usd"`
+	Reason            string         `json:"reason"`
+	EventKey          *string        `json:"event_key,omitempty"`
+	Metadata          map[string]any `json:"metadata"`
+	CreatedAt         time.Time      `json:"created_at"`
 }
 
 // PromoCode 注册优惠码

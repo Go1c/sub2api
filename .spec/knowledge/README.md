@@ -54,6 +54,7 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
+| [`records/upstream-sync-20260715.md`](records/upstream-sync-20260715.md) | v0.1.156 ordered 同步台账：全量 unit 已绿、VERSION 0.1.156；integration/前端/commit 切分仍待（进行中） |
 | [`records/upstream-sync-20260710.md`](records/upstream-sync-20260710.md) | v0.1.150 日更同步台账：18 个上游落点的 fork 适配、例外与验证结果（2026-07-10） |
 | [`records/upstream-sync-review-20260616.md`](records/upstream-sync-review-20260616.md) | v0.1.136 同步上线前独立代码复审与 go/no-go 结论(2026-06-16) |
 | [`records/upstream-sync-acceptance-20260615.md`](records/upstream-sync-acceptance-20260615.md) | v0.1.136 同步验收清单:合了什么、风险在哪、怎么验(2026-06-15) |

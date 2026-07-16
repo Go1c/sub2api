@@ -33,7 +33,7 @@ func TestUsageUnrestrictedIncludesWeeklyWindowStart(t *testing.T) {
 			Name:             "Weekly plan",
 			SubscriptionType: service.SubscriptionTypeSubscription,
 		}},
-		middleware.AuthSubject{},
+		nil,
 		nil,
 		nil,
 		nil,

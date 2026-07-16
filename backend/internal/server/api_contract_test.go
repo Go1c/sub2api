@@ -5,6 +5,7 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"math"
@@ -377,6 +378,7 @@ func TestAPIContracts(t *testing.T) {
 						"video_rate_multiplier": 0,
 						"claude_code_only": false,
 						"allow_messages_dispatch": false,
+						"expose_upstream_model_to_user": false,
 						"fallback_group_id": null,
 						"fallback_group_id_on_invalid_request": null,
 						"require_oauth_only": false,
@@ -397,7 +399,7 @@ func TestAPIContracts(t *testing.T) {
 					{
 						ID:              501,
 						UserID:          1,
-						GroupID:         10,
+						GroupID:         ptr(int64(10)),
 						StartsAt:        deps.now,
 						ExpiresAt:       time.Date(2099, 1, 2, 3, 4, 5, 0, time.UTC), // 使用未来日期避免 normalizeSubscriptionStatus 标记为过期
 						Status:          service.SubscriptionStatusActive,
@@ -432,6 +434,18 @@ func TestAPIContracts(t *testing.T) {
 						"daily_usage_usd": 1.23,
 						"weekly_usage_usd": 2.34,
 						"monthly_usage_usd": 3.45,
+						"daily_limit_usd": null,
+						"daily_reset_at": null,
+						"weekly_limit_usd": null,
+						"weekly_reset_at": null,
+						"exhausted_at": null,
+						"is_usable": true,
+						"quota_limit_usd": 0,
+						"quota_remaining_usd": 0,
+						"quota_used_usd": 0,
+						"recent_30d_wasted_usd": 0,
+						"scope_config": {},
+						"scope_type": "",
 						"created_at": "2025-01-02T03:04:05Z",
 						"updated_at": "2025-01-02T03:04:05Z"
 					}
@@ -781,6 +795,7 @@ func TestAPIContracts(t *testing.T) {
 						"ops_metrics_interval_seconds": 60,
 						"site_name": "Sub2API",
 						"site_logo": "",
+						"site_pages": [],
 						"site_subtitle": "Subtitle",
 						"api_base_url": "https://api.example.com",
 						"api_key_acl_trust_forwarded_ip": false,
@@ -846,6 +861,7 @@ func TestAPIContracts(t *testing.T) {
 						"enable_identity_patch": true,
 						"identity_patch_prompt": "",
 						"invitation_code_enabled": false,
+						"invitation_registration_mode": "redeem_code",
 						"home_content": "",
 					"hide_ccs_import_button": false,
 					"purchase_subscription_enabled": false,
@@ -1009,6 +1025,7 @@ func TestAPIContracts(t *testing.T) {
 					"password_reset_enabled": false,
 					"frontend_url": "",
 						"invitation_code_enabled": false,
+						"invitation_registration_mode": "redeem_code",
 						"totp_enabled": false,
 						"totp_encryption_key_configured": false,
 						"login_agreement_enabled": false,
@@ -1084,6 +1101,7 @@ func TestAPIContracts(t *testing.T) {
 					"google_oauth_frontend_redirect_url": "/auth/oauth/callback",
 					"site_name": "Sub2API",
 					"site_logo": "",
+					"site_pages": [],
 					"site_subtitle": "Subscription to API Conversion Platform",
 					"api_base_url": "",
 					"api_key_acl_trust_forwarded_ip": false,
@@ -1367,7 +1385,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
 
 	redeemService := service.NewRedeemService(redeemRepo, userRepo, subscriptionService, nil, nil, nil, nil, nil)
-	redeemHandler := handler.NewRedeemHandler(redeemService)
+	redeemHandler := handler.NewRedeemHandler(redeemService, nil)
 
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
@@ -1375,9 +1393,9 @@ func newContractDeps(t *testing.T) *contractDeps {
 	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
-	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)
+	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil, nil, nil)
-	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	jwtAuth := func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
@@ -1695,6 +1713,10 @@ func (stubGroupRepo) ExistsByName(ctx context.Context, name string) (bool, error
 
 func (stubGroupRepo) GetAccountCount(ctx context.Context, groupID int64) (int64, int64, error) {
 	return 0, 0, errors.New("not implemented")
+}
+
+func (stubGroupRepo) CountExhaustedFallbackReferers(ctx context.Context, groupID int64) (int64, error) {
+	return 0, nil
 }
 
 func (stubGroupRepo) DeleteAccountGroupsByGroupID(ctx context.Context, groupID int64) (int64, error) {
@@ -2108,7 +2130,7 @@ func (r *stubUserSubscriptionRepo) ListActiveByUserID(ctx context.Context, userI
 func (stubUserSubscriptionRepo) ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]service.UserSubscription, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }
-func (stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
+func (stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, filters service.UserSubscriptionListFilters) ([]service.UserSubscription, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }
 func (stubUserSubscriptionRepo) ExistsByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (bool, error) {
@@ -2146,6 +2168,32 @@ func (stubUserSubscriptionRepo) IncrementUsage(ctx context.Context, id int64, co
 }
 func (stubUserSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
 	return 0, errors.New("not implemented")
+}
+
+// SubscriptionCreditExtension stubs（契约测试用 legacy 路径，默认 not found / not implemented）
+func (stubUserSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	return nil, service.ErrSubscriptionNotFound
+}
+func (stubUserSubscriptionRepo) ListUsableCreditSubscriptions(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
+	return nil, nil
+}
+func (stubUserSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
+	return false, nil
+}
+func (stubUserSubscriptionRepo) GetRenewalEligibility(ctx context.Context, userID int64) (service.RenewalEligibility, error) {
+	return service.RenewalEligibility{Allowed: true, Reason: service.RenewalReasonNoSubscription}, nil
+}
+func (stubUserSubscriptionRepo) LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error {
+	return nil
+}
+func (stubUserSubscriptionRepo) InsertCreditSubscription(ctx context.Context, tx *sql.Tx, sub *service.UserSubscription) (*service.UserSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (stubUserSubscriptionRepo) ExpireCreditSubscriptions(ctx context.Context) (int64, error) {
+	return 0, errors.New("not implemented")
+}
+func (stubUserSubscriptionRepo) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
+	return nil
 }
 
 type stubApiKeyRepo struct {

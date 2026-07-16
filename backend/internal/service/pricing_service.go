@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1033,6 +1034,25 @@ func (s *PricingService) getHashFilePath() string {
 }
 
 // isNumeric 检查字符串是否为纯数字
+
+// ListModelNamesByProvider returns all model names in the catalog whose
+// LiteLLMProvider matches the given provider string (case-insensitive).
+// The returned slice is sorted alphabetically.
+func (s *PricingService) ListModelNamesByProvider(provider string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	names := make([]string, 0)
+	for name, pricing := range s.pricingData {
+		if strings.ToLower(pricing.LiteLLMProvider) == provider {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 func isNumeric(s string) bool {
 	for _, c := range s {
 		if c < '0' || c > '9' {

@@ -219,7 +219,7 @@ func TestSettingHandler_UpdateSettings_PreservesOmittedSiteLogo(t *testing.T) {
 		},
 	}
 	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
-	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
 
 	body := map[string]any{
 		"registration_enabled": true,
@@ -255,7 +255,7 @@ func TestSettingHandler_UpdateSettings_ClearsExplicitEmptySiteLogo(t *testing.T)
 		},
 	}
 	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
-	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
 
 	body := map[string]any{
 		"registration_enabled": true,
@@ -293,7 +293,7 @@ func TestSettingHandler_UpdateSettings_AllowsExplicitlyDisablingAllWeChatCapabil
 		},
 	}
 	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
-	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
 
 	body := map[string]any{
 		"registration_enabled":          true,
@@ -325,7 +325,7 @@ func TestSettingHandler_UpdateSettings_AllowsConsecutiveSavesWithExistingSetting
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{values: map[string]string{}}
 	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
-	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
 	body := map[string]any{
 		"registration_enabled":          true,
 		"promo_code_enabled":            true,
@@ -359,7 +359,7 @@ func TestSettingHandler_UpdateSettings_DeduplicatesSameAdminAndBodyWithinWindow(
 		},
 	}
 	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
-	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
 
 	idempotencyRepo := newMemoryIdempotencyRepoStub()
 	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(idempotencyRepo, service.DefaultIdempotencyConfig()))
@@ -407,7 +407,7 @@ func TestSettingHandler_UpdateSettings_RejectsSitePageSlugOutsideDocRoute(t *tes
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{values: map[string]string{}}
 	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
-	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
 
 	body := map[string]any{
 		"site_pages": []map[string]any{
@@ -439,7 +439,7 @@ func TestSettingHandler_UpdateSettings_PreservesSitePageMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{values: map[string]string{}}
 	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
-	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil)
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
 
 	body := map[string]any{
 		"site_pages": []map[string]any{

@@ -11,8 +11,12 @@ import (
 
 // AdminService interface defines admin management operations
 type AdminService interface {
+	// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
+	SetAccountErrorHistoryService(svc *AccountErrorHistoryService)
+
 	// User management
 	ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error)
+	GetUserBalanceSummary(ctx context.Context, limit int) (*UserBalanceSummary, error)
 	GetUser(ctx context.Context, id int64) (*User, error)
 	GetUserIncludeDeleted(ctx context.Context, id int64) (*User, error)
 	CreateUser(ctx context.Context, input *CreateUserInput) (*User, error)
@@ -141,16 +145,17 @@ type CreateUserInput struct {
 }
 
 type UpdateUserInput struct {
-	Email         string
-	Password      string
-	Username      *string
-	Notes         *string
-	Role          string   // 空字符串表示"未提供"(不修改);合法值 admin/user
-	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
-	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
-	RPMLimit      *int     // 使用指针区分"未提供"和"设置为0"
-	Status        string
-	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	Email          string
+	Password       string
+	Username       *string
+	Notes          *string
+	Role           string   // 空字符串表示"未提供"(不修改);合法值 admin/user
+	Balance        *float64 // 使用指针区分"未提供"和"设置为0"
+	Concurrency    *int     // 使用指针区分"未提供"和"设置为0"
+	RPMLimit       *int     // 使用指针区分"未提供"和"设置为0"
+	InvoiceEnabled *bool
+	Status         string
+	AllowedGroups  *[]int64 // 使用指针区分"未提供"和"设置为空数组"
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
 	GroupRates map[int64]*float64
@@ -599,6 +604,12 @@ type adminServiceImpl struct {
 	userSubRepo          UserSubscriptionRepository
 	privacyClientFactory PrivacyClientFactory
 	runtimeBlocker       AccountRuntimeBlocker
+	accountErrorHistory  *AccountErrorHistoryService
+}
+
+// SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
+func (s *adminServiceImpl) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
+	s.accountErrorHistory = svc
 }
 
 type userGroupRateBatchReader interface {

@@ -18,6 +18,8 @@ export const useAppStore = defineStore('app', () => {
   // ==================== State ====================
 
   const sidebarCollapsed = ref<boolean>(false)
+  /** Persist sidebar nav scroll position across route remounts */
+  const sidebarScrollTop = ref<number>(0)
   const mobileOpen = ref<boolean>(false)
   const loading = ref<boolean>(false)
   const toasts = ref<Toast[]>([])
@@ -379,6 +381,7 @@ export const useAppStore = defineStore('app', () => {
         affiliate_enabled: false,
         site_messages_enabled: false,
         site_messages_default_recipient_email: '',
+        service_quota_enabled: false,
       })
     }
 
@@ -438,6 +441,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     // State
     sidebarCollapsed,
+    sidebarScrollTop,
     mobileOpen,
     loading,
     toasts,

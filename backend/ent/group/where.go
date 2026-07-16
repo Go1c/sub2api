@@ -235,6 +235,11 @@ func FallbackGroupIDOnInvalidRequest(v int64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnInvalidRequest, v))
 }
 
+// FallbackGroupIDOnExhausted applies equality check predicate on the "fallback_group_id_on_exhausted" field. It's identical to FallbackGroupIDOnExhaustedEQ.
+func FallbackGroupIDOnExhausted(v int64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnExhausted, v))
+}
+
 // ModelRoutingEnabled applies equality check predicate on the "model_routing_enabled" field. It's identical to ModelRoutingEnabledEQ.
 func ModelRoutingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldModelRoutingEnabled, v))
@@ -273,6 +278,11 @@ func DefaultMappedModel(v string) predicate.Group {
 // RpmLimit applies equality check predicate on the "rpm_limit" field. It's identical to RpmLimitEQ.
 func RpmLimit(v int) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRpmLimit, v))
+}
+
+// ExposeUpstreamModelToUser applies equality check predicate on the "expose_upstream_model_to_user" field. It's identical to ExposeUpstreamModelToUserEQ.
+func ExposeUpstreamModelToUser(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldExposeUpstreamModelToUser, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -1820,6 +1830,56 @@ func FallbackGroupIDOnInvalidRequestNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnInvalidRequest))
 }
 
+// FallbackGroupIDOnExhaustedEQ applies the EQ predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedEQ(v int64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedNEQ applies the NEQ predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedNEQ(v int64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedIn applies the In predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedIn(vs ...int64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldFallbackGroupIDOnExhausted, vs...))
+}
+
+// FallbackGroupIDOnExhaustedNotIn applies the NotIn predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedNotIn(vs ...int64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldFallbackGroupIDOnExhausted, vs...))
+}
+
+// FallbackGroupIDOnExhaustedGT applies the GT predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedGT(v int64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedGTE applies the GTE predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedGTE(v int64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedLT applies the LT predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedLT(v int64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedLTE applies the LTE predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedLTE(v int64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldFallbackGroupIDOnExhausted, v))
+}
+
+// FallbackGroupIDOnExhaustedIsNil applies the IsNil predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldFallbackGroupIDOnExhausted))
+}
+
+// FallbackGroupIDOnExhaustedNotNil applies the NotNil predicate on the "fallback_group_id_on_exhausted" field.
+func FallbackGroupIDOnExhaustedNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnExhausted))
+}
+
 // ModelRoutingIsNil applies the IsNil predicate on the "model_routing" field.
 func ModelRoutingIsNil() predicate.Group {
 	return predicate.Group(sql.FieldIsNull(FieldModelRouting))
@@ -2025,6 +2085,16 @@ func RpmLimitLTE(v int) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRpmLimit, v))
 }
 
+// ExposeUpstreamModelToUserEQ applies the EQ predicate on the "expose_upstream_model_to_user" field.
+func ExposeUpstreamModelToUserEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldExposeUpstreamModelToUser, v))
+}
+
+// ExposeUpstreamModelToUserNEQ applies the NEQ predicate on the "expose_upstream_model_to_user" field.
+func ExposeUpstreamModelToUserNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldExposeUpstreamModelToUser, v))
+}
+
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.
 func HasAPIKeys() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {
@@ -2109,6 +2179,29 @@ func HasUsageLogs() predicate.Group {
 func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {
 		step := newUsageLogsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSubscriptionCreditLedgers applies the HasEdge predicate on the "subscription_credit_ledgers" edge.
+func HasSubscriptionCreditLedgers() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionCreditLedgersTable, SubscriptionCreditLedgersColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSubscriptionCreditLedgersWith applies the HasEdge predicate on the "subscription_credit_ledgers" edge with a given conditions (other predicates).
+func HasSubscriptionCreditLedgersWith(preds ...predicate.SubscriptionCreditLedger) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSubscriptionCreditLedgersStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

@@ -68,6 +68,7 @@ func (r *groupRepository) Create(ctx context.Context, groupIn *service.Group) er
 		SetClaudeCodeOnly(groupIn.ClaudeCodeOnly).
 		SetNillableFallbackGroupID(groupIn.FallbackGroupID).
 		SetNillableFallbackGroupIDOnInvalidRequest(groupIn.FallbackGroupIDOnInvalidRequest).
+		SetNillableFallbackGroupIDOnExhausted(groupIn.FallbackGroupIDOnExhausted).
 		SetModelRoutingEnabled(groupIn.ModelRoutingEnabled).
 		SetMcpXMLInject(groupIn.MCPXMLInject).
 		SetAllowMessagesDispatch(groupIn.AllowMessagesDispatch).
@@ -233,6 +234,12 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		builder = builder.SetFallbackGroupIDOnInvalidRequest(*groupIn.FallbackGroupIDOnInvalidRequest)
 	} else {
 		builder = builder.ClearFallbackGroupIDOnInvalidRequest()
+	}
+	// 处理 FallbackGroupIDOnExhausted：nil 时清除，否则设置
+	if groupIn.FallbackGroupIDOnExhausted != nil {
+		builder = builder.SetFallbackGroupIDOnExhausted(*groupIn.FallbackGroupIDOnExhausted)
+	} else {
+		builder = builder.ClearFallbackGroupIDOnExhausted()
 	}
 
 	// 处理 ModelRouting：nil 时清除，否则设置
@@ -501,6 +508,18 @@ func (r *groupRepository) ListActive(ctx context.Context) ([]service.Group, erro
 	}
 
 	return outGroups, nil
+}
+
+// CountExhaustedFallbackReferers 返回将指定分组设为「账号耗尽兜底」目标的其它分组数量。
+// 用于在配置时阻止形成兜底链：若当前分组已被引用，则不允许它再设兜底目标。
+func (r *groupRepository) CountExhaustedFallbackReferers(ctx context.Context, groupID int64) (int64, error) {
+	n, err := r.client.Group.Query().
+		Where(group.FallbackGroupIDOnExhaustedEQ(groupID)).
+		Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int64(n), nil
 }
 
 func (r *groupRepository) ListActiveIDs(ctx context.Context) ([]int64, error) {

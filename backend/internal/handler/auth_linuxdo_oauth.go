@@ -324,55 +324,8 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		redirectOAuthError(c, frontendCallback, "session_error", infraerrors.Reason(err), infraerrors.Message(err))
 		return
 	}
-	emailVerificationRequired := h != nil && h.authService != nil && h.authService.IsEmailVerifyEnabled(c.Request.Context())
-	forceEmailOnSignup := h.isForceEmailOnThirdPartySignup(c.Request.Context())
-	if compatEmailUser == nil && !emailVerificationRequired && !forceEmailOnSignup {
-		if err := h.ensureBackendModeAllowsNewUserLogin(c.Request.Context()); err != nil {
-			redirectOAuthError(c, frontendCallback, "session_error", infraerrors.Reason(err), infraerrors.Message(err))
-			return
-		}
-		tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPairAndPromoCode(
-			c.Request.Context(),
-			email,
-			username,
-			"",
-			"",
-			readOAuthPromoCode(c),
-			"linuxdo",
-		)
-		if err == nil {
-			if err := applyPendingOAuthBinding(
-				c.Request.Context(),
-				h.entClient(),
-				h.authService,
-				h.userService,
-				&dbent.PendingAuthSession{
-					Intent:                 oauthIntentLogin,
-					ProviderType:           identityKey.ProviderType,
-					ProviderKey:            identityKey.ProviderKey,
-					ProviderSubject:        identityKey.ProviderSubject,
-					ResolvedEmail:          email,
-					UpstreamIdentityClaims: upstreamClaims,
-				},
-				nil,
-				&user.ID,
-				true,
-				false,
-			); err != nil {
-				redirectOAuthError(c, frontendCallback, "session_error", "failed to bind oauth identity", "")
-				return
-			}
-			h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
-			clearOAuthPendingSessionCookie(c, secureCookie)
-			clearOAuthPendingBrowserCookie(c, secureCookie)
-			redirectOAuthTokenPair(c, frontendCallback, tokenPair, redirectTo)
-			return
-		}
-		if !errors.Is(err, service.ErrOAuthInvitationRequired) {
-			redirectOAuthError(c, frontendCallback, "session_error", infraerrors.Reason(err), infraerrors.Message(err))
-			return
-		}
-	}
+	// 回调阶段统一落 pending session，由前端完成登录/注册选择；
+	// 避免在 PKCE 关闭等兼容路径下直接下发 access_token。
 	if err := h.createLinuxDoOAuthChoicePendingSession(
 		c,
 		identityKey,
@@ -383,8 +336,8 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		upstreamClaims,
 		compatEmail,
 		compatEmailUser,
-		emailVerificationRequired,
-		forceEmailOnSignup,
+		h != nil && h.authService != nil && h.authService.IsEmailVerifyEnabled(c.Request.Context()),
+		h.isForceEmailOnThirdPartySignup(c.Request.Context()),
 	); err != nil {
 		redirectOAuthError(c, frontendCallback, "session_error", "failed to continue oauth login", "")
 		return

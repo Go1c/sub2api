@@ -34,6 +34,9 @@ type ResolvedPricing struct {
 
 	// 是否支持缓存细分
 	SupportsCacheBreakdown bool
+
+	// 渠道定价原始配置（用于区间模式下获取 ImageOutputPrice）
+	channelPricing *ChannelModelPricing
 }
 
 // ModelPricingResolver 统一模型定价解析器。
@@ -93,6 +96,7 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 	// 2. 如果有 GroupID，尝试渠道覆盖
 	if chPricing != nil {
 		resolved.Source = PricingSourceChannel
+		resolved.channelPricing = chPricing
 		r.applyTokenOverrides(chPricing, resolved)
 	} else if input.GroupID != nil {
 		r.applyChannelOverrides(ctx, *input.GroupID, input.Model, resolved)
@@ -120,6 +124,7 @@ func (r *ModelPricingResolver) applyChannelOverrides(ctx context.Context, groupI
 	}
 
 	resolved.Source = PricingSourceChannel
+	resolved.channelPricing = chPricing
 	resolved.Mode = chPricing.BillingMode
 	if resolved.Mode == "" {
 		resolved.Mode = BillingModeToken
@@ -141,12 +146,28 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 	// 如果有有效的区间定价，使用区间
 	if len(validIntervals) > 0 {
 		resolved.Intervals = validIntervals
+		// 区间不匹配时回退到 BasePricing，也需要覆盖图片价格
+		if resolved.BasePricing == nil {
+			resolved.BasePricing = &ModelPricing{}
+		} else {
+			cloned := *resolved.BasePricing
+			resolved.BasePricing = &cloned
+		}
+		if chPricing.ImageOutputPrice != nil {
+			resolved.BasePricing.ImageOutputPricePerToken = *chPricing.ImageOutputPrice
+		} else {
+			resolved.BasePricing.ImageOutputPricePerToken = 0
+		}
+		resolved.BasePricing.ImageOutputPriceExplicit = true
 		return
 	}
 
 	// 否则用 flat 字段覆盖 BasePricing
 	if resolved.BasePricing == nil {
 		resolved.BasePricing = &ModelPricing{}
+	} else {
+		cloned := *resolved.BasePricing
+		resolved.BasePricing = &cloned
 	}
 
 	if chPricing.InputPrice != nil {
@@ -170,7 +191,10 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 	}
 	if chPricing.ImageOutputPrice != nil {
 		resolved.BasePricing.ImageOutputPricePerToken = *chPricing.ImageOutputPrice
+	} else {
+		resolved.BasePricing.ImageOutputPricePerToken = 0
 	}
+	resolved.BasePricing.ImageOutputPriceExplicit = true
 }
 
 // applyRequestTierOverrides 应用按次/图片模式的渠道覆盖
@@ -207,11 +231,11 @@ func (r *ModelPricingResolver) GetIntervalPricing(resolved *ResolvedPricing, tot
 		return resolved.BasePricing
 	}
 
-	return intervalToModelPricing(iv, resolved.SupportsCacheBreakdown)
+	return intervalToModelPricing(iv, resolved.SupportsCacheBreakdown, resolved.channelPricing)
 }
 
 // intervalToModelPricing 将区间定价转换为 ModelPricing
-func intervalToModelPricing(iv *PricingInterval, supportsCacheBreakdown bool) *ModelPricing {
+func intervalToModelPricing(iv *PricingInterval, supportsCacheBreakdown bool, chPricing *ChannelModelPricing) *ModelPricing {
 	pricing := &ModelPricing{
 		SupportsCacheBreakdown: supportsCacheBreakdown,
 	}
@@ -233,6 +257,13 @@ func intervalToModelPricing(iv *PricingInterval, supportsCacheBreakdown bool) *M
 	if iv.CacheReadPrice != nil {
 		pricing.CacheReadPricePerToken = *iv.CacheReadPrice
 		pricing.CacheReadPricePerTokenPriority = *iv.CacheReadPrice
+	}
+	// 渠道定价存在时，ImageOutputPrice 显式覆盖。
+	if chPricing != nil {
+		pricing.ImageOutputPriceExplicit = true
+		if chPricing.ImageOutputPrice != nil {
+			pricing.ImageOutputPricePerToken = *chPricing.ImageOutputPrice
+		}
 	}
 	return pricing
 }

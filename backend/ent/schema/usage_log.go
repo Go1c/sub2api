@@ -145,6 +145,21 @@ func (UsageLog) Fields() []ent.Field {
 			MaxLen(10).
 			Optional().
 			Nillable(),
+		field.String("image_input_size").
+			MaxLen(32).
+			Optional().
+			Nillable(),
+		field.String("image_output_size").
+			MaxLen(32).
+			Optional().
+			Nillable(),
+		field.String("image_size_source").
+			MaxLen(16).
+			Optional().
+			Nillable(),
+		field.JSON("image_size_breakdown", map[string]int{}).
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 		field.Int("video_count").
 			Default(0).
 			Comment("视频生成数量；>0 表示本行是视频生成用量"),

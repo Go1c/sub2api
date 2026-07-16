@@ -14,6 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const insufficientBalanceMessage = "账户余额不足，请先充值后再使用。"
+
 // NewAPIKeyAuthMiddleware 创建 API Key 认证中间件
 func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
 	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg))
@@ -144,28 +146,33 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
-		// ── 5. 加载订阅（订阅模式时始终加载） ───────────────────────
+		// ── 5. 加载可消费订阅（用户级额度池，不再依赖分组 subscription_type） ──
 
-		// skipBilling: /v1/usage 只需鉴权，跳过所有计费执行
-		skipBilling := c.Request.URL.Path == "/v1/usage"
+		// skipBilling: usage 查询只需鉴权，跳过所有计费执行
+		skipBilling := isGatewayUsagePath(c.Request.URL.Path)
 
 		var subscription *service.UserSubscription
-		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+		var subscriptionCandidateIDs []int64
+		var subscriptionErr error
 
-		if isSubscriptionType && subscriptionService != nil {
-			sub, subErr := subscriptionService.GetActiveSubscription(
+		if subscriptionService != nil {
+			sub, candidateIDs, subErr := loadUsableCreditSubscriptionForAuth(
 				c.Request.Context(),
+				subscriptionService,
 				apiKey.User.ID,
-				apiKey.Group.ID,
+				apiKey.Group,
+				apiKey.User,
 			)
 			if subErr != nil {
-				if !skipBilling {
-					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
+				if !skipBilling && !isFallbackableSubscriptionAuthError(subErr) {
+					status, code := subscriptionAuthErrorStatus(subErr)
+					AbortWithError(c, status, code, subErr.Error())
 					return
 				}
-				// skipBilling: 订阅不存在也放行，handler 会返回可用的数据
+				subscriptionErr = subErr
 			} else {
 				subscription = sub
+				subscriptionCandidateIDs = candidateIDs
 			}
 		}
 
@@ -192,34 +199,15 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				return
 			}
 
-			// 订阅模式：验证订阅限额
-			if subscription != nil {
-				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-				if needsMaintenance {
-					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
-					if maintenanceErr != nil {
-						AbortWithError(c, 500, "SUBSCRIPTION_MAINTENANCE_FAILED", "Failed to maintain subscription usage windows")
+			// 无可用额度池订阅时回退到余额检查；限额类错误在无余额时以 403 返回。
+			if subscription == nil {
+				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+					if subscriptionErr != nil {
+						status, code := subscriptionAuthErrorStatus(subscriptionErr)
+						AbortWithError(c, status, code, subscriptionErr.Error())
 						return
 					}
-					subscription = refreshed
-					_, validateErr = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-				}
-				if validateErr != nil {
-					code := "SUBSCRIPTION_INVALID"
-					status := 403
-					if errors.Is(validateErr, service.ErrDailyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrWeeklyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrMonthlyLimitExceeded) {
-						code = "USAGE_LIMIT_EXCEEDED"
-						status = 429
-					}
-					AbortWithError(c, status, code, validateErr.Error())
-					return
-				}
-			} else {
-				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
-				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", insufficientBalanceMessage)
 					return
 				}
 			}
@@ -229,6 +217,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
+		}
+		if len(subscriptionCandidateIDs) > 0 {
+			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.SubscriptionCandidateIDs, subscriptionCandidateIDs))
 		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
@@ -299,6 +290,82 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 // 否则已配置该值的存量部署升级后，0 < balance < reserve 的用户会在所有端点被静默 403。
 func apiKeyBalanceBelowAuthThreshold(balance float64, _ *config.Config) bool {
 	return balance <= 0
+}
+
+// loadUsableCreditSubscriptionForAuth 从用户级额度池订阅中挑选覆盖当前分组的可消费订阅。
+// 返回 selected 订阅、覆盖该分组的候选 ID 列表，以及首个可回退/不可回退错误。
+func loadUsableCreditSubscriptionForAuth(ctx context.Context, subscriptionService *service.SubscriptionService, userID int64, group *service.Group, user *service.User) (*service.UserSubscription, []int64, error) {
+	if subscriptionService == nil {
+		return nil, nil, nil
+	}
+	subs, err := subscriptionService.ListUsableCreditSubscriptions(ctx, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrSubscriptionNotFound) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	var firstErr error
+	var selected *service.UserSubscription
+	candidateIDs := make([]int64, 0, len(subs))
+	for i := range subs {
+		sub := subs[i]
+		if !service.SubscriptionCoversGroup(&sub, group, user) {
+			if firstErr == nil {
+				firstErr = service.ErrSubscriptionInvalid
+			}
+			continue
+		}
+		candidateIDs = append(candidateIDs, sub.ID)
+		needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(&sub, group)
+		// Credit-pool subscriptions may intentionally leave all periodic windows
+		// unactivated until billing. Only revalidate an already-active stale
+		// window here; otherwise auth would turn pure total-quota subscriptions
+		// into a synchronous database-write path.
+		if needsMaintenance && sub.IsWindowActivated() {
+			refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(ctx, &sub)
+			if maintenanceErr != nil {
+				return nil, nil, maintenanceErr
+			}
+			sub = *refreshed
+			_, validateErr = subscriptionService.ValidateAndCheckLimits(&sub, group)
+		}
+		if validateErr != nil {
+			if !isFallbackableSubscriptionAuthError(validateErr) {
+				return nil, nil, validateErr
+			}
+			if firstErr == nil {
+				firstErr = validateErr
+			}
+			continue
+		}
+		if selected == nil {
+			selected = &sub
+		}
+	}
+	if selected != nil {
+		return selected, candidateIDs, nil
+	}
+	if firstErr != nil {
+		return nil, candidateIDs, firstErr
+	}
+	return nil, nil, nil
+}
+
+func isFallbackableSubscriptionAuthError(err error) bool {
+	return errors.Is(err, service.ErrSubscriptionInvalid) ||
+		errors.Is(err, service.ErrSubscriptionExpired) ||
+		errors.Is(err, service.ErrSubscriptionSuspended) ||
+		errors.Is(err, service.ErrDailyLimitExceeded) ||
+		errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+		errors.Is(err, service.ErrMonthlyLimitExceeded)
+}
+
+func subscriptionAuthErrorStatus(err error) (int, string) {
+	if isFallbackableSubscriptionAuthError(err) {
+		return 403, "SUBSCRIPTION_INVALID"
+	}
+	return 500, "INTERNAL_ERROR"
 }
 
 func abortIfAPIKeyGroupUnavailable(c *gin.Context, apiKey *service.APIKey) bool {

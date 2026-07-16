@@ -13,11 +13,10 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
-	"github.com/shopspring/decimal"
 )
 
 // --- Order Creation ---
@@ -53,44 +52,18 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if s.notificationEmailService != nil {
 		s.notificationEmailService.RememberRecipientLocale(ctx, req.UserID, user.Email, req.Locale)
 	}
-	orderAmount := req.Amount
-	limitAmount := req.Amount
-	if plan != nil {
-		orderAmount = plan.Price
-		limitAmount = plan.Price
-	} else if req.OrderType == payment.OrderTypeBalance {
-		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
+	if req.OrderType == payment.OrderTypeSubscription && isInternalBalancePaymentType(req.PaymentType) {
+		return s.createSubscriptionBalanceOrder(ctx, req, user, plan, cfg)
 	}
+	limitAmount := paymentLimitAmount(req, plan)
 	feeRate := cfg.RechargeFeeRate
-	methodCurrency := payment.DefaultPaymentCurrency
-	if s.configService != nil {
-		methodCurrency, err = s.configService.ValidateMethodCurrencyConsistency(ctx, req.PaymentType)
-		if err != nil {
-			return nil, err
-		}
-	}
-	payAmountStr, payAmount, err := calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, methodCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
-	if err != nil {
-		return nil, err
-	}
+	payAmountStr := payment.CalculatePayAmount(limitAmount, feeRate)
+	payAmount, _ := strconv.ParseFloat(payAmountStr, 64)
 	sel, err := s.selectCreateOrderInstance(ctx, req, cfg, payAmount)
 	if err != nil {
 		return nil, err
 	}
 	if err := s.validateSelectedCreateOrderInstance(ctx, req, sel); err != nil {
-		return nil, err
-	}
-	selectedCurrency := payment.DefaultPaymentCurrency
-	if sel != nil {
-		selectedCurrency = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
-	}
-	if selectedCurrency != methodCurrency {
-		payAmountStr, payAmount, err = calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, selectedCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if err := validateSelectedCreateOrderAmountCurrency(payAmountStr, sel); err != nil {
 		return nil, err
 	}
 	oauthResp, err := s.maybeBuildWeChatOAuthRequiredResponseForSelection(ctx, req, limitAmount, payAmount, feeRate, sel)
@@ -100,6 +73,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if oauthResp != nil {
 		return oauthResp, nil
 	}
+	orderAmount := resolveExternalOrderAmount(req, plan, cfg, sel)
 	order, err := s.createOrderInTx(ctx, req, user, plan, cfg, orderAmount, limitAmount, feeRate, payAmount, sel)
 	if err != nil {
 		return nil, err
@@ -112,6 +86,27 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		return nil, err
 	}
 	return resp, nil
+}
+
+func paymentLimitAmount(req CreateOrderRequest, plan *dbent.SubscriptionPlan) float64 {
+	if plan != nil {
+		return plan.Price
+	}
+	return req.Amount
+}
+
+func resolveExternalOrderAmount(req CreateOrderRequest, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, sel *payment.InstanceSelection) float64 {
+	if plan != nil {
+		return plan.Price
+	}
+	if req.OrderType != payment.OrderTypeBalance {
+		return req.Amount
+	}
+	multiplier := cfg.BalanceRechargeMultiplier
+	if sel != nil {
+		multiplier = payment.ProviderBalanceRechargeMultiplier(sel.ProviderKey, sel.Config, cfg.BalanceRechargeMultiplier)
+	}
+	return calculateCreditedBalance(req.Amount, multiplier)
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
@@ -139,14 +134,279 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	if err != nil || !plan.ForSale {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
 	}
-	group, err := s.groupRepo.GetByID(ctx, plan.GroupID)
-	if err != nil || group.Status != payment.EntityStatusActive {
-		return nil, infraerrors.NotFound("GROUP_NOT_FOUND", "subscription group is no longer available")
+	if _, err := subscriptionOrderSnapshotFromPlan(plan); err != nil {
+		return nil, err
 	}
-	if !group.IsSubscriptionType() {
-		return nil, infraerrors.BadRequest("GROUP_TYPE_MISMATCH", "group is not a subscription type")
+	// 额度池套餐 group_id 可空（不绑定具体分组）；仅当套餐绑分组时校验分组状态
+	if plan.GroupID != nil {
+		group, err := s.groupRepo.GetByID(ctx, *plan.GroupID)
+		if err != nil || group.Status != payment.EntityStatusActive {
+			return nil, infraerrors.NotFound("GROUP_NOT_FOUND", "subscription group is no longer available")
+		}
+		if !group.IsSubscriptionType() {
+			return nil, infraerrors.BadRequest("GROUP_TYPE_MISMATCH", "group is not a subscription type")
+		}
+	}
+	if s.subscriptionSvc != nil && !s.multipleSubscriptionPurchasesEnabled(ctx) {
+		eligibility, err := s.subscriptionSvc.GetRenewalEligibility(ctx, req.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if !eligibility.Allowed {
+			return nil, subscriptionRenewalNotAllowedError(eligibility)
+		}
 	}
 	return plan, nil
+}
+
+type subscriptionOrderSnapshot struct {
+	PlanID         int64
+	QuotaUSD       float64
+	DailyLimitUSD  *float64
+	WeeklyLimitUSD *float64
+	ScopeType      string
+	ScopeConfig    map[string]any
+	ValidityDays   int
+}
+
+func subscriptionOrderSnapshotFromPlan(plan *dbent.SubscriptionPlan) (subscriptionOrderSnapshot, error) {
+	if plan == nil {
+		return subscriptionOrderSnapshot{}, infraerrors.BadRequest("PLAN_NOT_AVAILABLE", "subscription plan is required")
+	}
+	if plan.QuotaUsd <= 0 || math.IsNaN(plan.QuotaUsd) || math.IsInf(plan.QuotaUsd, 0) {
+		return subscriptionOrderSnapshot{}, infraerrors.BadRequest("PLAN_QUOTA_INVALID", "subscription plan quota must be positive")
+	}
+	validityDays := psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
+	if validityDays <= 0 {
+		return subscriptionOrderSnapshot{}, infraerrors.BadRequest("PLAN_VALIDITY_INVALID", "subscription plan validity must be positive")
+	}
+	scopeType := strings.TrimSpace(plan.ScopeType)
+	if scopeType == "" {
+		scopeType = SubscriptionScopeAllAvailableGroups
+	}
+	scopeConfig := cloneSubscriptionScopeConfig(plan.ScopeConfig)
+	if scopeConfig == nil {
+		scopeConfig = map[string]any{}
+	}
+	return subscriptionOrderSnapshot{
+		PlanID:         plan.ID,
+		QuotaUSD:       plan.QuotaUsd,
+		DailyLimitUSD:  cloneFloat64Ptr(plan.DailyLimitUsd),
+		WeeklyLimitUSD: cloneFloat64Ptr(plan.WeeklyLimitUsd),
+		ScopeType:      scopeType,
+		ScopeConfig:    scopeConfig,
+		ValidityDays:   validityDays,
+	}, nil
+}
+
+func subscriptionRenewalNotAllowedError(eligibility RenewalEligibility) error {
+	md := map[string]string{
+		"renewal_reason": string(eligibility.Reason),
+	}
+	if sub := eligibility.Subscription; sub != nil {
+		md["subscription_id"] = strconv.FormatInt(sub.ID, 10)
+		remaining := math.Max(sub.QuotaLimitUSD-sub.QuotaUsedUSD, 0)
+		md["quota_remaining_usd"] = fmt.Sprintf("%.10f", remaining)
+		if !sub.ExpiresAt.IsZero() {
+			md["expires_at"] = sub.ExpiresAt.UTC().Format(time.RFC3339)
+		}
+	}
+	return infraerrors.Conflict("SUBSCRIPTION_RENEWAL_NOT_ALLOWED", "current subscription is still usable").WithMetadata(md)
+}
+
+func isInternalBalancePaymentType(paymentType string) bool {
+	return strings.EqualFold(strings.TrimSpace(paymentType), payment.TypeBalance)
+}
+
+func subscriptionBalancePaymentItemName(plan *dbent.SubscriptionPlan) string {
+	if plan == nil {
+		return "subscription"
+	}
+	if name := strings.TrimSpace(plan.ProductName); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(plan.Name); name != "" {
+		return name
+	}
+	return fmt.Sprintf("subscription plan #%d", plan.ID)
+}
+
+func buildSubscriptionBalancePaymentNote(plan *dbent.SubscriptionPlan, balanceSpent, balanceAfter float64) string {
+	return fmt.Sprintf(
+		"余额支付订阅：%s（¥%.2f），扣除 $%.2f，剩余 $%.2f",
+		subscriptionBalancePaymentItemName(plan),
+		plan.Price,
+		balanceSpent,
+		balanceAfter,
+	)
+}
+
+func (s *PaymentService) createSubscriptionBalanceOrder(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig) (*CreateOrderResponse, error) {
+	if plan == nil {
+		return nil, infraerrors.BadRequest("PLAN_NOT_AVAILABLE", "subscription plan is required")
+	}
+	if !cfg.SubscriptionBalancePaymentEnabled {
+		return nil, infraerrors.Forbidden("SUBSCRIPTION_BALANCE_PAYMENT_DISABLED", "subscription balance payment is disabled")
+	}
+
+	balanceSpent := calculateCreditedBalance(plan.Price, cfg.BalanceRechargeMultiplier)
+	if user.Balance+amountToleranceCNY < balanceSpent {
+		return nil, ErrInsufficientBalance.WithMetadata(map[string]string{
+			"required_balance":  fmt.Sprintf("%.2f", balanceSpent),
+			"available_balance": fmt.Sprintf("%.2f", user.Balance),
+		})
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := s.checkDailyLimit(txCtx, tx, req.UserID, plan.Price, cfg.DailyLimit); err != nil {
+		return nil, err
+	}
+
+	outTradeNo, err := s.allocateOutTradeNo(txCtx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	orderBuilder := tx.PaymentOrder.Create().
+		SetUserID(req.UserID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetNillableUserNotes(psNilIfEmpty(user.Notes)).
+		SetAmount(plan.Price).
+		SetPayAmount(balanceSpent).
+		SetFeeRate(0).
+		SetRechargeCode("").
+		SetOutTradeNo(outTradeNo).
+		SetPaymentType(payment.TypeBalance).
+		SetPaymentTradeNo("").
+		SetOrderType(req.OrderType).
+		SetStatus(OrderStatusPaid).
+		SetPaidAt(now).
+		SetExpiresAt(now).
+		SetClientIP(req.ClientIP).
+		SetSrcHost(req.SrcHost)
+	if req.SrcURL != "" {
+		orderBuilder.SetSrcURL(req.SrcURL)
+	}
+
+	snapshot, err := subscriptionOrderSnapshotFromPlan(plan)
+	if err != nil {
+		return nil, err
+	}
+	orderBuilder.SetPlanID(snapshot.PlanID).
+		SetSubscriptionDays(snapshot.ValidityDays).
+		SetSubscriptionQuotaUsd(snapshot.QuotaUSD).
+		SetNillableSubscriptionDailyLimitUsd(snapshot.DailyLimitUSD).
+		SetNillableSubscriptionWeeklyLimitUsd(snapshot.WeeklyLimitUSD).
+		SetSubscriptionScopeType(snapshot.ScopeType).
+		SetSubscriptionScopeConfig(snapshot.ScopeConfig).
+		SetSubscriptionValidityDays(snapshot.ValidityDays)
+	if plan.GroupID != nil {
+		orderBuilder.SetSubscriptionGroupID(*plan.GroupID)
+	}
+
+	order, err := orderBuilder.Save(txCtx)
+	if err != nil {
+		return nil, fmt.Errorf("create balance subscription order: %w", err)
+	}
+
+	rechargeCode := fmt.Sprintf("PAY-%d-%d", order.ID, time.Now().UnixNano()%100000)
+	order, err = tx.PaymentOrder.UpdateOneID(order.ID).SetRechargeCode(rechargeCode).Save(txCtx)
+	if err != nil {
+		return nil, fmt.Errorf("set recharge code: %w", err)
+	}
+
+	updated, err := tx.User.Update().
+		Where(dbuser.IDEQ(req.UserID), dbuser.BalanceGTE(balanceSpent)).
+		AddBalance(-balanceSpent).
+		Save(txCtx)
+	if err != nil {
+		return nil, fmt.Errorf("deduct user balance: %w", err)
+	}
+	if updated == 0 {
+		return nil, ErrInsufficientBalance.WithMetadata(map[string]string{
+			"required_balance": fmt.Sprintf("%.2f", balanceSpent),
+		})
+	}
+
+	updatedUser, err := tx.User.Get(txCtx, req.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("reload user balance: %w", err)
+	}
+
+	note := buildSubscriptionBalancePaymentNote(plan, balanceSpent, updatedUser.Balance)
+	if _, err := tx.RedeemCode.Create().
+		SetCode(order.RechargeCode).
+		SetType(RedeemTypeBalancePayment).
+		SetValue(-balanceSpent).
+		SetStatus(StatusUsed).
+		SetNotes(note).
+		SetUsedBy(req.UserID).
+		SetUsedAt(now).
+		Save(txCtx); err != nil {
+		return nil, fmt.Errorf("create balance payment ledger: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit balance subscription transaction: %w", err)
+	}
+
+	if s.redeemService != nil {
+		s.redeemService.invalidateRedeemCaches(ctx, req.UserID, &RedeemCode{Type: RedeemTypeBalancePayment})
+	}
+
+	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
+		"orderAmount":      order.Amount,
+		"payAmount":        order.PayAmount,
+		"paymentType":      payment.TypeBalance,
+		"orderType":        req.OrderType,
+		"subscriptionPlan": subscriptionBalancePaymentItemName(plan),
+	})
+	s.writeAuditLog(ctx, order.ID, "ORDER_PAID", fmt.Sprintf("user:%d", req.UserID), map[string]any{
+		"paidAmount":       balanceSpent,
+		"paymentType":      payment.TypeBalance,
+		"subscriptionPlan": subscriptionBalancePaymentItemName(plan),
+	})
+	s.writeAuditLog(ctx, order.ID, "BALANCE_PAYMENT_RECORDED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
+		"item":           subscriptionBalancePaymentItemName(plan),
+		"plan_price_cny": plan.Price,
+		"balance_spent":  balanceSpent,
+		"balance_after":  updatedUser.Balance,
+		"ledger_note":    note,
+	})
+
+	if err := s.executeFulfillment(ctx, order.ID); err != nil {
+		slog.Error("subscription balance payment fulfillment failed",
+			"orderID", order.ID,
+			"userID", req.UserID,
+			"planID", plan.ID,
+			"error", err,
+		)
+	}
+
+	refreshedOrder, err := s.entClient.PaymentOrder.Get(ctx, order.ID)
+	if err == nil {
+		order = refreshedOrder
+	}
+
+	return &CreateOrderResponse{
+		OrderID:     order.ID,
+		Amount:      order.Amount,
+		PayAmount:   order.PayAmount,
+		FeeRate:     order.FeeRate,
+		Status:      order.Status,
+		ResultType:  payment.CreatePaymentResultOrderCreated,
+		PaymentType: payment.TypeBalance,
+		OutTradeNo:  order.OutTradeNo,
+		ExpiresAt:   order.ExpiresAt,
+	}, nil
 }
 
 func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
@@ -207,7 +467,21 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		b.SetProviderSnapshot(providerSnapshot)
 	}
 	if plan != nil {
-		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit))
+		snapshot, err := subscriptionOrderSnapshotFromPlan(plan)
+		if err != nil {
+			return nil, err
+		}
+		b.SetPlanID(snapshot.PlanID).
+			SetSubscriptionDays(snapshot.ValidityDays).
+			SetSubscriptionQuotaUsd(snapshot.QuotaUSD).
+			SetNillableSubscriptionDailyLimitUsd(snapshot.DailyLimitUSD).
+			SetNillableSubscriptionWeeklyLimitUsd(snapshot.WeeklyLimitUSD).
+			SetSubscriptionScopeType(snapshot.ScopeType).
+			SetSubscriptionScopeConfig(snapshot.ScopeConfig).
+			SetSubscriptionValidityDays(snapshot.ValidityDays)
+		if plan.GroupID != nil {
+			b.SetSubscriptionGroupID(*plan.GroupID)
+		}
 	}
 	order, err := b.Save(ctx)
 	if err != nil {
@@ -284,26 +558,23 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 		if merchantID := strings.TrimSpace(sel.Config["mchId"]); merchantID != "" {
 			snapshot["merchant_id"] = merchantID
 		}
-		snapshot["currency"] = payment.DefaultPaymentCurrency
+		snapshot["currency"] = "CNY"
 	}
 	if providerKey == payment.TypeAlipay {
 		if merchantAppID := strings.TrimSpace(sel.Config["appId"]); merchantAppID != "" {
 			snapshot["merchant_app_id"] = merchantAppID
 		}
 	}
-	if providerKey == payment.TypeEasyPay {
+	if providerKey == payment.TypeEasyPay || providerKey == payment.TypeMapay {
 		if merchantID := strings.TrimSpace(sel.Config["pid"]); merchantID != "" {
 			snapshot["merchant_id"] = merchantID
 		}
 	}
 	if providerKey == payment.TypeStripe {
-		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
-	}
-	if providerKey == payment.TypeAirwallex {
-		if accountID := strings.TrimSpace(sel.Config["accountId"]); accountID != "" {
-			snapshot["merchant_id"] = accountID
+		snapshot["currency"] = strings.ToUpper(payment.NormalizeStripeCurrency(sel.Config))
+		if multiplier := payment.ProviderBalanceRechargeMultiplier(providerKey, sel.Config, 0); multiplier > 0 {
+			snapshot["balance_recharge_multiplier"] = multiplier
 		}
-		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
 	}
 
 	if len(snapshot) == 1 {
@@ -327,7 +598,7 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 		return nil
 	}
 	ts := psStartOfDayUTC(time.Now())
-	orders, err := tx.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusCompleted), paymentorder.PaidAtGTE(ts)).All(ctx)
+	orders, err := tx.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusFulfillmentFailed, OrderStatusCompleted), paymentorder.PaidAtGTE(ts)).All(ctx)
 	if err != nil {
 		return fmt.Errorf("query daily usage: %w", err)
 	}
@@ -413,7 +684,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_PROVIDER_MISCONFIGURED", "provider_misconfigured").
 			WithMetadata(map[string]string{"provider": sel.ProviderKey, "instance_id": sel.InstanceID})
 	}
-	subject := s.buildPaymentSubject(plan, limitAmount, cfg, sel)
+	subject := s.buildPaymentSubject(plan, limitAmount, cfg)
 	outTradeNo := order.OutTradeNo
 	canonicalReturnURL, err := CanonicalizeReturnURL(req.ReturnURL, req.SrcHost, req.SrcURL)
 	if err != nil {
@@ -446,9 +717,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		IsMobile:    req.IsMobile,
 		ReturnURL:   providerReturnURL,
 	}, sel, outTradeNo, payAmountStr, subject)
-	finishProviderCall := servertiming.ObserveDependency(ctx, "payment")
 	pr, err := prov.CreatePayment(ctx, providerReq)
-	finishProviderCall()
 	if err != nil {
 		slog.Error("[PaymentService] CreatePayment failed", "provider", sel.ProviderKey, "instance", sel.InstanceID, "error", err)
 		if appErr := new(infraerrors.ApplicationError); errors.As(err, &appErr) {
@@ -456,8 +725,9 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		}
 		return nil, classifyCreatePaymentError(req, sel.ProviderKey, err)
 	}
-	sanitizeCreatePaymentResponseDetails(pr)
+	actualPayAmount := providerRequiredPayAmount(payAmount, pr)
 	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).
+		SetPayAmount(actualPayAmount).
 		SetNillablePaymentTradeNo(psNilIfEmpty(pr.TradeNo)).
 		SetNillablePayURL(psNilIfEmpty(pr.PayURL)).
 		SetNillableQrCode(psNilIfEmpty(pr.QRCode)).
@@ -470,7 +740,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
 		"paymentAmount":  req.Amount,
 		"creditedAmount": order.Amount,
-		"payAmount":      order.PayAmount,
+		"payAmount":      actualPayAmount,
 		"paymentType":    req.PaymentType,
 		"orderType":      req.OrderType,
 		"paymentSource":  NormalizePaymentSource(req.PaymentSource),
@@ -479,25 +749,24 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	if resultType == "" {
 		resultType = payment.CreatePaymentResultOrderCreated
 	}
-	resp := buildCreateOrderResponse(order, req, payAmount, sel, pr, resultType)
+	resp := buildCreateOrderResponse(order, req, actualPayAmount, sel, pr, resultType)
 	resp.ResumeToken = resumeToken
 	return resp, nil
 }
 
-func sanitizeCreatePaymentResponseDetails(pr *payment.CreatePaymentResponse) {
+func providerRequiredPayAmount(defaultAmount float64, pr *payment.CreatePaymentResponse) float64 {
 	if pr == nil {
-		return
+		return defaultAmount
 	}
-	pr.TradeNo = removePostgresTextNUL(pr.TradeNo)
-	pr.PayURL = removePostgresTextNUL(pr.PayURL)
-	pr.QRCode = removePostgresTextNUL(pr.QRCode)
-}
-
-func removePostgresTextNUL(value string) string {
-	if !strings.ContainsRune(value, 0) {
-		return value
+	raw := strings.TrimSpace(pr.PayAmount)
+	if raw == "" {
+		return defaultAmount
 	}
-	return strings.ReplaceAll(value, "\x00", "")
+	amount, err := strconv.ParseFloat(raw, 64)
+	if err != nil || !isValidProviderAmount(amount) {
+		return defaultAmount
+	}
+	return amount
 }
 
 func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.InstanceSelection, orderID, amount, subject string) payment.CreatePaymentRequest {
@@ -521,41 +790,20 @@ func selectedInstanceSupportedTypes(sel *payment.InstanceSelection) string {
 	return sel.SupportedTypes
 }
 
-func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, limitAmount float64, cfg *PaymentConfig, sel *payment.InstanceSelection) string {
+func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, limitAmount float64, cfg *PaymentConfig) string {
 	if plan != nil {
-		productName := plan.ProductName
-		if productName == "" {
-			productName = "Sub2API Subscription " + plan.Name
+		if plan.ProductName != "" {
+			return plan.ProductName
 		}
-		return applyPaymentProductNameAffix(productName, cfg)
+		return "Sub2API Subscription " + plan.Name
 	}
-	currency := payment.DefaultPaymentCurrency
-	if sel != nil {
-		currency = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
-	}
-	amountStr := payment.FormatAmountForCurrency(limitAmount, currency)
-	if hasPaymentProductNameAffix(cfg) {
-		return applyPaymentProductNameAffix(amountStr, cfg)
-	}
-	return "Sub2API " + amountStr + " " + currency
-}
-
-func hasPaymentProductNameAffix(cfg *PaymentConfig) bool {
-	if cfg == nil {
-		return false
-	}
+	amountStr := strconv.FormatFloat(limitAmount, 'f', 2, 64)
 	pf := strings.TrimSpace(cfg.ProductNamePrefix)
 	sf := strings.TrimSpace(cfg.ProductNameSuffix)
-	return pf != "" || sf != ""
-}
-
-func applyPaymentProductNameAffix(productName string, cfg *PaymentConfig) string {
-	if !hasPaymentProductNameAffix(cfg) {
-		return productName
+	if pf != "" || sf != "" {
+		return strings.TrimSpace(pf + " " + amountStr + " " + sf)
 	}
-	pf := strings.TrimSpace(cfg.ProductNamePrefix)
-	sf := strings.TrimSpace(cfg.ProductNameSuffix)
-	return strings.TrimSpace(pf + " " + productName + " " + sf)
+	return "Sub2API " + amountStr + " CNY"
 }
 
 func (s *PaymentService) maybeBuildWeChatOAuthRequiredResponse(ctx context.Context, req CreateOrderRequest, amount, payAmount, feeRate float64) (*CreateOrderResponse, error) {
@@ -616,66 +864,6 @@ func (s *PaymentService) validateSelectedCreateOrderInstance(ctx context.Context
 	return nil
 }
 
-func calculateCreateOrderPayAmount(limitAmount, feeRate float64, currency string) (string, float64, error) {
-	if err := validateCreateOrderAmountCurrency(limitAmount, currency); err != nil {
-		return "", 0, err
-	}
-	payAmountStr := payment.CalculatePayAmountForCurrency(limitAmount, feeRate, currency)
-	if _, err := payment.AmountToMinorUnit(payAmountStr, currency); err != nil {
-		return "", 0, infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
-			WithMetadata(map[string]string{"currency": currency})
-	}
-	payAmount, err := strconv.ParseFloat(payAmountStr, 64)
-	if err != nil {
-		return "", 0, infraerrors.BadRequest("INVALID_AMOUNT", "invalid payment amount").
-			WithMetadata(map[string]string{"currency": currency})
-	}
-	return payAmountStr, payAmount, nil
-}
-
-func calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate float64, currency, orderType string, usdToCnyRate float64) (string, float64, error) {
-	paymentAmount := limitAmount
-	if orderType == payment.OrderTypeSubscription {
-		paymentAmount = calculateSubscriptionGatewayBaseAmount(limitAmount, usdToCnyRate, currency)
-	}
-	return calculateCreateOrderPayAmount(paymentAmount, feeRate, currency)
-}
-
-// calculateSubscriptionGatewayBaseAmount 计算订阅订单的网关扣款基数。
-// 换算是显式 opt-in：仅当管理员配置了订阅汇率（rate > 0，1 USD = rate CNY）
-// 且网关币种为 CNY 时，按 price × rate 换算；未配置时保持 price 直付的存量行为。
-func calculateSubscriptionGatewayBaseAmount(amount, usdToCnyRate float64, currency string) float64 {
-	rate := normalizeSubscriptionUSDToCNYRate(usdToCnyRate)
-	if rate <= 0 || currency != payment.DefaultPaymentCurrency {
-		return amount
-	}
-	return decimal.NewFromFloat(amount).
-		Mul(decimal.NewFromFloat(rate)).
-		Round(int32(payment.CurrencyMaxFractionDigits(currency))).
-		InexactFloat64()
-}
-
-func validateCreateOrderAmountCurrency(amount float64, currency string) error {
-	amountStr := strconv.FormatFloat(amount, 'f', -1, 64)
-	if _, err := payment.AmountToMinorUnit(amountStr, currency); err != nil {
-		return infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
-			WithMetadata(map[string]string{"currency": currency})
-	}
-	return nil
-}
-
-func validateSelectedCreateOrderAmountCurrency(payAmount string, sel *payment.InstanceSelection) error {
-	if sel == nil {
-		return nil
-	}
-	currency := paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
-	if _, err := payment.AmountToMinorUnit(payAmount, currency); err != nil {
-		return infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
-			WithMetadata(map[string]string{"currency": currency})
-	}
-	return nil
-}
-
 func requiresWeChatJSAPICompatibleSelection(req CreateOrderRequest, sel *payment.InstanceSelection) bool {
 	if sel == nil || sel.ProviderKey != payment.TypeWxpay || payment.GetBasePaymentType(req.PaymentType) != payment.TypeWxpay {
 		return false
@@ -720,6 +908,7 @@ func classifyCreatePaymentError(req CreateOrderRequest, providerKey string, err 
 }
 
 func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest, payAmount float64, sel *payment.InstanceSelection, pr *payment.CreatePaymentResponse, resultType payment.CreatePaymentResultType) *CreateOrderResponse {
+	payAmount = providerRequiredPayAmount(payAmount, pr)
 	return &CreateOrderResponse{
 		OrderID:      order.ID,
 		Amount:       order.Amount,
@@ -728,14 +917,11 @@ func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest,
 		Status:       OrderStatusPending,
 		ResultType:   resultType,
 		PaymentType:  req.PaymentType,
+		ProviderKey:  strings.TrimSpace(sel.ProviderKey),
 		OutTradeNo:   order.OutTradeNo,
 		PayURL:       pr.PayURL,
 		QRCode:       pr.QRCode,
 		ClientSecret: pr.ClientSecret,
-		IntentID:     pr.IntentID,
-		Currency:     pr.Currency,
-		CountryCode:  pr.CountryCode,
-		PaymentEnv:   pr.PaymentEnv,
 		OAuth:        pr.OAuth,
 		JSAPI:        pr.JSAPI,
 		JSAPIPayload: pr.JSAPI,

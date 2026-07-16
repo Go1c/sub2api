@@ -69,6 +69,9 @@ const (
 	SubscriptionStatusSuspended = "suspended"
 )
 
+// AntigravityGemini31ProAgentModel is the upstream route for Gemini 3.1 Pro High.
+const AntigravityGemini31ProAgentModel = "gemini-pro-agent"
+
 // Subscription scope types
 // 描述订阅额度池覆盖范围。
 const (
@@ -138,10 +141,12 @@ var DefaultAntigravityModelMapping = map[string]string{
 	"gemini-3-flash-preview": "gemini-3-flash",
 	"gemini-3-pro-preview":   "gemini-3-pro-high",
 	// Gemini 3.1 白名单
-	"gemini-3.1-pro-high": "gemini-3.1-pro-high",
-	"gemini-3.1-pro-low":  "gemini-3.1-pro-low",
+	AntigravityGemini31ProAgentModel: AntigravityGemini31ProAgentModel,
+	"gemini-3.1-pro":                 AntigravityGemini31ProAgentModel,
+	"gemini-3.1-pro-high":            AntigravityGemini31ProAgentModel,
+	"gemini-3.1-pro-low":             "gemini-3.1-pro-low",
 	// Gemini 3.1 preview 映射
-	"gemini-3.1-pro-preview": "gemini-3.1-pro-high",
+	"gemini-3.1-pro-preview": AntigravityGemini31ProAgentModel,
 	// Gemini 3.1 image 白名单
 	"gemini-3.1-flash-image": "gemini-3.1-flash-image",
 	// Gemini 3.1 image preview 映射
@@ -159,7 +164,10 @@ var DefaultAntigravityModelMapping = map[string]string{
 // 注意：此处的 "us." 前缀仅为默认值，ResolveBedrockModelID 会根据账号配置的
 // aws_region 自动调整为匹配的区域前缀（如 eu.、apac.、jp. 等）
 var DefaultBedrockModelMapping = map[string]string{
+	// Claude Fable
+	"claude-fable-5": "anthropic.claude-fable-5",
 	// Claude Opus
+	"claude-opus-4-8":          "us.anthropic.claude-opus-4-8-v1",
 	"claude-opus-4-7":          "us.anthropic.claude-opus-4-7-v1",
 	"claude-opus-4-6-thinking": "us.anthropic.claude-opus-4-6-v1",
 	"claude-opus-4-6":          "us.anthropic.claude-opus-4-6-v1",

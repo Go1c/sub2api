@@ -10,7 +10,8 @@ import (
 )
 
 type stubAdminService struct {
-	users                               []service.User
+	lastBalanceSummaryLimit int
+		users                               []service.User
 	apiKeys                             []service.APIKey
 	groups                              []service.Group
 	accounts                            []service.Account
@@ -41,7 +42,7 @@ type stubAdminService struct {
 		accountID int64
 		platform  string
 		groupIDs  []int64
-	}
+}
 	lastListAccounts struct {
 		platform    string
 		accountType string
@@ -145,6 +146,8 @@ func newStubAdminService() *stubAdminService {
 	}
 }
 
+func (s *stubAdminService) SetAccountErrorHistoryService(svc *service.AccountErrorHistoryService) {}
+
 func (s *stubAdminService) ListUsers(ctx context.Context, page, pageSize int, filters service.UserListFilters, sortBy, sortOrder string) ([]service.User, int64, error) {
 	s.lastListUsers.page = page
 	s.lastListUsers.pageSize = pageSize
@@ -153,6 +156,23 @@ func (s *stubAdminService) ListUsers(ctx context.Context, page, pageSize int, fi
 	s.lastListUsers.sortOrder = sortOrder
 	s.lastListUsers.calls++
 	return s.users, int64(len(s.users)), nil
+}
+
+func (s *stubAdminService) GetUserBalanceSummary(ctx context.Context, limit int) (*service.UserBalanceSummary, error) {
+	s.lastBalanceSummaryLimit = limit
+	if len(s.users) == 0 {
+		return &service.UserBalanceSummary{}, nil
+	}
+	var total float64
+	ranking := make([]service.UserBalanceRankingItem, 0, len(s.users))
+	for _, u := range s.users {
+		total += u.Balance
+		ranking = append(ranking, service.UserBalanceRankingItem{UserID: u.ID, Balance: u.Balance})
+	}
+	if limit > 0 && len(ranking) > limit {
+		ranking = ranking[:limit]
+	}
+	return &service.UserBalanceSummary{TotalBalance: total, UserCount: int64(len(s.users)), Ranking: ranking}, nil
 }
 
 func (s *stubAdminService) GetUser(ctx context.Context, id int64) (*service.User, error) {

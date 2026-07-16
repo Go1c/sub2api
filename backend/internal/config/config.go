@@ -93,7 +93,20 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	GeoBlock                GeoBlockConfig                `mapstructure:"geo_block"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
+}
+
+// GeoBlockConfig 控制按地区拦截「网页前端」访问的合规开关。
+// 仅作用于浏览器网页请求；中转 API（/v1 等）与管理 API（/api/）不受影响。
+type GeoBlockConfig struct {
+	// Enabled 为 true 时启用地区拦截，默认 false。
+	Enabled bool `mapstructure:"enabled"`
+	// Countries 为需要拦截的 ISO 3166-1 alpha-2 国家码列表，默认 ["CN"]（中国大陆）。
+	Countries []string `mapstructure:"countries"`
+	// Whitelist 为豁免拦截的 IP 或 CIDR 列表（如管理员/办公室出口 IP）。
+	// 命中白名单的客户端即使地处受限地区也始终放行。默认为空。
+	Whitelist []string `mapstructure:"whitelist"`
 }
 
 type LogConfig struct {
@@ -765,6 +778,8 @@ type GatewayConfig struct {
 	// OpenAIHighEffortFirstOutputTimeoutSeconds: high/xhigh/max 推理的首个语义输出超时（秒）。
 	// 0 表示回退到 OpenAIFirstOutputTimeoutSeconds。
 	OpenAIHighEffortFirstOutputTimeoutSeconds int `mapstructure:"openai_high_effort_first_output_timeout_seconds"`
+	// OpenAIImageAccountRoutingMode controls fork-side routing enforcement for image-capable OpenAI accounts.
+	OpenAIImageAccountRoutingMode string `mapstructure:"openai_image_account_routing_mode"`
 	// 请求体最大字节数，用于网关请求体大小限制
 	MaxBodySize int64 `mapstructure:"max_body_size"`
 	// 非流式上游响应体读取上限（字节），用于防止无界读取导致内存放大

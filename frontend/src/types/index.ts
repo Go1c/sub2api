@@ -87,6 +87,8 @@ export interface User {
   role: 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
+  total_recharged?: number // Historical recharge amount available for invoice checks
+  invoice_enabled?: boolean // Whether the user can access invoice requests
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status
@@ -143,8 +145,12 @@ export interface UserAffiliateDetail {
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
-  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
-  effective_rebate_rate_percent: number
+  invitee_recharge_total?: number
+  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖阶梯）。null 表示未配置或未达标。 */
+  effective_rebate_rate_percent: number | null
+  affiliate_tiers?: AffiliateRebateTier[]
+  current_affiliate_tier?: AffiliateRebateTier | null
+  next_affiliate_tier?: AffiliateRebateTier | null
   invitees: AffiliateInvitee[]
 }
 
@@ -241,6 +247,24 @@ export interface PublicSettings {
   service_quota_enabled: boolean
   affiliate_enabled: boolean
   allow_user_view_error_requests?: boolean
+  invitation_registration_mode?: 'redeem_code' | 'affiliate_link' | 'both' | string
+  contact_channels?: ContactChannel[]
+  support_chat_enabled?: boolean
+  support_chat_gateway_url?: string
+  support_chat_title?: string
+  support_chat_welcome_message?: string
+  support_chat_official_contact_text?: string
+  support_chat_official_contact_url?: string
+  site_pages?: SitePage[]
+  ccswitch_default_model_anthropic?: string
+  ccswitch_default_model_openai?: string
+  ccswitch_default_model_gemini?: string
+  ccswitch_default_model_antigravity?: string
+  ccswitch_default_model_antigravity_gemini?: string
+  user_subscriptions_visible?: boolean
+  frontend_locales?: string[]
+  site_messages_enabled?: boolean
+  site_messages_default_recipient_email?: string
 }
 
 export interface AuthResponse {
@@ -588,7 +612,9 @@ export interface ApiKey {
   key: string
   name: string
   group_id: number | null
+  fallback_key_id: number | null // 兜底密钥 ID（主密钥分组上游全不可用时改用此密钥转发并计费）
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  allowed_models: string[]
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
@@ -617,7 +643,9 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
+  fallback_key_id?: number | null // 兜底密钥 ID（null = 不设置）
   custom_key?: string // Optional custom API Key
+  allowed_models?: string[] // Empty = no model restriction
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (0 = unlimited)
@@ -630,7 +658,9 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_id?: number | null
+  fallback_key_id?: number | null // 兜底密钥 ID（编辑时总下发，null = 清除）
   status?: 'active' | 'inactive'
+  allowed_models?: string[] // Empty = clear model restriction
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (null = no change, 0 = unlimited)
@@ -1088,6 +1118,17 @@ export interface AccountUsageInfo {
     amount?: number
     minimum_balance?: number
   }> | null
+  upstream_balance?: {
+    enabled?: boolean
+    checked_at?: string
+    success?: boolean
+    status_code?: number
+    path?: string
+    balance?: number
+    currency?: string
+    message?: string
+    raw?: string
+  } | null
   // Antigravity 403 forbidden 状态
   is_forbidden?: boolean
   forbidden_reason?: string
@@ -1360,6 +1401,8 @@ export interface UsageLog {
   account_id: number | null
   request_id: string
   model: string
+  upstream_model?: string | null
+  model_mapping_chain?: string | null
   service_tier?: string | null
   reasoning_effort?: string | null
   inbound_endpoint?: string | null
@@ -1393,6 +1436,9 @@ export interface UsageLog {
 
   // 图片生成字段
   image_count: number
+  video_count?: number
+  video_resolution?: string | null
+  video_duration_seconds?: number | null
   image_size: string | null
   image_input_size: string | null
   image_output_size: string | null
@@ -1705,12 +1751,26 @@ export interface ChangePasswordRequest {
 export interface UserSubscription {
   id: number
   user_id: number
-  group_id: number
+  group_id: number | null
+  plan_id?: number | null
+  plan_name?: string
+  plan_product_name?: string
   status: 'active' | 'expired' | 'revoked' | 'suspended'
-  starts_at: string
+  is_usable?: boolean
+  exhausted_at?: string | null
+  starts_at?: string
+  quota_limit_usd?: number
+  quota_used_usd?: number
+  quota_remaining_usd?: number
+  daily_limit_usd?: number | null
   daily_usage_usd: number
+  daily_reset_at?: string | null
+  weekly_limit_usd?: number | null
   weekly_usage_usd: number
+  weekly_reset_at?: string | null
   monthly_usage_usd: number
+  scope_type?: string
+  scope_config?: Record<string, unknown> | null
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null
@@ -2096,3 +2156,215 @@ export type {
   PlatformQuotaWindow,
   PlatformQuotasResponse,
 } from '@/api/admin/users'
+
+// ==================== Site Pages / Messages / Affiliate extras ====================
+
+export type SitePageMode = 'markdown' | 'link'
+
+export interface SitePage {
+  key: string
+  title: string
+  slug: string
+  mode?: SitePageMode
+  content: string
+  enabled: boolean
+}
+
+export interface ContactChannel {
+  label: string
+  url: string
+}
+
+export interface SiteMessageRecipient {
+  id: number
+  email: string
+  username: string
+  is_admin?: boolean
+}
+
+export interface SiteMessage {
+  id: number
+  sender_id: number
+  recipient_id: number
+  parent_id?: number
+  subject: string
+  content: string
+  read_at?: string
+  created_at: string
+  updated_at: string
+  sender?: SiteMessageRecipient
+  recipient?: SiteMessageRecipient
+  replies?: SiteMessage[]
+}
+
+export interface CreateSiteMessageRequest {
+  recipient: string
+  subject: string
+  content: string
+}
+
+export interface ReplySiteMessageRequest {
+  content: string
+}
+
+export interface AdminSendSiteMessageRequest {
+  subject: string
+  content: string
+  send_email?: boolean
+}
+
+export interface AdminSendCompensationBatchRequest {
+  recipient_mode: 'selected' | 'all'
+  recipient_emails?: string[]
+  subject: string
+  content: string
+  compensation_enabled: boolean
+  compensation_amount?: number
+  compensation_codes?: string[]
+  compensation_format?: 'block' | 'compact'
+  send_email?: boolean
+  inactive_days?: number
+}
+
+export interface SiteMessageCompensationCodeAssignment {
+  recipient: string
+  code: string
+  status: 'unused' | 'used' | 'reserved' | 'recorded'
+}
+
+export interface SiteMessageCompensationBatchResult {
+  recipient: string
+  user_id?: number
+  code?: string
+  message_id?: number
+  status: 'sent' | 'failed'
+  error_reason?: string
+  error?: string
+}
+
+export interface SiteMessageCompensationBatch {
+  id: string
+  subject: string
+  content: string
+  mode: 'selected' | 'all'
+  audience: string
+  recipient_count: number
+  success_count: number
+  failed_count: number
+  amount: number
+  code_count: number
+  operator: string
+  sent_at: string
+  codes: SiteMessageCompensationCodeAssignment[]
+  results: SiteMessageCompensationBatchResult[]
+  message_ids: number[]
+}
+
+// ==================== Lottery Types ====================
+
+export interface LotterySegment {
+  label: string
+  is_prize: boolean
+}
+
+export interface LotteryActiveCampaign {
+  id: number
+  name: string
+  subtitle: string
+  prize_count: number
+  max_participants: number
+  joined_count: number
+  early_boost_participant_percent?: number
+  recharge_boost_cap_percent?: number
+  segments: LotterySegment[]
+}
+
+export interface LotteryActiveResponse {
+  campaign: LotteryActiveCampaign | null
+}
+
+export interface LotteryDrawResult {
+  won: boolean
+  index: number
+  label: string
+  message: string
+  site_message_id?: number | null
+}
+
+export interface LotteryCode {
+  id: number
+  campaign_id: number
+  code: string
+  assigned_user_id?: number | null
+  assigned_draw_id?: number | null
+  assigned_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface LotteryDraw {
+  id: number
+  campaign_id: number
+  user_id: number
+  user_email?: string
+  won: boolean
+  lottery_code_id?: number | null
+  site_message_id?: number | null
+  result_label: string
+  created_at: string
+}
+
+export interface LotteryCampaign {
+  id: number
+  name: string
+  subtitle: string
+  status: 'active' | 'finished'
+  prize_count: number
+  max_participants: number
+  joined_count: number
+  winner_count: number
+  early_boost_participant_percent?: number
+  recharge_boost_cap_percent?: number
+  created_by: number
+  created_at: string
+  updated_at: string
+  finished_at?: string | null
+  codes?: LotteryCode[]
+  draws?: LotteryDraw[]
+}
+
+export interface CreateLotteryCampaignRequest {
+  name: string
+  subtitle?: string
+  prize_count: number
+  max_participants: number
+  early_boost_participant_percent: number
+  recharge_boost_cap_percent: number
+  codes: string[]
+}
+
+export interface AffiliateInviteLog {
+  id: number
+  inviter_id?: number | null
+  inviter_email?: string
+  inviter_username?: string
+  invitee_id?: number | null
+  invitee_email?: string
+  invitee_username?: string
+  affiliate_code?: string
+  success: boolean
+  failure_reason?: string
+  failure_message?: string
+  bonus_amount: number
+  fingerprint_hash?: string
+  ip_address?: string
+  user_agent?: string
+  created_at: string
+}
+
+export interface AffiliateRebateTier {
+  level: string
+  min_invitees: number
+  min_recharge: number
+  rebate_rate_percent: number | null
+}

@@ -32,8 +32,9 @@ type OpenAIGatewayHandler struct {
 	apiKeyService            *service.APIKeyService
 	usageRecordWorkerPool    *service.UsageRecordWorkerPool
 	errorPassthroughService  *service.ErrorPassthroughService
-	contentModerationService *service.ContentModerationService
-	opsService               *service.OpsService
+	contentModerationService  *service.ContentModerationService
+	userRequestMonitorService *service.OpsUserRequestMonitorService
+	opsService                *service.OpsService
 	concurrencyHelper        *ConcurrencyHelper
 	imageLimiter             *imageConcurrencyLimiter
 	maxAccountSwitches       int
@@ -272,7 +273,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	imageIntent := service.IsImageGenerationIntent("/v1/responses", reqModel, body)
+	imageIntent := h.isOpenAIResponsesImageIntent(c, reqModel, body)
 	if imageIntent && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 		return
@@ -1994,10 +1995,14 @@ func (h *OpenAIGatewayHandler) submitUsageRecordTask(parent context.Context, tas
 	}
 	task = wrapUsageRecordTaskContext(parent, task)
 	if h.usageRecordWorkerPool != nil {
-		h.usageRecordWorkerPool.Submit(task)
-		return
+		if mode := h.usageRecordWorkerPool.Submit(task); mode != service.UsageRecordSubmitModeDropped {
+			return
+		}
+		logger.L().With(
+			zap.String("component", "handler.openai_gateway.responses"),
+		).Warn("openai.usage_record_task_sync_fallback")
 	}
-	// 回退路径：worker 池未注入时同步执行，避免退回到无界 goroutine 模式。
+	// 回退路径：worker 池未注入或异步提交被丢弃时同步执行，避免计费/用量丢失。
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	defer func() {
@@ -2043,6 +2048,26 @@ func (h *OpenAIGatewayHandler) submitMandatoryUsageRecordTask(parent context.Con
 		}
 	}()
 	task(ctx)
+}
+
+func (h *OpenAIGatewayHandler) isOpenAIResponsesImageIntent(c *gin.Context, reqModel string, body []byte) bool {
+	if service.IsImageGenerationIntent("/v1/responses", reqModel, body) {
+		return true
+	}
+	userAgent := ""
+	originator := ""
+	if c != nil {
+		userAgent = c.GetHeader("User-Agent")
+		originator = c.GetHeader("originator")
+	}
+	return service.IsCodexTextImageGenerationIntent(
+		"/v1/responses",
+		reqModel,
+		body,
+		userAgent,
+		originator,
+		h != nil && h.cfg != nil && h.cfg.Gateway.ForceCodexCLI,
+	)
 }
 
 func (h *OpenAIGatewayHandler) acquireImageGenerationSlot(c *gin.Context, streamStarted bool) (func(), bool) {

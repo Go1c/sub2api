@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -58,26 +59,22 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		},
 	}
 
-	t.Run("standard_mode_completes_maintenance_before_request", func(t *testing.T) {
+	t.Run("standard_mode_stale_window_does_not_block_request", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeStandard}
-		cfg.SubscriptionMaintenance.WorkerCount = 1
-		cfg.SubscriptionMaintenance.QueueSize = 1
 
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 
 		past := time.Now().Add(-48 * time.Hour)
+		gid := group.ID
 		sub := &service.UserSubscription{
-			ID:                 55,
-			UserID:             user.ID,
-			GroupID:            group.ID,
-			Status:             service.SubscriptionStatusActive,
-			ExpiresAt:          time.Now().Add(24 * time.Hour),
-			DailyWindowStart:   &past,
-			WeeklyWindowStart:  &past,
-			MonthlyWindowStart: &past,
-			DailyUsageUSD:      0,
+			ID:               55,
+			UserID:           user.ID,
+			GroupID:          &gid,
+			Status:           service.SubscriptionStatusActive,
+			ExpiresAt:        time.Now().Add(24 * time.Hour),
+			DailyWindowStart: &past,
+			DailyUsageUSD:    0,
 		}
-		maintenanceCalled := make(chan struct{}, 1)
 		subscriptionRepo := &stubUserSubscriptionRepo{
 			getByID: func(ctx context.Context, id int64) (*service.UserSubscription, error) {
 				clone := *sub
@@ -87,22 +84,15 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 				clone := *sub
 				return &clone, nil
 			},
+			getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+				clone := *sub
+				return &clone, nil
+			},
 			updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
 			activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
-			resetDaily: func(ctx context.Context, id int64, start time.Time) error {
-				sub.DailyWindowStart = &start
-				sub.DailyUsageUSD = 0
-				maintenanceCalled <- struct{}{}
-				return nil
-			},
-			resetWeekly: func(ctx context.Context, id int64, start time.Time) error {
-				sub.WeeklyWindowStart = &start
-				return nil
-			},
-			resetMonthly: func(ctx context.Context, id int64, start time.Time) error {
-				sub.MonthlyWindowStart = &start
-				return nil
-			},
+			resetDaily:     func(ctx context.Context, id int64, start time.Time) error { return nil },
+			resetWeekly:    func(ctx context.Context, id int64, start time.Time) error { return nil },
+			resetMonthly:   func(ctx context.Context, id int64, start time.Time) error { return nil },
 		}
 		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
 		t.Cleanup(subscriptionService.Stop)
@@ -115,24 +105,30 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
-		select {
-		case <-maintenanceCalled:
-			// ok
-		case <-time.After(time.Second):
-			t.Fatalf("expected maintenance to complete before response")
-		}
 	})
 
 	t.Run("standard_mode_revalidates_cas_loser_from_database", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeStandard}
-		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+		limitedUser := *user
+		limitedUser.Balance = 0
+		limitedAPIKey := *apiKey
+		limitedAPIKey.User = &limitedUser
+		limitedAPIKey.UserID = limitedUser.ID
+		limitedAPIKeyRepo := &stubApiKeyRepo{
+			getByKey: func(context.Context, string) (*service.APIKey, error) {
+				clone := limitedAPIKey
+				return &clone, nil
+			},
+		}
+		apiKeyService := service.NewAPIKeyService(limitedAPIKeyRepo, nil, nil, nil, nil, nil, cfg)
 
 		past := time.Now().Add(-48 * time.Hour)
 		current := time.Now()
+		groupID := group.ID
 		stale := &service.UserSubscription{
 			ID:                 56,
 			UserID:             user.ID,
-			GroupID:            group.ID,
+			GroupID:            &groupID,
 			Status:             service.SubscriptionStatusActive,
 			ExpiresAt:          current.Add(24 * time.Hour),
 			DailyWindowStart:   &past,
@@ -147,6 +143,10 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		fresh.DailyUsageUSD = 2
 
 		subscriptionRepo := &stubUserSubscriptionRepo{
+			getUsable: func(context.Context, int64) (*service.UserSubscription, error) {
+				clone := *stale
+				return &clone, nil
+			},
 			getActive: func(context.Context, int64, int64) (*service.UserSubscription, error) {
 				clone := *stale
 				return &clone, nil
@@ -164,10 +164,11 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/t", nil)
-		req.Header.Set("x-api-key", apiKey.Key)
+		req.Header.Set("x-api-key", limitedAPIKey.Key)
 		router.ServeHTTP(w, req)
 
-		require.Equal(t, http.StatusTooManyRequests, w.Code)
+		require.Equal(t, http.StatusForbidden, w.Code)
+		require.Contains(t, w.Body.String(), "SUBSCRIPTION_INVALID")
 	})
 
 	t.Run("simple_mode_bypasses_quota_check", func(t *testing.T) {
@@ -198,15 +199,30 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 	})
 
-	t.Run("standard_mode_enforces_quota_check", func(t *testing.T) {
+	t.Run("standard_mode_treats_subscription_limit_as_no_valid_subscription", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeStandard}
-		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+		limitedUser := *user
+		limitedUser.Balance = 0
+		limitedAPIKey := *apiKey
+		limitedAPIKey.User = &limitedUser
+		limitedAPIKey.UserID = limitedUser.ID
+		limitedRepo := &stubApiKeyRepo{
+			getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+				if key != limitedAPIKey.Key {
+					return nil, service.ErrAPIKeyNotFound
+				}
+				clone := limitedAPIKey
+				return &clone, nil
+			},
+		}
+		apiKeyService := service.NewAPIKeyService(limitedRepo, nil, nil, nil, nil, nil, cfg)
 
 		now := time.Now()
+		gid2 := group.ID
 		sub := &service.UserSubscription{
 			ID:               55,
-			UserID:           user.ID,
-			GroupID:          group.ID,
+			UserID:           limitedUser.ID,
+			GroupID:          &gid2,
 			Status:           service.SubscriptionStatusActive,
 			ExpiresAt:        now.Add(24 * time.Hour),
 			DailyWindowStart: &now,
@@ -214,7 +230,14 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		}
 		subscriptionRepo := &stubUserSubscriptionRepo{
 			getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
-				if userID != sub.UserID || groupID != sub.GroupID {
+				if userID != sub.UserID || sub.GroupID == nil || groupID != *sub.GroupID {
+					return nil, service.ErrSubscriptionNotFound
+				}
+				clone := *sub
+				return &clone, nil
+			},
+			getUsable: func(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+				if userID != sub.UserID {
 					return nil, service.ErrSubscriptionNotFound
 				}
 				clone := *sub
@@ -234,8 +257,8 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		req.Header.Set("x-api-key", apiKey.Key)
 		router.ServeHTTP(w, req)
 
-		require.Equal(t, http.StatusTooManyRequests, w.Code)
-		require.Contains(t, w.Body.String(), "USAGE_LIMIT_EXCEEDED")
+		require.Equal(t, http.StatusForbidden, w.Code)
+		require.Contains(t, w.Body.String(), "SUBSCRIPTION_INVALID")
 	})
 }
 
@@ -1149,7 +1172,7 @@ func TestAPIKeyAuthRejectsExhaustedBalance(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusForbidden, w.Code)
-	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "账户余额不足，请先充值后再使用。")
 }
 
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
@@ -1278,6 +1301,8 @@ func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*servi
 type stubUserSubscriptionRepo struct {
 	getByID        func(ctx context.Context, id int64) (*service.UserSubscription, error)
 	getActive      func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error)
+	getUsable      func(ctx context.Context, userID int64) (*service.UserSubscription, error)
+	listUsable     func(ctx context.Context, userID int64) ([]service.UserSubscription, error)
 	updateStatus   func(ctx context.Context, subscriptionID int64, status string) error
 	activateWindow func(ctx context.Context, id int64, start time.Time) error
 	resetDaily     func(ctx context.Context, id int64, start time.Time) error
@@ -1370,7 +1395,7 @@ func (r *stubUserSubscriptionRepo) ListByGroupID(ctx context.Context, groupID in
 	return nil, nil, errors.New("not implemented")
 }
 
-func (r *stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
+func (r *stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, filters service.UserSubscriptionListFilters) ([]service.UserSubscription, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }
 
@@ -1435,4 +1460,49 @@ func (r *stubUserSubscriptionRepo) IncrementUsage(ctx context.Context, id int64,
 
 func (r *stubUserSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
 	return 0, errors.New("not implemented")
+}
+
+// SubscriptionCreditExtension stubs（额度池鉴权走 ListUsable；getUsable 为便捷单条桩）
+func (r *stubUserSubscriptionRepo) GetUsableCreditSubscription(ctx context.Context, userID int64) (*service.UserSubscription, error) {
+	if r.getUsable != nil {
+		return r.getUsable(ctx, userID)
+	}
+	return nil, service.ErrSubscriptionNotFound
+}
+func (r *stubUserSubscriptionRepo) ListUsableCreditSubscriptions(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
+	if r.listUsable != nil {
+		return r.listUsable(ctx, userID)
+	}
+	if r.getUsable == nil {
+		return nil, nil
+	}
+	sub, err := r.getUsable(ctx, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrSubscriptionNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if sub == nil {
+		return nil, nil
+	}
+	return []service.UserSubscription{*sub}, nil
+}
+func (r *stubUserSubscriptionRepo) HasUsableCreditSubscription(ctx context.Context, userID int64) (bool, error) {
+	return false, nil
+}
+func (r *stubUserSubscriptionRepo) GetRenewalEligibility(ctx context.Context, userID int64) (service.RenewalEligibility, error) {
+	return service.RenewalEligibility{Allowed: true, Reason: service.RenewalReasonNoSubscription}, nil
+}
+func (r *stubUserSubscriptionRepo) LockUserForSubscriptionWrite(ctx context.Context, tx *sql.Tx, userID int64) error {
+	return nil
+}
+func (r *stubUserSubscriptionRepo) InsertCreditSubscription(ctx context.Context, tx *sql.Tx, sub *service.UserSubscription) (*service.UserSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubUserSubscriptionRepo) ExpireCreditSubscriptions(ctx context.Context) (int64, error) {
+	return 0, errors.New("not implemented")
+}
+func (r *stubUserSubscriptionRepo) MarkExpiredCreditLogged(ctx context.Context, id int64, loggedAt time.Time) error {
+	return nil
 }

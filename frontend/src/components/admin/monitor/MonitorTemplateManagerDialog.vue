@@ -513,13 +513,13 @@ function apiModeButtonClass(mode: APIMode): string {
   return 'border-blue-100 bg-white/70 text-gray-600 hover:border-primary-300 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400'
 }
 
-function apiModeLabel(mode: APIMode): string {
+function apiModeLabel(mode: APIMode | undefined | null): string {
   return normalizeAPIMode(mode) === API_MODE_RESPONSES
     ? t('admin.channelMonitor.form.apiModeResponses')
     : t('admin.channelMonitor.form.apiModeChatCompletions')
 }
 
-function apiModeBadgeClass(mode: APIMode): string {
+function apiModeBadgeClass(mode: APIMode | undefined | null): string {
   if (normalizeAPIMode(mode) === API_MODE_RESPONSES) {
     return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
   }

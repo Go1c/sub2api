@@ -30,6 +30,7 @@ const (
 	opsStreamKey                 = "ops_stream"
 	opsAccountIDKey              = "ops_account_id"
 	opsRoutingCapacityLimitedKey = "ops_routing_capacity_limited"
+	opsRequestBodyKey            = "ops_request_body"
 
 	opsUpstreamModelKey = "ops_upstream_model"
 	opsRequestTypeKey   = "ops_request_type"
@@ -388,13 +389,16 @@ func opsErrorLogConfig() (workerCount int, queueSize int) {
 	return workerCount, queueSize
 }
 
-func setOpsRequestContext(c *gin.Context, model string, stream bool) {
+func setOpsRequestContext(c *gin.Context, model string, stream bool, requestBody ...[]byte) {
 	if c == nil {
 		return
 	}
 	model = strings.TrimSpace(model)
 	c.Set(opsModelKey, model)
 	c.Set(opsStreamKey, stream)
+	if len(requestBody) > 0 && len(requestBody[0]) > 0 {
+		c.Set(opsRequestBodyKey, requestBody[0])
+	}
 	if c.Request != nil && model != "" {
 		ctx := context.WithValue(c.Request.Context(), ctxkey.Model, model)
 		c.Request = c.Request.WithContext(ctx)
@@ -411,6 +415,22 @@ func setOpsEndpointContext(c *gin.Context, upstreamModel string, requestType int
 		c.Set(opsUpstreamModelKey, upstreamModel)
 	}
 	c.Set(opsRequestTypeKey, requestType)
+}
+
+func attachOpsRequestBodyToEntry(c *gin.Context, entry *service.OpsInsertErrorLogInput) {
+	if c == nil || entry == nil {
+		return
+	}
+	v, ok := c.Get(opsRequestBodyKey)
+	if !ok {
+		return
+	}
+	raw, ok := v.([]byte)
+	if !ok || len(raw) == 0 {
+		return
+	}
+	entry.RequestBodyJSON, entry.RequestBodyTruncated, entry.RequestBodyBytes = service.PrepareOpsRequestBodyForQueue(raw)
+	opsErrorLogSanitized.Add(1)
 }
 
 func setOpsSelectedAccount(c *gin.Context, accountID int64, platform ...string) {
@@ -890,6 +910,11 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				}
 			}
 
+			// Persist only a minimal, whitelisted set of request headers to improve retry fidelity.
+			// Do NOT store Authorization/Cookie/etc.
+			entry.RequestHeadersJSON = extractOpsRetryRequestHeaders(c)
+			attachOpsRequestBodyToEntry(c, entry)
+
 			enqueueOpsErrorLog(ops, entry)
 			return
 		}
@@ -1038,6 +1063,11 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			}
 		}
 
+		// Persist only a minimal, whitelisted set of request headers to improve retry fidelity.
+		// Do NOT store Authorization/Cookie/etc.
+		entry.RequestHeadersJSON = extractOpsRetryRequestHeaders(c)
+		attachOpsRequestBodyToEntry(c, entry)
+
 		enqueueOpsErrorLog(ops, entry)
 	}
 }
@@ -1171,10 +1201,47 @@ func logOpsStreamError(c *gin.Context, ops *service.OpsService, wireStatus int) 
 		entry.ClientIP = &clientIP
 	}
 
+	// Persist only a minimal, whitelisted set of request headers to improve retry fidelity.
+	// Do NOT store Authorization/Cookie/etc.
+	entry.RequestHeadersJSON = extractOpsRetryRequestHeaders(c)
+	attachOpsRequestBodyToEntry(c, entry)
+
 	enqueueOpsErrorLog(ops, entry)
 }
 
 // isCountTokensRequest checks if the request is a count_tokens request
+
+var opsRetryRequestHeaderAllowlist = []string{
+	"anthropic-beta",
+	"anthropic-version",
+}
+
+func extractOpsRetryRequestHeaders(c *gin.Context) *string {
+	if c == nil || c.Request == nil {
+		return nil
+	}
+
+	headers := make(map[string]string, 4)
+	for _, key := range opsRetryRequestHeaderAllowlist {
+		v := strings.TrimSpace(c.GetHeader(key))
+		if v == "" {
+			continue
+		}
+		// Keep headers small even if a client sends something unexpected.
+		headers[key] = truncateString(v, 512)
+	}
+	if len(headers) == 0 {
+		return nil
+	}
+
+	raw, err := json.Marshal(headers)
+	if err != nil {
+		return nil
+	}
+	s := string(raw)
+	return &s
+}
+
 func isCountTokensRequest(c *gin.Context) bool {
 	if c == nil || c.Request == nil || c.Request.URL == nil {
 		return false

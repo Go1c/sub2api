@@ -48,6 +48,7 @@ type GatewayHandler struct {
 	usageRecordWorkerPool     *service.UsageRecordWorkerPool
 	errorPassthroughService   *service.ErrorPassthroughService
 	contentModerationService  *service.ContentModerationService
+	userRequestMonitorService *service.OpsUserRequestMonitorService
 	concurrencyHelper         *ConcurrencyHelper
 	userMsgQueueHelper        *UserMsgQueueHelper
 	maxAccountSwitches        int
@@ -1272,13 +1273,42 @@ func (h *GatewayHandler) Usage(c *gin.Context) {
 
 	// 判断模式: key 有总额度或速率限制 → quota_limited，否则 → unrestricted
 	isQuotaLimited := apiKey.Quota > 0 || apiKey.HasRateLimits()
-
-	if isQuotaLimited {
-		h.usageQuotaLimited(c, ctx, apiKey, usageData, dailyUsage, modelStats)
+	walletBalance, walletErr := h.loadUsageWalletBalance(ctx, subject.UserID)
+	if walletErr != nil && !isQuotaLimited && (apiKey.Group == nil || !apiKey.Group.IsSubscriptionType()) {
+		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to get user info")
 		return
 	}
 
-	h.usageUnrestricted(c, ctx, apiKey, subject, usageData, dailyUsage, modelStats)
+	if isQuotaLimited {
+		h.usageQuotaLimited(c, ctx, apiKey, walletBalance, usageData, dailyUsage, modelStats)
+		return
+	}
+
+	h.usageUnrestricted(c, ctx, apiKey, walletBalance, usageData, dailyUsage, modelStats)
+}
+
+func (h *GatewayHandler) loadUsageWalletBalance(ctx context.Context, userID int64) (*float64, error) {
+	if h.userService == nil {
+		return nil, errors.New("user service unavailable")
+	}
+	latestUser, err := h.userService.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if latestUser == nil {
+		return nil, errors.New("user not found")
+	}
+	balance := latestUser.Balance
+	return &balance, nil
+}
+
+func attachWalletBalance(resp gin.H, walletBalance *float64) {
+	if resp == nil || walletBalance == nil {
+		return
+	}
+	resp["balance"] = *walletBalance
+	resp["wallet_balance"] = *walletBalance
+	resp["account_balance"] = *walletBalance
 }
 
 // parseUsageDateRange 解析 start_date / end_date query params，默认返回近 30 天范围
@@ -1349,12 +1379,13 @@ func (h *GatewayHandler) buildAPIKeyDailyUsage(c *gin.Context, userID, apiKeyID 
 }
 
 // usageQuotaLimited 处理 quota_limited 模式的响应
-func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, apiKey *service.APIKey, usageData gin.H, dailyUsage any, modelStats any) {
+func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, apiKey *service.APIKey, walletBalance *float64, usageData gin.H, dailyUsage any, modelStats any) {
 	resp := gin.H{
 		"mode":    "quota_limited",
 		"isValid": apiKey.Status == service.StatusAPIKeyActive || apiKey.Status == service.StatusAPIKeyQuotaExhausted || apiKey.Status == service.StatusAPIKeyExpired,
 		"status":  apiKey.Status,
 	}
+	attachWalletBalance(resp, walletBalance)
 
 	// 总额度信息
 	if apiKey.Quota > 0 {
@@ -1442,7 +1473,7 @@ func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, 
 }
 
 // usageUnrestricted 处理 unrestricted 模式的响应（向后兼容）
-func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, usageData gin.H, dailyUsage any, modelStats any) {
+func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, apiKey *service.APIKey, walletBalance *float64, usageData gin.H, dailyUsage any, modelStats any) {
 	// 订阅模式
 	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
 		resp := gin.H{
@@ -1451,6 +1482,7 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 			"planName": apiKey.Group.Name,
 			"unit":     "USD",
 		}
+		attachWalletBalance(resp, walletBalance)
 
 		// 订阅信息可能不在 context 中（/v1/usage 路径跳过了中间件的计费检查）
 		subscription, ok := middleware2.GetSubscriptionFromContext(c)
@@ -1483,8 +1515,7 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 	}
 
 	// 余额模式
-	latestUser, err := h.userService.GetByID(ctx, subject.UserID)
-	if err != nil {
+	if walletBalance == nil {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to get user info")
 		return
 	}
@@ -1493,10 +1524,10 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 		"mode":      "unrestricted",
 		"isValid":   true,
 		"planName":  "钱包余额",
-		"remaining": latestUser.Balance,
+		"remaining": *walletBalance,
 		"unit":      "USD",
-		"balance":   latestUser.Balance,
 	}
+	attachWalletBalance(resp, walletBalance)
 	if usageData != nil {
 		resp["usage"] = usageData
 	}
@@ -1668,14 +1699,11 @@ func (h *GatewayHandler) handleStreamingAwareError(c *gin.Context, status int, e
 // 让 handleStreamingAwareError 通过 SSE 发协议合规的终止事件，
 // 否则下游收到的就是 silent EOF。
 func (h *GatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarted bool) bool {
-	if c == nil || c.Writer == nil {
+	if c == nil || c.Writer == nil || c.Writer.Written() {
 		return false
 	}
 	if service.IsResponseCommitted(c) {
 		return false
-	}
-	if c.Writer.Written() {
-		streamStarted = true
 	}
 	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
 	return true
@@ -2118,17 +2146,19 @@ func billingErrorDetails(err error) (status int, code, message string, retryAfte
 		}
 		return http.StatusServiceUnavailable, "billing_service_error", msg, 0
 	}
+	// 本地 API Key 金额窗口限额不是上游瞬时拥塞。返回 429 会让 Codex/OpenAI 类客户端
+	// 自动重试并最终只显示 "exceeded retry limit"，吞掉这里的明确提示。
 	if errors.Is(err, service.ErrAPIKeyRateLimit5hExceeded) {
 		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
+		return http.StatusForbidden, "rate_limit_exceeded", msg, 0
 	}
 	if errors.Is(err, service.ErrAPIKeyRateLimit1dExceeded) {
 		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
+		return http.StatusForbidden, "rate_limit_exceeded", msg, 0
 	}
 	if errors.Is(err, service.ErrAPIKeyRateLimit7dExceeded) {
 		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
+		return http.StatusForbidden, "rate_limit_exceeded", msg, 0
 	}
 	// 用户/分组 RPM 超限统一映射为 HTTP 429；保留与其它 rate_limit 一致的错误码便于客户端分类。
 	// 返回 Retry-After 秒数（当前分钟剩余秒数），让 SDK 自动退避。
@@ -2186,10 +2216,14 @@ func (h *GatewayHandler) submitUsageRecordTask(parent context.Context, task serv
 	}
 	task = wrapUsageRecordTaskContext(parent, task)
 	if h.usageRecordWorkerPool != nil {
-		h.usageRecordWorkerPool.Submit(task)
-		return
+		if mode := h.usageRecordWorkerPool.Submit(task); mode != service.UsageRecordSubmitModeDropped {
+			return
+		}
+		logger.L().With(
+			zap.String("component", "handler.gateway.messages"),
+		).Warn("gateway.usage_record_task_sync_fallback")
 	}
-	// 回退路径：worker 池未注入时同步执行，避免退回到无界 goroutine 模式。
+	// 回退路径：worker 池未注入或异步提交被丢弃时同步执行，避免计费/用量丢失。
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	defer func() {

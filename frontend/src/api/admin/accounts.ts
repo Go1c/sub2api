@@ -771,6 +771,118 @@ export async function setPrivacy(id: number): Promise<Account> {
   return data
 }
 
+export interface CodexSessionImportMessage {
+  index: number
+  name?: string
+  message: string
+}
+
+export interface CodexSessionImportItem {
+  index: number
+  name?: string
+  action: string
+  account_id?: number
+  message?: string
+}
+
+export interface CodexSessionImportResult {
+  total: number
+  created: number
+  updated: number
+  skipped: number
+  failed: number
+  items?: CodexSessionImportItem[]
+  warnings?: CodexSessionImportMessage[]
+  errors?: CodexSessionImportMessage[]
+}
+
+export interface CodexSessionImportRequest {
+  content?: string
+  contents?: string[]
+  name?: string
+  notes?: string | null
+  group_ids?: number[]
+  proxy_id?: number | null
+  concurrency?: number
+  priority?: number
+  rate_multiplier?: number
+  load_factor?: number
+  expires_at?: number | null
+  auto_pause_on_expired?: boolean
+  credential_extras?: Record<string, unknown>
+  extra?: Record<string, unknown>
+  update_existing?: boolean
+  skip_default_group_bind?: boolean
+  confirm_mixed_channel_risk?: boolean
+}
+
+/** Import OpenAI Codex session auth.json / tokens into accounts. */
+export async function importCodexSession(
+  payload: CodexSessionImportRequest
+): Promise<CodexSessionImportResult> {
+  const { data } = await apiClient.post<CodexSessionImportResult>(
+    '/admin/accounts/import-codex-session',
+    payload
+  )
+  return data
+}
+
+export interface CreateOpenAICodexPATRequest {
+  access_token: string
+  name?: string
+  notes?: string | null
+  group_ids?: number[]
+  proxy_id?: number | null
+  concurrency?: number
+  priority?: number
+  rate_multiplier?: number
+  load_factor?: number
+  expires_at?: number | null
+  auto_pause_on_expired?: boolean
+  credential_extras?: Record<string, unknown>
+  extra?: Record<string, unknown>
+  skip_default_group_bind?: boolean
+  confirm_mixed_channel_risk?: boolean
+}
+
+/** Create OpenAI OAuth account from a Codex personal access token (at-*). */
+export async function createOpenAICodexPAT(
+  payload: CreateOpenAICodexPATRequest
+): Promise<Account> {
+  const { data } = await apiClient.post<Account>(
+    '/admin/openai/create-from-codex-pat',
+    payload
+  )
+  return data
+}
+
+/** Revert account proxy to the original before automatic fallback. */
+export async function revertProxyFallback(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>(
+    `/admin/accounts/${id}/revert-proxy-fallback`
+  )
+  return data
+}
+
+export interface CreateSparkShadowRequest {
+  name?: string
+  priority?: number
+  concurrency?: number
+  group_ids?: number[]
+}
+
+/** Create a spark-dimension shadow account linked to a parent OpenAI OAuth account. */
+export async function createSparkShadow(
+  parentId: number,
+  payload: CreateSparkShadowRequest = {}
+): Promise<Account> {
+  const { data } = await apiClient.post<Account>(
+    `/admin/accounts/${parentId}/shadow`,
+    payload
+  )
+  return data
+}
+
 export const accountsAPI = {
   list,
   listWithEtag,
@@ -812,7 +924,11 @@ export const accountsAPI = {
   getAntigravityDefaultModelMapping,
   batchClearError,
   batchRefresh,
-  setPrivacy
+  setPrivacy,
+  importCodexSession,
+  createOpenAICodexPAT,
+  revertProxyFallback,
+  createSparkShadow
 }
 
 export default accountsAPI

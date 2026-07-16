@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -128,43 +130,43 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
-		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		if isSubscriptionType && subscriptionService != nil {
-			subscription, err := subscriptionService.GetActiveSubscription(
+		// 用户级额度池订阅优先；无可用订阅时回退余额检查。
+		var subscription *service.UserSubscription
+		var subscriptionCandidateIDs []int64
+		var subscriptionErr error
+		if subscriptionService != nil {
+			sub, candidateIDs, subErr := loadUsableCreditSubscriptionForAuth(
 				c.Request.Context(),
+				subscriptionService,
 				apiKey.User.ID,
-				apiKey.Group.ID,
+				apiKey.Group,
+				apiKey.User,
 			)
-			if err != nil {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
-				return
-			}
-
-			needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-			if needsMaintenance {
-				refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
-				if maintenanceErr != nil {
-					abortWithGoogleError(c, 500, "Failed to maintain subscription usage windows")
+			if subErr != nil {
+				if !isFallbackableSubscriptionAuthError(subErr) {
+					status, _ := subscriptionAuthErrorStatus(subErr)
+					abortWithGoogleError(c, status, subErr.Error())
 					return
 				}
-				subscription = refreshed
-				_, err = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				subscriptionErr = subErr
+			} else {
+				subscription = sub
+				subscriptionCandidateIDs = candidateIDs
 			}
-			if err != nil {
-				status := 403
-				if errors.Is(err, service.ErrDailyLimitExceeded) ||
-					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-					errors.Is(err, service.ErrMonthlyLimitExceeded) {
-					status = 429
-				}
-				abortWithGoogleError(c, status, err.Error())
-				return
-			}
-
+		}
+		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
+			if len(subscriptionCandidateIDs) > 0 {
+				c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.SubscriptionCandidateIDs, subscriptionCandidateIDs))
+			}
 		} else {
 			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-				abortWithGoogleError(c, 403, "Insufficient account balance")
+				if subscriptionErr != nil {
+					status, _ := subscriptionAuthErrorStatus(subscriptionErr)
+					abortWithGoogleError(c, status, subscriptionErr.Error())
+					return
+				}
+				abortWithGoogleError(c, 403, insufficientBalanceMessage)
 				return
 			}
 		}

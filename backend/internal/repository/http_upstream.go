@@ -1068,7 +1068,8 @@ func defaultPoolSettings(cfg *config.Config) poolSettings {
 		if cfg.Gateway.IdleConnTimeoutSeconds > 0 {
 			idleConnTimeout = time.Duration(cfg.Gateway.IdleConnTimeoutSeconds) * time.Second
 		}
-		if cfg.Gateway.ResponseHeaderTimeout >= 0 {
+		// 0 means "use default" (unset). Only positive values override the 5m default.
+		if cfg.Gateway.ResponseHeaderTimeout > 0 {
 			responseHeaderTimeout = time.Duration(cfg.Gateway.ResponseHeaderTimeout) * time.Second
 		}
 	}

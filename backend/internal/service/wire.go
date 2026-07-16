@@ -20,6 +20,41 @@ type BuildInfo struct {
 	BuildType string
 }
 
+var opsAccountErrorAlertReleaseScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
+
+type opsAccountErrorAlertRedisStore struct {
+	client *redis.Client
+}
+
+func ProvideOpsAccountErrorAlertLockStore(redisClient *redis.Client) OpsAccountErrorAlertLockStore {
+	if redisClient == nil {
+		return nil
+	}
+	return &opsAccountErrorAlertRedisStore{client: redisClient}
+}
+
+func (s *opsAccountErrorAlertRedisStore) Acquire(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return s.client.SetNX(ctx, key, value, ttl).Result()
+}
+
+func (s *opsAccountErrorAlertRedisStore) Release(ctx context.Context, key, value string) error {
+	return opsAccountErrorAlertReleaseScript.Run(ctx, s.client, []string{key}, value).Err()
+}
+
+func (s *opsAccountErrorAlertRedisStore) Exists(ctx context.Context, key string) (bool, error) {
+	count, err := s.client.Exists(ctx, key).Result()
+	return count > 0, err
+}
+
+func (s *opsAccountErrorAlertRedisStore) SetCooldown(ctx context.Context, key string, ttl time.Duration) error {
+	return s.client.Set(ctx, key, "1", ttl).Err()
+}
+
 // ProvidePricingService creates and initializes PricingService
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
@@ -289,6 +324,26 @@ func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, se
 	return svc
 }
 
+// ProvideSubscriptionService wires the ledger dependency used by admin credit
+// adjustments and ledger listing. Keeping this in Wire prevents regeneration
+// from dropping SetSubscriptionCreditLedgerRepository.
+func ProvideSubscriptionService(
+	groupRepo GroupRepository,
+	userSubRepo UserSubscriptionRepository,
+	ledgerRepo SubscriptionCreditLedgerRepository,
+	billingCacheService *BillingCacheService,
+	entClient *dbent.Client,
+	cfg *config.Config,
+	settingService *SettingService,
+) *SubscriptionService {
+	svc := NewSubscriptionService(groupRepo, userSubRepo, billingCacheService, entClient, cfg).
+		SetSubscriptionCreditLedgerRepository(ledgerRepo)
+	if settingService != nil {
+		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
+	}
+	return svc
+}
+
 // ProvideTimingWheelService creates and starts TimingWheelService
 func ProvideTimingWheelService() (*TimingWheelService, error) {
 	svc, err := NewTimingWheelService()
@@ -430,6 +485,12 @@ func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
 	sink.Start()
 	logger.SetSink(sink)
 	return sink
+}
+
+func ProvideOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRepository, limiter OpsUserRequestCaptureLimiter) *OpsUserRequestMonitorService {
+	svc := NewOpsUserRequestMonitorService(opsRepo, userRepo, limiter)
+	svc.Start()
+	return svc
 }
 
 func buildIdempotencyConfig(cfg *config.Config) IdempotencyConfig {
@@ -633,6 +694,18 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
+	ProvideSiteMessageUserRepository,
+	ProvideSiteMessageSettingsReader,
+	NewSiteMessageService,
+	wire.Bind(new(SiteMessageEmailSender), new(*EmailQueueService)),
+	wire.Bind(new(SiteMessageRedeemCodeReader), new(*RedeemService)),
+	wire.Bind(new(SiteMessagePromoCodeValidator), new(*PromoService)),
+	ProvideLotterySettingsReader,
+	NewLotteryService,
+	wire.Bind(new(LotteryPrizeMessenger), new(*SiteMessageService)),
+	ProvideInvoiceUserReader,
+	NewInvoiceService,
+	wire.Bind(new(InvoiceEmailSender), new(*EmailService)),
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
@@ -645,6 +718,7 @@ var ProviderSet = wire.NewSet(
 	NewOAuthService,
 	ProvideOpenAIOAuthService,
 	NewGrokOAuthService,
+	wire.Bind(new(GrokOAuthTokenService), new(*GrokOAuthService)),
 	NewGeminiOAuthService,
 	NewGeminiQuotaService,
 	NewCompositeTokenCacheInvalidator,
@@ -663,21 +737,28 @@ var ProviderSet = wire.NewSet(
 	ProvideRateLimitService,
 	ProvideAccountUsageService,
 	ProvideAccountTestService,
+	ProvideAccountErrorHistoryService,
+	ProvideAccountErrorHistoryWiring,
 	ProvideSettingService,
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
+	ProvideOpsUserRequestMonitorService,
 	ProvideOpsService,
+	NewTelegramOpsSender,
+	wire.Bind(new(OpsTelegramSender), new(*telegramOpsSender)),
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
 	ProvideOpsAlertEvaluatorService,
+	ProvideOpsAccountErrorAlertLockStore,
+	ProvideOpsAccountErrorAlertService,
 	ProvideOpsCleanupService,
 	ProvideOpsScheduledReportService,
 	NewEmailService,
 	NewNotificationEmailService,
 	ProvideEmailQueueService,
 	NewTurnstileService,
-	NewSubscriptionService,
+	ProvideSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	ProvideConcurrencyService,
 	ProvideUserMessageQueueService,
@@ -710,10 +791,12 @@ var ProviderSet = wire.NewSet(
 	ProvideScheduledTestRunnerService,
 	NewGroupCapacityService,
 	NewChannelService,
+	ProvideModelMarketService,
 	NewModelPricingResolver,
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
+	NewSubscriptionWasteStatsService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
@@ -722,6 +805,47 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
 )
+
+func ProvideSiteMessageUserRepository(userRepo UserRepository) SiteMessageUserRepository {
+	return userRepo
+}
+
+func ProvideSiteMessageSettingsReader(settingService *SettingService) SiteMessageSettingsReader {
+	return settingService
+}
+
+func ProvideLotterySettingsReader(settingService *SettingService) LotterySettingsReader {
+	return settingService
+}
+
+func ProvideInvoiceUserReader(userRepo UserRepository) InvoiceUserReader {
+	return userRepo
+}
+
+// ProvideAccountErrorHistoryService 创建账号错误历史服务（仅依赖 repo，供 AccountHandler 查询用）。
+func ProvideAccountErrorHistoryService(repo AccountErrorHistoryRepository) *AccountErrorHistoryService {
+	return NewAccountErrorHistoryService(repo)
+}
+
+// AccountErrorHistoryWiring 是 setter 注入的副作用标记类型；由 App 消费以确保注入发生。
+type AccountErrorHistoryWiring struct{}
+
+// ProvideAccountErrorHistoryWiring 把错误历史服务 setter 注入到所有埋点来源。
+func ProvideAccountErrorHistoryWiring(
+	svc *AccountErrorHistoryService,
+	gatewayService *GatewayService,
+	openaiGatewayService *OpenAIGatewayService,
+	accountTestService *AccountTestService,
+	tokenRefreshService *TokenRefreshService,
+	adminService AdminService,
+) AccountErrorHistoryWiring {
+	gatewayService.SetAccountErrorHistoryService(svc)
+	openaiGatewayService.SetAccountErrorHistoryService(svc)
+	accountTestService.SetAccountErrorHistoryService(svc)
+	tokenRefreshService.SetAccountErrorHistoryService(svc)
+	adminService.SetAccountErrorHistoryService(svc)
+	return AccountErrorHistoryWiring{}
+}
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
 func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService) *UserPlatformQuotaUsageFlusher {

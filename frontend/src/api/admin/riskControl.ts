@@ -2,6 +2,7 @@ import { apiClient } from '../client'
 
 export type ModerationMode = 'off' | 'observe' | 'pre_block'
 export type ContentModerationModelFilterType = 'all' | 'include' | 'exclude'
+export type KeywordBlockingMode = 'keyword_and_api' | 'keyword_only' | 'api_only'
 
 export interface ContentModerationModelFilter {
   type: ContentModerationModelFilterType
@@ -38,6 +39,9 @@ export interface ContentModerationConfig {
   pre_hash_check_enabled: boolean
   model_filter: ContentModerationModelFilter
   cyber_policy_exclude_from_ban_count: boolean
+  thresholds?: Record<string, number>
+  blocked_keywords?: string[]
+  keyword_blocking_mode?: KeywordBlockingMode
 }
 
 export type ContentModerationAPIKeyStatusValue = 'unknown' | 'ok' | 'error' | 'frozen'
@@ -112,6 +116,22 @@ export interface UpdateContentModerationConfig {
   pre_hash_check_enabled?: boolean
   model_filter?: ContentModerationModelFilter
   cyber_policy_exclude_from_ban_count?: boolean
+  thresholds?: Record<string, number>
+  blocked_keywords?: string[]
+  keyword_blocking_mode?: KeywordBlockingMode
+}
+
+export interface ContentModerationAPIKeyLoad {
+  index: number
+  key_hash?: string
+  masked?: string
+  status?: ContentModerationAPIKeyStatusValue
+  active: number
+  total: number
+  success: number
+  errors: number
+  avg_latency_ms: number
+  last_latency_ms: number
 }
 
 export interface ContentModerationRuntimeStatus {
@@ -134,6 +154,16 @@ export interface ContentModerationRuntimeStatus {
   last_cleanup_at?: string
   last_cleanup_deleted_hit: number
   last_cleanup_deleted_non_hit: number
+  pre_block_active?: number
+  pre_block_checked?: number
+  pre_block_allowed?: number
+  pre_block_blocked?: number
+  pre_block_errors?: number
+  pre_block_avg_latency_ms?: number
+  pre_block_api_key_loads?: ContentModerationAPIKeyLoad[]
+  pre_block_api_key_active?: number
+  pre_block_api_key_available_count?: number
+  pre_block_api_key_total_calls?: number
 }
 
 export interface ContentModerationLog {

@@ -314,6 +314,10 @@ func (s *proxyRepoStub) CountAccountsByProxyID(ctx context.Context, proxyID int6
 func (s *proxyRepoStub) ListAccountSummariesByProxyID(ctx context.Context, proxyID int64) ([]ProxyAccountSummary, error) {
 	panic("unexpected ListAccountSummariesByProxyID call")
 }
+func (s *proxyRepoStub) SweepExpiredProxies(context.Context, time.Time) (int64, error) { return 0, nil }
+func (s *proxyRepoStub) ListAllForFallback(context.Context) ([]Proxy, error)           { return nil, nil }
+func (s *proxyRepoStub) CountExpired(context.Context) (int64, error)                   { return 0, nil }
+func (s *proxyRepoStub) CountExpiringSoon(context.Context, time.Time) (int64, error)   { return 0, nil }
 
 type redeemRepoStub struct {
 	deleteErrByID map[int64]error
@@ -372,6 +376,9 @@ func (s *redeemRepoStub) ListByUserPaginated(ctx context.Context, userID int64, 
 
 func (s *redeemRepoStub) SumPositiveBalanceByUser(ctx context.Context, userID int64) (float64, error) {
 	panic("unexpected SumPositiveBalanceByUser call")
+}
+func (s *redeemRepoStub) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) {
+	return 0, nil
 }
 
 type subscriptionInvalidateCall struct {

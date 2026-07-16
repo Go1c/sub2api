@@ -160,6 +160,10 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("无效请求兜底使用的分组 ID"),
+		field.Int64("fallback_group_id_on_exhausted").
+			Optional().
+			Nillable().
+			Comment("上游账号全部不可用时兜底使用的分组 ID"),
 
 		// 模型路由配置 (added by migration 040)
 		field.JSON("model_routing", map[string][]int64{}).
@@ -215,6 +219,11 @@ func (Group) Fields() []ent.Field {
 		field.Int("rpm_limit").
 			Default(0).
 			Comment("分组 RPM 上限，0 表示不限制；设置后接管该分组用户的限流"),
+
+		// 是否在用户使用记录页暴露上游模型 (added by migration 139)
+		field.Bool("expose_upstream_model_to_user").
+			Default(false).
+			Comment("是否允许用户在使用记录页看到上游模型与映射链，false 时仅管理员可见"),
 	}
 }
 
@@ -224,6 +233,7 @@ func (Group) Edges() []ent.Edge {
 		edge.To("redeem_codes", RedeemCode.Type),
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("usage_logs", UsageLog.Type),
+		edge.To("subscription_credit_ledgers", SubscriptionCreditLedger.Type),
 		edge.From("accounts", Account.Type).
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),

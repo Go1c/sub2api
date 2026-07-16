@@ -25,6 +25,16 @@ type CustomEndpoint struct {
 	Description string `json:"description"`
 }
 
+// SitePage represents a public site page configured by admin.
+type SitePage struct {
+	Key     string `json:"key"`
+	Title   string `json:"title"`
+	Slug    string `json:"slug"`
+	Mode    string `json:"mode"`
+	Content string `json:"content"`
+	Enabled bool   `json:"enabled"`
+}
+
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
 	RegistrationEnabled              bool                     `json:"registration_enabled"`
@@ -34,6 +44,7 @@ type SystemSettings struct {
 	PasswordResetEnabled             bool                     `json:"password_reset_enabled"`
 	FrontendURL                      string                   `json:"frontend_url"`
 	InvitationCodeEnabled            bool                     `json:"invitation_code_enabled"`
+	InvitationRegistrationMode       string                   `json:"invitation_registration_mode"`
 	TotpEnabled                      bool                     `json:"totp_enabled"`                   // TOTP 双因素认证
 	TotpEncryptionKeyConfigured      bool                     `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
 	LoginAgreementEnabled            bool                     `json:"login_agreement_enabled"`
@@ -133,6 +144,7 @@ type SystemSettings struct {
 	APIBaseURL                  string           `json:"api_base_url"`
 	ContactInfo                 string           `json:"contact_info"`
 	DocURL                      string           `json:"doc_url"`
+	SitePages                   []SitePage       `json:"site_pages"`
 	HomeContent                 string           `json:"home_content"`
 	HideCcsImportButton         bool             `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled bool             `json:"purchase_subscription_enabled"`
@@ -308,6 +320,7 @@ type PublicSettings struct {
 	PromoCodeEnabled                 bool                     `json:"promo_code_enabled"`
 	PasswordResetEnabled             bool                     `json:"password_reset_enabled"`
 	InvitationCodeEnabled            bool                     `json:"invitation_code_enabled"`
+	InvitationRegistrationMode       string                   `json:"invitation_registration_mode"`
 	TotpEnabled                      bool                     `json:"totp_enabled"` // TOTP 双因素认证
 	LoginAgreementEnabled            bool                     `json:"login_agreement_enabled"`
 	LoginAgreementMode               string                   `json:"login_agreement_mode"`
@@ -322,6 +335,7 @@ type PublicSettings struct {
 	APIBaseURL                       string                   `json:"api_base_url"`
 	ContactInfo                      string                   `json:"contact_info"`
 	DocURL                           string                   `json:"doc_url"`
+	SitePages                        []SitePage               `json:"site_pages"`
 	HomeContent                      string                   `json:"home_content"`
 	HideCcsImportButton              bool                     `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled      bool                     `json:"purchase_subscription_enabled"`
@@ -502,6 +516,20 @@ func ParseCustomMenuItems(raw string) []CustomMenuItem {
 	var items []CustomMenuItem
 	if err := json.Unmarshal([]byte(raw), &items); err != nil {
 		return []CustomMenuItem{}
+	}
+	return items
+}
+
+// ParseSitePages parses a JSON string into a slice of SitePage.
+// Returns empty slice on empty/invalid input.
+func ParseSitePages(raw string) []SitePage {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return []SitePage{}
+	}
+	var items []SitePage
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []SitePage{}
 	}
 	return items
 }
