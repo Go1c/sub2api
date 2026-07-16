@@ -61,3 +61,29 @@ func TestMigration177aOpsSystemLogsAPIKeyIDIndexNotx(t *testing.T) {
 	sql := strings.Join(strings.Fields(string(content)), " ")
 	require.Contains(t, sql, "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ops_system_logs_api_key_id_created_at")
 }
+
+func TestMigration178GroupPeakRate(t *testing.T) {
+	content, err := FS.ReadFile("178_add_group_peak_rate_multiplier.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "peak_rate_enabled")
+	require.Contains(t, sql, "peak_rate_multiplier")
+	require.Contains(t, sql, "peak_start")
+	require.Contains(t, sql, "peak_end")
+}
+
+func TestMigration179GroupWebSearchPrice(t *testing.T) {
+	content, err := FS.ReadFile("179_group_web_search_price_per_call.sql")
+	require.NoError(t, err)
+	require.Contains(t, string(content), "web_search_price_per_call")
+}
+
+func TestMigration181DeletedAPIKeyAudit(t *testing.T) {
+	content, err := FS.ReadFile("181_deleted_api_key_audit.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "CREATE TABLE IF NOT EXISTS deleted_api_key_audits")
+	require.Contains(t, sql, "attempted_key_prefix")
+}
