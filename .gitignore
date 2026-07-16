@@ -133,6 +133,9 @@ docs/*
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
+# Admin compliance gate + Docker frontend build import docs/legal/*.md?raw
+!docs/legal/
+!docs/legal/**
 .serena/
 .codex/
 frontend/coverage/
