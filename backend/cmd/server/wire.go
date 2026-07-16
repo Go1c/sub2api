@@ -105,6 +105,7 @@ func provideCleanup(
 	channelMonitorRunner *service.ChannelMonitorRunner,
 	quotaFlusher *service.UserPlatformQuotaUsageFlusher,
 	_ service.AccountErrorHistoryWiring, // side-effect: setter 注入错误历史服务到各埋点来源
+	auditLog *service.AuditLogService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -138,6 +139,12 @@ func provideCleanup(
 			{"OpsUserRequestMonitorService", func() error {
 				if opsUserRequestMonitor != nil {
 					opsUserRequestMonitor.Stop()
+				}
+				return nil
+			}},
+			{"AuditLogService", func() error {
+				if auditLog != nil {
+					auditLog.Stop()
 				}
 				return nil
 			}},

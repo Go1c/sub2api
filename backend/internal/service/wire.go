@@ -494,6 +494,14 @@ func ProvideOpsUserRequestMonitorService(opsRepo OpsRepository, userRepo UserRep
 	return svc
 }
 
+// ProvideAuditLogService 创建操作审计日志服务并启动异步写入与保留期清理协程。
+// 停止逻辑挂在 cmd/server 的 provideCleanup。
+func ProvideAuditLogService(repo AuditLogRepository, settingService *SettingService) *AuditLogService {
+	svc := NewAuditLogService(repo, settingService)
+	svc.Start()
+	return svc
+}
+
 func buildIdempotencyConfig(cfg *config.Config) IdempotencyConfig {
 	idempotencyCfg := DefaultIdempotencyConfig()
 	if cfg != nil {
@@ -748,6 +756,7 @@ var ProviderSet = wire.NewSet(
 	ProvideOpsService,
 	NewTelegramOpsSender,
 	wire.Bind(new(OpsTelegramSender), new(*telegramOpsSender)),
+	ProvideAuditLogService,
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
 	ProvideOpsAlertEvaluatorService,
