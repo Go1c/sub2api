@@ -121,7 +121,8 @@ tests
 .claude/*
 !.claude/agents
 !.claude/skills
-scripts
+# Root-level agent/tool scripts only; keep backend/scripts tracked for Docker builds
+/scripts
 .code-review-state
 #openspec/
 code-reviews/
