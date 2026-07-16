@@ -800,7 +800,17 @@ export default {
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         codexCliWs: 'Codex CLI (WebSocket)',
+        grokCli: 'Grok CLI',
         opencode: 'OpenCode'
+      },
+      grok: {
+        description: '为 Grok 账号配置 API 访问。可选择 Grok CLI、Codex Responses，或（可用时）Claude Code Messages 路径。',
+        configTomlHint: '请确保以下内容位于 Grok config.toml 文件的开头部分',
+        codexConfigTomlHint: 'Grok Responses 的 Codex config.toml（已启用 WebSocket v2）',
+        codexDescription: '添加以下 Codex CLI 配置以接入 Grok Responses。',
+        codexNote: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
+        codexNoteWindows: '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。',
+        note: '这些环境变量将在当前终端会话中生效。'
       },
       antigravity: {
         description: '为 Antigravity 分组配置 API 访问。请根据您使用的客户端选择对应的配置方式。',

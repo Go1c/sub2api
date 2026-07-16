@@ -350,11 +350,17 @@ const clientTabs = computed((): TabConfig[] => {
         { id: 'gemini', label: t('keys.useKeyModal.cliTabs.geminiCli'), icon: SparkleIcon },
         { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
       ]
-    case 'grok':
-      return [
+    case 'grok': {
+      const tabs: TabConfig[] = [
         { id: 'grok', label: t('keys.useKeyModal.cliTabs.grokCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
       ]
+      if (props.allowMessagesDispatch) {
+        tabs.push({ id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon })
+      }
+      tabs.push({ id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon })
+      return tabs
+    }
     default:
       return [
         { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
@@ -509,6 +515,13 @@ const currentFiles = computed((): FileConfig[] => {
       }
       return generateAnthropicFiles(`${baseUrl}/antigravity`, apiKey)
     case 'grok':
+      if (activeClientTab.value === 'claude' && props.allowMessagesDispatch) {
+        // Prefer Claude Code env setup when messages dispatch is available.
+        return generateAnthropicFiles(baseUrl.replace(/\/v1\/?$/, '') || baseUrl, apiKey)
+      }
+      if (activeClientTab.value === 'codex') {
+        return generateGrokCodexFiles(apiBase, apiKey)
+      }
       return generateGrokFiles(apiBase, apiKey)
     default:
       return generateAnthropicFiles(baseUrl, apiKey)
@@ -680,6 +693,43 @@ supports_backend_search = true`
     content: configContent,
     hint: t('keys.useKeyModal.grok.configTomlHint')
   }]
+}
+
+function generateGrokCodexFiles(baseUrl: string, apiKey: string): FileConfig[] {
+  const isWindows = activeTab.value === 'windows'
+  const configPath = isWindows
+    ? '%USERPROFILE%\\.codex\\config.toml'
+    : '~/.codex/config.toml'
+  const configContent = `model_provider = "sub2api_grok"
+model = "grok-4.5"
+review_model = "grok-4.5"
+model_reasoning_effort = "xhigh"
+model_context_window = 1000000
+
+[model_providers.sub2api_grok]
+name = "Sub2API Grok"
+base_url = "${baseUrl}"
+env_key = "SUB2API_API_KEY"
+wire_api = "responses"
+supports_websockets = true
+
+[features]
+responses_websockets_v2 = true`
+  const environmentContent = isWindows
+    ? `$env:SUB2API_API_KEY="${apiKey}"`
+    : `export SUB2API_API_KEY="${apiKey}"`
+
+  return [
+    {
+      path: configPath,
+      content: configContent,
+      hint: t('keys.useKeyModal.grok.codexConfigTomlHint')
+    },
+    {
+      path: isWindows ? 'PowerShell' : 'Terminal',
+      content: environmentContent
+    }
+  ]
 }
 
 function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {

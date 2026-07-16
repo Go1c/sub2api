@@ -800,7 +800,17 @@ export default {
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         codexCliWs: 'Codex CLI (WebSocket)',
+        grokCli: 'Grok CLI',
         opencode: 'OpenCode',
+      },
+      grok: {
+        description: 'Configure API access for Grok accounts. Choose CLI, Codex Responses, or Claude Code messages when available.',
+        configTomlHint: 'Make sure the following content is at the beginning of the Grok config.toml file',
+        codexConfigTomlHint: 'Codex config.toml for Grok Responses (WebSocket v2 enabled)',
+        codexDescription: 'Add the following Codex CLI configuration for Grok Responses.',
+        codexNote: 'Make sure the config directory exists. macOS/Linux users can run mkdir -p ~/.codex to create it.',
+        codexNoteWindows: 'Press Win+R and enter %userprofile%\\.codex to open the config directory. Create it manually if it does not exist.',
+        note: 'These environment variables will be active in the current terminal session.'
       },
       antigravity: {
         description: 'Configure API access for Antigravity group. Select the configuration method based on your client.',
