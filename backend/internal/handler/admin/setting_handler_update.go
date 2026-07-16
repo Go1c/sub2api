@@ -441,6 +441,48 @@ type UpdateSettingsRequest struct {
 	AuthSourceGooglePlatformQuotas   map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_google_platform_quotas"`
 	AuthSourceDingTalkPlatformQuotas map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_dingtalk_platform_quotas"`
 
+
+	// Fork: contact channels + AI support chat
+	ContactChannels                *[]dto.ContactChannel `json:"contact_channels"`
+	SupportChatEnabled             bool                  `json:"support_chat_enabled"`
+	SupportChatGatewayURL          string                `json:"support_chat_gateway_url"`
+	SupportChatTitle               string                `json:"support_chat_title"`
+	SupportChatWelcomeMessage      string                `json:"support_chat_welcome_message"`
+	SupportChatOfficialContactText string                `json:"support_chat_official_contact_text"`
+	SupportChatOfficialContactURL  string                `json:"support_chat_official_contact_url"`
+
+	// Fork: frontend locales + CCSwitch defaults
+	FrontendLocales                       []string `json:"frontend_locales"`
+	CCSwitchDefaultModelAnthropic         string   `json:"ccswitch_default_model_anthropic"`
+	CCSwitchDefaultModelOpenAI            string   `json:"ccswitch_default_model_openai"`
+	CCSwitchDefaultModelGemini            string   `json:"ccswitch_default_model_gemini"`
+	CCSwitchDefaultModelAntigravity       string   `json:"ccswitch_default_model_antigravity"`
+	CCSwitchDefaultModelAntigravityGemini string   `json:"ccswitch_default_model_antigravity_gemini"`
+
+	// Fork: user subscriptions visibility / notify / multi-purchase / quota reset
+	UserSubscriptionsVisible               *bool `json:"user_subscriptions_visible"`
+	SubscriptionNotifyEmailEnabled         *bool `json:"subscription_notify_email_enabled"`
+	SubscriptionMultiplePurchasesEnabled   *bool `json:"subscription_multiple_purchases_enabled"`
+	SubscriptionQuotaResetUTCOffsetMinutes *int  `json:"subscription_quota_reset_utc_offset_minutes"`
+	SubscriptionQuotaResetHour             *int  `json:"subscription_quota_reset_hour"`
+
+	// Fork: affiliate signup bonus + balance usage gate
+	AffiliateSignupBonusEnabled  *bool    `json:"affiliate_signup_bonus_enabled"`
+	AffiliateSignupBonusAmount   *float64 `json:"affiliate_signup_bonus_amount"`
+	AffiliateSignupBonusTotalCap *float64 `json:"affiliate_signup_bonus_total_cap"`
+	AffiliateSignupBonusDailyCap *float64 `json:"affiliate_signup_bonus_daily_cap"`
+	BalanceUsageGateEnabled      *bool    `json:"balance_usage_gate_enabled"`
+	BalanceUsageGateMinBalance   *float64 `json:"balance_usage_gate_min_balance"`
+	BalanceUsageGateMinRecharge  *float64 `json:"balance_usage_gate_min_recharge"`
+
+	// Fork: subscription balance payment
+	PaymentSubscriptionBalanceEnabled *bool `json:"payment_subscription_balance_enabled"`
+
+	// Fork: site messages
+	SiteMessagesEnabled               *bool   `json:"site_messages_enabled"`
+	SiteMessagesDailySendLimit        *int    `json:"site_messages_daily_send_limit"`
+	SiteMessagesRetentionDays         *int    `json:"site_messages_retention_days"`
+	SiteMessagesDefaultRecipientEmail *string `json:"site_messages_default_recipient_email"`
 	AllowUserViewErrorRequests *bool `json:"allow_user_view_error_requests"`
 }
 
@@ -1427,7 +1469,113 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		siteLogo = *req.SiteLogo
 	}
 
-	settings := &service.SystemSettings{
+	
+	// Fork fields: contact channels JSON
+	const maxContactChannels = 10
+	contactChannelsJSON := previousSettings.ContactChannels
+	if req.ContactChannels != nil {
+		channels := *req.ContactChannels
+		if len(channels) > maxContactChannels {
+			channels = channels[:maxContactChannels]
+		}
+		normalized := make([]dto.ContactChannel, 0, len(channels))
+		for _, ch := range channels {
+			label := strings.TrimSpace(ch.Label)
+			url := strings.TrimSpace(ch.URL)
+			if label == "" && url == "" {
+				continue
+			}
+			normalized = append(normalized, dto.ContactChannel{Label: label, URL: url})
+		}
+		raw, err := json.Marshal(normalized)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid contact_channels"})
+			return
+		}
+		contactChannelsJSON = string(raw)
+	}
+
+	affiliateSignupBonusAmount := previousSettings.AffiliateSignupBonusAmount
+	if req.AffiliateSignupBonusAmount != nil {
+		affiliateSignupBonusAmount = *req.AffiliateSignupBonusAmount
+	}
+	if affiliateSignupBonusAmount < 0 {
+		affiliateSignupBonusAmount = service.AffiliateSignupBonusAmountDefault
+	}
+	affiliateSignupBonusTotalCap := previousSettings.AffiliateSignupBonusTotalCap
+	if req.AffiliateSignupBonusTotalCap != nil {
+		affiliateSignupBonusTotalCap = *req.AffiliateSignupBonusTotalCap
+	}
+	if affiliateSignupBonusTotalCap < 0 {
+		affiliateSignupBonusTotalCap = service.AffiliateSignupBonusTotalCapDefault
+	}
+	affiliateSignupBonusDailyCap := previousSettings.AffiliateSignupBonusDailyCap
+	if req.AffiliateSignupBonusDailyCap != nil {
+		affiliateSignupBonusDailyCap = *req.AffiliateSignupBonusDailyCap
+	}
+	if affiliateSignupBonusDailyCap < 0 {
+		affiliateSignupBonusDailyCap = service.AffiliateSignupBonusDailyCapDefault
+	}
+	balanceUsageGateMinBalance := previousSettings.BalanceUsageGateMinBalance
+	if req.BalanceUsageGateMinBalance != nil {
+		balanceUsageGateMinBalance = *req.BalanceUsageGateMinBalance
+	}
+	if balanceUsageGateMinBalance < 0 {
+		balanceUsageGateMinBalance = service.BalanceUsageGateMinBalanceDefault
+	}
+	balanceUsageGateMinRecharge := previousSettings.BalanceUsageGateMinRecharge
+	if req.BalanceUsageGateMinRecharge != nil {
+		balanceUsageGateMinRecharge = *req.BalanceUsageGateMinRecharge
+	}
+	if balanceUsageGateMinRecharge < 0 {
+		balanceUsageGateMinRecharge = service.BalanceUsageGateMinRechargeDefault
+	}
+
+	subscriptionQuotaResetUTCOffsetMinutes := previousSettings.SubscriptionQuotaResetUTCOffsetMinutes
+	if req.SubscriptionQuotaResetUTCOffsetMinutes != nil {
+		subscriptionQuotaResetUTCOffsetMinutes = *req.SubscriptionQuotaResetUTCOffsetMinutes
+	}
+	subscriptionQuotaResetHour := previousSettings.SubscriptionQuotaResetHour
+	if req.SubscriptionQuotaResetHour != nil {
+		subscriptionQuotaResetHour = *req.SubscriptionQuotaResetHour
+	}
+
+	userSubscriptionsVisible := boolValueOrDefault(req.UserSubscriptionsVisible, previousSettings.UserSubscriptionsVisible)
+	subscriptionNotifyEmailEnabled := boolValueOrDefault(req.SubscriptionNotifyEmailEnabled, previousSettings.SubscriptionNotifyEmailEnabled)
+	subscriptionMultiplePurchasesEnabled := boolValueOrDefault(req.SubscriptionMultiplePurchasesEnabled, previousSettings.SubscriptionMultiplePurchasesEnabled)
+
+	affiliateSignupBonusEnabled := previousSettings.AffiliateSignupBonusEnabled
+	if req.AffiliateSignupBonusEnabled != nil {
+		affiliateSignupBonusEnabled = *req.AffiliateSignupBonusEnabled
+	}
+	balanceUsageGateEnabled := previousSettings.BalanceUsageGateEnabled
+	if req.BalanceUsageGateEnabled != nil {
+		balanceUsageGateEnabled = *req.BalanceUsageGateEnabled
+	}
+
+	siteMessagesEnabled := previousSettings.SiteMessagesEnabled
+	if req.SiteMessagesEnabled != nil {
+		siteMessagesEnabled = *req.SiteMessagesEnabled
+	}
+	siteMessagesDailySendLimit := previousSettings.SiteMessagesDailySendLimit
+	if req.SiteMessagesDailySendLimit != nil {
+		siteMessagesDailySendLimit = *req.SiteMessagesDailySendLimit
+	}
+	siteMessagesRetentionDays := previousSettings.SiteMessagesRetentionDays
+	if req.SiteMessagesRetentionDays != nil {
+		siteMessagesRetentionDays = *req.SiteMessagesRetentionDays
+	}
+	siteMessagesDefaultRecipientEmail := previousSettings.SiteMessagesDefaultRecipientEmail
+	if req.SiteMessagesDefaultRecipientEmail != nil {
+		siteMessagesDefaultRecipientEmail = strings.TrimSpace(*req.SiteMessagesDefaultRecipientEmail)
+	}
+
+	frontendLocales := previousSettings.FrontendLocales
+	if req.FrontendLocales != nil {
+		frontendLocales = req.FrontendLocales
+	}
+
+settings := &service.SystemSettings{
 		// 系统全局 platform quota 默认值（整体替换语义）
 		DefaultPlatformQuotas: req.DefaultPlatformQuotas,
 
@@ -1533,10 +1681,28 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		SiteSubtitle:                           req.SiteSubtitle,
 		APIBaseURL:                             req.APIBaseURL,
 		ContactInfo:                            req.ContactInfo,
+		ContactChannels:                        contactChannelsJSON,
+		SupportChatEnabled:                     req.SupportChatEnabled,
+		SupportChatGatewayURL:                  req.SupportChatGatewayURL,
+		SupportChatTitle:                       req.SupportChatTitle,
+		SupportChatWelcomeMessage:              req.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:         req.SupportChatOfficialContactText,
+		SupportChatOfficialContactURL:          req.SupportChatOfficialContactURL,
 		DocURL:                                 req.DocURL,
 		SitePages:                              sitePagesJSON,
 		HomeContent:                            req.HomeContent,
 		HideCcsImportButton:                    req.HideCcsImportButton,
+		FrontendLocales:                        frontendLocales,
+		CCSwitchDefaultModelAnthropic:          req.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:             req.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:             req.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:        req.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini:  req.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:               userSubscriptionsVisible,
+		SubscriptionNotifyEmailEnabled:         subscriptionNotifyEmailEnabled,
+		SubscriptionMultiplePurchasesEnabled:   subscriptionMultiplePurchasesEnabled,
+		SubscriptionQuotaResetUTCOffsetMinutes: subscriptionQuotaResetUTCOffsetMinutes,
+		SubscriptionQuotaResetHour:             subscriptionQuotaResetHour,
 		PurchaseSubscriptionEnabled:            purchaseEnabled,
 		PurchaseSubscriptionURL:                purchaseURL,
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
@@ -1781,12 +1947,23 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.AffiliateEnabled
 		}(),
+		AffiliateSignupBonusEnabled:  affiliateSignupBonusEnabled,
+		AffiliateSignupBonusAmount:   affiliateSignupBonusAmount,
+		AffiliateSignupBonusTotalCap: affiliateSignupBonusTotalCap,
+		AffiliateSignupBonusDailyCap: affiliateSignupBonusDailyCap,
+		BalanceUsageGateEnabled:      balanceUsageGateEnabled,
+		BalanceUsageGateMinBalance:   balanceUsageGateMinBalance,
+		BalanceUsageGateMinRecharge:  balanceUsageGateMinRecharge,
 		RiskControlEnabled: func() bool {
 			if req.RiskControlEnabled != nil {
 				return *req.RiskControlEnabled
 			}
 			return previousSettings.RiskControlEnabled
 		}(),
+		SiteMessagesEnabled:               siteMessagesEnabled,
+		SiteMessagesDailySendLimit:        siteMessagesDailySendLimit,
+		SiteMessagesRetentionDays:         siteMessagesRetentionDays,
+		SiteMessagesDefaultRecipientEmail: siteMessagesDefaultRecipientEmail,
 		CyberSessionBlockEnabled: func() bool {
 			if req.CyberSessionBlockEnabled != nil {
 				return *req.CyberSessionBlockEnabled
@@ -1887,6 +2064,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			MaxPendingOrders:          req.PaymentMaxPendingOrders,
 			EnabledTypes:              req.PaymentEnabledTypes,
 			BalanceDisabled:           req.PaymentBalanceDisabled,
+		SubscriptionBalancePaymentEnabled: req.PaymentSubscriptionBalanceEnabled,
 			BalanceRechargeMultiplier: req.PaymentBalanceRechargeMultiplier,
 			SubscriptionUSDToCNYRate:  req.PaymentSubscriptionUSDToCNYRate,
 			RechargeFeeRate:           req.PaymentRechargeFeeRate,
@@ -2042,10 +2220,28 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		SiteSubtitle:                                           updatedSettings.SiteSubtitle,
 		APIBaseURL:                                             updatedSettings.APIBaseURL,
 		ContactInfo:                                            updatedSettings.ContactInfo,
+		ContactChannels:                                        dto.ParseContactChannels(updatedSettings.ContactChannels),
+		SupportChatEnabled:                                     updatedSettings.SupportChatEnabled,
+		SupportChatGatewayURL:                                  updatedSettings.SupportChatGatewayURL,
+		SupportChatTitle:                                       updatedSettings.SupportChatTitle,
+		SupportChatWelcomeMessage:                              updatedSettings.SupportChatWelcomeMessage,
+		SupportChatOfficialContactText:                         updatedSettings.SupportChatOfficialContactText,
+		SupportChatOfficialContactURL:                          updatedSettings.SupportChatOfficialContactURL,
 		DocURL:                                                 updatedSettings.DocURL,
 		SitePages:                                              dto.ParseSitePages(updatedSettings.SitePages),
 		HomeContent:                                            updatedSettings.HomeContent,
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,
+		FrontendLocales:                                        updatedSettings.FrontendLocales,
+		CCSwitchDefaultModelAnthropic:                          updatedSettings.CCSwitchDefaultModelAnthropic,
+		CCSwitchDefaultModelOpenAI:                             updatedSettings.CCSwitchDefaultModelOpenAI,
+		CCSwitchDefaultModelGemini:                             updatedSettings.CCSwitchDefaultModelGemini,
+		CCSwitchDefaultModelAntigravity:                        updatedSettings.CCSwitchDefaultModelAntigravity,
+		CCSwitchDefaultModelAntigravityGemini:                  updatedSettings.CCSwitchDefaultModelAntigravityGemini,
+		UserSubscriptionsVisible:                               updatedSettings.UserSubscriptionsVisible,
+		SubscriptionNotifyEmailEnabled:                         updatedSettings.SubscriptionNotifyEmailEnabled,
+		SubscriptionMultiplePurchasesEnabled:                   updatedSettings.SubscriptionMultiplePurchasesEnabled,
+		SubscriptionQuotaResetUTCOffsetMinutes:                 updatedSettings.SubscriptionQuotaResetUTCOffsetMinutes,
+		SubscriptionQuotaResetHour:                             updatedSettings.SubscriptionQuotaResetHour,
 		PurchaseSubscriptionEnabled:                            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,
@@ -2133,6 +2329,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		PaymentMaxPendingOrders:                                updatedPaymentCfg.MaxPendingOrders,
 		PaymentEnabledTypes:                                    updatedPaymentCfg.EnabledTypes,
 		PaymentBalanceDisabled:                                 updatedPaymentCfg.BalanceDisabled,
+		PaymentSubscriptionBalanceEnabled:                      updatedPaymentCfg.SubscriptionBalancePaymentEnabled,
 		PaymentBalanceRechargeMultiplier:                       updatedPaymentCfg.BalanceRechargeMultiplier,
 		PaymentSubscriptionUSDToCNYRate:                        updatedPaymentCfg.SubscriptionUSDToCNYRate,
 		PaymentRechargeFeeRate:                                 updatedPaymentCfg.RechargeFeeRate,
@@ -2154,8 +2351,19 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
+		AffiliateSignupBonusEnabled:  updatedSettings.AffiliateSignupBonusEnabled,
+		AffiliateSignupBonusAmount:   updatedSettings.AffiliateSignupBonusAmount,
+		AffiliateSignupBonusTotalCap: updatedSettings.AffiliateSignupBonusTotalCap,
+		AffiliateSignupBonusDailyCap: updatedSettings.AffiliateSignupBonusDailyCap,
+		BalanceUsageGateEnabled:      updatedSettings.BalanceUsageGateEnabled,
+		BalanceUsageGateMinBalance:   updatedSettings.BalanceUsageGateMinBalance,
+		BalanceUsageGateMinRecharge:  updatedSettings.BalanceUsageGateMinRecharge,
 
 		RiskControlEnabled:          updatedSettings.RiskControlEnabled,
+		SiteMessagesEnabled:               updatedSettings.SiteMessagesEnabled,
+		SiteMessagesDailySendLimit:        updatedSettings.SiteMessagesDailySendLimit,
+		SiteMessagesRetentionDays:         updatedSettings.SiteMessagesRetentionDays,
+		SiteMessagesDefaultRecipientEmail: updatedSettings.SiteMessagesDefaultRecipientEmail,
 		CyberSessionBlockEnabled:    updatedSettings.CyberSessionBlockEnabled,
 		CyberSessionBlockTTLSeconds: updatedSettings.CyberSessionBlockTTLSeconds,
 		AllowUserViewErrorRequests:  updatedSettings.AllowUserViewErrorRequests,

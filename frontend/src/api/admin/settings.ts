@@ -9,12 +9,39 @@ import type {
   CustomMenuItem,
   LoginAgreementDocument,
   NotifyEmailEntry,
+  ContactChannel,
+  SitePage,
 } from "@/types";
+import type {
+  AdminModelMarketResponse,
+  ModelMarketConfig,
+} from "@/api/modelMarket";
 
 export interface DefaultSubscriptionSetting {
   group_id: number;
   validity_days: number;
 }
+
+export interface AffiliateRebateTier {
+  level: "L1" | "L2" | "L3" | "L4" | string;
+  min_invitees: number;
+  min_recharge: number;
+  rebate_rate_percent: number | null;
+}
+
+export type FrontendLocaleCode = "en" | "zh" | "zh-Hant";
+
+export interface FrontendLocaleOption {
+  value: FrontendLocaleCode;
+  labelZh: string;
+  labelEn: string;
+}
+
+export const FRONTEND_LOCALE_OPTIONS: FrontendLocaleOption[] = [
+  { value: "en", labelZh: "English", labelEn: "English" },
+  { value: "zh", labelZh: "简体中文", labelEn: "Simplified Chinese" },
+  { value: "zh-Hant", labelZh: "繁體中文", labelEn: "Traditional Chinese" },
+];
 
 // ── 平台限额类型 ──────────────────────────────────────────────────
 export type PlatformType = "anthropic" | "openai" | "gemini" | "antigravity" | "grok"
@@ -364,6 +391,9 @@ export interface SystemSettings {
   password_reset_enabled: boolean;
   frontend_url: string;
   invitation_code_enabled: boolean;
+  invitation_registration_mode: "redeem_code" | "affiliate_link" | "both" | string;
+  affiliate_rebate_tiers: AffiliateRebateTier[];
+  site_pages: SitePage[];
   totp_enabled: boolean; // TOTP 双因素认证
   totp_encryption_key_configured: boolean; // TOTP 加密密钥是否已配置
   login_agreement_enabled: boolean;
@@ -430,6 +460,36 @@ export interface SystemSettings {
   site_subtitle: string;
   api_base_url: string;
   contact_info: string;
+contact_channels: ContactChannel[];
+  support_chat_enabled: boolean;
+  support_chat_gateway_url: string;
+  support_chat_title: string;
+  support_chat_welcome_message: string;
+  support_chat_official_contact_text: string;
+  support_chat_official_contact_url: string;
+  frontend_locales: string[];
+  ccswitch_default_model_anthropic: string;
+  ccswitch_default_model_openai: string;
+  ccswitch_default_model_gemini: string;
+  ccswitch_default_model_antigravity: string;
+  ccswitch_default_model_antigravity_gemini: string;
+  user_subscriptions_visible: boolean;
+  subscription_notify_email_enabled: boolean;
+  subscription_multiple_purchases_enabled: boolean;
+  subscription_quota_reset_utc_offset_minutes: number;
+  subscription_quota_reset_hour: number;
+  affiliate_signup_bonus_enabled: boolean;
+  affiliate_signup_bonus_amount: number;
+  affiliate_signup_bonus_total_cap: number;
+  affiliate_signup_bonus_daily_cap: number;
+  balance_usage_gate_enabled: boolean;
+  balance_usage_gate_min_balance: number;
+  balance_usage_gate_min_recharge: number;
+  payment_subscription_balance_enabled: boolean;
+  site_messages_enabled: boolean;
+  site_messages_daily_send_limit: number;
+  site_messages_retention_days: number;
+  site_messages_default_recipient_email: string;
   doc_url: string;
   home_content: string;
   hide_ccs_import_button: boolean;
@@ -663,6 +723,9 @@ export interface UpdateSettingsRequest {
   password_reset_enabled?: boolean;
   frontend_url?: string;
   invitation_code_enabled?: boolean;
+  invitation_registration_mode?: "redeem_code" | "affiliate_link" | "both" | string;
+  affiliate_rebate_tiers?: AffiliateRebateTier[];
+  site_pages?: SitePage[];
   totp_enabled?: boolean; // TOTP 双因素认证
   login_agreement_enabled?: boolean;
   login_agreement_mode?: "modal" | "checkbox" | string;
@@ -726,6 +789,36 @@ export interface UpdateSettingsRequest {
   site_subtitle?: string;
   api_base_url?: string;
   contact_info?: string;
+contact_channels?: ContactChannel[];
+  support_chat_enabled?: boolean;
+  support_chat_gateway_url?: string;
+  support_chat_title?: string;
+  support_chat_welcome_message?: string;
+  support_chat_official_contact_text?: string;
+  support_chat_official_contact_url?: string;
+  frontend_locales?: string[];
+  ccswitch_default_model_anthropic?: string;
+  ccswitch_default_model_openai?: string;
+  ccswitch_default_model_gemini?: string;
+  ccswitch_default_model_antigravity?: string;
+  ccswitch_default_model_antigravity_gemini?: string;
+  user_subscriptions_visible?: boolean;
+  subscription_notify_email_enabled?: boolean;
+  subscription_multiple_purchases_enabled?: boolean;
+  subscription_quota_reset_utc_offset_minutes?: number;
+  subscription_quota_reset_hour?: number;
+  affiliate_signup_bonus_enabled?: boolean;
+  affiliate_signup_bonus_amount?: number;
+  affiliate_signup_bonus_total_cap?: number;
+  affiliate_signup_bonus_daily_cap?: number;
+  balance_usage_gate_enabled?: boolean;
+  balance_usage_gate_min_balance?: number;
+  balance_usage_gate_min_recharge?: number;
+  payment_subscription_balance_enabled?: boolean;
+  site_messages_enabled?: boolean;
+  site_messages_daily_send_limit?: number;
+  site_messages_retention_days?: number;
+  site_messages_default_recipient_email?: string;
   doc_url?: string;
   home_content?: string;
   hide_ccs_import_button?: boolean;
@@ -1397,7 +1490,60 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export async function getModelMarket(): Promise<AdminModelMarketResponse> {
+  const { data } = await apiClient.get<AdminModelMarketResponse>(
+    "/admin/settings/model-market",
+  );
+  return data;
+}
+
+export async function updateModelMarket(
+  config: ModelMarketConfig,
+): Promise<AdminModelMarketResponse> {
+  const { data } = await apiClient.put<AdminModelMarketResponse>(
+    "/admin/settings/model-market",
+    config,
+  );
+  return data;
+}
+
+export interface GeoBlockSettings {
+  enabled: boolean;
+  countries: string[];
+  whitelist: string[];
+}
+
+/**
+ * Get geo block settings
+ * @returns Geo block settings
+ */
+export async function getGeoBlockSettings(): Promise<GeoBlockSettings> {
+  const { data } = await apiClient.get<GeoBlockSettings>(
+    "/admin/settings/geo-block",
+  );
+  return data;
+}
+
+/**
+ * Update geo block settings
+ * @param settings - Geo block settings to update
+ * @returns Updated settings
+ */
+export async function updateGeoBlockSettings(
+  settings: GeoBlockSettings,
+): Promise<GeoBlockSettings> {
+  const { data } = await apiClient.put<GeoBlockSettings>(
+    "/admin/settings/geo-block",
+    settings,
+  );
+  return data;
+}
+
 export const settingsAPI = {
+  getModelMarket,
+  updateModelMarket,
+  getGeoBlockSettings,
+  updateGeoBlockSettings,
   getSettings,
   updateSettings,
   testSmtpConnection,
