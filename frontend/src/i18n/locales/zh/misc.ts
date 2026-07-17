@@ -112,7 +112,7 @@ export default {
     title: '我的订阅',
     description: '查看您的订阅计划和用量',
     noActiveSubscriptions: '暂无有效订阅',
-    noActiveSubscriptionsDesc: '您没有任何有效订阅。请联系管理员获取订阅。',
+    noActiveSubscriptionsDesc: '您没有任何有效订阅.请前往充值页面订购',
     failedToLoad: '加载订阅失败',
     status: {
       active: '有效',
@@ -132,7 +132,14 @@ export default {
     resetIn: '{time} 后重置',
     quotaEndsIn: '额度将在 {time} 后结束',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}'
+    usageOf: '已用 {used} / {limit}',
+    exhaustedAwaitingExpiry: '{count} 个已耗尽订阅等待到期，您可以前往购买一个新的订阅',
+    resetWeeklyLimit: '重置周限',
+    resetWeeklyLimitTitle: '重置每周用量限制',
+    resetWeeklyLimitConfirm:
+      '每个订阅周期仅可重置一次周限。当前剩余次数：{remaining}。仅清零周限用量；总额度、累计已用、日限、状态和到期时间均不会改变。',
+    weeklyLimitResetSuccess: '周限用量已重置',
+    failedToResetWeeklyLimit: '重置周限失败'
   },
 
   // Onboarding Tour

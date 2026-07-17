@@ -44,6 +44,11 @@ var (
 	ErrSQLDBUnavailable              = infraerrors.InternalServer("SQL_DB_UNAVAILABLE", "sql.DB not wired into repository")
 	ErrSubscriptionRenewalNotAllowed = infraerrors.Conflict("SUBSCRIPTION_RENEWAL_NOT_ALLOWED", "current subscription is still usable, cannot purchase a new one before exhaustion or expiration")
 	ErrAlreadyHasUsableSubscription  = infraerrors.Conflict("ALREADY_HAS_USABLE_SUBSCRIPTION", "user already has a usable subscription")
+
+	// 用户手动重置周限
+	ErrSubscriptionNotUsable                 = infraerrors.Forbidden("SUBSCRIPTION_NOT_USABLE", "subscription is not usable")
+	ErrSubscriptionNoWeeklyLimit             = infraerrors.BadRequest("SUBSCRIPTION_NO_WEEKLY_LIMIT", "subscription has no weekly limit")
+	ErrSubscriptionWeeklyLimitResetExhausted = infraerrors.Conflict("SUBSCRIPTION_WEEKLY_LIMIT_RESET_EXHAUSTED", "weekly limit reset already used for this subscription period")
 )
 
 // SubscriptionService 订阅服务
@@ -1100,6 +1105,7 @@ func (s *SubscriptionService) CheckAndActivateWindow(ctx context.Context, sub *U
 
 // AdminResetQuota manually resets the daily, weekly, and/or monthly usage windows.
 // Uses startOfDay(now) as the new window start, matching automatic resets.
+// Does not read or write weekly_limit_user_reset_at.
 func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionID int64, resetDaily, resetWeekly, resetMonthly bool) (*UserSubscription, error) {
 	if !resetDaily && !resetWeekly && !resetMonthly {
 		return nil, ErrInvalidInput
@@ -1124,6 +1130,48 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 		_ = s.billingCacheService.InvalidateSubscription(ctx, sub.UserID, gid)
 	}
 	// Return the refreshed subscription from DB
+	return s.userSubRepo.GetByID(ctx, subscriptionID)
+}
+
+// UserResetWeeklyLimit 用户手动重置周限（每个订阅周期仅一次）。
+// 仅清零 weekly_usage_usd / 刷新 weekly_window_start / 写入 weekly_limit_user_reset_at，
+// 不改动 quota_used/quota_limit/daily/status/expires_at。
+func (s *SubscriptionService) UserResetWeeklyLimit(ctx context.Context, userID, subscriptionID int64) (*UserSubscription, error) {
+	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub.UserID != userID {
+		return nil, ErrSubscriptionNotFound
+	}
+	if !sub.IsUsable() {
+		return nil, ErrSubscriptionNotUsable
+	}
+	if sub.WeeklyLimitUSD == nil {
+		return nil, ErrSubscriptionNoWeeklyLimit
+	}
+	if sub.WeeklyLimitUserResetAt != nil {
+		return nil, ErrSubscriptionWeeklyLimitResetExhausted
+	}
+
+	now := time.Now()
+	windowStart := startOfDay(now)
+	affected, err := s.userSubRepo.UserResetWeeklyLimit(ctx, subscriptionID, userID, windowStart, now)
+	if err != nil {
+		return nil, err
+	}
+	if affected == 0 {
+		return nil, ErrSubscriptionWeeklyLimitResetExhausted
+	}
+
+	gid := subscriptionGroupIDOrZero(sub.GroupID)
+	s.InvalidateSubCache(userID, gid)
+	if s.subCacheL1 != nil {
+		s.subCacheL1.Wait()
+	}
+	if s.billingCacheService != nil {
+		_ = s.billingCacheService.InvalidateSubscription(ctx, userID, gid)
+	}
 	return s.userSubRepo.GetByID(ctx, subscriptionID)
 }
 

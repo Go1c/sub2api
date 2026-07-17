@@ -7180,7 +7180,14 @@ export default {
     resetIn: 'Resets in {time}',
     quotaEndsIn: 'Quota ends in {time}',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}'
+    usageOf: '{used} of {limit}',
+    exhaustedAwaitingExpiry: '{count} exhausted subscription(s) waiting to expire',
+    resetWeeklyLimit: 'Reset Weekly Limit',
+    resetWeeklyLimitTitle: 'Reset Weekly Usage Limit',
+    resetWeeklyLimitConfirm:
+      'You can reset the weekly limit only once per subscription period. Remaining attempts: {remaining}. This only zeroes weekly usage; total credit, cumulative usage, daily limit, status, and expiration are unchanged.',
+    weeklyLimitResetSuccess: 'Weekly limit usage has been reset',
+    failedToResetWeeklyLimit: 'Failed to reset weekly limit'
   },
 
   // Onboarding Tour

@@ -61263,53 +61263,54 @@ func (m *UserPlatformQuotaMutation) ResetEdge(name string) error {
 // UserSubscriptionMutation represents an operation that mutates the UserSubscription nodes in the graph.
 type UserSubscriptionMutation struct {
 	config
-	op                       Op
-	typ                      string
-	id                       *int64
-	created_at               *time.Time
-	updated_at               *time.Time
-	deleted_at               *time.Time
-	plan_id                  *int64
-	addplan_id               *int64
-	scope_type               *string
-	scope_config             *map[string]interface{}
-	quota_limit_usd          *float64
-	addquota_limit_usd       *float64
-	quota_used_usd           *float64
-	addquota_used_usd        *float64
-	daily_limit_usd          *float64
-	adddaily_limit_usd       *float64
-	weekly_limit_usd         *float64
-	addweekly_limit_usd      *float64
-	starts_at                *time.Time
-	expires_at               *time.Time
-	status                   *string
-	exhausted_at             *time.Time
-	expired_credit_logged_at *time.Time
-	daily_window_start       *time.Time
-	weekly_window_start      *time.Time
-	daily_usage_usd          *float64
-	adddaily_usage_usd       *float64
-	weekly_usage_usd         *float64
-	addweekly_usage_usd      *float64
-	assigned_at              *time.Time
-	notes                    *string
-	clearedFields            map[string]struct{}
-	user                     *int64
-	cleareduser              bool
-	group                    *int64
-	clearedgroup             bool
-	assigned_by_user         *int64
-	clearedassigned_by_user  bool
-	usage_logs               map[int64]struct{}
-	removedusage_logs        map[int64]struct{}
-	clearedusage_logs        bool
-	credit_ledger            map[int64]struct{}
-	removedcredit_ledger     map[int64]struct{}
-	clearedcredit_ledger     bool
-	done                     bool
-	oldValue                 func(context.Context) (*UserSubscription, error)
-	predicates               []predicate.UserSubscription
+	op                         Op
+	typ                        string
+	id                         *int64
+	created_at                 *time.Time
+	updated_at                 *time.Time
+	deleted_at                 *time.Time
+	plan_id                    *int64
+	addplan_id                 *int64
+	scope_type                 *string
+	scope_config               *map[string]interface{}
+	quota_limit_usd            *float64
+	addquota_limit_usd         *float64
+	quota_used_usd             *float64
+	addquota_used_usd          *float64
+	daily_limit_usd            *float64
+	adddaily_limit_usd         *float64
+	weekly_limit_usd           *float64
+	addweekly_limit_usd        *float64
+	starts_at                  *time.Time
+	expires_at                 *time.Time
+	status                     *string
+	exhausted_at               *time.Time
+	expired_credit_logged_at   *time.Time
+	daily_window_start         *time.Time
+	weekly_window_start        *time.Time
+	daily_usage_usd            *float64
+	adddaily_usage_usd         *float64
+	weekly_usage_usd           *float64
+	addweekly_usage_usd        *float64
+	weekly_limit_user_reset_at *time.Time
+	assigned_at                *time.Time
+	notes                      *string
+	clearedFields              map[string]struct{}
+	user                       *int64
+	cleareduser                bool
+	group                      *int64
+	clearedgroup               bool
+	assigned_by_user           *int64
+	clearedassigned_by_user    bool
+	usage_logs                 map[int64]struct{}
+	removedusage_logs          map[int64]struct{}
+	clearedusage_logs          bool
+	credit_ledger              map[int64]struct{}
+	removedcredit_ledger       map[int64]struct{}
+	clearedcredit_ledger       bool
+	done                       bool
+	oldValue                   func(context.Context) (*UserSubscription, error)
+	predicates                 []predicate.UserSubscription
 }
 
 var _ ent.Mutation = (*UserSubscriptionMutation)(nil)
@@ -62426,6 +62427,55 @@ func (m *UserSubscriptionMutation) ResetWeeklyUsageUsd() {
 	m.addweekly_usage_usd = nil
 }
 
+// SetWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field.
+func (m *UserSubscriptionMutation) SetWeeklyLimitUserResetAt(t time.Time) {
+	m.weekly_limit_user_reset_at = &t
+}
+
+// WeeklyLimitUserResetAt returns the value of the "weekly_limit_user_reset_at" field in the mutation.
+func (m *UserSubscriptionMutation) WeeklyLimitUserResetAt() (r time.Time, exists bool) {
+	v := m.weekly_limit_user_reset_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWeeklyLimitUserResetAt returns the old "weekly_limit_user_reset_at" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldWeeklyLimitUserResetAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWeeklyLimitUserResetAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWeeklyLimitUserResetAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWeeklyLimitUserResetAt: %w", err)
+	}
+	return oldValue.WeeklyLimitUserResetAt, nil
+}
+
+// ClearWeeklyLimitUserResetAt clears the value of the "weekly_limit_user_reset_at" field.
+func (m *UserSubscriptionMutation) ClearWeeklyLimitUserResetAt() {
+	m.weekly_limit_user_reset_at = nil
+	m.clearedFields[usersubscription.FieldWeeklyLimitUserResetAt] = struct{}{}
+}
+
+// WeeklyLimitUserResetAtCleared returns if the "weekly_limit_user_reset_at" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) WeeklyLimitUserResetAtCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldWeeklyLimitUserResetAt]
+	return ok
+}
+
+// ResetWeeklyLimitUserResetAt resets all changes to the "weekly_limit_user_reset_at" field.
+func (m *UserSubscriptionMutation) ResetWeeklyLimitUserResetAt() {
+	m.weekly_limit_user_reset_at = nil
+	delete(m.clearedFields, usersubscription.FieldWeeklyLimitUserResetAt)
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (m *UserSubscriptionMutation) SetAssignedBy(i int64) {
 	m.assigned_by_user = &i
@@ -62796,7 +62846,7 @@ func (m *UserSubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserSubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, usersubscription.FieldCreatedAt)
 	}
@@ -62860,6 +62910,9 @@ func (m *UserSubscriptionMutation) Fields() []string {
 	if m.weekly_usage_usd != nil {
 		fields = append(fields, usersubscription.FieldWeeklyUsageUsd)
 	}
+	if m.weekly_limit_user_reset_at != nil {
+		fields = append(fields, usersubscription.FieldWeeklyLimitUserResetAt)
+	}
 	if m.assigned_by_user != nil {
 		fields = append(fields, usersubscription.FieldAssignedBy)
 	}
@@ -62919,6 +62972,8 @@ func (m *UserSubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.DailyUsageUsd()
 	case usersubscription.FieldWeeklyUsageUsd:
 		return m.WeeklyUsageUsd()
+	case usersubscription.FieldWeeklyLimitUserResetAt:
+		return m.WeeklyLimitUserResetAt()
 	case usersubscription.FieldAssignedBy:
 		return m.AssignedBy()
 	case usersubscription.FieldAssignedAt:
@@ -62976,6 +63031,8 @@ func (m *UserSubscriptionMutation) OldField(ctx context.Context, name string) (e
 		return m.OldDailyUsageUsd(ctx)
 	case usersubscription.FieldWeeklyUsageUsd:
 		return m.OldWeeklyUsageUsd(ctx)
+	case usersubscription.FieldWeeklyLimitUserResetAt:
+		return m.OldWeeklyLimitUserResetAt(ctx)
 	case usersubscription.FieldAssignedBy:
 		return m.OldAssignedBy(ctx)
 	case usersubscription.FieldAssignedAt:
@@ -63137,6 +63194,13 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWeeklyUsageUsd(v)
+		return nil
+	case usersubscription.FieldWeeklyLimitUserResetAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWeeklyLimitUserResetAt(v)
 		return nil
 	case usersubscription.FieldAssignedBy:
 		v, ok := value.(int64)
@@ -63303,6 +63367,9 @@ func (m *UserSubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(usersubscription.FieldWeeklyWindowStart) {
 		fields = append(fields, usersubscription.FieldWeeklyWindowStart)
 	}
+	if m.FieldCleared(usersubscription.FieldWeeklyLimitUserResetAt) {
+		fields = append(fields, usersubscription.FieldWeeklyLimitUserResetAt)
+	}
 	if m.FieldCleared(usersubscription.FieldAssignedBy) {
 		fields = append(fields, usersubscription.FieldAssignedBy)
 	}
@@ -63349,6 +63416,9 @@ func (m *UserSubscriptionMutation) ClearField(name string) error {
 		return nil
 	case usersubscription.FieldWeeklyWindowStart:
 		m.ClearWeeklyWindowStart()
+		return nil
+	case usersubscription.FieldWeeklyLimitUserResetAt:
+		m.ClearWeeklyLimitUserResetAt()
 		return nil
 	case usersubscription.FieldAssignedBy:
 		m.ClearAssignedBy()
@@ -63426,6 +63496,9 @@ func (m *UserSubscriptionMutation) ResetField(name string) error {
 		return nil
 	case usersubscription.FieldWeeklyUsageUsd:
 		m.ResetWeeklyUsageUsd()
+		return nil
+	case usersubscription.FieldWeeklyLimitUserResetAt:
+		m.ResetWeeklyLimitUserResetAt()
 		return nil
 	case usersubscription.FieldAssignedBy:
 		m.ResetAssignedBy()

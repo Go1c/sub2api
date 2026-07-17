@@ -43,12 +43,25 @@
                     {{ subscription.group.description }}
                   </p>
                 </div>
-                <button
-                  :class="['rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
-                  @click="router.push({ path: '/purchase', query: { tab: 'subscription' } })"
-                >
-                  {{ t('payment.renewNow') }}
-                </button>
+                <div class="flex flex-shrink-0 flex-wrap items-center gap-2">
+                  <button
+                    v-if="canShowResetWeeklyLimit(subscription)"
+                    type="button"
+                    data-testid="reset-weekly-limit"
+                    class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
+                    :disabled="isResetWeeklyLimitDisabled(subscription)"
+                    @click="handleResetWeeklyLimit(subscription)"
+                  >
+                    {{ t('userSubscriptions.resetWeeklyLimit') }}
+                  </button>
+                  <button
+                    type="button"
+                    :class="['rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
+                    @click="router.push({ path: '/purchase', query: { tab: 'subscription' } })"
+                  >
+                    {{ t('payment.renewNow') }}
+                  </button>
+                </div>
               </div>
 
               <div class="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
@@ -102,6 +115,17 @@
         </details>
       </template>
     </div>
+
+    <ConfirmDialog
+      :show="showResetWeeklyLimitConfirm"
+      :title="t('userSubscriptions.resetWeeklyLimitTitle')"
+      :message="resetWeeklyLimitConfirmMessage"
+      :confirm-text="t('userSubscriptions.resetWeeklyLimit')"
+      :cancel-text="t('common.cancel')"
+      :danger="true"
+      @confirm="confirmResetWeeklyLimit"
+      @cancel="closeResetWeeklyLimitDialog"
+    />
   </AppLayout>
 </template>
 
@@ -115,6 +139,7 @@ import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { formatDateOnly, formatDateTime } from '@/utils/format'
 import { platformAccentBarClass, platformBadgeClass, platformBadgeLightClass, platformBorderClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
 import { subscriptionDisplayName } from '@/utils/subscriptionDisplay'
@@ -158,11 +183,19 @@ const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
+const showResetWeeklyLimitConfirm = ref(false)
+const weeklyLimitSubscription = ref<UserSubscription | null>(null)
+const resettingWeeklyLimit = ref(false)
 
 const visibleSubscriptions = computed(() => subscriptions.value.filter(isVisibleSubscription))
 const usableSubscriptions = computed(() => visibleSubscriptions.value.filter(subscription => subscription.is_usable === true))
 const orderedUsableSubscriptions = computed(() => [...usableSubscriptions.value].sort(compareSubscriptionRecency))
 const exhaustedSubscriptions = computed(() => visibleSubscriptions.value.filter(subscription => subscription.exhausted_at && subscription.is_usable !== true))
+
+const resetWeeklyLimitConfirmMessage = computed(() => {
+  const remaining = weeklyLimitSubscription.value?.weekly_limit_reset_remaining ?? 0
+  return t('userSubscriptions.resetWeeklyLimitConfirm', { remaining })
+})
 
 async function loadSubscriptions() {
   try {
@@ -176,6 +209,48 @@ async function loadSubscriptions() {
       : extractApiErrorMessage(error, t('userSubscriptions.failedToLoad')))
   } finally {
     loading.value = false
+  }
+}
+
+function canShowResetWeeklyLimit(subscription: UserSubscription): boolean {
+  return subscription.is_usable === true && subscription.weekly_limit_usd != null
+}
+
+function isResetWeeklyLimitDisabled(subscription: UserSubscription): boolean {
+  return (subscription.weekly_limit_reset_remaining ?? 0) <= 0
+    || (resettingWeeklyLimit.value && weeklyLimitSubscription.value?.id === subscription.id)
+}
+
+function handleResetWeeklyLimit(subscription: UserSubscription) {
+  if (isResetWeeklyLimitDisabled(subscription)) return
+  weeklyLimitSubscription.value = subscription
+  showResetWeeklyLimitConfirm.value = true
+}
+
+function closeResetWeeklyLimitDialog() {
+  if (resettingWeeklyLimit.value) return
+  showResetWeeklyLimitConfirm.value = false
+  weeklyLimitSubscription.value = null
+}
+
+async function confirmResetWeeklyLimit() {
+  if (!weeklyLimitSubscription.value || resettingWeeklyLimit.value) return
+
+  resettingWeeklyLimit.value = true
+  try {
+    await subscriptionsAPI.resetWeeklyLimit(weeklyLimitSubscription.value.id)
+    appStore.showSuccess(t('userSubscriptions.weeklyLimitResetSuccess'))
+    showResetWeeklyLimitConfirm.value = false
+    weeklyLimitSubscription.value = null
+    await loadSubscriptions()
+  } catch (error) {
+    console.error('Failed to reset weekly limit:', error)
+    const code = extractApiErrorCode(error)
+    appStore.showError(code && subscriptionCreditErrorMessages[code]
+      ? subscriptionCreditErrorMessages[code]
+      : extractApiErrorMessage(error, t('userSubscriptions.failedToResetWeeklyLimit')))
+  } finally {
+    resettingWeeklyLimit.value = false
   }
 }
 
