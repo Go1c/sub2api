@@ -399,6 +399,26 @@ func (_u *UserSubscriptionUpdate) AddWeeklyUsageUsd(v float64) *UserSubscription
 	return _u
 }
 
+// SetWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field.
+func (_u *UserSubscriptionUpdate) SetWeeklyLimitUserResetAt(v time.Time) *UserSubscriptionUpdate {
+	_u.mutation.SetWeeklyLimitUserResetAt(v)
+	return _u
+}
+
+// SetNillableWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableWeeklyLimitUserResetAt(v *time.Time) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetWeeklyLimitUserResetAt(*v)
+	}
+	return _u
+}
+
+// ClearWeeklyLimitUserResetAt clears the value of the "weekly_limit_user_reset_at" field.
+func (_u *UserSubscriptionUpdate) ClearWeeklyLimitUserResetAt() *UserSubscriptionUpdate {
+	_u.mutation.ClearWeeklyLimitUserResetAt()
+	return _u
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (_u *UserSubscriptionUpdate) SetAssignedBy(v int64) *UserSubscriptionUpdate {
 	_u.mutation.SetAssignedBy(v)
@@ -747,6 +767,12 @@ func (_u *UserSubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.AddedWeeklyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldWeeklyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.WeeklyLimitUserResetAt(); ok {
+		_spec.SetField(usersubscription.FieldWeeklyLimitUserResetAt, field.TypeTime, value)
+	}
+	if _u.mutation.WeeklyLimitUserResetAtCleared() {
+		_spec.ClearField(usersubscription.FieldWeeklyLimitUserResetAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -1321,6 +1347,26 @@ func (_u *UserSubscriptionUpdateOne) AddWeeklyUsageUsd(v float64) *UserSubscript
 	return _u
 }
 
+// SetWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field.
+func (_u *UserSubscriptionUpdateOne) SetWeeklyLimitUserResetAt(v time.Time) *UserSubscriptionUpdateOne {
+	_u.mutation.SetWeeklyLimitUserResetAt(v)
+	return _u
+}
+
+// SetNillableWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableWeeklyLimitUserResetAt(v *time.Time) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetWeeklyLimitUserResetAt(*v)
+	}
+	return _u
+}
+
+// ClearWeeklyLimitUserResetAt clears the value of the "weekly_limit_user_reset_at" field.
+func (_u *UserSubscriptionUpdateOne) ClearWeeklyLimitUserResetAt() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearWeeklyLimitUserResetAt()
+	return _u
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (_u *UserSubscriptionUpdateOne) SetAssignedBy(v int64) *UserSubscriptionUpdateOne {
 	_u.mutation.SetAssignedBy(v)
@@ -1699,6 +1745,12 @@ func (_u *UserSubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *UserSu
 	}
 	if value, ok := _u.mutation.AddedWeeklyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldWeeklyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.WeeklyLimitUserResetAt(); ok {
+		_spec.SetField(usersubscription.FieldWeeklyLimitUserResetAt, field.TypeTime, value)
+	}
+	if _u.mutation.WeeklyLimitUserResetAtCleared() {
+		_spec.ClearField(usersubscription.FieldWeeklyLimitUserResetAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)

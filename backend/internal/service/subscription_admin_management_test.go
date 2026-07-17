@@ -71,6 +71,9 @@ func (r *adminUpdateUserSubRepoStub) ActivateWindows(context.Context, int64, tim
 func (r *adminUpdateUserSubRepoStub) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time) error {
 	panic("unexpected ResetUsageWindows")
 }
+func (r *adminUpdateUserSubRepoStub) UserResetWeeklyLimit(context.Context, int64, int64, time.Time, time.Time) (int, error) {
+	panic("unexpected UserResetWeeklyLimit")
+}
 func (r *adminUpdateUserSubRepoStub) ResetDailyUsage(context.Context, int64, *time.Time, time.Time) error {
 	panic("unexpected ResetDailyUsage")
 }

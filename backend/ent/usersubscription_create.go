@@ -288,6 +288,20 @@ func (_c *UserSubscriptionCreate) SetNillableWeeklyUsageUsd(v *float64) *UserSub
 	return _c
 }
 
+// SetWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field.
+func (_c *UserSubscriptionCreate) SetWeeklyLimitUserResetAt(v time.Time) *UserSubscriptionCreate {
+	_c.mutation.SetWeeklyLimitUserResetAt(v)
+	return _c
+}
+
+// SetNillableWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWeeklyLimitUserResetAt(v *time.Time) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWeeklyLimitUserResetAt(*v)
+	}
+	return _c
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (_c *UserSubscriptionCreate) SetAssignedBy(v int64) *UserSubscriptionCreate {
 	_c.mutation.SetAssignedBy(v)
@@ -634,6 +648,10 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.WeeklyUsageUsd(); ok {
 		_spec.SetField(usersubscription.FieldWeeklyUsageUsd, field.TypeFloat64, value)
 		_node.WeeklyUsageUsd = value
+	}
+	if value, ok := _c.mutation.WeeklyLimitUserResetAt(); ok {
+		_spec.SetField(usersubscription.FieldWeeklyLimitUserResetAt, field.TypeTime, value)
+		_node.WeeklyLimitUserResetAt = &value
 	}
 	if value, ok := _c.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -1111,6 +1129,24 @@ func (u *UserSubscriptionUpsert) UpdateWeeklyUsageUsd() *UserSubscriptionUpsert 
 // AddWeeklyUsageUsd adds v to the "weekly_usage_usd" field.
 func (u *UserSubscriptionUpsert) AddWeeklyUsageUsd(v float64) *UserSubscriptionUpsert {
 	u.Add(usersubscription.FieldWeeklyUsageUsd, v)
+	return u
+}
+
+// SetWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field.
+func (u *UserSubscriptionUpsert) SetWeeklyLimitUserResetAt(v time.Time) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWeeklyLimitUserResetAt, v)
+	return u
+}
+
+// UpdateWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWeeklyLimitUserResetAt() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWeeklyLimitUserResetAt)
+	return u
+}
+
+// ClearWeeklyLimitUserResetAt clears the value of the "weekly_limit_user_reset_at" field.
+func (u *UserSubscriptionUpsert) ClearWeeklyLimitUserResetAt() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldWeeklyLimitUserResetAt)
 	return u
 }
 
@@ -1596,6 +1632,27 @@ func (u *UserSubscriptionUpsertOne) AddWeeklyUsageUsd(v float64) *UserSubscripti
 func (u *UserSubscriptionUpsertOne) UpdateWeeklyUsageUsd() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateWeeklyUsageUsd()
+	})
+}
+
+// SetWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field.
+func (u *UserSubscriptionUpsertOne) SetWeeklyLimitUserResetAt(v time.Time) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWeeklyLimitUserResetAt(v)
+	})
+}
+
+// UpdateWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWeeklyLimitUserResetAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWeeklyLimitUserResetAt()
+	})
+}
+
+// ClearWeeklyLimitUserResetAt clears the value of the "weekly_limit_user_reset_at" field.
+func (u *UserSubscriptionUpsertOne) ClearWeeklyLimitUserResetAt() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWeeklyLimitUserResetAt()
 	})
 }
 
@@ -2255,6 +2312,27 @@ func (u *UserSubscriptionUpsertBulk) AddWeeklyUsageUsd(v float64) *UserSubscript
 func (u *UserSubscriptionUpsertBulk) UpdateWeeklyUsageUsd() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateWeeklyUsageUsd()
+	})
+}
+
+// SetWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field.
+func (u *UserSubscriptionUpsertBulk) SetWeeklyLimitUserResetAt(v time.Time) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWeeklyLimitUserResetAt(v)
+	})
+}
+
+// UpdateWeeklyLimitUserResetAt sets the "weekly_limit_user_reset_at" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWeeklyLimitUserResetAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWeeklyLimitUserResetAt()
+	})
+}
+
+// ClearWeeklyLimitUserResetAt clears the value of the "weekly_limit_user_reset_at" field.
+func (u *UserSubscriptionUpsertBulk) ClearWeeklyLimitUserResetAt() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWeeklyLimitUserResetAt()
 	})
 }
 

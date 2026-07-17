@@ -27,6 +27,9 @@ type UserSubscriptionRepository interface {
 
 	ActivateWindows(ctx context.Context, id int64, start time.Time) error
 	ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly bool, newWindowStart time.Time) error
+	// UserResetWeeklyLimit 原子 CAS：仅当 weekly_limit_user_reset_at IS NULL 时
+	// 清零周用量、刷新周窗口起点、写入 reset_at。返回影响行数（0 = 已用尽/竞态未命中）。
+	UserResetWeeklyLimit(ctx context.Context, subscriptionID, userID int64, windowStart, resetAt time.Time) (int, error)
 	ResetDailyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error
 	ResetWeeklyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error
 	ResetMonthlyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error

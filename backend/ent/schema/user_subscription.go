@@ -113,6 +113,12 @@ func (UserSubscription) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
 			Default(0),
 
+		// 用户手动重置周限时间戳（NULL = 本订阅周期内尚未手动重置）
+		field.Time("weekly_limit_user_reset_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+
 		// 审计信息
 		field.Int64("assigned_by").
 			Optional().

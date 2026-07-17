@@ -24,7 +24,7 @@ metadata:
 |------|--------|
 | [`features/payment.md`](features/payment.md) | 内置支付系统:服务商接入、Webhook、订单状态、可信余额履约限流边界、管理端集成 Admin API |
 | [`features/subscription-pricing.md`](features/subscription-pricing.md) | 订阅套餐计价口径与计算器工具——定价 / 折扣 / 日周上限怎么算 |
-| [`features/subscription-credit-pool.md`](features/subscription-credit-pool.md) | 用户级订阅额度池:多订阅按时间扣费、额度优先消费、不足拆分扣余额、ledger 审计 |
+| [`features/subscription-credit-pool.md`](features/subscription-credit-pool.md) | 用户级订阅额度池:多订阅按时间扣费、额度优先消费、不足拆分扣余额、ledger 审计；用户自助重置周限（每订阅周期一次） |
 | [`features/subscription-admin.md`](features/subscription-admin.md) | issue #47 订阅管理三项修复:撤销不计浪费、限额刷新时间可配、套餐入口迁移 |
 | [`features/recharge-invoice-balance-gate.md`](features/recharge-invoice-balance-gate.md) | 充值页开票须知提示 + 首次使用余额门槛文案优化 |
 | [`features/admin-invoice-export.md`](features/admin-invoice-export.md) | 管理员发票记录页 Excel 导出(全部 / 正在开票) |
