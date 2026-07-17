@@ -7371,7 +7371,13 @@ export default {
     resetAt: 'Next reset: {time}',
     weeklyResetHint: 'Weekly credit resets at {time}. No credit will be restored before then.',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}'
+    usageOf: '{used} of {limit}',
+    resetWeeklyLimit: 'Reset Weekly Limit',
+    resetWeeklyLimitTitle: 'Reset Weekly Usage Limit',
+    resetWeeklyLimitConfirm:
+      'You can reset the weekly limit only once per subscription period. Remaining attempts: {remaining}. This only zeroes weekly usage; total credit, cumulative usage, daily limit, status, and expiration are unchanged.',
+    weeklyLimitResetSuccess: 'Weekly limit usage has been reset',
+    failedToResetWeeklyLimit: 'Failed to reset weekly limit'
   },
 
   // Onboarding Tour

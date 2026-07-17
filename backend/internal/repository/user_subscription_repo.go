@@ -62,7 +62,8 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 		SetNillableDailyLimitUsd(sub.DailyLimitUSD).
 		SetNillableWeeklyLimitUsd(sub.WeeklyLimitUSD).
 		SetNillableExhaustedAt(sub.ExhaustedAt).
-		SetNillableExpiredCreditLoggedAt(sub.ExpiredCreditLoggedAt)
+		SetNillableExpiredCreditLoggedAt(sub.ExpiredCreditLoggedAt).
+		SetNillableWeeklyLimitUserResetAt(sub.WeeklyLimitUserResetAt)
 
 	if sub.StartsAt.IsZero() {
 		builder.SetStartsAt(time.Now())
@@ -181,6 +182,11 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 		SetNillableWeeklyLimitUsd(sub.WeeklyLimitUSD).
 		SetNillableExhaustedAt(sub.ExhaustedAt).
 		SetNillableExpiredCreditLoggedAt(sub.ExpiredCreditLoggedAt)
+	if sub.WeeklyLimitUserResetAt != nil {
+		builder.SetWeeklyLimitUserResetAt(*sub.WeeklyLimitUserResetAt)
+	} else {
+		builder.ClearWeeklyLimitUserResetAt()
+	}
 
 	updated, err := builder.Save(ctx)
 	if err == nil {
@@ -459,6 +465,32 @@ func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id i
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
 
+// UserResetWeeklyLimit 原子 CAS 重置用户周限：
+// 条件 id + user_id + weekly_limit_user_reset_at IS NULL（软删除拦截器自动过滤 deleted_at）。
+// 设置 weekly_usage_usd=0、weekly_window_start、weekly_limit_user_reset_at。
+// 返回影响行数；0 表示机会已用尽或并发未命中。
+func (r *userSubscriptionRepository) UserResetWeeklyLimit(
+	ctx context.Context,
+	subscriptionID, userID int64,
+	windowStart, resetAt time.Time,
+) (int, error) {
+	client := clientFromContext(ctx, r.client)
+	n, err := client.UserSubscription.Update().
+		Where(
+			usersubscription.IDEQ(subscriptionID),
+			usersubscription.UserIDEQ(userID),
+			usersubscription.WeeklyLimitUserResetAtIsNil(),
+		).
+		SetWeeklyUsageUsd(0).
+		SetWeeklyWindowStart(windowStart).
+		SetWeeklyLimitUserResetAt(resetAt).
+		Save(ctx)
+	if err != nil {
+		return 0, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	return n, nil
+}
+
 func (r *userSubscriptionRepository) ResetDailyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
 	query := client.UserSubscription.Update().Where(usersubscription.IDEQ(id))
@@ -642,13 +674,14 @@ func userSubscriptionEntityToService(m *dbent.UserSubscription) *service.UserSub
 		DailyWindowStart:      m.DailyWindowStart,
 		WeeklyWindowStart:     m.WeeklyWindowStart,
 		// MonthlyWindowStart / MonthlyUsageUSD 已从 schema 移除
-		DailyUsageUSD:  m.DailyUsageUsd,
-		WeeklyUsageUSD: m.WeeklyUsageUsd,
-		AssignedBy:     m.AssignedBy,
-		AssignedAt:     m.AssignedAt,
-		Notes:          derefString(m.Notes),
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
+		DailyUsageUSD:          m.DailyUsageUsd,
+		WeeklyUsageUSD:         m.WeeklyUsageUsd,
+		WeeklyLimitUserResetAt: m.WeeklyLimitUserResetAt,
+		AssignedBy:             m.AssignedBy,
+		AssignedAt:             m.AssignedAt,
+		Notes:                  derefString(m.Notes),
+		CreatedAt:              m.CreatedAt,
+		UpdatedAt:              m.UpdatedAt,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

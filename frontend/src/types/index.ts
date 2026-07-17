@@ -1751,6 +1751,10 @@ export interface UserSubscription {
   weekly_limit_usd?: number | null
   weekly_usage_usd: number
   weekly_reset_at?: string | null
+  /** User self-service weekly-limit resets remaining in current subscription period (0|1). */
+  weekly_limit_reset_remaining?: number
+  /** When the user last self-reset weekly usage in this period. */
+  weekly_limit_user_reset_at?: string | null
   monthly_usage_usd: number
   scope_type?: string
   scope_config?: Record<string, unknown> | null

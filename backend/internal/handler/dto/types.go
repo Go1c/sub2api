@@ -544,7 +544,11 @@ type UserSubscription struct {
 	WeeklyLimitUSD  *float64   `json:"weekly_limit_usd"`
 	WeeklyUsageUSD  float64    `json:"weekly_usage_usd"`
 	WeeklyResetAt   *time.Time `json:"weekly_reset_at"`
-	MonthlyUsageUSD float64    `json:"monthly_usage_usd"`
+	// WeeklyLimitResetRemaining 本订阅周期用户还可手动重置周限的次数（0 或 1）。
+	WeeklyLimitResetRemaining int `json:"weekly_limit_reset_remaining"`
+	// WeeklyLimitUserResetAt 用户上次手动重置周限时刻；未重置时 omitempty。
+	WeeklyLimitUserResetAt *time.Time `json:"weekly_limit_user_reset_at,omitempty"`
+	MonthlyUsageUSD        float64    `json:"monthly_usage_usd"`
 
 	Recent30dWastedUSD float64 `json:"recent_30d_wasted_usd"`
 

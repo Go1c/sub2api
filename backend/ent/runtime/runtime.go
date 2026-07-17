@@ -2382,7 +2382,7 @@ func init() {
 	// usersubscription.DefaultWeeklyUsageUsd holds the default value on creation for the weekly_usage_usd field.
 	usersubscription.DefaultWeeklyUsageUsd = usersubscriptionDescWeeklyUsageUsd.Default.(float64)
 	// usersubscriptionDescAssignedAt is the schema descriptor for assigned_at field.
-	usersubscriptionDescAssignedAt := usersubscriptionFields[19].Descriptor()
+	usersubscriptionDescAssignedAt := usersubscriptionFields[20].Descriptor()
 	// usersubscription.DefaultAssignedAt holds the default value on creation for the assigned_at field.
 	usersubscription.DefaultAssignedAt = usersubscriptionDescAssignedAt.Default.(func() time.Time)
 }

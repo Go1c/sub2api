@@ -155,6 +155,11 @@ func WeeklyUsageUsd(v float64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldWeeklyUsageUsd, v))
 }
 
+// WeeklyLimitUserResetAt applies equality check predicate on the "weekly_limit_user_reset_at" field. It's identical to WeeklyLimitUserResetAtEQ.
+func WeeklyLimitUserResetAt(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWeeklyLimitUserResetAt, v))
+}
+
 // AssignedBy applies equality check predicate on the "assigned_by" field. It's identical to AssignedByEQ.
 func AssignedBy(v int64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldAssignedBy, v))
@@ -1068,6 +1073,56 @@ func WeeklyUsageUsdLT(v float64) predicate.UserSubscription {
 // WeeklyUsageUsdLTE applies the LTE predicate on the "weekly_usage_usd" field.
 func WeeklyUsageUsdLTE(v float64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldLTE(FieldWeeklyUsageUsd, v))
+}
+
+// WeeklyLimitUserResetAtEQ applies the EQ predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtEQ(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldWeeklyLimitUserResetAt, v))
+}
+
+// WeeklyLimitUserResetAtNEQ applies the NEQ predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtNEQ(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldWeeklyLimitUserResetAt, v))
+}
+
+// WeeklyLimitUserResetAtIn applies the In predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtIn(vs ...time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldWeeklyLimitUserResetAt, vs...))
+}
+
+// WeeklyLimitUserResetAtNotIn applies the NotIn predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtNotIn(vs ...time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldWeeklyLimitUserResetAt, vs...))
+}
+
+// WeeklyLimitUserResetAtGT applies the GT predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtGT(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldWeeklyLimitUserResetAt, v))
+}
+
+// WeeklyLimitUserResetAtGTE applies the GTE predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtGTE(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldWeeklyLimitUserResetAt, v))
+}
+
+// WeeklyLimitUserResetAtLT applies the LT predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtLT(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldWeeklyLimitUserResetAt, v))
+}
+
+// WeeklyLimitUserResetAtLTE applies the LTE predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtLTE(v time.Time) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldWeeklyLimitUserResetAt, v))
+}
+
+// WeeklyLimitUserResetAtIsNil applies the IsNil predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldWeeklyLimitUserResetAt))
+}
+
+// WeeklyLimitUserResetAtNotNil applies the NotNil predicate on the "weekly_limit_user_reset_at" field.
+func WeeklyLimitUserResetAtNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldWeeklyLimitUserResetAt))
 }
 
 // AssignedByEQ applies the EQ predicate on the "assigned_by" field.

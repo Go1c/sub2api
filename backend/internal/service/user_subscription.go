@@ -47,6 +47,10 @@ type UserSubscription struct {
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64 // 兼容字段；DB 已移除
 
+	// WeeklyLimitUserResetAt 用户手动重置周限时刻。
+	// nil = 本订阅周期内尚未手动重置；非 nil = 已使用过一次机会。
+	WeeklyLimitUserResetAt *time.Time
+
 	// 管理后台展示字段：近 30 天窗口重置和过期销毁造成的浪费金额。
 	Recent30dWastedUSD float64
 

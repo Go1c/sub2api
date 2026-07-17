@@ -2028,6 +2028,9 @@ func (stubUserSubscriptionRepo) ActivateWindows(ctx context.Context, id int64, s
 func (stubUserSubscriptionRepo) ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly bool, newWindowStart time.Time) error {
 	return errors.New("not implemented")
 }
+func (stubUserSubscriptionRepo) UserResetWeeklyLimit(ctx context.Context, subscriptionID, userID int64, windowStart, resetAt time.Time) (int, error) {
+	return 0, errors.New("not implemented")
+}
 func (stubUserSubscriptionRepo) ResetDailyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
 	return errors.New("not implemented")
 }

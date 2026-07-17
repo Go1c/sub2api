@@ -7380,7 +7380,13 @@ export default {
     resetAt: '下次重置：{time}',
     weeklyResetHint: '周额度将在 {time} 重置，重置前不会恢复可用额度。',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}'
+    usageOf: '已用 {used} / {limit}',
+    resetWeeklyLimit: '重置周限',
+    resetWeeklyLimitTitle: '重置每周用量限制',
+    resetWeeklyLimitConfirm:
+      '每个订阅周期仅可重置一次周限。当前剩余次数：{remaining}。仅清零周限用量；总额度、累计已用、日限、状态和到期时间均不会改变。',
+    weeklyLimitResetSuccess: '周限用量已重置',
+    failedToResetWeeklyLimit: '重置周限失败'
   },
 
   // Onboarding Tour

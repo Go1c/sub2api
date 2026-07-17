@@ -60,6 +60,36 @@ func TestUserSubscriptionFromServiceIncludesCreditPoolFields(t *testing.T) {
 	require.Equal(t, 12.0, out.WeeklyUsageUSD)
 	require.NotNil(t, out.WeeklyResetAt)
 	require.Equal(t, weeklyWindow.Add(7*24*time.Hour), *out.WeeklyResetAt)
+	require.Equal(t, 1, out.WeeklyLimitResetRemaining, "有周限且未手动重置 → remaining=1")
+	require.Nil(t, out.WeeklyLimitUserResetAt)
 	require.Equal(t, service.SubscriptionScopeSelectedGroups, out.ScopeType)
 	require.NotNil(t, out.ScopeConfig)
+}
+
+func TestUserSubscriptionFromServiceWeeklyLimitResetRemaining(t *testing.T) {
+	weekly := 50.0
+	usedAt := time.Now().UTC()
+
+	t.Run("has weekly limit unused", func(t *testing.T) {
+		out := UserSubscriptionFromService(&service.UserSubscription{
+			WeeklyLimitUSD: &weekly,
+		})
+		require.Equal(t, 1, out.WeeklyLimitResetRemaining)
+		require.Nil(t, out.WeeklyLimitUserResetAt)
+	})
+
+	t.Run("already reset", func(t *testing.T) {
+		out := UserSubscriptionFromService(&service.UserSubscription{
+			WeeklyLimitUSD:         &weekly,
+			WeeklyLimitUserResetAt: &usedAt,
+		})
+		require.Equal(t, 0, out.WeeklyLimitResetRemaining)
+		require.NotNil(t, out.WeeklyLimitUserResetAt)
+		require.Equal(t, usedAt, *out.WeeklyLimitUserResetAt)
+	})
+
+	t.Run("no weekly limit", func(t *testing.T) {
+		out := UserSubscriptionFromService(&service.UserSubscription{})
+		require.Equal(t, 0, out.WeeklyLimitResetRemaining)
+	})
 }
