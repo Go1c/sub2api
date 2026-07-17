@@ -62,6 +62,8 @@ type UserSubscription struct {
 	DailyUsageUsd float64 `json:"daily_usage_usd,omitempty"`
 	// WeeklyUsageUsd holds the value of the "weekly_usage_usd" field.
 	WeeklyUsageUsd float64 `json:"weekly_usage_usd,omitempty"`
+	// WeeklyLimitUserResetAt holds the value of the "weekly_limit_user_reset_at" field.
+	WeeklyLimitUserResetAt *time.Time `json:"weekly_limit_user_reset_at,omitempty"`
 	// AssignedBy holds the value of the "assigned_by" field.
 	AssignedBy *int64 `json:"assigned_by,omitempty"`
 	// AssignedAt holds the value of the "assigned_at" field.
@@ -155,7 +157,7 @@ func (*UserSubscription) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case usersubscription.FieldScopeType, usersubscription.FieldStatus, usersubscription.FieldNotes:
 			values[i] = new(sql.NullString)
-		case usersubscription.FieldCreatedAt, usersubscription.FieldUpdatedAt, usersubscription.FieldDeletedAt, usersubscription.FieldStartsAt, usersubscription.FieldExpiresAt, usersubscription.FieldExhaustedAt, usersubscription.FieldExpiredCreditLoggedAt, usersubscription.FieldDailyWindowStart, usersubscription.FieldWeeklyWindowStart, usersubscription.FieldAssignedAt:
+		case usersubscription.FieldCreatedAt, usersubscription.FieldUpdatedAt, usersubscription.FieldDeletedAt, usersubscription.FieldStartsAt, usersubscription.FieldExpiresAt, usersubscription.FieldExhaustedAt, usersubscription.FieldExpiredCreditLoggedAt, usersubscription.FieldDailyWindowStart, usersubscription.FieldWeeklyWindowStart, usersubscription.FieldWeeklyLimitUserResetAt, usersubscription.FieldAssignedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -314,6 +316,13 @@ func (_m *UserSubscription) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field weekly_usage_usd", values[i])
 			} else if value.Valid {
 				_m.WeeklyUsageUsd = value.Float64
+			}
+		case usersubscription.FieldWeeklyLimitUserResetAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field weekly_limit_user_reset_at", values[i])
+			} else if value.Valid {
+				_m.WeeklyLimitUserResetAt = new(time.Time)
+				*_m.WeeklyLimitUserResetAt = value.Time
 			}
 		case usersubscription.FieldAssignedBy:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -476,6 +485,11 @@ func (_m *UserSubscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("weekly_usage_usd=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WeeklyUsageUsd))
+	builder.WriteString(", ")
+	if v := _m.WeeklyLimitUserResetAt; v != nil {
+		builder.WriteString("weekly_limit_user_reset_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.AssignedBy; v != nil {
 		builder.WriteString("assigned_by=")

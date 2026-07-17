@@ -14,6 +14,11 @@ export const subscriptionCreditErrorMessages: Record<string, string> = {
   SUBSCRIPTION_RENEWAL_NOT_ALLOWED: 'This subscription cannot be renewed right now.',
   DAILY_LIMIT_EXCEEDED: 'Daily subscription credit limit reached. Please try again after the daily reset.',
   WEEKLY_LIMIT_EXCEEDED: 'Weekly subscription credit limit reached. Please try again after the weekly reset.',
+  SUBSCRIPTION_WEEKLY_LIMIT_RESET_EXHAUSTED:
+    'You have already used the weekly limit reset for this subscription period.',
+  SUBSCRIPTION_NO_WEEKLY_LIMIT: 'This subscription has no weekly limit to reset.',
+  SUBSCRIPTION_NOT_USABLE: 'This subscription is not currently usable.',
+  SUBSCRIPTION_NOT_FOUND: 'Subscription not found.',
 }
 
 /**
@@ -77,10 +82,21 @@ export async function getSubscriptionProgress(
   return response.data
 }
 
+/**
+ * User self-service: reset only the current weekly usage window once per subscription period.
+ */
+export async function resetWeeklyLimit(id: number): Promise<UserSubscription> {
+  const response = await apiClient.post<UserSubscription>(
+    `/subscriptions/${id}/reset-weekly-limit`
+  )
+  return response.data
+}
+
 export default {
   getMySubscriptions,
   getActiveSubscriptions,
   getSubscriptionsProgress,
   getSubscriptionSummary,
-  getSubscriptionProgress
+  getSubscriptionProgress,
+  resetWeeklyLimit,
 }

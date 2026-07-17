@@ -1,22 +1,30 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import SubscriptionsView from '../SubscriptionsView.vue'
 import type { UserSubscription } from '@/types'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 
 const getMySubscriptions = vi.hoisted(() => vi.fn())
+const resetWeeklyLimit = vi.hoisted(() => vi.fn())
 const showError = vi.hoisted(() => vi.fn())
+const showSuccess = vi.hoisted(() => vi.fn())
 const routerPush = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/subscriptions', () => ({
   default: {
     getMySubscriptions,
+    resetWeeklyLimit,
   },
-  subscriptionCreditErrorMessages: {},
+  resetWeeklyLimit,
+  subscriptionCreditErrorMessages: {
+    SUBSCRIPTION_WEEKLY_LIMIT_RESET_EXHAUSTED: 'Weekly limit reset already used this period.',
+  },
 }))
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError,
+    showSuccess,
   }),
 }))
 
@@ -67,7 +75,30 @@ function subscription(overrides: Partial<UserSubscription>): UserSubscription {
   }
 }
 
+function mountView() {
+  return mount(SubscriptionsView, {
+    global: {
+      stubs: {
+        AppLayout: { template: '<div><slot /></div>' },
+        Icon: true,
+        BaseDialog: {
+          props: ['show', 'title'],
+          template: '<div v-if="show" data-testid="base-dialog"><slot /><slot name="footer" /></div>',
+        },
+      },
+    },
+  })
+}
+
 describe('SubscriptionsView', () => {
+  beforeEach(() => {
+    getMySubscriptions.mockReset()
+    resetWeeklyLimit.mockReset()
+    showError.mockReset()
+    showSuccess.mockReset()
+    routerPush.mockReset()
+  })
+
   it('prioritizes usable subscriptions, orders them by earliest purchase, and shows full usage details on every usable subscription', async () => {
     getMySubscriptions.mockResolvedValueOnce([
       subscription({
@@ -92,6 +123,7 @@ describe('SubscriptionsView', () => {
         daily_usage_usd: 4.15,
         weekly_limit_usd: 90,
         weekly_usage_usd: 4.15,
+        weekly_limit_reset_remaining: 1,
         created_at: '2026-06-27T00:00:00Z',
       }),
       subscription({
@@ -105,18 +137,12 @@ describe('SubscriptionsView', () => {
         daily_usage_usd: 1.25,
         weekly_limit_usd: 35,
         weekly_usage_usd: 2.5,
+        weekly_limit_reset_remaining: 1,
         created_at: '2026-06-28T00:00:00Z',
       }),
     ])
 
-    const wrapper = mount(SubscriptionsView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          Icon: true,
-        },
-      },
-    })
+    const wrapper = mountView()
 
     await flushPromises()
 
@@ -131,5 +157,120 @@ describe('SubscriptionsView', () => {
     expect((text.match(/payment\.planCard\.scope/g) || []).length).toBe(2)
     expect(text).toContain('userSubscriptions.usageOf:{"used":"$1.25","limit":"$35"}')
     expect(text).toContain('userSubscriptions.usageOf:{"used":"$2.5","limit":"$35"}')
+  })
+
+  it('renders reset weekly limit button on usable cards with weekly limit, next to renew', async () => {
+    getMySubscriptions.mockResolvedValueOnce([
+      subscription({
+        id: 10,
+        plan_name: '有周限',
+        is_usable: true,
+        weekly_limit_usd: 50,
+        weekly_limit_reset_remaining: 1,
+      }),
+      subscription({
+        id: 11,
+        plan_name: '无周限',
+        is_usable: true,
+        weekly_limit_usd: null,
+      }),
+    ])
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const resetButtons = wrapper.findAll('[data-testid="reset-weekly-limit"]')
+    expect(resetButtons).toHaveLength(1)
+    expect(resetButtons[0].text()).toContain('userSubscriptions.resetWeeklyLimit')
+    expect(resetButtons[0].classes().join(' ')).toMatch(/red/)
+    expect(wrapper.text()).toContain('payment.renewNow')
+  })
+
+  it('does not render reset weekly limit on non-usable cards even with weekly limit', async () => {
+    getMySubscriptions.mockResolvedValueOnce([
+      subscription({
+        id: 12,
+        plan_name: '已耗尽有周限',
+        is_usable: false,
+        weekly_limit_usd: 50,
+        weekly_limit_reset_remaining: 1,
+        exhausted_at: '2026-06-26T01:00:00Z',
+        created_at: '2026-06-26T00:00:00Z',
+      }),
+    ])
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="reset-weekly-limit"]')).toHaveLength(0)
+  })
+
+  it('disables reset weekly limit when remaining is 0 and does not open dialog', async () => {
+    getMySubscriptions.mockResolvedValueOnce([
+      subscription({
+        id: 13,
+        plan_name: '次数用尽',
+        is_usable: true,
+        weekly_limit_usd: 40,
+        weekly_limit_reset_remaining: 0,
+      }),
+    ])
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const button = wrapper.get('[data-testid="reset-weekly-limit"]')
+    expect(button.attributes('disabled')).toBeDefined()
+    await button.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findComponent(ConfirmDialog).props('show')).toBe(false)
+    expect(resetWeeklyLimit).not.toHaveBeenCalled()
+  })
+
+  it('opens danger confirm dialog with remaining count and calls user reset API on confirm', async () => {
+    getMySubscriptions
+      .mockResolvedValueOnce([
+        subscription({
+          id: 14,
+          plan_name: '可重置',
+          is_usable: true,
+          weekly_limit_usd: 60,
+          weekly_usage_usd: 12,
+          weekly_limit_reset_remaining: 1,
+        }),
+      ])
+      .mockResolvedValueOnce([
+        subscription({
+          id: 14,
+          plan_name: '可重置',
+          is_usable: true,
+          weekly_limit_usd: 60,
+          weekly_usage_usd: 0,
+          weekly_limit_reset_remaining: 0,
+        }),
+      ])
+    resetWeeklyLimit.mockResolvedValueOnce({})
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="reset-weekly-limit"]').trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.findComponent(ConfirmDialog)
+    expect(dialog.props('show')).toBe(true)
+    expect(dialog.props('danger')).toBe(true)
+    expect(dialog.props('message')).toContain('userSubscriptions.resetWeeklyLimitConfirm')
+    expect(dialog.props('message')).toContain('"remaining":1')
+
+    await dialog.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(resetWeeklyLimit).toHaveBeenCalledTimes(1)
+    expect(resetWeeklyLimit).toHaveBeenCalledWith(14)
+    expect(showSuccess).toHaveBeenCalledWith('userSubscriptions.weeklyLimitResetSuccess')
+    expect(getMySubscriptions).toHaveBeenCalledTimes(2)
+    expect(dialog.props('show')).toBe(false)
   })
 })

@@ -793,18 +793,28 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		DailyLimitUSD:      sub.DailyLimitUSD,
 		DailyUsageUSD:      sub.DailyUsageUSD,
 		DailyResetAt:       sub.DailyResetTime(),
-		WeeklyLimitUSD:     sub.WeeklyLimitUSD,
-		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
-		WeeklyResetAt:      sub.WeeklyResetTime(),
-		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
-		Recent30dWastedUSD: sub.Recent30dWastedUSD,
-		ScopeType:          sub.ScopeType,
-		ScopeConfig:        scopeConfig,
-		CreatedAt:          sub.CreatedAt,
-		UpdatedAt:          sub.UpdatedAt,
-		User:               UserFromServiceShallow(sub.User),
-		Group:              GroupFromServiceShallow(sub.Group),
+		WeeklyLimitUSD:            sub.WeeklyLimitUSD,
+		WeeklyUsageUSD:            sub.WeeklyUsageUSD,
+		WeeklyResetAt:             sub.WeeklyResetTime(),
+		WeeklyLimitResetRemaining: weeklyLimitResetRemaining(sub),
+		WeeklyLimitUserResetAt:    sub.WeeklyLimitUserResetAt,
+		MonthlyUsageUSD:           sub.MonthlyUsageUSD,
+		Recent30dWastedUSD:        sub.Recent30dWastedUSD,
+		ScopeType:                 sub.ScopeType,
+		ScopeConfig:               scopeConfig,
+		CreatedAt:                 sub.CreatedAt,
+		UpdatedAt:                 sub.UpdatedAt,
+		User:                      UserFromServiceShallow(sub.User),
+		Group:                     GroupFromServiceShallow(sub.Group),
 	}
+}
+
+// weeklyLimitResetRemaining 有周限且尚未手动重置 → 1，否则 0。
+func weeklyLimitResetRemaining(sub *service.UserSubscription) int {
+	if sub == nil || sub.WeeklyLimitUSD == nil || sub.WeeklyLimitUserResetAt != nil {
+		return 0
+	}
+	return 1
 }
 
 func BulkAssignResultFromService(r *service.BulkAssignResult) *BulkAssignResult {
