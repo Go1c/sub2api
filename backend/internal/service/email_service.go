@@ -584,7 +584,7 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
     </div>
 </body>
 </html>
-`, siteName, code)
+`, html.EscapeString(siteName), code)
 }
 
 func (s *EmailService) siteMessageCopyFrontendURL(ctx context.Context) string {
@@ -861,5 +861,5 @@ func (s *EmailService) buildPasswordResetEmailBody(resetURL, siteName string) st
     </div>
 </body>
 </html>
-`, siteName, resetURL, resetURL)
+`, html.EscapeString(siteName), html.EscapeString(resetURL), html.EscapeString(resetURL))
 }
