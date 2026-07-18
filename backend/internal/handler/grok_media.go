@@ -41,7 +41,6 @@ func (h *OpenAIGatewayHandler) GrokVideoExtension(c *gin.Context) {
 	h.handleGrokMedia(c, service.GrokMediaEndpointVideosExtensions, "")
 }
 
-
 // GrokVideoStatus handles xAI video status retrieval through Grok groups.
 func (h *OpenAIGatewayHandler) GrokVideoStatus(c *gin.Context) {
 	h.handleGrokMedia(c, service.GrokMediaEndpointVideoStatus, c.Param("request_id"))
