@@ -804,12 +804,15 @@ export default {
         opencode: 'OpenCode',
       },
       grok: {
+        claudeSettingsHint: 'Claude Code settings.json for Grok Messages gateway',
+        claudeNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
         description: 'Configure API access for Grok accounts. Choose CLI, Codex Responses, or Claude Code messages when available.',
         configTomlHint: 'Make sure the following content is at the beginning of the Grok config.toml file',
         codexConfigTomlHint: 'Codex config.toml for Grok Responses (WebSocket v2 enabled)',
         codexDescription: 'Add the following Codex CLI configuration for Grok Responses.',
         codexNote: 'Make sure the config directory exists. macOS/Linux users can run mkdir -p ~/.codex to create it.',
         codexNoteWindows: 'Press Win+R and enter %userprofile%\\.codex to open the config directory. Create it manually if it does not exist.',
+        noteWindows: 'Press Win+R and enter %userprofile%\\.grok to open the Grok config directory.',
         note: 'These environment variables will be active in the current terminal session.'
       },
       antigravity: {

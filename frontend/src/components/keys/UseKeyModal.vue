@@ -431,6 +431,14 @@ const platformNote = computed(() => {
         ? t('keys.useKeyModal.antigravity.claudeNote')
         : t('keys.useKeyModal.antigravity.geminiNote')
     case 'grok':
+      if (activeClientTab.value === 'claude') {
+        return t('keys.useKeyModal.grok.claudeNote')
+      }
+      if (activeClientTab.value === 'codex') {
+        return activeTab.value === 'windows'
+          ? t('keys.useKeyModal.grok.codexNoteWindows')
+          : t('keys.useKeyModal.grok.codexNote')
+      }
       return activeTab.value === 'windows'
         ? t('keys.useKeyModal.grok.noteWindows')
         : t('keys.useKeyModal.grok.note')
@@ -516,8 +524,7 @@ const currentFiles = computed((): FileConfig[] => {
       return generateAnthropicFiles(`${baseUrl}/antigravity`, apiKey)
     case 'grok':
       if (activeClientTab.value === 'claude' && props.allowMessagesDispatch) {
-        // Prefer Claude Code env setup when messages dispatch is available.
-        return generateAnthropicFiles(baseUrl.replace(/\/v1\/?$/, '') || baseUrl, apiKey)
+        return generateGrokClaudeFiles(baseUrl.replace(/\/v1\/?$/, '') || baseUrl, apiKey)
       }
       if (activeClientTab.value === 'codex') {
         return generateGrokCodexFiles(apiBase, apiKey)
@@ -670,6 +677,64 @@ http_headers = { "x-openai-actor-authorization" = "local-image-extension" }`
   }
 
   return 'requires_openai_auth = true'
+}
+
+
+function generateGrokClaudeFiles(baseUrl: string, apiKey: string): FileConfig[] {
+  const environment = {
+    ANTHROPIC_BASE_URL: baseUrl,
+    ANTHROPIC_AUTH_TOKEN: apiKey,
+    ANTHROPIC_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'grok-4.5',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'grok-4.5',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    CLAUDE_CODE_ATTRIBUTION_HEADER: '0'
+  }
+  let path: string
+  let content: string
+
+  switch (activeTab.value) {
+    case 'unix':
+      path = 'Terminal'
+      content = Object.entries(environment)
+        .map(([name, value]) => `export ${name}="${value}"`)
+        .join('\n')
+      break
+    case 'cmd':
+      path = 'Command Prompt'
+      content = Object.entries(environment)
+        .map(([name, value]) => `set ${name}=${value}`)
+        .join('\n')
+      break
+    case 'powershell':
+      path = 'PowerShell'
+      content = Object.entries(environment)
+        .map(([name, value]) => `$env:${name}="${value}"`)
+        .join('\n')
+      break
+    default:
+      path = 'Terminal'
+      content = ''
+  }
+
+  const settingsPath = activeTab.value === 'unix'
+    ? '~/.claude/settings.json'
+    : '%USERPROFILE%\\.claude\\settings.json'
+
+  return [
+    { path, content },
+    {
+      path: settingsPath,
+      content: JSON.stringify({
+        $schema: 'https://json.schemastore.org/claude-code-settings.json',
+        env: environment
+      }, null, 2),
+      hint: t('keys.useKeyModal.grok.claudeSettingsHint')
+    }
+  ]
 }
 
 function generateGrokFiles(baseUrl: string, apiKey: string): FileConfig[] {

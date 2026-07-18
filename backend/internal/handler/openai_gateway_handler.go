@@ -1603,8 +1603,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 	// 与 HTTP Responses 路径保持一致：生图意图请求要求账号支持 Responses API（#4417）。
 	// WSv2 传输本身已隐含 Responses 支持，此处为防御性对齐。
+	wsImageIntent := service.IsExplicitImageGenerationIntent("/v1/responses", reqModel, firstMessage)
 	requiredCapability := service.OpenAIEndpointCapabilityChatCompletions
-	if imageIntent && requestPlatform == service.PlatformOpenAI {
+	if wsImageIntent && requestPlatform == service.PlatformOpenAI {
 		requiredCapability = service.OpenAIEndpointCapabilityResponses
 	}
 

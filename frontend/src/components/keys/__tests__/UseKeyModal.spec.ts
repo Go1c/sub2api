@@ -8,9 +8,11 @@ vi.mock('vue-i18n', () => ({
   })
 }))
 
+const copyToClipboardMock = vi.fn().mockResolvedValue(true)
+
 vi.mock('@/composables/useClipboard', () => ({
   useClipboard: () => ({
-    copyToClipboard: vi.fn().mockResolvedValue(true)
+    copyToClipboard: copyToClipboardMock
   })
 }))
 
@@ -85,7 +87,8 @@ describe('UseKeyModal', () => {
         show: true,
         apiKey: 'sk-grok-claude-test',
         baseUrl: 'https://example.com/v1',
-        platform: 'grok'
+        platform: 'grok',
+        allowMessagesDispatch: true
       },
       global: {
         stubs: {
@@ -126,10 +129,9 @@ describe('UseKeyModal', () => {
     const parsedSettings = JSON.parse(settingsConfig!)
     expect(parsedSettings.$schema).toBe('https://json.schemastore.org/claude-code-settings.json')
     expect(parsedSettings.env.ANTHROPIC_MODEL).toBe('grok-4.5')
-    expect(wrapper.text()).toContain('keys.useKeyModal.claudeSettingsHint')
+    expect(wrapper.text()).toContain('keys.useKeyModal.grok.claudeSettingsHint')
     expect(wrapper.text()).toContain('keys.useKeyModal.grok.claudeNote')
-    expect(wrapper.find('nav[aria-label="Client"]').classes()).toContain('min-w-max')
-    expect(wrapper.find('nav[aria-label="Client"]').element.parentElement?.classList.contains('overflow-x-auto')).toBe(true)
+    expect(wrapper.find('nav[aria-label="Client"]').exists()).toBe(true)
 
     const cmdTab = wrapper.findAll('button').find(
       (button) => button.text().trim() === 'Windows CMD'

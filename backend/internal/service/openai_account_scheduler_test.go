@@ -574,7 +574,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_ResponsesCapabilityExcl
 		selection, _, err := svc.SelectAccountWithSchedulerForCapability(
 			ctx, &groupID, "", "", "gpt-image-2", nil,
 			OpenAIUpstreamTransportAny, OpenAIEndpointCapabilityResponses,
-			false, false, false,
+			false, false, PlatformOpenAI,
 		)
 		require.NoError(t, err)
 		require.NotNil(t, selection)
@@ -587,7 +587,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_ResponsesCapabilityExcl
 		selection, _, err := svc.SelectAccountWithSchedulerForCapability(
 			ctx, &groupID, "", "", "gpt-image-2", nil,
 			OpenAIUpstreamTransportAny, OpenAIEndpointCapabilityResponses,
-			false, false, false,
+			false, false, PlatformOpenAI,
 		)
 		require.Error(t, err)
 		require.Nil(t, selection)
@@ -598,7 +598,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_ResponsesCapabilityExcl
 		selection, _, err := svc.SelectAccountWithSchedulerForCapability(
 			ctx, &groupID, "", "", "gpt-5.1", nil,
 			OpenAIUpstreamTransportAny, OpenAIEndpointCapabilityChatCompletions,
-			false, false, true,
+			false, false, PlatformOpenAI,
 		)
 		require.NoError(t, err)
 		require.NotNil(t, selection)
