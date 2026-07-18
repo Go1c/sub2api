@@ -10,8 +10,8 @@ import (
 )
 
 type stubAdminService struct {
-	lastBalanceSummaryLimit int
-		users                               []service.User
+	lastBalanceSummaryLimit             int
+	users                               []service.User
 	apiKeys                             []service.APIKey
 	groups                              []service.Group
 	accounts                            []service.Account
@@ -42,7 +42,7 @@ type stubAdminService struct {
 		accountID int64
 		platform  string
 		groupIDs  []int64
-}
+	}
 	lastListAccounts struct {
 		platform    string
 		accountType string
@@ -213,6 +213,10 @@ func (s *stubAdminService) UpdateUserBalance(ctx context.Context, userID int64, 
 
 func (s *stubAdminService) BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error) {
 	return len(userIDs), nil
+}
+
+func (s *stubAdminService) BatchUpdateLimits(ctx context.Context, userIDs []int64, concurrency, rpmLimit *int) (int, error) {
+	return 0, nil
 }
 
 func (s *stubAdminService) GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]service.APIKey, int64, error) {
