@@ -273,7 +273,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	imageIntent := h.isOpenAIResponsesImageIntent(c, reqModel, body)
+	imageIntent := h.isOpenAIResponsesImageIntent(c, apiKey, reqModel, body)
 	if imageIntent && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 		return
@@ -1462,7 +1462,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		return
 	}
 
-	if service.IsImageGenerationIntent("/v1/responses", reqModel, firstMessage) && !service.GroupAllowsImageGeneration(apiKey.Group) {
+	if service.IsImageGenerationIntentForPlatform("/v1/responses", reqModel, firstMessage, openAICompatibleRequestPlatform(apiKey)) && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, service.ImageGenerationPermissionMessage())
 		return
 	}
@@ -2050,8 +2050,8 @@ func (h *OpenAIGatewayHandler) submitMandatoryUsageRecordTask(parent context.Con
 	task(ctx)
 }
 
-func (h *OpenAIGatewayHandler) isOpenAIResponsesImageIntent(c *gin.Context, reqModel string, body []byte) bool {
-	if service.IsImageGenerationIntent("/v1/responses", reqModel, body) {
+func (h *OpenAIGatewayHandler) isOpenAIResponsesImageIntent(c *gin.Context, apiKey *service.APIKey, reqModel string, body []byte) bool {
+	if service.IsImageGenerationIntentForPlatform("/v1/responses", reqModel, body, openAICompatibleRequestPlatform(apiKey)) {
 		return true
 	}
 	userAgent := ""

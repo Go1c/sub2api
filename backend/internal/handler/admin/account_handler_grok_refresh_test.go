@@ -71,7 +71,7 @@ func TestRefreshSingleAccountRoutesGrokThroughGrokOAuthService(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		nil,
+		nil, // accountErrorHistoryService
 	)
 	account := &service.Account{
 		ID:       4227,

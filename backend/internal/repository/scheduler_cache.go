@@ -863,6 +863,10 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"auto_pause_5h_disabled",
 		"auto_pause_7d_disabled",
 		"model_rate_limits",
+		// Grok media routing override + billing snapshot must survive scheduler
+		// snapshot so ineligible accounts stay out of media buckets after rebuild.
+		service.GrokMediaEligibleExtraKey,
+		"grok_billing_snapshot",
 	}
 	filtered := make(map[string]any)
 	for _, key := range keys {
