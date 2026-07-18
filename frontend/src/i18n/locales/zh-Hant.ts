@@ -3812,6 +3812,8 @@ export default {
           refreshTokenAuth: '手動輸入 RT',
           refreshTokenDesc: '輸入您已有的 OpenAI Refresh Token，支持批量輸入（每行一個），系統將自動驗證並創建賬號。',
           refreshTokenPlaceholder: '粘貼您的 OpenAI Refresh Token...\n支持多個，每行一個',
+          mobileRefreshTokenAuth: '手動輸入 Mobile RT',
+          accessTokenAuth: '手動輸入 AT',
           sessionTokenAuth: '手動輸入 ST',
           sessionTokenDesc: '輸入您已有的 Session Token，支持批量輸入（每行一個），系統將自動驗證並創建賬號。',
           sessionTokenPlaceholder: '粘貼您的 Session Token...\n支持多個，每行一個',
