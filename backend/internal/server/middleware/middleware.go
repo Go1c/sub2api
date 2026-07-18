@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
@@ -132,4 +133,14 @@ func RequireGroupAssignment(settingService *service.SettingService, writeError G
 
 func isGatewayUsagePath(path string) bool {
 	return path == "/v1/usage" || path == "/antigravity/v1/usage"
+}
+
+// isAsyncImageTaskRead reports whether the request only polls an existing
+// asynchronous image task. Task results already belong to the authenticated
+// key and must remain readable after generation has consumed remaining balance.
+func isAsyncImageTaskRead(method, path string) bool {
+	if method != "GET" {
+		return false
+	}
+	return strings.HasPrefix(path, "/v1/images/tasks/") || strings.HasPrefix(path, "/images/tasks/")
 }

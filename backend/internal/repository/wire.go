@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -126,6 +127,9 @@ var ProviderSet = wire.NewSet(
 	NewUpdateCache,
 	NewGeminiTokenCache,
 	NewBatchImageQueue,
+	NewImageTaskStore,
+	ProvideImageStorage,
+
 	NewBatchImageDownloadLimiter,
 	NewLeaderLockCache,
 	ProvideSchedulerCache,
@@ -212,4 +216,17 @@ func ProvideSQLDB(client *ent.Client) (*sql.DB, error) {
 // 提供：*redis.Client
 func ProvideRedis(cfg *config.Config) *redis.Client {
 	return InitRedis(cfg)
+}
+
+// ProvideImageStorage 提供异步图片任务结果转存所用的对象存储实现。
+// 仅当开关打开且 S3 凭证齐全时返回具体实现，否则返回 nil（功能整体禁用）。
+func ProvideImageStorage(cfg *config.Config) (service.ImageStorage, error) {
+	if !cfg.ImageStorage.Active() {
+		return nil, nil
+	}
+	store, err := NewS3ImageStorage(context.Background(), &cfg.ImageStorage)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
 }
