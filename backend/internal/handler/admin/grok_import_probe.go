@@ -167,6 +167,9 @@ func (h *GrokOAuthHandler) scheduleGrokImportProbe(account *service.Account) {
 
 // ProvideAccountHandler injects the Grok active prober for production while
 // keeping NewAccountHandler convenient for focused unit tests.
+//
+// Fork note: accountErrorHistoryService is a Lumio-only dependency retained
+// from origin/dev; upstream ProvideAccountHandler does not take this arg.
 func ProvideAccountHandler(
 	adminService service.AdminService,
 	oauthService *service.OAuthService,
@@ -182,6 +185,7 @@ func ProvideAccountHandler(
 	sessionLimitCache service.SessionLimitCache,
 	rpmCache service.RPMCache,
 	tokenCacheInvalidator service.TokenCacheInvalidator,
+	accountErrorHistoryService *service.AccountErrorHistoryService,
 	grokQuotaService *service.GrokQuotaService,
 ) *AccountHandler {
 	handler := NewAccountHandler(
@@ -199,7 +203,7 @@ func ProvideAccountHandler(
 		sessionLimitCache,
 		rpmCache,
 		tokenCacheInvalidator,
-		nil, // accountErrorHistoryService — fork-only dependency
+		accountErrorHistoryService,
 	)
 	handler.grokImportProber = grokQuotaService
 	return handler
