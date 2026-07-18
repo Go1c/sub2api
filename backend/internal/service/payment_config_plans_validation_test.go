@@ -239,3 +239,24 @@ func TestValidatePlanPatch_AllowsZeroDailyWeeklyLimitForClearSentinel(t *testing
 	})
 	require.NoError(t, err)
 }
+
+func TestNormalizePlanCurrency_EmptyMeansNoLabel(t *testing.T) {
+	got, err := normalizePlanCurrency("  ")
+	require.NoError(t, err)
+	require.Equal(t, "", got)
+}
+
+func TestNormalizePlanCurrency_UppercasesValidCode(t *testing.T) {
+	got, err := normalizePlanCurrency("nzd")
+	require.NoError(t, err)
+	require.Equal(t, "NZD", got)
+}
+
+func TestNormalizePlanCurrency_RejectsInvalid(t *testing.T) {
+	_, err := normalizePlanCurrency("US")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "currency")
+
+	_, err = normalizePlanCurrency("US1")
+	require.Error(t, err)
+}
