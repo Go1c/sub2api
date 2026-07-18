@@ -145,8 +145,8 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 5. 加载可消费订阅（用户级额度池，不再依赖分组 subscription_type） ──
 
-		// skipBilling: usage 查询只需鉴权，跳过所有计费执行
-		skipBilling := isGatewayUsagePath(c.Request.URL.Path)
+		// skipBilling: usage 查询与异步生图任务轮询只需鉴权，跳过所有计费执行
+		skipBilling := isGatewayUsagePath(c.Request.URL.Path) || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
 
 		var subscription *service.UserSubscription
 		var subscriptionCandidateIDs []int64
