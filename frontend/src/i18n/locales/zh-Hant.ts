@@ -2733,6 +2733,11 @@ export default {
       runNow: '立即檢測',
       runSuccess: '檢測完成',
       runFailed: '檢測失敗',
+      duplicate: '複製',
+      duplicating: '複製中',
+      duplicateSuccess: '監控已複製為「{name}」，預設關閉，請確認配置後再啟用。',
+      duplicateFailed: '複製監控失敗',
+      duplicateKeyUnavailable: 'API Key 無法解密，請重新編輯填入密鑰後再複製。',
       logs: {
         action: '日誌',
         title: '請求日誌 - {name}',

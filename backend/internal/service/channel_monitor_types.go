@@ -54,6 +54,12 @@ type ChannelMonitor struct {
 	// 用于 Claude Code / Gemini thinking 这类普通 challenge body 不稳定的上游。
 	CompatibilityProbeEnabled bool
 
+	// DuplicateOperationID is internal persistence metadata used to recover an
+	// already committed duplicate after an ambiguous idempotency-store failure.
+	// Repository implementations must keep it out of ExtraHeaders so it can
+	// never be serialized to clients or forwarded to an upstream provider.
+	DuplicateOperationID string
+
 	// APIKeyDecryptFailed 表示 APIKey 字段无法解密（密钥不一致或损坏）。
 	// 此时 APIKey 为空字符串，runner / RunCheck 必须跳过该监控并提示重填。
 	APIKeyDecryptFailed bool
@@ -70,18 +76,18 @@ type ChannelMonitorListParams struct {
 
 // ChannelMonitorCreateParams 创建参数。
 type ChannelMonitorCreateParams struct {
-	Name             string
-	Provider         string
-	APIMode          string
-	Endpoint         string
-	APIKey           string
-	PrimaryModel     string
-	ExtraModels      []string
-	GroupName        string
-	Enabled          bool
-	IntervalSeconds  int
-	JitterSeconds    int
-	CreatedBy        int64
+	Name                      string
+	Provider                  string
+	APIMode                   string
+	Endpoint                  string
+	APIKey                    string
+	PrimaryModel              string
+	ExtraModels               []string
+	GroupName                 string
+	Enabled                   bool
+	IntervalSeconds           int
+	JitterSeconds             int
+	CreatedBy                 int64
 	TemplateID                *int64
 	ExtraHeaders              map[string]string
 	BodyOverrideMode          string
