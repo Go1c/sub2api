@@ -702,6 +702,7 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		monitors.GET("/:id", h.Admin.ChannelMonitor.Get)
 		monitors.PUT("/:id", h.Admin.ChannelMonitor.Update)
 		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
+		monitors.POST("/:id/duplicate", h.Admin.ChannelMonitor.Duplicate)
 		monitors.POST("/:id/run", h.Admin.ChannelMonitor.Run)
 		monitors.GET("/:id/history", h.Admin.ChannelMonitor.History)
 	}
