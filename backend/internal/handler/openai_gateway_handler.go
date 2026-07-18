@@ -273,7 +273,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	imageIntent := h.isOpenAIResponsesImageIntent(c, apiKey, reqModel, body)
+	// 使用 IsExplicitImageGenerationIntent 排除被动 image_gen namespace 声明。
+	// Codex 在所有请求中被动声明 image_gen namespace，宽泛检测会导致禁了生图的
+	// 分组中所有 Codex 请求被 403（#4447），并误占生图并发槽位。
+	imageIntent := service.IsExplicitImageGenerationIntent("/v1/responses", reqModel, body)
 	if imageIntent && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 		return
@@ -1462,7 +1465,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		return
 	}
 
-	if service.IsImageGenerationIntentForPlatform("/v1/responses", reqModel, firstMessage, openAICompatibleRequestPlatform(apiKey)) && !service.GroupAllowsImageGeneration(apiKey.Group) {
+	// 使用 IsExplicitImageGenerationIntent 排除被动 namespace 声明（#4447 / #4476）。
+	if service.IsExplicitImageGenerationIntent("/v1/responses", reqModel, firstMessage) && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, service.ImageGenerationPermissionMessage())
 		return
 	}
@@ -2048,26 +2052,6 @@ func (h *OpenAIGatewayHandler) submitMandatoryUsageRecordTask(parent context.Con
 		}
 	}()
 	task(ctx)
-}
-
-func (h *OpenAIGatewayHandler) isOpenAIResponsesImageIntent(c *gin.Context, apiKey *service.APIKey, reqModel string, body []byte) bool {
-	if service.IsImageGenerationIntentForPlatform("/v1/responses", reqModel, body, openAICompatibleRequestPlatform(apiKey)) {
-		return true
-	}
-	userAgent := ""
-	originator := ""
-	if c != nil {
-		userAgent = c.GetHeader("User-Agent")
-		originator = c.GetHeader("originator")
-	}
-	return service.IsCodexTextImageGenerationIntent(
-		"/v1/responses",
-		reqModel,
-		body,
-		userAgent,
-		originator,
-		h != nil && h.cfg != nil && h.cfg.Gateway.ForceCodexCLI,
-	)
 }
 
 func (h *OpenAIGatewayHandler) acquireImageGenerationSlot(c *gin.Context, streamStarted bool) (func(), bool) {
