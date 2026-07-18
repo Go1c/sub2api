@@ -58,6 +58,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		Description    string         `json:"description"`
 		Price          float64        `json:"price"`
 		OriginalPrice  *float64       `json:"original_price,omitempty"`
+		Currency       string         `json:"currency,omitempty"`
 		ValidityDays   int            `json:"validity_days"`
 		ValidityUnit   string         `json:"validity_unit"`
 		QuotaUSD       float64        `json:"quota_usd"`
@@ -80,7 +81,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		}
 		result = append(result, planWithPlatform{
 			ID: int64(p.ID), GroupID: gid, GroupPlatform: platformMap[gid],
-			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
+			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice, Currency: p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit,
 			QuotaUSD: p.QuotaUsd, DailyLimitUSD: p.DailyLimitUsd, WeeklyLimitUSD: p.WeeklyLimitUsd,
 			ScopeType: planScopeTypeForResponse(p.ScopeType), ScopeConfig: planScopeConfigForResponse(p.ScopeConfig),
@@ -171,6 +172,7 @@ type checkoutPlan struct {
 	Description     string         `json:"description"`
 	Price           float64        `json:"price"`
 	OriginalPrice   *float64       `json:"original_price,omitempty"`
+	Currency        string         `json:"currency,omitempty"`
 	ValidityDays    int            `json:"validity_days"`
 	ValidityUnit    string         `json:"validity_unit"`
 	Features        []string       `json:"features"`
@@ -199,6 +201,7 @@ func checkoutPlanFromSubscriptionPlan(p *dbent.SubscriptionPlan, gid int64, gi s
 		Description:     p.Description,
 		Price:           p.Price,
 		OriginalPrice:   p.OriginalPrice,
+		Currency:        p.Currency,
 		ValidityDays:    p.ValidityDays,
 		ValidityUnit:    p.ValidityUnit,
 		Features:        parseFeatures(p.Features),

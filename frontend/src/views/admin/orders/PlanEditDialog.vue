@@ -95,6 +95,11 @@
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div><label class="input-label">{{ t('payment.admin.sortOrder') }}</label><input v-model.number="planForm.sort_order" type="number" min="0" class="input" /></div>
+        <div>
+          <label class="input-label">{{ t('payment.admin.currency') }}</label>
+          <input v-model="planForm.currency" type="text" maxlength="3" class="input uppercase" :placeholder="t('payment.admin.currencyPlaceholder')" />
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.currencyHint') }}</p>
+        </div>
       </div>
       <div>
         <label class="input-label">{{ t('payment.admin.features') }}</label>
@@ -162,6 +167,7 @@ const planForm = reactive({
   description: '',
   price: 0,
   original_price: 0,
+  currency: '',
   quota_usd: 0,
   daily_limit_usd: null as number | null | '',
   weekly_limit_usd: null as number | null | '',
@@ -224,6 +230,7 @@ watch(() => props.show, (visible) => {
       description: props.plan.description,
       price: props.plan.price,
       original_price: props.plan.original_price || 0,
+      currency: props.plan.currency || '',
       quota_usd: props.plan.quota_usd || 0,
       daily_limit_usd: props.plan.daily_limit_usd ?? null,
       weekly_limit_usd: props.plan.weekly_limit_usd ?? null,
@@ -244,6 +251,7 @@ watch(() => props.show, (visible) => {
       description: '',
       price: 0,
       original_price: 0,
+      currency: '',
       quota_usd: 0,
       daily_limit_usd: null,
       weekly_limit_usd: null,
@@ -293,6 +301,7 @@ function buildPlanPayload() {
     description: planForm.description,
     price: planForm.price,
     original_price: planForm.original_price || 0,
+    currency: planForm.currency.trim().toUpperCase(),
     quota_usd: planForm.quota_usd,
     daily_limit_usd: optionalUsdForSave(planForm.daily_limit_usd),
     weekly_limit_usd: optionalUsdForSave(planForm.weekly_limit_usd),
