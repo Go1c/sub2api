@@ -604,7 +604,8 @@ func TestFetchCodexModelsManifestAPIKeyCacheBoundsEntriesAndBodySize(t *testing.
 		calls.Add(1)
 		body := `{"models":[]}`
 		if strings.Contains(req.URL.Host, "large") {
-			body = strings.Repeat("x", (1<<20)+1)
+			// Keep a valid Codex envelope while exceeding the cache body-size bound.
+			body = `{"models":[],"padding":"` + strings.Repeat("x", (1<<20)+1) + `"}`
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
