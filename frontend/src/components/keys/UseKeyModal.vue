@@ -99,6 +99,14 @@
               {{ t('keys.useKeyModal.openai.authModeApiKey') }}
             </button>
           </div>
+          <div
+            v-if="codexAuthMode === 'api-key'"
+            data-testid="codex-api-key-restart-notice"
+            class="mt-3 flex items-start gap-2 border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-500 dark:bg-amber-950/30 dark:text-amber-200"
+          >
+            <Icon name="exclamationCircle" size="sm" class="mt-0.5 flex-shrink-0" />
+            <p>{{ t('keys.useKeyModal.openai.authModeApiKeyRestartNotice') }}</p>
+          </div>
         </div>
 
         <!-- OS/Shell Tabs -->
@@ -350,11 +358,17 @@ const clientTabs = computed((): TabConfig[] => {
         { id: 'gemini', label: t('keys.useKeyModal.cliTabs.geminiCli'), icon: SparkleIcon },
         { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
       ]
-    case 'grok':
-      return [
+    case 'grok': {
+      const tabs: TabConfig[] = [
         { id: 'grok', label: t('keys.useKeyModal.cliTabs.grokCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
       ]
+      if (props.allowMessagesDispatch) {
+        tabs.push({ id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon })
+      }
+      tabs.push({ id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon })
+      return tabs
+    }
     default:
       return [
         { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
@@ -425,6 +439,14 @@ const platformNote = computed(() => {
         ? t('keys.useKeyModal.antigravity.claudeNote')
         : t('keys.useKeyModal.antigravity.geminiNote')
     case 'grok':
+      if (activeClientTab.value === 'claude') {
+        return t('keys.useKeyModal.grok.claudeNote')
+      }
+      if (activeClientTab.value === 'codex') {
+        return activeTab.value === 'windows'
+          ? t('keys.useKeyModal.grok.codexNoteWindows')
+          : t('keys.useKeyModal.grok.codexNote')
+      }
       return activeTab.value === 'windows'
         ? t('keys.useKeyModal.grok.noteWindows')
         : t('keys.useKeyModal.grok.note')
@@ -509,6 +531,12 @@ const currentFiles = computed((): FileConfig[] => {
       }
       return generateAnthropicFiles(`${baseUrl}/antigravity`, apiKey)
     case 'grok':
+      if (activeClientTab.value === 'claude' && props.allowMessagesDispatch) {
+        return generateGrokClaudeFiles(baseUrl.replace(/\/v1\/?$/, '') || baseUrl, apiKey)
+      }
+      if (activeClientTab.value === 'codex') {
+        return generateGrokCodexFiles(apiBase, apiKey)
+      }
       return generateGrokFiles(apiBase, apiKey)
     default:
       return generateAnthropicFiles(baseUrl, apiKey)
@@ -659,6 +687,64 @@ http_headers = { "x-openai-actor-authorization" = "local-image-extension" }`
   return 'requires_openai_auth = true'
 }
 
+
+function generateGrokClaudeFiles(baseUrl: string, apiKey: string): FileConfig[] {
+  const environment = {
+    ANTHROPIC_BASE_URL: baseUrl,
+    ANTHROPIC_AUTH_TOKEN: apiKey,
+    ANTHROPIC_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'grok-4.5',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'grok-4.5',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'grok-4.5',
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+    CLAUDE_CODE_ATTRIBUTION_HEADER: '0'
+  }
+  let path: string
+  let content: string
+
+  switch (activeTab.value) {
+    case 'unix':
+      path = 'Terminal'
+      content = Object.entries(environment)
+        .map(([name, value]) => `export ${name}="${value}"`)
+        .join('\n')
+      break
+    case 'cmd':
+      path = 'Command Prompt'
+      content = Object.entries(environment)
+        .map(([name, value]) => `set ${name}=${value}`)
+        .join('\n')
+      break
+    case 'powershell':
+      path = 'PowerShell'
+      content = Object.entries(environment)
+        .map(([name, value]) => `$env:${name}="${value}"`)
+        .join('\n')
+      break
+    default:
+      path = 'Terminal'
+      content = ''
+  }
+
+  const settingsPath = activeTab.value === 'unix'
+    ? '~/.claude/settings.json'
+    : '%USERPROFILE%\\.claude\\settings.json'
+
+  return [
+    { path, content },
+    {
+      path: settingsPath,
+      content: JSON.stringify({
+        $schema: 'https://json.schemastore.org/claude-code-settings.json',
+        env: environment
+      }, null, 2),
+      hint: t('keys.useKeyModal.grok.claudeSettingsHint')
+    }
+  ]
+}
+
 function generateGrokFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.grok' : '~/.grok'
@@ -680,6 +766,43 @@ supports_backend_search = true`
     content: configContent,
     hint: t('keys.useKeyModal.grok.configTomlHint')
   }]
+}
+
+function generateGrokCodexFiles(baseUrl: string, apiKey: string): FileConfig[] {
+  const isWindows = activeTab.value === 'windows'
+  const configPath = isWindows
+    ? '%USERPROFILE%\\.codex\\config.toml'
+    : '~/.codex/config.toml'
+  const configContent = `model_provider = "sub2api_grok"
+model = "grok-4.5"
+review_model = "grok-4.5"
+model_reasoning_effort = "xhigh"
+model_context_window = 1000000
+
+[model_providers.sub2api_grok]
+name = "Sub2API Grok"
+base_url = "${baseUrl}"
+env_key = "SUB2API_API_KEY"
+wire_api = "responses"
+supports_websockets = true
+
+[features]
+responses_websockets_v2 = true`
+  const environmentContent = isWindows
+    ? `$env:SUB2API_API_KEY="${apiKey}"`
+    : `export SUB2API_API_KEY="${apiKey}"`
+
+  return [
+    {
+      path: configPath,
+      content: configContent,
+      hint: t('keys.useKeyModal.grok.codexConfigTomlHint')
+    },
+    {
+      path: isWindows ? 'PowerShell' : 'Terminal',
+      content: environmentContent
+    }
+  ]
 }
 
 function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {

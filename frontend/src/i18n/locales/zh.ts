@@ -800,7 +800,20 @@ export default {
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         codexCliWs: 'Codex CLI (WebSocket)',
+        grokCli: 'Grok CLI',
         opencode: 'OpenCode'
+      },
+      grok: {
+        claudeSettingsHint: 'Grok Messages 网关的 Claude Code settings.json',
+        claudeNote: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
+        description: '为 Grok 账号配置 API 访问。可选择 Grok CLI、Codex Responses，或（可用时）Claude Code Messages 路径。',
+        configTomlHint: '请确保以下内容位于 Grok config.toml 文件的开头部分',
+        codexConfigTomlHint: 'Grok Responses 的 Codex config.toml（已启用 WebSocket v2）',
+        codexDescription: '添加以下 Codex CLI 配置以接入 Grok Responses。',
+        codexNote: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
+        codexNoteWindows: '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。',
+        noteWindows: '按 Win+R，输入 %userprofile%\\.grok 打开 Grok 配置目录。',
+        note: '这些环境变量将在当前终端会话中生效。'
       },
       antigravity: {
         description: '为 Antigravity 分组配置 API 访问。请根据您使用的客户端选择对应的配置方式。',
@@ -2620,7 +2633,7 @@ export default {
         webSearchEmulationHint: '⚠️ 开启后该渠道下所有 Anthropic 分组的账号将自动拦截 web_search 请求，请谨慎操作',
         webSearchEmulationGlobalDisabled: '请先在系统设置 → 网关 → Web Search 模拟中启用全局开关',
         codexImageGenerationBridge: 'Codex 图片生成桥接',
-        codexImageGenerationBridgeHint: '开启后，OpenAI 分组的 Codex /responses 文本请求可能会被自动注入 image_generation 工具。仅在路由账号支持图片生成时开启。',
+        codexImageGenerationBridgeHint: '开启后，仅对非 Responses Lite 的 OpenAI 分组 Codex /responses 文本请求注入 hosted image_generation 工具；Responses Lite 不注入。本地 image_gen 由客户端与账号策略决定。仅在路由账号支持图片生成时开启。',
         bedrockCCCompat: 'Bedrock CC 兼容',
         bedrockCCCompatHint: '⚠️ 开启后，该渠道下 Bedrock 账号的请求将进行 Claude Code 兼容处理（thinking 类型转换、tool_use ID 清理）',
         basicSettings: '基础设置',
