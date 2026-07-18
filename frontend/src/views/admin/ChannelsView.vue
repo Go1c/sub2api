@@ -828,10 +828,50 @@ function addPricingEntry(sectionIdx: number) {
     output_price: null,
     cache_write_price: null,
     cache_read_price: null,
+    image_input_price: null,
     image_output_price: null,
     per_request_price: null,
     intervals: []
   })
+}
+
+const syncingPlatform = ref<string | null>(null)
+
+async function syncLatestModels(sectionIdx: number) {
+  const platform = form.platforms[sectionIdx].platform
+  if (syncingPlatform.value) return
+  syncingPlatform.value = platform
+  try {
+    const result = await adminAPI.channels.syncPricingModels(platform)
+    // Collect all model names already present in this platform's pricing entries
+    const existingModels = new Set<string>()
+    for (const entry of form.platforms[sectionIdx].model_pricing) {
+      for (const m of entry.models) existingModels.add(m)
+    }
+    const newModels = result.models.filter(m => !existingModels.has(m))
+    if (newModels.length === 0) {
+      appStore.showSuccess(t('admin.channels.form.syncModelsAlreadyUpToDate'))
+      return
+    }
+    // Add new models as a single new pricing entry (user fills in prices)
+    form.platforms[sectionIdx].model_pricing.push({
+      models: newModels,
+      billing_mode: 'token',
+      input_price: null,
+      output_price: null,
+      cache_write_price: null,
+      cache_read_price: null,
+      image_input_price: null,
+      image_output_price: null,
+      per_request_price: null,
+      intervals: []
+    })
+    appStore.showSuccess(t('admin.channels.form.syncModelsSuccess', { count: newModels.length }))
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.channels.form.syncModelsError')))
+  } finally {
+    syncingPlatform.value = null
+  }
 }
 
 function updatePricingEntry(sectionIdx: number, idx: number, updated: PricingFormEntry) {
@@ -886,6 +926,7 @@ function addRulePricingEntry(sectionIdx: number, ruleIndex: number) {
     output_price: null,
     cache_write_price: null,
     cache_read_price: null,
+    image_input_price: null,
     image_output_price: null,
     per_request_price: null,
     intervals: []
@@ -1001,6 +1042,7 @@ function accountStatsRulesToAPI(): AccountStatsPricingRule[] {
             output_price: mTokToPerToken(p.output_price),
             cache_write_price: mTokToPerToken(p.cache_write_price),
             cache_read_price: mTokToPerToken(p.cache_read_price),
+            image_input_price: mTokToPerToken(p.image_input_price),
             image_output_price: mTokToPerToken(p.image_output_price),
             per_request_price: p.per_request_price != null && p.per_request_price !== '' ? Number(p.per_request_price) : null,
             intervals: formIntervalsToAPI(p.intervals || [])
@@ -1041,6 +1083,7 @@ function formToAPI(): { group_ids: number[], model_pricing: ChannelModelPricing[
         output_price: mTokToPerToken(entry.output_price),
         cache_write_price: mTokToPerToken(entry.cache_write_price),
         cache_read_price: mTokToPerToken(entry.cache_read_price),
+        image_input_price: mTokToPerToken(entry.image_input_price),
         image_output_price: mTokToPerToken(entry.image_output_price),
         per_request_price: entry.per_request_price != null && entry.per_request_price !== '' ? Number(entry.per_request_price) : null,
         intervals: formIntervalsToAPI(entry.intervals || [])
@@ -1116,6 +1159,7 @@ function apiToForm(channel: Channel): PlatformSection[] {
         output_price: perTokenToMTok(p.output_price),
         cache_write_price: perTokenToMTok(p.cache_write_price),
         cache_read_price: perTokenToMTok(p.cache_read_price),
+        image_input_price: perTokenToMTok(p.image_input_price),
         image_output_price: perTokenToMTok(p.image_output_price),
         per_request_price: p.per_request_price,
         intervals: apiIntervalsToForm(p.intervals || [])
@@ -1302,6 +1346,7 @@ function distributeRulesToPlatforms(apiRules: AccountStatsPricingRule[]) {
         output_price: perTokenToMTok(p.output_price),
         cache_write_price: perTokenToMTok(p.cache_write_price),
         cache_read_price: perTokenToMTok(p.cache_read_price),
+        image_input_price: perTokenToMTok(p.image_input_price),
         image_output_price: perTokenToMTok(p.image_output_price),
         per_request_price: p.per_request_price,
         intervals: apiIntervalsToForm(p.intervals || [])

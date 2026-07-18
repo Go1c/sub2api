@@ -85,6 +85,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // quotaFlusher
 		service.AccountErrorHistoryWiring{},
 		nil, // auditLog
+		nil, // upstreamBillingProbe
 	)
 
 	require.NotPanics(t, func() {
