@@ -188,6 +188,10 @@ func (r *publicChannelMonitorRepo) LoadAggregationWatermark(context.Context) (*t
 	return nil, nil
 }
 
+func (r *publicChannelMonitorRepo) FindByDuplicateOperationID(context.Context, string) (*service.ChannelMonitor, error) {
+	return nil, nil
+}
+
 func (r *publicChannelMonitorRepo) UpdateAggregationWatermark(context.Context, time.Time) error {
 	return nil
 }
