@@ -438,6 +438,7 @@ func TestAPIContracts(t *testing.T) {
 						"daily_reset_at": null,
 						"weekly_limit_usd": null,
 						"weekly_reset_at": null,
+						"weekly_limit_reset_remaining": 0,
 						"exhausted_at": null,
 						"is_usable": true,
 						"quota_limit_usd": 0,
@@ -718,6 +719,8 @@ func TestAPIContracts(t *testing.T) {
 						"frontend_url": "",
 						"totp_enabled": false,
 						"totp_encryption_key_configured": false,
+						"session_binding_enabled": true,
+						"audit_log_retention_days": 180,
 						"login_agreement_enabled": false,
 						"login_agreement_mode": "modal",
 						"login_agreement_updated_at": "2026-03-31",
@@ -736,6 +739,7 @@ func TestAPIContracts(t *testing.T) {
 					"smtp_use_tls": true,
 					"turnstile_enabled": true,
 					"turnstile_site_key": "site-key",
+				"user_subscriptions_visible": true,
 					"turnstile_secret_key_configured": true,
 						"linuxdo_connect_enabled": false,
 						"linuxdo_connect_client_id": "",
@@ -795,6 +799,10 @@ func TestAPIContracts(t *testing.T) {
 						"ops_metrics_interval_seconds": 60,
 						"site_name": "Sub2API",
 						"site_logo": "",
+				"site_messages_daily_send_limit": 10,
+				"site_messages_default_recipient_email": "",
+				"site_messages_enabled": false,
+				"site_messages_retention_days": 30,
 						"site_pages": [],
 						"site_subtitle": "Subtitle",
 						"api_base_url": "https://api.example.com",
@@ -837,6 +845,7 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_dingtalk_grant_on_signup": false,
 					"auth_source_default_dingtalk_grant_on_first_bind": false,
 					"force_email_on_third_party_signup": false,
+				"frontend_locales": ["en", "zh", "zh-Hant"],
 					"default_concurrency": 5,
 					"default_balance": 1.25,
 					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null}},
@@ -848,6 +857,10 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_wechat_platform_quotas": null,
 					"auth_source_default_dingtalk_platform_quotas": null,
 					"affiliate_rebate_rate": 20,
+				"affiliate_signup_bonus_amount": 0,
+				"affiliate_signup_bonus_daily_cap": 0,
+				"affiliate_signup_bonus_enabled": false,
+				"affiliate_signup_bonus_total_cap": 0,
 					"affiliate_rebate_freeze_hours": 0,
 					"affiliate_rebate_duration_days": 0,
 					"affiliate_rebate_per_invitee_cap": 0,
@@ -874,6 +887,7 @@ func TestAPIContracts(t *testing.T) {
 					"max_codex_version": "",
 					"codex_cli_only_blacklist": "",
 					"codex_cli_only_whitelist": "",
+				"contact_channels": [],
 					"codex_cli_only_allow_app_server_clients": false,
 					"codex_cli_only_engine_fingerprint_signals": "[{\"type\":\"header_prefix\",\"match\":[\"x-codex-\"],\"required\":true},{\"type\":\"header_exact\",\"match\":[\"session-id\",\"session_id\"],\"required\":false},{\"type\":\"header_exact\",\"match\":[\"thread-id\",\"thread_id\"],\"required\":false},{\"type\":\"body_path\",\"match\":[\"client_metadata.x-codex-window-id\",\"client_metadata.x-codex-installation-id\"],\"required\":false}]",
 					"allow_ungrouped_key_scheduling": false,
@@ -932,6 +946,7 @@ func TestAPIContracts(t *testing.T) {
 					"payment_balance_recharge_multiplier": 0,
 					"payment_subscription_usd_to_cny_rate": 0,
 					"payment_recharge_fee_rate": 0,
+				"payment_subscription_balance_enabled": false,
 					"payment_load_balance_strategy": "",
 					"payment_product_name_prefix": "",
 					"payment_product_name_suffix": "",
@@ -947,7 +962,25 @@ func TestAPIContracts(t *testing.T) {
 					"balance_low_notify_enabled": false,
 					"account_quota_notify_enabled": false,
 					"subscription_expiry_notify_enabled": true,
+				"subscription_multiple_purchases_enabled": false,
+				"subscription_notify_email_enabled": false,
+				"subscription_quota_reset_hour": 0,
+				"subscription_quota_reset_utc_offset_minutes": 0,
+				"support_chat_enabled": false,
+				"support_chat_gateway_url": "",
+				"support_chat_official_contact_text": "",
+				"support_chat_official_contact_url": "",
+				"support_chat_title": "",
+				"support_chat_welcome_message": "",
 					"balance_low_notify_threshold": 0,
+				"balance_usage_gate_enabled": false,
+				"balance_usage_gate_min_balance": 0,
+				"balance_usage_gate_min_recharge": 0,
+				"ccswitch_default_model_anthropic": "",
+				"ccswitch_default_model_antigravity": "",
+				"ccswitch_default_model_antigravity_gemini": "",
+				"ccswitch_default_model_gemini": "",
+				"ccswitch_default_model_openai": "",
 					"balance_low_notify_recharge_url": "",
 					"account_quota_notify_emails": [],
 					"channel_monitor_enabled": true,
@@ -1028,6 +1061,8 @@ func TestAPIContracts(t *testing.T) {
 						"invitation_registration_mode": "redeem_code",
 						"totp_enabled": false,
 						"totp_encryption_key_configured": false,
+						"session_binding_enabled": true,
+						"audit_log_retention_days": 180,
 						"login_agreement_enabled": false,
 						"login_agreement_mode": "modal",
 						"login_agreement_updated_at": "2026-03-31",
@@ -1046,6 +1081,7 @@ func TestAPIContracts(t *testing.T) {
 					"smtp_use_tls": false,
 					"turnstile_enabled": false,
 					"turnstile_site_key": "",
+				"user_subscriptions_visible": true,
 					"turnstile_secret_key_configured": false,
 					"linuxdo_connect_enabled": false,
 					"linuxdo_connect_client_id": "",
@@ -1101,6 +1137,10 @@ func TestAPIContracts(t *testing.T) {
 					"google_oauth_frontend_redirect_url": "/auth/oauth/callback",
 					"site_name": "Sub2API",
 					"site_logo": "",
+				"site_messages_daily_send_limit": 10,
+				"site_messages_default_recipient_email": "",
+				"site_messages_enabled": false,
+				"site_messages_retention_days": 30,
 					"site_pages": [],
 					"site_subtitle": "Subscription to API Conversion Platform",
 					"api_base_url": "",
@@ -1126,6 +1166,10 @@ func TestAPIContracts(t *testing.T) {
 					"default_concurrency": 0,
 					"default_balance": 0,
 					"affiliate_rebate_rate": 20,
+				"affiliate_signup_bonus_amount": 0,
+				"affiliate_signup_bonus_daily_cap": 0,
+				"affiliate_signup_bonus_enabled": false,
+				"affiliate_signup_bonus_total_cap": 0,
 					"affiliate_rebate_freeze_hours": 0,
 					"affiliate_rebate_duration_days": 0,
 					"affiliate_rebate_per_invitee_cap": 0,
@@ -1160,6 +1204,7 @@ func TestAPIContracts(t *testing.T) {
 					"max_codex_version": "",
 					"codex_cli_only_blacklist": "",
 					"codex_cli_only_whitelist": "",
+				"contact_channels": [],
 					"codex_cli_only_allow_app_server_clients": false,
 					"codex_cli_only_engine_fingerprint_signals": "[{\"type\":\"header_prefix\",\"match\":[\"x-codex-\"],\"required\":true},{\"type\":\"header_exact\",\"match\":[\"session-id\",\"session_id\"],\"required\":false},{\"type\":\"header_exact\",\"match\":[\"thread-id\",\"thread_id\"],\"required\":false},{\"type\":\"body_path\",\"match\":[\"client_metadata.x-codex-window-id\",\"client_metadata.x-codex-installation-id\"],\"required\":false}]",
 					"web_search_emulation_enabled": false,
@@ -1205,6 +1250,7 @@ func TestAPIContracts(t *testing.T) {
 					"payment_balance_recharge_multiplier": 0,
 					"payment_subscription_usd_to_cny_rate": 0,
 					"payment_recharge_fee_rate": 0,
+				"payment_subscription_balance_enabled": false,
 					"payment_load_balance_strategy": "",
 					"payment_product_name_prefix": "",
 					"payment_product_name_suffix": "",
@@ -1219,7 +1265,25 @@ func TestAPIContracts(t *testing.T) {
 					"balance_low_notify_enabled": false,
 					"account_quota_notify_enabled": false,
 					"subscription_expiry_notify_enabled": true,
+				"subscription_multiple_purchases_enabled": false,
+				"subscription_notify_email_enabled": false,
+				"subscription_quota_reset_hour": 0,
+				"subscription_quota_reset_utc_offset_minutes": 0,
+				"support_chat_enabled": false,
+				"support_chat_gateway_url": "",
+				"support_chat_official_contact_text": "",
+				"support_chat_official_contact_url": "",
+				"support_chat_title": "",
+				"support_chat_welcome_message": "",
 					"balance_low_notify_threshold": 0,
+				"balance_usage_gate_enabled": false,
+				"balance_usage_gate_min_balance": 0,
+				"balance_usage_gate_min_recharge": 0,
+				"ccswitch_default_model_anthropic": "",
+				"ccswitch_default_model_antigravity": "",
+				"ccswitch_default_model_antigravity_gemini": "",
+				"ccswitch_default_model_gemini": "",
+				"ccswitch_default_model_openai": "",
 					"balance_low_notify_recharge_url": "",
 					"account_quota_notify_emails": [],
 					"channel_monitor_enabled": true,
@@ -1281,6 +1345,7 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_dingtalk_grant_on_signup": false,
 					"auth_source_default_dingtalk_grant_on_first_bind": false,
 					"force_email_on_third_party_signup": false,
+				"frontend_locales": ["en", "zh", "zh-Hant"],
 					"allow_user_view_error_requests": false
 				}
 			}`,
@@ -1557,6 +1622,9 @@ func (r *stubUserRepo) UpdateConcurrency(ctx context.Context, id int64, amount i
 
 func (r *stubUserRepo) BatchSetConcurrency(context.Context, []int64, int) (int, error) { return 0, nil }
 func (r *stubUserRepo) BatchAddConcurrency(context.Context, []int64, int) (int, error) { return 0, nil }
+func (r *stubUserRepo) BatchUpdateLimits(context.Context, []int64, *int, *int) (int, error) {
+	return 0, nil
+}
 
 func (r *stubUserRepo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	return false, errors.New("not implemented")
@@ -1733,6 +1801,14 @@ func (stubGroupRepo) GetAccountIDsByGroupIDs(ctx context.Context, groupIDs []int
 
 func (stubGroupRepo) UpdateSortOrders(ctx context.Context, updates []service.GroupSortOrderUpdate) error {
 	return nil
+}
+
+func (stubGroupRepo) FindByDuplicateOperationID(ctx context.Context, operationID string) (*service.Group, error) {
+	return nil, service.ErrGroupNotFound
+}
+
+func (stubGroupRepo) CreateFromSource(ctx context.Context, group *service.Group, sourceGroupID int64) error {
+	return errors.New("not implemented")
 }
 
 type stubAccountRepo struct {

@@ -31,36 +31,46 @@ const localeLoaders: Record<LocaleCode, () => Promise<{ default: LocaleMessages 
  */
 async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]> {
   if (locale === 'en') {
-    const [accounts, ops, overview, dashboard] = await Promise.all([
+    // Prefer small, additive overlays. Do not deep-merge full upstream settings packs
+    // over the monothithic en.ts — they can clobber fork-only keys.
+    const [accounts, ops, overview, audit, dashboard, common] = await Promise.all([
       import('./locales/en/admin/accounts'),
       import('./locales/en/admin/ops'),
       import('./locales/en/admin/overview'),
-      import('./locales/en/dashboard')
+      import('./locales/en/admin/audit'),
+      import('./locales/en/dashboard'),
+      import('./locales/en/common')
     ])
     return [
       { admin: accounts.default },
       { admin: ops.default },
       { admin: overview.default },
-      dashboard.default
+      { admin: audit.default },
+      dashboard.default,
+      common.default
     ]
   }
 
   if (locale === 'zh' || locale === 'zh-Hant') {
     // zh-Hant has no modular tree yet; reuse simplified modular packs so new keys
     // show Chinese instead of raw i18n paths (better than untranslated keys).
-    const [accounts, ops, overview, dashboard, misc] = await Promise.all([
+    const [accounts, ops, overview, audit, dashboard, misc, common] = await Promise.all([
       import('./locales/zh/admin/accounts'),
       import('./locales/zh/admin/ops'),
       import('./locales/zh/admin/overview'),
+      import('./locales/zh/admin/audit'),
       import('./locales/zh/dashboard'),
-      import('./locales/zh/misc')
+      import('./locales/zh/misc'),
+      import('./locales/zh/common')
     ])
     return [
       { admin: accounts.default },
       { admin: ops.default },
       { admin: overview.default },
+      { admin: audit.default },
       dashboard.default,
-      misc.default
+      misc.default,
+      common.default
     ]
   }
 
