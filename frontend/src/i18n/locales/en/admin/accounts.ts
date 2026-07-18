@@ -836,6 +836,8 @@ export default {
           refreshTokenAuth: 'Manual RT Input',
           refreshTokenDesc: 'Enter your existing OpenAI Refresh Token(s). Supports batch input (one per line). The system will automatically validate and create accounts.',
           refreshTokenPlaceholder: 'Paste your OpenAI Refresh Token...\nSupports multiple, one per line',
+          mobileRefreshTokenAuth: 'Manual Mobile RT Input',
+          accessTokenAuth: 'Manual AT Input',
           codexSessionAuth: 'Codex auth.json / AT Import',
           codexSessionDesc: 'Paste a Codex auth.json (OAuth or Agent Identity) or an accessToken. Accounts use the step 1 settings.',
           codexSessionInputLabel: 'Codex auth.json or accessToken',
