@@ -664,6 +664,17 @@ export default {
       errorCodeExists: '该错误码已被选中',
       interceptWarmupRequests: '拦截预热请求',
       interceptWarmupRequestsDesc: '启用后，标题生成等预热请求将返回 mock 响应，不消耗上游 token',
+      grokCustomBaseUrl: {
+        title: '自定义上游端点',
+        hint: '仅改写转发地址；OAuth 授权与刷新仍走官方端点。关闭后恢复默认 CLI 网关。',
+        placeholder: 'https://api.x.ai/v1 或区域/第三方地址',
+        required: '请填写自定义上游地址',
+        invalid: '上游地址必须以 http:// 或 https:// 开头',
+        presets: {
+          cli: 'Grok Build CLI',
+          official: '官方 API'
+        }
+      },
       headerOverride: {
         title: '请求头覆写',
         hint: '转发时用配置值覆盖同名请求头（不区分大小写）',

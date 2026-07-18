@@ -45,11 +45,6 @@ type grokCredentialProxyRepoStub struct {
 func (r *grokCredentialProxyRepoStub) GetByID(context.Context, int64) (*Proxy, error) {
 	return r.proxy, r.err
 }
-func (r *grokCredentialProxyRepoStub) SweepExpiredProxies(context.Context, time.Time) (int64, error) { return 0, nil }
-func (r *grokCredentialProxyRepoStub) ListAllForFallback(context.Context) ([]Proxy, error) { return nil, nil }
-func (r *grokCredentialProxyRepoStub) CountExpired(context.Context) (int64, error) { return 0, nil }
-func (r *grokCredentialProxyRepoStub) CountExpiringSoon(context.Context, time.Time) (int64, error) { return 0, nil }
-
 
 type grokCredentialBlockingRepo struct {
 	*tokenRefreshAccountRepo

@@ -1964,6 +1964,47 @@
         />
       </div>
 
+      <!-- Grok OAuth Custom Upstream URL (仅改写转发端点，OAuth 授权/刷新不受影响) -->
+      <div
+        v-if="form.platform === 'grok' && isOAuthFlow"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.grokCustomBaseUrl.title') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.grokCustomBaseUrl.hint') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            data-testid="grok-custom-base-url-toggle"
+            @click="grokOAuthCustomBaseUrlEnabled = !grokOAuthCustomBaseUrlEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              grokOAuthCustomBaseUrlEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                grokOAuthCustomBaseUrlEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+        <div v-if="grokOAuthCustomBaseUrlEnabled" class="space-y-2">
+          <input
+            v-model="grokOAuthBaseUrl"
+            type="text"
+            class="input"
+            data-testid="grok-custom-base-url-input"
+            :placeholder="t('admin.accounts.grokCustomBaseUrl.placeholder')"
+          />
+          <GrokBaseUrlPresets @select="grokOAuthBaseUrl = $event" />
+        </div>
+      </div>
+
       <!-- OpenAI OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
       <div
         v-if="(form.platform === 'openai' || form.platform === 'grok') && isOAuthFlow"
@@ -3494,6 +3535,7 @@ import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
+import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
@@ -3688,6 +3730,41 @@ const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
 const headerOverrideEnabled = ref(false)
 const headerOverrideRows = ref<HeaderOverrideRow[]>([])
+
+// Grok OAuth：自定义上游地址（base_url 仅改写转发端点，OAuth 授权/刷新不受影响）
+const grokOAuthCustomBaseUrlEnabled = ref(false)
+const grokOAuthBaseUrl = ref('')
+
+// Grok OAuth 三条创建路径（授权码/RT 批量/SSO 批量）共用的前置校验。
+const validateGrokOAuthUpstreamConfig = (): boolean => {
+  if (grokOAuthCustomBaseUrlEnabled.value) {
+    const trimmed = grokOAuthBaseUrl.value.trim()
+    if (!trimmed) {
+      appStore.showError(t('admin.accounts.grokCustomBaseUrl.required'))
+      return false
+    }
+    if (!/^https?:\/\//i.test(trimmed)) {
+      appStore.showError(t('admin.accounts.grokCustomBaseUrl.invalid'))
+      return false
+    }
+  }
+  if (headerOverrideEnabled.value) {
+    const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
+    if (headerError) {
+      appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
+      return false
+    }
+  }
+  return true
+}
+
+// 把已通过校验的自定义上游地址与请求头覆写写入 credentials
+const applyGrokOAuthUpstreamConfig = (credentials: Record<string, unknown>) => {
+  if (grokOAuthCustomBaseUrlEnabled.value) {
+    credentials.base_url = grokOAuthBaseUrl.value.trim()
+  }
+  applyHeaderOverride(credentials, headerOverrideEnabled.value, headerOverrideRows.value, 'create')
+}
 
 const addHeaderOverrideRow = () => {
   headerOverrideRows.value.push({ name: '', value: '' })
@@ -5147,7 +5224,9 @@ const createAccountAndFinish = async (
     }
   }
   if (platform === 'grok') {
-    if (!credentials.base_url) {
+    // OAuth credentials already carry CLI gateway base_url (or operator custom URL).
+    // Only API-key accounts fall back to the official public API host.
+    if (type === 'apikey' && !credentials.base_url) {
       credentials.base_url = apiKeyBaseUrl.value.trim() || 'https://api.x.ai/v1'
     }
     const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
@@ -5178,6 +5257,7 @@ const createAccountAndFinish = async (
 // Grok 手动 RT 批量验证和创建
 const handleGrokValidateRT = async (refreshTokenInput: string) => {
   if (!refreshTokenInput.trim()) return
+  if (!validateGrokOAuthUpstreamConfig()) return
 
   const refreshTokens = refreshTokenInput
     .split('\n')
@@ -5208,6 +5288,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
         }
 
         const credentials = grokOAuth.buildCredentials(tokenInfo)
+        applyGrokOAuthUpstreamConfig(credentials)
         const extra = grokOAuth.buildExtraInfo(tokenInfo)
         const accountName = refreshTokens.length > 1 ? `${form.name || tokenInfo.email || 'Grok OAuth Account'} #${i + 1}` : (form.name || tokenInfo.email || 'Grok OAuth Account')
 
@@ -5266,6 +5347,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
 
 const handleGrokImportSSO = async (ssoInput: string) => {
   // Align with OpenAI/Grok RT batch import: one token per line, no client-side dedupe.
+  if (!validateGrokOAuthUpstreamConfig()) return
   const ssoTokens = ssoInput
     .split('\n')
     .map((token) => token.trim())
@@ -5276,6 +5358,7 @@ const handleGrokImportSSO = async (ssoInput: string) => {
   grokOAuth.error.value = ''
 
   const credentials: Record<string, unknown> = {}
+  applyGrokOAuthUpstreamConfig(credentials)
   const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
   if (modelMapping) {
     credentials.model_mapping = modelMapping
@@ -5870,6 +5953,8 @@ const handleAntigravityExchange = async (authCode: string) => {
 // Grok OAuth 授权码兑换
 const handleGrokExchange = async (authCode: string) => {
   if (!authCode.trim() || !grokOAuth.sessionId.value) return
+  // 校验须在兑换 code 之前：失败时不能消耗一次性授权码
+  if (!validateGrokOAuthUpstreamConfig()) return
 
   grokOAuth.loading.value = true
   grokOAuth.error.value = ''
@@ -5892,6 +5977,7 @@ const handleGrokExchange = async (authCode: string) => {
     if (!tokenInfo) return
 
     const credentials = grokOAuth.buildCredentials(tokenInfo)
+    applyGrokOAuthUpstreamConfig(credentials)
     const extra = grokOAuth.buildExtraInfo(tokenInfo)
     await createAccountAndFinish('grok', 'oauth', credentials, extra)
   } catch (error: any) {

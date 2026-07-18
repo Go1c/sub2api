@@ -41,7 +41,6 @@ func (h *OpenAIGatewayHandler) GrokVideoExtension(c *gin.Context) {
 	h.handleGrokMedia(c, service.GrokMediaEndpointVideosExtensions, "")
 }
 
-
 // GrokVideoStatus handles xAI video status retrieval through Grok groups.
 func (h *OpenAIGatewayHandler) GrokVideoStatus(c *gin.Context) {
 	h.handleGrokMedia(c, service.GrokMediaEndpointVideoStatus, c.Param("request_id"))
@@ -174,6 +173,9 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		maxAccountSwitches = 3
 	}
 	routingStart := time.Now()
+	// Upstream Grok media eligibility: generation routes require the
+	// grok_media_generation capability so ineligible OAuth accounts are filtered.
+	requiredCapability := grokMediaRequiredCapability(endpoint)
 
 	for {
 		if failoverClientGone(c) {
@@ -187,7 +189,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			requestModel,
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportHTTPSSE,
-			"",
+			requiredCapability,
 			false,
 			false,
 			service.PlatformGrok,
@@ -202,6 +204,10 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
 			if len(failedAccountIDs) == 0 {
+				if requiredCapability == service.OpenAIEndpointCapabilityGrokMediaGeneration {
+					h.errorResponse(c, http.StatusServiceUnavailable, "grok_media_no_eligible_account", "No eligible Grok media accounts")
+					return
+				}
 				h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable")
 				return
 			}
@@ -213,6 +219,10 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			return
 		}
 		if selection == nil || selection.Account == nil {
+			if requiredCapability == service.OpenAIEndpointCapabilityGrokMediaGeneration {
+				h.errorResponse(c, http.StatusServiceUnavailable, "grok_media_no_eligible_account", "No eligible Grok media accounts")
+				return
+			}
 			h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts")
 			return
 		}
@@ -401,4 +411,13 @@ func recordGrokMediaUsage(
 			reqLog.Debug("grok_media.record_usage_failed", zap.Error(err))
 		}
 	})
+}
+
+// grokMediaRequiredCapability mirrors upstream: generation endpoints require
+// accounts that pass GrokMediaGenerationEligibility; status lookups do not.
+func grokMediaRequiredCapability(endpoint service.GrokMediaEndpoint) service.OpenAIEndpointCapability {
+	if endpoint.IsGenerationRequest() {
+		return service.OpenAIEndpointCapabilityGrokMediaGeneration
+	}
+	return ""
 }

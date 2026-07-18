@@ -571,6 +571,17 @@ export default {
       interceptWarmupRequests: 'Intercept Warmup Requests',
       interceptWarmupRequestsDesc:
         'When enabled, warmup requests like title generation will return mock responses without consuming upstream tokens',
+      grokCustomBaseUrl: {
+        title: 'Custom Upstream Endpoint',
+        hint: 'Rewrites forward endpoints only; OAuth authorize/refresh still use official hosts. Turn off to restore the default CLI gateway.',
+        placeholder: 'https://api.x.ai/v1 or a regional/third-party URL',
+        required: 'Please enter a custom upstream URL',
+        invalid: 'Upstream URL must start with http:// or https://',
+        presets: {
+          cli: 'Grok Build CLI',
+          official: 'Official API'
+        }
+      },
       headerOverride: {
         title: 'Header Override',
         hint: 'Override same-named request headers on forwarding (case-insensitive)',
