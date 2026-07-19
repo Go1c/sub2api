@@ -22,11 +22,11 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.amount') }}</span>
-                <span class="font-medium text-gray-900 dark:text-white">{{ paidOrder.order_type === 'balance' ? `$${paidOrder.amount.toFixed(2)}` : `${paidOrder.amount.toFixed(2)} ${t('payment.creditUnit')}` }}</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ creditedAmountSymbol }}{{ paidOrder.amount.toFixed(2) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
-                <span class="font-medium text-gray-900 dark:text-white">{{ paidOrder.pay_amount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ formatGatewayAmount(paidOrder.pay_amount, paidOrder.currency) }}</span>
               </div>
             </div>
           </div>
@@ -68,7 +68,7 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
-                <span class="font-medium text-gray-900 dark:text-white">{{ paidOrder.pay_amount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ formatGatewayAmount(paidOrder.pay_amount, paidOrder.currency) }}</span>
               </div>
             </div>
           </div>
@@ -172,6 +172,7 @@ import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { getPaymentPopupFeatures } from '@/components/payment/providerConfig'
+import { currencySymbol, formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
 import type { PaymentOrder } from '@/types/payment'
 import Icon from '@/components/icons/Icon.vue'
 import QRCode from 'qrcode'
@@ -186,6 +187,7 @@ const props = defineProps<{
   payUrl?: string
   orderType?: string
   payAmount?: number
+  currency?: string
   providerKey?: string
   paymentMode?: string
 }>()
@@ -194,7 +196,8 @@ type PaymentOutcome = 'success' | 'cancelled' | 'expired' | 'fulfillment_failed'
 
 const emit = defineEmits<{ done: []; success: []; settled: [outcome: PaymentOutcome] }>()
 
-const { t } = useI18n()
+const i18n = useI18n()
+const { t } = i18n
 const paymentStore = usePaymentStore()
 const appStore = useAppStore()
 
@@ -205,6 +208,22 @@ const cancelling = ref(false)
 const paidOrder = ref<PaymentOrder | null>(null)
 const activePayAmount = ref(props.payAmount ?? 0)
 const activeProviderHint = ref(props.providerKey || '')
+const creditedAmountSymbol = currencySymbol('USD')
+const paymentCurrency = computed(() =>
+  normalizePaymentCurrency(paidOrder.value?.currency || props.currency),
+)
+const localeCode = computed(() => {
+  const raw = i18n.locale as unknown
+  if (typeof raw === 'string') return raw
+  if (raw && typeof raw === 'object' && 'value' in raw) {
+    return String((raw as { value?: string }).value || '')
+  }
+  return undefined
+})
+
+function formatGatewayAmount(amount: number, currency?: string | null): string {
+  return formatPaymentAmount(amount, currency || paymentCurrency.value, localeCode.value)
+}
 
 // Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired'
 const outcome = ref<PaymentOutcome | null>(null)
@@ -227,7 +246,7 @@ const hasExactPayAmount = computed(() => Number.isFinite(activePayAmount.value) 
 const showExactAmountWarning = computed(() =>
   !!qrUrl.value && hasExactPayAmount.value && (isAlipay.value || isWxpay.value) && isMapayFlow.value
 )
-const exactPayAmountDisplay = computed(() => activePayAmount.value.toFixed(2))
+const exactPayAmountDisplay = computed(() => formatGatewayAmount(activePayAmount.value, paymentCurrency.value))
 
 const qrBorderClass = computed(() => {
   if (isAlipay.value) return 'border-[#00AEEF] bg-blue-50 dark:border-[#00AEEF]/70 dark:bg-blue-950/20'

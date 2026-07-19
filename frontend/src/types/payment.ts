@@ -69,6 +69,8 @@ export interface CheckoutInfoResponse {
   balance_disabled: boolean
   subscription_balance_payment_enabled: boolean
   balance_recharge_multiplier: number
+  /** When > 0 and method currency is CNY, subscription gateway charge uses price * rate */
+  subscription_usd_to_cny_rate?: number
   recharge_fee_rate: number
   help_text: string
   help_image_url: string
