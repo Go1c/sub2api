@@ -119,7 +119,7 @@ func (h *OpenAIGatewayHandler) AlphaSearch(c *gin.Context) {
 			requestedModel,
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportHTTPSSE,
-			service.OpenAIEndpointCapabilityChatCompletions,
+			service.OpenAIEndpointCapabilityAlphaSearch,
 			false,
 			false,
 			false,
