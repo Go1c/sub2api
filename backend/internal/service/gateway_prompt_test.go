@@ -30,7 +30,7 @@ func TestIsClaudeCodeClient(t *testing.T) {
 		},
 		{
 			name:           "Claude Code client with JSON user_id",
-			userAgent:      "claude-cli/2.1.92 (external, cli)",
+			userAgent:      "claude-cli/" + claude.CLICurrentVersion + " (external, cli)",
 			metadataUserID: jsonUserID,
 			want:           true,
 		},
@@ -72,7 +72,7 @@ func TestIsClaudeCodeClient(t *testing.T) {
 		},
 		{
 			name:           "Opencode spoofing UA with arbitrary user_id",
-			userAgent:      "claude-cli/2.1.92",
+			userAgent:      "claude-cli/" + claude.CLICurrentVersion,
 			metadataUserID: "session_abc",
 			want:           false,
 		},
