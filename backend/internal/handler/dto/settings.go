@@ -30,6 +30,14 @@ type CustomEndpoint struct {
 	Description string `json:"description"`
 }
 
+// AffiliateRebateTier is one L1–L4 tier of invite rebate configuration.
+type AffiliateRebateTier struct {
+	Level             string   `json:"level"`
+	MinInvitees       int      `json:"min_invitees"`
+	MinRecharge       float64  `json:"min_recharge"`
+	RebateRatePercent *float64 `json:"rebate_rate_percent"`
+}
+
 // SitePage represents a public site page configured by admin.
 type SitePage struct {
 	Key     string `json:"key"`
@@ -183,6 +191,7 @@ type SystemSettings struct {
 	DefaultConcurrency           int                          `json:"default_concurrency"`
 	DefaultBalance               float64                      `json:"default_balance"`
 	AffiliateRebateRate          float64                      `json:"affiliate_rebate_rate"`
+	AffiliateRebateTiers         []AffiliateRebateTier        `json:"affiliate_rebate_tiers"`
 	AffiliateRebateFreezeHours   int                          `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays  int                          `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap float64                      `json:"affiliate_rebate_per_invitee_cap"`

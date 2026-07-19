@@ -635,12 +635,11 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 	if err != nil {
 		return fmt.Errorf("query daily usage: %w", err)
 	}
+	// Daily limit is configured and checked in site order amount units
+	// (recharge credits / subscription price), not gateway settlement currency.
+	// Summing PayAmount mixes CNY/USD/JPY and breaks the limit under multi-currency.
 	var used float64
 	for _, o := range orders {
-		if o.OrderType == payment.OrderTypeBalance {
-			used += o.PayAmount
-			continue
-		}
 		used += o.Amount
 	}
 	if used+amount > limit {
@@ -702,7 +701,12 @@ func (s *PaymentService) usesOfficialWxpayVisibleMethod(ctx context.Context) boo
 }
 
 func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.PaymentOrder, req CreateOrderRequest, cfg *PaymentConfig, limitAmount float64, payAmountStr string, payAmount float64, plan *dbent.SubscriptionPlan, sel *payment.InstanceSelection) (*CreateOrderResponse, error) {
-	prov, err := provider.CreateProvider(sel.ProviderKey, sel.InstanceID, sel.Config)
+	providerConfig := sel.Config
+	if cfg != nil && cfg.AlipayForceQRCode && strings.TrimSpace(sel.ProviderKey) == payment.TypeAlipay {
+		providerConfig = clonePaymentProviderConfig(sel.Config)
+		providerConfig["forceQrCode"] = "true"
+	}
+	prov, err := provider.CreateProvider(sel.ProviderKey, sel.InstanceID, providerConfig)
 	if err != nil {
 		slog.Error("[PaymentService] CreateProvider failed", "provider", sel.ProviderKey, "instance", sel.InstanceID, "error", err)
 		// If the provider returned a structured ApplicationError (e.g. WXPAY_CONFIG_MISSING_KEY),
@@ -814,6 +818,17 @@ func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.Inst
 		IsMobile:           req.IsMobile,
 		InstanceSubMethods: selectedInstanceSupportedTypes(sel),
 	}
+}
+
+func clonePaymentProviderConfig(cfg map[string]string) map[string]string {
+	if cfg == nil {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(cfg)+1)
+	for k, v := range cfg {
+		out[k] = v
+	}
+	return out
 }
 
 func selectedInstanceSupportedTypes(sel *payment.InstanceSelection) string {

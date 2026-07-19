@@ -305,6 +305,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AffiliateRebateRate != after.AffiliateRebateRate {
 		changed = append(changed, "affiliate_rebate_rate")
 	}
+	if !equalAffiliateRebateTiers(before.AffiliateRebateTiers, after.AffiliateRebateTiers) {
+		changed = append(changed, "affiliate_rebate_tiers")
+	}
 	if before.AffiliateRebateFreezeHours != after.AffiliateRebateFreezeHours {
 		changed = append(changed, "affiliate_rebate_freeze_hours")
 	}
@@ -678,6 +681,27 @@ func equalDefaultSubscriptions(a, b []service.DefaultSubscriptionSetting) bool {
 	}
 	for i := range a {
 		if a[i].GroupID != b[i].GroupID || a[i].ValidityDays != b[i].ValidityDays {
+			return false
+		}
+	}
+	return true
+}
+
+func equalAffiliateRebateTiers(a, b []service.AffiliateRebateTier) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Level != b[i].Level ||
+			a[i].MinInvitees != b[i].MinInvitees ||
+			a[i].MinRecharge != b[i].MinRecharge {
+			return false
+		}
+		if (a[i].RebateRatePercent == nil) != (b[i].RebateRatePercent == nil) {
+			return false
+		}
+		if a[i].RebateRatePercent != nil && b[i].RebateRatePercent != nil &&
+			*a[i].RebateRatePercent != *b[i].RebateRatePercent {
 			return false
 		}
 	}

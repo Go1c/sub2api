@@ -189,8 +189,40 @@ func TestCreateTradeUsesPagePayForDesktop(t *testing.T) {
 	if resp.PayURL == "" {
 		t.Fatal("expected pay_url for desktop page pay")
 	}
-	if resp.QRCode != resp.PayURL {
-		t.Fatalf("qr_code = %q, want same as pay_url %q", resp.QRCode, resp.PayURL)
+	// page-pay is a browser checkout URL, not a scannable QR payload.
+	if resp.QRCode != "" {
+		t.Fatalf("qr_code = %q, want empty for page-pay fallback", resp.QRCode)
+	}
+}
+
+func TestCreateDesktopTradeForceQRDoesNotFallbackToPagePay(t *testing.T) {
+	origPreCreate := alipayTradePreCreate
+	origPagePay := alipayTradePagePay
+	t.Cleanup(func() {
+		alipayTradePreCreate = origPreCreate
+		alipayTradePagePay = origPagePay
+	})
+
+	pagePayCalls := 0
+	alipayTradePreCreate = func(ctx context.Context, client *alipay.Client, param alipay.TradePreCreate) (*alipay.TradePreCreateRsp, error) {
+		return nil, errors.New("merchant does not have FACE_TO_FACE_PAYMENT")
+	}
+	alipayTradePagePay = func(client *alipay.Client, param alipay.TradePagePay) (*url.URL, error) {
+		pagePayCalls++
+		return url.Parse("https://openapi.alipay.com/gateway.do?page-pay")
+	}
+
+	provider := &Alipay{config: map[string]string{"forceQrCode": "true"}}
+	_, err := provider.createDesktopTrade(context.Background(), &alipay.Client{}, payment.CreatePaymentRequest{
+		OrderID: "sub2_force_qr",
+		Amount:  "10.00",
+		Subject: "Balance recharge",
+	}, "https://merchant.example.com/api/v1/payment/webhook/alipay", "https://merchant.example.com/payment/result")
+	if err == nil {
+		t.Fatal("expected error when force QR is enabled and precreate fails")
+	}
+	if pagePayCalls != 0 {
+		t.Fatalf("page pay calls = %d, want 0 when force QR is enabled", pagePayCalls)
 	}
 }
 

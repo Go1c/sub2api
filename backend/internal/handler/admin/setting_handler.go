@@ -273,6 +273,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		CyberSessionBlockEnabled:                               settings.CyberSessionBlockEnabled,
 		CyberSessionBlockTTLSeconds:                            settings.CyberSessionBlockTTLSeconds,
 		AffiliateRebateRate:                                    settings.AffiliateRebateRate,
+		AffiliateRebateTiers:                                   affiliateRebateTiersDTOs(settings.AffiliateRebateTiers),
 		AffiliateRebateFreezeHours:                             settings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:                            settings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:                           settings.AffiliateRebatePerInviteeCap,
@@ -467,6 +468,19 @@ func loginAgreementDocumentsToService(items []dto.LoginAgreementDocument) []serv
 		})
 	}
 	return result
+}
+
+func affiliateRebateTiersDTOs(tiers []service.AffiliateRebateTier) []dto.AffiliateRebateTier {
+	out := make([]dto.AffiliateRebateTier, 0, len(tiers))
+	for _, tier := range tiers {
+		out = append(out, dto.AffiliateRebateTier{
+			Level:             tier.Level,
+			MinInvitees:       tier.MinInvitees,
+			MinRecharge:       tier.MinRecharge,
+			RebateRatePercent: tier.RebateRatePercent,
+		})
+	}
+	return out
 }
 
 func systemSettingsResponseData(settings dto.SystemSettings, authSourceDefaults *service.AuthSourceDefaultSettings) map[string]any {

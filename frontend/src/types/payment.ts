@@ -53,6 +53,8 @@ export interface MethodLimit {
   display_name?: string
   /** ISO 4217 currency for this payment method when instances agree */
   currency?: string
+  /** Effective credit multiplier when all instances for this method agree */
+  balance_recharge_multiplier?: number
 }
 
 /** Response from /payment/limits API */

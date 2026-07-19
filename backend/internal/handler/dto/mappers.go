@@ -80,13 +80,19 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 	if k == nil {
 		return nil
 	}
+	allowedModels := k.AllowedModels
+	if allowedModels == nil {
+		allowedModels = []string{}
+	}
 	out := &APIKey{
 		ID:                 k.ID,
 		UserID:             k.UserID,
 		Key:                k.Key,
 		Name:               k.Name,
 		GroupID:            k.GroupID,
+		FallbackKeyID:      k.FallbackKeyID,
 		Status:             k.Status,
+		AllowedModels:      allowedModels,
 		IPWhitelist:        k.IPWhitelist,
 		IPBlacklist:        k.IPBlacklist,
 		LastUsedAt:         k.LastUsedAt,
@@ -203,6 +209,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		WebSearchPricePerCall:           g.WebSearchPricePerCall,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
+		FallbackGroupIDOnExhausted:      g.FallbackGroupIDOnExhausted,
 		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
 		AllowMessagesDispatch:           g.AllowMessagesDispatch,
 		RequireOAuthOnly:                g.RequireOAuthOnly,
@@ -651,6 +658,9 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		ImageSizeSource:           l.ImageSizeSource,
 		ImageSizeBreakdown:        l.ImageSizeBreakdown,
 		MediaType:                 l.MediaType,
+		VideoCount:                l.VideoCount,
+		VideoResolution:           l.VideoResolution,
+		VideoDurationSeconds:      l.VideoDurationSeconds,
 		UserAgent:                 l.UserAgent,
 		IPAddress:                 l.IPAddress,
 		CacheTTLOverridden:        l.CacheTTLOverridden,

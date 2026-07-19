@@ -163,9 +163,17 @@ func (a *Alipay) createDesktopTrade(ctx context.Context, client *alipay.Client, 
 		return a.createPagePayTrade(client, req, notifyURL, returnURL)
 	}
 
+	forceQR := strings.EqualFold(strings.TrimSpace(a.config["forceQrCode"]), "true") ||
+		strings.EqualFold(strings.TrimSpace(a.config["force_qr_code"]), "true")
+
 	resp, precreateErr := a.createPrecreateTrade(ctx, client, req, notifyURL)
 	if precreateErr == nil {
 		return resp, nil
+	}
+	// Site-wide "force QR" must not silently fall back to page-pay redirect;
+	// merchants without FACE_TO_FACE_PAYMENT should get a clear error instead.
+	if forceQR {
+		return nil, fmt.Errorf("alipay force QR code enabled but precreate failed: %w", precreateErr)
 	}
 
 	resp, pagePayErr := a.createPagePayTrade(client, req, notifyURL, returnURL)

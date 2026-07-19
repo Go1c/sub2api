@@ -1190,3 +1190,37 @@ func TestGetModelPricingWithChannel_UnknownModelReturnsError(t *testing.T) {
 	require.Nil(t, pricing)
 	require.Contains(t, err.Error(), "pricing not found")
 }
+
+
+func TestGetModelPricingWithChannel_UnspecifiedImageOutputFallsBackToTextOutput(t *testing.T) {
+	svc := newTestBillingService()
+
+	// Channel overrides only text output price; image output must not be forced to $0.
+	chPricing := &ChannelModelPricing{
+		OutputPrice: testPtrFloat64(20e-6),
+	}
+	pricing, err := svc.GetModelPricingWithChannel("claude-sonnet-4", chPricing)
+	require.NoError(t, err)
+	require.False(t, pricing.ImageOutputPriceExplicit, "unset channel image output should not be marked explicit")
+
+	// With no explicit image output rate, computeTokenBreakdown falls back to outputPrice.
+	bd := svc.computeTokenBreakdown(pricing, UsageTokens{OutputTokens: 10, ImageOutputTokens: 10}, 1.0, "", false)
+	require.InDelta(t, 0, bd.OutputCost, 1e-15, "all tokens classified as image output")
+	require.InDelta(t, 10*20e-6, bd.ImageOutputCost, 1e-15, "image output falls back to text output rate")
+}
+
+func TestGetModelPricingWithChannel_ExplicitZeroImageOutputStaysZero(t *testing.T) {
+	svc := newTestBillingService()
+	zero := 0.0
+	chPricing := &ChannelModelPricing{
+		OutputPrice:      testPtrFloat64(20e-6),
+		ImageOutputPrice: &zero,
+	}
+	pricing, err := svc.GetModelPricingWithChannel("claude-sonnet-4", chPricing)
+	require.NoError(t, err)
+	require.True(t, pricing.ImageOutputPriceExplicit)
+	require.Zero(t, pricing.ImageOutputPricePerToken)
+
+	bd := svc.computeTokenBreakdown(pricing, UsageTokens{OutputTokens: 10, ImageOutputTokens: 10}, 1.0, "", false)
+	require.Zero(t, bd.ImageOutputCost, "explicit zero must not fall back")
+}
