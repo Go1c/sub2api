@@ -382,22 +382,21 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	}
 
 	readClientMessage := func() ([]byte, error) {
-		readCtx := ctx
 		idleTimeout := s.openAIWSIngressInterTurnIdleTimeout()
-		cancelRead := func() {}
-		if idleTimeout > 0 {
-			readCtx, cancelRead = context.WithTimeout(ctx, idleTimeout)
-		}
-		msgType, payload, readErr := clientConn.Read(readCtx)
-		cancelRead()
+		msgType, payload, readErr := ReadOpenAIWSClientMessage(
+			ctx,
+			clientConn,
+			idleTimeout,
+			coderws.StatusNormalClosure,
+			"websocket idle timeout",
+		)
 		if readErr != nil {
-			if idleTimeout > 0 && errors.Is(readErr, context.DeadlineExceeded) && ctx.Err() == nil {
-				logOpenAIWSModeInfo("ingress_ws_inter_turn_idle_timeout account_id=%d timeout_seconds=%d", account.ID, int(idleTimeout.Seconds()))
-				return nil, NewOpenAIWSClientCloseError(
-					coderws.StatusNormalClosure,
-					"websocket idle timeout",
-					readErr,
-				)
+			var closeErr *OpenAIWSClientCloseError
+			if errors.As(readErr, &closeErr) {
+				if idleTimeout > 0 && errors.Is(closeErr.Unwrap(), context.DeadlineExceeded) && ctx.Err() == nil {
+					logOpenAIWSModeInfo("ingress_ws_inter_turn_idle_timeout account_id=%d timeout_seconds=%d", account.ID, int(idleTimeout.Seconds()))
+				}
+				return nil, readErr
 			}
 			return nil, readErr
 		}

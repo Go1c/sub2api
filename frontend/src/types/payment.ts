@@ -49,6 +49,8 @@ export interface MethodLimit {
   single_max: number
   fee_rate: number
   available: boolean
+  /** Optional operator-facing label (e.g. EasyPay custom method) */
+  display_name?: string
   /** ISO 4217 currency for this payment method when instances agree */
   currency?: string
 }
