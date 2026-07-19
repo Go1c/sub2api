@@ -2960,6 +2960,18 @@ export default {
       duplicateSuccess: '监控已复制为「{name}」，默认关闭，请确认配置后再启用。',
       duplicateFailed: '复制监控失败',
       duplicateKeyUnavailable: 'API Key 无法解密，请重新编辑填入密钥后再复制。',
+      logs: {
+        action: '日志',
+        title: '请求日志 - {name}',
+        empty: '暂无请求日志',
+        loadError: '加载请求日志失败',
+        checkedAt: '检测时间',
+        model: '模型',
+        status: '状态',
+        latency: '延迟',
+        pingLatency: 'Ping 延迟',
+        message: '消息'
+      },
       apiKeyDecryptFailed: 'API Key 解密失败，请重新编辑该监控并填入新的 Key',
       createSuccess: '监控创建成功',
       updateSuccess: '监控更新成功',
@@ -3004,6 +3016,8 @@ export default {
         groupNamePlaceholder: '可选，用于在用户视图中聚合显示',
         intervalSeconds: '检测间隔 (秒)',
         intervalSecondsHint: '范围：15 - 3600 秒',
+        jitterSeconds: '随机抖动 (± 秒)',
+        jitterSecondsHint: '每次检测在间隔基础上正负随机偏移该秒数，0 表示固定间隔；需满足 间隔 - 抖动 ≥ 15 秒',
         enabled: '启用监控',
         kindRequired: '请选择供应商'
       },
