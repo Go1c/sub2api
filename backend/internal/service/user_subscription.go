@@ -2,14 +2,16 @@ package service
 
 import "time"
 
+const subscriptionDayDuration = 24 * time.Hour
+
 // UserSubscription 表示用户订阅。
 //
 // 订阅额度池模型（详见 doc/plan/2026-05-28-subscription-credit-pool-plan.md）：
 //
-//	可消费    : status='active' AND ExhaustedAt == nil AND ExpiresAt > now
-//	等过期    : status='active' AND ExhaustedAt != nil（总额度已耗尽，等待 ExpiresAt 到达）
-//	已过期    : status='expired'
-//	暂停      : status='suspended'
+// 可消费    : status='active' AND ExhaustedAt == nil AND ExpiresAt > now
+// 等过期    : status='active' AND ExhaustedAt != nil（总额度已耗尽，等待 ExpiresAt 到达）
+// 已过期    : status='expired'
+// 暂停      : status='suspended'
 //
 // 月度窗口字段（MonthlyWindowStart / MonthlyUsageUSD）已从数据库移除，
 // 但 Go struct 暂时保留为内存字段以兼容现有代码；Task 4 后将完全清理。
@@ -104,10 +106,20 @@ func (s *UserSubscription) IsCreditPoolExhausted() bool {
 }
 
 func (s *UserSubscription) DaysRemaining() int {
-	if s.IsExpired() {
+	return s.daysRemainingAt(time.Now())
+}
+
+func (s *UserSubscription) daysRemainingAt(now time.Time) int {
+	remaining := s.ExpiresAt.Sub(now)
+	if remaining <= 0 {
 		return 0
 	}
-	return int(time.Until(s.ExpiresAt).Hours() / 24)
+
+	days := int(remaining / subscriptionDayDuration)
+	if remaining%subscriptionDayDuration != 0 {
+		days++
+	}
+	return days
 }
 
 // QuotaRemainingUSD 剩余总额度（不考虑窗口）。
