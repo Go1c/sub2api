@@ -10316,6 +10316,33 @@ function findDuplicateDefaultSubscription(
   });
 }
 
+
+/** Normalize Claude OAuth system prompt blocks for save: expand boolean cache_control flags. */
+function normalizeClaudeOAuthSystemPromptBlocksForSave(raw: string | undefined): string {
+  const input = (raw || "").trim();
+  if (!input) return "";
+  try {
+    const parsed = JSON.parse(input);
+    if (!Array.isArray(parsed)) return input;
+    const normalized = parsed.map((item: Record<string, unknown>) => {
+      const block: Record<string, unknown> = {
+        enabled: item.enabled !== false,
+        type: typeof item.type === "string" && item.type ? item.type : "text",
+        text: typeof item.text === "string" ? item.text : "",
+      };
+      if (item.cache_control === true) {
+        block.cache_control = { type: "ephemeral", ttl: "5m" };
+      } else if (item.cache_control && typeof item.cache_control === "object") {
+        block.cache_control = item.cache_control;
+      }
+      return block;
+    });
+    return JSON.stringify(normalized);
+  } catch {
+    return input;
+  }
+}
+
 async function saveSettings() {
   if (saving.value) return;
   saving.value = true;
@@ -10693,8 +10720,22 @@ async function saveSettings() {
       enable_fingerprint_unification: form.enable_fingerprint_unification,
       enable_metadata_passthrough: form.enable_metadata_passthrough,
       enable_cch_signing: form.enable_cch_signing,
+      enable_claude_oauth_system_prompt_injection:
+        form.enable_claude_oauth_system_prompt_injection,
+      claude_oauth_system_prompt: form.claude_oauth_system_prompt?.trim()
+        ? form.claude_oauth_system_prompt
+        : "",
+      claude_oauth_system_prompt_blocks:
+        normalizeClaudeOAuthSystemPromptBlocksForSave(
+          form.claude_oauth_system_prompt_blocks,
+        ),
       enable_anthropic_cache_ttl_1h_injection:
         form.enable_anthropic_cache_ttl_1h_injection,
+      rewrite_message_cache_control: form.rewrite_message_cache_control,
+      enable_client_dateline_normalization:
+        form.enable_client_dateline_normalization,
+      antigravity_user_agent_version:
+        form.antigravity_user_agent_version?.trim() || "",
       // Payment configuration
       payment_enabled: form.payment_enabled,
       risk_control_enabled: form.risk_control_enabled,
