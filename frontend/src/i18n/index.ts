@@ -31,46 +31,86 @@ const localeLoaders: Record<LocaleCode, () => Promise<{ default: LocaleMessages 
  */
 async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]> {
   if (locale === 'en') {
-    // Prefer small, additive overlays. Do not deep-merge full upstream settings packs
-    // over the monothithic en.ts — they can clobber fork-only keys.
-    const [accounts, ops, overview, audit, dashboard, common] = await Promise.all([
+    // Prefer small, additive overlays. Settings is merged last so monothithic
+    // fork-only leaves remain unless the modular pack also defines them (deep-merge
+    // overwrites scalars from source). promptAudit is fork-only and fully modular.
+    const [
+      accounts,
+      ops,
+      overview,
+      audit,
+      promptAudit,
+      settings,
+      forkGaps,
+      dashboard,
+      common,
+      forkRootGaps,
+    ] = await Promise.all([
       import('./locales/en/admin/accounts'),
       import('./locales/en/admin/ops'),
       import('./locales/en/admin/overview'),
       import('./locales/en/admin/audit'),
+      import('./locales/en/admin/promptAudit'),
+      import('./locales/en/admin/settings'),
+      import('./locales/en/admin/forkGaps'),
       import('./locales/en/dashboard'),
-      import('./locales/en/common')
+      import('./locales/en/common'),
+      import('./locales/en/forkRootGaps'),
     ])
     return [
       { admin: accounts.default },
       { admin: ops.default },
       { admin: overview.default },
       { admin: audit.default },
+      { admin: promptAudit.default },
+      { admin: settings.default },
+      { admin: forkGaps.default },
       dashboard.default,
-      common.default
+      common.default,
+      forkRootGaps.default,
     ]
   }
 
   if (locale === 'zh' || locale === 'zh-Hant') {
     // zh-Hant has no modular tree yet; reuse simplified modular packs so new keys
     // show Chinese instead of raw i18n paths (better than untranslated keys).
-    const [accounts, ops, overview, audit, dashboard, misc, common] = await Promise.all([
+    const [
+      accounts,
+      ops,
+      overview,
+      audit,
+      promptAudit,
+      settings,
+      forkGaps,
+      dashboard,
+      misc,
+      common,
+      forkRootGaps,
+    ] = await Promise.all([
       import('./locales/zh/admin/accounts'),
       import('./locales/zh/admin/ops'),
       import('./locales/zh/admin/overview'),
       import('./locales/zh/admin/audit'),
+      import('./locales/zh/admin/promptAudit'),
+      import('./locales/zh/admin/settings'),
+      import('./locales/zh/admin/forkGaps'),
       import('./locales/zh/dashboard'),
       import('./locales/zh/misc'),
-      import('./locales/zh/common')
+      import('./locales/zh/common'),
+      import('./locales/zh/forkRootGaps'),
     ])
     return [
       { admin: accounts.default },
       { admin: ops.default },
       { admin: overview.default },
       { admin: audit.default },
+      { admin: promptAudit.default },
+      { admin: settings.default },
+      { admin: forkGaps.default },
       dashboard.default,
       misc.default,
-      common.default
+      common.default,
+      forkRootGaps.default,
     ]
   }
 

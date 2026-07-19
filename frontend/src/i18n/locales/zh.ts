@@ -1141,9 +1141,9 @@ export default {
     detailTitle: '渠道详情',
     closeDetail: '关闭',
     windowTab: {
-          7d: '7 天',
-          15d: '15 天',
-          30d: '30 天'
+          '7d': '7 天',
+          '15d': '15 天',
+          '30d': '30 天'
         },
     overall: {
           operational: 'OPERATIONAL',
