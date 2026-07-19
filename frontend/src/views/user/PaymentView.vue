@@ -22,7 +22,6 @@
             :pay-url="paymentState.payUrl"
             :order-type="paymentState.orderType"
             :pay-amount="paymentState.payAmount"
-            :currency="paymentState.currency"
             :provider-key="paymentState.providerKey"
             :payment-mode="paymentState.paymentMode"
             @done="onPaymentDone"
@@ -79,15 +78,15 @@
                       <div v-if="validAmount > 0" class="space-y-2 text-sm">
                         <div class="flex justify-between">
                           <span class="text-gray-500 dark:text-gray-400">{{ t('payment.paymentAmount') }}</span>
-                          <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(validAmount) }}</span>
+                          <span class="text-gray-900 dark:text-white">{{ validAmount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                         </div>
                         <div v-if="feeRate > 0" class="flex justify-between">
                           <span class="text-gray-500 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
-                          <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(feeAmount) }}</span>
+                          <span class="text-gray-900 dark:text-white">{{ feeAmount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                         </div>
                         <div v-if="feeRate > 0" class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
                           <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
-                          <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ formatSelectedPaymentAmount(totalAmount) }}</span>
+                          <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ totalAmount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                         </div>
                         <div v-if="balanceRechargeMultiplier !== 1" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
                           <span class="text-gray-500 dark:text-gray-400">{{ t('payment.creditedBalance') }}</span>
@@ -107,7 +106,7 @@
                         <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
                         {{ t('common.processing') }}
                       </span>
-                      <span v-else>{{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(totalAmount) }}</span>
+                      <span v-else>{{ t('payment.createOrder') }} {{ totalAmount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                     </button>
                   </div>
                 </div>
@@ -173,15 +172,15 @@
                 <div class="space-y-2 text-sm">
                   <div class="flex justify-between">
                     <span class="text-gray-500 dark:text-gray-400">{{ t('payment.amountLabel') }}</span>
-                    <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(subPaymentAmount) }}</span>
+                    <span class="text-gray-900 dark:text-white">{{ selectedPlan.price.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-gray-500 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
-                    <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(subFeeAmount) }}</span>
+                    <span class="text-gray-900 dark:text-white">{{ subFeeAmount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                   </div>
                   <div class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
                     <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
-                    <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ formatSelectedPaymentAmount(subTotalAmount) }}</span>
+                    <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ subTotalAmount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                   </div>
                 </div>
               </div>
@@ -320,11 +319,6 @@ import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures } from '@/components/payment/providerConfig'
 import {
-  DEFAULT_PAYMENT_CURRENCY,
-  formatPaymentAmount,
-  normalizePaymentCurrency,
-} from '@/components/payment/currency'
-import {
   PAYMENT_RECOVERY_STORAGE_KEY,
   buildCreateOrderPayload,
   clearPaymentRecoverySnapshot,
@@ -344,8 +338,7 @@ import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSele
 import { buildPaymentErrorToastMessage, describePaymentScenarioError } from './paymentUx'
 import { hasWechatResumeQuery, parseWechatResumeRoute, stripWechatResumeQuery } from './paymentWechatResume'
 
-const i18n = useI18n()
-const { t } = i18n
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -354,14 +347,6 @@ const subscriptionStore = useSubscriptionStore()
 const appStore = useAppStore()
 
 const user = computed(() => authStore.user)
-const localeCode = computed(() => {
-  const raw = i18n.locale as unknown
-  if (typeof raw === 'string') return raw
-  if (raw && typeof raw === 'object' && 'value' in raw) {
-    return String((raw as { value?: string }).value || '')
-  }
-  return undefined
-})
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
 const usableActiveSubscriptions = computed(() => activeSubscriptions.value.filter(subscription => subscription.is_usable === true))
 
@@ -590,7 +575,7 @@ function onPaymentSettled() {
 // All checkout data from single API call
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
-  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
+  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
 })
 
 const userSubscriptionsVisible = computed(() => appStore.cachedPublicSettings?.user_subscriptions_visible !== false)
@@ -653,62 +638,6 @@ const globalMaxAmount = computed(() => {
 
 // Selected method's limits (for validation and error messages)
 const selectedRechargeLimit = computed(() => visibleMethods.value[selectedRechargeMethod.value])
-const selectedSubscriptionLimit = computed(() =>
-  selectedSubscriptionMethod.value === 'balance'
-    ? undefined
-    : visibleMethods.value[selectedSubscriptionMethod.value],
-)
-const selectedRechargeCurrency = computed(() =>
-  normalizePaymentCurrency(selectedRechargeLimit.value?.currency),
-)
-const selectedSubscriptionCurrency = computed(() =>
-  normalizePaymentCurrency(selectedSubscriptionLimit.value?.currency),
-)
-const subscriptionUsdToCnyRate = computed(() =>
-  Number(checkout.value?.subscription_usd_to_cny_rate) > 0
-    ? Number(checkout.value.subscription_usd_to_cny_rate)
-    : 0,
-)
-
-function currencyFractionDigits(currency: string): number {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-    }).resolvedOptions().maximumFractionDigits ?? 2
-  } catch {
-    return 2
-  }
-}
-
-function roundPaymentAmount(value: number, currency: string): number {
-  if (!Number.isFinite(value)) return 0
-  const factor = 10 ** currencyFractionDigits(currency)
-  return Math.round(value * factor) / factor
-}
-
-function ceilPaymentAmount(value: number, currency: string): number {
-  if (!Number.isFinite(value)) return 0
-  const factor = 10 ** currencyFractionDigits(currency)
-  return Math.ceil(value * factor) / factor
-}
-
-function subscriptionPaymentAmountForCurrency(value: number, currency: string): number {
-  const rate = subscriptionUsdToCnyRate.value
-  if (rate <= 0 || currency !== DEFAULT_PAYMENT_CURRENCY) return roundPaymentAmount(value, currency)
-  return roundPaymentAmount(value * rate, currency)
-}
-
-function formatSelectedPaymentAmount(value: number, currency = selectedRechargeCurrency.value): string {
-  return formatPaymentAmount(value, currency, localeCode.value)
-}
-
-function subscriptionTotalAmountForCurrency(value: number, currency: string): number {
-  const paymentAmount = subscriptionPaymentAmountForCurrency(value, currency)
-  if (feeRate.value <= 0 || paymentAmount <= 0) return paymentAmount
-  const fee = ceilPaymentAmount((paymentAmount * feeRate.value) / 100, currency)
-  return roundPaymentAmount(paymentAmount + fee, currency)
-}
 
 const methodOptions = computed<PaymentMethodOption[]>(() =>
   enabledMethods.value.map((type) => {
@@ -722,14 +651,16 @@ const methodOptions = computed<PaymentMethodOption[]>(() =>
 )
 
 const feeRate = computed(() => checkout.value?.recharge_fee_rate ?? 0)
-const feeAmount = computed(() => {
-  if (feeRate.value <= 0 || validAmount.value <= 0) return 0
-  return ceilPaymentAmount((validAmount.value * feeRate.value) / 100, selectedRechargeCurrency.value)
-})
-const totalAmount = computed(() => {
-  if (feeRate.value <= 0 || validAmount.value <= 0) return validAmount.value
-  return roundPaymentAmount(validAmount.value + feeAmount.value, selectedRechargeCurrency.value)
-})
+const feeAmount = computed(() =>
+  feeRate.value > 0 && validAmount.value > 0
+    ? Math.ceil(((validAmount.value * feeRate.value) / 100) * 100) / 100
+    : 0
+)
+const totalAmount = computed(() =>
+  feeRate.value > 0 && validAmount.value > 0
+    ? Math.round((validAmount.value + feeAmount.value) * 100) / 100
+    : validAmount.value
+)
 
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
@@ -740,12 +671,8 @@ const amountError = computed(() => {
   // Selected method can't handle this amount (but others can)
   const ml = selectedRechargeLimit.value
   if (ml) {
-    if (ml.single_min > 0 && validAmount.value < ml.single_min) {
-      return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(ml.single_min) })
-    }
-    if (ml.single_max > 0 && validAmount.value > ml.single_max) {
-      return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(ml.single_max) })
-    }
+    if (ml.single_min > 0 && validAmount.value < ml.single_min) return t('payment.amountTooLow', { min: ml.single_min })
+    if (ml.single_max > 0 && validAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: ml.single_max })
   }
   return ''
 })
@@ -756,16 +683,15 @@ const canSubmit = computed(() =>
     && selectedRechargeLimit.value?.available !== false
 )
 
-// Subscription-specific: method options based on gateway pay amount (currency-aware)
+// Subscription-specific: method options based on plan price
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   const planPrice = selectedPlan.value?.price ?? 0
   const options = enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
-    const currency = normalizePaymentCurrency(ml?.currency)
     return {
       type,
       fee_rate: ml?.fee_rate ?? 0,
-      available: ml?.available !== false && amountFitsMethod(subscriptionTotalAmountForCurrency(planPrice, currency), type),
+      available: ml?.available !== false && amountFitsMethod(planPrice, type),
     }
   })
   if (subscriptionBalancePaymentEnabled.value) {
@@ -780,19 +706,16 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   )
 })
 
-const subPaymentAmount = computed(() => {
-  const price = selectedPlan.value?.price ?? 0
-  return subscriptionPaymentAmountForCurrency(price, selectedSubscriptionCurrency.value)
-})
-
 const subFeeAmount = computed(() => {
-  if (feeRate.value <= 0 || subPaymentAmount.value <= 0) return 0
-  return ceilPaymentAmount((subPaymentAmount.value * feeRate.value) / 100, selectedSubscriptionCurrency.value)
+  const price = selectedPlan.value?.price ?? 0
+  if (feeRate.value <= 0 || price <= 0) return 0
+  return Math.ceil(((price * feeRate.value) / 100) * 100) / 100
 })
 
 const subTotalAmount = computed(() => {
-  if (feeRate.value <= 0 || subPaymentAmount.value <= 0) return subPaymentAmount.value
-  return roundPaymentAmount(subPaymentAmount.value + subFeeAmount.value, selectedSubscriptionCurrency.value)
+  const price = selectedPlan.value?.price ?? 0
+  if (feeRate.value <= 0 || price <= 0) return price
+  return Math.round((price + subFeeAmount.value) * 100) / 100
 })
 
 const subscriptionBalancePaymentEnabled = computed(() => checkout.value.subscription_balance_payment_enabled === true)
@@ -866,8 +789,7 @@ const subscriptionConfirmAmountLabel = computed(() => {
   if (selectedSubscriptionMethodIsBalance.value) {
     return `$${subscriptionBalanceRequired.value.toFixed(2)}`
   }
-  const amount = feeRate.value > 0 ? subTotalAmount.value : subPaymentAmount.value
-  return formatSelectedPaymentAmount(amount, selectedSubscriptionCurrency.value)
+  return `${(feeRate.value > 0 ? subTotalAmount.value : selectedPlan.value.price).toFixed(2)} ${t('payment.creditUnit')}`
 })
 
 // Subscription confirm: platform accent colors (clean card, no gradient)
