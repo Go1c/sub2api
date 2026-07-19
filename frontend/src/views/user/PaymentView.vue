@@ -687,7 +687,7 @@ const canSubmit = computed(() =>
 // Subscription-specific: method options based on plan price
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   const planPrice = selectedPlan.value?.price ?? 0
-  const options = enabledMethods.value.map((type) => {
+  const options: PaymentMethodOption[] = enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
     return {
       type,
