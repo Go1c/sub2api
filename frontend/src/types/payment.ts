@@ -81,6 +81,8 @@ export interface PaymentOrder {
   amount: number
   pay_amount: number
   fee_rate: number
+  /** ISO 4217 payment currency (e.g. CNY, USD); omitted for legacy rows */
+  currency?: string
   payment_type: string
   out_trade_no: string
   status: OrderStatus
