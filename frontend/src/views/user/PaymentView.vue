@@ -575,7 +575,7 @@ function onPaymentSettled() {
 // All checkout data from single API call
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
-  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
+  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '', alipay_force_qrcode: false,
 })
 
 const userSubscriptionsVisible = computed(() => appStore.cachedPublicSettings?.user_subscriptions_visible !== false)
@@ -859,6 +859,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: isMobileDevice(),
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
     })
     if (options.openid) {
       payload.openid = options.openid
@@ -917,6 +918,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       orderType,
       isMobile: isMobileDevice(),
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
       stripePopupUrl: stripeRouteUrl,
       stripeRouteUrl,
       airwallexRouteUrl,
@@ -1094,6 +1096,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: false,
       isWechatBrowser: false,
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
     })
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
     const stripeMethod = visibleMethod === 'wxpay' ? 'wechat_pay' : 'alipay'
@@ -1123,6 +1126,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       orderType: context.orderType,
       isMobile: false,
       isWechatBrowser: false,
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
       stripePopupUrl: stripeRouteUrl,
       stripeRouteUrl,
       airwallexRouteUrl,
