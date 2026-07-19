@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { applyInterceptWarmup } from '../credentialsBuilder'
+import {
+  applyInterceptWarmup,
+  applyAntigravityProjectID,
+  ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY,
+} from '../credentialsBuilder'
 
 describe('applyInterceptWarmup', () => {
   it('create + enabled=true: should set intercept_warmup_requests to true', () => {
@@ -36,11 +40,44 @@ describe('applyInterceptWarmup', () => {
     const creds: Record<string, unknown> = {
       api_key: 'sk',
       base_url: 'url',
-      intercept_warmup_requests: true
+      intercept_warmup_requests: true,
     }
     applyInterceptWarmup(creds, false, 'edit')
     expect(creds.api_key).toBe('sk')
     expect(creds.base_url).toBe('url')
     expect('intercept_warmup_requests' in creds).toBe(false)
+  })
+})
+
+describe('applyAntigravityProjectID', () => {
+  it('create + project id: trims and stores configured project fallback', () => {
+    const creds: Record<string, unknown> = { access_token: 'tok' }
+    applyAntigravityProjectID(creds, '  configured-project  ', 'create')
+    expect(creds[ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY]).toBe('configured-project')
+  })
+
+  it('create + empty project id: should not add the field', () => {
+    const creds: Record<string, unknown> = { access_token: 'tok' }
+    applyAntigravityProjectID(creds, '   ', 'create')
+    expect(ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY in creds).toBe(false)
+  })
+
+  it('edit + empty project id: deletes existing fallback', () => {
+    const creds: Record<string, unknown> = {
+      access_token: 'tok',
+      [ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY]: 'old-project',
+    }
+    applyAntigravityProjectID(creds, '', 'edit')
+    expect(ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY in creds).toBe(false)
+  })
+
+  it('does not affect onboard project_id or other credentials', () => {
+    const creds: Record<string, unknown> = {
+      project_id: 'onboard-project',
+      access_token: 'tok',
+    }
+    applyAntigravityProjectID(creds, 'configured-project', 'edit')
+    expect(creds.project_id).toBe('onboard-project')
+    expect(creds[ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY]).toBe('configured-project')
   })
 })

@@ -367,8 +367,16 @@ func (s *OpenAIOAuthService) BuildAccountCredentials(tokenInfo *OpenAITokenInfo)
 	if strings.TrimSpace(tokenInfo.ClientID) != "" {
 		creds["client_id"] = strings.TrimSpace(tokenInfo.ClientID)
 	}
+	if tokenInfo.AuthMode == OpenAIAuthModePersonalAccessToken {
+		creds[openAIAuthModeCredentialKey] = OpenAIAuthModePersonalAccessToken
+		creds[openAIAuthModeLegacyCredentialKey] = "personal_access_token"
+		creds["token_type"] = "Bearer"
+		creds["chatgpt_account_is_fedramp"] = tokenInfo.ChatGPTAccountFedRAMP
+	} else if tokenInfo.ChatGPTAccountFedRAMP {
+		creds["chatgpt_account_is_fedramp"] = true
+	}
 
-	return creds
+	return NormalizeOpenAIPersonalAccessTokenCredentials(nil, tokenInfo, creds)
 }
 
 // Stop stops the session store cleanup goroutine

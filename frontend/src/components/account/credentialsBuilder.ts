@@ -225,6 +225,9 @@ export function applyHeaderOverride(
   credentials[HEADER_OVERRIDES_CREDENTIAL_KEY] = buildHeaderOverridesObject(rows)
 }
 
+// Configured Antigravity OAuth project fallback (not Vertex onboard project_id).
+export const ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY = 'antigravity_project_id'
+
 export function applyAntigravityProjectID(
   credentials: Record<string, unknown>,
   projectId: string,
@@ -232,11 +235,11 @@ export function applyAntigravityProjectID(
 ): void {
   const trimmed = String(projectId ?? '').trim()
   if (trimmed) {
-    credentials.project_id = trimmed
+    credentials[ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY] = trimmed
     return
   }
   if (mode === 'edit') {
-    delete credentials.project_id
+    delete credentials[ANTIGRAVITY_PROJECT_ID_CREDENTIAL_KEY]
   }
 }
 
