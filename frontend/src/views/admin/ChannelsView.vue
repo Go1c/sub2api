@@ -406,9 +406,19 @@
             <div>
               <div class="mb-1 flex items-center justify-between">
                 <label class="input-label text-xs mb-0">{{ t('admin.channels.form.modelPricing', 'Model Pricing') }}</label>
-                <button type="button" @click="addPricingEntry(sIdx)" class="text-xs text-primary-600 hover:text-primary-700">
-                  + {{ t('common.add', 'Add') }}
-                </button>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    @click="syncLatestModels(sIdx)"
+                    :disabled="syncingPlatform === section.platform"
+                    class="text-xs text-gray-500 hover:text-primary-600 disabled:opacity-50"
+                  >
+                    {{ syncingPlatform === section.platform ? t('admin.channels.form.syncingModels') : t('admin.channels.form.syncLatestModels') }}
+                  </button>
+                  <button type="button" @click="addPricingEntry(sIdx)" class="text-xs text-primary-600 hover:text-primary-700">
+                    + {{ t('common.add', 'Add') }}
+                  </button>
+                </div>
               </div>
               <div
                 v-if="section.model_pricing.length === 0"
@@ -848,7 +858,7 @@ async function syncLatestModels(sectionIdx: number) {
     for (const entry of form.platforms[sectionIdx].model_pricing) {
       for (const m of entry.models) existingModels.add(m)
     }
-    const newModels = result.models.filter(m => !existingModels.has(m))
+    const newModels = result.models.filter((m: string) => !existingModels.has(m))
     if (newModels.length === 0) {
       appStore.showSuccess(t('admin.channels.form.syncModelsAlreadyUpToDate'))
       return
