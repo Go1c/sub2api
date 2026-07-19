@@ -90,8 +90,8 @@
         <div class="card">
           <div class="px-6 py-4">
           <div class="flex flex-wrap items-end gap-4">
-            <!-- API Key Filter -->
-            <div class="min-w-[180px]">
+            <!-- API Key Filter (usage tab only; error tab has its own key filter) -->
+            <div v-if="activeTab === 'usage'" class="min-w-[180px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select
                 v-model="filters.api_key_id"
@@ -101,7 +101,7 @@
               />
             </div>
 
-            <!-- Date Range Filter -->
+            <!-- Date Range Filter (shared by usage + errors) -->
             <div>
               <label class="input-label">{{ t('usage.timeRange') }}</label>
               <DateRangePicker
@@ -113,13 +113,22 @@
 
             <!-- Actions -->
             <div class="ml-auto flex items-center gap-3">
-              <button @click="applyFilters" :disabled="loading" class="btn btn-secondary">
+              <button
+                @click="refreshData"
+                :disabled="activeTab === 'errors' ? errorLoading : loading"
+                class="btn btn-secondary"
+              >
                 {{ t('common.refresh') }}
               </button>
               <button @click="resetFilters" class="btn btn-secondary">
                 {{ t('common.reset') }}
               </button>
-              <button @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
+              <button
+                v-if="activeTab !== 'errors'"
+                @click="exportToCSV"
+                :disabled="exporting"
+                class="btn btn-primary"
+              >
                 <svg
                   v-if="exporting"
                   class="-ml-1 mr-2 h-4 w-4 animate-spin"
@@ -149,7 +158,47 @@
       </template>
 
       <template #table>
+        <div
+          v-if="errorViewEnabled"
+          class="mb-4 flex gap-2 border-b border-gray-200 dark:border-dark-700"
+        >
+          <button
+            type="button"
+            class="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+            :class="activeTab === 'usage'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            @click="switchToUsage"
+          >
+            {{ t('usage.tabs.usage') }}
+          </button>
+          <button
+            type="button"
+            class="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+            :class="activeTab === 'errors'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            @click="switchToErrors"
+          >
+            {{ t('usage.tabs.errors') }}
+          </button>
+        </div>
+
+        <UserErrorRequestsTable
+          v-if="errorViewEnabled && activeTab === 'errors'"
+          :rows="errorRows"
+          :total="errorTotal"
+          :loading="errorLoading"
+          :page="errorPage"
+          :page-size="errorPageSize"
+          :api-keys="apiKeys"
+          @filter="onErrorFilter"
+          @update:page="onErrorPage"
+          @update:pageSize="onErrorPageSize"
+        />
+
         <DataTable
+          v-else
           :columns="columns"
           :data="usageLogs"
           :loading="loading"
@@ -385,7 +434,7 @@
 
       <template #pagination>
         <Pagination
-          v-if="pagination.total > 0"
+          v-if="activeTab === 'usage' && pagination.total > 0"
           :page="pagination.page"
           :total="pagination.total"
           :page-size="pagination.page_size"
@@ -579,7 +628,8 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Icon from '@/components/icons/Icon.vue'
-import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse } from '@/types'
+import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
+import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse, UserErrorRequest } from '@/types'
 import type { Column } from '@/components/common/types'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -601,6 +651,25 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 let abortController: AbortController | null = null
+let errorAbortController: AbortController | null = null
+
+// Usage / errors detail tabs (errors gated by public setting)
+type DetailTab = 'usage' | 'errors'
+const activeTab = ref<DetailTab>('usage')
+const errorViewEnabled = computed(
+  () => appStore.cachedPublicSettings?.allow_user_view_error_requests ?? false
+)
+
+const errorRows = ref<UserErrorRequest[]>([])
+const errorLoading = ref(false)
+const errorPage = ref(1)
+const errorPageSize = ref(20)
+const errorTotal = ref(0)
+const errorFilter = ref<{ model: string; category: string; api_key_id: number | null }>({
+  model: '',
+  category: '',
+  api_key_id: null,
+})
 
 // Tooltip state
 const tooltipVisible = ref(false)
@@ -861,6 +930,20 @@ const applyFilters = () => {
   pagination.page = 1
   loadUsageLogs()
   loadUsageStats()
+  // Date/API-key changes also reset the errors list when that tab is open.
+  errorPage.value = 1
+  if (activeTab.value === 'errors') {
+    void loadErrors()
+  } else {
+    errorRows.value = []
+    errorTotal.value = 0
+  }
+}
+
+const refreshData = () => {
+  loadUsageLogs()
+  loadUsageStats()
+  if (activeTab.value === 'errors') void loadErrors()
 }
 
 const resetFilters = () => {
@@ -878,8 +961,76 @@ const resetFilters = () => {
   filters.value.start_date = startDate.value
   filters.value.end_date = endDate.value
   pagination.page = 1
+  errorFilter.value = { model: '', category: '', api_key_id: null }
+  errorPage.value = 1
   loadUsageLogs()
   loadUsageStats()
+  if (activeTab.value === 'errors') void loadErrors()
+}
+
+const loadErrors = async () => {
+  if (!errorViewEnabled.value) return
+  errorAbortController?.abort()
+  const current = new AbortController()
+  errorAbortController = current
+  errorLoading.value = true
+  try {
+    const resp = await usageAPI.listMyErrorRequests(
+      {
+        page: errorPage.value,
+        page_size: errorPageSize.value,
+        start_date: filters.value.start_date || startDate.value,
+        end_date: filters.value.end_date || endDate.value,
+        model: errorFilter.value.model.trim() || undefined,
+        category: errorFilter.value.category || undefined,
+        api_key_id: errorFilter.value.api_key_id ?? undefined,
+        sort_by: 'created_at',
+        sort_order: 'desc',
+      },
+      { signal: current.signal }
+    )
+    if (current.signal.aborted) return
+    errorRows.value = resp.items
+    errorTotal.value = resp.total
+  } catch (error) {
+    if (current.signal.aborted) return
+    const abortError = error as { name?: string; code?: string }
+    if (abortError?.name === 'AbortError' || abortError?.code === 'ERR_CANCELED') return
+    console.error('[UsageView] loadErrors failed:', error)
+    appStore.showError(t('usage.errors.failedToLoad'))
+  } finally {
+    if (errorAbortController === current) errorLoading.value = false
+  }
+}
+
+const onErrorFilter = (next: { model: string; category: string; api_key_id: number | null }) => {
+  errorFilter.value = {
+    model: next.model || '',
+    category: next.category || '',
+    api_key_id: next.api_key_id,
+  }
+  errorPage.value = 1
+  void loadErrors()
+}
+
+const onErrorPage = (page: number) => {
+  errorPage.value = page
+  void loadErrors()
+}
+
+const onErrorPageSize = (pageSize: number) => {
+  errorPageSize.value = pageSize
+  errorPage.value = 1
+  void loadErrors()
+}
+
+const switchToUsage = () => {
+  activeTab.value = 'usage'
+}
+
+const switchToErrors = () => {
+  activeTab.value = 'errors'
+  if (errorRows.value.length === 0) void loadErrors()
 }
 
 const handlePageChange = (page: number) => {
