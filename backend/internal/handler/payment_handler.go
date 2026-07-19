@@ -507,6 +507,7 @@ type PublicOrderResult struct {
 	Amount              float64    `json:"amount"`
 	PayAmount           float64    `json:"pay_amount"`
 	FeeRate             float64    `json:"fee_rate"`
+	Currency            string     `json:"currency,omitempty"`
 	PaymentType         string     `json:"payment_type"`
 	OrderType           string     `json:"order_type"`
 	Status              string     `json:"status"`
@@ -529,6 +530,7 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 		Amount:              order.Amount,
 		PayAmount:           order.PayAmount,
 		FeeRate:             order.FeeRate,
+		Currency:            service.PaymentOrderCurrency(order),
 		PaymentType:         order.PaymentType,
 		OrderType:           order.OrderType,
 		Status:              order.Status,
@@ -602,24 +604,31 @@ func isMobile(c *gin.Context) bool {
 	return false
 }
 
-func sanitizePaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*dbent.PaymentOrder {
-	if len(orders) == 0 {
-		return orders
-	}
-	out := make([]*dbent.PaymentOrder, 0, len(orders))
+type paymentOrderResponse struct {
+	*dbent.PaymentOrder
+	Currency string `json:"currency,omitempty"`
+}
+
+func sanitizePaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*paymentOrderResponse {
+	out := make([]*paymentOrderResponse, 0, len(orders))
 	for _, order := range orders {
-		out = append(out, sanitizePaymentOrderForResponse(order))
+		if item := sanitizePaymentOrderForResponse(order); item != nil {
+			out = append(out, item)
+		}
 	}
 	return out
 }
 
-func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *dbent.PaymentOrder {
+func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *paymentOrderResponse {
 	if order == nil {
 		return nil
 	}
 	cloned := *order
 	cloned.ProviderSnapshot = nil
-	return &cloned
+	return &paymentOrderResponse{
+		PaymentOrder: &cloned,
+		Currency:     service.PaymentOrderCurrency(order),
+	}
 }
 
 func isWeChatBrowser(c *gin.Context) bool {

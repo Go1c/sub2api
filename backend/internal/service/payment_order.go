@@ -571,10 +571,16 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 		}
 	}
 	if providerKey == payment.TypeStripe {
-		snapshot["currency"] = strings.ToUpper(payment.NormalizeStripeCurrency(sel.Config))
+		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
 		if multiplier := payment.ProviderBalanceRechargeMultiplier(providerKey, sel.Config, 0); multiplier > 0 {
 			snapshot["balance_recharge_multiplier"] = multiplier
 		}
+	}
+	if providerKey == payment.TypeAirwallex {
+		if accountID := strings.TrimSpace(sel.Config["accountId"]); accountID != "" {
+			snapshot["merchant_id"] = accountID
+		}
+		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
 	}
 
 	if len(snapshot) == 1 {
