@@ -51,6 +51,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { useAppStore } from '@/stores'
 import { isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
+import type { PaymentOrder } from '@/types/payment'
 import QRCode from 'qrcode'
 import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
@@ -73,6 +74,10 @@ const paymentType = ref('')
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
+let verifyAttempts = 0
+let lastVerifyAt = 0
+const VERIFY_RETRY_INTERVAL_MS = 15000
+const VERIFY_RETRY_MAX_ATTEMPTS = 6
 
 const countdownDisplay = computed(() => {
   const m = Math.floor(remainingSeconds.value / 60)
@@ -142,16 +147,39 @@ async function renderQR() {
   }
 }
 
+async function tryRecoverPendingOrder(order: PaymentOrder): Promise<PaymentOrder> {
+  if (!isWxpay.value) return order
+  const outTradeNo = String(order.out_trade_no || '').trim()
+  if (!outTradeNo) return order
+  const normalizedStatus = String(order.status || '').trim().toUpperCase()
+  if (normalizedStatus !== 'PENDING') return order
+  const now = Date.now()
+  if (verifyAttempts >= VERIFY_RETRY_MAX_ATTEMPTS || now - lastVerifyAt < VERIFY_RETRY_INTERVAL_MS) {
+    return order
+  }
+
+  lastVerifyAt = now
+  verifyAttempts += 1
+  try {
+    const result = await paymentAPI.verifyOrder(outTradeNo)
+    return result.data ?? order
+  } catch {
+    return order
+  }
+}
+
 let pollInFlight = false
 async function pollStatus() {
   if (!orderId.value) return
-  // 防重入：接口响应慢于 3 秒轮询间隔时避免并发重叠请求与重复跳转。
+  // 防重入：接口（含 verifyOrder 二次确认）响应慢于 3 秒轮询间隔时避免并发重叠请求。
   if (pollInFlight) return
   pollInFlight = true
   try {
-    const order = await paymentStore.pollOrderStatus(orderId.value)
+    let order = await paymentStore.pollOrderStatus(orderId.value)
     if (!order) return
     // 定时器已被 cleanup 清除时不再执行终态跳转（响应可能在 cleanup 后才回来）。
+    if (!pollTimer) return
+    order = await tryRecoverPendingOrder(order)
     if (!pollTimer) return
     if (order.status === 'COMPLETED' || order.status === 'PAID') {
       cleanup()

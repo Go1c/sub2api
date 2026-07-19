@@ -167,8 +167,11 @@ async function initStripe(clientSecret: string, publishableKey: string) {
   }
 }
 
+let pollInFlight = false
 function startPolling() {
   pollTimer = setInterval(async () => {
+    if (pollInFlight) return
+    pollInFlight = true
     try {
       const token = document.cookie.split('; ').find(c => c.startsWith('token='))?.split('=')[1]
         || localStorage.getItem('token') || ''
@@ -177,6 +180,8 @@ function startPolling() {
         credentials: 'include',
       })
       if (!res.ok) return
+      // 定时器已被清理时不再执行终态处理。
+      if (!pollTimer) return
       const data = await res.json()
       const status = data?.data?.status
       if (status === 'COMPLETED' || status === 'PAID') {
@@ -185,6 +190,9 @@ function startPolling() {
         setTimeout(closeWindow, 2000)
       }
     } catch { /* ignore */ }
+    finally {
+      pollInFlight = false
+    }
   }, 3000)
 }
 </script>
