@@ -427,6 +427,10 @@ function emptyPaymentState(): PaymentRecoverySnapshot {
     payUrl: '',
     outTradeNo: '',
     clientSecret: '',
+    intentId: '',
+    currency: '',
+    countryCode: '',
+    paymentEnv: '',
     payAmount: 0,
     orderType: '',
     paymentMode: '',
@@ -896,6 +900,16 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         },
       }).href
       : ''
+    const airwallexRouteUrl = result.client_secret && result.intent_id
+      ? router.resolve({
+        path: '/payment/airwallex',
+        query: {
+          order_id: String(result.order_id),
+          out_trade_no: result.out_trade_no || undefined,
+          resume_token: result.resume_token || undefined,
+        },
+      }).href
+      : undefined
     const decision = decidePaymentLaunch(result, {
       visibleMethod,
       orderType,
@@ -903,6 +917,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
       stripePopupUrl: stripeRouteUrl,
       stripeRouteUrl,
+      airwallexRouteUrl,
     })
 
     if (decision.kind === 'wechat_oauth' && decision.oauth?.authorize_url) {
@@ -926,6 +941,10 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
 
     if (decision.kind === 'stripe_popup') {
       openWindow(decision.paymentState.payUrl)
+      return
+    }
+    if (decision.kind === 'airwallex_route') {
+      window.location.href = decision.paymentState.payUrl
       return
     }
     if (decision.kind === 'stripe_route') {
@@ -1087,6 +1106,16 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
         },
       }).href
       : ''
+    const airwallexRouteUrl = result.client_secret && result.intent_id
+      ? router.resolve({
+        path: '/payment/airwallex',
+        query: {
+          order_id: String(result.order_id),
+          out_trade_no: result.out_trade_no || undefined,
+          resume_token: result.resume_token || undefined,
+        },
+      }).href
+      : undefined
     const decision = decidePaymentLaunch(result, {
       visibleMethod,
       orderType: context.orderType,
@@ -1094,6 +1123,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       isWechatBrowser: false,
       stripePopupUrl: stripeRouteUrl,
       stripeRouteUrl,
+      airwallexRouteUrl,
     })
 
     if (decision.kind !== 'qr_waiting' || !decision.paymentState.qrCode) {

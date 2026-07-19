@@ -177,13 +177,13 @@
           </div>
         </div>
 
-        <!-- Stripe webhook hint -->
-        <div v-if="stripeWebhookUrl" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-900/20">
+        <!-- Provider webhook hint (Stripe / Airwallex) -->
+        <div v-if="providerWebhookUrl" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-900/20">
           <p class="text-xs text-blue-700 dark:text-blue-300">
-            {{ t('admin.settings.payment.stripeWebhookHint') }}
+            {{ t(providerWebhookHintKey) }}
           </p>
           <code class="mt-1 block break-all rounded bg-blue-100 px-2 py-1 text-xs text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
-            {{ stripeWebhookUrl }}
+            {{ providerWebhookUrl }}
           </code>
         </div>
       </div>
@@ -330,9 +330,16 @@ const visibleFields = reactive<Record<string, boolean>>({})
 // --- Computed ---
 const defaultBaseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
-const stripeWebhookUrl = computed(() =>
-  form.provider_key === 'stripe' ? defaultBaseUrl + WEBHOOK_PATHS.stripe : '',
-)
+const providerWebhookUrl = computed(() => {
+  if (form.provider_key === 'stripe') return defaultBaseUrl + WEBHOOK_PATHS.stripe
+  if (form.provider_key === 'airwallex') return defaultBaseUrl + WEBHOOK_PATHS.airwallex
+  return ''
+})
+
+const providerWebhookHintKey = computed(() => {
+  if (form.provider_key === 'airwallex') return 'admin.settings.payment.airwallexWebhookHint'
+  return 'admin.settings.payment.stripeWebhookHint'
+})
 
 const callbackPaths = computed(() => PROVIDER_CALLBACK_PATHS[form.provider_key] || null)
 const usesGatewayPaymentMode = computed(() => usesPaymentMode(form.provider_key))
@@ -416,13 +423,24 @@ const paymentGuide = computed<PaymentGuide | null>(() => {
     }
   }
 
+  if (form.provider_key === 'airwallex') {
+    return {
+      summary: t('admin.settings.payment.airwallexGuideSummary'),
+      note: t('admin.settings.payment.airwallexGuideNote'),
+      items: [],
+    }
+  }
+
   return null
 })
 
 const limitableTypes = computed(() => {
-  // Stripe: single "stripe" entry (one set of shared limits)
+  // Stripe/Airwallex: single shared-limit entry
   if (form.provider_key === 'stripe') {
     return [{ value: 'stripe', label: 'Stripe' }]
+  }
+  if (form.provider_key === 'airwallex') {
+    return [{ value: 'airwallex', label: 'Airwallex' }]
   }
   const selected = form.supported_types.filter(t => t !== 'easypay')
   return selected.map(v => {

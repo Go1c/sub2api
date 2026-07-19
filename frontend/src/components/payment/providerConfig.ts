@@ -32,13 +32,14 @@ export const PROVIDER_SUPPORTED_TYPES: Record<string, string[]> = {
   alipay: ['alipay'],
   wxpay: ['wxpay'],
   stripe: ['card', 'alipay', 'wxpay', 'link'],
+  airwallex: ['airwallex'],
 }
 
 /** Available payment modes for EasyPay-compatible providers. */
 export const EASYPAY_PAYMENT_MODES = ['qrcode', 'popup'] as const
 
 /** Fixed display order for user-facing payment methods */
-export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'stripe', 'balance'] as const
+export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'stripe', 'airwallex', 'balance'] as const
 
 /** Payment mode constants */
 export const PAYMENT_MODE_QRCODE = 'qrcode'
@@ -70,6 +71,7 @@ export const WEBHOOK_PATHS: Record<string, string> = {
   alipay: '/api/v1/payment/webhook/alipay',
   wxpay: '/api/v1/payment/webhook/wxpay',
   stripe: '/api/v1/payment/webhook/stripe',
+  airwallex: '/api/v1/payment/webhook/airwallex',
 }
 
 export const RETURN_PATH = '/payment/result'
@@ -91,6 +93,15 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'apiBase', label: '', sensitive: false },
     { key: 'cidAlipay', label: '', sensitive: false, optional: true },
     { key: 'cidWxpay', label: '', sensitive: false, optional: true },
+  ],
+  airwallex: [
+    { key: 'clientId', label: '', sensitive: false },
+    { key: 'apiKey', label: '', sensitive: true },
+    { key: 'webhookSecret', label: '', sensitive: true },
+    { key: 'apiBase', label: '', sensitive: false, defaultValue: 'https://api.airwallex.com/api/v1' },
+    { key: 'accountId', label: 'admin.settings.payment.field_accountId', sensitive: false, optional: true },
+    { key: 'currency', label: '', sensitive: false, optional: true, defaultValue: 'CNY' },
+    { key: 'countryCode', label: '', sensitive: false, optional: true, defaultValue: 'CN' },
   ],
   mapay: [
     { key: 'pid', label: 'PID', sensitive: false },

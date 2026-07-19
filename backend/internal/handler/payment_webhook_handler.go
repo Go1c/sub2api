@@ -66,6 +66,12 @@ func (h *PaymentWebhookHandler) StripeWebhook(c *gin.Context) {
 	h.handleNotify(c, payment.TypeStripe)
 }
 
+// AirwallexWebhook 处理空中云汇 Webhook 事件。
+// POST /api/v1/payment/webhook/airwallex
+func (h *PaymentWebhookHandler) AirwallexWebhook(c *gin.Context) {
+	h.handleNotify(c, payment.TypeAirwallex)
+}
+
 // handleNotify is the shared logic for all provider webhook handlers.
 func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string) {
 	var rawBody string
@@ -153,7 +159,7 @@ func extractOutTradeNo(rawBody, providerKey string) string {
 			return values.Get("out_trade_no")
 		}
 	}
-	// For other providers (Stripe, Alipay direct, WxPay direct), the registry
+	// For other providers (Stripe, Airwallex, Alipay direct, WxPay direct), the registry
 	// typically has only one instance, so no instance lookup is needed.
 	return ""
 }
@@ -191,12 +197,12 @@ const (
 
 // writeSuccessResponse sends the provider-specific success response.
 // WeChat Pay requires JSON {"code":"SUCCESS","message":"成功"};
-// Stripe expects an empty 200; others accept plain text "success".
+// Stripe/Airwallex expect an empty 200; others accept plain text "success".
 func writeSuccessResponse(c *gin.Context, providerKey string) {
 	switch providerKey {
 	case payment.TypeWxpay:
 		c.JSON(http.StatusOK, wxpaySuccessResponse{Code: wxpaySuccessCode, Message: wxpaySuccessMessage})
-	case payment.TypeStripe:
+	case payment.TypeStripe, payment.TypeAirwallex:
 		c.String(http.StatusOK, "")
 	default:
 		c.String(http.StatusOK, "success")
