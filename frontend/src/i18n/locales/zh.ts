@@ -297,12 +297,12 @@ export default {
     close: '关闭',
     enabled: '已启用',
     disabled: '已禁用',
-	    total: '总计',
-	    balance: '余额',
-	    availableBalance: '可用余额',
-	    frozenBalance: '冻结金额',
-	    totalBalance: '总余额',
-	    available: '可用',
+    total: '总计',
+    balance: '余额',
+    availableBalance: '可用余额',
+    frozenBalance: '冻结金额',
+    totalBalance: '总余额',
+    available: '可用',
     copiedToClipboard: '已复制到剪贴板',
     copied: '已复制',
     copyFailed: '复制失败',
@@ -321,11 +321,11 @@ export default {
     selectedCount: '（已选 {count} 个）',
     refresh: '刷新',
     autoRefresh: {
-      title: '自动刷新',
-      enable: '启用自动刷新',
-      countdown: '自动刷新: {seconds}s',
-      seconds: '{n} 秒',
-    },
+          title: '自动刷新',
+          enable: '启用自动刷新',
+          countdown: '自动刷新: {seconds}s',
+          seconds: '{n} 秒'
+        },
     view: '查看',
     settings: '设置',
     chooseFile: '选择文件',
@@ -337,18 +337,28 @@ export default {
     unknown: '未知',
     minutes: '分钟',
     time: {
-      never: '从未',
-      justNow: '刚刚',
-      minutesAgo: '{n}分钟前',
-      hoursAgo: '{n}小时前',
-      daysAgo: '{n}天前',
-      countdown: {
-        daysHours: '{d}d {h}h',
-        hoursMinutes: '{h}h {m}m',
-        minutes: '{m}m',
-        withSuffix: '{time} 后解除'
-      }
-    }
+          never: '从未',
+          justNow: '刚刚',
+          minutesAgo: '{n}分钟前',
+          hoursAgo: '{n}小时前',
+          daysAgo: '{n}天前',
+          countdown: {
+                  daysHours: '{d}d {h}h',
+                  hoursMinutes: '{h}h {m}m',
+                  minutes: '{m}m',
+                  withSuffix: '{time} 后解除'
+                }
+        },
+    remove: '移除',
+    menu: '菜单',
+    peakRateTooltip: '高峰倍率：{window}',
+    peakRateImageNote: '；token 计费的图片 token 同样适用，图片按次计费不受高峰影响',
+    apply: '应用',
+    clear: '清除',
+    creating: '创建中...',
+    required: '必填',
+    sending: '发送中...',
+    tryAgain: '请重试'
   },
 
   adminCompliance: {
@@ -433,6 +443,10 @@ export default {
     channelMonitor: '渠道监控',
     channelStatus: '渠道状态',
     riskControl: '风控中心',
+    securityAudit: '安全审计',
+    contentModeration: '内容审核',
+    promptAudit: '提示词审计',
+    auditLogs: '操作日志'
   },
 
   // Auth
@@ -462,8 +476,8 @@ export default {
     passwordMinLength: '密码至少需要 6 个字符',
     loginFailed: '登录失败，请检查您的凭据后重试。',
     errors: {
-      USER_NOT_ACTIVE: '账号已被禁用',
-    },
+          USER_NOT_ACTIVE: '账号已被禁用'
+        },
     registrationFailed: '注册失败，请重试。',
     emailSuffixNotAllowed: '该邮箱域名不在允许注册范围内。',
     emailSuffixNotAllowedWithAllowed: '该邮箱域名不被允许。可用域名：{suffixes}',
@@ -513,93 +527,93 @@ export default {
     invitationCodeInvalidCannotRegister: '邀请码无效，请检查后重试',
     oauthOrContinue: '或使用其他继续',
     linuxdo: {
-      signIn: '使用 Linux.do 登录',
-      orContinue: '或使用邮箱密码继续',
-      callbackTitle: '正在完成登录',
-      callbackProcessing: '正在验证登录信息，请稍候...',
-      callbackHint: '如果页面未自动跳转，请返回登录页重试。',
-      callbackMissingToken: '登录信息缺失，请返回重试。',
-      backToLogin: '返回登录',
-      invitationRequired: '该 Linux.do 账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
-      invalidPendingToken: '注册凭证已失效，请重新使用 Linux.do 登录。',
-      completeRegistration: '完成注册',
-      completing: '正在完成注册...',
-      completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
-    },
+          signIn: '使用 Linux.do 登录',
+          orContinue: '或使用邮箱密码继续',
+          callbackTitle: '正在完成登录',
+          callbackProcessing: '正在验证登录信息，请稍候...',
+          callbackHint: '如果页面未自动跳转，请返回登录页重试。',
+          callbackMissingToken: '登录信息缺失，请返回重试。',
+          backToLogin: '返回登录',
+          invitationRequired: '该 Linux.do 账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
+          invalidPendingToken: '注册凭证已失效，请重新使用 Linux.do 登录。',
+          completeRegistration: '完成注册',
+          completing: '正在完成注册...',
+          completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
+        },
     dingtalk: {
-      signIn: '钉钉登录',
-      callbackTitle: '正在完成钉钉登录',
-      callbackProcessing: '正在验证钉钉登录信息，请稍候...',
-      callbackHint: '如果页面未自动跳转，请返回登录页重试。',
-      callbackMissingToken: '登录信息缺失，请返回重试。',
-      backToLogin: '返回登录',
-      invitationRequired: '该钉钉账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
-      invalidPendingToken: '注册凭证已失效，请重新使用钉钉登录。',
-      completeRegistration: '完成注册',
-      completing: '正在完成注册...',
-      completeRegistrationFailed: '注册失败，请检查邀请码后重试。',
-      createAccountTitle: '创建钉钉账户',
-      registrationDisabledRedirectToBind: '当前已禁止注册新账户，请使用已有账户邮箱和密码绑定钉钉登录',
-      error: {
-        title: '钉钉登录失败',
-        csrf: '登录会话已过期，请重新扫码登录',
-        corp_rejected: '您的钉钉账号不属于本企业，请联系管理员',
-        dingtalk_not_enabled: '钉钉登录暂未启用',
-        upstream_error: '钉钉服务暂时不可用，请稍后重试',
-        missing_browser_session: '浏览器会话丢失，请重新登录',
-        missing_params: '请求参数不完整',
-        invalid_state: '登录状态异常',
-        provider_error: '钉钉授权失败',
-        session_error: '会话创建失败，请重试',
-        retry: '重新登录'
-      }
-    },
+          signIn: '钉钉登录',
+          callbackTitle: '正在完成钉钉登录',
+          callbackProcessing: '正在验证钉钉登录信息，请稍候...',
+          callbackHint: '如果页面未自动跳转，请返回登录页重试。',
+          callbackMissingToken: '登录信息缺失，请返回重试。',
+          backToLogin: '返回登录',
+          invitationRequired: '该钉钉账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
+          invalidPendingToken: '注册凭证已失效，请重新使用钉钉登录。',
+          completeRegistration: '完成注册',
+          completing: '正在完成注册...',
+          completeRegistrationFailed: '注册失败，请检查邀请码后重试。',
+          createAccountTitle: '创建钉钉账户',
+          registrationDisabledRedirectToBind: '当前已禁止注册新账户，请使用已有账户邮箱和密码绑定钉钉登录',
+          error: {
+                  title: '钉钉登录失败',
+                  csrf: '登录会话已过期，请重新扫码登录',
+                  corp_rejected: '您的钉钉账号不属于本企业，请联系管理员',
+                  dingtalk_not_enabled: '钉钉登录暂未启用',
+                  upstream_error: '钉钉服务暂时不可用，请稍后重试',
+                  missing_browser_session: '浏览器会话丢失，请重新登录',
+                  missing_params: '请求参数不完整',
+                  invalid_state: '登录状态异常',
+                  provider_error: '钉钉授权失败',
+                  session_error: '会话创建失败，请重试',
+                  retry: '重新登录'
+                }
+        },
     emailOAuth: {
-      signIn: '使用 {providerName} 登录'
-    },
+          signIn: '使用 {providerName} 登录'
+        },
     oidc: {
-      signIn: '使用 {providerName} 登录',
-      callbackTitle: '正在完成 {providerName} 登录',
-      callbackProcessing: '正在验证 {providerName} 登录信息，请稍候...',
-      callbackHint: '如果页面未自动跳转，请返回登录页重试。',
-      callbackMissingToken: '登录信息缺失，请返回重试。',
-      backToLogin: '返回登录',
-      invitationRequired: '该 {providerName} 账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
-      invalidPendingToken: '注册凭证已失效，请重新登录。',
-      completeRegistration: '完成注册',
-      completing: '正在完成注册...',
-      completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
-    },
+          signIn: '使用 {providerName} 登录',
+          callbackTitle: '正在完成 {providerName} 登录',
+          callbackProcessing: '正在验证 {providerName} 登录信息，请稍候...',
+          callbackHint: '如果页面未自动跳转，请返回登录页重试。',
+          callbackMissingToken: '登录信息缺失，请返回重试。',
+          backToLogin: '返回登录',
+          invitationRequired: '该 {providerName} 账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
+          invalidPendingToken: '注册凭证已失效，请重新登录。',
+          completeRegistration: '完成注册',
+          completing: '正在完成注册...',
+          completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
+        },
     oauthFlow: {
-      profileDetailsTitle: '使用 {providerName} 资料',
-      profileDetailsDescription: '选择是否将 {providerName} 的昵称或头像应用到当前账户。',
-      useDisplayName: '使用昵称',
-      useAvatar: '使用头像',
-      avatarAlt: '{providerName} 头像',
-      reviewProfileBeforeContinue: '请先确认 {providerName} 资料后再继续。',
-      chooseHowToContinue: '选择后续操作',
-      chooseAccountActionHint: '请选择绑定已有账户，或创建一个新账户。',
-      suggestedEmail: '建议邮箱：{email}',
-      bindExistingAccount: '绑定已有账户',
-      createNewAccount: '创建新账户',
-      createAccountHint: '请输入邮箱地址以创建账户并继续。',
-      bindLoginHint: '登录一个已有账户以绑定此次 {providerName} 登录。',
-      signInThenBindDescription: '请先登录已有账户，再将此次 {providerName} 登录绑定到该账户。',
-      bindSignInToExistingAccount: '将此次 {providerName} 登录绑定到已有账户。',
-      bindCurrentAccountTitle: '绑定当前账户',
-      bindCurrentAccountDescription: '将此次 {providerName} 登录绑定到当前浏览器已登录的账户。',
-      bindCurrentAccount: '绑定当前账户',
-      logInAndBind: '登录并绑定',
-      useDifferentEmail: '使用其他邮箱',
-      backToOptions: '返回选项',
-      yourAccount: '当前账户',
-      totpHint: '请输入 {account} 的 6 位验证码，以完成此次 {providerName} 登录绑定。',
-      verifyAndContinue: '验证并继续',
-      wechatAvailabilityUnknown: '暂时无法确认微信登录可用性，请刷新后重试。',
-      wechatSystemBrowserOnly: '当前微信登录流程仅支持在系统浏览器中继续。',
-      wechatBrowserOnly: '当前微信登录流程仅支持在微信内置浏览器中继续。',
-      wechatNotConfigured: '微信登录尚未配置。'
-    },
+          profileDetailsTitle: '使用 {providerName} 资料',
+          profileDetailsDescription: '选择是否将 {providerName} 的昵称或头像应用到当前账户。',
+          useDisplayName: '使用昵称',
+          useAvatar: '使用头像',
+          avatarAlt: '{providerName} 头像',
+          reviewProfileBeforeContinue: '请先确认 {providerName} 资料后再继续。',
+          chooseHowToContinue: '选择后续操作',
+          chooseAccountActionHint: '请选择绑定已有账户，或创建一个新账户。',
+          suggestedEmail: '建议邮箱：{email}',
+          bindExistingAccount: '绑定已有账户',
+          createNewAccount: '创建新账户',
+          createAccountHint: '请输入邮箱地址以创建账户并继续。',
+          bindLoginHint: '登录一个已有账户以绑定此次 {providerName} 登录。',
+          signInThenBindDescription: '请先登录已有账户，再将此次 {providerName} 登录绑定到该账户。',
+          bindSignInToExistingAccount: '将此次 {providerName} 登录绑定到已有账户。',
+          bindCurrentAccountTitle: '绑定当前账户',
+          bindCurrentAccountDescription: '将此次 {providerName} 登录绑定到当前浏览器已登录的账户。',
+          bindCurrentAccount: '绑定当前账户',
+          logInAndBind: '登录并绑定',
+          useDifferentEmail: '使用其他邮箱',
+          backToOptions: '返回选项',
+          yourAccount: '当前账户',
+          totpHint: '请输入 {account} 的 6 位验证码，以完成此次 {providerName} 登录绑定。',
+          verifyAndContinue: '验证并继续',
+          wechatAvailabilityUnknown: '暂时无法确认微信登录可用性，请刷新后重试。',
+          wechatSystemBrowserOnly: '当前微信登录流程仅支持在系统浏览器中继续。',
+          wechatBrowserOnly: '当前微信登录流程仅支持在微信内置浏览器中继续。',
+          wechatNotConfigured: '微信登录尚未配置。'
+        },
     linuxdoCallbackPageTitle: 'LinuxDo 登录回调',
     dingtalkCallbackPageTitle: '钉钉登录回调',
     oidcCallbackPageTitle: 'OIDC 登录回调',
@@ -608,21 +622,20 @@ export default {
     wechatCallbackPageTitle: '微信登录回调',
     wechatPaymentCallbackPageTitle: '微信支付回调',
     wechatPayment: {
-      callbackTitle: '正在恢复微信支付',
-      callbackProcessing: '正在恢复微信支付...',
-      backToPayment: '返回支付页',
-      callbackMissingResumeToken: '微信支付回调缺少恢复令牌。'
-    },
+          callbackTitle: '正在恢复微信支付',
+          callbackProcessing: '正在恢复微信支付...',
+          backToPayment: '返回支付页',
+          callbackMissingResumeToken: '微信支付回调缺少恢复令牌。'
+        },
     oauth: {
-      callbackTitle: 'OAuth 回调',
-      callbackHint: '按需将授权码和状态值复制回后台授权流程。',
-      invalidCallbackTitle: '无效的登录回调',
-      invalidCallbackHint: '当前页面缺少有效的授权结果，请返回登录页重新发起快捷登录。',
-      code: '授权码',
-      state: '状态',
-      fullUrl: '完整URL'
-    },
-    // 忘记密码
+          callbackTitle: 'OAuth 回调',
+          callbackHint: '按需将授权码和状态值复制回后台授权流程。',
+          invalidCallbackTitle: '无效的登录回调',
+          invalidCallbackHint: '当前页面缺少有效的授权结果，请返回登录页重新发起快捷登录。',
+          code: '授权码',
+          state: '状态',
+          fullUrl: '完整URL'
+        },
     forgotPassword: '忘记密码？',
     forgotPasswordTitle: '重置密码',
     forgotPasswordHint: '输入您的邮箱地址，我们将向您发送密码重置链接。',
@@ -630,11 +643,9 @@ export default {
     sendingResetLink: '发送中...',
     sendResetLinkFailed: '发送重置链接失败，请重试。',
     resetEmailSent: '重置链接已发送',
-    resetEmailSentHint:
-      '如果该邮箱已注册，您将很快收到密码重置链接。请检查您的收件箱和垃圾邮件文件夹。',
+    resetEmailSentHint: '如果该邮箱已注册，您将很快收到密码重置链接。请检查您的收件箱和垃圾邮件文件夹。',
     backToLogin: '返回登录',
     rememberedPassword: '想起密码了？',
-    // 重置密码
     resetPasswordTitle: '设置新密码',
     resetPasswordHint: '请在下方输入您的新密码。',
     newPassword: '新密码',
@@ -651,7 +662,9 @@ export default {
     invalidResetLink: '无效的重置链接',
     invalidResetLinkHint: '此密码重置链接无效或已过期。请重新请求一个新链接。',
     requestNewResetLink: '请求新的重置链接',
-    invalidOrExpiredToken: '密码重置链接无效或已过期。请重新请求一个新链接。'
+    invalidOrExpiredToken: '密码重置链接无效或已过期。请重新请求一个新链接。',
+    externalHandoffInvalid: '外部登录回跳地址未被允许，将按默认登录流程继续。',
+    invitationOnlyNotice: '本站仅支持邀请注册'
   },
 
   // Dashboard
@@ -726,19 +739,19 @@ export default {
     description: '管理您的 API 密钥和访问令牌',
     searchPlaceholder: '搜索名称或Key...',
     endpoints: {
-      title: 'API 端点',
-      default: '默认',
-      copied: '已复制',
-      copiedHint: '已复制到剪贴板',
-      clickToCopy: '点击可复制此端点',
-      speedTest: '测速',
-    },
+          title: 'API 端点',
+          default: '默认',
+          copied: '已复制',
+          copiedHint: '已复制到剪贴板',
+          clickToCopy: '点击可复制此端点',
+          speedTest: '测速'
+        },
     allGroups: '全部分组',
     allStatus: '全部状态',
     createKey: '创建密钥',
     editKey: '编辑密钥',
     deleteKey: '删除密钥',
-    deleteConfirmMessage: "确定要删除 '{name}' 吗？此操作无法撤销。",
+    deleteConfirmMessage: '确定要删除 \'{name}\' 吗？此操作无法撤销。',
     apiKey: 'API 密钥',
     group: '分组',
     currentConcurrency: '当前并发',
@@ -780,62 +793,57 @@ export default {
     lastUsedAt: '上次使用时间',
     useKey: '使用密钥',
     useKeyModal: {
-      title: '使用 API 密钥',
-      description: '将以下环境变量添加到您的终端配置文件或直接在终端中运行。',
-      copy: '复制',
-      copied: '已复制',
-      note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
-      noGroupTitle: '请先分配分组',
-      noGroupDescription:
-        '此 API 密钥尚未分配分组，请先在密钥列表中点击分组列进行分配，然后才能查看使用配置。',
-      openai: {
-        description: '将以下配置文件添加到 Codex CLI 配置目录中。',
-        configTomlHint: '请确保以下内容位于 config.toml 文件的开头部分',
-        note: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
-        noteWindows:
-          '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。'
-      },
-      cliTabs: {
-        claudeCode: 'Claude Code',
-        geminiCli: 'Gemini CLI',
-        codexCli: 'Codex CLI',
-        codexCliWs: 'Codex CLI (WebSocket)',
-        grokCli: 'Grok CLI',
-        opencode: 'OpenCode'
-      },
-      grok: {
-        claudeSettingsHint: 'Grok Messages 网关的 Claude Code settings.json',
-        claudeNote: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
-        description: '为 Grok 账号配置 API 访问。可选择 Grok CLI、Codex Responses，或（可用时）Claude Code Messages 路径。',
-        configTomlHint: '请确保以下内容位于 Grok config.toml 文件的开头部分',
-        codexConfigTomlHint: 'Grok Responses 的 Codex config.toml（已启用 WebSocket v2）',
-        codexDescription: '添加以下 Codex CLI 配置以接入 Grok Responses。',
-        codexNote: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
-        codexNoteWindows: '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。',
-        noteWindows: '按 Win+R，输入 %userprofile%\\.grok 打开 Grok 配置目录。',
-        note: '这些环境变量将在当前终端会话中生效。'
-      },
-      antigravity: {
-        description: '为 Antigravity 分组配置 API 访问。请根据您使用的客户端选择对应的配置方式。',
-        claudeCode: 'Claude Code',
-        geminiCli: 'Gemini CLI',
-        claudeNote:
-          '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
-        geminiNote:
-          '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。'
-      },
-      gemini: {
-        description:
-          '将以下环境变量添加到您的终端配置文件或直接在终端中运行，以配置 Gemini CLI 访问。',
-        modelComment: '如果你有 Gemini 3 权限可以填：gemini-3-pro-preview',
-        note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。'
-      },
-      opencode: {
-        title: 'OpenCode 配置示例',
-        subtitle: 'opencode.json',
-        hint: '配置文件路径：~/.config/opencode/opencode.json（或 opencode.jsonc），不存在需手动创建。可使用默认 provider（openai/anthropic/google）或自定义 provider_id。API Key 支持直接配置或通过客户端 /connect 命令配置。示例仅供参考，模型与选项可按需调整。'
-      }
-    },
+          title: '使用 API 密钥',
+          description: '将以下环境变量添加到您的终端配置文件或直接在终端中运行。',
+          copy: '复制',
+          copied: '已复制',
+          note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
+          noGroupTitle: '请先分配分组',
+          noGroupDescription: '此 API 密钥尚未分配分组，请先在密钥列表中点击分组列进行分配，然后才能查看使用配置。',
+          openai: {
+                  description: '将以下配置文件添加到 Codex CLI 配置目录中。',
+                  configTomlHint: '请确保以下内容位于 config.toml 文件的开头部分',
+                  note: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
+                  noteWindows: '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。'
+                },
+          cliTabs: {
+                  claudeCode: 'Claude Code',
+                  geminiCli: 'Gemini CLI',
+                  codexCli: 'Codex CLI',
+                  codexCliWs: 'Codex CLI (WebSocket)',
+                  grokCli: 'Grok CLI',
+                  opencode: 'OpenCode'
+                },
+          grok: {
+                  claudeSettingsHint: 'Grok Messages 网关的 Claude Code settings.json',
+                  claudeNote: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
+                  description: '为 Grok 账号配置 API 访问。可选择 Grok CLI、Codex Responses，或（可用时）Claude Code Messages 路径。',
+                  configTomlHint: '请确保以下内容位于 Grok config.toml 文件的开头部分',
+                  codexConfigTomlHint: 'Grok Responses 的 Codex config.toml（已启用 WebSocket v2）',
+                  codexDescription: '添加以下 Codex CLI 配置以接入 Grok Responses。',
+                  codexNote: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
+                  codexNoteWindows: '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。',
+                  noteWindows: '按 Win+R，输入 %userprofile%\\.grok 打开 Grok 配置目录。',
+                  note: '这些环境变量将在当前终端会话中生效。'
+                },
+          antigravity: {
+                  description: '为 Antigravity 分组配置 API 访问。请根据您使用的客户端选择对应的配置方式。',
+                  claudeCode: 'Claude Code',
+                  geminiCli: 'Gemini CLI',
+                  claudeNote: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
+                  geminiNote: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。'
+                },
+          gemini: {
+                  description: '将以下环境变量添加到您的终端配置文件或直接在终端中运行，以配置 Gemini CLI 访问。',
+                  modelComment: '如果你有 Gemini 3 权限可以填：gemini-3-pro-preview',
+                  note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。'
+                },
+          opencode: {
+                  title: 'OpenCode 配置示例',
+                  subtitle: 'opencode.json',
+                  hint: '配置文件路径：~/.config/opencode/opencode.json（或 opencode.jsonc），不存在需手动创建。可使用默认 provider（openai/anthropic/google）或自定义 provider_id。API Key 支持直接配置或通过客户端 /connect 命令配置。示例仅供参考，模型与选项可按需调整。'
+                }
+        },
     customKeyLabel: '自定义密钥',
     customKeyPlaceholder: '输入自定义密钥（至少16个字符）',
     customKeyHint: '仅允许字母、数字、下划线和连字符，最少16个字符。',
@@ -850,17 +858,15 @@ export default {
     ipBlacklistPlaceholder: '1.2.3.4\n5.6.0.0/16',
     ipBlacklistHint: '每行一个 IP 或 CIDR，这些 IP 将被禁止使用此密钥',
     ipRestrictionEnabled: '已配置 IP 限制',
-    ccSwitchNotInstalled:
-      'CC-Switch 未安装或协议处理程序未注册。请先安装 CC-Switch 或手动复制 API 密钥。',
+    ccSwitchNotInstalled: 'CC-Switch 未安装或协议处理程序未注册。请先安装 CC-Switch 或手动复制 API 密钥。',
     ccsClientSelect: {
-      title: '选择客户端',
-      description: '请选择您要导入到 CC-Switch 的客户端类型：',
-      claudeCode: 'Claude Code',
-      claudeCodeDesc: '导入为 Claude Code 配置',
-      geminiCli: 'Gemini CLI',
-      geminiCliDesc: '导入为 Gemini CLI 配置'
-    },
-    // 配额和有效期
+          title: '选择客户端',
+          description: '请选择您要导入到 CC-Switch 的客户端类型：',
+          claudeCode: 'Claude Code',
+          claudeCodeDesc: '导入为 Claude Code 配置',
+          geminiCli: 'Gemini CLI',
+          geminiCliDesc: '导入为 Gemini CLI 配置'
+        },
     quotaLimit: '额度限制',
     quotaAmount: '额度金额 (USD)',
     quotaAmountPlaceholder: '输入 USD 额度限制',
@@ -896,11 +902,23 @@ export default {
     expiresAt: '过期时间',
     noExpiration: '永久有效',
     status: {
-      active: '活跃',
-      inactive: '已停用',
-      quota_exhausted: '额度耗尽',
-      expired: '已过期'
-    }
+          active: '活跃',
+          inactive: '已停用',
+          quota_exhausted: '额度耗尽',
+          expired: '已过期'
+        },
+    fallbackKeyLabel: '兜底密钥',
+    fallbackKeyPlaceholder: '选择一把兜底密钥（可选）',
+    fallbackKeyNone: '不设置',
+    fallbackKeyDanger: '危险操作：当本密钥所在分组的上游账号全部不可用时，系统会自动改用所选兜底密钥转发请求并按其计费。请务必确认两把密钥的平台/类型完全一致（如同为 Claude），否则请求会失败（例如一个是 Claude、一个是 Codex 将无法互转）。',
+    modelRestriction: '允许使用模型',
+    modelRestrictionHint: '开启后，此密钥只能请求下方选中的模型。模型来自当前分组在模型广场中的可用模型。',
+    modelRestrictionSearch: '搜索模型',
+    modelRestrictionNoGroup: '请先选择分组',
+    modelRestrictionNoModels: '当前分组暂无可选模型',
+    modelRestrictionNoMatchedModels: '未找到匹配的模型',
+    allowedModelsRequired: '请至少选择一个允许使用的模型',
+    selectedModelsCount: '已选择 {count} 个模型'
   },
 
   // Usage
@@ -1012,25 +1030,70 @@ export default {
     exportExcelFailed: '使用数据导出失败',
     imageUnit: '张',
     userAgent: 'User-Agent',
-    tabs: { usage: '用量明细', errors: '错误请求' },
+    tabs: {
+          usage: '用量明细',
+          errors: '错误请求',
+          ranking: '用户排行'
+        },
     errors: {
-      time: '时间', model: '模型', endpoint: '端点', status: '状态码',
-      category: '分类', platform: '平台', message: '错误信息',
-      keyName: 'Key 名称', keyDeleted: '已删除', allKeys: '全部 Key',
-      modelPlaceholder: '搜索模型', allCategories: '全部分类',
-      empty: '暂无错误请求', failedToLoad: '加载错误请求失败',
-      categories: {
-        auth: '认证失败', rate_limit: '限流', quota: '余额/订阅',
-        invalid_request: '参数错误', service_unavailable: '服务暂时不可用',
-        upstream: '上游错误', internal: '平台错误', other: '其他', cyber: '安全策略',
-      },
-      detail: {
-        title: '错误请求详情',
-        responseBody: '上游响应内容',
-        upstreamStatus: '上游状态码',
-        loadFailed: '加载详情失败，请稍后重试',
-      },
-    },
+          time: '时间',
+          model: '模型',
+          endpoint: '端点',
+          status: '状态码',
+          category: '分类',
+          platform: '平台',
+          message: '错误信息',
+          keyName: 'Key 名称',
+          keyDeleted: '已删除',
+          allKeys: '全部 Key',
+          modelPlaceholder: '搜索模型',
+          allCategories: '全部分类',
+          empty: '暂无错误请求',
+          failedToLoad: '加载错误请求失败',
+          categories: {
+                  auth: '认证失败',
+                  rate_limit: '限流',
+                  quota: '余额/订阅',
+                  invalid_request: '参数错误',
+                  service_unavailable: '服务暂时不可用',
+                  upstream: '上游错误',
+                  internal: '平台错误',
+                  other: '其他',
+                  cyber: '安全策略'
+                },
+          detail: {
+                  title: '错误请求详情',
+                  responseBody: '上游响应内容',
+                  upstreamStatus: '上游状态码',
+                  loadFailed: '加载详情失败，请稍后重试'
+                },
+          allStatuses: '全部状态码'
+        },
+    cacheTotal: '缓存',
+    cacheBreakdown: '缓存 Token 明细',
+    cacheCreationTokensLabel: '缓存创建',
+    cacheReadTokensLabel: '缓存读取',
+    latency: '延迟',
+    latencyFirstToken: '首字',
+    latencyDuration: '总耗时',
+    imageInputTokens: '图片输入 Token',
+    imageInputTokenPrice: '图片输入单价',
+    imageInputCost: '图片输入费用',
+    ipGeo: {
+          fetch: '获取地区',
+          fetching: '获取中...',
+          failed: '获取失败',
+          private: '内网地址',
+          refreshTitle: '刷新地区信息',
+          batchFetch: '批量获取地区',
+          batchFetching: '获取中...',
+          pending: '{count} 个 IP 待获取地区',
+          batchFailed: '批量获取地区信息失败',
+          detailOrg: '运营商',
+          detailTimezone: '时区',
+          detailAccuracy: '定位精度',
+          detailCoordinates: '坐标'
+        }
   },
 
   // Shared keys for channel monitor (admin + user views)
@@ -1078,36 +1141,36 @@ export default {
     detailTitle: '渠道详情',
     closeDetail: '关闭',
     windowTab: {
-      '7d': '7 天',
-      '15d': '15 天',
-      '30d': '30 天'
-    },
+          7d: '7 天',
+          15d: '15 天',
+          30d: '30 天'
+        },
     overall: {
-      operational: 'OPERATIONAL',
-      degraded: 'DEGRADED',
-      unavailable: 'UNAVAILABLE'
-    },
+          operational: 'OPERATIONAL',
+          degraded: 'DEGRADED',
+          unavailable: 'UNAVAILABLE'
+        },
     columns: {
-      name: '名称',
-      provider: '供应商',
-      groupName: '分组',
-      primaryModel: '主模型',
-      availability7d: '7 天可用率',
-      latency: '延迟 (ms)'
-    },
+          name: '名称',
+          provider: '供应商',
+          groupName: '分组',
+          primaryModel: '主模型',
+          availability7d: '7 天可用率',
+          latency: '延迟 (ms)'
+        },
     detailColumns: {
-      model: '模型',
-      latestStatus: '最新状态',
-      latestLatency: '最新延迟 (ms)',
-      availability7d: '7 天可用率',
-      availability15d: '15 天可用率',
-      availability30d: '30 天可用率',
-      avgLatency7d: '7 天平均延迟 (ms)'
-    },
+          model: '模型',
+          latestStatus: '最新状态',
+          latestLatency: '最新延迟 (ms)',
+          availability7d: '7 天可用率',
+          availability15d: '15 天可用率',
+          availability30d: '30 天可用率',
+          avgLatency7d: '7 天平均延迟 (ms)'
+        },
     empty: {
-      title: '暂无可显示的渠道',
-      description: '管理员尚未配置可监控的渠道。'
-    }
+          title: '暂无可显示的渠道',
+          description: '管理员尚未配置可监控的渠道。'
+        }
   },
 
   // Available Channels (user-facing)
@@ -1159,39 +1222,77 @@ export default {
     loadFailed: '加载邀请返利数据失败',
     transferFailed: '转入余额失败',
     stats: {
-      rebateRate: '我的返利比例',
-      rebateRateHint: '被邀请用户每次充值后你可获得的返利比例',
-      invitedUsers: '邀请人数',
-      availableQuota: '可转返利额度',
-      frozenQuota: '冻结中',
-      frozenQuotaHint: '新产生的返利正在冻结期中',
-      totalQuota: '历史返利额度'
-    },
+          rebateRate: '我的返利比例',
+          rebateRateHint: '被邀请用户每次充值后你可获得的返利比例',
+          invitedUsers: '邀请人数',
+          availableQuota: '可转返利额度',
+          frozenQuota: '冻结中',
+          frozenQuotaHint: '新产生的返利正在冻结期中',
+          totalQuota: '历史返利额度'
+        },
     transfer: {
-      title: '返利额度转余额',
-      description: '将当前可用返利额度一键转入账户余额',
-      button: '转入余额',
-      transferring: '转入中...',
-      empty: '当前没有可转入额度',
-      success: '已转入余额：{amount}'
-    },
+          title: '返利额度转余额',
+          description: '将当前可用返利额度一键转入账户余额',
+          button: '转入余额',
+          transferring: '转入中...',
+          empty: '当前没有可转入额度',
+          success: '已转入余额：{amount}'
+        },
     invitees: {
-      title: '已邀请用户',
-      empty: '暂无邀请记录',
-      columns: {
-        email: '邮箱',
-        username: '用户名',
-        rebate: '返利明细',
-        joinedAt: '注册时间'
-      }
-    },
+          title: '已邀请用户',
+          empty: '暂无邀请记录',
+          columns: {
+                  email: '邮箱',
+                  username: '用户名',
+                  rebate: '返利明细',
+                  joinedAt: '注册时间'
+                }
+        },
     tips: {
-      title: '使用说明',
-      line1: '将邀请码或邀请链接分享给新用户。',
-      line2: '被邀请用户充值后，你可获得 {rate} 的返利额度。',
-      line3: '返利额度可随时转入账户余额。',
-      line4: '新产生的返利需要经过冻结期后才能提现。'
-    }
+          title: '使用说明',
+          line1: '将邀请码或邀请链接分享给新用户。',
+          line2: '被邀请用户充值后，你可获得 {rate} 的返利额度。',
+          line3: '返利额度可随时转入账户余额。',
+          line4: '新产生的返利需要经过冻结期后才能提现。'
+        },
+    tiers: {
+          eyebrow: '阶梯返利',
+          title: '等级成长',
+          description: '邀请人数与邀请充值总额同时达标后自动晋级，等级越高返利比例越高。',
+          configNote: '等级固定为 L1-L4；每档邀请人数、邀请充值总额和返利比例以后端管理员配置为准。',
+          currentLevel: '当前等级',
+          previewData: '当前口径',
+          noLevel: '暂无等级',
+          unconfigured: '未配置',
+          inviteCount: '邀请人数',
+          rechargeTotal: '邀请充值总额',
+          nextInviteProgress: '邀请人数进度',
+          nextRechargeProgress: '充值总额进度',
+          maxLevel: '已满级',
+          maxLevelHint: '你已达到当前已配置阶梯的最高等级。',
+          readyForNext: '已满足 {level} 的双维度门槛。',
+          nextHintBoth: '距离 {level} 还差 {count} 人和 {amount} 邀请充值。',
+          nextHintInviteOnly: '距离 {level} 还差 {count} 人。',
+          nextHintRechargeOnly: '距离 {level} 还差 {amount} 邀请充值。',
+          active: '当前',
+          inviteThreshold: '邀请人数 >=',
+          rechargeThreshold: '邀请充值 >=',
+          shareRate: '返利比例'
+        },
+    logs: {
+          title: '邀请记录',
+          description: '查看与你相关的邀请绑定和注册赠送结果。敏感指纹与 IP 仅管理员可见。',
+          empty: '暂无邀请记录',
+          loadFailed: '加载邀请记录失败',
+          total: '共 {total} 条',
+          columns: {
+                  time: '时间',
+                  account: '账号',
+                  code: '邀请码',
+                  result: '结果',
+                  bonus: '赠送余额'
+                }
+        }
   },
 
   // Redeem
@@ -1234,7 +1335,11 @@ export default {
     codeRedeemSuccess: '兑换成功！',
     failedToRedeem: '兑换失败，请检查兑换码后重试。',
     subscriptionRefreshFailed: '兑换成功，但订阅状态刷新失败。',
-    pleaseEnterCode: '请输入兑换码'
+    pleaseEnterCode: '请输入兑换码',
+    balanceAddedPromo: '余额充值（优惠码）',
+    balanceAddedAffiliateSignupBonus: '余额充值（邀请注册赠送）',
+    balancePaymentSubscription: '余额支付订阅',
+    subscriptionPayment: '订阅消费'
   },
 
   // Profile
@@ -7384,10 +7489,10 @@ export default {
     noActiveSubscriptionsDesc: '您没有任何有效订阅.请前往充值页面订购',
     failedToLoad: '加载订阅失败',
     status: {
-      active: '有效',
-      expired: '已过期',
-      revoked: '已撤销'
-    },
+          active: '有效',
+          expired: '已过期',
+          revoked: '已撤销'
+        },
     usage: '用量',
     expires: '到期时间',
     noExpiration: '无到期时间',
@@ -7405,10 +7510,20 @@ export default {
     exhaustedAwaitingExpiry: '{count} 个已耗尽订阅等待到期，您可以前往购买一个新的订阅',
     resetWeeklyLimit: '重置周限',
     resetWeeklyLimitTitle: '重置每周用量限制',
-    resetWeeklyLimitConfirm:
-      '每个订阅周期仅可重置一次周限。当前剩余次数：{remaining}。仅清零周限用量；总额度、累计已用、日限、状态和到期时间均不会改变。',
+    resetWeeklyLimitConfirm: '每个订阅周期仅可重置一次周限。当前剩余次数：{remaining}。仅清零周限用量；总额度、累计已用、日限、状态和到期时间均不会改变。',
     weeklyLimitResetSuccess: '周限用量已重置',
-    failedToResetWeeklyLimit: '重置周限失败'
+    failedToResetWeeklyLimit: '重置周限失败',
+    currentlyUsable: '当前可用',
+    totalCredit: '总额度',
+    creditPoolSubscription: '额度池订阅',
+    groupScopeFallback: '订阅范围',
+    allAvailableGroups: '全部可用分组',
+    daysRemainingWithDate: '{date}（剩余 {days} 天）',
+    remainingOf: '剩余 {remaining} / {total}',
+    exhaustedAt: '额度耗尽于 {date}',
+    exhaustedSummary: '已用 {used} / {limit}，到期于 {expires}',
+    resetAt: '下次重置：{time}',
+    weeklyResetHint: '周额度将在 {time} 重置，重置前不会恢复可用额度。'
   },
 
   // Onboarding Tour

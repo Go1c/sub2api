@@ -297,12 +297,12 @@ export default {
     close: 'Close',
     enabled: 'Enabled',
     disabled: 'Disabled',
-	    total: 'Total',
-	    balance: 'Balance',
-	    availableBalance: 'Available balance',
-	    frozenBalance: 'Frozen balance',
-	    totalBalance: 'Total balance',
-	    available: 'Available',
+    total: 'Total',
+    balance: 'Balance',
+    availableBalance: 'Available balance',
+    frozenBalance: 'Frozen balance',
+    totalBalance: 'Total balance',
+    available: 'Available',
     copiedToClipboard: 'Copied to clipboard',
     copied: 'Copied',
     copyFailed: 'Failed to copy',
@@ -321,11 +321,11 @@ export default {
     selectedCount: '({count} selected)',
     refresh: 'Refresh',
     autoRefresh: {
-      title: 'Auto Refresh',
-      enable: 'Enable auto refresh',
-      countdown: 'Auto refresh: {seconds}s',
-      seconds: '{n} seconds',
-    },
+          title: 'Auto Refresh',
+          enable: 'Enable auto refresh',
+          countdown: 'Auto refresh: {seconds}s',
+          seconds: '{n} seconds'
+        },
     view: 'View',
     settings: 'Settings',
     chooseFile: 'Choose File',
@@ -337,18 +337,28 @@ export default {
     unknown: 'Unknown',
     minutes: 'min',
     time: {
-      never: 'Never',
-      justNow: 'Just now',
-      minutesAgo: '{n}m ago',
-      hoursAgo: '{n}h ago',
-      daysAgo: '{n}d ago',
-      countdown: {
-        daysHours: '{d}d {h}h',
-        hoursMinutes: '{h}h {m}m',
-        minutes: '{m}m',
-        withSuffix: '{time} to lift'
-      }
-    }
+          never: 'Never',
+          justNow: 'Just now',
+          minutesAgo: '{n}m ago',
+          hoursAgo: '{n}h ago',
+          daysAgo: '{n}d ago',
+          countdown: {
+                  daysHours: '{d}d {h}h',
+                  hoursMinutes: '{h}h {m}m',
+                  minutes: '{m}m',
+                  withSuffix: '{time} to lift'
+                }
+        },
+    remove: 'Remove',
+    menu: 'Menu',
+    peakRateTooltip: 'Peak rate: {window}',
+    peakRateImageNote: '; image tokens billed as tokens are also affected, per-image billing is unaffected',
+    apply: 'Apply',
+    clear: 'Clear',
+    creating: 'Creating...',
+    required: 'Required',
+    sending: 'Sending...',
+    tryAgain: 'Please try again'
   },
 
   adminCompliance: {
@@ -433,6 +443,10 @@ export default {
     channelMonitor: 'Channel Monitor',
     channelStatus: 'Channel Status',
     riskControl: 'Risk Control',
+    securityAudit: 'Security Audit',
+    contentModeration: 'Content Moderation',
+    promptAudit: 'Prompt Audit',
+    auditLogs: 'Audit Logs'
   },
 
   // Auth
@@ -447,7 +461,7 @@ export default {
     processing: 'Processing...',
     continue: 'Continue',
     rememberMe: 'Remember me',
-    dontHaveAccount: "Don't have an account?",
+    dontHaveAccount: 'Don\'t have an account?',
     alreadyHaveAccount: 'Already have an account?',
     registrationDisabled: 'Registration is currently disabled. Please contact the administrator.',
     emailLabel: 'Email',
@@ -462,12 +476,11 @@ export default {
     passwordMinLength: 'Password must be at least 6 characters',
     loginFailed: 'Login failed. Please check your credentials and try again.',
     errors: {
-      USER_NOT_ACTIVE: 'Account has been disabled.',
-    },
+          USER_NOT_ACTIVE: 'Account has been disabled.'
+        },
     registrationFailed: 'Registration failed. Please try again.',
     emailSuffixNotAllowed: 'This email domain is not allowed for registration.',
-    emailSuffixNotAllowedWithAllowed:
-      'This email domain is not allowed. Allowed domains: {suffixes}',
+    emailSuffixNotAllowedWithAllowed: 'This email domain is not allowed. Allowed domains: {suffixes}',
     emailSuffixAllowedMore: 'and {count} more',
     loginSuccess: 'Login successful! Welcome back.',
     accountCreatedSuccess: 'Account created successfully! Welcome to {siteName}.',
@@ -484,7 +497,7 @@ export default {
     sendCode: 'Send code',
     clickToResend: 'Click to resend code',
     resendCode: 'Resend verification code',
-    sendCodeDesc: "We'll send a verification code to",
+    sendCodeDesc: 'We\'ll send a verification code to',
     codeSentSuccess: 'Verification code sent! Please check your inbox.',
     verifying: 'Verifying...',
     verifyAndCreate: 'Verify & Create Account',
@@ -514,94 +527,93 @@ export default {
     invitationCodeInvalidCannotRegister: 'Invalid invitation code. Please check and try again',
     oauthOrContinue: 'or continue with others',
     linuxdo: {
-      signIn: 'Continue with Linux.do',
-      orContinue: 'or continue with email',
-      callbackTitle: 'Signing you in',
-      callbackProcessing: 'Completing login, please wait...',
-      callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
-      callbackMissingToken: 'Missing login token, please try again.',
-      backToLogin: 'Back to Login',
-      invitationRequired: 'This Linux.do account is not yet registered. The site requires an invitation code — please enter one to complete registration.',
-      invalidPendingToken: 'The registration token has expired. Please sign in with Linux.do again.',
-      completeRegistration: 'Complete Registration',
-      completing: 'Completing registration…',
-      completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
-    },
+          signIn: 'Continue with Linux.do',
+          orContinue: 'or continue with email',
+          callbackTitle: 'Signing you in',
+          callbackProcessing: 'Completing login, please wait...',
+          callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
+          callbackMissingToken: 'Missing login token, please try again.',
+          backToLogin: 'Back to Login',
+          invitationRequired: 'This Linux.do account is not yet registered. The site requires an invitation code — please enter one to complete registration.',
+          invalidPendingToken: 'The registration token has expired. Please sign in with Linux.do again.',
+          completeRegistration: 'Complete Registration',
+          completing: 'Completing registration…',
+          completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
+        },
     dingtalk: {
-      signIn: 'Continue with DingTalk',
-      callbackTitle: 'Signing you in with DingTalk',
-      callbackProcessing: 'Completing DingTalk login, please wait...',
-      callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
-      callbackMissingToken: 'Missing login token, please try again.',
-      backToLogin: 'Back to Login',
-      invitationRequired: 'This DingTalk account is not yet registered. The site requires an invitation code — please enter one to complete registration.',
-      invalidPendingToken: 'The registration token has expired. Please sign in with DingTalk again.',
-      completeRegistration: 'Complete Registration',
-      completing: 'Completing registration…',
-      completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.',
-      createAccountTitle: 'Create DingTalk Account',
-      registrationDisabledRedirectToBind: 'New account registration is currently disabled. Please bind to your existing account with its email and password.',
-      error: {
-        title: 'DingTalk Sign-in Failed',
-        csrf: 'Login session expired, please scan again',
-        corp_rejected: 'Your DingTalk account is not part of this organization. Please contact administrator',
-        dingtalk_not_enabled: 'DingTalk login is not enabled',
-        upstream_error: 'DingTalk service is temporarily unavailable. Please try again later',
-        missing_browser_session: 'Browser session lost. Please login again',
-        missing_params: 'Request parameters are incomplete',
-        invalid_state: 'Invalid login state',
-        provider_error: 'DingTalk authorization failed',
-        session_error: 'Failed to create session. Please retry',
-        retry: 'Retry Login'
-      }
-    },
+          signIn: 'Continue with DingTalk',
+          callbackTitle: 'Signing you in with DingTalk',
+          callbackProcessing: 'Completing DingTalk login, please wait...',
+          callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
+          callbackMissingToken: 'Missing login token, please try again.',
+          backToLogin: 'Back to Login',
+          invitationRequired: 'This DingTalk account is not yet registered. The site requires an invitation code — please enter one to complete registration.',
+          invalidPendingToken: 'The registration token has expired. Please sign in with DingTalk again.',
+          completeRegistration: 'Complete Registration',
+          completing: 'Completing registration…',
+          completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.',
+          createAccountTitle: 'Create DingTalk Account',
+          registrationDisabledRedirectToBind: 'New account registration is currently disabled. Please bind to your existing account with its email and password.',
+          error: {
+                  title: 'DingTalk Sign-in Failed',
+                  csrf: 'Login session expired, please scan again',
+                  corp_rejected: 'Your DingTalk account is not part of this organization. Please contact administrator',
+                  dingtalk_not_enabled: 'DingTalk login is not enabled',
+                  upstream_error: 'DingTalk service is temporarily unavailable. Please try again later',
+                  missing_browser_session: 'Browser session lost. Please login again',
+                  missing_params: 'Request parameters are incomplete',
+                  invalid_state: 'Invalid login state',
+                  provider_error: 'DingTalk authorization failed',
+                  session_error: 'Failed to create session. Please retry',
+                  retry: 'Retry Login'
+                }
+        },
     emailOAuth: {
-      signIn: 'Continue with {providerName}'
-    },
+          signIn: 'Continue with {providerName}'
+        },
     oidc: {
-      signIn: 'Continue with {providerName}',
-      callbackTitle: 'Signing you in with {providerName}',
-      callbackProcessing: 'Completing login with {providerName}, please wait...',
-      callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
-      callbackMissingToken: 'Missing login token, please try again.',
-      backToLogin: 'Back to Login',
-      invitationRequired:
-        'This {providerName} account is not yet registered. The site requires an invitation code — please enter one to complete registration.',
-      invalidPendingToken: 'The registration token has expired. Please sign in again.',
-      completeRegistration: 'Complete Registration',
-      completing: 'Completing registration…',
-      completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
-    },
+          signIn: 'Continue with {providerName}',
+          callbackTitle: 'Signing you in with {providerName}',
+          callbackProcessing: 'Completing login with {providerName}, please wait...',
+          callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
+          callbackMissingToken: 'Missing login token, please try again.',
+          backToLogin: 'Back to Login',
+          invitationRequired: 'This {providerName} account is not yet registered. The site requires an invitation code — please enter one to complete registration.',
+          invalidPendingToken: 'The registration token has expired. Please sign in again.',
+          completeRegistration: 'Complete Registration',
+          completing: 'Completing registration…',
+          completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
+        },
     oauthFlow: {
-      profileDetailsTitle: 'Use {providerName} profile details',
-      profileDetailsDescription: 'Choose whether to apply the nickname or avatar from {providerName} to this account.',
-      useDisplayName: 'Use display name',
-      useAvatar: 'Use avatar',
-      avatarAlt: '{providerName} avatar',
-      reviewProfileBeforeContinue: 'Review the {providerName} profile details before continuing.',
-      chooseHowToContinue: 'Choose how to continue',
-      chooseAccountActionHint: 'Choose whether to bind an existing account or create a new one.',
-      suggestedEmail: 'Suggested email: {email}',
-      bindExistingAccount: 'Bind existing account',
-      createNewAccount: 'Create new account',
-      createAccountHint: 'Enter an email address to create your account and continue.',
-      bindLoginHint: 'Log in to an existing account to bind this {providerName} sign-in.',
-      signInThenBindDescription: 'Sign in to an existing account, then bind this {providerName} sign-in to it.',
-      bindSignInToExistingAccount: 'Bind this {providerName} sign-in to an existing account.',
-      bindCurrentAccountTitle: 'Bind the current account',
-      bindCurrentAccountDescription: 'Bind this {providerName} sign-in to the account currently signed in on this browser.',
-      bindCurrentAccount: 'Bind current account',
-      logInAndBind: 'Log in and bind',
-      useDifferentEmail: 'Use a different email',
-      backToOptions: 'Back to options',
-      yourAccount: 'your account',
-      totpHint: 'Enter the 6-digit verification code for {account} to finish binding this {providerName} sign-in.',
-      verifyAndContinue: 'Verify and continue',
-      wechatAvailabilityUnknown: 'WeChat sign-in availability could not be confirmed. Refresh and retry.',
-      wechatSystemBrowserOnly: 'This WeChat sign-in flow is only available in your system browser.',
-      wechatBrowserOnly: 'This WeChat sign-in flow is only available inside the WeChat browser.',
-      wechatNotConfigured: 'WeChat sign-in is not configured yet.'
-    },
+          profileDetailsTitle: 'Use {providerName} profile details',
+          profileDetailsDescription: 'Choose whether to apply the nickname or avatar from {providerName} to this account.',
+          useDisplayName: 'Use display name',
+          useAvatar: 'Use avatar',
+          avatarAlt: '{providerName} avatar',
+          reviewProfileBeforeContinue: 'Review the {providerName} profile details before continuing.',
+          chooseHowToContinue: 'Choose how to continue',
+          chooseAccountActionHint: 'Choose whether to bind an existing account or create a new one.',
+          suggestedEmail: 'Suggested email: {email}',
+          bindExistingAccount: 'Bind existing account',
+          createNewAccount: 'Create new account',
+          createAccountHint: 'Enter an email address to create your account and continue.',
+          bindLoginHint: 'Log in to an existing account to bind this {providerName} sign-in.',
+          signInThenBindDescription: 'Sign in to an existing account, then bind this {providerName} sign-in to it.',
+          bindSignInToExistingAccount: 'Bind this {providerName} sign-in to an existing account.',
+          bindCurrentAccountTitle: 'Bind the current account',
+          bindCurrentAccountDescription: 'Bind this {providerName} sign-in to the account currently signed in on this browser.',
+          bindCurrentAccount: 'Bind current account',
+          logInAndBind: 'Log in and bind',
+          useDifferentEmail: 'Use a different email',
+          backToOptions: 'Back to options',
+          yourAccount: 'your account',
+          totpHint: 'Enter the 6-digit verification code for {account} to finish binding this {providerName} sign-in.',
+          verifyAndContinue: 'Verify and continue',
+          wechatAvailabilityUnknown: 'WeChat sign-in availability could not be confirmed. Refresh and retry.',
+          wechatSystemBrowserOnly: 'This WeChat sign-in flow is only available in your system browser.',
+          wechatBrowserOnly: 'This WeChat sign-in flow is only available inside the WeChat browser.',
+          wechatNotConfigured: 'WeChat sign-in is not configured yet.'
+        },
     linuxdoCallbackPageTitle: 'LinuxDo Sign-In Callback',
     dingtalkCallbackPageTitle: 'DingTalk Sign-In Callback',
     oidcCallbackPageTitle: 'OIDC Sign-In Callback',
@@ -610,21 +622,20 @@ export default {
     wechatCallbackPageTitle: 'WeChat Sign-In Callback',
     wechatPaymentCallbackPageTitle: 'WeChat Payment Callback',
     wechatPayment: {
-      callbackTitle: 'Resuming WeChat payment',
-      callbackProcessing: 'Resuming WeChat payment...',
-      backToPayment: 'Back to payment',
-      callbackMissingResumeToken: 'The WeChat payment callback is missing the resume token.'
-    },
+          callbackTitle: 'Resuming WeChat payment',
+          callbackProcessing: 'Resuming WeChat payment...',
+          backToPayment: 'Back to payment',
+          callbackMissingResumeToken: 'The WeChat payment callback is missing the resume token.'
+        },
     oauth: {
-      callbackTitle: 'OAuth Callback',
-      callbackHint: 'Copy the code and state back to the admin authorization flow when needed.',
-      invalidCallbackTitle: 'Invalid sign-in callback',
-      invalidCallbackHint: 'This page does not contain a valid authorization result. Return to the login page and start quick sign-in again.',
-      code: 'Code',
-      state: 'State',
-      fullUrl: 'Full URL'
-    },
-    // Forgot password
+          callbackTitle: 'OAuth Callback',
+          callbackHint: 'Copy the code and state back to the admin authorization flow when needed.',
+          invalidCallbackTitle: 'Invalid sign-in callback',
+          invalidCallbackHint: 'This page does not contain a valid authorization result. Return to the login page and start quick sign-in again.',
+          code: 'Code',
+          state: 'State',
+          fullUrl: 'Full URL'
+        },
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset Your Password',
     forgotPasswordHint: 'Enter your email address and we will send you a link to reset your password.',
@@ -635,7 +646,6 @@ export default {
     resetEmailSentHint: 'If an account exists with this email, you will receive a password reset link shortly. Please check your inbox and spam folder.',
     backToLogin: 'Back to Login',
     rememberedPassword: 'Remembered your password?',
-    // Reset password
     resetPasswordTitle: 'Set New Password',
     resetPasswordHint: 'Enter your new password below.',
     newPassword: 'New Password',
@@ -652,7 +662,9 @@ export default {
     invalidResetLink: 'Invalid Reset Link',
     invalidResetLinkHint: 'This password reset link is invalid or has expired. Please request a new one.',
     requestNewResetLink: 'Request New Reset Link',
-    invalidOrExpiredToken: 'The password reset link is invalid or has expired. Please request a new one.'
+    invalidOrExpiredToken: 'The password reset link is invalid or has expired. Please request a new one.',
+    externalHandoffInvalid: 'External login return URL is not allowed. Continuing with the default login flow.',
+    invitationOnlyNotice: 'This site requires an invitation to register'
   },
 
   // Dashboard
@@ -727,19 +739,19 @@ export default {
     description: 'Manage your API keys and access tokens',
     searchPlaceholder: 'Search name or key...',
     endpoints: {
-      title: 'API Endpoints',
-      default: 'Default',
-      copied: 'Copied',
-      copiedHint: 'Copied to clipboard',
-      clickToCopy: 'Click to copy this endpoint',
-      speedTest: 'Speed Test',
-    },
+          title: 'API Endpoints',
+          default: 'Default',
+          copied: 'Copied',
+          copiedHint: 'Copied to clipboard',
+          clickToCopy: 'Click to copy this endpoint',
+          speedTest: 'Speed Test'
+        },
     allGroups: 'All Groups',
     allStatus: 'All Status',
     createKey: 'Create API Key',
     editKey: 'Edit API Key',
     deleteKey: 'Delete API Key',
-    deleteConfirmMessage: "Are you sure you want to delete '{name}'? This action cannot be undone.",
+    deleteConfirmMessage: 'Are you sure you want to delete \'{name}\'? This action cannot be undone.',
     apiKey: 'API Key',
     group: 'Group',
     currentConcurrency: 'Current Concurrency',
@@ -781,58 +793,57 @@ export default {
     lastUsedAt: 'Last Used',
     useKey: 'Use Key',
     useKeyModal: {
-      title: 'Use API Key',
-      description:
-        'Add the following environment variables to your terminal profile or run directly in terminal to configure API access.',
-      copy: 'Copy',
-      copied: 'Copied',
-      note: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
-      noGroupTitle: 'Please assign a group first',
-      noGroupDescription: 'This API key has not been assigned to a group. Please click the group column in the key list to assign one before viewing the configuration.',
-      openai: {
-        description: 'Add the following configuration files to your Codex CLI config directory.',
-        configTomlHint: 'Make sure the following content is at the beginning of the config.toml file',
-        note: 'Make sure the config directory exists. macOS/Linux users can run mkdir -p ~/.codex to create it.',
-        noteWindows: 'Press Win+R and enter %userprofile%\\.codex to open the config directory. Create it manually if it does not exist.',
-      },
-      cliTabs: {
-        claudeCode: 'Claude Code',
-        geminiCli: 'Gemini CLI',
-        codexCli: 'Codex CLI',
-        codexCliWs: 'Codex CLI (WebSocket)',
-        grokCli: 'Grok CLI',
-        opencode: 'OpenCode',
-      },
-      grok: {
-        claudeSettingsHint: 'Claude Code settings.json for Grok Messages gateway',
-        claudeNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
-        description: 'Configure API access for Grok accounts. Choose CLI, Codex Responses, or Claude Code messages when available.',
-        configTomlHint: 'Make sure the following content is at the beginning of the Grok config.toml file',
-        codexConfigTomlHint: 'Codex config.toml for Grok Responses (WebSocket v2 enabled)',
-        codexDescription: 'Add the following Codex CLI configuration for Grok Responses.',
-        codexNote: 'Make sure the config directory exists. macOS/Linux users can run mkdir -p ~/.codex to create it.',
-        codexNoteWindows: 'Press Win+R and enter %userprofile%\\.codex to open the config directory. Create it manually if it does not exist.',
-        noteWindows: 'Press Win+R and enter %userprofile%\\.grok to open the Grok config directory.',
-        note: 'These environment variables will be active in the current terminal session.'
-      },
-      antigravity: {
-        description: 'Configure API access for Antigravity group. Select the configuration method based on your client.',
-        claudeCode: 'Claude Code',
-        geminiCli: 'Gemini CLI',
-        claudeNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
-        geminiNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
-      },
-      gemini: {
-        description: 'Add the following environment variables to your terminal profile or run directly in terminal to configure Gemini CLI access.',
-        modelComment: 'If you have Gemini 3 access, you can use: gemini-3-pro-preview',
-        note: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
-      },
-      opencode: {
-        title: 'OpenCode Example',
-        subtitle: 'opencode.json',
-        hint: 'Config path: ~/.config/opencode/opencode.json (or opencode.jsonc), create if not exists. Use default providers (openai/anthropic/google) or custom provider_id. API Key can be configured directly or via /connect command. This is an example, adjust models and options as needed.',
-      },
-    },
+          title: 'Use API Key',
+          description: 'Add the following environment variables to your terminal profile or run directly in terminal to configure API access.',
+          copy: 'Copy',
+          copied: 'Copied',
+          note: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
+          noGroupTitle: 'Please assign a group first',
+          noGroupDescription: 'This API key has not been assigned to a group. Please click the group column in the key list to assign one before viewing the configuration.',
+          openai: {
+                  description: 'Add the following configuration files to your Codex CLI config directory.',
+                  configTomlHint: 'Make sure the following content is at the beginning of the config.toml file',
+                  note: 'Make sure the config directory exists. macOS/Linux users can run mkdir -p ~/.codex to create it.',
+                  noteWindows: 'Press Win+R and enter %userprofile%\\.codex to open the config directory. Create it manually if it does not exist.'
+                },
+          cliTabs: {
+                  claudeCode: 'Claude Code',
+                  geminiCli: 'Gemini CLI',
+                  codexCli: 'Codex CLI',
+                  codexCliWs: 'Codex CLI (WebSocket)',
+                  grokCli: 'Grok CLI',
+                  opencode: 'OpenCode'
+                },
+          grok: {
+                  claudeSettingsHint: 'Claude Code settings.json for Grok Messages gateway',
+                  claudeNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
+                  description: 'Configure API access for Grok accounts. Choose CLI, Codex Responses, or Claude Code messages when available.',
+                  configTomlHint: 'Make sure the following content is at the beginning of the Grok config.toml file',
+                  codexConfigTomlHint: 'Codex config.toml for Grok Responses (WebSocket v2 enabled)',
+                  codexDescription: 'Add the following Codex CLI configuration for Grok Responses.',
+                  codexNote: 'Make sure the config directory exists. macOS/Linux users can run mkdir -p ~/.codex to create it.',
+                  codexNoteWindows: 'Press Win+R and enter %userprofile%\\.codex to open the config directory. Create it manually if it does not exist.',
+                  noteWindows: 'Press Win+R and enter %userprofile%\\.grok to open the Grok config directory.',
+                  note: 'These environment variables will be active in the current terminal session.'
+                },
+          antigravity: {
+                  description: 'Configure API access for Antigravity group. Select the configuration method based on your client.',
+                  claudeCode: 'Claude Code',
+                  geminiCli: 'Gemini CLI',
+                  claudeNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
+                  geminiNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.'
+                },
+          gemini: {
+                  description: 'Add the following environment variables to your terminal profile or run directly in terminal to configure Gemini CLI access.',
+                  modelComment: 'If you have Gemini 3 access, you can use: gemini-3-pro-preview',
+                  note: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.'
+                },
+          opencode: {
+                  title: 'OpenCode Example',
+                  subtitle: 'opencode.json',
+                  hint: 'Config path: ~/.config/opencode/opencode.json (or opencode.jsonc), create if not exists. Use default providers (openai/anthropic/google) or custom provider_id. API Key can be configured directly or via /connect command. This is an example, adjust models and options as needed.'
+                }
+        },
     customKeyLabel: 'Custom Key',
     customKeyPlaceholder: 'Enter your custom key (min 16 chars)',
     customKeyHint: 'Only letters, numbers, underscores and hyphens allowed. Minimum 16 characters.',
@@ -849,14 +860,13 @@ export default {
     ipRestrictionEnabled: 'IP restriction enabled',
     ccSwitchNotInstalled: 'CC-Switch is not installed or the protocol handler is not registered. Please install CC-Switch first or manually copy the API key.',
     ccsClientSelect: {
-      title: 'Select Client',
-      description: 'Please select the client type to import to CC-Switch:',
-      claudeCode: 'Claude Code',
-      claudeCodeDesc: 'Import as Claude Code configuration',
-      geminiCli: 'Gemini CLI',
-      geminiCliDesc: 'Import as Gemini CLI configuration',
-    },
-    // Quota and expiration
+          title: 'Select Client',
+          description: 'Please select the client type to import to CC-Switch:',
+          claudeCode: 'Claude Code',
+          claudeCodeDesc: 'Import as Claude Code configuration',
+          geminiCli: 'Gemini CLI',
+          geminiCliDesc: 'Import as Gemini CLI configuration'
+        },
     quotaLimit: 'Quota Limit',
     quotaAmount: 'Quota Amount (USD)',
     quotaAmountPlaceholder: 'Enter quota limit in USD',
@@ -892,11 +902,23 @@ export default {
     expiresAt: 'Expires',
     noExpiration: 'Never',
     status: {
-      active: 'Active',
-      inactive: 'Inactive',
-      quota_exhausted: 'Quota Exhausted',
-      expired: 'Expired',
-    },
+          active: 'Active',
+          inactive: 'Inactive',
+          quota_exhausted: 'Quota Exhausted',
+          expired: 'Expired'
+        },
+    fallbackKeyLabel: 'Fallback Key',
+    fallbackKeyPlaceholder: 'Select a fallback key (optional)',
+    fallbackKeyNone: 'None',
+    fallbackKeyDanger: 'Dangerous: when every upstream account in this key\'s group is unavailable, requests are automatically forwarded through the selected fallback key and billed to it. Make sure both keys share the exact same platform/type (e.g. both Claude); otherwise requests will fail (e.g. one Claude and one Codex cannot interoperate).',
+    modelRestriction: 'Allowed Models',
+    modelRestrictionHint: 'When enabled, this key can only request the selected models below. Models are loaded from the current group in the model market.',
+    modelRestrictionSearch: 'Search models',
+    modelRestrictionNoGroup: 'Please select a group first',
+    modelRestrictionNoModels: 'No models are available for the current group',
+    modelRestrictionNoMatchedModels: 'No matching models found',
+    allowedModelsRequired: 'Please select at least one allowed model',
+    selectedModelsCount: '{count} models selected'
   },
 
   // Usage
@@ -1008,25 +1030,70 @@ export default {
     exportExcelFailed: 'Failed to export usage data',
     imageUnit: ' images',
     userAgent: 'User-Agent',
-    tabs: { usage: 'Usage', errors: 'Error Requests' },
+    tabs: {
+          usage: 'Usage',
+          errors: 'Error Requests',
+          ranking: 'User Ranking'
+        },
     errors: {
-      time: 'Time', model: 'Model', endpoint: 'Endpoint', status: 'Status',
-      category: 'Category', platform: 'Platform', message: 'Message',
-      keyName: 'Key Name', keyDeleted: 'Deleted', allKeys: 'All keys',
-      modelPlaceholder: 'Search model', allCategories: 'All categories',
-      empty: 'No error requests', failedToLoad: 'Failed to load error requests',
-      categories: {
-        auth: 'Auth failed', rate_limit: 'Rate limited', quota: 'Balance/Subscription',
-        invalid_request: 'Invalid request', service_unavailable: 'Service unavailable',
-        upstream: 'Upstream error', internal: 'Platform error', other: 'Other', cyber: 'Cyber policy',
-      },
-      detail: {
-        title: 'Error Request Detail',
-        responseBody: 'Response Body',
-        upstreamStatus: 'Upstream Status',
-        loadFailed: 'Failed to load detail, please try again',
-      },
-    },
+          time: 'Time',
+          model: 'Model',
+          endpoint: 'Endpoint',
+          status: 'Status',
+          category: 'Category',
+          platform: 'Platform',
+          message: 'Message',
+          keyName: 'Key Name',
+          keyDeleted: 'Deleted',
+          allKeys: 'All keys',
+          modelPlaceholder: 'Search model',
+          allCategories: 'All categories',
+          empty: 'No error requests',
+          failedToLoad: 'Failed to load error requests',
+          categories: {
+                  auth: 'Auth failed',
+                  rate_limit: 'Rate limited',
+                  quota: 'Balance/Subscription',
+                  invalid_request: 'Invalid request',
+                  service_unavailable: 'Service unavailable',
+                  upstream: 'Upstream error',
+                  internal: 'Platform error',
+                  other: 'Other',
+                  cyber: 'Cyber policy'
+                },
+          detail: {
+                  title: 'Error Request Detail',
+                  responseBody: 'Response Body',
+                  upstreamStatus: 'Upstream Status',
+                  loadFailed: 'Failed to load detail, please try again'
+                },
+          allStatuses: 'All status codes'
+        },
+    cacheTotal: 'Cache',
+    cacheBreakdown: 'Cache Token Breakdown',
+    cacheCreationTokensLabel: 'Cache Creation',
+    cacheReadTokensLabel: 'Cache Read',
+    latency: 'Latency',
+    latencyFirstToken: 'First',
+    latencyDuration: 'Total',
+    imageInputTokens: 'Image Input Tokens',
+    imageInputTokenPrice: 'Image Input Price',
+    imageInputCost: 'Image Input Cost',
+    ipGeo: {
+          fetch: 'Fetch region',
+          fetching: 'Fetching...',
+          failed: 'Failed',
+          private: 'Private address',
+          refreshTitle: 'Refresh region info',
+          batchFetch: 'Batch fetch regions',
+          batchFetching: 'Fetching...',
+          pending: '{count} IPs pending',
+          batchFailed: 'Failed to batch fetch IP regions',
+          detailOrg: 'ISP',
+          detailTimezone: 'Timezone',
+          detailAccuracy: 'Accuracy',
+          detailCoordinates: 'Coordinates'
+        }
   },
 
   // Shared keys for channel monitor (admin + user views)
@@ -1074,36 +1141,36 @@ export default {
     detailTitle: 'Channel Detail',
     closeDetail: 'Close',
     windowTab: {
-      '7d': '7 days',
-      '15d': '15 days',
-      '30d': '30 days'
-    },
+          7d: '7 days',
+          15d: '15 days',
+          30d: '30 days'
+        },
     overall: {
-      operational: 'OPERATIONAL',
-      degraded: 'DEGRADED',
-      unavailable: 'UNAVAILABLE'
-    },
+          operational: 'OPERATIONAL',
+          degraded: 'DEGRADED',
+          unavailable: 'UNAVAILABLE'
+        },
     columns: {
-      name: 'Name',
-      provider: 'Provider',
-      groupName: 'Group',
-      primaryModel: 'Primary Model',
-      availability7d: '7d Availability',
-      latency: 'Latency (ms)'
-    },
+          name: 'Name',
+          provider: 'Provider',
+          groupName: 'Group',
+          primaryModel: 'Primary Model',
+          availability7d: '7d Availability',
+          latency: 'Latency (ms)'
+        },
     detailColumns: {
-      model: 'Model',
-      latestStatus: 'Latest Status',
-      latestLatency: 'Latest Latency (ms)',
-      availability7d: '7d Availability',
-      availability15d: '15d Availability',
-      availability30d: '30d Availability',
-      avgLatency7d: '7d Avg Latency (ms)'
-    },
+          model: 'Model',
+          latestStatus: 'Latest Status',
+          latestLatency: 'Latest Latency (ms)',
+          availability7d: '7d Availability',
+          availability15d: '15d Availability',
+          availability30d: '30d Availability',
+          avgLatency7d: '7d Avg Latency (ms)'
+        },
     empty: {
-      title: 'No channels available',
-      description: 'No monitored channels have been configured yet.'
-    }
+          title: 'No channels available',
+          description: 'No monitored channels have been configured yet.'
+        }
   },
 
   // Available Channels (user-facing)
@@ -1155,39 +1222,77 @@ export default {
     loadFailed: 'Failed to load affiliate data',
     transferFailed: 'Failed to transfer affiliate quota',
     stats: {
-      rebateRate: 'My Rebate Rate',
-      rebateRateHint: 'What you earn each time an invitee recharges',
-      invitedUsers: 'Invited Users',
-      availableQuota: 'Available Rebate Quota',
-      frozenQuota: 'Frozen',
-      frozenQuotaHint: 'Recently earned rebates pending release',
-      totalQuota: 'Historical Rebate Quota'
-    },
+          rebateRate: 'My Rebate Rate',
+          rebateRateHint: 'What you earn each time an invitee recharges',
+          invitedUsers: 'Invited Users',
+          availableQuota: 'Available Rebate Quota',
+          frozenQuota: 'Frozen',
+          frozenQuotaHint: 'Recently earned rebates pending release',
+          totalQuota: 'Historical Rebate Quota'
+        },
     transfer: {
-      title: 'Transfer Rebate Quota',
-      description: 'Move available rebate quota into your account balance',
-      button: 'Transfer to Balance',
-      transferring: 'Transferring...',
-      empty: 'No available rebate quota',
-      success: '{amount} has been transferred to your balance'
-    },
+          title: 'Transfer Rebate Quota',
+          description: 'Move available rebate quota into your account balance',
+          button: 'Transfer to Balance',
+          transferring: 'Transferring...',
+          empty: 'No available rebate quota',
+          success: '{amount} has been transferred to your balance'
+        },
     invitees: {
-      title: 'Invited Users',
-      empty: 'No invited users yet',
-      columns: {
-        email: 'Email',
-        username: 'Username',
-        rebate: 'Rebate',
-        joinedAt: 'Joined At'
-      }
-    },
+          title: 'Invited Users',
+          empty: 'No invited users yet',
+          columns: {
+                  email: 'Email',
+                  username: 'Username',
+                  rebate: 'Rebate',
+                  joinedAt: 'Joined At'
+                }
+        },
     tips: {
-      title: 'How It Works',
-      line1: 'Share your affiliate code or invite link with new users.',
-      line2: 'When invitees recharge, you receive {rate} of the recharge as rebate quota.',
-      line3: 'Transfer rebate quota to balance at any time.',
-      line4: 'Newly earned rebates may have a waiting period before they can be transferred.'
-    }
+          title: 'How It Works',
+          line1: 'Share your affiliate code or invite link with new users.',
+          line2: 'When invitees recharge, you receive {rate} of the recharge as rebate quota.',
+          line3: 'Transfer rebate quota to balance at any time.',
+          line4: 'Newly earned rebates may have a waiting period before they can be transferred.'
+        },
+    tiers: {
+          eyebrow: 'Tiered Rebate',
+          title: 'Level Growth',
+          description: 'Level up when both invited users and invitee recharge volume meet the thresholds. Higher levels unlock higher rebate rates.',
+          configNote: 'Levels are fixed to L1-L4. Invitee thresholds, recharge thresholds, and rebate rates are controlled by admin settings.',
+          currentLevel: 'Current Level',
+          previewData: 'Current Metrics',
+          noLevel: 'No Level',
+          unconfigured: 'Not configured',
+          inviteCount: 'Invited Users',
+          rechargeTotal: 'Invitee Recharge Volume',
+          nextInviteProgress: 'Invite Progress',
+          nextRechargeProgress: 'Recharge Progress',
+          maxLevel: 'Max Level',
+          maxLevelHint: 'You have reached the highest configured tier.',
+          readyForNext: 'Both requirements for {level} are already met.',
+          nextHintBoth: '{count} more invitees and {amount} more recharge volume to reach {level}.',
+          nextHintInviteOnly: '{count} more invitees to reach {level}.',
+          nextHintRechargeOnly: '{amount} more recharge volume to reach {level}.',
+          active: 'Current',
+          inviteThreshold: 'Invitees >=',
+          rechargeThreshold: 'Recharge >=',
+          shareRate: 'Rebate Rate'
+        },
+    logs: {
+          title: 'Invite Logs',
+          description: 'View invite binding and signup bonus results related to your account. Sensitive fingerprints and IPs are admin-only.',
+          empty: 'No invite logs yet',
+          loadFailed: 'Failed to load invite logs',
+          total: '{total} total',
+          columns: {
+                  time: 'Time',
+                  account: 'Account',
+                  code: 'Invite Code',
+                  result: 'Result',
+                  bonus: 'Bonus'
+                }
+        }
   },
 
   // Redeem
@@ -1230,7 +1335,11 @@ export default {
     codeRedeemSuccess: 'Code redeemed successfully!',
     failedToRedeem: 'Failed to redeem code. Please check the code and try again.',
     subscriptionRefreshFailed: 'Redeemed successfully, but failed to refresh subscription status.',
-    pleaseEnterCode: 'Please enter a redeem code'
+    pleaseEnterCode: 'Please enter a redeem code',
+    balanceAddedPromo: 'Balance Added (Promo)',
+    balanceAddedAffiliateSignupBonus: 'Balance Added (Invite Signup Bonus)',
+    balancePaymentSubscription: 'Subscription Paid by Balance',
+    subscriptionPayment: 'Subscription Payment'
   },
 
   // Profile
@@ -7229,14 +7338,13 @@ export default {
     title: 'My Subscriptions',
     description: 'View your subscription plans and usage',
     noActiveSubscriptions: 'No Active Subscriptions',
-    noActiveSubscriptionsDesc:
-      "You don't have any active subscriptions. Contact administrator to get one.",
+    noActiveSubscriptionsDesc: 'You don\'t have any active subscriptions. Contact administrator to get one.',
     failedToLoad: 'Failed to load subscriptions',
     status: {
-      active: 'Active',
-      expired: 'Expired',
-      revoked: 'Revoked'
-    },
+          active: 'Active',
+          expired: 'Expired',
+          revoked: 'Revoked'
+        },
     usage: 'Usage',
     expires: 'Expires',
     noExpiration: 'No expiration',
@@ -7254,10 +7362,20 @@ export default {
     exhaustedAwaitingExpiry: '{count} exhausted subscription(s) waiting to expire',
     resetWeeklyLimit: 'Reset Weekly Limit',
     resetWeeklyLimitTitle: 'Reset Weekly Usage Limit',
-    resetWeeklyLimitConfirm:
-      'You can reset the weekly limit only once per subscription period. Remaining attempts: {remaining}. This only zeroes weekly usage; total credit, cumulative usage, daily limit, status, and expiration are unchanged.',
+    resetWeeklyLimitConfirm: 'You can reset the weekly limit only once per subscription period. Remaining attempts: {remaining}. This only zeroes weekly usage; total credit, cumulative usage, daily limit, status, and expiration are unchanged.',
     weeklyLimitResetSuccess: 'Weekly limit usage has been reset',
-    failedToResetWeeklyLimit: 'Failed to reset weekly limit'
+    failedToResetWeeklyLimit: 'Failed to reset weekly limit',
+    currentlyUsable: 'Currently Usable',
+    totalCredit: 'Total Credit',
+    creditPoolSubscription: 'Credit Pool Subscription',
+    groupScopeFallback: 'Subscription Scope',
+    allAvailableGroups: 'All available groups',
+    daysRemainingWithDate: '{date} ({days} days remaining)',
+    remainingOf: '{remaining} remaining of {total}',
+    exhaustedAt: 'Credit exhausted at {date}',
+    exhaustedSummary: '{used} used of {limit}, expires {expires}',
+    resetAt: 'Next reset: {time}',
+    weeklyResetHint: 'Weekly credit resets at {time}. No credit will be restored before then.'
   },
 
   // Onboarding Tour
