@@ -1141,9 +1141,9 @@ export default {
     detailTitle: 'Channel Detail',
     closeDetail: 'Close',
     windowTab: {
-          7d: '7 days',
-          15d: '15 days',
-          30d: '30 days'
+          '7d': '7 days',
+          '15d': '15 days',
+          '30d': '30 days'
         },
     overall: {
           operational: 'OPERATIONAL',
