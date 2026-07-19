@@ -211,6 +211,10 @@ const outcome = ref<PaymentOutcome | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
+let verifyAttempts = 0
+let lastVerifyAt = 0
+const VERIFY_RETRY_INTERVAL_MS = 15000
+const VERIFY_RETRY_MAX_ATTEMPTS = 6
 
 const isAlipay = computed(() => isBuiltInAlipayMethod(props.paymentType))
 const isWxpay = computed(() => isBuiltInWxpayMethod(props.paymentType))
@@ -287,17 +291,40 @@ async function renderQR() {
   })
 }
 
+async function tryRecoverPendingOrder(order: PaymentOrder): Promise<PaymentOrder> {
+  if (!isWxpay.value) return order
+  const outTradeNo = String(order.out_trade_no || '').trim()
+  if (!outTradeNo) return order
+  const normalizedStatus = String(order.status || '').trim().toUpperCase()
+  if (normalizedStatus !== 'PENDING') return order
+  const now = Date.now()
+  if (verifyAttempts >= VERIFY_RETRY_MAX_ATTEMPTS || now - lastVerifyAt < VERIFY_RETRY_INTERVAL_MS) {
+    return order
+  }
+
+  lastVerifyAt = now
+  verifyAttempts += 1
+  try {
+    const result = await paymentAPI.verifyOrder(outTradeNo)
+    return result.data ?? order
+  } catch {
+    return order
+  }
+}
+
 let pollInFlight = false
 async function pollStatus() {
   if (!props.orderId || (outcome.value && outcome.value !== 'fulfillment_failed')) return
-  // 防重入：接口响应慢于 3 秒轮询间隔时避免并发重叠请求与重复终态处理。
+  // 防重入：接口（含 verifyOrder 二次确认）响应慢于 3 秒轮询间隔时避免并发重叠请求。
   if (pollInFlight) return
   pollInFlight = true
   try {
-    const order = await paymentStore.pollOrderStatus(props.orderId)
+    let order = await paymentStore.pollOrderStatus(props.orderId)
     if (!order) return
     // fulfillment_failed 会继续轮询，其它终态 cleanup 后丢弃迟到响应。
     if (!pollTimer && outcome.value !== 'fulfillment_failed') return
+    order = await tryRecoverPendingOrder(order)
+    if (outcome.value && outcome.value !== 'fulfillment_failed') return
     if (Number.isFinite(order.pay_amount) && order.pay_amount > 0) {
       activePayAmount.value = order.pay_amount
     }
