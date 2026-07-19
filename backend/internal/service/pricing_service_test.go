@@ -46,6 +46,45 @@ func TestParsePricingData_ParsesPriorityAndServiceTierFields(t *testing.T) {
 	require.True(t, pricing.SupportsServiceTier)
 }
 
+func TestParsePricingData_ParsesInputCostPerImageToken(t *testing.T) {
+	svc := &PricingService{}
+	body := []byte(`{
+		"gpt-image-2": {
+			"input_cost_per_token": 0.000005,
+			"output_cost_per_token": 0.00004,
+			"input_cost_per_image_token": 0.000008,
+			"output_cost_per_image_token": 0.00004,
+			"litellm_provider": "openai",
+			"mode": "image_generation"
+		},
+		"image-input-only": {
+			"input_cost_per_image_token": 0.00001,
+			"litellm_provider": "openai",
+			"mode": "image_generation"
+		}
+	}`)
+
+	data, err := svc.parsePricingData(body)
+	require.NoError(t, err)
+
+	pricing := data["gpt-image-2"]
+	require.NotNil(t, pricing)
+	require.InDelta(t, 8e-6, pricing.InputCostPerImageToken, 1e-12)
+	require.InDelta(t, 4e-5, pricing.OutputCostPerImageToken, 1e-12)
+
+	// Entries that only publish image-input pricing must still be retained.
+	imageOnly := data["image-input-only"]
+	require.NotNil(t, imageOnly)
+	require.InDelta(t, 1e-5, imageOnly.InputCostPerImageToken, 1e-12)
+	require.True(t, imageOnly.TokenPricingAbsent)
+
+	billing := NewBillingService(&config.Config{}, &PricingService{pricingData: data})
+	modelPricing, err := billing.GetModelPricing("gpt-image-2")
+	require.NoError(t, err)
+	require.InDelta(t, 8e-6, modelPricing.ImageInputPricePerToken, 1e-12)
+	require.InDelta(t, 4e-5, modelPricing.ImageOutputPricePerToken, 1e-12)
+}
+
 func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.T) {
 	tests := []struct {
 		model             string
