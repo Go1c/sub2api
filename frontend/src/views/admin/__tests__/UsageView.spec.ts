@@ -55,6 +55,10 @@ vi.mock('@/api/admin/usage', () => ({
   },
 }))
 
+vi.mock('@/api/admin/ops', () => ({
+  listErrorLogs: vi.fn().mockResolvedValue({ items: [], total: 0, pages: 0 }),
+}))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError: vi.fn(),
@@ -159,6 +163,7 @@ describe('admin UsageView distribution metric toggles', () => {
         DateRangePicker: true, Icon: true, TokenUsageTrend: true,
         ModelDistributionChart: ModelDistributionChartStub, GroupDistributionChart: GroupDistributionChartStub,
         EndpointDistributionChart: true,
+        UserTokenRanking: true, OpsErrorLogTable: true, OpsErrorDetailModal: true,
       } },
     })
     vi.advanceTimersByTime(120)
@@ -196,6 +201,9 @@ describe('admin UsageView distribution metric toggles', () => {
           TokenUsageTrend: true,
           ModelDistributionChart: ModelDistributionChartStub,
           GroupDistributionChart: GroupDistributionChartStub,
+          UserTokenRanking: true,
+          OpsErrorLogTable: true,
+          OpsErrorDetailModal: true,
         },
       },
     })
@@ -267,6 +275,9 @@ describe('admin UsageView handleUserClick', () => {
           UsageExportProgress: true,
           UsageCleanupDialog: true,
           UserBalanceHistoryModal: true,
+          UserTokenRanking: true,
+          OpsErrorLogTable: true,
+          OpsErrorDetailModal: true,
           AuditLogModal: true,
           Pagination: true,
           Select: true,
