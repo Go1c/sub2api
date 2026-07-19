@@ -15,6 +15,13 @@ export interface ConfigFieldDef {
 export interface TypeOption {
   value: string
   label: string
+  [key: string]: unknown
+}
+
+export interface EasyPayCustomMethod {
+  type: string
+  upstreamType: string
+  displayName: string
 }
 
 /** Callback URL paths for a provider. */
@@ -41,9 +48,33 @@ export const EASYPAY_PAYMENT_MODES = ['qrcode', 'popup'] as const
 /** Fixed display order for user-facing payment methods */
 export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'stripe', 'airwallex', 'balance'] as const
 
+export function isBuiltInAlipayMethod(type: string): boolean {
+  return type === 'alipay' || type === 'alipay_direct'
+}
+
+export function isBuiltInWxpayMethod(type: string): boolean {
+  return type === 'wxpay' || type === 'wxpay_direct'
+}
+
 /** Payment mode constants */
 export const PAYMENT_MODE_QRCODE = 'qrcode'
 export const PAYMENT_MODE_POPUP = 'popup'
+/** Alipay-only redirect mode (backend matches this literal case-insensitively). */
+export const PAYMENT_MODE_REDIRECT = 'redirect'
+
+export const PAYMENT_CURRENCY_OPTIONS: TypeOption[] = [
+  { value: 'CNY', label: 'CNY' },
+  { value: 'HKD', label: 'HKD' },
+  { value: 'USD', label: 'USD' },
+  { value: 'EUR', label: 'EUR' },
+  { value: 'GBP', label: 'GBP' },
+  { value: 'AUD', label: 'AUD' },
+  { value: 'CAD', label: 'CAD' },
+  { value: 'SGD', label: 'SGD' },
+  { value: 'JPY', label: 'JPY' },
+  { value: 'KRW', label: 'KRW' },
+  { value: 'NZD', label: 'NZD' },
+]
 
 /** Preferred popup size for payment gateways. Alipay's standard checkout
  * (QR + account login panel) needs ~1200×900 to render without any scrolling. */
@@ -93,6 +124,7 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'apiBase', label: '', sensitive: false },
     { key: 'cidAlipay', label: '', sensitive: false, optional: true },
     { key: 'cidWxpay', label: '', sensitive: false, optional: true },
+    { key: 'customMethods', label: '', sensitive: false, optional: true },
   ],
   airwallex: [
     { key: 'clientId', label: '', sensitive: false },
