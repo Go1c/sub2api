@@ -8633,23 +8633,12 @@ const form = reactive<SettingsForm>({
   enable_client_dateline_normalization: true,
   max_codex_version: "",
   min_codex_version: "",
-  openai_advanced_scheduler_lb_top_k: "",
-  openai_advanced_scheduler_sticky_weighted_enabled: false,
-  openai_advanced_scheduler_subscription_priority_enabled: false,
-  openai_advanced_scheduler_weight_error_rate: "",
-  openai_advanced_scheduler_weight_load: "",
-  openai_advanced_scheduler_weight_previous_response: "",
-  openai_advanced_scheduler_weight_priority: "",
-  openai_advanced_scheduler_weight_queue: "",
-  openai_advanced_scheduler_weight_quota_headroom: "",
-  openai_advanced_scheduler_weight_reset: "",
-  openai_advanced_scheduler_weight_session_sticky: "",
-  openai_advanced_scheduler_weight_ttft: "",
   openai_codex_user_agent: "",
   payment_alipay_force_qrcode: false,
   payment_subscription_usd_to_cny_rate: 0,
   rewrite_message_cache_control: false,
   subscription_expiry_notify_enabled: true,
+});
 
 type OpenAIAdvancedSchedulerOverrideKey =
   | "openai_advanced_scheduler_lb_top_k"

@@ -401,30 +401,14 @@ import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import {
-  LATENCY_BAR_CLASSES,
-  LATENCY_BAR_FROM_CLASSES,
-  LATENCY_BAR_TO_CLASSES,
-  LATENCY_TEXT_CLASSES,
-  durationSeverity,
-  firstTokenSeverity,
-} from '@/utils/latencyHealth'
-import {
+  BILLING_MODE_IMAGE,
   BILLING_MODE_TOKEN,
   getBillingModeLabel,
   getBillingModeBadgeClass,
   isImageUsage,
-  getDisplayBillingMode,
-  imageUnitPrice,
 } from '@/utils/billingMode'
 import {
-  formatImageBillingSize,
-  formatImageInputSize,
-  formatImageOutputSize,
-  formatImageSizeBreakdown,
-  formatImageSizeSource,
   hasImageOutputTokens,
-  textOutputTokens,
-  hasImageOutputCost,
   hasImageInputTokens,
   textInputTokens,
   hasImageInputCost,

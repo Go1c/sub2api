@@ -627,17 +627,6 @@ export default {
         invalidValue: 'Invalid header value (control characters are not allowed; max length 8192)',
         tooManyEntries: 'Too many header override entries (max 64)'
       },
-      grokCustomBaseUrl: {
-        title: 'Custom Upstream URL',
-        hint: 'When enabled, account traffic (chat/media/probes) is forwarded to the specified address. OAuth authorization and token refresh are unaffected and stay on the official endpoints.',
-        placeholder: 'https://relay.example.com/v1',
-        required: 'An address is required when Custom Upstream URL is enabled',
-        invalid: 'Invalid upstream address (must be a full http(s):// URL)',
-        presets: {
-          cli: 'Grok Build CLI',
-          official: 'Official API'
-        }
-      },
       autoPauseOnExpired: 'Auto Pause On Expired',
       autoPauseOnExpiredDesc: 'When enabled, the account will auto pause scheduling after it expires',
 	  autoPause5hThreshold: '5h Usage Threshold (%)',
