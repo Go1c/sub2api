@@ -1151,8 +1151,14 @@ export type OpsErrorListQueryParams = {
   platform?: string
   group_id?: number | null
   account_id?: number | null
+  user_id?: number
+  api_key_id?: number
+  // 模型过滤：后端以 COALESCE(requested_model, model) 精确匹配（admin 路径）。
+  model?: string
 
   phase?: string
+  // 分类(用户侧粗分类码,如 auth/rate_limit/upstream),后端反查为 phase/type ANY 条件
+  category?: string
   error_owner?: string
   error_source?: string
   resolved?: string
@@ -1161,6 +1167,10 @@ export type OpsErrorListQueryParams = {
   q?: string
   status_codes?: string
   status_codes_other?: string
+
+  // 服务端排序,列白名单见后端 opsErrorLogsOrderBy(created_at/model/status_code)
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
 }
 
 // Legacy unified endpoints

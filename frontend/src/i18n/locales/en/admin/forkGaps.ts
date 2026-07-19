@@ -264,12 +264,18 @@ export default {
   usage: {
       billingModeVideo: 'Video',
       tokenRanking: {
+            subtitle: 'Per-user token usage for the current filters and time range',
+            rowHint: "Click to view this user's usage details",
+            userCount: '{count} users',
             columns: {
-                    user: 'User'
-                  },
-            subtitle: 'Configure daily / weekly / monthly USD usage limits for each upstream platform for user {email}',
-            rowHint: 'Click a row to view user details',
-            userCount: '{count} users'
+                    user: 'User',
+                    requests: 'Requests',
+                    inputTokens: 'Input Tokens',
+                    outputTokens: 'Output Tokens',
+                    cacheTokens: 'Cache Tokens',
+                    totalTokens: 'Total Tokens',
+                    cost: 'Cost'
+                  }
           }
     },
   users: {
