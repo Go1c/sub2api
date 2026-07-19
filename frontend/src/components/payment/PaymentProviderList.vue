@@ -147,7 +147,10 @@ function isProviderEnabled(provider: ProviderInstance): boolean {
     return true
   }
 
-  return provider.supported_types.some(type =>
+  const supportedTypes = Array.isArray(provider.supported_types)
+    ? provider.supported_types
+    : []
+  return supportedTypes.some(type =>
     props.enabledPaymentTypes.includes(normalizeVisiblePaymentType(type)),
   )
 }

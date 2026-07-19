@@ -11644,7 +11644,14 @@ async function loadProviders() {
   providersLoading.value = true;
   try {
     const res = await adminAPI.payment.getProviders();
-    providers.value = res.data || [];
+    // Go nil slices encode as JSON null; normalize so ProviderCard never
+    // TypeErrors on supported_types.includes() and cards stay visible.
+    providers.value = (res.data || []).map((provider) => ({
+      ...provider,
+      supported_types: Array.isArray(provider.supported_types)
+        ? provider.supported_types
+        : [],
+    }));
   } catch (err: unknown) {
     appStore.showError(extractI18nErrorMessage(err, t, "payment.errors", t("common.error")));
   } finally {
