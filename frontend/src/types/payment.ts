@@ -77,6 +77,8 @@ export interface CheckoutInfoResponse {
   help_text: string
   help_image_url: string
   stripe_publishable_key: string
+  /** When true, mobile Alipay always uses QR instead of mobile redirect */
+  alipay_force_qrcode?: boolean
 }
 
 // ==================== Orders ====================

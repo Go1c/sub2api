@@ -6642,6 +6642,17 @@
                     </p>
                   </div>
                 </div>
+                <div class="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 dark:border-dark-700">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t("admin.settings.payment.alipayForceQRCode")
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.payment.alipayForceQRCodeHint") }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.payment_alipay_force_qrcode" />
+                </div>
                 <!-- Row 3: Pending orders + load balance + cancel rate limit (all in one row) -->
                 <div class="flex flex-wrap items-end gap-4">
                   <div class="w-28">
