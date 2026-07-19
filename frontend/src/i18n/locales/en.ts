@@ -2884,6 +2884,18 @@ export default {
       duplicateSuccess: 'Monitor duplicated as "{name}" and disabled. Review its configuration before enabling it.',
       duplicateFailed: 'Failed to duplicate monitor',
       duplicateKeyUnavailable: 'The API key cannot be decrypted. Re-enter it before duplicating this monitor.',
+      logs: {
+        action: 'Logs',
+        title: 'Request logs - {name}',
+        empty: 'No request logs',
+        loadError: 'Failed to load request logs',
+        checkedAt: 'Checked At',
+        model: 'Model',
+        status: 'Status',
+        latency: 'Latency',
+        pingLatency: 'Ping Latency',
+        message: 'Message'
+      },
       apiKeyDecryptFailed: 'API Key decryption failed. Please re-edit this monitor with a fresh key.',
       createSuccess: 'Monitor created',
       updateSuccess: 'Monitor updated',
@@ -2928,6 +2940,8 @@ export default {
         groupNamePlaceholder: 'Optional, used to group rows in user view',
         intervalSeconds: 'Interval (seconds)',
         intervalSecondsHint: 'Range: 15 - 3600 seconds',
+        jitterSeconds: 'Random Jitter (± seconds)',
+        jitterSecondsHint: 'Each check fires at interval ± a random offset within this value; 0 means fixed interval. Interval minus jitter must be ≥ 15s',
         enabled: 'Enable monitor',
         kindRequired: 'Please select a provider'
       },
