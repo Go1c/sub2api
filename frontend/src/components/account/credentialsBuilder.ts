@@ -156,6 +156,57 @@ export function validateHeaderOverrideRows(rows: HeaderOverrideRow[]): string | 
   return null
 }
 
+/** 行数组 → credentials 存储对象（小写 header 名） */
+export function buildHeaderOverridesObject(rows: HeaderOverrideRow[]): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const row of rows) {
+    const name = row.name.trim().toLowerCase()
+    if (!name) continue
+    result[name] = row.value.trim()
+  }
+  return result
+}
+
+/**
+ * 解析粘贴的 JSON 文本为请求头覆写行。
+ * 仅接受扁平 JSON 对象；值允许 string/number/boolean（统一转字符串），
+ * 其余类型或非对象输入返回 null 表示格式非法。键为空白的条目直接丢弃。
+ */
+export function parseHeaderOverridesJson(text: string): HeaderOverrideRow[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const rows: HeaderOverrideRow[] = []
+  for (const [rawName, rawValue] of Object.entries(parsed as Record<string, unknown>)) {
+    const name = rawName.trim()
+    if (!name) continue
+    if (
+      typeof rawValue !== 'string' &&
+      typeof rawValue !== 'number' &&
+      typeof rawValue !== 'boolean'
+    ) {
+      return null
+    }
+    rows.push({ name, value: String(rawValue).trim() })
+  }
+  return rows.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** 请求头覆写行 → 便于迁移/备份的 JSON 文本（跳过名称为空的占位行） */
+export function serializeHeaderOverrideRows(rows: HeaderOverrideRow[]): string {
+  const record: Record<string, string> = {}
+  for (const row of rows) {
+    const name = row.name.trim()
+    if (!name) continue
+    record[name] = row.value.trim()
+  }
+  return JSON.stringify(record, null, 2)
+}
+
 export function applyHeaderOverride(
   credentials: Record<string, unknown>,
   enabled: boolean,
@@ -170,19 +221,8 @@ export function applyHeaderOverride(
     return
   }
 
-  const overrides: Record<string, string> = {}
-  for (const row of rows) {
-    const name = row.name.trim()
-    const value = row.value
-    // Empty value = placeholder only; do not override
-    if (!name || !value.trim()) {
-      continue
-    }
-    overrides[name] = value
-  }
-
   credentials[HEADER_OVERRIDE_ENABLED_CREDENTIAL_KEY] = true
-  credentials[HEADER_OVERRIDES_CREDENTIAL_KEY] = overrides
+  credentials[HEADER_OVERRIDES_CREDENTIAL_KEY] = buildHeaderOverridesObject(rows)
 }
 
 export function applyAntigravityProjectID(
