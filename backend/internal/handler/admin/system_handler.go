@@ -21,6 +21,27 @@ type SystemHandler struct {
 	lockSvc   *service.SystemOperationLockService
 }
 
+// systemUpdateTimeout bounds a full in-place update: the release manifest
+// fetch plus a large binary download over slow links. It must stay above the
+// GitHub download client timeout (10 minutes) so the download owns its own
+// deadline.
+const systemUpdateTimeout = 15 * time.Minute
+
+// systemUpdateContext detaches a long-running update from the HTTP request
+// lifetime. Browsers and reverse proxies commonly abort idle requests after
+// 30-60s (axios default, nginx proxy_read_timeout), which canceled
+// c.Request.Context() mid-download and killed the update with
+// "download failed: context canceled" (#4504). The swap keeps running after a
+// client disconnect; a later retry then hits the system operation lock or
+// reports no update available.
+func systemUpdateContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	base := context.Background()
+	if ctx != nil {
+		base = context.WithoutCancel(ctx)
+	}
+	return context.WithTimeout(base, systemUpdateTimeout)
+}
+
 // NewSystemHandler creates a new SystemHandler
 func NewSystemHandler(updateSvc *service.UpdateService, lockSvc *service.SystemOperationLockService) *SystemHandler {
 	return &SystemHandler{
@@ -66,7 +87,10 @@ func (h *SystemHandler) PerformUpdate(c *gin.Context) {
 			release(releaseReason, succeeded)
 		}()
 
-		if err := h.updateSvc.PerformUpdate(ctx); err != nil {
+		updateCtx, cancel := systemUpdateContext(ctx)
+		defer cancel()
+
+		if err := h.updateSvc.PerformUpdate(updateCtx); err != nil {
 			releaseReason = "SYSTEM_UPDATE_FAILED"
 			return nil, err
 		}
@@ -96,6 +120,7 @@ func (h *SystemHandler) Rollback(c *gin.Context) {
 			release(releaseReason, succeeded)
 		}()
 
+		// Local .backup rename does not need a detached download context.
 		if err := h.updateSvc.Rollback(); err != nil {
 			releaseReason = "SYSTEM_ROLLBACK_FAILED"
 			return nil, err
