@@ -18,3 +18,11 @@ func TestUserFromServiceShallow_MapsDeletedAt(t *testing.T) {
 	active := UserFromServiceShallow(&service.User{ID: 2, Email: "a@test.com"})
 	require.Nil(t, active.DeletedAt, "active user must have nil DeletedAt")
 }
+
+func TestUserFromServiceShallow_MapsInvoiceEnabled(t *testing.T) {
+	enabled := UserFromServiceShallow(&service.User{ID: 1, Email: "a@test.com", InvoiceEnabled: true})
+	require.True(t, enabled.InvoiceEnabled)
+
+	disabled := UserFromServiceShallow(&service.User{ID: 2, Email: "b@test.com", InvoiceEnabled: false})
+	require.False(t, disabled.InvoiceEnabled)
+}
