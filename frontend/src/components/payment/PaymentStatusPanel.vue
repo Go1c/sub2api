@@ -171,7 +171,7 @@ import { usePaymentStore } from '@/stores/payment'
 import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
-import { getPaymentPopupFeatures } from '@/components/payment/providerConfig'
+import { getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
 import type { PaymentOrder } from '@/types/payment'
 import Icon from '@/components/icons/Icon.vue'
 import QRCode from 'qrcode'
@@ -212,8 +212,8 @@ const outcome = ref<PaymentOutcome | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
-const isAlipay = computed(() => props.paymentType.includes('alipay'))
-const isWxpay = computed(() => props.paymentType.includes('wxpay'))
+const isAlipay = computed(() => isBuiltInAlipayMethod(props.paymentType))
+const isWxpay = computed(() => isBuiltInWxpayMethod(props.paymentType))
 const normalizedProviderKey = computed(() => (props.providerKey || '').trim().toLowerCase())
 const normalizedPaymentMode = computed(() => (props.paymentMode || '').trim().toLowerCase())
 const isMapayFlow = computed(() => {
@@ -287,31 +287,41 @@ async function renderQR() {
   })
 }
 
+let pollInFlight = false
 async function pollStatus() {
   if (!props.orderId || (outcome.value && outcome.value !== 'fulfillment_failed')) return
-  const order = await paymentStore.pollOrderStatus(props.orderId)
-  if (!order) return
-  if (Number.isFinite(order.pay_amount) && order.pay_amount > 0) {
-    activePayAmount.value = order.pay_amount
-  }
-  if (!props.providerKey && order.provider_key) {
-    activeProviderHint.value = order.provider_key
-  }
-  if (isSuccessStatus(order.status)) {
-    cleanup()
-    paidOrder.value = order
-    setOutcome('success')
-    emit('success')
-  } else if (order.status === 'FULFILLMENT_FAILED') {
-    stopCountdown()
-    paidOrder.value = order
-    setOutcome('fulfillment_failed')
-  } else if (order.status === 'CANCELLED') {
-    cleanup()
-    setOutcome('cancelled')
-  } else if (order.status === 'EXPIRED' || order.status === 'FAILED') {
-    cleanup()
-    setOutcome('expired')
+  // 防重入：接口响应慢于 3 秒轮询间隔时避免并发重叠请求与重复终态处理。
+  if (pollInFlight) return
+  pollInFlight = true
+  try {
+    const order = await paymentStore.pollOrderStatus(props.orderId)
+    if (!order) return
+    // fulfillment_failed 会继续轮询，其它终态 cleanup 后丢弃迟到响应。
+    if (!pollTimer && outcome.value !== 'fulfillment_failed') return
+    if (Number.isFinite(order.pay_amount) && order.pay_amount > 0) {
+      activePayAmount.value = order.pay_amount
+    }
+    if (!props.providerKey && order.provider_key) {
+      activeProviderHint.value = order.provider_key
+    }
+    if (isSuccessStatus(order.status)) {
+      cleanup()
+      paidOrder.value = order
+      setOutcome('success')
+      emit('success')
+    } else if (order.status === 'FULFILLMENT_FAILED') {
+      stopCountdown()
+      paidOrder.value = order
+      setOutcome('fulfillment_failed')
+    } else if (order.status === 'CANCELLED') {
+      cleanup()
+      setOutcome('cancelled')
+    } else if (order.status === 'EXPIRED' || order.status === 'FAILED') {
+      cleanup()
+      setOutcome('expired')
+    }
+  } finally {
+    pollInFlight = false
   }
 }
 
