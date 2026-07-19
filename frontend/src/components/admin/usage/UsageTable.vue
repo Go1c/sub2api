@@ -1,5 +1,5 @@
 <template>
-  <div class="card overflow-hidden">
+  <div :class="flat ? 'overflow-hidden' : 'card overflow-hidden'">
     <div class="overflow-auto">
       <DataTable
         :columns="columns"
@@ -441,13 +441,16 @@ interface Props {
   serverSideSort?: boolean
   defaultSortKey?: string
   defaultSortOrder?: 'asc' | 'desc'
+  /** 嵌入统一卡片内使用：去掉自身卡片外观 */
+  flat?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   loading: false,
   serverSideSort: false,
   defaultSortKey: '',
-  defaultSortOrder: 'asc'
+  defaultSortOrder: 'asc',
+  flat: false
 })
 defineEmits<{
   userClick: [userID: number, email?: string]
