@@ -202,6 +202,10 @@ export interface CreateOrderResult {
   pay_url?: string
   qr_code?: string
   client_secret?: string
+  intent_id?: string
+  currency?: string
+  country_code?: string
+  payment_env?: string
   pay_amount: number
   fee_rate: number
   expires_at: string

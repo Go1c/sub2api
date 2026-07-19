@@ -418,6 +418,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/payment/airwallex',
+    name: 'AirwallexPayment',
+    component: () => import('@/views/user/AirwallexPaymentView.vue'),
+    meta: {
+      requiresAuth: true,
+      layout: 'blank',
+      title: 'Airwallex Payment',
+      titleKey: 'payment.airwallexPay',
+      requiresPayment: false
+    }
+  },
+  {
     path: '/payment/stripe-popup',
     name: 'StripePopup',
     component: () => import('@/views/user/StripePopupView.vue'),

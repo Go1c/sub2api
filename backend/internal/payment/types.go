@@ -15,6 +15,7 @@ const (
 	TypeAlipayDirect PaymentType = "alipay_direct"
 	TypeWxpayDirect  PaymentType = "wxpay_direct"
 	TypeStripe       PaymentType = "stripe"
+	TypeAirwallex    PaymentType = "airwallex"
 	TypeCard         PaymentType = "card"
 	TypeLink         PaymentType = "link"
 	TypeEasyPay      PaymentType = "easypay"
@@ -87,6 +88,8 @@ func GetBasePaymentType(t string) string {
 		return TypeEasyPay
 	case t == TypeMapay:
 		return TypeMapay
+	case t == TypeAirwallex:
+		return TypeAirwallex
 	case t == TypeStripe || t == TypeCard || t == TypeLink:
 		return TypeStripe
 	case len(t) >= len(TypeAlipay) && t[:len(TypeAlipay)] == TypeAlipay:
@@ -147,7 +150,11 @@ type CreatePaymentResponse struct {
 	PayURL       string                  // H5 payment URL (alipay/wxpay)
 	QRCode       string                  // QR code content for scanning
 	PayAmount    string                  // Provider-required payment amount, if adjusted by upstream
-	ClientSecret string                  // Stripe PaymentIntent client secret
+	ClientSecret string                  // Stripe/Airwallex PaymentIntent client secret
+	IntentID     string                  // Provider payment intent ID for frontend SDK
+	Currency     string                  // Provider checkout currency
+	CountryCode  string                  // Provider checkout country/region code
+	PaymentEnv   string                  // Provider frontend environment flag
 	ResultType   CreatePaymentResultType // Typed result contract for frontend flows
 	OAuth        *WechatOAuthInfo        // WeChat OAuth bootstrap payload when required
 	JSAPI        *WechatJSAPIPayload     // WeChat JSAPI invocation payload when ready
@@ -178,6 +185,15 @@ type RefundRequest struct {
 	OrderID string
 	Amount  string // Refund amount formatted to 2 decimal places
 	Reason  string
+}
+
+// RefundQueryRequest contains identifiers needed to query a previously
+// requested refund.
+type RefundQueryRequest struct {
+	TradeNo  string
+	OrderID  string
+	RefundID string
+	Amount   string
 }
 
 // RefundResponse is returned after a refund request.
@@ -212,6 +228,12 @@ type Provider interface {
 	VerifyNotification(ctx context.Context, rawBody string, headers map[string]string) (*PaymentNotification, error)
 	// Refund requests a refund from the upstream provider.
 	Refund(ctx context.Context, req RefundRequest) (*RefundResponse, error)
+}
+
+// RefundQueryProvider extends Provider with refund status querying.
+type RefundQueryProvider interface {
+	Provider
+	QueryRefund(ctx context.Context, req RefundQueryRequest) (*RefundResponse, error)
 }
 
 // CancelableProvider extends Provider with the ability to cancel pending payments.
