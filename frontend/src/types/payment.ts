@@ -49,6 +49,8 @@ export interface MethodLimit {
   single_max: number
   fee_rate: number
   available: boolean
+  /** ISO 4217 currency for this payment method when instances agree */
+  currency?: string
 }
 
 /** Response from /payment/limits API */
