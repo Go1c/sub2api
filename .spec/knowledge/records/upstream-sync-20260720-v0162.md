@@ -4,7 +4,7 @@ description: main 同步至 v0.1.162 后，将 0.1.160→0.1.162 增量分主题
 metadata:
   type: record
   date: 2026-07-20
-  status: T1 安全/收尾批次完成；T2/T3 按主题另开
+  status: T1 已合；高价值 T2 讨论收口 PR #234–#241 待合；大块跳过；运维默认不动
 ---
 
 # Upstream Sync 台账 — 2026-07-20 (v0.1.162)
@@ -76,7 +76,48 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | T2 model_not_found | `sync/t2-model-not-found-4508` | ✅ PR #231 已合：#4508 临时账号耗尽保留 503，不误报 model_not_found |
 | T2 plan-validity | `sync/t2-plan-validity-4528` | ✅ PR #232 已合：#4528 套餐有效期文案去写死「天」 |
 | T2 renew-expired | `sync/t2-renew-expired-4541` | ✅ PR #233 已合：#4541 admin assign 过期订阅续期（fork 额度池字段适配；gofmt 跟进） |
-| T2/T3 | — | **不整包合**；first-parent 仍有大量与 wave2 重叠的网关/前端 PR，需按主题另开 |
+| ops PG local/dev | `sync/ops-pg-tuning-local-dev` | 🟡 PR #234 待合：local/dev compose 接 `POSTGRES_*`（与 yml 同款） |
+| T2 OAuth system 去重 | `sync/t2-oauth-dedupe-4606` | 🟡 PR #235 待合：#4606（讨论 4=A） |
+| T2 流失败上报 | `sync/t2-stream-fail-4520` | 🟡 PR #236 待合：#4520 客户端码 + Ops `CountTowardsSLA`（讨论 2=A） |
+| T2 content_part | `sync/t2-content-part-4468` | 🟡 PR #237 待合：#4468（讨论 3=A） |
+| T2 Agent Identity Team | `sync/t2-agent-identity-team-4572` | 🟡 PR #238 待合：#4572 匹配键 + skip OAuth expiry（讨论 1=A） |
+| T2 Anthropic monitor | `sync/t2-anthropic-monitor-4537` | 🟡 PR #239 待合：#4537（讨论 5=A） |
+| T2 WS mode 文档 | `sync/t2-ws-mode-docs-4522` | 🟡 PR #240 待合：#4522 全包 i18n+config+README（讨论 6=A） |
+| T2 Dockerfile 交叉编译 | `sync/t2-dockerfile-cross-4507` | 🟡 PR #241 待合：#4507 BUILDPLATFORM + cache；保留 fork VERSION 回退（讨论 7 代决=A） |
+| T2/T3 | — | **不整包合**；大块专题与产品差异项见下表 |
+
+### 产品 / 运维讨论结论（2026-07-21）
+
+| # | 项 | 结论 |
+|---|---|---|
+| 1 | #4572 Agent Identity | **A** 整包：Team 匹配键 + 跳过 OAuth 过期策略（否则导入失败） |
+| 2 | #4520 流失败上报 | **A** 整包：稳定错误码 + Ops 逻辑 502 / SLA |
+| 3 | #4468 content_part | **A** 整包 |
+| 4 | #4606 OAuth system 去重 | **A** 整包（json_object / 混合 content 仍保留双份） |
+| 5 | #4537 Anthropic monitor | **A** 整包 |
+| 6 | #4522 WS 文档 | **A** 全包（含 README） |
+| 7 | #4507 Dockerfile 交叉编译 | **A**（用户委托代决）：构建期 only，同架构无行为变化 |
+| 8 | `docker-deploy.sh` raw 源 | **不动** — 部署已稳定；继续默认 upstream `Wei-Shaw/.../main/deploy` |
+| 9 | 生产 PG 参数 | **B** — 只记录与仓库 compose 脱钩、**未上机验证**；不上机、不改线上 |
+
+### 已具备 / 跳过（避免重复讨论）
+
+| 项 | 结论 |
+|---|---|
+| #4630 IP 部分更新不清空 | 已具备，无需再 port |
+| #4629 套餐货币符号 `$` | 不合（产品） |
+| #4588 本体 docker-compose.yml PG 调优 | 已具备；缺口在 local/dev → PR #234 |
+| local/docker-deploy PG 接线 | #234（待合） |
+| publish 线上 PG | 与仓库 compose 脱钩；讨论 9=B 仅文档/台账，未上机 |
+| `docker-deploy.sh` 改指 fork raw | 讨论 8=**不动**（稳定优先） |
+| #4590 Trae/Codex 工具缓存 | 默认跳过（大） |
+| #4543 / #4626 受保护视频 | 默认跳过（大） |
+| #4553 WS turn lifecycle | 默认跳过（大） |
+| #4547 / #4496 调度冷却 model/池 | 默认跳过（中心路径） |
+| #4604 + BindEnv 全量 client-ip | 默认跳过（与 fork IP 栈深绑） |
+| 上游 branding SVG | 不合（Lumio 品牌） |
+| Grok Free/媒体、#4575/#4573/#4517 前端 | 中等，未做；按产品另开 |
+| #4583 ops 报表邮件、#4558 antigravity plan_type | 中等，未做 |
 
 ### T2 misc 冲突 / 适配纪要
 
@@ -86,9 +127,13 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | system_handler_test.go | fork 无此测试文件 → 不恢复 |
 | redis local volume | 保留 fork `./redis_data:/data`（无 `:Z`）；只合 command 行续 `\` |
 | plan currency / Trae / grok video / branding SVG / dark palette 全量 | 仍跳过（深度冲突或 fork 产品差异） |
+| #4572 | 匹配键仅 `account:` + `resolveCodexImportExpiry` 对 Agent Identity 早退；`NewAccountHandler` 多一个 fork 参数 |
+| #4507 | 合 BUILDPLATFORM/TARGET*/cache；**保留** fork `resolve-version.sh` 缺失时 VERSION 文件回退 |
+| #4520 | `OpsStreamError.Code` + `CountTowardsSLA`；与 fork 已有 stream error 标记路径并集 |
 
 ### CI 基线债（全 PR 共有，不在本台账批次阻塞）
 - `backend-security` govulncheck：S3 SDK / crypto/tls 调用图（#222/#223/#224/#225 均红）
+- CLA 对上游作者 commit 的噪音（常 admin merge）
 
 
 ## 验收门槛（每批 PR）
