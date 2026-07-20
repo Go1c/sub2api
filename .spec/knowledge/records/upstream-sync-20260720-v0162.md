@@ -70,7 +70,8 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | T1c follow-up | `fix/usage-log-insert-placeholders` | ✅ PR #225 已合：usage_logs `$57/$58`、golangci baseline、integration suite 漂移 |
 | T1d 安全小补丁 | `sync/t1d-infra-v0162` | ✅ PR #226 已合：image_storage 空默认 + compose env 透传 |
 | T1d GitHub token | `sync/t1d-github-token-v0162` | ✅ PR #227 已合：UPDATE_GITHUB_TOKEN |
-| T2 小修复批 | `sync/t2-small-fixes-v0162` | 进行中：API Key IP 部分更新、Codex call_id、messages content-type、订阅剩余天数上取整、过期时间到分钟 |
+| T2 小修复批 | `sync/t2-small-fixes-v0162` | ✅ PR #228 已合 |
+| T2 网关修复批 | `sync/t2-gateway-fixes-v0162` | 进行中：Codex models 401 下线、Anthropic stop_reason null、WS HTTP bridge failover、OpenAI quota 错误形态、Responses SSE/image intent、Grok 手动测试调度门 |
 | T2/T3 | — | **不整包合**；first-parent 仍有大量与 wave2 重叠的网关/前端 PR，需按主题另开 |
 
 ### CI 基线债（全 PR 共有，不在本台账批次阻塞）
