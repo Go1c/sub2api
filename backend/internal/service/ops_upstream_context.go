@@ -108,24 +108,56 @@ func HasOpsClientBusinessLimited(c *gin.Context) bool {
 	return marked
 }
 
+// OpsStreamError records an in-band SSE error for ops logging when the wire
+// status is already committed as HTTP 200 (so middleware would otherwise miss it).
 type OpsStreamError struct {
-	ErrType        string
-	Message        string
+	// ErrType 是写入 SSE 帧的对客错误类型（如 rate_limit_error / upstream_error / api_error）。
+	ErrType string
+	// Code 是可选的稳定错误分类；用于既保留通用 OpenAI error.type，又向客户端和 Ops
+	// 暴露可编程判断的细分类（如 upstream_http2_stream_error）。
+	Code string
+	// Message 是写入 SSE 帧的对客错误消息。
+	Message string
+	// IntendedStatus 是流若未固化本应返回的 HTTP 状态码（如并发限流的 429）。
+	// 默认仅用于错误分级；CountTowardsSLA=true 时也作为 Ops 的逻辑状态码。
 	IntendedStatus int
+	// CountTowardsSLA 表示虽然 wire 状态已固化为 200，请求在应用语义上仍然失败，
+	// Ops 应使用 IntendedStatus 计入错误率/SLA。
+	CountTowardsSLA bool
 }
 
 func MarkOpsStreamError(c *gin.Context, errType, message string, intendedStatus int) {
+	markOpsStreamError(c, OpsStreamError{
+		ErrType:        errType,
+		Message:        message,
+		IntendedStatus: intendedStatus,
+	})
+}
+
+// MarkOpsStreamFailure records an in-band stream error that represents a failed
+// request and therefore must count towards Ops error rate/SLA despite HTTP 200
+// already being committed on the wire.
+func MarkOpsStreamFailure(c *gin.Context, errType, code, message string, intendedStatus int) {
+	markOpsStreamError(c, OpsStreamError{
+		ErrType:         errType,
+		Code:            code,
+		Message:         message,
+		IntendedStatus:  intendedStatus,
+		CountTowardsSLA: true,
+	})
+}
+
+func markOpsStreamError(c *gin.Context, streamErr OpsStreamError) {
 	if c == nil {
 		return
 	}
 	if _, exists := c.Get(OpsStreamErrorKey); exists {
 		return
 	}
-	c.Set(OpsStreamErrorKey, OpsStreamError{
-		ErrType:        strings.TrimSpace(errType),
-		Message:        strings.TrimSpace(message),
-		IntendedStatus: intendedStatus,
-	})
+	streamErr.ErrType = strings.TrimSpace(streamErr.ErrType)
+	streamErr.Code = strings.TrimSpace(streamErr.Code)
+	streamErr.Message = strings.TrimSpace(streamErr.Message)
+	c.Set(OpsStreamErrorKey, streamErr)
 }
 
 func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
