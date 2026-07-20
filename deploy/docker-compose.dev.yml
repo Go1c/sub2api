@@ -91,6 +91,13 @@ services:
     image: postgres:18-alpine
     container_name: sub2api-postgres-dev
     restart: unless-stopped
+    # Same POSTGRES_* tuning keys as docker-compose.yml / local.yml (.env.example).
+    command: >
+      postgres
+      -c max_connections=${POSTGRES_MAX_CONNECTIONS:-100}
+      -c shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}
+      -c effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-4GB}
+      -c maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}
     volumes:
       - ./postgres_data:/var/lib/postgresql/data:Z
     environment:
