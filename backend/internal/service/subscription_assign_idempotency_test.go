@@ -592,7 +592,6 @@ func TestBulkAssignSubscriptionCreatedReusedAndConflict(t *testing.T) {
 	require.Equal(t, 1, subRepo.createCalls)
 }
 
-
 func TestBulkAssignSubscriptionRenewsExpiredSemanticMatch(t *testing.T) {
 	groupRepo := &subscriptionGroupRepoStub{
 		group: &Group{ID: 1, SubscriptionType: SubscriptionTypeSubscription},
