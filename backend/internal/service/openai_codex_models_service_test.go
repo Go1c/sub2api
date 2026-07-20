@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
