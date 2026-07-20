@@ -389,7 +389,7 @@
           </template>
 
           <template #cell-exhausted_at="{ value }">
-            <span v-if="value" class="text-sm text-red-600 dark:text-red-400">{{ formatDateOnly(value) }}</span>
+            <span v-if="value" class="text-sm text-red-600 dark:text-red-400">{{ formatDateTimeToMinute(value) }}</span>
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
