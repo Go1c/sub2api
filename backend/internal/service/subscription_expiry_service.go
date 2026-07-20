@@ -10,16 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	// subscriptionExpiryReminderLeaderLockKey gates the per-cycle reminder scan so
-	// that only one instance walks all active subscriptions and sends reminder
-	// emails, avoiding redundant full scans and duplicate emails.
-	subscriptionExpiryReminderLeaderLockKey = "subscription:expiry:reminder:leader"
-	// subscriptionExpiryReminderLeaderLockTTL bounds crash recovery; the scan can
-	// page through many subscriptions, so keep it comfortably above one cycle.
-	subscriptionExpiryReminderLeaderLockTTL = 5 * time.Minute
-)
-
 // SubscriptionExpiryService periodically expires subscriptions and records credit-pool expiry audit events.
 type SubscriptionExpiryService struct {
 	userSubRepo              UserSubscriptionRepository

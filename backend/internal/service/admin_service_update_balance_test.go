@@ -43,8 +43,9 @@ func (s *balanceRedeemRepoStub) Create(ctx context.Context, code *RedeemCode) er
 	s.created = append(s.created, &clone)
 	return nil
 }
-func (s *balanceRedeemRepoStub) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) { return 0, nil }
-
+func (s *balanceRedeemRepoStub) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) {
+	return 0, nil
+}
 
 type authCacheInvalidatorStub struct {
 	userIDs  []int64

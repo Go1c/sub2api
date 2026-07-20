@@ -987,4 +987,3 @@ func (h *OpsHandler) ListRetryAttempts(c *gin.Context) {
 	}
 	response.Success(c, items)
 }
-

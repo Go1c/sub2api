@@ -851,7 +851,12 @@ func (r *groupRepository) DeleteCascade(ctx context.Context, id int64) ([]int64,
 		return nil, err
 	}
 
-	// 4. Soft-delete group itself.
+	// 4. Clear API keys bound to this group so list/detail no longer show a deleted group.
+	if _, err := exec.ExecContext(ctx, "UPDATE api_keys SET group_id = NULL WHERE group_id = $1", id); err != nil {
+		return nil, err
+	}
+
+	// 5. Soft-delete group itself.
 	if _, err := txClient.Group.Delete().Where(group.IDEQ(id)).Exec(ctx); err != nil {
 		return nil, err
 	}

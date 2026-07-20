@@ -612,7 +612,6 @@ type AccountSummary struct {
 	Name string `json:"name"`
 }
 
-
 // GeoBlockSettings is the admin-facing region web-block configuration.
 type GeoBlockSettings struct {
 	Enabled   bool     `json:"enabled"`
@@ -650,12 +649,12 @@ type UserSubscription struct {
 	QuotaUsedUSD      float64 `json:"quota_used_usd"`
 	QuotaRemainingUSD float64 `json:"quota_remaining_usd"`
 
-	DailyLimitUSD   *float64   `json:"daily_limit_usd"`
-	DailyUsageUSD   float64    `json:"daily_usage_usd"`
-	DailyResetAt    *time.Time `json:"daily_reset_at"`
-	WeeklyLimitUSD  *float64   `json:"weekly_limit_usd"`
-	WeeklyUsageUSD  float64    `json:"weekly_usage_usd"`
-	WeeklyResetAt   *time.Time `json:"weekly_reset_at"`
+	DailyLimitUSD  *float64   `json:"daily_limit_usd"`
+	DailyUsageUSD  float64    `json:"daily_usage_usd"`
+	DailyResetAt   *time.Time `json:"daily_reset_at"`
+	WeeklyLimitUSD *float64   `json:"weekly_limit_usd"`
+	WeeklyUsageUSD float64    `json:"weekly_usage_usd"`
+	WeeklyResetAt  *time.Time `json:"weekly_reset_at"`
 	// WeeklyLimitResetRemaining 本订阅周期用户还可手动重置周限的次数（0 或 1）。
 	WeeklyLimitResetRemaining int `json:"weekly_limit_reset_remaining"`
 	// WeeklyLimitUserResetAt 用户上次手动重置周限时刻；未重置时 omitempty。

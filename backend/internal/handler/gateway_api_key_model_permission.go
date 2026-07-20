@@ -55,19 +55,6 @@ func modelAllowedBySet(allowed map[string]struct{}, model string) bool {
 	return false
 }
 
-func filterModelIDsByAllowedSet(modelIDs []string, allowed map[string]struct{}) []string {
-	if len(allowed) == 0 {
-		return modelIDs
-	}
-	out := make([]string, 0, len(modelIDs))
-	for _, modelID := range modelIDs {
-		if modelAllowedBySet(allowed, modelID) {
-			out = append(out, modelID)
-		}
-	}
-	return out
-}
-
 func filterGeminiModelsByAllowedSet(models []gemini.Model, allowed map[string]struct{}) []gemini.Model {
 	if len(allowed) == 0 {
 		return models

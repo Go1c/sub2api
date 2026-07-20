@@ -1089,17 +1089,6 @@ const (
 	defaultWebSearchPricePerCall = 0.01
 )
 
-func imagePriceConfigFromGroup(group *Group) *ImagePriceConfig {
-	if group == nil {
-		return nil
-	}
-	return &ImagePriceConfig{
-		Price1K: group.ImagePrice1K,
-		Price2K: group.ImagePrice2K,
-		Price4K: group.ImagePrice4K,
-	}
-}
-
 func normalizeImageBillingTier(imageSize string) string {
 	switch strings.ToUpper(strings.TrimSpace(imageSize)) {
 	case "1K":
@@ -1110,22 +1099,6 @@ func normalizeImageBillingTier(imageSize string) string {
 		return "4K"
 	default:
 		return normalizeOpenAIImageSizeTier(imageSize)
-	}
-}
-
-func imagePriceConfigHasTierPrice(groupConfig *ImagePriceConfig, imageSize string) bool {
-	if groupConfig == nil {
-		return false
-	}
-	switch normalizeImageBillingTier(imageSize) {
-	case "1K":
-		return groupConfig.Price1K != nil
-	case "2K":
-		return groupConfig.Price2K != nil
-	case "4K":
-		return groupConfig.Price4K != nil
-	default:
-		return false
 	}
 }
 

@@ -131,23 +131,23 @@ type SystemSettings struct {
 	GoogleOAuthRedirectURL            string
 	GoogleOAuthFrontendRedirectURL    string
 
-	SiteName                    string
-	SiteLogo                    string
-	SiteSubtitle                string
-	APIBaseURL                  string
-	ContactInfo                 string
-	ContactChannels             string
-	SupportChatEnabled          bool
-	SupportChatGatewayURL       string
-	SupportChatTitle            string
-	SupportChatWelcomeMessage   string
-	SupportChatOfficialContactText string
-	SupportChatOfficialContactURL  string
-	DocURL                      string
-	SitePages                   string // JSON array of public site pages
-	HomeContent                 string
-	HideCcsImportButton         bool
-	FrontendLocales             []string
+	SiteName                               string
+	SiteLogo                               string
+	SiteSubtitle                           string
+	APIBaseURL                             string
+	ContactInfo                            string
+	ContactChannels                        string
+	SupportChatEnabled                     bool
+	SupportChatGatewayURL                  string
+	SupportChatTitle                       string
+	SupportChatWelcomeMessage              string
+	SupportChatOfficialContactText         string
+	SupportChatOfficialContactURL          string
+	DocURL                                 string
+	SitePages                              string // JSON array of public site pages
+	HomeContent                            string
+	HideCcsImportButton                    bool
+	FrontendLocales                        []string
 	CCSwitchDefaultModelAnthropic          string
 	CCSwitchDefaultModelOpenAI             string
 	CCSwitchDefaultModelGemini             string
@@ -165,30 +165,30 @@ type SystemSettings struct {
 	CustomMenuItems                        string // JSON array of custom menu items
 	CustomEndpoints                        string // JSON array of custom endpoints
 
-	DefaultConcurrency           int
-	DefaultBalance               float64
-	RiskControlEnabled           bool
+	DefaultConcurrency                int
+	DefaultBalance                    float64
+	RiskControlEnabled                bool
 	SiteMessagesEnabled               bool
 	SiteMessagesDailySendLimit        int
 	SiteMessagesRetentionDays         int
 	SiteMessagesDefaultRecipientEmail string
-	CyberSessionBlockEnabled     bool
-	CyberSessionBlockTTLSeconds  int
-	AffiliateEnabled             bool
-	AffiliateRebateRate          float64
-	AffiliateRebateTiers         []AffiliateRebateTier
-	AffiliateRebateFreezeHours   int
-	AffiliateRebateDurationDays  int
-	AffiliateRebatePerInviteeCap float64
-	AffiliateSignupBonusEnabled  bool
-	AffiliateSignupBonusAmount   float64
-	AffiliateSignupBonusTotalCap float64
-	AffiliateSignupBonusDailyCap float64
-	BalanceUsageGateEnabled      bool
-	BalanceUsageGateMinBalance   float64
-	BalanceUsageGateMinRecharge  float64
-	DefaultUserRPMLimit          int
-	DefaultSubscriptions         []DefaultSubscriptionSetting
+	CyberSessionBlockEnabled          bool
+	CyberSessionBlockTTLSeconds       int
+	AffiliateEnabled                  bool
+	AffiliateRebateRate               float64
+	AffiliateRebateTiers              []AffiliateRebateTier
+	AffiliateRebateFreezeHours        int
+	AffiliateRebateDurationDays       int
+	AffiliateRebatePerInviteeCap      float64
+	AffiliateSignupBonusEnabled       bool
+	AffiliateSignupBonusAmount        float64
+	AffiliateSignupBonusTotalCap      float64
+	AffiliateSignupBonusDailyCap      float64
+	BalanceUsageGateEnabled           bool
+	BalanceUsageGateMinBalance        float64
+	BalanceUsageGateMinRecharge       float64
+	DefaultUserRPMLimit               int
+	DefaultSubscriptions              []DefaultSubscriptionSetting
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -306,45 +306,45 @@ type DefaultSubscriptionSetting struct {
 }
 
 type PublicSettings struct {
-	RegistrationEnabled              bool
-	EmailVerifyEnabled               bool
-	ForceEmailOnThirdPartySignup     bool
-	RegistrationEmailSuffixWhitelist []string
-	PromoCodeEnabled                 bool
-	PasswordResetEnabled             bool
-	InvitationCodeEnabled            bool
-	InvitationRegistrationMode       string
-	TotpEnabled                      bool // TOTP 双因素认证
-	LoginAgreementEnabled            bool
-	LoginAgreementMode               string
-	LoginAgreementUpdatedAt          string
-	LoginAgreementRevision           string
-	LoginAgreementDocuments          []LoginAgreementDocument
-	TurnstileEnabled                 bool
-	TurnstileSiteKey                 string
-	SiteName                         string
-	SiteLogo                         string
-	SiteSubtitle                     string
-	APIBaseURL                       string
-	ContactInfo                      string
-	ContactChannels                  string
-	SupportChatEnabled               bool
-	SupportChatGatewayURL            string
-	SupportChatTitle                 string
-	SupportChatWelcomeMessage        string
-	SupportChatOfficialContactText   string
-	SupportChatOfficialContactURL    string
-	DocURL                           string
-	SitePages                        string // JSON array of public site pages
-	HomeContent                      string
-	HideCcsImportButton              bool
-	FrontendLocales                  []string
+	RegistrationEnabled                   bool
+	EmailVerifyEnabled                    bool
+	ForceEmailOnThirdPartySignup          bool
+	RegistrationEmailSuffixWhitelist      []string
+	PromoCodeEnabled                      bool
+	PasswordResetEnabled                  bool
+	InvitationCodeEnabled                 bool
+	InvitationRegistrationMode            string
+	TotpEnabled                           bool // TOTP 双因素认证
+	LoginAgreementEnabled                 bool
+	LoginAgreementMode                    string
+	LoginAgreementUpdatedAt               string
+	LoginAgreementRevision                string
+	LoginAgreementDocuments               []LoginAgreementDocument
+	TurnstileEnabled                      bool
+	TurnstileSiteKey                      string
+	SiteName                              string
+	SiteLogo                              string
+	SiteSubtitle                          string
+	APIBaseURL                            string
+	ContactInfo                           string
+	ContactChannels                       string
+	SupportChatEnabled                    bool
+	SupportChatGatewayURL                 string
+	SupportChatTitle                      string
+	SupportChatWelcomeMessage             string
+	SupportChatOfficialContactText        string
+	SupportChatOfficialContactURL         string
+	DocURL                                string
+	SitePages                             string // JSON array of public site pages
+	HomeContent                           string
+	HideCcsImportButton                   bool
+	FrontendLocales                       []string
 	CCSwitchDefaultModelAnthropic         string
 	CCSwitchDefaultModelOpenAI            string
 	CCSwitchDefaultModelGemini            string
 	CCSwitchDefaultModelAntigravity       string
 	CCSwitchDefaultModelAntigravityGemini string
-	UserSubscriptionsVisible         bool
+	UserSubscriptionsVisible              bool
 
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string

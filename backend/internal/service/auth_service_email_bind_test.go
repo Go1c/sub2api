@@ -828,7 +828,9 @@ func (s *emailBindUserRepoStub) BatchAddConcurrency(context.Context, []int64, in
 	return 0, nil
 }
 
-func (s *emailBindUserRepoStub) BatchUpdateLimits(context.Context, []int64, *int, *int) (int, error) { return 0, nil }
+func (s *emailBindUserRepoStub) BatchUpdateLimits(context.Context, []int64, *int, *int) (int, error) {
+	return 0, nil
+}
 
 func (s *emailBindUserRepoStub) RemoveGroupFromAllowedGroups(context.Context, int64) (int64, error) {
 	return 0, nil
