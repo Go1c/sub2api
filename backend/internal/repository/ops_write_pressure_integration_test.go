@@ -57,7 +57,13 @@ func TestEnqueueSchedulerOutbox_DeduplicatesIdempotentEvents(t *testing.T) {
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM scheduler_outbox WHERE event_type = $1", service.SchedulerOutboxEventAccountChanged).Scan(&count))
 	require.Equal(t, 1, count)
 
-	time.Sleep(schedulerOutboxDedupWindow + 150*time.Millisecond)
+	// Dedup is key-based for pending rows (ON CONFLICT DO NOTHING), not a time window.
+	// After the poller releases dedup_key, a later identical event may be enqueued again.
+	_, err := integrationDB.ExecContext(ctx,
+		`UPDATE scheduler_outbox SET dedup_key = NULL WHERE event_type = $1`,
+		service.SchedulerOutboxEventAccountChanged,
+	)
+	require.NoError(t, err)
 	require.NoError(t, enqueueSchedulerOutbox(ctx, integrationDB, service.SchedulerOutboxEventAccountChanged, &accountID, nil, nil))
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM scheduler_outbox WHERE event_type = $1", service.SchedulerOutboxEventAccountChanged).Scan(&count))
 	require.Equal(t, 2, count)

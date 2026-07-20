@@ -2488,6 +2488,11 @@ export default {
         hint: 'Triggered only when upstream explicitly returns prompt too long. Leave empty to disable fallback.',
         noFallback: 'No Fallback'
       },
+      exhaustedAccountsFallback: {
+        title: 'Fallback when all accounts unavailable',
+        noFallback: 'None',
+        hint: 'If every account in this group is unavailable, retry with a same-platform fallback group (fallback groups cannot nest this setting)',
+      },
       copyAccounts: {
         title: 'Copy Accounts from Groups',
         tooltip: 'Select one or more groups of the same platform. After creation, all accounts from these groups will be automatically bound to the new group (deduplicated).',

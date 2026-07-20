@@ -82,14 +82,9 @@ func TestReadOpenAIWSClientMessage_ControlCloseFrames(t *testing.T) {
 				cancelControl(tt.cancelCause)
 			}
 
-			readCtx, cancelRead := context.WithTimeout(context.Background(), time.Second)
-			_, _, err = clientConn.Read(readCtx)
-			cancelRead()
-			var clientClose coderws.CloseError
-			require.ErrorAs(t, err, &clientClose)
-			require.Equal(t, tt.wantStatus, clientClose.Code)
-			require.Equal(t, tt.wantReason, clientClose.Reason)
-
+			// Server force-closes without waiting for a peer handshake so leases
+			// release promptly when the client is idle. Client-side close codes
+			// are therefore not guaranteed; assert the server control error.
 			select {
 			case serverErr := <-serverResult:
 				var closeErr *OpenAIWSClientCloseError
@@ -97,8 +92,13 @@ func TestReadOpenAIWSClientMessage_ControlCloseFrames(t *testing.T) {
 				require.Equal(t, tt.wantStatus, closeErr.StatusCode())
 				require.Equal(t, tt.wantReason, closeErr.Reason())
 			case <-time.After(time.Second):
-				t.Fatal("server read goroutine did not exit after close handshake")
+				t.Fatal("server read goroutine did not exit after forced close")
 			}
+
+			readCtx, cancelRead := context.WithTimeout(context.Background(), time.Second)
+			_, _, err = clientConn.Read(readCtx)
+			cancelRead()
+			require.Error(t, err, "client should observe a closed connection after server teardown")
 		})
 	}
 }
@@ -127,17 +127,19 @@ func TestReadOpenAIWSClientMessage_ParentCancellationStillJoinsRead(t *testing.T
 	defer func() { _ = clientConn.CloseNow() }()
 	<-readStarted
 	cancelControl(errors.New("server shutting down"))
-	readCtx, cancelRead := context.WithTimeout(context.Background(), time.Second)
-	_, _, err = clientConn.Read(readCtx)
-	cancelRead()
-	var clientClose coderws.CloseError
-	require.ErrorAs(t, err, &clientClose)
-	require.Equal(t, coderws.StatusGoingAway, clientClose.Code)
-	require.Equal(t, "websocket request canceled", clientClose.Reason)
 
 	select {
-	case <-serverResult:
+	case serverErr := <-serverResult:
+		var closeErr *OpenAIWSClientCloseError
+		require.ErrorAs(t, serverErr, &closeErr)
+		require.Equal(t, coderws.StatusGoingAway, closeErr.StatusCode())
+		require.Equal(t, "websocket request canceled", closeErr.Reason())
 	case <-time.After(time.Second):
 		t.Fatal("server read goroutine leaked after parent cancellation")
 	}
+
+	readCtx, cancelRead := context.WithTimeout(context.Background(), time.Second)
+	_, _, err = clientConn.Read(readCtx)
+	cancelRead()
+	require.Error(t, err, "client should observe a closed connection after server teardown")
 }

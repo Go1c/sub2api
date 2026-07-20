@@ -122,9 +122,12 @@ type MethodLimits struct {
 	DisplayName string  `json:"display_name,omitempty"`
 	Currency    string  `json:"currency,omitempty"`
 	FeeRate     float64 `json:"fee_rate"`
-	DailyLimit  float64 `json:"daily_limit"`
-	SingleMin   float64 `json:"single_min"`
-	SingleMax   float64 `json:"single_max"`
+	// BalanceRechargeMultiplier is the effective credit multiplier for this
+	// method after aggregating enabled provider instances (falls back to global).
+	BalanceRechargeMultiplier float64 `json:"balance_recharge_multiplier,omitempty"`
+	DailyLimit                float64 `json:"daily_limit"`
+	SingleMin                 float64 `json:"single_min"`
+	SingleMax                 float64 `json:"single_max"`
 }
 
 // MethodLimitsResponse is the full response for the user-facing /limits API.
@@ -336,38 +339,45 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 			return infraerrors.BadRequest("INVALID_RECHARGE_FEE_RATE", "recharge fee rate allows at most 2 decimal places")
 		}
 	}
-	m := map[string]string{
-		SettingPaymentEnabled:                    formatBoolOrEmpty(req.Enabled),
-		SettingMinRechargeAmount:                 formatPositiveFloat(req.MinAmount),
-		SettingMaxRechargeAmount:                 formatPositiveFloat(req.MaxAmount),
-		SettingDailyRechargeLimit:                formatPositiveFloat(req.DailyLimit),
-		SettingOrderTimeoutMinutes:               formatPositiveInt(req.OrderTimeoutMin),
-		SettingMaxPendingOrders:                  formatPositiveInt(req.MaxPendingOrders),
-		SettingBalancePayDisabled:                formatBoolOrEmpty(req.BalanceDisabled),
-		SettingSubscriptionBalancePaymentEnabled: formatBoolOrEmpty(req.SubscriptionBalancePaymentEnabled),
-		SettingBalanceRechargeMult:               formatPositiveFloat(req.BalanceRechargeMultiplier),
-		SettingSubscriptionUSDToCNYRate:          formatPositiveFloatExact(req.SubscriptionUSDToCNYRate),
-		SettingRechargeFeeRate:                   formatNonNegativeFloat(req.RechargeFeeRate),
-		SettingLoadBalanceStrategy:               derefStr(req.LoadBalanceStrategy),
-		SettingProductNamePrefix:                 derefStr(req.ProductNamePrefix),
-		SettingProductNameSuffix:                 derefStr(req.ProductNameSuffix),
-		SettingHelpImageURL:                      derefStr(req.HelpImageURL),
-		SettingHelpText:                          derefStr(req.HelpText),
-		SettingCancelRateLimitOn:                 formatBoolOrEmpty(req.CancelRateLimitEnabled),
-		SettingCancelRateLimitMax:                formatPositiveInt(req.CancelRateLimitMax),
-		SettingCancelWindowSize:                  formatPositiveInt(req.CancelRateLimitWindow),
-		SettingCancelWindowUnit:                  derefStr(req.CancelRateLimitUnit),
-		SettingCancelWindowMode:                  derefStr(req.CancelRateLimitMode),
-		SettingAlipayForceQRCode:                 formatBoolOrEmpty(req.AlipayForceQRCode),
-		SettingPaymentVisibleMethodAlipaySource:  derefStr(req.VisibleMethodAlipaySource),
-		SettingPaymentVisibleMethodWxpaySource:   derefStr(req.VisibleMethodWxpaySource),
-		SettingPaymentVisibleMethodAlipayEnabled: formatBoolOrEmpty(req.VisibleMethodAlipayEnabled),
-		SettingPaymentVisibleMethodWxpayEnabled:  formatBoolOrEmpty(req.VisibleMethodWxpayEnabled),
+	// Patch-style update: only persist fields that were explicitly provided.
+	// Nil pointers must not overwrite existing settings with empty strings.
+	m := make(map[string]string)
+	setIfPresent := func(key, value string, present bool) {
+		if present {
+			m[key] = value
+		}
 	}
+	setIfPresent(SettingPaymentEnabled, formatBoolOrEmpty(req.Enabled), req.Enabled != nil)
+	setIfPresent(SettingMinRechargeAmount, formatPositiveFloat(req.MinAmount), req.MinAmount != nil)
+	setIfPresent(SettingMaxRechargeAmount, formatPositiveFloat(req.MaxAmount), req.MaxAmount != nil)
+	setIfPresent(SettingDailyRechargeLimit, formatPositiveFloat(req.DailyLimit), req.DailyLimit != nil)
+	setIfPresent(SettingOrderTimeoutMinutes, formatPositiveInt(req.OrderTimeoutMin), req.OrderTimeoutMin != nil)
+	setIfPresent(SettingMaxPendingOrders, formatPositiveInt(req.MaxPendingOrders), req.MaxPendingOrders != nil)
+	setIfPresent(SettingBalancePayDisabled, formatBoolOrEmpty(req.BalanceDisabled), req.BalanceDisabled != nil)
+	setIfPresent(SettingSubscriptionBalancePaymentEnabled, formatBoolOrEmpty(req.SubscriptionBalancePaymentEnabled), req.SubscriptionBalancePaymentEnabled != nil)
+	setIfPresent(SettingBalanceRechargeMult, formatPositiveFloat(req.BalanceRechargeMultiplier), req.BalanceRechargeMultiplier != nil)
+	setIfPresent(SettingSubscriptionUSDToCNYRate, formatPositiveFloatExact(req.SubscriptionUSDToCNYRate), req.SubscriptionUSDToCNYRate != nil)
+	setIfPresent(SettingRechargeFeeRate, formatNonNegativeFloat(req.RechargeFeeRate), req.RechargeFeeRate != nil)
+	setIfPresent(SettingLoadBalanceStrategy, derefStr(req.LoadBalanceStrategy), req.LoadBalanceStrategy != nil)
+	setIfPresent(SettingProductNamePrefix, derefStr(req.ProductNamePrefix), req.ProductNamePrefix != nil)
+	setIfPresent(SettingProductNameSuffix, derefStr(req.ProductNameSuffix), req.ProductNameSuffix != nil)
+	setIfPresent(SettingHelpImageURL, derefStr(req.HelpImageURL), req.HelpImageURL != nil)
+	setIfPresent(SettingHelpText, derefStr(req.HelpText), req.HelpText != nil)
+	setIfPresent(SettingCancelRateLimitOn, formatBoolOrEmpty(req.CancelRateLimitEnabled), req.CancelRateLimitEnabled != nil)
+	setIfPresent(SettingCancelRateLimitMax, formatPositiveInt(req.CancelRateLimitMax), req.CancelRateLimitMax != nil)
+	setIfPresent(SettingCancelWindowSize, formatPositiveInt(req.CancelRateLimitWindow), req.CancelRateLimitWindow != nil)
+	setIfPresent(SettingCancelWindowUnit, derefStr(req.CancelRateLimitUnit), req.CancelRateLimitUnit != nil)
+	setIfPresent(SettingCancelWindowMode, derefStr(req.CancelRateLimitMode), req.CancelRateLimitMode != nil)
+	setIfPresent(SettingAlipayForceQRCode, formatBoolOrEmpty(req.AlipayForceQRCode), req.AlipayForceQRCode != nil)
+	setIfPresent(SettingPaymentVisibleMethodAlipaySource, derefStr(req.VisibleMethodAlipaySource), req.VisibleMethodAlipaySource != nil)
+	setIfPresent(SettingPaymentVisibleMethodWxpaySource, derefStr(req.VisibleMethodWxpaySource), req.VisibleMethodWxpaySource != nil)
+	setIfPresent(SettingPaymentVisibleMethodAlipayEnabled, formatBoolOrEmpty(req.VisibleMethodAlipayEnabled), req.VisibleMethodAlipayEnabled != nil)
+	setIfPresent(SettingPaymentVisibleMethodWxpayEnabled, formatBoolOrEmpty(req.VisibleMethodWxpayEnabled), req.VisibleMethodWxpayEnabled != nil)
 	if req.EnabledTypes != nil {
 		m[SettingEnabledPaymentTypes] = strings.Join(req.EnabledTypes, ",")
-	} else {
-		m[SettingEnabledPaymentTypes] = ""
+	}
+	if len(m) == 0 {
+		return nil
 	}
 	return s.settingRepo.SetMultiple(ctx, m)
 }

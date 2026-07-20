@@ -8,14 +8,21 @@ import (
 	coderws "github.com/coder/websocket"
 )
 
+// openAIWSClientReadJoinTimeout bounds how long we wait for the concurrent
+// reader to exit after CloseNow aborts the transport.
+const openAIWSClientReadJoinTimeout = 500 * time.Millisecond
+
 type openAIWSClientReadResult struct {
 	messageType coderws.MessageType
 	payload     []byte
 	err         error
 }
 
-// ReadOpenAIWSClientMessage keeps one reader alive while control events send
-// their close frame, then closes the transport and joins that reader.
+// ReadOpenAIWSClientMessage keeps one reader alive until a control event forces
+// session teardown. Resource release must not wait for a full close handshake:
+// coder/websocket.Close can block for several seconds when the peer is not
+// reading, and once Close has marked the conn closing, CloseNow can no longer
+// force-drop the transport. Always force-close first, then join the reader.
 func ReadOpenAIWSClientMessage(
 	controlCtx context.Context,
 	conn *coderws.Conn,
@@ -32,6 +39,8 @@ func ReadOpenAIWSClientMessage(
 
 	readDone := make(chan openAIWSClientReadResult, 1)
 	go func() {
+		// Use Background so a short-lived parent cancel does not close the
+		// socket via setupReadTimeout before we decide how to tear down.
 		messageType, payload, err := conn.Read(context.Background())
 		readDone <- openAIWSClientReadResult{messageType: messageType, payload: payload, err: err}
 	}()
@@ -45,9 +54,14 @@ func ReadOpenAIWSClientMessage(
 	}
 
 	closeAndJoin := func(status coderws.StatusCode, reason string, cause error) (coderws.MessageType, []byte, error) {
-		_ = conn.Close(status, reason)
+		// Force-close the underlying transport immediately. Do not call
+		// conn.Close first: its handshake waits for a peer close frame and
+		// races the concurrent reader, delaying lease release by seconds.
 		_ = conn.CloseNow()
-		<-readDone
+		select {
+		case <-readDone:
+		case <-time.After(openAIWSClientReadJoinTimeout):
+		}
 		return 0, nil, NewOpenAIWSClientCloseError(status, reason, cause)
 	}
 

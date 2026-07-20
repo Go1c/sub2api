@@ -591,6 +591,14 @@ const visibleMethods = computed(() => getVisibleMethods(checkout.value.methods))
 const enabledMethods = computed(() => Object.keys(visibleMethods.value))
 const validAmount = computed(() => amount.value ?? 0)
 const balanceRechargeMultiplier = computed(() => {
+  // Prefer the selected recharge method's instance-level multiplier when available
+  // so the preview matches backend fulfillment (which uses the chosen instance).
+  const methodKey = selectedRechargeMethod.value
+  const selected = methodKey ? visibleMethods.value[methodKey] : undefined
+  const methodMultiplier = selected?.balance_recharge_multiplier
+  if (methodMultiplier && methodMultiplier > 0) {
+    return methodMultiplier
+  }
   const multiplier = checkout.value.balance_recharge_multiplier
   return multiplier > 0 ? multiplier : 1
 })

@@ -178,6 +178,12 @@ func TestExtractOutTradeNo(t *testing.T) {
 			rawBody:     "{}",
 			want:        "",
 		},
+		{
+			name:        "airwallex json payload",
+			providerKey: "airwallex",
+			rawBody:     `{"id":"evt_1","name":"payment_intent.succeeded","data":{"object":{"id":"int_1","merchant_order_id":"sub2_air_1","status":"SUCCEEDED"}}}`,
+			want:        "sub2_air_1",
+		},
 	}
 
 	for _, tt := range tests {

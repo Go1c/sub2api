@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -95,11 +96,10 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 	providers, err := h.paymentService.GetWebhookProviders(c.Request.Context(), providerKey, outTradeNo)
 	if err != nil {
 		slog.Warn("[Payment Webhook] provider not found", "provider", providerKey, "outTradeNo", outTradeNo, "error", err)
-		if providerKey == payment.TypeWxpay {
-			c.String(http.StatusBadRequest, "verify failed")
-			return
-		}
-		writeSuccessResponse(c, providerKey)
+		// Ambiguous multi-instance resolution or internal lookup errors must not
+		// be acked with 2xx — providers would stop retrying while orders stay unpaid.
+		// Only unknown-order after successful verification may be acked (below).
+		c.String(http.StatusBadRequest, "verify failed")
 		return
 	}
 
@@ -158,10 +158,31 @@ func extractOutTradeNo(rawBody, providerKey string) string {
 		if err == nil {
 			return values.Get("out_trade_no")
 		}
+	case payment.TypeAirwallex:
+		return extractAirwallexMerchantOrderID(rawBody)
 	}
-	// For other providers (Stripe, Airwallex, Alipay direct, WxPay direct), the registry
-	// typically has only one instance, so no instance lookup is needed.
+	// Stripe / WxPay may require multi-candidate verification without a pre-parsed order id.
 	return ""
+}
+
+// extractAirwallexMerchantOrderID best-effort parses Airwallex JSON webhooks before
+// signature verification so multi-instance deployments can pin the correct merchant.
+func extractAirwallexMerchantOrderID(rawBody string) string {
+	rawBody = strings.TrimSpace(rawBody)
+	if rawBody == "" {
+		return ""
+	}
+	var payload struct {
+		Data struct {
+			Object struct {
+				MerchantOrderID string `json:"merchant_order_id"`
+			} `json:"object"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(rawBody), &payload); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(payload.Data.Object.MerchantOrderID)
 }
 
 func verifyNotificationWithProviders(ctx context.Context, providers []payment.Provider, rawBody string, headers map[string]string) (string, *payment.PaymentNotification, error) {
