@@ -68,7 +68,8 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | T1b step-up 开关 | — | ✅ 已在 `origin/dev`（#4526 等价能力齐全，跳过） |
 | T1c ingress reject | `sync/t1c-ingress-reject-v0162` | ✅ PR #224 已合 `dev`；migration 915/916 |
 | T1c follow-up | `fix/usage-log-insert-placeholders` | ✅ PR #225 已合：usage_logs `$57/$58`、golangci baseline、integration suite 漂移 |
-| T1d 安全小补丁 | `sync/t1d-infra-v0162` | ✅ 本批已落地：image_storage 空默认 + compose/standalone 透传 SETUP/HTTP2/postgres 调优 env；**未**全量 port client-ip 头栈 / image_storage_settings 后台（冲突面大，另开） |
+| T1d 安全小补丁 | `sync/t1d-infra-v0162` | ✅ PR #226 已合：image_storage 空默认 + compose env 透传 |
+| T1d GitHub token | `sync/t1d-github-token-v0162` | 进行中：#4581 UPDATE_GITHUB_TOKEN for release checks（不恢复 deploy/README） |
 | T2/T3 | — | **不整包合**；first-parent 仍有大量与 wave2 重叠的网关/前端 PR，需按主题另开 |
 
 ### CI 基线债（全 PR 共有，不在本台账批次阻塞）
