@@ -185,6 +185,15 @@ services:
       nofile:
         soft: 100000
         hard: 100000
+    # Pass the tuning values documented in .env.example to postgres. Fallbacks
+    # are postgres stock defaults when variables are unset. Same keys as
+    # docker-compose.yml so docker-deploy.sh (which uses this file) honors them.
+    command: >
+      postgres
+      -c max_connections=${POSTGRES_MAX_CONNECTIONS:-100}
+      -c shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}
+      -c effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-4GB}
+      -c maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}
     volumes:
       # Local directory mapping for easy migration
       - ./postgres_data:/var/lib/postgresql/data

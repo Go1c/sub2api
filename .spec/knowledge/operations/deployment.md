@@ -116,8 +116,19 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 |------|---------|------|------|
 | **docker-compose.local.yml** | 本地目录（./data、./postgres_data、./redis_data） | ✅ 简单（整目录 tar） | 生产、需频繁备份/迁移 |
 | **docker-compose.yml** | 命名卷（/var/lib/docker/volumes/） | ⚠️ 需 docker 命令 | 简单部署、无需迁移 |
+| **docker-compose.dev.yml** | 本地目录（开发用） | ✅ | 本地开发 |
 
 **推荐**：使用 `docker-compose.local.yml`（即 `docker-deploy.sh` 部署的版本），数据管理与迁移更方便。
+
+#### 哪份 compose 会生效 / PG 调优键
+
+| 路径 | 谁用 | PG 调优 |
+|------|------|---------|
+| `docker-compose.local.yml` | **`docker-deploy.sh` 实际下载并启动的那份**（脚本内另存为 `docker-compose.yml`） | ✅ 读取 `.env` 中 `POSTGRES_MAX_CONNECTIONS` / `POSTGRES_SHARED_BUFFERS` / `POSTGRES_EFFECTIVE_CACHE_SIZE` / `POSTGRES_MAINTENANCE_WORK_MEM` |
+| `docker-compose.yml` | 手动 `docker compose -f docker-compose.yml` | ✅ 同上 |
+| `docker-compose.dev.yml` | 本地开发 | ✅ 同上 |
+
+调优键说明见 `deploy/.env.example`「PostgreSQL 服务端参数」一节。未设置时回落到 postgres 常见默认（`max_connections=100`、`shared_buffers=128MB` 等）。
 
 #### 生产 PG 与安装脚本（运维决策，2026-07-21）
 
@@ -126,7 +137,7 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 | **publish / 线上 PG** | 与仓库 `docker-compose*.yml` **脱钩**；可能是托管实例或 `deploy-service.sh` 编排。**未上机验证**（`SHOW max_connections` 等）。当前线上部署稳定 → **不上机改参、不在本仓库假设线上等于 compose**。需要时另开运维任务。 |
 | **`docker-deploy.sh` raw URL** | **保持**默认 `Wei-Shaw/sub2api/main/deploy`，**不改**指向 fork。一键安装跟上游；fork 侧 compose 改动（如 local PG 调优）请用仓库内 `deploy/` 或自行拷贝，勿依赖 raw 脚本自动同步。 |
 
-> 仓库内 compose 的 `POSTGRES_*` 接线说明见 PR #234（local/dev 与 yml 对齐）；该接线只影响用本仓库 compose 起的栈，不自动作用于已稳定的生产。
+> 仓库内 compose 的 `POSTGRES_*` 接线（local/dev 与 yml 对齐）只影响用本仓库 compose 起的栈，不自动作用于已稳定的生产。
 
 #### 自动初始化（Auto-Setup）原理
 
