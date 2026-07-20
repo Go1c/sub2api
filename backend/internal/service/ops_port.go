@@ -301,6 +301,13 @@ type OpsInsertErrorLogInput struct {
 
 	// 有效(未删除)key 报错时快照的 key 脱敏前缀(前 8 位)。
 	// 落库快照而非读时 JOIN:key 之后被删(key 列被 tombstone 覆盖)仍保留当时前缀。
+	// 已删除 key 归因（仅 INVALID_API_KEY 时有意义）
+	AttemptedKeyPrefix    string // 提交 key 的脱敏前缀(前 8 位)
+	DeletedKeyOwnerUserID *int64 // 反查命中的原所有者 user_id
+	DeletedKeyName        string // 反查命中的 key 名称
+
+	// 有效(未删除)key 报错时快照的 key 脱敏前缀(前 8 位);与 AttemptedKeyPrefix 互斥。
+	// 用于运维侧在错误详情中回显绑定密钥前缀。
 	APIKeyPrefix string
 }
 
