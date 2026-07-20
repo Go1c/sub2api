@@ -50,7 +50,6 @@ func (h *BatchImageHandler) Submit(c *gin.Context) {
 	c.JSON(http.StatusOK, got)
 }
 
-
 func (h *BatchImageHandler) checkSecurityAuditBeforeSubmit(c *gin.Context, req *service.BatchImageSubmitRequest) bool {
 	if h == nil || h.openAI == nil || req == nil {
 		return true

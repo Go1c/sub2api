@@ -329,4 +329,5 @@ func (m *opsRepoMock) DeleteExpiredUserRequestCaptures(ctx context.Context, now 
 	}
 	return 0, nil
 }
+
 var _ OpsRepository = (*opsRepoMock)(nil)

@@ -170,7 +170,6 @@ func (s *PaymentConfigService) pcInstancePaymentCurrency(inst *dbent.PaymentProv
 	return paymentProviderConfigCurrency(inst.ProviderKey, cfg)
 }
 
-
 type easyPayCustomMethodDisplayConfig struct {
 	Type        string `json:"type"`
 	DisplayName string `json:"displayName"`

@@ -762,7 +762,6 @@ func (s *OpsService) LookupDeletedKeyAudit(ctx context.Context, key string) (*De
 	return s.opsRepo.LookupDeletedKeyAudit(ctx, key)
 }
 
-
 func (s *OpsService) ListRetryAttemptsByErrorID(ctx context.Context, errorID int64, limit int) ([]*OpsRetryAttempt, error) {
 	if err := s.RequireMonitoringEnabled(ctx); err != nil {
 		return nil, err

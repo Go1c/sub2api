@@ -22,7 +22,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 const (
 	adminSettingsUpdateIdempotencyScope = "admin.settings.update"
 	adminSettingsUpdateDedupeTTL        = time.Minute
@@ -84,8 +83,8 @@ func (w *settingsUpdateResponseCapture) WriteString(data string) (int, error) {
 	w.size += n
 	return n, err
 }
-func (w *settingsUpdateResponseCapture) Status() int  { return w.status }
-func (w *settingsUpdateResponseCapture) Size() int    { return w.size }
+func (w *settingsUpdateResponseCapture) Status() int   { return w.status }
+func (w *settingsUpdateResponseCapture) Size() int     { return w.size }
 func (w *settingsUpdateResponseCapture) Written() bool { return w.written }
 
 func adminSettingsImplicitIdempotencyKey(actorScope string, req UpdateSettingsRequest) (string, error) {
@@ -448,7 +447,6 @@ type UpdateSettingsRequest struct {
 	AuthSourceGooglePlatformQuotas   map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_google_platform_quotas"`
 	AuthSourceDingTalkPlatformQuotas map[string]*service.DefaultPlatformQuotaSetting `json:"auth_source_default_dingtalk_platform_quotas"`
 
-
 	// Fork: contact channels + AI support chat
 	ContactChannels                *[]dto.ContactChannel `json:"contact_channels"`
 	SupportChatEnabled             bool                  `json:"support_chat_enabled"`
@@ -490,7 +488,7 @@ type UpdateSettingsRequest struct {
 	SiteMessagesDailySendLimit        *int    `json:"site_messages_daily_send_limit"`
 	SiteMessagesRetentionDays         *int    `json:"site_messages_retention_days"`
 	SiteMessagesDefaultRecipientEmail *string `json:"site_messages_default_recipient_email"`
-	AllowUserViewErrorRequests *bool `json:"allow_user_view_error_requests"`
+	AllowUserViewErrorRequests        *bool   `json:"allow_user_view_error_requests"`
 }
 
 // UpdateSettings 更新系统设置
@@ -1543,7 +1541,6 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		siteLogo = *req.SiteLogo
 	}
 
-	
 	// Fork fields: contact channels JSON
 	const maxContactChannels = 10
 	contactChannelsJSON := previousSettings.ContactChannels
@@ -1649,7 +1646,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		frontendLocales = req.FrontendLocales
 	}
 
-settings := &service.SystemSettings{
+	settings := &service.SystemSettings{
 		// 系统全局 platform quota 默认值（整体替换语义）
 		DefaultPlatformQuotas: req.DefaultPlatformQuotas,
 
@@ -2150,29 +2147,29 @@ settings := &service.SystemSettings{
 	// Skip if no payment fields were provided (prevents accidental wipe).
 	if h.paymentConfigService != nil && hasPaymentFields(req) {
 		paymentReq := service.UpdatePaymentConfigRequest{
-			Enabled:                   req.PaymentEnabled,
-			MinAmount:                 req.PaymentMinAmount,
-			MaxAmount:                 req.PaymentMaxAmount,
-			DailyLimit:                req.PaymentDailyLimit,
-			OrderTimeoutMin:           req.PaymentOrderTimeoutMin,
-			MaxPendingOrders:          req.PaymentMaxPendingOrders,
-			EnabledTypes:              req.PaymentEnabledTypes,
-			BalanceDisabled:           req.PaymentBalanceDisabled,
-		SubscriptionBalancePaymentEnabled: req.PaymentSubscriptionBalanceEnabled,
-			BalanceRechargeMultiplier: req.PaymentBalanceRechargeMultiplier,
-			SubscriptionUSDToCNYRate:  req.PaymentSubscriptionUSDToCNYRate,
-			RechargeFeeRate:           req.PaymentRechargeFeeRate,
-			LoadBalanceStrategy:       req.PaymentLoadBalanceStrat,
-			ProductNamePrefix:         req.PaymentProductNamePrefix,
-			ProductNameSuffix:         req.PaymentProductNameSuffix,
-			HelpImageURL:              req.PaymentHelpImageURL,
-			HelpText:                  req.PaymentHelpText,
-			CancelRateLimitEnabled:    req.PaymentCancelRateLimitEnabled,
-			CancelRateLimitMax:        req.PaymentCancelRateLimitMax,
-			CancelRateLimitWindow:     req.PaymentCancelRateLimitWindow,
-			CancelRateLimitUnit:       req.PaymentCancelRateLimitUnit,
-			CancelRateLimitMode:       req.PaymentCancelRateLimitMode,
-			AlipayForceQRCode:         req.PaymentAlipayForceQRCode,
+			Enabled:                           req.PaymentEnabled,
+			MinAmount:                         req.PaymentMinAmount,
+			MaxAmount:                         req.PaymentMaxAmount,
+			DailyLimit:                        req.PaymentDailyLimit,
+			OrderTimeoutMin:                   req.PaymentOrderTimeoutMin,
+			MaxPendingOrders:                  req.PaymentMaxPendingOrders,
+			EnabledTypes:                      req.PaymentEnabledTypes,
+			BalanceDisabled:                   req.PaymentBalanceDisabled,
+			SubscriptionBalancePaymentEnabled: req.PaymentSubscriptionBalanceEnabled,
+			BalanceRechargeMultiplier:         req.PaymentBalanceRechargeMultiplier,
+			SubscriptionUSDToCNYRate:          req.PaymentSubscriptionUSDToCNYRate,
+			RechargeFeeRate:                   req.PaymentRechargeFeeRate,
+			LoadBalanceStrategy:               req.PaymentLoadBalanceStrat,
+			ProductNamePrefix:                 req.PaymentProductNamePrefix,
+			ProductNameSuffix:                 req.PaymentProductNameSuffix,
+			HelpImageURL:                      req.PaymentHelpImageURL,
+			HelpText:                          req.PaymentHelpText,
+			CancelRateLimitEnabled:            req.PaymentCancelRateLimitEnabled,
+			CancelRateLimitMax:                req.PaymentCancelRateLimitMax,
+			CancelRateLimitWindow:             req.PaymentCancelRateLimitWindow,
+			CancelRateLimitUnit:               req.PaymentCancelRateLimitUnit,
+			CancelRateLimitMode:               req.PaymentCancelRateLimitMode,
+			AlipayForceQRCode:                 req.PaymentAlipayForceQRCode,
 		}
 		if err := h.paymentConfigService.UpdatePaymentConfig(c.Request.Context(), paymentReq); err != nil {
 			response.ErrorFrom(c, err)
@@ -2452,7 +2449,7 @@ settings := &service.SystemSettings{
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
 
-		AffiliateEnabled: updatedSettings.AffiliateEnabled,
+		AffiliateEnabled:             updatedSettings.AffiliateEnabled,
 		AffiliateSignupBonusEnabled:  updatedSettings.AffiliateSignupBonusEnabled,
 		AffiliateSignupBonusAmount:   updatedSettings.AffiliateSignupBonusAmount,
 		AffiliateSignupBonusTotalCap: updatedSettings.AffiliateSignupBonusTotalCap,
@@ -2461,14 +2458,14 @@ settings := &service.SystemSettings{
 		BalanceUsageGateMinBalance:   updatedSettings.BalanceUsageGateMinBalance,
 		BalanceUsageGateMinRecharge:  updatedSettings.BalanceUsageGateMinRecharge,
 
-		RiskControlEnabled:          updatedSettings.RiskControlEnabled,
+		RiskControlEnabled:                updatedSettings.RiskControlEnabled,
 		SiteMessagesEnabled:               updatedSettings.SiteMessagesEnabled,
 		SiteMessagesDailySendLimit:        updatedSettings.SiteMessagesDailySendLimit,
 		SiteMessagesRetentionDays:         updatedSettings.SiteMessagesRetentionDays,
 		SiteMessagesDefaultRecipientEmail: updatedSettings.SiteMessagesDefaultRecipientEmail,
-		CyberSessionBlockEnabled:    updatedSettings.CyberSessionBlockEnabled,
-		CyberSessionBlockTTLSeconds: updatedSettings.CyberSessionBlockTTLSeconds,
-		AllowUserViewErrorRequests:  updatedSettings.AllowUserViewErrorRequests,
+		CyberSessionBlockEnabled:          updatedSettings.CyberSessionBlockEnabled,
+		CyberSessionBlockTTLSeconds:       updatedSettings.CyberSessionBlockTTLSeconds,
+		AllowUserViewErrorRequests:        updatedSettings.AllowUserViewErrorRequests,
 	}
 	if fastPolicy, err := h.settingService.GetOpenAIFastPolicySettings(c.Request.Context()); err != nil {
 		slog.Error("openai_fast_policy_settings_get_failed", "error", err)

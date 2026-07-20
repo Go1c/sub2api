@@ -16,13 +16,6 @@ func (h *GatewayHandler) captureClientRequest(c *gin.Context, model string, body
 	captureClientRequest(h.userRequestMonitorService, c, model, body, len(body))
 }
 
-func (h *OpenAIGatewayHandler) captureClientRequest(c *gin.Context, model string, body []byte) {
-	if h == nil {
-		return
-	}
-	captureClientRequest(h.userRequestMonitorService, c, model, body, len(body))
-}
-
 func (h *OpenAIGatewayHandler) captureClientRequestWithBytes(c *gin.Context, model string, body []byte, bodyBytes int) {
 	if h == nil {
 		return

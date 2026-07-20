@@ -957,14 +957,14 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		DefaultMappedModel:              g.DefaultMappedModel,
 		MessagesDispatchModelConfig:     g.MessagesDispatchModelConfig,
 		ModelsListConfig:                g.ModelsListConfig,
-		RPMLimit:                  g.RpmLimit,
-		ExposeUpstreamModelToUser: g.ExposeUpstreamModelToUser,
-		PeakRateEnabled:           g.PeakRateEnabled,
-		PeakStart:                 g.PeakStart,
-		PeakEnd:                   g.PeakEnd,
-		PeakRateMultiplier:        g.PeakRateMultiplier,
-		CreatedAt:                 g.CreatedAt,
-		UpdatedAt:                 g.UpdatedAt,
+		RPMLimit:                        g.RpmLimit,
+		ExposeUpstreamModelToUser:       g.ExposeUpstreamModelToUser,
+		PeakRateEnabled:                 g.PeakRateEnabled,
+		PeakStart:                       g.PeakStart,
+		PeakEnd:                         g.PeakEnd,
+		PeakRateMultiplier:              g.PeakRateMultiplier,
+		CreatedAt:                       g.CreatedAt,
+		UpdatedAt:                       g.UpdatedAt,
 	}
 }
 

@@ -47,23 +47,23 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
-	adminService            service.AdminService
-	oauthService            *service.OAuthService
-	openaiOAuthService      *service.OpenAIOAuthService
-	geminiOAuthService      *service.GeminiOAuthService
-	antigravityOAuthService *service.AntigravityOAuthService
-	grokOAuthService        service.GrokOAuthTokenService
-	rateLimitService        *service.RateLimitService
-	accountUsageService     *service.AccountUsageService
-	accountTestService      *service.AccountTestService
-	concurrencyService      *service.ConcurrencyService
-	crsSyncService          *service.CRSSyncService
-	sessionLimitCache       service.SessionLimitCache
-	rpmCache                service.RPMCache
-	tokenCacheInvalidator       service.TokenCacheInvalidator
-	grokImportProber            grokUsageProber
-	accountErrorHistoryService  *service.AccountErrorHistoryService
-	upstreamBillingProbe        *service.UpstreamBillingProbeService
+	adminService               service.AdminService
+	oauthService               *service.OAuthService
+	openaiOAuthService         *service.OpenAIOAuthService
+	geminiOAuthService         *service.GeminiOAuthService
+	antigravityOAuthService    *service.AntigravityOAuthService
+	grokOAuthService           service.GrokOAuthTokenService
+	rateLimitService           *service.RateLimitService
+	accountUsageService        *service.AccountUsageService
+	accountTestService         *service.AccountTestService
+	concurrencyService         *service.ConcurrencyService
+	crsSyncService             *service.CRSSyncService
+	sessionLimitCache          service.SessionLimitCache
+	rpmCache                   service.RPMCache
+	tokenCacheInvalidator      service.TokenCacheInvalidator
+	grokImportProber           grokUsageProber
+	accountErrorHistoryService *service.AccountErrorHistoryService
+	upstreamBillingProbe       *service.UpstreamBillingProbeService
 }
 
 // SetUpstreamBillingProbeService attaches the optional remote billing probe service.
@@ -90,21 +90,21 @@ func NewAccountHandler(
 	accountErrorHistoryService *service.AccountErrorHistoryService,
 ) *AccountHandler {
 	return &AccountHandler{
-		adminService:            adminService,
-		oauthService:            oauthService,
-		openaiOAuthService:      openaiOAuthService,
-		geminiOAuthService:      geminiOAuthService,
-		antigravityOAuthService: antigravityOAuthService,
-		grokOAuthService:        grokOAuthService,
-		rateLimitService:        rateLimitService,
-		accountUsageService:     accountUsageService,
-		accountTestService:      accountTestService,
-		concurrencyService:      concurrencyService,
-		crsSyncService:          crsSyncService,
-		sessionLimitCache:       sessionLimitCache,
-		rpmCache:                rpmCache,
-		tokenCacheInvalidator:       tokenCacheInvalidator,
-		accountErrorHistoryService:  accountErrorHistoryService,
+		adminService:               adminService,
+		oauthService:               oauthService,
+		openaiOAuthService:         openaiOAuthService,
+		geminiOAuthService:         geminiOAuthService,
+		antigravityOAuthService:    antigravityOAuthService,
+		grokOAuthService:           grokOAuthService,
+		rateLimitService:           rateLimitService,
+		accountUsageService:        accountUsageService,
+		accountTestService:         accountTestService,
+		concurrencyService:         concurrencyService,
+		crsSyncService:             crsSyncService,
+		sessionLimitCache:          sessionLimitCache,
+		rpmCache:                   rpmCache,
+		tokenCacheInvalidator:      tokenCacheInvalidator,
+		accountErrorHistoryService: accountErrorHistoryService,
 	}
 }
 
@@ -1467,7 +1467,6 @@ func (h *AccountHandler) GetStats(c *gin.Context) {
 
 	response.Success(c, stats)
 }
-
 
 // accountErrorHistoryItemResponse 单条账号错误历史的响应 DTO（snake_case）。
 // nullable 字段无值时序列化为 null。

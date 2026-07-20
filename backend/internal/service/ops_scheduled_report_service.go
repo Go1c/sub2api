@@ -353,7 +353,6 @@ func (s *OpsScheduledReportService) runReport(ctx context.Context, report *opsSc
 	return attempts, nil
 }
 
-
 func opsScheduledReportDeliverySourceID(report *opsScheduledReport) string {
 	if report == nil {
 		return "scheduled_report"

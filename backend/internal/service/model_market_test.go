@@ -255,9 +255,9 @@ func TestModelMarket_AutoSyncAppliesConfiguredBillingOverrides(t *testing.T) {
 				Status:   StatusActive,
 				Credentials: map[string]any{
 					"model_mapping": map[string]any{
-						"gpt-image": "gpt-image",
+						"gpt-image":  "gpt-image",
 						"gpt-manual": "gpt-manual",
-						"gpt-once":  "gpt-once",
+						"gpt-once":   "gpt-once",
 					},
 				},
 			},
