@@ -64,9 +64,9 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | 批次 | 分支 | 状态 |
 |---|---|---|
 | 评估 + main sync | — | ✅ `origin/main` = `upstream/main` = `e625ce3b3` |
-| T1a 小安全 | `sync/t1-security-v0162` | ✅ #4565 prompt-audit fail-closed + #4638 S3 ephemeral key（backup only；image_storage 待 T1d） |
+| T1a 小安全 | `sync/t1-security-v0162` | ✅ 已合 PR #223 |
 | T1b step-up 开关 | — | ✅ 已在 `origin/dev`（#4526 等价能力齐全，跳过） |
-| T1c ingress reject | 待开 / 后续 PR | 待（#4515 约 206 文件，含 migration 重编号） |
+| T1c ingress reject | `sync/t1c-ingress-reject-v0162` | ✅ PR #224（rebase 后合入）；migration 183/184→915/916；已恢复 3 个上游测试 |
 | T2/T3 | 待开 | 待 |
 
 ## 验收门槛（每批 PR）
@@ -76,3 +76,27 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 - 涉及 integration 源码：`go vet -tags integration ./...`
 - 涉及 frontend：`cd frontend && pnpm typecheck && pnpm build`
 - PR：`gh pr create --repo Go1c/sub2api --base dev`
+
+
+## T1c 冲突处理纪要
+
+### 已按「并集」处理（非漏合历史）
+
+| 区域 | 决策 |
+|---|---|
+| API key auth | 保留 fork 中文余额不足文案 + 上游 header 尺寸/ingress Mark |
+| API key errors | 保留 fork `ErrFallbackKeyInvalid` + 上游 `ErrAPIKeyAuthOverloaded` |
+| Ops port/models/service | 保留 fork `LookupDeletedKeyAudit` / retry / request-body queue 路径；并入上游 runtime settings / queue body bounds / ingress aggregator 依赖 |
+| Ops cleanup | 同时清理 `ops_retry_attempts` 与 `ops_ingress_reject_aggregates` |
+| wire / wire_gen | 保留 fork 用户请求监控等 cleanup；并入 ingress/outbox/runtime refresh 生命周期 |
+| migration | `183/184` → `915/916`（fork 编号空间） |
+
+### 产品确认（已定）
+
+| 项 | 结论 |
+|---|---|
+| `IgnoreInvalidApiKeyErrors` 强制 true | 接受（跟上游） |
+| Ops 详情 `api_key_prefix` | 保留 |
+| 恢复 3 个上游测试文件 | 已恢复并合入本 PR |
+| `deploy/README.md` | 不恢复；保留 `EDGE_SECURITY.md` |
+| 合并顺序 | #222 → #223 → #224（用户授权全部合入） |
