@@ -311,6 +311,18 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		return nil, err
 	}
 	requestInfo := ParseGrokMediaRequest(contentType, body)
+	upstreamModel := requestInfo.Model
+	if endpoint.RequiresRequestBody() && gjson.ValidBytes(body) {
+		if mappedModel := strings.TrimSpace(account.GetMappedModel(requestInfo.Model)); mappedModel != "" {
+			upstreamModel = mappedModel
+		}
+		if upstreamModel != requestInfo.Model {
+			body, err = sjson.SetBytes(body, "model", upstreamModel)
+			if err != nil {
+				return nil, fmt.Errorf("rewrite grok media account mapped model: %w", err)
+			}
+		}
+	}
 	body, contentType, err = sanitizeGrokMediaForwardBody(endpoint, body, contentType)
 	if err != nil {
 		return nil, err
@@ -364,6 +376,16 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if err != nil {
 		return nil, err
 	}
+	if endpoint == GrokMediaEndpointImagesGenerations || endpoint == GrokMediaEndpointImagesEdits {
+		if countOpenAIResponseImageOutputsFromJSONBytes(respBody) <= 0 {
+			setOpsUpstreamError(c, http.StatusBadGateway, "xAI upstream returned no image output", truncateString(string(respBody), 512))
+			return nil, &UpstreamFailoverError{
+				StatusCode:      http.StatusBadGateway,
+				ResponseBody:    respBody,
+				ResponseHeaders: resp.Header.Clone(),
+			}
+		}
+	}
 	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
 	usage := grokMediaUsageFromResponse(endpoint, requestInfo, respBody)
 	return &OpenAIForwardResult{
@@ -372,7 +394,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		Usage:                usage.Usage,
 		Model:                requestModel,
 		BillingModel:         requestModel,
-		UpstreamModel:        requestModel,
+		UpstreamModel:        upstreamModel,
 		ResponseHeaders:      resp.Header.Clone(),
 		Duration:             time.Since(startTime),
 		ImageCount:           usage.ImageCount,
@@ -470,7 +492,7 @@ func normalizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, cont
 		return nil, "", err
 	}
 	info := ParseGrokMediaRequest(contentType, body)
-	upstreamModel := normalizeGrokMediaModelForEndpoint(endpoint, info.Model, info.HasInputImage())
+	upstreamModel := NormalizeGrokMediaModelForEndpoint(endpoint, info.Model, info.HasInputImage())
 	if upstreamModel == "" || upstreamModel == info.Model {
 		return body, contentType, nil
 	}
@@ -552,7 +574,9 @@ func (r GrokMediaRequestInfo) HasInputImage() bool {
 	return len(r.InputImageURLs) > 0 || len(r.Uploads) > 0
 }
 
-func normalizeGrokMediaModelForEndpoint(endpoint GrokMediaEndpoint, model string, hasInputImage bool) string {
+// NormalizeGrokMediaModelForEndpoint resolves the built-in upstream model alias
+// for a media endpoint before account-level model mapping and scheduling.
+func NormalizeGrokMediaModelForEndpoint(endpoint GrokMediaEndpoint, model string, hasInputImage bool) string {
 	model = strings.TrimSpace(model)
 	switch endpoint {
 	case GrokMediaEndpointImagesGenerations, GrokMediaEndpointImagesEdits:
@@ -584,14 +608,7 @@ func grokMediaUsageFromResponse(endpoint GrokMediaEndpoint, requestInfo GrokMedi
 	meta := grokMediaUsageMetadata{Usage: usage}
 	switch endpoint {
 	case GrokMediaEndpointImagesGenerations, GrokMediaEndpointImagesEdits:
-		imageCount := countOpenAIResponseImageOutputsFromJSONBytes(responseBody)
-		if imageCount <= 0 {
-			imageCount = requestInfo.N
-		}
-		if imageCount <= 0 {
-			imageCount = 1
-		}
-		meta.ImageCount = imageCount
+		meta.ImageCount = countOpenAIResponseImageOutputsFromJSONBytes(responseBody)
 		meta.ImageSize = requestInfo.SizeTier
 		meta.ImageInputSize = requestInfo.Size
 		meta.ImageOutputSizes = collectOpenAIResponseImageOutputSizesFromJSONBytes(responseBody)
