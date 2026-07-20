@@ -4,7 +4,7 @@ description: main 同步至 v0.1.162 后，将 0.1.160→0.1.162 增量分主题
 metadata:
   type: record
   date: 2026-07-20
-  status: 进行中
+  status: T1 安全/收尾批次完成；T2/T3 按主题另开
 ---
 
 # Upstream Sync 台账 — 2026-07-20 (v0.1.162)
@@ -33,13 +33,13 @@ metadata:
 | T3 计费/订阅展示 | 5 | plan currency symbol、renew expired、validity label、antigravity plan_type、balance modal |
 | CHORE / OTHER | 10 | VERSION、sponsors、杂项修复 |
 
-## 关键新能力（dev 上尚缺）
+## 关键新能力（dev 状态）
 
-- `ingress_reject` 中间件 + ops 聚合 + cleanup CLI
-- `auth_cache_invalidation_outbox`（migration + service + repo）
-- `invalid_auth_abuse_limiter`
-- `image_storage_settings` / env 可达性
-- branding SVG logo helpers、`batchImage` i18n 拆分等
+- ✅ `ingress_reject` + auth abuse + auth cache outbox（#224）
+- ⚠️ `image_storage`：已有 S3 实现；**后台 `image_storage_settings` 服务/UI 全量 port 仍缺**；本批只补 env 空默认
+- ⚠️ client-ip 自定义 CDN 头 / `ForwardedClientIPHeaders` 全量 port 仍缺（与 fork IP 栈深度交织）
+- ⚠️ branding SVG / batchImage i18n 等前端：按 T2 另开
+- ⚠️ T2 网关大量 first-parent 落点与 wave2 重叠，**禁止**整包 merge main→dev
 
 ## Migration 编号映射
 
@@ -66,8 +66,14 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | 评估 + main sync | — | ✅ `origin/main` = `upstream/main` = `e625ce3b3` |
 | T1a 小安全 | `sync/t1-security-v0162` | ✅ 已合 PR #223 |
 | T1b step-up 开关 | — | ✅ 已在 `origin/dev`（#4526 等价能力齐全，跳过） |
-| T1c ingress reject | `sync/t1c-ingress-reject-v0162` | ✅ PR #224（rebase 后合入）；migration 183/184→915/916；已恢复 3 个上游测试 |
-| T2/T3 | 待开 | 待 |
+| T1c ingress reject | `sync/t1c-ingress-reject-v0162` | ✅ PR #224 已合 `dev`；migration 915/916 |
+| T1c follow-up | `fix/usage-log-insert-placeholders` | ✅ PR #225 已合：usage_logs `$57/$58`、golangci baseline、integration suite 漂移 |
+| T1d 安全小补丁 | `sync/t1d-infra-v0162` | ✅ 本批已落地：image_storage 空默认 + compose/standalone 透传 SETUP/HTTP2/postgres 调优 env；**未**全量 port client-ip 头栈 / image_storage_settings 后台（冲突面大，另开） |
+| T2/T3 | — | **不整包合**；first-parent 仍有大量与 wave2 重叠的网关/前端 PR，需按主题另开 |
+
+### CI 基线债（全 PR 共有，不在本台账批次阻塞）
+- `backend-security` govulncheck：S3 SDK / crypto/tls 调用图（#222/#223/#224/#225 均红）
+
 
 ## 验收门槛（每批 PR）
 
