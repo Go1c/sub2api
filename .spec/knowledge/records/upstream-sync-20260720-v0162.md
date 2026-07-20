@@ -71,8 +71,18 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | T1d 安全小补丁 | `sync/t1d-infra-v0162` | ✅ PR #226 已合：image_storage 空默认 + compose env 透传 |
 | T1d GitHub token | `sync/t1d-github-token-v0162` | ✅ PR #227 已合：UPDATE_GITHUB_TOKEN |
 | T2 小修复批 | `sync/t2-small-fixes-v0162` | ✅ PR #228 已合 |
-| T2 网关修复批 | `sync/t2-gateway-fixes-v0162` | 进行中：Codex models 401 下线、Anthropic stop_reason null、WS HTTP bridge failover、OpenAI quota 错误形态、Responses SSE/image intent、Grok 手动测试调度门 |
+| T2 网关修复批 | `sync/t2-gateway-fixes-v0162` | ✅ PR #229 已合：Codex models 401 下线、Anthropic stop_reason null、WS HTTP bridge failover、OpenAI quota 错误形态、Responses SSE/image intent、Grok 手动测试调度门 |
+| T2 杂项批 | `sync/t2-misc-v0162` | 进行中：sticky 同账号重试不计缓存、Codex list envelope、Claude `[1m]` 后缀、channels 滚动、balance modal dark、system update detach（fork 形态）、redis compose 续行、i18n 硬编码 |
 | T2/T3 | — | **不整包合**；first-parent 仍有大量与 wave2 重叠的网关/前端 PR，需按主题另开 |
+
+### T2 misc 冲突 / 适配纪要
+
+| 项 | 决策 |
+|---|---|
+| system update detach | 只 port `systemUpdateContext` + PerformUpdate 解耦 + 前端 update 15min timeout；**不**引入 main 的 `RollbackToVersion` / already-up-to-date / interface 抽象（fork 无该能力） |
+| system_handler_test.go | fork 无此测试文件 → 不恢复 |
+| redis local volume | 保留 fork `./redis_data:/data`（无 `:Z`）；只合 command 行续 `\` |
+| plan currency / Trae / grok video / branding SVG / dark palette 全量 | 仍跳过（深度冲突或 fork 产品差异） |
 
 ### CI 基线债（全 PR 共有，不在本台账批次阻塞）
 - `backend-security` govulncheck：S3 SDK / crypto/tls 调用图（#222/#223/#224/#225 均红）
