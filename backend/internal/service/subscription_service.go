@@ -518,6 +518,30 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 		if getErr != nil {
 			return nil, false, getErr
 		}
+		// Admin re-assign of an already-expired row should open a fresh term
+		// instead of idempotently returning the dead subscription (#4541 / #4532).
+		// Suspended subscriptions are left alone — operators must unsuspend
+		// explicitly; do not treat them as reusable or auto-renewed.
+		now := time.Now()
+		if sub.Status == SubscriptionStatusExpired ||
+			(sub.Status != SubscriptionStatusSuspended && !sub.ExpiresAt.After(now)) {
+			validityDays := normalizeAssignValidityDays(input.ValidityDays)
+			newExpiresAt := now.AddDate(0, 0, validityDays)
+			if newExpiresAt.After(MaxExpiresAt) {
+				newExpiresAt = MaxExpiresAt
+			}
+			renewalNotes := input.Notes
+			if strings.TrimSpace(sub.Notes) == strings.TrimSpace(input.Notes) {
+				// Same note text: keep the existing notes string as-is (no duplicate append).
+				renewalNotes = ""
+			}
+			if err := s.renewExpiredAdminAssignment(ctx, sub, renewalNotes, now, newExpiresAt); err != nil {
+				return nil, false, err
+			}
+			s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, false)
+			renewed, getErr := s.userSubRepo.GetByID(ctx, sub.ID)
+			return renewed, true, getErr
+		}
 		if conflictReason, conflict := detectAssignSemanticConflict(sub, input); conflict {
 			return nil, false, ErrSubscriptionAssignConflict.WithMetadata(map[string]string{
 				"conflict_reason": conflictReason,
@@ -568,6 +592,67 @@ func detectAssignSemanticConflict(existing *UserSubscription, input *AssignSubsc
 	}
 
 	return "", false
+}
+
+// renewExpiredAdminAssignment reopens an expired (or past-expiry) admin
+// assignment as a fresh term. Scoped to AssignSubscription / bulk assign only;
+// does not change credit-pool purchase flows or AssignOrExtendSubscription.
+//
+// Fork adaptation vs upstream #4541:
+//   - also clears ExhaustedAt / QuotaUsedUSD / WeeklyLimitUserResetAt so a
+//     re-opened term is usable under the credit-pool model
+//   - uses the existing UserSubscriptionRepository.Update path
+func (s *SubscriptionService) renewExpiredAdminAssignment(
+	ctx context.Context,
+	existingSub *UserSubscription,
+	notes string,
+	startsAt time.Time,
+	newExpiresAt time.Time,
+) error {
+	if existingSub == nil {
+		return ErrSubscriptionNilInput
+	}
+	return s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+		renewed := renewedAdminAssignmentTerm(existingSub, notes, startsAt, newExpiresAt)
+		if err := s.userSubRepo.Update(txCtx, renewed); err != nil {
+			return fmt.Errorf("renew expired subscription: %w", err)
+		}
+		return nil
+	})
+}
+
+func renewedAdminAssignmentTerm(
+	existingSub *UserSubscription,
+	notes string,
+	startsAt, expiresAt time.Time,
+) *UserSubscription {
+	renewed := *existingSub
+	windowStart := startOfDay(startsAt)
+	renewed.StartsAt = startsAt
+	renewed.ExpiresAt = expiresAt
+	renewed.Status = SubscriptionStatusActive
+	renewed.DailyWindowStart = &windowStart
+	renewed.WeeklyWindowStart = &windowStart
+	renewed.MonthlyWindowStart = &windowStart
+	renewed.DailyUsageUSD = 0
+	renewed.WeeklyUsageUSD = 0
+	renewed.MonthlyUsageUSD = 0
+	// Credit-pool fields: a new admin term starts clean.
+	renewed.QuotaUsedUSD = 0
+	renewed.ExhaustedAt = nil
+	renewed.WeeklyLimitUserResetAt = nil
+	renewed.Notes = appendSubscriptionNotes(existingSub.Notes, notes)
+	return &renewed
+}
+
+func appendSubscriptionNotes(existingNotes, newNotes string) string {
+	if newNotes == "" {
+		return existingNotes
+	}
+	if existingNotes == "" {
+		return newNotes
+	}
+	return existingNotes + "\n" + newNotes
 }
 
 func normalizeAssignValidityDays(days int) int {
