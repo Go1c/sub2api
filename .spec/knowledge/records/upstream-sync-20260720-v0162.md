@@ -4,7 +4,7 @@ description: main 同步至 v0.1.162 后，将 0.1.160→0.1.162 增量分主题
 metadata:
   type: record
   date: 2026-07-20
-  status: T1 已合；高价值 T2 讨论收口 PR #234–#241 待合；大块跳过；运维默认不动
+  status: T1+高价值T2+#243–#246 已合；#247 调度冷却待合；大块 A/B/C/E 评估结论已记；F 不合
 ---
 
 # Upstream Sync 台账 — 2026-07-20 (v0.1.162)
@@ -130,6 +130,20 @@ upstream `183`/`184` 在 fork 编号空间已被占用（fork 用 `900+` 扩展�
 | #4572 | 匹配键仅 `account:` + `resolveCodexImportExpiry` 对 Agent Identity 早退；`NewAccountHandler` 多一个 fork 参数 |
 | #4507 | 合 BUILDPLATFORM/TARGET*/cache；**保留** fork `resolve-version.sh` 缺失时 VERSION 文件回退 |
 | #4520 | `OpsStreamError.Code` + `CountTowardsSLA`；与 fork 已有 stream error 标记路径并集 |
+
+
+
+### 大块专题决策（2026-07-21）
+
+| 代号 | 上游 | 用户决定 | 评估结论 |
+|---|---|---|---|
+| A | #4553 WS turn lifecycle | **先评估** | **缺口大（~+1.3k）**：缺 `openai_ws_v2_passthrough_lifecycle_test.go`；main 相对 dev 改 `passthrough_relay` / `openai_ws_client_read` / passthrough adapter。fork 已有 WS HTTP bridge failover（#229）。**建议：无明确 WS turn 线上故障则不合**；要合需独立专题 + 全量 WS 单测。 |
+| B | #4590 Trae/Codex/Claude Desktop 工具缓存 | **先评估** | **缺口中大（cache+chat_bridge ~+600 行 + EditAccountModal）**：main 有账号级 `grok_client_tool_cache_enabled`、Claude Desktop 指纹 opt-in、Trae 跨 turn 路由；dev 在 #4489 后仍是较简 Free 注入逻辑。**与刚合 Grok 四件套叠加**。**建议：仅当 Codex/Trae/Claude Desktop Free 缓存有真实投诉再合**；合则在 #243 之后单独 PR。 |
+| C | #4543/#4626 受保护视频代理 | **先评估** | **缺口大（media content ~+750）**：main 有 `GrokMediaEndpointVideoContent`、安全代理/改写 URL、chained content proxy 测试；dev 路由已有 `/videos/:request_id/content` 入口痕迹，**内容代理实现与测试不齐**。**建议：若产品要代理 xAI 受保护视频内容则开专题合；否则跳过**（#243 媒体 eligibility/mapping 已够调度侧）。 |
+| D | #4496+#4547 调度冷却 | **合** | ✅ 已开 PR #247：池模式尊崇 temp 规则 + 已知模型 `SetModelRateLimit` 隔离；未知模型仍账号级兜底。 |
+| E | #4604 client-ip + BindEnv | **先评估** | **缺口大且深绑 fork**：main 有 `ForwardedClientIPSettings`、自定义 CDN 头列表、settings 热更新、多语言 README/EDGE_SECURITY；dev `pkg/ip` 以 Gin trusted proxy 链为主，合规 geo 路径敏感。**建议：不合默认**；若要 CDN 真实 IP，需对照 fork geo/限流/会话绑定单开专题，禁止整包。 |
+| F | 上游 branding SVG | **不合** | 保持：Lumio 品牌，不直合上游 SVG。 |
+
 
 ### CI 基线债（全 PR 共有，不在本台账批次阻塞）
 - `backend-security` govulncheck：S3 SDK / crypto/tls 调用图（#222/#223/#224/#225 均红）

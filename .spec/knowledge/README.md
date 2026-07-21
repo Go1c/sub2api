@@ -54,7 +54,7 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
-| [`records/upstream-sync-20260720-v0162.md`](records/upstream-sync-20260720-v0162.md) | main→0.1.162 分主题并入：T1 已合；高价值 T2 讨论收口 PR #234–#241 待合；运维默认不动（进行中） |
+| [`records/upstream-sync-20260720-v0162.md`](records/upstream-sync-20260720-v0162.md) | main→0.1.162：高价值T2+#243–#246 已合；#247 调度冷却待合；大块评估结论已记 |
 | [`records/upstream-sync-20260715.md`](records/upstream-sync-20260715.md) | v0.1.156 ordered 同步台账：全量 unit 已绿、VERSION 0.1.156；integration/前端/commit 切分仍待（进行中） |
 | [`records/upstream-sync-20260710.md`](records/upstream-sync-20260710.md) | v0.1.150 日更同步台账：18 个上游落点的 fork 适配、例外与验证结果（2026-07-10） |
 | [`records/upstream-sync-review-20260616.md`](records/upstream-sync-review-20260616.md) | v0.1.136 同步上线前独立代码复审与 go/no-go 结论(2026-06-16) |
