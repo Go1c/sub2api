@@ -266,6 +266,7 @@ type UsageInfo struct {
 	GrokLocalUsage7d       *WindowStats        `json:"grok_local_usage_7d,omitempty"`
 	GrokLocalUsageMonthly  *WindowStats        `json:"grok_local_usage_monthly,omitempty"`
 	GrokBilling            *xai.BillingSummary `json:"grok_billing,omitempty"`
+	GrokFreeTokenLimit     int64               `json:"grok_free_token_limit,omitempty"`
 
 	// Antigravity 账号级信息
 	SubscriptionTier    string `json:"subscription_tier,omitempty"`     // 归一化订阅等级: FREE/PRO/ULTRA/UNKNOWN
