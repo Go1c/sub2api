@@ -727,6 +727,10 @@ export default {
         invalidValue: '请求头值不合法（不允许控制字符，长度不超过 8192）',
         tooManyEntries: '请求头覆写条目过多（最多 64 条）'
       },
+      grokClientToolCache: {
+        title: '客户端工具缓存（可能改变自动工具选择）',
+        hint: '仅对已识别为 Free 的 Grok OAuth 账号生效，为 Codex、Trae 等客户端函数工具请求启用上游提示缓存；请确认自动工具选择行为可接受后开启。'
+      },
       autoPauseOnExpired: '过期自动暂停调度',
       autoPauseOnExpiredDesc: '启用后，账号过期将自动暂停调度',
 	  autoPause5hThreshold: '5h 用量阈值(%)',

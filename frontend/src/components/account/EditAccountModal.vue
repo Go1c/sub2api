@@ -482,6 +482,26 @@
 
       </div>
 
+      <!-- Grok OAuth client-tool prompt cache opt-in -->
+      <div
+        v-if="account.platform === 'grok' && account.type === 'oauth'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <label class="input-label mb-0">{{ t('admin.accounts.grokClientToolCache.title') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.grokClientToolCache.hint') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="grokClientToolCacheEnabled"
+            data-testid="grok-client-tool-cache-toggle"
+            :aria-label="t('admin.accounts.grokClientToolCache.title')"
+          />
+        </div>
+      </div>
+
       <!-- Grok OAuth Custom Upstream URL (仅改写转发端点，OAuth 授权/刷新不受影响) -->
       <div
         v-if="account.platform === 'grok' && account.type === 'oauth'"
@@ -2761,6 +2781,7 @@ const allowedModels = ref<string[]>([])
 const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
+const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
@@ -2806,6 +2827,7 @@ const grokOAuthBaseUrl = ref('')
 const headerOverrideCapable = computed(() =>
   isHeaderOverrideCapable(props.account?.platform || '', props.account?.type || '')
 )
+const grokClientToolCacheEnabled = ref(false)
 
 // 模板按钮：填入标准客户端请求头名称（值留空），跳过已存在的同名行
 const fillHeaderOverrideTemplate = () => {
@@ -3467,6 +3489,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   // Load Grok OAuth custom upstream URL state（默认 CLI 网关视同未定制）
   grokOAuthCustomBaseUrlEnabled.value = false
   grokOAuthBaseUrl.value = ''
+  grokClientToolCacheEnabled.value =
+    newAccount.platform === 'grok' &&
+    newAccount.type === 'oauth' &&
+    newAccount.extra?.[GROK_CLIENT_TOOL_CACHE_EXTRA_KEY] === true
   if (newAccount.platform === 'grok' && newAccount.type === 'oauth' && newAccount.credentials) {
     const grokCreds = newAccount.credentials as Record<string, unknown>
     if (isCustomGrokBaseUrl(grokCreds.base_url)) {
@@ -4349,6 +4375,16 @@ const handleSubmit = async () => {
       applyHeaderOverride(newCredentials, headerOverrideEnabled.value, headerOverrideRows.value, 'edit')
 
       updatePayload.credentials = newCredentials
+
+      const newExtra: Record<string, unknown> = {
+        ...((props.account.extra as Record<string, unknown>) || {})
+      }
+      if (grokClientToolCacheEnabled.value) {
+        newExtra[GROK_CLIENT_TOOL_CACHE_EXTRA_KEY] = true
+      } else {
+        delete newExtra[GROK_CLIENT_TOOL_CACHE_EXTRA_KEY]
+      }
+      updatePayload.extra = newExtra
     }
 
     // OpenAI/Grok OAuth: persist model mapping to credentials
