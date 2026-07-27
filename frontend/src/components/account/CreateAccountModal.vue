@@ -1143,6 +1143,23 @@
           <p v-if="apiKeyHint" class="input-hint">{{ apiKeyHint }}</p>
         </div>
 
+        <div
+          v-if="form.platform === 'grok'"
+          class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
+        >
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.grok.videoCompatMode') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.grok.videoCompatModeHint') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="grokVideoCompatModeEnabled"
+            data-testid="grok-video-compat-mode-create"
+            :aria-label="t('admin.accounts.grok.videoCompatMode')"
+          />
+        </div>
+
         <!-- Gemini API Key tier selection -->
         <div v-if="form.platform === 'gemini'">
           <label class="input-label">{{ t('admin.accounts.gemini.tier.label') }}</label>
@@ -3546,6 +3563,7 @@ import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
@@ -3826,6 +3844,7 @@ adminAPI.settings.getWebSearchEmulationConfig().then(cfg => {
 loadQuotaNotifyGlobal()
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
+const grokVideoCompatModeEnabled = ref(false)
 const antigravityAccountType = ref<'oauth' | 'upstream'>('oauth') // For antigravity: oauth or upstream
 const antigravityProjectId = ref('')
 const upstreamBaseUrl = ref('') // For upstream type: base URL
@@ -4624,6 +4643,7 @@ const resetForm = () => {
   addMethod.value = 'oauth'
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
+  grokVideoCompatModeEnabled.value = false
   editQuotaLimit.value = null
   editQuotaDailyLimit.value = null
   editQuotaWeeklyLimit.value = null
@@ -5115,7 +5135,10 @@ const handleSubmit = async () => {
   }
 
   form.credentials = credentials
-  const extra = buildAnthropicExtra(buildOpenAIExtra())
+  let extra = buildAnthropicExtra(buildOpenAIExtra())
+  if (form.platform === 'grok' && grokVideoCompatModeEnabled.value) {
+    extra = { ...(extra || {}), grok_video_compat_mode: true }
+  }
 
   await doCreateAccount({
     ...form,
@@ -5183,8 +5206,11 @@ const createAccountAndFinish = async (
   }
   // Inject quota limits for apikey/bedrock accounts
   let finalExtra = extra
+  if (platform === 'grok' && grokVideoCompatModeEnabled.value) {
+    finalExtra = { ...(finalExtra || {}), grok_video_compat_mode: true }
+  }
   if (type === 'apikey' || type === 'bedrock') {
-    const quotaExtra: Record<string, unknown> = { ...(extra || {}) }
+    const quotaExtra: Record<string, unknown> = { ...(finalExtra || extra || {}) }
     if (editQuotaLimit.value != null && editQuotaLimit.value > 0) {
       quotaExtra.quota_limit = editQuotaLimit.value
     }

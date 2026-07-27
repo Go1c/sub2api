@@ -624,7 +624,10 @@ export default {
       },
       grok: {
         baseUrlHint: 'Grok OAuth 账号会转发到官方 xAI API Base URL。',
-        apiKeyHint: 'Grok 订阅支持使用 OAuth refresh token；API Key 账号不在本次范围内。'
+        apiKeyHint: 'Grok 订阅支持使用 OAuth refresh token；API Key 账号不在本次范围内。',
+        videoCompatMode: '视频兼容模式',
+        videoCompatModeHint:
+          '开启后，视频生成按 OpenAI Videos 兼容协议出站（POST /videos，seconds/size/image_url），用于 2KEN 等上游；关闭则保持原生 xAI Grok 媒体协议。'
       },
       anthropic: {
         apiKeyPassthrough: '自动透传（仅替换认证）',

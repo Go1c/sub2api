@@ -574,6 +574,19 @@ func BuildVideosGenerationsURLWithValidator(baseURL string, validator BaseURLVal
 	return validatedBaseURL + "/videos/generations", nil
 }
 
+// BuildVideosURL builds the OpenAI-video compatible create endpoint (POST /videos).
+func BuildVideosURL(baseURL string) (string, error) {
+	return BuildVideosURLWithValidator(baseURL, nil)
+}
+
+func BuildVideosURLWithValidator(baseURL string, validator BaseURLValidator) (string, error) {
+	validatedBaseURL, err := validatedBaseURLWithValidator(baseURL, validator)
+	if err != nil {
+		return "", fmt.Errorf("invalid base url: %w", err)
+	}
+	return validatedBaseURL + "/videos", nil
+}
+
 func BuildVideosEditsURL(baseURL string) (string, error) {
 	return BuildVideosEditsURLWithValidator(baseURL, nil)
 }

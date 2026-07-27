@@ -112,6 +112,11 @@ const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 // absent/null value uses provider observations.
 const GrokMediaEligibleExtraKey = "grok_media_eligible"
 
+// GrokVideoCompatModeExtraKey enables OpenAI-video compatible outbound shaping
+// for Grok media video generation (e.g. 2KEN: POST /videos + seconds/size/image_url).
+// When absent or false, the original xAI Grok media paths and body fields are used.
+const GrokVideoCompatModeExtraKey = "grok_video_compat_mode"
+
 const (
 	OpenAIAuthModePersonalAccessToken = "personalAccessToken"
 	openAIAuthModeCredentialKey       = "auth_mode"
@@ -1520,6 +1525,20 @@ func grokMediaEligibilityOverride(extra map[string]any) (bool, bool) {
 	}
 	value, ok := raw.(bool)
 	return value, ok
+}
+
+// GrokVideoCompatModeEnabled reports whether this account should use OpenAI-video
+// compatible outbound paths/bodies for video generation.
+func (a *Account) GrokVideoCompatModeEnabled() bool {
+	if a == nil || !a.IsGrok() || a.Extra == nil {
+		return false
+	}
+	raw, ok := a.Extra[GrokVideoCompatModeExtraKey]
+	if !ok || raw == nil {
+		return false
+	}
+	enabled, ok := raw.(bool)
+	return ok && enabled
 }
 
 func (a *Account) openAIEndpointCapabilitySet() (map[string]bool, bool) {

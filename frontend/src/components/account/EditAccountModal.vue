@@ -26,6 +26,23 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <div
+        v-if="account.platform === 'grok'"
+        class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div>
+          <label class="input-label mb-0">{{ t('admin.accounts.grok.videoCompatMode') }}</label>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.grok.videoCompatModeHint') }}
+          </p>
+        </div>
+        <Toggle
+          v-model="grokVideoCompatModeEnabled"
+          data-testid="grok-video-compat-mode"
+          :aria-label="t('admin.accounts.grok.videoCompatMode')"
+        />
+      </div>
+
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div>
@@ -2849,6 +2866,7 @@ const autoPause7dThreshold = ref<number | null>(null)
 const autoPause5hDisabled = ref(false)
 const autoPause7dDisabled = ref(false)
 const upstreamBillingAutoProbeEnabled = ref(false)
+const grokVideoCompatModeEnabled = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
 const antigravityProjectId = ref('')
@@ -3331,6 +3349,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	autoPause5hDisabled.value = extra?.auto_pause_5h_disabled === true
 	autoPause7dDisabled.value = extra?.auto_pause_7d_disabled === true
 	upstreamBillingAutoProbeEnabled.value = extra?.upstream_billing_probe_enabled === true
+	grokVideoCompatModeEnabled.value = extra?.grok_video_compat_mode === true
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
@@ -4384,6 +4403,11 @@ const handleSubmit = async () => {
       } else {
         delete newExtra[GROK_CLIENT_TOOL_CACHE_EXTRA_KEY]
       }
+      if (grokVideoCompatModeEnabled.value) {
+        newExtra.grok_video_compat_mode = true
+      } else {
+        delete newExtra.grok_video_compat_mode
+      }
       updatePayload.extra = newExtra
     }
 
@@ -4673,6 +4697,13 @@ const handleSubmit = async () => {
       const currentExtra = (updatePayload.extra as Record<string, unknown>) ||
         (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
+      if (props.account.platform === 'grok') {
+        if (grokVideoCompatModeEnabled.value) {
+          newExtra.grok_video_compat_mode = true
+        } else {
+          delete newExtra.grok_video_compat_mode
+        }
+      }
       // Total quota
       if (editQuotaLimit.value != null && editQuotaLimit.value > 0) {
         newExtra.quota_limit = editQuotaLimit.value

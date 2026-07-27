@@ -1132,6 +1132,126 @@ func TestForwardGrokMediaVideoGenerationPreservesImageToVideoModel(t *testing.T)
 	require.Equal(t, VideoBillingDefaultDurationSeconds, result.VideoDurationSeconds)
 }
 
+func TestForwardGrokMediaVideoCompatModeUsesOpenAIVideoPathAndBody(t *testing.T) {
+	t.Setenv(xai.EnvAllowUnsafeURLOverrides, "true")
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	body := []byte(`{"model":"grok-imagine-video","prompt":"waves","resolution":"720p","duration":4}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos/generations", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	account := &Account{
+		ID:          64,
+		Name:        "grok-2ken",
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "api-key",
+			"base_url": "https://apis.2ken.test/v1",
+		},
+		Extra: map[string]any{
+			GrokVideoCompatModeExtraKey: true,
+		},
+	}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"id":"task_abc","task_id":"task_abc","status":"queued"}`)),
+	}}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+
+	result, err := svc.ForwardGrokMedia(context.Background(), c, account, GrokMediaEndpointVideosGenerations, "", body, "application/json")
+	require.NoError(t, err)
+	require.Equal(t, "https://apis.2ken.test/v1/videos", upstream.lastReq.URL.String())
+	require.JSONEq(t, `{"model":"grok-imagine-video","prompt":"waves","seconds":"4","size":"1280x720"}`, string(upstream.lastBody))
+	require.Equal(t, "task_abc", result.ResponseID)
+	require.Equal(t, 1, result.VideoCount)
+	require.Equal(t, VideoBillingResolution720P, result.VideoResolution)
+	require.Equal(t, 4, result.VideoDurationSeconds)
+}
+
+func TestForwardGrokMediaVideoCompatModeImageToVideoUsesTopLevelImageURL(t *testing.T) {
+	t.Setenv(xai.EnvAllowUnsafeURLOverrides, "true")
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	body := []byte(`{"model":"grok-imagine-video-1.5","prompt":"animate","duration":4,"resolution":"720p","image":{"url":"https://cdn.example.com/photo.jpg"}}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos/generations", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	account := &Account{
+		ID:          65,
+		Name:        "grok-2ken",
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "api-key",
+			"base_url": "https://apis.2ken.test/v1",
+		},
+		Extra: map[string]any{
+			GrokVideoCompatModeExtraKey: true,
+		},
+	}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"task_id":"task_i2v","status":"queued"}`)),
+	}}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+
+	result, err := svc.ForwardGrokMedia(context.Background(), c, account, GrokMediaEndpointVideosGenerations, "", body, "application/json")
+	require.NoError(t, err)
+	require.Equal(t, "https://apis.2ken.test/v1/videos", upstream.lastReq.URL.String())
+	require.Equal(t, "grok-imagine-video-1.5-preview", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, "4", gjson.GetBytes(upstream.lastBody, "seconds").String())
+	require.Equal(t, "1280x720", gjson.GetBytes(upstream.lastBody, "size").String())
+	require.Equal(t, "https://cdn.example.com/photo.jpg", gjson.GetBytes(upstream.lastBody, "image_url").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "image").Exists())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "duration").Exists())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "resolution").Exists())
+	require.Equal(t, "task_i2v", result.ResponseID)
+	require.Equal(t, "grok-imagine-video-1.5", result.BillingModel)
+}
+
+func TestBuildGrokMediaURLVideoCompatModeOnlyChangesCreatePath(t *testing.T) {
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"base_url": "https://apis.2ken.test/v1",
+		},
+		Extra: map[string]any{
+			GrokVideoCompatModeExtraKey: true,
+		},
+	}
+	cfg := &config.Config{}
+	cfg.Security.URLAllowlist.Enabled = false
+	cfg.Security.URLAllowlist.AllowInsecureHTTP = true
+
+	createURL, err := buildGrokMediaURL(account, cfg, GrokMediaEndpointVideosGenerations, "")
+	require.NoError(t, err)
+	require.Equal(t, "https://apis.2ken.test/v1/videos", createURL)
+
+	statusURL, err := buildGrokMediaURL(account, cfg, GrokMediaEndpointVideoStatus, "task_1")
+	require.NoError(t, err)
+	require.Equal(t, "https://apis.2ken.test/v1/videos/task_1", statusURL)
+
+	contentURL, err := buildGrokMediaURL(account, cfg, GrokMediaEndpointVideoContent, "task_1")
+	require.NoError(t, err)
+	require.Equal(t, "https://apis.2ken.test/v1/videos/task_1/content", contentURL)
+
+	// Off by default: original xAI path.
+	account.Extra = nil
+	legacyURL, err := buildGrokMediaURL(account, cfg, GrokMediaEndpointVideosGenerations, "")
+	require.NoError(t, err)
+	require.Equal(t, "https://apis.2ken.test/v1/videos/generations", legacyURL)
+}
+
 func TestForwardGrokMediaOAuthImageToVideoUsesOfficialAPIForLargeBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -297,6 +297,24 @@ func TestBuildSchedulerMetadataAccount_KeepsGrokMediaEligibility(t *testing.T) {
 		require.Nil(t, got.Extra["unused_large_field"])
 	})
 
+	t.Run("video compat mode flag", func(t *testing.T) {
+		account := service.Account{
+			ID:       45,
+			Platform: service.PlatformGrok,
+			Type:     service.AccountTypeAPIKey,
+			Extra: map[string]any{
+				service.GrokVideoCompatModeExtraKey: true,
+				"unused_large_field":                "drop-me",
+			},
+		}
+
+		got := buildSchedulerMetadataAccount(account)
+
+		require.True(t, got.GrokVideoCompatModeEnabled())
+		require.Equal(t, true, got.Extra[service.GrokVideoCompatModeExtraKey])
+		require.Nil(t, got.Extra["unused_large_field"])
+	})
+
 	t.Run("forbidden billing observation", func(t *testing.T) {
 		account := service.Account{
 			ID:       44,

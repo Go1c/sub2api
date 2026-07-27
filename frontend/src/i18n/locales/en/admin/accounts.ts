@@ -526,7 +526,10 @@ export default {
       },
       grok: {
         baseUrlHint: 'Grok OAuth accounts forward to the official xAI API base URL.',
-        apiKeyHint: 'Grok subscription support uses OAuth refresh tokens; API keys are out of scope for this account type.'
+        apiKeyHint: 'Grok subscription support uses OAuth refresh tokens; API keys are out of scope for this account type.',
+        videoCompatMode: 'Video compatibility mode',
+        videoCompatModeHint:
+          'When enabled, video generation is forwarded with OpenAI Videos-compatible outbound shaping (POST /videos, seconds/size/image_url) for providers such as 2KEN. When disabled, the native xAI Grok media protocol is used.'
       },
       anthropic: {
         apiKeyPassthrough: 'Auto passthrough (auth only)',

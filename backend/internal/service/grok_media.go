@@ -331,6 +331,14 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			}
 		}
 	}
+	// Compat mode rewrites outbound video create bodies after billing fields are
+	// parsed from the native Grok payload (duration/resolution/image.url).
+	if account.GrokVideoCompatModeEnabled() && endpoint == GrokMediaEndpointVideosGenerations {
+		body, contentType, err = adaptGrokMediaBodyForVideoCompat(body, contentType, requestInfo, upstreamModel)
+		if err != nil {
+			return nil, err
+		}
+	}
 	body, contentType, err = sanitizeGrokMediaForwardBody(endpoint, body, contentType)
 	if err != nil {
 		return nil, err
@@ -518,6 +526,140 @@ func normalizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, cont
 	return out, contentType, nil
 }
 
+// adaptGrokMediaBodyForVideoCompat converts a native Grok/xAI video-generation
+// JSON body into the OpenAI-video compatible shape used by providers such as 2KEN:
+// seconds (string), size (WxH), top-level image_url, and POST /videos model IDs.
+func adaptGrokMediaBodyForVideoCompat(body []byte, contentType string, info GrokMediaRequestInfo, upstreamModel string) ([]byte, string, error) {
+	if !gjson.ValidBytes(body) {
+		return body, contentType, nil
+	}
+
+	model := strings.TrimSpace(upstreamModel)
+	if model == "" {
+		model = strings.TrimSpace(info.Model)
+	}
+	model = normalizeGrokVideoCompatModel(model, info.HasInputImage())
+
+	payload := map[string]any{}
+	if model != "" {
+		payload["model"] = model
+	}
+	if prompt := strings.TrimSpace(info.Prompt); prompt != "" {
+		payload["prompt"] = prompt
+	}
+
+	seconds := grokVideoCompatSeconds(body, info.DurationSeconds)
+	if seconds != "" {
+		payload["seconds"] = seconds
+	}
+	if size := grokVideoCompatSize(body, info.Resolution); size != "" {
+		payload["size"] = size
+	}
+	if imageURL := firstGrokVideoCompatImageURL(info); imageURL != "" {
+		payload["image_url"] = imageURL
+	}
+
+	// Preserve unknown top-level fields that are neither native Grok media keys
+	// nor already rewritten, so providers can still accept extra options.
+	if gjson.ValidBytes(body) {
+		gjson.ParseBytes(body).ForEach(func(key, value gjson.Result) bool {
+			name := key.String()
+			switch name {
+			case "model", "prompt", "duration", "seconds", "resolution", "size",
+				"image", "images", "reference_images", "image_url", "n":
+				return true
+			}
+			if _, exists := payload[name]; exists {
+				return true
+			}
+			payload[name] = value.Value()
+			return true
+		})
+	}
+
+	out, err := marshalOpenAIUpstreamJSON(payload)
+	if err != nil {
+		return nil, "", fmt.Errorf("adapt grok video compat body: %w", err)
+	}
+	return out, "application/json", nil
+}
+
+func normalizeGrokVideoCompatModel(model string, hasInputImage bool) string {
+	model = strings.TrimSpace(model)
+	switch model {
+	case "grok-imagine-video-1.5":
+		if hasInputImage {
+			return "grok-imagine-video-1.5-preview"
+		}
+		return "grok-imagine-video"
+	default:
+		return model
+	}
+}
+
+func grokVideoCompatSeconds(body []byte, durationSeconds int) string {
+	if raw := strings.TrimSpace(gjson.GetBytes(body, "seconds").String()); raw != "" {
+		return raw
+	}
+	if duration := gjson.GetBytes(body, "duration"); duration.Exists() {
+		switch duration.Type {
+		case gjson.Number:
+			if duration.Int() > 0 {
+				return strconv.FormatInt(duration.Int(), 10)
+			}
+		case gjson.String:
+			if s := strings.TrimSpace(duration.String()); s != "" {
+				return s
+			}
+		}
+	}
+	if durationSeconds > 0 {
+		return strconv.Itoa(durationSeconds)
+	}
+	return ""
+}
+
+func grokVideoCompatSize(body []byte, resolution string) string {
+	if raw := strings.TrimSpace(gjson.GetBytes(body, "size").String()); raw != "" {
+		// Native image-style sizes like "1024x1024" are already WxH; keep them.
+		if strings.Contains(raw, "x") {
+			return raw
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(firstNonEmpty(resolution, gjson.GetBytes(body, "resolution").String()))) {
+	case "480", "480p", "sd":
+		return "720x1280"
+	case "720", "720p", "hd":
+		return "1280x720"
+	case "1080", "1080p", "full_hd", "full-hd", "fhd":
+		return "1792x1024"
+	case "9:16", "portrait":
+		return "720x1280"
+	case "16:9", "landscape":
+		return "1280x720"
+	default:
+		if raw := strings.TrimSpace(gjson.GetBytes(body, "size").String()); raw != "" {
+			return raw
+		}
+		// Match 2KEN default when neither size nor resolution is provided.
+		return "720x1280"
+	}
+}
+
+func firstGrokVideoCompatImageURL(info GrokMediaRequestInfo) string {
+	for _, imageURL := range info.InputImageURLs {
+		if imageURL = strings.TrimSpace(imageURL); imageURL != "" {
+			return imageURL
+		}
+	}
+	for _, upload := range info.Uploads {
+		if dataURL, err := openAIImageUploadToDataURL(upload); err == nil && strings.TrimSpace(dataURL) != "" {
+			return dataURL
+		}
+	}
+	return ""
+}
+
 func canonicalizeGrokMediaImageURLFields(body []byte, fields ...string) ([]byte, error) {
 	out := body
 	for _, field := range fields {
@@ -642,7 +784,11 @@ func extractGrokMediaVideoRequestID(body []byte) string {
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return ""
 	}
-	for _, path := range []string{"request_id", "id", "data.request_id", "data.id", "video.request_id", "video.id"} {
+	for _, path := range []string{
+		"request_id", "task_id", "id",
+		"data.request_id", "data.task_id", "data.id",
+		"video.request_id", "video.task_id", "video.id",
+	} {
 		if id := strings.TrimSpace(gjson.GetBytes(body, path).String()); id != "" {
 			return id
 		}

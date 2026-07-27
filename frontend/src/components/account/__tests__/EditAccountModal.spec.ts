@@ -494,6 +494,43 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_long_context_billing_enabled).toBe(false)
   })
 
+  it('submits Grok video compatibility mode in extra', async () => {
+    const account = buildGrokAPIKeyAccount()
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    const toggle = wrapper.get('[data-testid="grok-video-compat-mode"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+
+    await toggle.trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.grok_video_compat_mode).toBe(true)
+  })
+
+  it('clears Grok video compatibility mode when disabled', async () => {
+    const account = buildGrokAPIKeyAccount()
+    account.extra = { grok_video_compat_mode: true }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    const toggle = wrapper.get('[data-testid="grok-video-compat-mode"]')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+
+    await toggle.trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).not.toHaveProperty('grok_video_compat_mode')
+  })
+
   it('loads and submits Grok OAuth model mapping edits', async () => {
     const account = buildGrokOAuthAccount()
     updateAccountMock.mockReset()

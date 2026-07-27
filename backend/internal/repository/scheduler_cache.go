@@ -965,6 +965,7 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"model_rate_limits",
 		service.UpstreamBillingProbeExtraKey,
 		service.GrokMediaEligibleExtraKey,
+		service.GrokVideoCompatModeExtraKey,
 		"grok_billing_snapshot",
 	}
 	filtered := make(map[string]any)
