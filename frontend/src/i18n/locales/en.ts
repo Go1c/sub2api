@@ -1481,6 +1481,24 @@ export default {
       saved: 'Saved',
       saveFailed: 'Failed to save'
     },
+    webhookBalanceNotify: {
+      title: 'WeCom / Robot Notify',
+      description: 'When balance falls below threshold, POST an alert to your WeCom group robot webhook (no browser required)',
+      enabled: 'Enable robot notify',
+      webhookUrl: 'Webhook URL',
+      webhookUrlHint: 'WeCom robot: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...',
+      webhookUrlPlaceholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx',
+      threshold: 'Balance alert threshold',
+      thresholdHint: 'Leave empty to use default $10',
+      thresholdPlaceholder: 'Default 10',
+      test: 'Send test',
+      testing: 'Sending…',
+      testHint: 'Save the webhook URL before testing',
+      testSent: 'Test message sent',
+      testFailed: 'Test failed',
+      saved: 'Saved',
+      saveFailed: 'Failed to save'
+    },
     avatar: {
       title: 'Profile Avatar',
       description: 'Upload an avatar image. Static uploads are compressed to 20KB before saving.',

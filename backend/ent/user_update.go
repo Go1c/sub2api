@@ -475,6 +475,61 @@ func (_u *UserUpdate) SetNillableWebsocketAnnouncementNotifyEnabled(v *bool) *Us
 	return _u
 }
 
+// SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
+func (_u *UserUpdate) SetWebhookBalanceNotifyEnabled(v bool) *UserUpdate {
+	_u.mutation.SetWebhookBalanceNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebhookBalanceNotifyEnabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetWebhookBalanceNotifyEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebhookBalanceNotifyURL sets the "webhook_balance_notify_url" field.
+func (_u *UserUpdate) SetWebhookBalanceNotifyURL(v string) *UserUpdate {
+	_u.mutation.SetWebhookBalanceNotifyURL(v)
+	return _u
+}
+
+// SetNillableWebhookBalanceNotifyURL sets the "webhook_balance_notify_url" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebhookBalanceNotifyURL(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetWebhookBalanceNotifyURL(*v)
+	}
+	return _u
+}
+
+// SetWebhookBalanceNotifyThreshold sets the "webhook_balance_notify_threshold" field.
+func (_u *UserUpdate) SetWebhookBalanceNotifyThreshold(v float64) *UserUpdate {
+	_u.mutation.ResetWebhookBalanceNotifyThreshold()
+	_u.mutation.SetWebhookBalanceNotifyThreshold(v)
+	return _u
+}
+
+// SetNillableWebhookBalanceNotifyThreshold sets the "webhook_balance_notify_threshold" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebhookBalanceNotifyThreshold(v *float64) *UserUpdate {
+	if v != nil {
+		_u.SetWebhookBalanceNotifyThreshold(*v)
+	}
+	return _u
+}
+
+// AddWebhookBalanceNotifyThreshold adds value to the "webhook_balance_notify_threshold" field.
+func (_u *UserUpdate) AddWebhookBalanceNotifyThreshold(v float64) *UserUpdate {
+	_u.mutation.AddWebhookBalanceNotifyThreshold(v)
+	return _u
+}
+
+// ClearWebhookBalanceNotifyThreshold clears the value of the "webhook_balance_notify_threshold" field.
+func (_u *UserUpdate) ClearWebhookBalanceNotifyThreshold() *UserUpdate {
+	_u.mutation.ClearWebhookBalanceNotifyThreshold()
+	return _u
+}
+
 // SetTotalRecharged sets the "total_recharged" field.
 func (_u *UserUpdate) SetTotalRecharged(v float64) *UserUpdate {
 	_u.mutation.ResetTotalRecharged()
@@ -1314,6 +1369,21 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.WebsocketAnnouncementNotifyEnabled(); ok {
 		_spec.SetField(user.FieldWebsocketAnnouncementNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebhookBalanceNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebhookBalanceNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebhookBalanceNotifyURL(); ok {
+		_spec.SetField(user.FieldWebhookBalanceNotifyURL, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.WebhookBalanceNotifyThreshold(); ok {
+		_spec.SetField(user.FieldWebhookBalanceNotifyThreshold, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWebhookBalanceNotifyThreshold(); ok {
+		_spec.AddField(user.FieldWebhookBalanceNotifyThreshold, field.TypeFloat64, value)
+	}
+	if _u.mutation.WebhookBalanceNotifyThresholdCleared() {
+		_spec.ClearField(user.FieldWebhookBalanceNotifyThreshold, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)
@@ -2515,6 +2585,61 @@ func (_u *UserUpdateOne) SetNillableWebsocketAnnouncementNotifyEnabled(v *bool) 
 	return _u
 }
 
+// SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
+func (_u *UserUpdateOne) SetWebhookBalanceNotifyEnabled(v bool) *UserUpdateOne {
+	_u.mutation.SetWebhookBalanceNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebhookBalanceNotifyEnabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebhookBalanceNotifyEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebhookBalanceNotifyURL sets the "webhook_balance_notify_url" field.
+func (_u *UserUpdateOne) SetWebhookBalanceNotifyURL(v string) *UserUpdateOne {
+	_u.mutation.SetWebhookBalanceNotifyURL(v)
+	return _u
+}
+
+// SetNillableWebhookBalanceNotifyURL sets the "webhook_balance_notify_url" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebhookBalanceNotifyURL(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebhookBalanceNotifyURL(*v)
+	}
+	return _u
+}
+
+// SetWebhookBalanceNotifyThreshold sets the "webhook_balance_notify_threshold" field.
+func (_u *UserUpdateOne) SetWebhookBalanceNotifyThreshold(v float64) *UserUpdateOne {
+	_u.mutation.ResetWebhookBalanceNotifyThreshold()
+	_u.mutation.SetWebhookBalanceNotifyThreshold(v)
+	return _u
+}
+
+// SetNillableWebhookBalanceNotifyThreshold sets the "webhook_balance_notify_threshold" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebhookBalanceNotifyThreshold(v *float64) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebhookBalanceNotifyThreshold(*v)
+	}
+	return _u
+}
+
+// AddWebhookBalanceNotifyThreshold adds value to the "webhook_balance_notify_threshold" field.
+func (_u *UserUpdateOne) AddWebhookBalanceNotifyThreshold(v float64) *UserUpdateOne {
+	_u.mutation.AddWebhookBalanceNotifyThreshold(v)
+	return _u
+}
+
+// ClearWebhookBalanceNotifyThreshold clears the value of the "webhook_balance_notify_threshold" field.
+func (_u *UserUpdateOne) ClearWebhookBalanceNotifyThreshold() *UserUpdateOne {
+	_u.mutation.ClearWebhookBalanceNotifyThreshold()
+	return _u
+}
+
 // SetTotalRecharged sets the "total_recharged" field.
 func (_u *UserUpdateOne) SetTotalRecharged(v float64) *UserUpdateOne {
 	_u.mutation.ResetTotalRecharged()
@@ -3384,6 +3509,21 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.WebsocketAnnouncementNotifyEnabled(); ok {
 		_spec.SetField(user.FieldWebsocketAnnouncementNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebhookBalanceNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebhookBalanceNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebhookBalanceNotifyURL(); ok {
+		_spec.SetField(user.FieldWebhookBalanceNotifyURL, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.WebhookBalanceNotifyThreshold(); ok {
+		_spec.SetField(user.FieldWebhookBalanceNotifyThreshold, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWebhookBalanceNotifyThreshold(); ok {
+		_spec.AddField(user.FieldWebhookBalanceNotifyThreshold, field.TypeFloat64, value)
+	}
+	if _u.mutation.WebhookBalanceNotifyThresholdCleared() {
+		_spec.ClearField(user.FieldWebhookBalanceNotifyThreshold, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)

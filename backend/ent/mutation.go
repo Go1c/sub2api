@@ -54508,6 +54508,10 @@ type UserMutation struct {
 	addwebsocket_balance_alert_threshold  *float64
 	websocket_site_message_notify_enabled *bool
 	websocket_announcement_notify_enabled *bool
+	webhook_balance_notify_enabled        *bool
+	webhook_balance_notify_url            *string
+	webhook_balance_notify_threshold      *float64
+	addwebhook_balance_notify_threshold   *float64
 	total_recharged                       *float64
 	addtotal_recharged                    *float64
 	invoice_enabled                       *bool
@@ -55830,6 +55834,148 @@ func (m *UserMutation) ResetWebsocketAnnouncementNotifyEnabled() {
 	m.websocket_announcement_notify_enabled = nil
 }
 
+// SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
+func (m *UserMutation) SetWebhookBalanceNotifyEnabled(b bool) {
+	m.webhook_balance_notify_enabled = &b
+}
+
+// WebhookBalanceNotifyEnabled returns the value of the "webhook_balance_notify_enabled" field in the mutation.
+func (m *UserMutation) WebhookBalanceNotifyEnabled() (r bool, exists bool) {
+	v := m.webhook_balance_notify_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebhookBalanceNotifyEnabled returns the old "webhook_balance_notify_enabled" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldWebhookBalanceNotifyEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebhookBalanceNotifyEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebhookBalanceNotifyEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebhookBalanceNotifyEnabled: %w", err)
+	}
+	return oldValue.WebhookBalanceNotifyEnabled, nil
+}
+
+// ResetWebhookBalanceNotifyEnabled resets all changes to the "webhook_balance_notify_enabled" field.
+func (m *UserMutation) ResetWebhookBalanceNotifyEnabled() {
+	m.webhook_balance_notify_enabled = nil
+}
+
+// SetWebhookBalanceNotifyURL sets the "webhook_balance_notify_url" field.
+func (m *UserMutation) SetWebhookBalanceNotifyURL(s string) {
+	m.webhook_balance_notify_url = &s
+}
+
+// WebhookBalanceNotifyURL returns the value of the "webhook_balance_notify_url" field in the mutation.
+func (m *UserMutation) WebhookBalanceNotifyURL() (r string, exists bool) {
+	v := m.webhook_balance_notify_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebhookBalanceNotifyURL returns the old "webhook_balance_notify_url" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldWebhookBalanceNotifyURL(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebhookBalanceNotifyURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebhookBalanceNotifyURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebhookBalanceNotifyURL: %w", err)
+	}
+	return oldValue.WebhookBalanceNotifyURL, nil
+}
+
+// ResetWebhookBalanceNotifyURL resets all changes to the "webhook_balance_notify_url" field.
+func (m *UserMutation) ResetWebhookBalanceNotifyURL() {
+	m.webhook_balance_notify_url = nil
+}
+
+// SetWebhookBalanceNotifyThreshold sets the "webhook_balance_notify_threshold" field.
+func (m *UserMutation) SetWebhookBalanceNotifyThreshold(f float64) {
+	m.webhook_balance_notify_threshold = &f
+	m.addwebhook_balance_notify_threshold = nil
+}
+
+// WebhookBalanceNotifyThreshold returns the value of the "webhook_balance_notify_threshold" field in the mutation.
+func (m *UserMutation) WebhookBalanceNotifyThreshold() (r float64, exists bool) {
+	v := m.webhook_balance_notify_threshold
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebhookBalanceNotifyThreshold returns the old "webhook_balance_notify_threshold" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldWebhookBalanceNotifyThreshold(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebhookBalanceNotifyThreshold is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebhookBalanceNotifyThreshold requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebhookBalanceNotifyThreshold: %w", err)
+	}
+	return oldValue.WebhookBalanceNotifyThreshold, nil
+}
+
+// AddWebhookBalanceNotifyThreshold adds f to the "webhook_balance_notify_threshold" field.
+func (m *UserMutation) AddWebhookBalanceNotifyThreshold(f float64) {
+	if m.addwebhook_balance_notify_threshold != nil {
+		*m.addwebhook_balance_notify_threshold += f
+	} else {
+		m.addwebhook_balance_notify_threshold = &f
+	}
+}
+
+// AddedWebhookBalanceNotifyThreshold returns the value that was added to the "webhook_balance_notify_threshold" field in this mutation.
+func (m *UserMutation) AddedWebhookBalanceNotifyThreshold() (r float64, exists bool) {
+	v := m.addwebhook_balance_notify_threshold
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWebhookBalanceNotifyThreshold clears the value of the "webhook_balance_notify_threshold" field.
+func (m *UserMutation) ClearWebhookBalanceNotifyThreshold() {
+	m.webhook_balance_notify_threshold = nil
+	m.addwebhook_balance_notify_threshold = nil
+	m.clearedFields[user.FieldWebhookBalanceNotifyThreshold] = struct{}{}
+}
+
+// WebhookBalanceNotifyThresholdCleared returns if the "webhook_balance_notify_threshold" field was cleared in this mutation.
+func (m *UserMutation) WebhookBalanceNotifyThresholdCleared() bool {
+	_, ok := m.clearedFields[user.FieldWebhookBalanceNotifyThreshold]
+	return ok
+}
+
+// ResetWebhookBalanceNotifyThreshold resets all changes to the "webhook_balance_notify_threshold" field.
+func (m *UserMutation) ResetWebhookBalanceNotifyThreshold() {
+	m.webhook_balance_notify_threshold = nil
+	m.addwebhook_balance_notify_threshold = nil
+	delete(m.clearedFields, user.FieldWebhookBalanceNotifyThreshold)
+}
+
 // SetTotalRecharged sets the "total_recharged" field.
 func (m *UserMutation) SetTotalRecharged(f float64) {
 	m.total_recharged = &f
@@ -56876,7 +57022,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 30)
+	fields := make([]string, 0, 33)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -56958,6 +57104,15 @@ func (m *UserMutation) Fields() []string {
 	if m.websocket_announcement_notify_enabled != nil {
 		fields = append(fields, user.FieldWebsocketAnnouncementNotifyEnabled)
 	}
+	if m.webhook_balance_notify_enabled != nil {
+		fields = append(fields, user.FieldWebhookBalanceNotifyEnabled)
+	}
+	if m.webhook_balance_notify_url != nil {
+		fields = append(fields, user.FieldWebhookBalanceNotifyURL)
+	}
+	if m.webhook_balance_notify_threshold != nil {
+		fields = append(fields, user.FieldWebhookBalanceNotifyThreshold)
+	}
 	if m.total_recharged != nil {
 		fields = append(fields, user.FieldTotalRecharged)
 	}
@@ -57029,6 +57184,12 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.WebsocketSiteMessageNotifyEnabled()
 	case user.FieldWebsocketAnnouncementNotifyEnabled:
 		return m.WebsocketAnnouncementNotifyEnabled()
+	case user.FieldWebhookBalanceNotifyEnabled:
+		return m.WebhookBalanceNotifyEnabled()
+	case user.FieldWebhookBalanceNotifyURL:
+		return m.WebhookBalanceNotifyURL()
+	case user.FieldWebhookBalanceNotifyThreshold:
+		return m.WebhookBalanceNotifyThreshold()
 	case user.FieldTotalRecharged:
 		return m.TotalRecharged()
 	case user.FieldInvoiceEnabled:
@@ -57098,6 +57259,12 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldWebsocketSiteMessageNotifyEnabled(ctx)
 	case user.FieldWebsocketAnnouncementNotifyEnabled:
 		return m.OldWebsocketAnnouncementNotifyEnabled(ctx)
+	case user.FieldWebhookBalanceNotifyEnabled:
+		return m.OldWebhookBalanceNotifyEnabled(ctx)
+	case user.FieldWebhookBalanceNotifyURL:
+		return m.OldWebhookBalanceNotifyURL(ctx)
+	case user.FieldWebhookBalanceNotifyThreshold:
+		return m.OldWebhookBalanceNotifyThreshold(ctx)
 	case user.FieldTotalRecharged:
 		return m.OldTotalRecharged(ctx)
 	case user.FieldInvoiceEnabled:
@@ -57302,6 +57469,27 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetWebsocketAnnouncementNotifyEnabled(v)
 		return nil
+	case user.FieldWebhookBalanceNotifyEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebhookBalanceNotifyEnabled(v)
+		return nil
+	case user.FieldWebhookBalanceNotifyURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebhookBalanceNotifyURL(v)
+		return nil
+	case user.FieldWebhookBalanceNotifyThreshold:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebhookBalanceNotifyThreshold(v)
+		return nil
 	case user.FieldTotalRecharged:
 		v, ok := value.(float64)
 		if !ok {
@@ -57346,6 +57534,9 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addwebsocket_balance_alert_threshold != nil {
 		fields = append(fields, user.FieldWebsocketBalanceAlertThreshold)
 	}
+	if m.addwebhook_balance_notify_threshold != nil {
+		fields = append(fields, user.FieldWebhookBalanceNotifyThreshold)
+	}
 	if m.addtotal_recharged != nil {
 		fields = append(fields, user.FieldTotalRecharged)
 	}
@@ -57370,6 +57561,8 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBalanceNotifyThreshold()
 	case user.FieldWebsocketBalanceAlertThreshold:
 		return m.AddedWebsocketBalanceAlertThreshold()
+	case user.FieldWebhookBalanceNotifyThreshold:
+		return m.AddedWebhookBalanceNotifyThreshold()
 	case user.FieldTotalRecharged:
 		return m.AddedTotalRecharged()
 	case user.FieldRpmLimit:
@@ -57418,6 +57611,13 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddWebsocketBalanceAlertThreshold(v)
 		return nil
+	case user.FieldWebhookBalanceNotifyThreshold:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWebhookBalanceNotifyThreshold(v)
+		return nil
 	case user.FieldTotalRecharged:
 		v, ok := value.(float64)
 		if !ok {
@@ -57461,6 +57661,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldWebsocketBalanceAlertThreshold) {
 		fields = append(fields, user.FieldWebsocketBalanceAlertThreshold)
 	}
+	if m.FieldCleared(user.FieldWebhookBalanceNotifyThreshold) {
+		fields = append(fields, user.FieldWebhookBalanceNotifyThreshold)
+	}
 	return fields
 }
 
@@ -57495,6 +57698,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldWebsocketBalanceAlertThreshold:
 		m.ClearWebsocketBalanceAlertThreshold()
+		return nil
+	case user.FieldWebhookBalanceNotifyThreshold:
+		m.ClearWebhookBalanceNotifyThreshold()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -57584,6 +57790,15 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldWebsocketAnnouncementNotifyEnabled:
 		m.ResetWebsocketAnnouncementNotifyEnabled()
+		return nil
+	case user.FieldWebhookBalanceNotifyEnabled:
+		m.ResetWebhookBalanceNotifyEnabled()
+		return nil
+	case user.FieldWebhookBalanceNotifyURL:
+		m.ResetWebhookBalanceNotifyURL()
+		return nil
+	case user.FieldWebhookBalanceNotifyThreshold:
+		m.ResetWebhookBalanceNotifyThreshold()
 		return nil
 	case user.FieldTotalRecharged:
 		m.ResetTotalRecharged()

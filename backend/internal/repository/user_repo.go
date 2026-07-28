@@ -257,6 +257,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetNillableWebsocketBalanceAlertThreshold(userIn.WebsocketBalanceAlertThreshold).
 		SetWebsocketSiteMessageNotifyEnabled(userIn.WebsocketSiteMessageNotifyEnabled).
 		SetWebsocketAnnouncementNotifyEnabled(userIn.WebsocketAnnouncementNotifyEnabled).
+		SetWebhookBalanceNotifyEnabled(userIn.WebhookBalanceNotifyEnabled).
+		SetWebhookBalanceNotifyURL(userIn.WebhookBalanceNotifyURL).
+		SetNillableWebhookBalanceNotifyThreshold(userIn.WebhookBalanceNotifyThreshold).
 		SetTotalRecharged(userIn.TotalRecharged).
 		SetRpmLimit(userIn.RPMLimit)
 	if userIn.SignupSource != "" {
@@ -273,6 +276,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 	}
 	if userIn.WebsocketBalanceAlertThreshold == nil {
 		updateOp = updateOp.ClearWebsocketBalanceAlertThreshold()
+	}
+	if userIn.WebhookBalanceNotifyThreshold == nil {
+		updateOp = updateOp.ClearWebhookBalanceNotifyThreshold()
 	}
 	updated, err := updateOp.Save(txCtx)
 	if err != nil {

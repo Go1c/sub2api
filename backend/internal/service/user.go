@@ -53,10 +53,14 @@ type User struct {
 	WebsocketNotifyEnabled              bool
 	WebsocketBalanceAlertEnabled        bool
 	WebsocketBalanceAlertThreshold      *float64
-	WebsocketSiteMessageNotifyEnabled   bool
-	WebsocketAnnouncementNotifyEnabled  bool
-	TotalRecharged                      float64
-	InvoiceEnabled                      bool
+	WebsocketSiteMessageNotifyEnabled  bool
+	WebsocketAnnouncementNotifyEnabled bool
+	// 外部机器人/Webhook 余额告警（企业微信等；与邮件、WebSocket 解耦）
+	WebhookBalanceNotifyEnabled   bool
+	WebhookBalanceNotifyURL       string
+	WebhookBalanceNotifyThreshold *float64
+	TotalRecharged                float64
+	InvoiceEnabled                bool
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
 	// 且该 (用户, 分组) 无 rpm_override 时作为全局兜底生效，计数键 rpm:u:{userID}:{min}。

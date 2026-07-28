@@ -46,9 +46,12 @@ func RegisterUserRoutes(
 				notifyEmail.DELETE("", h.User.RemoveNotifyEmail)
 			}
 
-			// WebSocket 实时通知（与邮件余额提醒解耦）
+			// WebSocket 实时通知（与邮件余额提醒解耦；非主推通道）
 			user.GET("/ws/notifications", h.User.UserWebsocketWS)
 			user.POST("/websocket-notify/test", h.User.SendWebsocketTest)
+
+			// 企业微信/外部机器人 Webhook 余额告警
+			user.POST("/webhook-balance-notify/test", h.User.SendWebhookBalanceNotifyTest)
 
 			// TOTP 双因素认证
 			totp := user.Group("/totp")

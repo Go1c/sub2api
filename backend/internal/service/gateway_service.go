@@ -710,10 +710,11 @@ type GatewayService struct {
 	resolver              *ModelPricingResolver
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
-	balanceNotifyService       *BalanceNotifyService
-	userWebsocketNotifyService *UserWebsocketNotifyService
-	accountErrorHistory        *AccountErrorHistoryService
-	userPlatformQuotaRepo      UserPlatformQuotaRepository
+	balanceNotifyService        *BalanceNotifyService
+	userWebsocketNotifyService  *UserWebsocketNotifyService
+	webhookBalanceNotifyService *WebhookBalanceNotifyService
+	accountErrorHistory         *AccountErrorHistoryService
+	userPlatformQuotaRepo       UserPlatformQuotaRepository
 }
 
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
@@ -724,6 +725,11 @@ func (s *GatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryS
 // SetUserWebsocketNotifyService injects optional WebSocket balance alerts (independent of email).
 func (s *GatewayService) SetUserWebsocketNotifyService(svc *UserWebsocketNotifyService) {
 	s.userWebsocketNotifyService = svc
+}
+
+// SetWebhookBalanceNotifyService injects optional external robot/webhook balance alerts (WeCom etc.).
+func (s *GatewayService) SetWebhookBalanceNotifyService(svc *WebhookBalanceNotifyService) {
+	s.webhookBalanceNotifyService = svc
 }
 
 // NewGatewayService creates a new GatewayService
