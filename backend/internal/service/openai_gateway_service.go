@@ -403,7 +403,6 @@ type OpenAIGatewayService struct {
 	resolver              *ModelPricingResolver
 	channelService        *ChannelService
 	balanceNotifyService        *BalanceNotifyService
-	userWebsocketNotifyService  *UserWebsocketNotifyService
 	webhookBalanceNotifyService *WebhookBalanceNotifyService
 	settingService              *SettingService
 	userPlatformQuotaRepo       UserPlatformQuotaRepository
@@ -443,10 +442,6 @@ func (s *OpenAIGatewayService) SetAccountErrorHistoryService(svc *AccountErrorHi
 	s.accountErrorHistory = svc
 }
 
-// SetUserWebsocketNotifyService injects optional WebSocket balance alerts (independent of email).
-func (s *OpenAIGatewayService) SetUserWebsocketNotifyService(svc *UserWebsocketNotifyService) {
-	s.userWebsocketNotifyService = svc
-}
 
 // SetWebhookBalanceNotifyService injects optional external robot/webhook balance alerts (WeCom etc.).
 func (s *OpenAIGatewayService) SetWebhookBalanceNotifyService(svc *WebhookBalanceNotifyService) {
@@ -622,8 +617,7 @@ func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 		billingCacheService:        s.billingCacheService,
 		deferredService:            s.deferredService,
 		balanceNotifyService:        s.balanceNotifyService,
-		userWebsocketNotifyService:  s.userWebsocketNotifyService,
-		webhookBalanceNotifyService: s.webhookBalanceNotifyService,
+			webhookBalanceNotifyService: s.webhookBalanceNotifyService,
 		userPlatformQuotaRepo:       s.userPlatformQuotaRepo,
 	}
 }

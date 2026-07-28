@@ -28,17 +28,13 @@ type User struct {
 	BalanceNotifyThresholdType string             `json:"balance_notify_threshold_type"`
 	BalanceNotifyThreshold     *float64           `json:"balance_notify_threshold"`
 	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
-	// WebSocket 实时通知（与邮件解耦）
-	WebsocketNotifyEnabled             bool     `json:"websocket_notify_enabled"`
-	WebsocketBalanceAlertEnabled       bool     `json:"websocket_balance_alert_enabled"`
-	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
-	WebsocketSiteMessageNotifyEnabled  bool     `json:"websocket_site_message_notify_enabled"`
-	WebsocketAnnouncementNotifyEnabled bool     `json:"websocket_announcement_notify_enabled"`
-	// 外部机器人/Webhook 余额告警（企业微信）
-	WebhookBalanceNotifyEnabled   bool     `json:"webhook_balance_notify_enabled"`
-	WebhookBalanceNotifyURL       string   `json:"webhook_balance_notify_url"`
-	WebhookBalanceNotifyThreshold *float64 `json:"webhook_balance_notify_threshold"`
-	TotalRecharged                float64  `json:"total_recharged"`
+	// Webhook 通知（HTTPS POST；与邮件解耦）
+	WebhookBalanceNotifyEnabled      bool     `json:"webhook_balance_notify_enabled"`
+	WebhookBalanceNotifyURL          string   `json:"webhook_balance_notify_url"`
+	WebhookBalanceNotifyThreshold    *float64 `json:"webhook_balance_notify_threshold"`
+	WebhookSiteMessageNotifyEnabled  bool     `json:"webhook_site_message_notify_enabled"`
+	WebhookAnnouncementNotifyEnabled bool     `json:"webhook_announcement_notify_enabled"`
+	TotalRecharged                   float64  `json:"total_recharged"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制），仅在所用分组未设置 rpm_limit 时作为兜底生效。
 	RPMLimit int `json:"rpm_limit"`

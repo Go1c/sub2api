@@ -165,31 +165,6 @@ func BalanceNotifyExtraEmails(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBalanceNotifyExtraEmails, v))
 }
 
-// WebsocketNotifyEnabled applies equality check predicate on the "websocket_notify_enabled" field. It's identical to WebsocketNotifyEnabledEQ.
-func WebsocketNotifyEnabled(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketNotifyEnabled, v))
-}
-
-// WebsocketBalanceAlertEnabled applies equality check predicate on the "websocket_balance_alert_enabled" field. It's identical to WebsocketBalanceAlertEnabledEQ.
-func WebsocketBalanceAlertEnabled(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketBalanceAlertEnabled, v))
-}
-
-// WebsocketBalanceAlertThreshold applies equality check predicate on the "websocket_balance_alert_threshold" field. It's identical to WebsocketBalanceAlertThresholdEQ.
-func WebsocketBalanceAlertThreshold(v float64) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketBalanceAlertThreshold, v))
-}
-
-// WebsocketSiteMessageNotifyEnabled applies equality check predicate on the "websocket_site_message_notify_enabled" field. It's identical to WebsocketSiteMessageNotifyEnabledEQ.
-func WebsocketSiteMessageNotifyEnabled(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketSiteMessageNotifyEnabled, v))
-}
-
-// WebsocketAnnouncementNotifyEnabled applies equality check predicate on the "websocket_announcement_notify_enabled" field. It's identical to WebsocketAnnouncementNotifyEnabledEQ.
-func WebsocketAnnouncementNotifyEnabled(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketAnnouncementNotifyEnabled, v))
-}
-
 // WebhookBalanceNotifyEnabled applies equality check predicate on the "webhook_balance_notify_enabled" field. It's identical to WebhookBalanceNotifyEnabledEQ.
 func WebhookBalanceNotifyEnabled(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldWebhookBalanceNotifyEnabled, v))
@@ -203,6 +178,16 @@ func WebhookBalanceNotifyURL(v string) predicate.User {
 // WebhookBalanceNotifyThreshold applies equality check predicate on the "webhook_balance_notify_threshold" field. It's identical to WebhookBalanceNotifyThresholdEQ.
 func WebhookBalanceNotifyThreshold(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldWebhookBalanceNotifyThreshold, v))
+}
+
+// WebhookSiteMessageNotifyEnabled applies equality check predicate on the "webhook_site_message_notify_enabled" field. It's identical to WebhookSiteMessageNotifyEnabledEQ.
+func WebhookSiteMessageNotifyEnabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldWebhookSiteMessageNotifyEnabled, v))
+}
+
+// WebhookAnnouncementNotifyEnabled applies equality check predicate on the "webhook_announcement_notify_enabled" field. It's identical to WebhookAnnouncementNotifyEnabledEQ.
+func WebhookAnnouncementNotifyEnabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldWebhookAnnouncementNotifyEnabled, v))
 }
 
 // TotalRecharged applies equality check predicate on the "total_recharged" field. It's identical to TotalRechargedEQ.
@@ -1350,96 +1335,6 @@ func BalanceNotifyExtraEmailsContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldBalanceNotifyExtraEmails, v))
 }
 
-// WebsocketNotifyEnabledEQ applies the EQ predicate on the "websocket_notify_enabled" field.
-func WebsocketNotifyEnabledEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketNotifyEnabled, v))
-}
-
-// WebsocketNotifyEnabledNEQ applies the NEQ predicate on the "websocket_notify_enabled" field.
-func WebsocketNotifyEnabledNEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldWebsocketNotifyEnabled, v))
-}
-
-// WebsocketBalanceAlertEnabledEQ applies the EQ predicate on the "websocket_balance_alert_enabled" field.
-func WebsocketBalanceAlertEnabledEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketBalanceAlertEnabled, v))
-}
-
-// WebsocketBalanceAlertEnabledNEQ applies the NEQ predicate on the "websocket_balance_alert_enabled" field.
-func WebsocketBalanceAlertEnabledNEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldWebsocketBalanceAlertEnabled, v))
-}
-
-// WebsocketBalanceAlertThresholdEQ applies the EQ predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdEQ(v float64) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketBalanceAlertThreshold, v))
-}
-
-// WebsocketBalanceAlertThresholdNEQ applies the NEQ predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdNEQ(v float64) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldWebsocketBalanceAlertThreshold, v))
-}
-
-// WebsocketBalanceAlertThresholdIn applies the In predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdIn(vs ...float64) predicate.User {
-	return predicate.User(sql.FieldIn(FieldWebsocketBalanceAlertThreshold, vs...))
-}
-
-// WebsocketBalanceAlertThresholdNotIn applies the NotIn predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdNotIn(vs ...float64) predicate.User {
-	return predicate.User(sql.FieldNotIn(FieldWebsocketBalanceAlertThreshold, vs...))
-}
-
-// WebsocketBalanceAlertThresholdGT applies the GT predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdGT(v float64) predicate.User {
-	return predicate.User(sql.FieldGT(FieldWebsocketBalanceAlertThreshold, v))
-}
-
-// WebsocketBalanceAlertThresholdGTE applies the GTE predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdGTE(v float64) predicate.User {
-	return predicate.User(sql.FieldGTE(FieldWebsocketBalanceAlertThreshold, v))
-}
-
-// WebsocketBalanceAlertThresholdLT applies the LT predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdLT(v float64) predicate.User {
-	return predicate.User(sql.FieldLT(FieldWebsocketBalanceAlertThreshold, v))
-}
-
-// WebsocketBalanceAlertThresholdLTE applies the LTE predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdLTE(v float64) predicate.User {
-	return predicate.User(sql.FieldLTE(FieldWebsocketBalanceAlertThreshold, v))
-}
-
-// WebsocketBalanceAlertThresholdIsNil applies the IsNil predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdIsNil() predicate.User {
-	return predicate.User(sql.FieldIsNull(FieldWebsocketBalanceAlertThreshold))
-}
-
-// WebsocketBalanceAlertThresholdNotNil applies the NotNil predicate on the "websocket_balance_alert_threshold" field.
-func WebsocketBalanceAlertThresholdNotNil() predicate.User {
-	return predicate.User(sql.FieldNotNull(FieldWebsocketBalanceAlertThreshold))
-}
-
-// WebsocketSiteMessageNotifyEnabledEQ applies the EQ predicate on the "websocket_site_message_notify_enabled" field.
-func WebsocketSiteMessageNotifyEnabledEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketSiteMessageNotifyEnabled, v))
-}
-
-// WebsocketSiteMessageNotifyEnabledNEQ applies the NEQ predicate on the "websocket_site_message_notify_enabled" field.
-func WebsocketSiteMessageNotifyEnabledNEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldWebsocketSiteMessageNotifyEnabled, v))
-}
-
-// WebsocketAnnouncementNotifyEnabledEQ applies the EQ predicate on the "websocket_announcement_notify_enabled" field.
-func WebsocketAnnouncementNotifyEnabledEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldWebsocketAnnouncementNotifyEnabled, v))
-}
-
-// WebsocketAnnouncementNotifyEnabledNEQ applies the NEQ predicate on the "websocket_announcement_notify_enabled" field.
-func WebsocketAnnouncementNotifyEnabledNEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldWebsocketAnnouncementNotifyEnabled, v))
-}
-
 // WebhookBalanceNotifyEnabledEQ applies the EQ predicate on the "webhook_balance_notify_enabled" field.
 func WebhookBalanceNotifyEnabledEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldWebhookBalanceNotifyEnabled, v))
@@ -1563,6 +1458,26 @@ func WebhookBalanceNotifyThresholdIsNil() predicate.User {
 // WebhookBalanceNotifyThresholdNotNil applies the NotNil predicate on the "webhook_balance_notify_threshold" field.
 func WebhookBalanceNotifyThresholdNotNil() predicate.User {
 	return predicate.User(sql.FieldNotNull(FieldWebhookBalanceNotifyThreshold))
+}
+
+// WebhookSiteMessageNotifyEnabledEQ applies the EQ predicate on the "webhook_site_message_notify_enabled" field.
+func WebhookSiteMessageNotifyEnabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldWebhookSiteMessageNotifyEnabled, v))
+}
+
+// WebhookSiteMessageNotifyEnabledNEQ applies the NEQ predicate on the "webhook_site_message_notify_enabled" field.
+func WebhookSiteMessageNotifyEnabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldWebhookSiteMessageNotifyEnabled, v))
+}
+
+// WebhookAnnouncementNotifyEnabledEQ applies the EQ predicate on the "webhook_announcement_notify_enabled" field.
+func WebhookAnnouncementNotifyEnabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldWebhookAnnouncementNotifyEnabled, v))
+}
+
+// WebhookAnnouncementNotifyEnabledNEQ applies the NEQ predicate on the "webhook_announcement_notify_enabled" field.
+func WebhookAnnouncementNotifyEnabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldWebhookAnnouncementNotifyEnabled, v))
 }
 
 // TotalRechargedEQ applies the EQ predicate on the "total_recharged" field.

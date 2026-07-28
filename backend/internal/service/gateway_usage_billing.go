@@ -439,9 +439,6 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 		"result_has_new_balance", result != nil && result.NewBalance != nil,
 	)
 	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
-	if deps.userWebsocketNotifyService != nil {
-		deps.userWebsocketNotifyService.CheckWebsocketBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
-	}
 	if deps.webhookBalanceNotifyService != nil {
 		deps.webhookBalanceNotifyService.CheckWebhookBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
 	}
@@ -521,7 +518,6 @@ type billingDeps struct {
 	billingCacheService         *BillingCacheService
 	deferredService             *DeferredService
 	balanceNotifyService        *BalanceNotifyService
-	userWebsocketNotifyService  *UserWebsocketNotifyService
 	webhookBalanceNotifyService *WebhookBalanceNotifyService
 	userPlatformQuotaRepo       UserPlatformQuotaRepository
 	cfg                         *config.Config
@@ -535,8 +531,7 @@ func (s *GatewayService) billingDeps() *billingDeps {
 		billingCacheService:         s.billingCacheService,
 		deferredService:             s.deferredService,
 		balanceNotifyService:        s.balanceNotifyService,
-		userWebsocketNotifyService:  s.userWebsocketNotifyService,
-		webhookBalanceNotifyService: s.webhookBalanceNotifyService,
+			webhookBalanceNotifyService: s.webhookBalanceNotifyService,
 		userPlatformQuotaRepo:       s.userPlatformQuotaRepo,
 		cfg:                         s.cfg,
 	}

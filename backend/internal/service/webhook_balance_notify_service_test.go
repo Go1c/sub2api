@@ -22,9 +22,9 @@ func TestValidateWebhookURL(t *testing.T) {
 	require.NoError(t, ValidateWebhookURL("https://hooks.example.com/custom"))
 }
 
-func TestIsWeComWebhook(t *testing.T) {
-	require.True(t, IsWeComWebhook("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1"))
-	require.False(t, IsWeComWebhook("https://hooks.example.com/x"))
+func TestIsWeComStyleWebhook(t *testing.T) {
+	require.True(t, IsWeComStyleWebhook("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=1"))
+	require.False(t, IsWeComStyleWebhook("https://hooks.example.com/x"))
 }
 
 func TestShouldPushWebhookBalanceAlert(t *testing.T) {
@@ -66,8 +66,16 @@ func TestCheckWebhookBalanceAfterDeduction_PostsOnCross(t *testing.T) {
 	require.Equal(t, int32(1), hits.Load())
 }
 
+type webhookUserReaderStub struct {
+	user *User
+}
+
+func (s *webhookUserReaderStub) GetByID(context.Context, int64) (*User, error) {
+	return s.user, nil
+}
+
 func TestSendTest_Disabled(t *testing.T) {
-	repo := &wsUserReaderStub{user: &User{ID: 1, WebhookBalanceNotifyEnabled: false}}
+	repo := &webhookUserReaderStub{user: &User{ID: 1, WebhookBalanceNotifyEnabled: false}}
 	svc := NewWebhookBalanceNotifyService(repo)
 	err := svc.SendTest(context.Background(), 1)
 	require.ErrorIs(t, err, ErrWebhookBalanceNotifyDisabled)

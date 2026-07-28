@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 const (
@@ -23,7 +25,7 @@ const (
 	webhookBalanceNotifyMaxBody     = 2048
 )
 
-// ErrWebhookBalanceNotifyDisabled means the user has not enabled webhook balance alerts.
+// ErrWebhookBalanceNotifyDisabled means the user has not enabled webhook notify.
 var ErrWebhookBalanceNotifyDisabled = fmt.Errorf("WEBHOOK_BALANCE_NOTIFY_DISABLED")
 
 // ErrWebhookBalanceNotifyURLInvalid means the webhook URL is missing or not allowed.
@@ -35,17 +37,27 @@ var ErrWebhookBalanceNotifySendFailed = fmt.Errorf("WEBHOOK_BALANCE_NOTIFY_SEND_
 // ErrWebhookBalanceNotifyRateLimited means test is called too frequently.
 var ErrWebhookBalanceNotifyRateLimited = fmt.Errorf("WEBHOOK_BALANCE_NOTIFY_RATE_LIMITED")
 
-// WebhookBalanceNotifyService sends balance-low alerts to external robots (WeCom primary).
+// WebhookUserReader loads users for preference checks.
+type WebhookUserReader interface {
+	GetByID(ctx context.Context, id int64) (*User, error)
+}
+
+// WebhookAnnouncementUserLister lists users eligible for announcement webhook fan-out.
+type WebhookAnnouncementUserLister interface {
+	ListIDsWithWebhookAnnouncementNotify(ctx context.Context) ([]int64, error)
+}
+
+// WebhookBalanceNotifyService sends HTTPS webhook notifications (balance / site-message / announcement).
 type WebhookBalanceNotifyService struct {
-	client *http.Client
-	userRepo UserWebsocketUserReader // reuse narrow GetByID reader
+	client   *http.Client
+	userRepo WebhookUserReader
 
 	testMu   sync.Mutex
 	testLast map[int64]time.Time
 }
 
 // NewWebhookBalanceNotifyService constructs the service.
-func NewWebhookBalanceNotifyService(userRepo UserWebsocketUserReader) *WebhookBalanceNotifyService {
+func NewWebhookBalanceNotifyService(userRepo WebhookUserReader) *WebhookBalanceNotifyService {
 	return &WebhookBalanceNotifyService{
 		client:   &http.Client{Timeout: webhookBalanceNotifyHTTPTimeout},
 		userRepo: userRepo,
@@ -64,19 +76,32 @@ func ResolveWebhookBalanceThreshold(user *User) float64 {
 	return DefaultWebhookBalanceNotifyThreshold
 }
 
-// ShouldPushWebhookBalanceAlert reports whether a balance cross should notify webhook.
-func ShouldPushWebhookBalanceAlert(user *User) bool {
+func webhookReady(user *User) bool {
 	if user == nil || !user.WebhookBalanceNotifyEnabled {
 		return false
 	}
-	if strings.TrimSpace(user.WebhookBalanceNotifyURL) == "" {
+	return strings.TrimSpace(user.WebhookBalanceNotifyURL) != ""
+}
+
+// ShouldPushWebhookBalanceAlert reports whether a balance cross should notify webhook.
+func ShouldPushWebhookBalanceAlert(user *User) bool {
+	if !webhookReady(user) {
 		return false
 	}
 	return ResolveWebhookBalanceThreshold(user) > 0
 }
 
-// ValidateWebhookURL validates user-supplied webhook URLs.
-// Allows WeCom robot URLs and generic https webhooks (no http, no localhost).
+// ShouldPushWebhookSiteMessage reports whether a new site message should notify webhook.
+func ShouldPushWebhookSiteMessage(user *User) bool {
+	return webhookReady(user) && user.WebhookSiteMessageNotifyEnabled
+}
+
+// ShouldPushWebhookAnnouncement reports whether a new announcement should notify webhook.
+func ShouldPushWebhookAnnouncement(user *User) bool {
+	return webhookReady(user) && user.WebhookAnnouncementNotifyEnabled
+}
+
+// ValidateWebhookURL validates user-supplied webhook URLs (https only, no localhost).
 func ValidateWebhookURL(raw string) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -96,8 +121,8 @@ func ValidateWebhookURL(raw string) error {
 	return nil
 }
 
-// IsWeComWebhook reports whether URL looks like a WeCom group robot webhook.
-func IsWeComWebhook(raw string) bool {
+// IsWeComStyleWebhook reports whether URL uses WeCom robot path (affects JSON payload shape only).
+func IsWeComStyleWebhook(raw string) bool {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
 		return false
@@ -106,9 +131,8 @@ func IsWeComWebhook(raw string) bool {
 	return host == "qyapi.weixin.qq.com" && strings.Contains(u.Path, "/cgi-bin/webhook/send")
 }
 
-// CheckWebhookBalanceAfterDeduction pushes webhook when balance first crosses below threshold.
-// Independent from email BalanceNotifyService and browser WebSocket.
-func (s *WebhookBalanceNotifyService) CheckWebhookBalanceAfterDeduction(ctx context.Context, user *User, oldBalance, cost float64) {
+// CheckWebhookBalanceAfterDeduction posts when balance first crosses below threshold.
+func (s *WebhookBalanceNotifyService) CheckWebhookBalanceAfterDeduction(_ context.Context, user *User, oldBalance, cost float64) {
 	if s == nil || !ShouldPushWebhookBalanceAlert(user) {
 		return
 	}
@@ -120,7 +144,6 @@ func (s *WebhookBalanceNotifyService) CheckWebhookBalanceAfterDeduction(ctx cont
 	if !crossedDownward(oldBalance, newBalance, threshold) {
 		return
 	}
-	// fire-and-forget so billing path is not blocked
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -129,11 +152,96 @@ func (s *WebhookBalanceNotifyService) CheckWebhookBalanceAfterDeduction(ctx cont
 		}()
 		notifyCtx, cancel := context.WithTimeout(context.Background(), webhookBalanceNotifyHTTPTimeout)
 		defer cancel()
-		if err := s.sendBalanceLow(notifyCtx, user, newBalance, threshold, false); err != nil {
-			slog.Warn("webhook balance notify failed",
-				"user_id", user.ID, "err", err)
+		text := buildWebhookBalanceText(user, newBalance, threshold, false)
+		if err := s.postWebhook(notifyCtx, user.WebhookBalanceNotifyURL, text); err != nil {
+			slog.Warn("webhook balance notify failed", "user_id", user.ID, "err", err)
 		}
 	}()
+}
+
+// NotifySiteMessage posts when a user receives a new site message.
+func (s *WebhookBalanceNotifyService) NotifySiteMessage(ctx context.Context, recipientID int64, messageID int64, subject string) {
+	if s == nil || recipientID <= 0 {
+		return
+	}
+	user, err := s.loadUser(ctx, recipientID)
+	if err != nil || !ShouldPushWebhookSiteMessage(user) {
+		return
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("panic in webhook site-message notify", "recover", r)
+			}
+		}()
+		notifyCtx, cancel := context.WithTimeout(context.Background(), webhookBalanceNotifyHTTPTimeout)
+		defer cancel()
+		subj := strings.TrimSpace(subject)
+		if subj == "" {
+			subj = "(no subject)"
+		}
+		text := fmt.Sprintf("【新站内信】\n账户: %s\n主题: %s\n消息ID: %d",
+			webhookUserLabel(user), subj, messageID)
+		if err := s.postWebhook(notifyCtx, user.WebhookBalanceNotifyURL, text); err != nil {
+			slog.Warn("webhook site-message notify failed", "user_id", recipientID, "err", err)
+		}
+	}()
+}
+
+// NotifyAnnouncementPublished fans out to users with webhook announcement notify enabled.
+func (s *WebhookBalanceNotifyService) NotifyAnnouncementPublished(ctx context.Context, a *Announcement) {
+	if s == nil || s.userRepo == nil || a == nil || a.Status != AnnouncementStatusActive {
+		return
+	}
+	lister, ok := s.userRepo.(WebhookAnnouncementUserLister)
+	if !ok {
+		return
+	}
+	ids, err := lister.ListIDsWithWebhookAnnouncementNotify(ctx)
+	if err != nil {
+		slog.Warn("webhook announcement list users failed", "err", err)
+		return
+	}
+	for _, id := range ids {
+		user, err := s.loadUser(ctx, id)
+		if err != nil || !ShouldPushWebhookAnnouncement(user) {
+			continue
+		}
+		if !announcementLikelyVisible(user, a) {
+			continue
+		}
+		uid, title, aid := id, a.Title, a.ID
+		u := user
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("panic in webhook announcement notify", "recover", r)
+				}
+			}()
+			notifyCtx, cancel := context.WithTimeout(context.Background(), webhookBalanceNotifyHTTPTimeout)
+			defer cancel()
+			t := strings.TrimSpace(title)
+			if t == "" {
+				t = "(untitled)"
+			}
+			text := fmt.Sprintf("【新公告】\n账户: %s\n标题: %s\n公告ID: %d",
+				webhookUserLabel(u), t, aid)
+			if err := s.postWebhook(notifyCtx, u.WebhookBalanceNotifyURL, text); err != nil {
+				slog.Warn("webhook announcement notify failed", "user_id", uid, "err", err)
+			}
+		}()
+	}
+}
+
+func announcementLikelyVisible(user *User, a *Announcement) bool {
+	if user == nil || a == nil {
+		return false
+	}
+	t := domain.AnnouncementTargeting(a.Targeting)
+	if len(t.AnyOf) == 0 {
+		return true
+	}
+	return t.Matches(user.Balance, map[int64]struct{}{})
 }
 
 // SendTest sends a test message to the user's configured webhook (rate limited).
@@ -162,34 +270,35 @@ func (s *WebhookBalanceNotifyService) SendTest(ctx context.Context, userID int64
 	s.testMu.Unlock()
 
 	threshold := ResolveWebhookBalanceThreshold(user)
-	return s.sendBalanceLow(ctx, user, user.Balance, threshold, true)
+	text := buildWebhookBalanceText(user, user.Balance, threshold, true)
+	return s.postWebhook(ctx, user.WebhookBalanceNotifyURL, text)
 }
 
-func (s *WebhookBalanceNotifyService) sendBalanceLow(ctx context.Context, user *User, balance, threshold float64, isTest bool) error {
+func (s *WebhookBalanceNotifyService) loadUser(ctx context.Context, userID int64) (*User, error) {
+	if s.userRepo == nil {
+		return nil, ErrUserNotFound
+	}
+	return s.userRepo.GetByID(ctx, userID)
+}
+
+func webhookUserLabel(user *User) string {
 	if user == nil {
-		return ErrWebhookBalanceNotifyDisabled
+		return "unknown"
 	}
-	if err := ValidateWebhookURL(user.WebhookBalanceNotifyURL); err != nil {
-		return err
+	email := strings.TrimSpace(user.Email)
+	if email != "" {
+		return email
 	}
-	text := buildWebhookBalanceText(user, balance, threshold, isTest)
-	return s.postWebhook(ctx, user.WebhookBalanceNotifyURL, text)
+	return fmt.Sprintf("user#%d", user.ID)
 }
 
 func buildWebhookBalanceText(user *User, balance, threshold float64, isTest bool) string {
 	prefix := "【余额不足提醒】"
 	if isTest {
-		prefix = "【余额不足提醒·测试】"
-	}
-	email := ""
-	if user != nil {
-		email = strings.TrimSpace(user.Email)
-	}
-	if email == "" {
-		email = fmt.Sprintf("user#%d", user.ID)
+		prefix = "【Webhook 测试】"
 	}
 	return fmt.Sprintf("%s\n账户: %s\n当前余额: $%.4f\n告警阈值: $%.4f\n请及时充值以免影响使用。",
-		prefix, email, balance, threshold)
+		prefix, webhookUserLabel(user), balance, threshold)
 }
 
 func (s *WebhookBalanceNotifyService) postWebhook(ctx context.Context, webhookURL, text string) error {
@@ -203,7 +312,7 @@ func (s *WebhookBalanceNotifyService) postWebhook(ctx context.Context, webhookUR
 	}
 
 	var payload any
-	if IsWeComWebhook(webhookURL) {
+	if IsWeComStyleWebhook(webhookURL) {
 		payload = map[string]any{
 			"msgtype": "text",
 			"text": map[string]string{
@@ -211,7 +320,6 @@ func (s *WebhookBalanceNotifyService) postWebhook(ctx context.Context, webhookUR
 			},
 		}
 	} else {
-		// Generic JSON webhook for custom receivers / future robots.
 		payload = map[string]any{
 			"msgtype": "text",
 			"text":    text,
@@ -242,14 +350,13 @@ func (s *WebhookBalanceNotifyService) postWebhook(ctx context.Context, webhookUR
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("%w: status=%d body=%s", ErrWebhookBalanceNotifySendFailed, resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
-	// WeCom returns HTTP 200 with errcode in JSON body.
-	if IsWeComWebhook(webhookURL) {
+	if IsWeComStyleWebhook(webhookURL) {
 		var wecom struct {
 			ErrCode int    `json:"errcode"`
 			ErrMsg  string `json:"errmsg"`
 		}
 		if err := json.Unmarshal(raw, &wecom); err == nil && wecom.ErrCode != 0 {
-			return fmt.Errorf("%w: wecom errcode=%d errmsg=%s", ErrWebhookBalanceNotifySendFailed, wecom.ErrCode, wecom.ErrMsg)
+			return fmt.Errorf("%w: webhook errcode=%d errmsg=%s", ErrWebhookBalanceNotifySendFailed, wecom.ErrCode, wecom.ErrMsg)
 		}
 	}
 	return nil

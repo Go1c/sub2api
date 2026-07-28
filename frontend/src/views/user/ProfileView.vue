@@ -48,12 +48,6 @@
         :user="user"
       />
 
-      <!-- 网页 WebSocket 为次要通道，保留但不作为主推机器人通知 -->
-      <ProfileWebsocketNotifyCard
-        v-if="user && user.role !== 'admin'"
-        :user="user"
-      />
-
       <ProfileTotpCard />
     </div>
   </AppLayout>
@@ -69,7 +63,6 @@ import ProfileInfoCard from '@/components/user/profile/ProfileInfoCard.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
 import ProfileTotpCard from '@/components/user/profile/ProfileTotpCard.vue'
 import ProfileWebhookBalanceNotifyCard from '@/components/user/profile/ProfileWebhookBalanceNotifyCard.vue'
-import ProfileWebsocketNotifyCard from '@/components/user/profile/ProfileWebsocketNotifyCard.vue'
 import { isWeChatWebOAuthEnabled } from '@/api/auth'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
