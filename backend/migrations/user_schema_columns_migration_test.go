@@ -89,8 +89,8 @@ func collectEmbeddedMigrationSQL() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		b.Write(raw)
-		b.WriteByte('\n')
+		_, _ = b.Write(raw)
+		_ = b.WriteByte('\n')
 	}
 	return b.String(), nil
 }
