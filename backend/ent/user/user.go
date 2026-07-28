@@ -59,6 +59,16 @@ const (
 	FieldBalanceNotifyThreshold = "balance_notify_threshold"
 	// FieldBalanceNotifyExtraEmails holds the string denoting the balance_notify_extra_emails field in the database.
 	FieldBalanceNotifyExtraEmails = "balance_notify_extra_emails"
+	// FieldWebsocketNotifyEnabled holds the string denoting the websocket_notify_enabled field in the database.
+	FieldWebsocketNotifyEnabled = "websocket_notify_enabled"
+	// FieldWebsocketBalanceAlertEnabled holds the string denoting the websocket_balance_alert_enabled field in the database.
+	FieldWebsocketBalanceAlertEnabled = "websocket_balance_alert_enabled"
+	// FieldWebsocketBalanceAlertThreshold holds the string denoting the websocket_balance_alert_threshold field in the database.
+	FieldWebsocketBalanceAlertThreshold = "websocket_balance_alert_threshold"
+	// FieldWebsocketSiteMessageNotifyEnabled holds the string denoting the websocket_site_message_notify_enabled field in the database.
+	FieldWebsocketSiteMessageNotifyEnabled = "websocket_site_message_notify_enabled"
+	// FieldWebsocketAnnouncementNotifyEnabled holds the string denoting the websocket_announcement_notify_enabled field in the database.
+	FieldWebsocketAnnouncementNotifyEnabled = "websocket_announcement_notify_enabled"
 	// FieldTotalRecharged holds the string denoting the total_recharged field in the database.
 	FieldTotalRecharged = "total_recharged"
 	// FieldInvoiceEnabled holds the string denoting the invoice_enabled field in the database.
@@ -245,6 +255,11 @@ var Columns = []string{
 	FieldBalanceNotifyThresholdType,
 	FieldBalanceNotifyThreshold,
 	FieldBalanceNotifyExtraEmails,
+	FieldWebsocketNotifyEnabled,
+	FieldWebsocketBalanceAlertEnabled,
+	FieldWebsocketBalanceAlertThreshold,
+	FieldWebsocketSiteMessageNotifyEnabled,
+	FieldWebsocketAnnouncementNotifyEnabled,
 	FieldTotalRecharged,
 	FieldInvoiceEnabled,
 	FieldRpmLimit,
@@ -316,6 +331,14 @@ var (
 	DefaultBalanceNotifyThresholdType string
 	// DefaultBalanceNotifyExtraEmails holds the default value on creation for the "balance_notify_extra_emails" field.
 	DefaultBalanceNotifyExtraEmails string
+	// DefaultWebsocketNotifyEnabled holds the default value on creation for the "websocket_notify_enabled" field.
+	DefaultWebsocketNotifyEnabled bool
+	// DefaultWebsocketBalanceAlertEnabled holds the default value on creation for the "websocket_balance_alert_enabled" field.
+	DefaultWebsocketBalanceAlertEnabled bool
+	// DefaultWebsocketSiteMessageNotifyEnabled holds the default value on creation for the "websocket_site_message_notify_enabled" field.
+	DefaultWebsocketSiteMessageNotifyEnabled bool
+	// DefaultWebsocketAnnouncementNotifyEnabled holds the default value on creation for the "websocket_announcement_notify_enabled" field.
+	DefaultWebsocketAnnouncementNotifyEnabled bool
 	// DefaultTotalRecharged holds the default value on creation for the "total_recharged" field.
 	DefaultTotalRecharged float64
 	// DefaultInvoiceEnabled holds the default value on creation for the "invoice_enabled" field.
@@ -440,6 +463,31 @@ func ByBalanceNotifyThreshold(opts ...sql.OrderTermOption) OrderOption {
 // ByBalanceNotifyExtraEmails orders the results by the balance_notify_extra_emails field.
 func ByBalanceNotifyExtraEmails(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalanceNotifyExtraEmails, opts...).ToFunc()
+}
+
+// ByWebsocketNotifyEnabled orders the results by the websocket_notify_enabled field.
+func ByWebsocketNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebsocketNotifyEnabled, opts...).ToFunc()
+}
+
+// ByWebsocketBalanceAlertEnabled orders the results by the websocket_balance_alert_enabled field.
+func ByWebsocketBalanceAlertEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebsocketBalanceAlertEnabled, opts...).ToFunc()
+}
+
+// ByWebsocketBalanceAlertThreshold orders the results by the websocket_balance_alert_threshold field.
+func ByWebsocketBalanceAlertThreshold(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebsocketBalanceAlertThreshold, opts...).ToFunc()
+}
+
+// ByWebsocketSiteMessageNotifyEnabled orders the results by the websocket_site_message_notify_enabled field.
+func ByWebsocketSiteMessageNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebsocketSiteMessageNotifyEnabled, opts...).ToFunc()
+}
+
+// ByWebsocketAnnouncementNotifyEnabled orders the results by the websocket_announcement_notify_enabled field.
+func ByWebsocketAnnouncementNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebsocketAnnouncementNotifyEnabled, opts...).ToFunc()
 }
 
 // ByTotalRecharged orders the results by the total_recharged field.

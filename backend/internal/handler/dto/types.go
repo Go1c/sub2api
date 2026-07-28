@@ -23,12 +23,18 @@ type User struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
 
-	// 余额不足通知
+	// 余额不足通知（邮件）
 	BalanceNotifyEnabled       bool               `json:"balance_notify_enabled"`
 	BalanceNotifyThresholdType string             `json:"balance_notify_threshold_type"`
 	BalanceNotifyThreshold     *float64           `json:"balance_notify_threshold"`
 	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
-	TotalRecharged             float64            `json:"total_recharged"`
+	// WebSocket 实时通知（与邮件解耦）
+	WebsocketNotifyEnabled             bool     `json:"websocket_notify_enabled"`
+	WebsocketBalanceAlertEnabled       bool     `json:"websocket_balance_alert_enabled"`
+	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
+	WebsocketSiteMessageNotifyEnabled  bool     `json:"websocket_site_message_notify_enabled"`
+	WebsocketAnnouncementNotifyEnabled bool     `json:"websocket_announcement_notify_enabled"`
+	TotalRecharged                     float64  `json:"total_recharged"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制），仅在所用分组未设置 rpm_limit 时作为兜底生效。
 	RPMLimit int `json:"rpm_limit"`

@@ -1459,6 +1459,28 @@ export default {
       unverified: 'Unverified',
       verified: 'Verified',
     },
+    websocketNotify: {
+      title: 'WebSocket Settings',
+      description:
+        'When enabled, receive realtime alerts while any page of this site is open (independent from email balance alerts)',
+      enabled: 'Enable WebSocket',
+      balanceAlert: 'Notify when balance falls below threshold',
+      balanceAlertHint: 'Push a browser alert when balance first drops below the threshold',
+      balanceThreshold: 'Balance alert threshold',
+      balanceThresholdHint: 'Leave empty to use default $10',
+      balanceThresholdPlaceholder: 'Default 10',
+      siteMessage: 'Notify on new site messages',
+      siteMessageHint: 'Realtime alert when a new inbox message arrives',
+      announcement: 'Notify on new announcements',
+      announcementHint: 'Realtime alert when a new visible announcement is available',
+      test: 'Send test',
+      testing: 'Sending…',
+      testHint: 'Enable WebSocket and keep this site open',
+      testSent: 'Test notification sent',
+      testFailed: 'Test failed',
+      saved: 'Saved',
+      saveFailed: 'Failed to save'
+    },
     avatar: {
       title: 'Profile Avatar',
       description: 'Upload an avatar image. Static uploads are compressed to 20KB before saving.',

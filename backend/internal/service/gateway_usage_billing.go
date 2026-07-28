@@ -439,6 +439,9 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 		"result_has_new_balance", result != nil && result.NewBalance != nil,
 	)
 	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
+	if deps.userWebsocketNotifyService != nil {
+		deps.userWebsocketNotifyService.CheckWebsocketBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
+	}
 }
 
 // resolveOldBalance returns the pre-deduction balance.
@@ -509,26 +512,28 @@ func detachUpstreamContext(ctx context.Context) (context.Context, context.Cancel
 
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
 type billingDeps struct {
-	accountRepo           AccountRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	billingCacheService   *BillingCacheService
-	deferredService       *DeferredService
-	balanceNotifyService  *BalanceNotifyService
-	userPlatformQuotaRepo UserPlatformQuotaRepository
-	cfg                   *config.Config
+	accountRepo               AccountRepository
+	userRepo                  UserRepository
+	userSubRepo               UserSubscriptionRepository
+	billingCacheService       *BillingCacheService
+	deferredService           *DeferredService
+	balanceNotifyService      *BalanceNotifyService
+	userWebsocketNotifyService *UserWebsocketNotifyService
+	userPlatformQuotaRepo     UserPlatformQuotaRepository
+	cfg                       *config.Config
 }
 
 func (s *GatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:           s.accountRepo,
-		userRepo:              s.userRepo,
-		userSubRepo:           s.userSubRepo,
-		billingCacheService:   s.billingCacheService,
-		deferredService:       s.deferredService,
-		balanceNotifyService:  s.balanceNotifyService,
-		userPlatformQuotaRepo: s.userPlatformQuotaRepo,
-		cfg:                   s.cfg,
+		accountRepo:                s.accountRepo,
+		userRepo:                   s.userRepo,
+		userSubRepo:                s.userSubRepo,
+		billingCacheService:        s.billingCacheService,
+		deferredService:            s.deferredService,
+		balanceNotifyService:       s.balanceNotifyService,
+		userWebsocketNotifyService: s.userWebsocketNotifyService,
+		userPlatformQuotaRepo:      s.userPlatformQuotaRepo,
+		cfg:                        s.cfg,
 	}
 }
 

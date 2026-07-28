@@ -16,6 +16,7 @@ type AnnouncementService struct {
 	readRepo         AnnouncementReadRepository
 	userRepo         UserRepository
 	userSubRepo      UserSubscriptionRepository
+	wsNotify         *UserWebsocketNotifyService
 }
 
 func NewAnnouncementService(
@@ -29,6 +30,13 @@ func NewAnnouncementService(
 		readRepo:         readRepo,
 		userRepo:         userRepo,
 		userSubRepo:      userSubRepo,
+	}
+}
+
+// SetUserWebsocketNotifyService injects optional WebSocket fan-out for new/active announcements.
+func (s *AnnouncementService) SetUserWebsocketNotifyService(svc *UserWebsocketNotifyService) {
+	if s != nil {
+		s.wsNotify = svc
 	}
 }
 
@@ -126,6 +134,9 @@ func (s *AnnouncementService) Create(ctx context.Context, input *CreateAnnouncem
 	if err := s.announcementRepo.Create(ctx, a); err != nil {
 		return nil, fmt.Errorf("create announcement: %w", err)
 	}
+	if s.wsNotify != nil && a.Status == AnnouncementStatusActive {
+		s.wsNotify.NotifyAnnouncementPublished(ctx, a)
+	}
 	return a, nil
 }
 
@@ -196,6 +207,9 @@ func (s *AnnouncementService) Update(ctx context.Context, id int64, input *Updat
 
 	if err := s.announcementRepo.Update(ctx, a); err != nil {
 		return nil, fmt.Errorf("update announcement: %w", err)
+	}
+	if s.wsNotify != nil && a.Status == AnnouncementStatusActive {
+		s.wsNotify.NotifyAnnouncementPublished(ctx, a)
 	}
 	return a, nil
 }

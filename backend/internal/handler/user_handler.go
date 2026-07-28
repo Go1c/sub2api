@@ -22,6 +22,7 @@ type UserHandler struct {
 	emailCache            service.EmailCache
 	affiliateService      *service.AffiliateService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository
+	wsNotify              *service.UserWebsocketNotifyService
 }
 
 // NewUserHandler creates a new UserHandler
@@ -40,6 +41,13 @@ func NewUserHandler(
 		emailCache:            emailCache,
 		affiliateService:      affiliateService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+	}
+}
+
+// SetUserWebsocketNotifyService injects WebSocket notify hub for profile test + WS upgrade.
+func (h *UserHandler) SetUserWebsocketNotifyService(svc *service.UserWebsocketNotifyService) {
+	if h != nil {
+		h.wsNotify = svc
 	}
 }
 
@@ -77,10 +85,15 @@ type ChangePasswordRequest struct {
 
 // UpdateProfileRequest represents the update profile request payload
 type UpdateProfileRequest struct {
-	Username               *string  `json:"username"`
-	AvatarURL              *string  `json:"avatar_url"`
-	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
+	Username                           *string  `json:"username"`
+	AvatarURL                          *string  `json:"avatar_url"`
+	BalanceNotifyEnabled               *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold             *float64 `json:"balance_notify_threshold"`
+	WebsocketNotifyEnabled             *bool    `json:"websocket_notify_enabled"`
+	WebsocketBalanceAlertEnabled       *bool    `json:"websocket_balance_alert_enabled"`
+	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
+	WebsocketSiteMessageNotifyEnabled  *bool    `json:"websocket_site_message_notify_enabled"`
+	WebsocketAnnouncementNotifyEnabled *bool    `json:"websocket_announcement_notify_enabled"`
 }
 
 type userProfileResponse struct {
@@ -174,10 +187,15 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	svcReq := service.UpdateProfileRequest{
-		Username:               req.Username,
-		AvatarURL:              req.AvatarURL,
-		BalanceNotifyEnabled:   req.BalanceNotifyEnabled,
-		BalanceNotifyThreshold: req.BalanceNotifyThreshold,
+		Username:                           req.Username,
+		AvatarURL:                          req.AvatarURL,
+		BalanceNotifyEnabled:               req.BalanceNotifyEnabled,
+		BalanceNotifyThreshold:             req.BalanceNotifyThreshold,
+		WebsocketNotifyEnabled:             req.WebsocketNotifyEnabled,
+		WebsocketBalanceAlertEnabled:       req.WebsocketBalanceAlertEnabled,
+		WebsocketBalanceAlertThreshold:     req.WebsocketBalanceAlertThreshold,
+		WebsocketSiteMessageNotifyEnabled:  req.WebsocketSiteMessageNotifyEnabled,
+		WebsocketAnnouncementNotifyEnabled: req.WebsocketAnnouncementNotifyEnabled,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {

@@ -96,7 +96,7 @@ func (User) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
-		// 余额不足通知
+		// 余额不足通知（邮件，与 WebSocket 解耦）
 		field.Bool("balance_notify_enabled").
 			Default(true),
 		field.String("balance_notify_threshold_type").
@@ -108,6 +108,19 @@ func (User) Fields() []ent.Field {
 		field.String("balance_notify_extra_emails").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Default("[]"),
+		// WebSocket 实时通知（独立功能）
+		field.Bool("websocket_notify_enabled").
+			Default(false),
+		field.Bool("websocket_balance_alert_enabled").
+			Default(true),
+		field.Float("websocket_balance_alert_threshold").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
+		field.Bool("websocket_site_message_notify_enabled").
+			Default(true),
+		field.Bool("websocket_announcement_notify_enabled").
+			Default(true),
 		field.Float("total_recharged").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),

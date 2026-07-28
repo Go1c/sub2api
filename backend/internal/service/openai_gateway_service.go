@@ -402,10 +402,11 @@ type OpenAIGatewayService struct {
 	openaiWSResolver      OpenAIWSProtocolResolver
 	resolver              *ModelPricingResolver
 	channelService        *ChannelService
-	balanceNotifyService  *BalanceNotifyService
-	settingService        *SettingService
-	userPlatformQuotaRepo UserPlatformQuotaRepository
-	accountErrorHistory   *AccountErrorHistoryService
+	balanceNotifyService       *BalanceNotifyService
+	userWebsocketNotifyService *UserWebsocketNotifyService
+	settingService             *SettingService
+	userPlatformQuotaRepo      UserPlatformQuotaRepository
+	accountErrorHistory        *AccountErrorHistoryService
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -439,6 +440,11 @@ type OpenAIGatewayService struct {
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
 func (s *OpenAIGatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
 	s.accountErrorHistory = svc
+}
+
+// SetUserWebsocketNotifyService injects optional WebSocket balance alerts (independent of email).
+func (s *OpenAIGatewayService) SetUserWebsocketNotifyService(svc *UserWebsocketNotifyService) {
+	s.userWebsocketNotifyService = svc
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -604,13 +610,14 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 
 func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:           s.accountRepo,
-		userRepo:              s.userRepo,
-		userSubRepo:           s.userSubRepo,
-		billingCacheService:   s.billingCacheService,
-		deferredService:       s.deferredService,
-		balanceNotifyService:  s.balanceNotifyService,
-		userPlatformQuotaRepo: s.userPlatformQuotaRepo,
+		accountRepo:                s.accountRepo,
+		userRepo:                   s.userRepo,
+		userSubRepo:                s.userSubRepo,
+		billingCacheService:        s.billingCacheService,
+		deferredService:            s.deferredService,
+		balanceNotifyService:       s.balanceNotifyService,
+		userWebsocketNotifyService: s.userWebsocketNotifyService,
+		userPlatformQuotaRepo:      s.userPlatformQuotaRepo,
 	}
 }
 
