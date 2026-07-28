@@ -29,6 +29,8 @@ const (
 	FieldRole = "role"
 	// FieldBalance holds the string denoting the balance field in the database.
 	FieldBalance = "balance"
+	// FieldFrozenBalance holds the string denoting the frozen_balance field in the database.
+	FieldFrozenBalance = "frozen_balance"
 	// FieldConcurrency holds the string denoting the concurrency field in the database.
 	FieldConcurrency = "concurrency"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -57,22 +59,16 @@ const (
 	FieldBalanceNotifyThreshold = "balance_notify_threshold"
 	// FieldBalanceNotifyExtraEmails holds the string denoting the balance_notify_extra_emails field in the database.
 	FieldBalanceNotifyExtraEmails = "balance_notify_extra_emails"
-	// FieldWebsocketNotifyEnabled holds the string denoting the websocket_notify_enabled field in the database.
-	FieldWebsocketNotifyEnabled = "websocket_notify_enabled"
-	// FieldWebsocketBalanceAlertEnabled holds the string denoting the websocket_balance_alert_enabled field in the database.
-	FieldWebsocketBalanceAlertEnabled = "websocket_balance_alert_enabled"
-	// FieldWebsocketBalanceAlertThreshold holds the string denoting the websocket_balance_alert_threshold field in the database.
-	FieldWebsocketBalanceAlertThreshold = "websocket_balance_alert_threshold"
-	// FieldWebsocketSiteMessageNotifyEnabled holds the string denoting the websocket_site_message_notify_enabled field in the database.
-	FieldWebsocketSiteMessageNotifyEnabled = "websocket_site_message_notify_enabled"
-	// FieldWebsocketAnnouncementNotifyEnabled holds the string denoting the websocket_announcement_notify_enabled field in the database.
-	FieldWebsocketAnnouncementNotifyEnabled = "websocket_announcement_notify_enabled"
 	// FieldWebhookBalanceNotifyEnabled holds the string denoting the webhook_balance_notify_enabled field in the database.
 	FieldWebhookBalanceNotifyEnabled = "webhook_balance_notify_enabled"
 	// FieldWebhookBalanceNotifyURL holds the string denoting the webhook_balance_notify_url field in the database.
 	FieldWebhookBalanceNotifyURL = "webhook_balance_notify_url"
 	// FieldWebhookBalanceNotifyThreshold holds the string denoting the webhook_balance_notify_threshold field in the database.
 	FieldWebhookBalanceNotifyThreshold = "webhook_balance_notify_threshold"
+	// FieldWebhookSiteMessageNotifyEnabled holds the string denoting the webhook_site_message_notify_enabled field in the database.
+	FieldWebhookSiteMessageNotifyEnabled = "webhook_site_message_notify_enabled"
+	// FieldWebhookAnnouncementNotifyEnabled holds the string denoting the webhook_announcement_notify_enabled field in the database.
+	FieldWebhookAnnouncementNotifyEnabled = "webhook_announcement_notify_enabled"
 	// FieldTotalRecharged holds the string denoting the total_recharged field in the database.
 	FieldTotalRecharged = "total_recharged"
 	// FieldInvoiceEnabled holds the string denoting the invoice_enabled field in the database.
@@ -244,6 +240,7 @@ var Columns = []string{
 	FieldPasswordHash,
 	FieldRole,
 	FieldBalance,
+	FieldFrozenBalance,
 	FieldConcurrency,
 	FieldStatus,
 	FieldUsername,
@@ -258,14 +255,11 @@ var Columns = []string{
 	FieldBalanceNotifyThresholdType,
 	FieldBalanceNotifyThreshold,
 	FieldBalanceNotifyExtraEmails,
-	FieldWebsocketNotifyEnabled,
-	FieldWebsocketBalanceAlertEnabled,
-	FieldWebsocketBalanceAlertThreshold,
-	FieldWebsocketSiteMessageNotifyEnabled,
-	FieldWebsocketAnnouncementNotifyEnabled,
 	FieldWebhookBalanceNotifyEnabled,
 	FieldWebhookBalanceNotifyURL,
 	FieldWebhookBalanceNotifyThreshold,
+	FieldWebhookSiteMessageNotifyEnabled,
+	FieldWebhookAnnouncementNotifyEnabled,
 	FieldTotalRecharged,
 	FieldInvoiceEnabled,
 	FieldRpmLimit,
@@ -311,6 +305,8 @@ var (
 	RoleValidator func(string) error
 	// DefaultBalance holds the default value on creation for the "balance" field.
 	DefaultBalance float64
+	// DefaultFrozenBalance holds the default value on creation for the "frozen_balance" field.
+	DefaultFrozenBalance float64
 	// DefaultConcurrency holds the default value on creation for the "concurrency" field.
 	DefaultConcurrency int
 	// DefaultStatus holds the default value on creation for the "status" field.
@@ -335,18 +331,14 @@ var (
 	DefaultBalanceNotifyThresholdType string
 	// DefaultBalanceNotifyExtraEmails holds the default value on creation for the "balance_notify_extra_emails" field.
 	DefaultBalanceNotifyExtraEmails string
-	// DefaultWebsocketNotifyEnabled holds the default value on creation for the "websocket_notify_enabled" field.
-	DefaultWebsocketNotifyEnabled bool
-	// DefaultWebsocketBalanceAlertEnabled holds the default value on creation for the "websocket_balance_alert_enabled" field.
-	DefaultWebsocketBalanceAlertEnabled bool
-	// DefaultWebsocketSiteMessageNotifyEnabled holds the default value on creation for the "websocket_site_message_notify_enabled" field.
-	DefaultWebsocketSiteMessageNotifyEnabled bool
-	// DefaultWebsocketAnnouncementNotifyEnabled holds the default value on creation for the "websocket_announcement_notify_enabled" field.
-	DefaultWebsocketAnnouncementNotifyEnabled bool
 	// DefaultWebhookBalanceNotifyEnabled holds the default value on creation for the "webhook_balance_notify_enabled" field.
 	DefaultWebhookBalanceNotifyEnabled bool
 	// DefaultWebhookBalanceNotifyURL holds the default value on creation for the "webhook_balance_notify_url" field.
 	DefaultWebhookBalanceNotifyURL string
+	// DefaultWebhookSiteMessageNotifyEnabled holds the default value on creation for the "webhook_site_message_notify_enabled" field.
+	DefaultWebhookSiteMessageNotifyEnabled bool
+	// DefaultWebhookAnnouncementNotifyEnabled holds the default value on creation for the "webhook_announcement_notify_enabled" field.
+	DefaultWebhookAnnouncementNotifyEnabled bool
 	// DefaultTotalRecharged holds the default value on creation for the "total_recharged" field.
 	DefaultTotalRecharged float64
 	// DefaultInvoiceEnabled holds the default value on creation for the "invoice_enabled" field.
@@ -396,6 +388,11 @@ func ByRole(opts ...sql.OrderTermOption) OrderOption {
 // ByBalance orders the results by the balance field.
 func ByBalance(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalance, opts...).ToFunc()
+}
+
+// ByFrozenBalance orders the results by the frozen_balance field.
+func ByFrozenBalance(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFrozenBalance, opts...).ToFunc()
 }
 
 // ByConcurrency orders the results by the concurrency field.
@@ -468,31 +465,6 @@ func ByBalanceNotifyExtraEmails(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalanceNotifyExtraEmails, opts...).ToFunc()
 }
 
-// ByWebsocketNotifyEnabled orders the results by the websocket_notify_enabled field.
-func ByWebsocketNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWebsocketNotifyEnabled, opts...).ToFunc()
-}
-
-// ByWebsocketBalanceAlertEnabled orders the results by the websocket_balance_alert_enabled field.
-func ByWebsocketBalanceAlertEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWebsocketBalanceAlertEnabled, opts...).ToFunc()
-}
-
-// ByWebsocketBalanceAlertThreshold orders the results by the websocket_balance_alert_threshold field.
-func ByWebsocketBalanceAlertThreshold(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWebsocketBalanceAlertThreshold, opts...).ToFunc()
-}
-
-// ByWebsocketSiteMessageNotifyEnabled orders the results by the websocket_site_message_notify_enabled field.
-func ByWebsocketSiteMessageNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWebsocketSiteMessageNotifyEnabled, opts...).ToFunc()
-}
-
-// ByWebsocketAnnouncementNotifyEnabled orders the results by the websocket_announcement_notify_enabled field.
-func ByWebsocketAnnouncementNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWebsocketAnnouncementNotifyEnabled, opts...).ToFunc()
-}
-
 // ByWebhookBalanceNotifyEnabled orders the results by the webhook_balance_notify_enabled field.
 func ByWebhookBalanceNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebhookBalanceNotifyEnabled, opts...).ToFunc()
@@ -506,6 +478,16 @@ func ByWebhookBalanceNotifyURL(opts ...sql.OrderTermOption) OrderOption {
 // ByWebhookBalanceNotifyThreshold orders the results by the webhook_balance_notify_threshold field.
 func ByWebhookBalanceNotifyThreshold(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebhookBalanceNotifyThreshold, opts...).ToFunc()
+}
+
+// ByWebhookSiteMessageNotifyEnabled orders the results by the webhook_site_message_notify_enabled field.
+func ByWebhookSiteMessageNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebhookSiteMessageNotifyEnabled, opts...).ToFunc()
+}
+
+// ByWebhookAnnouncementNotifyEnabled orders the results by the webhook_announcement_notify_enabled field.
+func ByWebhookAnnouncementNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebhookAnnouncementNotifyEnabled, opts...).ToFunc()
 }
 
 // ByTotalRecharged orders the results by the total_recharged field.

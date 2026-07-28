@@ -8,7 +8,6 @@ import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
 import SupportChatWidget from '@/components/support/SupportChatWidget.vue'
 import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
-import { useUserWebsocketNotify } from '@/composables/useUserWebsocketNotify'
 
 const router = useRouter()
 const route = useRoute()
@@ -16,8 +15,6 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
-const userWebsocketNotify = useUserWebsocketNotify()
-userWebsocketNotify.ensureStarted()
 
 /**
  * Update favicon dynamically
