@@ -37,24 +37,33 @@ func jwtAuth(
 	auditService *service.AuditLogService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 从Authorization header中提取token
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			AbortWithError(c, 401, "UNAUTHORIZED", "Authorization header is required")
-			return
+		tokenString := ""
+		// WebSocket browsers cannot set Authorization; allow jwt.<token> via Sec-WebSocket-Protocol.
+		if isWebSocketUpgradeRequest(c) {
+			if t := extractJWTFromWebSocketSubprotocol(c); t != "" {
+				tokenString = t
+			}
 		}
-
-		// 验证Bearer scheme
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			AbortWithError(c, 401, "INVALID_AUTH_HEADER", "Authorization header format must be 'Bearer {token}'")
-			return
-		}
-
-		tokenString := strings.TrimSpace(parts[1])
 		if tokenString == "" {
-			AbortWithError(c, 401, "EMPTY_TOKEN", "Token cannot be empty")
-			return
+			// 从Authorization header中提取token
+			authHeader := c.GetHeader("Authorization")
+			if authHeader == "" {
+				AbortWithError(c, 401, "UNAUTHORIZED", "Authorization header is required")
+				return
+			}
+
+			// 验证Bearer scheme
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+				AbortWithError(c, 401, "INVALID_AUTH_HEADER", "Authorization header format must be 'Bearer {token}'")
+				return
+			}
+
+			tokenString = strings.TrimSpace(parts[1])
+			if tokenString == "" {
+				AbortWithError(c, 401, "EMPTY_TOKEN", "Token cannot be empty")
+				return
+			}
 		}
 
 		// 验证token

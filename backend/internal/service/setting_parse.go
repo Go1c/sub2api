@@ -336,6 +336,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpenAIAdvancedSchedulerWeightSessionSticky:         "",
 
 		SettingKeyAllowUserViewErrorRequests: "false",
+
+		// 余额不足邮件提醒：系统默认阈值 $10（用户未自定义时使用）
+		SettingKeyBalanceLowNotifyEnabled:     "false",
+		SettingKeyBalanceLowNotifyThreshold:   "10",
+		SettingKeyBalanceLowNotifyRechargeURL: "",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)

@@ -832,6 +832,8 @@ var ProviderSet = wire.NewSet(
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
+	ProvideUserWebsocketHub,
+	ProvideUserWebsocketNotifyService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
@@ -897,6 +899,16 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 	svc := NewBalanceNotifyService(emailService, settingRepo, accountRepo)
 	svc.SetNotificationEmailService(notificationEmailService)
 	return svc
+}
+
+// ProvideUserWebsocketHub creates the in-process hub for user notification WebSockets.
+func ProvideUserWebsocketHub() *UserWebsocketHub {
+	return NewUserWebsocketHub()
+}
+
+// ProvideUserWebsocketNotifyService creates the user WebSocket notify service.
+func ProvideUserWebsocketNotifyService(hub *UserWebsocketHub, userRepo UserRepository) *UserWebsocketNotifyService {
+	return NewUserWebsocketNotifyService(hub, UserWebsocketUserReader(userRepo))
 }
 
 // ProvidePaymentService creates PaymentService and attaches notification email delivery.
