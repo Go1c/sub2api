@@ -43,13 +43,19 @@ type User struct {
 	TotpEnabled         bool       // 是否启用 TOTP
 	TotpEnabledAt       *time.Time // TOTP 启用时间
 
-	// 余额不足通知
+	// 余额不足通知（邮件，与 WebSocket 解耦）
 	BalanceNotifyEnabled       bool
 	BalanceNotifyThresholdType string // "fixed" (default) | "percentage"
 	BalanceNotifyThreshold     *float64
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
-	TotalRecharged             float64
-	InvoiceEnabled             bool
+	// WebSocket 实时通知（独立功能；总开关默认关）
+	WebsocketNotifyEnabled             bool
+	WebsocketBalanceAlertEnabled       bool
+	WebsocketBalanceAlertThreshold     *float64
+	WebsocketSiteMessageNotifyEnabled  bool
+	WebsocketAnnouncementNotifyEnabled bool
+	TotalRecharged                     float64
+	InvoiceEnabled                     bool
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
 	// 且该 (用户, 分组) 无 rpm_override 时作为全局兜底生效，计数键 rpm:u:{userID}:{min}。

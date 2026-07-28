@@ -3014,6 +3014,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		// 订阅额度池通知 - 重新订阅链接（空表示回退到购买订阅页）
 		SettingKeySubscriptionCreditPoolRepurchaseURL: "",
 		SettingKeySubscriptionNotifyEmailEnabled:      "false",
+
+		// 余额不足邮件提醒：系统默认阈值 $10（用户未自定义时使用）
+		SettingKeyBalanceLowNotifyEnabled:     "false",
+		SettingKeyBalanceLowNotifyThreshold:   "10",
+		SettingKeyBalanceLowNotifyRechargeURL: "",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)

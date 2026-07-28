@@ -612,7 +612,8 @@ type GatewayService struct {
 	resolver              *ModelPricingResolver
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
-	balanceNotifyService  *BalanceNotifyService
+	balanceNotifyService       *BalanceNotifyService
+	userWebsocketNotifyService *UserWebsocketNotifyService
 	// accountErrorHistory 通过 SetAccountErrorHistoryService 注入（best-effort 监控，可为 nil）。
 	// 用 setter 而非构造参数，避免改动 NewGatewayService 签名波及大量测试。
 	accountErrorHistory   *AccountErrorHistoryService
@@ -622,6 +623,11 @@ type GatewayService struct {
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
 func (s *GatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
 	s.accountErrorHistory = svc
+}
+
+// SetUserWebsocketNotifyService injects optional WebSocket balance alerts (independent of email).
+func (s *GatewayService) SetUserWebsocketNotifyService(svc *UserWebsocketNotifyService) {
+	s.userWebsocketNotifyService = svc
 }
 
 // NewGatewayService creates a new GatewayService
@@ -8433,6 +8439,9 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 		"result_has_new_balance", result != nil && result.NewBalance != nil,
 	)
 	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, balanceCost)
+	if deps.userWebsocketNotifyService != nil {
+		deps.userWebsocketNotifyService.CheckWebsocketBalanceAfterDeduction(context.Background(), p.User, oldBalance, balanceCost)
+	}
 }
 
 // resolveOldBalance returns the pre-deduction balance.
@@ -8503,28 +8512,30 @@ func detachUpstreamContext(ctx context.Context) (context.Context, context.Cancel
 
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
 type billingDeps struct {
-	accountRepo           AccountRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	settingService        *SettingService
-	billingCacheService   *BillingCacheService
-	deferredService       *DeferredService
-	balanceNotifyService  *BalanceNotifyService
-	userPlatformQuotaRepo UserPlatformQuotaRepository
-	cfg                   *config.Config
+	accountRepo                AccountRepository
+	userRepo                   UserRepository
+	userSubRepo                UserSubscriptionRepository
+	settingService             *SettingService
+	billingCacheService        *BillingCacheService
+	deferredService            *DeferredService
+	balanceNotifyService       *BalanceNotifyService
+	userWebsocketNotifyService *UserWebsocketNotifyService
+	userPlatformQuotaRepo      UserPlatformQuotaRepository
+	cfg                        *config.Config
 }
 
 func (s *GatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:           s.accountRepo,
-		userRepo:              s.userRepo,
-		userSubRepo:           s.userSubRepo,
-		settingService:        s.settingService,
-		billingCacheService:   s.billingCacheService,
-		deferredService:       s.deferredService,
-		balanceNotifyService:  s.balanceNotifyService,
-		userPlatformQuotaRepo: s.userPlatformQuotaRepo,
-		cfg:                   s.cfg,
+		accountRepo:                s.accountRepo,
+		userRepo:                   s.userRepo,
+		userSubRepo:                s.userSubRepo,
+		settingService:             s.settingService,
+		billingCacheService:        s.billingCacheService,
+		deferredService:            s.deferredService,
+		balanceNotifyService:       s.balanceNotifyService,
+		userWebsocketNotifyService: s.userWebsocketNotifyService,
+		userPlatformQuotaRepo:      s.userPlatformQuotaRepo,
+		cfg:                        s.cfg,
 	}
 }
 

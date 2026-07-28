@@ -371,6 +371,89 @@ func (_u *UserUpdate) SetNillableBalanceNotifyExtraEmails(v *string) *UserUpdate
 	return _u
 }
 
+// SetWebsocketNotifyEnabled sets the "websocket_notify_enabled" field.
+func (_u *UserUpdate) SetWebsocketNotifyEnabled(v bool) *UserUpdate {
+	_u.mutation.SetWebsocketNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketNotifyEnabled sets the "websocket_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebsocketNotifyEnabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetWebsocketNotifyEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field.
+func (_u *UserUpdate) SetWebsocketBalanceAlertEnabled(v bool) *UserUpdate {
+	_u.mutation.SetWebsocketBalanceAlertEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebsocketBalanceAlertEnabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetWebsocketBalanceAlertEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field.
+func (_u *UserUpdate) SetWebsocketBalanceAlertThreshold(v float64) *UserUpdate {
+	_u.mutation.ResetWebsocketBalanceAlertThreshold()
+	_u.mutation.SetWebsocketBalanceAlertThreshold(v)
+	return _u
+}
+
+// SetNillableWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebsocketBalanceAlertThreshold(v *float64) *UserUpdate {
+	if v != nil {
+		_u.SetWebsocketBalanceAlertThreshold(*v)
+	}
+	return _u
+}
+
+// AddWebsocketBalanceAlertThreshold adds value to the "websocket_balance_alert_threshold" field.
+func (_u *UserUpdate) AddWebsocketBalanceAlertThreshold(v float64) *UserUpdate {
+	_u.mutation.AddWebsocketBalanceAlertThreshold(v)
+	return _u
+}
+
+// ClearWebsocketBalanceAlertThreshold clears the value of the "websocket_balance_alert_threshold" field.
+func (_u *UserUpdate) ClearWebsocketBalanceAlertThreshold() *UserUpdate {
+	_u.mutation.ClearWebsocketBalanceAlertThreshold()
+	return _u
+}
+
+// SetWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field.
+func (_u *UserUpdate) SetWebsocketSiteMessageNotifyEnabled(v bool) *UserUpdate {
+	_u.mutation.SetWebsocketSiteMessageNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebsocketSiteMessageNotifyEnabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetWebsocketSiteMessageNotifyEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field.
+func (_u *UserUpdate) SetWebsocketAnnouncementNotifyEnabled(v bool) *UserUpdate {
+	_u.mutation.SetWebsocketAnnouncementNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWebsocketAnnouncementNotifyEnabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetWebsocketAnnouncementNotifyEnabled(*v)
+	}
+	return _u
+}
+
 // SetTotalRecharged sets the "total_recharged" field.
 func (_u *UserUpdate) SetTotalRecharged(v float64) *UserUpdate {
 	_u.mutation.ResetTotalRecharged()
@@ -1183,6 +1266,27 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.BalanceNotifyExtraEmails(); ok {
 		_spec.SetField(user.FieldBalanceNotifyExtraEmails, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.WebsocketNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebsocketBalanceAlertEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketBalanceAlertEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebsocketBalanceAlertThreshold(); ok {
+		_spec.SetField(user.FieldWebsocketBalanceAlertThreshold, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWebsocketBalanceAlertThreshold(); ok {
+		_spec.AddField(user.FieldWebsocketBalanceAlertThreshold, field.TypeFloat64, value)
+	}
+	if _u.mutation.WebsocketBalanceAlertThresholdCleared() {
+		_spec.ClearField(user.FieldWebsocketBalanceAlertThreshold, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WebsocketSiteMessageNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketSiteMessageNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebsocketAnnouncementNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketAnnouncementNotifyEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)
@@ -2280,6 +2384,89 @@ func (_u *UserUpdateOne) SetNillableBalanceNotifyExtraEmails(v *string) *UserUpd
 	return _u
 }
 
+// SetWebsocketNotifyEnabled sets the "websocket_notify_enabled" field.
+func (_u *UserUpdateOne) SetWebsocketNotifyEnabled(v bool) *UserUpdateOne {
+	_u.mutation.SetWebsocketNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketNotifyEnabled sets the "websocket_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebsocketNotifyEnabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebsocketNotifyEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field.
+func (_u *UserUpdateOne) SetWebsocketBalanceAlertEnabled(v bool) *UserUpdateOne {
+	_u.mutation.SetWebsocketBalanceAlertEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebsocketBalanceAlertEnabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebsocketBalanceAlertEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field.
+func (_u *UserUpdateOne) SetWebsocketBalanceAlertThreshold(v float64) *UserUpdateOne {
+	_u.mutation.ResetWebsocketBalanceAlertThreshold()
+	_u.mutation.SetWebsocketBalanceAlertThreshold(v)
+	return _u
+}
+
+// SetNillableWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebsocketBalanceAlertThreshold(v *float64) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebsocketBalanceAlertThreshold(*v)
+	}
+	return _u
+}
+
+// AddWebsocketBalanceAlertThreshold adds value to the "websocket_balance_alert_threshold" field.
+func (_u *UserUpdateOne) AddWebsocketBalanceAlertThreshold(v float64) *UserUpdateOne {
+	_u.mutation.AddWebsocketBalanceAlertThreshold(v)
+	return _u
+}
+
+// ClearWebsocketBalanceAlertThreshold clears the value of the "websocket_balance_alert_threshold" field.
+func (_u *UserUpdateOne) ClearWebsocketBalanceAlertThreshold() *UserUpdateOne {
+	_u.mutation.ClearWebsocketBalanceAlertThreshold()
+	return _u
+}
+
+// SetWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field.
+func (_u *UserUpdateOne) SetWebsocketSiteMessageNotifyEnabled(v bool) *UserUpdateOne {
+	_u.mutation.SetWebsocketSiteMessageNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebsocketSiteMessageNotifyEnabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebsocketSiteMessageNotifyEnabled(*v)
+	}
+	return _u
+}
+
+// SetWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field.
+func (_u *UserUpdateOne) SetWebsocketAnnouncementNotifyEnabled(v bool) *UserUpdateOne {
+	_u.mutation.SetWebsocketAnnouncementNotifyEnabled(v)
+	return _u
+}
+
+// SetNillableWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWebsocketAnnouncementNotifyEnabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetWebsocketAnnouncementNotifyEnabled(*v)
+	}
+	return _u
+}
+
 // SetTotalRecharged sets the "total_recharged" field.
 func (_u *UserUpdateOne) SetTotalRecharged(v float64) *UserUpdateOne {
 	_u.mutation.ResetTotalRecharged()
@@ -3122,6 +3309,27 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.BalanceNotifyExtraEmails(); ok {
 		_spec.SetField(user.FieldBalanceNotifyExtraEmails, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.WebsocketNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebsocketBalanceAlertEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketBalanceAlertEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebsocketBalanceAlertThreshold(); ok {
+		_spec.SetField(user.FieldWebsocketBalanceAlertThreshold, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWebsocketBalanceAlertThreshold(); ok {
+		_spec.AddField(user.FieldWebsocketBalanceAlertThreshold, field.TypeFloat64, value)
+	}
+	if _u.mutation.WebsocketBalanceAlertThresholdCleared() {
+		_spec.ClearField(user.FieldWebsocketBalanceAlertThreshold, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WebsocketSiteMessageNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketSiteMessageNotifyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebsocketAnnouncementNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebsocketAnnouncementNotifyEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)

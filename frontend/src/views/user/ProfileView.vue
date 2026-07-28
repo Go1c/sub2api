@@ -42,6 +42,11 @@
         :user-email="user.email"
       />
 
+      <ProfileWebsocketNotifyCard
+        v-if="user && user.role !== 'admin'"
+        :user="user"
+      />
+
       <ProfileTotpCard />
     </div>
   </AppLayout>
@@ -56,6 +61,7 @@ import ProfileBalanceNotifyCard from '@/components/user/profile/ProfileBalanceNo
 import ProfileInfoCard from '@/components/user/profile/ProfileInfoCard.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
 import ProfileTotpCard from '@/components/user/profile/ProfileTotpCard.vue'
+import ProfileWebsocketNotifyCard from '@/components/user/profile/ProfileWebsocketNotifyCard.vue'
 import { isWeChatWebOAuthEnabled } from '@/api/auth'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -67,7 +73,7 @@ const user = computed(() => authStore.user)
 
 const contactInfo = ref('')
 const balanceLowNotifyEnabled = ref(false)
-const systemDefaultThreshold = ref(0)
+const systemDefaultThreshold = ref(10)
 const linuxdoOAuthEnabled = ref(false)
 const wechatOAuthEnabled = ref(false)
 const wechatOAuthOpenEnabled = ref<boolean | undefined>(undefined)
@@ -87,7 +93,7 @@ onMounted(async () => {
       }
       contactInfo.value = settings.contact_info || ''
       balanceLowNotifyEnabled.value = settings.balance_low_notify_enabled ?? false
-      systemDefaultThreshold.value = settings.balance_low_notify_threshold ?? 0
+      systemDefaultThreshold.value = settings.balance_low_notify_threshold ?? 10
       linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled ?? false
       wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
       wechatOAuthOpenEnabled.value = typeof settings.wechat_oauth_open_enabled === 'boolean'

@@ -187,12 +187,17 @@ const (
 
 // UpdateProfileRequest 更新用户资料请求
 type UpdateProfileRequest struct {
-	Email                  *string  `json:"email"`
-	Username               *string  `json:"username"`
-	AvatarURL              *string  `json:"avatar_url"`
-	Concurrency            *int     `json:"concurrency"`
-	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
+	Email                              *string  `json:"email"`
+	Username                           *string  `json:"username"`
+	AvatarURL                          *string  `json:"avatar_url"`
+	Concurrency                        *int     `json:"concurrency"`
+	BalanceNotifyEnabled               *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold             *float64 `json:"balance_notify_threshold"`
+	WebsocketNotifyEnabled             *bool    `json:"websocket_notify_enabled"`
+	WebsocketBalanceAlertEnabled       *bool    `json:"websocket_balance_alert_enabled"`
+	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
+	WebsocketSiteMessageNotifyEnabled  *bool    `json:"websocket_site_message_notify_enabled"`
+	WebsocketAnnouncementNotifyEnabled *bool    `json:"websocket_announcement_notify_enabled"`
 }
 
 type UserAvatar struct {
@@ -469,6 +474,25 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 		} else {
 			user.BalanceNotifyThreshold = req.BalanceNotifyThreshold
 		}
+	}
+	if req.WebsocketNotifyEnabled != nil {
+		user.WebsocketNotifyEnabled = *req.WebsocketNotifyEnabled
+	}
+	if req.WebsocketBalanceAlertEnabled != nil {
+		user.WebsocketBalanceAlertEnabled = *req.WebsocketBalanceAlertEnabled
+	}
+	if req.WebsocketBalanceAlertThreshold != nil {
+		if *req.WebsocketBalanceAlertThreshold <= 0 {
+			user.WebsocketBalanceAlertThreshold = nil
+		} else {
+			user.WebsocketBalanceAlertThreshold = req.WebsocketBalanceAlertThreshold
+		}
+	}
+	if req.WebsocketSiteMessageNotifyEnabled != nil {
+		user.WebsocketSiteMessageNotifyEnabled = *req.WebsocketSiteMessageNotifyEnabled
+	}
+	if req.WebsocketAnnouncementNotifyEnabled != nil {
+		user.WebsocketAnnouncementNotifyEnabled = *req.WebsocketAnnouncementNotifyEnabled
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
