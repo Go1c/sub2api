@@ -10,7 +10,6 @@ import SupportChatWidget from '@/components/support/SupportChatWidget.vue'
 import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
-import { useUserWebsocketNotify } from '@/composables/useUserWebsocketNotify'
 
 const router = useRouter()
 const route = useRoute()
@@ -19,8 +18,6 @@ const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
-const userWebsocketNotify = useUserWebsocketNotify()
-userWebsocketNotify.ensureStarted()
 
 // Watch for site settings changes and update favicon/title
 watch(

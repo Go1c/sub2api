@@ -54473,102 +54473,98 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                                    Op
-	typ                                   string
-	id                                    *int64
-	created_at                            *time.Time
-	updated_at                            *time.Time
-	deleted_at                            *time.Time
-	email                                 *string
-	password_hash                         *string
-	role                                  *string
-	balance                               *float64
-	addbalance                            *float64
-	frozen_balance                        *float64
-	addfrozen_balance                     *float64
-	concurrency                           *int
-	addconcurrency                        *int
-	status                                *string
-	username                              *string
-	notes                                 *string
-	totp_secret_encrypted                 *string
-	totp_enabled                          *bool
-	totp_enabled_at                       *time.Time
-	signup_source                         *string
-	last_login_at                         *time.Time
-	last_active_at                        *time.Time
-	balance_notify_enabled                *bool
-	balance_notify_threshold_type         *string
-	balance_notify_threshold              *float64
-	addbalance_notify_threshold           *float64
-	balance_notify_extra_emails           *string
-	websocket_notify_enabled              *bool
-	websocket_balance_alert_enabled       *bool
-	websocket_balance_alert_threshold     *float64
-	addwebsocket_balance_alert_threshold  *float64
-	websocket_site_message_notify_enabled *bool
-	websocket_announcement_notify_enabled *bool
-	webhook_balance_notify_enabled        *bool
-	webhook_balance_notify_url            *string
-	webhook_balance_notify_threshold      *float64
-	addwebhook_balance_notify_threshold   *float64
-	total_recharged                       *float64
-	addtotal_recharged                    *float64
-	invoice_enabled                       *bool
-	rpm_limit                             *int
-	addrpm_limit                          *int
-	clearedFields                         map[string]struct{}
-	api_keys                              map[int64]struct{}
-	removedapi_keys                       map[int64]struct{}
-	clearedapi_keys                       bool
-	redeem_codes                          map[int64]struct{}
-	removedredeem_codes                   map[int64]struct{}
-	clearedredeem_codes                   bool
-	subscriptions                         map[int64]struct{}
-	removedsubscriptions                  map[int64]struct{}
-	clearedsubscriptions                  bool
-	assigned_subscriptions                map[int64]struct{}
-	removedassigned_subscriptions         map[int64]struct{}
-	clearedassigned_subscriptions         bool
-	announcement_reads                    map[int64]struct{}
-	removedannouncement_reads             map[int64]struct{}
-	clearedannouncement_reads             bool
-	sent_site_messages                    map[int64]struct{}
-	removedsent_site_messages             map[int64]struct{}
-	clearedsent_site_messages             bool
-	received_site_messages                map[int64]struct{}
-	removedreceived_site_messages         map[int64]struct{}
-	clearedreceived_site_messages         bool
-	allowed_groups                        map[int64]struct{}
-	removedallowed_groups                 map[int64]struct{}
-	clearedallowed_groups                 bool
-	usage_logs                            map[int64]struct{}
-	removedusage_logs                     map[int64]struct{}
-	clearedusage_logs                     bool
-	attribute_values                      map[int64]struct{}
-	removedattribute_values               map[int64]struct{}
-	clearedattribute_values               bool
-	promo_code_usages                     map[int64]struct{}
-	removedpromo_code_usages              map[int64]struct{}
-	clearedpromo_code_usages              bool
-	payment_orders                        map[int64]struct{}
-	removedpayment_orders                 map[int64]struct{}
-	clearedpayment_orders                 bool
-	subscription_credit_ledgers           map[int64]struct{}
-	removedsubscription_credit_ledgers    map[int64]struct{}
-	clearedsubscription_credit_ledgers    bool
-	auth_identities                       map[int64]struct{}
-	removedauth_identities                map[int64]struct{}
-	clearedauth_identities                bool
-	pending_auth_sessions                 map[int64]struct{}
-	removedpending_auth_sessions          map[int64]struct{}
-	clearedpending_auth_sessions          bool
-	platform_quotas                       map[int64]struct{}
-	removedplatform_quotas                map[int64]struct{}
-	clearedplatform_quotas                bool
-	done                                  bool
-	oldValue                              func(context.Context) (*User, error)
-	predicates                            []predicate.User
+	op                                  Op
+	typ                                 string
+	id                                  *int64
+	created_at                          *time.Time
+	updated_at                          *time.Time
+	deleted_at                          *time.Time
+	email                               *string
+	password_hash                       *string
+	role                                *string
+	balance                             *float64
+	addbalance                          *float64
+	frozen_balance                      *float64
+	addfrozen_balance                   *float64
+	concurrency                         *int
+	addconcurrency                      *int
+	status                              *string
+	username                            *string
+	notes                               *string
+	totp_secret_encrypted               *string
+	totp_enabled                        *bool
+	totp_enabled_at                     *time.Time
+	signup_source                       *string
+	last_login_at                       *time.Time
+	last_active_at                      *time.Time
+	balance_notify_enabled              *bool
+	balance_notify_threshold_type       *string
+	balance_notify_threshold            *float64
+	addbalance_notify_threshold         *float64
+	balance_notify_extra_emails         *string
+	webhook_balance_notify_enabled      *bool
+	webhook_balance_notify_url          *string
+	webhook_balance_notify_threshold    *float64
+	addwebhook_balance_notify_threshold *float64
+	webhook_site_message_notify_enabled *bool
+	webhook_announcement_notify_enabled *bool
+	total_recharged                     *float64
+	addtotal_recharged                  *float64
+	invoice_enabled                     *bool
+	rpm_limit                           *int
+	addrpm_limit                        *int
+	clearedFields                       map[string]struct{}
+	api_keys                            map[int64]struct{}
+	removedapi_keys                     map[int64]struct{}
+	clearedapi_keys                     bool
+	redeem_codes                        map[int64]struct{}
+	removedredeem_codes                 map[int64]struct{}
+	clearedredeem_codes                 bool
+	subscriptions                       map[int64]struct{}
+	removedsubscriptions                map[int64]struct{}
+	clearedsubscriptions                bool
+	assigned_subscriptions              map[int64]struct{}
+	removedassigned_subscriptions       map[int64]struct{}
+	clearedassigned_subscriptions       bool
+	announcement_reads                  map[int64]struct{}
+	removedannouncement_reads           map[int64]struct{}
+	clearedannouncement_reads           bool
+	sent_site_messages                  map[int64]struct{}
+	removedsent_site_messages           map[int64]struct{}
+	clearedsent_site_messages           bool
+	received_site_messages              map[int64]struct{}
+	removedreceived_site_messages       map[int64]struct{}
+	clearedreceived_site_messages       bool
+	allowed_groups                      map[int64]struct{}
+	removedallowed_groups               map[int64]struct{}
+	clearedallowed_groups               bool
+	usage_logs                          map[int64]struct{}
+	removedusage_logs                   map[int64]struct{}
+	clearedusage_logs                   bool
+	attribute_values                    map[int64]struct{}
+	removedattribute_values             map[int64]struct{}
+	clearedattribute_values             bool
+	promo_code_usages                   map[int64]struct{}
+	removedpromo_code_usages            map[int64]struct{}
+	clearedpromo_code_usages            bool
+	payment_orders                      map[int64]struct{}
+	removedpayment_orders               map[int64]struct{}
+	clearedpayment_orders               bool
+	subscription_credit_ledgers         map[int64]struct{}
+	removedsubscription_credit_ledgers  map[int64]struct{}
+	clearedsubscription_credit_ledgers  bool
+	auth_identities                     map[int64]struct{}
+	removedauth_identities              map[int64]struct{}
+	clearedauth_identities              bool
+	pending_auth_sessions               map[int64]struct{}
+	removedpending_auth_sessions        map[int64]struct{}
+	clearedpending_auth_sessions        bool
+	platform_quotas                     map[int64]struct{}
+	removedplatform_quotas              map[int64]struct{}
+	clearedplatform_quotas              bool
+	done                                bool
+	oldValue                            func(context.Context) (*User, error)
+	predicates                          []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -55620,220 +55616,6 @@ func (m *UserMutation) ResetBalanceNotifyExtraEmails() {
 	m.balance_notify_extra_emails = nil
 }
 
-// SetWebsocketNotifyEnabled sets the "websocket_notify_enabled" field.
-func (m *UserMutation) SetWebsocketNotifyEnabled(b bool) {
-	m.websocket_notify_enabled = &b
-}
-
-// WebsocketNotifyEnabled returns the value of the "websocket_notify_enabled" field in the mutation.
-func (m *UserMutation) WebsocketNotifyEnabled() (r bool, exists bool) {
-	v := m.websocket_notify_enabled
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWebsocketNotifyEnabled returns the old "websocket_notify_enabled" field's value of the User entity.
-// If the User object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldWebsocketNotifyEnabled(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWebsocketNotifyEnabled is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWebsocketNotifyEnabled requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWebsocketNotifyEnabled: %w", err)
-	}
-	return oldValue.WebsocketNotifyEnabled, nil
-}
-
-// ResetWebsocketNotifyEnabled resets all changes to the "websocket_notify_enabled" field.
-func (m *UserMutation) ResetWebsocketNotifyEnabled() {
-	m.websocket_notify_enabled = nil
-}
-
-// SetWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field.
-func (m *UserMutation) SetWebsocketBalanceAlertEnabled(b bool) {
-	m.websocket_balance_alert_enabled = &b
-}
-
-// WebsocketBalanceAlertEnabled returns the value of the "websocket_balance_alert_enabled" field in the mutation.
-func (m *UserMutation) WebsocketBalanceAlertEnabled() (r bool, exists bool) {
-	v := m.websocket_balance_alert_enabled
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWebsocketBalanceAlertEnabled returns the old "websocket_balance_alert_enabled" field's value of the User entity.
-// If the User object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldWebsocketBalanceAlertEnabled(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWebsocketBalanceAlertEnabled is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWebsocketBalanceAlertEnabled requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWebsocketBalanceAlertEnabled: %w", err)
-	}
-	return oldValue.WebsocketBalanceAlertEnabled, nil
-}
-
-// ResetWebsocketBalanceAlertEnabled resets all changes to the "websocket_balance_alert_enabled" field.
-func (m *UserMutation) ResetWebsocketBalanceAlertEnabled() {
-	m.websocket_balance_alert_enabled = nil
-}
-
-// SetWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field.
-func (m *UserMutation) SetWebsocketBalanceAlertThreshold(f float64) {
-	m.websocket_balance_alert_threshold = &f
-	m.addwebsocket_balance_alert_threshold = nil
-}
-
-// WebsocketBalanceAlertThreshold returns the value of the "websocket_balance_alert_threshold" field in the mutation.
-func (m *UserMutation) WebsocketBalanceAlertThreshold() (r float64, exists bool) {
-	v := m.websocket_balance_alert_threshold
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWebsocketBalanceAlertThreshold returns the old "websocket_balance_alert_threshold" field's value of the User entity.
-// If the User object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldWebsocketBalanceAlertThreshold(ctx context.Context) (v *float64, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWebsocketBalanceAlertThreshold is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWebsocketBalanceAlertThreshold requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWebsocketBalanceAlertThreshold: %w", err)
-	}
-	return oldValue.WebsocketBalanceAlertThreshold, nil
-}
-
-// AddWebsocketBalanceAlertThreshold adds f to the "websocket_balance_alert_threshold" field.
-func (m *UserMutation) AddWebsocketBalanceAlertThreshold(f float64) {
-	if m.addwebsocket_balance_alert_threshold != nil {
-		*m.addwebsocket_balance_alert_threshold += f
-	} else {
-		m.addwebsocket_balance_alert_threshold = &f
-	}
-}
-
-// AddedWebsocketBalanceAlertThreshold returns the value that was added to the "websocket_balance_alert_threshold" field in this mutation.
-func (m *UserMutation) AddedWebsocketBalanceAlertThreshold() (r float64, exists bool) {
-	v := m.addwebsocket_balance_alert_threshold
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearWebsocketBalanceAlertThreshold clears the value of the "websocket_balance_alert_threshold" field.
-func (m *UserMutation) ClearWebsocketBalanceAlertThreshold() {
-	m.websocket_balance_alert_threshold = nil
-	m.addwebsocket_balance_alert_threshold = nil
-	m.clearedFields[user.FieldWebsocketBalanceAlertThreshold] = struct{}{}
-}
-
-// WebsocketBalanceAlertThresholdCleared returns if the "websocket_balance_alert_threshold" field was cleared in this mutation.
-func (m *UserMutation) WebsocketBalanceAlertThresholdCleared() bool {
-	_, ok := m.clearedFields[user.FieldWebsocketBalanceAlertThreshold]
-	return ok
-}
-
-// ResetWebsocketBalanceAlertThreshold resets all changes to the "websocket_balance_alert_threshold" field.
-func (m *UserMutation) ResetWebsocketBalanceAlertThreshold() {
-	m.websocket_balance_alert_threshold = nil
-	m.addwebsocket_balance_alert_threshold = nil
-	delete(m.clearedFields, user.FieldWebsocketBalanceAlertThreshold)
-}
-
-// SetWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field.
-func (m *UserMutation) SetWebsocketSiteMessageNotifyEnabled(b bool) {
-	m.websocket_site_message_notify_enabled = &b
-}
-
-// WebsocketSiteMessageNotifyEnabled returns the value of the "websocket_site_message_notify_enabled" field in the mutation.
-func (m *UserMutation) WebsocketSiteMessageNotifyEnabled() (r bool, exists bool) {
-	v := m.websocket_site_message_notify_enabled
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWebsocketSiteMessageNotifyEnabled returns the old "websocket_site_message_notify_enabled" field's value of the User entity.
-// If the User object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldWebsocketSiteMessageNotifyEnabled(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWebsocketSiteMessageNotifyEnabled is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWebsocketSiteMessageNotifyEnabled requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWebsocketSiteMessageNotifyEnabled: %w", err)
-	}
-	return oldValue.WebsocketSiteMessageNotifyEnabled, nil
-}
-
-// ResetWebsocketSiteMessageNotifyEnabled resets all changes to the "websocket_site_message_notify_enabled" field.
-func (m *UserMutation) ResetWebsocketSiteMessageNotifyEnabled() {
-	m.websocket_site_message_notify_enabled = nil
-}
-
-// SetWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field.
-func (m *UserMutation) SetWebsocketAnnouncementNotifyEnabled(b bool) {
-	m.websocket_announcement_notify_enabled = &b
-}
-
-// WebsocketAnnouncementNotifyEnabled returns the value of the "websocket_announcement_notify_enabled" field in the mutation.
-func (m *UserMutation) WebsocketAnnouncementNotifyEnabled() (r bool, exists bool) {
-	v := m.websocket_announcement_notify_enabled
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWebsocketAnnouncementNotifyEnabled returns the old "websocket_announcement_notify_enabled" field's value of the User entity.
-// If the User object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldWebsocketAnnouncementNotifyEnabled(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWebsocketAnnouncementNotifyEnabled is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWebsocketAnnouncementNotifyEnabled requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWebsocketAnnouncementNotifyEnabled: %w", err)
-	}
-	return oldValue.WebsocketAnnouncementNotifyEnabled, nil
-}
-
-// ResetWebsocketAnnouncementNotifyEnabled resets all changes to the "websocket_announcement_notify_enabled" field.
-func (m *UserMutation) ResetWebsocketAnnouncementNotifyEnabled() {
-	m.websocket_announcement_notify_enabled = nil
-}
-
 // SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
 func (m *UserMutation) SetWebhookBalanceNotifyEnabled(b bool) {
 	m.webhook_balance_notify_enabled = &b
@@ -55974,6 +55756,78 @@ func (m *UserMutation) ResetWebhookBalanceNotifyThreshold() {
 	m.webhook_balance_notify_threshold = nil
 	m.addwebhook_balance_notify_threshold = nil
 	delete(m.clearedFields, user.FieldWebhookBalanceNotifyThreshold)
+}
+
+// SetWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field.
+func (m *UserMutation) SetWebhookSiteMessageNotifyEnabled(b bool) {
+	m.webhook_site_message_notify_enabled = &b
+}
+
+// WebhookSiteMessageNotifyEnabled returns the value of the "webhook_site_message_notify_enabled" field in the mutation.
+func (m *UserMutation) WebhookSiteMessageNotifyEnabled() (r bool, exists bool) {
+	v := m.webhook_site_message_notify_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebhookSiteMessageNotifyEnabled returns the old "webhook_site_message_notify_enabled" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldWebhookSiteMessageNotifyEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebhookSiteMessageNotifyEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebhookSiteMessageNotifyEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebhookSiteMessageNotifyEnabled: %w", err)
+	}
+	return oldValue.WebhookSiteMessageNotifyEnabled, nil
+}
+
+// ResetWebhookSiteMessageNotifyEnabled resets all changes to the "webhook_site_message_notify_enabled" field.
+func (m *UserMutation) ResetWebhookSiteMessageNotifyEnabled() {
+	m.webhook_site_message_notify_enabled = nil
+}
+
+// SetWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field.
+func (m *UserMutation) SetWebhookAnnouncementNotifyEnabled(b bool) {
+	m.webhook_announcement_notify_enabled = &b
+}
+
+// WebhookAnnouncementNotifyEnabled returns the value of the "webhook_announcement_notify_enabled" field in the mutation.
+func (m *UserMutation) WebhookAnnouncementNotifyEnabled() (r bool, exists bool) {
+	v := m.webhook_announcement_notify_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebhookAnnouncementNotifyEnabled returns the old "webhook_announcement_notify_enabled" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldWebhookAnnouncementNotifyEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebhookAnnouncementNotifyEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebhookAnnouncementNotifyEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebhookAnnouncementNotifyEnabled: %w", err)
+	}
+	return oldValue.WebhookAnnouncementNotifyEnabled, nil
+}
+
+// ResetWebhookAnnouncementNotifyEnabled resets all changes to the "webhook_announcement_notify_enabled" field.
+func (m *UserMutation) ResetWebhookAnnouncementNotifyEnabled() {
+	m.webhook_announcement_notify_enabled = nil
 }
 
 // SetTotalRecharged sets the "total_recharged" field.
@@ -57022,7 +56876,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 33)
+	fields := make([]string, 0, 30)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -57089,21 +56943,6 @@ func (m *UserMutation) Fields() []string {
 	if m.balance_notify_extra_emails != nil {
 		fields = append(fields, user.FieldBalanceNotifyExtraEmails)
 	}
-	if m.websocket_notify_enabled != nil {
-		fields = append(fields, user.FieldWebsocketNotifyEnabled)
-	}
-	if m.websocket_balance_alert_enabled != nil {
-		fields = append(fields, user.FieldWebsocketBalanceAlertEnabled)
-	}
-	if m.websocket_balance_alert_threshold != nil {
-		fields = append(fields, user.FieldWebsocketBalanceAlertThreshold)
-	}
-	if m.websocket_site_message_notify_enabled != nil {
-		fields = append(fields, user.FieldWebsocketSiteMessageNotifyEnabled)
-	}
-	if m.websocket_announcement_notify_enabled != nil {
-		fields = append(fields, user.FieldWebsocketAnnouncementNotifyEnabled)
-	}
 	if m.webhook_balance_notify_enabled != nil {
 		fields = append(fields, user.FieldWebhookBalanceNotifyEnabled)
 	}
@@ -57112,6 +56951,12 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.webhook_balance_notify_threshold != nil {
 		fields = append(fields, user.FieldWebhookBalanceNotifyThreshold)
+	}
+	if m.webhook_site_message_notify_enabled != nil {
+		fields = append(fields, user.FieldWebhookSiteMessageNotifyEnabled)
+	}
+	if m.webhook_announcement_notify_enabled != nil {
+		fields = append(fields, user.FieldWebhookAnnouncementNotifyEnabled)
 	}
 	if m.total_recharged != nil {
 		fields = append(fields, user.FieldTotalRecharged)
@@ -57174,22 +57019,16 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.BalanceNotifyThreshold()
 	case user.FieldBalanceNotifyExtraEmails:
 		return m.BalanceNotifyExtraEmails()
-	case user.FieldWebsocketNotifyEnabled:
-		return m.WebsocketNotifyEnabled()
-	case user.FieldWebsocketBalanceAlertEnabled:
-		return m.WebsocketBalanceAlertEnabled()
-	case user.FieldWebsocketBalanceAlertThreshold:
-		return m.WebsocketBalanceAlertThreshold()
-	case user.FieldWebsocketSiteMessageNotifyEnabled:
-		return m.WebsocketSiteMessageNotifyEnabled()
-	case user.FieldWebsocketAnnouncementNotifyEnabled:
-		return m.WebsocketAnnouncementNotifyEnabled()
 	case user.FieldWebhookBalanceNotifyEnabled:
 		return m.WebhookBalanceNotifyEnabled()
 	case user.FieldWebhookBalanceNotifyURL:
 		return m.WebhookBalanceNotifyURL()
 	case user.FieldWebhookBalanceNotifyThreshold:
 		return m.WebhookBalanceNotifyThreshold()
+	case user.FieldWebhookSiteMessageNotifyEnabled:
+		return m.WebhookSiteMessageNotifyEnabled()
+	case user.FieldWebhookAnnouncementNotifyEnabled:
+		return m.WebhookAnnouncementNotifyEnabled()
 	case user.FieldTotalRecharged:
 		return m.TotalRecharged()
 	case user.FieldInvoiceEnabled:
@@ -57249,22 +57088,16 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldBalanceNotifyThreshold(ctx)
 	case user.FieldBalanceNotifyExtraEmails:
 		return m.OldBalanceNotifyExtraEmails(ctx)
-	case user.FieldWebsocketNotifyEnabled:
-		return m.OldWebsocketNotifyEnabled(ctx)
-	case user.FieldWebsocketBalanceAlertEnabled:
-		return m.OldWebsocketBalanceAlertEnabled(ctx)
-	case user.FieldWebsocketBalanceAlertThreshold:
-		return m.OldWebsocketBalanceAlertThreshold(ctx)
-	case user.FieldWebsocketSiteMessageNotifyEnabled:
-		return m.OldWebsocketSiteMessageNotifyEnabled(ctx)
-	case user.FieldWebsocketAnnouncementNotifyEnabled:
-		return m.OldWebsocketAnnouncementNotifyEnabled(ctx)
 	case user.FieldWebhookBalanceNotifyEnabled:
 		return m.OldWebhookBalanceNotifyEnabled(ctx)
 	case user.FieldWebhookBalanceNotifyURL:
 		return m.OldWebhookBalanceNotifyURL(ctx)
 	case user.FieldWebhookBalanceNotifyThreshold:
 		return m.OldWebhookBalanceNotifyThreshold(ctx)
+	case user.FieldWebhookSiteMessageNotifyEnabled:
+		return m.OldWebhookSiteMessageNotifyEnabled(ctx)
+	case user.FieldWebhookAnnouncementNotifyEnabled:
+		return m.OldWebhookAnnouncementNotifyEnabled(ctx)
 	case user.FieldTotalRecharged:
 		return m.OldTotalRecharged(ctx)
 	case user.FieldInvoiceEnabled:
@@ -57434,41 +57267,6 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBalanceNotifyExtraEmails(v)
 		return nil
-	case user.FieldWebsocketNotifyEnabled:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWebsocketNotifyEnabled(v)
-		return nil
-	case user.FieldWebsocketBalanceAlertEnabled:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWebsocketBalanceAlertEnabled(v)
-		return nil
-	case user.FieldWebsocketBalanceAlertThreshold:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWebsocketBalanceAlertThreshold(v)
-		return nil
-	case user.FieldWebsocketSiteMessageNotifyEnabled:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWebsocketSiteMessageNotifyEnabled(v)
-		return nil
-	case user.FieldWebsocketAnnouncementNotifyEnabled:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWebsocketAnnouncementNotifyEnabled(v)
-		return nil
 	case user.FieldWebhookBalanceNotifyEnabled:
 		v, ok := value.(bool)
 		if !ok {
@@ -57489,6 +57287,20 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWebhookBalanceNotifyThreshold(v)
+		return nil
+	case user.FieldWebhookSiteMessageNotifyEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebhookSiteMessageNotifyEnabled(v)
+		return nil
+	case user.FieldWebhookAnnouncementNotifyEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebhookAnnouncementNotifyEnabled(v)
 		return nil
 	case user.FieldTotalRecharged:
 		v, ok := value.(float64)
@@ -57531,9 +57343,6 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addbalance_notify_threshold != nil {
 		fields = append(fields, user.FieldBalanceNotifyThreshold)
 	}
-	if m.addwebsocket_balance_alert_threshold != nil {
-		fields = append(fields, user.FieldWebsocketBalanceAlertThreshold)
-	}
 	if m.addwebhook_balance_notify_threshold != nil {
 		fields = append(fields, user.FieldWebhookBalanceNotifyThreshold)
 	}
@@ -57559,8 +57368,6 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedConcurrency()
 	case user.FieldBalanceNotifyThreshold:
 		return m.AddedBalanceNotifyThreshold()
-	case user.FieldWebsocketBalanceAlertThreshold:
-		return m.AddedWebsocketBalanceAlertThreshold()
 	case user.FieldWebhookBalanceNotifyThreshold:
 		return m.AddedWebhookBalanceNotifyThreshold()
 	case user.FieldTotalRecharged:
@@ -57603,13 +57410,6 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddBalanceNotifyThreshold(v)
-		return nil
-	case user.FieldWebsocketBalanceAlertThreshold:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddWebsocketBalanceAlertThreshold(v)
 		return nil
 	case user.FieldWebhookBalanceNotifyThreshold:
 		v, ok := value.(float64)
@@ -57658,9 +57458,6 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldBalanceNotifyThreshold) {
 		fields = append(fields, user.FieldBalanceNotifyThreshold)
 	}
-	if m.FieldCleared(user.FieldWebsocketBalanceAlertThreshold) {
-		fields = append(fields, user.FieldWebsocketBalanceAlertThreshold)
-	}
 	if m.FieldCleared(user.FieldWebhookBalanceNotifyThreshold) {
 		fields = append(fields, user.FieldWebhookBalanceNotifyThreshold)
 	}
@@ -57695,9 +57492,6 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldBalanceNotifyThreshold:
 		m.ClearBalanceNotifyThreshold()
-		return nil
-	case user.FieldWebsocketBalanceAlertThreshold:
-		m.ClearWebsocketBalanceAlertThreshold()
 		return nil
 	case user.FieldWebhookBalanceNotifyThreshold:
 		m.ClearWebhookBalanceNotifyThreshold()
@@ -57776,21 +57570,6 @@ func (m *UserMutation) ResetField(name string) error {
 	case user.FieldBalanceNotifyExtraEmails:
 		m.ResetBalanceNotifyExtraEmails()
 		return nil
-	case user.FieldWebsocketNotifyEnabled:
-		m.ResetWebsocketNotifyEnabled()
-		return nil
-	case user.FieldWebsocketBalanceAlertEnabled:
-		m.ResetWebsocketBalanceAlertEnabled()
-		return nil
-	case user.FieldWebsocketBalanceAlertThreshold:
-		m.ResetWebsocketBalanceAlertThreshold()
-		return nil
-	case user.FieldWebsocketSiteMessageNotifyEnabled:
-		m.ResetWebsocketSiteMessageNotifyEnabled()
-		return nil
-	case user.FieldWebsocketAnnouncementNotifyEnabled:
-		m.ResetWebsocketAnnouncementNotifyEnabled()
-		return nil
 	case user.FieldWebhookBalanceNotifyEnabled:
 		m.ResetWebhookBalanceNotifyEnabled()
 		return nil
@@ -57799,6 +57578,12 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldWebhookBalanceNotifyThreshold:
 		m.ResetWebhookBalanceNotifyThreshold()
+		return nil
+	case user.FieldWebhookSiteMessageNotifyEnabled:
+		m.ResetWebhookSiteMessageNotifyEnabled()
+		return nil
+	case user.FieldWebhookAnnouncementNotifyEnabled:
+		m.ResetWebhookAnnouncementNotifyEnabled()
 		return nil
 	case user.FieldTotalRecharged:
 		m.ResetTotalRecharged()

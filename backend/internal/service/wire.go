@@ -832,8 +832,6 @@ var ProviderSet = wire.NewSet(
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
-	ProvideUserWebsocketHub,
-	ProvideUserWebsocketNotifyService,
 	ProvideWebhookBalanceNotifyService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
@@ -902,19 +900,11 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 	return svc
 }
 
-// ProvideUserWebsocketHub creates the in-process hub for user notification WebSockets.
-func ProvideUserWebsocketHub() *UserWebsocketHub {
-	return NewUserWebsocketHub()
-}
 
-// ProvideUserWebsocketNotifyService creates the user WebSocket notify service.
-func ProvideUserWebsocketNotifyService(hub *UserWebsocketHub, userRepo UserRepository) *UserWebsocketNotifyService {
-	return NewUserWebsocketNotifyService(hub, UserWebsocketUserReader(userRepo))
-}
 
-// ProvideWebhookBalanceNotifyService creates external robot/webhook balance notify service.
+// ProvideWebhookBalanceNotifyService creates webhook notify service (balance/site-message/announcement).
 func ProvideWebhookBalanceNotifyService(userRepo UserRepository) *WebhookBalanceNotifyService {
-	return NewWebhookBalanceNotifyService(UserWebsocketUserReader(userRepo))
+	return NewWebhookBalanceNotifyService(userRepo)
 }
 
 // ProvidePaymentService creates PaymentService and attaches notification email delivery.

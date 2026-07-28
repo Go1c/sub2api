@@ -96,16 +96,12 @@ export interface User {
   balance_notify_enabled: boolean
   balance_notify_threshold: number | null
   balance_notify_extra_emails: NotifyEmailEntry[]
-  /** WebSocket realtime notifications (independent from email balance notify) */
-  websocket_notify_enabled?: boolean
-  websocket_balance_alert_enabled?: boolean
-  websocket_balance_alert_threshold?: number | null
-  websocket_site_message_notify_enabled?: boolean
-  websocket_announcement_notify_enabled?: boolean
   /** External robot/webhook balance notify (WeCom primary) */
   webhook_balance_notify_enabled?: boolean
   webhook_balance_notify_url?: string
   webhook_balance_notify_threshold?: number | null
+  webhook_site_message_notify_enabled?: boolean
+  webhook_announcement_notify_enabled?: boolean
   subscriptions?: UserSubscription[] // User's active subscriptions
   last_active_at?: string | null
   created_at: string

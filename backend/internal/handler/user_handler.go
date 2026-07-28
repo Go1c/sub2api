@@ -23,7 +23,6 @@ type UserHandler struct {
 	emailCache            service.EmailCache
 	affiliateService      *service.AffiliateService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository
-	wsNotify              *service.UserWebsocketNotifyService
 	webhookBalanceNotify  *service.WebhookBalanceNotifyService
 }
 
@@ -46,14 +45,8 @@ func NewUserHandler(
 	}
 }
 
-// SetUserWebsocketNotifyService injects WebSocket notify hub for profile test + WS upgrade.
-func (h *UserHandler) SetUserWebsocketNotifyService(svc *service.UserWebsocketNotifyService) {
-	if h != nil {
-		h.wsNotify = svc
-	}
-}
 
-// SetWebhookBalanceNotifyService injects external robot/webhook balance notify (WeCom etc.).
+// SetWebhookBalanceNotifyService injects Webhook notify (balance / site-message / announcement).
 func (h *UserHandler) SetWebhookBalanceNotifyService(svc *service.WebhookBalanceNotifyService) {
 	if h != nil {
 		h.webhookBalanceNotify = svc
@@ -63,7 +56,7 @@ func (h *UserHandler) SetWebhookBalanceNotifyService(svc *service.WebhookBalance
 // SendWebhookBalanceNotifyTest handles POST /api/v1/user/webhook-balance-notify/test
 func (h *UserHandler) SendWebhookBalanceNotifyTest(c *gin.Context) {
 	if h.webhookBalanceNotify == nil {
-		response.Error(c, 503, "Webhook balance notify unavailable")
+		response.Error(c, 503, "Webhook unavailable")
 		return
 	}
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
@@ -77,19 +70,19 @@ func (h *UserHandler) SendWebhookBalanceNotifyTest(c *gin.Context) {
 		return
 	}
 	if user.IsAdmin() {
-		response.Forbidden(c, "Webhook balance notify is for non-admin users")
+		response.Forbidden(c, "Webhook is for non-admin users")
 		return
 	}
 	if err := h.webhookBalanceNotify.SendTest(c.Request.Context(), subject.UserID); err != nil {
 		switch {
 		case errors.Is(err, service.ErrWebhookBalanceNotifyDisabled):
-			response.BadRequest(c, "请先启用机器人通知并保存")
+			response.BadRequest(c, "请先启用 Webhook 并保存")
 		case errors.Is(err, service.ErrWebhookBalanceNotifyURLInvalid):
-			response.BadRequest(c, "Webhook 地址无效，请填写 https 企业微信机器人地址")
+			response.BadRequest(c, "Webhook 地址无效，请填写有效的 https Webhook 地址")
 		case errors.Is(err, service.ErrWebhookBalanceNotifyRateLimited):
 			response.Error(c, 429, "请稍后再试")
 		case errors.Is(err, service.ErrWebhookBalanceNotifySendFailed):
-			response.BadRequest(c, "发送失败，请检查机器人 Webhook 是否正确")
+			response.BadRequest(c, "发送失败，请检查 Webhook 地址是否正确")
 		default:
 			response.ErrorFrom(c, err)
 		}
@@ -136,14 +129,11 @@ type UpdateProfileRequest struct {
 	AvatarURL                          *string  `json:"avatar_url"`
 	BalanceNotifyEnabled               *bool    `json:"balance_notify_enabled"`
 	BalanceNotifyThreshold             *float64 `json:"balance_notify_threshold"`
-	WebsocketNotifyEnabled             *bool    `json:"websocket_notify_enabled"`
-	WebsocketBalanceAlertEnabled       *bool    `json:"websocket_balance_alert_enabled"`
-	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
-	WebsocketSiteMessageNotifyEnabled  *bool    `json:"websocket_site_message_notify_enabled"`
-	WebsocketAnnouncementNotifyEnabled *bool    `json:"websocket_announcement_notify_enabled"`
 	WebhookBalanceNotifyEnabled        *bool    `json:"webhook_balance_notify_enabled"`
 	WebhookBalanceNotifyURL            *string  `json:"webhook_balance_notify_url"`
 	WebhookBalanceNotifyThreshold      *float64 `json:"webhook_balance_notify_threshold"`
+	WebhookSiteMessageNotifyEnabled    *bool    `json:"webhook_site_message_notify_enabled"`
+	WebhookAnnouncementNotifyEnabled   *bool    `json:"webhook_announcement_notify_enabled"`
 }
 
 type userProfileResponse struct {
@@ -241,14 +231,11 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		AvatarURL:                          req.AvatarURL,
 		BalanceNotifyEnabled:               req.BalanceNotifyEnabled,
 		BalanceNotifyThreshold:             req.BalanceNotifyThreshold,
-		WebsocketNotifyEnabled:             req.WebsocketNotifyEnabled,
-		WebsocketBalanceAlertEnabled:       req.WebsocketBalanceAlertEnabled,
-		WebsocketBalanceAlertThreshold:     req.WebsocketBalanceAlertThreshold,
-		WebsocketSiteMessageNotifyEnabled:  req.WebsocketSiteMessageNotifyEnabled,
-		WebsocketAnnouncementNotifyEnabled: req.WebsocketAnnouncementNotifyEnabled,
 		WebhookBalanceNotifyEnabled:        req.WebhookBalanceNotifyEnabled,
 		WebhookBalanceNotifyURL:            req.WebhookBalanceNotifyURL,
 		WebhookBalanceNotifyThreshold:      req.WebhookBalanceNotifyThreshold,
+		WebhookSiteMessageNotifyEnabled:    req.WebhookSiteMessageNotifyEnabled,
+		WebhookAnnouncementNotifyEnabled:   req.WebhookAnnouncementNotifyEnabled,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {
