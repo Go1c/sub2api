@@ -160,6 +160,17 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 - 迁移按文件名字典序执行（如 `001_...sql`、`002_...sql`）
 - `schema_migrations` 记录已执行的迁移（文件名 + 校验和）
 - 迁移仅向前（forward-only）；回滚需恢复数据库备份或手写补偿 SQL
+- 迁移文件通过 `//go:embed *.sql` 打进二进制；**发布镜像里有哪些 SQL，启动时就会跑哪些**——与 `dev` 工作区是否另有文件无关
+
+**发布护栏（2026-07-28 事故后强制）**
+
+| 规则 | 说明 |
+|------|------|
+| **代码 / Ent 新列必须同批有迁移** | 改 `ent/schema/*.go` 加列时，同 PR 必须有 `backend/migrations/NNN_*.sql` 的 `ADD COLUMN`（或确认该列迁移已在目标环境的 `schema_migrations` 里）。CI 有 `TestUserEntFieldsCoveredByMigrations` 校验 `users` 表字段 ⊆ 迁移 SQL。 |
+| **选择性 topic 发布慎带 Ent** | `release/*-to-publish` 若只带部分功能，可能把共享 schema 上别的主题字段编进镜像，却漏掉对应 `160_…` 等迁移。优先用完整 `dev → publish` 快照；否则审查 **镜像内 embed 的 migrations 集合** 是否覆盖 ent 全部列。 |
+| **破坏性迁移（DROP COLUMN）延后** | 代码停读停写后，再隔几个发布周期才 DROP。已应用的删列迁移会让「回滚代码版本」失效。见 919 与 [`records/prod-frozen-balance-migration-gap-20260728.md`](../records/prod-frozen-balance-migration-gap-20260728.md)。 |
+| **生产手改 DDL 后仍要补迁移** | 热修 `ALTER TABLE` 不会写入 `schema_migrations`；后续必须用幂等 `IF NOT EXISTS` 正式迁移文件补记 checksum（如 920 相对 160）。 |
+| **建议增强（未强制）** | 部署前对生产库副本 dry-run migrate；扩展「全 entity 字段 ⊆ 迁移」静态检查。 |
 
 **校验 `users.allowed_groups` → `user_allowed_groups` 回填**
 

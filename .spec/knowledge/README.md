@@ -51,12 +51,13 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
-| [`operations/deployment.md`](operations/deployment.md) | Docker / 安装方式、datamanagementd、CDN 缓存规则——部署或排查线上时查 |
+| [`operations/deployment.md`](operations/deployment.md) | Docker / 安装方式、datamanagementd、迁移护栏（ent 列须有迁移、DROP 延后）、CDN 缓存规则——部署或排查线上时查 |
 
 ## records/(历史记录 · 归档供回看)
 
 | 文档 | 一句话 |
 |------|--------|
+| [`records/prod-frozen-balance-migration-gap-20260728.md`](records/prod-frozen-balance-migration-gap-20260728.md) | 2026-07-28：publish 引入 `users.frozen_balance` Ent 字段却无迁移，登录 503；手改恢复后补 920 + CI 护栏 |
 | [`records/upstream-sync-20260720-v0162.md`](records/upstream-sync-20260720-v0162.md) | main→0.1.162：#234–#249 已合（含 Grok/WS turn/调度冷却）；B/C/E/F 大块默认跳过 |
 | [`records/upstream-sync-20260715.md`](records/upstream-sync-20260715.md) | v0.1.156 ordered 同步台账：全量 unit 已绿、VERSION 0.1.156；integration/前端/commit 切分仍待（进行中） |
 | [`records/upstream-sync-20260710.md`](records/upstream-sync-20260710.md) | v0.1.150 日更同步台账：18 个上游落点的 fork 适配、例外与验证结果（2026-07-10） |
