@@ -53,18 +53,21 @@ func TestMigration920AddsUserFrozenBalanceIdempotently(t *testing.T) {
 	require.NotContains(t, sql, "DROP COLUMN")
 }
 
-func TestMigration160And920BothCoverFrozenBalance(t *testing.T) {
-	// 160 is the upstream/dev lineage; 920 is the publish-lineage safety net.
-	// Fresh installs may apply both; both must be IF NOT EXISTS no-ops when re-run.
-	for _, name := range []string{
-		"160_add_user_frozen_balance.sql",
-		"920_add_user_frozen_balance.sql",
-	} {
-		content, err := FS.ReadFile(name)
-		require.NoError(t, err, name)
-		require.Contains(t, string(content), "frozen_balance", name)
-		require.Contains(t, string(content), "IF NOT EXISTS", name)
+func TestMigration920AndOptional160CoverFrozenBalance(t *testing.T) {
+	// 920 is required on every lineage (publish safety net after the 2026-07-28 outage).
+	// 160 exists on full-dev / upstream installs; topic publish branches may only have 920.
+	content920, err := FS.ReadFile("920_add_user_frozen_balance.sql")
+	require.NoError(t, err)
+	require.Contains(t, string(content920), "frozen_balance")
+	require.Contains(t, string(content920), "IF NOT EXISTS")
+
+	content160, err := FS.ReadFile("160_add_user_frozen_balance.sql")
+	if err != nil {
+		t.Logf("160_add_user_frozen_balance.sql not in this build (publish-thin lineage): %v", err)
+		return
 	}
+	require.Contains(t, string(content160), "frozen_balance")
+	require.Contains(t, string(content160), "IF NOT EXISTS")
 }
 
 func userSchemaPath(t *testing.T) string {
