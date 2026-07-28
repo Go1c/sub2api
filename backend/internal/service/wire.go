@@ -755,6 +755,8 @@ var ProviderSet = wire.NewSet(
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
+	ProvideUserWebsocketHub,
+	ProvideUserWebsocketNotifyService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
@@ -776,6 +778,16 @@ func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache
 // payment.EncryptionKey type instead of raw []byte, avoiding Wire ambiguity.
 func ProvidePaymentConfigService(entClient *dbent.Client, settingRepo SettingRepository, key payment.EncryptionKey) *PaymentConfigService {
 	return NewPaymentConfigService(entClient, settingRepo, []byte(key))
+}
+
+// ProvideUserWebsocketHub creates the in-process hub for user notification WebSockets.
+func ProvideUserWebsocketHub() *UserWebsocketHub {
+	return NewUserWebsocketHub()
+}
+
+// ProvideUserWebsocketNotifyService creates the user WebSocket notify service.
+func ProvideUserWebsocketNotifyService(hub *UserWebsocketHub, userRepo UserRepository) *UserWebsocketNotifyService {
+	return NewUserWebsocketNotifyService(hub, UserWebsocketUserReader(userRepo))
 }
 
 // ProvideBalanceNotifyService creates BalanceNotifyService
