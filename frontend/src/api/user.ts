@@ -46,6 +46,9 @@ export async function updateProfile(profile: {
   websocket_balance_alert_threshold?: number | null
   websocket_site_message_notify_enabled?: boolean
   websocket_announcement_notify_enabled?: boolean
+  webhook_balance_notify_enabled?: boolean
+  webhook_balance_notify_url?: string
+  webhook_balance_notify_threshold?: number | null
 }): Promise<User> {
   const { data } = await apiClient.put<User>('/user', profile)
   return data
@@ -58,6 +61,14 @@ export async function sendWebsocketNotifyTest(): Promise<{ sent: number; message
   const { data } = await apiClient.post<{ sent: number; message: string }>(
     '/user/websocket-notify/test'
   )
+  return data
+}
+
+/**
+ * Send a test balance-low message to the user's configured robot/webhook (WeCom etc.).
+ */
+export async function sendWebhookBalanceNotifyTest(): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>('/user/webhook-balance-notify/test')
   return data
 }
 

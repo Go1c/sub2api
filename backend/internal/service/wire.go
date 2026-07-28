@@ -757,6 +757,7 @@ var ProviderSet = wire.NewSet(
 	ProvideBalanceNotifyService,
 	ProvideUserWebsocketHub,
 	ProvideUserWebsocketNotifyService,
+	ProvideWebhookBalanceNotifyService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
@@ -788,6 +789,11 @@ func ProvideUserWebsocketHub() *UserWebsocketHub {
 // ProvideUserWebsocketNotifyService creates the user WebSocket notify service.
 func ProvideUserWebsocketNotifyService(hub *UserWebsocketHub, userRepo UserRepository) *UserWebsocketNotifyService {
 	return NewUserWebsocketNotifyService(hub, UserWebsocketUserReader(userRepo))
+}
+
+// ProvideWebhookBalanceNotifyService creates external robot/webhook balance notify service.
+func ProvideWebhookBalanceNotifyService(userRepo UserRepository) *WebhookBalanceNotifyService {
+	return NewWebhookBalanceNotifyService(UserWebsocketUserReader(userRepo))
 }
 
 // ProvideBalanceNotifyService creates BalanceNotifyService

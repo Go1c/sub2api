@@ -198,6 +198,9 @@ type UpdateProfileRequest struct {
 	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
 	WebsocketSiteMessageNotifyEnabled  *bool    `json:"websocket_site_message_notify_enabled"`
 	WebsocketAnnouncementNotifyEnabled *bool    `json:"websocket_announcement_notify_enabled"`
+	WebhookBalanceNotifyEnabled        *bool    `json:"webhook_balance_notify_enabled"`
+	WebhookBalanceNotifyURL            *string  `json:"webhook_balance_notify_url"`
+	WebhookBalanceNotifyThreshold      *float64 `json:"webhook_balance_notify_threshold"`
 }
 
 type UserAvatar struct {
@@ -493,6 +496,19 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 	}
 	if req.WebsocketAnnouncementNotifyEnabled != nil {
 		user.WebsocketAnnouncementNotifyEnabled = *req.WebsocketAnnouncementNotifyEnabled
+	}
+	if req.WebhookBalanceNotifyEnabled != nil {
+		user.WebhookBalanceNotifyEnabled = *req.WebhookBalanceNotifyEnabled
+	}
+	if req.WebhookBalanceNotifyURL != nil {
+		user.WebhookBalanceNotifyURL = strings.TrimSpace(*req.WebhookBalanceNotifyURL)
+	}
+	if req.WebhookBalanceNotifyThreshold != nil {
+		if *req.WebhookBalanceNotifyThreshold <= 0 {
+			user.WebhookBalanceNotifyThreshold = nil
+		} else {
+			user.WebhookBalanceNotifyThreshold = req.WebhookBalanceNotifyThreshold
+		}
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {

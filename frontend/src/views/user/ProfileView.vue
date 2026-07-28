@@ -42,6 +42,11 @@
         :user-email="user.email"
       />
 
+      <ProfileWebhookBalanceNotifyCard
+        v-if="user && user.role !== 'admin'"
+        :user="user"
+      />
+
       <ProfileWebsocketNotifyCard
         v-if="user && user.role !== 'admin'"
         :user="user"
@@ -61,6 +66,7 @@ import ProfileBalanceNotifyCard from '@/components/user/profile/ProfileBalanceNo
 import ProfileInfoCard from '@/components/user/profile/ProfileInfoCard.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
 import ProfileTotpCard from '@/components/user/profile/ProfileTotpCard.vue'
+import ProfileWebhookBalanceNotifyCard from '@/components/user/profile/ProfileWebhookBalanceNotifyCard.vue'
 import ProfileWebsocketNotifyCard from '@/components/user/profile/ProfileWebsocketNotifyCard.vue'
 import { isWeChatWebOAuthEnabled } from '@/api/auth'
 import { useAppStore } from '@/stores/app'
