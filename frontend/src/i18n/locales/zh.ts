@@ -1306,6 +1306,24 @@ export default {
       saved: '已保存',
       saveFailed: '保存失败'
     },
+    webhookBalanceNotify: {
+      title: '企业微信 / 机器人通知',
+      description: '余额低于阈值时，向企业微信群机器人 Webhook 发送提醒（无需保持网页打开）',
+      enabled: '启用机器人通知',
+      webhookUrl: 'Webhook 地址',
+      webhookUrlHint: '企业微信群机器人：https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...',
+      webhookUrlPlaceholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx',
+      threshold: '余额告警阈值',
+      thresholdHint: '留空使用默认 $10',
+      thresholdPlaceholder: '默认 10',
+      test: '发送测试',
+      testing: '发送中…',
+      testHint: '请先保存 Webhook 地址后再测试',
+      testSent: '测试消息已发送',
+      testFailed: '测试失败',
+      saved: '已保存',
+      saveFailed: '保存失败'
+    },
     avatar: {
       title: '资料头像',
       description: '仅支持上传头像图片；静态图片会自动压缩到 20KB 以内后再保存。',

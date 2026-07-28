@@ -67,6 +67,12 @@ const (
 	FieldWebsocketSiteMessageNotifyEnabled = "websocket_site_message_notify_enabled"
 	// FieldWebsocketAnnouncementNotifyEnabled holds the string denoting the websocket_announcement_notify_enabled field in the database.
 	FieldWebsocketAnnouncementNotifyEnabled = "websocket_announcement_notify_enabled"
+	// FieldWebhookBalanceNotifyEnabled holds the string denoting the webhook_balance_notify_enabled field in the database.
+	FieldWebhookBalanceNotifyEnabled = "webhook_balance_notify_enabled"
+	// FieldWebhookBalanceNotifyURL holds the string denoting the webhook_balance_notify_url field in the database.
+	FieldWebhookBalanceNotifyURL = "webhook_balance_notify_url"
+	// FieldWebhookBalanceNotifyThreshold holds the string denoting the webhook_balance_notify_threshold field in the database.
+	FieldWebhookBalanceNotifyThreshold = "webhook_balance_notify_threshold"
 	// FieldTotalRecharged holds the string denoting the total_recharged field in the database.
 	FieldTotalRecharged = "total_recharged"
 	// FieldInvoiceEnabled holds the string denoting the invoice_enabled field in the database.
@@ -257,6 +263,9 @@ var Columns = []string{
 	FieldWebsocketBalanceAlertThreshold,
 	FieldWebsocketSiteMessageNotifyEnabled,
 	FieldWebsocketAnnouncementNotifyEnabled,
+	FieldWebhookBalanceNotifyEnabled,
+	FieldWebhookBalanceNotifyURL,
+	FieldWebhookBalanceNotifyThreshold,
 	FieldTotalRecharged,
 	FieldInvoiceEnabled,
 	FieldRpmLimit,
@@ -334,6 +343,10 @@ var (
 	DefaultWebsocketSiteMessageNotifyEnabled bool
 	// DefaultWebsocketAnnouncementNotifyEnabled holds the default value on creation for the "websocket_announcement_notify_enabled" field.
 	DefaultWebsocketAnnouncementNotifyEnabled bool
+	// DefaultWebhookBalanceNotifyEnabled holds the default value on creation for the "webhook_balance_notify_enabled" field.
+	DefaultWebhookBalanceNotifyEnabled bool
+	// DefaultWebhookBalanceNotifyURL holds the default value on creation for the "webhook_balance_notify_url" field.
+	DefaultWebhookBalanceNotifyURL string
 	// DefaultTotalRecharged holds the default value on creation for the "total_recharged" field.
 	DefaultTotalRecharged float64
 	// DefaultInvoiceEnabled holds the default value on creation for the "invoice_enabled" field.
@@ -478,6 +491,21 @@ func ByWebsocketSiteMessageNotifyEnabled(opts ...sql.OrderTermOption) OrderOptio
 // ByWebsocketAnnouncementNotifyEnabled orders the results by the websocket_announcement_notify_enabled field.
 func ByWebsocketAnnouncementNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebsocketAnnouncementNotifyEnabled, opts...).ToFunc()
+}
+
+// ByWebhookBalanceNotifyEnabled orders the results by the webhook_balance_notify_enabled field.
+func ByWebhookBalanceNotifyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebhookBalanceNotifyEnabled, opts...).ToFunc()
+}
+
+// ByWebhookBalanceNotifyURL orders the results by the webhook_balance_notify_url field.
+func ByWebhookBalanceNotifyURL(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebhookBalanceNotifyURL, opts...).ToFunc()
+}
+
+// ByWebhookBalanceNotifyThreshold orders the results by the webhook_balance_notify_threshold field.
+func ByWebhookBalanceNotifyThreshold(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebhookBalanceNotifyThreshold, opts...).ToFunc()
 }
 
 // ByTotalRecharged orders the results by the total_recharged field.

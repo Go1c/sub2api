@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type UserHandler struct {
 	affiliateService      *service.AffiliateService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository
 	wsNotify              *service.UserWebsocketNotifyService
+	webhookBalanceNotify  *service.WebhookBalanceNotifyService
 }
 
 // NewUserHandler creates a new UserHandler
@@ -49,6 +51,51 @@ func (h *UserHandler) SetUserWebsocketNotifyService(svc *service.UserWebsocketNo
 	if h != nil {
 		h.wsNotify = svc
 	}
+}
+
+// SetWebhookBalanceNotifyService injects external robot/webhook balance notify (WeCom etc.).
+func (h *UserHandler) SetWebhookBalanceNotifyService(svc *service.WebhookBalanceNotifyService) {
+	if h != nil {
+		h.webhookBalanceNotify = svc
+	}
+}
+
+// SendWebhookBalanceNotifyTest handles POST /api/v1/user/webhook-balance-notify/test
+func (h *UserHandler) SendWebhookBalanceNotifyTest(c *gin.Context) {
+	if h.webhookBalanceNotify == nil {
+		response.Error(c, 503, "Webhook balance notify unavailable")
+		return
+	}
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	user, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
+	if err != nil || user == nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if user.IsAdmin() {
+		response.Forbidden(c, "Webhook balance notify is for non-admin users")
+		return
+	}
+	if err := h.webhookBalanceNotify.SendTest(c.Request.Context(), subject.UserID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrWebhookBalanceNotifyDisabled):
+			response.BadRequest(c, "请先启用机器人通知并保存")
+		case errors.Is(err, service.ErrWebhookBalanceNotifyURLInvalid):
+			response.BadRequest(c, "Webhook 地址无效，请填写 https 企业微信机器人地址")
+		case errors.Is(err, service.ErrWebhookBalanceNotifyRateLimited):
+			response.Error(c, 429, "请稍后再试")
+		case errors.Is(err, service.ErrWebhookBalanceNotifySendFailed):
+			response.BadRequest(c, "发送失败，请检查机器人 Webhook 是否正确")
+		default:
+			response.ErrorFrom(c, err)
+		}
+		return
+	}
+	response.Success(c, gin.H{"message": "测试消息已发送"})
 }
 
 // GetMyPlatformQuotas GET /user/platform-quotas
@@ -94,6 +141,9 @@ type UpdateProfileRequest struct {
 	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
 	WebsocketSiteMessageNotifyEnabled  *bool    `json:"websocket_site_message_notify_enabled"`
 	WebsocketAnnouncementNotifyEnabled *bool    `json:"websocket_announcement_notify_enabled"`
+	WebhookBalanceNotifyEnabled        *bool    `json:"webhook_balance_notify_enabled"`
+	WebhookBalanceNotifyURL            *string  `json:"webhook_balance_notify_url"`
+	WebhookBalanceNotifyThreshold      *float64 `json:"webhook_balance_notify_threshold"`
 }
 
 type userProfileResponse struct {
@@ -195,6 +245,9 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		WebsocketBalanceAlertThreshold:     req.WebsocketBalanceAlertThreshold,
 		WebsocketSiteMessageNotifyEnabled:  req.WebsocketSiteMessageNotifyEnabled,
 		WebsocketAnnouncementNotifyEnabled: req.WebsocketAnnouncementNotifyEnabled,
+		WebhookBalanceNotifyEnabled:        req.WebhookBalanceNotifyEnabled,
+		WebhookBalanceNotifyURL:            req.WebhookBalanceNotifyURL,
+		WebhookBalanceNotifyThreshold:      req.WebhookBalanceNotifyThreshold,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {

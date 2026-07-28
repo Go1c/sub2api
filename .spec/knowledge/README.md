@@ -33,6 +33,7 @@ metadata:
 | [`features/real-lottery.md`](features/real-lottery.md) | 后端驱动多用户抽奖,中奖兑换码经站内信发放 |
 | [`features/site-messages.md`](features/site-messages.md) | 站内信(类轻量邮件):收发读回复、未读红点、管理员开关与发信 |
 | [`features/balance-low-websocket-notify.md`](features/balance-low-websocket-notify.md) | 个人资料 WebSocket 设置：余额/站内信/公告实时通知；默认关、全站连；与邮件余额提醒解耦 |
+| [`features/webhook-balance-robot-notify.md`](features/webhook-balance-robot-notify.md) | 企业微信/机器人 Webhook 余额告警（主推外部通知，与邮件/WebSocket 解耦） |
 | [`features/support-chat.md`](features/support-chat.md) | 站内 AI 客服浮窗:外部 gateway 接入、登录态修复、品牌配色、附件上传 |
 | [`features/user-request-monitoring.md`](features/user-request-monitoring.md) | 管理员定向监控指定用户请求、限时抓取原始请求体(非阻塞网关) |
 | [`features/external-auth-handoff.md`](features/external-auth-handoff.md) | 外部应用带用户来登录、登录后把 access token 回跳的接入协议与实现 |

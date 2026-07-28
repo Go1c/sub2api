@@ -31,6 +31,10 @@ type User struct {
 	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
 	WebsocketSiteMessageNotifyEnabled  bool     `json:"websocket_site_message_notify_enabled"`
 	WebsocketAnnouncementNotifyEnabled bool     `json:"websocket_announcement_notify_enabled"`
+	// 外部机器人/Webhook 余额告警（企业微信）
+	WebhookBalanceNotifyEnabled   bool     `json:"webhook_balance_notify_enabled"`
+	WebhookBalanceNotifyURL       string   `json:"webhook_balance_notify_url"`
+	WebhookBalanceNotifyThreshold *float64 `json:"webhook_balance_notify_threshold"`
 	TotalRecharged                     float64  `json:"total_recharged"`
 	InvoiceEnabled                     bool     `json:"invoice_enabled"`
 
