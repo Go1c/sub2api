@@ -402,11 +402,12 @@ type OpenAIGatewayService struct {
 	openaiWSResolver      OpenAIWSProtocolResolver
 	resolver              *ModelPricingResolver
 	channelService        *ChannelService
-	balanceNotifyService       *BalanceNotifyService
-	userWebsocketNotifyService *UserWebsocketNotifyService
-	settingService             *SettingService
-	userPlatformQuotaRepo      UserPlatformQuotaRepository
-	accountErrorHistory        *AccountErrorHistoryService
+	balanceNotifyService        *BalanceNotifyService
+	userWebsocketNotifyService  *UserWebsocketNotifyService
+	webhookBalanceNotifyService *WebhookBalanceNotifyService
+	settingService              *SettingService
+	userPlatformQuotaRepo       UserPlatformQuotaRepository
+	accountErrorHistory         *AccountErrorHistoryService
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -445,6 +446,11 @@ func (s *OpenAIGatewayService) SetAccountErrorHistoryService(svc *AccountErrorHi
 // SetUserWebsocketNotifyService injects optional WebSocket balance alerts (independent of email).
 func (s *OpenAIGatewayService) SetUserWebsocketNotifyService(svc *UserWebsocketNotifyService) {
 	s.userWebsocketNotifyService = svc
+}
+
+// SetWebhookBalanceNotifyService injects optional external robot/webhook balance alerts (WeCom etc.).
+func (s *OpenAIGatewayService) SetWebhookBalanceNotifyService(svc *WebhookBalanceNotifyService) {
+	s.webhookBalanceNotifyService = svc
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -615,9 +621,10 @@ func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 		userSubRepo:                s.userSubRepo,
 		billingCacheService:        s.billingCacheService,
 		deferredService:            s.deferredService,
-		balanceNotifyService:       s.balanceNotifyService,
-		userWebsocketNotifyService: s.userWebsocketNotifyService,
-		userPlatformQuotaRepo:      s.userPlatformQuotaRepo,
+		balanceNotifyService:        s.balanceNotifyService,
+		userWebsocketNotifyService:  s.userWebsocketNotifyService,
+		webhookBalanceNotifyService: s.webhookBalanceNotifyService,
+		userPlatformQuotaRepo:       s.userPlatformQuotaRepo,
 	}
 }
 

@@ -71,6 +71,12 @@ type User struct {
 	WebsocketSiteMessageNotifyEnabled bool `json:"websocket_site_message_notify_enabled,omitempty"`
 	// WebsocketAnnouncementNotifyEnabled holds the value of the "websocket_announcement_notify_enabled" field.
 	WebsocketAnnouncementNotifyEnabled bool `json:"websocket_announcement_notify_enabled,omitempty"`
+	// WebhookBalanceNotifyEnabled holds the value of the "webhook_balance_notify_enabled" field.
+	WebhookBalanceNotifyEnabled bool `json:"webhook_balance_notify_enabled,omitempty"`
+	// WebhookBalanceNotifyURL holds the value of the "webhook_balance_notify_url" field.
+	WebhookBalanceNotifyURL string `json:"webhook_balance_notify_url,omitempty"`
+	// WebhookBalanceNotifyThreshold holds the value of the "webhook_balance_notify_threshold" field.
+	WebhookBalanceNotifyThreshold *float64 `json:"webhook_balance_notify_threshold,omitempty"`
 	// TotalRecharged holds the value of the "total_recharged" field.
 	TotalRecharged float64 `json:"total_recharged,omitempty"`
 	// InvoiceEnabled holds the value of the "invoice_enabled" field.
@@ -282,13 +288,13 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled, user.FieldWebsocketNotifyEnabled, user.FieldWebsocketBalanceAlertEnabled, user.FieldWebsocketSiteMessageNotifyEnabled, user.FieldWebsocketAnnouncementNotifyEnabled, user.FieldInvoiceEnabled:
+		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled, user.FieldWebsocketNotifyEnabled, user.FieldWebsocketBalanceAlertEnabled, user.FieldWebsocketSiteMessageNotifyEnabled, user.FieldWebsocketAnnouncementNotifyEnabled, user.FieldWebhookBalanceNotifyEnabled, user.FieldInvoiceEnabled:
 			values[i] = new(sql.NullBool)
-		case user.FieldBalance, user.FieldFrozenBalance, user.FieldBalanceNotifyThreshold, user.FieldWebsocketBalanceAlertThreshold, user.FieldTotalRecharged:
+		case user.FieldBalance, user.FieldFrozenBalance, user.FieldBalanceNotifyThreshold, user.FieldWebsocketBalanceAlertThreshold, user.FieldWebhookBalanceNotifyThreshold, user.FieldTotalRecharged:
 			values[i] = new(sql.NullFloat64)
 		case user.FieldID, user.FieldConcurrency, user.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
-		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
+		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails, user.FieldWebhookBalanceNotifyURL:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt, user.FieldTotpEnabledAt, user.FieldLastLoginAt, user.FieldLastActiveAt:
 			values[i] = new(sql.NullTime)
@@ -481,6 +487,25 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field websocket_announcement_notify_enabled", values[i])
 			} else if value.Valid {
 				_m.WebsocketAnnouncementNotifyEnabled = value.Bool
+			}
+		case user.FieldWebhookBalanceNotifyEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field webhook_balance_notify_enabled", values[i])
+			} else if value.Valid {
+				_m.WebhookBalanceNotifyEnabled = value.Bool
+			}
+		case user.FieldWebhookBalanceNotifyURL:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field webhook_balance_notify_url", values[i])
+			} else if value.Valid {
+				_m.WebhookBalanceNotifyURL = value.String
+			}
+		case user.FieldWebhookBalanceNotifyThreshold:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field webhook_balance_notify_threshold", values[i])
+			} else if value.Valid {
+				_m.WebhookBalanceNotifyThreshold = new(float64)
+				*_m.WebhookBalanceNotifyThreshold = value.Float64
 			}
 		case user.FieldTotalRecharged:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -715,6 +740,17 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("websocket_announcement_notify_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WebsocketAnnouncementNotifyEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("webhook_balance_notify_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WebhookBalanceNotifyEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("webhook_balance_notify_url=")
+	builder.WriteString(_m.WebhookBalanceNotifyURL)
+	builder.WriteString(", ")
+	if v := _m.WebhookBalanceNotifyThreshold; v != nil {
+		builder.WriteString("webhook_balance_notify_threshold=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("total_recharged=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalRecharged))

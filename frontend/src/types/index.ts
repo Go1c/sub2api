@@ -102,6 +102,10 @@ export interface User {
   websocket_balance_alert_threshold?: number | null
   websocket_site_message_notify_enabled?: boolean
   websocket_announcement_notify_enabled?: boolean
+  /** External robot/webhook balance notify (WeCom primary) */
+  webhook_balance_notify_enabled?: boolean
+  webhook_balance_notify_url?: string
+  webhook_balance_notify_threshold?: number | null
   subscriptions?: UserSubscription[] // User's active subscriptions
   last_active_at?: string | null
   created_at: string

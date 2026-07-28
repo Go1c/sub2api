@@ -121,6 +121,16 @@ func (User) Fields() []ent.Field {
 			Default(true),
 		field.Bool("websocket_announcement_notify_enabled").
 			Default(true),
+		// 外部机器人/Webhook 余额告警（企业微信为主，与邮件、浏览器 WebSocket 解耦）
+		field.Bool("webhook_balance_notify_enabled").
+			Default(false),
+		field.String("webhook_balance_notify_url").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Default(""),
+		field.Float("webhook_balance_notify_threshold").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
 		field.Float("total_recharged").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
