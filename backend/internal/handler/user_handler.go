@@ -23,7 +23,6 @@ type UserHandler struct {
 	emailCache            service.EmailCache
 	affiliateService      *service.AffiliateService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository
-	wsNotify              *service.UserWebsocketNotifyService
 	webhookBalanceNotify  *service.WebhookBalanceNotifyService
 }
 
@@ -46,12 +45,6 @@ func NewUserHandler(
 	}
 }
 
-// SetUserWebsocketNotifyService injects WebSocket notify hub for profile test + WS upgrade.
-func (h *UserHandler) SetUserWebsocketNotifyService(svc *service.UserWebsocketNotifyService) {
-	if h != nil {
-		h.wsNotify = svc
-	}
-}
 
 // SetWebhookBalanceNotifyService injects external robot/webhook balance notify (WeCom etc.).
 func (h *UserHandler) SetWebhookBalanceNotifyService(svc *service.WebhookBalanceNotifyService) {
@@ -136,11 +129,6 @@ type UpdateProfileRequest struct {
 	AvatarURL                          *string  `json:"avatar_url"`
 	BalanceNotifyEnabled               *bool    `json:"balance_notify_enabled"`
 	BalanceNotifyThreshold             *float64 `json:"balance_notify_threshold"`
-	WebsocketNotifyEnabled             *bool    `json:"websocket_notify_enabled"`
-	WebsocketBalanceAlertEnabled       *bool    `json:"websocket_balance_alert_enabled"`
-	WebsocketBalanceAlertThreshold     *float64 `json:"websocket_balance_alert_threshold"`
-	WebsocketSiteMessageNotifyEnabled  *bool    `json:"websocket_site_message_notify_enabled"`
-	WebsocketAnnouncementNotifyEnabled *bool    `json:"websocket_announcement_notify_enabled"`
 	WebhookBalanceNotifyEnabled        *bool    `json:"webhook_balance_notify_enabled"`
 	WebhookBalanceNotifyURL            *string  `json:"webhook_balance_notify_url"`
 	WebhookBalanceNotifyThreshold      *float64 `json:"webhook_balance_notify_threshold"`
@@ -240,12 +228,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		AvatarURL:                          req.AvatarURL,
 		BalanceNotifyEnabled:               req.BalanceNotifyEnabled,
 		BalanceNotifyThreshold:             req.BalanceNotifyThreshold,
-		WebsocketNotifyEnabled:             req.WebsocketNotifyEnabled,
-		WebsocketBalanceAlertEnabled:       req.WebsocketBalanceAlertEnabled,
-		WebsocketBalanceAlertThreshold:     req.WebsocketBalanceAlertThreshold,
-		WebsocketSiteMessageNotifyEnabled:  req.WebsocketSiteMessageNotifyEnabled,
-		WebsocketAnnouncementNotifyEnabled: req.WebsocketAnnouncementNotifyEnabled,
-		WebhookBalanceNotifyEnabled:        req.WebhookBalanceNotifyEnabled,
+							WebhookBalanceNotifyEnabled:        req.WebhookBalanceNotifyEnabled,
 		WebhookBalanceNotifyURL:            req.WebhookBalanceNotifyURL,
 		WebhookBalanceNotifyThreshold:      req.WebhookBalanceNotifyThreshold,
 	}

@@ -252,11 +252,6 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalanceNotifyThresholdType(userIn.BalanceNotifyThresholdType).
 		SetNillableBalanceNotifyThreshold(userIn.BalanceNotifyThreshold).
 		SetBalanceNotifyExtraEmails(marshalExtraEmails(userIn.BalanceNotifyExtraEmails)).
-		SetWebsocketNotifyEnabled(userIn.WebsocketNotifyEnabled).
-		SetWebsocketBalanceAlertEnabled(userIn.WebsocketBalanceAlertEnabled).
-		SetNillableWebsocketBalanceAlertThreshold(userIn.WebsocketBalanceAlertThreshold).
-		SetWebsocketSiteMessageNotifyEnabled(userIn.WebsocketSiteMessageNotifyEnabled).
-		SetWebsocketAnnouncementNotifyEnabled(userIn.WebsocketAnnouncementNotifyEnabled).
 		SetWebhookBalanceNotifyEnabled(userIn.WebhookBalanceNotifyEnabled).
 		SetWebhookBalanceNotifyURL(userIn.WebhookBalanceNotifyURL).
 		SetNillableWebhookBalanceNotifyThreshold(userIn.WebhookBalanceNotifyThreshold).
@@ -273,9 +268,6 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 	}
 	if userIn.BalanceNotifyThreshold == nil {
 		updateOp = updateOp.ClearBalanceNotifyThreshold()
-	}
-	if userIn.WebsocketBalanceAlertThreshold == nil {
-		updateOp = updateOp.ClearWebsocketBalanceAlertThreshold()
 	}
 	if userIn.WebhookBalanceNotifyThreshold == nil {
 		updateOp = updateOp.ClearWebhookBalanceNotifyThreshold()
@@ -1276,4 +1268,27 @@ func (r *userRepository) DisableTotp(ctx context.Context, userID int64) error {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
 	return nil
+}
+
+// ListIDsWithWebhookAnnouncementNotify returns active users with webhook + announcement notify enabled and a URL set.
+func (r *userRepository) ListIDsWithWebhookAnnouncementNotify(ctx context.Context) ([]int64, error) {
+	rows, err := r.client.User.Query().
+		Where(
+			dbuser.StatusEQ(service.StatusActive),
+			dbuser.WebhookBalanceNotifyEnabledEQ(true),
+			dbuser.WebhookAnnouncementNotifyEnabledEQ(true),
+			dbuser.WebhookBalanceNotifyURLNEQ(""),
+		).
+		Select(dbuser.FieldID).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]int64, 0, len(rows))
+	for _, u := range rows {
+		if u != nil {
+			out = append(out, u.ID)
+		}
+	}
+	return out, nil
 }

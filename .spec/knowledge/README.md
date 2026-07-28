@@ -32,8 +32,9 @@ metadata:
 | [`features/affiliate-tier-rebate.md`](features/affiliate-tier-rebate.md) | 阶梯式邀请返利：管理员配置 L1-L4 门槛与返利比例，用户页展示后端计算进度 |
 | [`features/real-lottery.md`](features/real-lottery.md) | 后端驱动多用户抽奖,中奖兑换码经站内信发放 |
 | [`features/site-messages.md`](features/site-messages.md) | 站内信(类轻量邮件):收发读回复、未读红点、管理员开关与发信 |
-| [`features/balance-low-websocket-notify.md`](features/balance-low-websocket-notify.md) | 个人资料 WebSocket 设置：余额/站内信/公告实时通知；默认关、全站连；与邮件余额提醒解耦 |
-| [`features/webhook-balance-robot-notify.md`](features/webhook-balance-robot-notify.md) | 企业微信/机器人 Webhook 余额告警（主推外部通知，与邮件/WebSocket 解耦） |
+| [`features/balance-low-websocket-notify.md`](features/balance-low-websocket-notify.md) | （已废弃）用户侧浏览器 WebSocket 通知，已由 Webhook 替代 |
+| [`features/webhook-balance-robot-notify.md`](features/webhook-balance-robot-notify.md) | 个人资料 Webhook 通知：余额/站内信/公告 HTTPS POST（无 WebSocket） |
+| [`features/balance-low-site-message-notify.md`](features/balance-low-site-message-notify.md) | （作废方向）曾误写为站内信通道；以 websocket 文档为准 |
 | [`features/support-chat.md`](features/support-chat.md) | 站内 AI 客服浮窗:外部 gateway 接入、登录态修复、品牌配色、附件上传 |
 | [`features/user-request-monitoring.md`](features/user-request-monitoring.md) | 管理员定向监控指定用户请求、限时抓取原始请求体(非阻塞网关) |
 | [`features/external-auth-handoff.md`](features/external-auth-handoff.md) | 外部应用带用户来登录、登录后把 access token 回跳的接入协议与实现 |
@@ -56,6 +57,8 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
+| [`records/upstream-sync-20260720-v0162.md`](records/upstream-sync-20260720-v0162.md) | main→0.1.162：#234–#249 已合（含 Grok/WS turn/调度冷却）；B/C/E/F 大块默认跳过 |
+| [`records/upstream-sync-20260715.md`](records/upstream-sync-20260715.md) | v0.1.156 ordered 同步台账：全量 unit 已绿、VERSION 0.1.156；integration/前端/commit 切分仍待（进行中） |
 | [`records/upstream-sync-20260710.md`](records/upstream-sync-20260710.md) | v0.1.150 日更同步台账：18 个上游落点的 fork 适配、例外与验证结果（2026-07-10） |
 | [`records/upstream-sync-review-20260616.md`](records/upstream-sync-review-20260616.md) | v0.1.136 同步上线前独立代码复审与 go/no-go 结论(2026-06-16) |
 | [`records/upstream-sync-acceptance-20260615.md`](records/upstream-sync-acceptance-20260615.md) | v0.1.136 同步验收清单:合了什么、风险在哪、怎么验(2026-06-15) |

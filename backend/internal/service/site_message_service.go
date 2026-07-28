@@ -20,7 +20,7 @@ type SiteMessageService struct {
 	redeemCodes         SiteMessageRedeemCodeReader
 	promoCodes          SiteMessagePromoCodeValidator
 	compensationBatches SiteMessageCompensationBatchRepository
-	wsNotify            *UserWebsocketNotifyService
+	webhookNotify       *WebhookBalanceNotifyService
 	now                 func() time.Time
 }
 
@@ -45,10 +45,10 @@ func NewSiteMessageService(
 	}
 }
 
-// SetUserWebsocketNotifyService injects optional WebSocket notify on new inbox messages.
-func (s *SiteMessageService) SetUserWebsocketNotifyService(svc *UserWebsocketNotifyService) {
+// SetWebhookBalanceNotifyService injects optional Webhook notify on new inbox messages.
+func (s *SiteMessageService) SetWebhookBalanceNotifyService(svc *WebhookBalanceNotifyService) {
 	if s != nil {
-		s.wsNotify = svc
+		s.webhookNotify = svc
 	}
 }
 
@@ -410,8 +410,8 @@ func (s *SiteMessageService) create(ctx context.Context, senderID, recipientID i
 	if err := s.repo.Create(ctx, message); err != nil {
 		return nil, fmt.Errorf("create site message: %w", err)
 	}
-	if s.wsNotify != nil {
-		s.wsNotify.NotifySiteMessage(ctx, message.RecipientID, message.ID, message.Subject)
+	if s.webhookNotify != nil {
+		s.webhookNotify.NotifySiteMessage(ctx, message.RecipientID, message.ID, message.Subject)
 	}
 	return message, nil
 }

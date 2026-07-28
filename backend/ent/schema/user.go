@@ -49,6 +49,9 @@ func (User) Fields() []ent.Field {
 		field.Float("balance").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Float("frozen_balance").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0),
 		field.Int("concurrency").
 			Default(5),
 		field.String("status").
@@ -77,10 +80,10 @@ func (User) Fields() []ent.Field {
 		field.String("signup_source").
 			Validate(func(value string) error {
 				switch value {
-				case "email", "linuxdo", "wechat", "oidc", "github", "google":
+				case "email", "linuxdo", "wechat", "oidc", "github", "google", "dingtalk":
 					return nil
 				default:
-					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc, github, google")
+					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc, github, google, dingtalk")
 				}
 			}).
 			Default("email"),
@@ -93,7 +96,7 @@ func (User) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
-		// 余额不足通知（邮件，与 WebSocket 解耦）
+		// 余额不足通知（邮件，与 Webhook 解耦）
 		field.Bool("balance_notify_enabled").
 			Default(true),
 		field.String("balance_notify_threshold_type").
@@ -105,20 +108,7 @@ func (User) Fields() []ent.Field {
 		field.String("balance_notify_extra_emails").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Default("[]"),
-		// WebSocket 实时通知（独立功能）
-		field.Bool("websocket_notify_enabled").
-			Default(false),
-		field.Bool("websocket_balance_alert_enabled").
-			Default(true),
-		field.Float("websocket_balance_alert_threshold").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Optional().
-			Nillable(),
-		field.Bool("websocket_site_message_notify_enabled").
-			Default(true),
-		field.Bool("websocket_announcement_notify_enabled").
-			Default(true),
-		// 外部机器人/Webhook 余额告警（企业微信为主）
+		// Webhook 通知（HTTPS POST；与邮件解耦；默认关）
 		field.Bool("webhook_balance_notify_enabled").
 			Default(false),
 		field.String("webhook_balance_notify_url").
@@ -128,6 +118,10 @@ func (User) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Optional().
 			Nillable(),
+		field.Bool("webhook_site_message_notify_enabled").
+			Default(true),
+		field.Bool("webhook_announcement_notify_enabled").
+			Default(true),
 		field.Float("total_recharged").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),

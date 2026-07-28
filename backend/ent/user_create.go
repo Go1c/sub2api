@@ -118,6 +118,20 @@ func (_c *UserCreate) SetNillableBalance(v *float64) *UserCreate {
 	return _c
 }
 
+// SetFrozenBalance sets the "frozen_balance" field.
+func (_c *UserCreate) SetFrozenBalance(v float64) *UserCreate {
+	_c.mutation.SetFrozenBalance(v)
+	return _c
+}
+
+// SetNillableFrozenBalance sets the "frozen_balance" field if the given value is not nil.
+func (_c *UserCreate) SetNillableFrozenBalance(v *float64) *UserCreate {
+	if v != nil {
+		_c.SetFrozenBalance(*v)
+	}
+	return _c
+}
+
 // SetConcurrency sets the "concurrency" field.
 func (_c *UserCreate) SetConcurrency(v int) *UserCreate {
 	_c.mutation.SetConcurrency(v)
@@ -314,76 +328,6 @@ func (_c *UserCreate) SetNillableBalanceNotifyExtraEmails(v *string) *UserCreate
 	return _c
 }
 
-// SetWebsocketNotifyEnabled sets the "websocket_notify_enabled" field.
-func (_c *UserCreate) SetWebsocketNotifyEnabled(v bool) *UserCreate {
-	_c.mutation.SetWebsocketNotifyEnabled(v)
-	return _c
-}
-
-// SetNillableWebsocketNotifyEnabled sets the "websocket_notify_enabled" field if the given value is not nil.
-func (_c *UserCreate) SetNillableWebsocketNotifyEnabled(v *bool) *UserCreate {
-	if v != nil {
-		_c.SetWebsocketNotifyEnabled(*v)
-	}
-	return _c
-}
-
-// SetWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field.
-func (_c *UserCreate) SetWebsocketBalanceAlertEnabled(v bool) *UserCreate {
-	_c.mutation.SetWebsocketBalanceAlertEnabled(v)
-	return _c
-}
-
-// SetNillableWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field if the given value is not nil.
-func (_c *UserCreate) SetNillableWebsocketBalanceAlertEnabled(v *bool) *UserCreate {
-	if v != nil {
-		_c.SetWebsocketBalanceAlertEnabled(*v)
-	}
-	return _c
-}
-
-// SetWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field.
-func (_c *UserCreate) SetWebsocketBalanceAlertThreshold(v float64) *UserCreate {
-	_c.mutation.SetWebsocketBalanceAlertThreshold(v)
-	return _c
-}
-
-// SetNillableWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field if the given value is not nil.
-func (_c *UserCreate) SetNillableWebsocketBalanceAlertThreshold(v *float64) *UserCreate {
-	if v != nil {
-		_c.SetWebsocketBalanceAlertThreshold(*v)
-	}
-	return _c
-}
-
-// SetWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field.
-func (_c *UserCreate) SetWebsocketSiteMessageNotifyEnabled(v bool) *UserCreate {
-	_c.mutation.SetWebsocketSiteMessageNotifyEnabled(v)
-	return _c
-}
-
-// SetNillableWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field if the given value is not nil.
-func (_c *UserCreate) SetNillableWebsocketSiteMessageNotifyEnabled(v *bool) *UserCreate {
-	if v != nil {
-		_c.SetWebsocketSiteMessageNotifyEnabled(*v)
-	}
-	return _c
-}
-
-// SetWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field.
-func (_c *UserCreate) SetWebsocketAnnouncementNotifyEnabled(v bool) *UserCreate {
-	_c.mutation.SetWebsocketAnnouncementNotifyEnabled(v)
-	return _c
-}
-
-// SetNillableWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field if the given value is not nil.
-func (_c *UserCreate) SetNillableWebsocketAnnouncementNotifyEnabled(v *bool) *UserCreate {
-	if v != nil {
-		_c.SetWebsocketAnnouncementNotifyEnabled(*v)
-	}
-	return _c
-}
-
 // SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
 func (_c *UserCreate) SetWebhookBalanceNotifyEnabled(v bool) *UserCreate {
 	_c.mutation.SetWebhookBalanceNotifyEnabled(v)
@@ -422,6 +366,34 @@ func (_c *UserCreate) SetWebhookBalanceNotifyThreshold(v float64) *UserCreate {
 func (_c *UserCreate) SetNillableWebhookBalanceNotifyThreshold(v *float64) *UserCreate {
 	if v != nil {
 		_c.SetWebhookBalanceNotifyThreshold(*v)
+	}
+	return _c
+}
+
+// SetWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field.
+func (_c *UserCreate) SetWebhookSiteMessageNotifyEnabled(v bool) *UserCreate {
+	_c.mutation.SetWebhookSiteMessageNotifyEnabled(v)
+	return _c
+}
+
+// SetNillableWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableWebhookSiteMessageNotifyEnabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetWebhookSiteMessageNotifyEnabled(*v)
+	}
+	return _c
+}
+
+// SetWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field.
+func (_c *UserCreate) SetWebhookAnnouncementNotifyEnabled(v bool) *UserCreate {
+	_c.mutation.SetWebhookAnnouncementNotifyEnabled(v)
+	return _c
+}
+
+// SetNillableWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableWebhookAnnouncementNotifyEnabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetWebhookAnnouncementNotifyEnabled(*v)
 	}
 	return _c
 }
@@ -767,6 +739,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultBalance
 		_c.mutation.SetBalance(v)
 	}
+	if _, ok := _c.mutation.FrozenBalance(); !ok {
+		v := user.DefaultFrozenBalance
+		_c.mutation.SetFrozenBalance(v)
+	}
 	if _, ok := _c.mutation.Concurrency(); !ok {
 		v := user.DefaultConcurrency
 		_c.mutation.SetConcurrency(v)
@@ -803,22 +779,6 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultBalanceNotifyExtraEmails
 		_c.mutation.SetBalanceNotifyExtraEmails(v)
 	}
-	if _, ok := _c.mutation.WebsocketNotifyEnabled(); !ok {
-		v := user.DefaultWebsocketNotifyEnabled
-		_c.mutation.SetWebsocketNotifyEnabled(v)
-	}
-	if _, ok := _c.mutation.WebsocketBalanceAlertEnabled(); !ok {
-		v := user.DefaultWebsocketBalanceAlertEnabled
-		_c.mutation.SetWebsocketBalanceAlertEnabled(v)
-	}
-	if _, ok := _c.mutation.WebsocketSiteMessageNotifyEnabled(); !ok {
-		v := user.DefaultWebsocketSiteMessageNotifyEnabled
-		_c.mutation.SetWebsocketSiteMessageNotifyEnabled(v)
-	}
-	if _, ok := _c.mutation.WebsocketAnnouncementNotifyEnabled(); !ok {
-		v := user.DefaultWebsocketAnnouncementNotifyEnabled
-		_c.mutation.SetWebsocketAnnouncementNotifyEnabled(v)
-	}
 	if _, ok := _c.mutation.WebhookBalanceNotifyEnabled(); !ok {
 		v := user.DefaultWebhookBalanceNotifyEnabled
 		_c.mutation.SetWebhookBalanceNotifyEnabled(v)
@@ -826,6 +786,14 @@ func (_c *UserCreate) defaults() error {
 	if _, ok := _c.mutation.WebhookBalanceNotifyURL(); !ok {
 		v := user.DefaultWebhookBalanceNotifyURL
 		_c.mutation.SetWebhookBalanceNotifyURL(v)
+	}
+	if _, ok := _c.mutation.WebhookSiteMessageNotifyEnabled(); !ok {
+		v := user.DefaultWebhookSiteMessageNotifyEnabled
+		_c.mutation.SetWebhookSiteMessageNotifyEnabled(v)
+	}
+	if _, ok := _c.mutation.WebhookAnnouncementNotifyEnabled(); !ok {
+		v := user.DefaultWebhookAnnouncementNotifyEnabled
+		_c.mutation.SetWebhookAnnouncementNotifyEnabled(v)
 	}
 	if _, ok := _c.mutation.TotalRecharged(); !ok {
 		v := user.DefaultTotalRecharged
@@ -877,6 +845,9 @@ func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.Balance(); !ok {
 		return &ValidationError{Name: "balance", err: errors.New(`ent: missing required field "User.balance"`)}
 	}
+	if _, ok := _c.mutation.FrozenBalance(); !ok {
+		return &ValidationError{Name: "frozen_balance", err: errors.New(`ent: missing required field "User.frozen_balance"`)}
+	}
 	if _, ok := _c.mutation.Concurrency(); !ok {
 		return &ValidationError{Name: "concurrency", err: errors.New(`ent: missing required field "User.concurrency"`)}
 	}
@@ -919,23 +890,17 @@ func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.BalanceNotifyExtraEmails(); !ok {
 		return &ValidationError{Name: "balance_notify_extra_emails", err: errors.New(`ent: missing required field "User.balance_notify_extra_emails"`)}
 	}
-	if _, ok := _c.mutation.WebsocketNotifyEnabled(); !ok {
-		return &ValidationError{Name: "websocket_notify_enabled", err: errors.New(`ent: missing required field "User.websocket_notify_enabled"`)}
-	}
-	if _, ok := _c.mutation.WebsocketBalanceAlertEnabled(); !ok {
-		return &ValidationError{Name: "websocket_balance_alert_enabled", err: errors.New(`ent: missing required field "User.websocket_balance_alert_enabled"`)}
-	}
-	if _, ok := _c.mutation.WebsocketSiteMessageNotifyEnabled(); !ok {
-		return &ValidationError{Name: "websocket_site_message_notify_enabled", err: errors.New(`ent: missing required field "User.websocket_site_message_notify_enabled"`)}
-	}
-	if _, ok := _c.mutation.WebsocketAnnouncementNotifyEnabled(); !ok {
-		return &ValidationError{Name: "websocket_announcement_notify_enabled", err: errors.New(`ent: missing required field "User.websocket_announcement_notify_enabled"`)}
-	}
 	if _, ok := _c.mutation.WebhookBalanceNotifyEnabled(); !ok {
 		return &ValidationError{Name: "webhook_balance_notify_enabled", err: errors.New(`ent: missing required field "User.webhook_balance_notify_enabled"`)}
 	}
 	if _, ok := _c.mutation.WebhookBalanceNotifyURL(); !ok {
 		return &ValidationError{Name: "webhook_balance_notify_url", err: errors.New(`ent: missing required field "User.webhook_balance_notify_url"`)}
+	}
+	if _, ok := _c.mutation.WebhookSiteMessageNotifyEnabled(); !ok {
+		return &ValidationError{Name: "webhook_site_message_notify_enabled", err: errors.New(`ent: missing required field "User.webhook_site_message_notify_enabled"`)}
+	}
+	if _, ok := _c.mutation.WebhookAnnouncementNotifyEnabled(); !ok {
+		return &ValidationError{Name: "webhook_announcement_notify_enabled", err: errors.New(`ent: missing required field "User.webhook_announcement_notify_enabled"`)}
 	}
 	if _, ok := _c.mutation.TotalRecharged(); !ok {
 		return &ValidationError{Name: "total_recharged", err: errors.New(`ent: missing required field "User.total_recharged"`)}
@@ -1001,6 +966,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldBalance, field.TypeFloat64, value)
 		_node.Balance = value
 	}
+	if value, ok := _c.mutation.FrozenBalance(); ok {
+		_spec.SetField(user.FieldFrozenBalance, field.TypeFloat64, value)
+		_node.FrozenBalance = value
+	}
 	if value, ok := _c.mutation.Concurrency(); ok {
 		_spec.SetField(user.FieldConcurrency, field.TypeInt, value)
 		_node.Concurrency = value
@@ -1057,26 +1026,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldBalanceNotifyExtraEmails, field.TypeString, value)
 		_node.BalanceNotifyExtraEmails = value
 	}
-	if value, ok := _c.mutation.WebsocketNotifyEnabled(); ok {
-		_spec.SetField(user.FieldWebsocketNotifyEnabled, field.TypeBool, value)
-		_node.WebsocketNotifyEnabled = value
-	}
-	if value, ok := _c.mutation.WebsocketBalanceAlertEnabled(); ok {
-		_spec.SetField(user.FieldWebsocketBalanceAlertEnabled, field.TypeBool, value)
-		_node.WebsocketBalanceAlertEnabled = value
-	}
-	if value, ok := _c.mutation.WebsocketBalanceAlertThreshold(); ok {
-		_spec.SetField(user.FieldWebsocketBalanceAlertThreshold, field.TypeFloat64, value)
-		_node.WebsocketBalanceAlertThreshold = &value
-	}
-	if value, ok := _c.mutation.WebsocketSiteMessageNotifyEnabled(); ok {
-		_spec.SetField(user.FieldWebsocketSiteMessageNotifyEnabled, field.TypeBool, value)
-		_node.WebsocketSiteMessageNotifyEnabled = value
-	}
-	if value, ok := _c.mutation.WebsocketAnnouncementNotifyEnabled(); ok {
-		_spec.SetField(user.FieldWebsocketAnnouncementNotifyEnabled, field.TypeBool, value)
-		_node.WebsocketAnnouncementNotifyEnabled = value
-	}
 	if value, ok := _c.mutation.WebhookBalanceNotifyEnabled(); ok {
 		_spec.SetField(user.FieldWebhookBalanceNotifyEnabled, field.TypeBool, value)
 		_node.WebhookBalanceNotifyEnabled = value
@@ -1088,6 +1037,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.WebhookBalanceNotifyThreshold(); ok {
 		_spec.SetField(user.FieldWebhookBalanceNotifyThreshold, field.TypeFloat64, value)
 		_node.WebhookBalanceNotifyThreshold = &value
+	}
+	if value, ok := _c.mutation.WebhookSiteMessageNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebhookSiteMessageNotifyEnabled, field.TypeBool, value)
+		_node.WebhookSiteMessageNotifyEnabled = value
+	}
+	if value, ok := _c.mutation.WebhookAnnouncementNotifyEnabled(); ok {
+		_spec.SetField(user.FieldWebhookAnnouncementNotifyEnabled, field.TypeBool, value)
+		_node.WebhookAnnouncementNotifyEnabled = value
 	}
 	if value, ok := _c.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)
@@ -1497,6 +1454,24 @@ func (u *UserUpsert) AddBalance(v float64) *UserUpsert {
 	return u
 }
 
+// SetFrozenBalance sets the "frozen_balance" field.
+func (u *UserUpsert) SetFrozenBalance(v float64) *UserUpsert {
+	u.Set(user.FieldFrozenBalance, v)
+	return u
+}
+
+// UpdateFrozenBalance sets the "frozen_balance" field to the value that was provided on create.
+func (u *UserUpsert) UpdateFrozenBalance() *UserUpsert {
+	u.SetExcluded(user.FieldFrozenBalance)
+	return u
+}
+
+// AddFrozenBalance adds v to the "frozen_balance" field.
+func (u *UserUpsert) AddFrozenBalance(v float64) *UserUpsert {
+	u.Add(user.FieldFrozenBalance, v)
+	return u
+}
+
 // SetConcurrency sets the "concurrency" field.
 func (u *UserUpsert) SetConcurrency(v int) *UserUpsert {
 	u.Set(user.FieldConcurrency, v)
@@ -1707,78 +1682,6 @@ func (u *UserUpsert) UpdateBalanceNotifyExtraEmails() *UserUpsert {
 	return u
 }
 
-// SetWebsocketNotifyEnabled sets the "websocket_notify_enabled" field.
-func (u *UserUpsert) SetWebsocketNotifyEnabled(v bool) *UserUpsert {
-	u.Set(user.FieldWebsocketNotifyEnabled, v)
-	return u
-}
-
-// UpdateWebsocketNotifyEnabled sets the "websocket_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsert) UpdateWebsocketNotifyEnabled() *UserUpsert {
-	u.SetExcluded(user.FieldWebsocketNotifyEnabled)
-	return u
-}
-
-// SetWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field.
-func (u *UserUpsert) SetWebsocketBalanceAlertEnabled(v bool) *UserUpsert {
-	u.Set(user.FieldWebsocketBalanceAlertEnabled, v)
-	return u
-}
-
-// UpdateWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field to the value that was provided on create.
-func (u *UserUpsert) UpdateWebsocketBalanceAlertEnabled() *UserUpsert {
-	u.SetExcluded(user.FieldWebsocketBalanceAlertEnabled)
-	return u
-}
-
-// SetWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field.
-func (u *UserUpsert) SetWebsocketBalanceAlertThreshold(v float64) *UserUpsert {
-	u.Set(user.FieldWebsocketBalanceAlertThreshold, v)
-	return u
-}
-
-// UpdateWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field to the value that was provided on create.
-func (u *UserUpsert) UpdateWebsocketBalanceAlertThreshold() *UserUpsert {
-	u.SetExcluded(user.FieldWebsocketBalanceAlertThreshold)
-	return u
-}
-
-// AddWebsocketBalanceAlertThreshold adds v to the "websocket_balance_alert_threshold" field.
-func (u *UserUpsert) AddWebsocketBalanceAlertThreshold(v float64) *UserUpsert {
-	u.Add(user.FieldWebsocketBalanceAlertThreshold, v)
-	return u
-}
-
-// ClearWebsocketBalanceAlertThreshold clears the value of the "websocket_balance_alert_threshold" field.
-func (u *UserUpsert) ClearWebsocketBalanceAlertThreshold() *UserUpsert {
-	u.SetNull(user.FieldWebsocketBalanceAlertThreshold)
-	return u
-}
-
-// SetWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field.
-func (u *UserUpsert) SetWebsocketSiteMessageNotifyEnabled(v bool) *UserUpsert {
-	u.Set(user.FieldWebsocketSiteMessageNotifyEnabled, v)
-	return u
-}
-
-// UpdateWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsert) UpdateWebsocketSiteMessageNotifyEnabled() *UserUpsert {
-	u.SetExcluded(user.FieldWebsocketSiteMessageNotifyEnabled)
-	return u
-}
-
-// SetWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field.
-func (u *UserUpsert) SetWebsocketAnnouncementNotifyEnabled(v bool) *UserUpsert {
-	u.Set(user.FieldWebsocketAnnouncementNotifyEnabled, v)
-	return u
-}
-
-// UpdateWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsert) UpdateWebsocketAnnouncementNotifyEnabled() *UserUpsert {
-	u.SetExcluded(user.FieldWebsocketAnnouncementNotifyEnabled)
-	return u
-}
-
 // SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
 func (u *UserUpsert) SetWebhookBalanceNotifyEnabled(v bool) *UserUpsert {
 	u.Set(user.FieldWebhookBalanceNotifyEnabled, v)
@@ -1824,6 +1727,30 @@ func (u *UserUpsert) AddWebhookBalanceNotifyThreshold(v float64) *UserUpsert {
 // ClearWebhookBalanceNotifyThreshold clears the value of the "webhook_balance_notify_threshold" field.
 func (u *UserUpsert) ClearWebhookBalanceNotifyThreshold() *UserUpsert {
 	u.SetNull(user.FieldWebhookBalanceNotifyThreshold)
+	return u
+}
+
+// SetWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field.
+func (u *UserUpsert) SetWebhookSiteMessageNotifyEnabled(v bool) *UserUpsert {
+	u.Set(user.FieldWebhookSiteMessageNotifyEnabled, v)
+	return u
+}
+
+// UpdateWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field to the value that was provided on create.
+func (u *UserUpsert) UpdateWebhookSiteMessageNotifyEnabled() *UserUpsert {
+	u.SetExcluded(user.FieldWebhookSiteMessageNotifyEnabled)
+	return u
+}
+
+// SetWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field.
+func (u *UserUpsert) SetWebhookAnnouncementNotifyEnabled(v bool) *UserUpsert {
+	u.Set(user.FieldWebhookAnnouncementNotifyEnabled, v)
+	return u
+}
+
+// UpdateWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field to the value that was provided on create.
+func (u *UserUpsert) UpdateWebhookAnnouncementNotifyEnabled() *UserUpsert {
+	u.SetExcluded(user.FieldWebhookAnnouncementNotifyEnabled)
 	return u
 }
 
@@ -2015,6 +1942,27 @@ func (u *UserUpsertOne) AddBalance(v float64) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateBalance() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateBalance()
+	})
+}
+
+// SetFrozenBalance sets the "frozen_balance" field.
+func (u *UserUpsertOne) SetFrozenBalance(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetFrozenBalance(v)
+	})
+}
+
+// AddFrozenBalance adds v to the "frozen_balance" field.
+func (u *UserUpsertOne) AddFrozenBalance(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddFrozenBalance(v)
+	})
+}
+
+// UpdateFrozenBalance sets the "frozen_balance" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateFrozenBalance() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateFrozenBalance()
 	})
 }
 
@@ -2263,90 +2211,6 @@ func (u *UserUpsertOne) UpdateBalanceNotifyExtraEmails() *UserUpsertOne {
 	})
 }
 
-// SetWebsocketNotifyEnabled sets the "websocket_notify_enabled" field.
-func (u *UserUpsertOne) SetWebsocketNotifyEnabled(v bool) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketNotifyEnabled(v)
-	})
-}
-
-// UpdateWebsocketNotifyEnabled sets the "websocket_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateWebsocketNotifyEnabled() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketNotifyEnabled()
-	})
-}
-
-// SetWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field.
-func (u *UserUpsertOne) SetWebsocketBalanceAlertEnabled(v bool) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketBalanceAlertEnabled(v)
-	})
-}
-
-// UpdateWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateWebsocketBalanceAlertEnabled() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketBalanceAlertEnabled()
-	})
-}
-
-// SetWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field.
-func (u *UserUpsertOne) SetWebsocketBalanceAlertThreshold(v float64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketBalanceAlertThreshold(v)
-	})
-}
-
-// AddWebsocketBalanceAlertThreshold adds v to the "websocket_balance_alert_threshold" field.
-func (u *UserUpsertOne) AddWebsocketBalanceAlertThreshold(v float64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.AddWebsocketBalanceAlertThreshold(v)
-	})
-}
-
-// UpdateWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateWebsocketBalanceAlertThreshold() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketBalanceAlertThreshold()
-	})
-}
-
-// ClearWebsocketBalanceAlertThreshold clears the value of the "websocket_balance_alert_threshold" field.
-func (u *UserUpsertOne) ClearWebsocketBalanceAlertThreshold() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearWebsocketBalanceAlertThreshold()
-	})
-}
-
-// SetWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field.
-func (u *UserUpsertOne) SetWebsocketSiteMessageNotifyEnabled(v bool) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketSiteMessageNotifyEnabled(v)
-	})
-}
-
-// UpdateWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateWebsocketSiteMessageNotifyEnabled() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketSiteMessageNotifyEnabled()
-	})
-}
-
-// SetWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field.
-func (u *UserUpsertOne) SetWebsocketAnnouncementNotifyEnabled(v bool) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketAnnouncementNotifyEnabled(v)
-	})
-}
-
-// UpdateWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateWebsocketAnnouncementNotifyEnabled() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketAnnouncementNotifyEnabled()
-	})
-}
-
 // SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
 func (u *UserUpsertOne) SetWebhookBalanceNotifyEnabled(v bool) *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
@@ -2400,6 +2264,34 @@ func (u *UserUpsertOne) UpdateWebhookBalanceNotifyThreshold() *UserUpsertOne {
 func (u *UserUpsertOne) ClearWebhookBalanceNotifyThreshold() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearWebhookBalanceNotifyThreshold()
+	})
+}
+
+// SetWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field.
+func (u *UserUpsertOne) SetWebhookSiteMessageNotifyEnabled(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetWebhookSiteMessageNotifyEnabled(v)
+	})
+}
+
+// UpdateWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateWebhookSiteMessageNotifyEnabled() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateWebhookSiteMessageNotifyEnabled()
+	})
+}
+
+// SetWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field.
+func (u *UserUpsertOne) SetWebhookAnnouncementNotifyEnabled(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetWebhookAnnouncementNotifyEnabled(v)
+	})
+}
+
+// UpdateWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateWebhookAnnouncementNotifyEnabled() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateWebhookAnnouncementNotifyEnabled()
 	})
 }
 
@@ -2768,6 +2660,27 @@ func (u *UserUpsertBulk) UpdateBalance() *UserUpsertBulk {
 	})
 }
 
+// SetFrozenBalance sets the "frozen_balance" field.
+func (u *UserUpsertBulk) SetFrozenBalance(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetFrozenBalance(v)
+	})
+}
+
+// AddFrozenBalance adds v to the "frozen_balance" field.
+func (u *UserUpsertBulk) AddFrozenBalance(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddFrozenBalance(v)
+	})
+}
+
+// UpdateFrozenBalance sets the "frozen_balance" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateFrozenBalance() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateFrozenBalance()
+	})
+}
+
 // SetConcurrency sets the "concurrency" field.
 func (u *UserUpsertBulk) SetConcurrency(v int) *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
@@ -3013,90 +2926,6 @@ func (u *UserUpsertBulk) UpdateBalanceNotifyExtraEmails() *UserUpsertBulk {
 	})
 }
 
-// SetWebsocketNotifyEnabled sets the "websocket_notify_enabled" field.
-func (u *UserUpsertBulk) SetWebsocketNotifyEnabled(v bool) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketNotifyEnabled(v)
-	})
-}
-
-// UpdateWebsocketNotifyEnabled sets the "websocket_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateWebsocketNotifyEnabled() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketNotifyEnabled()
-	})
-}
-
-// SetWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field.
-func (u *UserUpsertBulk) SetWebsocketBalanceAlertEnabled(v bool) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketBalanceAlertEnabled(v)
-	})
-}
-
-// UpdateWebsocketBalanceAlertEnabled sets the "websocket_balance_alert_enabled" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateWebsocketBalanceAlertEnabled() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketBalanceAlertEnabled()
-	})
-}
-
-// SetWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field.
-func (u *UserUpsertBulk) SetWebsocketBalanceAlertThreshold(v float64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketBalanceAlertThreshold(v)
-	})
-}
-
-// AddWebsocketBalanceAlertThreshold adds v to the "websocket_balance_alert_threshold" field.
-func (u *UserUpsertBulk) AddWebsocketBalanceAlertThreshold(v float64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.AddWebsocketBalanceAlertThreshold(v)
-	})
-}
-
-// UpdateWebsocketBalanceAlertThreshold sets the "websocket_balance_alert_threshold" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateWebsocketBalanceAlertThreshold() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketBalanceAlertThreshold()
-	})
-}
-
-// ClearWebsocketBalanceAlertThreshold clears the value of the "websocket_balance_alert_threshold" field.
-func (u *UserUpsertBulk) ClearWebsocketBalanceAlertThreshold() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearWebsocketBalanceAlertThreshold()
-	})
-}
-
-// SetWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field.
-func (u *UserUpsertBulk) SetWebsocketSiteMessageNotifyEnabled(v bool) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketSiteMessageNotifyEnabled(v)
-	})
-}
-
-// UpdateWebsocketSiteMessageNotifyEnabled sets the "websocket_site_message_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateWebsocketSiteMessageNotifyEnabled() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketSiteMessageNotifyEnabled()
-	})
-}
-
-// SetWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field.
-func (u *UserUpsertBulk) SetWebsocketAnnouncementNotifyEnabled(v bool) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWebsocketAnnouncementNotifyEnabled(v)
-	})
-}
-
-// UpdateWebsocketAnnouncementNotifyEnabled sets the "websocket_announcement_notify_enabled" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateWebsocketAnnouncementNotifyEnabled() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWebsocketAnnouncementNotifyEnabled()
-	})
-}
-
 // SetWebhookBalanceNotifyEnabled sets the "webhook_balance_notify_enabled" field.
 func (u *UserUpsertBulk) SetWebhookBalanceNotifyEnabled(v bool) *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
@@ -3150,6 +2979,34 @@ func (u *UserUpsertBulk) UpdateWebhookBalanceNotifyThreshold() *UserUpsertBulk {
 func (u *UserUpsertBulk) ClearWebhookBalanceNotifyThreshold() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearWebhookBalanceNotifyThreshold()
+	})
+}
+
+// SetWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field.
+func (u *UserUpsertBulk) SetWebhookSiteMessageNotifyEnabled(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetWebhookSiteMessageNotifyEnabled(v)
+	})
+}
+
+// UpdateWebhookSiteMessageNotifyEnabled sets the "webhook_site_message_notify_enabled" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateWebhookSiteMessageNotifyEnabled() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateWebhookSiteMessageNotifyEnabled()
+	})
+}
+
+// SetWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field.
+func (u *UserUpsertBulk) SetWebhookAnnouncementNotifyEnabled(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetWebhookAnnouncementNotifyEnabled(v)
+	})
+}
+
+// UpdateWebhookAnnouncementNotifyEnabled sets the "webhook_announcement_notify_enabled" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateWebhookAnnouncementNotifyEnabled() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateWebhookAnnouncementNotifyEnabled()
 	})
 }
 

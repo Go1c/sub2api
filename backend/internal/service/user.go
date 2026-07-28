@@ -48,17 +48,13 @@ type User struct {
 	BalanceNotifyThresholdType string // "fixed" (default) | "percentage"
 	BalanceNotifyThreshold     *float64
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
-	// WebSocket 实时通知（独立功能；总开关默认关）
-	WebsocketNotifyEnabled             bool
-	WebsocketBalanceAlertEnabled       bool
-	WebsocketBalanceAlertThreshold     *float64
-	WebsocketSiteMessageNotifyEnabled  bool
-	WebsocketAnnouncementNotifyEnabled bool
 	// 外部机器人/Webhook 余额告警（企业微信等）
 	WebhookBalanceNotifyEnabled   bool
 	WebhookBalanceNotifyURL       string
-	WebhookBalanceNotifyThreshold *float64
-	TotalRecharged                float64
+	WebhookBalanceNotifyThreshold    *float64
+	WebhookSiteMessageNotifyEnabled  bool
+	WebhookAnnouncementNotifyEnabled bool
+	TotalRecharged                   float64
 	InvoiceEnabled                bool
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
