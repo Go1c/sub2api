@@ -53,7 +53,7 @@ export async function updateProfile(profile: {
 
 
 /**
- * Send a test balance-low message to the user's configured Webhook.
+ * Send a test balance-low message to the user's configured robot/webhook (WeCom etc.).
  */
 export async function sendWebhookBalanceNotifyTest(): Promise<{ message: string }> {
   const { data } = await apiClient.post<{ message: string }>('/user/webhook-balance-notify/test')

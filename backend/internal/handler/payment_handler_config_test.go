@@ -82,7 +82,7 @@ func TestGetPaymentConfigReturnsStripePublishableKey(t *testing.T) {
 			service.SettingPaymentEnabled: "true",
 		},
 	}, nil)
-	h := NewPaymentHandler(nil, configSvc, nil)
+	h := NewPaymentHandler(nil, configSvc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/payment/config", nil)
 	w := httptest.NewRecorder()

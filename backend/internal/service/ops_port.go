@@ -10,6 +10,7 @@ type OpsRepository interface {
 	BatchInsertErrorLogs(ctx context.Context, inputs []*OpsInsertErrorLogInput) (int64, error)
 	ListErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error)
 	GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error)
+	LookupDeletedKeyAudit(ctx context.Context, key string) (*DeletedKeyAuditResult, error)
 	ListRequestDetails(ctx context.Context, filter *OpsRequestDetailFilter) ([]*OpsRequestDetail, int64, error)
 	BatchInsertSystemLogs(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error)
 	ListSystemLogs(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error)
@@ -81,6 +82,12 @@ type OpsRepository interface {
 	StreamUserRequestCaptures(ctx context.Context, monitorID int64, handle func(*OpsUserRequestCapture) error) error
 	ExpireUserRequestMonitors(ctx context.Context, now time.Time) (int64, error)
 	DeleteExpiredUserRequestCaptures(ctx context.Context, now time.Time) (int64, error)
+}
+
+// DeletedKeyAuditResult 是按明文 key 反查 deleted_api_key_audits 的结果。
+type DeletedKeyAuditResult struct {
+	UserID  int64
+	KeyName string
 }
 
 const (
@@ -226,7 +233,6 @@ type OpsUserRequestCaptureFilter struct {
 	Page      int
 	PageSize  int
 }
-
 type OpsInsertErrorLogInput struct {
 	RequestID       string
 	ClientRequestID string
@@ -292,6 +298,17 @@ type OpsInsertErrorLogInput struct {
 	RetryCount  int
 
 	CreatedAt time.Time
+
+	// 有效(未删除)key 报错时快照的 key 脱敏前缀(前 8 位)。
+	// 落库快照而非读时 JOIN:key 之后被删(key 列被 tombstone 覆盖)仍保留当时前缀。
+	// 已删除 key 归因（仅 INVALID_API_KEY 时有意义）
+	AttemptedKeyPrefix    string // 提交 key 的脱敏前缀(前 8 位)
+	DeletedKeyOwnerUserID *int64 // 反查命中的原所有者 user_id
+	DeletedKeyName        string // 反查命中的 key 名称
+
+	// 有效(未删除)key 报错时快照的 key 脱敏前缀(前 8 位);与 AttemptedKeyPrefix 互斥。
+	// 用于运维侧在错误详情中回显绑定密钥前缀。
+	APIKeyPrefix string
 }
 
 type OpsInsertRetryAttemptInput struct {
@@ -385,12 +402,14 @@ type OpsInsertSystemMetricsInput struct {
 
 type OpsInsertSystemLogInput struct {
 	CreatedAt       time.Time
+	Host            string
 	Level           string
 	Component       string
 	Message         string
 	RequestID       string
 	ClientRequestID string
 	UserID          *int64
+	APIKeyID        *int64
 	AccountID       *int64
 	Platform        string
 	Model           string
@@ -400,6 +419,7 @@ type OpsInsertSystemLogInput struct {
 type OpsSystemLogFilter struct {
 	StartTime *time.Time
 	EndTime   *time.Time
+	Host      string
 
 	Level     string
 	Component string
@@ -407,6 +427,7 @@ type OpsSystemLogFilter struct {
 	RequestID       string
 	ClientRequestID string
 	UserID          *int64
+	APIKeyID        *int64
 	AccountID       *int64
 	Platform        string
 	Model           string
@@ -419,6 +440,7 @@ type OpsSystemLogFilter struct {
 type OpsSystemLogCleanupFilter struct {
 	StartTime *time.Time
 	EndTime   *time.Time
+	Host      string
 
 	Level     string
 	Component string
@@ -426,6 +448,7 @@ type OpsSystemLogCleanupFilter struct {
 	RequestID       string
 	ClientRequestID string
 	UserID          *int64
+	APIKeyID        *int64
 	AccountID       *int64
 	Platform        string
 	Model           string

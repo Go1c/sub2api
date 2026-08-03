@@ -188,7 +188,8 @@ func TestOpenAIGatewayHandlerResponses_ImageIntentRejectedByImageConcurrency(t *
 
 func TestOpenAIGatewayHandlerResponses_CodexTextImageIntentRejectedByImageConcurrency(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	body := `{"model":"gpt-5.5","input":"帮我生成一张卡通游戏图标，2K","stream":false}`
+	// Explicit native image_generation tool — passive namespace alone must not take the image slot (#4447/#4476).
+	body := `{"model":"gpt-5.5","input":"帮我生成一张卡通游戏图标，2K","tools":[{"type":"image_generation"}],"stream":false}`
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body))

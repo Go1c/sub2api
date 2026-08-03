@@ -6,13 +6,14 @@
  */
 
 import { apiClient } from '../client'
-import type { BodyOverrideMode, Provider } from './channelMonitor'
+import type { APIMode, BodyOverrideMode, Provider } from './channelMonitor'
 
 export interface ChannelMonitorTemplate {
   id: number
   name: string
   provider: Provider
   description: string
+  api_mode?: APIMode
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
   body_override: Record<string, unknown> | null
@@ -34,6 +35,7 @@ export interface CreateParams {
   name: string
   provider: Provider
   description?: string
+  api_mode?: APIMode
   extra_headers?: Record<string, string>
   body_override_mode?: BodyOverrideMode
   body_override?: Record<string, unknown> | null
@@ -42,6 +44,7 @@ export interface CreateParams {
 export interface UpdateParams {
   name?: string
   description?: string
+  api_mode?: APIMode
   extra_headers?: Record<string, string>
   body_override_mode?: BodyOverrideMode
   body_override?: Record<string, unknown> | null

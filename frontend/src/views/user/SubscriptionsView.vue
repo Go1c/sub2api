@@ -140,7 +140,7 @@ import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import { formatDateOnly, formatDateTime } from '@/utils/format'
+import { formatDateTime, formatDateTimeToMinute } from '@/utils/format'
 import { platformAccentBarClass, platformBadgeClass, platformBadgeLightClass, platformBorderClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
 import { subscriptionDisplayName } from '@/utils/subscriptionDisplay'
 
@@ -329,7 +329,7 @@ function expirationDisplay(expiresAt: string | null | undefined): string {
   const diff = expires.getTime() - now.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
   if (days < 0) return t('userSubscriptions.status.expired')
-  const dateStr = formatDateOnly(expires)
+  const dateStr = formatDateTimeToMinute(expires)
   if (days === 0) return `${dateStr} (${t('common.today')})`
   if (days === 1) return `${dateStr} (${t('common.tomorrow')})`
   return t('userSubscriptions.daysRemainingWithDate', { days, date: dateStr })

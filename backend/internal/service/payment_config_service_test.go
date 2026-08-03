@@ -493,3 +493,29 @@ func TestPaymentConfigServiceCreatePlanSetsCreditPoolFields(t *testing.T) {
 func paymentConfigStrPtr(value string) *string {
 	return &value
 }
+
+func TestUpdatePaymentConfig_PartialUpdateKeepsSubscriptionRate(t *testing.T) {
+	repo := &paymentConfigSettingRepoStub{values: map[string]string{
+		SettingSubscriptionUSDToCNYRate: "7.2",
+		SettingPaymentEnabled:           "true",
+		SettingBalanceRechargeMult:      "1",
+	}}
+	svc := &PaymentConfigService{settingRepo: repo}
+
+	enabled := false
+	err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
+		Enabled: &enabled,
+	})
+	if err != nil {
+		t.Fatalf("UpdatePaymentConfig returned error: %v", err)
+	}
+	if got := repo.values[SettingSubscriptionUSDToCNYRate]; got != "7.2" {
+		t.Fatalf("subscription rate overwritten: got %q want 7.2", got)
+	}
+	if got := repo.values[SettingPaymentEnabled]; got != "false" {
+		t.Fatalf("enabled = %q, want false", got)
+	}
+	if _, ok := repo.updates[SettingSubscriptionUSDToCNYRate]; ok {
+		t.Fatalf("nil subscription rate must not be written")
+	}
+}

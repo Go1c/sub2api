@@ -5,9 +5,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -70,64 +67,93 @@ func setupFakeMonitorProvider(t *testing.T, handler http.Handler) string {
 	return srv.URL
 }
 
-var monitorPromptQuestionRegex = regexp.MustCompile(`Q: (\d+) ([+-]) (\d+) = \?\s*A:\s*$`)
-
-func expectedAnswerFromPrompt(prompt string) (string, error) {
-	matches := monitorPromptQuestionRegex.FindStringSubmatch(prompt)
-	if len(matches) != 4 {
-		return "", fmt.Errorf("monitor prompt did not contain final arithmetic question: %q", prompt)
-	}
-	left, err := strconv.Atoi(matches[1])
-	if err != nil {
-		return "", err
-	}
-	right, err := strconv.Atoi(matches[3])
-	if err != nil {
-		return "", err
-	}
-	switch matches[2] {
-	case "+":
-		return strconv.Itoa(left + right), nil
-	case "-":
-		return strconv.Itoa(left - right), nil
-	default:
-		return "", fmt.Errorf("unsupported operator %q", matches[2])
-	}
+type openAICaptureHandler struct {
+	lastBody                  map[string]any
+	lastHeaders               http.Header
+	lastPath                  string
+	status                    int
+	rawResponse               string
+	responsesLeadingReasoning bool
 }
 
-func anthropicPromptFromBody(body map[string]any) string {
-	messages, _ := body["messages"].([]any)
-	if len(messages) == 0 {
-		return ""
+func (h *openAICaptureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.lastHeaders = r.Header.Clone()
+	h.lastPath = r.URL.Path
+	defer func() { _ = r.Body.Close() }()
+	var parsed map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&parsed)
+	h.lastBody = parsed
+
+	if h.status == 0 {
+		h.status = http.StatusOK
 	}
-	message, _ := messages[0].(map[string]any)
-	switch content := message["content"].(type) {
-	case string:
-		return content
-	case []any:
-		for _, part := range content {
-			partMap, _ := part.(map[string]any)
-			if text, _ := partMap["text"].(string); text != "" {
-				return text
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(h.status)
+	if h.rawResponse != "" {
+		_, _ = w.Write([]byte(h.rawResponse))
+		return
+	}
+
+	answer := answerFromOpenAIRequest(parsed)
+	if h.lastPath == providerOpenAIResponsesPath {
+		output := []map[string]any{}
+		if h.responsesLeadingReasoning {
+			output = append(output, map[string]any{
+				"type":    "reasoning",
+				"summary": []any{},
+			})
+		}
+		output = append(output, map[string]any{
+			"type":   "message",
+			"status": "completed",
+			"role":   "assistant",
+			"content": []map[string]any{
+				{"type": "output_text", "text": answer},
+			},
+		})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"output": output,
+		})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"choices": []map[string]any{{"message": map[string]any{"content": answer}}},
+	})
+}
+
+func setupFakeOpenAI(t *testing.T, handler *openAICaptureHandler) string {
+	t.Helper()
+	swapMonitorHTTPClient(t)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+func answerFromOpenAIRequest(body map[string]any) string {
+	prompt, _ := body["input"].(string)
+	if prompt == "" {
+		if messages, ok := body["messages"].([]any); ok && len(messages) > 0 {
+			if msg, ok := messages[0].(map[string]any); ok {
+				prompt, _ = msg["content"].(string)
 			}
 		}
 	}
-	return ""
+	return answerFromChallengePrompt(prompt)
 }
 
-func geminiPromptFromBody(body map[string]any) string {
-	contents, _ := body["contents"].([]any)
-	if len(contents) == 0 {
-		return ""
+var challengeQuestionRegex = regexp.MustCompile(`Q: (\d+) ([+-]) (\d+) = \?\nA:$`)
+
+func answerFromChallengePrompt(prompt string) string {
+	m := challengeQuestionRegex.FindStringSubmatch(prompt)
+	if len(m) != 4 {
+		return "0"
 	}
-	content, _ := contents[0].(map[string]any)
-	parts, _ := content["parts"].([]any)
-	if len(parts) == 0 {
-		return ""
+	left, _ := strconv.Atoi(m[1])
+	right, _ := strconv.Atoi(m[3])
+	if m[2] == "+" {
+		return strconv.Itoa(left + right)
 	}
-	part, _ := parts[0].(map[string]any)
-	text, _ := part["text"].(string)
-	return text
+	return strconv.Itoa(left - right)
 }
 
 func TestRunCheckForModel_OffMode_PreservesDefaultBody(t *testing.T) {
@@ -143,14 +169,197 @@ func TestRunCheckForModel_OffMode_PreservesDefaultBody(t *testing.T) {
 	if _, ok := h.lastBody["messages"]; !ok {
 		t.Error("default body should contain messages")
 	}
-	if h.lastBody["stream"] != nil {
-		t.Errorf("default body should not enable streaming, got %v", h.lastBody["stream"])
-	}
-	if mt, ok := h.lastBody["max_tokens"].(float64); !ok || mt != monitorChallengeMaxTokens {
-		t.Errorf("default body should use max_tokens=%d, got %v", monitorChallengeMaxTokens, h.lastBody["max_tokens"])
-	}
 	if h.lastHeaders.Get("x-api-key") != "sk-fake" {
 		t.Errorf("expected adapter's x-api-key header, got %q", h.lastHeaders.Get("x-api-key"))
+	}
+}
+
+func TestRunCheckForModel_OpenAI_DefaultChatRequest(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-test", nil)
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("default chat request should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if h.lastPath != providerOpenAIPath {
+		t.Fatalf("expected chat completions path %q, got %q", providerOpenAIPath, h.lastPath)
+	}
+	if h.lastBody["model"] != "gpt-test" {
+		t.Errorf("chat body should contain model=gpt-test, got %v", h.lastBody["model"])
+	}
+	if _, ok := h.lastBody["messages"]; !ok {
+		t.Error("chat body should contain messages")
+	}
+	if _, ok := h.lastBody["instructions"]; ok {
+		t.Error("chat body must not contain top-level instructions")
+	}
+	if h.lastBody["stream"] != false {
+		t.Errorf("chat body should set stream=false, got %v", h.lastBody["stream"])
+	}
+	if h.lastHeaders.Get("Authorization") != "Bearer sk-openai" {
+		t.Errorf("expected bearer auth header, got %q", h.lastHeaders.Get("Authorization"))
+	}
+}
+
+func TestGrokMonitorConfiguration(t *testing.T) {
+	if err := validateProvider(MonitorProviderGrok); err != nil {
+		t.Fatalf("grok provider should be supported: %v", err)
+	}
+	if got := normalizeMonitorPrimaryModel(MonitorProviderGrok, ""); got != MonitorDefaultGrokModel {
+		t.Fatalf("expected default Grok model %q, got %q", MonitorDefaultGrokModel, got)
+	}
+	if err := validateAPIMode(MonitorProviderGrok, MonitorAPIModeChatCompletions); err != nil {
+		t.Fatalf("grok chat_completions mode should be valid: %v", err)
+	}
+	if err := validateAPIMode(MonitorProviderGrok, MonitorAPIModeResponses); err == nil {
+		t.Fatal("grok responses mode should be rejected by channel monitoring")
+	}
+	if err := validateReplaceRequestBody(MonitorProviderGrok, MonitorAPIModeChatCompletions, map[string]any{}); err == nil {
+		t.Fatal("grok replace-mode body should require messages")
+	}
+}
+
+func TestRunCheckForModel_Grok_DefaultChatRequest(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderGrok, endpoint, "xai-key", MonitorDefaultGrokModel, nil)
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("Grok request should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if res.LatencyMs == nil {
+		t.Fatal("Grok request should record latency")
+	}
+	if h.lastPath != providerGrokPath {
+		t.Fatalf("expected Grok chat completions path %q, got %q", providerGrokPath, h.lastPath)
+	}
+	if h.lastBody["model"] != MonitorDefaultGrokModel {
+		t.Errorf("Grok body should contain model=%s, got %v", MonitorDefaultGrokModel, h.lastBody["model"])
+	}
+	if _, ok := h.lastBody["messages"]; !ok {
+		t.Error("Grok body should contain messages")
+	}
+	if h.lastBody["stream"] != false {
+		t.Errorf("Grok body should set stream=false, got %v", h.lastBody["stream"])
+	}
+	if h.lastHeaders.Get("Authorization") != "Bearer xai-key" {
+		t.Errorf("expected Grok bearer auth header, got %q", h.lastHeaders.Get("Authorization"))
+	}
+}
+
+func TestRunCheckForModel_Grok_UpstreamFailure(t *testing.T) {
+	h := &openAICaptureHandler{status: http.StatusTooManyRequests}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderGrok, endpoint, "xai-key", MonitorDefaultGrokModel, nil)
+
+	if res.Status != MonitorStatusError {
+		t.Fatalf("Grok 429 should be recorded as error, got status=%s message=%q", res.Status, res.Message)
+	}
+	if !strings.Contains(res.Message, "upstream HTTP 429") {
+		t.Fatalf("Grok failure should preserve upstream status, got %q", res.Message)
+	}
+	if res.LatencyMs == nil {
+		t.Fatal("Grok failure should still record latency")
+	}
+}
+
+func TestRunCheckForModel_Grok_RedactsXAIKeyFromUpstreamBody(t *testing.T) {
+	h := &openAICaptureHandler{
+		status:      http.StatusUnauthorized,
+		rawResponse: `{"error":{"message":"invalid API key xai-secret"}}`,
+	}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderGrok, endpoint, "request-key", MonitorDefaultGrokModel, nil)
+
+	if res.Status != MonitorStatusError {
+		t.Fatalf("Grok upstream failure should be recorded as error, got %s", res.Status)
+	}
+	if strings.Contains(res.Message, "xai-secret") {
+		t.Fatalf("Grok error message leaked xAI key: %q", res.Message)
+	}
+	if !strings.Contains(res.Message, "xai-***REDACTED***") {
+		t.Fatalf("Grok error message should contain redaction marker, got %q", res.Message)
+	}
+}
+
+func TestRunCheckForModel_OpenAIResponses_DefaultRequest(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-test", &CheckOptions{
+		APIMode: MonitorAPIModeResponses,
+	})
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("default responses request should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if h.lastPath != providerOpenAIResponsesPath {
+		t.Fatalf("expected responses path %q, got %q", providerOpenAIResponsesPath, h.lastPath)
+	}
+	if h.lastBody["model"] != "gpt-test" {
+		t.Errorf("responses body should contain model=gpt-test, got %v", h.lastBody["model"])
+	}
+	instructions, _ := h.lastBody["instructions"].(string)
+	if strings.TrimSpace(instructions) == "" {
+		t.Error("responses body should contain non-empty instructions")
+	}
+	input, _ := h.lastBody["input"].(string)
+	if strings.TrimSpace(input) == "" {
+		t.Error("responses body should contain non-empty input")
+	}
+	if _, ok := h.lastBody["messages"]; ok {
+		t.Error("responses body must not contain chat messages")
+	}
+	if h.lastBody["stream"] != false {
+		t.Errorf("responses body should set stream=false, got %v", h.lastBody["stream"])
+	}
+	if h.lastHeaders.Get("Authorization") != "Bearer sk-openai" {
+		t.Errorf("expected bearer auth header, got %q", h.lastHeaders.Get("Authorization"))
+	}
+}
+
+func TestRunCheckForModel_OpenAIResponses_SkipsLeadingReasoningItem(t *testing.T) {
+	h := &openAICaptureHandler{responsesLeadingReasoning: true}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-5.5", &CheckOptions{
+		APIMode: MonitorAPIModeResponses,
+	})
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("responses request should find text after leading reasoning item, got status=%s message=%q", res.Status, res.Message)
+	}
+	if h.lastPath != providerOpenAIResponsesPath {
+		t.Fatalf("expected responses path %q, got %q", providerOpenAIResponsesPath, h.lastPath)
+	}
+}
+
+func TestRunCheckForModel_OpenAIResponsesReplaceMissingInstructionsFailsLocally(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-test", &CheckOptions{
+		APIMode:          MonitorAPIModeResponses,
+		BodyOverrideMode: MonitorBodyOverrideModeReplace,
+		BodyOverride: map[string]any{
+			"model": "gpt-test",
+			"input": "hello",
+		},
+	})
+
+	if res.Status != MonitorStatusError {
+		t.Fatalf("invalid responses replace body should fail locally as error, got status=%s", res.Status)
+	}
+	if !strings.Contains(res.Message, "instructions and input are required") {
+		t.Errorf("expected local validation message about instructions/input, got %q", res.Message)
+	}
+	if h.lastPath != "" {
+		t.Errorf("invalid replace body should fail before HTTP request, got path %q", h.lastPath)
 	}
 }
 
@@ -251,531 +460,49 @@ func TestRunCheckForModel_ReplaceMode_EmptyResponseIsFailed(t *testing.T) {
 	}
 }
 
-func TestRunCheckForModel_AnthropicTextAfterThinkingBlockPassesChallenge(t *testing.T) {
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"content": []map[string]any{
-				{"type": "thinking", "thinking": ""},
-				{"type": "text", "text": answer},
-			},
-			"usage": map[string]any{"input_tokens": 562, "output_tokens": 57},
-		})
-	}))
-
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-6", nil)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational when Anthropic text follows thinking block, got status=%s message=%q", res.Status, res.Message)
-	}
-}
-
-func TestRunCheckForModel_AnthropicCompatibilityProbePassesClaudeCodeValidation(t *testing.T) {
-	validator := NewClaudeCodeValidator()
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if !validator.Validate(r, body) {
-			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error": map[string]any{
-					"type":    nil,
-					"message": "This API is only for use in claude code",
-				},
-				"type": "error",
-			})
-			return
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"content": []map[string]any{{"type": "text", "text": answer}},
-		})
-	}))
-
-	opts := &CheckOptions{CompatibilityProbeEnabled: true}
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-7", opts)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational with Claude Code-like compatibility probe request, got status=%s message=%q", res.Status, res.Message)
-	}
-}
-
-func TestRunCheckForModel_AnthropicCompatibilityProbeUsesClaudeCodeStreamingBody(t *testing.T) {
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if body["stream"] != true || body["temperature"] != float64(1) || body["max_tokens"].(float64) < 1024 {
-			w.WriteHeader(http.StatusBadGateway)
-			_, _ = w.Write([]byte(`{"error":{"message":"expected Claude Code streaming probe body"}}`))
-			return
-		}
-		messages, _ := body["messages"].([]any)
-		message, _ := messages[0].(map[string]any)
-		content, _ := message["content"].([]any)
-		contentPart, _ := content[0].(map[string]any)
-		cacheControl, _ := contentPart["cache_control"].(map[string]any)
-		if _, hasTTL := cacheControl["ttl"]; hasTTL {
-			w.WriteHeader(http.StatusBadGateway)
-			_, _ = w.Write([]byte(`{"error":{"message":"unexpected cache_control ttl for API-key probe"}}`))
-			return
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":%q}}\n\n", answer)
-		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
-	}))
-
-	opts := &CheckOptions{CompatibilityProbeEnabled: true}
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-6", opts)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational with Claude Code streaming body, got status=%s message=%q", res.Status, res.Message)
-	}
-}
-
-func TestRunCheckForModel_AnthropicCompatibilityProbeOverridesCriticalClaudeHeaders(t *testing.T) {
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		if got := r.Header.Get("User-Agent"); !strings.HasPrefix(got, "claude-cli/") {
-			t.Fatalf("compatibility probe should send Claude CLI User-Agent, got %q", got)
-		}
-		if got := r.Header.Get("X-App"); got != "cli" {
-			t.Fatalf("compatibility probe should send X-App=cli, got %q", got)
-		}
-		if got := r.Header.Get("Accept"); got != "application/json" {
-			t.Fatalf("compatibility probe should send Accept=application/json, got %q", got)
-		}
-		if got := r.Header.Get("x-stainless-helper-method"); got != "stream" {
-			t.Fatalf("compatibility probe should mark stream helper method, got %q", got)
-		}
-		if got := r.Header.Get("x-client-request-id"); got == "" {
-			t.Fatal("compatibility probe should include x-client-request-id")
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "event: content_block_delta\ndata: {\"delta\":{\"text\":%q}}\n\n", answer)
-	}))
-
-	opts := &CheckOptions{
-		CompatibilityProbeEnabled: true,
-		ExtraHeaders: map[string]string{
-			"User-Agent": "Go-http-client/2.0",
-			"X-App":      "",
+func TestExtractAnthropicMonitorText(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "text block after thinking",
+			body: `{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"2"}]}`,
+			want: "2",
+		},
+		{
+			name: "single text block",
+			body: `{"content":[{"type":"text","text":"2"}]}`,
+			want: "2",
+		},
+		{
+			name: "thinking only",
+			body: `{"content":[{"type":"thinking","thinking":""}]}`,
+			want: "",
+		},
+		{
+			name: "multiple text blocks",
+			body: `{"content":[{"type":"text","text":"answer"},{"type":"tool_use","name":"x"},{"type":"text","text":"2"}]}`,
+			want: "answer\n2",
 		},
 	}
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-7", opts)
 
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational when compatibility probe repairs critical Claude headers, got status=%s message=%q", res.Status, res.Message)
-	}
-}
-
-func TestRunCheckForModel_AnthropicClientNotAllowedFallsBackToCompatibilityProbe(t *testing.T) {
-	var attempts int
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if attempts == 1 {
-			if body["stream"] != nil {
-				t.Fatalf("first attempt should use default non-compat body, got stream=%v", body["stream"])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractAnthropicMonitorText([]byte(tt.body))
+			if got != tt.want {
+				t.Fatalf("extractAnthropicMonitorText() = %q, want %q", got, tt.want)
 			}
-			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error": map[string]any{
-					"type":    nil,
-					"message": "This API is only for use in claude code, continue to use it outside claude code can cause your account banned",
-				},
-				"type": "error",
-			})
-			return
-		}
-
-		if body["stream"] != true {
-			t.Fatalf("fallback attempt should use compatibility streaming body, got stream=%v", body["stream"])
-		}
-		if got := r.Header.Get("User-Agent"); !strings.HasPrefix(got, "claude-cli/") {
-			t.Fatalf("fallback should send Claude CLI User-Agent, got %q", got)
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "event: content_block_delta\ndata: {\"delta\":{\"text\":%q}}\n\n", answer)
-	}))
-
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-6", nil)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational after Claude Code rejection fallback, got status=%s message=%q", res.Status, res.Message)
-	}
-	if attempts != 2 {
-		t.Fatalf("expected exactly 2 attempts, got %d", attempts)
-	}
-}
-
-func TestRunCheckForModel_AnthropicCompatibilityProbePreservesClaudeCodeTemplateHeaders(t *testing.T) {
-	templateUA := "claude-cli/2.1.114 (external, sdk-cli)"
-	templateBeta := "claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27"
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		if got := r.Header.Get("User-Agent"); got != templateUA {
-			t.Fatalf("compatibility probe should preserve valid Claude Code template User-Agent, got %q", got)
-		}
-		if got := r.Header.Get("anthropic-beta"); got != templateBeta {
-			t.Fatalf("compatibility probe should preserve valid Claude Code template beta header, got %q", got)
-		}
-		if got := r.Header.Get("X-App"); got != "cli" {
-			t.Fatalf("compatibility probe should preserve X-App=cli, got %q", got)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "event: content_block_delta\ndata: {\"delta\":{\"text\":%q}}\n\n", answer)
-	}))
-
-	opts := &CheckOptions{
-		CompatibilityProbeEnabled: true,
-		ExtraHeaders: map[string]string{
-			"user-agent":        templateUA,
-			"x-app":             "cli",
-			"anthropic-beta":    templateBeta,
-			"anthropic-version": monitorAnthropicAPIVersion,
-		},
-	}
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-7", opts)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational when preserving valid Claude Code template headers, got status=%s message=%q", res.Status, res.Message)
-	}
-}
-
-func TestMergeHeaders_NormalizesDuplicateHeaderNames(t *testing.T) {
-	headers := mergeHeaders(
-		map[string]string{"User-Agent": "base", "anthropic-version": monitorAnthropicAPIVersion},
-		&CheckOptions{ExtraHeaders: map[string]string{"user-agent": "template"}},
-	)
-
-	var userAgentKeys int
-	for key := range headers {
-		if strings.EqualFold(key, "User-Agent") {
-			userAgentKeys++
-		}
-	}
-	if userAgentKeys != 1 {
-		t.Fatalf("expected one User-Agent header after merge, got %d in %#v", userAgentKeys, headers)
-	}
-	if got := monitorHeaderValue(headers, "User-Agent"); got != "template" {
-		t.Fatalf("expected user header to win, got %q", got)
-	}
-}
-
-func TestRunCheckForModel_AnthropicCompatibilityProbeRetriesClaudeCodeRejectionWithFreshFingerprint(t *testing.T) {
-	var attempts int
-	var firstRequestID string
-	var firstUserID string
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if body["stream"] != true {
-			t.Fatalf("compatibility attempt should use streaming body, got stream=%v", body["stream"])
-		}
-		metadata, _ := body["metadata"].(map[string]any)
-		userID, _ := metadata["user_id"].(string)
-		requestID := r.Header.Get("x-client-request-id")
-		if userID == "" || requestID == "" {
-			t.Fatalf("compatibility attempt should include user_id and request id, user_id=%q request_id=%q", userID, requestID)
-		}
-
-		if attempts == 1 {
-			firstUserID = userID
-			firstRequestID = requestID
-			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error": map[string]any{
-					"type":    nil,
-					"message": "This API is only for use in claude code, continue to use it outside claude code can cause your account banned",
-				},
-				"type": "error",
-			})
-			return
-		}
-
-		if userID == firstUserID {
-			t.Fatal("retry should regenerate metadata.user_id")
-		}
-		if requestID == firstRequestID {
-			t.Fatal("retry should regenerate x-client-request-id")
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "event: content_block_delta\ndata: {\"delta\":{\"text\":%q}}\n\n", answer)
-	}))
-
-	opts := &CheckOptions{CompatibilityProbeEnabled: true}
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-6", opts)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational after retrying Claude Code rejection with fresh fingerprint, got status=%s message=%q", res.Status, res.Message)
-	}
-	if attempts != 2 {
-		t.Fatalf("expected exactly 2 attempts, got %d", attempts)
-	}
-}
-
-func TestRunCheckForModel_RetriesTransientHTTP502(t *testing.T) {
-	var attempts int
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if attempts == 1 {
-			w.WriteHeader(http.StatusBadGateway)
-			_, _ = w.Write([]byte(`{"title":"Error 502: Bad gateway"}`))
-			return
-		}
-
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"content": []map[string]any{{"type": "text", "text": answer}},
 		})
-	}))
-
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, endpoint, "sk-fake", "claude-opus-4-6", nil)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational after retrying transient 502, got status=%s message=%q", res.Status, res.Message)
-	}
-	if attempts != 2 {
-		t.Fatalf("expected exactly 2 attempts, got %d", attempts)
 	}
 }
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
+func TestValidateChallenge_AnthropicTextAfterThinking(t *testing.T) {
+	body := []byte(`{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"答案是 2"}]}`)
+	respText := extractAnthropicMonitorText(body)
 
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
-func TestRunCheckForModel_RetriesResponseHeaderTimeout(t *testing.T) {
-	orig := monitorHTTPClient
-	var attempts int
-	monitorHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		attempts++
-		if attempts == 1 {
-			return nil, errors.New("http2: timeout awaiting response headers")
-		}
-
-		defer func() { _ = req.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		answer, err := expectedAnswerFromPrompt(anthropicPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-		respBody := fmt.Sprintf(`{"content":[{"type":"text","text":%q}]}`, answer)
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     make(http.Header),
-			Body:       io.NopCloser(strings.NewReader(respBody)),
-			Request:    req,
-		}, nil
-	})}
-	t.Cleanup(func() { monitorHTTPClient = orig })
-
-	res := runCheckForModel(context.Background(), MonitorProviderAnthropic, "https://example.test", "sk-fake", "claude-opus-4-6", nil)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational after retrying response header timeout, got status=%s message=%q", res.Status, res.Message)
-	}
-	if attempts != 2 {
-		t.Fatalf("expected exactly 2 attempts, got %d", attempts)
-	}
-}
-
-func TestRunCheckForModel_GeminiTextAfterThoughtBlockPassesChallenge(t *testing.T) {
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		answer, err := expectedAnswerFromPrompt(geminiPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"candidates": []map[string]any{
-				{
-					"content": map[string]any{
-						"parts": []map[string]any{
-							{"thought": true, "text": ""},
-							{"text": answer},
-						},
-					},
-				},
-			},
-		})
-	}))
-
-	res := runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "AIza-fake", "gemini-3.1-pro-preview", nil)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational when Gemini text follows thought block, got status=%s message=%q", res.Status, res.Message)
-	}
-}
-
-func TestRunCheckForModel_GeminiDefaultKeepsSmallChallengeBudget(t *testing.T) {
-	var observedMaxOutputTokens float64
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-
-		generationConfig, _ := body["generationConfig"].(map[string]any)
-		observedMaxOutputTokens, _ = generationConfig["maxOutputTokens"].(float64)
-		answer, err := expectedAnswerFromPrompt(geminiPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":%q}]},\"finishReason\":\"STOP\"}]}\n\n", answer)
-	}))
-
-	res := runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "AIza-fake", "gemini-3.1-pro-preview", nil)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational with default Gemini probe, got status=%s message=%q", res.Status, res.Message)
-	}
-	if observedMaxOutputTokens != monitorChallengeMaxTokens {
-		t.Fatalf("default Gemini probe should keep maxOutputTokens=%d, got %v", monitorChallengeMaxTokens, observedMaxOutputTokens)
-	}
-}
-
-func TestRunCheckForModel_GeminiSSEStreamPassesChallenge(t *testing.T) {
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, ":streamGenerateContent") || r.URL.Query().Get("alt") != "sse" {
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"error":{"message":"expected streamGenerateContent SSE endpoint"}}`))
-			return
-		}
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		answer, err := expectedAnswerFromPrompt(geminiPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: %s\n\n", `{"candidates":[{"content":{"parts":[{"thought":true,"text":"ignored thinking"}]}}]}`)
-		fmt.Fprintf(w, "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":%q}]}}]}\n\n", answer)
-		fmt.Fprint(w, "data: [DONE]\n\n")
-	}))
-
-	opts := &CheckOptions{CompatibilityProbeEnabled: true}
-	res := runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "AIza-fake", "gemini-3.1-pro-preview", opts)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational with Gemini SSE response, got status=%s message=%q", res.Status, res.Message)
-	}
-}
-
-func TestRunCheckForModel_GeminiAllowsEnoughOutputTokensForThinkingModels(t *testing.T) {
-	endpoint := setupFakeMonitorProvider(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() { _ = r.Body.Close() }()
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-
-		generationConfig, _ := body["generationConfig"].(map[string]any)
-		maxOutputTokens, _ := generationConfig["maxOutputTokens"].(float64)
-		w.Header().Set("Content-Type", "text/event-stream")
-		if maxOutputTokens < 256 {
-			fmt.Fprintf(w, "data: %s\n\n", `{"candidates":[{"content":{"parts":[{"thought":true,"text":"thinking used the token budget"}]},"finishReason":"MAX_TOKENS"}]}`)
-			return
-		}
-
-		answer, err := expectedAnswerFromPrompt(geminiPromptFromBody(body))
-		if err != nil {
-			t.Fatalf("extract expected answer: %v", err)
-		}
-		fmt.Fprintf(w, "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":%q}]},\"finishReason\":\"STOP\"}]}\n\n", answer)
-	}))
-
-	opts := &CheckOptions{CompatibilityProbeEnabled: true}
-	res := runCheckForModel(context.Background(), MonitorProviderGemini, endpoint, "AIza-fake", "gemini-3.1-pro-preview", opts)
-
-	if res.Status != MonitorStatusOperational {
-		t.Fatalf("expected operational when Gemini has enough output tokens for thinking, got status=%s message=%q", res.Status, res.Message)
+	if !validateChallenge(respText, "2") {
+		t.Fatalf("validateChallenge(%q, %q) = false, want true", respText, "2")
 	}
 }

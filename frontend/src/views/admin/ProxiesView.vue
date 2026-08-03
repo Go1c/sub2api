@@ -1039,7 +1039,7 @@ const editForm = reactive({
   port: 8080,
   username: '',
   password: '',
-  status: 'active' as 'active' | 'inactive'
+  status: 'active' as 'active' | 'inactive' | 'expired'
 })
 
 let abortController: AbortController | null = null

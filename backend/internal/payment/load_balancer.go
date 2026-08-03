@@ -255,10 +255,13 @@ func getInstanceChannelLimits(inst *dbent.PaymentProviderInstance, paymentType P
 	if err := json.Unmarshal([]byte(inst.Limits), &limits); err != nil {
 		return ChannelLimits{}
 	}
-	// For Stripe, limits are stored under the provider key "stripe".
+	// For Stripe/Airwallex, limits are stored under the provider key.
 	lookupKey := paymentType
-	if inst.ProviderKey == "stripe" {
-		lookupKey = "stripe"
+	if inst.ProviderKey == TypeStripe {
+		lookupKey = TypeStripe
+	}
+	if inst.ProviderKey == TypeAirwallex {
+		lookupKey = TypeAirwallex
 	}
 	if cl, ok := limits[lookupKey]; ok {
 		return cl

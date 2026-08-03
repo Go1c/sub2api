@@ -75,7 +75,8 @@ func TestExtractOpenAICodexProbeUpdatesAccepts429WithCodexHeaders(t *testing.T) 
 	headers.Set("x-codex-primary-used-percent", "100")
 	headers.Set("x-codex-primary-reset-after-seconds", "604800")
 	headers.Set("x-codex-primary-window-minutes", "10080")
-	headers.Set("x-codex-secondary-used-percent", "0")
+	// secondary maps to the 5h window when window minutes are known (300 vs 10080).
+	headers.Set("x-codex-secondary-used-percent", "100")
 	headers.Set("x-codex-secondary-reset-after-seconds", "18000")
 	headers.Set("x-codex-secondary-window-minutes", "300")
 
@@ -169,7 +170,7 @@ func TestAccountUsageService_GetOpenAIUsage_DoesNotPromoteCodexExtraToRateLimit(
 		},
 	}
 
-	usage, err := svc.getOpenAIUsage(context.Background(), account)
+	usage, err := svc.getOpenAIUsage(context.Background(), account, false)
 	if err != nil {
 		t.Fatalf("getOpenAIUsage() error = %v", err)
 	}

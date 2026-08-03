@@ -25,6 +25,7 @@ type Usage struct {
 	OutputTokens             int
 	CacheCreationInputTokens int
 	CacheReadInputTokens     int
+	ImageOutputTokens        int
 }
 
 type RelayResult struct {
@@ -51,6 +52,7 @@ type RelayTurnResult struct {
 type RelayExit struct {
 	Stage           string
 	Err             error
+	Graceful        bool
 	WroteDownstream bool
 }
 
@@ -59,10 +61,15 @@ type RelayOptions struct {
 	IdleTimeout                     time.Duration
 	UpstreamDrainTimeout            time.Duration
 	FirstMessageType                coderws.MessageType
+	FirstMessageSent                bool
 	StartClientAfterFirstDownstream bool
 	OnUsageParseFailure             func(eventType string, usageRaw string)
 	OnTurnComplete                  func(turn RelayTurnResult)
 	BeforeWriteClient               func(msgType coderws.MessageType, payload []byte, wroteDownstream bool) error
+	BeforeClientWrite               func(msgType coderws.MessageType, payload []byte)
+	AfterClientWrite                func(msgType coderws.MessageType, payload []byte, writeErr error)
+	BeforeRelayCancel               func(exit RelayExit)
+	ReadClientFrame                 func(ctx context.Context, clientConn FrameConn) (coderws.MessageType, []byte, error)
 	OnTrace                         func(event RelayTraceEvent)
 	Now                             func() time.Time
 }
@@ -172,24 +179,33 @@ func Relay(
 		MessageType:  relayMessageTypeString(firstMessageType),
 	})
 
-	if err := writeUpstream(firstMessageType, firstClientMessage); err != nil {
-		result.Duration = nowFn().Sub(startAt)
+	if options.FirstMessageSent {
 		emitRelayTrace(onTrace, RelayTraceEvent{
-			Stage:        "write_first_message_failed",
+			Stage:        "write_first_message_skipped",
 			Direction:    "client_to_upstream",
 			MessageType:  relayMessageTypeString(firstMessageType),
 			PayloadBytes: len(firstClientMessage),
-			Error:        err.Error(),
 		})
-		return result, &RelayExit{Stage: "write_upstream", Err: err}
+	} else {
+		if err := writeUpstream(firstMessageType, firstClientMessage); err != nil {
+			result.Duration = nowFn().Sub(startAt)
+			emitRelayTrace(onTrace, RelayTraceEvent{
+				Stage:        "write_first_message_failed",
+				Direction:    "client_to_upstream",
+				MessageType:  relayMessageTypeString(firstMessageType),
+				PayloadBytes: len(firstClientMessage),
+				Error:        err.Error(),
+			})
+			return result, &RelayExit{Stage: "write_upstream", Err: err}
+		}
+		emitRelayTrace(onTrace, RelayTraceEvent{
+			Stage:        "write_first_message_ok",
+			Direction:    "client_to_upstream",
+			MessageType:  relayMessageTypeString(firstMessageType),
+			PayloadBytes: len(firstClientMessage),
+		})
 	}
 	clientToUpstreamFrames.Add(1)
-	emitRelayTrace(onTrace, RelayTraceEvent{
-		Stage:        "write_first_message_ok",
-		Direction:    "client_to_upstream",
-		MessageType:  relayMessageTypeString(firstMessageType),
-		PayloadBytes: len(firstClientMessage),
-	})
 	markActivity()
 
 	exitCh := make(chan relayExitSignal, 3)
@@ -199,7 +215,7 @@ func Relay(
 		if !clientReaderStarted.CompareAndSwap(false, true) {
 			return
 		}
-		go runClientToUpstream(relayCtx, clientConn, writeUpstream, markActivity, clientToUpstreamFrames, onTrace, exitCh)
+		go runClientToUpstream(relayCtx, clientConn, options.ReadClientFrame, writeUpstream, markActivity, clientToUpstreamFrames, onTrace, exitCh)
 	}
 	if !options.StartClientAfterFirstDownstream {
 		startClientReader()
@@ -214,7 +230,9 @@ func Relay(
 		options.OnUsageParseFailure,
 		options.OnTurnComplete,
 		options.BeforeWriteClient,
-		func() {
+		options.BeforeClientWrite,
+		options.AfterClientWrite,
+		func(msgType coderws.MessageType, payload []byte) {
 			if options.StartClientAfterFirstDownstream {
 				startClientReader()
 			}
@@ -229,6 +247,13 @@ func Relay(
 	go runIdleWatchdog(relayCtx, nowFn, options.IdleTimeout, &lastActivity, onTrace, exitCh)
 
 	firstExit := <-exitCh
+	// An outer ingress cancellation is a control-plane close, not a graceful
+	// upstream disconnect. Leave the client connection open here so the
+	// adapter can emit the precise lease/request close code. Internal
+	// relayCancel does not cancel ctx and therefore does not take this path.
+	if ctx.Err() != nil {
+		firstExit.graceful = false
+	}
 	emitRelayTrace(onTrace, RelayTraceEvent{
 		Stage:           "first_exit",
 		Direction:       relayDirectionFromStage(firstExit.stage),
@@ -236,6 +261,14 @@ func Relay(
 		WroteDownstream: firstExit.wroteDownstream,
 		Error:           relayErrorString(firstExit.err),
 	})
+	if options.BeforeRelayCancel != nil {
+		options.BeforeRelayCancel(RelayExit{
+			Stage:           firstExit.stage,
+			Err:             firstExit.err,
+			Graceful:        firstExit.graceful,
+			WroteDownstream: firstExit.wroteDownstream,
+		})
+	}
 	combinedWroteDownstream := firstExit.wroteDownstream
 	secondExit := relayExitSignal{graceful: true}
 	hasSecondExit := false
@@ -269,6 +302,14 @@ func Relay(
 	result.ClientToUpstreamFrames = clientToUpstreamFrames.Load()
 	result.UpstreamToClientFrames = upstreamToClientFrames.Load()
 	result.DroppedDownstreamFrames = droppedDownstreamFrames.Load()
+	if options.FirstMessageSent && firstExit.stage == "read_client" && firstExit.graceful {
+		emitRelayTrace(onTrace, RelayTraceEvent{
+			Stage:           "relay_client_closed",
+			Graceful:        true,
+			WroteDownstream: combinedWroteDownstream,
+		})
+		return result, nil
+	}
 	if firstExit.stage == "read_client" && firstExit.graceful {
 		stage := "client_disconnected"
 		exitErr := firstExit.err
@@ -329,6 +370,14 @@ func Relay(
 			WroteDownstream: combinedWroteDownstream,
 		}
 	}
+	if options.FirstMessageSent {
+		emitRelayTrace(onTrace, RelayTraceEvent{
+			Stage:           "relay_client_closed",
+			Graceful:        true,
+			WroteDownstream: combinedWroteDownstream,
+		})
+		return result, nil
+	}
 	emitRelayTrace(onTrace, RelayTraceEvent{
 		Stage:           "relay_complete",
 		Graceful:        true,
@@ -341,14 +390,20 @@ func Relay(
 func runClientToUpstream(
 	ctx context.Context,
 	clientConn FrameConn,
+	readClientFrame func(context.Context, FrameConn) (coderws.MessageType, []byte, error),
 	writeUpstream func(msgType coderws.MessageType, payload []byte) error,
 	markActivity func(),
 	forwardedFrames *atomic.Int64,
 	onTrace func(event RelayTraceEvent),
 	exitCh chan<- relayExitSignal,
 ) {
+	if readClientFrame == nil {
+		readClientFrame = func(ctx context.Context, conn FrameConn) (coderws.MessageType, []byte, error) {
+			return conn.ReadFrame(ctx)
+		}
+	}
 	for {
-		msgType, payload, err := clientConn.ReadFrame(ctx)
+		msgType, payload, err := readClientFrame(ctx, clientConn)
 		if err != nil {
 			emitRelayTrace(onTrace, RelayTraceEvent{
 				Stage:     "read_client_failed",
@@ -388,7 +443,9 @@ func runUpstreamToClient(
 	onUsageParseFailure func(eventType string, usageRaw string),
 	onTurnComplete func(turn RelayTurnResult),
 	beforeWriteClient func(msgType coderws.MessageType, payload []byte, wroteDownstream bool) error,
-	afterWriteClient func(),
+	beforeClientWrite func(msgType coderws.MessageType, payload []byte),
+	afterClientWrite func(msgType coderws.MessageType, payload []byte, writeErr error),
+	afterWriteClient func(msgType coderws.MessageType, payload []byte),
 	dropDownstreamWrites *atomic.Bool,
 	forwardedFrames *atomic.Int64,
 	droppedFrames *atomic.Int64,
@@ -464,21 +521,28 @@ func runUpstreamToClient(
 			markActivity()
 			continue
 		}
-		if err := writeClient(msgType, payload); err != nil {
+		if beforeClientWrite != nil {
+			beforeClientWrite(msgType, payload)
+		}
+		writeErr := writeClient(msgType, payload)
+		if afterClientWrite != nil {
+			afterClientWrite(msgType, payload, writeErr)
+		}
+		if writeErr != nil {
 			emitRelayTrace(onTrace, RelayTraceEvent{
 				Stage:           "write_client_failed",
 				Direction:       "upstream_to_client",
 				MessageType:     relayMessageTypeString(msgType),
 				PayloadBytes:    len(payload),
 				WroteDownstream: wroteDownstream,
-				Error:           err.Error(),
+				Error:           writeErr.Error(),
 			})
-			exitCh <- relayExitSignal{stage: "write_client", err: err, wroteDownstream: wroteDownstream}
+			exitCh <- relayExitSignal{stage: "write_client", err: writeErr, wroteDownstream: wroteDownstream}
 			return
 		}
 		wroteDownstream = true
 		if afterWriteClient != nil {
-			afterWriteClient()
+			afterWriteClient(msgType, payload)
 		}
 		if forwardedFrames != nil {
 			forwardedFrames.Add(1)
@@ -723,8 +787,21 @@ func parseUsageAndAccumulate(
 	}
 
 	inputResult := gjson.GetBytes(message, "response.usage.input_tokens")
+	if !inputResult.Exists() {
+		inputResult = gjson.GetBytes(message, "response.usage.prompt_tokens")
+	}
 	outputResult := gjson.GetBytes(message, "response.usage.output_tokens")
+	if !outputResult.Exists() {
+		outputResult = gjson.GetBytes(message, "response.usage.completion_tokens")
+	}
 	cachedResult := gjson.GetBytes(message, "response.usage.input_tokens_details.cached_tokens")
+	if !cachedResult.Exists() {
+		cachedResult = gjson.GetBytes(message, "response.usage.prompt_tokens_details.cached_tokens")
+	}
+	imageTokens := usageResult.Get("output_tokens_details.image_tokens").Int()
+	if imageTokens == 0 {
+		imageTokens = usageResult.Get("completion_tokens_details.image_tokens").Int()
+	}
 
 	inputTokens, inputOK := parseUsageIntField(inputResult, true)
 	outputTokens, outputOK := parseUsageIntField(outputResult, true)
@@ -742,12 +819,14 @@ func parseUsageAndAccumulate(
 		OutputTokens:             outputTokens,
 		CacheCreationInputTokens: openAICacheCreationTokensFromUsage(usageResult),
 		CacheReadInputTokens:     cachedTokens,
+		ImageOutputTokens:        int(imageTokens),
 	}
 
 	state.usage.InputTokens += parsedUsage.InputTokens
 	state.usage.OutputTokens += parsedUsage.OutputTokens
 	state.usage.CacheCreationInputTokens += parsedUsage.CacheCreationInputTokens
 	state.usage.CacheReadInputTokens += parsedUsage.CacheReadInputTokens
+	state.usage.ImageOutputTokens += parsedUsage.ImageOutputTokens
 	return parsedUsage
 }
 
@@ -834,7 +913,7 @@ func isTerminalEvent(eventType string) bool {
 
 func shouldParseUsage(eventType string) bool {
 	switch eventType {
-	case "response.completed", "response.done", "response.failed":
+	case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
 		return true
 	default:
 		return false

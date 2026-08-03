@@ -121,7 +121,8 @@ tests
 .claude/*
 !.claude/agents
 !.claude/skills
-scripts
+# Root-level agent/tool scripts only; keep backend/scripts tracked for Docker builds
+/scripts
 .code-review-state
 #openspec/
 code-reviews/
@@ -133,6 +134,9 @@ docs/*
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
+# Admin compliance gate + Docker frontend build import docs/legal/*.md?raw
+!docs/legal/
+!docs/legal/**
 .serena/
 .codex/
 frontend/coverage/

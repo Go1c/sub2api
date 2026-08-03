@@ -46,16 +46,26 @@ export interface UpdateResult {
 }
 
 /**
+ * In-place update downloads a full release binary from GitHub, which can take
+ * several minutes on slow links. The global 30s axios timeout would abort the
+ * request mid-download (#4504), so this call waits as long as the backend
+ * allows (15 minutes server-side).
+ */
+const UPDATE_REQUEST_TIMEOUT_MS = 15 * 60 * 1000
+
+/**
  * Perform system update
  * Downloads and applies the latest version
  */
 export async function performUpdate(): Promise<UpdateResult> {
-  const { data } = await apiClient.post<UpdateResult>('/admin/system/update')
+  const { data } = await apiClient.post<UpdateResult>('/admin/system/update', undefined, {
+    timeout: UPDATE_REQUEST_TIMEOUT_MS
+  })
   return data
 }
 
 /**
- * Rollback to previous version
+ * Rollback to previous version (local .backup swap; no long download)
  */
 export async function rollback(): Promise<UpdateResult> {
   const { data } = await apiClient.post<UpdateResult>('/admin/system/rollback')

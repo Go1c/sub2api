@@ -35,6 +35,7 @@ import riskControlAPI from './riskControl'
 import adminSiteMessagesAPI from './siteMessages'
 import adminInvoicesAPI from './invoices'
 import adminLotteryAPI from './lottery'
+import auditAPI from './audit'
 
 /**
  * Unified admin API object for convenient access
@@ -71,7 +72,8 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   siteMessages: adminSiteMessagesAPI,
   invoices: adminInvoicesAPI,
-  lottery: adminLotteryAPI
+  lottery: adminLotteryAPI,
+  audit: auditAPI
 }
 
 export {
@@ -106,12 +108,14 @@ export {
   riskControlAPI,
   adminSiteMessagesAPI,
   adminInvoicesAPI,
-  adminLotteryAPI
+  adminLotteryAPI,
+  auditAPI
 }
 
 export default adminAPI
 
 // Re-export types used by components
+export type { AuditLog, AuditLogQuery, AuditLogListResponse } from './audit'
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'

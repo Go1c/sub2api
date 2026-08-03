@@ -16,8 +16,6 @@ const {
   getStreamTimeoutSettings,
   getRectifierSettings,
   getBetaPolicySettings,
-  getModelMarket,
-  updateModelMarket,
   getGroups,
   listProxies,
   getProviders,
@@ -40,8 +38,6 @@ const {
   getStreamTimeoutSettings: vi.fn(),
   getRectifierSettings: vi.fn(),
   getBetaPolicySettings: vi.fn(),
-  getModelMarket: vi.fn(),
-  updateModelMarket: vi.fn(),
   getGroups: vi.fn(),
   listProxies: vi.fn(),
   getProviders: vi.fn(),
@@ -55,17 +51,6 @@ const {
 }));
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
-
-vi.mock("@/i18n", () => ({
-  i18n: {
-    global: {
-      locale: localeRef,
-      t: (key: string) => key,
-    },
-  },
-  getLocale: () => localeRef.value,
-  setLocale: vi.fn(),
-}));
 
 vi.mock("@/api", () => ({
   adminAPI: {
@@ -81,8 +66,6 @@ vi.mock("@/api", () => ({
       getStreamTimeoutSettings,
       getRectifierSettings,
       getBetaPolicySettings,
-      getModelMarket,
-      updateModelMarket,
     },
     groups: {
       getAll: getGroups,
@@ -98,39 +81,6 @@ vi.mock("@/api", () => ({
     },
   },
 }));
-
-vi.mock("@/api/admin/settings", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/api/admin/settings")>();
-  const settingsAPI = {
-    getSettings,
-    updateSettings,
-    testSmtpConnection: vi.fn(),
-    sendTestEmail: vi.fn(),
-    getAdminApiKey,
-    regenerateAdminApiKey: vi.fn(),
-    deleteAdminApiKey: vi.fn(),
-    getModelMarket,
-    updateModelMarket,
-    getOverloadCooldownSettings,
-    updateOverloadCooldownSettings: vi.fn(),
-    getStreamTimeoutSettings,
-    updateStreamTimeoutSettings: vi.fn(),
-    getRectifierSettings,
-    updateRectifierSettings: vi.fn(),
-    getBetaPolicySettings,
-    updateBetaPolicySettings: vi.fn(),
-    getWebSearchEmulationConfig,
-    updateWebSearchEmulationConfig,
-    testWebSearchEmulation: vi.fn(),
-    resetWebSearchUsage: vi.fn(),
-  };
-
-  return {
-    ...actual,
-    default: settingsAPI,
-    settingsAPI,
-  };
-});
 
 vi.mock("@/stores", () => ({
   useAppStore: () => ({
@@ -211,6 +161,29 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.payment.findProvider": "查看支持的支付方式",
     "admin.settings.openaiExperimentalScheduler.title": "OpenAI 实验调度策略",
     "admin.settings.openaiExperimentalScheduler.description": "默认关闭。开启后仅影响本网关在 OpenAI 账号间的实验性调度选择逻辑，不代表上游 OpenAI 官方能力。",
+    "admin.settings.openaiExperimentalScheduler.lowRatePriorityTitle": "低倍率优先",
+    "admin.settings.openaiExperimentalScheduler.lowRatePriorityDescription": "开启后优先选择计费倍率较低的账号；倍率相同时，再比较账号优先级和当前负载等。启用实验调度策略后，此开关不生效。",
+    "admin.settings.openaiExperimentalScheduler.oauthRateTitle": "OAuth 调度参考倍率",
+    "admin.settings.openaiExperimentalScheduler.oauthRatePriorityDescription": "同一分组同时包含 API Key 和 OAuth 账号时，OAuth 账号按此倍率与已探测的 API Key 计费倍率一起排序。",
+    "admin.settings.openaiExperimentalScheduler.oauthRateWeightedDescription": "同一分组同时包含 API Key 和 OAuth 账号时，计算“计费倍率”得分时，OAuth 账号按此倍率参与计算。",
+    "admin.settings.openaiExperimentalScheduler.stickyWeightedTitle": "粘性加权",
+    "admin.settings.openaiExperimentalScheduler.stickyWeightedDescription": "开启后 previous_response_id 和 session_hash 粘性进入高级调度打分；关闭时仍按旧逻辑硬命中粘性账号。",
+    "admin.settings.openaiExperimentalScheduler.subscriptionPriorityTitle": "订阅优先",
+    "admin.settings.openaiExperimentalScheduler.subscriptionPriorityDescription": "开启后先在 ChatGPT 订阅账号池中按权值选取；订阅池拿不到席位时再回退到非订阅账号池。",
+    "admin.settings.openaiExperimentalScheduler.weightsTitle": "调度权值覆盖",
+    "admin.settings.openaiExperimentalScheduler.weightsDescription": "留空时使用配置/环境变量值；配置未设置时使用内置默认值。页面非空设置优先。",
+    "admin.settings.openaiExperimentalScheduler.defaultPlaceholder": "配置/默认：{value}",
+    "admin.settings.openaiExperimentalScheduler.topKLabel": "TopK",
+    "admin.settings.openaiExperimentalScheduler.priorityWeight": "优先级",
+    "admin.settings.openaiExperimentalScheduler.loadWeight": "负载",
+    "admin.settings.openaiExperimentalScheduler.queueWeight": "排队",
+    "admin.settings.openaiExperimentalScheduler.errorRateWeight": "错误率",
+    "admin.settings.openaiExperimentalScheduler.ttftWeight": "首包延迟",
+    "admin.settings.openaiExperimentalScheduler.resetWeight": "重置窗口",
+    "admin.settings.openaiExperimentalScheduler.quotaHeadroomWeight": "额度余量",
+    "admin.settings.openaiExperimentalScheduler.upstreamCostWeight": "计费倍率",
+    "admin.settings.openaiExperimentalScheduler.previousResponseWeight": "previous_response 粘性",
+    "admin.settings.openaiExperimentalScheduler.sessionStickyWeight": "session_hash 粘性",
     "admin.settings.site.uploadImage": "上传图片",
     "admin.settings.site.remove": "移除",
     "admin.settings.platformQuota.platform": "平台",
@@ -326,10 +299,6 @@ const ImageUploadStub = defineComponent({
       type: String,
       default: "",
     },
-    maxSize: {
-      type: Number,
-      default: undefined,
-    },
   },
   setup(props) {
     return () =>
@@ -339,7 +308,6 @@ const ImageUploadStub = defineComponent({
         "data-upload-label": props.uploadLabel,
         "data-remove-label": props.removeLabel,
         "data-placeholder": props.placeholder,
-        "data-max-size": props.maxSize == null ? "" : String(props.maxSize),
       });
   },
 });
@@ -350,9 +318,12 @@ const baseSettingsResponse = {
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
   invitation_code_enabled: false,
+  invitation_registration_mode: "redeem_code",
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
+  session_binding_enabled: true,
+  audit_log_retention_days: 180,
   default_balance: 0,
   default_concurrency: 1,
   default_subscriptions: [],
@@ -433,7 +404,14 @@ const baseSettingsResponse = {
   enable_fingerprint_unification: true,
   enable_metadata_passthrough: false,
   enable_cch_signing: false,
+  enable_claude_oauth_system_prompt_injection: true,
+  claude_oauth_system_prompt: "",
+  claude_oauth_system_prompt_blocks: "",
   enable_anthropic_cache_ttl_1h_injection: false,
+  rewrite_message_cache_control: false,
+  enable_client_dateline_normalization: true,
+  antigravity_user_agent_version: "",
+  openai_codex_user_agent: "",
   payment_enabled: true,
   payment_min_amount: 1,
   payment_max_amount: 10000,
@@ -442,8 +420,8 @@ const baseSettingsResponse = {
   payment_max_pending_orders: 3,
   payment_enabled_types: [],
   payment_balance_disabled: false,
-  payment_subscription_balance_enabled: false,
   payment_balance_recharge_multiplier: 1,
+  payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_load_balance_strategy: "round-robin",
   payment_product_name_prefix: "",
@@ -455,21 +433,43 @@ const baseSettingsResponse = {
   payment_cancel_rate_limit_window: 1,
   payment_cancel_rate_limit_unit: "day",
   payment_cancel_rate_limit_window_mode: "rolling",
-  user_subscriptions_visible: true,
   payment_visible_method_alipay_source: "alipay_direct",
   payment_visible_method_wxpay_source: "invalid-source",
   payment_visible_method_alipay_enabled: true,
   payment_visible_method_wxpay_enabled: true,
+  openai_low_upstream_rate_priority_enabled: false,
+  openai_oauth_scheduling_rate_multiplier: 1,
   openai_advanced_scheduler_enabled: false,
+  openai_advanced_scheduler_sticky_weighted_enabled: false,
+  openai_advanced_scheduler_subscription_priority_enabled: false,
+  openai_advanced_scheduler_lb_top_k: "",
+  openai_advanced_scheduler_weight_priority: "",
+  openai_advanced_scheduler_weight_load: "",
+  openai_advanced_scheduler_weight_queue: "",
+  openai_advanced_scheduler_weight_error_rate: "",
+  openai_advanced_scheduler_weight_ttft: "",
+  openai_advanced_scheduler_weight_reset: "",
+  openai_advanced_scheduler_weight_quota_headroom: "",
+  openai_advanced_scheduler_weight_upstream_cost: "",
+  openai_advanced_scheduler_weight_previous_response: "",
+  openai_advanced_scheduler_weight_session_sticky: "",
+  openai_advanced_scheduler_effective_lb_top_k: "7",
+  openai_advanced_scheduler_effective_weight_priority: "1",
+  openai_advanced_scheduler_effective_weight_load: "1",
+  openai_advanced_scheduler_effective_weight_queue: "0.7",
+  openai_advanced_scheduler_effective_weight_error_rate: "0.8",
+  openai_advanced_scheduler_effective_weight_ttft: "0.5",
+  openai_advanced_scheduler_effective_weight_reset: "0",
+  openai_advanced_scheduler_effective_weight_quota_headroom: "0",
+  openai_advanced_scheduler_effective_weight_upstream_cost: "0",
+  openai_advanced_scheduler_effective_weight_previous_response: "5",
+  openai_advanced_scheduler_effective_weight_session_sticky: "3",
   balance_low_notify_enabled: false,
   balance_low_notify_threshold: 0,
   balance_low_notify_recharge_url: "",
+  subscription_expiry_notify_enabled: true,
   account_quota_notify_enabled: false,
   account_quota_notify_emails: [],
-  site_messages_enabled: false,
-  site_messages_daily_send_limit: 10,
-  site_messages_retention_days: 30,
-  site_messages_default_recipient_email: "",
   // 平台限额嵌套字段（新后端契约）
   default_platform_quotas: {
     anthropic:   { daily: null, weekly: null, monthly: null },
@@ -484,8 +484,6 @@ function mountView() {
     global: {
       stubs: {
         AppLayout: AppLayoutStub,
-        RouterLink: { template: "<a><slot /></a>" },
-        "router-link": { template: "<a><slot /></a>" },
         Select: SelectStub,
         Toggle: ToggleStub,
         Icon: true,
@@ -532,26 +530,6 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
   await flushPromises();
 }
 
-async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
-  const featuresTabButton = wrapper
-    .findAll("button")
-    .find((node) => node.text().includes("admin.settings.tabs.features"));
-
-  expect(featuresTabButton).toBeDefined();
-  await featuresTabButton?.trigger("click");
-  await flushPromises();
-}
-
-async function openModelMarketTab(wrapper: ReturnType<typeof mountView>) {
-  const modelMarketTabButton = wrapper
-    .findAll("button")
-    .find((node) => node.text().includes("admin.settings.tabs.pricing"));
-
-  expect(modelMarketTabButton).toBeDefined();
-  await modelMarketTabButton?.trigger("click");
-  await flushPromises();
-}
-
 describe("admin SettingsView payment visible method controls", () => {
   beforeEach(() => {
     getSettings.mockReset();
@@ -565,8 +543,6 @@ describe("admin SettingsView payment visible method controls", () => {
     getStreamTimeoutSettings.mockReset();
     getRectifierSettings.mockReset();
     getBetaPolicySettings.mockReset();
-    getModelMarket.mockReset();
-    updateModelMarket.mockReset();
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
@@ -622,23 +598,6 @@ describe("admin SettingsView payment visible method controls", () => {
     getBetaPolicySettings.mockResolvedValue({
       rules: [],
     });
-    getModelMarket.mockResolvedValue({
-      config: {
-        enabled: true,
-        auto_sync: true,
-        title: "模型广场",
-        description: "按平台、分组和计费类型查看当前可用模型。",
-        selected_models: [],
-        custom_models: [],
-      },
-      candidates: [],
-      models: [],
-    });
-    updateModelMarket.mockImplementation(async (payload) => ({
-      config: payload,
-      candidates: [],
-      models: [],
-    }));
     getGroups.mockResolvedValue([]);
     listProxies.mockResolvedValue({
       items: [],
@@ -658,19 +617,6 @@ describe("admin SettingsView payment visible method controls", () => {
 
     expect(wrapper.text()).not.toContain("可见方式");
     expect(wrapper.text()).not.toContain("支付来源");
-  });
-
-  it("renders Mapay in the enabled payment types selector", async () => {
-    const wrapper = mountView();
-
-    await flushPromises();
-    await openPaymentTab(wrapper);
-
-    const enabledTypeButtons = wrapper
-      .findAll("button")
-      .map((node) => node.text());
-
-    expect(enabledTypeButtons).toContain("payment.methods.mapay");
   });
 
   it("links payment guidance to README sections instead of removed payment docs", async () => {
@@ -713,96 +659,6 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_enabled");
   });
 
-  it("preserves public site page link mode when saving", async () => {
-    getSettings.mockResolvedValueOnce({
-      ...baseSettingsResponse,
-      site_pages: [
-        {
-          key: "docs",
-          title: "Docs",
-          slug: "doc/docs",
-          mode: "link",
-          content: "https://blog.lumio.games/docs/doc/api",
-          enabled: true,
-        },
-      ],
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await wrapper.find("form").trigger("submit.prevent");
-    await flushPromises();
-
-    expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        site_pages: expect.arrayContaining([
-          expect.objectContaining({
-            key: "docs",
-            mode: "link",
-            content: "https://blog.lumio.games/docs/doc/api",
-          }),
-        ]),
-      }),
-    );
-  });
-
-  it("places user subscriptions visibility under feature switches, not general settings", async () => {
-    getSettings.mockResolvedValueOnce({
-      ...baseSettingsResponse,
-      user_subscriptions_visible: false,
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-
-    await openFeaturesTab(wrapper);
-
-    const pageText = wrapper.text();
-
-    expect(pageText).not.toContain("admin.settings.site.userSubscriptionsVisible");
-    expect(pageText).toContain("admin.settings.features.userSubscriptions.title");
-  });
-
-  it("submits the user subscriptions visibility setting", async () => {
-    getSettings.mockResolvedValueOnce({
-      ...baseSettingsResponse,
-      user_subscriptions_visible: false,
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await wrapper.find("form").trigger("submit.prevent");
-    await flushPromises();
-
-    expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_subscriptions_visible: false,
-      }),
-    );
-  });
-
-  it("submits the multiple subscription purchases setting", async () => {
-    getSettings.mockResolvedValueOnce({
-      ...baseSettingsResponse,
-      subscription_multiple_purchases_enabled: true,
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await wrapper.find("form").trigger("submit.prevent");
-    await flushPromises();
-
-    expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        subscription_multiple_purchases_enabled: true,
-      }),
-    );
-  });
-
   it("submits Anthropic cache TTL injection gateway setting", async () => {
     getSettings.mockResolvedValueOnce({
       ...baseSettingsResponse,
@@ -823,11 +679,10 @@ describe("admin SettingsView payment visible method controls", () => {
     );
   });
 
-  it("submits trimmed site message default recipient email", async () => {
+  it("submits message cache_control rewrite gateway setting", async () => {
     getSettings.mockResolvedValueOnce({
       ...baseSettingsResponse,
-      site_messages_enabled: true,
-      site_messages_default_recipient_email: " support@lumio.games ",
+      rewrite_message_cache_control: true,
     });
 
     const wrapper = mountView();
@@ -839,31 +694,65 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(updateSettings).toHaveBeenCalledTimes(1);
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        site_messages_default_recipient_email: "support@lumio.games",
+        rewrite_message_cache_control: true,
       }),
     );
   });
 
-  it("ignores duplicate save submissions while the settings request is in flight", async () => {
-    let resolveUpdate: ((value: typeof baseSettingsResponse) => void) | undefined;
-    updateSettings.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveUpdate = resolve;
-        }),
-    );
+  it("submits Claude OAuth system prompt injection gateway settings", async () => {
+    const blocks = `[{"type":"text","text":"custom block","cache_control":true}]`;
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      enable_claude_oauth_system_prompt_injection: false,
+      claude_oauth_system_prompt_blocks: blocks,
+    });
 
     const wrapper = mountView();
 
     await flushPromises();
-    const form = wrapper.find("form");
-    await form.trigger("submit.prevent");
-    await form.trigger("submit.prevent");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
 
     expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enable_claude_oauth_system_prompt_injection: false,
+      }),
+    );
+    const payload = updateSettings.mock.calls[0][0] as {
+      claude_oauth_system_prompt_blocks: string;
+    };
+    expect(JSON.parse(payload.claude_oauth_system_prompt_blocks)).toEqual([
+      {
+        enabled: true,
+        type: "text",
+        text: "custom block",
+        cache_control: {
+          type: "ephemeral",
+          ttl: "5m",
+        },
+      },
+    ]);
+  });
 
-    resolveUpdate?.({ ...baseSettingsResponse });
+  it("submits Antigravity user agent version gateway setting", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      antigravity_user_agent_version: "1.23.2",
+    });
+
+    const wrapper = mountView();
+
     await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        antigravity_user_agent_version: "1.23.2",
+      }),
+    );
   });
 
   it("updates provider enablement immediately and reloads providers", async () => {
@@ -941,6 +830,66 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(wrapper.text()).not.toContain("OpenAI 高级调度器");
   });
 
+  it("places and explains rate controls for both scheduling modes", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    expect(
+      wrapper.find('[data-testid="openai-oauth-scheduling-rate-multiplier"]').exists(),
+    ).toBe(false);
+
+    const lowRateToggle = wrapper.get('[data-testid="openai-low-rate-priority-toggle"]');
+    await lowRateToggle.setValue(true);
+    const priorityModeText = wrapper.text();
+    expect(priorityModeText).toContain(
+      "同一分组同时包含 API Key 和 OAuth 账号时，OAuth 账号按此倍率与已探测的 API Key 计费倍率一起排序。",
+    );
+    expect(priorityModeText.indexOf("低倍率优先")).toBeLessThan(
+      priorityModeText.indexOf("OAuth 调度参考倍率"),
+    );
+    expect(priorityModeText.indexOf("OAuth 调度参考倍率")).toBeLessThan(
+      priorityModeText.indexOf("OpenAI 实验调度策略"),
+    );
+
+    const oauthRateInput = wrapper.get(
+      '[data-testid="openai-oauth-scheduling-rate-multiplier"]',
+    );
+    await oauthRateInput.setValue("0.05");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        openai_low_upstream_rate_priority_enabled: true,
+        openai_oauth_scheduling_rate_multiplier: 0.05,
+      }),
+    );
+
+    await wrapper
+      .get('[data-testid="openai-advanced-scheduler-toggle"]')
+      .setValue(true);
+    expect(
+      wrapper.find('[data-testid="openai-low-rate-priority-toggle"]').exists(),
+    ).toBe(false);
+    expect(
+      wrapper.find('[data-testid="openai-oauth-scheduling-rate-multiplier"]').exists(),
+    ).toBe(true);
+    const weightedModeText = wrapper.text();
+    expect(weightedModeText).toContain(
+      "同一分组同时包含 API Key 和 OAuth 账号时，计算“计费倍率”得分时，OAuth 账号按此倍率参与计算。",
+    );
+    expect(weightedModeText).not.toContain(
+      "OAuth 账号按此倍率与已探测的 API Key 计费倍率一起排序。",
+    );
+    expect(weightedModeText.indexOf("订阅优先")).toBeLessThan(
+      weightedModeText.indexOf("OAuth 调度参考倍率"),
+    );
+    expect(weightedModeText.indexOf("OAuth 调度参考倍率")).toBeLessThan(
+      weightedModeText.indexOf("调度权值覆盖"),
+    );
+    expect(weightedModeText).toContain("计费倍率");
+  });
+
   it("passes translated upload and remove labels to the payment help image uploader", async () => {
     const wrapper = mountView();
 
@@ -957,7 +906,70 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(paymentHelpImageUpload).toBeDefined();
     expect(paymentHelpImageUpload?.attributes("data-upload-label")).toBe("上传图片");
     expect(paymentHelpImageUpload?.attributes("data-remove-label")).toBe("移除");
-    expect(paymentHelpImageUpload?.attributes("data-max-size")).toBe(String(1024 * 1024));
+  });
+
+  it("normalizes null supported_types from API so provider card stays visible", async () => {
+    // Backend returns null for supported_types when the list is empty
+    // (Go nil slice → JSON null). Without normalization, ProviderCard's
+    // isSelected() throws TypeError on null.includes(), causing the card
+    // to vanish from the list.
+    const providerWithNullTypes = {
+      id: 42,
+      provider_key: "easypay",
+      name: "EasyPay",
+      config: {},
+      supported_types: null as unknown as string[],
+      enabled: true,
+      payment_mode: "",
+      refund_enabled: false,
+      allow_user_refund: false,
+      limits: "",
+      sort_order: 0,
+    };
+    getProviders.mockReset();
+    getProviders.mockResolvedValue({ data: [providerWithNullTypes] });
+
+    let receivedProviders: Array<Record<string, unknown>> = [];
+    const PaymentProviderListCapture = defineComponent({
+      props: {
+        providers: {
+          type: Array,
+          default: () => [],
+        },
+      },
+      setup(props) {
+        receivedProviders = props.providers as Array<Record<string, unknown>>;
+        return () => h("div", { class: "provider-list-capture" });
+      },
+    });
+
+    const wrapper = mount(SettingsView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          Select: SelectStub,
+          Toggle: ToggleStub,
+          Icon: true,
+          ConfirmDialog: true,
+          PaymentProviderList: PaymentProviderListCapture,
+          PaymentProviderDialog: true,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          ProxySelector: true,
+          ImageUpload: ImageUploadStub,
+          BackupSettings: true,
+        },
+      },
+    });
+
+    await flushPromises();
+    await openPaymentTab(wrapper);
+
+    // The provider should still be in the list
+    expect(receivedProviders.length).toBe(1);
+    // supported_types should be normalized to an empty array, not null
+    expect(Array.isArray(receivedProviders[0].supported_types)).toBe(true);
+    expect(receivedProviders[0].supported_types).toEqual([]);
   });
 });
 
@@ -974,8 +986,6 @@ describe("admin SettingsView wechat connect controls", () => {
     getStreamTimeoutSettings.mockReset();
     getRectifierSettings.mockReset();
     getBetaPolicySettings.mockReset();
-    getModelMarket.mockReset();
-    updateModelMarket.mockReset();
     getGroups.mockReset();
     listProxies.mockReset();
     getProviders.mockReset();
@@ -1034,23 +1044,6 @@ describe("admin SettingsView wechat connect controls", () => {
     getBetaPolicySettings.mockResolvedValue({
       rules: [],
     });
-    getModelMarket.mockResolvedValue({
-      config: {
-        enabled: true,
-        auto_sync: true,
-        title: "模型广场",
-        description: "按平台、分组和计费类型查看当前可用模型。",
-        selected_models: [],
-        custom_models: [],
-      },
-      candidates: [],
-      models: [],
-    });
-    updateModelMarket.mockImplementation(async (payload) => ({
-      config: payload,
-      candidates: [],
-      models: [],
-    }));
     getGroups.mockResolvedValue([]);
     listProxies.mockResolvedValue({
       items: [],
@@ -1174,22 +1167,6 @@ describe("admin SettingsView wechat connect controls", () => {
     ).toContain("密钥已配置");
   });
 
-  it("omits unchanged site_logo from the settings save payload", async () => {
-    getSettings.mockResolvedValueOnce({
-      ...baseSettingsResponse,
-      site_logo: "data:image/png;base64," + "a".repeat(1024),
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await wrapper.find("form").trigger("submit.prevent");
-    await flushPromises();
-
-    expect(updateSettings).toHaveBeenCalledTimes(1);
-    expect(updateSettings.mock.calls[0][0]).not.toHaveProperty("site_logo");
-  });
-
   it("collapses auth source defaults until the source is enabled", async () => {
     const wrapper = mountView();
 
@@ -1239,338 +1216,6 @@ describe("admin SettingsView wechat connect controls", () => {
         oidc_connect_validate_id_token: false,
       }),
     );
-  });
-
-  it("saves model market manual selections without duplicating price config", async () => {
-    getModelMarket.mockResolvedValueOnce({
-      config: {
-        enabled: true,
-        auto_sync: true,
-        title: "模型广场",
-        description: "按平台、分组和计费类型查看当前可用模型。",
-        selected_models: [],
-        custom_models: [],
-      },
-      candidates: [
-        {
-          key: "openai:gpt-5.4",
-          name: "gpt-5.4",
-          platform: "openai",
-          billing_mode: "token",
-          pricing: {
-            billing_mode: "token",
-            input_price: 0.000001,
-            output_price: 0.000002,
-            cache_write_price: null,
-            cache_read_price: null,
-            image_output_price: null,
-            per_request_price: null,
-            intervals: [],
-          },
-          groups: [
-            {
-              id: 1,
-              name: "public",
-              platform: "openai",
-              subscription_type: "balance",
-              rate_multiplier: 0.2,
-              is_exclusive: false,
-            },
-          ],
-          channels: ["OpenAI Public"],
-          sort_order: 0,
-        },
-      ],
-      models: [],
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await openModelMarketTab(wrapper);
-    await wrapper.get('[data-testid="model-market-auto-sync"]').setValue(false);
-    await flushPromises();
-    await wrapper.get('[data-testid="model-market-select-openai:gpt-5.4"]').setValue(true);
-    await flushPromises();
-    await wrapper.get('[data-testid="model-market-sort-openai:gpt-5.4"]').setValue("20");
-    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
-    await flushPromises();
-
-    expect(updateModelMarket).toHaveBeenCalledTimes(1);
-    expect(updateModelMarket).toHaveBeenCalledWith({
-      enabled: true,
-      auto_sync: false,
-      title: "模型广场",
-      description: "按平台、分组和计费类型查看当前可用模型。",
-      selected_models: [
-        {
-          key: "openai:gpt-5.4",
-          platform: "openai",
-          model: "gpt-5.4",
-          enabled: true,
-          sort_order: 20,
-        },
-      ],
-      custom_models: [],
-    });
-    expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("rows");
-    expect(updateModelMarket.mock.calls[0]?.[0]).not.toHaveProperty("currency");
-  });
-
-  it("saves model market candidate billing overrides for token pricing", async () => {
-    getModelMarket.mockResolvedValueOnce({
-      config: {
-        enabled: true,
-        auto_sync: true,
-        title: "模型广场",
-        description: "按平台、分组和计费类型查看当前可用模型。",
-        selected_models: [],
-        custom_models: [],
-      },
-      candidates: [
-        {
-          key: "gemini:gemini-3.5-flash-high",
-          name: "gemini-3.5-flash-high",
-          platform: "gemini",
-          billing_mode: "token",
-          pricing: null,
-          groups: [
-            {
-              id: 1,
-              name: "Gemini",
-              platform: "gemini",
-              subscription_type: "balance",
-              rate_multiplier: 0.35,
-              is_exclusive: false,
-            },
-          ],
-          channels: ["Gemini"],
-          sort_order: 0,
-        },
-      ],
-      models: [],
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await openModelMarketTab(wrapper);
-    expect(wrapper.text()).not.toContain("admin.channels.form");
-    await wrapper.get('[data-testid="model-market-candidate-input-price-gemini:gemini-3.5-flash-high"]').setValue("1.5");
-    await wrapper.get('[data-testid="model-market-candidate-output-price-gemini:gemini-3.5-flash-high"]').setValue("9");
-    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
-    await flushPromises();
-
-    expect(updateModelMarket).toHaveBeenCalledTimes(1);
-    expect(updateModelMarket).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selected_models: [
-          expect.objectContaining({
-            key: "gemini:gemini-3.5-flash-high",
-            platform: "gemini",
-            model: "gemini-3.5-flash-high",
-            enabled: true,
-            billing_mode: "token",
-            pricing: expect.objectContaining({
-              billing_mode: "token",
-              input_price: 0.0000015,
-              output_price: 0.000009,
-            }),
-          }),
-        ],
-      }),
-    );
-  });
-
-  it("saves model market candidate billing overrides for per-image tier pricing", async () => {
-    getModelMarket.mockResolvedValueOnce({
-      config: {
-        enabled: true,
-        auto_sync: true,
-        title: "模型广场",
-        description: "按平台、分组和计费类型查看当前可用模型。",
-        selected_models: [],
-        custom_models: [],
-      },
-      candidates: [
-        {
-          key: "openai:gpt-image-2",
-          name: "gpt-image-2",
-          platform: "openai",
-          billing_mode: "token",
-          pricing: {
-            billing_mode: "token",
-            input_price: 0.000005,
-            output_price: 0.00001,
-            cache_write_price: null,
-            cache_read_price: 0.00000125,
-            image_output_price: 0.00003,
-            per_request_price: null,
-            intervals: [],
-          },
-          groups: [
-            {
-              id: 1,
-              name: "public",
-              platform: "openai",
-              subscription_type: "balance",
-              rate_multiplier: 0.2,
-              is_exclusive: false,
-            },
-          ],
-          channels: ["OpenAI Public"],
-          sort_order: 0,
-        },
-      ],
-      models: [],
-    });
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await openModelMarketTab(wrapper);
-    await wrapper.get('[data-testid="model-market-candidate-billing-openai:gpt-image-2"]').setValue("image");
-    await flushPromises();
-    await wrapper.get('[data-testid="model-market-candidate-image-tier-1k-openai:gpt-image-2"]').setValue("0.05");
-    await wrapper.get('[data-testid="model-market-candidate-image-tier-4k-openai:gpt-image-2"]').setValue("0.15");
-    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
-    await flushPromises();
-
-    expect(updateModelMarket).toHaveBeenCalledTimes(1);
-    expect(updateModelMarket).toHaveBeenCalledWith(
-      expect.objectContaining({
-        enabled: true,
-        auto_sync: true,
-        selected_models: [
-          expect.objectContaining({
-            key: "openai:gpt-image-2",
-            platform: "openai",
-            model: "gpt-image-2",
-            enabled: true,
-            billing_mode: "image",
-            pricing: expect.objectContaining({
-              billing_mode: "image",
-              intervals: [
-                expect.objectContaining({
-                  tier_label: "1K",
-                  per_request_price: 0.05,
-                }),
-                expect.objectContaining({
-                  tier_label: "4K",
-                  per_request_price: 0.15,
-                }),
-              ],
-            }),
-          }),
-        ],
-      }),
-    );
-  });
-
-  it("adds custom model market entries with group, multiplier and pricing", async () => {
-    getGroups.mockResolvedValue([
-      {
-        id: 42,
-        name: "OpenAI Pro",
-        platform: "openai",
-        status: "active",
-        subscription_type: "standard",
-        rate_multiplier: 0.3,
-        is_exclusive: false,
-      },
-    ]);
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await openModelMarketTab(wrapper);
-    await wrapper.get('[data-testid="model-market-add-custom"]').trigger("click");
-    await flushPromises();
-
-    await wrapper.get('[data-testid="model-market-custom-platform-0"]').setValue("openai");
-    await wrapper.get('[data-testid="model-market-custom-model-0"]').setValue("gpt-custom");
-    await wrapper.get('[data-testid="model-market-custom-group-0"]').setValue("42");
-    await wrapper.get('[data-testid="model-market-custom-rate-0"]').setValue("0.55");
-    await wrapper.get('[data-testid="model-market-custom-input-price-0"]').setValue("4");
-    await wrapper.get('[data-testid="model-market-custom-output-price-0"]').setValue("12");
-    await wrapper.get('[data-testid="model-market-custom-sort-0"]').setValue("30");
-    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
-    await flushPromises();
-
-    expect(updateModelMarket).toHaveBeenCalledTimes(1);
-    expect(updateModelMarket).toHaveBeenCalledWith(
-      expect.objectContaining({
-        custom_models: [
-          expect.objectContaining({
-            key: "custom:openai:gpt-custom",
-            platform: "openai",
-            model: "gpt-custom",
-            enabled: true,
-            sort_order: 30,
-            billing_mode: "token",
-            pricing: expect.objectContaining({
-              billing_mode: "token",
-              input_price: 0.000004,
-              output_price: 0.000012,
-            }),
-            groups: [
-              expect.objectContaining({
-                id: 42,
-                name: "OpenAI Pro",
-                platform: "openai",
-                subscription_type: "standard",
-                rate_multiplier: 0.55,
-                is_exclusive: false,
-              }),
-            ],
-          }),
-        ],
-      }),
-    );
-  });
-
-  it("blocks model market custom save when the model name is empty", async () => {
-    getGroups.mockResolvedValue([
-      {
-        id: 42,
-        name: "OpenAI Pro",
-        platform: "openai",
-        status: "active",
-        subscription_type: "standard",
-        rate_multiplier: 0.3,
-        is_exclusive: false,
-      },
-    ]);
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await openModelMarketTab(wrapper);
-    await wrapper.get('[data-testid="model-market-add-custom"]').trigger("click");
-    await flushPromises();
-    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
-    await flushPromises();
-
-    expect(updateModelMarket).not.toHaveBeenCalled();
-    expect(showError).toHaveBeenCalledWith("admin.settings.modelMarket.customModelRequired");
-    expect(wrapper.find('[data-testid="model-market-custom-model-0"]').exists()).toBe(true);
-  });
-
-  it("blocks enabled model market custom save when no group is selected", async () => {
-    getGroups.mockResolvedValue([]);
-
-    const wrapper = mountView();
-
-    await flushPromises();
-    await openModelMarketTab(wrapper);
-    await wrapper.get('[data-testid="model-market-add-custom"]').trigger("click");
-    await flushPromises();
-    await wrapper.get('[data-testid="model-market-custom-model-0"]').setValue("gpt-custom");
-    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
-    await flushPromises();
-
-    expect(updateModelMarket).not.toHaveBeenCalled();
-    expect(showError).toHaveBeenCalledWith("admin.settings.modelMarket.customGroupRequired");
   });
 });
 

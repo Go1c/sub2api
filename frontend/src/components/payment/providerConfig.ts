@@ -9,12 +9,22 @@ export interface ConfigFieldDef {
   label: string
   sensitive: boolean
   optional?: boolean
+  clearable?: boolean
   defaultValue?: string
+  hintKey?: string
+  options?: TypeOption[]
 }
 
 export interface TypeOption {
   value: string
   label: string
+  [key: string]: unknown
+}
+
+export interface EasyPayCustomMethod {
+  type: string
+  upstreamType: string
+  displayName: string
 }
 
 /** Callback URL paths for a provider. */
@@ -32,17 +42,45 @@ export const PROVIDER_SUPPORTED_TYPES: Record<string, string[]> = {
   alipay: ['alipay'],
   wxpay: ['wxpay'],
   stripe: ['card', 'alipay', 'wxpay', 'link'],
+  airwallex: ['airwallex'],
 }
 
 /** Available payment modes for EasyPay-compatible providers. */
 export const EASYPAY_PAYMENT_MODES = ['qrcode', 'popup'] as const
 
 /** Fixed display order for user-facing payment methods */
-export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'stripe', 'balance'] as const
+export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'stripe', 'airwallex', 'balance'] as const
+
+export function isBuiltInAlipayMethod(type: string): boolean {
+  return type === 'alipay' || type === 'alipay_direct'
+}
+
+export function isBuiltInWxpayMethod(type: string): boolean {
+  return type === 'wxpay' || type === 'wxpay_direct'
+}
 
 /** Payment mode constants */
 export const PAYMENT_MODE_QRCODE = 'qrcode'
 export const PAYMENT_MODE_POPUP = 'popup'
+/** Alipay-only redirect mode (backend matches this literal case-insensitively). */
+export const PAYMENT_MODE_REDIRECT = 'redirect'
+
+// Keep in sync with stripe-go v85 API version used by backend.
+export const STRIPE_SDK_API_VERSION = '2026-03-25.dahlia'
+
+export const PAYMENT_CURRENCY_OPTIONS: TypeOption[] = [
+  { value: 'CNY', label: 'CNY' },
+  { value: 'HKD', label: 'HKD' },
+  { value: 'USD', label: 'USD' },
+  { value: 'EUR', label: 'EUR' },
+  { value: 'GBP', label: 'GBP' },
+  { value: 'AUD', label: 'AUD' },
+  { value: 'CAD', label: 'CAD' },
+  { value: 'SGD', label: 'SGD' },
+  { value: 'JPY', label: 'JPY' },
+  { value: 'KRW', label: 'KRW' },
+  { value: 'NZD', label: 'NZD' },
+]
 
 /** Preferred popup size for payment gateways. Alipay's standard checkout
  * (QR + account login panel) needs ~1200×900 to render without any scrolling. */
@@ -70,6 +108,7 @@ export const WEBHOOK_PATHS: Record<string, string> = {
   alipay: '/api/v1/payment/webhook/alipay',
   wxpay: '/api/v1/payment/webhook/wxpay',
   stripe: '/api/v1/payment/webhook/stripe',
+  airwallex: '/api/v1/payment/webhook/airwallex',
 }
 
 export const RETURN_PATH = '/payment/result'
@@ -91,6 +130,16 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'apiBase', label: '', sensitive: false },
     { key: 'cidAlipay', label: '', sensitive: false, optional: true },
     { key: 'cidWxpay', label: '', sensitive: false, optional: true },
+    { key: 'customMethods', label: '', sensitive: false, optional: true },
+  ],
+  airwallex: [
+    { key: 'clientId', label: '', sensitive: false },
+    { key: 'apiKey', label: '', sensitive: true },
+    { key: 'webhookSecret', label: '', sensitive: true },
+    { key: 'apiBase', label: '', sensitive: false, defaultValue: 'https://api.airwallex.com/api/v1', hintKey: 'admin.settings.payment.field_airwallexApiBaseHint' },
+    { key: 'accountId', label: 'admin.settings.payment.field_accountId', sensitive: false, optional: true, clearable: true, hintKey: 'admin.settings.payment.field_accountIdHint' },
+    { key: 'currency', label: '', sensitive: false, optional: true, defaultValue: 'CNY', hintKey: 'admin.settings.payment.field_paymentCurrencyHint', options: PAYMENT_CURRENCY_OPTIONS },
+    { key: 'countryCode', label: '', sensitive: false, optional: true, defaultValue: 'CN' },
   ],
   mapay: [
     { key: 'pid', label: 'PID', sensitive: false },
@@ -118,7 +167,7 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'secretKey', label: '', sensitive: true },
     { key: 'publishableKey', label: '', sensitive: false },
     { key: 'webhookSecret', label: '', sensitive: true },
-    { key: 'currency', label: '', sensitive: false, defaultValue: 'usd' },
+    { key: 'currency', label: '', sensitive: false, defaultValue: 'CNY', hintKey: 'admin.settings.payment.field_paymentCurrencyHint', options: PAYMENT_CURRENCY_OPTIONS },
     { key: 'balanceRechargeMultiplier', label: '', sensitive: false, defaultValue: '7' },
   ],
 }
@@ -143,6 +192,34 @@ export function getAvailableTypes(
 ): TypeOption[] {
   const types = PROVIDER_SUPPORTED_TYPES[providerKey] || []
   return types.map(t => resolveTypeLabel(t, providerKey, allTypes, redirectLabel))
+}
+
+export function parseEasyPayCustomMethods(raw: string | undefined): EasyPayCustomMethod[] {
+  if (!raw || !raw.trim()) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((item: any) => ({
+        type: String(item?.type || '').trim(),
+        upstreamType: String(item?.upstreamType || '').trim(),
+        displayName: String(item?.displayName || '').trim(),
+      }))
+      .filter(item => item.type && item.upstreamType)
+  } catch {
+    return []
+  }
+}
+
+export function serializeEasyPayCustomMethods(methods: EasyPayCustomMethod[]): string {
+  const clean = methods
+    .map(method => ({
+      type: method.type.trim(),
+      upstreamType: method.upstreamType.trim(),
+      displayName: method.displayName.trim(),
+    }))
+    .filter(method => method.type && method.upstreamType)
+  return clean.length ? JSON.stringify(clean) : ''
 }
 
 /** Extract base URL from a full callback URL by removing the known path suffix. */

@@ -9,7 +9,6 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -19,15 +18,13 @@ import (
 
 // PaymentHandler handles user-facing payment requests.
 type PaymentHandler struct {
-	channelService *service.ChannelService
 	paymentService *service.PaymentService
 	configService  *service.PaymentConfigService
 }
 
 // NewPaymentHandler creates a new PaymentHandler.
-func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService, channelService *service.ChannelService) *PaymentHandler {
+func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService) *PaymentHandler {
 	return &PaymentHandler{
-		channelService: channelService,
 		paymentService: paymentService,
 		configService:  configService,
 	}
@@ -61,6 +58,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		Description    string         `json:"description"`
 		Price          float64        `json:"price"`
 		OriginalPrice  *float64       `json:"original_price,omitempty"`
+		Currency       string         `json:"currency,omitempty"`
 		ValidityDays   int            `json:"validity_days"`
 		ValidityUnit   string         `json:"validity_unit"`
 		QuotaUSD       float64        `json:"quota_usd"`
@@ -83,7 +81,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		}
 		result = append(result, planWithPlatform{
 			ID: int64(p.ID), GroupID: gid, GroupPlatform: platformMap[gid],
-			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
+			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice, Currency: p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit,
 			QuotaUSD: p.QuotaUsd, DailyLimitUSD: p.DailyLimitUsd, WeeklyLimitUSD: p.WeeklyLimitUsd,
 			ScopeType: planScopeTypeForResponse(p.ScopeType), ScopeConfig: planScopeConfigForResponse(p.ScopeConfig),
@@ -93,17 +91,6 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		})
 	}
 	response.Success(c, result)
-}
-
-// GetChannels returns enabled payment channels.
-// GET /api/v1/payment/channels
-func (h *PaymentHandler) GetChannels(c *gin.Context) {
-	channels, _, err := h.channelService.List(c.Request.Context(), pagination.PaginationParams{Page: 1, PageSize: 1000}, "active", "")
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, channels)
 }
 
 // GetCheckoutInfo returns all data the payment page needs in a single call:
@@ -147,10 +134,12 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		BalanceDisabled:                   cfg.BalanceDisabled,
 		SubscriptionBalancePaymentEnabled: cfg.SubscriptionBalancePaymentEnabled,
 		BalanceRechargeMultiplier:         cfg.BalanceRechargeMultiplier,
+		SubscriptionUSDToCNYRate:          cfg.SubscriptionUSDToCNYRate,
 		RechargeFeeRate:                   cfg.RechargeFeeRate,
 		HelpText:                          cfg.HelpText,
 		HelpImageURL:                      cfg.HelpImageURL,
 		StripePublishableKey:              cfg.StripePublishableKey,
+		AlipayForceQRCode:                 cfg.AlipayForceQRCode,
 	})
 }
 
@@ -162,10 +151,12 @@ type checkoutInfoResponse struct {
 	BalanceDisabled                   bool                            `json:"balance_disabled"`
 	SubscriptionBalancePaymentEnabled bool                            `json:"subscription_balance_payment_enabled"`
 	BalanceRechargeMultiplier         float64                         `json:"balance_recharge_multiplier"`
+	SubscriptionUSDToCNYRate          float64                         `json:"subscription_usd_to_cny_rate"`
 	RechargeFeeRate                   float64                         `json:"recharge_fee_rate"`
 	HelpText                          string                          `json:"help_text"`
 	HelpImageURL                      string                          `json:"help_image_url"`
 	StripePublishableKey              string                          `json:"stripe_publishable_key"`
+	AlipayForceQRCode                 bool                            `json:"alipay_force_qrcode"`
 }
 
 type checkoutPlan struct {
@@ -185,6 +176,7 @@ type checkoutPlan struct {
 	Description     string         `json:"description"`
 	Price           float64        `json:"price"`
 	OriginalPrice   *float64       `json:"original_price,omitempty"`
+	Currency        string         `json:"currency,omitempty"`
 	ValidityDays    int            `json:"validity_days"`
 	ValidityUnit    string         `json:"validity_unit"`
 	Features        []string       `json:"features"`
@@ -213,6 +205,7 @@ func checkoutPlanFromSubscriptionPlan(p *dbent.SubscriptionPlan, gid int64, gi s
 		Description:     p.Description,
 		Price:           p.Price,
 		OriginalPrice:   p.OriginalPrice,
+		Currency:        p.Currency,
 		ValidityDays:    p.ValidityDays,
 		ValidityUnit:    p.ValidityUnit,
 		Features:        parseFeatures(p.Features),
@@ -322,6 +315,7 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		PaymentSource:   req.PaymentSource,
 		OrderType:       req.OrderType,
 		PlanID:          req.PlanID,
+		Locale:          c.GetHeader("Accept-Language"),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -517,6 +511,7 @@ type PublicOrderResult struct {
 	Amount              float64    `json:"amount"`
 	PayAmount           float64    `json:"pay_amount"`
 	FeeRate             float64    `json:"fee_rate"`
+	Currency            string     `json:"currency,omitempty"`
 	PaymentType         string     `json:"payment_type"`
 	OrderType           string     `json:"order_type"`
 	Status              string     `json:"status"`
@@ -539,6 +534,7 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 		Amount:              order.Amount,
 		PayAmount:           order.PayAmount,
 		FeeRate:             order.FeeRate,
+		Currency:            service.PaymentOrderCurrency(order),
 		PaymentType:         order.PaymentType,
 		OrderType:           order.OrderType,
 		Status:              order.Status,
@@ -612,24 +608,31 @@ func isMobile(c *gin.Context) bool {
 	return false
 }
 
-func sanitizePaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*dbent.PaymentOrder {
-	if len(orders) == 0 {
-		return orders
-	}
-	out := make([]*dbent.PaymentOrder, 0, len(orders))
+type paymentOrderResponse struct {
+	*dbent.PaymentOrder
+	Currency string `json:"currency,omitempty"`
+}
+
+func sanitizePaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*paymentOrderResponse {
+	out := make([]*paymentOrderResponse, 0, len(orders))
 	for _, order := range orders {
-		out = append(out, sanitizePaymentOrderForResponse(order))
+		if item := sanitizePaymentOrderForResponse(order); item != nil {
+			out = append(out, item)
+		}
 	}
 	return out
 }
 
-func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *dbent.PaymentOrder {
+func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *paymentOrderResponse {
 	if order == nil {
 		return nil
 	}
 	cloned := *order
 	cloned.ProviderSnapshot = nil
-	return &cloned
+	return &paymentOrderResponse{
+		PaymentOrder: &cloned,
+		Currency:     service.PaymentOrderCurrency(order),
+	}
 }
 
 func isWeChatBrowser(c *gin.Context) bool {

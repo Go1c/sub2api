@@ -427,6 +427,10 @@ function emptyPaymentState(): PaymentRecoverySnapshot {
     payUrl: '',
     outTradeNo: '',
     clientSecret: '',
+    intentId: '',
+    currency: '',
+    countryCode: '',
+    paymentEnv: '',
     payAmount: 0,
     orderType: '',
     paymentMode: '',
@@ -571,7 +575,7 @@ function onPaymentSettled() {
 // All checkout data from single API call
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
-  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
+  plans: [], balance_disabled: false, subscription_balance_payment_enabled: false, balance_recharge_multiplier: 1, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '', alipay_force_qrcode: false,
 })
 
 const userSubscriptionsVisible = computed(() => appStore.cachedPublicSettings?.user_subscriptions_visible !== false)
@@ -587,6 +591,14 @@ const visibleMethods = computed(() => getVisibleMethods(checkout.value.methods))
 const enabledMethods = computed(() => Object.keys(visibleMethods.value))
 const validAmount = computed(() => amount.value ?? 0)
 const balanceRechargeMultiplier = computed(() => {
+  // Prefer the selected recharge method's instance-level multiplier when available
+  // so the preview matches backend fulfillment (which uses the chosen instance).
+  const methodKey = selectedRechargeMethod.value
+  const selected = methodKey ? visibleMethods.value[methodKey] : undefined
+  const methodMultiplier = selected?.balance_recharge_multiplier
+  if (methodMultiplier && methodMultiplier > 0) {
+    return methodMultiplier
+  }
   const multiplier = checkout.value.balance_recharge_multiplier
   return multiplier > 0 ? multiplier : 1
 })
@@ -640,6 +652,7 @@ const methodOptions = computed<PaymentMethodOption[]>(() =>
     const ml = visibleMethods.value[type]
     return {
       type,
+      display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
       available: ml?.available !== false && amountFitsMethod(validAmount.value, type),
     }
@@ -682,10 +695,11 @@ const canSubmit = computed(() =>
 // Subscription-specific: method options based on plan price
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   const planPrice = selectedPlan.value?.price ?? 0
-  const options = enabledMethods.value.map((type) => {
+  const options: PaymentMethodOption[] = enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
     return {
       type,
+      display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
       available: ml?.available !== false && amountFitsMethod(planPrice, type),
     }
@@ -853,6 +867,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: isMobileDevice(),
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
     })
     if (options.openid) {
       payload.openid = options.openid
@@ -896,13 +911,25 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         },
       }).href
       : ''
+    const airwallexRouteUrl = result.client_secret && result.intent_id
+      ? router.resolve({
+        path: '/payment/airwallex',
+        query: {
+          order_id: String(result.order_id),
+          out_trade_no: result.out_trade_no || undefined,
+          resume_token: result.resume_token || undefined,
+        },
+      }).href
+      : undefined
     const decision = decidePaymentLaunch(result, {
       visibleMethod,
       orderType,
       isMobile: isMobileDevice(),
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
       stripePopupUrl: stripeRouteUrl,
       stripeRouteUrl,
+      airwallexRouteUrl,
     })
 
     if (decision.kind === 'wechat_oauth' && decision.oauth?.authorize_url) {
@@ -926,6 +953,10 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
 
     if (decision.kind === 'stripe_popup') {
       openWindow(decision.paymentState.payUrl)
+      return
+    }
+    if (decision.kind === 'airwallex_route') {
+      window.location.href = decision.paymentState.payUrl
       return
     }
     if (decision.kind === 'stripe_route') {
@@ -1073,6 +1104,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: false,
       isWechatBrowser: false,
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
     })
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
     const stripeMethod = visibleMethod === 'wxpay' ? 'wechat_pay' : 'alipay'
@@ -1087,13 +1119,25 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
         },
       }).href
       : ''
+    const airwallexRouteUrl = result.client_secret && result.intent_id
+      ? router.resolve({
+        path: '/payment/airwallex',
+        query: {
+          order_id: String(result.order_id),
+          out_trade_no: result.out_trade_no || undefined,
+          resume_token: result.resume_token || undefined,
+        },
+      }).href
+      : undefined
     const decision = decidePaymentLaunch(result, {
       visibleMethod,
       orderType: context.orderType,
       isMobile: false,
       isWechatBrowser: false,
+      forceQRCode: checkout.value.alipay_force_qrcode === true,
       stripePopupUrl: stripeRouteUrl,
       stripeRouteUrl,
+      airwallexRouteUrl,
     })
 
     if (decision.kind !== 'qr_waiting' || !decision.paymentState.qrCode) {

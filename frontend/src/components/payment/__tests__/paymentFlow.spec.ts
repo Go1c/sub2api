@@ -389,3 +389,51 @@ describe('readPaymentRecoverySnapshot', () => {
     expect(restored?.outTradeNo).toBe('')
   })
 })
+
+describe('alipay forceQRCode', () => {
+  it('buildCreateOrderPayload forces is_mobile false for alipay when forceQRCode', () => {
+    const payload = buildCreateOrderPayload({
+      amount: 10,
+      paymentType: 'alipay',
+      orderType: 'balance',
+      isMobile: true,
+      isWechatBrowser: false,
+      forceQRCode: true,
+    })
+    expect(payload.is_mobile).toBe(false)
+  })
+
+  it('buildCreateOrderPayload keeps is_mobile for non-alipay when forceQRCode', () => {
+    const payload = buildCreateOrderPayload({
+      amount: 10,
+      paymentType: 'wxpay',
+      orderType: 'balance',
+      isMobile: true,
+      isWechatBrowser: false,
+      forceQRCode: true,
+    })
+    expect(payload.is_mobile).toBe(true)
+  })
+
+  it('decidePaymentLaunch prefers QR for mobile alipay when forceQRCode', () => {
+    const decision = decidePaymentLaunch(createOrderResult({
+      qr_code: 'weixin://qr',
+      pay_url: 'https://example.com/pay',
+    }), {
+      visibleMethod: 'alipay',
+      orderType: 'balance',
+      isMobile: true,
+      forceQRCode: true,
+    })
+    expect(decision.kind).toBe('qr_waiting')
+  })
+
+  it('getVisibleMethods keeps EasyPay custom method keys', () => {
+    const visible = getVisibleMethods({
+      credit_card: methodLimit({ display_name: '信用卡', fee_rate: 1 }),
+      alipay: methodLimit({ fee_rate: 0 }),
+    })
+    expect(visible.credit_card?.display_name).toBe('信用卡')
+    expect(visible.alipay).toBeDefined()
+  })
+})

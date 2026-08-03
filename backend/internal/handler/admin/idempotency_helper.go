@@ -21,14 +21,6 @@ const (
 	idempotencyStoreUnavailableFailOpen
 )
 
-func adminIdempotencyActorScope(c *gin.Context) string {
-	actorScope := "admin:0"
-	if subject, ok := middleware2.GetAuthSubjectFromContext(c); ok {
-		actorScope = "admin:" + strconv.FormatInt(subject.UserID, 10)
-	}
-	return actorScope
-}
-
 func executeAdminIdempotent(
 	c *gin.Context,
 	scope string,
@@ -47,7 +39,7 @@ func executeAdminIdempotent(
 
 	return coordinator.Execute(c.Request.Context(), service.IdempotencyExecuteOptions{
 		Scope:          scope,
-		ActorScope:     adminIdempotencyActorScope(c),
+		ActorScope:     adminActorScope(c),
 		Method:         c.Request.Method,
 		Route:          c.FullPath(),
 		IdempotencyKey: c.GetHeader("Idempotency-Key"),
@@ -55,6 +47,14 @@ func executeAdminIdempotent(
 		RequireKey:     true,
 		TTL:            ttl,
 	}, execute)
+}
+
+func adminActorScope(c *gin.Context) string {
+	actorScope := "admin:0"
+	if subject, ok := middleware2.GetAuthSubjectFromContext(c); ok {
+		actorScope = "admin:" + strconv.FormatInt(subject.UserID, 10)
+	}
+	return actorScope
 }
 
 func executeAdminIdempotentJSON(

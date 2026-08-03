@@ -156,6 +156,30 @@ func (m *groupAwareMockAccountRepo) ListSchedulableByGroupIDAndPlatforms(ctx con
 	return result, nil
 }
 
+// ListModelAvailabilityCandidates returns persistently eligible accounts and
+// ignores transient schedulability filters (mirrors production diagnosis query).
+func (m *groupAwareMockAccountRepo) ListModelAvailabilityCandidates(_ context.Context, groupID *int64, platforms []string, includeGrouped bool) ([]Account, error) {
+	platformSet := make(map[string]bool, len(platforms))
+	for _, p := range platforms {
+		platformSet[p] = true
+	}
+	var result []Account
+	for _, acc := range m.allAccounts {
+		if !platformSet[acc.Platform] || acc.Status != StatusActive || !acc.Schedulable {
+			continue
+		}
+		if groupID != nil {
+			if !accountBelongsToGroup(acc, *groupID) {
+				continue
+			}
+		} else if !includeGrouped && len(acc.AccountGroups) > 0 {
+			continue
+		}
+		result = append(result, acc)
+	}
+	return result, nil
+}
+
 // accountBelongsToGroup 检查账号是否属于指定分组
 func accountBelongsToGroup(acc Account, groupID int64) bool {
 	for _, ag := range acc.AccountGroups {

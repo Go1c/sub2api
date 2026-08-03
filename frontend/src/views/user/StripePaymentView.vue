@@ -148,7 +148,7 @@ onMounted(async () => {
     const publishableKey = paymentStore.config?.stripe_publishable_key
     if (!publishableKey) { initError.value = t('payment.stripeNotConfigured'); return }
 
-    const { loadStripe } = await import('@stripe/stripe-js')
+    const { loadStripe } = await import('@stripe/stripe-js/pure')
     const stripe = await loadStripe(publishableKey)
     if (!stripe) { initError.value = t('payment.stripeLoadFailed'); return }
 
@@ -255,18 +255,28 @@ async function handleGenericPay() {
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollInFlight = false
 
 function startPolling() {
   const orderId = Number(route.query.order_id)
   if (!orderId) return
   pollTimer = setInterval(async () => {
-    const o = await paymentStore.pollOrderStatus(orderId)
-    if (!o) return
-    if (o.status === 'COMPLETED' || o.status === 'PAID') {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-      stripeSuccess.value = true
-      wechatQrUrl.value = ''
-      scheduleClose()
+    // 防重入：接口响应慢于 3 秒轮询间隔时避免并发重叠请求与重复跳转。
+    if (pollInFlight) return
+    pollInFlight = true
+    try {
+      const o = await paymentStore.pollOrderStatus(orderId)
+      if (!o) return
+      // 定时器已被清理时不再执行终态处理（响应可能在 cleanup 后才回来）。
+      if (!pollTimer) return
+      if (o.status === 'COMPLETED' || o.status === 'PAID') {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+        stripeSuccess.value = true
+        wechatQrUrl.value = ''
+        scheduleClose()
+      }
+    } finally {
+      pollInFlight = false
     }
   }, 3000)
 }

@@ -83,6 +83,10 @@ func (s *accountRepoStub) ListWithFilters(ctx context.Context, params pagination
 	panic("unexpected ListWithFilters call")
 }
 
+func (s *accountRepoStub) ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, error) {
+	panic("unexpected ListAllWithFilters call")
+}
+
 func (s *accountRepoStub) ListByGroup(ctx context.Context, groupID int64) ([]Account, error) {
 	panic("unexpected ListByGroup call")
 }
@@ -155,11 +159,15 @@ func (s *accountRepoStub) ListSchedulableUngroupedByPlatforms(ctx context.Contex
 	panic("unexpected ListSchedulableUngroupedByPlatforms call")
 }
 
+func (s *accountRepoStub) ListModelAvailabilityCandidates(ctx context.Context, groupID *int64, platforms []string, includeGrouped bool) ([]Account, error) {
+	panic("unexpected ListModelAvailabilityCandidates call")
+}
+
 func (s *accountRepoStub) SetRateLimited(ctx context.Context, id int64, resetAt time.Time) error {
 	panic("unexpected SetRateLimited call")
 }
 
-func (s *accountRepoStub) SetModelRateLimit(ctx context.Context, id int64, scope string, resetAt time.Time) error {
+func (s *accountRepoStub) SetModelRateLimit(ctx context.Context, id int64, scope string, resetAt time.Time, reason ...string) error {
 	panic("unexpected SetModelRateLimit call")
 }
 
@@ -209,6 +217,14 @@ func (s *accountRepoStub) IncrementQuotaUsed(ctx context.Context, id int64, amou
 
 func (s *accountRepoStub) ResetQuotaUsed(ctx context.Context, id int64) error {
 	return nil
+}
+
+func (s *accountRepoStub) RevertProxyFallback(ctx context.Context, accountID int64) error {
+	panic("unexpected RevertProxyFallback call")
+}
+
+func (s *accountRepoStub) ListShadowsByParent(ctx context.Context, parentID int64) ([]*Account, error) {
+	panic("unexpected ListShadowsByParent call")
 }
 
 // TestAccountService_Delete_NotFound 测试删除不存在的账号时返回正确的错误。

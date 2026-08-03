@@ -83,23 +83,38 @@ const success = ref(false)
 const hint = ref(t('payment.stripePopup.redirecting'))
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let initTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+let messageHandler: ((event: MessageEvent) => void) | null = null
 
 function closeWindow() { window.close() }
 
+function clearInitTimeout() {
+  if (initTimeoutTimer) {
+    clearTimeout(initTimeoutTimer)
+    initTimeoutTimer = null
+  }
+}
+
 onMounted(() => {
-  const handler = (event: MessageEvent) => {
+  messageHandler = (event: MessageEvent) => {
     if (event.origin !== window.location.origin) return
     if (event.data?.type !== 'STRIPE_POPUP_INIT') return
-    window.removeEventListener('message', handler)
+    // INIT 已到达，取消兜底超时，避免长时间的扫码支付被误判为超时。
+    clearInitTimeout()
+    if (messageHandler) {
+      window.removeEventListener('message', messageHandler)
+      messageHandler = null
+    }
     initStripe(event.data.clientSecret, event.data.publishableKey)
   }
-  window.addEventListener('message', handler)
+  window.addEventListener('message', messageHandler)
 
   if (window.opener) {
     window.opener.postMessage({ type: 'STRIPE_POPUP_READY' }, window.location.origin)
   }
 
-  setTimeout(() => {
+  // 仅兜底“父窗口始终未发 STRIPE_POPUP_INIT”的场景。
+  initTimeoutTimer = setTimeout(() => {
     if (!error.value && !success.value) {
       error.value = t('payment.stripePopup.timeout')
     }
@@ -107,7 +122,12 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer)
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  clearInitTimeout()
+  if (messageHandler) {
+    window.removeEventListener('message', messageHandler)
+    messageHandler = null
+  }
 })
 
 async function initStripe(clientSecret: string, publishableKey: string) {
@@ -116,7 +136,7 @@ async function initStripe(clientSecret: string, publishableKey: string) {
     return
   }
   try {
-    const { loadStripe } = await import('@stripe/stripe-js')
+    const { loadStripe } = await import('@stripe/stripe-js/pure')
     const stripe = await loadStripe(publishableKey)
     if (!stripe) { error.value = t('payment.stripeLoadFailed'); return }
 
@@ -147,8 +167,11 @@ async function initStripe(clientSecret: string, publishableKey: string) {
   }
 }
 
+let pollInFlight = false
 function startPolling() {
   pollTimer = setInterval(async () => {
+    if (pollInFlight) return
+    pollInFlight = true
     try {
       const token = document.cookie.split('; ').find(c => c.startsWith('token='))?.split('=')[1]
         || localStorage.getItem('token') || ''
@@ -157,6 +180,8 @@ function startPolling() {
         credentials: 'include',
       })
       if (!res.ok) return
+      // 定时器已被清理时不再执行终态处理。
+      if (!pollTimer) return
       const data = await res.json()
       const status = data?.data?.status
       if (status === 'COMPLETED' || status === 'PAID') {
@@ -165,6 +190,9 @@ function startPolling() {
         setTimeout(closeWindow, 2000)
       }
     } catch { /* ignore */ }
+    finally {
+      pollInFlight = false
+    }
   }, 3000)
 }
 </script>

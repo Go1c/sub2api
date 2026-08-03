@@ -12,6 +12,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
+
+	entsql "entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 )
 
 // channelMonitorRepository 实现 service.ChannelMonitorRepository。
@@ -37,6 +40,7 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 	builder := client.ChannelMonitor.Create().
 		SetName(m.Name).
 		SetProvider(channelmonitor.Provider(m.Provider)).
+		SetAPIMode(defaultAPIModeRepo(m.APIMode)).
 		SetEndpoint(m.Endpoint).
 		SetAPIKeyEncrypted(m.APIKey). // 调用方传入的已是密文
 		SetPrimaryModel(m.PrimaryModel).
@@ -44,8 +48,9 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetGroupName(m.GroupName).
 		SetEnabled(m.Enabled).
 		SetIntervalSeconds(m.IntervalSeconds).
+		SetJitterSeconds(m.JitterSeconds).
 		SetCreatedBy(m.CreatedBy).
-		SetExtraHeaders(emptyHeadersIfNilRepo(m.ExtraHeaders)).
+		SetExtraHeaders(channelMonitorHeadersForPersistence(m)).
 		SetBodyOverrideMode(defaultBodyModeRepo(m.BodyOverrideMode)).
 		SetCompatibilityProbeEnabled(m.CompatibilityProbeEnabled)
 	if m.TemplateID != nil {
@@ -65,6 +70,30 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 	return nil
 }
 
+func (r *channelMonitorRepository) FindByDuplicateOperationID(ctx context.Context, operationID string) (*service.ChannelMonitor, error) {
+	if strings.TrimSpace(operationID) == "" {
+		return nil, nil
+	}
+	client := clientFromContext(ctx, r.client)
+	row, err := client.ChannelMonitor.Query().
+		Where(func(selector *entsql.Selector) {
+			selector.Where(sqljson.ValueEQ(
+				channelmonitor.FieldExtraHeaders,
+				operationID,
+				sqljson.Path(service.ChannelMonitorDuplicateOperationIDMetadataKey),
+			))
+		}).
+		Order(dbent.Asc(channelmonitor.FieldID)).
+		First(ctx)
+	if dbent.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find channel monitor duplicate operation: %w", err)
+	}
+	return entToServiceMonitor(row), nil
+}
+
 func (r *channelMonitorRepository) GetByID(ctx context.Context, id int64) (*service.ChannelMonitor, error) {
 	row, err := r.client.ChannelMonitor.Query().
 		Where(channelmonitor.IDEQ(id)).
@@ -80,6 +109,7 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 	updater := client.ChannelMonitor.UpdateOneID(m.ID).
 		SetName(m.Name).
 		SetProvider(channelmonitor.Provider(m.Provider)).
+		SetAPIMode(defaultAPIModeRepo(m.APIMode)).
 		SetEndpoint(m.Endpoint).
 		SetAPIKeyEncrypted(m.APIKey).
 		SetPrimaryModel(m.PrimaryModel).
@@ -87,7 +117,8 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		SetGroupName(m.GroupName).
 		SetEnabled(m.Enabled).
 		SetIntervalSeconds(m.IntervalSeconds).
-		SetExtraHeaders(emptyHeadersIfNilRepo(m.ExtraHeaders)).
+		SetJitterSeconds(m.JitterSeconds).
+		SetExtraHeaders(channelMonitorHeadersForPersistence(m)).
 		SetBodyOverrideMode(defaultBodyModeRepo(m.BodyOverrideMode)).
 		SetCompatibilityProbeEnabled(m.CompatibilityProbeEnabled)
 	if m.TemplateID != nil {
@@ -702,14 +733,17 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 	if extras == nil {
 		extras = []string{}
 	}
-	headers := row.ExtraHeaders
-	if headers == nil {
-		headers = map[string]string{}
+	headers := make(map[string]string, len(row.ExtraHeaders))
+	for key, value := range row.ExtraHeaders {
+		headers[key] = value
 	}
+	duplicateOperationID := headers[service.ChannelMonitorDuplicateOperationIDMetadataKey]
+	delete(headers, service.ChannelMonitorDuplicateOperationIDMetadataKey)
 	out := &service.ChannelMonitor{
 		ID:                        row.ID,
 		Name:                      row.Name,
 		Provider:                  string(row.Provider),
+		APIMode:                   row.APIMode,
 		Endpoint:                  row.Endpoint,
 		APIKey:                    row.APIKeyEncrypted, // 仍为密文，service 层负责解密
 		PrimaryModel:              row.PrimaryModel,
@@ -717,6 +751,7 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		GroupName:                 row.GroupName,
 		Enabled:                   row.Enabled,
 		IntervalSeconds:           row.IntervalSeconds,
+		JitterSeconds:             row.JitterSeconds,
 		LastCheckedAt:             row.LastCheckedAt,
 		CreatedBy:                 row.CreatedBy,
 		CreatedAt:                 row.CreatedAt,
@@ -725,12 +760,33 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		BodyOverrideMode:          row.BodyOverrideMode,
 		BodyOverride:              row.BodyOverride,
 		CompatibilityProbeEnabled: row.CompatibilityProbeEnabled,
+		DuplicateOperationID:      duplicateOperationID,
 	}
 	if row.TemplateID != nil {
 		id := *row.TemplateID
 		out.TemplateID = &id
 	}
 	return out
+}
+
+// channelMonitorHeadersForPersistence injects the internal duplicate operation
+// metadata into extra_headers for storage, while keeping service-layer
+// ExtraHeaders free of that key.
+func channelMonitorHeadersForPersistence(m *service.ChannelMonitor) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	headers := make(map[string]string, len(m.ExtraHeaders)+1)
+	for key, value := range m.ExtraHeaders {
+		if key == service.ChannelMonitorDuplicateOperationIDMetadataKey {
+			continue
+		}
+		headers[key] = value
+	}
+	if operationID := strings.TrimSpace(m.DuplicateOperationID); operationID != "" {
+		headers[service.ChannelMonitorDuplicateOperationIDMetadataKey] = operationID
+	}
+	return headers
 }
 
 // emptyHeadersIfNilRepo 与 service.emptyHeadersIfNil 功能一致，
@@ -748,6 +804,13 @@ func defaultBodyModeRepo(mode string) string {
 		return "off"
 	}
 	return mode
+}
+
+func defaultAPIModeRepo(apiMode string) string {
+	if apiMode == "" {
+		return service.MonitorAPIModeChatCompletions
+	}
+	return apiMode
 }
 
 func emptySliceIfNil(in []string) []string {

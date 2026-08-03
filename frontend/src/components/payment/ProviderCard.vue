@@ -77,6 +77,7 @@ const PROVIDER_KEY_LABELS: Record<string, string> = {
   alipay: 'admin.settings.payment.providerAlipay',
   wxpay: 'admin.settings.payment.providerWxpay',
   stripe: 'admin.settings.payment.providerStripe',
+  airwallex: 'admin.settings.payment.providerAirwallex',
 }
 
 const props = defineProps<{
@@ -103,6 +104,7 @@ const modeLabel = computed(() => {
 })
 
 function isSelected(type: string): boolean {
-  return props.provider.supported_types.includes(type)
+  return Array.isArray(props.provider.supported_types)
+    && props.provider.supported_types.includes(type)
 }
 </script>

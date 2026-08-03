@@ -13,30 +13,31 @@ func UserFromServiceShallow(u *service.User) *User {
 		return nil
 	}
 	return &User{
-		ID:                         u.ID,
-		Email:                      u.Email,
-		Username:                   u.Username,
-		Role:                       u.Role,
-		Balance:                    u.Balance,
-		Concurrency:                u.Concurrency,
-		Status:                     u.Status,
-		AllowedGroups:              u.AllowedGroups,
-		LastActiveAt:               u.LastActiveAt,
-		CreatedAt:                  u.CreatedAt,
-		UpdatedAt:                  u.UpdatedAt,
-		BalanceNotifyEnabled:               u.BalanceNotifyEnabled,
-		BalanceNotifyThresholdType:         u.BalanceNotifyThresholdType,
-		BalanceNotifyThreshold:             u.BalanceNotifyThreshold,
-		BalanceNotifyExtraEmails:           NotifyEmailEntriesFromService(u.BalanceNotifyExtraEmails),
-		WebhookBalanceNotifyEnabled:        u.WebhookBalanceNotifyEnabled,
-		WebhookBalanceNotifyURL:            u.WebhookBalanceNotifyURL,
+		ID:                               u.ID,
+		Email:                            u.Email,
+		Username:                         u.Username,
+		Role:                             u.Role,
+		Balance:                          u.Balance,
+		FrozenBalance:                    u.FrozenBalance,
+		Concurrency:                      u.Concurrency,
+		Status:                           u.Status,
+		AllowedGroups:                    u.AllowedGroups,
+		LastActiveAt:                     u.LastActiveAt,
+		CreatedAt:                        u.CreatedAt,
+		UpdatedAt:                        u.UpdatedAt,
+		BalanceNotifyEnabled:             u.BalanceNotifyEnabled,
+		BalanceNotifyThresholdType:       u.BalanceNotifyThresholdType,
+		BalanceNotifyThreshold:           u.BalanceNotifyThreshold,
+		BalanceNotifyExtraEmails:         NotifyEmailEntriesFromService(u.BalanceNotifyExtraEmails),
+		WebhookBalanceNotifyEnabled:      u.WebhookBalanceNotifyEnabled,
+		WebhookBalanceNotifyURL:          u.WebhookBalanceNotifyURL,
 		WebhookBalanceNotifyThreshold:    u.WebhookBalanceNotifyThreshold,
 		WebhookSiteMessageNotifyEnabled:  u.WebhookSiteMessageNotifyEnabled,
 		WebhookAnnouncementNotifyEnabled: u.WebhookAnnouncementNotifyEnabled,
-		TotalRecharged:                     u.TotalRecharged,
-		InvoiceEnabled:                     u.InvoiceEnabled,
-		RPMLimit:                           u.RPMLimit,
-		DeletedAt:                          u.DeletedAt,
+		TotalRecharged:                   u.TotalRecharged,
+		RPMLimit:                         u.RPMLimit,
+		InvoiceEnabled:                   u.InvoiceEnabled,
+		DeletedAt:                        u.DeletedAt,
 	}
 }
 
@@ -84,34 +85,40 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 	if k == nil {
 		return nil
 	}
+	allowedModels := k.AllowedModels
+	if allowedModels == nil {
+		allowedModels = []string{}
+	}
 	out := &APIKey{
-		ID:            k.ID,
-		UserID:        k.UserID,
-		Key:           k.Key,
-		Name:          k.Name,
-		GroupID:       k.GroupID,
-		FallbackKeyID: k.FallbackKeyID,
-		Status:        k.Status,
-		AllowedModels: apiKeyAllowedModelsForResponse(k.AllowedModels),
-		IPWhitelist:   k.IPWhitelist,
-		IPBlacklist:   k.IPBlacklist,
-		LastUsedAt:    k.LastUsedAt,
-		Quota:         k.Quota,
-		QuotaUsed:     k.QuotaUsed,
-		ExpiresAt:     k.ExpiresAt,
-		CreatedAt:     k.CreatedAt,
-		UpdatedAt:     k.UpdatedAt,
-		RateLimit5h:   k.RateLimit5h,
-		RateLimit1d:   k.RateLimit1d,
-		RateLimit7d:   k.RateLimit7d,
-		Usage5h:       k.EffectiveUsage5h(),
-		Usage1d:       k.EffectiveUsage1d(),
-		Usage7d:       k.EffectiveUsage7d(),
-		Window5hStart: k.Window5hStart,
-		Window1dStart: k.Window1dStart,
-		Window7dStart: k.Window7dStart,
-		User:          UserFromServiceShallow(k.User),
-		Group:         GroupFromServiceShallow(k.Group),
+		ID:                 k.ID,
+		UserID:             k.UserID,
+		Key:                k.Key,
+		Name:               k.Name,
+		GroupID:            k.GroupID,
+		FallbackKeyID:      k.FallbackKeyID,
+		Status:             k.Status,
+		AllowedModels:      allowedModels,
+		IPWhitelist:        k.IPWhitelist,
+		IPBlacklist:        k.IPBlacklist,
+		LastUsedAt:         k.LastUsedAt,
+		LastUsedIP:         k.LastUsedIP,
+		Quota:              k.Quota,
+		QuotaUsed:          k.QuotaUsed,
+		ExpiresAt:          k.ExpiresAt,
+		CreatedAt:          k.CreatedAt,
+		UpdatedAt:          k.UpdatedAt,
+		CurrentConcurrency: k.CurrentConcurrency,
+		RateLimit5h:        k.RateLimit5h,
+		RateLimit1d:        k.RateLimit1d,
+		RateLimit7d:        k.RateLimit7d,
+		Usage5h:            k.EffectiveUsage5h(),
+		Usage1d:            k.EffectiveUsage1d(),
+		Usage7d:            k.EffectiveUsage7d(),
+		Window5hStart:      k.Window5hStart,
+		Window1dStart:      k.Window1dStart,
+		Window7dStart:      k.Window7dStart,
+		User:               UserFromServiceShallow(k.User),
+		Group:              GroupFromServiceShallow(k.Group),
 	}
 	if k.Window5hStart != nil && !service.IsWindowExpired(k.Window5hStart, service.RateLimitWindow5h) {
 		t := k.Window5hStart.Add(service.RateLimitWindow5h)
@@ -126,14 +133,6 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		out.Reset7dAt = &t
 	}
 	return out
-}
-
-func apiKeyAllowedModelsForResponse(models []string) []string {
-	normalized := service.NormalizeAPIKeyAllowedModels(models)
-	if normalized == nil {
-		return []string{}
-	}
-	return normalized
 }
 
 func GroupFromServiceShallow(g *service.Group) *Group {
@@ -164,6 +163,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		MCPXMLInject:                g.MCPXMLInject,
 		DefaultMappedModel:          g.DefaultMappedModel,
 		MessagesDispatchModelConfig: g.MessagesDispatchModelConfig,
+		ModelsListConfig:            g.ModelsListConfig,
 		SupportedModelScopes:        g.SupportedModelScopes,
 		AccountCount:                g.AccountCount,
 		ActiveAccountCount:          g.ActiveAccountCount,
@@ -194,20 +194,28 @@ func groupFromServiceBase(g *service.Group) Group {
 		WeeklyLimitUSD:                  g.WeeklyLimitUSD,
 		MonthlyLimitUSD:                 g.MonthlyLimitUSD,
 		AllowImageGeneration:            g.AllowImageGeneration,
+		AllowBatchImageGeneration:       g.AllowBatchImageGeneration,
 		ImageRateIndependent:            g.ImageRateIndependent,
 		ImageRateMultiplier:             g.ImageRateMultiplier,
+		BatchImageDiscountMultiplier:    g.BatchImageDiscountMultiplier,
+		BatchImageHoldMultiplier:        g.BatchImageHoldMultiplier,
+		VideoRateIndependent:            g.VideoRateIndependent,
+		VideoRateMultiplier:             g.VideoRateMultiplier,
+		PeakRateEnabled:                 g.PeakRateEnabled,
+		PeakStart:                       g.PeakStart,
+		PeakEnd:                         g.PeakEnd,
+		PeakRateMultiplier:              g.PeakRateMultiplier,
 		ImagePrice1K:                    g.ImagePrice1K,
 		ImagePrice2K:                    g.ImagePrice2K,
 		ImagePrice4K:                    g.ImagePrice4K,
-		VideoRateIndependent:            g.VideoRateIndependent,
-		VideoRateMultiplier:             g.VideoRateMultiplier,
 		VideoPrice480P:                  g.VideoPrice480P,
 		VideoPrice720P:                  g.VideoPrice720P,
 		VideoPrice1080P:                 g.VideoPrice1080P,
+		WebSearchPricePerCall:           g.WebSearchPricePerCall,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
-		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
 		FallbackGroupIDOnExhausted:      g.FallbackGroupIDOnExhausted,
+		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
 		AllowMessagesDispatch:           g.AllowMessagesDispatch,
 		RequireOAuthOnly:                g.RequireOAuthOnly,
 		RequirePrivacySet:               g.RequirePrivacySet,
@@ -233,6 +241,8 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		CredentialsStatus:       credsStatus,
 		Extra:                   a.Extra,
 		ProxyID:                 a.ProxyID,
+		ProxyFallbackOriginID:   a.ProxyFallbackOriginID,
+		ProxyFallbackOriginName: a.ProxyFallbackOriginName,
 		Concurrency:             a.Concurrency,
 		LoadFactor:              a.LoadFactor,
 		Priority:                a.Priority,
@@ -254,6 +264,8 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		SessionWindowEnd:        a.SessionWindowEnd,
 		SessionWindowStatus:     a.SessionWindowStatus,
 		GroupIDs:                a.GroupIDs,
+		ParentAccountID:         a.ParentAccountID,
+		QuotaDimension:          a.QuotaDimension,
 	}
 
 	// 提取 5h 窗口费用控制和会话数量控制配置（仅 Anthropic OAuth/SetupToken 账号有效）
@@ -434,15 +446,19 @@ func ProxyFromService(p *service.Proxy) *Proxy {
 		return nil
 	}
 	return &Proxy{
-		ID:        p.ID,
-		Name:      p.Name,
-		Protocol:  p.Protocol,
-		Host:      p.Host,
-		Port:      p.Port,
-		Username:  p.Username,
-		Status:    p.Status,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
+		ID:             p.ID,
+		Name:           p.Name,
+		Protocol:       p.Protocol,
+		Host:           p.Host,
+		Port:           p.Port,
+		Username:       p.Username,
+		Status:         p.Status,
+		CreatedAt:      p.CreatedAt,
+		UpdatedAt:      p.UpdatedAt,
+		ExpiresAt:      p.ExpiresAt,
+		FallbackMode:   p.FallbackMode,
+		BackupProxyID:  p.BackupProxyID,
+		ExpiryWarnDays: p.ExpiryWarnDays,
 	}
 }
 
@@ -557,15 +573,19 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 		UsedBy:       rc.UsedBy,
 		UsedAt:       rc.UsedAt,
 		CreatedAt:    rc.CreatedAt,
+		ExpiresAt:    rc.ExpiresAt,
 		GroupID:      rc.GroupID,
 		ValidityDays: rc.ValidityDays,
 		User:         UserFromServiceShallow(rc.User),
 		Group:        GroupFromServiceShallow(rc.Group),
 	}
+	if rc.IsExpired() {
+		out.Status = service.StatusExpired
+	}
 
-	// Include notes for adjustment and balance-payment history items so users can
-	// see why their balance changed.
-	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency" || rc.Type == "balance_payment" || rc.Type == "promo_balance") && rc.Notes != "" {
+	// For admin_balance/admin_concurrency types, include notes so users can see
+	// why they were charged or credited by admin
+	if (rc.Type == "admin_balance" || rc.Type == "admin_concurrency") && rc.Notes != "" {
 		out.Notes = &rc.Notes
 	}
 
@@ -585,14 +605,14 @@ func AccountSummaryFromService(a *service.Account) *AccountSummary {
 }
 
 func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
-	// 普通用户 DTO：严禁包含管理员字段（例如 account_rate_multiplier、ip_address、account）。
+	// 普通用户 DTO：严禁包含管理员字段（例如 account_rate_multiplier、account）。
+	// upstream_model / model_mapping_chain 仅在分组开启 expose_upstream_model_to_user 时返回。
 	requestType := l.EffectiveRequestType()
 	stream, openAIWSMode := service.ApplyLegacyRequestFields(requestType, l.Stream, l.OpenAIWSMode)
 	requestedModel := l.RequestedModel
 	if requestedModel == "" {
 		requestedModel = l.Model
 	}
-	// 仅当分组开启 expose_upstream_model_to_user 时才向用户暴露上游模型与映射链。
 	var upstreamModel *string
 	var modelMappingChain *string
 	if l.Group != nil && l.Group.ExposeUpstreamModelToUser {
@@ -600,58 +620,68 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		modelMappingChain = l.ModelMappingChain
 	}
 	return UsageLog{
-		ID:                    l.ID,
-		UserID:                l.UserID,
-		APIKeyID:              l.APIKeyID,
-		AccountID:             l.AccountID,
-		RequestID:             l.RequestID,
-		Model:                 requestedModel,
-		ServiceTier:           l.ServiceTier,
-		ReasoningEffort:       l.ReasoningEffort,
-		InboundEndpoint:       l.InboundEndpoint,
-		UpstreamEndpoint:      l.UpstreamEndpoint,
-		GroupID:               l.GroupID,
-		SubscriptionID:        l.SubscriptionID,
-		InputTokens:           l.InputTokens,
-		OutputTokens:          l.OutputTokens,
-		CacheCreationTokens:   l.CacheCreationTokens,
-		CacheReadTokens:       l.CacheReadTokens,
-		CacheCreation5mTokens: l.CacheCreation5mTokens,
-		CacheCreation1hTokens: l.CacheCreation1hTokens,
-		InputCost:             l.InputCost,
-		OutputCost:            l.OutputCost,
-		CacheCreationCost:     l.CacheCreationCost,
-		CacheReadCost:         l.CacheReadCost,
-		TotalCost:             l.TotalCost,
-		ActualCost:            l.ActualCost,
-		RateMultiplier:        l.RateMultiplier,
-		BillingType:           l.BillingType,
-		RequestType:           requestType.String(),
-		Stream:                stream,
-		OpenAIWSMode:          openAIWSMode,
-		DurationMs:            l.DurationMs,
-		FirstTokenMs:          l.FirstTokenMs,
-		ImageCount:            l.ImageCount,
-		ImageSize:             l.ImageSize,
-		MediaType:             l.MediaType,
-		VideoCount:            l.VideoCount,
-		VideoResolution:       l.VideoResolution,
-		VideoDurationSeconds:  l.VideoDurationSeconds,
-		UserAgent:             l.UserAgent,
-		CacheTTLOverridden:    l.CacheTTLOverridden,
-		BillingMode:           l.BillingMode,
-		UpstreamModel:         upstreamModel,
-		ModelMappingChain:     modelMappingChain,
-		CreatedAt:             l.CreatedAt,
-		User:                  UserFromServiceShallow(l.User),
-		APIKey:                APIKeyFromService(l.APIKey),
-		Group:                 GroupFromServiceShallow(l.Group),
-		Subscription:          UserSubscriptionFromService(l.Subscription),
+		ID:                        l.ID,
+		UserID:                    l.UserID,
+		APIKeyID:                  l.APIKeyID,
+		AccountID:                 l.AccountID,
+		RequestID:                 l.RequestID,
+		Model:                     requestedModel,
+		ServiceTier:               l.ServiceTier,
+		ReasoningEffort:           l.ReasoningEffort,
+		InboundEndpoint:           l.InboundEndpoint,
+		UpstreamEndpoint:          l.UpstreamEndpoint,
+		GroupID:                   l.GroupID,
+		SubscriptionID:            l.SubscriptionID,
+		InputTokens:               l.InputTokens,
+		OutputTokens:              l.OutputTokens,
+		CacheCreationTokens:       l.CacheCreationTokens,
+		CacheReadTokens:           l.CacheReadTokens,
+		CacheCreation5mTokens:     l.CacheCreation5mTokens,
+		CacheCreation1hTokens:     l.CacheCreation1hTokens,
+		InputCost:                 l.InputCost,
+		OutputCost:                l.OutputCost,
+		CacheCreationCost:         l.CacheCreationCost,
+		CacheReadCost:             l.CacheReadCost,
+		TotalCost:                 l.TotalCost,
+		ActualCost:                l.ActualCost,
+		RateMultiplier:            l.RateMultiplier,
+		LongContextBillingApplied: l.LongContextBillingApplied,
+		BillingType:               l.BillingType,
+		RequestType:               requestType.String(),
+		Stream:                    stream,
+		OpenAIWSMode:              openAIWSMode,
+		DurationMs:                l.DurationMs,
+		FirstTokenMs:              l.FirstTokenMs,
+		ImageCount:                l.ImageCount,
+		ImageSize:                 l.ImageSize,
+		ImageInputSize:            l.ImageInputSize,
+		ImageOutputSize:           l.ImageOutputSize,
+		ImageInputTokens:          l.ImageInputTokens,
+		ImageInputCost:            l.ImageInputCost,
+		ImageOutputTokens:         l.ImageOutputTokens,
+		ImageOutputCost:           l.ImageOutputCost,
+		ImageSizeSource:           l.ImageSizeSource,
+		ImageSizeBreakdown:        l.ImageSizeBreakdown,
+		MediaType:                 l.MediaType,
+		VideoCount:                l.VideoCount,
+		VideoResolution:           l.VideoResolution,
+		VideoDurationSeconds:      l.VideoDurationSeconds,
+		UserAgent:                 l.UserAgent,
+		IPAddress:                 l.IPAddress,
+		CacheTTLOverridden:        l.CacheTTLOverridden,
+		BillingMode:               l.BillingMode,
+		UpstreamModel:             upstreamModel,
+		ModelMappingChain:         modelMappingChain,
+		CreatedAt:                 l.CreatedAt,
+		User:                      UserFromServiceShallow(l.User),
+		APIKey:                    APIKeyFromService(l.APIKey),
+		Group:                     GroupFromServiceShallow(l.Group),
+		Subscription:              UserSubscriptionFromService(l.Subscription),
 	}
 }
 
 // UsageLogFromService converts a service UsageLog to DTO for regular users.
-// It excludes Account details and IP address - users should not see these.
+// It excludes admin-only account/upstream internals while keeping user billing and request metadata.
 func UsageLogFromService(l *service.UsageLog) *UsageLog {
 	if l == nil {
 		return nil
@@ -666,8 +696,10 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	if l == nil {
 		return nil
 	}
+	usageLog := usageLogFromServiceUser(l)
+	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
 	return &AdminUsageLog{
-		UsageLog:              usageLogFromServiceUser(l),
+		UsageLog:              usageLog,
 		UpstreamModel:         l.UpstreamModel,
 		ChannelID:             l.ChannelID,
 		ModelMappingChain:     l.ModelMappingChain,
@@ -759,26 +791,26 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		scopeConfig = map[string]any{}
 	}
 	return UserSubscription{
-		ID:                 sub.ID,
-		UserID:             sub.UserID,
-		GroupID:            sub.GroupID,
-		PlanID:             sub.PlanID,
-		PlanName:           sub.PlanName,
-		PlanProductName:    sub.PlanProductName,
-		StartsAt:           sub.StartsAt,
-		ExpiresAt:          sub.ExpiresAt,
-		Status:             sub.Status,
-		IsUsable:           sub.IsUsable(),
-		DailyWindowStart:   sub.DailyWindowStart,
-		WeeklyWindowStart:  sub.WeeklyWindowStart,
-		MonthlyWindowStart: sub.MonthlyWindowStart,
-		ExhaustedAt:        sub.ExhaustedAt,
-		QuotaLimitUSD:      sub.QuotaLimitUSD,
-		QuotaUsedUSD:       sub.QuotaUsedUSD,
-		QuotaRemainingUSD:  sub.QuotaRemainingUSD(),
-		DailyLimitUSD:      sub.DailyLimitUSD,
-		DailyUsageUSD:      sub.DailyUsageUSD,
-		DailyResetAt:       sub.DailyResetTime(),
+		ID:                        sub.ID,
+		UserID:                    sub.UserID,
+		GroupID:                   sub.GroupID,
+		PlanID:                    sub.PlanID,
+		PlanName:                  sub.PlanName,
+		PlanProductName:           sub.PlanProductName,
+		StartsAt:                  sub.StartsAt,
+		ExpiresAt:                 sub.ExpiresAt,
+		Status:                    sub.Status,
+		IsUsable:                  sub.IsUsable(),
+		DailyWindowStart:          sub.DailyWindowStart,
+		WeeklyWindowStart:         sub.WeeklyWindowStart,
+		MonthlyWindowStart:        sub.MonthlyWindowStart,
+		ExhaustedAt:               sub.ExhaustedAt,
+		QuotaLimitUSD:             sub.QuotaLimitUSD,
+		QuotaUsedUSD:              sub.QuotaUsedUSD,
+		QuotaRemainingUSD:         sub.QuotaRemainingUSD(),
+		DailyLimitUSD:             sub.DailyLimitUSD,
+		DailyUsageUSD:             sub.DailyUsageUSD,
+		DailyResetAt:              sub.DailyResetTime(),
 		WeeklyLimitUSD:            sub.WeeklyLimitUSD,
 		WeeklyUsageUSD:            sub.WeeklyUsageUSD,
 		WeeklyResetAt:             sub.WeeklyResetTime(),

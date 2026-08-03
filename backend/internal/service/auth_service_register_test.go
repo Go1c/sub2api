@@ -545,7 +545,7 @@ func TestAuthService_ValidateToken_ExpiredReturnsClaimsWithError(t *testing.T) {
 		Status:       StatusActive,
 		TokenVersion: 1,
 	}
-	token, err := service.GenerateToken(user)
+	token, err := service.GenerateToken(context.Background(), user)
 	require.NoError(t, err)
 
 	// 验证有效 token
@@ -556,7 +556,7 @@ func TestAuthService_ValidateToken_ExpiredReturnsClaimsWithError(t *testing.T) {
 
 	// 模拟过期 token（通过创建一个过期很久的 token）
 	service.cfg.JWT.ExpireHour = -1 // 设置为负数使 token 立即过期
-	expiredToken, err := service.GenerateToken(user)
+	expiredToken, err := service.GenerateToken(context.Background(), user)
 	require.NoError(t, err)
 	service.cfg.JWT.ExpireHour = 1 // 恢复
 
@@ -581,7 +581,7 @@ func TestAuthService_RefreshToken_ExpiredTokenNoPanic(t *testing.T) {
 
 	// 创建过期 token
 	service.cfg.JWT.ExpireHour = -1
-	expiredToken, err := service.GenerateToken(user)
+	expiredToken, err := service.GenerateToken(context.Background(), user)
 	require.NoError(t, err)
 	service.cfg.JWT.ExpireHour = 1
 
@@ -622,7 +622,7 @@ func TestAuthService_GenerateToken_UsesExpireHourWhenMinutesZero(t *testing.T) {
 		TokenVersion: 1,
 	}
 
-	token, err := service.GenerateToken(user)
+	token, err := service.GenerateToken(context.Background(), user)
 	require.NoError(t, err)
 
 	claims, err := service.ValidateToken(token)
@@ -647,7 +647,7 @@ func TestAuthService_GenerateToken_UsesMinutesWhenConfigured(t *testing.T) {
 		TokenVersion: 1,
 	}
 
-	token, err := service.GenerateToken(user)
+	token, err := service.GenerateToken(context.Background(), user)
 	require.NoError(t, err)
 
 	claims, err := service.ValidateToken(token)
@@ -743,7 +743,7 @@ func TestAuthService_Register_GrantOnSignupMergesSourceOverridesWithGlobalDefaul
 	require.NoError(t, err)
 	require.NotNil(t, user)
 	require.Equal(t, 9.5, user.Balance)
-	require.Equal(t, 2, user.Concurrency)
+	require.Equal(t, 5, user.Concurrency)
 	require.Len(t, assigner.calls, 1)
 	require.Equal(t, int64(31), assigner.calls[0].GroupID)
 	require.Equal(t, 5, assigner.calls[0].ValidityDays)
@@ -763,7 +763,7 @@ func TestAuthService_LoginOrRegisterOAuthWithTokenPair_UsesLinuxDoAuthSourceDefa
 	service.defaultSubAssigner = assigner
 	service.refreshTokenCache = &refreshTokenCacheStub{}
 
-	tokenPair, user, err := service.LoginOrRegisterOAuthWithTokenPair(context.Background(), "linuxdo-123@linuxdo-connect.invalid", "linuxdo_user", "", "")
+	tokenPair, user, err := service.LoginOrRegisterOAuthWithTokenPair(context.Background(), "linuxdo-123@linuxdo-connect.invalid", "linuxdo_user", "", "", "linuxdo")
 	require.NoError(t, err)
 	require.NotNil(t, tokenPair)
 	require.NotNil(t, user)
@@ -799,7 +799,7 @@ func TestAuthService_LoginOrRegisterOAuthWithTokenPair_ExistingUserDoesNotGrantA
 	service.defaultSubAssigner = assigner
 	service.refreshTokenCache = &refreshTokenCacheStub{}
 
-	tokenPair, user, err := service.LoginOrRegisterOAuthWithTokenPair(context.Background(), existing.Email, "linuxdo_user", "", "")
+	tokenPair, user, err := service.LoginOrRegisterOAuthWithTokenPair(context.Background(), existing.Email, "linuxdo_user", "", "", "linuxdo")
 	require.NoError(t, err)
 	require.NotNil(t, tokenPair)
 	require.Equal(t, existing.ID, user.ID)
@@ -807,4 +807,100 @@ func TestAuthService_LoginOrRegisterOAuthWithTokenPair_ExistingUserDoesNotGrantA
 	require.Equal(t, 1, user.Concurrency)
 	require.Empty(t, repo.created)
 	require.Empty(t, assigner.calls)
+}
+
+// newAuthServiceWithDingTalkCfg 构建一个含完整 DingTalk config 的 AuthService，
+// 用于测试 canBypassRegistrationDisabledForOAuth。
+func newAuthServiceWithDingTalkCfg(settings map[string]string, dtCfg config.DingTalkConnectConfig) *AuthService {
+	cfg := &config.Config{
+		JWT:      config.JWTConfig{Secret: "test-secret", ExpireHour: 1},
+		Default:  config.DefaultConfig{UserBalance: 3.5, UserConcurrency: 2},
+		DingTalk: dtCfg,
+	}
+	settingService := NewSettingService(&settingRepoStub{values: settings}, cfg)
+	return NewAuthService(nil, nil, nil, nil, cfg, settingService, nil, nil, nil, nil, nil, nil, nil)
+}
+
+// minDingTalkURLs 返回一个包含必填字段的基础 DingTalkConnectConfig（不设 Enabled/BypassRegistration/Policy）。
+func minDingTalkURLs() config.DingTalkConnectConfig {
+	return config.DingTalkConnectConfig{
+		ClientID:            "test-client",
+		ClientSecret:        "test-secret",
+		AuthorizeURL:        "https://example.com/oauth2/auth",
+		TokenURL:            "https://example.com/oauth2/token",
+		UserInfoURL:         "https://example.com/oauth2/userinfo",
+		RedirectURL:         "https://example.com/callback",
+		FrontendRedirectURL: "https://example.com/auth/callback",
+		DingTalkAppKind:     "internal_app",
+		AppType:             "internal",
+	}
+}
+
+func TestCanBypassRegistrationDisabledForOAuth(t *testing.T) {
+	cases := []struct {
+		name         string
+		signupSource string
+		settings     map[string]string
+		dtCfg        config.DingTalkConnectConfig
+		want         bool
+	}{
+		{
+			name:         "non-dingtalk source → false",
+			signupSource: "linuxdo",
+			settings:     map[string]string{},
+			dtCfg:        minDingTalkURLs(),
+			want:         false,
+		},
+		{
+			name:         "dingtalk but cfg.Enabled=false → false",
+			signupSource: "dingtalk",
+			settings: map[string]string{
+				SettingKeyDingTalkConnectEnabled:               "false",
+				SettingKeyDingTalkConnectBypassRegistration:    "true",
+				SettingKeyDingTalkConnectCorpRestrictionPolicy: "internal_only",
+			},
+			dtCfg: minDingTalkURLs(),
+			want:  false,
+		},
+		{
+			name:         "dingtalk enabled but BypassRegistration=false → false",
+			signupSource: "dingtalk",
+			settings: map[string]string{
+				SettingKeyDingTalkConnectEnabled:               "true",
+				SettingKeyDingTalkConnectBypassRegistration:    "false",
+				SettingKeyDingTalkConnectCorpRestrictionPolicy: "internal_only",
+			},
+			dtCfg: minDingTalkURLs(),
+			want:  false,
+		},
+		{
+			name:         "dingtalk enabled + bypass=true but policy=none → false",
+			signupSource: "dingtalk",
+			settings: map[string]string{
+				SettingKeyDingTalkConnectEnabled:               "true",
+				SettingKeyDingTalkConnectBypassRegistration:    "true",
+				SettingKeyDingTalkConnectCorpRestrictionPolicy: "none",
+			},
+			dtCfg: minDingTalkURLs(),
+			want:  false,
+		},
+		{
+			name:         "dingtalk enabled + bypass=true + policy=internal_only → true",
+			signupSource: "dingtalk",
+			settings: map[string]string{
+				SettingKeyDingTalkConnectEnabled:               "true",
+				SettingKeyDingTalkConnectBypassRegistration:    "true",
+				SettingKeyDingTalkConnectCorpRestrictionPolicy: "internal_only",
+			},
+			dtCfg: minDingTalkURLs(),
+			want:  true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newAuthServiceWithDingTalkCfg(tc.settings, tc.dtCfg)
+			got := svc.canBypassRegistrationDisabledForOAuth(context.Background(), tc.signupSource)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }

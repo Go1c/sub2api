@@ -49,6 +49,12 @@ export interface MethodLimit {
   single_max: number
   fee_rate: number
   available: boolean
+  /** Optional operator-facing label (e.g. EasyPay custom method) */
+  display_name?: string
+  /** ISO 4217 currency for this payment method when instances agree */
+  currency?: string
+  /** Effective credit multiplier when all instances for this method agree */
+  balance_recharge_multiplier?: number
 }
 
 /** Response from /payment/limits API */
@@ -67,10 +73,14 @@ export interface CheckoutInfoResponse {
   balance_disabled: boolean
   subscription_balance_payment_enabled: boolean
   balance_recharge_multiplier: number
+  /** When > 0 and method currency is CNY, subscription gateway charge uses price * rate */
+  subscription_usd_to_cny_rate?: number
   recharge_fee_rate: number
   help_text: string
   help_image_url: string
   stripe_publishable_key: string
+  /** When true, mobile Alipay always uses QR instead of mobile redirect */
+  alipay_force_qrcode?: boolean
 }
 
 // ==================== Orders ====================
@@ -81,6 +91,8 @@ export interface PaymentOrder {
   amount: number
   pay_amount: number
   fee_rate: number
+  /** ISO 4217 payment currency (e.g. CNY, USD); omitted for legacy rows */
+  currency?: string
   payment_type: string
   out_trade_no: string
   status: OrderStatus
@@ -123,6 +135,8 @@ export interface SubscriptionPlan {
   description: string
   price: number
   original_price?: number
+  /** Display-only ISO 4217 currency label (e.g. "NZD"); empty means no label */
+  currency?: string
   validity_days: number
   validity_unit: string
   /** Stored as JSON string in backend; API layer should parse before use */
@@ -200,6 +214,10 @@ export interface CreateOrderResult {
   pay_url?: string
   qr_code?: string
   client_secret?: string
+  intent_id?: string
+  currency?: string
+  country_code?: string
+  payment_env?: string
   pay_amount: number
   fee_rate: number
   expires_at: string

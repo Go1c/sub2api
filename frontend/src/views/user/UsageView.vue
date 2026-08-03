@@ -90,8 +90,48 @@
         <div class="card">
           <div class="px-6 py-4">
           <div class="flex flex-wrap items-end gap-4">
-            <!-- API Key Filter -->
-            <div class="min-w-[180px]">
+            <!-- Error tab filters -->
+            <template v-if="activeTab === 'errors'">
+              <div class="min-w-[180px]">
+                <label class="input-label">{{ t('usage.errors.keyName') }}</label>
+                <Select
+                  v-model="errorFilter.api_key_id"
+                  :options="errorKeyOptions"
+                  @change="applyErrorFilters"
+                />
+              </div>
+              <div class="min-w-[180px]">
+                <label class="input-label">{{ t('usage.errors.model') }}</label>
+                <Select
+                  v-model="errorFilter.model"
+                  :options="errorModelOptions"
+                  searchable
+                  creatable
+                  clearable
+                  :placeholder="t('usage.errors.modelPlaceholder')"
+                  @change="applyErrorFilters"
+                />
+              </div>
+              <div class="min-w-[160px]">
+                <label class="input-label">{{ t('usage.errors.category') }}</label>
+                <Select
+                  v-model="errorFilter.category"
+                  :options="errorCategoryOptions"
+                  @change="applyErrorFilters"
+                />
+              </div>
+              <div class="min-w-[140px]">
+                <label class="input-label">{{ t('usage.errors.status') }}</label>
+                <Select
+                  v-model="errorFilter.status_code"
+                  :options="errorStatusOptions"
+                  @change="applyErrorFilters"
+                />
+              </div>
+            </template>
+
+            <!-- Usage tab API key filter -->
+            <div v-else class="min-w-[180px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select
                 v-model="filters.api_key_id"
@@ -101,7 +141,7 @@
               />
             </div>
 
-            <!-- Date Range Filter -->
+            <!-- Date Range Filter (shared by usage + errors) -->
             <div>
               <label class="input-label">{{ t('usage.timeRange') }}</label>
               <DateRangePicker
@@ -113,13 +153,53 @@
 
             <!-- Actions -->
             <div class="ml-auto flex items-center gap-3">
-              <button @click="applyFilters" :disabled="loading" class="btn btn-secondary">
+              <button
+                @click="refreshData"
+                :disabled="activeTab === 'errors' ? errorLoading : loading"
+                class="btn btn-secondary"
+              >
                 {{ t('common.refresh') }}
               </button>
               <button @click="resetFilters" class="btn btn-secondary">
                 {{ t('common.reset') }}
               </button>
-              <button @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
+              <div v-if="activeTab === 'errors'" class="relative" ref="errorColumnDropdownRef">
+                <button
+                  type="button"
+                  @click="showErrorColumnDropdown = !showErrorColumnDropdown"
+                  class="btn btn-secondary px-2 md:px-3"
+                  :title="t('admin.users.columnSettings')"
+                >
+                  <Icon name="grid" size="sm" class="md:mr-1.5" />
+                  <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
+                </button>
+                <div
+                  v-if="showErrorColumnDropdown"
+                  class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
+                >
+                  <button
+                    v-for="col in errToggleableColumns"
+                    :key="col.key"
+                    type="button"
+                    @click="toggleErrColumn(col.key)"
+                    class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                  >
+                    <span>{{ col.label }}</span>
+                    <Icon
+                      v-if="isErrColumnVisible(col.key)"
+                      name="check"
+                      size="sm"
+                      class="text-primary-500"
+                    />
+                  </button>
+                </div>
+              </div>
+              <button
+                v-if="activeTab !== 'errors'"
+                @click="exportToCSV"
+                :disabled="exporting"
+                class="btn btn-primary"
+              >
                 <svg
                   v-if="exporting"
                   class="-ml-1 mr-2 h-4 w-4 animate-spin"
@@ -149,7 +229,48 @@
       </template>
 
       <template #table>
+        <div
+          v-if="errorViewEnabled"
+          class="mb-4 flex gap-2 border-b border-gray-200 dark:border-dark-700"
+        >
+          <button
+            type="button"
+            class="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+            :class="activeTab === 'usage'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            @click="switchToUsage"
+          >
+            {{ t('usage.tabs.usage') }}
+          </button>
+          <button
+            type="button"
+            class="-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+            :class="activeTab === 'errors'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            @click="switchToErrors"
+          >
+            {{ t('usage.tabs.errors') }}
+          </button>
+        </div>
+
+        <UserErrorRequestsTable
+          v-if="errorViewEnabled && activeTab === 'errors'"
+          :rows="errorRows"
+          :total="errorTotal"
+          :loading="errorLoading"
+          :page="errorPage"
+          :page-size="errorPageSize"
+          :visible-column-keys="errVisibleColumnKeys"
+          @sort="onErrorSort"
+          @update:page="onErrorPage"
+          @update:pageSize="onErrorPageSize"
+          @ipGeoBatchFailed="handleIpGeoBatchFailed"
+        />
+
         <DataTable
+          v-else
           :columns="columns"
           :data="usageLogs"
           :loading="loading"
@@ -339,20 +460,31 @@
             </div>
           </template>
 
-          <template #cell-first_token="{ row }">
-            <span
-              v-if="row.first_token_ms != null"
-              class="text-sm text-gray-600 dark:text-gray-400"
-            >
-              {{ formatDuration(row.first_token_ms) }}
-            </span>
-            <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
-          </template>
-
-          <template #cell-duration="{ row }">
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{
-              formatDuration(row.duration_ms)
-            }}</span>
+          <!-- 合并首字/总耗时的健康度列：左侧色条上端随首字档、下端随总耗时档 -->
+          <template #cell-latency="{ row }">
+            <div class="flex items-stretch gap-2">
+              <span
+                class="w-1 shrink-0 rounded-full"
+                :class="row.first_token_ms != null
+                  ? ['bg-gradient-to-b from-40% to-60%', LATENCY_BAR_FROM_CLASSES[firstTokenSeverity(row.first_token_ms)], LATENCY_BAR_TO_CLASSES[durationSeverity(row.duration_ms ?? 0)]]
+                  : LATENCY_BAR_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
+                aria-hidden="true"
+              ></span>
+              <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
+                <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyFirstToken') }}</span>
+                <span
+                  v-if="row.first_token_ms != null"
+                  class="font-medium tabular-nums"
+                  :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(row.first_token_ms)]"
+                >{{ formatDuration(row.first_token_ms) }}</span>
+                <span v-else class="text-gray-400 dark:text-gray-500">-</span>
+                <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
+                <span
+                  class="font-medium tabular-nums"
+                  :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
+                >{{ formatDuration(row.duration_ms) }}</span>
+              </div>
+            </div>
           </template>
 
           <template #cell-created_at="{ value }">
@@ -374,7 +506,7 @@
 
       <template #pagination>
         <Pagination
-          v-if="pagination.total > 0"
+          v-if="activeTab === 'usage' && pagination.total > 0"
           :page="pagination.page"
           :total="pagination.total"
           :page-size="pagination.page_size"
@@ -556,7 +688,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { usageAPI, keysAPI } from '@/api'
@@ -566,9 +698,11 @@ import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Icon from '@/components/icons/Icon.vue'
-import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse } from '@/types'
+import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
+import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse, UserErrorRequest } from '@/types'
 import type { Column } from '@/components/common/types'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -577,11 +711,149 @@ import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import { BILLING_MODE_TOKEN, getBillingModeLabel, getBillingModeBadgeClass, isImageUsage } from '@/utils/billingMode'
+import {
+  LATENCY_BAR_CLASSES,
+  LATENCY_BAR_FROM_CLASSES,
+  LATENCY_BAR_TO_CLASSES,
+  LATENCY_TEXT_CLASSES,
+  durationSeverity,
+  firstTokenSeverity,
+} from '@/utils/latencyHealth'
+import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 
 let abortController: AbortController | null = null
+let errorAbortController: AbortController | null = null
+
+// Usage / errors detail tabs (errors gated by public setting)
+type DetailTab = 'usage' | 'errors'
+const activeTab = ref<DetailTab>('usage')
+const errorViewEnabled = computed(
+  () => appStore.cachedPublicSettings?.allow_user_view_error_requests ?? false
+)
+
+const errorRows = ref<UserErrorRequest[]>([])
+const errorLoading = ref(false)
+const errorPage = ref(1)
+const errorPageSize = ref(20)
+const errorTotal = ref(0)
+const errorSortBy = ref('created_at')
+const errorSortOrder = ref<'asc' | 'desc'>('desc')
+const errorFilter = ref<{
+  model: string | null
+  category: string
+  api_key_id: number | null
+  status_code: number | null
+}>({
+  model: '',
+  category: '',
+  api_key_id: null,
+  status_code: null,
+})
+
+const errorCategoryCodes = [
+  'auth',
+  'rate_limit',
+  'quota',
+  'invalid_request',
+  'service_unavailable',
+  'upstream',
+  'internal',
+  'cyber',
+]
+
+const errorKeyOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('usage.errors.allKeys') },
+  ...apiKeys.value.map((key) => ({ value: key.id, label: key.name })),
+])
+
+const errorModelOptions = computed<SelectOption[]>(() => {
+  const seen = new Set<string>()
+  const opts: SelectOption[] = []
+  for (const row of errorRows.value) {
+    if (row.model && !seen.has(row.model)) {
+      seen.add(row.model)
+      opts.push({ value: row.model, label: row.model })
+    }
+  }
+  const current = (errorFilter.value.model ?? '').trim()
+  if (current && !seen.has(current)) {
+    opts.unshift({ value: current, label: current })
+  }
+  return opts
+})
+
+const errorCategoryOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('usage.errors.allCategories') },
+  ...errorCategoryCodes.map((c) => ({ value: c, label: t('usage.errors.categories.' + c) })),
+])
+
+const errorStatusOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('usage.errors.allStatuses') },
+  ...COMMON_ERROR_STATUS_CODES.map((c) => ({ value: c, label: String(c) })),
+])
+
+// 错误请求 tab 独立列设置
+const ERR_ALWAYS_VISIBLE = ['status', 'created_at']
+const ERR_DEFAULT_HIDDEN_COLUMNS = ['user_agent']
+const ERR_HIDDEN_COLUMNS_KEY = 'user-usage-error-hidden-columns'
+
+const errAllColumns = computed<Column[]>(() => [
+  { key: 'key_name', label: t('usage.errors.keyName') },
+  { key: 'model', label: t('usage.errors.model') },
+  { key: 'endpoint', label: t('usage.errors.endpoint') },
+  { key: 'client_ip', label: 'IP' },
+  { key: 'group', label: t('admin.usage.group') },
+  { key: 'type', label: t('usage.type') },
+  { key: 'platform', label: t('usage.errors.platform') },
+  { key: 'category', label: t('usage.errors.category') },
+  { key: 'status', label: t('usage.errors.status') },
+  { key: 'message', label: t('usage.errors.message') },
+  { key: 'created_at', label: t('usage.errors.time') },
+  { key: 'user_agent', label: t('usage.userAgent') },
+])
+
+const errHiddenColumns = reactive<Set<string>>(new Set())
+const errToggleableColumns = computed(() =>
+  errAllColumns.value.filter((col) => !ERR_ALWAYS_VISIBLE.includes(col.key))
+)
+const errVisibleColumnKeys = computed(() =>
+  errAllColumns.value
+    .filter((col) => ERR_ALWAYS_VISIBLE.includes(col.key) || !errHiddenColumns.has(col.key))
+    .map((col) => col.key)
+)
+const isErrColumnVisible = (key: string) => !errHiddenColumns.has(key)
+const toggleErrColumn = (key: string) => {
+  if (errHiddenColumns.has(key)) errHiddenColumns.delete(key)
+  else errHiddenColumns.add(key)
+  try {
+    localStorage.setItem(ERR_HIDDEN_COLUMNS_KEY, JSON.stringify([...errHiddenColumns]))
+  } catch (e) {
+    console.error('Failed to save error columns:', e)
+  }
+}
+const loadSavedErrColumns = () => {
+  try {
+    const saved = localStorage.getItem(ERR_HIDDEN_COLUMNS_KEY)
+    const values = saved ? (JSON.parse(saved) as string[]) : ERR_DEFAULT_HIDDEN_COLUMNS
+    values.forEach((key) => errHiddenColumns.add(key))
+  } catch {
+    ERR_DEFAULT_HIDDEN_COLUMNS.forEach((key) => errHiddenColumns.add(key))
+  }
+}
+
+const showErrorColumnDropdown = ref(false)
+const errorColumnDropdownRef = ref<HTMLElement | null>(null)
+const handleErrorColumnClickOutside = (event: MouseEvent) => {
+  if (
+    errorColumnDropdownRef.value &&
+    !errorColumnDropdownRef.value.contains(event.target as HTMLElement)
+  ) {
+    showErrorColumnDropdown.value = false
+  }
+}
 
 // Tooltip state
 const tooltipVisible = ref(false)
@@ -606,8 +878,7 @@ const columns = computed<Column[]>(() => [
   { key: 'deduction_mode', label: t('usage.deductionMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },
   { key: 'cost', label: t('usage.cost'), sortable: false },
-  { key: 'first_token', label: t('usage.firstToken'), sortable: false },
-  { key: 'duration', label: t('usage.duration'), sortable: false },
+  { key: 'latency', label: t('usage.latency'), sortable: false },
   { key: 'created_at', label: t('usage.time'), sortable: true },
   { key: 'user_agent', label: t('usage.userAgent'), sortable: false }
 ])
@@ -673,10 +944,14 @@ const sortState = reactive({
   sort_order: 'desc' as 'asc' | 'desc'
 })
 
+// 超过 1 分钟简化为 "Xm Ys"，免去人工换算（超过 1 小时再进位为 "Xh Ym"）
 const formatDuration = (ms: number | null | undefined): string => {
   if (ms == null) return '-'
-  if (ms < 1000) return `${ms.toFixed(0)}ms`
-  return `${(ms / 1000).toFixed(2)}s`
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(2)}s`
+  const totalSec = Math.round(ms / 1000)
+  if (totalSec < 3600) return `${Math.floor(totalSec / 60)}m ${totalSec % 60}s`
+  return `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`
 }
 
 const imageUnitPrice = (row: UsageLog | null): number => {
@@ -692,6 +967,7 @@ const formatUserAgent = (ua: string): string => {
 
 const getRequestTypeLabel = (log: UsageLog): string => {
   const requestType = resolveUsageRequestType(log)
+  if (requestType === 'cyber') return t('usage.cyber')
   if (requestType === 'ws_v2') return t('usage.ws')
   if (requestType === 'stream') return t('usage.stream')
   if (requestType === 'sync') return t('usage.sync')
@@ -700,6 +976,7 @@ const getRequestTypeLabel = (log: UsageLog): string => {
 
 const getRequestTypeBadgeClass = (log: UsageLog): string => {
   const requestType = resolveUsageRequestType(log)
+  if (requestType === 'cyber') return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
   if (requestType === 'ws_v2') return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200'
   if (requestType === 'stream') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
   if (requestType === 'sync') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
@@ -723,6 +1000,7 @@ const getDeductionModeBadgeClass = (billingType: number | null | undefined): str
 
 const getRequestTypeExportText = (log: UsageLog): string => {
   const requestType = resolveUsageRequestType(log)
+  if (requestType === 'cyber') return 'Cyber'
   if (requestType === 'ws_v2') return 'WS'
   if (requestType === 'stream') return 'Stream'
   if (requestType === 'sync') return 'Sync'
@@ -836,6 +1114,20 @@ const applyFilters = () => {
   pagination.page = 1
   loadUsageLogs()
   loadUsageStats()
+  // Date/API-key changes also reset the errors list when that tab is open.
+  errorPage.value = 1
+  if (activeTab.value === 'errors') {
+    void loadErrors()
+  } else {
+    errorRows.value = []
+    errorTotal.value = 0
+  }
+}
+
+const refreshData = () => {
+  loadUsageLogs()
+  loadUsageStats()
+  if (activeTab.value === 'errors') void loadErrors()
 }
 
 const resetFilters = () => {
@@ -853,8 +1145,86 @@ const resetFilters = () => {
   filters.value.start_date = startDate.value
   filters.value.end_date = endDate.value
   pagination.page = 1
+  errorFilter.value = { model: '', category: '', api_key_id: null, status_code: null }
+  errorPage.value = 1
+  errorSortBy.value = 'created_at'
+  errorSortOrder.value = 'desc'
   loadUsageLogs()
   loadUsageStats()
+  if (activeTab.value === 'errors') void loadErrors()
+}
+
+const loadErrors = async () => {
+  if (!errorViewEnabled.value) return
+  errorAbortController?.abort()
+  const current = new AbortController()
+  errorAbortController = current
+  errorLoading.value = true
+  try {
+    const resp = await usageAPI.listMyErrorRequests(
+      {
+        page: errorPage.value,
+        page_size: errorPageSize.value,
+        start_date: filters.value.start_date || startDate.value,
+        end_date: filters.value.end_date || endDate.value,
+        model: (errorFilter.value.model ?? '').trim() || undefined,
+        category: errorFilter.value.category || undefined,
+        api_key_id: errorFilter.value.api_key_id ?? undefined,
+        status_code: errorFilter.value.status_code ?? undefined,
+        sort_by: errorSortBy.value,
+        sort_order: errorSortOrder.value,
+      },
+      { signal: current.signal }
+    )
+    if (current.signal.aborted) return
+    errorRows.value = resp.items
+    errorTotal.value = resp.total
+  } catch (error) {
+    if (current.signal.aborted) return
+    const abortError = error as { name?: string; code?: string }
+    if (abortError?.name === 'AbortError' || abortError?.code === 'ERR_CANCELED') return
+    console.error('[UsageView] loadErrors failed:', error)
+    appStore.showError(t('usage.errors.failedToLoad'))
+  } finally {
+    if (errorAbortController === current) errorLoading.value = false
+  }
+}
+
+const applyErrorFilters = () => {
+  errorPage.value = 1
+  void loadErrors()
+}
+
+const onErrorSort = (sortBy: string, sortOrder: 'asc' | 'desc') => {
+  errorSortBy.value = sortBy
+  errorSortOrder.value = sortOrder
+  errorPage.value = 1
+  void loadErrors()
+}
+
+const onErrorPage = (page: number) => {
+  errorPage.value = page
+  void loadErrors()
+}
+
+const onErrorPageSize = (pageSize: number) => {
+  errorPageSize.value = pageSize
+  errorPage.value = 1
+  void loadErrors()
+}
+
+const handleIpGeoBatchFailed = () => {
+  appStore.showError(t('usage.ipGeo.batchFailed'))
+}
+
+const switchToUsage = () => {
+  activeTab.value = 'usage'
+  showErrorColumnDropdown.value = false
+}
+
+const switchToErrors = () => {
+  activeTab.value = 'errors'
+  if (errorRows.value.length === 0) void loadErrors()
 }
 
 const handlePageChange = (page: number) => {
@@ -938,7 +1308,8 @@ const exportToCSV = async () => {
       'Billed Cost',
       'Original Cost',
       'First Token (ms)',
-      'Duration (ms)'
+      'Duration (ms)',
+      'Latency'
     ]
     const rows = allLogs.map((log) =>
       [
@@ -958,7 +1329,9 @@ const exportToCSV = async () => {
         (log.actual_cost ?? 0).toFixed(8),
         (log.total_cost ?? 0).toFixed(8),
         log.first_token_ms ?? '',
-        log.duration_ms
+        log.duration_ms ?? '',
+        // Human-readable latency for spreadsheet scanning; keep raw ms columns above.
+        [log.first_token_ms != null ? formatDuration(log.first_token_ms) : '-', formatDuration(log.duration_ms)].join(' / ')
       ].map(escapeCSVValue)
     )
 
@@ -1018,8 +1391,16 @@ const hideTokenTooltip = () => {
 }
 
 onMounted(() => {
+  loadSavedErrColumns()
+  document.addEventListener('click', handleErrorColumnClickOutside)
   loadApiKeys()
   loadUsageLogs()
   loadUsageStats()
+})
+
+onUnmounted(() => {
+  abortController?.abort()
+  errorAbortController?.abort()
+  document.removeEventListener('click', handleErrorColumnClickOutside)
 })
 </script>

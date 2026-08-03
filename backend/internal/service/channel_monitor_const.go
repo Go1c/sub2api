@@ -47,17 +47,23 @@ const (
 
 	// providerOpenAIPath OpenAI Chat Completions 路径。
 	providerOpenAIPath = "/v1/chat/completions"
+	// providerGrokPath Grok OpenAI-compatible Chat Completions 路径。
+	providerGrokPath = "/v1/chat/completions"
+	// providerOpenAIResponsesPath OpenAI Responses API 路径。
+	providerOpenAIResponsesPath = "/v1/responses"
 	// providerAnthropicPath Anthropic Messages 路径。
 	providerAnthropicPath = "/v1/messages"
-	// providerGeminiPathTemplate Gemini streamGenerateContent 路径模板（含 model 占位）。
-	providerGeminiPathTemplate = "/v1beta/models/%s:streamGenerateContent?alt=sse"
+	// providerGeminiPathTemplate Gemini generateContent 路径模板（含 model 占位）。
+	providerGeminiPathTemplate = "/v1beta/models/%s:generateContent"
 
 	// MonitorProviderOpenAI / Anthropic / Gemini / Grok provider 字符串常量（也是 ent enum 的实际值）。
-	// Grok/xAI 走 OpenAI 兼容的 /v1/chat/completions。
 	MonitorProviderOpenAI    = "openai"
 	MonitorProviderAnthropic = "anthropic"
 	MonitorProviderGemini    = "gemini"
 	MonitorProviderGrok      = "grok"
+
+	// MonitorDefaultGrokModel 是新增 Grok 监控未显式指定模型时使用的轻量测活模型。
+	MonitorDefaultGrokModel = "grok-4.5"
 
 	// MonitorStatusOperational 等监控状态字符串常量（与 ent enum 一致）。
 	MonitorStatusOperational = "operational"
@@ -85,13 +91,8 @@ const (
 
 	// monitorAnthropicAPIVersion Anthropic Messages API 版本头。
 	monitorAnthropicAPIVersion = "2023-06-01"
-	// monitorChallengeMaxTokens 单次 challenge 请求的默认 max_tokens（OpenAI / Claude 足够回答个位数算术）。
+	// monitorChallengeMaxTokens 单次 challenge 请求的 max_tokens（足够回答个位数算术）。
 	monitorChallengeMaxTokens = 50
-	// monitorAnthropicChallengeMaxTokens Claude Code probe 使用更接近真实 CLI/账号测试的输出上限。
-	monitorAnthropicChallengeMaxTokens = 1024
-	// monitorGeminiChallengeMaxOutputTokens Gemini 3.1 preview 会消耗较多 thinking tokens；
-	// 50 tokens 可能只产出半个答案后 MAX_TOKENS，导致 challenge mismatch got "" 或 got "4"。
-	monitorGeminiChallengeMaxOutputTokens = 256
 
 	// monitorRunOneBuffer runOne 的总超时缓冲（除请求超时与 ping 超时外的额外裕量）。
 	monitorRunOneBuffer = 10 * time.Second
@@ -102,12 +103,6 @@ const (
 	monitorTLSHandshakeTimeout = 10 * time.Second
 	// monitorResponseHeaderTimeout HTTP transport 等待响应头超时。
 	monitorResponseHeaderTimeout = 30 * time.Second
-	// monitorRequestRetryMaxRetries 单次模型探测遇到 transient upstream 错误时最多重试次数。
-	monitorRequestRetryMaxRetries = 1
-	// monitorRequestRetryDelay transient upstream 错误重试前的短暂等待。
-	monitorRequestRetryDelay = 250 * time.Millisecond
-	// monitorClaudeCodeRejectionMaxRetries Claude Code 指纹被上游偶发拒绝时，用新指纹重试次数。
-	monitorClaudeCodeRejectionMaxRetries = 1
 	// monitorPingDiscardMaxBytes ping 时丢弃响应体的最大字节数。
 	monitorPingDiscardMaxBytes = 1024
 
@@ -125,8 +120,17 @@ var (
 	ErrChannelMonitorInvalidProvider = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok",
 	)
+	ErrChannelMonitorInvalidAPIMode = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_API_MODE", "api_mode must be chat_completions or responses; responses is only supported for openai",
+	)
+	ErrChannelMonitorInvalidRequestBody = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_REQUEST_BODY", "openai-compatible replace-mode body_override must include non-empty messages for chat_completions or non-empty instructions and input for responses",
+	)
 	ErrChannelMonitorInvalidInterval = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_INTERVAL", "interval_seconds must be in [15, 3600]",
+	)
+	ErrChannelMonitorInvalidJitter = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_JITTER", "jitter_seconds must be >= 0 and interval_seconds - jitter_seconds must be >= 15",
 	)
 	ErrChannelMonitorInvalidEndpoint = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_ENDPOINT", "endpoint must be a valid https URL",

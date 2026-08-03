@@ -10,7 +10,12 @@
 # Documentation
 *.md
 !deploy/DOCKER.md
-docs/
+# Exclude docs, but keep legal markdown for Dockerfile COPY docs/legal/
+# (frontend build imports docs/legal/*.md?raw; admin compliance reads them at runtime)
+docs/**
+!docs/legal/
+!docs/legal/**
+!docs/legal/**/*.md
 
 # IDE
 .idea/

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
@@ -11,8 +10,22 @@ import (
 const (
 	openAIResponsesEndpoint          = "/v1/responses"
 	openAIResponsesCompactEndpoint   = "/v1/responses/compact"
+	responsesLiteHeader              = "X-OpenAI-Internal-Codex-Responses-Lite"
+	responsesLiteHeaderKey           = "x-openai-internal-codex-responses-lite"
+	responsesLiteWSMetadataKey       = "ws_request_header_x_openai_internal_codex_responses_lite"
 	imageGenerationPermissionMessage = "Image generation is not enabled for this group"
 )
+
+func isOpenAIResponsesLiteHeader(value string) bool {
+	return strings.EqualFold(strings.TrimSpace(value), "true")
+}
+
+func isOpenAIResponsesLiteWebSocketPayload(body []byte) bool {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return false
+	}
+	return isOpenAIResponsesLiteHeader(gjson.GetBytes(body, "client_metadata."+responsesLiteWSMetadataKey).String())
+}
 
 // ImageGenerationPermissionMessage returns the stable end-user error text for disabled groups.
 func ImageGenerationPermissionMessage() string {
@@ -35,22 +48,121 @@ func IsImageGenerationIntent(endpoint string, requestedModel string, body []byte
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return false
 	}
-	if model := strings.TrimSpace(gjson.GetBytes(body, "model").String()); isOpenAIImageGenerationModel(model) {
+
+	var modelSeen, toolsSeen, inputSeen, toolChoiceSeen bool
+	imageIntent := false
+	parseRawJSONView(body).ForEach(func(key, value gjson.Result) bool {
+		// GetBytes returns the first duplicate key; retain that behavior while walking the root once.
+		switch key.Str {
+		case "model":
+			if !modelSeen {
+				modelSeen = true
+				imageIntent = isOpenAIImageGenerationModel(strings.TrimSpace(value.String()))
+			}
+		case "tools":
+			if !toolsSeen {
+				toolsSeen = true
+				imageIntent = openAIJSONToolsContainImageGeneration(value)
+			}
+		case "input":
+			if !inputSeen {
+				inputSeen = true
+				imageIntent = openAIJSONInputContainsImageGenTool(value)
+			}
+		case "tool_choice":
+			if !toolChoiceSeen {
+				toolChoiceSeen = true
+				imageIntent = openAIJSONToolChoiceSelectsImageGeneration(value)
+			}
+		}
+		return !imageIntent && (!modelSeen || !toolsSeen || !inputSeen || !toolChoiceSeen)
+	})
+	return imageIntent
+}
+
+// IsExplicitImageGenerationIntent 仅检测原生 image_generation 工具、图片模型和显式 tool_choice，
+// 不检测被动的 image_gen namespace 声明。用于 capability / 权限门控——被动 namespace 不应
+// 强制要求原生 Responses 能力，也不应在禁生图分组里对所有 Codex 请求 403（#4447 / #4476）。
+func IsExplicitImageGenerationIntent(endpoint string, requestedModel string, body []byte) bool {
+	if IsImageGenerationEndpoint(endpoint) || isOpenAIImageGenerationModel(requestedModel) {
 		return true
 	}
-	if openAIJSONToolsContainImageGeneration(gjson.GetBytes(body, "tools")) {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return false
+	}
+	var modelSeen, toolsSeen, toolChoiceSeen bool
+	imageIntent := false
+	parseRawJSONView(body).ForEach(func(key, value gjson.Result) bool {
+		switch key.Str {
+		case "model":
+			if !modelSeen {
+				modelSeen = true
+				imageIntent = isOpenAIImageGenerationModel(strings.TrimSpace(value.String()))
+			}
+		case "tools":
+			if !toolsSeen {
+				toolsSeen = true
+				imageIntent = openAIJSONToolsContainNativeImageGeneration(value)
+			}
+		case "tool_choice":
+			if !toolChoiceSeen {
+				toolChoiceSeen = true
+				imageIntent = openAIJSONToolChoiceSelectsExplicitImageGeneration(value)
+			}
+		}
+		return !imageIntent && (!modelSeen || !toolsSeen || !toolChoiceSeen)
+	})
+	return imageIntent
+}
+
+// IsImageGenerationIntentForPlatform applies platform-specific intent rules.
+//
+// Codex advertises the image_gen namespace on ordinary Responses requests so
+// that it is available if the model needs it. Grok strips namespace and
+// Responses Lite additional_tools declarations before forwarding, so those
+// declarations alone must not turn every Codex request into an image request.
+// Native image_generation tools, explicit image selection and image models
+// remain image intent. Other platforms retain the original declaration rule.
+func IsImageGenerationIntentForPlatform(endpoint string, requestedModel string, body []byte, platform string) bool {
+	if !strings.EqualFold(strings.TrimSpace(platform), PlatformGrok) {
+		return IsImageGenerationIntent(endpoint, requestedModel, body)
+	}
+	return isExplicitGrokImageGenerationIntent(endpoint, requestedModel, body)
+}
+
+func isExplicitGrokImageGenerationIntent(endpoint string, requestedModel string, body []byte) bool {
+	if IsImageGenerationEndpoint(endpoint) || isOpenAIImageGenerationModel(requestedModel) {
 		return true
 	}
-	if openAIJSONToolsContainImageGeneration(gjson.GetBytes(body, "functions")) {
-		return true
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return false
 	}
-	if openAIJSONInputContainsImageGenTool(gjson.GetBytes(body, "input")) {
-		return true
-	}
-	if openAIJSONToolChoiceSelectsImageGeneration(gjson.GetBytes(body, "tool_choice")) {
-		return true
-	}
-	return openAIJSONToolChoiceSelectsImageGeneration(gjson.GetBytes(body, "function_call"))
+
+	var modelSeen, toolsSeen, toolChoiceSeen bool
+	imageIntent := false
+	parseRawJSONView(body).ForEach(func(key, value gjson.Result) bool {
+		switch key.Str {
+		case "model":
+			if !modelSeen {
+				modelSeen = true
+				imageIntent = isOpenAIImageGenerationModel(strings.TrimSpace(value.String()))
+			}
+		case "tools":
+			if !toolsSeen {
+				toolsSeen = true
+				// Grok removes namespace catalogs before forwarding. Native
+				// image_generation remains an explicit capability request.
+				imageIntent = openAIJSONToolsContainNativeImageGeneration(value)
+			}
+		case "tool_choice":
+			if !toolChoiceSeen {
+				toolChoiceSeen = true
+				imageIntent = openAIJSONToolChoiceSelectsExplicitImageGeneration(value)
+			}
+		}
+		return !imageIntent && (!modelSeen || !toolsSeen || !toolChoiceSeen)
+	})
+	return imageIntent
 }
 
 // IsImageGenerationIntentMap is the map-backed variant used after service-side request mutation.
@@ -67,19 +179,10 @@ func IsImageGenerationIntentMap(endpoint string, requestedModel string, reqBody 
 	if isOpenAIImageGenerationModel(firstNonEmptyString(reqBody["model"])) {
 		return true
 	}
-	if toolsContainImageGeneration(reqBody["tools"]) {
+	if hasOpenAIImageGenerationTool(reqBody) {
 		return true
 	}
-	if openAIAnyCollectionContainsImageGenerationCapability(reqBody["functions"]) {
-		return true
-	}
-	if inputContainsImageGenerationTool(reqBody["input"]) {
-		return true
-	}
-	if openAIAnyToolChoiceSelectsImageGeneration(reqBody["tool_choice"]) {
-		return true
-	}
-	return openAIAnyToolChoiceSelectsImageGeneration(reqBody["function_call"])
+	return openAIAnyToolChoiceSelectsImageGeneration(reqBody["tool_choice"])
 }
 
 // IsCodexTextImageGenerationIntent detects Codex /responses requests where the
@@ -272,11 +375,7 @@ func openAIJSONToolsContainImageGeneration(tools gjson.Result) bool {
 	}
 	found := false
 	tools.ForEach(func(_, item gjson.Result) bool {
-		if strings.TrimSpace(item.Get("type").String()) == "image_generation" {
-			found = true
-			return false
-		}
-		if openAIJSONToolContainsImageGenerationMCP(item) {
+		if isOpenAIImageGenerationType(openAIJSONString(item.Get("type"))) {
 			found = true
 			return false
 		}
@@ -285,6 +384,20 @@ func openAIJSONToolsContainImageGeneration(tools gjson.Result) bool {
 			return false
 		}
 		return true
+	})
+	return found
+}
+
+// openAIJSONToolsContainNativeImageGeneration only matches the hosted
+// image_generation tool type. Namespace catalogs alone are ignored.
+func openAIJSONToolsContainNativeImageGeneration(tools gjson.Result) bool {
+	if !tools.IsArray() {
+		return false
+	}
+	found := false
+	tools.ForEach(func(_, item gjson.Result) bool {
+		found = isOpenAIImageGenerationType(openAIJSONString(item.Get("type")))
+		return !found
 	})
 	return found
 }
@@ -324,114 +437,36 @@ func openAIJSONInputContainsImageGenTool(input gjson.Result) bool {
 	return found
 }
 
-func openAIJSONString(value gjson.Result) string {
-	if value.Type != gjson.String {
-		return ""
-	}
-	return strings.TrimSpace(value.String())
-}
-
-func openAIJSONToolContainsImageGenerationMCP(tool gjson.Result) bool {
-	if !tool.Exists() || !tool.IsObject() {
+func openAIRequestBodyHasImageGenerationDeclaration(body []byte) bool {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return false
 	}
-	hasImageNamespace := false
-	hasGenerateImage := false
-	walkOpenAIJSONStrings(tool, func(value string) {
-		markOpenAIImageGenerationMCPString(value, &hasImageNamespace, &hasGenerateImage)
-	})
-	return hasImageNamespace && hasGenerateImage
+	return openAIJSONToolsContainImageGeneration(gjson.GetBytes(body, "tools")) ||
+		openAIJSONInputContainsImageGenTool(gjson.GetBytes(body, "input")) ||
+		openAIJSONToolChoiceSelectsImageGeneration(gjson.GetBytes(body, "tool_choice"))
 }
 
-func openAIStringContainsImageGenerationCapability(value string) bool {
-	hasImageNamespace := false
-	hasGenerateImage := false
-	markOpenAIImageGenerationMCPString(value, &hasImageNamespace, &hasGenerateImage)
-	return hasImageNamespace && hasGenerateImage
-}
-
-func walkOpenAIJSONStrings(value gjson.Result, visit func(string)) {
-	if !value.Exists() {
-		return
+func openAIRequestBodyImageGenerationToolNeedsNormalization(body []byte) bool {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return false
 	}
-	switch {
-	case value.Type == gjson.String:
-		visit(value.String())
-	case value.IsArray() || value.IsObject():
-		value.ForEach(func(_, item gjson.Result) bool {
-			walkOpenAIJSONStrings(item, visit)
+	tools := gjson.GetBytes(body, "tools")
+	if !tools.IsArray() {
+		return false
+	}
+	needsNormalization := false
+	tools.ForEach(func(_, item gjson.Result) bool {
+		if openAIJSONString(item.Get("type")) != "image_generation" {
 			return true
-		})
-	}
-}
-
-func markOpenAIImageGenerationMCPString(value string, hasImageNamespace *bool, hasGenerateImage *bool) {
-	normalized := normalizeOpenAIImageGenerationIntentString(value)
-	if normalized == "" {
-		return
-	}
-	if openAIImageIntentStringHasImageNamespace(normalized) {
-		*hasImageNamespace = true
-	}
-	if openAIImageIntentStringHasImageAction(normalized) {
-		*hasGenerateImage = true
-	}
-}
-
-func normalizeOpenAIImageGenerationIntentString(value string) string {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	if normalized == "" {
-		return ""
-	}
-	return strings.NewReplacer("-", "_", ".", "_", "/", "_", " ", "_", ":", "_").Replace(normalized)
-}
-
-func openAIImageIntentStringHasImageNamespace(normalized string) bool {
-	switch {
-	case strings.Contains(normalized, "image"),
-		strings.Contains(normalized, "picture"),
-		strings.Contains(normalized, "photo"),
-		strings.Contains(normalized, "illustration"),
-		strings.Contains(normalized, "artwork"),
-		strings.Contains(normalized, "gpt_image"),
-		strings.Contains(normalized, "image_2"),
-		strings.Contains(normalized, "image2"),
-		strings.Contains(normalized, "imagegen"),
-		strings.Contains(normalized, "image_gen"),
-		strings.Contains(normalized, "txt2img"),
-		strings.Contains(normalized, "img2img"),
-		strings.Contains(normalized, "dalle"):
+		}
+		// 只有旧字段需要迁移时才进入 map 修改，纯计费读取保持 raw 路径。
+		if item.Get("format").Exists() || item.Get("compression").Exists() {
+			needsNormalization = true
+			return false
+		}
 		return true
-	default:
-		return false
-	}
-}
-
-func openAIImageIntentStringHasImageAction(normalized string) bool {
-	switch {
-	case strings.Contains(normalized, "image_generation"),
-		strings.Contains(normalized, "generate_image"),
-		strings.Contains(normalized, "create_image"),
-		strings.Contains(normalized, "render_image"),
-		strings.Contains(normalized, "draw_image"),
-		strings.Contains(normalized, "edit_image"),
-		strings.Contains(normalized, "image_edit"),
-		strings.Contains(normalized, "variation"),
-		strings.Contains(normalized, "upscale"),
-		strings.Contains(normalized, "outpaint"),
-		strings.Contains(normalized, "inpaint"),
-		strings.Contains(normalized, "generate"),
-		strings.Contains(normalized, "generation"),
-		strings.Contains(normalized, "create"),
-		strings.Contains(normalized, "render"),
-		strings.Contains(normalized, "draw"),
-		strings.Contains(normalized, "paint"),
-		strings.Contains(normalized, "edit"),
-		strings.Contains(normalized, "transform"):
-		return true
-	default:
-		return false
-	}
+	})
+	return needsNormalization
 }
 
 func openAIJSONToolChoiceSelectsImageGeneration(choice gjson.Result) bool {
@@ -439,8 +474,7 @@ func openAIJSONToolChoiceSelectsImageGeneration(choice gjson.Result) bool {
 		return false
 	}
 	if choice.Type == gjson.String {
-		value := strings.TrimSpace(choice.String())
-		return value == "image_generation" || openAIStringContainsImageGenerationCapability(value)
+		return isOpenAIImageGenerationType(choice.String())
 	}
 	if !choice.IsObject() {
 		return false
@@ -460,14 +494,52 @@ func openAIJSONToolChoiceSelectsImageGeneration(choice gjson.Result) bool {
 	if isOpenAIImageGenerationType(openAIJSONString(choice.Get("function.name"))) {
 		return true
 	}
-	return openAIJSONToolContainsImageGenerationMCP(choice)
+	return false
+}
+
+func openAIJSONToolChoiceSelectsExplicitImageGeneration(choice gjson.Result) bool {
+	if openAIJSONToolChoiceSelectsImageGeneration(choice) {
+		return true
+	}
+	if !choice.IsObject() {
+		return false
+	}
+	if tool := choice.Get("tool"); tool.IsObject() && openAIJSONToolChoiceSelectsExplicitImageGeneration(tool) {
+		return true
+	}
+	if isOpenAIImageGenFunctionReference(
+		openAIJSONString(choice.Get("namespace")),
+		openAIJSONString(choice.Get("name")),
+	) {
+		return true
+	}
+	if fn := choice.Get("function"); fn.IsObject() {
+		return isOpenAIImageGenFunctionReference(
+			openAIJSONString(fn.Get("namespace")),
+			openAIJSONString(fn.Get("name")),
+		)
+	}
+	return false
+}
+
+func isOpenAIImageGenFunctionReference(namespace string, name string) bool {
+	namespace = strings.TrimSpace(namespace)
+	name = strings.TrimSpace(name)
+	if namespace == "image_gen" && name == "imagegen" {
+		return true
+	}
+	switch name {
+	case "image_gen.imagegen", "image_gen__imagegen":
+		return true
+	default:
+		return false
+	}
 }
 
 func openAIAnyToolChoiceSelectsImageGeneration(choice any) bool {
 	switch v := choice.(type) {
 	case string:
-		value := strings.TrimSpace(v)
-		return value == "image_generation" || openAIStringContainsImageGenerationCapability(value)
+		return isOpenAIImageGenerationType(v)
 	case map[string]any:
 		choiceType := strings.TrimSpace(firstNonEmptyString(v["type"]))
 		if isOpenAIImageGenerationType(choiceType) {
@@ -484,55 +556,8 @@ func openAIAnyToolChoiceSelectsImageGeneration(choice any) bool {
 		if fn, ok := v["function"].(map[string]any); ok && isOpenAIImageGenerationType(firstNonEmptyString(fn["name"])) {
 			return true
 		}
-		return openAIAnyToolContainsImageGenerationCapability(v)
 	}
 	return false
-}
-
-func openAIAnyCollectionContainsImageGenerationCapability(value any) bool {
-	items, ok := value.([]any)
-	if !ok {
-		return false
-	}
-	for _, item := range items {
-		if openAIAnyToolContainsImageGenerationCapability(item) {
-			return true
-		}
-	}
-	return false
-}
-
-func openAIAnyToolContainsImageGenerationCapability(tool any) bool {
-	if toolMap, ok := tool.(map[string]any); ok {
-		if strings.TrimSpace(firstNonEmptyString(toolMap["type"])) == "image_generation" {
-			return true
-		}
-	}
-	hasImageNamespace := false
-	hasGenerateImage := false
-	walkOpenAIAnyStrings(tool, func(value string) {
-		markOpenAIImageGenerationMCPString(value, &hasImageNamespace, &hasGenerateImage)
-	})
-	return hasImageNamespace && hasGenerateImage
-}
-
-func walkOpenAIAnyStrings(value any, visit func(string)) {
-	switch v := value.(type) {
-	case string:
-		visit(v)
-	case []any:
-		for _, item := range v {
-			walkOpenAIAnyStrings(item, visit)
-		}
-	case map[string]any:
-		for _, item := range v {
-			walkOpenAIAnyStrings(item, visit)
-		}
-	case map[string]string:
-		for _, item := range v {
-			visit(item)
-		}
-	}
 }
 
 func getAPIKeyFromContext(c interface{ Get(string) (any, bool) }) *APIKey {
@@ -554,18 +579,13 @@ func apiKeyGroup(apiKey *APIKey) *Group {
 	return apiKey.Group
 }
 
-func cloneRequestMapForImageIntent(body []byte) map[string]any {
-	if len(body) == 0 {
-		return nil
-	}
-	var out map[string]any
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil
-	}
-	return out
+type OpenAIResponsesImageBillingConfig struct {
+	Model     string
+	SizeTier  string
+	InputSize string
 }
 
-func resolveOpenAIResponsesImageBillingConfig(reqBody map[string]any, fallbackModel string) (string, string, error) {
+func resolveOpenAIResponsesImageBillingConfigDetailed(reqBody map[string]any, fallbackModel string) (OpenAIResponsesImageBillingConfig, error) {
 	imageModel := ""
 	imageSize := ""
 	hasImageTool := false
@@ -598,12 +618,59 @@ func resolveOpenAIResponsesImageBillingConfig(reqBody map[string]any, fallbackMo
 		imageModel = strings.TrimSpace(fallbackModel)
 	}
 	sizeTier := normalizeOpenAIImageSizeTier(imageSize)
-	return imageModel, sizeTier, nil
+	return OpenAIResponsesImageBillingConfig{
+		Model:     imageModel,
+		SizeTier:  sizeTier,
+		InputSize: imageSize,
+	}, nil
 }
 
 func resolveOpenAIResponsesImageBillingConfigFromBody(body []byte, fallbackModel string) (string, string, error) {
-	reqBody := cloneRequestMapForImageIntent(body)
-	return resolveOpenAIResponsesImageBillingConfig(reqBody, fallbackModel)
+	cfg, err := resolveOpenAIResponsesImageBillingConfigDetailedFromBody(body, fallbackModel)
+	if err != nil {
+		return "", "", err
+	}
+	return cfg.Model, cfg.SizeTier, nil
+}
+
+func resolveOpenAIResponsesImageBillingConfigDetailedFromBody(body []byte, fallbackModel string) (OpenAIResponsesImageBillingConfig, error) {
+	imageModel := ""
+	imageSize := ""
+	hasImageTool := false
+	if len(body) > 0 && gjson.ValidBytes(body) {
+		tools := gjson.GetBytes(body, "tools")
+		if tools.IsArray() {
+			tools.ForEach(func(_, item gjson.Result) bool {
+				if openAIJSONString(item.Get("type")) != "image_generation" {
+					return true
+				}
+				hasImageTool = true
+				imageModel = openAIJSONString(item.Get("model"))
+				imageSize = openAIJSONString(item.Get("size"))
+				return false
+			})
+		}
+		if imageSize == "" {
+			imageSize = openAIJSONString(gjson.GetBytes(body, "size"))
+		}
+		if imageModel == "" {
+			bodyModel := openAIJSONString(gjson.GetBytes(body, "model"))
+			if isOpenAIImageBillingModelAlias(bodyModel) || !hasImageTool {
+				imageModel = bodyModel
+			}
+		}
+	}
+	if imageModel == "" && hasImageTool {
+		imageModel = "gpt-image-2"
+	}
+	if imageModel == "" {
+		imageModel = strings.TrimSpace(fallbackModel)
+	}
+	return OpenAIResponsesImageBillingConfig{
+		Model:     imageModel,
+		SizeTier:  normalizeOpenAIImageSizeTier(imageSize),
+		InputSize: imageSize,
+	}, nil
 }
 
 func isOpenAIImageBillingModelAlias(model string) bool {
@@ -612,4 +679,11 @@ func isOpenAIImageBillingModelAlias(model string) bool {
 		return false
 	}
 	return isOpenAIImageGenerationModel(normalized) || strings.Contains(normalized, "image")
+}
+
+func openAIJSONString(value gjson.Result) string {
+	if value.Type != gjson.String {
+		return ""
+	}
+	return strings.TrimSpace(value.String())
 }

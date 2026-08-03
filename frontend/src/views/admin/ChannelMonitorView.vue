@@ -51,7 +51,9 @@
             <MonitorActionsCell
               :row="row"
               :running="runningId === row.id"
+              :duplicating="duplicatingIds.has(row.id)"
               @run="handleRunNow"
+              @duplicate="handleDuplicate"
               @logs="openHistoryDialog"
               @edit="openEditDialog"
               @delete="handleDelete"
@@ -163,6 +165,7 @@ const {
 const monitors = ref<ChannelMonitor[]>([])
 const loading = ref(false)
 const runningId = ref<number | null>(null)
+const duplicatingIds = reactive(new Set<number>())
 const searchQuery = ref('')
 const providerFilter = ref<Provider | ''>('')
 const enabledFilter = ref<'' | 'true' | 'false'>('')
@@ -285,6 +288,25 @@ async function handleRunNow(row: ChannelMonitor) {
     appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.runFailed')))
   } finally {
     runningId.value = null
+  }
+}
+
+async function handleDuplicate(row: ChannelMonitor) {
+  if (row.api_key_decrypt_failed) {
+    appStore.showError(t('admin.channelMonitor.duplicateKeyUnavailable'))
+    return
+  }
+  if (duplicatingIds.has(row.id)) return
+
+  duplicatingIds.add(row.id)
+  try {
+    const duplicate = await adminAPI.channelMonitor.duplicate(row.id)
+    appStore.showSuccess(t('admin.channelMonitor.duplicateSuccess', { name: duplicate.name }))
+    await reload()
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.duplicateFailed')))
+  } finally {
+    duplicatingIds.delete(row.id)
   }
 }
 

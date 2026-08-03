@@ -118,9 +118,11 @@ type OpenAITokenInfo struct {
 	ExpiresIn             int64  `json:"expires_in"`
 	ExpiresAt             int64  `json:"expires_at"`
 	ClientID              string `json:"client_id,omitempty"`
+	AuthMode              string `json:"auth_mode,omitempty"`
 	Email                 string `json:"email,omitempty"`
 	ChatGPTAccountID      string `json:"chatgpt_account_id,omitempty"`
 	ChatGPTUserID         string `json:"chatgpt_user_id,omitempty"`
+	ChatGPTAccountFedRAMP bool   `json:"chatgpt_account_is_fedramp,omitempty"`
 	OrganizationID        string `json:"organization_id,omitempty"`
 	PlanType              string `json:"plan_type,omitempty"`
 	SubscriptionExpiresAt string `json:"subscription_expires_at,omitempty"`
@@ -365,8 +367,16 @@ func (s *OpenAIOAuthService) BuildAccountCredentials(tokenInfo *OpenAITokenInfo)
 	if strings.TrimSpace(tokenInfo.ClientID) != "" {
 		creds["client_id"] = strings.TrimSpace(tokenInfo.ClientID)
 	}
+	if tokenInfo.AuthMode == OpenAIAuthModePersonalAccessToken {
+		creds[openAIAuthModeCredentialKey] = OpenAIAuthModePersonalAccessToken
+		creds[openAIAuthModeLegacyCredentialKey] = "personal_access_token"
+		creds["token_type"] = "Bearer"
+		creds["chatgpt_account_is_fedramp"] = tokenInfo.ChatGPTAccountFedRAMP
+	} else if tokenInfo.ChatGPTAccountFedRAMP {
+		creds["chatgpt_account_is_fedramp"] = true
+	}
 
-	return creds
+	return NormalizeOpenAIPersonalAccessTokenCredentials(nil, tokenInfo, creds)
 }
 
 // Stop stops the session store cleanup goroutine
