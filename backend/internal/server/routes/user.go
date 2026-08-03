@@ -46,7 +46,6 @@ func RegisterUserRoutes(
 				notifyEmail.DELETE("", h.User.RemoveNotifyEmail)
 			}
 
-
 			// Webhook 通知（余额/站内信/公告）
 			user.POST("/webhook-balance-notify/test", h.User.SendWebhookBalanceNotifyTest)
 
