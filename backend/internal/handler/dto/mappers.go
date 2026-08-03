@@ -13,18 +13,18 @@ func UserFromServiceShallow(u *service.User) *User {
 		return nil
 	}
 	return &User{
-		ID:                         u.ID,
-		Email:                      u.Email,
-		Username:                   u.Username,
-		Role:                       u.Role,
-		Balance:                    u.Balance,
-		FrozenBalance:              u.FrozenBalance,
-		Concurrency:                u.Concurrency,
-		Status:                     u.Status,
-		AllowedGroups:              u.AllowedGroups,
-		LastActiveAt:               u.LastActiveAt,
-		CreatedAt:                  u.CreatedAt,
-		UpdatedAt:                  u.UpdatedAt,
+		ID:                               u.ID,
+		Email:                            u.Email,
+		Username:                         u.Username,
+		Role:                             u.Role,
+		Balance:                          u.Balance,
+		FrozenBalance:                    u.FrozenBalance,
+		Concurrency:                      u.Concurrency,
+		Status:                           u.Status,
+		AllowedGroups:                    u.AllowedGroups,
+		LastActiveAt:                     u.LastActiveAt,
+		CreatedAt:                        u.CreatedAt,
+		UpdatedAt:                        u.UpdatedAt,
 		BalanceNotifyEnabled:             u.BalanceNotifyEnabled,
 		BalanceNotifyThresholdType:       u.BalanceNotifyThresholdType,
 		BalanceNotifyThreshold:           u.BalanceNotifyThreshold,
@@ -35,9 +35,9 @@ func UserFromServiceShallow(u *service.User) *User {
 		WebhookSiteMessageNotifyEnabled:  u.WebhookSiteMessageNotifyEnabled,
 		WebhookAnnouncementNotifyEnabled: u.WebhookAnnouncementNotifyEnabled,
 		TotalRecharged:                   u.TotalRecharged,
-		RPMLimit:                           u.RPMLimit,
-		InvoiceEnabled:                     u.InvoiceEnabled,
-		DeletedAt:                          u.DeletedAt,
+		RPMLimit:                         u.RPMLimit,
+		InvoiceEnabled:                   u.InvoiceEnabled,
+		DeletedAt:                        u.DeletedAt,
 	}
 }
 

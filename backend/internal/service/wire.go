@@ -900,8 +900,6 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 	return svc
 }
 
-
-
 // ProvideWebhookBalanceNotifyService creates webhook notify service (balance/site-message/announcement).
 func ProvideWebhookBalanceNotifyService(userRepo UserRepository) *WebhookBalanceNotifyService {
 	return NewWebhookBalanceNotifyService(userRepo)

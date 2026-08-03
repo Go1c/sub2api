@@ -189,17 +189,17 @@ const (
 
 // UpdateProfileRequest 更新用户资料请求
 type UpdateProfileRequest struct {
-	Email                              *string  `json:"email"`
-	Username                           *string  `json:"username"`
-	AvatarURL                          *string  `json:"avatar_url"`
-	Concurrency                        *int     `json:"concurrency"`
-	BalanceNotifyEnabled               *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold             *float64 `json:"balance_notify_threshold"`
-	WebhookBalanceNotifyEnabled        *bool    `json:"webhook_balance_notify_enabled"`
-	WebhookBalanceNotifyURL            *string  `json:"webhook_balance_notify_url"`
-	WebhookBalanceNotifyThreshold      *float64 `json:"webhook_balance_notify_threshold"`
-	WebhookSiteMessageNotifyEnabled    *bool    `json:"webhook_site_message_notify_enabled"`
-	WebhookAnnouncementNotifyEnabled   *bool    `json:"webhook_announcement_notify_enabled"`
+	Email                            *string  `json:"email"`
+	Username                         *string  `json:"username"`
+	AvatarURL                        *string  `json:"avatar_url"`
+	Concurrency                      *int     `json:"concurrency"`
+	BalanceNotifyEnabled             *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold           *float64 `json:"balance_notify_threshold"`
+	WebhookBalanceNotifyEnabled      *bool    `json:"webhook_balance_notify_enabled"`
+	WebhookBalanceNotifyURL          *string  `json:"webhook_balance_notify_url"`
+	WebhookBalanceNotifyThreshold    *float64 `json:"webhook_balance_notify_threshold"`
+	WebhookSiteMessageNotifyEnabled  *bool    `json:"webhook_site_message_notify_enabled"`
+	WebhookAnnouncementNotifyEnabled *bool    `json:"webhook_announcement_notify_enabled"`
 }
 
 type UserAvatar struct {

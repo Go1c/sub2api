@@ -531,7 +531,7 @@ func (s *GatewayService) billingDeps() *billingDeps {
 		billingCacheService:         s.billingCacheService,
 		deferredService:             s.deferredService,
 		balanceNotifyService:        s.balanceNotifyService,
-			webhookBalanceNotifyService: s.webhookBalanceNotifyService,
+		webhookBalanceNotifyService: s.webhookBalanceNotifyService,
 		userPlatformQuotaRepo:       s.userPlatformQuotaRepo,
 		cfg:                         s.cfg,
 	}

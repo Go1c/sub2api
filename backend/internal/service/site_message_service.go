@@ -52,7 +52,6 @@ func (s *SiteMessageService) SetWebhookBalanceNotifyService(svc *WebhookBalanceN
 	}
 }
 
-
 func (s *SiteMessageService) Send(ctx context.Context, input SendSiteMessageInput) (*SiteMessage, error) {
 	settings, err := s.enabledSettings(ctx)
 	if err != nil {

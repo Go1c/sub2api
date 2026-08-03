@@ -344,7 +344,7 @@ func (s *WebhookBalanceNotifyService) postWebhook(ctx context.Context, webhookUR
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrWebhookBalanceNotifySendFailed, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, webhookBalanceNotifyMaxBody))
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
