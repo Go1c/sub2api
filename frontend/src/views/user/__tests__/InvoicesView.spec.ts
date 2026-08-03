@@ -21,4 +21,18 @@ describe('user InvoicesView source contract', () => {
     expect(source).toContain('invoicesAPI.download')
     expect(source).toContain("t('invoice.mailDeliveryHint')")
   })
+
+  it('supports one-click fill from the last completed invoice without overwriting amount', () => {
+    const source = readFileSync(viewPath, 'utf8')
+
+    expect(source).toContain("t('invoice.fillLastSuccess')")
+    expect(source).toContain('fillFromLastSuccess')
+    expect(source).toContain("item.status === 'completed'")
+    expect(source).toContain('form.title = last.title')
+    expect(source).toContain('form.tax_number = last.tax_number')
+    expect(source).toContain('form.recipient_email = last.recipient_email')
+    // Amount must stay user-controlled — do not copy last.amount into the form.
+    expect(source).not.toContain('form.amount = last.amount')
+    expect(source).not.toContain('form.amount = last?.amount')
+  })
 })

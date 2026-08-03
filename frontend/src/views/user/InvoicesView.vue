@@ -58,10 +58,20 @@
               <label class="input-label">{{ t('invoice.form.email') }}</label>
               <input v-model.trim="form.recipient_email" type="email" class="input" :placeholder="t('invoice.form.emailPlaceholder')" />
             </div>
-            <button type="submit" class="btn btn-primary w-full" :disabled="submitting || loading">
-              <Icon v-if="!submitting" name="check" size="sm" class="mr-2" />
-              {{ submitting ? t('common.submitting') : t('invoice.submit') }}
-            </button>
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                class="btn btn-secondary w-full sm:w-auto sm:flex-1"
+                :disabled="loading || !lastCompletedInvoice"
+                @click="fillFromLastSuccess"
+              >
+                {{ t('invoice.fillLastSuccess') }}
+              </button>
+              <button type="submit" class="btn btn-primary w-full sm:flex-1" :disabled="submitting || loading">
+                <Icon v-if="!submitting" name="check" size="sm" class="mr-2" />
+                {{ submitting ? t('common.submitting') : t('invoice.submit') }}
+              </button>
+            </div>
           </form>
         </div>
 
@@ -182,8 +192,26 @@ const columns = computed<Column[]>(() => [
   { key: 'actions', label: t('common.actions') },
 ])
 
+/** Latest completed invoice on the current page (list is created_at DESC). */
+const lastCompletedInvoice = computed(() =>
+  items.value.find((item) => item.status === 'completed') ?? null,
+)
+
 function formatMoney(value: number | null | undefined): string {
   return formatCurrency(value ?? 0, 'USD')
+}
+
+function fillFromLastSuccess() {
+  const last = lastCompletedInvoice.value
+  if (!last) {
+    appStore.showWarning(t('invoice.noCompletedHistory'))
+    return
+  }
+  form.title = last.title
+  form.tax_number = last.tax_number
+  form.recipient_email = last.recipient_email
+  // Intentionally do not copy amount — each request needs a fresh amount.
+  appStore.showSuccess(t('invoice.fillLastSuccessDone'))
 }
 
 function statusLabel(status: InvoiceStatus): string {
