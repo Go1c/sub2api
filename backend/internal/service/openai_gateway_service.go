@@ -380,28 +380,28 @@ var ErrNoAvailableCompactAccounts = errors.New("no available OpenAI accounts sup
 
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
-	accountRepo           AccountRepository
-	usageLogRepo          UsageLogRepository
-	usageBillingRepo      UsageBillingRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	cache                 GatewayCache
-	cfg                   *config.Config
-	codexDetector         CodexClientRestrictionDetector
-	schedulerSnapshot     *SchedulerSnapshotService
-	concurrencyService    *ConcurrencyService
-	billingService        *BillingService
-	rateLimitService      *RateLimitService
-	billingCacheService   *BillingCacheService
-	userGroupRateResolver *userGroupRateResolver
-	httpUpstream          HTTPUpstream
-	deferredService       *DeferredService
-	openAITokenProvider   *OpenAITokenProvider
-	grokTokenProvider     *GrokTokenProvider
-	toolCorrector         *CodexToolCorrector
-	openaiWSResolver      OpenAIWSProtocolResolver
-	resolver              *ModelPricingResolver
-	channelService        *ChannelService
+	accountRepo                 AccountRepository
+	usageLogRepo                UsageLogRepository
+	usageBillingRepo            UsageBillingRepository
+	userRepo                    UserRepository
+	userSubRepo                 UserSubscriptionRepository
+	cache                       GatewayCache
+	cfg                         *config.Config
+	codexDetector               CodexClientRestrictionDetector
+	schedulerSnapshot           *SchedulerSnapshotService
+	concurrencyService          *ConcurrencyService
+	billingService              *BillingService
+	rateLimitService            *RateLimitService
+	billingCacheService         *BillingCacheService
+	userGroupRateResolver       *userGroupRateResolver
+	httpUpstream                HTTPUpstream
+	deferredService             *DeferredService
+	openAITokenProvider         *OpenAITokenProvider
+	grokTokenProvider           *GrokTokenProvider
+	toolCorrector               *CodexToolCorrector
+	openaiWSResolver            OpenAIWSProtocolResolver
+	resolver                    *ModelPricingResolver
+	channelService              *ChannelService
 	balanceNotifyService        *BalanceNotifyService
 	webhookBalanceNotifyService *WebhookBalanceNotifyService
 	settingService              *SettingService
@@ -441,7 +441,6 @@ type OpenAIGatewayService struct {
 func (s *OpenAIGatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
 	s.accountErrorHistory = svc
 }
-
 
 // SetWebhookBalanceNotifyService injects optional external robot/webhook balance alerts (WeCom etc.).
 func (s *OpenAIGatewayService) SetWebhookBalanceNotifyService(svc *WebhookBalanceNotifyService) {
@@ -611,13 +610,13 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 
 func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:                s.accountRepo,
-		userRepo:                   s.userRepo,
-		userSubRepo:                s.userSubRepo,
-		billingCacheService:        s.billingCacheService,
-		deferredService:            s.deferredService,
+		accountRepo:                 s.accountRepo,
+		userRepo:                    s.userRepo,
+		userSubRepo:                 s.userSubRepo,
+		billingCacheService:         s.billingCacheService,
+		deferredService:             s.deferredService,
 		balanceNotifyService:        s.balanceNotifyService,
-			webhookBalanceNotifyService: s.webhookBalanceNotifyService,
+		webhookBalanceNotifyService: s.webhookBalanceNotifyService,
 		userPlatformQuotaRepo:       s.userPlatformQuotaRepo,
 	}
 }

@@ -45,7 +45,6 @@ func NewUserHandler(
 	}
 }
 
-
 // SetWebhookBalanceNotifyService injects Webhook notify (balance / site-message / announcement).
 func (h *UserHandler) SetWebhookBalanceNotifyService(svc *service.WebhookBalanceNotifyService) {
 	if h != nil {
@@ -125,15 +124,15 @@ type ChangePasswordRequest struct {
 
 // UpdateProfileRequest represents the update profile request payload
 type UpdateProfileRequest struct {
-	Username                           *string  `json:"username"`
-	AvatarURL                          *string  `json:"avatar_url"`
-	BalanceNotifyEnabled               *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold             *float64 `json:"balance_notify_threshold"`
-	WebhookBalanceNotifyEnabled        *bool    `json:"webhook_balance_notify_enabled"`
-	WebhookBalanceNotifyURL            *string  `json:"webhook_balance_notify_url"`
-	WebhookBalanceNotifyThreshold      *float64 `json:"webhook_balance_notify_threshold"`
-	WebhookSiteMessageNotifyEnabled    *bool    `json:"webhook_site_message_notify_enabled"`
-	WebhookAnnouncementNotifyEnabled   *bool    `json:"webhook_announcement_notify_enabled"`
+	Username                         *string  `json:"username"`
+	AvatarURL                        *string  `json:"avatar_url"`
+	BalanceNotifyEnabled             *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold           *float64 `json:"balance_notify_threshold"`
+	WebhookBalanceNotifyEnabled      *bool    `json:"webhook_balance_notify_enabled"`
+	WebhookBalanceNotifyURL          *string  `json:"webhook_balance_notify_url"`
+	WebhookBalanceNotifyThreshold    *float64 `json:"webhook_balance_notify_threshold"`
+	WebhookSiteMessageNotifyEnabled  *bool    `json:"webhook_site_message_notify_enabled"`
+	WebhookAnnouncementNotifyEnabled *bool    `json:"webhook_announcement_notify_enabled"`
 }
 
 type userProfileResponse struct {
@@ -227,15 +226,15 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	svcReq := service.UpdateProfileRequest{
-		Username:                           req.Username,
-		AvatarURL:                          req.AvatarURL,
-		BalanceNotifyEnabled:               req.BalanceNotifyEnabled,
-		BalanceNotifyThreshold:             req.BalanceNotifyThreshold,
-		WebhookBalanceNotifyEnabled:        req.WebhookBalanceNotifyEnabled,
-		WebhookBalanceNotifyURL:            req.WebhookBalanceNotifyURL,
-		WebhookBalanceNotifyThreshold:      req.WebhookBalanceNotifyThreshold,
-		WebhookSiteMessageNotifyEnabled:    req.WebhookSiteMessageNotifyEnabled,
-		WebhookAnnouncementNotifyEnabled:   req.WebhookAnnouncementNotifyEnabled,
+		Username:                         req.Username,
+		AvatarURL:                        req.AvatarURL,
+		BalanceNotifyEnabled:             req.BalanceNotifyEnabled,
+		BalanceNotifyThreshold:           req.BalanceNotifyThreshold,
+		WebhookBalanceNotifyEnabled:      req.WebhookBalanceNotifyEnabled,
+		WebhookBalanceNotifyURL:          req.WebhookBalanceNotifyURL,
+		WebhookBalanceNotifyThreshold:    req.WebhookBalanceNotifyThreshold,
+		WebhookSiteMessageNotifyEnabled:  req.WebhookSiteMessageNotifyEnabled,
+		WebhookAnnouncementNotifyEnabled: req.WebhookAnnouncementNotifyEnabled,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {

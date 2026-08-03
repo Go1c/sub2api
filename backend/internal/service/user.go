@@ -50,13 +50,13 @@ type User struct {
 	BalanceNotifyThreshold     *float64
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
 	// Webhook 通知（HTTPS POST；总开关默认关；子项控制余额/站内信/公告）
-	WebhookBalanceNotifyEnabled        bool
-	WebhookBalanceNotifyURL            string
-	WebhookBalanceNotifyThreshold      *float64
-	WebhookSiteMessageNotifyEnabled    bool
-	WebhookAnnouncementNotifyEnabled   bool
-	TotalRecharged                     float64
-	InvoiceEnabled                     bool
+	WebhookBalanceNotifyEnabled      bool
+	WebhookBalanceNotifyURL          string
+	WebhookBalanceNotifyThreshold    *float64
+	WebhookSiteMessageNotifyEnabled  bool
+	WebhookAnnouncementNotifyEnabled bool
+	TotalRecharged                   float64
+	InvoiceEnabled                   bool
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
 	// 且该 (用户, 分组) 无 rpm_override 时作为全局兜底生效，计数键 rpm:u:{userID}:{min}。

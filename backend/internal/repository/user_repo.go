@@ -1348,4 +1348,3 @@ func (r *userRepository) ListIDsWithWebhookAnnouncementNotify(ctx context.Contex
 	}
 	return out, nil
 }
-
