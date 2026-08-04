@@ -828,6 +828,7 @@ var ProviderSet = wire.NewSet(
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
+	ProvideSubscriptionCreditPurchaseService,
 	NewSubscriptionWasteStatsService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
@@ -836,6 +837,10 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
+	ProvideSubscriptionNotifyMessenger,
+	ProvideSubscriptionNotifyEmailer,
+	ProvideSubscriptionNotifyService,
+	ProvideSubscriptionNotifyWorker,
 	ProvideUserPlatformQuotaUsageFlusher,
 )
 
@@ -905,11 +910,80 @@ func ProvideWebhookBalanceNotifyService(userRepo UserRepository) *WebhookBalance
 	return NewWebhookBalanceNotifyService(userRepo)
 }
 
-// ProvidePaymentService creates PaymentService and attaches notification email delivery.
-func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService, notificationEmailService *NotificationEmailService) *PaymentService {
-	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
-	svc.SetNotificationEmailService(notificationEmailService)
+// ProvideSubscriptionCreditPurchaseService wires the credit-pool purchase
+// fulfiller with the raw SQL transaction boundary required by repository locks.
+func ProvideSubscriptionCreditPurchaseService(
+	db *sql.DB,
+	userSubRepo UserSubscriptionRepository,
+	ledgerRepo SubscriptionCreditLedgerRepository,
+	settingService *SettingService,
+) *SubscriptionCreditPurchaseService {
+	svc := NewSubscriptionCreditPurchaseService(db, userSubRepo, ledgerRepo)
+	if settingService != nil {
+		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
+	}
 	return svc
+}
+
+// ProvidePaymentService wires payment fulfillment with the credit-pool purchase
+// path and notification email delivery.
+func ProvidePaymentService(
+	entClient *dbent.Client,
+	registry *payment.Registry,
+	loadBalancer payment.LoadBalancer,
+	redeemService *RedeemService,
+	subscriptionSvc *SubscriptionService,
+	configService *PaymentConfigService,
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	affiliateService *AffiliateService,
+	subscriptionCreditPurchaseSvc *SubscriptionCreditPurchaseService,
+	notificationEmailService *NotificationEmailService,
+	settingService *SettingService,
+) *PaymentService {
+	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
+	svc.subscriptionCreditPurchaseSvc = subscriptionCreditPurchaseSvc
+	svc.SetNotificationEmailService(notificationEmailService)
+	if settingService != nil {
+		svc.SetSubscriptionMultiplePurchasesEnabledReader(settingService.GetSubscriptionMultiplePurchasesEnabled)
+	}
+	return svc
+}
+
+// ProvideSubscriptionNotifyMessenger 适配 SiteMessageRepository → SubscriptionNotifyMessenger。
+// 直接走 repository.Create，避免 SiteMessageService.Send 的 admin/限频校验。
+func ProvideSubscriptionNotifyMessenger(repo SiteMessageRepository) SubscriptionNotifyMessenger {
+	return &subscriptionNotifyMessengerAdapter{repo: repo}
+}
+
+// ProvideSubscriptionNotifyEmailer 适配 *EmailService → SubscriptionNotifyEmailer。
+func ProvideSubscriptionNotifyEmailer(email *EmailService) SubscriptionNotifyEmailer {
+	return &subscriptionNotifyEmailerAdapter{email: email}
+}
+
+// ProvideSubscriptionNotifyService 构造订阅通知服务（站内信 + 邮件）。
+func ProvideSubscriptionNotifyService(
+	users UserRepository,
+	messenger SubscriptionNotifyMessenger,
+	emailer SubscriptionNotifyEmailer,
+	settings SettingRepository,
+	cfg *config.Config,
+) *SubscriptionNotifyService {
+	frontendURL := ""
+	if cfg != nil {
+		frontendURL = cfg.Server.FrontendURL
+	}
+	return NewSubscriptionNotifyService(users, messenger, emailer, settings, frontendURL)
+}
+
+// ProvideSubscriptionNotifyWorker 构造并启动订阅通知 outbox worker。
+func ProvideSubscriptionNotifyWorker(
+	repo SubscriptionNotifyOutboxRepository,
+	handler *SubscriptionNotifyService,
+) *SubscriptionNotifyWorker {
+	w := NewSubscriptionNotifyWorker(repo, handler, 0, 0)
+	w.Start()
+	return w
 }
 
 // ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.

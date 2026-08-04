@@ -115,6 +115,7 @@ func provideCleanup(
 	auditLog *service.AuditLogService,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	promptAudit *securityaudit.PromptService,
+	subscriptionNotifyWorker *service.SubscriptionNotifyWorker,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -332,6 +333,12 @@ func provideCleanup(
 			{"UserPlatformQuotaUsageFlusher", func() error {
 				if quotaFlusher != nil {
 					quotaFlusher.Stop()
+				}
+				return nil
+			}},
+			{"SubscriptionNotifyWorker", func() error {
+				if subscriptionNotifyWorker != nil {
+					subscriptionNotifyWorker.Stop()
 				}
 				return nil
 			}},

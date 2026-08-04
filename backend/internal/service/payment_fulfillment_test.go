@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -555,6 +556,60 @@ func TestExecuteSubscriptionFulfillmentUsesCreditPurchaseSnapshot(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusCompleted, got.Status)
 	require.NotNil(t, got.CompletedAt)
+}
+
+func TestExecuteSubscriptionFulfillmentRequiresPurchaseService(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
+	svc := &PaymentService{entClient: client}
+
+	err := svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+
+	require.Error(t, err)
+	require.Equal(t, "SUBSCRIPTION_PURCHASE_SERVICE_UNAVAILABLE", infraerrors.Reason(err))
+	require.Contains(t, err.Error(), "subscription purchase service is not configured")
+	got, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusFulfillmentFailed, got.Status)
+	require.NotNil(t, got.FailedReason)
+	require.Contains(t, *got.FailedReason, "SUBSCRIPTION_PURCHASE_SERVICE_UNAVAILABLE")
+}
+
+func TestProvidePaymentServiceInjectsSubscriptionCreditPurchase(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+	order := createPaidCreditSubscriptionOrderForFulfillmentTest(t, ctx, client)
+	purchaseSvc := &SubscriptionCreditPurchaseService{}
+	notificationEmail := &NotificationEmailService{}
+
+	svc := ProvidePaymentService(
+		client,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		purchaseSvc,
+		notificationEmail,
+		nil,
+	)
+
+	require.Same(t, purchaseSvc, svc.subscriptionCreditPurchaseSvc)
+	require.Same(t, notificationEmail, svc.notificationEmailService)
+
+	// Inject a stub fulfiller through the same field ProvidePaymentService sets,
+	// so ExecuteSubscriptionFulfillment no longer hits the nil SERVICE_UNAVAILABLE path.
+	fulfiller := &subscriptionCreditPurchaseFulfillerStub{}
+	svc.subscriptionCreditPurchaseSvc = fulfiller
+
+	err := svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fulfiller.order)
+	require.Equal(t, order.ID, fulfiller.order.ID)
 }
 
 func TestExecuteSubscriptionFulfillmentAccruesAffiliateRebateForExternalPayment(t *testing.T) {
