@@ -76,7 +76,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	apiKeyService := service.ProvideAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, apiKeyCache, configConfig, billingCacheService, concurrencyService)
 	apiKeyAuthCacheInvalidator := service.ProvideAPIKeyAuthCacheInvalidator(apiKeyService)
 	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator)
-	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService, client, configConfig)
+	subscriptionCreditLedgerRepository := repository.NewSubscriptionCreditLedgerRepository(db)
+	subscriptionService := service.ProvideSubscriptionService(groupRepository, userSubscriptionRepository, subscriptionCreditLedgerRepository, billingCacheService, client, configConfig, settingService)
 	affiliateRepository := repository.NewAffiliateRepository(client, db)
 	affiliateService := service.NewAffiliateService(affiliateRepository, settingService, apiKeyAuthCacheInvalidator, billingCacheService)
 	authService := service.NewAuthService(client, userRepository, redeemCodeRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, subscriptionService, affiliateService, serviceUserPlatformQuotaRepository)
@@ -116,6 +117,11 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	siteMessageService := service.NewSiteMessageService(siteMessageRepository, siteMessageUserRepository, siteMessageSettingsReader, emailQueueService, redeemService, promoService, siteMessageCompensationBatchRepository)
 	siteMessageService.SetWebhookBalanceNotifyService(webhookBalanceNotifyService)
 	siteMessageHandler := handler.NewSiteMessageHandler(siteMessageService)
+	subscriptionNotifyMessenger := service.ProvideSubscriptionNotifyMessenger(siteMessageRepository)
+	subscriptionNotifyEmailer := service.ProvideSubscriptionNotifyEmailer(emailService)
+	subscriptionNotifyService := service.ProvideSubscriptionNotifyService(userRepository, subscriptionNotifyMessenger, subscriptionNotifyEmailer, settingRepository, configConfig)
+	subscriptionNotifyOutboxRepository := repository.NewSubscriptionNotifyOutboxRepository(db)
+	subscriptionNotifyWorker := service.ProvideSubscriptionNotifyWorker(subscriptionNotifyOutboxRepository, subscriptionNotifyService)
 	lotteryRepository := repository.NewLotteryRepository(client)
 	lotterySettingsReader := service.ProvideLotterySettingsReader(settingService)
 	lotteryService := service.NewLotteryService(lotteryRepository, lotterySettingsReader, siteMessageService)
@@ -244,7 +250,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	paymentConfigService := service.ProvidePaymentConfigService(client, settingRepository, encryptionKey)
 	registry := payment.ProvideRegistry()
 	defaultLoadBalancer := payment.ProvideDefaultLoadBalancer(client, encryptionKey)
-	paymentService := service.ProvidePaymentService(client, registry, defaultLoadBalancer, redeemService, subscriptionService, paymentConfigService, userRepository, groupRepository, affiliateService, notificationEmailService)
+	subscriptionCreditPurchaseService := service.ProvideSubscriptionCreditPurchaseService(db, userSubscriptionRepository, subscriptionCreditLedgerRepository, settingService)
+	paymentService := service.ProvidePaymentService(client, registry, defaultLoadBalancer, redeemService, subscriptionService, paymentConfigService, userRepository, groupRepository, affiliateService, subscriptionCreditPurchaseService, notificationEmailService, settingService)
 	settingHandler := handler.ProvideAdminSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService, userAttributeService, notificationEmailService, totpService, userService)
 	opsHandler := admin.NewOpsHandler(opsService)
 	updateCache := repository.NewUpdateCache(redisClient)
@@ -355,7 +362,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	channelMonitorRunner := service.ProvideChannelMonitorRunner(channelMonitorService, settingService)
 	userPlatformQuotaUsageFlusher := service.ProvideUserPlatformQuotaUsageFlusher(configConfig, billingCache, serviceUserPlatformQuotaRepository, timingWheelService)
 	accountErrorHistoryWiring := service.ProvideAccountErrorHistoryWiring(accountErrorHistoryService, gatewayService, openAIGatewayService, accountTestService, tokenRefreshService, adminService)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsAccountErrorAlertService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsUserRequestMonitorService, opsService, opsIngressRejectAggregator, apiKeyService, authCacheInvalidationWorker, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, batchImageCleanupService, batchImageWorkerRuntime, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher, accountErrorHistoryWiring, auditLogService, upstreamBillingProbeService, promptService)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsAccountErrorAlertService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsUserRequestMonitorService, opsService, opsIngressRejectAggregator, apiKeyService, authCacheInvalidationWorker, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, batchImageCleanupService, batchImageWorkerRuntime, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher, accountErrorHistoryWiring, auditLogService, upstreamBillingProbeService, promptService, subscriptionNotifyWorker)
 	application := &Application{
 		Server:      httpServer,
 		PromptAudit: promptService,
@@ -426,6 +433,7 @@ func provideCleanup(
 	auditLog *service.AuditLogService,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	promptAudit *securityaudit.PromptService,
+	subscriptionNotifyWorker *service.SubscriptionNotifyWorker,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -642,6 +650,12 @@ func provideCleanup(
 			{"UserPlatformQuotaUsageFlusher", func() error {
 				if quotaFlusher != nil {
 					quotaFlusher.Stop()
+				}
+				return nil
+			}},
+			{"SubscriptionNotifyWorker", func() error {
+				if subscriptionNotifyWorker != nil {
+					subscriptionNotifyWorker.Stop()
 				}
 				return nil
 			}},
