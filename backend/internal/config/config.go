@@ -645,6 +645,8 @@ type PricingConfig struct {
 	DataDir string `mapstructure:"data_dir"`
 	// 回退文件路径
 	FallbackFile string `mapstructure:"fallback_file"`
+	// 本地模型价格覆盖文件：仅列出的模型覆盖远程价，其它模型仍跟随远程更新
+	OverridesFile string `mapstructure:"overrides_file"`
 	// 更新间隔（小时）
 	UpdateIntervalHours int `mapstructure:"update_interval_hours"`
 	// 哈希校验间隔（分钟）
@@ -2007,6 +2009,8 @@ func setDefaults() {
 	viper.SetDefault("pricing.hash_url", "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/main/model_prices_and_context_window.sha256")
 	viper.SetDefault("pricing.data_dir", "./data")
 	viper.SetDefault("pricing.fallback_file", "./resources/model-pricing/model_prices_and_context_window.json")
+	// 默认启用仓库内置覆盖表（仅 pin 需要策略价的模型；空文件/缺文件则等同未配置）
+	viper.SetDefault("pricing.overrides_file", "./resources/model-pricing/pricing_overrides.json")
 	viper.SetDefault("pricing.update_interval_hours", 24)
 	viper.SetDefault("pricing.hash_check_interval_minutes", 10)
 

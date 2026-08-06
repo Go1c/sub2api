@@ -386,6 +386,143 @@ func TestPricingService_MergesFallbackOnlyModels(t *testing.T) {
 	require.InDelta(t, 0.034, merged["gemini-3.1-flash-lite-image"].OutputCostPerImage, 1e-12)
 }
 
+func TestPricingService_LocalOverridesBeatRemoteRates(t *testing.T) {
+	dir := t.TempDir()
+	overridesFile := filepath.Join(dir, "pricing_overrides.json")
+	require.NoError(t, os.WriteFile(overridesFile, []byte(`{
+		"gpt-5.6-luna": {
+			"input_cost_per_token": 1e-6,
+			"input_cost_per_token_priority": 2e-6,
+			"output_cost_per_token": 6e-6,
+			"output_cost_per_token_priority": 1.2e-5,
+			"cache_creation_input_token_cost": 1.25e-6,
+			"cache_creation_input_token_cost_priority": 2.5e-6,
+			"cache_read_input_token_cost": 1e-7,
+			"cache_read_input_token_cost_priority": 2e-7,
+			"long_context_input_token_threshold": 272000,
+			"long_context_input_cost_multiplier": 2.0,
+			"long_context_output_cost_multiplier": 1.5,
+			"litellm_provider": "openai",
+			"mode": "chat",
+			"supports_prompt_caching": true,
+			"supports_service_tier": true
+		}
+	}`), 0644))
+
+	svc := &PricingService{cfg: &config.Config{}}
+	svc.cfg.Pricing.OverridesFile = overridesFile
+
+	remoteData, err := svc.parsePricingData([]byte(`{
+		"gpt-5.6-luna": {
+			"input_cost_per_token": 2e-7,
+			"output_cost_per_token": 1.2e-6,
+			"cache_read_input_token_cost": 2e-8,
+			"cache_creation_input_token_cost": 2.5e-7,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		},
+		"gpt-5.6-sol": {
+			"input_cost_per_token": 5e-6,
+			"output_cost_per_token": 3e-5,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		}
+	}`))
+	require.NoError(t, err)
+
+	applied := svc.applyLocalPricingOverrides(remoteData)
+	require.InDelta(t, 1e-6, applied["gpt-5.6-luna"].InputCostPerToken, 1e-12)
+	require.InDelta(t, 6e-6, applied["gpt-5.6-luna"].OutputCostPerToken, 1e-12)
+	require.InDelta(t, 1e-7, applied["gpt-5.6-luna"].CacheReadInputTokenCost, 1e-12)
+	require.InDelta(t, 1.25e-6, applied["gpt-5.6-luna"].CacheCreationInputTokenCost, 1e-12)
+	require.InDelta(t, 2e-6, applied["gpt-5.6-luna"].InputCostPerTokenPriority, 1e-12)
+	require.Equal(t, 272000, applied["gpt-5.6-luna"].LongContextInputTokenThreshold)
+	// Unlisted models keep remote rates.
+	require.InDelta(t, 5e-6, applied["gpt-5.6-sol"].InputCostPerToken, 1e-12)
+	require.InDelta(t, 3e-5, applied["gpt-5.6-sol"].OutputCostPerToken, 1e-12)
+
+	billing := NewBillingService(&config.Config{}, &PricingService{pricingData: applied})
+	pricing, err := billing.GetModelPricing("gpt-5.6-luna")
+	require.NoError(t, err)
+	require.InDelta(t, 1e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.1e-6, pricing.CacheReadPricePerToken, 1e-12)
+	require.InDelta(t, 1.25e-6, pricing.CacheCreationPricePerToken, 1e-12)
+}
+
+func TestPricingService_LocalOverridesEmptyPathIsNoop(t *testing.T) {
+	svc := &PricingService{cfg: &config.Config{}}
+	remoteData, err := svc.parsePricingData([]byte(`{
+		"gpt-5.6-luna": {
+			"input_cost_per_token": 2e-7,
+			"output_cost_per_token": 1.2e-6,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		}
+	}`))
+	require.NoError(t, err)
+
+	applied := svc.applyLocalPricingOverrides(remoteData)
+	require.InDelta(t, 2e-7, applied["gpt-5.6-luna"].InputCostPerToken, 1e-12)
+}
+
+func TestPricingService_LocalOverridesMissingFileIsNoop(t *testing.T) {
+	svc := &PricingService{cfg: &config.Config{}}
+	svc.cfg.Pricing.OverridesFile = filepath.Join(t.TempDir(), "does-not-exist.json")
+	remoteData, err := svc.parsePricingData([]byte(`{
+		"gpt-5.6-luna": {
+			"input_cost_per_token": 2e-7,
+			"output_cost_per_token": 1.2e-6,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		}
+	}`))
+	require.NoError(t, err)
+
+	applied := svc.applyLocalPricingOverrides(remoteData)
+	require.InDelta(t, 2e-7, applied["gpt-5.6-luna"].InputCostPerToken, 1e-12)
+}
+
+func TestShippedPricingOverridesPinGPT56Luna(t *testing.T) {
+	overridesPath := filepath.Join("..", "..", "resources", "model-pricing", "pricing_overrides.json")
+	data, err := os.ReadFile(overridesPath)
+	require.NoError(t, err)
+
+	svc := &PricingService{cfg: &config.Config{}}
+	svc.cfg.Pricing.OverridesFile = overridesPath
+
+	// Simulate post-2026-07-31 remote reduced rates for luna; sol stays remote.
+	remoteData, err := svc.parsePricingData([]byte(`{
+		"gpt-5.6-luna": {
+			"input_cost_per_token": 2e-7,
+			"output_cost_per_token": 1.2e-6,
+			"cache_read_input_token_cost": 2e-8,
+			"cache_creation_input_token_cost": 2.5e-7,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		},
+		"gpt-5.6-sol": {
+			"input_cost_per_token": 5e-6,
+			"output_cost_per_token": 3e-5,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		}
+	}`))
+	require.NoError(t, err)
+
+	applied := svc.applyLocalPricingOverrides(remoteData)
+	require.InDelta(t, 1e-6, applied["gpt-5.6-luna"].InputCostPerToken, 1e-12)
+	require.InDelta(t, 6e-6, applied["gpt-5.6-luna"].OutputCostPerToken, 1e-12)
+	require.InDelta(t, 1e-7, applied["gpt-5.6-luna"].CacheReadInputTokenCost, 1e-12)
+	require.InDelta(t, 1.25e-6, applied["gpt-5.6-luna"].CacheCreationInputTokenCost, 1e-12)
+	require.InDelta(t, 5e-6, applied["gpt-5.6-sol"].InputCostPerToken, 1e-12)
+
+	// File itself must parse as valid override map containing luna.
+	parsed, err := svc.parsePricingData(data)
+	require.NoError(t, err)
+	require.Contains(t, parsed, "gpt-5.6-luna")
+}
+
 func TestGetModelPricing_Gpt53CodexSparkUsesGpt51CodexPricing(t *testing.T) {
 	sparkPricing := &LiteLLMModelPricing{InputCostPerToken: 1}
 	gpt53Pricing := &LiteLLMModelPricing{InputCostPerToken: 9}

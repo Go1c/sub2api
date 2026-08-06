@@ -383,6 +383,7 @@ func (s *PricingService) downloadPricingData() error {
 		return fmt.Errorf("parse pricing data: %w", err)
 	}
 	data = s.mergeFallbackPricingData(data)
+	data = s.applyLocalPricingOverrides(data)
 
 	// 保存到本地文件
 	pricingFile := s.getPricingFilePath()
@@ -522,6 +523,7 @@ func (s *PricingService) loadPricingData(filePath string) error {
 		return fmt.Errorf("parse pricing data: %w", err)
 	}
 	pricingData = s.mergeFallbackPricingData(pricingData)
+	pricingData = s.applyLocalPricingOverrides(pricingData)
 
 	// 计算哈希
 	hash := sha256.Sum256(data)
@@ -570,6 +572,58 @@ func (s *PricingService) mergeFallbackPricingData(data map[string]*LiteLLMModelP
 	}
 	if merged > 0 {
 		logger.LegacyPrintf("service.pricing", "[Pricing] Merged %d fallback-only models", merged)
+	}
+	return data
+}
+
+// applyLocalPricingOverrides 用 overrides_file 覆盖远程/缓存中的指定模型价格。
+// 仅文件中出现的模型会被替换；其它模型继续使用远程价，从而保留自动更新能力。
+// 覆盖作用在内存定价表上，不改写远程下载缓存文件本身。
+func (s *PricingService) applyLocalPricingOverrides(data map[string]*LiteLLMModelPricing) map[string]*LiteLLMModelPricing {
+	if data == nil {
+		data = make(map[string]*LiteLLMModelPricing)
+	}
+	if s == nil || s.cfg == nil {
+		return data
+	}
+	overridesPath := strings.TrimSpace(s.cfg.Pricing.OverridesFile)
+	if overridesPath == "" {
+		return data
+	}
+	body, err := os.ReadFile(overridesPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			logger.LegacyPrintf("service.pricing", "[Pricing] Local overrides load skipped: %v", err)
+		}
+		return data
+	}
+	if len(strings.TrimSpace(string(body))) == 0 {
+		return data
+	}
+	overrides, err := s.parsePricingData(body)
+	if err != nil {
+		logger.LegacyPrintf("service.pricing", "[Pricing] Local overrides parse skipped: %v", err)
+		return data
+	}
+	if len(overrides) == 0 {
+		return data
+	}
+	applied := 0
+	for modelName, pricing := range overrides {
+		if pricing == nil {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(modelName))
+		if key == "" {
+			continue
+		}
+		// 拷贝一份，避免后续对 overrides map 的修改污染已加载条目
+		cloned := *pricing
+		data[key] = &cloned
+		applied++
+	}
+	if applied > 0 {
+		logger.LegacyPrintf("service.pricing", "[Pricing] Applied local overrides for %d model(s) from %s", applied, overridesPath)
 	}
 	return data
 }
