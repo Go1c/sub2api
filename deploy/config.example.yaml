@@ -1080,6 +1080,10 @@ pricing:
   # Fallback pricing file
   # 备用定价文件
   fallback_file: "./resources/model-pricing/model_prices_and_context_window.json"
+  # Local model price overrides (only listed models override remote rates;
+  # all other models continue to follow remote auto-updates)
+  # 本地模型价格覆盖（仅文件中列出的模型覆盖远程价，其它模型仍跟随远程自动更新）
+  overrides_file: "./resources/model-pricing/pricing_overrides.json"
   # Update interval in hours
   # 更新间隔（小时）
   update_interval_hours: 24
