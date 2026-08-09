@@ -328,8 +328,9 @@ type SystemSettings struct {
 	AccountQuotaNotifyEmails        []NotifyEmailEntry `json:"account_quota_notify_emails"`
 
 	// Channel Monitor feature switch
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
@@ -434,8 +435,9 @@ type PublicSettings struct {
 	BalanceLowNotifyThreshold   float64 `json:"balance_low_notify_threshold"`
 	BalanceLowNotifyRechargeURL string  `json:"balance_low_notify_recharge_url"`
 
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 

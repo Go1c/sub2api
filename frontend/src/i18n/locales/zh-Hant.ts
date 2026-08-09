@@ -2774,6 +2774,17 @@ export default {
       duplicateSuccess: '監控已複製為「{name}」，預設關閉，請確認配置後再啟用。',
       duplicateFailed: '複製監控失敗',
       duplicateKeyUnavailable: 'API Key 無法解密，請重新編輯填入密鑰後再複製。',
+      statusBanner: {
+        title: '自訂 Banner',
+        description: '在「渠道狀態」頁頂部高亮展示一行自訂文案，適合發佈維護通知或活動提示。',
+        placeholder: '例如：Grok 渠道維護中，預計 18:00 恢復',
+        hint: '留空則不顯示。最多 500 字。',
+        save: '儲存 Banner',
+        clear: '清空',
+        saveSuccess: 'Banner 已儲存',
+        saveError: '儲存 Banner 失敗',
+        loadError: '載入 Banner 失敗'
+      },
       logs: {
         action: '日誌',
         title: '請求日誌 - {name}',

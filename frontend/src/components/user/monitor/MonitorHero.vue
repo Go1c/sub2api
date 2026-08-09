@@ -1,56 +1,75 @@
 <template>
   <section class="py-3 md:py-4">
-    <div class="flex items-center justify-end gap-3 flex-wrap">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
       <div
-        role="tablist"
-        class="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-dark-800 border border-gray-200/60 dark:border-dark-700/60 text-xs"
+        v-if="bannerText"
+        class="min-w-0 flex-1 max-w-3xl"
       >
-        <button
-          v-for="opt in windowOptions"
-          :key="opt.value"
-          type="button"
-          role="tab"
-          :aria-selected="window === opt.value"
-          class="px-3 py-1 rounded-lg transition-colors"
-          :class="window === opt.value
-            ? 'bg-white dark:bg-dark-700 shadow-sm text-gray-900 dark:text-white font-semibold'
-            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
-          @click="emit('update:window', opt.value)"
+        <div
+          class="inline-flex max-w-full items-center gap-2 rounded-xl border border-primary-400/30 bg-gradient-to-r from-primary-500/15 via-primary-400/10 to-transparent px-3.5 py-2 text-sm font-medium text-primary-700 shadow-[0_0_24px_rgba(79,140,255,0.12)] dark:border-primary-400/25 dark:from-primary-400/20 dark:via-primary-500/10 dark:text-primary-200"
+          role="status"
         >
-          {{ opt.label }}
-        </button>
+          <span
+            class="inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500 shadow-[0_0_8px_rgba(79,140,255,0.8)] animate-pulse dark:bg-primary-300"
+            aria-hidden="true"
+          ></span>
+          <span class="truncate ui-sans">{{ bannerText }}</span>
+        </div>
       </div>
+      <div v-else class="min-w-0 flex-1"></div>
 
-      <span
-        class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider uppercase"
-        :class="overallChipClass"
-      >
+      <div class="flex items-center justify-end gap-3 flex-wrap">
+        <div
+          role="tablist"
+          class="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-dark-800 border border-gray-200/60 dark:border-dark-700/60 text-xs"
+        >
+          <button
+            v-for="opt in windowOptions"
+            :key="opt.value"
+            type="button"
+            role="tab"
+            :aria-selected="window === opt.value"
+            class="px-3 py-1 rounded-lg transition-colors"
+            :class="window === opt.value
+              ? 'bg-white dark:bg-dark-700 shadow-sm text-gray-900 dark:text-white font-semibold'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+            @click="emit('update:window', opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+
         <span
-          class="w-1.5 h-1.5 rounded-full mr-1.5"
-          :class="overallDotClass"
-        ></span>
-        {{ overallLabel }}
-      </span>
+          class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider uppercase"
+          :class="overallChipClass"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full mr-1.5"
+            :class="overallDotClass"
+          ></span>
+          {{ overallLabel }}
+        </span>
 
-      <button
-        type="button"
-        class="h-8 w-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-dark-700 transition-colors disabled:opacity-50"
-        :disabled="loading"
-        :title="t('common.refresh')"
-        @click="emit('refresh')"
-      >
-        <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-      </button>
+        <button
+          type="button"
+          class="h-8 w-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-dark-700 transition-colors disabled:opacity-50"
+          :disabled="loading"
+          :title="t('common.refresh')"
+          @click="emit('refresh')"
+        >
+          <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+        </button>
 
-      <AutoRefreshButton
-        v-if="autoRefresh"
-        :enabled="autoRefresh.enabled.value"
-        :interval-seconds="autoRefresh.intervalSeconds.value"
-        :countdown="autoRefresh.countdown.value"
-        :intervals="autoRefresh.intervals"
-        @update:enabled="autoRefresh.setEnabled"
-        @update:interval="autoRefresh.setInterval"
-      />
+        <AutoRefreshButton
+          v-if="autoRefresh"
+          :enabled="autoRefresh.enabled.value"
+          :interval-seconds="autoRefresh.intervalSeconds.value"
+          :countdown="autoRefresh.countdown.value"
+          :intervals="autoRefresh.intervals"
+          @update:enabled="autoRefresh.setEnabled"
+          @update:interval="autoRefresh.setInterval"
+        />
+      </div>
     </div>
   </section>
 </template>
@@ -68,6 +87,7 @@ const props = defineProps<{
   intervalSeconds: number
   window: MonitorWindow
   loading: boolean
+  bannerText?: string | null
   autoRefresh?: {
     enabled: { value: boolean }
     intervalSeconds: { value: number }
@@ -84,6 +104,11 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const bannerText = computed(() => {
+  const text = typeof props.bannerText === 'string' ? props.bannerText.trim() : ''
+  return text || ''
+})
 
 const windowOptions = computed<{ value: MonitorWindow; label: string }[]>(() => [
   { value: '7d', label: t('channelStatus.windowTab.7d') },

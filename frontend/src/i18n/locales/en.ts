@@ -3039,6 +3039,17 @@ export default {
       duplicateSuccess: 'Monitor duplicated as "{name}" and disabled. Review its configuration before enabling it.',
       duplicateFailed: 'Failed to duplicate monitor',
       duplicateKeyUnavailable: 'The API key cannot be decrypted. Re-enter it before duplicating this monitor.',
+      statusBanner: {
+        title: 'Custom Banner',
+        description: 'Show a highlighted one-line message at the top of the Channel Status page for maintenance notices or promotions.',
+        placeholder: 'e.g. Grok channel is under maintenance until 18:00',
+        hint: 'Leave empty to hide. Max 500 characters.',
+        save: 'Save Banner',
+        clear: 'Clear',
+        saveSuccess: 'Banner saved',
+        saveError: 'Failed to save banner',
+        loadError: 'Failed to load banner'
+      },
       logs: {
         action: 'Logs',
         title: 'Request logs - {name}',

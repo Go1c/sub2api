@@ -1,5 +1,63 @@
 <template>
   <AppLayout>
+    <div class="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+            {{ t('admin.channelMonitor.statusBanner.title') }}
+          </h2>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.channelMonitor.statusBanner.description') }}
+          </p>
+          <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              v-model="statusBannerDraft"
+              type="text"
+              maxlength="500"
+              class="input w-full sm:max-w-xl"
+              :placeholder="t('admin.channelMonitor.statusBanner.placeholder')"
+              :disabled="statusBannerLoading || statusBannerSaving"
+              @keydown.enter.prevent="saveStatusBanner"
+            />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="statusBannerLoading || statusBannerSaving || !statusBannerDirty"
+                @click="saveStatusBanner"
+              >
+                <Icon
+                  v-if="statusBannerSaving"
+                  name="refresh"
+                  size="sm"
+                  class="mr-1.5 animate-spin"
+                />
+                {{ t('admin.channelMonitor.statusBanner.save') }}
+              </button>
+              <button
+                v-if="statusBannerDraft.trim()"
+                type="button"
+                class="btn btn-secondary"
+                :disabled="statusBannerLoading || statusBannerSaving"
+                @click="clearStatusBanner"
+              >
+                {{ t('admin.channelMonitor.statusBanner.clear') }}
+              </button>
+            </div>
+          </div>
+          <p class="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+            {{ t('admin.channelMonitor.statusBanner.hint') }}
+          </p>
+        </div>
+        <div
+          v-if="statusBannerDraft.trim()"
+          class="shrink-0 rounded-xl border border-primary-400/30 bg-gradient-to-r from-primary-500/15 via-primary-400/10 to-transparent px-3.5 py-2 text-sm font-medium text-primary-700 dark:border-primary-400/25 dark:from-primary-400/20 dark:via-primary-500/10 dark:text-primary-200"
+        >
+          <span class="ui-sans">{{ statusBannerDraft.trim() }}</span>
+        </div>
+      </div>
+    </div>
+
     <TablePageLayout>
       <template #filters>
         <MonitorFiltersBar
@@ -181,6 +239,14 @@ const runResults = ref<CheckResult[]>([])
 const showHistoryDialog = ref(false)
 const historyMonitor = ref<ChannelMonitor | null>(null)
 
+const statusBannerDraft = ref('')
+const statusBannerSaved = ref('')
+const statusBannerLoading = ref(false)
+const statusBannerSaving = ref(false)
+const statusBannerDirty = computed(
+  () => statusBannerDraft.value.trim() !== statusBannerSaved.value.trim(),
+)
+
 let abortController: AbortController | null = null
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -198,6 +264,52 @@ const deleteConfirmMessage = computed(() => {
   const name = deleting.value?.name || ''
   return t('admin.channelMonitor.deleteConfirm', { name })
 })
+
+async function loadStatusBanner() {
+  statusBannerLoading.value = true
+  try {
+    const settings = await adminAPI.settings.getSettings()
+    const banner = (settings.channel_monitor_status_banner || '').trim()
+    statusBannerDraft.value = banner
+    statusBannerSaved.value = banner
+  } catch (err: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(err, t('admin.channelMonitor.statusBanner.loadError')),
+    )
+  } finally {
+    statusBannerLoading.value = false
+  }
+}
+
+async function saveStatusBanner() {
+  if (statusBannerSaving.value) return
+  const next = statusBannerDraft.value.trim()
+  statusBannerSaving.value = true
+  try {
+    const updated = await adminAPI.settings.updateSettings({
+      channel_monitor_status_banner: next,
+    })
+    const banner = (updated.channel_monitor_status_banner || '').trim()
+    statusBannerDraft.value = banner
+    statusBannerSaved.value = banner
+    // Keep public settings in sync so the status page reflects the change without a full reload.
+    if (appStore.cachedPublicSettings) {
+      appStore.cachedPublicSettings.channel_monitor_status_banner = banner
+    }
+    appStore.showSuccess(t('admin.channelMonitor.statusBanner.saveSuccess'))
+  } catch (err: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(err, t('admin.channelMonitor.statusBanner.saveError')),
+    )
+  } finally {
+    statusBannerSaving.value = false
+  }
+}
+
+async function clearStatusBanner() {
+  statusBannerDraft.value = ''
+  await saveStatusBanner()
+}
 
 async function reload() {
   if (abortController) abortController.abort()
@@ -338,7 +450,10 @@ async function confirmDelete() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  void reload()
+  void loadStatusBanner()
+})
 onUnmounted(() => {
   if (searchTimeout) clearTimeout(searchTimeout)
   abortController?.abort()

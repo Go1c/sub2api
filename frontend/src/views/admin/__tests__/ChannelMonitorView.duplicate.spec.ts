@@ -9,11 +9,15 @@ import ChannelMonitorView from '@/views/admin/ChannelMonitorView.vue'
 const {
   listMonitors,
   duplicateMonitor,
+  getSettings,
+  updateSettings,
   showSuccess,
   showError,
 } = vi.hoisted(() => ({
   listMonitors: vi.fn(),
   duplicateMonitor: vi.fn(),
+  getSettings: vi.fn(),
+  updateSettings: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn(),
 }))
@@ -27,11 +31,19 @@ vi.mock('@/api/admin', () => ({
       runNow: vi.fn(),
       del: vi.fn(),
     },
+    settings: {
+      getSettings,
+      updateSettings,
+    },
   },
 }))
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ showSuccess, showError }),
+  useAppStore: () => ({
+    showSuccess,
+    showError,
+    cachedPublicSettings: { channel_monitor_status_banner: '' },
+  }),
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -119,7 +131,9 @@ function mountView() {
 describe('ChannelMonitorView duplicate action', () => {
   beforeEach(() => {
     localStorage.clear()
-    for (const fn of [listMonitors, duplicateMonitor, showSuccess, showError]) fn.mockReset()
+    for (const fn of [listMonitors, duplicateMonitor, getSettings, updateSettings, showSuccess, showError]) {
+      fn.mockReset()
+    }
     listMonitors.mockResolvedValue({
       items: [monitor],
       total: 1,
@@ -127,6 +141,8 @@ describe('ChannelMonitorView duplicate action', () => {
       page_size: 20,
       pages: 1,
     })
+    getSettings.mockResolvedValue({ channel_monitor_status_banner: '' })
+    updateSettings.mockResolvedValue({ channel_monitor_status_banner: '' })
     duplicateMonitor.mockResolvedValue(makeMonitor({ id: 43, name: 'primary (Copy)', enabled: false }))
   })
 

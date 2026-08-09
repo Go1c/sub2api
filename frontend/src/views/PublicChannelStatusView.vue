@@ -11,6 +11,7 @@
           :interval-seconds="DEFAULT_INTERVAL_SECONDS"
           :window="currentWindow"
           :loading="loading"
+          :banner-text="statusBanner"
           :auto-refresh="autoRefresh"
           @update:window="handleWindowChange"
           @refresh="manualReload"
@@ -67,6 +68,7 @@ const currentWindow = ref<MonitorWindow>('7d')
 const detailCache = reactive<Record<number, UserMonitorDetail>>({})
 const showDetail = ref(false)
 const detailTarget = ref<UserMonitorView | null>(null)
+const statusBanner = computed(() => appStore.cachedPublicSettings?.channel_monitor_status_banner || '')
 
 let abortController: AbortController | null = null
 
