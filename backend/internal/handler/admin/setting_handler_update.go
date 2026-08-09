@@ -416,8 +416,9 @@ type UpdateSettingsRequest struct {
 	PaymentAlipayForceQRCode *bool `json:"payment_alipay_force_qrcode"`
 
 	// Channel Monitor feature switch
-	ChannelMonitorEnabled                *bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds *int  `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorEnabled                *bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds *int    `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorStatusBanner           *string `json:"channel_monitor_status_banner"`
 
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
@@ -2023,6 +2024,12 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.ChannelMonitorDefaultIntervalSeconds
 		}(),
+		ChannelMonitorStatusBanner: func() string {
+			if req.ChannelMonitorStatusBanner != nil {
+				return *req.ChannelMonitorStatusBanner
+			}
+			return previousSettings.ChannelMonitorStatusBanner
+		}(),
 		AvailableChannelsEnabled: func() bool {
 			if req.AvailableChannelsEnabled != nil {
 				return *req.AvailableChannelsEnabled
@@ -2446,6 +2453,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 
 		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
+		ChannelMonitorStatusBanner:           updatedSettings.ChannelMonitorStatusBanner,
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
 

@@ -8633,6 +8633,7 @@ const form = reactive<SettingsForm>({
   // Channel Monitor feature switch
   channel_monitor_enabled: true,
   channel_monitor_default_interval_seconds: 60,
+  channel_monitor_status_banner: "",
   // Available Channels feature switch
   available_channels_enabled: false,
   // Site Messages feature switch

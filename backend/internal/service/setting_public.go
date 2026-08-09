@@ -235,6 +235,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAccountQuotaNotifyEnabled,
 		SettingKeyChannelMonitorEnabled,
 		SettingKeyChannelMonitorDefaultIntervalSeconds,
+		SettingKeyChannelMonitorStatusBanner,
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
@@ -363,6 +364,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 
 		ChannelMonitorEnabled:                !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled]),
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
+		ChannelMonitorStatusBanner:           normalizeChannelMonitorStatusBanner(settings[SettingKeyChannelMonitorStatusBanner]),
 
 		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
 
@@ -407,6 +409,24 @@ func clampChannelMonitorInterval(v int) int {
 		return channelMonitorIntervalMax
 	}
 	return v
+}
+
+const channelMonitorStatusBannerMaxLen = 500
+
+// normalizeChannelMonitorStatusBanner trims whitespace and clamps the banner text
+// length. Empty result means "do not show a banner" on the status page.
+func normalizeChannelMonitorStatusBanner(raw string) string {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return ""
+	}
+	// Normalize newlines / tabs into spaces so the hero banner stays single-line.
+	text = strings.Join(strings.Fields(text), " ")
+	if len([]rune(text)) > channelMonitorStatusBannerMaxLen {
+		runes := []rune(text)
+		text = string(runes[:channelMonitorStatusBannerMaxLen])
+	}
+	return text
 }
 
 // ChannelMonitorRuntime is the lightweight view of the channel monitor feature
@@ -546,6 +566,7 @@ type PublicSettingsInjectionPayload struct {
 	// that hid the "可用渠道" menu on page refresh.
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 	AvailableChannelsEnabled             bool   `json:"available_channels_enabled"`
 	AffiliateEnabled                     bool   `json:"affiliate_enabled"`
 	RiskControlEnabled                   bool   `json:"risk_control_enabled"`
@@ -629,6 +650,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
+		ChannelMonitorStatusBanner:           settings.ChannelMonitorStatusBanner,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,

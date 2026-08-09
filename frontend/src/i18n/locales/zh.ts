@@ -3111,6 +3111,17 @@ export default {
       duplicateSuccess: '监控已复制为「{name}」，默认关闭，请确认配置后再启用。',
       duplicateFailed: '复制监控失败',
       duplicateKeyUnavailable: 'API Key 无法解密，请重新编辑填入密钥后再复制。',
+      statusBanner: {
+        title: '自定义 Banner',
+        description: '在「渠道状态」页顶部高亮展示一行自定义文案，适合发布维护通知或活动提示。',
+        placeholder: '例如：Grok 渠道维护中，预计 18:00 恢复',
+        hint: '留空则不显示。最多 500 字。',
+        save: '保存 Banner',
+        clear: '清空',
+        saveSuccess: 'Banner 已保存',
+        saveError: '保存 Banner 失败',
+        loadError: '加载 Banner 失败'
+      },
       logs: {
         action: '日志',
         title: '请求日志 - {name}',
