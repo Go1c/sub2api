@@ -2065,7 +2065,9 @@ export default {
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for this user; 0 = unlimited. Acts as a fallback only when the group has no rpm_limit set.',
         invoiceEnabled: 'Enable invoice requests',
-        invoiceEnabledHint: 'When enabled, this user sees the invoice request entry in the left menu'
+        invoiceEnabledHint: 'When enabled, this user sees the invoice request entry in the left menu',
+        subscriptionPurchaseDisabled: 'Ban subscription purchase',
+        subscriptionPurchaseDisabledHint: 'When enabled, this user cannot purchase subscription plans'
       },
       columns: {
         user: 'User',
@@ -7724,6 +7726,7 @@ export default {
           REFUND_AMOUNT_EXCEEDED: 'Refund amount exceeds the recharge amount.',
           REFUND_FAILED: 'Refund failed.',
           SUBSCRIPTION_BALANCE_PAYMENT_DISABLED: 'Balance subscription payment has been disabled.',
+          SUBSCRIPTION_PURCHASE_FORBIDDEN: 'No permission to purchase subscriptions',
           SUBSCRIPTION_RENEWAL_NOT_ALLOWED: 'You still have a usable subscription. Renew again after the credit is exhausted or the subscription expires.',
           SUBSCRIPTION_EXPIRED: 'Your current subscription has expired. Please purchase a new plan.',
           SUBSCRIPTION_CREDIT_EXHAUSTED: 'Your current subscription credit has been exhausted. Please renew or purchase a new plan.',

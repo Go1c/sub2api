@@ -426,6 +426,20 @@ func (_c *UserCreate) SetNillableInvoiceEnabled(v *bool) *UserCreate {
 	return _c
 }
 
+// SetSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field.
+func (_c *UserCreate) SetSubscriptionPurchaseDisabled(v bool) *UserCreate {
+	_c.mutation.SetSubscriptionPurchaseDisabled(v)
+	return _c
+}
+
+// SetNillableSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableSubscriptionPurchaseDisabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetSubscriptionPurchaseDisabled(*v)
+	}
+	return _c
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_c *UserCreate) SetRpmLimit(v int) *UserCreate {
 	_c.mutation.SetRpmLimit(v)
@@ -803,6 +817,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultInvoiceEnabled
 		_c.mutation.SetInvoiceEnabled(v)
 	}
+	if _, ok := _c.mutation.SubscriptionPurchaseDisabled(); !ok {
+		v := user.DefaultSubscriptionPurchaseDisabled
+		_c.mutation.SetSubscriptionPurchaseDisabled(v)
+	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		v := user.DefaultRpmLimit
 		_c.mutation.SetRpmLimit(v)
@@ -907,6 +925,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.InvoiceEnabled(); !ok {
 		return &ValidationError{Name: "invoice_enabled", err: errors.New(`ent: missing required field "User.invoice_enabled"`)}
+	}
+	if _, ok := _c.mutation.SubscriptionPurchaseDisabled(); !ok {
+		return &ValidationError{Name: "subscription_purchase_disabled", err: errors.New(`ent: missing required field "User.subscription_purchase_disabled"`)}
 	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		return &ValidationError{Name: "rpm_limit", err: errors.New(`ent: missing required field "User.rpm_limit"`)}
@@ -1053,6 +1074,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.InvoiceEnabled(); ok {
 		_spec.SetField(user.FieldInvoiceEnabled, field.TypeBool, value)
 		_node.InvoiceEnabled = value
+	}
+	if value, ok := _c.mutation.SubscriptionPurchaseDisabled(); ok {
+		_spec.SetField(user.FieldSubscriptionPurchaseDisabled, field.TypeBool, value)
+		_node.SubscriptionPurchaseDisabled = value
 	}
 	if value, ok := _c.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -1784,6 +1809,18 @@ func (u *UserUpsert) UpdateInvoiceEnabled() *UserUpsert {
 	return u
 }
 
+// SetSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field.
+func (u *UserUpsert) SetSubscriptionPurchaseDisabled(v bool) *UserUpsert {
+	u.Set(user.FieldSubscriptionPurchaseDisabled, v)
+	return u
+}
+
+// UpdateSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field to the value that was provided on create.
+func (u *UserUpsert) UpdateSubscriptionPurchaseDisabled() *UserUpsert {
+	u.SetExcluded(user.FieldSubscriptionPurchaseDisabled)
+	return u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (u *UserUpsert) SetRpmLimit(v int) *UserUpsert {
 	u.Set(user.FieldRpmLimit, v)
@@ -2327,6 +2364,20 @@ func (u *UserUpsertOne) SetInvoiceEnabled(v bool) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateInvoiceEnabled() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateInvoiceEnabled()
+	})
+}
+
+// SetSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field.
+func (u *UserUpsertOne) SetSubscriptionPurchaseDisabled(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetSubscriptionPurchaseDisabled(v)
+	})
+}
+
+// UpdateSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateSubscriptionPurchaseDisabled() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateSubscriptionPurchaseDisabled()
 	})
 }
 
@@ -3042,6 +3093,20 @@ func (u *UserUpsertBulk) SetInvoiceEnabled(v bool) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateInvoiceEnabled() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateInvoiceEnabled()
+	})
+}
+
+// SetSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field.
+func (u *UserUpsertBulk) SetSubscriptionPurchaseDisabled(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetSubscriptionPurchaseDisabled(v)
+	})
+}
+
+// UpdateSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateSubscriptionPurchaseDisabled() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateSubscriptionPurchaseDisabled()
 	})
 }
 

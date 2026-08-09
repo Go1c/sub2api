@@ -58,6 +58,7 @@ const createUser = (overrides: Partial<AdminUser> = {}): AdminUser => ({
   balance: 10,
   total_recharged: 100,
   invoice_enabled: true,
+  subscription_purchase_disabled: false,
   concurrency: 1,
   rpm_limit: 0,
   status: 'active',
@@ -110,6 +111,38 @@ describe('UserEditModal invoice access', () => {
       42,
       expect.objectContaining({
         invoice_enabled: false,
+      }),
+    )
+  })
+
+  it('submits the per-user subscription purchase ban toggle when updating a user', async () => {
+    updateUser.mockResolvedValue(createUser({ subscription_purchase_disabled: true }))
+
+    const wrapper = mount(UserEditModal, {
+      props: {
+        show: true,
+        user: createUser({ subscription_purchase_disabled: false }),
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          UserAttributeForm: true,
+          Icon: true,
+        },
+      },
+    })
+
+    const toggle = wrapper.get('[data-test="subscription-purchase-disabled-toggle"]')
+    expect((toggle.element as HTMLInputElement).checked).toBe(false)
+
+    await toggle.setValue(true)
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateUser).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({
+        subscription_purchase_disabled: true,
       }),
     )
   })

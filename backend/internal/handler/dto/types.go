@@ -42,6 +42,9 @@ type User struct {
 	// InvoiceEnabled 是否允许该用户使用发票申请入口与相关接口。
 	InvoiceEnabled bool `json:"invoice_enabled"`
 
+	// SubscriptionPurchaseDisabled 为 true 时禁止该用户购买订阅。
+	SubscriptionPurchaseDisabled bool `json:"subscription_purchase_disabled"`
+
 	APIKeys       []APIKey           `json:"api_keys,omitempty"`
 	Subscriptions []UserSubscription `json:"subscriptions,omitempty"`
 }

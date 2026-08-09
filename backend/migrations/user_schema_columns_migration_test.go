@@ -53,6 +53,16 @@ func TestMigration920AddsUserFrozenBalanceIdempotently(t *testing.T) {
 	require.NotContains(t, sql, "DROP COLUMN")
 }
 
+func TestMigration921AddsSubscriptionPurchaseDisabledIdempotently(t *testing.T) {
+	content, err := FS.ReadFile("921_add_user_subscription_purchase_disabled.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS subscription_purchase_disabled BOOLEAN NOT NULL DEFAULT FALSE")
+	require.Contains(t, string(content), "IF NOT EXISTS")
+	require.NotContains(t, sql, "DROP COLUMN")
+}
+
 func TestMigration920AndOptional160CoverFrozenBalance(t *testing.T) {
 	// 920 is required on every lineage (publish safety net after the 2026-07-28 outage).
 	// 160 exists on full-dev / upstream installs; topic publish branches may only have 920.

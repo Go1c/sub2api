@@ -2059,6 +2059,7 @@ var (
 		{Name: "webhook_announcement_notify_enabled", Type: field.TypeBool, Default: true},
 		{Name: "total_recharged", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "invoice_enabled", Type: field.TypeBool, Default: false},
+		{Name: "subscription_purchase_disabled", Type: field.TypeBool, Default: false},
 		{Name: "rpm_limit", Type: field.TypeInt, Default: 0},
 	}
 	// UsersTable holds the schema information for the "users" table.

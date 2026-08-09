@@ -2178,7 +2178,9 @@ export default {
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效',
         invoiceEnabled: '启用发票申请',
-        invoiceEnabledHint: '开启后该用户左侧菜单会显示发票申请入口'
+        invoiceEnabledHint: '开启后该用户左侧菜单会显示发票申请入口',
+        subscriptionPurchaseDisabled: '禁止购买订阅',
+        subscriptionPurchaseDisabledHint: '开启后，该用户无法购买订阅套餐'
       },
       adjustBalance: '调整余额',
       adjustConcurrency: '调整并发数',
@@ -7899,6 +7901,7 @@ export default {
           REFUND_AMOUNT_EXCEEDED: '退款金额超过充值金额',
           REFUND_FAILED: '退款失败',
           SUBSCRIPTION_BALANCE_PAYMENT_DISABLED: '余额购买订阅功能已关闭',
+          SUBSCRIPTION_PURCHASE_FORBIDDEN: '无权限购买',
           SUBSCRIPTION_RENEWAL_NOT_ALLOWED: '当前仍有可用订阅，请在额度耗尽或订阅到期后再续购。',
           SUBSCRIPTION_EXPIRED: '当前订阅已过期，请购买新套餐。',
           SUBSCRIPTION_CREDIT_EXHAUSTED: '当前订阅额度已耗尽，请续费或购买新套餐。',

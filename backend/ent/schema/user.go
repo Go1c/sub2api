@@ -127,6 +127,9 @@ func (User) Fields() []ent.Field {
 			Default(0),
 		field.Bool("invoice_enabled").
 			Default(false),
+		// 管理员禁止该用户购买订阅（默认 false = 允许购买）。
+		field.Bool("subscription_purchase_disabled").
+			Default(false),
 
 		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
 		field.Int("rpm_limit").

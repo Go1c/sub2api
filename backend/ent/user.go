@@ -75,6 +75,8 @@ type User struct {
 	TotalRecharged float64 `json:"total_recharged,omitempty"`
 	// InvoiceEnabled holds the value of the "invoice_enabled" field.
 	InvoiceEnabled bool `json:"invoice_enabled,omitempty"`
+	// SubscriptionPurchaseDisabled holds the value of the "subscription_purchase_disabled" field.
+	SubscriptionPurchaseDisabled bool `json:"subscription_purchase_disabled,omitempty"`
 	// RpmLimit holds the value of the "rpm_limit" field.
 	RpmLimit int `json:"rpm_limit,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -282,7 +284,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled, user.FieldWebhookBalanceNotifyEnabled, user.FieldWebhookSiteMessageNotifyEnabled, user.FieldWebhookAnnouncementNotifyEnabled, user.FieldInvoiceEnabled:
+		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled, user.FieldWebhookBalanceNotifyEnabled, user.FieldWebhookSiteMessageNotifyEnabled, user.FieldWebhookAnnouncementNotifyEnabled, user.FieldInvoiceEnabled, user.FieldSubscriptionPurchaseDisabled:
 			values[i] = new(sql.NullBool)
 		case user.FieldBalance, user.FieldFrozenBalance, user.FieldBalanceNotifyThreshold, user.FieldWebhookBalanceNotifyThreshold, user.FieldTotalRecharged:
 			values[i] = new(sql.NullFloat64)
@@ -493,6 +495,12 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field invoice_enabled", values[i])
 			} else if value.Valid {
 				_m.InvoiceEnabled = value.Bool
+			}
+		case user.FieldSubscriptionPurchaseDisabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_purchase_disabled", values[i])
+			} else if value.Valid {
+				_m.SubscriptionPurchaseDisabled = value.Bool
 			}
 		case user.FieldRpmLimit:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -721,6 +729,9 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("invoice_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.InvoiceEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("subscription_purchase_disabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionPurchaseDisabled))
 	builder.WriteString(", ")
 	builder.WriteString("rpm_limit=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RpmLimit))

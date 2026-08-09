@@ -130,6 +130,69 @@ func TestCreateOrderSubscriptionBalancePaymentRecordsLedgerAndAudit(t *testing.T
 	require.Equal(t, float64(25), detail["balance_after"])
 }
 
+func TestCreateOrderSubscriptionPurchaseForbiddenWhenUserBanned(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("sub-purchase-banned@example.com").
+		SetPasswordHash("hash").
+		SetUsername("banned-buyer").
+		SetStatus(payment.EntityStatusActive).
+		SetBalance(40).
+		Save(ctx)
+	require.NoError(t, err)
+
+	plan, err := client.SubscriptionPlan.Create().
+		SetName("Starter").
+		SetDescription("starter plan").
+		SetPrice(10).
+		SetValidityDays(30).
+		SetValidityUnit("day").
+		SetFeatures("[]").
+		SetProductName("Starter Plan").
+		SetQuotaUsd(25).
+		SetScopeType(SubscriptionScopeAllAvailableGroups).
+		SetScopeConfig(map[string]any{}).
+		SetForSale(true).
+		SetSortOrder(1).
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{
+		entClient: client,
+		configService: &PaymentConfigService{
+			entClient: client,
+			settingRepo: &paymentConfigSettingRepoStub{
+				values: map[string]string{
+					SettingPaymentEnabled:                    "true",
+					SettingSubscriptionBalancePaymentEnabled: "true",
+				},
+			},
+		},
+		userRepo: &mockUserRepo{
+			getByIDUser: &User{
+				ID:                           user.ID,
+				Email:                        user.Email,
+				Username:                     user.Username,
+				Status:                       payment.EntityStatusActive,
+				Balance:                      40,
+				SubscriptionPurchaseDisabled: true,
+			},
+		},
+		subscriptionCreditPurchaseSvc: &subscriptionBalancePaymentFulfillerStub{},
+	}
+
+	_, err = svc.CreateOrder(ctx, CreateOrderRequest{
+		UserID:      user.ID,
+		PaymentType: payment.TypeBalance,
+		OrderType:   payment.OrderTypeSubscription,
+		PlanID:      plan.ID,
+	})
+	require.Error(t, err)
+	require.Equal(t, "SUBSCRIPTION_PURCHASE_FORBIDDEN", infraerrors.FromError(err).Reason)
+}
+
 func TestCreateOrderSubscriptionBalancePaymentRequiresToggle(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentOrderLifecycleTestClient(t)
