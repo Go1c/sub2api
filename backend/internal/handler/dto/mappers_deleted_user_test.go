@@ -26,3 +26,11 @@ func TestUserFromServiceShallow_MapsInvoiceEnabled(t *testing.T) {
 	disabled := UserFromServiceShallow(&service.User{ID: 2, Email: "b@test.com", InvoiceEnabled: false})
 	require.False(t, disabled.InvoiceEnabled)
 }
+
+func TestUserFromServiceShallow_MapsSubscriptionPurchaseDisabled(t *testing.T) {
+	banned := UserFromServiceShallow(&service.User{ID: 1, Email: "a@test.com", SubscriptionPurchaseDisabled: true})
+	require.True(t, banned.SubscriptionPurchaseDisabled)
+
+	allowed := UserFromServiceShallow(&service.User{ID: 2, Email: "b@test.com", SubscriptionPurchaseDisabled: false})
+	require.False(t, allowed.SubscriptionPurchaseDisabled)
+}

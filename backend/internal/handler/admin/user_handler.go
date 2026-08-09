@@ -81,8 +81,9 @@ type UpdateUserRequest struct {
 	Balance        *float64 `json:"balance"`
 	Concurrency    *int     `json:"concurrency"`
 	RPMLimit       *int     `json:"rpm_limit"`
-	InvoiceEnabled *bool    `json:"invoice_enabled"`
-	Status         string   `json:"status" binding:"omitempty,oneof=active disabled"`
+	InvoiceEnabled               *bool    `json:"invoice_enabled"`
+	SubscriptionPurchaseDisabled *bool    `json:"subscription_purchase_disabled"`
+	Status                       string   `json:"status" binding:"omitempty,oneof=active disabled"`
 	AllowedGroups  *[]int64 `json:"allowed_groups"`
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
@@ -376,11 +377,12 @@ func (h *UserHandler) Update(c *gin.Context) {
 		Balance:        req.Balance,
 		Concurrency:    req.Concurrency,
 		RPMLimit:       req.RPMLimit,
-		InvoiceEnabled: req.InvoiceEnabled,
-		Status:         req.Status,
-		AllowedGroups:  req.AllowedGroups,
-		GroupRates:     req.GroupRates,
-		ActorAdminID:   getAdminIDFromContext(c),
+		InvoiceEnabled:               req.InvoiceEnabled,
+		SubscriptionPurchaseDisabled: req.SubscriptionPurchaseDisabled,
+		Status:                       req.Status,
+		AllowedGroups:                req.AllowedGroups,
+		GroupRates:                   req.GroupRates,
+		ActorAdminID:                 getAdminIDFromContext(c),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

@@ -73,6 +73,8 @@ const (
 	FieldTotalRecharged = "total_recharged"
 	// FieldInvoiceEnabled holds the string denoting the invoice_enabled field in the database.
 	FieldInvoiceEnabled = "invoice_enabled"
+	// FieldSubscriptionPurchaseDisabled holds the string denoting the subscription_purchase_disabled field in the database.
+	FieldSubscriptionPurchaseDisabled = "subscription_purchase_disabled"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
@@ -262,6 +264,7 @@ var Columns = []string{
 	FieldWebhookAnnouncementNotifyEnabled,
 	FieldTotalRecharged,
 	FieldInvoiceEnabled,
+	FieldSubscriptionPurchaseDisabled,
 	FieldRpmLimit,
 }
 
@@ -343,6 +346,8 @@ var (
 	DefaultTotalRecharged float64
 	// DefaultInvoiceEnabled holds the default value on creation for the "invoice_enabled" field.
 	DefaultInvoiceEnabled bool
+	// DefaultSubscriptionPurchaseDisabled holds the default value on creation for the "subscription_purchase_disabled" field.
+	DefaultSubscriptionPurchaseDisabled bool
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
 )
@@ -498,6 +503,11 @@ func ByTotalRecharged(opts ...sql.OrderTermOption) OrderOption {
 // ByInvoiceEnabled orders the results by the invoice_enabled field.
 func ByInvoiceEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoiceEnabled, opts...).ToFunc()
+}
+
+// BySubscriptionPurchaseDisabled orders the results by the subscription_purchase_disabled field.
+func BySubscriptionPurchaseDisabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionPurchaseDisabled, opts...).ToFunc()
 }
 
 // ByRpmLimit orders the results by the rpm_limit field.

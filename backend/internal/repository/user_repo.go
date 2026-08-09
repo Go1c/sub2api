@@ -114,6 +114,11 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 			return err
 		}
 	}
+	if userIn.SubscriptionPurchaseDisabled {
+		if err := setUserSubscriptionPurchaseDisabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), created.ID, true); err != nil {
+			return err
+		}
+	}
 
 	if tx != nil {
 		if err := tx.Commit(); err != nil {
@@ -140,6 +145,9 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 		out.AllowedGroups = v
 	}
 	if err := r.hydrateInvoiceEnabled(ctx, out); err != nil {
+		return nil, err
+	}
+	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -187,6 +195,9 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 		out.AllowedGroups = v
 	}
 	if err := r.hydrateInvoiceEnabled(ctx, out); err != nil {
+		return nil, err
+	}
+	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -279,6 +290,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrEmailExists)
 	}
 	if err := setUserInvoiceEnabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), updated.ID, userIn.InvoiceEnabled); err != nil {
+		return err
+	}
+	if err := setUserSubscriptionPurchaseDisabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), updated.ID, userIn.SubscriptionPurchaseDisabled); err != nil {
 		return err
 	}
 
@@ -630,6 +644,9 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 			u.AllowedGroups = groups
 		}
 		if err := r.hydrateInvoiceEnabled(ctx, u); err != nil {
+			return nil, nil, err
+		}
+		if err := r.hydrateSubscriptionPurchaseDisabled(ctx, u); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -1138,6 +1155,9 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	if err := r.hydrateInvoiceEnabled(ctx, out); err != nil {
 		return nil, err
 	}
+	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -1167,6 +1187,36 @@ func setUserInvoiceEnabled(ctx context.Context, exec sqlQueryExecutor, userID in
 	}
 	if _, err := exec.ExecContext(ctx, "UPDATE users SET invoice_enabled = $1 WHERE id = $2", enabled, userID); err != nil {
 		return fmt.Errorf("update user invoice flag: %w", err)
+	}
+	return nil
+}
+
+func (r *userRepository) hydrateSubscriptionPurchaseDisabled(ctx context.Context, user *service.User) error {
+	if user == nil {
+		return nil
+	}
+	exec := txAwareSQLExecutor(ctx, r.sql, r.client)
+	if exec == nil {
+		return nil
+	}
+	var disabled bool
+	err := scanSingleRow(ctx, exec, "SELECT subscription_purchase_disabled FROM users WHERE id = $1", []any{user.ID}, &disabled)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("load user subscription purchase ban flag: %w", err)
+	}
+	user.SubscriptionPurchaseDisabled = disabled
+	return nil
+}
+
+func setUserSubscriptionPurchaseDisabled(ctx context.Context, exec sqlQueryExecutor, userID int64, disabled bool) error {
+	if exec == nil {
+		return nil
+	}
+	if _, err := exec.ExecContext(ctx, "UPDATE users SET subscription_purchase_disabled = $1 WHERE id = $2", disabled, userID); err != nil {
+		return fmt.Errorf("update user subscription purchase ban flag: %w", err)
 	}
 	return nil
 }

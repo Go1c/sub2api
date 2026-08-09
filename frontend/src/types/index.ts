@@ -89,6 +89,7 @@ export interface User {
   frozen_balance?: number // Balance currently held by async batch jobs
   total_recharged?: number // Historical recharge amount available for invoice checks
   invoice_enabled?: boolean // Whether the user can access invoice requests
+  subscription_purchase_disabled?: boolean // When true, user cannot purchase subscriptions
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status

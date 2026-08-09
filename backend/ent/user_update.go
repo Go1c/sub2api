@@ -510,6 +510,20 @@ func (_u *UserUpdate) SetNillableInvoiceEnabled(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field.
+func (_u *UserUpdate) SetSubscriptionPurchaseDisabled(v bool) *UserUpdate {
+	_u.mutation.SetSubscriptionPurchaseDisabled(v)
+	return _u
+}
+
+// SetNillableSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableSubscriptionPurchaseDisabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetSubscriptionPurchaseDisabled(*v)
+	}
+	return _u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdate) SetRpmLimit(v int) *UserUpdate {
 	_u.mutation.ResetRpmLimit()
@@ -1323,6 +1337,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.InvoiceEnabled(); ok {
 		_spec.SetField(user.FieldInvoiceEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SubscriptionPurchaseDisabled(); ok {
+		_spec.SetField(user.FieldSubscriptionPurchaseDisabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -2550,6 +2567,20 @@ func (_u *UserUpdateOne) SetNillableInvoiceEnabled(v *bool) *UserUpdateOne {
 	return _u
 }
 
+// SetSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field.
+func (_u *UserUpdateOne) SetSubscriptionPurchaseDisabled(v bool) *UserUpdateOne {
+	_u.mutation.SetSubscriptionPurchaseDisabled(v)
+	return _u
+}
+
+// SetNillableSubscriptionPurchaseDisabled sets the "subscription_purchase_disabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSubscriptionPurchaseDisabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionPurchaseDisabled(*v)
+	}
+	return _u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdateOne) SetRpmLimit(v int) *UserUpdateOne {
 	_u.mutation.ResetRpmLimit()
@@ -3393,6 +3424,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.InvoiceEnabled(); ok {
 		_spec.SetField(user.FieldInvoiceEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SubscriptionPurchaseDisabled(); ok {
+		_spec.SetField(user.FieldSubscriptionPurchaseDisabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)

@@ -2427,8 +2427,12 @@ func init() {
 	userDescInvoiceEnabled := userFields[25].Descriptor()
 	// user.DefaultInvoiceEnabled holds the default value on creation for the invoice_enabled field.
 	user.DefaultInvoiceEnabled = userDescInvoiceEnabled.Default.(bool)
+	// userDescSubscriptionPurchaseDisabled is the schema descriptor for subscription_purchase_disabled field.
+	userDescSubscriptionPurchaseDisabled := userFields[26].Descriptor()
+	// user.DefaultSubscriptionPurchaseDisabled holds the default value on creation for the subscription_purchase_disabled field.
+	user.DefaultSubscriptionPurchaseDisabled = userDescSubscriptionPurchaseDisabled.Default.(bool)
 	// userDescRpmLimit is the schema descriptor for rpm_limit field.
-	userDescRpmLimit := userFields[26].Descriptor()
+	userDescRpmLimit := userFields[27].Descriptor()
 	// user.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	user.DefaultRpmLimit = userDescRpmLimit.Default.(int)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()

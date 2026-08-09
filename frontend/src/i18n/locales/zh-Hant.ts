@@ -1931,7 +1931,9 @@ export default {
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '該用戶每分鐘最大請求數，0 = 不限制；僅在所用分組未設置 rpm_limit 時作為兜底生效',
         invoiceEnabled: '啟用發票申請',
-        invoiceEnabledHint: '開啟後該用戶左側菜單會顯示發票申請入口'
+        invoiceEnabledHint: '開啟後該用戶左側菜單會顯示發票申請入口',
+        subscriptionPurchaseDisabled: '禁止購買訂閱',
+        subscriptionPurchaseDisabledHint: '開啟後，該用戶無法購買訂閱套餐'
       },
       adjustBalance: '調整餘額',
       adjustConcurrency: '調整併發數',
@@ -7607,6 +7609,7 @@ export default {
       USER_INACTIVE: '賬號已被禁用',
       BALANCE_PAYMENT_DISABLED: '餘額充值功能已關閉',
       SUBSCRIPTION_BALANCE_PAYMENT_DISABLED: '餘額購買訂閱功能已關閉',
+      SUBSCRIPTION_PURCHASE_FORBIDDEN: '無權限購買',
       SUBSCRIPTION_RENEWAL_NOT_ALLOWED: '當前仍有可用訂閱，請在額度耗盡或訂閱到期後再續購。',
       SUBSCRIPTION_EXPIRED: '當前訂閱已過期，請購買新套餐。',
       SUBSCRIPTION_CREDIT_EXHAUSTED: '當前訂閱額度已耗盡，請續費或購買新套餐。',

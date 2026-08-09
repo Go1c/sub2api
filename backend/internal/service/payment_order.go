@@ -50,6 +50,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if user.Status != payment.EntityStatusActive {
 		return nil, infraerrors.Forbidden("USER_INACTIVE", "user account is disabled")
 	}
+	if req.OrderType == payment.OrderTypeSubscription && user.SubscriptionPurchaseDisabled {
+		return nil, infraerrors.Forbidden("SUBSCRIPTION_PURCHASE_FORBIDDEN", "subscription purchase is not allowed for this user")
+	}
 	if s.notificationEmailService != nil {
 		s.notificationEmailService.RememberRecipientLocale(ctx, req.UserID, user.Email, req.Locale)
 	}

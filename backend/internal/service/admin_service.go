@@ -161,7 +161,9 @@ type UpdateUserInput struct {
 	Concurrency    *int     // 使用指针区分"未提供"和"设置为0"
 	RPMLimit       *int     // 使用指针区分"未提供"和"设置为0"
 	InvoiceEnabled *bool
-	Status         string
+	// SubscriptionPurchaseDisabled 使用指针区分"未提供"和"设置为 false"
+	SubscriptionPurchaseDisabled *bool
+	Status                       string
 	AllowedGroups  *[]int64 // 使用指针区分"未提供"和"设置为空数组"
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
