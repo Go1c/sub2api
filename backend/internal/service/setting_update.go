@@ -29,6 +29,21 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	return err
 }
 
+// UpdateChannelMonitorStatusBanner updates the standalone banner setting without
+// rewriting unrelated system settings from an intentionally partial admin request.
+func (s *SettingService) UpdateChannelMonitorStatusBanner(ctx context.Context, raw string) (string, error) {
+	banner := normalizeChannelMonitorStatusBanner(raw)
+	if err := s.settingRepo.SetMultiple(ctx, map[string]string{
+		SettingKeyChannelMonitorStatusBanner: banner,
+	}); err != nil {
+		return "", err
+	}
+	if s.onUpdate != nil {
+		s.onUpdate()
+	}
+	return banner, nil
+}
+
 // UpdateSettingsWithAuthSourceDefaults persists system settings and auth-source defaults in a single write.
 func (s *SettingService) UpdateSettingsWithAuthSourceDefaults(ctx context.Context, settings *SystemSettings, authDefaults *AuthSourceDefaultSettings) error {
 	updates, err := s.buildSystemSettingsUpdates(ctx, settings)

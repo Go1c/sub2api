@@ -38,13 +38,29 @@ func settingInsertUpsertSQLPattern() string {
 	return regexp.QuoteMeta(`INSERT INTO "settings" ("key", "value", "updated_at") VALUES ($1, $2, $3) ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value", "updated_at" = EXCLUDED."updated_at"`)
 }
 
+func settingBatchSavepointSQLPattern() string {
+	return regexp.QuoteMeta(`SAVEPOINT sub2api_settings_batch`)
+}
+
+func settingBatchRollbackSQLPattern() string {
+	return regexp.QuoteMeta(`ROLLBACK TO SAVEPOINT sub2api_settings_batch`)
+}
+
+func settingBatchReleaseSQLPattern() string {
+	return regexp.QuoteMeta(`RELEASE SAVEPOINT sub2api_settings_batch`)
+}
+
 func TestSettingRepositorySetMultipleUpdatesExistingKeyWithoutInsert(t *testing.T) {
 	repo, mock := newSettingRepoSQLMock(t)
 
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("updated", sqlmock.AnyArg(), "existing_key").
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	err := repo.SetMultiple(context.Background(), map[string]string{
@@ -58,12 +74,16 @@ func TestSettingRepositorySetMultipleInsertsNewKeyAfterUpdateMiss(t *testing.T) 
 	repo, mock := newSettingRepoSQLMock(t)
 
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("created", sqlmock.AnyArg(), "new_key").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingInsertUpsertSQLPattern()).
 		WithArgs("new_key", "created", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	err := repo.SetMultiple(context.Background(), map[string]string{
@@ -77,6 +97,8 @@ func TestSettingRepositorySetMultipleUpdatesExistingAndInsertsNewKey(t *testing.
 	repo, mock := newSettingRepoSQLMock(t)
 
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("updated", sqlmock.AnyArg(), "existing_key").
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -86,6 +108,8 @@ func TestSettingRepositorySetMultipleUpdatesExistingAndInsertsNewKey(t *testing.
 	mock.ExpectExec(settingInsertUpsertSQLPattern()).
 		WithArgs("new_key", "created", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	err := repo.SetMultiple(context.Background(), map[string]string{
@@ -101,6 +125,8 @@ func TestSettingRepositorySetMultipleRollsBackWhenAnyWriteFails(t *testing.T) {
 	writeErr := errors.New("write failed")
 
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("written", sqlmock.AnyArg(), "first_key").
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -110,6 +136,10 @@ func TestSettingRepositorySetMultipleRollsBackWhenAnyWriteFails(t *testing.T) {
 	mock.ExpectExec(settingInsertUpsertSQLPattern()).
 		WithArgs("second_key", "fails", sqlmock.AnyArg()).
 		WillReturnError(writeErr)
+	mock.ExpectExec(settingBatchRollbackSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 
 	err := repo.SetMultiple(context.Background(), map[string]string{
@@ -129,12 +159,18 @@ func TestSettingRepositorySetMultipleFallsBackToUpsertOnUniqueViolation(t *testi
 	pgErr := &pq.Error{Code: pgUniqueViolation, Constraint: "settings_key_key"}
 
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("recovered", sqlmock.AnyArg(), "custom_menu_items").
 		WillReturnError(pgErr)
+	mock.ExpectExec(settingBatchRollbackSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingInsertUpsertSQLPattern()).
 		WithArgs("custom_menu_items", "recovered", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	err := repo.SetMultiple(context.Background(), map[string]string{
@@ -151,16 +187,24 @@ func TestSettingRepositorySetMultipleConsecutiveSavesSucceed(t *testing.T) {
 
 	// 第一次：UPDATE 命中（管理员已经保存过一次）
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("first", sqlmock.AnyArg(), "consecutive_key").
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	// 第二次：UPDATE 命中
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("second", sqlmock.AnyArg(), "consecutive_key").
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	require.NoError(t, repo.SetMultiple(context.Background(), map[string]string{"consecutive_key": "first"}))
@@ -174,9 +218,15 @@ func TestSettingRepositorySetMultipleNonUniqueUpdateErrorPropagates(t *testing.T
 	deadlock := &pq.Error{Code: "40P01", Message: "deadlock detected"}
 
 	mock.ExpectBegin()
+	mock.ExpectExec(settingBatchSavepointSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(settingUpdateSQLPattern()).
 		WithArgs("ignored", sqlmock.AnyArg(), "deadlock_key").
 		WillReturnError(deadlock)
+	mock.ExpectExec(settingBatchRollbackSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(settingBatchReleaseSQLPattern()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 
 	err := repo.SetMultiple(context.Background(), map[string]string{"deadlock_key": "ignored"})
