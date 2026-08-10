@@ -19,16 +19,34 @@ metadata:
 
 服务端隐式幂等：
 
-- 服务端按 `管理员 ID + 请求 body` 生成幂等键。
+- 服务端按 `管理员 ID + 规范化请求 + 更新模式` 生成幂等键。
 - 同一管理员在 **60 秒**内重复提交同一设置 body 时，只执行第一次写入。
 - 后续重复请求直接复用第一次成功响应，并返回响应头 `X-Idempotency-Replayed: true`。
 - 如果第一次请求仍在处理中，重复请求会收到现有幂等协调器的「处理中冲突」响应。
 
 前端配合：设置页在保存请求进行中阻止再次提交，并保持保存按钮禁用到响应结束。
 
+### 渠道状态 Banner 单字段更新
+
+`{"channel_monitor_status_banner":"..."}` 是管理员设置接口支持的独立部分更新：
+
+- 只规范化并写入 `channel_monitor_status_banner`，不会用请求结构体的零值覆盖其他系统设置。
+- 响应 `data.channel_monitor_status_banner` 返回规范化后的文案；空字符串表示清空。
+- 幂等 payload 包含 `status_banner_only` 模式位，避免单字段请求与字段值相同的完整设置请求互相重放。
+
+### PostgreSQL 异常恢复
+
+生产库曾出现字面 `UPDATE settings SET value/updated_at ...` 返回 `23505 settings_key_key` 的异常。批量设置写入保留 update-first 路径，但整批放在 savepoint 内：
+
+1. `UPDATE` 返回 `23505` 后先 `ROLLBACK TO SAVEPOINT`，清除 PostgreSQL 的 aborted transaction 状态。
+2. 再对整批执行 raw `INSERT ... ON CONFLICT DO UPDATE`。
+3. fallback 成功后释放 savepoint 并提交；其他错误仍向上传播。
+
+不能在收到 PostgreSQL 语句错误后直接在同一事务中继续 upsert，否则只会得到 `current transaction is aborted`，并让幂等记录进入 retry backoff。
+
 ## 已决策
 
-- **幂等键 = 管理员 ID + 请求 body**——同管理员同内容才视为重复，不同内容仍正常写入。
+- **幂等键 = 管理员 ID + 规范化请求 + 更新模式**——同管理员、同内容、同更新语义才视为重复。
 - **60 秒窗口**——短时间内的重试/重复提交去重。
 - **服务端幂等是最终防线**——前端禁用按钮只是第一层；服务端覆盖网络重试、浏览器重复提交、客户端状态延迟等前端拦不住的情况。
 - **复用现有幂等协调器**——「处理中冲突」语义沿用既有协调器，不另起一套。
@@ -41,3 +59,4 @@ metadata:
 
 - 接口：`PUT /api/v1/admin/settings`
 - 响应头：`X-Idempotency-Replayed: true`（重放命中时）
+- 设置键：`channel_monitor_status_banner`

@@ -403,6 +403,78 @@ func TestSettingHandler_UpdateSettings_DeduplicatesSameAdminAndBodyWithinWindow(
 	require.Equal(t, 1, repo.setMultipleCalls, "same admin and same settings body should only update settings once within the dedupe window")
 }
 
+func TestSettingHandler_UpdateSettings_ChannelMonitorBannerOnlyPreservesOtherSettings(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyRegistrationEnabled:        "true",
+			service.SettingKeyPromoCodeEnabled:           "true",
+			service.SettingKeyChannelMonitorStatusBanner: "",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
+
+	idempotencyRepo := newMemoryIdempotencyRepoStub()
+	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(idempotencyRepo, service.DefaultIdempotencyConfig()))
+	t.Cleanup(func() {
+		service.SetDefaultIdempotencyCoordinator(nil)
+	})
+
+	router := gin.New()
+	router.PUT("/api/v1/admin/settings", func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+		handler.UpdateSettings(c)
+	})
+
+	call := func(body string) (int, http.Header, string) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(rec, req)
+
+		var payload struct {
+			Data struct {
+				ChannelMonitorStatusBanner string `json:"channel_monitor_status_banner"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+		return rec.Code, rec.Header(), payload.Data.ChannelMonitorStatusBanner
+	}
+
+	status1, headers1, banner1 := call(`{"channel_monitor_status_banner":"  test   banner\n"}`)
+	status2, headers2, banner2 := call(`{"channel_monitor_status_banner":"  test   banner\n"}`)
+
+	require.Equal(t, http.StatusOK, status1)
+	require.Equal(t, http.StatusOK, status2)
+	require.Empty(t, headers1.Get("X-Idempotency-Replayed"))
+	require.Equal(t, "true", headers2.Get("X-Idempotency-Replayed"))
+	require.Equal(t, "test banner", banner1)
+	require.Equal(t, banner1, banner2)
+	require.Equal(t, "true", repo.values[service.SettingKeyRegistrationEnabled])
+	require.Equal(t, "true", repo.values[service.SettingKeyPromoCodeEnabled])
+	require.Equal(t, "test banner", repo.values[service.SettingKeyChannelMonitorStatusBanner])
+	require.Equal(t, 1, repo.setMultipleCalls)
+
+	publicSettings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "test banner", publicSettings.ChannelMonitorStatusBanner)
+	adminSettings, err := svc.GetAllSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "test banner", adminSettings.ChannelMonitorStatusBanner)
+
+	clearStatus, _, clearedBanner := call(`{"channel_monitor_status_banner":""}`)
+	require.Equal(t, http.StatusOK, clearStatus)
+	require.Empty(t, clearedBanner)
+	require.Equal(t, "", repo.values[service.SettingKeyChannelMonitorStatusBanner])
+	require.Equal(t, "true", repo.values[service.SettingKeyRegistrationEnabled])
+	require.Equal(t, "true", repo.values[service.SettingKeyPromoCodeEnabled])
+	require.Equal(t, 2, repo.setMultipleCalls)
+	publicSettings, err = svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, publicSettings.ChannelMonitorStatusBanner)
+}
+
 func TestSettingHandler_UpdateSettings_RejectsSitePageSlugOutsideDocRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{values: map[string]string{}}
