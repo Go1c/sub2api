@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 )
 
 const (
@@ -87,8 +88,13 @@ func (w *settingsUpdateResponseCapture) Status() int   { return w.status }
 func (w *settingsUpdateResponseCapture) Size() int     { return w.size }
 func (w *settingsUpdateResponseCapture) Written() bool { return w.written }
 
-func adminSettingsImplicitIdempotencyKey(actorScope string, req UpdateSettingsRequest) (string, error) {
-	raw, err := json.Marshal(req)
+type adminSettingsIdempotencyPayload struct {
+	Settings         UpdateSettingsRequest `json:"settings"`
+	StatusBannerOnly bool                  `json:"status_banner_only"`
+}
+
+func adminSettingsImplicitIdempotencyKey(actorScope string, payload adminSettingsIdempotencyPayload) (string, error) {
+	raw, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("marshal settings idempotency payload: %w", err)
 	}
@@ -530,24 +536,35 @@ func (h *SettingHandler) ensureActorTotpForStepUp(c *gin.Context) bool {
 }
 
 func (h *SettingHandler) UpdateSettings(c *gin.Context) {
-	var req UpdateSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var raw map[string]json.RawMessage
+	if err := c.ShouldBindBodyWith(&raw, binding.JSON); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
 
-	h.updateSettingsIdempotently(c, req)
+	var req UpdateSettingsRequest
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	_, hasStatusBanner := raw[service.SettingKeyChannelMonitorStatusBanner]
+	h.updateSettingsIdempotently(c, req, len(raw) == 1 && hasStatusBanner)
 }
 
-func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSettingsRequest) {
+func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool) {
 	coordinator := service.DefaultIdempotencyCoordinator()
 	if coordinator == nil {
-		h.updateSettings(c, req)
+		h.runSettingsUpdate(c, req, statusBannerOnly)
 		return
 	}
 
 	actorScope := adminIdempotencyActorScope(c)
-	idempotencyKey, err := adminSettingsImplicitIdempotencyKey(actorScope, req)
+	payload := adminSettingsIdempotencyPayload{
+		Settings:         req,
+		StatusBannerOnly: statusBannerOnly,
+	}
+	idempotencyKey, err := adminSettingsImplicitIdempotencyKey(actorScope, payload)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -559,12 +576,12 @@ func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSe
 		Method:         c.Request.Method,
 		Route:          c.FullPath(),
 		IdempotencyKey: idempotencyKey,
-		Payload:        req,
+		Payload:        payload,
 		RequireKey:     true,
 		TTL:            adminSettingsUpdateDedupeTTL,
 	}, func(ctx context.Context) (any, error) {
 		return captureSettingsUpdateResponse(c, func() {
-			h.updateSettings(c, req)
+			h.runSettingsUpdate(c, req, statusBannerOnly)
 		})
 	})
 	if err != nil {
@@ -586,6 +603,39 @@ func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSe
 		return
 	}
 	response.Success(c, result.Data)
+}
+
+func (h *SettingHandler) runSettingsUpdate(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool) {
+	if statusBannerOnly {
+		h.updateChannelMonitorStatusBanner(c, req)
+		return
+	}
+	h.updateSettings(c, req)
+}
+
+func (h *SettingHandler) updateChannelMonitorStatusBanner(c *gin.Context, req UpdateSettingsRequest) {
+	if req.ChannelMonitorStatusBanner == nil {
+		response.BadRequest(c, "channel_monitor_status_banner must be a string")
+		return
+	}
+
+	previous, err := h.settingService.GetAllSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	banner, err := h.settingService.UpdateChannelMonitorStatusBanner(c.Request.Context(), *req.ChannelMonitorStatusBanner)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	updated := *previous
+	updated.ChannelMonitorStatusBanner = banner
+	h.auditSettingsUpdate(c, previous, &updated, nil, nil, req)
+	response.Success(c, map[string]string{
+		service.SettingKeyChannelMonitorStatusBanner: banner,
+	})
 }
 
 func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsRequest) {
