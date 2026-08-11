@@ -168,6 +168,29 @@ describe('desktop payment handoff routing', () => {
     })
   })
 
+  it('replaces stale local auth on a server-configured protected payment path', async () => {
+    authStore.restoreCookieSession.mockResolvedValue(true)
+    const { navigation, next } = runGuard({
+      path: '/custom/pay',
+      fullPath: '/custom/pay?desktop_handoff=1&source=desktop#checkout',
+      query: { desktop_handoff: '1', source: 'desktop' },
+      hash: '#checkout',
+    })
+
+    await navigation
+
+    expect(authStore.restoreCookieSession).toHaveBeenCalledWith({
+      replaceClientSession: true,
+    })
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith({
+      path: '/custom/pay',
+      query: { source: 'desktop' },
+      hash: '#checkout',
+      replace: true,
+    })
+  })
+
   it('restores a cookie-only session before rejecting a protected route', async () => {
     authStore.isAuthenticated = false
     authStore.restoreCookieSession.mockImplementation(async () => {

@@ -899,7 +899,6 @@ router.beforeEach(async (to, _from, next) => {
   const requiresAdmin = to.meta.requiresAdmin === true
   const desktopHandoff =
     requiresAuth &&
-    to.meta.requiresPayment === true &&
     to.query.desktop_handoff === '1'
 
   // Restore auth state from localStorage on first navigation (page refresh)
