@@ -41,7 +41,7 @@ func DefaultLumioDesktopConfig() LumioDesktopConfig {
 		MinClientVersion: LumioDesktopDefaultMinClientVersion,
 		FeatureFlags: LumioDesktopFeatureFlags{
 			Registration:    true,
-			PaymentHandoff:  false,
+			PaymentHandoff:  true,
 			KeyProvisioning: true,
 		},
 	}

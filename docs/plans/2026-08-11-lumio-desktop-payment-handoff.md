@@ -36,7 +36,7 @@
 - Produces: `(*DesktopPaymentHandoffService).Consume(context.Context, string) (*DesktopPaymentHandoffSession, error)`
 - Consumes: `(*SettingService).GetLumioDesktopConfig`
 
-- [ ] **Step 1: Write failing Redis store tests**
+- [x] **Step 1: Write failing Redis store tests**
 
 ```go
 func TestDesktopPaymentHandoffStoreConsumesOnceAndExpires(t *testing.T) {
@@ -61,13 +61,13 @@ func TestDesktopPaymentHandoffStoreConsumesOnceAndExpires(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the store test and verify RED**
+- [x] **Step 2: Run the store test and verify RED**
 
 Run: `cd backend && go test -tags=unit -count=1 ./internal/repository -run 'DesktopPaymentHandoffStore'`
 
 Expected: compile failure because the store and service contract do not exist.
 
-- [ ] **Step 3: Implement the Redis store**
+- [x] **Step 3: Implement the Redis store**
 
 ```go
 const desktopPaymentHandoffKeyPrefix = "desktop_payment_handoff:"
@@ -88,7 +88,7 @@ func (s *desktopPaymentHandoffStore) Consume(ctx context.Context, tokenHash stri
 }
 ```
 
-- [ ] **Step 4: Write failing service tests**
+- [x] **Step 4: Write failing service tests**
 
 ```go
 func TestDesktopPaymentHandoffIssueStoresOnlyHash(t *testing.T) {
@@ -141,13 +141,13 @@ func TestDesktopPaymentHandoffConsumeRejectsInactiveBoundUser(t *testing.T) {
 
 The test file defines four narrow stubs matching the service ports: `desktopHandoffStoreStub` records `storedHash`/`ttl` and returns `consumeData`/`consumeErr`; `desktopHandoffUserStub` returns one user; `desktopHandoffTokenIssuerStub` delegates to an `AuthService` configured with a test JWT secret; and `desktopHandoffConfigStub` returns the supplied typed config.
 
-- [ ] **Step 5: Run service tests and verify RED**
+- [x] **Step 5: Run service tests and verify RED**
 
 Run: `cd backend && go test -tags=unit -count=1 ./internal/service -run 'DesktopPaymentHandoff'`
 
 Expected: compile failure because the service types and methods do not exist.
 
-- [ ] **Step 6: Implement the minimal service**
+- [x] **Step 6: Implement the minimal service**
 
 ```go
 const (
@@ -186,7 +186,7 @@ func (s *DesktopPaymentHandoffService) Consume(ctx context.Context, raw string) 
 }
 ```
 
-- [ ] **Step 7: Register providers and verify GREEN**
+- [x] **Step 7: Register providers and verify GREEN**
 
 Run: `cd backend && go test -tags=unit -count=1 ./internal/repository ./internal/service -run 'DesktopPaymentHandoff'`
 
@@ -214,7 +214,7 @@ Expected: PASS.
 - Produces: `GET /api/v1/desktop/payment-handoff/consume`
 - Produces: JWT middleware fallback to `lumio_web_session`
 
-- [ ] **Step 1: Write failing handler tests**
+- [x] **Step 1: Write failing handler tests**
 
 ```go
 func TestDesktopPaymentHandoffHandlerIssueReturnsOpaqueRelativeURL(t *testing.T) {
@@ -240,13 +240,13 @@ func TestDesktopPaymentHandoffHandlerConsumeSetsCookieAndIgnoresRedirect(t *test
 }
 ```
 
-- [ ] **Step 2: Run handler tests and verify RED**
+- [x] **Step 2: Run handler tests and verify RED**
 
 Run: `cd backend && go test -tags=unit -count=1 ./internal/handler -run 'DesktopPaymentHandoff'`
 
 Expected: compile failure because the handler does not exist.
 
-- [ ] **Step 3: Implement handler and security headers**
+- [x] **Step 3: Implement handler and security headers**
 
 ```go
 func (h *DesktopPaymentHandoffHandler) Issue(c *gin.Context) {
@@ -270,7 +270,7 @@ func (h *DesktopPaymentHandoffHandler) Consume(c *gin.Context) {
 }
 ```
 
-- [ ] **Step 4: Write failing middleware, logout, and route tests**
+- [x] **Step 4: Write failing middleware, logout, and route tests**
 
 ```go
 func TestJWTAuthUsesLumioWebSessionCookieWhenHeaderMissing(t *testing.T) {
@@ -327,13 +327,13 @@ func TestRegisterDesktopRoutesSeparatesIssueAuthAndPublicConsume(t *testing.T) {
 }
 ```
 
-- [ ] **Step 5: Run middleware/route tests and verify RED**
+- [x] **Step 5: Run middleware/route tests and verify RED**
 
 Run: `cd backend && go test -tags=unit -count=1 ./internal/server/middleware ./internal/server/routes ./internal/handler -run 'LumioWebSession|DesktopPaymentHandoff'`
 
 Expected: cookie auth and desktop routes are absent.
 
-- [ ] **Step 6: Implement cookie fallback, logout clearing, and routes**
+- [x] **Step 6: Implement cookie fallback, logout clearing, and routes**
 
 ```go
 if authHeader == "" {
@@ -345,13 +345,13 @@ if authHeader == "" {
 
 Register the consume route before the authenticated issue group, apply existing fail-close IP rate limiting, and keep `BackendModeUserGuard` on issue. Always clear `lumio_web_session` in `AuthHandler.Logout`.
 
-- [ ] **Step 7: Wire, generate, and verify GREEN**
+- [x] **Step 7: Wire, generate, and verify GREEN**
 
 Run: `cd backend && go generate ./cmd/server && go test -tags=unit -count=1 ./internal/handler ./internal/server/middleware ./internal/server/routes ./internal/server`
 
 Expected: PASS and `wire_gen.go` includes the new store, service, handler, and `Handlers` field.
 
-- [ ] **Step 8: Commit backend handoff**
+- [x] **Step 8: Commit backend handoff**
 
 Run: `git diff --check && git diff --stat`
 
@@ -373,7 +373,7 @@ Commit: `feat(desktop): add one-time payment handoff`
 - Produces: `authStore.restoreCookieSession({ replaceClientSession?: boolean })`
 - Produces: `/payment` alias for `PaymentView.vue`
 
-- [ ] **Step 1: Write failing API/store tests**
+- [x] **Step 1: Write failing API/store tests**
 
 ```ts
 it('probes the current user with credentials without persisting a token', async () => {
@@ -402,13 +402,13 @@ it('always calls backend logout for a cookie-only session', async () => {
 })
 ```
 
-- [ ] **Step 2: Run frontend tests and verify RED**
+- [x] **Step 2: Run frontend tests and verify RED**
 
 Run: `cd frontend && pnpm test --run src/stores/__tests__/auth.spec.ts src/api/__tests__/auth-cookie-session.spec.ts`
 
 Expected: missing cookie-session probe and restore action.
 
-- [ ] **Step 3: Implement probe and Pinia cookie-session state**
+- [x] **Step 3: Implement probe and Pinia cookie-session state**
 
 ```ts
 export async function probeCookieSession(): Promise<CurrentUserResponse> {
@@ -444,7 +444,7 @@ async function restoreCookieSession(options?: { replaceClientSession?: boolean }
 
 Allow `refreshUser` and auto-refresh when either a local token or the cookie-session flag is active. Make `authAPI.logout` always POST `/auth/logout`, using `{ refresh_token }` only when present.
 
-- [ ] **Step 4: Write failing router tests**
+- [x] **Step 4: Write failing router tests**
 
 ```ts
 it('resolves /payment to the existing purchase view', () => {
@@ -459,13 +459,13 @@ it('forces cookie account restore and strips only desktop_handoff', async () => 
 })
 ```
 
-- [ ] **Step 5: Run router tests and verify RED**
+- [x] **Step 5: Run router tests and verify RED**
 
 Run: `cd frontend && pnpm test --run src/__tests__/integration/navigation.spec.ts`
 
 Expected: `/payment` does not resolve and the guard redirects to login.
 
-- [ ] **Step 6: Implement alias and guard bootstrap**
+- [x] **Step 6: Implement alias and guard bootstrap**
 
 Add `alias: '/payment'` to `PurchaseSubscription`. Before the protected-route rejection:
 
@@ -482,7 +482,7 @@ if (requiresAuth && (desktopHandoff || !authStore.isAuthenticated)) {
 }
 ```
 
-- [ ] **Step 7: Verify frontend and commit**
+- [x] **Step 7: Verify frontend and commit**
 
 Run: `cd frontend && pnpm typecheck && pnpm test --run src/stores/__tests__/auth.spec.ts src/api/__tests__/auth-cookie-session.spec.ts src/__tests__/integration/navigation.spec.ts && pnpm build`
 
@@ -503,7 +503,7 @@ Commit: `feat(payment): restore desktop handoff session`
 - Consumes: completed Tasks 1-3
 - Produces: built-in `PaymentHandoff: true`, still gated by `SettingPaymentEnabled`
 
-- [ ] **Step 1: Change default expectations first and verify RED**
+- [x] **Step 1: Change default expectations first and verify RED**
 
 Change the default service/API contract tests to expect `payment_handoff: true` while retaining the test where global payment is false.
 
@@ -511,7 +511,7 @@ Run: `cd backend && go test -tags=unit -count=1 ./internal/service ./internal/se
 
 Expected: default-config assertions fail because production still returns false.
 
-- [ ] **Step 2: Enable the default and verify GREEN**
+- [x] **Step 2: Enable the default and verify GREEN**
 
 ```go
 FeatureFlags: LumioDesktopFeatureFlags{
@@ -525,11 +525,11 @@ Run: `cd backend && go test -tags=unit -count=1 ./internal/service ./internal/se
 
 Expected: PASS; the global-payment-off case still returns false.
 
-- [ ] **Step 3: Synchronize knowledge and task status**
+- [x] **Step 3: Synchronize knowledge and task status**
 
 Document the issue/consume endpoints, hash-only Redis storage, access-only Cookie, frontend bootstrap marker, and Docker integration-test limitation in `.spec/knowledge/features/lumio-desktop-client.md`. Mark all three task cards completed only after verification.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Backend:
 
@@ -552,6 +552,13 @@ pnpm build
 
 Also run `git diff --check`. If Docker remains unavailable, record the repository integration harness skip explicitly; do not claim database-backed integration execution.
 
-- [ ] **Step 5: Review and commit activation/docs**
+Verification result:
+
+- Backend unit/integration/vet passed and incremental golangci-lint reported `0 issues`.
+- The Docker client was present but its Colima daemon was unavailable. Integration-tag code ran, while container-backed database/Redis harnesses followed the repository's existing skip path; no external-container execution is claimed.
+- Frontend typecheck, production build, `/payment` dev-server HTTP 200, and the task-related route/auth tests passed, including custom protected payment-path account replacement.
+- The final full frontend suite reported 1212 passed, 7 failed, and two unrelated unhandled rejections. The same baseline failures remain in unchanged model-whitelist, account modal, sidebar, risk-control, ops-log locale, and prompt-audit tests; the unhandled rejections came from unchanged dashboard/profile tests. They are outside this task and were not modified.
+
+- [x] **Step 5: Review and commit activation/docs**
 
 Commit: `docs(desktop): finalize payment handoff contract`

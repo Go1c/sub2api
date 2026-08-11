@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: completed
 title: Lumio Desktop 一次性支付交接后端
 ---
 

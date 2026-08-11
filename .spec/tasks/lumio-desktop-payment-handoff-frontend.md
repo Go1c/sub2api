@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: Lumio Desktop 支付 Cookie 会话前端恢复
 ---
 

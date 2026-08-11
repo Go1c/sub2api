@@ -1,5 +1,7 @@
 # Lumio Desktop Payment Handoff Design
 
+Implementation status: the server issue/consume flow, website Cookie bootstrap, and safe-on desktop feature default are implemented. Native Lumio Codex button/browser integration remains in the client phase.
+
 ## Goal
 
 Let an authenticated Lumio Codex client open the current account's website payment page without exposing its JWT or API key in a URL and without asking the user to sign in again.
@@ -68,6 +70,8 @@ The client cannot submit a redirect target. Issue and consume both use `SettingS
 
 The frontend adds `/payment` as an alias for the existing `/purchase` payment view. Any `redirect`, `return_to`, or similarly named query parameter on the consume request is ignored. The only server-added query value is `desktop_handoff=1`, which contains no credential and is removed by the router after session bootstrap.
 
+The router handles that marker on any authenticated destination route, not only routes tagged `requiresPayment`, because the server-owned `payment_url` may select another same-origin protected payment page.
+
 ## Website session bootstrap
 
 JWT middleware continues to prefer an explicit `Authorization: Bearer` header. If the header is absent, it accepts `lumio_web_session` as the JWT source and performs the same signature, expiry, token-version, account-status, and optional IP/UA binding checks.
@@ -81,7 +85,7 @@ The probe uses a small credentialed request path that does not invoke the global
 
 ## Feature gates and failure behavior
 
-`feature_flags.payment_handoff` defaults on only after both backend and frontend support are present. The effective value remains false whenever the global payment switch is off. Both issue and consume re-evaluate that effective flag, so an operator can stop new and outstanding handoffs without a client release.
+`feature_flags.payment_handoff` now defaults on because both backend and frontend support are present. A persisted desktop override can disable it, and the effective value remains false whenever the global payment switch is off. Both issue and consume re-evaluate that effective flag, so an operator can stop new and outstanding handoffs without a client release.
 
 Redis errors fail closed. No token is issued when storage cannot guarantee one-time semantics. A token is consumed before creating the website session; if the user was disabled or payment was switched off meanwhile, that token cannot be retried.
 
@@ -101,3 +105,4 @@ Redis errors fail closed. No token is issued when storage cannot guarantee one-t
 - Middleware tests cover cookie fallback, Authorization precedence, expiry, token-version checks, and logout cookie clearing.
 - Frontend tests cover forced account replacement on the bootstrap marker, cookie-only `/auth/me` restore, marker removal, `/payment` route resolution, and cookie-session logout.
 - Full backend unit/integration/vet/lint and frontend typecheck/test/build gates run before handoff.
+- Integration-tag tests and compilation still run without Docker, but the repository's container-backed database/Redis harness skips when Docker is unavailable; miniredis separately covers Redis TTL and atomic single consumption.

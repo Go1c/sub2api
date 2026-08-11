@@ -1016,7 +1016,7 @@ func TestAPIContracts(t *testing.T) {
 					"update_notice": "",
 					"feature_flags": {
 						"registration": true,
-						"payment_handoff": false,
+						"payment_handoff": true,
 						"key_provisioning": true
 					}
 				},
@@ -1342,7 +1342,7 @@ func TestAPIContracts(t *testing.T) {
 					"update_notice": "",
 					"feature_flags": {
 						"registration": true,
-						"payment_handoff": false,
+						"payment_handoff": true,
 						"key_provisioning": true
 					}
 				},

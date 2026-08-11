@@ -24,7 +24,7 @@ func TestDefaultLumioDesktopConfig_EnablesAvailableKeyProvisioning(t *testing.T)
 	cfg := DefaultLumioDesktopConfig()
 
 	require.True(t, cfg.FeatureFlags.Registration)
-	require.False(t, cfg.FeatureFlags.PaymentHandoff)
+	require.True(t, cfg.FeatureFlags.PaymentHandoff)
 	require.True(t, cfg.FeatureFlags.KeyProvisioning)
 }
 
