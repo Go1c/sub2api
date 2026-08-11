@@ -49,6 +49,8 @@
       />
 
       <ProfileTotpCard />
+
+      <ProfileAccessTokensCard />
     </div>
   </AppLayout>
 </template>
@@ -58,6 +60,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Icon } from '@/components/icons'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import ProfileAccessTokensCard from '@/components/user/profile/ProfileAccessTokensCard.vue'
 import ProfileBalanceNotifyCard from '@/components/user/profile/ProfileBalanceNotifyCard.vue'
 import ProfileInfoCard from '@/components/user/profile/ProfileInfoCard.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
