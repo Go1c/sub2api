@@ -359,6 +359,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/purchase',
     name: 'PurchaseSubscription',
+    alias: '/payment',
     component: () => import('@/views/user/PaymentView.vue'),
     meta: {
       requiresAuth: true,
@@ -894,10 +895,20 @@ router.beforeEach(async (to, _from, next) => {
   navigationLoading.startNavigation()
 
   const authStore = useAuthStore()
+  const requiresAuth = to.meta.requiresAuth !== false // Default to true
+  const requiresAdmin = to.meta.requiresAdmin === true
+  const desktopHandoff =
+    requiresAuth &&
+    to.meta.requiresPayment === true &&
+    to.query.desktop_handoff === '1'
 
   // Restore auth state from localStorage on first navigation (page refresh)
   if (!authInitialized) {
-    authStore.checkAuth()
+    // A desktop handoff must not start a stale local-token refresh that can race
+    // with the cookie-bound account replacement.
+    if (!desktopHandoff) {
+      authStore.checkAuth()
+    }
     authInitialized = true
   }
 
@@ -919,10 +930,6 @@ router.beforeEach(async (to, _from, next) => {
   } else {
     document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)
   }
-
-  // Check if route requires authentication
-  const requiresAuth = to.meta.requiresAuth !== false // Default to true
-  const requiresAdmin = to.meta.requiresAdmin === true
 
   if (to.path === '/setup') {
     try {
@@ -969,6 +976,33 @@ router.beforeEach(async (to, _from, next) => {
     }
     next()
     return
+  }
+
+  if (desktopHandoff || !authStore.isAuthenticated) {
+    const restored = desktopHandoff
+      ? await authStore.restoreCookieSession({ replaceClientSession: true })
+      : await authStore.restoreCookieSession()
+
+    if (desktopHandoff) {
+      const query = { ...to.query }
+      delete query.desktop_handoff
+      const handoffTarget = {
+        path: to.path,
+        query,
+        hash: to.hash,
+        replace: true,
+      }
+
+      if (restored) {
+        next(handoffTarget)
+      } else {
+        next({
+          path: '/login',
+          query: { redirect: router.resolve(handoffTarget).fullPath },
+        })
+      }
+      return
+    }
   }
 
   // Route requires authentication

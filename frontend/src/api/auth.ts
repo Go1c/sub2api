@@ -3,7 +3,7 @@
  * Handles user login, registration, and logout operations
  */
 
-import { apiClient } from './client'
+import { apiClient, buildApiUrl } from './client'
 import { oauthAffiliatePayload } from '@/utils/oauthAffiliate'
 import type {
   LoginRequest,
@@ -14,7 +14,8 @@ import type {
   SendVerifyCodeResponse,
   PublicSettings,
   TotpLoginResponse,
-  TotpLogin2FARequest
+  TotpLogin2FARequest,
+  ApiResponse
 } from '@/types'
 
 /**
@@ -158,6 +159,43 @@ export async function getCurrentUser() {
 }
 
 /**
+ * Probe the HttpOnly website session without invoking Axios' global 401 redirect flow.
+ */
+export async function probeCookieSession(): Promise<CurrentUserResponse> {
+  let response: Response
+  try {
+    response = await fetch(buildApiUrl('/auth/me'), {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' }
+    })
+  } catch {
+    throw {
+      status: 0,
+      message: 'Network error. Please check your connection.'
+    }
+  }
+
+  let envelope: Partial<ApiResponse<CurrentUserResponse>>
+  try {
+    envelope = await response.json() as Partial<ApiResponse<CurrentUserResponse>>
+  } catch {
+    throw {
+      status: response.status,
+      message: 'Invalid server response'
+    }
+  }
+
+  if (!response.ok || envelope.code !== 0 || !envelope.data) {
+    throw {
+      status: response.status,
+      message: envelope.message || 'Cookie session is not available'
+    }
+  }
+  return envelope.data
+}
+
+/**
  * User logout
  * Clears authentication token and user data from localStorage
  * Optionally revokes the refresh token on the server
@@ -165,13 +203,11 @@ export async function getCurrentUser() {
 export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken()
 
-  // Try to revoke the refresh token on the server
-  if (refreshToken) {
-    try {
-      await apiClient.post('/auth/logout', { refresh_token: refreshToken })
-    } catch {
-      // Ignore errors - we still want to clear local state
-    }
+  // Always notify the backend so an HttpOnly cookie-only session is cleared.
+  try {
+    await apiClient.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : {})
+  } catch {
+    // Ignore errors - we still want to clear local state
   }
 
   clearAuthToken()
@@ -663,6 +699,7 @@ export const authAPI = {
   isTotp2FARequired,
   register,
   getCurrentUser,
+  probeCookieSession,
   logout,
   isAuthenticated,
   setAuthToken,
