@@ -1272,6 +1272,40 @@ export default {
       saved: '已保存',
       saveFailed: '保存失敗'
     },
+    accessTokens: {
+      title: 'API 訪問令牌',
+      description:
+        '建立可撤銷的長效令牌，供外部程式管理你自己的 API 金鑰（建立/更新/刪除金鑰、查看可用分組）。預設 7 天，最長 30 天。請妥善保管，勿用於他人資源。',
+      name: '名稱',
+      namePlaceholder: '例如：CI 金鑰管理',
+      nameRequired: '請填寫名稱',
+      expiresInDays: '有效天數',
+      expiresHint: '預設 7 天，範圍 1–30 天',
+      invalidDays: '有效天數須為 1–30 的整數',
+      create: '建立令牌',
+      createSuccess: '令牌已建立',
+      createFailed: '建立失敗',
+      onceWarning: '請立即複製完整令牌。離開本頁後將無法再次查看。',
+      copy: '複製',
+      copied: '已複製',
+      copyFailed: '複製失敗',
+      dismissOnce: '我已保存，關閉提示',
+      empty: '暫無訪問令牌',
+      prefix: '前綴',
+      status: '狀態',
+      statusLabels: {
+        active: '有效',
+        revoked: '已撤銷',
+        expired: '已過期'
+      },
+      expiresAt: '過期時間',
+      createdAt: '建立時間',
+      revoke: '撤銷',
+      revokeConfirm: '確定撤銷令牌「{name}」？撤銷後立即失效。',
+      revokeSuccess: '已撤銷',
+      revokeFailed: '撤銷失敗',
+      loadFailed: '載入令牌列表失敗'
+    },
     avatar: {
       title: '資料頭像',
       description: '僅支持上傳頭像圖片；靜態圖片會自動壓縮到 20KB 以內後再保存。',

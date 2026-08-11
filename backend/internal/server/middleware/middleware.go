@@ -30,6 +30,10 @@ const (
 	// apiKey 已加载但尚未写入 ContextKeyAPIKey；该键让 Ops 错误日志仍能取到
 	// user/group/platform。仅供 Ops 错误日志读取，不代表请求已通过鉴权。
 	ContextKeyOpsFallbackAPIKey ContextKey = "ops_fallback_api_key"
+	// ContextKeyAuthMethod 认证方式：jwt | user_access_token
+	ContextKeyAuthMethod ContextKey = "auth_method"
+	// ContextKeyUserAccessTokenID opaque access token 记录 ID（仅 user_access_token 认证时设置）
+	ContextKeyUserAccessTokenID ContextKey = "user_access_token_id"
 )
 
 // ForcePlatform 返回设置强制平台的中间件

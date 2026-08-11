@@ -2080,6 +2080,45 @@ var (
 			},
 		},
 	}
+	// UserAccessTokensColumns holds the columns for the "user_access_tokens" table.
+	UserAccessTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "token_hash", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "token_prefix", Type: field.TypeString, Size: 32},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "last_used_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// UserAccessTokensTable holds the schema information for the "user_access_tokens" table.
+	UserAccessTokensTable = &schema.Table{
+		Name:       "user_access_tokens",
+		Columns:    UserAccessTokensColumns,
+		PrimaryKey: []*schema.Column{UserAccessTokensColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_access_tokens_users_access_tokens",
+				Columns:    []*schema.Column{UserAccessTokensColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "useraccesstoken_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserAccessTokensColumns[9]},
+			},
+			{
+				Name:    "useraccesstoken_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserAccessTokensColumns[9], UserAccessTokensColumns[1]},
+			},
+		},
+	}
 	// UserAllowedGroupsColumns holds the columns for the "user_allowed_groups" table.
 	UserAllowedGroupsColumns = []*schema.Column{
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -2379,6 +2418,7 @@ var (
 		UsageCleanupTasksTable,
 		UsageLogsTable,
 		UsersTable,
+		UserAccessTokensTable,
 		UserAllowedGroupsTable,
 		UserAttributeDefinitionsTable,
 		UserAttributeValuesTable,
@@ -2541,6 +2581,10 @@ func init() {
 	}
 	UsersTable.Annotation = &entsql.Annotation{
 		Table: "users",
+	}
+	UserAccessTokensTable.ForeignKeys[0].RefTable = UsersTable
+	UserAccessTokensTable.Annotation = &entsql.Annotation{
+		Table: "user_access_tokens",
 	}
 	UserAllowedGroupsTable.ForeignKeys[0].RefTable = UsersTable
 	UserAllowedGroupsTable.ForeignKeys[1].RefTable = GroupsTable

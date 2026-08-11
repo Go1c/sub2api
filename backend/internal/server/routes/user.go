@@ -61,6 +61,14 @@ func RegisterUserRoutes(
 				// 敏感操作二次验证：授予当前会话一段时间的 step-up 权限
 				totp.POST("/step-up", h.Totp.StepUp)
 			}
+
+			// 用户长效 Access Token（仅 JWT 会话；opaque access token 鉴权会被路径守卫拒绝）
+			accessTokens := user.Group("/access-tokens")
+			{
+				accessTokens.GET("", h.UserAccessToken.List)
+				accessTokens.POST("", h.UserAccessToken.Create)
+				accessTokens.DELETE("/:id", h.UserAccessToken.Revoke)
+			}
 		}
 
 		// API Key管理

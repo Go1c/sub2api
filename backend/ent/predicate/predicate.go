@@ -123,6 +123,9 @@ type UsageLog func(*sql.Selector)
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
 
+// UserAccessToken is the predicate function for useraccesstoken builders.
+type UserAccessToken func(*sql.Selector)
+
 // UserAllowedGroup is the predicate function for userallowedgroup builders.
 type UserAllowedGroup func(*sql.Selector)
 

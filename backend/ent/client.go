@@ -54,6 +54,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/useraccesstoken"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -146,6 +147,8 @@ type Client struct {
 	UsageLog *UsageLogClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// UserAccessToken is the client for interacting with the UserAccessToken builders.
+	UserAccessToken *UserAccessTokenClient
 	// UserAllowedGroup is the client for interacting with the UserAllowedGroup builders.
 	UserAllowedGroup *UserAllowedGroupClient
 	// UserAttributeDefinition is the client for interacting with the UserAttributeDefinition builders.
@@ -206,6 +209,7 @@ func (c *Client) init() {
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
 	c.User = NewUserClient(c.config)
+	c.UserAccessToken = NewUserAccessTokenClient(c.config)
 	c.UserAllowedGroup = NewUserAllowedGroupClient(c.config)
 	c.UserAttributeDefinition = NewUserAttributeDefinitionClient(c.config)
 	c.UserAttributeValue = NewUserAttributeValueClient(c.config)
@@ -342,6 +346,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
 		User:                          NewUserClient(cfg),
+		UserAccessToken:               NewUserAccessTokenClient(cfg),
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
@@ -405,6 +410,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
 		User:                          NewUserClient(cfg),
+		UserAccessToken:               NewUserAccessTokenClient(cfg),
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
@@ -449,7 +455,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SiteMessage,
 		c.SubscriptionCreditLedger, c.SubscriptionPlan, c.TLSFingerprintProfile,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAccessToken, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
 		c.UserSubscription,
 	} {
@@ -471,7 +477,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SiteMessage,
 		c.SubscriptionCreditLedger, c.SubscriptionPlan, c.TLSFingerprintProfile,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAccessToken, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
 		c.UserSubscription,
 	} {
@@ -560,6 +566,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UsageLog.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
+	case *UserAccessTokenMutation:
+		return c.UserAccessToken.mutate(ctx, m)
 	case *UserAllowedGroupMutation:
 		return c.UserAllowedGroup.mutate(ctx, m)
 	case *UserAttributeDefinitionMutation:
@@ -6752,6 +6760,22 @@ func (c *UserClient) QueryAPIKeys(_m *User) *APIKeyQuery {
 	return query
 }
 
+// QueryAccessTokens queries the access_tokens edge of a User.
+func (c *UserClient) QueryAccessTokens(_m *User) *UserAccessTokenQuery {
+	query := (&UserAccessTokenClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(useraccesstoken.Table, useraccesstoken.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.AccessTokensTable, user.AccessTokensColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryRedeemCodes queries the redeem_codes edge of a User.
 func (c *UserClient) QueryRedeemCodes(_m *User) *RedeemCodeQuery {
 	query := (&RedeemCodeClient{config: c.config}).Query()
@@ -7032,6 +7056,155 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 		return (&UserDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown User mutation op: %q", m.Op())
+	}
+}
+
+// UserAccessTokenClient is a client for the UserAccessToken schema.
+type UserAccessTokenClient struct {
+	config
+}
+
+// NewUserAccessTokenClient returns a client for the UserAccessToken from the given config.
+func NewUserAccessTokenClient(c config) *UserAccessTokenClient {
+	return &UserAccessTokenClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `useraccesstoken.Hooks(f(g(h())))`.
+func (c *UserAccessTokenClient) Use(hooks ...Hook) {
+	c.hooks.UserAccessToken = append(c.hooks.UserAccessToken, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `useraccesstoken.Intercept(f(g(h())))`.
+func (c *UserAccessTokenClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserAccessToken = append(c.inters.UserAccessToken, interceptors...)
+}
+
+// Create returns a builder for creating a UserAccessToken entity.
+func (c *UserAccessTokenClient) Create() *UserAccessTokenCreate {
+	mutation := newUserAccessTokenMutation(c.config, OpCreate)
+	return &UserAccessTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserAccessToken entities.
+func (c *UserAccessTokenClient) CreateBulk(builders ...*UserAccessTokenCreate) *UserAccessTokenCreateBulk {
+	return &UserAccessTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserAccessTokenClient) MapCreateBulk(slice any, setFunc func(*UserAccessTokenCreate, int)) *UserAccessTokenCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserAccessTokenCreateBulk{err: fmt.Errorf("calling to UserAccessTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserAccessTokenCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserAccessTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserAccessToken.
+func (c *UserAccessTokenClient) Update() *UserAccessTokenUpdate {
+	mutation := newUserAccessTokenMutation(c.config, OpUpdate)
+	return &UserAccessTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserAccessTokenClient) UpdateOne(_m *UserAccessToken) *UserAccessTokenUpdateOne {
+	mutation := newUserAccessTokenMutation(c.config, OpUpdateOne, withUserAccessToken(_m))
+	return &UserAccessTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserAccessTokenClient) UpdateOneID(id int64) *UserAccessTokenUpdateOne {
+	mutation := newUserAccessTokenMutation(c.config, OpUpdateOne, withUserAccessTokenID(id))
+	return &UserAccessTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserAccessToken.
+func (c *UserAccessTokenClient) Delete() *UserAccessTokenDelete {
+	mutation := newUserAccessTokenMutation(c.config, OpDelete)
+	return &UserAccessTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserAccessTokenClient) DeleteOne(_m *UserAccessToken) *UserAccessTokenDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserAccessTokenClient) DeleteOneID(id int64) *UserAccessTokenDeleteOne {
+	builder := c.Delete().Where(useraccesstoken.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserAccessTokenDeleteOne{builder}
+}
+
+// Query returns a query builder for UserAccessToken.
+func (c *UserAccessTokenClient) Query() *UserAccessTokenQuery {
+	return &UserAccessTokenQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserAccessToken},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserAccessToken entity by its id.
+func (c *UserAccessTokenClient) Get(ctx context.Context, id int64) (*UserAccessToken, error) {
+	return c.Query().Where(useraccesstoken.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserAccessTokenClient) GetX(ctx context.Context, id int64) *UserAccessToken {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserAccessToken.
+func (c *UserAccessTokenClient) QueryUser(_m *UserAccessToken) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(useraccesstoken.Table, useraccesstoken.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, useraccesstoken.UserTable, useraccesstoken.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserAccessTokenClient) Hooks() []Hook {
+	return c.hooks.UserAccessToken
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserAccessTokenClient) Interceptors() []Interceptor {
+	return c.inters.UserAccessToken
+}
+
+func (c *UserAccessTokenClient) mutate(ctx context.Context, m *UserAccessTokenMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserAccessTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserAccessTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserAccessTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserAccessTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserAccessToken mutation op: %q", m.Op())
 	}
 }
 
@@ -7845,7 +8018,7 @@ type (
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
 		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
 		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserAccessToken, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
@@ -7858,7 +8031,7 @@ type (
 		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
 		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
 		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserAccessToken, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )

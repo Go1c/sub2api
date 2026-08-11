@@ -1484,6 +1484,40 @@ export default {
       saved: 'Saved',
       saveFailed: 'Failed to save'
     },
+    accessTokens: {
+      title: 'API Access Tokens',
+      description:
+        'Create revocable long-lived tokens for programs to manage your own API keys (create/update/delete keys, list available groups). Default 7 days, max 30 days. Keep them secret; they cannot access other users’ resources.',
+      name: 'Name',
+      namePlaceholder: 'e.g. CI key manager',
+      nameRequired: 'Name is required',
+      expiresInDays: 'Expires in (days)',
+      expiresHint: 'Default 7 days; range 1–30',
+      invalidDays: 'Expires in days must be an integer from 1 to 30',
+      create: 'Create token',
+      createSuccess: 'Token created',
+      createFailed: 'Failed to create token',
+      onceWarning: 'Copy the full token now. You will not be able to view it again after leaving this page.',
+      copy: 'Copy',
+      copied: 'Copied',
+      copyFailed: 'Copy failed',
+      dismissOnce: 'I have saved it — dismiss',
+      empty: 'No access tokens yet',
+      prefix: 'Prefix',
+      status: 'Status',
+      statusLabels: {
+        active: 'Active',
+        revoked: 'Revoked',
+        expired: 'Expired'
+      },
+      expiresAt: 'Expires',
+      createdAt: 'Created',
+      revoke: 'Revoke',
+      revokeConfirm: 'Revoke token “{name}”? It will stop working immediately.',
+      revokeSuccess: 'Revoked',
+      revokeFailed: 'Failed to revoke',
+      loadFailed: 'Failed to load access tokens'
+    },
     avatar: {
       title: 'Profile Avatar',
       description: 'Upload an avatar image. Static uploads are compressed to 20KB before saving.',

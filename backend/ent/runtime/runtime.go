@@ -45,6 +45,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/useraccesstoken"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -2435,6 +2436,75 @@ func init() {
 	userDescRpmLimit := userFields[27].Descriptor()
 	// user.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	user.DefaultRpmLimit = userDescRpmLimit.Default.(int)
+	useraccesstokenMixin := schema.UserAccessToken{}.Mixin()
+	useraccesstokenMixinFields0 := useraccesstokenMixin[0].Fields()
+	_ = useraccesstokenMixinFields0
+	useraccesstokenFields := schema.UserAccessToken{}.Fields()
+	_ = useraccesstokenFields
+	// useraccesstokenDescCreatedAt is the schema descriptor for created_at field.
+	useraccesstokenDescCreatedAt := useraccesstokenMixinFields0[0].Descriptor()
+	// useraccesstoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	useraccesstoken.DefaultCreatedAt = useraccesstokenDescCreatedAt.Default.(func() time.Time)
+	// useraccesstokenDescUpdatedAt is the schema descriptor for updated_at field.
+	useraccesstokenDescUpdatedAt := useraccesstokenMixinFields0[1].Descriptor()
+	// useraccesstoken.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	useraccesstoken.DefaultUpdatedAt = useraccesstokenDescUpdatedAt.Default.(func() time.Time)
+	// useraccesstoken.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	useraccesstoken.UpdateDefaultUpdatedAt = useraccesstokenDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// useraccesstokenDescName is the schema descriptor for name field.
+	useraccesstokenDescName := useraccesstokenFields[1].Descriptor()
+	// useraccesstoken.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	useraccesstoken.NameValidator = func() func(string) error {
+		validators := useraccesstokenDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// useraccesstokenDescTokenHash is the schema descriptor for token_hash field.
+	useraccesstokenDescTokenHash := useraccesstokenFields[2].Descriptor()
+	// useraccesstoken.TokenHashValidator is a validator for the "token_hash" field. It is called by the builders before save.
+	useraccesstoken.TokenHashValidator = func() func(string) error {
+		validators := useraccesstokenDescTokenHash.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(token_hash string) error {
+			for _, fn := range fns {
+				if err := fn(token_hash); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// useraccesstokenDescTokenPrefix is the schema descriptor for token_prefix field.
+	useraccesstokenDescTokenPrefix := useraccesstokenFields[3].Descriptor()
+	// useraccesstoken.TokenPrefixValidator is a validator for the "token_prefix" field. It is called by the builders before save.
+	useraccesstoken.TokenPrefixValidator = func() func(string) error {
+		validators := useraccesstokenDescTokenPrefix.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(token_prefix string) error {
+			for _, fn := range fns {
+				if err := fn(token_prefix); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
 	_ = userallowedgroupFields
 	// userallowedgroupDescCreatedAt is the schema descriptor for created_at field.
