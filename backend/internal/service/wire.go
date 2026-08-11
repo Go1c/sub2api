@@ -671,6 +671,15 @@ func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupReposit
 	return svc
 }
 
+func ProvideDesktopPaymentHandoffService(
+	store DesktopPaymentHandoffStore,
+	userRepo UserRepository,
+	authService *AuthService,
+	settingService *SettingService,
+) *DesktopPaymentHandoffService {
+	return NewDesktopPaymentHandoffService(store, userRepo, authService, settingService)
+}
+
 // ProvideBillingCacheService wires BillingCacheService with its RPM dependencies.
 func ProvideBillingCacheService(
 	cache BillingCache,
@@ -770,6 +779,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAccountErrorHistoryWiring,
 	ProvideUpstreamBillingProbeService,
 	ProvideSettingService,
+	ProvideDesktopPaymentHandoffService,
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
@@ -835,6 +845,7 @@ var ProviderSet = wire.NewSet(
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
 	ProvideWebhookBalanceNotifyService,
+	ProvideWebhookBalanceNotifyWiring,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
@@ -909,6 +920,23 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 // ProvideWebhookBalanceNotifyService creates webhook notify service (balance/site-message/announcement).
 func ProvideWebhookBalanceNotifyService(userRepo UserRepository) *WebhookBalanceNotifyService {
 	return NewWebhookBalanceNotifyService(userRepo)
+}
+
+// WebhookBalanceNotifyWiring keeps optional webhook fan-out attached when Wire is regenerated.
+type WebhookBalanceNotifyWiring struct{}
+
+func ProvideWebhookBalanceNotifyWiring(
+	webhook *WebhookBalanceNotifyService,
+	announcement *AnnouncementService,
+	siteMessage *SiteMessageService,
+	gateway *GatewayService,
+	openAIGateway *OpenAIGatewayService,
+) *WebhookBalanceNotifyWiring {
+	announcement.SetWebhookBalanceNotifyService(webhook)
+	siteMessage.SetWebhookBalanceNotifyService(webhook)
+	gateway.SetWebhookBalanceNotifyService(webhook)
+	openAIGateway.SetWebhookBalanceNotifyService(webhook)
+	return &WebhookBalanceNotifyWiring{}
 }
 
 // ProvideSubscriptionCreditPurchaseService wires the credit-pool purchase
