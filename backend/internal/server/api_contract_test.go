@@ -1009,6 +1009,17 @@ func TestAPIContracts(t *testing.T) {
 				"ccswitch_default_model_antigravity_gemini": "",
 				"ccswitch_default_model_gemini": "",
 				"ccswitch_default_model_openai": "",
+				"lumio_desktop_config": {
+					"default_model": "gpt-5.4",
+					"payment_url": "/payment",
+					"min_client_version": "0.0.0",
+					"update_notice": "",
+					"feature_flags": {
+						"registration": true,
+						"payment_handoff": false,
+						"key_provisioning": false
+					}
+				},
 					"balance_low_notify_recharge_url": "",
 					"account_quota_notify_emails": [],
 					"channel_monitor_enabled": true,
@@ -1324,6 +1335,17 @@ func TestAPIContracts(t *testing.T) {
 				"ccswitch_default_model_antigravity_gemini": "",
 				"ccswitch_default_model_gemini": "",
 				"ccswitch_default_model_openai": "",
+				"lumio_desktop_config": {
+					"default_model": "gpt-5.4",
+					"payment_url": "/payment",
+					"min_client_version": "0.0.0",
+					"update_notice": "",
+					"feature_flags": {
+						"registration": true,
+						"payment_handoff": false,
+						"key_provisioning": false
+					}
+				},
 					"balance_low_notify_recharge_url": "",
 					"account_quota_notify_emails": [],
 					"channel_monitor_enabled": true,

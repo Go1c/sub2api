@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: completed
 title: Lumio 桌面公开配置接口
 ---
 
@@ -18,13 +18,13 @@ title: Lumio 桌面公开配置接口
 
 ## 验收标准
 
-- [ ] 无 JWT 可读取且响应只含明确白名单字段
-- [ ] 空配置返回内置安全默认值
-- [ ] 非法 JSON、版本或外部支付 URL 不会进入公开响应
-- [ ] 全局注册/支付关闭能压制桌面功能开关
-- [ ] 管理员 GET/PUT 可读写 typed desktop config，省略字段不覆盖旧值
-- [ ] ETag、304 和 `Cache-Control` 行为有测试
-- [ ] 相关 unit tests 通过
+- [x] 无 JWT 可读取且响应只含明确白名单字段
+- [x] 空配置返回内置安全默认值
+- [x] 非法 JSON、版本或外部支付 URL 不会进入公开响应
+- [x] 全局注册/支付关闭能压制桌面功能开关
+- [x] 管理员 GET/PUT 可读写 typed desktop config，省略字段不覆盖旧值
+- [x] ETag、304 和 `Cache-Control` 行为有测试
+- [x] 相关 unit tests 通过
 
 ## 依赖
 

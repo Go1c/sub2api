@@ -33,7 +33,7 @@
 - Produces: `(*SettingService).GetLumioDesktopConfig(context.Context) (*LumioDesktopConfig, error)`
 - Produces: `ValidateLumioDesktopConfig(LumioDesktopConfig) error`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 ```go
 func TestGetLumioDesktopConfigUsesSafeDefaults(t *testing.T) {
@@ -73,13 +73,13 @@ func TestValidateLumioDesktopConfigRejectsInvalidVersion(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `cd backend && go test -tags=unit ./internal/service -run 'LumioDesktopConfig'`
 
 Expected: compile failure because the desktop config contract and setting key do not exist.
 
-- [ ] **Step 3: Implement the minimal typed setting**
+- [x] **Step 3: Implement the minimal typed setting**
 
 ```go
 type LumioDesktopFeatureFlags struct {
@@ -99,7 +99,7 @@ type LumioDesktopConfig struct {
 
 Add `SettingKeyLumioDesktopConfig = "lumio_desktop_config"`, parse from defaults before JSON overlay, gate registration/payment with existing settings, and marshal the validated normalized document during `buildSystemSettingsUpdates`.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run: `cd backend && go test -tags=unit ./internal/service -run 'LumioDesktopConfig'`
 
@@ -119,7 +119,7 @@ Expected: PASS.
 - Consumes: `(*SettingService).GetLumioDesktopConfig(context.Context)`
 - Produces: `(*SettingHandler).GetLumioDesktopConfig(*gin.Context)` at `GET /api/v1/desktop/config`
 
-- [ ] **Step 1: Write failing handler tests**
+- [x] **Step 1: Write failing handler tests**
 
 ```go
 func TestSettingHandlerGetLumioDesktopConfigReturnsWhitelistAndCacheHeaders(t *testing.T) {
@@ -131,7 +131,7 @@ func TestSettingHandlerGetLumioDesktopConfigReturnsWhitelistAndCacheHeaders(t *t
     require.Equal(t, http.StatusOK, recorder.Code)
     require.NotEmpty(t, recorder.Header().Get("ETag"))
     require.Equal(t, "public, max-age=300, stale-if-error=86400", recorder.Header().Get("Cache-Control"))
-    require.JSONEq(t, `{"code":0,"message":"success","data":{"default_model":"gpt-5.4","payment_url":"/payment","min_client_version":"0.0.0","update_notice":"","feature_flags":{"registration":false,"payment_handoff":false,"key_provisioning":true}}}`, recorder.Body.String())
+    require.JSONEq(t, `{"code":0,"message":"success","data":{"default_model":"gpt-5.4","payment_url":"/payment","min_client_version":"0.0.0","update_notice":"","feature_flags":{"registration":false,"payment_handoff":false,"key_provisioning":false}}}`, recorder.Body.String())
 }
 
 func TestSettingHandlerGetLumioDesktopConfigHonorsIfNoneMatch(t *testing.T) {
@@ -151,23 +151,23 @@ func TestSettingHandlerGetLumioDesktopConfigHonorsIfNoneMatch(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `cd backend && go test -tags=unit ./internal/handler -run 'LumioDesktopConfig'`
 
 Expected: compile failure because the handler method does not exist.
 
-- [ ] **Step 3: Implement handler and admin mappings**
+- [x] **Step 3: Implement handler and admin mappings**
 
 The handler serializes only `service.LumioDesktopConfig`, hashes that JSON for a quoted ETag, sets `Cache-Control: public, max-age=300, stale-if-error=86400`, returns 304 for an exact `If-None-Match`, and otherwise uses the standard success envelope. Add the route under `/desktop/config`. Add a typed `lumio_desktop_config` field to admin GET/PUT and preserve the previous value when omitted.
 
-- [ ] **Step 4: Run focused and package tests**
+- [x] **Step 4: Run focused and package tests**
 
 Run: `cd backend && go test -tags=unit ./internal/handler ./internal/handler/admin ./internal/server/routes ./internal/service`
 
 Expected: PASS.
 
-- [ ] **Step 5: Review the task diff and commit**
+- [x] **Step 5: Review the task diff and commit**
 
 Run: `git diff --check && git diff --stat`
 
