@@ -20,12 +20,12 @@ func newLumioDesktopConfigTestService(values map[string]string) *SettingService 
 	return NewSettingService(&settingPublicRepoStub{values: values}, &config.Config{})
 }
 
-func TestDefaultLumioDesktopConfig_DisablesUnavailableFeaturesUntilConfigured(t *testing.T) {
+func TestDefaultLumioDesktopConfig_EnablesAvailableKeyProvisioning(t *testing.T) {
 	cfg := DefaultLumioDesktopConfig()
 
 	require.True(t, cfg.FeatureFlags.Registration)
 	require.False(t, cfg.FeatureFlags.PaymentHandoff)
-	require.False(t, cfg.FeatureFlags.KeyProvisioning)
+	require.True(t, cfg.FeatureFlags.KeyProvisioning)
 }
 
 func TestSettingService_GetLumioDesktopConfig_UsesSafeDefaults(t *testing.T) {
@@ -40,7 +40,7 @@ func TestSettingService_GetLumioDesktopConfig_UsesSafeDefaults(t *testing.T) {
 	require.Empty(t, got.UpdateNotice)
 	require.False(t, got.FeatureFlags.Registration)
 	require.False(t, got.FeatureFlags.PaymentHandoff)
-	require.False(t, got.FeatureFlags.KeyProvisioning)
+	require.True(t, got.FeatureFlags.KeyProvisioning)
 }
 
 func TestSettingService_GetLumioDesktopConfig_OverlaysStoredDocument(t *testing.T) {
@@ -126,7 +126,7 @@ func TestSettingService_GetLumioDesktopConfig_InvalidStoredValuesFallBack(t *tes
 				require.Equal(t, "0.0.0", got.MinClientVersion)
 				require.False(t, got.FeatureFlags.Registration)
 				require.False(t, got.FeatureFlags.PaymentHandoff)
-				require.False(t, got.FeatureFlags.KeyProvisioning)
+				require.True(t, got.FeatureFlags.KeyProvisioning)
 			},
 		},
 		{

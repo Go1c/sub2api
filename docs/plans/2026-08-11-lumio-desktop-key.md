@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces: `GetByUserIDAndName(context.Context, int64, string) (*service.APIKey, error)`
 
-- [ ] **Step 1: Write failing migration and repository tests**
+- [x] **Step 1: Write failing migration and repository tests**
 
 ```go
 func TestMigration923PreservesDuplicateCredentialsAndAddsPartialUniqueIndex(t *testing.T) {
@@ -63,17 +63,17 @@ func (s *APIKeyRepoSuite) TestReservedDesktopNameIsUniquePerActiveUser() {
 }
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `cd backend && go test -tags=unit ./migrations -run 'Migration923' && go test -tags=integration ./internal/repository -run 'APIKeyRepoSuite'`
 
 Expected: migration test fails because file 923 is absent; repository test fails because the method/index is absent.
 
-- [ ] **Step 3: Implement migration, Ent index, and lookup**
+- [x] **Step 3: Implement migration, Ent index, and lookup**
 
 Use a `row_number() over (partition by user_id order by created_at, id)` CTE. Keep row 1 unchanged; rename rows `rn > 1` to `Lumio Codex Desktop (legacy <id>)`. Add a named partial unique index on `(user_id, name)` with `deleted_at IS NULL AND name = 'Lumio Codex Desktop'`. Mirror it in Ent with `StorageKey` and `entsql.IndexWhere`.
 
-- [ ] **Step 4: Generate Ent and verify GREEN**
+- [x] **Step 4: Generate Ent and verify GREEN**
 
 Run: `cd backend && go generate ./ent && go test -tags=unit ./migrations -run 'Migration923' && go test -tags=integration ./internal/repository -run 'APIKeyRepoSuite'`
 
@@ -90,7 +90,7 @@ Expected: PASS.
 - Consumes: `APIKeyRepository.GetByUserIDAndName`
 - Produces: idempotent behavior for `Create(ctx, userID, CreateAPIKeyRequest{Name: LumioDesktopAPIKeyName})`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 ```go
 func TestAPIKeyServiceCreateLumioDesktopReusesExisting(t *testing.T) {
@@ -130,23 +130,23 @@ func TestAPIKeyServiceCreateOrdinaryNameKeepsConflict(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run focused test and verify RED**
+- [x] **Step 2: Run focused test and verify RED**
 
 Run: `cd backend && go test -tags=unit ./internal/service -run 'LumioDesktop'`
 
 Expected: existing reserved key is not reused.
 
-- [ ] **Step 3: Implement minimal conflict-safe get-or-create**
+- [x] **Step 3: Implement minimal conflict-safe get-or-create**
 
 Add `LumioDesktopAPIKeyName`. Before generating a key, owner-scope lookup the reserved active row. On a create error matching `ErrAPIKeyExists`, repeat the lookup and return that row; ordinary names return the original error unchanged. Preserve all existing validation and cache invalidation for the first successful insert.
 
-- [ ] **Step 4: Run focused and package tests**
+- [x] **Step 4: Run focused and package tests**
 
 Run: `cd backend && go test -tags=unit ./internal/service ./internal/repository ./internal/handler`
 
 Expected: PASS.
 
-- [ ] **Step 5: Review the task diff and commit**
+- [x] **Step 5: Review the task diff and commit**
 
 Run: `git diff --check && git diff --stat`
 

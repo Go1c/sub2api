@@ -28,14 +28,14 @@ The endpoint returns only:
   "feature_flags": {
     "registration": true,
     "payment_handoff": false,
-    "key_provisioning": false
+    "key_provisioning": true
   }
 }
 ```
 
 Configuration is stored under one settings key as JSON. A single document keeps related compatibility values atomic and allows the existing admin settings API to read and replace it without adding a new write surface. Parsing starts from built-in defaults, then overlays valid stored fields. Invalid JSON, invalid semantic versions, unsafe payment URLs, blank model names, and overlong notices fall back to safe values.
 
-`payment_url` is restricted to a same-origin absolute path (leading `/`, never `//`, with no scheme or host). `registration` is additionally gated by the existing global registration setting and backend mode; `payment_handoff` is gated by the existing payment-enabled setting. Payment handoff and account-level key provisioning both default off until their backing server invariants are deployed. Therefore an older desktop configuration cannot override the operator's global kill switches.
+`payment_url` is restricted to a same-origin absolute path (leading `/`, never `//`, with no scheme or host). `registration` is additionally gated by the existing global registration setting and backend mode; `payment_handoff` is gated by the existing payment-enabled setting. Payment handoff defaults off until its backing flow is deployed; account-level key provisioning defaults on because its database invariant is part of this phase. Therefore an older desktop configuration cannot override the operator's global kill switches.
 
 Responses use an ETag derived from the whitelisted payload and `Cache-Control: public, max-age=300, stale-if-error=86400`. The desktop client remains responsible for persisting its last successful response and for its own embedded fallback.
 

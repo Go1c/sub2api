@@ -47,7 +47,7 @@ metadata:
 | [`features/api-key-model-restriction.md`](features/api-key-model-restriction.md) | 用户 API 密钥模型允许列表:从模型广场按分组选择模型,网关拦截未授权模型请求 |
 | [`features/user-subscription-purchase-ban.md`](features/user-subscription-purchase-ban.md) | 管理员按用户禁止购买订阅：字段、编辑开关、CreateOrder 硬拦截、「无权限购买」 |
 | [`features/user-access-token.md`](features/user-access-token.md) | 用户长效 opaque Access Token：个人资料创建/撤销、仅密钥管理 API 白名单、与 sk- 网关密钥分离 |
-| [`features/lumio-desktop-client.md`](features/lumio-desktop-client.md) | Lumio Codex 桌面客户端的服务端引导契约：公开配置白名单、安全默认、缓存与全局开关；接入或调整桌面启动配置时查 |
+| [`features/lumio-desktop-client.md`](features/lumio-desktop-client.md) | Lumio Codex 桌面客户端服务端契约：公开配置白名单、安全回退与账号级唯一 Key；接入桌面启动流程时查 |
 | [`features/_TEMPLATE.md`](features/_TEMPLATE.md) | 新功能文档模板——新增功能记录时照此建,放对 领域 / 模块 |
 
 ## operations/(部署与运维)

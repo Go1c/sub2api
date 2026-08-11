@@ -42,7 +42,7 @@ func DefaultLumioDesktopConfig() LumioDesktopConfig {
 		FeatureFlags: LumioDesktopFeatureFlags{
 			Registration:    true,
 			PaymentHandoff:  false,
-			KeyProvisioning: false,
+			KeyProvisioning: true,
 		},
 	}
 }

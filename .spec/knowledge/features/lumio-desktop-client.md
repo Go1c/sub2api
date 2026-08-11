@@ -1,6 +1,6 @@
 ---
 name: lumio-desktop-client
-description: Lumio Codex 桌面客户端的服务端引导契约：公开配置白名单、安全默认、缓存与全局开关；接入或调整桌面启动配置时查
+description: Lumio Codex 桌面客户端服务端契约：公开配置白名单、安全回退与账号级唯一 Key；接入桌面启动流程时查
 metadata:
   type: doc
   level: L2
@@ -31,7 +31,13 @@ metadata:
 - 更新提示去首尾空白并最多保留 2000 个 Unicode 字符。
 - 配置 JSON 破损时从内置默认恢复，不向公开响应透出原始设置或未知字段。
 
-`registration` 同时受全局注册开关与 backend mode 压制；`payment_handoff` 同时受全局支付开关压制。尚未具备完整服务端支撑的 `payment_handoff` 与 `key_provisioning` 默认关闭，由对应能力交付后再显式开启。
+`registration` 同时受全局注册开关与 backend mode 压制；`payment_handoff` 同时受全局支付开关压制。`payment_handoff` 在交接流程交付前默认关闭；账号级唯一 Key 约束已落地，因此 `key_provisioning` 默认开启。
+
+## 账号级桌面 Key
+
+客户端继续调用已鉴权的 `POST /api/v1/keys`，名称固定为 `Lumio Codex Desktop`。服务端把这个精确名称解释为账号级 get-or-create：已有未删除记录时原样返回；不存在时走普通创建流程；并发插入冲突时读取并返回数据库中的胜出记录。
+
+PostgreSQL 部分唯一索引只约束 `deleted_at IS NULL` 且名称精确匹配的记录，因此不同用户可各有一条，软删除后可创建替代 Key，普通名称行为不变。迁移按 `created_at, id` 保留最早记录的名称，后续历史重复记录仅改为 `Lumio Codex Desktop (legacy <id>)`，不删除或轮换凭证。
 
 ## 缓存
 
@@ -46,6 +52,9 @@ Cache-Control: public, max-age=300, stale-if-error=86400
 ## 实现位置
 
 - Service/规范化：`backend/internal/service/lumio_desktop_config.go`
+- Key get-or-create：`backend/internal/service/api_key_service.go`
+- Key 查询与约束：`backend/internal/repository/api_key_repo.go`、`backend/ent/schema/api_key.go`
+- 数据迁移：`backend/migrations/923_lumio_desktop_api_key_unique.sql`
 - 公开 handler：`backend/internal/handler/setting_handler.go`
 - 公开路由：`backend/internal/server/routes/public.go`
 - 管理员映射：`backend/internal/handler/admin/setting_handler.go`、`setting_handler_update.go`
@@ -55,7 +64,8 @@ Cache-Control: public, max-age=300, stale-if-error=86400
 - 不扩充浏览器用的 `/settings/public`，桌面使用独立窄契约，避免兼容耦合与未来字段误暴露。
 - 相关兼容配置以单个 JSON 文档原子保存；全局业务开关仍是最终 kill switch。
 - 对已持久化坏值 fail-safe 回退，对管理员新写入 fail-fast 拒绝。
+- 桌面 Key 的并发串行化交给 PostgreSQL 部分唯一索引，应用层只负责查询与冲突后读取胜出记录。
 
 ## 待解决
 
-- 账号级唯一 Desktop Key、一次性支付登录交接完成后，分别开启对应 feature flag。
+- 一次性支付登录交接完成后开启 `payment_handoff`。

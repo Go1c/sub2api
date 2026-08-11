@@ -28,6 +28,10 @@ func (s *fallbackRepoStub) GetByID(ctx context.Context, id int64) (*APIKey, erro
 	return nil, ErrAPIKeyNotFound
 }
 
+func (s *fallbackRepoStub) GetByUserIDAndName(ctx context.Context, userID int64, name string) (*APIKey, error) {
+	panic("unexpected")
+}
+
 // 其余接口方法在本测试中不应被调用。
 func (s *fallbackRepoStub) Create(ctx context.Context, key *APIKey) error { panic("unexpected") }
 func (s *fallbackRepoStub) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {

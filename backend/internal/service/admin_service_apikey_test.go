@@ -129,6 +129,9 @@ func (s *apiKeyRepoStubForGroupUpdate) GetByID(_ context.Context, _ int64) (*API
 	clone := *s.key
 	return &clone, nil
 }
+func (s *apiKeyRepoStubForGroupUpdate) GetByUserIDAndName(context.Context, int64, string) (*APIKey, error) {
+	panic("unexpected")
+}
 func (s *apiKeyRepoStubForGroupUpdate) Update(_ context.Context, key *APIKey) error {
 	if s.updateErr != nil {
 		return s.updateErr

@@ -87,6 +87,19 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIK
 	return apiKeyEntityToService(m), nil
 }
 
+func (r *apiKeyRepository) GetByUserIDAndName(ctx context.Context, userID int64, name string) (*service.APIKey, error) {
+	m, err := r.activeQuery().
+		Where(apikey.UserIDEQ(userID), apikey.NameEQ(name)).
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, service.ErrAPIKeyNotFound
+		}
+		return nil, err
+	}
+	return apiKeyEntityToService(m), nil
+}
+
 // GetKeyAndOwnerID 根据 API Key ID 获取其 key 与所有者（用户）ID。
 // 相比 GetByID，此方法性能更优，因为：
 //   - 使用 Select() 只查询必要字段，减少数据传输量

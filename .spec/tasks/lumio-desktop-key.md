@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: Lumio Desktop Key 账号级唯一与并发幂等
 ---
 
@@ -19,14 +19,14 @@ title: Lumio Desktop Key 账号级唯一与并发幂等
 
 ## 验收标准
 
-- [ ] 已有固定名称 Key 直接复用并返回完整现有 DTO
-- [ ] 首次请求创建正常 Key
-- [ ] 不同幂等键/不同设备并发时数据库中只有一个未删除保留 Key
-- [ ] 软删除保留 Key 后可创建替代 Key
-- [ ] 普通名称 Key 的创建冲突语义不变
-- [ ] 历史重复凭据全部保留，仅非 canonical 行改显示名
-- [ ] Ent schema、迁移与 repository 查询一致
-- [ ] unit / integration / migration tests 通过
+- [x] 已有固定名称 Key 直接复用并返回完整现有 DTO
+- [x] 首次请求创建正常 Key
+- [x] 不同幂等键/不同设备并发时数据库中只有一个未删除保留 Key
+- [x] 软删除保留 Key 后可创建替代 Key
+- [x] 普通名称 Key 的创建冲突语义不变
+- [x] 历史重复凭据全部保留，仅非 canonical 行改显示名
+- [x] Ent schema、迁移与 repository 查询一致
+- [x] unit / integration / migration tests 通过
 
 ## 依赖
 
