@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler"
@@ -224,7 +225,17 @@ func RegisterAuthRoutes(
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(servermiddleware.BackendModeUserGuard(settingService))
 	{
-		authenticated.GET("/auth/me", h.Auth.GetCurrentUser)
+		// Wallet balance polling path (also used by frontend). Share the same per-user
+		// bucket as GET /user/profile so scripts cannot double the quota by alternating.
+		authenticated.GET("/auth/me", rateLimiter.LimitWithOptions("user-wallet-balance", userWalletBalanceRPM, time.Minute, middleware.RateLimitOptions{
+			KeyFunc: func(c *gin.Context) string {
+				if subject, ok := servermiddleware.GetAuthSubjectFromContext(c); ok && subject.UserID > 0 {
+					return fmt.Sprintf("user:%d", subject.UserID)
+				}
+				return "ip:" + c.ClientIP()
+			},
+			FailureMode: middleware.RateLimitFailOpen,
+		}), h.Auth.GetCurrentUser)
 		// 撤销所有会话（需要认证）
 		authenticated.POST("/auth/revoke-all-sessions", h.Auth.RevokeAllSessions)
 		authenticated.POST("/auth/oauth/bind-token", h.Auth.PrepareOAuthBindAccessTokenCookie)

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,9 @@ const (
 // RateLimitOptions 限流可选配置
 type RateLimitOptions struct {
 	FailureMode RateLimitFailureMode
+	// KeyFunc overrides the default ClientIP identity. When set, redis key becomes
+	// prefix + key + ":" + KeyFunc(c). Empty string falls back to ClientIP.
+	KeyFunc func(c *gin.Context) string
 }
 
 var rateLimitScript = redis.NewScript(`
@@ -88,8 +92,13 @@ func (r *RateLimiter) LimitWithOptions(key string, limit int, window time.Durati
 	}
 
 	return func(c *gin.Context) {
-		ip := c.ClientIP()
-		redisKey := r.prefix + key + ":" + ip
+		identity := c.ClientIP()
+		if opts.KeyFunc != nil {
+			if custom := strings.TrimSpace(opts.KeyFunc(c)); custom != "" {
+				identity = custom
+			}
+		}
+		redisKey := r.prefix + key + ":" + identity
 
 		ctx := c.Request.Context()
 

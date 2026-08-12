@@ -40,6 +40,9 @@ func (h *UsageHandler) List(c *gin.Context) {
 	}
 
 	page, pageSize := response.ParsePagination(c)
+	if pageSize > userUsageMaxPageSize {
+		pageSize = userUsageMaxPageSize
+	}
 
 	var apiKeyID int64
 	if apiKeyIDStr := c.Query("api_key_id"); apiKeyIDStr != "" {
@@ -123,6 +126,11 @@ func (h *UsageHandler) List(c *gin.Context) {
 		// Use half-open range [start, end), move to next calendar day start (DST-safe).
 		t = t.AddDate(0, 0, 1)
 		endTime = &t
+	}
+
+	if errMsg := validateUserUsageTimeRange(startTime, endTime); errMsg != "" {
+		response.BadRequest(c, errMsg)
+		return
 	}
 
 	params := pagination.PaginationParams{
@@ -257,6 +265,11 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		endTime = now
 	}
 
+	if errMsg := validateUserUsageConcreteRange(startTime, endTime); errMsg != "" {
+		response.BadRequest(c, errMsg)
+		return
+	}
+
 	var stats *service.UsageStats
 	var err error
 	if apiKeyID > 0 {
@@ -305,9 +318,38 @@ func parseUserTimeRange(c *gin.Context) (time.Time, time.Time) {
 	return startTime, endTime
 }
 
+// validateUserUsageTimeRange enforces a hard cap on user-facing usage queries.
+// Accepts optional start/end (list) or required concrete range (stats/dashboard).
+// end is treated as exclusive upper bound when both are present (half-open).
+func validateUserUsageTimeRange(start, end *time.Time) string {
+	if start == nil && end == nil {
+		return ""
+	}
+	if start != nil && end != nil {
+		if end.Before(*start) {
+			return "end_date must be on or after start_date"
+		}
+		// Inclusive calendar span for half-open [start, end): days = end-start.
+		maxSpan := time.Duration(userUsageMaxRangeDays) * 24 * time.Hour
+		if end.Sub(*start) > maxSpan {
+			return "date range cannot exceed 90 days"
+		}
+	}
+	return ""
+}
+
+func validateUserUsageConcreteRange(start, end time.Time) string {
+	s, e := start, end
+	return validateUserUsageTimeRange(&s, &e)
+}
+
 const (
 	defaultAPIKeyDailyUsageDays = 30
 	maxAPIKeyDailyUsageDays     = 90
+
+	// User-facing usage query guards (abuse / DB load protection).
+	userUsageMaxPageSize  = 100
+	userUsageMaxRangeDays = 90
 )
 
 func parseAPIKeyDailyUsageDays(raw string) (int, bool) {
@@ -356,6 +398,10 @@ func (h *UsageHandler) DashboardTrend(c *gin.Context) {
 	}
 
 	startTime, endTime := parseUserTimeRange(c)
+	if errMsg := validateUserUsageConcreteRange(startTime, endTime); errMsg != "" {
+		response.BadRequest(c, errMsg)
+		return
+	}
 	granularity := c.DefaultQuery("granularity", "day")
 
 	trend, err := h.usageService.GetUserUsageTrendByUserID(c.Request.Context(), subject.UserID, startTime, endTime, granularity)
@@ -382,6 +428,10 @@ func (h *UsageHandler) DashboardModels(c *gin.Context) {
 	}
 
 	startTime, endTime := parseUserTimeRange(c)
+	if errMsg := validateUserUsageConcreteRange(startTime, endTime); errMsg != "" {
+		response.BadRequest(c, errMsg)
+		return
+	}
 
 	stats, err := h.usageService.GetUserModelStats(c.Request.Context(), subject.UserID, startTime, endTime)
 	if err != nil {
