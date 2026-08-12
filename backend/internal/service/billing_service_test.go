@@ -741,7 +741,7 @@ func TestCalculateCostWithLongContext_PropagatesError(t *testing.T) {
 func TestGetModelPricing_Grok45OfficialFallback(t *testing.T) {
 	svc := newTestBillingService()
 
-	for _, model := range []string{"grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest"} {
+	for _, model := range []string{"grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest", "grok-4.6", "grok-4.6-latest", "grok-4.6-build"} {
 		model := model
 		t.Run(model, func(t *testing.T) {
 			pricing, err := svc.GetModelPricing(model)
