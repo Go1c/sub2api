@@ -2423,3 +2423,9 @@ func (s *RateLimitService) triggerStreamTimeoutError(ctx context.Context, accoun
 	slog.Warn("stream_timeout_account_error", "account_id", account.ID, "model", model)
 	return true
 }
+
+func isHTMLResponse(body []byte) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(string(body)))
+	return strings.HasPrefix(trimmed, "<!doctype html") ||
+		strings.HasPrefix(trimmed, "<html")
+}
