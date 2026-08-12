@@ -966,10 +966,21 @@ func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return OpenAIUsage{}, false
 	}
-	if usage, ok := openAIUsageFromGJSON(gjson.GetBytes(body, "usage")); ok {
-		return usage, true
+	// 部分 OpenAI 兼容上游（例如 Cline API）会将标准响应包在 data 字段中：
+	// {"data":{"choices": [...], "usage": {...}}, "success":true}。
+	// 按优先级先保留原有路径，再尝试兼容层 data 包装，
+	// 避免同步请求能正常返回但用量被静默记录为 0。
+	for _, usagePath := range []string{
+		"usage",
+		"response.usage",
+		"data.usage",
+		"data.response.usage",
+	} {
+		if usage, ok := openAIUsageFromGJSON(gjson.GetBytes(body, usagePath)); ok {
+			return usage, true
+		}
 	}
-	return openAIUsageFromGJSON(gjson.GetBytes(body, "response.usage"))
+	return OpenAIUsage{}, false
 }
 
 func extractOpenAIResponseIDFromJSONBytes(body []byte) string {
@@ -1262,10 +1273,20 @@ func extractOpenAISSEErrorMessage(payload []byte) string {
 }
 
 func sanitizeOpenAIResponseFailedEventForClient(payload []byte, eventType string, clientOutputStarted bool) ([]byte, bool) {
-	if eventType != "response.failed" || len(payload) == 0 || !gjson.ValidBytes(payload) {
+	eventType = strings.TrimSpace(eventType)
+	isFailedEvent := eventType == "response.failed"
+	if (!isFailedEvent && eventType != "error") || len(payload) == 0 || !gjson.ValidBytes(payload) {
 		return payload, false
 	}
 	updated := payload
+	// 容量降载码对 Codex CLI 是致命错误；事件既然要写给客户端（failover 已不可用），
+	// 就改写为客户端可重试的错误码。error 帧与 response.failed 都要改。
+	if rewritten, changed := sanitizeOpenAICapacityShedErrorCodeForClient(updated); changed {
+		updated = rewritten
+	}
+	if !isFailedEvent {
+		return updated, !bytes.Equal(updated, payload)
+	}
 	if clientOutputStarted && isOpenAIContextWindowError(extractOpenAISSEErrorMessage(payload), payload) {
 		errorPath := ""
 		switch {
