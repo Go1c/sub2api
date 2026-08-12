@@ -6,10 +6,28 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
+
+type runtimeBlockRecorder struct {
+	accounts   []*Account
+	until      []time.Time
+	reasons    []string
+	clearedIDs []int64
+}
+
+func (r *runtimeBlockRecorder) BlockAccountScheduling(account *Account, until time.Time, reason string) {
+	r.accounts = append(r.accounts, account)
+	r.until = append(r.until, until)
+	r.reasons = append(r.reasons, reason)
+}
+
+func (r *runtimeBlockRecorder) ClearAccountSchedulingBlock(accountID int64) {
+	r.clearedIDs = append(r.clearedIDs, accountID)
+}
 
 func TestRateLimitService_HandleUpstreamError_OpenAI403FirstHitTempUnschedulable(t *testing.T) {
 	repo := &rateLimitAccountRepoStub{}

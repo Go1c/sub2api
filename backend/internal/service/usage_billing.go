@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/shopspring/decimal"
 )
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
@@ -78,6 +81,36 @@ func (c *UsageBillingCommand) Normalize() {
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildUsageBillingFingerprint(c)
 	}
+	// 量化必须在指纹计算之后：指纹是请求幂等键，保持由原始金额派生可以避免
+	// 升级前后同一 request_id 的重试算出不同指纹而被判为 fingerprint conflict。
+	c.quantizeMonetaryFields()
+}
+
+// UsageBillingMonetaryScale 是所有计费金额的规范小数位数，
+// 对齐 users.balance / api_keys.quota_used 的 NUMERIC(20,8)。
+const UsageBillingMonetaryScale = 8
+
+// quantizeMonetaryFields 把命令中的金额统一量化到 NUMERIC(20,8)。
+//
+// 不量化时，同一笔 ActualCost 会在两条方向相反的 SQL 上被 PostgreSQL 分别舍入：
+// balance - $1 与 quota_used + $1 方向相反，half 边界下 delta 可能差 1e-8。
+// 在参数进入 SQL 之前量化一次，两条语句拿到同一个 8 位金额，存储阶段不再舍入。
+func (c *UsageBillingCommand) quantizeMonetaryFields() {
+	c.BalanceCost = QuantizeUsageBillingAmount(c.BalanceCost)
+	c.SubscriptionCost = QuantizeUsageBillingAmount(c.SubscriptionCost)
+	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
+	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
+	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+}
+
+// QuantizeUsageBillingAmount 把金额舍入到 UsageBillingMonetaryScale 位小数，
+// 采用与 PostgreSQL NUMERIC 一致的 half-away-from-zero 规则。
+func QuantizeUsageBillingAmount(v float64) float64 {
+	if v == 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return v
+	}
+	quantized, _ := decimal.NewFromFloat(v).Round(UsageBillingMonetaryScale).Float64()
+	return quantized
 }
 
 func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
