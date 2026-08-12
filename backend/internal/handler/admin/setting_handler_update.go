@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -535,6 +536,55 @@ func (h *SettingHandler) ensureActorTotpForStepUp(c *gin.Context) bool {
 	return true
 }
 
+// settingKeyJSONAliases covers the request fields whose JSON name differs from
+// the setting key they persist to. Every other field of UpdateSettingsRequest
+// is named after its setting key.
+var settingKeyJSONAliases = map[string]string{
+	"smtp_from_email": service.SettingKeySMTPFrom,
+}
+
+// settingKeyByJSONName maps the value-typed top-level JSON fields of
+// UpdateSettingsRequest to the setting key each one writes. Resolved once from
+// the struct tags so new fields are covered without touching this file.
+//
+// Pointer-typed fields are deliberately excluded: they already carry their own
+// "omitted = keep the stored value" merge in UpdateSettings, and some of them
+// rely on being rewritten on every save to re-normalize fail-closed security
+// state.
+var settingKeyByJSONName = buildSettingKeyByJSONName()
+
+func buildSettingKeyByJSONName() map[string]string {
+	t := reflect.TypeOf(UpdateSettingsRequest{})
+	out := make(map[string]string, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.Type.Kind() == reflect.Ptr {
+			continue
+		}
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		if alias, ok := settingKeyJSONAliases[name]; ok {
+			out[name] = alias
+			continue
+		}
+		out[name] = name
+	}
+	return out
+}
+
+// omittedSettingKeys reports the setting keys this payload never mentioned.
+func omittedSettingKeys(sentFields map[string]json.RawMessage) service.OmittedSettingKeys {
+	omitted := make(service.OmittedSettingKeys, len(settingKeyByJSONName))
+	for jsonName, settingKey := range settingKeyByJSONName {
+		if _, sent := sentFields[jsonName]; !sent {
+			omitted[settingKey] = struct{}{}
+		}
+	}
+	return omitted
+}
+
 func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	var raw map[string]json.RawMessage
 	if err := c.ShouldBindBodyWith(&raw, binding.JSON); err != nil {
@@ -549,13 +599,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	_, hasStatusBanner := raw[service.SettingKeyChannelMonitorStatusBanner]
-	h.updateSettingsIdempotently(c, req, len(raw) == 1 && hasStatusBanner)
+	omitted := omittedSettingKeys(raw)
+	h.updateSettingsIdempotently(c, req, len(raw) == 1 && hasStatusBanner, omitted)
 }
 
-func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool) {
+func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool, omitted service.OmittedSettingKeys) {
 	coordinator := service.DefaultIdempotencyCoordinator()
 	if coordinator == nil {
-		h.runSettingsUpdate(c, req, statusBannerOnly)
+		h.runSettingsUpdate(c, req, statusBannerOnly, omitted)
 		return
 	}
 
@@ -581,7 +632,7 @@ func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSe
 		TTL:            adminSettingsUpdateDedupeTTL,
 	}, func(ctx context.Context) (any, error) {
 		return captureSettingsUpdateResponse(c, func() {
-			h.runSettingsUpdate(c, req, statusBannerOnly)
+			h.runSettingsUpdate(c, req, statusBannerOnly, omitted)
 		})
 	})
 	if err != nil {
@@ -605,12 +656,12 @@ func (h *SettingHandler) updateSettingsIdempotently(c *gin.Context, req UpdateSe
 	response.Success(c, result.Data)
 }
 
-func (h *SettingHandler) runSettingsUpdate(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool) {
+func (h *SettingHandler) runSettingsUpdate(c *gin.Context, req UpdateSettingsRequest, statusBannerOnly bool, omitted service.OmittedSettingKeys) {
 	if statusBannerOnly {
 		h.updateChannelMonitorStatusBanner(c, req)
 		return
 	}
-	h.updateSettings(c, req)
+	h.updateSettings(c, req, omitted)
 }
 
 func (h *SettingHandler) updateChannelMonitorStatusBanner(c *gin.Context, req UpdateSettingsRequest) {
@@ -638,7 +689,7 @@ func (h *SettingHandler) updateChannelMonitorStatusBanner(c *gin.Context, req Up
 	})
 }
 
-func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsRequest) {
+func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsRequest, omitted service.OmittedSettingKeys) {
 	previousSettings, err := h.settingService.GetAllSettings(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -2184,7 +2235,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		},
 		ForceEmailOnThirdPartySignup: boolValueOrDefault(req.ForceEmailOnThirdPartySignup, previousAuthSourceDefaults.ForceEmailOnThirdPartySignup),
 	}
-	if err := h.settingService.UpdateSettingsWithAuthSourceDefaults(c.Request.Context(), settings, authSourceDefaults); err != nil {
+	if err := h.settingService.UpdateSettingsWithAuthSourceDefaultsOmitting(c.Request.Context(), settings, authSourceDefaults, omitted); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
