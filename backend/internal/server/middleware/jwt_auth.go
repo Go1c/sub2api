@@ -197,7 +197,8 @@ func authenticateUserAccessToken(
 	return true
 }
 
-// enforceUserAccessTokenPathScope restricts opaque-token auth to key-management APIs.
+// enforceUserAccessTokenPathScope restricts opaque-token auth to the API whitelist
+// (key management + read-only usage logs / wallet balance / subscription credit).
 func enforceUserAccessTokenPathScope(c *gin.Context) bool {
 	if !IsUserAccessTokenAuth(c) {
 		return true
@@ -212,6 +213,8 @@ func enforceUserAccessTokenPathScope(c *gin.Context) bool {
 }
 
 // isUserAccessTokenAllowedPath returns true for whitelist paths under /api/v1.
+// Write operations outside key management remain denied (profile update, access-token
+// management, subscription weekly-reset, payment, admin, etc.).
 func isUserAccessTokenAllowedPath(method, path string) bool {
 	// Normalize: strip trailing slash except root
 	if len(path) > 1 && strings.HasSuffix(path, "/") {
@@ -238,6 +241,46 @@ func isUserAccessTokenAllowedPath(method, path string) bool {
 	if path == "/api/v1/groups/rates" && method == "GET" {
 		return true
 	}
+
+	// GET /api/v1/user/profile — wallet balance (balance / frozen_balance) among profile fields
+	if path == "/api/v1/user/profile" && method == "GET" {
+		return true
+	}
+
+	// Usage / request logs (read-only; includes dashboard stats and batch query POST)
+	if path == "/api/v1/usage" && method == "GET" {
+		return true
+	}
+	if strings.HasPrefix(path, "/api/v1/usage/") {
+		rest := strings.TrimPrefix(path, "/api/v1/usage/")
+		switch rest {
+		case "stats", "dashboard/stats", "dashboard/trend", "dashboard/models":
+			return method == "GET"
+		case "dashboard/api-keys-usage":
+			return method == "POST"
+		default:
+			// GET /api/v1/usage/:id (numeric-ish single segment; reject nested)
+			if rest != "" && !strings.Contains(rest, "/") {
+				return method == "GET"
+			}
+		}
+		return false
+	}
+
+	// Subscription credit / remaining quotas (read-only; no weekly-limit reset)
+	if path == "/api/v1/subscriptions" && method == "GET" {
+		return true
+	}
+	if path == "/api/v1/subscriptions/active" && method == "GET" {
+		return true
+	}
+	if path == "/api/v1/subscriptions/progress" && method == "GET" {
+		return true
+	}
+	if path == "/api/v1/subscriptions/summary" && method == "GET" {
+		return true
+	}
+
 	return false
 }
 
