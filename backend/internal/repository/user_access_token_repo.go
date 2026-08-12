@@ -73,6 +73,20 @@ func (r *userAccessTokenRepository) ListByUserID(ctx context.Context, userID int
 	return out, nil
 }
 
+func (r *userAccessTokenRepository) CountActiveByUserID(ctx context.Context, userID int64, now time.Time) (int, error) {
+	n, err := r.client.UserAccessToken.Query().
+		Where(
+			useraccesstoken.UserIDEQ(userID),
+			useraccesstoken.RevokedAtIsNil(),
+			useraccesstoken.ExpiresAtGT(now),
+		).
+		Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 func (r *userAccessTokenRepository) RevokeByIDForUser(ctx context.Context, userID, id int64, revokedAt time.Time) error {
 	n, err := r.client.UserAccessToken.Update().
 		Where(

@@ -1,11 +1,26 @@
 package routes
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	appmiddleware "github.com/Wei-Shaw/sub2api/internal/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+)
+
+// User-facing rate limits (per authenticated user_id when available).
+const (
+	userUsageListRPM         = 60  // list / get-by-id
+	userUsageAggregateRPM    = 20  // stats + dashboard aggregates
+	userAccessTokenCreateRPM = 10  // create uat_
+	userUATAPIReadRPM        = 120 // general UAT-allowed keys/groups/subscriptions
+	// Wallet balance polling (auth/me + user/profile). Keep low to protect DB under scripts.
+	userWalletBalanceRPM = 30
 )
 
 // RegisterUserRoutes 注册用户相关路由（需要认证）
@@ -15,7 +30,16 @@ func RegisterUserRoutes(
 	jwtAuth middleware.JWTAuthMiddleware,
 	auditLog middleware.AuditLogMiddleware,
 	settingService *service.SettingService,
+	redisClient *redis.Client,
 ) {
+	rateLimiter := appmiddleware.NewRateLimiter(redisClient)
+	userKey := func(c *gin.Context) string {
+		if subject, ok := middleware.GetAuthSubjectFromContext(c); ok && subject.UserID > 0 {
+			return fmt.Sprintf("user:%d", subject.UserID)
+		}
+		return "ip:" + c.ClientIP()
+	}
+
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
@@ -25,7 +49,10 @@ func RegisterUserRoutes(
 		// 用户接口
 		user := authenticated.Group("/user")
 		{
-			user.GET("/profile", h.User.GetProfile)
+			user.GET("/profile", rateLimiter.LimitWithOptions("user-wallet-balance", userWalletBalanceRPM, time.Minute, appmiddleware.RateLimitOptions{
+				KeyFunc:     userKey,
+				FailureMode: appmiddleware.RateLimitFailOpen,
+			}), h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
 			user.GET("/aff", h.User.GetAffiliate)
@@ -66,13 +93,20 @@ func RegisterUserRoutes(
 			accessTokens := user.Group("/access-tokens")
 			{
 				accessTokens.GET("", h.UserAccessToken.List)
-				accessTokens.POST("", h.UserAccessToken.Create)
+				accessTokens.POST("", rateLimiter.LimitWithOptions("user-access-token-create", userAccessTokenCreateRPM, time.Minute, appmiddleware.RateLimitOptions{
+					KeyFunc:     userKey,
+					FailureMode: appmiddleware.RateLimitFailOpen,
+				}), h.UserAccessToken.Create)
 				accessTokens.DELETE("/:id", h.UserAccessToken.Revoke)
 			}
 		}
 
-		// API Key管理
+		// API Key管理（UAT 可写；按用户限流）
 		keys := authenticated.Group("/keys")
+		keys.Use(rateLimiter.LimitWithOptions("user-keys", userUATAPIReadRPM, time.Minute, appmiddleware.RateLimitOptions{
+			KeyFunc:     userKey,
+			FailureMode: appmiddleware.RateLimitFailOpen,
+		}))
 		{
 			keys.GET("", h.APIKey.List)
 			keys.GET("/:id", h.APIKey.GetByID)
@@ -83,6 +117,10 @@ func RegisterUserRoutes(
 
 		// 用户可用分组（非管理员接口）
 		groups := authenticated.Group("/groups")
+		groups.Use(rateLimiter.LimitWithOptions("user-groups", userUATAPIReadRPM, time.Minute, appmiddleware.RateLimitOptions{
+			KeyFunc:     userKey,
+			FailureMode: appmiddleware.RateLimitFailOpen,
+		}))
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
@@ -94,17 +132,25 @@ func RegisterUserRoutes(
 			channels.GET("/available", h.AvailableChannel.List)
 		}
 
-		// 使用记录
+		// 使用记录（UAT 可读；list 与聚合分开配额）
 		usage := authenticated.Group("/usage")
 		{
-			usage.GET("", h.Usage.List)
-			usage.GET("/:id", h.Usage.GetByID)
-			usage.GET("/stats", h.Usage.Stats)
+			usageListLimit := rateLimiter.LimitWithOptions("user-usage-list", userUsageListRPM, time.Minute, appmiddleware.RateLimitOptions{
+				KeyFunc:     userKey,
+				FailureMode: appmiddleware.RateLimitFailOpen,
+			})
+			usageAggLimit := rateLimiter.LimitWithOptions("user-usage-agg", userUsageAggregateRPM, time.Minute, appmiddleware.RateLimitOptions{
+				KeyFunc:     userKey,
+				FailureMode: appmiddleware.RateLimitFailOpen,
+			})
+			usage.GET("", usageListLimit, h.Usage.List)
+			usage.GET("/:id", usageListLimit, h.Usage.GetByID)
+			usage.GET("/stats", usageAggLimit, h.Usage.Stats)
 			// User dashboard endpoints
-			usage.GET("/dashboard/stats", h.Usage.DashboardStats)
-			usage.GET("/dashboard/trend", h.Usage.DashboardTrend)
-			usage.GET("/dashboard/models", h.Usage.DashboardModels)
-			usage.POST("/dashboard/api-keys-usage", h.Usage.DashboardAPIKeysUsage)
+			usage.GET("/dashboard/stats", usageAggLimit, h.Usage.DashboardStats)
+			usage.GET("/dashboard/trend", usageAggLimit, h.Usage.DashboardTrend)
+			usage.GET("/dashboard/models", usageAggLimit, h.Usage.DashboardModels)
+			usage.POST("/dashboard/api-keys-usage", usageAggLimit, h.Usage.DashboardAPIKeysUsage)
 		}
 
 		// 公告（用户可见）
@@ -149,13 +195,17 @@ func RegisterUserRoutes(
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 
-		// 用户订阅
+		// 用户订阅（只读路径与 UAT 白名单重叠，按用户限流）
 		subscriptions := authenticated.Group("/subscriptions")
 		{
-			subscriptions.GET("", h.Subscription.List)
-			subscriptions.GET("/active", h.Subscription.GetActive)
-			subscriptions.GET("/progress", h.Subscription.GetProgress)
-			subscriptions.GET("/summary", h.Subscription.GetSummary)
+			subReadLimit := rateLimiter.LimitWithOptions("user-subscriptions-read", userUATAPIReadRPM, time.Minute, appmiddleware.RateLimitOptions{
+				KeyFunc:     userKey,
+				FailureMode: appmiddleware.RateLimitFailOpen,
+			})
+			subscriptions.GET("", subReadLimit, h.Subscription.List)
+			subscriptions.GET("/active", subReadLimit, h.Subscription.GetActive)
+			subscriptions.GET("/progress", subReadLimit, h.Subscription.GetProgress)
+			subscriptions.GET("/summary", subReadLimit, h.Subscription.GetSummary)
 			subscriptions.POST("/:id/reset-weekly-limit", h.Subscription.ResetWeeklyLimit)
 		}
 

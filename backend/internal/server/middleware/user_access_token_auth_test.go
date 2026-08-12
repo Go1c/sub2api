@@ -74,6 +74,16 @@ func (r *uatRepoStub) ListByUserID(_ context.Context, userID int64) ([]service.U
 	return out, nil
 }
 
+func (r *uatRepoStub) CountActiveByUserID(_ context.Context, userID int64, now time.Time) (int, error) {
+	n := 0
+	for _, t := range r.byID {
+		if t.UserID == userID && t.RevokedAt == nil && t.ExpiresAt.After(now) {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (r *uatRepoStub) RevokeByIDForUser(_ context.Context, userID, id int64, revokedAt time.Time) error {
 	t, ok := r.byID[id]
 	if !ok || t.UserID != userID {
@@ -139,6 +149,7 @@ func TestUserAccessTokenAuth_AllowsKeysAndGroups(t *testing.T) {
 		"/api/v1/groups/available",
 		"/api/v1/groups/rates",
 		"/api/v1/user/profile",
+		"/api/v1/auth/me",
 		"/api/v1/usage",
 		"/api/v1/usage/1",
 		"/api/v1/usage/stats",
@@ -190,6 +201,8 @@ func TestUserAccessTokenAuth_DeniesOutOfScope(t *testing.T) {
 		{http.MethodPut, "/api/v1/user/profile"},
 		{http.MethodGet, "/api/v1/user/access-tokens"},
 		{http.MethodPost, "/api/v1/user/access-tokens"},
+		{http.MethodPost, "/api/v1/auth/revoke-all-sessions"},
+		{http.MethodPost, "/api/v1/auth/oauth/bind-token"},
 		{http.MethodPost, "/api/v1/subscriptions/1/reset-weekly-limit"},
 		{http.MethodGet, "/api/v1/admin/users"},
 		{http.MethodGet, "/api/v1/channels/available"},
@@ -254,6 +267,7 @@ func TestIsUserAccessTokenAllowedPath(t *testing.T) {
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/groups/available"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/groups/rates"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/user/profile"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/auth/me"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage/stats"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage/dashboard/trend"))
@@ -264,6 +278,7 @@ func TestIsUserAccessTokenAllowedPath(t *testing.T) {
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/subscriptions/summary"))
 	require.False(t, isUserAccessTokenAllowedPath("PUT", "/api/v1/user/profile"))
 	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/user/access-tokens"))
+	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/auth/revoke-all-sessions"))
 	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/subscriptions/1/reset-weekly-limit"))
 	require.False(t, isUserAccessTokenAllowedPath("GET", "/api/v1/keys/1/extra"))
 }

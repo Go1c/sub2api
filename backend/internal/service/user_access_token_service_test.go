@@ -232,3 +232,83 @@ func TestUserAccessTokenService_Validate_ActiveRevokedExpired(t *testing.T) {
 	_, err = svc.ValidateToken(context.Background(), "")
 	require.ErrorIs(t, err, ErrUserAccessTokenInvalid)
 }
+
+func (r *userAccessTokenRepoStub) CountActiveByUserID(_ context.Context, userID int64, now time.Time) (int, error) {
+	n := 0
+	for _, t := range r.byID {
+		if t.UserID == userID && t.RevokedAt == nil && t.ExpiresAt.After(now) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func TestUserAccessTokenService_Create_ActiveCountLimit(t *testing.T) {
+	repo := newUserAccessTokenRepoStub()
+	svc := NewUserAccessTokenService(repo)
+
+	for i := 0; i < userAccessTokenMaxActivePerUser; i++ {
+		_, err := svc.Create(context.Background(), 21, CreateUserAccessTokenInput{Name: "t"})
+		require.NoError(t, err, "create #%d", i+1)
+	}
+
+	_, err := svc.Create(context.Background(), 21, CreateUserAccessTokenInput{Name: "overflow"})
+	require.ErrorIs(t, err, ErrUserAccessTokenLimitReached)
+
+	// other user unaffected
+	_, err = svc.Create(context.Background(), 22, CreateUserAccessTokenInput{Name: "other"})
+	require.NoError(t, err)
+
+	// after revoke, can create again
+	list, err := svc.List(context.Background(), 21)
+	require.NoError(t, err)
+	require.NoError(t, svc.Revoke(context.Background(), 21, list[0].ID))
+	_, err = svc.Create(context.Background(), 21, CreateUserAccessTokenInput{Name: "after-revoke"})
+	require.NoError(t, err)
+}
+
+func TestUserAccessTokenService_Validate_UsesCacheAndRevokeClears(t *testing.T) {
+	repo := newUserAccessTokenRepoStub()
+	svc := NewUserAccessTokenService(repo)
+
+	created, err := svc.Create(context.Background(), 3, CreateUserAccessTokenInput{Name: "cache"})
+	require.NoError(t, err)
+
+	// first hit loads from repo
+	got, err := svc.ValidateToken(context.Background(), created.Token)
+	require.NoError(t, err)
+	require.Equal(t, created.ID, got.ID)
+
+	// corrupt/remove from stub to prove cache hit
+	sum := sha256.Sum256([]byte(created.Token))
+	hash := hex.EncodeToString(sum[:])
+	delete(repo.byHash, hash)
+
+	got2, err := svc.ValidateToken(context.Background(), created.Token)
+	require.NoError(t, err)
+	require.Equal(t, created.ID, got2.ID)
+
+	// restore for revoke path, then revoke should clear cache
+	repo.byHash[hash] = repo.byID[created.ID]
+	require.NoError(t, svc.Revoke(context.Background(), 3, created.ID))
+	_, err = svc.ValidateToken(context.Background(), created.Token)
+	require.ErrorIs(t, err, ErrUserAccessTokenRevoked)
+}
+
+func TestUserAccessTokenService_TouchLastUsed_Throttled(t *testing.T) {
+	repo := newUserAccessTokenRepoStub()
+	svc := NewUserAccessTokenService(repo)
+	created, err := svc.Create(context.Background(), 1, CreateUserAccessTokenInput{Name: "t"})
+	require.NoError(t, err)
+
+	svc.TouchLastUsed(context.Background(), created.ID)
+	first := repo.byID[created.ID].LastUsedAt
+	require.NotNil(t, first)
+
+	// second immediate touch should be throttled (LastUsedAt unchanged)
+	time.Sleep(5 * time.Millisecond)
+	svc.TouchLastUsed(context.Background(), created.ID)
+	second := repo.byID[created.ID].LastUsedAt
+	require.NotNil(t, second)
+	require.True(t, first.Equal(*second), "expected touch throttle within 60s")
+}

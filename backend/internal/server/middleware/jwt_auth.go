@@ -246,6 +246,10 @@ func isUserAccessTokenAllowedPath(method, path string) bool {
 	if path == "/api/v1/user/profile" && method == "GET" {
 		return true
 	}
+	// GET /api/v1/auth/me — same wallet balance fields as profile (frontend primary path)
+	if path == "/api/v1/auth/me" && method == "GET" {
+		return true
+	}
 
 	// Usage / request logs (read-only; includes dashboard stats and batch query POST)
 	if path == "/api/v1/usage" && method == "GET" {

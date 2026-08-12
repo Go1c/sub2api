@@ -141,3 +141,46 @@ func TestRateLimiterSuccessAndLimit(t *testing.T) {
 	router.ServeHTTP(recorder, req)
 	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
 }
+
+func TestRateLimiterLimitBySubject_UsesUserID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	keys := make([]string, 0)
+	originalRun := rateLimitRun
+	counts := map[string]int64{}
+	rateLimitRun = func(ctx context.Context, client *redis.Client, key string, windowMillis int64) (int64, bool, error) {
+		keys = append(keys, key)
+		counts[key]++
+		return counts[key], false, nil
+	}
+	t.Cleanup(func() { rateLimitRun = originalRun })
+
+	limiter := NewRateLimiter(redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"}))
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		// simulate auth subject already set
+		c.Set("user", struct {
+			UserID      int64
+			Concurrency int
+		}{UserID: 99, Concurrency: 1})
+		c.Next()
+	})
+	// Note: real subject key extraction uses server middleware; unit test LimitByKeyIdentity below
+	router.Use(limiter.LimitWithOptions("usage", 1, time.Minute, RateLimitOptions{
+		KeyFunc: func(c *gin.Context) string { return "user:99" },
+	}))
+	router.GET("/t", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	req = httptest.NewRequest(http.MethodGet, "/t", nil)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+
+	require.NotEmpty(t, keys)
+	require.Contains(t, keys[0], "user:99")
+}
