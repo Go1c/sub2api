@@ -7,12 +7,17 @@ title: 用户长效 Access Token（总览）
 
 ## 目标
 
-用户可在**个人资料**中创建**可撤销的长效 opaque Token**，用于外部程序通过 API 管理**自己的**密钥：
+用户可在**个人资料**中创建**可撤销的长效 opaque Token**，用于外部程序通过 API：
 
 - 创建 / 更新 / 删除 API Key
 - 查看自己的 API Key
 - 选择管理员开放的可用分组（`/groups/available`）
 - 设置 key 的额度 / 限速等（沿用现有 `/keys` 能力）
+- **只读**查询使用日志（`/usage*`）
+- **只读**查询钱包余额（`GET /user/profile` 中的 `balance` / `frozen_balance`）
+- **只读**查询订阅额度与进度（`GET /subscriptions*`，不含周限重置）
+
+以上为**同一访问令牌能力**的白名单范围，不是独立产品。
 
 ## 已确认产品决策
 
@@ -21,7 +26,7 @@ title: 用户长效 Access Token（总览）
 | Token 形态 | 可撤销 **opaque token** + 列表管理（非 JWT-only） |
 | 默认有效期 | **7 天** |
 | 最长有效期 | **30 天** |
-| 授权范围 | **仅密钥管理**：`/api/v1/keys*`、`/api/v1/groups/available`（及同组 rates 如需要） |
+| 授权范围 | 密钥管理 + 只读用量/余额/订阅（见 auth-scope 白名单） |
 | 分组语义 | **只能选择**管理员开放的 available groups；**不能**自建平台分组 |
 | 数据隔离 | Token 只能操作**创建者本人**的资源；访问他人资源必须 404/403 |
 | 明文 | 创建时**只返回一次**完整 token；之后列表仅展示前缀 / 元数据 |
@@ -29,7 +34,7 @@ title: 用户长效 Access Token（总览）
 ## 非目标
 
 - 不开放用户自建 Group / Channel / Admin 能力
-- 不让此 Token 访问密码、支付、订阅、站内信、TOTP、管理员接口
+- 不让此 Token 写资料、支付、重置订阅周限、站内信、TOTP、管理员接口
 - 不改现有 sk- API Key 网关鉴权（调用上游模型的 `sk-...` 机制保持不变）
 - 不把此 Token 当作网关推理密钥使用
 
@@ -42,7 +47,7 @@ title: 用户长效 Access Token（总览）
    - `GET /api/v1/user/access-tokens`
    - `POST /api/v1/user/access-tokens` `{ name, expires_in_days }`（默认 7，范围 1–30）
    - `DELETE /api/v1/user/access-tokens/:id`（撤销）
-5. **前端**：`ProfileView` 增加管理卡片（创建、复制一次、列表、撤销、到期展示）。
+5. **前端**：`ProfileView` 增加管理卡片（创建、复制一次、列表、撤销、到期展示）；文案与文档同步说明只读扩展。
 6. **安全**：token 熵足够（≥ 256 bit）；rate limit 创建；审计可选；改密是否吊销 access token 可与 `TokenVersion` 策略对齐或独立 `revoked`。
 
 ## 任务拆分与顺序
@@ -59,7 +64,8 @@ title: 用户长效 Access Token（总览）
 
 - [x] 用户在个人资料可创建 token（默认 7 天，最长 30 天）
 - [x] 用该 token 可对本账号执行 keys CRUD + 读 available groups + 设额度
-- [x] 用该 token 不能访问他人资源、不能访问非白名单接口
+- [x] 用该 token 可只读：usage 日志、profile 余额、subscriptions 额度/进度
+- [x] 用该 token 不能访问他人资源、不能写资料/重置周限/支付/admin 等
 - [x] 撤销 / 过期后立即失效
 - [x] 明文只在创建时出现一次
 - [x] 相关测试与本地验证通过

@@ -138,6 +138,15 @@ func TestUserAccessTokenAuth_AllowsKeysAndGroups(t *testing.T) {
 		"/api/v1/keys/42",
 		"/api/v1/groups/available",
 		"/api/v1/groups/rates",
+		"/api/v1/user/profile",
+		"/api/v1/usage",
+		"/api/v1/usage/1",
+		"/api/v1/usage/stats",
+		"/api/v1/usage/dashboard/stats",
+		"/api/v1/subscriptions",
+		"/api/v1/subscriptions/active",
+		"/api/v1/subscriptions/progress",
+		"/api/v1/subscriptions/summary",
 	} {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -156,6 +165,13 @@ func TestUserAccessTokenAuth_AllowsKeysAndGroups(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
+
+	// POST usage dashboard batch query allowed (read-only query via POST)
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/usage/dashboard/api-keys-usage", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestUserAccessTokenAuth_DeniesOutOfScope(t *testing.T) {
@@ -165,18 +181,25 @@ func TestUserAccessTokenAuth_DeniesOutOfScope(t *testing.T) {
 	}
 	router, _, token := newUATAuthEnv(t, user)
 
-	for _, path := range []string{
-		"/api/v1/user/profile",
-		"/api/v1/user/access-tokens",
-		"/api/v1/usage",
-		"/api/v1/admin/users",
-		"/api/v1/channels/available",
+	// Mutations and unrelated resources stay denied
+	type caseSpec struct {
+		method string
+		path   string
+	}
+	for _, tc := range []caseSpec{
+		{http.MethodPut, "/api/v1/user/profile"},
+		{http.MethodGet, "/api/v1/user/access-tokens"},
+		{http.MethodPost, "/api/v1/user/access-tokens"},
+		{http.MethodPost, "/api/v1/subscriptions/1/reset-weekly-limit"},
+		{http.MethodGet, "/api/v1/admin/users"},
+		{http.MethodGet, "/api/v1/channels/available"},
+		{http.MethodGet, "/api/v1/user/aff"},
 	} {
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequest(tc.method, tc.path, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		router.ServeHTTP(w, req)
-		require.Equal(t, http.StatusForbidden, w.Code, path)
+		require.Equal(t, http.StatusForbidden, w.Code, tc.method+" "+tc.path)
 		var body ErrorResponse
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 		require.Equal(t, "ACCESS_TOKEN_SCOPE_DENIED", body.Code)
@@ -230,7 +253,17 @@ func TestIsUserAccessTokenAllowedPath(t *testing.T) {
 	require.True(t, isUserAccessTokenAllowedPath("DELETE", "/api/v1/keys/99"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/groups/available"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/groups/rates"))
-	require.False(t, isUserAccessTokenAllowedPath("GET", "/api/v1/user/profile"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/user/profile"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage/stats"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage/dashboard/trend"))
+	require.True(t, isUserAccessTokenAllowedPath("POST", "/api/v1/usage/dashboard/api-keys-usage"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/subscriptions"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/subscriptions/active"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/subscriptions/progress"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/subscriptions/summary"))
+	require.False(t, isUserAccessTokenAllowedPath("PUT", "/api/v1/user/profile"))
 	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/user/access-tokens"))
+	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/subscriptions/1/reset-weekly-limit"))
 	require.False(t, isUserAccessTokenAllowedPath("GET", "/api/v1/keys/1/extra"))
 }

@@ -1487,7 +1487,7 @@ export default {
     accessTokens: {
       title: 'API Access Tokens',
       description:
-        'Create revocable long-lived tokens for programs to manage your own API keys (create/update/delete keys, list available groups). Default 7 days, max 30 days. Keep them secret; they cannot access other users’ resources.',
+        'Create revocable long-lived tokens for programs to manage your own API keys (create/update/delete keys, list available groups) and to read usage logs, wallet balance, and subscription credit. Default 7 days, max 30 days. Keep them secret; they cannot access other users’ resources.',
       name: 'Name',
       namePlaceholder: 'e.g. CI key manager',
       nameRequired: 'Name is required',
