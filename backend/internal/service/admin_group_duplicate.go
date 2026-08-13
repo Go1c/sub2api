@@ -67,6 +67,17 @@ func cloneGroupModelRouting(value map[string][]int64) map[string][]int64 {
 	return cloned
 }
 
+func cloneGroupModelPricing(value []ChannelModelPricing) []ChannelModelPricing {
+	if value == nil {
+		return nil
+	}
+	cloned := make([]ChannelModelPricing, len(value))
+	for i := range value {
+		cloned[i] = value[i].Clone()
+	}
+	return cloned
+}
+
 func cloneGroupMessagesDispatchModelConfig(value OpenAIMessagesDispatchModelConfig) OpenAIMessagesDispatchModelConfig {
 	cloned := value
 	if value.ExactModelMappings != nil {
@@ -111,6 +122,8 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		VideoPrice720P:                  cloneGroupValuePointer(source.VideoPrice720P),
 		VideoPrice1080P:                 cloneGroupValuePointer(source.VideoPrice1080P),
 		WebSearchPricePerCall:           cloneGroupValuePointer(source.WebSearchPricePerCall),
+		LongContextPricingEnabled:       source.LongContextPricingEnabled,
+		ModelPricing:                    cloneGroupModelPricing(source.ModelPricing),
 		ClaudeCodeOnly:                  source.ClaudeCodeOnly,
 		FallbackGroupID:                 cloneGroupValuePointer(source.FallbackGroupID),
 		FallbackGroupIDOnInvalidRequest: cloneGroupValuePointer(source.FallbackGroupIDOnInvalidRequest),

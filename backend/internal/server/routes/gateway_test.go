@@ -83,6 +83,35 @@ func TestGatewayRoutesOpenAIAlphaSearchPathsAreRegistered(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesGrokXSearchPathsAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformGrok)
+	registered := make(map[string]bool)
+	for _, route := range router.Routes() {
+		if route.Method == http.MethodPost {
+			registered[route.Path] = true
+		}
+	}
+
+	for _, path := range []string{
+		"/v1/x_search",
+		"/x_search",
+	} {
+		require.True(t, registered[path], "POST %s should be registered", path)
+	}
+}
+
+func TestGatewayRoutesXSearchRejectsNonGrokGroup(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformOpenAI)
+	req := httptest.NewRequest(http.MethodPost, "/v1/x_search", strings.NewReader(`{"query":"latest posts from xAI"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "X Search API is not supported for this platform")
+}
+
 func TestGatewayRoutesAlphaSearchRejectsNonOpenAIGroup(t *testing.T) {
 	router := newGatewayRoutesTestRouter(service.PlatformGrok)
 	req := httptest.NewRequest(http.MethodPost, "/v1/alpha/search", strings.NewReader(`{"model":"gpt-5.6-sol"}`))

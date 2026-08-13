@@ -188,8 +188,10 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 	var upstreamReq *http.Request
+	var grokUpstreamModel string
 	if account.Platform == PlatformGrok {
-		upstreamModel := resolveGrokWSUpstreamModel(account, body, originalModel)
+		grokUpstreamModel = resolveGrokWSUpstreamModel(account, body, originalModel)
+		upstreamModel := grokUpstreamModel
 		grokIntentSourceBody := body
 		body, err = patchGrokResponsesBody(body, upstreamModel)
 		if err != nil {
@@ -248,7 +250,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		}
 		shouldFailover := s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody)
 		if account.Platform == PlatformGrok {
-			s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+			s.handleGrokAccountUpstreamError(withGrokTeamRateLimitModel(ctx, grokUpstreamModel), account, resp.StatusCode, resp.Header, respBody)
 			if turn == 1 && shouldFailover {
 				return nil, newOpenAIUpstreamFailoverError(resp.StatusCode, resp.Header, respBody, upstreamMsg, false)
 			}
@@ -263,7 +265,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		return nil, fmt.Errorf("upstream http bridge error: status=%d message=%s", resp.StatusCode, upstreamMsg)
 	}
 	if account.Platform == PlatformGrok {
-		s.updateGrokUsageFromResponse(ctx, account, resp.Header, resp.StatusCode)
+		s.updateGrokUsageFromResponse(withGrokTeamRateLimitModel(ctx, grokUpstreamModel), account, resp.Header, resp.StatusCode)
 	}
 
 	responseID := ""
@@ -393,7 +395,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			statusCode := openAIWSErrorHTTPStatusFromRaw(errCodeRaw, errTypeRaw)
 			shouldFailover := s.shouldFailoverOpenAIUpstreamResponse(statusCode, errMessage, upstreamMessage)
 			if account.Platform == PlatformGrok {
-				s.handleGrokAccountUpstreamError(ctx, account, statusCode, resp.Header, upstreamMessage)
+				s.handleGrokAccountUpstreamError(withGrokTeamRateLimitModel(ctx, grokUpstreamModel), account, statusCode, resp.Header, upstreamMessage)
 			} else if shouldFailover {
 				accountStatus := statusCode
 				if transientStatus := openAIWSPayloadTransientStatus(upstreamMessage); transientStatus != 0 {

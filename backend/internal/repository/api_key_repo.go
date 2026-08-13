@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -196,6 +198,8 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldVideoPrice720p,
 				group.FieldVideoPrice1080p,
 				group.FieldWebSearchPricePerCall,
+				group.FieldLongContextPricingEnabled,
+				group.FieldModelPricing,
 				group.FieldClaudeCodeOnly,
 				group.FieldFallbackGroupID,
 				group.FieldFallbackGroupIDOnInvalidRequest,
@@ -922,6 +926,14 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 	if g.DuplicateOperationID != nil {
 		duplicateOperationID = *g.DuplicateOperationID
 	}
+	var modelPricing []service.ChannelModelPricing
+	if len(g.ModelPricing) > 0 {
+		if err := json.Unmarshal(g.ModelPricing, &modelPricing); err != nil {
+			slog.Warn("group model_pricing unmarshal failed; falling back to channel/builtin pricing",
+				"group_id", g.ID, "error", err)
+			modelPricing = nil
+		}
+	}
 	return &service.Group{
 		ID:                              g.ID,
 		Name:                            g.Name,
@@ -951,6 +963,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		VideoPrice720P:                  g.VideoPrice720p,
 		VideoPrice1080P:                 g.VideoPrice1080p,
 		WebSearchPricePerCall:           g.WebSearchPricePerCall,
+		LongContextPricingEnabled:       g.LongContextPricingEnabled,
+		ModelPricing:                    modelPricing,
 		DefaultValidityDays:             g.DefaultValidityDays,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,

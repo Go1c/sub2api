@@ -56,6 +56,11 @@ type Group struct {
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；
 	// nil 表示使用默认价 defaultWebSearchPricePerCall（官方 $10/1000 次）。
 	WebSearchPricePerCall *float64
+	// LongContextPricingEnabled 控制 token 计费是否走官方/预设长上下文阶梯。
+	// 默认 true；关闭后始终按第一档基础价。
+	LongContextPricingEnabled bool
+	// ModelPricing 分组级逐模型定价，优先于渠道和内置价卡。
+	ModelPricing []ChannelModelPricing
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool

@@ -59,6 +59,7 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
+| [`records/upstream-sync-grok-v0176-jwt-xsearch-pricing.md`](records/upstream-sync-grok-v0176-jwt-xsearch-pricing.md) | 2026-08-13：Grok JWT 档位、独立 /x_search、分组 model_pricing、SuperGrokPro、用量快照与 4.5/4.6 官方价卡的选择性同步（待 Review 合入 dev） |
 | [`records/prod-frozen-balance-migration-gap-20260728.md`](records/prod-frozen-balance-migration-gap-20260728.md) | 2026-07-28：publish 引入 `users.frozen_balance` Ent 字段却无迁移，登录 503；手改恢复后补 920 + CI 护栏 |
 | [`records/upstream-sync-20260720-v0162.md`](records/upstream-sync-20260720-v0162.md) | main→0.1.162：#234–#249 已合（含 Grok/WS turn/调度冷却）；B/C/E/F 大块默认跳过 |
 | [`records/upstream-sync-20260715.md`](records/upstream-sync-20260715.md) | v0.1.156 ordered 同步台账：全量 unit 已绿、VERSION 0.1.156；integration/前端/commit 切分仍待（进行中） |
