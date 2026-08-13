@@ -120,3 +120,66 @@ func TestSettingHandler_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *
 	require.True(t, resp.Data.WeChatOAuthOpenEnabled)
 	require.True(t, resp.Data.WeChatOAuthMPEnabled)
 }
+
+func TestSettingHandler_GetPublicSettings_ExposesEnabledSitePages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	repo := &settingHandlerPublicRepoStub{
+		values: map[string]string{
+			service.SettingKeySitePages: `[
+				{"key":"terms","title":"服务条款","slug":"doc/服务条款","mode":"link","content":"https://example.com/terms","enabled":true},
+				{"key":"docs","title":"文档","slug":"doc/文档","mode":"markdown","content":"# Docs","enabled":true},
+				{"key":"draft","title":"草稿","slug":"doc/草稿","mode":"link","content":"https://example.com/hidden","enabled":false}
+			]`,
+		},
+	}
+	h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), "test-version")
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+
+	h.GetPublicSettings(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			SitePages []struct {
+				Key     string `json:"key"`
+				Title   string `json:"title"`
+				Slug    string `json:"slug"`
+				Mode    string `json:"mode"`
+				Content string `json:"content"`
+				Enabled bool   `json:"enabled"`
+			} `json:"site_pages"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.Len(t, resp.Data.SitePages, 2)
+
+	byKey := make(map[string]struct {
+		Title   string
+		Slug    string
+		Mode    string
+		Content string
+	}, len(resp.Data.SitePages))
+	for _, page := range resp.Data.SitePages {
+		require.NotEqual(t, "draft", page.Key)
+		byKey[page.Key] = struct {
+			Title   string
+			Slug    string
+			Mode    string
+			Content string
+		}{Title: page.Title, Slug: page.Slug, Mode: page.Mode, Content: page.Content}
+	}
+
+	require.Equal(t, "服务条款", byKey["terms"].Title)
+	require.Equal(t, "doc/服务条款", byKey["terms"].Slug)
+	require.Equal(t, "link", byKey["terms"].Mode)
+	require.Equal(t, "https://example.com/terms", byKey["terms"].Content)
+	require.Equal(t, "# Docs", byKey["docs"].Content)
+	require.NotContains(t, recorder.Body.String(), "https://example.com/hidden")
+}

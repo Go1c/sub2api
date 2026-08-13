@@ -6377,7 +6377,7 @@ export default {
           contentHint: '支持 Markdown，保存後可通過 /doc/文檔 訪問。',
           linkUrl: '鏈接地址',
           linkPlaceholder: 'https://docs.example.com',
-          linkHint: '鏈接模式下，點擊導航會打開配置的訪問路徑，並在頁面內嵌入該地址。',
+          linkHint: '鏈接模式下，點擊導航會直接打開該 http(s) 地址。訪問路徑仍可用於 /doc/... 頁面內嵌。',
           required: '公開頁面需要填寫標識、標題和訪問路徑',
           invalidSlug: '公開頁面路徑必須以 doc/ 開頭，且不能包含 ?、#、反斜槓、連續斜槓或 ..',
           invalidLink: '鏈接模式需要填寫完整的 http(s) 地址'
