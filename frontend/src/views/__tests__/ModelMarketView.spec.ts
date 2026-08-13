@@ -139,9 +139,11 @@ vi.mock('@/stores', () => ({
   }),
 }))
 
+const routerPush = vi.hoisted(() => vi.fn())
+
 vi.mock('vue-router', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: routerPush,
   }),
 }))
 
@@ -176,6 +178,12 @@ describe('ModelMarketView', () => {
     expect(wrapper.text()).toContain('0.35x')
     expect(wrapper.text()).toContain('充值倍率')
     expect(wrapper.text()).toContain('1积分 = 1美元')
+    expect(wrapper.text()).toContain('订阅倍率')
+    expect(wrapper.text()).toContain('×')
+    expect(wrapper.text()).toContain('最低')
+    expect(wrapper.text()).toContain('0.75x')
+    expect(wrapper.text()).not.toContain('开通订阅后可用订阅额度调用此模型')
+    expect(wrapper.text()).toContain('去订阅')
     expect(wrapper.text()).not.toContain('官方价 × 0.35')
     expect(wrapper.text()).not.toContain('充值单位：积分')
   })
@@ -202,6 +210,8 @@ describe('ModelMarketView', () => {
     expect(imageArticle).toBeDefined()
     expect(imageArticle?.text()).not.toContain('折扣倍率')
     expect(imageArticle?.text()).not.toContain('0.35x')
+    expect(imageArticle?.text()).not.toContain('订阅倍率')
+    expect(imageArticle?.text()).not.toContain('去订阅')
   })
 
   it('resets the provider filter when selecting a group filter', async () => {
@@ -229,5 +239,28 @@ describe('ModelMarketView', () => {
 
     expect(wrapper.findAll('article')).toHaveLength(1)
     expect(wrapper.text()).toContain('claude-sonnet-4-6')
+  })
+
+  it('sends guests to login with a subscription purchase redirect', async () => {
+    routerPush.mockReset()
+    const wrapper = mount(ModelMarketView, {
+      global: {
+        stubs: {
+          Icon: true,
+          PlatformIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const subscribeButton = wrapper.findAll('button').find((node) => node.text().includes('去订阅'))
+    expect(subscribeButton).toBeDefined()
+    await subscribeButton?.trigger('click')
+
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/login',
+      query: { redirect: '/purchase?tab=subscription' },
+    })
   })
 })

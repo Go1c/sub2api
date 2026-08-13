@@ -5,7 +5,7 @@ export type NormalizedSitePage = SitePage & {
 };
 
 export interface SitePageNavigationTarget {
-  kind: "route";
+  kind: "route" | "external";
   target: string;
 }
 
@@ -56,6 +56,41 @@ export function resolveSitePageNavigationTarget(
   );
   if (!page) return null;
 
+  if (page.mode === "link" && isHttpUrl(page.content)) {
+    return { kind: "external", target: page.content.trim() };
+  }
+
   const slug = normalizeSitePageSlug(page.slug);
   return slug ? { kind: "route", target: encodeURI(`/${slug}`) } : null;
+}
+
+export function resolveSitePageNavItem(
+  pages: SitePage[] | null | undefined,
+  key: string,
+): { target: string; external: boolean } | null {
+  const resolved = resolveSitePageNavigationTarget(pages, key);
+  if (!resolved) return null;
+  return { target: resolved.target, external: resolved.kind === "external" };
+}
+
+export function sitePageHasMarkdownContent(
+  pages: SitePage[] | null | undefined,
+  key: string,
+): boolean {
+  const page = normalizeSitePages(pages).find(
+    (item) => item.enabled !== false && item.key === key,
+  );
+  return Boolean(page && page.mode !== "link" && page.content.trim());
+}
+
+export function resolveDocsNavItem(
+  pages: SitePage[] | null | undefined,
+  fallbackUrl: string,
+): { target: string; external: boolean } | null {
+  const fromPage = resolveSitePageNavItem(pages, "docs");
+  if (fromPage?.external) return fromPage;
+  if (fromPage && sitePageHasMarkdownContent(pages, "docs")) return fromPage;
+  const fallback = fallbackUrl.trim();
+  if (fallback) return { target: fallback, external: true };
+  return fromPage;
 }

@@ -262,32 +262,64 @@
                   </div>
                 </div>
 
-                <div class="mt-4 space-y-2 text-xs">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span
-                      v-if="tokenDiscountGroups(model).length > 0"
-                      class="shrink-0 font-semibold text-gray-500 dark:text-dark-300"
-                    >
-                      {{ labels.tokenDiscountTitle }}
-                    </span>
-                    <span
-                      v-for="group in model.groups"
-                      :key="group.id"
-                      class="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 font-semibold text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300"
-                    >
-                      <span class="min-w-0 max-w-full truncate">{{ group.name }}</span>
-                      <span v-if="isTokenBilling(model) && group.rateLabel" class="rounded-full bg-blue-600 px-2 py-0.5 font-mono text-[11px] font-bold text-white dark:bg-blue-500">
-                        {{ group.rateLabel }}x
+                <div class="mt-4 flex items-start gap-3 text-xs">
+                  <div class="min-w-0 flex-1 space-y-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span
+                        v-if="tokenDiscountGroups(model).length > 0"
+                        class="shrink-0 font-semibold text-gray-500 dark:text-dark-300"
+                      >
+                        {{ labels.tokenDiscountTitle }}
                       </span>
-                    </span>
+                      <span
+                        v-for="group in model.groups"
+                        :key="group.id"
+                        class="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 font-semibold text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300"
+                      >
+                        <span class="min-w-0 max-w-full truncate">{{ group.name }}</span>
+                        <span v-if="isTokenBilling(model) && group.rateLabel" class="rounded-full bg-blue-600 px-2 py-0.5 font-mono text-[11px] font-bold text-white dark:bg-blue-500">
+                          {{ group.rateLabel }}x
+                        </span>
+                      </span>
+                    </div>
+                    <div v-if="tokenDiscountGroups(model).length > 0" class="flex flex-wrap items-center gap-2">
+                      <span class="shrink-0 font-semibold text-gray-500 dark:text-dark-300">
+                        {{ labels.rechargeRateTitle }}
+                      </span>
+                      <span class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 font-semibold text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300">
+                        {{ labels.rechargeRateValue }}
+                      </span>
+                    </div>
                   </div>
-                  <div v-if="tokenDiscountGroups(model).length > 0" class="flex flex-wrap items-center gap-2">
-                    <span class="shrink-0 font-semibold text-gray-500 dark:text-dark-300">
-                      {{ labels.rechargeRateTitle }}
-                    </span>
-                    <span class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 font-semibold text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300">
-                      {{ labels.rechargeRateValue }}
-                    </span>
+                  <span
+                    v-if="tokenDiscountGroups(model).length > 0"
+                    class="mt-1 shrink-0 text-2xl font-semibold leading-none text-gray-400 dark:text-dark-300"
+                    aria-hidden="true"
+                  >
+                    ×
+                  </span>
+                  <div
+                    v-if="tokenDiscountGroups(model).length > 0"
+                    class="flex shrink-0 flex-col items-end gap-1.5"
+                  >
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                      <span class="font-semibold text-gray-500 dark:text-dark-300">
+                        {{ labels.subscriptionRateTitle }}
+                      </span>
+                      <span class="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 font-semibold text-violet-700 dark:border-violet-400/30 dark:bg-violet-500/10 dark:text-violet-200">
+                        {{ labels.subscriptionRatePrefix }}
+                        <span class="rounded-full bg-violet-600 px-2 py-0.5 font-mono text-[11px] font-bold text-white dark:bg-violet-500">
+                          {{ labels.subscriptionRateValue }}
+                        </span>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      class="rounded-md bg-violet-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-violet-500 dark:bg-violet-500 dark:hover:bg-violet-400"
+                      @click="goSubscribe"
+                    >
+                      {{ labels.subscriptionCta }}
+                    </button>
                   </div>
                 </div>
               </article>
@@ -336,6 +368,14 @@
                             {{ group.rateLabel }}x
                           </span>
                         </span>
+                        <button
+                          v-if="tokenDiscountGroups(model).length > 0"
+                          type="button"
+                          class="rounded-md bg-violet-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-violet-500 dark:bg-violet-500 dark:hover:bg-violet-400"
+                          @click="goSubscribe"
+                        >
+                          {{ labels.subscriptionCta }}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -481,6 +521,10 @@ const labels = computed(() => {
       tokenDiscountTitle: '折扣倍率',
       rechargeRateTitle: '充值倍率',
       rechargeRateValue: '1积分 = 1美元',
+      subscriptionRateTitle: '订阅倍率',
+      subscriptionRatePrefix: '最低',
+      subscriptionRateValue: '0.75x',
+      subscriptionCta: '去订阅',
     }
   }
 
@@ -531,6 +575,10 @@ const labels = computed(() => {
     tokenDiscountTitle: 'Discount',
     rechargeRateTitle: 'Recharge rate',
     rechargeRateValue: '1 credit = $1',
+    subscriptionRateTitle: 'Subscription rate',
+    subscriptionRatePrefix: 'from',
+    subscriptionRateValue: '0.75x',
+    subscriptionCta: 'Subscribe',
   }
 })
 
@@ -900,6 +948,16 @@ function goHome() {
 
 function goConsole() {
   router.push(authStore.isAuthenticated ? (authStore.isAdmin ? '/admin/dashboard' : '/dashboard') : '/login')
+}
+
+const subscribePurchasePath = '/purchase?tab=subscription'
+
+function goSubscribe() {
+  if (authStore.isAuthenticated) {
+    router.push({ path: '/purchase', query: { tab: 'subscription' } })
+    return
+  }
+  router.push({ path: '/login', query: { redirect: subscribePurchasePath } })
 }
 
 onMounted(() => {
