@@ -52,16 +52,16 @@
 
         <!-- Docs Link (shown on smaller screens; home nav already has docs on xl) -->
         <router-link
-          v-if="docsTarget?.kind === 'route'"
-          :to="docsTarget.target"
+          v-if="docsNav && !docsNav.external"
+          :to="docsNav.target"
           class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
         </router-link>
         <a
-          v-else-if="docUrl"
-          :href="docUrl"
+          v-else-if="docsNav?.external || docUrl"
+          :href="docsNav?.external ? docsNav.target : docUrl"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
@@ -283,7 +283,7 @@ import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import type { SitePage } from '@/types'
-import { normalizeSitePages, resolveSitePageNavigationTarget } from '@/utils/sitePages'
+import { normalizeSitePages, resolveDocsNavItem, resolveSitePageNavItem } from '@/utils/sitePages'
 
 const router = useRouter()
 const route = useRoute()
@@ -313,9 +313,9 @@ const balanceFrozenText = computed(() => t('common.frozenBalance') === 'common.f
 const balanceTotalText = computed(() => t('common.totalBalance') === 'common.totalBalance' ? '总余额' : t('common.totalBalance'))
 const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHeaderMoney(frozenBalance.value)}`)
 const sitePages = computed<SitePage[]>(() => normalizeSitePages(appStore.cachedPublicSettings?.site_pages || []))
-const docsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'docs'))
-const termsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'terms'))
-const privacyTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'privacy'))
+const docsNav = computed(() => resolveDocsNavItem(sitePages.value, docUrl.value))
+const termsNav = computed(() => resolveSitePageNavItem(sitePages.value, 'terms'))
+const privacyNav = computed(() => resolveSitePageNavItem(sitePages.value, 'privacy'))
 const image2ReturnTo = 'https://img.lumio.games/'
 const image2LoginHandoffTo = computed(() => ({
   path: '/login',
@@ -326,37 +326,24 @@ const image2LoginHandoffTo = computed(() => ({
 }))
 const homeNavItems = computed(() => {
   const isZh = locale.value.startsWith('zh')
-  const docs = docsTarget.value
-  const terms = termsTarget.value
-  const privacy = privacyTarget.value
+  const docs = docsNav.value
+  const terms = termsNav.value
+  const privacy = privacyNav.value
+  const footerFallback = { path: '/home', hash: '#footer' }
   return [
     { key: 'models', label: isZh ? '模型广场' : 'Model Market', to: { path: '/models' }, href: '', external: false },
     { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/status' }, href: '', external: false },
-    docs
-      ? {
-          key: 'docs',
-          label: t('nav.docs'),
-          to: docs.target,
-          href: '',
-          external: false
-        }
-      : docUrl.value
-        ? { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: docUrl.value, external: true }
-        : { key: 'docs', label: t('nav.docs'), to: { path: '/home', hash: '#footer' }, href: '', external: false },
-    {
-      key: 'terms',
-      label: isZh ? '服务条款' : 'Terms',
-      to: terms?.target || { path: '/home', hash: '#footer' },
-      href: '',
-      external: false
-    },
-    {
-      key: 'privacy',
-      label: isZh ? '隐私保护' : 'Privacy',
-      to: privacy?.target || { path: '/home', hash: '#footer' },
-      href: '',
-      external: false
-    },
+    docs?.external
+      ? { key: 'docs', label: t('nav.docs'), to: footerFallback, href: docs.target, external: true }
+      : docs
+        ? { key: 'docs', label: t('nav.docs'), to: docs.target, href: '', external: false }
+        : { key: 'docs', label: t('nav.docs'), to: footerFallback, href: '', external: false },
+    terms?.external
+      ? { key: 'terms', label: isZh ? '服务条款' : 'Terms', to: footerFallback, href: terms.target, external: true }
+      : { key: 'terms', label: isZh ? '服务条款' : 'Terms', to: terms?.target || footerFallback, href: '', external: false },
+    privacy?.external
+      ? { key: 'privacy', label: isZh ? '隐私保护' : 'Privacy', to: footerFallback, href: privacy.target, external: true }
+      : { key: 'privacy', label: isZh ? '隐私保护' : 'Privacy', to: privacy?.target || footerFallback, href: '', external: false },
     { key: 'image2', label: 'Image2生图', to: image2LoginHandoffTo.value, href: '', external: false },
   ]
 })

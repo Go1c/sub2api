@@ -199,7 +199,7 @@ export default {
                     itemLabel: 'Page #{n}',
                     key: 'Page Key',
                     keyPlaceholder: 'e.g., docs',
-                    linkHint: 'In link mode, navigation opens the configured path and embeds this URL in the page.',
+                    linkHint: 'In link mode, navigation opens this http(s) URL. The path can still embed it at /doc/...',
                     linkPlaceholder: 'https://docs.example.com',
                     linkUrl: 'Link URL',
                     mode: 'Page Mode',

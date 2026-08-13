@@ -487,7 +487,7 @@ import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { ContactChannel, SitePage } from '@/types'
-import { normalizeSitePages, resolveSitePageNavigationTarget } from '@/utils/sitePages'
+import { normalizeSitePages, resolveDocsNavItem, resolveSitePageNavItem } from '@/utils/sitePages'
 import { sanitizeUrl } from '@/utils/url'
 
 type HomeIconName =
@@ -607,10 +607,10 @@ const contactChannels = computed<ContactChannel[]>(() =>
 )
 const fallbackContactInfo = computed(() => appStore.cachedPublicSettings?.contact_info || appStore.contactInfo || '')
 const sitePages = computed<SitePage[]>(() => normalizeSitePages(appStore.cachedPublicSettings?.site_pages || []))
-const docsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'docs'))
-const termsTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'terms'))
-const privacyTarget = computed(() => resolveSitePageNavigationTarget(sitePages.value, 'privacy'))
 const docsHref = computed(() => docUrl.value || githubUrl)
+const docsNav = computed(() => resolveDocsNavItem(sitePages.value, docsHref.value))
+const termsNav = computed(() => resolveSitePageNavItem(sitePages.value, 'terms'))
+const privacyNav = computed(() => resolveSitePageNavItem(sitePages.value, 'privacy'))
 
 const zhCopy: HomeCopy = {
   nav: [
@@ -765,20 +765,21 @@ const image2LoginHandoffTarget = `/login?handoff=1&return_to=${encodeURIComponen
 const navItems = computed<NavItem[]>(() => [
   { key: 'models', label: copy.value.nav[0].label, target: '/models' },
   { ...copy.value.nav[1], key: 'status', target: '/status' },
-  docsTarget.value
-    ? {
-        ...copy.value.nav[2],
-        target: docsTarget.value.target
-      }
-    : { ...copy.value.nav[2], target: docsHref.value, external: true },
+  {
+    ...copy.value.nav[2],
+    target: docsNav.value?.target || docsHref.value,
+    external: docsNav.value?.external !== false
+  },
   {
     ...copy.value.dimNav[0],
-    target: termsTarget.value?.target || '#footer',
+    target: termsNav.value?.target || '#footer',
+    external: termsNav.value?.external === true,
     dim: true
   },
   {
     ...copy.value.dimNav[1],
-    target: privacyTarget.value?.target || '#footer',
+    target: privacyNav.value?.target || '#footer',
+    external: privacyNav.value?.external === true,
     dim: true
   },
   { key: 'image2', label: copy.value.dimNav[2].label, target: image2LoginHandoffTarget, dim: true },
@@ -818,11 +819,11 @@ function scrollTo(target: string) {
 }
 
 function openDocs() {
-  if (docsTarget.value?.kind === 'route') {
-    router.push(docsTarget.value.target)
+  if (docsNav.value && !docsNav.value.external) {
+    router.push(docsNav.value.target)
     return
   }
-  window.open(docsHref.value, '_blank', 'noopener,noreferrer')
+  window.open(docsNav.value?.target || docsHref.value, '_blank', 'noopener,noreferrer')
 }
 
 function onNav(item: NavItem) {

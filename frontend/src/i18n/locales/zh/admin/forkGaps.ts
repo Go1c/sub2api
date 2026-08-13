@@ -199,7 +199,7 @@ export default {
                     itemLabel: '页面 #{n}',
                     key: '页面标识',
                     keyPlaceholder: '例如：docs',
-                    linkHint: '链接模式下，点击导航会打开配置的访问路径，并在页面内嵌入该地址。',
+                    linkHint: '链接模式下，点击导航会直接打开该 http(s) 地址。访问路径仍可用于 /doc/... 页面内嵌。',
                     linkPlaceholder: 'https://docs.example.com',
                     linkUrl: '链接地址',
                     mode: '页面模式',
