@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
 type User struct {
@@ -136,6 +137,8 @@ type Group struct {
 	VideoPrice1080P    *float64 `json:"video_price_1080p"`
 	// Codex alpha/search 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
 	WebSearchPricePerCall *float64 `json:"web_search_price_per_call"`
+	// LongContextPricingEnabled 控制 token 计费是否走官方/预设长上下文阶梯。
+	LongContextPricingEnabled bool `json:"long_context_pricing_enabled"`
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool   `json:"claude_code_only"`
@@ -166,6 +169,9 @@ type Group struct {
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
 	Group
+
+	// ModelPricing 分组级逐模型定价，仅管理员可见。
+	ModelPricing []service.ChannelModelPricing `json:"model_pricing"`
 
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64 `json:"model_routing"`

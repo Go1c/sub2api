@@ -159,6 +159,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 	}
 	out := &AdminGroup{
 		Group:                       groupFromServiceBase(g),
+		ModelPricing:                g.ModelPricing,
 		ModelRouting:                g.ModelRouting,
 		ModelRoutingEnabled:         g.ModelRoutingEnabled,
 		MCPXMLInject:                g.MCPXMLInject,
@@ -213,6 +214,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		VideoPrice720P:                  g.VideoPrice720P,
 		VideoPrice1080P:                 g.VideoPrice1080P,
 		WebSearchPricePerCall:           g.WebSearchPricePerCall,
+		LongContextPricingEnabled:       g.LongContextPricingEnabled,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
 		FallbackGroupIDOnExhausted:      g.FallbackGroupIDOnExhausted,

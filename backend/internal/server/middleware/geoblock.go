@@ -100,6 +100,8 @@ func isAPIPath(path string) bool {
 		p == "/health" ||
 		p == "/responses" ||
 		strings.HasPrefix(p, "/responses/") ||
+		p == "/alpha/search" ||
+		p == "/x_search" ||
 		strings.HasPrefix(p, "/images/")
 }
 

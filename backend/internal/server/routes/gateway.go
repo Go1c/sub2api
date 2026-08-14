@@ -180,6 +180,19 @@ func RegisterGatewayRoutes(
 			h.Gateway.Responses(c)
 		})
 		gateway.POST("/alpha/search", textBodyLimit, h.OpenAIGateway.AlphaSearch)
+		gateway.POST("/x_search", textBodyLimit, func(c *gin.Context) {
+			if getGroupPlatform(c) != service.PlatformGrok {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+				c.JSON(http.StatusNotFound, gin.H{
+					"error": gin.H{
+						"type":    "not_found_error",
+						"message": "X Search API is not supported for this platform",
+					},
+				})
+				return
+			}
+			h.OpenAIGateway.XSearch(c)
+		})
 		gateway.GET("/responses", func(c *gin.Context) {
 			h.OpenAIGateway.ResponsesWebSocket(c)
 		})
@@ -252,6 +265,19 @@ func RegisterGatewayRoutes(
 	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, responsesHandler)
 	r.POST("/responses/*subpath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, responsesHandler)
 	r.POST("/alpha/search", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.OpenAIGateway.AlphaSearch)
+	r.POST("/x_search", textBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
+		if getGroupPlatform(c) != service.PlatformGrok {
+			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"type":    "not_found_error",
+					"message": "X Search API is not supported for this platform",
+				},
+			})
+			return
+		}
+		h.OpenAIGateway.XSearch(c)
+	})
 	r.GET("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
 		h.OpenAIGateway.ResponsesWebSocket(c)
 	})

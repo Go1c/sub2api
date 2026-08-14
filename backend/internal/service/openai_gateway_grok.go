@@ -143,7 +143,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 			Kind:               "failover",
 			Message:            upstreamMsg,
 		})
-		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+		s.handleGrokAccountUpstreamError(withGrokTeamRateLimitModel(ctx, upstreamModel), account, resp.StatusCode, resp.Header, respBody)
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
@@ -155,7 +155,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 		return s.handleErrorResponse(ctx, resp, c, account, patchedBody, upstreamModel)
 	}
 
-	s.updateGrokUsageFromResponse(ctx, account, resp.Header, resp.StatusCode)
+	s.updateGrokUsageFromResponse(withGrokTeamRateLimitModel(ctx, upstreamModel), account, resp.Header, resp.StatusCode)
 
 	var usage *OpenAIUsage
 	var firstTokenMs *int
@@ -761,7 +761,7 @@ func (s *OpenAIGatewayService) describeGrokComposerImage(
 			Kind:               "failover",
 			Message:            upstreamMsg,
 		})
-		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+		s.handleGrokAccountUpstreamError(withGrokTeamRateLimitModel(ctx, grokComposerImageBridgeVisionModel), account, resp.StatusCode, resp.Header, respBody)
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
 			return "", OpenAIUsage{}, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
@@ -773,7 +773,7 @@ func (s *OpenAIGatewayService) describeGrokComposerImage(
 		return "", OpenAIUsage{}, fmt.Errorf("grok composer image bridge upstream error: %s", upstreamMsg)
 	}
 
-	s.updateGrokUsageFromResponse(ctx, account, resp.Header, resp.StatusCode)
+	s.updateGrokUsageFromResponse(withGrokTeamRateLimitModel(ctx, grokComposerImageBridgeVisionModel), account, resp.Header, resp.StatusCode)
 	respBody, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, nil)
 	if err != nil {
 		return "", OpenAIUsage{}, fmt.Errorf("read grok composer image bridge response: %w", err)
@@ -957,6 +957,13 @@ func (s *OpenAIGatewayService) updateGrokUsageSnapshot(ctx context.Context, acco
 		stateCtx, cancel = openAIAccountStateContext(ctx)
 		defer cancel()
 	}
+	// Account pointers on the request path are per-request copies (Redis/DB decode),
+	// not a shared in-process cache. Mutating Extra here matches token refresh /
+	// rate-limit writers; do not reuse the same *Account across goroutines.
+	if account.Extra == nil {
+		account.Extra = map[string]any{}
+	}
+	account.Extra[grokQuotaSnapshotExtraKey] = snapshot
 	if s.accountRepo != nil {
 		_ = s.accountRepo.UpdateExtra(stateCtx, accountID, map[string]any{
 			grokQuotaSnapshotExtraKey: snapshot,
@@ -977,6 +984,7 @@ func (s *OpenAIGatewayService) updateGrokUsageSnapshot(ctx context.Context, acco
 func (s *OpenAIGatewayService) updateGrokUsageFromResponse(ctx context.Context, account *Account, headers http.Header, statusCode int) {
 	snapshot := parseGrokQuotaSnapshot(headers, statusCode, time.Now())
 	if snapshot != nil {
+		stampGrokQuotaSnapshotForPlan(account, snapshot, grokRequestedModelFromCtx(ctx))
 		s.updateGrokUsageSnapshot(ctx, account, snapshot)
 		return
 	}
@@ -1180,12 +1188,35 @@ func (s *OpenAIGatewayService) rateLimitGrok(ctx context.Context, account *Accou
 	persistGrokRateLimit(ctx, s.accountRepo, account, resetAt)
 }
 
+type grokTeamRateLimitModelContextKey struct{}
+
+func withGrokTeamRateLimitModel(ctx context.Context, model string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, grokTeamRateLimitModelContextKey{}, model)
+}
+
+func grokRequestedModelFromCtx(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	model, _ := ctx.Value(grokTeamRateLimitModelContextKey{}).(string)
+	return strings.TrimSpace(model)
+}
+
 func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte) {
 	if s == nil || account == nil {
 		return
 	}
 	now := time.Now()
-	s.updateGrokUsageSnapshot(ctx, account, parseGrokQuotaSnapshot(headers, statusCode, now))
+	snapshot := parseGrokQuotaSnapshot(headers, statusCode, now)
+	stampGrokQuotaSnapshotForPlan(account, snapshot, grokRequestedModelFromCtx(ctx))
+	s.updateGrokUsageSnapshot(ctx, account, snapshot)
 	switch statusCode {
 	case http.StatusUnauthorized:
 		s.tempUnscheduleGrok(ctx, account, 10*time.Minute, "grok credentials unauthorized")

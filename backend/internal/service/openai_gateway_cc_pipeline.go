@@ -89,7 +89,7 @@ func (s *OpenAIGatewayService) failoverOpenAIUpstreamHTTPError(
 	upstreamModel string,
 ) *UpstreamFailoverError {
 	if account != nil && account.Platform == PlatformGrok {
-		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+		s.handleGrokAccountUpstreamError(withGrokTeamRateLimitModel(ctx, upstreamModel), account, resp.StatusCode, resp.Header, respBody)
 	}
 	if !s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
 		return nil

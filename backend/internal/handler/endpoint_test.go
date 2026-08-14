@@ -26,6 +26,7 @@ func TestNormalizeInboundEndpoint(t *testing.T) {
 		{"/v1/chat/completions", EndpointChatCompletions},
 		{"/v1/embeddings", EndpointEmbeddings},
 		{"/v1/alpha/search", EndpointAlphaSearch},
+		{"/v1/x_search", EndpointXSearch},
 		{"/v1/responses", EndpointResponses},
 		{"/v1/responses/compact", EndpointResponsesCompact},
 		{"/v1/responses/compact/detail", EndpointResponsesCompact},
@@ -53,6 +54,7 @@ func TestNormalizeInboundEndpoint(t *testing.T) {
 		{"/responses/compact", EndpointResponsesCompact},
 		{"/responses/compact/detail", EndpointResponsesCompact},
 		{"/alpha/search", EndpointAlphaSearch},
+		{"/x_search", EndpointXSearch},
 		{"/images/tasks/imgtask_123", EndpointImageTasks},
 
 		// Bare Codex direct alias route — root vs. compact.
@@ -125,6 +127,8 @@ func TestDeriveUpstreamEndpoint(t *testing.T) {
 		{"openai from completions", EndpointChatCompletions, "/v1/chat/completions", service.PlatformOpenAI, EndpointResponses},
 		{"openai embeddings", EndpointEmbeddings, "/v1/embeddings", service.PlatformOpenAI, EndpointEmbeddings},
 		{"openai alpha search", EndpointAlphaSearch, "/backend-api/codex/alpha/search", service.PlatformOpenAI, EndpointAlphaSearch},
+		{"grok x search", EndpointXSearch, "/v1/x_search", service.PlatformGrok, EndpointXSearch},
+		{"grok bare x search", EndpointXSearch, "/x_search", service.PlatformGrok, EndpointXSearch},
 		{"openai image generations", EndpointImagesGenerations, "/v1/images/generations", service.PlatformOpenAI, EndpointImagesGenerations},
 		{"openai image edits", EndpointImagesEdits, "/openai/v1/images/edits", service.PlatformOpenAI, EndpointImagesEdits},
 		{"grok chat defaults to responses without runtime result", EndpointChatCompletions, "/v1/chat/completions", service.PlatformGrok, EndpointResponses},

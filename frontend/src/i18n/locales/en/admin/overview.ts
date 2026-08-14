@@ -949,6 +949,13 @@ export default {
         finalPricePreview: 'Final per-second price preview',
         notConfigured: 'Not configured'
       },
+      modelPricing: {
+        title: 'Per-model group pricing',
+        description: 'Overrides channel and built-in prices for matching models. Long-context tiers come from official presets — do not enter custom intervals.',
+        longContext: 'Enable long-context tier pricing',
+        longContextHint: 'When checked, official/preset long-context tiers apply. When unchecked, token models stay on the first-tier base rate.',
+        add: 'Add model price'
+      },
       webSearchPricing: {
         title: 'Codex Web Search Pricing',
         pricePerCall: 'Price per search call (USD)',

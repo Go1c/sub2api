@@ -1,5 +1,7 @@
 package xai
 
+import "strings"
+
 // Model describes an xAI model in OpenAI-compatible /models shape.
 type Model struct {
 	ID          string `json:"id"`
@@ -58,4 +60,17 @@ func DefaultModelMapping() map[string]string {
 	mapping["grok-4.20-reasoning"] = "grok-4.20-0309-reasoning"
 	mapping["grok-4.20-non-reasoning"] = "grok-4.20-0309-non-reasoning"
 	return mapping
+}
+
+// StripGrokProviderPrefix removes common provider prefixes accepted for
+// xAI/Grok models, returning the native model ID.
+func StripGrokProviderPrefix(model string) string {
+	trimmed := strings.TrimSpace(model)
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range []string{"xai/", "x-ai/", "grok/"} {
+		if strings.HasPrefix(lower, prefix) {
+			return strings.TrimSpace(trimmed[len(prefix):])
+		}
+	}
+	return trimmed
 }
