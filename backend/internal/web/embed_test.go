@@ -603,6 +603,32 @@ func TestFrontendServer_Middleware(t *testing.T) {
 		assert.JSONEq(t, `{"ok":true}`, w.Body.String())
 	})
 
+	t.Run("skips_x_search_post_route", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.Middleware())
+		nextCalled := false
+		router.POST("/x_search", func(c *gin.Context) {
+			nextCalled = true
+			c.JSON(http.StatusOK, gin.H{"ok": true})
+		})
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/x_search", strings.NewReader(`{"query":"latest posts from xAI"}`))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		assert.True(t, nextCalled, "next handler should be called for x search API route")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, `{"ok":true}`, w.Body.String())
+	})
+
 	t.Run("serves_index_for_spa_routes", func(t *testing.T) {
 		provider := &mockSettingsProvider{
 			settings: map[string]string{"test": "value"},

@@ -50,7 +50,7 @@ func TestCalculateOpenAIRecordUsageCostWebSearchPerCall(t *testing.T) {
 	// 即使 token 倍率（含高峰，3.0）更高也不采用。
 	apiKey := &APIKey{ID: 1, GroupID: &groupID, Group: &Group{ID: groupID, Platform: PlatformOpenAI}}
 	result := &OpenAIForwardResult{Model: "gpt-5.6-sol", UpstreamModel: "gpt-5.6-sol", WebSearchCalls: 1}
-	cost, err := svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey, []string{"gpt-5.6-sol"}, 3.0, 1.0, 1.0, 2.0, UsageTokens{}, "", false)
+	cost, err := svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey, []string{"gpt-5.6-sol"}, 3.0, 1.0, 1.0, 2.0, UsageTokens{}, "", boolPtr(false))
 	require.NoError(t, err)
 	require.Equal(t, string(BillingModePerRequest), cost.BillingMode)
 	require.InDelta(t, 0.01, cost.TotalCost, 1e-12)
@@ -58,7 +58,7 @@ func TestCalculateOpenAIRecordUsageCostWebSearchPerCall(t *testing.T) {
 
 	// 分组配置单价 0.005
 	apiKey.Group.WebSearchPricePerCall = float64Ptr(0.005)
-	cost, err = svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey, []string{"gpt-5.6-sol"}, 1.0, 1.0, 1.0, 1.0, UsageTokens{}, "", false)
+	cost, err = svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey, []string{"gpt-5.6-sol"}, 1.0, 1.0, 1.0, 1.0, UsageTokens{}, "", boolPtr(false))
 	require.NoError(t, err)
 	require.InDelta(t, 0.005, cost.TotalCost, 1e-12)
 	require.InDelta(t, 0.005, cost.ActualCost, 1e-12)
@@ -66,7 +66,7 @@ func TestCalculateOpenAIRecordUsageCostWebSearchPerCall(t *testing.T) {
 	// WebSearchCalls = 0 时不得走按次分支（无定价数据会返回 pricing 错误，
 	// 证明回落到了 token 路径而不是被按次分支吞掉）。
 	result.WebSearchCalls = 0
-	_, err = svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey, []string{"gpt-5.6-sol"}, 1.0, 1.0, 1.0, 1.0, UsageTokens{InputTokens: 10}, "", false)
+	_, err = svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey, []string{"gpt-5.6-sol"}, 1.0, 1.0, 1.0, 1.0, UsageTokens{InputTokens: 10}, "", boolPtr(false))
 	require.Error(t, err)
 }
 
@@ -98,4 +98,46 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesWebSearchPricePerCall(t *testi
 	require.NotNil(t, roundTrip.Group)
 	require.NotNil(t, roundTrip.Group.WebSearchPricePerCall)
 	require.InDelta(t, 0.008, *roundTrip.Group.WebSearchPricePerCall, 1e-12)
+}
+
+func TestAPIKeyService_SnapshotRoundTrip_PreservesGroupModelPricing(t *testing.T) {
+	svc := NewAPIKeyService(nil, nil, nil, nil, nil, nil, &config.Config{})
+	groupID := int64(9)
+	inputPrice := 0.000002
+	apiKey := &APIKey{
+		ID:      1,
+		UserID:  2,
+		GroupID: &groupID,
+		Key:     "k-group-pricing",
+		Status:  StatusActive,
+		User:    &User{ID: 2, Status: StatusActive, Role: RoleUser},
+		Group: &Group{
+			ID:                        groupID,
+			Name:                      "grok",
+			Platform:                  PlatformGrok,
+			Status:                    StatusActive,
+			SubscriptionType:          SubscriptionTypeStandard,
+			RateMultiplier:            1,
+			LongContextPricingEnabled: false,
+			ModelPricing: []ChannelModelPricing{
+				{
+					Platform:    PlatformGrok,
+					Models:      []string{"grok-4.6"},
+					BillingMode: BillingModeToken,
+					InputPrice:  &inputPrice,
+				},
+			},
+		},
+	}
+
+	snapshot := svc.snapshotFromAPIKey(context.Background(), apiKey)
+	roundTrip := svc.snapshotToAPIKey(apiKey.Key, snapshot)
+
+	require.NotNil(t, roundTrip)
+	require.NotNil(t, roundTrip.Group)
+	require.False(t, roundTrip.Group.LongContextPricingEnabled)
+	require.Len(t, roundTrip.Group.ModelPricing, 1)
+	require.Equal(t, []string{"grok-4.6"}, roundTrip.Group.ModelPricing[0].Models)
+	require.NotNil(t, roundTrip.Group.ModelPricing[0].InputPrice)
+	require.InDelta(t, inputPrice, *roundTrip.Group.ModelPricing[0].InputPrice, 1e-12)
 }

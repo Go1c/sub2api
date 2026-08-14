@@ -2497,7 +2497,8 @@ export default {
       billingMode: {
         token: 'Token',
         perRequest: '按次',
-        image: '圖片（按次）'
+        image: '圖片（按次）',
+        video: '視頻（按次）'
       },
       form: {
         name: '名稱',
@@ -2525,6 +2526,7 @@ export default {
         addInterval: '添加區間',
         requestTiers: '按次計費層級',
         imageTiers: '圖片計費層級（按次）',
+        videoTiers: '視頻計費層級（按次）',
         addTier: '添加層級',
         noTiersYet: '暫無層級，點擊添加配置按次計費價格',
         noPricingRules: '暫無定價規則，點擊"添加"創建',
@@ -2549,6 +2551,7 @@ export default {
         restrictModelsHint: '開啟後，僅允許模型定價列表中的模型。不在列表中的模型請求將被拒絕。',
         defaultPerRequestPrice: '默認單次價格（未命中層級時使用）',
         defaultImagePrice: '默認圖片價格（未命中層級時使用）',
+        defaultVideoPrice: '默認視頻價格（未命中層級時使用）',
         platformConfig: '平臺配置',
         webSearchEmulation: 'Web Search 模擬',
         webSearchEmulationHint: '⚠️ 開啟後該渠道下所有 Anthropic 分組的賬號將自動攔截 web_search 請求，請謹慎操作',
