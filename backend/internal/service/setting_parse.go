@@ -116,6 +116,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	lumioDesktopConfigJSON, err := json.Marshal(DefaultLumioDesktopConfig())
+	if err != nil {
+		return fmt.Errorf("marshal default lumio desktop config: %w", err)
+	}
 
 	// 初始化默认设置
 	defaults := map[string]string{
@@ -155,6 +159,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyTablePageSizeOptions:                      "[10,20,50,100]",
 		SettingKeyCustomMenuItems:                           "[]",
 		SettingKeyCustomEndpoints:                           "[]",
+		SettingKeyLumioDesktopConfig:                        string(lumioDesktopConfigJSON),
 		SettingKeyWeChatConnectEnabled:                      "false",
 		SettingKeyWeChatConnectAppID:                        "",
 		SettingKeyWeChatConnectAppSecret:                    "",
@@ -414,7 +419,11 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SubscriptionQuotaResetHour:             parseSubscriptionQuotaResetConfig(settings).ResetHour,
 		CustomMenuItems:                        settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                        settings[SettingKeyCustomEndpoints],
-		BackendModeEnabled:                     settings[SettingKeyBackendModeEnabled] == "true",
+		LumioDesktopConfig: normalizeLumioDesktopConfig(
+			settings[SettingKeyLumioDesktopConfig],
+			settings[SettingKeyCCSwitchDefaultModelOpenAI],
+		),
+		BackendModeEnabled: settings[SettingKeyBackendModeEnabled] == "true",
 	}
 	result.TableDefaultPageSize, result.TablePageSizeOptions = parseTablePreferences(
 		settings[SettingKeyTableDefaultPageSize],

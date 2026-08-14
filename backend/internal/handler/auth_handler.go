@@ -705,6 +705,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 	h.consumePendingOAuthSessionOnLogout(c)
 	clearOAuthLogoutCookies(c)
+	clearLumioWebSessionCookie(c)
 
 	response.Success(c, LogoutResponse{
 		Message: "Logged out successfully",

@@ -1010,6 +1010,17 @@ func TestAPIContracts(t *testing.T) {
 				"ccswitch_default_model_antigravity_gemini": "",
 				"ccswitch_default_model_gemini": "",
 				"ccswitch_default_model_openai": "",
+				"lumio_desktop_config": {
+					"default_model": "gpt-5.4",
+					"payment_url": "/payment",
+					"min_client_version": "0.0.0",
+					"update_notice": "",
+					"feature_flags": {
+						"registration": true,
+						"payment_handoff": true,
+						"key_provisioning": true
+					}
+				},
 					"balance_low_notify_recharge_url": "",
 					"account_quota_notify_emails": [],
 					"channel_monitor_enabled": true,
@@ -1325,6 +1336,17 @@ func TestAPIContracts(t *testing.T) {
 				"ccswitch_default_model_antigravity_gemini": "",
 				"ccswitch_default_model_gemini": "",
 				"ccswitch_default_model_openai": "",
+				"lumio_desktop_config": {
+					"default_model": "gpt-5.4",
+					"payment_url": "/payment",
+					"min_client_version": "0.0.0",
+					"update_notice": "",
+					"feature_flags": {
+						"registration": true,
+						"payment_handoff": true,
+						"key_provisioning": true
+					}
+				},
 					"balance_low_notify_recharge_url": "",
 					"account_quota_notify_emails": [],
 					"channel_monitor_enabled": true,
@@ -2374,6 +2396,16 @@ func (r *stubApiKeyRepo) GetByID(ctx context.Context, id int64) (*service.APIKey
 	}
 	clone := *key
 	return &clone, nil
+}
+
+func (r *stubApiKeyRepo) GetByUserIDAndName(ctx context.Context, userID int64, name string) (*service.APIKey, error) {
+	for _, key := range r.byID {
+		if key.UserID == userID && key.Name == name {
+			clone := *key
+			return &clone, nil
+		}
+	}
+	return nil, service.ErrAPIKeyNotFound
 }
 
 func (r *stubApiKeyRepo) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {

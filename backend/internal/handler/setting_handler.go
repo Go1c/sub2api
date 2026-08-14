@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"html"
 	"net/http"
 	"strings"
@@ -12,6 +15,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+const lumioDesktopConfigCacheControl = "public, max-age=300, stale-if-error=86400"
 
 // SettingHandler 公开设置处理器（无需认证）
 type SettingHandler struct {
@@ -123,6 +128,30 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 
 		AllowUserViewErrorRequests: settings.AllowUserViewErrorRequests,
 	})
+}
+
+// GetLumioDesktopConfig returns the public, whitelisted Lumio desktop bootstrap document.
+// GET /api/v1/desktop/config
+func (h *SettingHandler) GetLumioDesktopConfig(c *gin.Context) {
+	config, err := h.settingService.GetLumioDesktopConfig(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	payload, err := json.Marshal(config)
+	if err != nil {
+		response.InternalError(c, "Failed to serialize desktop configuration")
+		return
+	}
+	digest := sha256.Sum256(payload)
+	etag := `"` + hex.EncodeToString(digest[:]) + `"`
+	c.Header("Cache-Control", lumioDesktopConfigCacheControl)
+	c.Header("ETag", etag)
+	if strings.TrimSpace(c.GetHeader("If-None-Match")) == etag {
+		c.Status(http.StatusNotModified)
+		return
+	}
+	response.Success(c, config)
 }
 
 // UnsubscribeNotificationEmail handles optional notification email opt-outs.

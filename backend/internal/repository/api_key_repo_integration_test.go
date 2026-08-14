@@ -86,6 +86,53 @@ func (s *APIKeyRepoSuite) TestGetByKey_NotFound() {
 	s.Require().Error(err, "expected error for non-existent key")
 }
 
+func (s *APIKeyRepoSuite) TestGetByUserIDAndName() {
+	user := s.mustCreateUser("lumio-lookup@test.com")
+	expected := s.mustCreateApiKey(user.ID, "sk-lumio-lookup", service.LumioDesktopAPIKeyName, nil)
+
+	got, err := s.repo.GetByUserIDAndName(s.ctx, user.ID, service.LumioDesktopAPIKeyName)
+	s.Require().NoError(err)
+	s.Require().Equal(expected.ID, got.ID)
+}
+
+func (s *APIKeyRepoSuite) TestGetByUserIDAndNameDoesNotReturnAnotherUsersKey() {
+	owner := s.mustCreateUser("lumio-owner@test.com")
+	other := s.mustCreateUser("lumio-other@test.com")
+	s.mustCreateApiKey(owner.ID, "sk-lumio-owner", service.LumioDesktopAPIKeyName, nil)
+
+	_, err := s.repo.GetByUserIDAndName(s.ctx, other.ID, service.LumioDesktopAPIKeyName)
+	s.Require().ErrorIs(err, service.ErrAPIKeyNotFound)
+}
+
+func (s *APIKeyRepoSuite) TestReservedDesktopNameIsUniquePerActiveUser() {
+	user := s.mustCreateUser("lumio-unique@test.com")
+	first := &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-lumio-first",
+		Name:   service.LumioDesktopAPIKeyName,
+		Status: service.StatusActive,
+	}
+	second := &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-lumio-second",
+		Name:   service.LumioDesktopAPIKeyName,
+		Status: service.StatusActive,
+	}
+
+	s.Require().NoError(s.repo.Create(s.ctx, first))
+	s.Require().ErrorIs(s.repo.Create(s.ctx, second), service.ErrAPIKeyExists)
+	s.Require().NoError(s.repo.Delete(s.ctx, first.ID))
+	s.Require().NoError(s.repo.Create(s.ctx, second))
+}
+
+func (s *APIKeyRepoSuite) TestReservedDesktopNameIsUniquePerUser() {
+	firstUser := s.mustCreateUser("lumio-first-user@test.com")
+	secondUser := s.mustCreateUser("lumio-second-user@test.com")
+
+	s.mustCreateApiKey(firstUser.ID, "sk-lumio-first-user", service.LumioDesktopAPIKeyName, nil)
+	s.mustCreateApiKey(secondUser.ID, "sk-lumio-second-user", service.LumioDesktopAPIKeyName, nil)
+}
+
 func (s *APIKeyRepoSuite) TestGetByKeyForAuth_PreservesMessagesDispatchModelConfig() {
 	user := s.mustCreateUser("getbykey-auth-dispatch@test.com")
 	group, err := s.client.Group.Create().

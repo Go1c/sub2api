@@ -31,6 +31,10 @@ func (s *authRepoStub) GetByID(ctx context.Context, id int64) (*APIKey, error) {
 	panic("unexpected GetByID call")
 }
 
+func (s *authRepoStub) GetByUserIDAndName(ctx context.Context, userID int64, name string) (*APIKey, error) {
+	panic("unexpected GetByUserIDAndName call")
+}
+
 func (s *authRepoStub) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {
 	panic("unexpected GetKeyAndOwnerID call")
 }

@@ -191,6 +191,15 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if settings.SubscriptionQuotaResetHour < 0 || settings.SubscriptionQuotaResetHour > 23 {
 		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUOTA_RESET_HOUR", "subscription quota reset hour must be between 0 and 23")
 	}
+	lumioDesktopConfig, err := normalizeLumioDesktopConfigForWrite(settings.LumioDesktopConfig)
+	if err != nil {
+		return nil, err
+	}
+	settings.LumioDesktopConfig = lumioDesktopConfig
+	lumioDesktopConfigJSON, err := json.Marshal(lumioDesktopConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshal lumio desktop config: %w", err)
+	}
 
 	updates := make(map[string]string)
 
@@ -391,6 +400,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyTablePageSizeOptions] = string(tablePageSizeOptionsJSON)
 	updates[SettingKeyCustomMenuItems] = settings.CustomMenuItems
 	updates[SettingKeyCustomEndpoints] = settings.CustomEndpoints
+	updates[SettingKeyLumioDesktopConfig] = string(lumioDesktopConfigJSON)
 
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)

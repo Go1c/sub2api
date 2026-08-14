@@ -72,6 +72,7 @@ type Handlers struct {
 	ModelMarket      *ModelMarketHandler
 	BatchImage       *BatchImageHandler
 	AsyncImage       *AsyncImageHandler
+	DesktopHandoff   *DesktopPaymentHandoffHandler
 }
 
 // BuildInfo contains build-time information

@@ -188,6 +188,8 @@ type SystemSettings struct {
 	CustomMenuItems                        []CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints                        []CustomEndpoint `json:"custom_endpoints"`
 
+	LumioDesktopConfig service.LumioDesktopConfig `json:"lumio_desktop_config"`
+
 	DefaultConcurrency           int                          `json:"default_concurrency"`
 	DefaultBalance               float64                      `json:"default_balance"`
 	AffiliateRebateRate          float64                      `json:"affiliate_rebate_rate"`

@@ -150,6 +150,10 @@ func (APIKey) Indexes() []ent.Index {
 		index.Fields("status"),
 		index.Fields("deleted_at"),
 		index.Fields("last_used_at"),
+		index.Fields("user_id", "name").
+			Unique().
+			StorageKey("idx_api_keys_lumio_desktop_active_unique").
+			Annotations(entsql.IndexWhere("deleted_at IS NULL AND name = 'Lumio Codex Desktop'")),
 		// Index for quota queries
 		index.Fields("quota", "quota_used"),
 		index.Fields("expires_at"),

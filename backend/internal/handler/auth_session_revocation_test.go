@@ -59,3 +59,25 @@ func TestAuthHandlerRevokeAllSessionsInvalidatesAccessTokens(t *testing.T) {
 	require.Equal(t, 0, resp.Code)
 	require.Equal(t, "All sessions have been revoked. Please log in again.", resp.Data.Message)
 }
+
+func TestAuthHandlerLogoutClearsLumioWebSessionCookie(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := &AuthHandler{}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	c.Request.Header.Set("X-Forwarded-Proto", "https")
+
+	handler.Logout(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	cookie := findCookie(recorder.Result().Cookies(), service.LumioWebSessionCookieName)
+	require.NotNil(t, cookie)
+	require.Equal(t, -1, cookie.MaxAge)
+	require.Empty(t, cookie.Value)
+	require.Equal(t, "/", cookie.Path)
+	require.Empty(t, cookie.Domain)
+	require.True(t, cookie.HttpOnly)
+	require.True(t, cookie.Secure)
+	require.Equal(t, http.SameSiteLaxMode, cookie.SameSite)
+}
