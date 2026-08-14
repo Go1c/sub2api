@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"sort"
@@ -44,6 +45,7 @@ var (
 )
 
 const (
+	LumioDesktopAPIKeyName       = "Lumio Codex Desktop"
 	MaxAPIKeyCredentialBytes     = 128
 	defaultAuthLookupConcurrency = 64
 	defaultNegativeAuthCacheSize = 16384
@@ -57,6 +59,7 @@ const (
 type APIKeyRepository interface {
 	Create(ctx context.Context, key *APIKey) error
 	GetByID(ctx context.Context, id int64) (*APIKey, error)
+	GetByUserIDAndName(ctx context.Context, userID int64, name string) (*APIKey, error)
 	// GetKeyAndOwnerID 仅获取 API Key 的 key 与所有者 ID，用于删除等轻量场景
 	GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error)
 	GetByKey(ctx context.Context, key string) (*APIKey, error)
@@ -434,6 +437,17 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
+	isLumioDesktopKey := req.Name == LumioDesktopAPIKeyName
+	if isLumioDesktopKey {
+		existing, err := s.apiKeyRepo.GetByUserIDAndName(ctx, userID, LumioDesktopAPIKeyName)
+		if err == nil {
+			s.compileAPIKeyIPRules(existing)
+			return existing, nil
+		}
+		if !errors.Is(err, ErrAPIKeyNotFound) {
+			return nil, fmt.Errorf("get lumio desktop api key: %w", err)
+		}
+	}
 
 	// 验证 IP 白名单格式
 	if len(req.IPWhitelist) > 0 {
@@ -529,6 +543,16 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 
 	if err := s.apiKeyRepo.Create(ctx, apiKey); err != nil {
+		if isLumioDesktopKey && errors.Is(err, ErrAPIKeyExists) {
+			winner, lookupErr := s.apiKeyRepo.GetByUserIDAndName(ctx, userID, LumioDesktopAPIKeyName)
+			if lookupErr == nil {
+				s.compileAPIKeyIPRules(winner)
+				return winner, nil
+			}
+			if !errors.Is(lookupErr, ErrAPIKeyNotFound) {
+				return nil, fmt.Errorf("get lumio desktop api key after create conflict: %w", lookupErr)
+			}
+		}
 		return nil, fmt.Errorf("create api key: %w", err)
 	}
 

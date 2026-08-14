@@ -76,6 +76,7 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(null)
   const refreshTokenValue = ref<string | null>(null)
   const tokenExpiresAt = ref<number | null>(null) // 过期时间戳（毫秒）
+  const cookieSessionActive = ref(false)
   const runMode = ref<'standard' | 'simple'>('standard')
   const pendingAuthSession = ref<PendingAuthSessionSummary | null>(null)
   let refreshIntervalId: ReturnType<typeof setInterval> | null = null
@@ -84,7 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
   // ==================== Computed ====================
 
   const isAuthenticated = computed(() => {
-    return !!token.value && !!user.value
+    return !!user.value && (!!token.value || cookieSessionActive.value)
   })
 
   const isAdmin = computed(() => {
@@ -144,7 +145,7 @@ export const useAuthStore = defineStore('auth', () => {
     stopAutoRefresh()
 
     refreshIntervalId = setInterval(() => {
-      if (token.value) {
+      if (token.value || cookieSessionActive.value) {
         refreshUser().catch((error) => {
           console.error('Auto-refresh user failed:', error)
         })
@@ -282,6 +283,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   function setAuthFromResponse(response: AuthResponse): void {
     // Store token and user
+    cookieSessionActive.value = false
     token.value = response.access_token
 
     // Store refresh token if present
@@ -345,6 +347,7 @@ export const useAuthStore = defineStore('auth', () => {
     stopTokenRefresh()
     token.value = null
     user.value = null
+    cookieSessionActive.value = false
 
     token.value = newToken
     localStorage.setItem(AUTH_TOKEN_KEY, newToken)
@@ -406,13 +409,48 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Restore the current user from the HttpOnly Lumio website session.
+   * The cookie JWT remains inaccessible to JavaScript and is never persisted.
+   */
+  async function restoreCookieSession(
+    options?: { replaceClientSession?: boolean }
+  ): Promise<boolean> {
+    if (options?.replaceClientSession) {
+      clearAuth()
+    }
+
+    try {
+      const current = await authAPI.probeCookieSession()
+      const { run_mode, ...userData } = current
+
+      stopTokenRefresh()
+      token.value = null
+      refreshTokenValue.value = null
+      tokenExpiresAt.value = null
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+      localStorage.removeItem(AUTH_USER_KEY)
+      localStorage.removeItem(REFRESH_TOKEN_KEY)
+      localStorage.removeItem(TOKEN_EXPIRES_AT_KEY)
+
+      runMode.value = run_mode || 'standard'
+      user.value = userData
+      cookieSessionActive.value = true
+      startAutoRefresh()
+      return true
+    } catch {
+      cookieSessionActive.value = false
+      return false
+    }
+  }
+
+  /**
    * Refresh current user data
    * Fetches latest user info from the server
    * @returns Promise resolving to the updated user
    * @throws Error if not authenticated or request fails
    */
   async function refreshUser(): Promise<User> {
-    if (!token.value) {
+    if (!token.value && !cookieSessionActive.value) {
       throw new Error('Not authenticated')
     }
 
@@ -424,8 +462,10 @@ export const useAuthStore = defineStore('auth', () => {
       const { run_mode: _run_mode, ...userData } = response.data
       user.value = userData
 
-      // Update localStorage
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+      // Cookie-only sessions stay memory-only; local JWT sessions keep the existing cache.
+      if (token.value) {
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+      }
 
       return userData
     } catch (error) {
@@ -451,6 +491,8 @@ export const useAuthStore = defineStore('auth', () => {
     refreshTokenValue.value = null
     tokenExpiresAt.value = null
     user.value = null
+    cookieSessionActive.value = false
+    runMode.value = 'standard'
     localStorage.removeItem(AUTH_TOKEN_KEY)
     localStorage.removeItem(AUTH_USER_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
@@ -487,6 +529,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     setToken,
     logout,
+    restoreCookieSession,
     checkAuth,
     refreshUser,
     setPendingAuthSession,

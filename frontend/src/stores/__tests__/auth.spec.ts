@@ -10,6 +10,7 @@ const mockLogout = vi.fn()
 const mockGetCurrentUser = vi.fn()
 const mockRegister = vi.fn()
 const mockRefreshToken = vi.fn()
+const mockProbeCookieSession = vi.fn()
 
 vi.mock('@/api', () => ({
   authAPI: {
@@ -19,6 +20,7 @@ vi.mock('@/api', () => ({
     getCurrentUser: (...args: any[]) => mockGetCurrentUser(...args),
     register: (...args: any[]) => mockRegister(...args),
     refreshToken: (...args: any[]) => mockRefreshToken(...args),
+    probeCookieSession: (...args: any[]) => mockProbeCookieSession(...args),
   },
   isTotp2FARequired: (response: any) => response?.requires_2fa === true,
 }))
@@ -169,6 +171,51 @@ describe('useAuthStore', () => {
       await store.logout()
 
       expect(localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    })
+  })
+
+  describe('cookie session', () => {
+    it('replaces stale local auth with the cookie-bound desktop account', async () => {
+      localStorage.setItem('auth_token', 'old-user-token')
+      localStorage.setItem('refresh_token', 'old-user-refresh')
+      localStorage.setItem('auth_user', JSON.stringify(fakeUser))
+      mockProbeCookieSession.mockResolvedValue({
+        ...fakeAdminUser,
+        run_mode: 'simple' as const,
+      })
+      const store = useAuthStore()
+
+      const restored = await store.restoreCookieSession({ replaceClientSession: true })
+
+      expect(restored).toBe(true)
+      expect(store.user).toEqual(fakeAdminUser)
+      expect(store.token).toBeNull()
+      expect(store.isAuthenticated).toBe(true)
+      expect(store.isSimpleMode).toBe(true)
+      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(localStorage.getItem('refresh_token')).toBeNull()
+      expect(localStorage.getItem('auth_user')).toBeNull()
+    })
+
+    it('leaves stale local auth cleared when the handoff cookie is invalid', async () => {
+      mockLogin.mockResolvedValue({
+        ...fakeAuthResponse,
+        user: { ...fakeUser, run_mode: 'simple' as const },
+      })
+      const store = useAuthStore()
+      await store.login({ email: 'old@example.com', password: '123456' })
+      expect(store.isSimpleMode).toBe(true)
+      mockProbeCookieSession.mockRejectedValue({ status: 401 })
+
+      const restored = await store.restoreCookieSession({ replaceClientSession: true })
+
+      expect(restored).toBe(false)
+      expect(store.user).toBeNull()
+      expect(store.token).toBeNull()
+      expect(store.isAuthenticated).toBe(false)
+      expect(store.isSimpleMode).toBe(false)
+      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(localStorage.getItem('auth_user')).toBeNull()
     })
   })
 

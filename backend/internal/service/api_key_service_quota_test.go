@@ -86,6 +86,9 @@ func (s *quotaBaseAPIKeyRepoStub) GetByID(context.Context, int64) (*APIKey, erro
 	s.getByIDCalls++
 	return nil, nil
 }
+func (s *quotaBaseAPIKeyRepoStub) GetByUserIDAndName(context.Context, int64, string) (*APIKey, error) {
+	panic("unexpected GetByUserIDAndName call")
+}
 func (s *quotaBaseAPIKeyRepoStub) GetKeyAndOwnerID(context.Context, int64) (string, int64, error) {
 	panic("unexpected GetKeyAndOwnerID call")
 }

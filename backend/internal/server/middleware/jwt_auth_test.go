@@ -126,6 +126,83 @@ func TestJWTAuth_ValidToken_LowercaseBearer(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestJWTAuthUsesLumioWebSessionCookieWhenHeaderMissing(t *testing.T) {
+	user := &service.User{
+		ID:           1,
+		Email:        "cookie@example.com",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		TokenVersion: 1,
+	}
+	router, authSvc := newJWTTestEnv(map[int64]*service.User{1: user})
+	token, err := authSvc.GenerateToken(context.Background(), user)
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: service.LumioWebSessionCookieName, Value: token})
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"user_id":1`)
+}
+
+func TestJWTAuthAuthorizationHeaderWinsOverLumioWebSessionCookie(t *testing.T) {
+	headerUser := &service.User{
+		ID:           1,
+		Email:        "header@example.com",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		TokenVersion: 1,
+	}
+	cookieUser := &service.User{
+		ID:           2,
+		Email:        "cookie@example.com",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		TokenVersion: 1,
+	}
+	router, authSvc := newJWTTestEnv(map[int64]*service.User{1: headerUser, 2: cookieUser})
+	headerToken, err := authSvc.GenerateToken(context.Background(), headerUser)
+	require.NoError(t, err)
+	cookieToken, err := authSvc.GenerateToken(context.Background(), cookieUser)
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+headerToken)
+	req.AddCookie(&http.Cookie{Name: service.LumioWebSessionCookieName, Value: cookieToken})
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"user_id":1`)
+}
+
+func TestJWTAuthLumioWebSessionCookieHonorsTokenVersion(t *testing.T) {
+	userForToken := &service.User{
+		ID:           1,
+		Email:        "cookie@example.com",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		TokenVersion: 1,
+	}
+	userInDB := *userForToken
+	userInDB.TokenVersion = 2
+	router, authSvc := newJWTTestEnv(map[int64]*service.User{1: &userInDB})
+	token, err := authSvc.GenerateToken(context.Background(), userForToken)
+	require.NoError(t, err)
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: service.LumioWebSessionCookieName, Value: token})
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	var body ErrorResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Equal(t, "TOKEN_REVOKED", body.Code)
+}
+
 func TestJWTAuth_ValidToken_TouchesLastActive(t *testing.T) {
 	user := &service.User{
 		ID:           1,

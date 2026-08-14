@@ -89,6 +89,14 @@ var (
 				Columns: []*schema.Column{APIKeysColumns[8]},
 			},
 			{
+				Name:    "idx_api_keys_lumio_desktop_active_unique",
+				Unique:  true,
+				Columns: []*schema.Column{APIKeysColumns[25], APIKeysColumns[5]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "deleted_at IS NULL AND name = 'Lumio Codex Desktop'",
+				},
+			},
+			{
 				Name:    "apikey_quota_quota_used",
 				Unique:  false,
 				Columns: []*schema.Column{APIKeysColumns[12], APIKeysColumns[13]},

@@ -97,6 +97,9 @@ func (f fakeAPIKeyRepo) Create(ctx context.Context, key *service.APIKey) error {
 func (f fakeAPIKeyRepo) GetByID(ctx context.Context, id int64) (*service.APIKey, error) {
 	return nil, errors.New("not implemented")
 }
+func (f fakeAPIKeyRepo) GetByUserIDAndName(ctx context.Context, userID int64, name string) (*service.APIKey, error) {
+	return nil, errors.New("not implemented")
+}
 func (f fakeAPIKeyRepo) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {
 	return "", 0, errors.New("not implemented")
 }

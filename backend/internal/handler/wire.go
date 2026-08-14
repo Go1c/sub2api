@@ -114,6 +114,12 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	return h
 }
 
+func ProvideDesktopPaymentHandoffHandler(
+	svc *service.DesktopPaymentHandoffService,
+) *DesktopPaymentHandoffHandler {
+	return NewDesktopPaymentHandoffHandler(svc)
+}
+
 // ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
 func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService, totpService *service.TotpService, userService *service.UserService) *admin.SettingHandler {
 	h := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService, userAttributeService)
@@ -147,9 +153,13 @@ func ProvideHandlers(
 	modelMarketHandler *ModelMarketHandler,
 	batchImageHandler *BatchImageHandler,
 	asyncImageHandler *AsyncImageHandler,
+	desktopPaymentHandoffHandler *DesktopPaymentHandoffHandler,
+	webhookBalanceNotifyService *service.WebhookBalanceNotifyService,
+	_ *service.WebhookBalanceNotifyWiring,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
+	userHandler.SetWebhookBalanceNotifyService(webhookBalanceNotifyService)
 	return &Handlers{
 		Auth:             authHandler,
 		User:             userHandler,
@@ -174,6 +184,7 @@ func ProvideHandlers(
 		ModelMarket:      modelMarketHandler,
 		BatchImage:       batchImageHandler,
 		AsyncImage:       asyncImageHandler,
+		DesktopHandoff:   desktopPaymentHandoffHandler,
 	}
 }
 
@@ -262,6 +273,7 @@ var ProviderSet = wire.NewSet(
 	NewModelMarketHandler,
 	ProvideBatchImageHandler,
 	NewAsyncImageHandler,
+	ProvideDesktopPaymentHandoffHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
