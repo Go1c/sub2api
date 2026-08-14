@@ -159,8 +159,10 @@ func (s *UserAccessTokenService) ValidateToken(ctx context.Context, raw string) 
 	now := s.now()
 
 	if cached, ok := s.validateCache.Load(hash); ok {
-		entry := cached.(userAccessTokenCacheEntry)
-		if entry.expiresAt.After(now) {
+		entry, ok := cached.(userAccessTokenCacheEntry)
+		if !ok {
+			s.validateCache.Delete(hash)
+		} else if entry.expiresAt.After(now) {
 			cp := entry.token
 			if cp.RevokedAt != nil {
 				return nil, ErrUserAccessTokenRevoked
