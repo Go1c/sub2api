@@ -27,7 +27,9 @@ func CyberSessionBlockKey(apiKeyID int64, c *gin.Context, body []byte) string {
 	if raw == "" {
 		return ""
 	}
-	isolated := isolateOpenAISessionID(apiKeyID, raw)
+	// 屏蔽 key 是安全派生：不做账号级指纹收敛（否则 session/full 模式下
+	// 全账号会话塌缩为同一 key），保持 apiKeyID 隔离语义。
+	isolated := isolateOpenAISessionID(apiKeyID, raw, nil)
 	sum := sha256.Sum256([]byte(isolated))
 	return hex.EncodeToString(sum[:])
 }
