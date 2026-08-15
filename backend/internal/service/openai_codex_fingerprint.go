@@ -67,7 +67,11 @@ const (
 	codexFingerprintFull codexFingerprintMode = "full"
 )
 
-const codexFingerprintModeExtraKey = "codex_fingerprint_mode"
+const (
+	codexFingerprintModeExtraKey = "codex_fingerprint_mode"
+	// boundCodexInstallationID 是本机 ~/.codex/installation_id，绑机出站时优先使用。
+	boundCodexInstallationID = "12b0b072-d79b-45f9-98af-8fafbe3ef9f5"
+)
 
 // GetCodexFingerprintMode 从账号 extra JSON 读取指纹收敛模式。
 // 未设置时默认 session（设备+会话收敛），显式设为 "off" 才关闭。
@@ -99,22 +103,25 @@ func deriveStableUUIDv4(seed string) string {
 		b[10:16])
 }
 
-// resolveConvergedInstallationID 返回账号级恒定的 installation_id。
-// 优先使用管理员配置的真实 device_id，无则从 accountID 确定性派生。
+// resolveConvergedInstallationID 返回出站 installation_id。
+// 优先账号 extra.openai_device_id，其次本机绑机 installation_id。
 func resolveConvergedInstallationID(account *Account) string {
-	if account == nil {
-		return ""
+	if account != nil {
+		if deviceID := account.GetOpenAIDeviceID(); deviceID != "" {
+			return deviceID
+		}
 	}
-	if deviceID := account.GetOpenAIDeviceID(); deviceID != "" {
-		return deviceID
-	}
-	return deriveStableUUIDv4(fmt.Sprintf("sub2api:codex-install-id:v1:%d", account.ID))
+	return boundCodexInstallationID
 }
 
-// resolveConvergedSessionID 返回账号级恒定的 session_id。
+// resolveConvergedSessionID 返回出站 session_id。
+// 优先账号 extra.openai_session_id；未绑定时才按账号派生。
 func resolveConvergedSessionID(account *Account) string {
 	if account == nil {
 		return ""
+	}
+	if sessionID := account.GetOpenAISessionID(); sessionID != "" {
+		return sessionID
 	}
 	return deriveStableUUIDv4(fmt.Sprintf("sub2api:codex-session-id:v1:%d", account.ID))
 }
