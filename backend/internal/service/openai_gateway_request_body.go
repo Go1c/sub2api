@@ -273,6 +273,10 @@ func IsOpenAIResponsesCompactPathForTest(c *gin.Context) bool {
 	return isOpenAIResponsesCompactPath(c)
 }
 
+func IsOpenAIResponsesCompactPath(c *gin.Context) bool {
+	return isOpenAIResponsesCompactPath(c)
+}
+
 func OpenAICompactSessionSeedKeyForTest() string {
 	return openAICompactSessionSeedKey
 }

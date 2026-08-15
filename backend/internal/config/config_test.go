@@ -18,6 +18,31 @@ func resetViperWithJWTSecret(t *testing.T) {
 	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
 }
 
+func TestLoadTimezonePrecedence(t *testing.T) {
+	tests := []struct {
+		name        string
+		timezoneEnv string
+		tzEnv       string
+		want        string
+	}{
+		{name: "default", want: "Asia/Shanghai"},
+		{name: "timezone_env", timezoneEnv: "UTC", want: "UTC"},
+		{name: "tz_env_overrides_timezone", timezoneEnv: "UTC", tzEnv: "America/New_York", want: "America/New_York"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetViperWithJWTSecret(t)
+			t.Setenv("TIMEZONE", tt.timezoneEnv)
+			t.Setenv("TZ", tt.tzEnv)
+
+			cfg, err := Load()
+			require.NoError(t, err)
+			require.Equal(t, tt.want, cfg.Timezone)
+		})
+	}
+}
+
 func TestLoadServerTimingConfig(t *testing.T) {
 	t.Run("disabled by default", func(t *testing.T) {
 		resetViperWithJWTSecret(t)

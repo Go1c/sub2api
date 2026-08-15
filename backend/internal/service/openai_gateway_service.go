@@ -35,7 +35,7 @@ const (
 	// 与真实 Codex CLI 的 User-Agent 结构对齐：
 	// {originator}/{version} ({OS} {OS_version}; {arch}) {terminal}
 	// 旧值 "codex_cli_rs/0.125.0" 缺少 OS/架构/终端后缀，易被上游指纹识别为非官方客户端。
-	codexCLIUserAgent = "codex_cli_rs/0.144.1 (Ubuntu 22.4.0; x86_64) xterm-256color"
+	codexCLIUserAgent = "codex_cli_rs/0.146.0 (Mac OS X 26.5.2; arm64) unknown"
 	// codex_cli_only 拒绝时单个请求头日志长度上限（字符）
 	codexCLIOnlyHeaderValueMaxBytes = 256
 
@@ -50,7 +50,7 @@ const (
 	openAIWSRetryJitterRatioDefault    = 0.2
 	openAICompactSessionSeedKey        = "openai_compact_session_seed"
 	openAIUpstreamEndpointContextKey   = "openai_actual_upstream_endpoint"
-	codexCLIVersion                    = "0.144.1"
+	codexCLIVersion                    = "0.146.0"
 	// Codex 限额快照仅用于后台展示/诊断，不需要每个成功请求都立即落库。
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 	// 配额自动暂停时，超过该时长仍未刷新的 used% 快照视为陈旧，不再据此暂停账号。
@@ -374,8 +374,8 @@ func (t *accountWriteThrottle) Allow(id int64, now time.Time) bool {
 
 var defaultOpenAICodexSnapshotPersistThrottle = newAccountWriteThrottle(openAICodexSnapshotPersistMinInterval)
 
-// ErrNoAvailableCompactAccounts indicates the request needs /responses/compact
-// support but no compatible account is available.
+// ErrNoAvailableCompactAccounts indicates a legacy /responses/compact request
+// needs compact support but no compatible account is available.
 var ErrNoAvailableCompactAccounts = errors.New("no available OpenAI accounts support /responses/compact")
 
 // OpenAIGatewayService handles OpenAI API gateway operations
@@ -435,6 +435,11 @@ type OpenAIGatewayService struct {
 	codexModelsManifestCache            codexModelsManifestCache
 	openaiCompatSessionResponses        sync.Map
 	openaiCompatAnthropicDigestSessions sync.Map
+	// openaiCodexTurnStateOrigins: 下游会话 seed → openAICodexTurnStateOrigin，
+	// 记录最近一次向该会话下发 x-codex-turn-state 的铸造账号，供出站守卫
+	// 剥离跨账号回带（openai_codex_turn_state.go）。
+	openaiCodexTurnStateOrigins sync.Map
+	openaiCodexTurnStateWrites  atomic.Uint64
 }
 
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
@@ -578,6 +583,10 @@ func (s *OpenAIGatewayService) checkChannelPricingRestriction(ctx context.Contex
 func (s *OpenAIGatewayService) isUpstreamModelRestrictedByChannel(ctx context.Context, groupID int64, account *Account, requestedModel string, requireCompact bool) bool {
 	if s.channelService == nil {
 		return false
+	}
+	if compactForwardModel, ok := openAIForwardModelFromContext(ctx); ok {
+		requestedModel = compactForwardModel.model
+		requireCompact = compactForwardModel.useCompactModelMapping
 	}
 	upstreamModel := resolveOpenAIAccountUpstreamModelForRequest(account, requestedModel, requireCompact)
 	if upstreamModel == "" {
@@ -1028,10 +1037,18 @@ func getAPIKeyIDFromContext(c *gin.Context) int64 {
 // isolateOpenAISessionID 将 apiKeyID 混入 session 标识符，
 // 确保不同 API Key 的用户即使使用相同的原始 session_id/conversation_id，
 // 到达上游的标识符也不同，防止跨用户会话碰撞。
-func isolateOpenAISessionID(apiKeyID int64, raw string) string {
+func isolateOpenAISessionID(apiKeyID int64, raw string, account *Account) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
+	}
+	if account != nil {
+		if mode := account.GetCodexFingerprintMode(); mode == codexFingerprintSession || mode == codexFingerprintFull {
+			return resolveConvergedSessionID(account)
+		}
+	}
+	if isBoundCodexSessionID(raw) {
+		return raw
 	}
 	h := xxhash.New()
 	_, _ = fmt.Fprintf(h, "k%d:", apiKeyID)

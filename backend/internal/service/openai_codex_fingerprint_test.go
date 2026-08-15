@@ -73,18 +73,23 @@ func TestResolveConvergedInstallationID_UsesDeviceID(t *testing.T) {
 	assert.Equal(t, "real-device-id", resolveConvergedInstallationID(account))
 }
 
-func TestResolveConvergedInstallationID_DerivesFromAccountID(t *testing.T) {
+func TestResolveConvergedInstallationID_UsesBoundLocalInstallation(t *testing.T) {
 	account := newTestOAuthAccount(42, nil)
 	result := resolveConvergedInstallationID(account)
-	_, err := uuid.Parse(result)
-	require.NoError(t, err, "派生值应为合法 UUID")
+	assert.Equal(t, boundCodexInstallationID, result, "未配置 openai_device_id 时应使用本机绑机 installation_id")
 	assert.Equal(t, result, resolveConvergedInstallationID(account), "确定性")
 }
 
-func TestResolveConvergedInstallationID_DifferentAccounts(t *testing.T) {
+func TestResolveConvergedInstallationID_SameBoundIDAcrossAccounts(t *testing.T) {
 	a := resolveConvergedInstallationID(newTestOAuthAccount(1, nil))
 	b := resolveConvergedInstallationID(newTestOAuthAccount(2, nil))
-	assert.NotEqual(t, a, b)
+	assert.Equal(t, boundCodexInstallationID, a)
+	assert.Equal(t, a, b, "绑机后不同账号共用同一 installation_id")
+}
+
+func TestResolveConvergedSessionID_UsesBoundAccountSession(t *testing.T) {
+	account := newTestOAuthAccount(1, map[string]any{"openai_session_id": "01a005e2-2dd9-72d2-a651-cbf413bbf2bc"})
+	assert.Equal(t, "01a005e2-2dd9-72d2-a651-cbf413bbf2bc", resolveConvergedSessionID(account))
 }
 
 // --- resolveConvergedThreadID ---
