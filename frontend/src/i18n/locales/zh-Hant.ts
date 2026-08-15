@@ -2192,6 +2192,7 @@ export default {
         userStatus: '狀態'
       },
       usageToday: '今日',
+      usageYesterday: '昨日',
       usageTotal: '累計',
       accountsAvailable: '可用:',
       accountsRateLimited: '限流:',

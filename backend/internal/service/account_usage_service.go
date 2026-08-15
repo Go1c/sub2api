@@ -115,7 +115,7 @@ const (
 	openAIProbeCacheTTL     = 10 * time.Minute
 	grokProbeRetryTTL       = 1 * time.Minute
 	grokFreeQuotaWindow     = 24 * time.Hour
-	openAICodexProbeVersion = "0.144.1"
+	openAICodexProbeVersion = "0.146.0"
 
 	upstreamBalanceTimeout      = 10 * time.Second
 	upstreamBalanceLoginTimeout = 10 * time.Second

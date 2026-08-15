@@ -73,27 +73,35 @@ func TestResolveConvergedInstallationID_UsesDeviceID(t *testing.T) {
 	assert.Equal(t, "real-device-id", resolveConvergedInstallationID(account))
 }
 
-func TestResolveConvergedInstallationID_DerivesFromAccountID(t *testing.T) {
+func TestResolveConvergedInstallationID_UsesBoundLocalInstallation(t *testing.T) {
 	account := newTestOAuthAccount(42, nil)
 	result := resolveConvergedInstallationID(account)
-	_, err := uuid.Parse(result)
-	require.NoError(t, err, "派生值应为合法 UUID")
+	assert.Equal(t, boundCodexInstallationID, result, "未配置 openai_device_id 时应使用本机绑机 installation_id")
 	assert.Equal(t, result, resolveConvergedInstallationID(account), "确定性")
 }
 
-func TestResolveConvergedInstallationID_DifferentAccounts(t *testing.T) {
+func TestResolveConvergedInstallationID_SameBoundIDAcrossAccounts(t *testing.T) {
 	a := resolveConvergedInstallationID(newTestOAuthAccount(1, nil))
 	b := resolveConvergedInstallationID(newTestOAuthAccount(2, nil))
-	assert.NotEqual(t, a, b)
+	assert.Equal(t, boundCodexInstallationID, a)
+	assert.Equal(t, a, b, "绑机后不同账号共用同一 installation_id")
+}
+
+func TestResolveConvergedSessionID_UsesBoundAccountSession(t *testing.T) {
+	account := newTestOAuthAccount(1, map[string]any{"openai_session_id": "01a005e2-2dd9-72d2-a651-cbf413bbf2bc"})
+	assert.Equal(t, "01a005e2-2dd9-72d2-a651-cbf413bbf2bc", resolveConvergedSessionID(account))
 }
 
 // --- resolveConvergedThreadID ---
 
 func TestResolveConvergedThreadID_PerClientSession(t *testing.T) {
 	account := newTestOAuthAccount(1, nil)
-	a := resolveConvergedThreadID(account, "session-aaa")
-	b := resolveConvergedThreadID(account, "session-bbb")
+	// 绑机语义：UUID 形态的客户端会话直接作为 thread（每个真实会话一个线程），
+	// 非 UUID 输入回落到绑机会话（同一 thread）。
+	a := resolveConvergedThreadID(account, "11111111-1111-1111-1111-111111111111")
+	b := resolveConvergedThreadID(account, "22222222-2222-2222-2222-222222222222")
 	assert.NotEqual(t, a, b, "不同客户端 session 应得到不同 thread_id")
+	assert.Equal(t, resolveConvergedThreadID(account, "session-aaa"), resolveConvergedThreadID(account, "session-bbb"), "非 UUID 输入应回落到同一绑机会话")
 }
 
 func TestResolveConvergedThreadID_Deterministic(t *testing.T) {
@@ -105,7 +113,8 @@ func TestResolveConvergedThreadID_Deterministic(t *testing.T) {
 
 func TestResolveConvergedThreadID_EmptySession(t *testing.T) {
 	account := newTestOAuthAccount(1, nil)
-	assert.Equal(t, "", resolveConvergedThreadID(account, ""))
+	// 空输入不是 UUID，回落到绑机会话而非空串（下游 x-codex-window-id 等需要非空根）。
+	assert.Equal(t, resolveConvergedSessionID(account), resolveConvergedThreadID(account, ""))
 }
 
 // --- off 模式：resolveCodexFingerprintIDsFromRequest 返回 nil ---
@@ -215,15 +224,17 @@ func TestApplyCodexFingerprintHeaders_SessionMode_DifferentClients(t *testing.T)
 		return `{"installation_id":"x","session_id":"x","thread_id":"x","turn_id":"x","window_id":"x:0"}`
 	}
 
+	// 绑机语义：真实 Codex 客户端的 session-id 是 UUID，thread 直接沿用该 UUID
+	// （每个真实会话一个独立线程）；非 UUID 输入会回落到绑机会话（同一 thread）。
 	clientA := http.Header{}
-	clientA.Set("session-id", "client-A")
+	clientA.Set("session-id", "11111111-1111-1111-1111-111111111111")
 	idsA := resolveCodexFingerprintIDsFromRequest(account, clientA)
 	hA := http.Header{}
 	hA.Set("x-codex-turn-metadata", makeTurnMeta())
 	applyCodexFingerprintHeaders(hA, idsA)
 
 	clientB := http.Header{}
-	clientB.Set("session-id", "client-B")
+	clientB.Set("session-id", "22222222-2222-2222-2222-222222222222")
 	idsB := resolveCodexFingerprintIDsFromRequest(account, clientB)
 	hB := http.Header{}
 	hB.Set("x-codex-turn-metadata", makeTurnMeta())
