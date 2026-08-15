@@ -69,8 +69,10 @@ const (
 
 const (
 	codexFingerprintModeExtraKey = "codex_fingerprint_mode"
-	// boundCodexInstallationID 是本机 ~/.codex/installation_id，绑机出站时优先使用。
+	// boundCodexInstallationID 是本机 ~/.codex/installation_id。
 	boundCodexInstallationID = "12b0b072-d79b-45f9-98af-8fafbe3ef9f5"
+	// boundCodexSessionID 是本机最近一条 Codex 会话，绑机出站时作为默认 session/thread。
+	boundCodexSessionID = "01a005e9-75ac-7140-808a-7a91e2a43b33"
 )
 
 // GetCodexFingerprintMode 从账号 extra JSON 读取指纹收敛模式。
@@ -115,25 +117,43 @@ func resolveConvergedInstallationID(account *Account) string {
 }
 
 // resolveConvergedSessionID 返回出站 session_id。
-// 优先账号 extra.openai_session_id；未绑定时才按账号派生。
+// 优先账号 extra.openai_session_id，其次本机绑机会话。
 func resolveConvergedSessionID(account *Account) string {
-	if account == nil {
-		return ""
+	if account != nil {
+		if sessionID := account.GetOpenAISessionID(); sessionID != "" {
+			return sessionID
+		}
 	}
-	if sessionID := account.GetOpenAISessionID(); sessionID != "" {
-		return sessionID
-	}
-	return deriveStableUUIDv4(fmt.Sprintf("sub2api:codex-session-id:v1:%d", account.ID))
+	return boundCodexSessionID
 }
 
-// resolveConvergedThreadID 按客户端原始 session-id 确定性派生 thread_id。
-// 每个真实 Codex 会话（不同客户端启动实例）获得一个独立线程，
-// 模拟正常用户 spawn 子代理或开多窗口的模式。
+// resolveConvergedThreadID 返回出站 thread_id。
+// 客户端已带 UUID 会话时原样使用（本机多窗口/子代理），否则回落到绑机会话。
 func resolveConvergedThreadID(account *Account, clientSessionID string) string {
-	if account == nil || clientSessionID == "" {
-		return ""
+	if isBoundCodexSessionID(clientSessionID) {
+		return strings.TrimSpace(clientSessionID)
 	}
-	return deriveStableUUIDv4(fmt.Sprintf("sub2api:codex-thread-id:v1:%d:%s", account.ID, clientSessionID))
+	return resolveConvergedSessionID(account)
+}
+
+func isBoundCodexSessionID(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if len(raw) != 36 {
+		return false
+	}
+	if raw[8] != '-' || raw[13] != '-' || raw[18] != '-' || raw[23] != '-' {
+		return false
+	}
+	for i := 0; i < len(raw); i++ {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			continue
+		}
+		c := raw[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // codexFingerprintIDs 收敛后的完整 ID 集合。

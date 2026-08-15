@@ -1037,10 +1037,18 @@ func getAPIKeyIDFromContext(c *gin.Context) int64 {
 // isolateOpenAISessionID 将 apiKeyID 混入 session 标识符，
 // 确保不同 API Key 的用户即使使用相同的原始 session_id/conversation_id，
 // 到达上游的标识符也不同，防止跨用户会话碰撞。
-func isolateOpenAISessionID(apiKeyID int64, raw string) string {
+func isolateOpenAISessionID(apiKeyID int64, raw string, account *Account) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
+	}
+	if account != nil {
+		if mode := account.GetCodexFingerprintMode(); mode == codexFingerprintSession || mode == codexFingerprintFull {
+			return resolveConvergedSessionID(account)
+		}
+	}
+	if isBoundCodexSessionID(raw) {
+		return raw
 	}
 	h := xxhash.New()
 	_, _ = fmt.Fprintf(h, "k%d:", apiKeyID)
