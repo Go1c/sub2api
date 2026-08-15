@@ -29,7 +29,8 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 //   - 鉴权（Authentication）：验证 Key 有效性、用户状态、IP 限制 —— 始终执行
 //   - 计费执行（Billing Enforcement）：过期/配额/订阅/余额检查 —— skipBilling 时整块跳过
 //
-// /v1/usage 端点只需鉴权，不需要计费执行（允许过期/配额耗尽的 Key 查询自身用量）。
+// /v1/usage 与 GET 模型目录只需鉴权，不需要计费执行
+// （允许过期/配额耗尽/零余额的 Key 查询用量或发现可用模型）。
 func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
@@ -182,8 +183,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 5. 加载可消费订阅（用户级额度池，不再依赖分组 subscription_type） ──
 
-		// skipBilling: usage 查询与异步生图任务轮询只需鉴权，跳过所有计费执行
-		skipBilling := isGatewayUsagePath(c.Request.URL.Path) || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
+		// skipBilling: usage / 模型目录 / 异步生图任务轮询只需鉴权，跳过所有计费执行
+		skipBilling := isGatewayUsagePath(c.Request.URL.Path) ||
+			isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path) ||
+			isGatewayModelsListPath(c.Request.Method, c.Request.URL.Path)
 
 		var subscription *service.UserSubscription
 		var subscriptionCandidateIDs []int64

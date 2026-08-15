@@ -774,6 +774,48 @@ func TestApiKeyAuthWithSubscriptionGoogle_RejectsExhaustedBalance(t *testing.T) 
 	require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
 }
 
+func TestApiKeyAuthWithSubscriptionGoogle_AllowsZeroBalanceModelsList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			return &service.APIKey{
+				ID:     1,
+				Key:    key,
+				Status: service.StatusActive,
+				User: &service.User{
+					ID:      123,
+					Status:  service.StatusActive,
+					Balance: 0,
+				},
+			}, nil
+		},
+	})
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
+	r.GET("/v1beta/models", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	r.POST("/v1beta/models/*modelAction", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/models", nil)
+	req.Header.Set("Authorization", "Bearer ok")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotContains(t, w.Body.String(), "账户余额不足")
+
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-pro:generateContent", nil)
+	req.Header.Set("Authorization", "Bearer ok")
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusForbidden, w.Code)
+	var resp googleErrorResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, http.StatusForbidden, resp.Error.Code)
+	require.Equal(t, "账户余额不足，请先充值后再使用。", resp.Error.Message)
+	require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
+}
+
 func TestApiKeyAuthWithSubscriptionGoogle_TouchesLastUsedOnSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

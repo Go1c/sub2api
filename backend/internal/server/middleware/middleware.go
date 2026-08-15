@@ -162,3 +162,32 @@ func isAsyncImageTaskRead(method, path string) bool {
 	}
 	return strings.HasPrefix(path, "/v1/images/tasks/") || strings.HasPrefix(path, "/images/tasks/")
 }
+
+// isGatewayModelsListPath reports whether the request only lists or inspects
+// gateway model catalogs. Catalogs are discovery, not billed consumption.
+func isGatewayModelsListPath(method, path string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	path = strings.TrimRight(path, "/")
+	switch path {
+	case "/v1/models",
+		"/models",
+		"/backend-api/codex/models",
+		"/v1beta/models",
+		"/antigravity/models",
+		"/antigravity/v1/models",
+		"/antigravity/v1beta/models":
+		return true
+	}
+	return isSingleSegmentModelsLookup(path, "/v1beta/models/") ||
+		isSingleSegmentModelsLookup(path, "/antigravity/v1beta/models/")
+}
+
+func isSingleSegmentModelsLookup(path, prefix string) bool {
+	rest, ok := strings.CutPrefix(path, prefix)
+	if !ok || rest == "" || strings.Contains(rest, "/") {
+		return false
+	}
+	return true
+}
