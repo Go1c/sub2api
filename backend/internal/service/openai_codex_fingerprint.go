@@ -9,8 +9,42 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
+
+// codexFingerprintIDsContextKey 是暂存在 gin context 的收敛 ID 集合键。
+// 由 Forward（非透传）或 forwardOpenAIPassthrough（透传）解析后写入，请求
+// 构造器读取用于出站头改写——请求体与出站头必须共享同一份 IDs，保证
+// turn_id 等随机字段一致。
+const codexFingerprintIDsContextKey = "codex_fingerprint_ids"
+
+// stageCodexFingerprintIDs 将本 attempt 解析出的收敛 ID 暂存到 gin context。
+// 必须无条件覆写（含 nil）：failover 从收敛账号切到 off 账号时，上一账号的
+// IDs 不得残留并被误应用到新账号的出站头（typed-nil 由应用侧 nil 守卫吸收）。
+func stageCodexFingerprintIDs(c *gin.Context, ids *codexFingerprintIDs) {
+	if c != nil {
+		c.Set(codexFingerprintIDsContextKey, ids)
+	}
+}
+
+// applyStagedCodexFingerprintHeaders 读取 context 暂存的收敛 ID 并改写出站头。
+// 非透传与透传两个请求构造器共用本函数，防止应用语义漂移。仅 OAuth 账号
+// 生效（stale 键在账号类型混合 failover 下由该门挡住）。
+func applyStagedCodexFingerprintHeaders(c *gin.Context, account *Account, h http.Header) {
+	if c == nil || account == nil || account.Type != AccountTypeOAuth {
+		return
+	}
+	value, ok := c.Get(codexFingerprintIDsContextKey)
+	if !ok {
+		return
+	}
+	if ids, ok := value.(*codexFingerprintIDs); ok {
+		applyCodexFingerprintHeaders(h, ids)
+	}
+}
 
 // codexFingerprintMode 控制 OAuth 账号出站请求的设备指纹收敛强度。
 // 多人共享同一 OAuth 账号时，每个用户的 Codex 客户端会携带各自不同的
@@ -245,6 +279,21 @@ func applyCodexFingerprintClientMetadata(reqBody map[string]any, ids *codexFinge
 		existing = make(map[string]any)
 	}
 
+	if !applyCodexFingerprintToClientMetadataMap(existing, ids) {
+		return false
+	}
+	reqBody["client_metadata"] = existing
+	return true
+}
+
+// applyCodexFingerprintToClientMetadataMap 是 client_metadata 改写的共享核心，
+// map 版（非透传，body 已解码）与 raw 字节版（透传热路径）都经由它，保证两条
+// 路径的收敛语义永不漂移。
+func applyCodexFingerprintToClientMetadataMap(existing map[string]any, ids *codexFingerprintIDs) bool {
+	if existing == nil || ids == nil {
+		return false
+	}
+
 	modified := false
 
 	if ids.installationID != "" {
@@ -256,13 +305,9 @@ func applyCodexFingerprintClientMetadata(reqBody map[string]any, ids *codexFinge
 		rewriteClientMetadataEmbeddedTurnMetadata(existing, map[string]any{
 			"installation_id": ids.installationID,
 		})
-		if modified {
-			reqBody["client_metadata"] = existing
-		}
 		return modified
 	}
 
-	// session / full 模式
 	existing["session_id"] = ids.sessionID
 	existing["thread_id"] = ids.threadID
 	existing["turn_id"] = ids.turnID
@@ -276,9 +321,41 @@ func applyCodexFingerprintClientMetadata(reqBody map[string]any, ids *codexFinge
 		"window_id":               ids.windowID,
 		"turn_started_at_unix_ms": time.Now().UnixMilli(),
 	})
-
-	reqBody["client_metadata"] = existing
 	return true
+}
+
+// applyCodexFingerprintClientMetadataRaw 在原始 JSON 字节上改写 client_metadata，
+// 供透传路径使用——透传是热路径，禁止对可能高达数十 MB 的 body 做全量
+// Unmarshal。实现为：gjson 提取 client_metadata 小对象单独解码，经共享核心
+// 改写后 sjson 一次性拼回，body 其余字节原样保留。
+func applyCodexFingerprintClientMetadataRaw(body []byte, ids *codexFingerprintIDs) ([]byte, bool, error) {
+	if len(body) == 0 || ids == nil {
+		return body, false, nil
+	}
+	if !gjson.ParseBytes(body).IsObject() {
+		return body, false, nil
+	}
+
+	existing := map[string]any{}
+	if cm := gjson.GetBytes(body, "client_metadata"); cm.IsObject() {
+		if err := json.Unmarshal([]byte(cm.Raw), &existing); err != nil {
+			return body, false, fmt.Errorf("decode client_metadata for fingerprint: %w", err)
+		}
+	}
+
+	if !applyCodexFingerprintToClientMetadataMap(existing, ids) {
+		return body, false, nil
+	}
+
+	raw, err := json.Marshal(existing)
+	if err != nil {
+		return body, false, fmt.Errorf("encode converged client_metadata: %w", err)
+	}
+	next, err := sjson.SetRawBytes(body, "client_metadata", raw)
+	if err != nil {
+		return body, false, fmt.Errorf("splice converged client_metadata: %w", err)
+	}
+	return next, true, nil
 }
 
 // rewriteClientMetadataEmbeddedTurnMetadata 改写 client_metadata 中内嵌的
