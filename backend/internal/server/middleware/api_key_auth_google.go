@@ -147,25 +147,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
-		// Key 状态检查（状态字段可能因后台异步刷新而滞后，故显式拦截）。
-		switch apiKey.Status {
-		case service.StatusAPIKeyQuotaExhausted:
-			abortWithGoogleError(c, 429, "API key 额度已用完")
-			return
-		case service.StatusAPIKeyExpired:
-			abortWithGoogleError(c, 403, "API key 已过期")
-			return
-		}
-
-		// 运行时过期/配额检查（即使状态是 active，也要检查时间和用量，与主中间件一致）。
-		if apiKey.IsExpired() {
-			abortWithGoogleError(c, 403, "API key 已过期")
-			return
-		}
-		if apiKey.IsQuotaExhausted() {
-			abortWithGoogleError(c, 429, "API key 额度已用完")
-			return
-		}
+		// skipBilling: usage / 模型目录 / 异步生图任务轮询只需鉴权，与主中间件对齐
+		skipBilling := isGatewayUsagePath(c.Request.URL.Path) ||
+			isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path) ||
+			isGatewayModelsListPath(c.Request.Method, c.Request.URL.Path)
 
 		// 用户级额度池订阅优先；无可用订阅时回退余额检查。
 		var subscription *service.UserSubscription
@@ -180,7 +165,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				apiKey.User,
 			)
 			if subErr != nil {
-				if !isFallbackableSubscriptionAuthError(subErr) {
+				if !skipBilling && !isFallbackableSubscriptionAuthError(subErr) {
 					status, _ := subscriptionAuthErrorStatus(subErr)
 					abortWithGoogleError(c, status, subErr.Error())
 					return
@@ -191,20 +176,45 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				subscriptionCandidateIDs = candidateIDs
 			}
 		}
+
+		if !skipBilling {
+			// Key 状态检查（状态字段可能因后台异步刷新而滞后，故显式拦截）。
+			switch apiKey.Status {
+			case service.StatusAPIKeyQuotaExhausted:
+				abortWithGoogleError(c, 429, "API key 额度已用完")
+				return
+			case service.StatusAPIKeyExpired:
+				abortWithGoogleError(c, 403, "API key 已过期")
+				return
+			}
+
+			// 运行时过期/配额检查（即使状态是 active，也要检查时间和用量，与主中间件一致）。
+			if apiKey.IsExpired() {
+				abortWithGoogleError(c, 403, "API key 已过期")
+				return
+			}
+			if apiKey.IsQuotaExhausted() {
+				abortWithGoogleError(c, 429, "API key 额度已用完")
+				return
+			}
+
+			if subscription == nil {
+				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+					if subscriptionErr != nil {
+						status, _ := subscriptionAuthErrorStatus(subscriptionErr)
+						abortWithGoogleError(c, status, subscriptionErr.Error())
+						return
+					}
+					abortWithGoogleError(c, 403, insufficientBalanceMessage)
+					return
+				}
+			}
+		}
+
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
 			if len(subscriptionCandidateIDs) > 0 {
 				c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.SubscriptionCandidateIDs, subscriptionCandidateIDs))
-			}
-		} else {
-			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-				if subscriptionErr != nil {
-					status, _ := subscriptionAuthErrorStatus(subscriptionErr)
-					abortWithGoogleError(c, status, subscriptionErr.Error())
-					return
-				}
-				abortWithGoogleError(c, 403, insufficientBalanceMessage)
-				return
 			}
 		}
 

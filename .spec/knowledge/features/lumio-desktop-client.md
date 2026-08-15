@@ -1,6 +1,6 @@
 ---
 name: lumio-desktop-client
-description: Lumio Codex 桌面客户端服务端契约：公开配置、账号级唯一 Key 与一次性支付交接；接入桌面启动或充值流程时查
+description: Lumio Codex 桌面客户端服务端契约：公开配置、账号级唯一 Key、一次性支付交接，以及 GET /v1/models 不查余额；接入桌面启动或充值流程时查
 metadata:
   type: doc
   level: L2
@@ -38,6 +38,12 @@ metadata:
 客户端继续调用已鉴权的 `POST /api/v1/keys`，名称固定为 `Lumio Codex Desktop`。服务端把这个精确名称解释为账号级 get-or-create：已有未删除记录时原样返回；不存在时走普通创建流程；并发插入冲突时读取并返回数据库中的胜出记录。
 
 PostgreSQL 部分唯一索引只约束 `deleted_at IS NULL` 且名称精确匹配的记录，因此不同用户可各有一条，软删除后可创建替代 Key，普通名称行为不变。迁移按 `created_at, id` 保留最早记录的名称，后续历史重复记录仅改为 `Lumio Codex Desktop (legacy <id>)`，不删除或轮换凭证。
+
+## 模型目录不查余额
+
+桌面 onboarding 第 3 步是 `GET /v1/models`（OpenAI 兼容目录，不是 Gemini）。目录是发现接口，不是计费消费：有效 Key 即可列出模型，零余额、无订阅也不得返回 `403 INSUFFICIENT_BALANCE`。真正发起 `messages` / `responses` / `chat` / 生图 / 视频时才拦余额。鉴权通过后仍会 `TouchLastUsed`。
+
+实现：`isGatewayModelsListPath` 覆盖网关 GET 目录别名（`/v1/models`、`/models`、`/backend-api/codex/models` 及 Gemini/Antigravity 只读目录）；主中间件与 Gemini 中间件的 `skipBilling` 与 `/v1/usage` 同类。不送新用户余额，也不改 403 信封格式。
 
 ## 一次性支付交接
 
