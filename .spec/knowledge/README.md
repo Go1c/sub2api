@@ -38,7 +38,7 @@ metadata:
 | [`features/support-chat.md`](features/support-chat.md) | 站内 AI 客服浮窗:外部 gateway 接入、登录态修复、品牌配色、附件上传 |
 | [`features/user-request-monitoring.md`](features/user-request-monitoring.md) | 管理员定向监控指定用户请求、限时抓取原始请求体(非阻塞网关) |
 | [`features/external-auth-handoff.md`](features/external-auth-handoff.md) | 外部应用带用户来登录、登录后把 access token 回跳的接入协议与实现 |
-| [`features/admin-settings-idempotency.md`](features/admin-settings-idempotency.md) | 管理员设置保存的隐式幂等、Banner 单字段更新与 PostgreSQL fallback 恢复 |
+| [`features/admin-settings-idempotency.md`](features/admin-settings-idempotency.md) | 管理员设置保存的隐式幂等、Banner 单字段更新、PostgreSQL fallback，以及 fork 字段必须经 parseSettings 读回 |
 | [`features/compliance-geo-block.md`](features/compliance-geo-block.md) | 中国大陆 IP 网页访问拦截(屏蔽网站、保持 API 开放)的实现与验收 |
 | [`features/account-error-history.md`](features/account-error-history.md) | 账号错误历史:多来源 best-effort 异步记录、去重/节流/裁剪、账号「更多」菜单懒加载弹窗查看 |
 | [`features/account-error-alert.md`](features/account-error-alert.md) | 账号异常 Telegram 告警:后台定时聚合 `ops_error_logs`,通知最近窗口内异常账号 |
