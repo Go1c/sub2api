@@ -1,6 +1,6 @@
 ---
 name: admin-settings-idempotency
-description: 管理员设置保存（PUT /api/v1/admin/settings）的服务端隐式幂等保护 / 排查重复保存或网络重试导致的重复写入时查这篇
+description: 管理员设置保存（PUT /api/v1/admin/settings）的隐式幂等、部分更新，以及 fork 字段必须走 parseSettings 才能在管理端读回 / 排查保存后输入框变空或重复写入时查这篇
 metadata:
   type: doc
   level: L2
@@ -44,6 +44,14 @@ metadata:
 
 不能在收到 PostgreSQL 语句错误后直接在同一事务中继续 upsert，否则只会得到 `current transaction is aborted`，并让幂等记录进入 retry backoff。
 
+### fork 字段必须在 parseSettings 读回
+
+管理员 `GET` / `PUT` 成功响应都走 `GetAllSettings` → `parseSettings`。只把 key 写进 defaults 和 `setting_update.go`、不在 `parseSettings` 赋给 `SystemSettings`，管理端响应会永远是空串。前端保存后用响应体回填表单，空串会盖掉刚填的值，看起来像「点保存没反应」。
+
+公开设置若直接读 raw map，用户侧仍可能拿到已写入的值；管理端读回缺口会在下一次整页保存时把空串写回库。
+
+2026-08-16 已补 CCSwitch 五个默认模型的 parse（`ccswitch_default_model_*`）。OpenAI 空值回退 `gpt-5.4`，其余允许空串。新增 fork 设置字段时，defaults / write / parse / 管理员 DTO / 公开 DTO 必须同一条链补齐。
+
 ## 已决策
 
 - **幂等键 = 管理员 ID + 规范化请求 + 更新模式**——同管理员、同内容、同更新语义才视为重复。
@@ -57,6 +65,7 @@ metadata:
 
 ## 相关
 
-- 接口：`PUT /api/v1/admin/settings`
+- 接口：`PUT /api/v1/admin/settings`、`GET /api/v1/admin/settings`
 - 响应头：`X-Idempotency-Replayed: true`（重放命中时）
-- 设置键：`channel_monitor_status_banner`
+- 设置键：`channel_monitor_status_banner`、`ccswitch_default_model_*`
+- 读回：`backend/internal/service/setting_parse.go` 的 `parseSettings`

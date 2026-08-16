@@ -72,7 +72,13 @@ func (s *settingGetAllRepoStub) GetMultiple(ctx context.Context, keys []string) 
 }
 
 func (s *settingGetAllRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
-	panic("unexpected SetMultiple call")
+	if s.values == nil {
+		s.values = make(map[string]string, len(settings))
+	}
+	for key, value := range settings {
+		s.values[key] = value
+	}
+	return nil
 }
 
 func (s *settingGetAllRepoStub) GetAll(ctx context.Context) (map[string]string, error) {
@@ -505,6 +511,79 @@ func TestSettingService_GetAntigravityUserAgentVersion_Precedence(t *testing.T) 
 
 		require.Equal(t, antigravity.GetDefaultUserAgentVersion(), svc.GetAntigravityUserAgentVersion(context.Background()))
 	})
+}
+
+func TestSettingService_GetAllSettings_ReturnsStoredCCSwitchDefaultModels(t *testing.T) {
+	repo := &settingGetAllRepoStub{values: map[string]string{
+		SettingKeyCCSwitchDefaultModelAnthropic:         "claude-sonnet-4-5",
+		SettingKeyCCSwitchDefaultModelOpenAI:            "gpt-5.4-custom",
+		SettingKeyCCSwitchDefaultModelGemini:            "gemini-3-pro",
+		SettingKeyCCSwitchDefaultModelAntigravity:       "claude-opus-4-6",
+		SettingKeyCCSwitchDefaultModelAntigravityGemini: "gemini-3-flash",
+	}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	got, err := svc.GetAllSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "claude-sonnet-4-5", got.CCSwitchDefaultModelAnthropic)
+	require.Equal(t, "gpt-5.4-custom", got.CCSwitchDefaultModelOpenAI)
+	require.Equal(t, "gemini-3-pro", got.CCSwitchDefaultModelGemini)
+	require.Equal(t, "claude-opus-4-6", got.CCSwitchDefaultModelAntigravity)
+	require.Equal(t, "gemini-3-flash", got.CCSwitchDefaultModelAntigravityGemini)
+}
+
+func TestSettingService_GetAllSettings_CCSwitchDefaultModelOpenAIFallsBackToGPT54(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		svc := NewSettingService(&settingGetAllRepoStub{values: map[string]string{}}, &config.Config{})
+
+		got, err := svc.GetAllSettings(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, "gpt-5.4", got.CCSwitchDefaultModelOpenAI)
+		require.Empty(t, got.CCSwitchDefaultModelAnthropic)
+		require.Empty(t, got.CCSwitchDefaultModelGemini)
+		require.Empty(t, got.CCSwitchDefaultModelAntigravity)
+		require.Empty(t, got.CCSwitchDefaultModelAntigravityGemini)
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		svc := NewSettingService(&settingGetAllRepoStub{values: map[string]string{
+			SettingKeyCCSwitchDefaultModelOpenAI:            "   ",
+			SettingKeyCCSwitchDefaultModelAnthropic:         "",
+			SettingKeyCCSwitchDefaultModelGemini:            "",
+			SettingKeyCCSwitchDefaultModelAntigravity:       "",
+			SettingKeyCCSwitchDefaultModelAntigravityGemini: "",
+		}}, &config.Config{})
+
+		got, err := svc.GetAllSettings(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, "gpt-5.4", got.CCSwitchDefaultModelOpenAI)
+		require.Empty(t, got.CCSwitchDefaultModelAnthropic)
+		require.Empty(t, got.CCSwitchDefaultModelGemini)
+		require.Empty(t, got.CCSwitchDefaultModelAntigravity)
+		require.Empty(t, got.CCSwitchDefaultModelAntigravityGemini)
+	})
+}
+
+func TestSettingService_UpdateSettings_GetAllSettings_CCSwitchDefaultModelsRoundTrip(t *testing.T) {
+	repo := &settingGetAllRepoStub{values: map[string]string{}}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		CCSwitchDefaultModelAnthropic:         "claude-sonnet-4-5",
+		CCSwitchDefaultModelOpenAI:            "gpt-5.4-custom",
+		CCSwitchDefaultModelGemini:            "gemini-3-pro",
+		CCSwitchDefaultModelAntigravity:       "claude-opus-4-6",
+		CCSwitchDefaultModelAntigravityGemini: "gemini-3-flash",
+	})
+	require.NoError(t, err)
+
+	got, err := svc.GetAllSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "claude-sonnet-4-5", got.CCSwitchDefaultModelAnthropic)
+	require.Equal(t, "gpt-5.4-custom", got.CCSwitchDefaultModelOpenAI)
+	require.Equal(t, "gemini-3-pro", got.CCSwitchDefaultModelGemini)
+	require.Equal(t, "claude-opus-4-6", got.CCSwitchDefaultModelAntigravity)
+	require.Equal(t, "gemini-3-flash", got.CCSwitchDefaultModelAntigravityGemini)
 }
 
 func TestSettingService_UpdateSettings_RejectsInvalidPaymentVisibleMethodSource(t *testing.T) {
