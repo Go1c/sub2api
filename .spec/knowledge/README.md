@@ -29,7 +29,7 @@ metadata:
 | [`features/recharge-invoice-balance-gate.md`](features/recharge-invoice-balance-gate.md) | 充值页开票须知提示 + 首次使用余额门槛文案优化 |
 | [`features/admin-invoice-export.md`](features/admin-invoice-export.md) | 管理员发票记录页 Excel 导出(全部 / 正在开票) |
 | [`features/affiliate-signup-bonus.md`](features/affiliate-signup-bonus.md) | 邀请注册赠送纳入返利余额历史框架 + 独立管理员记录页 |
-| [`features/affiliate-tier-rebate.md`](features/affiliate-tier-rebate.md) | 阶梯式邀请返利：管理员配置 L1-L4 门槛与返利比例，用户页展示后端计算进度 |
+| [`features/affiliate-tier-rebate.md`](features/affiliate-tier-rebate.md) | 阶梯式邀请返利：管理员配置 L1-L4；用户 GET /user/aff 返回阶梯进度与运行规则 |
 | [`features/real-lottery.md`](features/real-lottery.md) | 后端驱动多用户抽奖,中奖兑换码经站内信发放 |
 | [`features/site-messages.md`](features/site-messages.md) | 站内信(类轻量邮件):收发读回复、未读红点、管理员开关与发信 |
 | [`features/balance-low-websocket-notify.md`](features/balance-low-websocket-notify.md) | （已废弃）用户侧浏览器 WebSocket 通知，已由 Webhook 替代 |

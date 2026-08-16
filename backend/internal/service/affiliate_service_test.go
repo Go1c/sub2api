@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"testing"
@@ -104,6 +105,100 @@ func TestGetAffiliateDetailIncludesTierProgress(t *testing.T) {
 	require.NotNil(t, detail.NextAffiliateTier)
 	require.Equal(t, "L3", detail.NextAffiliateTier.Level)
 	require.Len(t, detail.AffiliateTiers, 4)
+}
+
+func TestGetAffiliateDetailIncludesRuntimeRulesDefaults(t *testing.T) {
+	t.Parallel()
+
+	repo := newAffiliateSignupBonusRepoStub()
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{}}, nil)
+	svc := NewAffiliateService(repo, settingSvc, nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 1)
+
+	require.NoError(t, err)
+	assertAffiliateRuntimeRulesJSON(t, detail, map[string]any{
+		"rebate_freeze_hours":    float64(AffiliateRebateFreezeHoursDefault),
+		"rebate_duration_days":   float64(AffiliateRebateDurationDaysDefault),
+		"rebate_per_invitee_cap": AffiliateRebatePerInviteeCapDefault,
+		"signup_bonus_enabled":   AffiliateSignupBonusEnabledDefault,
+		"signup_bonus_amount":    AffiliateSignupBonusAmountDefault,
+	})
+}
+
+func TestGetAffiliateDetailIncludesRuntimeRulesFromSettings(t *testing.T) {
+	t.Parallel()
+
+	repo := newAffiliateSignupBonusRepoStub()
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateRebateFreezeHours:   "24",
+		SettingKeyAffiliateRebateDurationDays:  "90",
+		SettingKeyAffiliateRebatePerInviteeCap: "12.5",
+		SettingKeyAffiliateSignupBonusEnabled:  "true",
+		SettingKeyAffiliateSignupBonusAmount:   "2.5",
+	}}, nil)
+	svc := NewAffiliateService(repo, settingSvc, nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 1)
+
+	require.NoError(t, err)
+	assertAffiliateRuntimeRulesJSON(t, detail, map[string]any{
+		"rebate_freeze_hours":    float64(24),
+		"rebate_duration_days":   float64(90),
+		"rebate_per_invitee_cap": 12.5,
+		"signup_bonus_enabled":   true,
+		"signup_bonus_amount":    2.5,
+	})
+}
+
+func TestGetAffiliateDetailRuntimeRulesUseEffectiveClampedValues(t *testing.T) {
+	t.Parallel()
+
+	repo := newAffiliateSignupBonusRepoStub()
+	settingSvc := NewSettingService(&affiliateSignupBonusSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateRebateFreezeHours:  "99999",
+		SettingKeyAffiliateRebateDurationDays: "-3",
+	}}, nil)
+	svc := NewAffiliateService(repo, settingSvc, nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 1)
+
+	require.NoError(t, err)
+	assertAffiliateRuntimeRulesJSON(t, detail, map[string]any{
+		"rebate_freeze_hours":    float64(AffiliateRebateFreezeHoursMax),
+		"rebate_duration_days":   float64(AffiliateRebateDurationDaysDefault),
+		"rebate_per_invitee_cap": AffiliateRebatePerInviteeCapDefault,
+		"signup_bonus_enabled":   AffiliateSignupBonusEnabledDefault,
+		"signup_bonus_amount":    AffiliateSignupBonusAmountDefault,
+	})
+}
+
+func TestGetAffiliateDetailRuntimeRulesWhenSettingServiceNil(t *testing.T) {
+	t.Parallel()
+
+	svc := NewAffiliateService(newAffiliateSignupBonusRepoStub(), nil, nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(context.Background(), 1)
+
+	require.NoError(t, err)
+	assertAffiliateRuntimeRulesJSON(t, detail, map[string]any{
+		"rebate_freeze_hours":    float64(AffiliateRebateFreezeHoursDefault),
+		"rebate_duration_days":   float64(AffiliateRebateDurationDaysDefault),
+		"rebate_per_invitee_cap": AffiliateRebatePerInviteeCapDefault,
+		"signup_bonus_enabled":   AffiliateSignupBonusEnabledDefault,
+		"signup_bonus_amount":    AffiliateSignupBonusAmountDefault,
+	})
+}
+
+func assertAffiliateRuntimeRulesJSON(t *testing.T, detail *AffiliateDetail, want map[string]any) {
+	t.Helper()
+	raw, err := json.Marshal(detail)
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	rules, ok := payload["rules"].(map[string]any)
+	require.True(t, ok, "GET /user/aff data must include nested rules object, got %s", raw)
+	require.Equal(t, want, rules)
 }
 
 func TestAccrueInviteRebateForOrderUsesProspectiveRechargeTotal(t *testing.T) {
