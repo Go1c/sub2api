@@ -131,6 +131,18 @@ type AffiliateDetail struct {
 	CurrentAffiliateTier       *AffiliateRebateTier  `json:"current_affiliate_tier,omitempty"`
 	NextAffiliateTier          *AffiliateRebateTier  `json:"next_affiliate_tier,omitempty"`
 	Invitees                   []AffiliateInvitee    `json:"invitees"`
+	// Rules 是当前生效的全站运行规则，供门户展示冻结/有效期/上限文案。
+	// 0 分别表示不冻结 / 永久有效 / 无上限；注册赠送金额在关闭时仍透传当前配置值。
+	Rules AffiliateRuntimeRules `json:"rules"`
+}
+
+// AffiliateRuntimeRules 是邀请返利当前生效的运行规则（非用户进度）。
+type AffiliateRuntimeRules struct {
+	RebateFreezeHours   int     `json:"rebate_freeze_hours"`
+	RebateDurationDays  int     `json:"rebate_duration_days"`
+	RebatePerInviteeCap float64 `json:"rebate_per_invitee_cap"`
+	SignupBonusEnabled  bool    `json:"signup_bonus_enabled"`
+	SignupBonusAmount   float64 `json:"signup_bonus_amount"`
 }
 
 type AffiliateRepository interface {
@@ -385,7 +397,27 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 		CurrentAffiliateTier:       currentTier,
 		NextAffiliateTier:          nextAffiliateTier(tiers, currentTier),
 		Invitees:                   invitees,
+		Rules:                      s.affiliateRuntimeRules(ctx),
 	}, nil
+}
+
+func (s *AffiliateService) affiliateRuntimeRules(ctx context.Context) AffiliateRuntimeRules {
+	if s == nil || s.settingService == nil {
+		return AffiliateRuntimeRules{
+			RebateFreezeHours:   AffiliateRebateFreezeHoursDefault,
+			RebateDurationDays:  AffiliateRebateDurationDaysDefault,
+			RebatePerInviteeCap: AffiliateRebatePerInviteeCapDefault,
+			SignupBonusEnabled:  AffiliateSignupBonusEnabledDefault,
+			SignupBonusAmount:   AffiliateSignupBonusAmountDefault,
+		}
+	}
+	return AffiliateRuntimeRules{
+		RebateFreezeHours:   s.settingService.GetAffiliateRebateFreezeHours(ctx),
+		RebateDurationDays:  s.settingService.GetAffiliateRebateDurationDays(ctx),
+		RebatePerInviteeCap: s.settingService.GetAffiliateRebatePerInviteeCap(ctx),
+		SignupBonusEnabled:  s.settingService.IsAffiliateSignupBonusEnabled(ctx),
+		SignupBonusAmount:   s.settingService.GetAffiliateSignupBonusAmount(ctx),
+	}
 }
 
 func (s *AffiliateService) ValidateInviteCodeForRegistration(ctx context.Context, rawCode string) (string, error) {
