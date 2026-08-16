@@ -38,6 +38,7 @@ metadata:
 - 通过 ledger `action`（`transfer` vs `signup_bonus`）区分两类条目，并经 `Notes` 透传给前端选标题。
 - 过滤值不改（仍 `affiliate_balance`），保证 API 契约稳定。
 - Settings 中去重：移除内嵌邀请记录表，邀请记录改由专属侧栏页承载。
+- 用户侧 `GET /user/aff` 的 `rules.signup_bonus_enabled` / `rules.signup_bonus_amount` 透传当前配置，供门户展示「邀请注册得 X 元」；发放与记录逻辑不变。
 
 ## 实现
 - Task 1 后端：先写失败测试（区分 `transfer`/`signup_bonus`），改 `listAffiliateBalanceHistory`/`countAffiliateBalanceHistory`，跑 `go test ./backend/internal/service -run 'TestMergeBalanceHistoryCodes|TestAffiliateBalanceHistoryItem'`。
