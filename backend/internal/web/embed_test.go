@@ -5,6 +5,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -149,6 +150,162 @@ func TestInjectSiteFavicon(t *testing.T) {
 	})
 }
 
+func TestInjectSEOMeta(t *testing.T) {
+	baseHTML := []byte(`<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sub2API - AI API Gateway</title>
+  </head>
+  <body>
+    <div id="app">
+      <main>
+        <h1>Sub2API</h1>
+        <p>AI API 中转与接口管理平台。统一接入 Claude、GPT、Gemini 等主流模型，支持用量统计与额度管理。</p>
+        <p><a href="/login">登录</a> · <a href="/register">注册</a></p>
+      </main>
+    </div>
+  </body>
+</html>`)
+
+	t.Run("full_config_injects_description_canonical_og_twitter_and_jsonld", func(t *testing.T) {
+		settingsJSON := []byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"https://api.example.com"}`)
+
+		result := injectSEOMeta(baseHTML, settingsJSON)
+		html := string(result)
+
+		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
+		assert.Contains(t, html, `<meta name="description" content="AcmeAPI - 企业网关。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
+		assert.Contains(t, html, `<link rel="canonical" href="https://api.example.com">`)
+		assert.Contains(t, html, `<meta property="og:type" content="website">`)
+		assert.Contains(t, html, `<meta property="og:site_name" content="AcmeAPI">`)
+		assert.Contains(t, html, `<meta property="og:title" content="AcmeAPI - AI API Gateway">`)
+		assert.Contains(t, html, `<meta property="og:description" content="AcmeAPI - 企业网关。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
+		assert.Contains(t, html, `<meta property="og:url" content="https://api.example.com">`)
+		assert.Contains(t, html, `<meta name="twitter:card" content="summary">`)
+		assert.Contains(t, html, `application/ld+json`)
+		assert.Contains(t, html, `nonce="`+NonceHTMLPlaceholder+`"`)
+		assert.Contains(t, html, `<h1>Sub2API</h1>`)
+		assert.Contains(t, html, `href="/login"`)
+		assert.Contains(t, html, `href="/register"`)
+		assert.NotContains(t, html, "LumioAPI")
+
+		graph := extractJSONLDGraph(t, html)
+		org := graph["Organization"]
+		site := graph["WebSite"]
+		assert.Equal(t, "AcmeAPI", org["name"])
+		assert.Equal(t, "https://api.example.com", org["url"])
+		assert.Equal(t, "AcmeAPI", site["name"])
+		assert.Equal(t, "https://api.example.com", site["url"])
+	})
+
+	t.Run("empty_site_name_uses_sub2api_default_and_does_not_change_title", func(t *testing.T) {
+		settingsJSON := []byte(`{"site_name":"","site_subtitle":"企业网关","api_base_url":"https://api.example.com"}`)
+
+		result := injectSEOMeta(baseHTML, settingsJSON)
+		html := string(result)
+
+		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
+		assert.Contains(t, html, `<meta name="description" content="Sub2API - 企业网关。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
+		assert.Contains(t, html, `<meta property="og:site_name" content="Sub2API">`)
+		assert.Contains(t, html, `<meta property="og:title" content="Sub2API - AI API Gateway">`)
+		assert.NotContains(t, html, "LumioAPI")
+
+		graph := extractJSONLDGraph(t, html)
+		assert.Equal(t, "Sub2API", graph["Organization"]["name"])
+		assert.Equal(t, "Sub2API", graph["WebSite"]["name"])
+	})
+
+	t.Run("missing_subtitle_uses_no_dash_description", func(t *testing.T) {
+		settingsJSON := []byte(`{"site_name":"AcmeAPI","site_subtitle":"","api_base_url":"https://api.example.com"}`)
+
+		result := injectSEOMeta(baseHTML, settingsJSON)
+		html := string(result)
+
+		assert.Contains(t, html, `<meta name="description" content="AcmeAPI。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
+		assert.NotContains(t, html, `name="description" content="AcmeAPI - `)
+		assert.Contains(t, html, `<meta property="og:title" content="AcmeAPI - AI API Gateway">`)
+	})
+
+	t.Run("empty_or_unsafe_api_base_url_skips_canonical_and_og_url", func(t *testing.T) {
+		for _, settingsJSON := range [][]byte{
+			[]byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":""}`),
+			[]byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"javascript:alert(1)"}`),
+			[]byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"not-a-url"}`),
+		} {
+			html := string(injectSEOMeta(baseHTML, settingsJSON))
+			assert.NotContains(t, html, `rel="canonical"`)
+			assert.NotContains(t, html, `og:url`)
+			assert.Contains(t, html, `<meta name="description"`)
+			assert.Contains(t, html, `application/ld+json`)
+
+			graph := extractJSONLDGraph(t, html)
+			_, hasOrgURL := graph["Organization"]["url"]
+			_, hasSiteURL := graph["WebSite"]["url"]
+			assert.False(t, hasOrgURL)
+			assert.False(t, hasSiteURL)
+		}
+	})
+
+	t.Run("escapes_html_in_site_name_and_subtitle_attributes", func(t *testing.T) {
+		settingsJSON := []byte(`{"site_name":"</title><script>alert(1)</script><title>","site_subtitle":"A&B","api_base_url":"https://api.example.com/?a=1&b=2"}`)
+
+		result := injectSEOMeta(baseHTML, settingsJSON)
+		html := string(result)
+
+		assert.NotContains(t, html, "<script>alert(1)</script>")
+		assert.Contains(t, html, `&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;title&gt;`)
+		assert.Contains(t, html, `A&amp;B`)
+		assert.Contains(t, html, `a=1&amp;b=2`)
+
+		graph := extractJSONLDGraph(t, html)
+		assert.Equal(t, "</title><script>alert(1)</script><title>", graph["Organization"]["name"])
+		assert.Equal(t, "https://api.example.com/?a=1&b=2", graph["Organization"]["url"])
+	})
+
+	t.Run("invalid_json_or_missing_head_returns_unchanged", func(t *testing.T) {
+		invalidJSON := []byte(`{invalid json}`)
+		assert.Equal(t, string(baseHTML), string(injectSEOMeta(baseHTML, invalidJSON)))
+
+		noHead := []byte(`<html><body><div id="app"></div></body></html>`)
+		validJSON := []byte(`{"site_name":"AcmeAPI"}`)
+		assert.Equal(t, string(noHead), string(injectSEOMeta(noHead, validJSON)))
+	})
+}
+
+func extractJSONLDGraph(t *testing.T, html string) map[string]map[string]any {
+	t.Helper()
+
+	marker := `<script type="application/ld+json"`
+	start := strings.Index(html, marker)
+	require.GreaterOrEqual(t, start, 0, "JSON-LD script tag missing")
+	contentStart := strings.Index(html[start:], ">")
+	require.GreaterOrEqual(t, contentStart, 0)
+	contentStart += start + 1
+	end := strings.Index(html[contentStart:], "</script>")
+	require.GreaterOrEqual(t, end, 0)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(html[contentStart:contentStart+end]), &parsed))
+
+	rawGraph, ok := parsed["@graph"].([]any)
+	require.True(t, ok, "JSON-LD must use @graph")
+
+	graph := make(map[string]map[string]any, len(rawGraph))
+	for _, item := range rawGraph {
+		node, ok := item.(map[string]any)
+		require.True(t, ok)
+		typ, _ := node["@type"].(string)
+		require.NotEmpty(t, typ)
+		graph[typ] = node
+	}
+	require.Contains(t, graph, "Organization")
+	require.Contains(t, graph, "WebSite")
+	return graph
+}
+
 func TestReplaceNoncePlaceholder(t *testing.T) {
 	t.Run("replaces_single_placeholder", func(t *testing.T) {
 		html := []byte(`<script nonce="__CSP_NONCE_VALUE__">console.log('test');</script>`)
@@ -268,6 +425,53 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 		result := server.injectSettings(settingsJSON)
 
 		assert.Contains(t, string(result), `window.__APP_CONFIG__={"nested":{"array":[1,2,3]},"special":"<>&"};`)
+	})
+
+	t.Run("injects_seo_block_and_keeps_config_nonce", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"key": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		settingsJSON := []byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"https://api.example.com"}`)
+		result := server.injectSettings(settingsJSON)
+		html := string(result)
+
+		assert.Contains(t, html, `window.__APP_CONFIG__={"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"https://api.example.com"};`)
+		assert.Contains(t, html, `nonce="__CSP_NONCE_VALUE__"`)
+		assert.Contains(t, html, `<title>AcmeAPI - AI API Gateway</title>`)
+		assert.Contains(t, html, `<meta name="description"`)
+		assert.Contains(t, html, `rel="canonical"`)
+		assert.Contains(t, html, `og:title`)
+		assert.Contains(t, html, `twitter:card`)
+		assert.Contains(t, html, `application/ld+json`)
+		assert.Contains(t, html, `<h1>Sub2API</h1>`)
+		assert.Contains(t, html, `href="/login"`)
+		assert.Contains(t, html, `href="/register"`)
+		assert.NotContains(t, html, "LumioAPI")
+
+		graph := extractJSONLDGraph(t, html)
+		assert.Equal(t, "AcmeAPI", graph["Organization"]["name"])
+		assert.Equal(t, "https://api.example.com", graph["WebSite"]["url"])
+	})
+
+	t.Run("empty_site_name_keeps_static_title_and_defaults_seo_brand", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"key": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		settingsJSON := []byte(`{"site_name":"","site_subtitle":"企业网关"}`)
+		result := server.injectSettings(settingsJSON)
+		html := string(result)
+
+		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
+		assert.Contains(t, html, `content="Sub2API - 企业网关。`)
+		assert.NotContains(t, html, "LumioAPI")
 	})
 }
 
