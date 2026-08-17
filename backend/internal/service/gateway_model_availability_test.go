@@ -223,6 +223,40 @@ func TestOpenAIDiagnoseModelAvailabilityForPlatform_RateLimitedSupportingAccount
 	require.True(t, diag.HasModelSupport, "OpenAI-compatible diagnosis must keep transiently limited supporting accounts in the configured pool")
 }
 
+func TestOpenAIDiagnoseModelAvailabilityForPlatform_LunaUsesTerraMapping(t *testing.T) {
+	groupID := int64(44)
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:            3,
+				Platform:      PlatformOpenAI,
+				Status:        StatusActive,
+				Schedulable:   true,
+				AccountGroups: []AccountGroup{{GroupID: groupID}},
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-5.6-terra": "gpt-5.6-terra"},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:       repo,
+		cfg:               testConfig(),
+		schedulerSnapshot: &SchedulerSnapshotService{},
+	}
+
+	diag := svc.DiagnoseModelAvailabilityForPlatform(context.Background(), &groupID, "gpt-5.6-luna", PlatformOpenAI)
+	require.True(t, diag.HasAccountsInPool)
+	require.True(t, diag.HasModelSupport, "hidden Luna ingress must diagnose against the Terra fallback")
+
+	diag = svc.DiagnoseModelAvailabilityForPlatform(context.Background(), &groupID, "codex-auto-review", PlatformOpenAI)
+	require.True(t, diag.HasModelSupport, "Codex Auto-review must diagnose against the Terra fallback")
+}
+
 func TestDiagnoseModelAvailabilityForPlatform_WrongPlatformFiltersOut(t *testing.T) {
 	// Group has only Anthropic accounts; user routes to OpenAI gateway.
 	// Diagnosis must NOT see Anthropic accounts (listSchedulableAccounts filters
