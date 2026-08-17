@@ -155,3 +155,4 @@ Authorization: Bearer <access_token>
 - 前端：`frontend/src/utils/externalAuthHandoff.ts`、`frontend/src/router/index.ts`、`frontend/src/views/auth/LoginView.vue`
 - 构建变量：`VITE_EXTERNAL_AUTH_RETURN_ORIGINS`
 - 后端接口：`GET /api/v1/auth/me`
+- 反向场景（主站已登录、把 token 交给本站控制台）：[`auth-cross-domain-bridge.md`](./auth-cross-domain-bridge.md)

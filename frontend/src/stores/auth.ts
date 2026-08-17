@@ -314,6 +314,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function applyAuthResponse(response: AuthResponse): void {
+    setAuthFromResponse(response)
+  }
+
   /**
    * User registration
    * @param userData - Registration data (username, email, password)
@@ -527,6 +531,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     login2FA,
     register,
+    applyAuthResponse,
     setToken,
     logout,
     restoreCookieSession,

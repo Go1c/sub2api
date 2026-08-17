@@ -238,6 +238,10 @@ func RegisterAuthRoutes(
 		}), h.Auth.GetCurrentUser)
 		// 撤销所有会话（需要认证）
 		authenticated.POST("/auth/revoke-all-sessions", h.Auth.RevokeAllSessions)
+		// Cross-domain login handoff: exchange a valid access JWT for a new console token pair.
+		authenticated.POST("/auth/bridge", rateLimiter.LimitWithOptions("auth-bridge", 30, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), h.Auth.Bridge)
 		authenticated.POST("/auth/oauth/bind-token", h.Auth.PrepareOAuthBindAccessTokenCookie)
 	}
 }
