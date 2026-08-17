@@ -151,89 +151,99 @@ func TestInjectSiteFavicon(t *testing.T) {
 }
 
 func TestInjectSEOMeta(t *testing.T) {
+	const wantDescription = `AcmeAPI 是 AI API 中转与管理平台,统一接入 Anthropic Claude、OpenAI GPT、Google Gemini 等主流模型,提供 API Key 管理、额度计费与用量统计。`
+
 	baseHTML := []byte(`<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sub2API - AI API Gateway</title>
   </head>
   <body>
-    <div id="app">
-      <main>
-        <h1>Sub2API</h1>
-        <p>AI API 中转与接口管理平台。统一接入 Claude、GPT、Gemini 等主流模型，支持用量统计与额度管理。</p>
-        <p><a href="/login">登录</a> · <a href="/register">注册</a></p>
-      </main>
-    </div>
+    <section id="seo-crawler-intro" hidden>static intro</section>
+    <div id="app"></div>
   </body>
 </html>`)
 
+	staticHTML := []byte(`<!doctype html>
+<html><head>
+<title>Sub2API - AI API Gateway</title>
+<!--seo-meta-->
+<meta name="description" content="LumioAPI 是默认简介">
+<link rel="canonical" href="https://api.lumio.games/">
+<meta property="og:site_name" content="LumioAPI">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"LumioAPI","url":"https://api.lumio.games/","email":"admin@lumio.games"},{"@type":"WebSite","name":"LumioAPI","url":"https://api.lumio.games/"}]}</script>
+<!--/seo-meta-->
+</head>
+<body>
+<section id="seo-crawler-intro" hidden>LumioAPI 是 AI API 中转与管理平台。注册地址 https://api.lumio.games/register</section>
+<div id="app"></div>
+</body></html>`)
+
 	t.Run("full_config_injects_description_canonical_og_twitter_and_jsonld", func(t *testing.T) {
-		settingsJSON := []byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"https://api.example.com"}`)
+		settingsJSON := []byte(`{"site_name":"AcmeAPI","api_base_url":"https://api.example.com"}`)
 
 		result := injectSEOMeta(baseHTML, settingsJSON)
 		html := string(result)
 
 		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
-		assert.Contains(t, html, `<meta name="description" content="AcmeAPI - 企业网关。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
-		assert.Contains(t, html, `<link rel="canonical" href="https://api.example.com">`)
+		assert.Contains(t, html, `<meta name="description" content="`+wantDescription+`">`)
+		assert.Contains(t, html, `<link rel="canonical" href="https://api.example.com/">`)
 		assert.Contains(t, html, `<meta property="og:type" content="website">`)
 		assert.Contains(t, html, `<meta property="og:site_name" content="AcmeAPI">`)
 		assert.Contains(t, html, `<meta property="og:title" content="AcmeAPI - AI API Gateway">`)
-		assert.Contains(t, html, `<meta property="og:description" content="AcmeAPI - 企业网关。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
-		assert.Contains(t, html, `<meta property="og:url" content="https://api.example.com">`)
+		assert.Contains(t, html, `<meta property="og:description" content="`+wantDescription+`">`)
+		assert.Contains(t, html, `<meta property="og:url" content="https://api.example.com/">`)
 		assert.Contains(t, html, `<meta name="twitter:card" content="summary">`)
+		assert.Contains(t, html, `<meta name="twitter:title" content="AcmeAPI - AI API Gateway">`)
+		assert.Contains(t, html, `<meta name="twitter:description" content="`+wantDescription+`">`)
 		assert.Contains(t, html, `application/ld+json`)
 		assert.Contains(t, html, `nonce="`+NonceHTMLPlaceholder+`"`)
-		assert.Contains(t, html, `<h1>Sub2API</h1>`)
-		assert.Contains(t, html, `href="/login"`)
-		assert.Contains(t, html, `href="/register"`)
+		assert.Contains(t, html, `id="seo-crawler-intro"`)
+		assert.Equal(t, 1, strings.Count(html, `name="description"`))
 		assert.NotContains(t, html, "LumioAPI")
 
 		graph := extractJSONLDGraph(t, html)
 		org := graph["Organization"]
 		site := graph["WebSite"]
 		assert.Equal(t, "AcmeAPI", org["name"])
-		assert.Equal(t, "https://api.example.com", org["url"])
+		assert.Equal(t, "https://api.example.com/", org["url"])
 		assert.Equal(t, "AcmeAPI", site["name"])
-		assert.Equal(t, "https://api.example.com", site["url"])
+		assert.Equal(t, "https://api.example.com/", site["url"])
+		_, hasEmail := org["email"]
+		assert.False(t, hasEmail)
 	})
 
-	t.Run("empty_site_name_uses_sub2api_default_and_does_not_change_title", func(t *testing.T) {
-		settingsJSON := []byte(`{"site_name":"","site_subtitle":"企业网关","api_base_url":"https://api.example.com"}`)
+	t.Run("empty_site_name_keeps_static_defaults", func(t *testing.T) {
+		settingsJSON := []byte(`{"site_name":"","api_base_url":"https://api.example.com"}`)
 
-		result := injectSEOMeta(baseHTML, settingsJSON)
-		html := string(result)
+		assert.Equal(t, string(staticHTML), string(injectSEOMeta(staticHTML, settingsJSON)))
+		assert.Equal(t, string(baseHTML), string(injectSEOMeta(baseHTML, settingsJSON)))
+	})
 
-		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
-		assert.Contains(t, html, `<meta name="description" content="Sub2API - 企业网关。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
-		assert.Contains(t, html, `<meta property="og:site_name" content="Sub2API">`)
-		assert.Contains(t, html, `<meta property="og:title" content="Sub2API - AI API Gateway">`)
-		assert.NotContains(t, html, "LumioAPI")
+	t.Run("replaces_marked_block_without_duplicating_tags", func(t *testing.T) {
+		settingsJSON := []byte(`{"site_name":"AcmeAPI","api_base_url":"https://api.example.com"}`)
+		html := string(injectSEOMeta(staticHTML, settingsJSON))
+
+		assert.Equal(t, 1, strings.Count(html, seoMetaStart))
+		assert.Equal(t, 1, strings.Count(html, `name="description"`))
+		assert.Equal(t, 1, strings.Count(html, `application/ld+json`))
+		assert.Contains(t, html, `content="AcmeAPI 是 AI API 中转与管理平台`)
+		assert.NotContains(t, html, `og:site_name" content="LumioAPI"`)
+		assert.Contains(t, html, `id="seo-crawler-intro"`)
+		assert.Contains(t, html, `https://api.lumio.games/register`)
 
 		graph := extractJSONLDGraph(t, html)
-		assert.Equal(t, "Sub2API", graph["Organization"]["name"])
-		assert.Equal(t, "Sub2API", graph["WebSite"]["name"])
+		assert.Equal(t, "AcmeAPI", graph["Organization"]["name"])
+		assert.Equal(t, "admin@lumio.games", graph["Organization"]["email"])
+		assert.Equal(t, "https://api.example.com/", graph["Organization"]["url"])
 	})
 
-	t.Run("missing_subtitle_uses_no_dash_description", func(t *testing.T) {
-		settingsJSON := []byte(`{"site_name":"AcmeAPI","site_subtitle":"","api_base_url":"https://api.example.com"}`)
-
-		result := injectSEOMeta(baseHTML, settingsJSON)
-		html := string(result)
-
-		assert.Contains(t, html, `<meta name="description" content="AcmeAPI。AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。">`)
-		assert.NotContains(t, html, `name="description" content="AcmeAPI - `)
-		assert.Contains(t, html, `<meta property="og:title" content="AcmeAPI - AI API Gateway">`)
-	})
-
-	t.Run("empty_or_unsafe_api_base_url_skips_canonical_and_og_url", func(t *testing.T) {
+	t.Run("empty_or_unsafe_api_base_url_skips_canonical_when_none_exists", func(t *testing.T) {
 		for _, settingsJSON := range [][]byte{
-			[]byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":""}`),
-			[]byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"javascript:alert(1)"}`),
-			[]byte(`{"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"not-a-url"}`),
+			[]byte(`{"site_name":"AcmeAPI","api_base_url":""}`),
+			[]byte(`{"site_name":"AcmeAPI","api_base_url":"javascript:alert(1)"}`),
+			[]byte(`{"site_name":"AcmeAPI","api_base_url":"not-a-url"}`),
 		} {
 			html := string(injectSEOMeta(baseHTML, settingsJSON))
 			assert.NotContains(t, html, `rel="canonical"`)
@@ -249,15 +259,22 @@ func TestInjectSEOMeta(t *testing.T) {
 		}
 	})
 
-	t.Run("escapes_html_in_site_name_and_subtitle_attributes", func(t *testing.T) {
-		settingsJSON := []byte(`{"site_name":"</title><script>alert(1)</script><title>","site_subtitle":"A&B","api_base_url":"https://api.example.com/?a=1&b=2"}`)
+	t.Run("keeps_static_canonical_when_api_base_url_missing", func(t *testing.T) {
+		html := string(injectSEOMeta(staticHTML, []byte(`{"site_name":"AcmeAPI","api_base_url":""}`)))
+		assert.Contains(t, html, `<link rel="canonical" href="https://api.lumio.games/">`)
+		assert.Contains(t, html, `<meta property="og:url" content="https://api.lumio.games/">`)
+		graph := extractJSONLDGraph(t, html)
+		assert.Equal(t, "https://api.lumio.games/", graph["Organization"]["url"])
+	})
+
+	t.Run("escapes_html_in_site_name_attributes", func(t *testing.T) {
+		settingsJSON := []byte(`{"site_name":"</title><script>alert(1)</script><title>","api_base_url":"https://api.example.com/?a=1&b=2"}`)
 
 		result := injectSEOMeta(baseHTML, settingsJSON)
 		html := string(result)
 
 		assert.NotContains(t, html, "<script>alert(1)</script>")
 		assert.Contains(t, html, `&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;title&gt;`)
-		assert.Contains(t, html, `A&amp;B`)
 		assert.Contains(t, html, `a=1&amp;b=2`)
 
 		graph := extractJSONLDGraph(t, html)
@@ -446,15 +463,18 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 		assert.Contains(t, html, `rel="canonical"`)
 		assert.Contains(t, html, `og:title`)
 		assert.Contains(t, html, `twitter:card`)
+		assert.Contains(t, html, `twitter:title`)
 		assert.Contains(t, html, `application/ld+json`)
-		assert.Contains(t, html, `<h1>Sub2API</h1>`)
-		assert.Contains(t, html, `href="/login"`)
-		assert.Contains(t, html, `href="/register"`)
-		assert.NotContains(t, html, "LumioAPI")
+		assert.Contains(t, html, `id="seo-crawler-intro"`)
+		assert.Contains(t, html, `https://api.lumio.games/register`)
+		assert.Contains(t, html, `https://api.lumio.games/docs/`)
+		assert.Equal(t, 1, strings.Count(html, `name="description"`))
+		assert.NotContains(t, html, `og:site_name" content="LumioAPI"`)
 
 		graph := extractJSONLDGraph(t, html)
 		assert.Equal(t, "AcmeAPI", graph["Organization"]["name"])
-		assert.Equal(t, "https://api.example.com", graph["WebSite"]["url"])
+		assert.Equal(t, "https://api.example.com/", graph["WebSite"]["url"])
+		assert.Equal(t, "admin@lumio.games", graph["Organization"]["email"])
 	})
 
 	t.Run("empty_site_name_keeps_static_title_and_defaults_seo_brand", func(t *testing.T) {
@@ -470,8 +490,10 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 		html := string(result)
 
 		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
-		assert.Contains(t, html, `content="Sub2API - 企业网关。`)
-		assert.NotContains(t, html, "LumioAPI")
+		assert.Contains(t, html, `og:site_name" content="LumioAPI"`)
+		assert.Contains(t, html, `name="description" content="LumioAPI 是 AI API 中转与管理平台`)
+		assert.Equal(t, 1, strings.Count(html, `name="description"`))
+		assert.Contains(t, html, `window.__APP_CONFIG__={"site_name":"","site_subtitle":"企业网关"};`)
 	})
 }
 
