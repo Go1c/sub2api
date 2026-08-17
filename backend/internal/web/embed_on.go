@@ -213,6 +213,7 @@ func (s *FrontendServer) injectSettings(settingsJSON []byte) []byte {
 	// Apply custom branding before the browser paints the static defaults.
 	result = injectSiteTitle(result, settingsJSON)
 	result = injectSiteFavicon(result, settingsJSON)
+	result = injectSEOMeta(result, settingsJSON)
 
 	return result
 }
@@ -291,6 +292,92 @@ func injectSiteTitle(html, settingsJSON []byte) []byte {
 	buf.Write(newTitle)
 	buf.Write(html[titleEnd+len("</title>"):])
 	return buf.Bytes()
+}
+
+const (
+	defaultSEOSiteName = "Sub2API"
+	seoDescriptionBody = "AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。"
+)
+
+// injectSEOMeta inserts crawler-visible description / Open Graph / Twitter / JSON-LD
+// tags before </head>. Brand text comes from public settings, never a hardcoded fork brand.
+func injectSEOMeta(html, settingsJSON []byte) []byte {
+	var cfg struct {
+		SiteName     string `json:"site_name"`
+		SiteSubtitle string `json:"site_subtitle"`
+		APIBaseURL   string `json:"api_base_url"`
+	}
+	if err := json.Unmarshal(settingsJSON, &cfg); err != nil {
+		return html
+	}
+
+	headClose := []byte("</head>")
+	if !bytes.Contains(html, headClose) {
+		return html
+	}
+
+	siteName := strings.TrimSpace(cfg.SiteName)
+	if siteName == "" {
+		siteName = defaultSEOSiteName
+	}
+	subtitle := strings.TrimSpace(cfg.SiteSubtitle)
+
+	description := siteName + "。" + seoDescriptionBody
+	if subtitle != "" {
+		description = siteName + " - " + subtitle + "。" + seoDescriptionBody
+	}
+	ogTitle := siteName + " - AI API Gateway"
+	canonical := safeAbsoluteHTTPURL(cfg.APIBaseURL)
+
+	var buf bytes.Buffer
+	buf.WriteString(`<meta name="description" content="` + htmlpkg.EscapeString(description) + `">`)
+	if canonical != "" {
+		buf.WriteString(`<link rel="canonical" href="` + htmlpkg.EscapeString(canonical) + `">`)
+	}
+	buf.WriteString(`<meta property="og:type" content="website">`)
+	buf.WriteString(`<meta property="og:site_name" content="` + htmlpkg.EscapeString(siteName) + `">`)
+	buf.WriteString(`<meta property="og:title" content="` + htmlpkg.EscapeString(ogTitle) + `">`)
+	buf.WriteString(`<meta property="og:description" content="` + htmlpkg.EscapeString(description) + `">`)
+	if canonical != "" {
+		buf.WriteString(`<meta property="og:url" content="` + htmlpkg.EscapeString(canonical) + `">`)
+	}
+	buf.WriteString(`<meta name="twitter:card" content="summary">`)
+
+	org := map[string]any{
+		"@type": "Organization",
+		"name":  siteName,
+	}
+	website := map[string]any{
+		"@type": "WebSite",
+		"name":  siteName,
+	}
+	if canonical != "" {
+		org["url"] = canonical
+		website["url"] = canonical
+	}
+	ldJSON, err := json.Marshal(map[string]any{
+		"@context": "https://schema.org",
+		"@graph":   []any{org, website},
+	})
+	if err == nil {
+		buf.WriteString(`<script type="application/ld+json" nonce="` + NonceHTMLPlaceholder + `">`)
+		buf.Write(ldJSON)
+		buf.WriteString(`</script>`)
+	}
+
+	return bytes.Replace(html, headClose, append(buf.Bytes(), headClose...), 1)
+}
+
+func safeAbsoluteHTTPURL(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return ""
+	}
+	return trimmed
 }
 
 // replaceNoncePlaceholder replaces the nonce placeholder with actual nonce value

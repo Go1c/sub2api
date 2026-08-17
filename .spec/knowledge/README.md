@@ -50,6 +50,7 @@ metadata:
 | [`features/user-access-token.md`](features/user-access-token.md) | 用户长效 opaque Access Token：密钥管理 + 只读用量/余额/订阅；活跃数上限、用户 RPM、usage 查询护栏 |
 | [`features/lumio-desktop-client.md`](features/lumio-desktop-client.md) | Lumio Codex 桌面客户端服务端契约：公开配置、账号级唯一 Key、一次性支付交接，以及 GET /v1/models 不查余额；接入桌面启动或充值流程时查 |
 | [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna，并把 Codex Auto-review 的 luna/codex-auto-review 入站改写到 gpt-5.6-terra |
+| [`features/frontend-seo-meta.md`](features/frontend-seo-meta.md) | 前端 GEO/SEO：Go embed 注入 description/OG/Twitter/JSON-LD，以及 `#app` 内爬虫可见简介 |
 | [`features/_TEMPLATE.md`](features/_TEMPLATE.md) | 新功能文档模板——新增功能记录时照此建,放对 领域 / 模块 |
 
 ## operations/(部署与运维)
