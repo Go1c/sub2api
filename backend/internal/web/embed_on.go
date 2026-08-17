@@ -295,39 +295,35 @@ func injectSiteTitle(html, settingsJSON []byte) []byte {
 }
 
 const (
-	defaultSEOSiteName = "Sub2API"
-	seoDescriptionBody = "AI API 中转与接口管理平台,统一接入 Claude、GPT、Gemini 等主流模型,支持用量统计与额度管理。"
+	seoMetaStart       = "<!--seo-meta-->"
+	seoMetaEnd         = "<!--/seo-meta-->"
+	seoDescriptionBody = "是 AI API 中转与管理平台,统一接入 Anthropic Claude、OpenAI GPT、Google Gemini 等主流模型,提供 API Key 管理、额度计费与用量统计。"
 )
 
-// injectSEOMeta inserts crawler-visible description / Open Graph / Twitter / JSON-LD
-// tags before </head>. Brand text comes from public settings, never a hardcoded fork brand.
+// injectSEOMeta rewrites the marked SEO block when site_name is set.
+// Empty site_name leaves the static index.html defaults untouched so
+// crawlers still see the baked-in description / OG / JSON-LD.
 func injectSEOMeta(html, settingsJSON []byte) []byte {
 	var cfg struct {
-		SiteName     string `json:"site_name"`
-		SiteSubtitle string `json:"site_subtitle"`
-		APIBaseURL   string `json:"api_base_url"`
+		SiteName   string `json:"site_name"`
+		APIBaseURL string `json:"api_base_url"`
 	}
 	if err := json.Unmarshal(settingsJSON, &cfg); err != nil {
 		return html
 	}
 
-	headClose := []byte("</head>")
-	if !bytes.Contains(html, headClose) {
+	siteName := strings.TrimSpace(cfg.SiteName)
+	if siteName == "" {
 		return html
 	}
 
-	siteName := strings.TrimSpace(cfg.SiteName)
-	if siteName == "" {
-		siteName = defaultSEOSiteName
-	}
-	subtitle := strings.TrimSpace(cfg.SiteSubtitle)
-
-	description := siteName + "。" + seoDescriptionBody
-	if subtitle != "" {
-		description = siteName + " - " + subtitle + "。" + seoDescriptionBody
-	}
+	description := siteName + " " + seoDescriptionBody
 	ogTitle := siteName + " - AI API Gateway"
-	canonical := safeAbsoluteHTTPURL(cfg.APIBaseURL)
+	canonical := canonicalSiteURL(cfg.APIBaseURL)
+	if canonical == "" {
+		canonical = existingCanonicalURL(html)
+	}
+	email := existingJSONLDEmail(html)
 
 	var buf bytes.Buffer
 	buf.WriteString(`<meta name="description" content="` + htmlpkg.EscapeString(description) + `">`)
@@ -342,6 +338,8 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 		buf.WriteString(`<meta property="og:url" content="` + htmlpkg.EscapeString(canonical) + `">`)
 	}
 	buf.WriteString(`<meta name="twitter:card" content="summary">`)
+	buf.WriteString(`<meta name="twitter:title" content="` + htmlpkg.EscapeString(ogTitle) + `">`)
+	buf.WriteString(`<meta name="twitter:description" content="` + htmlpkg.EscapeString(description) + `">`)
 
 	org := map[string]any{
 		"@type": "Organization",
@@ -355,6 +353,9 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 		org["url"] = canonical
 		website["url"] = canonical
 	}
+	if email != "" {
+		org["email"] = email
+	}
 	ldJSON, err := json.Marshal(map[string]any{
 		"@context": "https://schema.org",
 		"@graph":   []any{org, website},
@@ -365,7 +366,103 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 		buf.WriteString(`</script>`)
 	}
 
+	return applySEOMetaBlock(html, buf.Bytes())
+}
+
+func applySEOMetaBlock(html, inner []byte) []byte {
+	start := bytes.Index(html, []byte(seoMetaStart))
+	end := bytes.Index(html, []byte(seoMetaEnd))
+	if start != -1 && end != -1 && end > start {
+		end += len(seoMetaEnd)
+		var buf bytes.Buffer
+		buf.Write(html[:start])
+		buf.WriteString(seoMetaStart)
+		buf.Write(inner)
+		buf.WriteString(seoMetaEnd)
+		buf.Write(html[end:])
+		return buf.Bytes()
+	}
+
+	headClose := []byte("</head>")
+	if !bytes.Contains(html, headClose) {
+		return html
+	}
+	var buf bytes.Buffer
+	buf.WriteString(seoMetaStart)
+	buf.Write(inner)
+	buf.WriteString(seoMetaEnd)
 	return bytes.Replace(html, headClose, append(buf.Bytes(), headClose...), 1)
+}
+
+func canonicalSiteURL(value string) string {
+	trimmed := safeAbsoluteHTTPURL(value)
+	if trimmed == "" {
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return trimmed
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	return parsed.String()
+}
+
+func existingCanonicalURL(html []byte) string {
+	marker := []byte(`rel="canonical"`)
+	pos := bytes.Index(html, marker)
+	if pos == -1 {
+		return ""
+	}
+	windowStart := pos - 64
+	if windowStart < 0 {
+		windowStart = 0
+	}
+	window := html[windowStart:]
+	href := []byte(`href="`)
+	hrefAt := bytes.Index(window, href)
+	if hrefAt == -1 {
+		return ""
+	}
+	valueStart := hrefAt + len(href)
+	valueEnd := bytes.IndexByte(window[valueStart:], '"')
+	if valueEnd == -1 {
+		return ""
+	}
+	return htmlpkg.UnescapeString(string(window[valueStart : valueStart+valueEnd]))
+}
+
+func existingJSONLDEmail(html []byte) string {
+	marker := []byte(`<script type="application/ld+json"`)
+	start := bytes.Index(html, marker)
+	if start == -1 {
+		return ""
+	}
+	contentStart := bytes.Index(html[start:], []byte(">"))
+	if contentStart == -1 {
+		return ""
+	}
+	contentStart += start + 1
+	end := bytes.Index(html[contentStart:], []byte("</script>"))
+	if end == -1 {
+		return ""
+	}
+	var parsed struct {
+		Graph []struct {
+			Type  string `json:"@type"`
+			Email string `json:"email"`
+		} `json:"@graph"`
+	}
+	if err := json.Unmarshal(html[contentStart:contentStart+end], &parsed); err != nil {
+		return ""
+	}
+	for _, node := range parsed.Graph {
+		if strings.EqualFold(node.Type, "Organization") {
+			return strings.TrimSpace(node.Email)
+		}
+	}
+	return ""
 }
 
 func safeAbsoluteHTTPURL(value string) string {
