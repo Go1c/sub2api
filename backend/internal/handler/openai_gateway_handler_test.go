@@ -672,6 +672,27 @@ func TestResolveOpenAIMessagesDispatchMappedModel(t *testing.T) {
 	})
 }
 
+func TestRewriteHiddenOpenAIRequestModel(t *testing.T) {
+	replace := func(body []byte, newModel string) []byte {
+		return service.ReplaceModelInBody(body, newModel)
+	}
+
+	t.Run("rewrites_luna_body_and_name", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.6-luna","input":"review"}`)
+		gotBody, gotModel := rewriteHiddenOpenAIRequestModel(body, "gpt-5.6-luna", replace)
+		require.Equal(t, "gpt-5.6-terra", gotModel)
+		require.Equal(t, "gpt-5.6-terra", gjson.GetBytes(gotBody, "model").String())
+		require.Equal(t, "gpt-5.6-luna", gjson.GetBytes(body, "model").String())
+	})
+
+	t.Run("leaves_terra_unchanged", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.6-terra","input":"ok"}`)
+		gotBody, gotModel := rewriteHiddenOpenAIRequestModel(body, "gpt-5.6-terra", replace)
+		require.Equal(t, "gpt-5.6-terra", gotModel)
+		require.Equal(t, string(body), string(gotBody))
+	})
+}
+
 func TestOpenAIModelMappedBody(t *testing.T) {
 	body := []byte(`{"model":"alias","input":"hello"}`)
 	calls := 0

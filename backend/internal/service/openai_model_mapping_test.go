@@ -286,10 +286,22 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 			want:    "gpt-5.5-pro",
 		},
 		{
-			name:    "oauth preserves codex auto review model",
+			name:    "oauth remaps codex auto review to terra",
 			account: &Account{Type: AccountTypeOAuth},
 			model:   "codex-auto-review",
-			want:    "codex-auto-review",
+			want:    "gpt-5.6-terra",
+		},
+		{
+			name:    "oauth remaps luna to terra",
+			account: &Account{Type: AccountTypeOAuth},
+			model:   "gpt-5.6-luna",
+			want:    "gpt-5.6-terra",
+		},
+		{
+			name:    "apikey remaps luna to terra",
+			account: &Account{Type: AccountTypeAPIKey},
+			model:   "gpt-5.6-luna",
+			want:    "gpt-5.6-terra",
 		},
 		{
 			name:    "apikey preserves official bare GPT-5.6 alias",
@@ -320,10 +332,10 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 	}
 }
 
-func TestUsageBillingModelCandidatesPreserveCodexAutoReviewModel(t *testing.T) {
+func TestUsageBillingModelCandidatesRewriteCodexAutoReviewToTerra(t *testing.T) {
 	candidates := usageBillingModelCandidates("codex-auto-review")
 
-	expected := []string{"codex-auto-review"}
+	expected := []string{"codex-auto-review", "gpt-5.6-terra"}
 	if len(candidates) != len(expected) {
 		t.Fatalf("usageBillingModelCandidates(codex-auto-review) = %#v, want %#v", candidates, expected)
 	}

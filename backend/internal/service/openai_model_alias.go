@@ -2,6 +2,34 @@ package service
 
 import "strings"
 
+// openaiHiddenIngressFallbackModel is the public stand-in for models that
+// clients may request but this gateway must not serve as themselves.
+// Codex Auto-review hardcodes gpt-5.6-luna / codex-auto-review and has no
+// client-side override; users must not reach real Luna.
+const openaiHiddenIngressFallbackModel = "gpt-5.6-terra"
+
+// RewriteOpenAIHiddenIngressModel rewrites models that must not be served
+// (Luna and Codex Auto-review) onto the public fallback. Other names are
+// returned unchanged so later alias / channel mapping still apply.
+func RewriteOpenAIHiddenIngressModel(model string) string {
+	trimmed := strings.TrimSpace(model)
+	if trimmed == "" {
+		return trimmed
+	}
+	normalized := canonicalizeOpenAIModelAliasSpelling(trimmed)
+	if normalized == "" {
+		normalized = strings.ToLower(lastOpenAIModelSegment(trimmed))
+	}
+	switch {
+	case normalized == "codex-auto-review" || strings.HasPrefix(normalized, "codex-auto-review-"):
+		return openaiHiddenIngressFallbackModel
+	case strings.Contains(normalized, "gpt-5.6-luna"):
+		return openaiHiddenIngressFallbackModel
+	default:
+		return trimmed
+	}
+}
+
 func lastOpenAIModelSegment(model string) string {
 	model = strings.TrimSpace(model)
 	if model == "" {
@@ -70,7 +98,7 @@ func normalizeKnownOpenAICodexModel(model string) string {
 	case strings.Contains(normalized, "gpt-5.6-terra"):
 		return "gpt-5.6-terra"
 	case strings.Contains(normalized, "gpt-5.6-luna"):
-		return "gpt-5.6-luna"
+		return openaiHiddenIngressFallbackModel
 	case normalized == "gpt-5.6":
 		return "gpt-5.6-sol"
 	case strings.HasPrefix(normalized, "gpt-5.6-"):

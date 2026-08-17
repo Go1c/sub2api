@@ -70,6 +70,14 @@ func openAIModelMappedBody(body []byte, mapped bool, mappedModel string, replace
 	return replace(body, mappedModel)
 }
 
+func rewriteHiddenOpenAIRequestModel(body []byte, reqModel string, replace openAIModelBodyReplaceFunc) ([]byte, string) {
+	next := service.RewriteOpenAIHiddenIngressModel(reqModel)
+	if next == reqModel {
+		return body, reqModel
+	}
+	return openAIModelMappedBody(body, true, next, replace), next
+}
+
 func seedOpenAIForwardImageIntentHint(c *gin.Context, channelMapped bool, imageIntent bool) {
 	if channelMapped {
 		// 渠道映射改变了规范请求，保持 unknown，由 Forward 按映射后的 model/body 初始化。
@@ -271,6 +279,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
+	body, reqModel = rewriteHiddenOpenAIRequestModel(body, reqModel, h.gatewayService.ReplaceModelInBody)
 
 	reqStream, ok := parseOpenAICompatibleStream(body)
 	if !ok {
@@ -884,6 +893,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
+	body, reqModel = rewriteHiddenOpenAIRequestModel(body, reqModel, h.gatewayService.ReplaceModelInBody)
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
@@ -1512,6 +1522,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
+	firstMessage, reqModel = rewriteHiddenOpenAIRequestModel(firstMessage, reqModel, h.gatewayService.ReplaceModelInBody)
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(firstMessage, "previous_response_id").String())
 	previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 	if previousResponseID != "" && previousResponseIDKind == service.OpenAIPreviousResponseIDKindMessageID {
