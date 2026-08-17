@@ -26,7 +26,7 @@ func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatform(
 	if s == nil {
 		return ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasModelSupport: true}
 	}
-	requestedModel = strings.TrimSpace(requestedModel)
+	requestedModel = RewriteOpenAIHiddenIngressModel(strings.TrimSpace(requestedModel))
 	if requestedModel == "" {
 		return ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasModelSupport: true}
 	}
