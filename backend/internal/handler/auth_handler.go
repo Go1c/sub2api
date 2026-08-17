@@ -736,3 +736,21 @@ func (h *AuthHandler) RevokeAllSessions(c *gin.Context) {
 		Message: "All sessions have been revoked. Please log in again.",
 	})
 }
+
+// Bridge exchanges a valid inbound access JWT for a new console token pair.
+// POST /api/v1/auth/bridge
+func (h *AuthHandler) Bridge(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	user, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	h.respondWithTokenPair(c, user)
+}
