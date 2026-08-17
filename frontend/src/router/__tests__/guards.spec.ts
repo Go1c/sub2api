@@ -103,6 +103,7 @@ function simulateGuard(
         '/auth/oidc/callback',
         '/auth/wechat/callback',
         '/auth/wechat/payment/callback',
+        '/auth/bridge',
       ]
       const pendingAuthPaths = ['/register', '/email-verify']
       const isAllowed =
@@ -160,6 +161,7 @@ function simulateGuard(
       '/auth/oidc/callback',
       '/auth/wechat/callback',
       '/auth/wechat/payment/callback',
+      '/auth/bridge',
     ]
     const pendingAuthPaths = ['/register', '/email-verify']
     const isAllowed =

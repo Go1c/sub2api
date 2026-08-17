@@ -202,6 +202,7 @@ func TestUserAccessTokenAuth_DeniesOutOfScope(t *testing.T) {
 		{http.MethodGet, "/api/v1/user/access-tokens"},
 		{http.MethodPost, "/api/v1/user/access-tokens"},
 		{http.MethodPost, "/api/v1/auth/revoke-all-sessions"},
+		{http.MethodPost, "/api/v1/auth/bridge"},
 		{http.MethodPost, "/api/v1/auth/oauth/bind-token"},
 		{http.MethodPost, "/api/v1/subscriptions/1/reset-weekly-limit"},
 		{http.MethodGet, "/api/v1/admin/users"},
@@ -279,6 +280,7 @@ func TestIsUserAccessTokenAllowedPath(t *testing.T) {
 	require.False(t, isUserAccessTokenAllowedPath("PUT", "/api/v1/user/profile"))
 	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/user/access-tokens"))
 	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/auth/revoke-all-sessions"))
+	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/auth/bridge"))
 	require.False(t, isUserAccessTokenAllowedPath("POST", "/api/v1/subscriptions/1/reset-weekly-limit"))
 	require.False(t, isUserAccessTokenAllowedPath("GET", "/api/v1/keys/1/extra"))
 }

@@ -158,6 +158,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/auth/bridge',
+    name: 'AuthBridge',
+    component: () => import('@/views/auth/BridgeView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: '登录中…'
+    }
+  },
+  {
     path: '/forgot-password',
     name: 'ForgotPassword',
     component: () => import('@/views/auth/ForgotPasswordView.vue'),
@@ -871,6 +880,7 @@ const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/oidc/callback',
   '/auth/wechat/callback',
   '/auth/wechat/payment/callback',
+  '/auth/bridge',
 ]
 const BACKEND_MODE_PENDING_AUTH_PATHS = ['/register', '/email-verify']
 

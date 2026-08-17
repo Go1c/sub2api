@@ -375,6 +375,22 @@ describe('useAuthStore', () => {
     })
   })
 
+  describe('applyAuthResponse', () => {
+    it('writes console session tokens the same way login does', () => {
+      const store = useAuthStore()
+
+      store.applyAuthResponse(fakeAuthResponse)
+
+      expect(store.token).toBe('test-token-123')
+      expect(store.user).toEqual(fakeUser)
+      expect(store.isAuthenticated).toBe(true)
+      expect(localStorage.getItem('auth_token')).toBe('test-token-123')
+      expect(localStorage.getItem('refresh_token')).toBe('refresh-token-456')
+      expect(localStorage.getItem('auth_user')).toBe(JSON.stringify(fakeUser))
+      expect(localStorage.getItem('token_expires_at')).toBeTruthy()
+    })
+  })
+
   // --- isAdmin ---
 
   describe('isAdmin', () => {
