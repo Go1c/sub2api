@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LumioAPI 帮助文档 — 接入指南与使用说明</title>
+  <meta name="description" content="LumioAPI 帮助文档:AI API 中转平台的新手引导、Claude Code / GPT Codex / Gemini CLI / Cursor / OpenCode 等客户端接入指南、CC Switch 一键导入、Image-2 生图 API 说明。请求 URL:https://api.lumio.games/">
+  <link rel="canonical" href="https://api.lumio.games/docs/">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LumioAPI">
+  <meta property="og:title" content="LumioAPI 帮助文档 — 接入指南与使用说明">
+  <meta property="og:description" content="AI API 中转平台的新手引导与各类 CLI / Agent 客户端接入指南:Claude Code、GPT Codex、Gemini CLI、Cursor、OpenCode 等。">
+  <meta property="og:url" content="https://api.lumio.games/docs/">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "LumioAPI 帮助文档",
+    "description": "LumioAPI(AI API 中转平台)的使用文档:新手引导、客户端接入指南、生图 API 说明。",
+    "url": "https://api.lumio.games/docs/",
+    "inLanguage": "zh-CN",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "LumioAPI",
+      "url": "https://api.lumio.games/"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "LumioAPI",
+      "url": "https://api.lumio.games/",
+      "email": "admin@lumio.games"
+    }
+  }
+  </script>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem 1.25rem 4rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.7; color: #1c1e21; background: #fff;
+      max-width: 760px; margin-inline: auto;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e4e6eb; background: #17181c; }
+      .card { background: #212329 !important; border-color: #33363e !important; }
+      .kv { border-color: #33363e !important; }
+      a { color: #7ab8ff; }
+    }
+    h1 { font-size: 1.7rem; margin: 0 0 .3rem; }
+    h2 { font-size: 1.2rem; margin: 2.2rem 0 .8rem; padding-bottom: .4rem; border-bottom: 1px solid rgba(128,128,128,.25); }
+    p.lead { margin: 0 0 1.6rem; opacity: .85; }
+    a { color: #0866d0; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .kv { border: 1px solid rgba(128,128,128,.3); border-radius: 10px; overflow: hidden; margin: 1.2rem 0; }
+    .kv div { display: flex; padding: .55rem .9rem; gap: .8rem; }
+    .kv div + div { border-top: 1px solid rgba(128,128,128,.18); }
+    .kv b { flex: 0 0 7.5em; font-weight: 600; opacity: .75; }
+    .kv code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+    ul.doclist { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+    ul.doclist li { margin: 0; }
+    ul.doclist a {
+      display: block; padding: .7rem 1rem; border: 1px solid rgba(128,128,128,.3);
+      border-radius: 10px; background: rgba(128,128,128,.05);
+    }
+    ul.doclist a:hover { border-color: #0866d0; text-decoration: none; }
+    ul.doclist .card-note { display: block; font-size: .85em; opacity: .65; margin-top: .15rem; }
+    footer { margin-top: 3rem; font-size: .85em; opacity: .6; }
+  </style>
+  <script defer src="https://data.lumio.games/script.js" data-website-id="423c8276-e57c-4e5b-81e6-63711a7fd1a5"></script>
+</head>
+<body>
+  <h1>LumioAPI 帮助文档</h1>
+  <p class="lead">LumioAPI 是 AI API 中转与接口管理平台,提供 Anthropic Claude、OpenAI GPT、Google Gemini 等主流模型的统一接入、额度管理与用量统计。本页汇总新手引导与各客户端接入指南。</p>
+
+  <div class="kv">
+    <div><b>请求 URL</b><span><code>https://api.lumio.games/</code></span></div>
+    <div><b>控制台</b><span><a href="https://api.lumio.games/">api.lumio.games</a>(注册、API Key 管理、余额与用量)</span></div>
+    <div><b>在线生图</b><span><a href="https://img.lumio.games/" rel="noopener">img.lumio.games</a>(GPT-Image2 生图体验)</span></div>
+    <div><b>社区支持</b><span><a href="https://t.me/lumiochat" rel="noopener">Telegram 群组</a> ｜ QQ 群 1073671738</span></div>
+    <div><b>联系邮箱</b><span><code>admin@lumio.games</code></span></div>
+  </div>
+
+  <p>推荐安装 <a href="https://fast-note.zeabur.app/share/492/AAAAAAAAAA4AAAAAAAAAAQAAAAB9STAfkLb-WrK_UnLqx-mcMbDLxg" rel="noopener">CC Switch</a> 一键导入:支持一键导入设置、切换 API 供应商、查询余额。</p>
+
+  <h2>🚀 快速开始</h2>
+  <ul class="doclist">
+    <li><a href="https://fast-note.zeabur.app/share/485/AAAAAAAAAA8AAAAAAAAAAQAAAAB9STAfOOmeOatluNZdKCQdkqoMrQ" rel="noopener">🧭 新手引导<span class="card-note">注册、充值、创建 API Key 的完整流程</span></a></li>
+    <li><a href="https://fast-note.zeabur.app/share/492/AAAAAAAAAA4AAAAAAAAAAQAAAAB9STAfkLb-WrK_UnLqx-mcMbDLxg" rel="noopener">🔄 CC Switch 安装与使用<span class="card-note">一键导入配置、切换供应商、查询余额</span></a></li>
+  </ul>
+
+  <h2>🎨 生图服务</h2>
+  <ul class="doclist">
+    <li><a href="https://fast-note.zeabur.app/share/426/AAAAAAAAAA0AAAAAAAAAAQAAAAB9STAfXnGgCYSgB0Gtb3-H7seEPw" rel="noopener">🎨 Image-2 生图环境及 API 说明<span class="card-note">GPT-Image2 接口调用与在线体验</span></a></li>
+  </ul>
+
+  <h2>💻 CLI / Agent 环境接入指南</h2>
+  <ul class="doclist">
+    <li><a href="https://fast-note.zeabur.app/share/493/AAAAAAAAABIAAAAAAAAAAQAAAAB9STAfh58ipk07z4n0uph96cHM0w" rel="noopener">⌨️ Claude Code 使用说明</a></li>
+    <li><a href="https://fast-note.zeabur.app/share/486/AAAAAAAAABAAAAAAAAAAAQAAAAB9STAfqFkbeeYvpToLwCimMmHqUg" rel="noopener">🤖 GPT Codex 使用说明</a></li>
+    <li><a href="https://fast-note.zeabur.app/share/487/AAAAAAAAABMAAAAAAAAAAQAAAAB9STAfogbuIgzTbnel867cd1KpVQ" rel="noopener">♊ Gemini CLI 使用说明</a></li>
+    <li><a href="https://fast-note.zeabur.app/share/491/AAAAAAAAABEAAAAAAAAAAQAAAAB9STAfRPRKQQ1ERwJMM80FNkH1Rg" rel="noopener">🖥️ ClaudeDesktop 使用说明</a></li>
+    <li><a href="https://fast-note.zeabur.app/share/488/AAAAAAAAABUAAAAAAAAAAQAAAAB9STAfPXE6PK7r73Fd_Z-Wr6DXLQ" rel="noopener">🖱️ Cursor 使用说明</a></li>
+    <li><a href="https://fast-note.zeabur.app/share/489/AAAAAAAAABYAAAAAAAAAAQAAAAB9STAfXXIlFem5NSiw1qIMvC_C9g" rel="noopener">📂 OpenCode 使用说明</a></li>
+    <li><a href="https://fast-note.zeabur.app/share/490/AAAAAAAAABcAAAAAAAAAAQAAAAB9STAfD7LGiFkJk-KkEJiloXB3Aw" rel="noopener">🚀 Grok 使用说明</a></li>
+    <li><a href="https://fast-note.zeabur.app/share/484/AAAAAAAAABQAAAAAAAAAAQAAAAB9STAfOMQJ_AaxLX-embTABJdOSA" rel="noopener">🦞 小龙虾等 Agent 使用说明</a></li>
+  </ul>
+
+  <footer>
+    <p>© LumioAPI · <a href="https://api.lumio.games/">返回控制台</a> · <a href="/llms.txt">llms.txt</a><br>
+    本服务不向中国大陆地区用户提供,详见<a href="https://fast-note.zeabur.app/share/376/AAAAAAAAAAYAAAAAAAAAAQAAAAB9SSyOSHa9D4u0QewYhvChTenw8g" rel="noopener">服务条款</a>。</p>
+  </footer>
+</body>
+</html>

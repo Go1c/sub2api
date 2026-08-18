@@ -344,6 +344,25 @@ func TestEnhanceCSPPolicy(t *testing.T) {
 		assert.Contains(t, enhanced, "frame-src 'self'")
 	})
 
+	t.Run("adds_umami_domain_for_public_tracking", func(t *testing.T) {
+		policy := "default-src 'self'; script-src 'self' __CSP_NONCE__"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "script-src", UmamiDomain))
+		assert.Equal(t, UmamiDomain, "https://data.lumio.games")
+	})
+
+	t.Run("does_not_duplicate_umami_domain", func(t *testing.T) {
+		policy := "default-src 'self'; script-src 'self' https://data.lumio.games"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "script-src", UmamiDomain))
+	})
+
+	t.Run("default_csp_policy_allows_umami_script_src", func(t *testing.T) {
+		assert.Equal(t, 1, countDirectiveValue(config.DefaultCSPPolicy, "script-src", "https://data.lumio.games"))
+	})
+
 	t.Run("does_not_duplicate_airwallex_domains", func(t *testing.T) {
 		policy := "default-src 'self'; script-src 'self' https://static.airwallex.com https://static-demo.airwallex.com; frame-src https://checkout.airwallex.com https://checkout-demo.airwallex.com"
 		enhanced := enhanceCSPPolicy(policy)
