@@ -223,6 +223,32 @@ export async function getMyPlatformQuotas(): Promise<PlatformQuotasResponse> {
   return data
 }
 
+/** Fields match backend walletTransactionResponse. */
+export interface WalletTransaction {
+  txn_id: string
+  client_id: string
+  client_name: string
+  amount: number
+  balance_after: number
+  currency: string
+  purpose: string
+  ref: string
+  created_at: string
+}
+
+export async function getMyWalletTransactions(params: {
+  page?: number
+  page_size?: number
+} = {}): Promise<PaginatedResponse<WalletTransaction>> {
+  const { data } = await apiClient.get<PaginatedResponse<WalletTransaction>>('/user/balance/transactions', {
+    params: {
+      page: params.page ?? 1,
+      page_size: params.page_size ?? 20
+    }
+  })
+  return data
+}
+
 export const userAPI = {
   getProfile,
   updateProfile,
@@ -240,6 +266,7 @@ export const userAPI = {
   transferAffiliateQuota,
   getAffiliateInviteLogs,
   getMyPlatformQuotas,
+  getMyWalletTransactions,
 }
 
 export default userAPI

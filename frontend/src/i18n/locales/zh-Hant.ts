@@ -7599,6 +7599,13 @@ export default {
       actions: '操作',
       requestRefund: '申請退款',
     },
+    walletDebits: {
+      title: '外部錢包扣款',
+      empty: '暫無外部錢包扣款',
+      debitedAt: '扣款時間',
+      source: '來源',
+      amount: '金額',
+    },
     result: {
       success: '支付成功',
       subscriptionSuccess: '訂閱成功',
