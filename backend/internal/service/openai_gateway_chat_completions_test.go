@@ -48,6 +48,99 @@ func (r *openAIChatStreamReadErrorCloser) Read(p []byte) (int, error) {
 
 func (r *openAIChatStreamReadErrorCloser) Close() error { return nil }
 
+func handleChatResponsesStreamForTest(t *testing.T, upstreamBody string) (*OpenAIForwardResult, error) {
+	t.Helper()
+
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type": []string{"text/event-stream"},
+			"x-request-id": []string{"rid_chat_responses_usage"},
+		},
+		Body: io.NopCloser(strings.NewReader(upstreamBody)),
+	}
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	return svc.handleChatStreamingResponse(
+		resp,
+		c,
+		&Account{ID: 113, Name: "openai-compatible", Platform: PlatformOpenAI, Type: AccountTypeAPIKey},
+		"gpt-5.6-sol",
+		"gpt-5.6-sol",
+		"gpt-5.6-sol",
+		time.Now(),
+		0,
+	)
+}
+
+func TestHandleChatStreamingResponse_ParsesCompatibleTerminalUsageShapes(t *testing.T) {
+	tests := []struct {
+		name         string
+		upstreamBody string
+		wantInput    int
+		wantOutput   int
+	}{
+		{
+			name: "event line and data response usage",
+			upstreamBody: `event: response.completed
+data: {"response":{"id":"resp_wrapped","object":"response","model":"gpt-5.6-sol","status":"completed","output":[]},"data":{"response":{"usage":{"input_tokens":13,"output_tokens":7}}}}
+
+`,
+			wantInput:  13,
+			wantOutput: 7,
+		},
+		{
+			name: "data usage",
+			upstreamBody: `data: {"type":"response.completed","response":{"id":"resp_data","object":"response","model":"gpt-5.6-sol","status":"completed","output":[]},"data":{"usage":{"input_tokens":15,"output_tokens":10}}}
+
+`,
+			wantInput:  15,
+			wantOutput: 10,
+		},
+		{
+			name: "chat completions aliases",
+			upstreamBody: `data: {"type":"response.completed","response":{"id":"resp_aliases","object":"response","model":"gpt-5.6-sol","status":"completed","output":[],"usage":{"prompt_tokens":14,"completion_tokens":8}}}
+
+`,
+			wantInput:  14,
+			wantOutput: 8,
+		},
+		{
+			name: "missing usage stays zero",
+			upstreamBody: `data: {"type":"response.completed","response":{"id":"resp_no_usage","object":"response","model":"gpt-5.6-sol","status":"completed","output":[]}}
+
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := handleChatResponsesStreamForTest(t, tt.upstreamBody)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, tt.wantInput, result.Usage.InputTokens)
+			require.Equal(t, tt.wantOutput, result.Usage.OutputTokens)
+		})
+	}
+}
+
+func TestHandleChatStreamingResponse_CountsImageGenerationOutput(t *testing.T) {
+	upstreamBody := `data: {"type":"response.completed","response":{"id":"resp_image","object":"response","model":"gpt-5.6-sol","status":"completed","output":[{"id":"ig_1","type":"image_generation_call","result":"aW1hZ2U="}],"usage":{"input_tokens":7,"output_tokens":3}}}
+
+`
+
+	result, err := handleChatResponsesStreamForTest(t, upstreamBody)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.GreaterOrEqual(t, result.ImageCount, 1)
+}
+
 func TestHandleChatStreamingResponse_ClassifiesHTTP2ReadError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
