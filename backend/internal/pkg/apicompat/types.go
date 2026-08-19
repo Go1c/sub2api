@@ -525,6 +525,7 @@ func (u *ResponsesUsage) UnmarshalJSON(data []byte) error {
 type ResponsesInputTokensDetails struct {
 	CachedTokens        int `json:"cached_tokens,omitempty"`
 	AudioTokens         int `json:"audio_tokens,omitempty"`
+	ImageTokens         int `json:"image_tokens,omitempty"`
 	CacheCreationTokens int `json:"cache_creation_tokens,omitempty"`
 	CacheWriteTokens    int `json:"cache_write_tokens,omitempty"`
 }
@@ -533,6 +534,7 @@ type ResponsesInputTokensDetails struct {
 type ResponsesOutputTokensDetails struct {
 	ReasoningTokens          int `json:"reasoning_tokens,omitempty"`
 	AudioTokens              int `json:"audio_tokens,omitempty"`
+	ImageTokens              int `json:"image_tokens,omitempty"`
 	AcceptedPredictionTokens int `json:"accepted_prediction_tokens,omitempty"`
 	RejectedPredictionTokens int `json:"rejected_prediction_tokens,omitempty"`
 }
