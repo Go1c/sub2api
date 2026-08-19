@@ -101,11 +101,25 @@ func TestAccountExplicitlyServesOpenAIHiddenLuna(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "auto-review key opts in",
+			name: "auto-review key mapped to luna opts in",
 			account: &Account{Credentials: map[string]any{
 				"model_mapping": map[string]any{"codex-auto-review": "gpt-5.6-luna"},
 			}},
 			want: true,
+		},
+		{
+			name: "identity whitelist auto-review does not opt in",
+			account: &Account{Credentials: map[string]any{
+				"model_mapping": map[string]any{"codex-auto-review": "codex-auto-review"},
+			}},
+			want: false,
+		},
+		{
+			name: "auto-review mapped to terra does not opt in",
+			account: &Account{Credentials: map[string]any{
+				"model_mapping": map[string]any{"codex-auto-review": "gpt-5.6-terra"},
+			}},
+			want: false,
 		},
 		{
 			name: "prefixed luna key opts in",

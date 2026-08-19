@@ -25,7 +25,7 @@ func RewriteOpenAIHiddenIngressModel(model string) string {
 }
 
 // ResolveOpenAIHiddenIngressModel keeps Luna when an account in the group has
-// opted in via an explicit mapping key. Otherwise it falls back to Terra.
+// opted in via an explicit Luna mapping. Otherwise it falls back to Terra.
 // Codex Auto-review is canonicalized to gpt-5.6-luna on the opt-in path.
 func ResolveOpenAIHiddenIngressModel(model string, allowRealLuna bool) string {
 	trimmed := strings.TrimSpace(model)
@@ -79,10 +79,15 @@ func mappingKeyServesOpenAIHiddenLuna(key string) bool {
 	if normalized == "" {
 		normalized = strings.ToLower(strings.TrimSpace(key))
 	}
-	if isOpenAIHiddenAutoReviewModel(normalized) {
-		return true
-	}
 	return strings.Contains(normalized, "gpt-5.6-luna")
+}
+
+func mappingKeyIsOpenAIHiddenAutoReview(key string) bool {
+	normalized := openAIHiddenIngressNormalizedName(key)
+	if normalized == "" {
+		normalized = strings.ToLower(strings.TrimSpace(key))
+	}
+	return isOpenAIHiddenAutoReviewModel(normalized)
 }
 
 func accountExplicitlyServesOpenAIHiddenLuna(account *Account) bool {
@@ -93,8 +98,11 @@ func accountExplicitlyServesOpenAIHiddenLuna(account *Account) bool {
 	if len(mapping) == 0 {
 		return false
 	}
-	for key := range mapping {
+	for key, value := range mapping {
 		if mappingKeyServesOpenAIHiddenLuna(key) {
+			return true
+		}
+		if mappingKeyIsOpenAIHiddenAutoReview(key) && mappingKeyServesOpenAIHiddenLuna(value) {
 			return true
 		}
 	}
