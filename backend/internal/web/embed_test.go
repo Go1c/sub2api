@@ -749,6 +749,23 @@ func TestFrontendServer_Middleware(t *testing.T) {
 		assert.Equal(t, "/", w.Header().Get("Location"))
 	})
 
+	t.Run("does_not_rewrite_sitemap_aliases_to_the_spa", func(t *testing.T) {
+		server, err := NewFrontendServer(&mockSettingsProvider{})
+		require.NoError(t, err)
+
+		for _, path := range []string{"/sitemap_index.xml", "/sitemap.txt"} {
+			t.Run(path, func(t *testing.T) {
+				router := gin.New()
+				router.Use(server.Middleware())
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+
+				assert.Equal(t, http.StatusNotFound, w.Code)
+				assert.NotContains(t, w.Body.String(), "<!doctype html>")
+			})
+		}
+	})
+
 	t.Run("skips_api_routes", func(t *testing.T) {
 		provider := &mockSettingsProvider{
 			settings: map[string]string{"test": "value"},
@@ -990,6 +1007,20 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 
 		assert.Equal(t, http.StatusMovedPermanently, w.Code)
 		assert.Equal(t, "/", w.Header().Get("Location"))
+	})
+
+	t.Run("does_not_rewrite_sitemap_aliases_to_the_spa", func(t *testing.T) {
+		for _, path := range []string{"/sitemap_index.xml", "/sitemap.txt"} {
+			t.Run(path, func(t *testing.T) {
+				router := gin.New()
+				router.Use(ServeEmbeddedFrontend())
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+
+				assert.Equal(t, http.StatusNotFound, w.Code)
+				assert.NotContains(t, w.Body.String(), "<!doctype html>")
+			})
+		}
 	})
 
 	t.Run("serves_static_files", func(t *testing.T) {
