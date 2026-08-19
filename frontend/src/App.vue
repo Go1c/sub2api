@@ -7,7 +7,7 @@ import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
 import { resolveDocumentTitle } from '@/router/title'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
 import SupportChatWidget from '@/components/support/SupportChatWidget.vue'
-import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore } from '@/stores'
+import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore, useCheckinStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 
@@ -18,6 +18,7 @@ const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
+const checkinStore = useCheckinStore()
 
 // Watch for site settings changes and update favicon/title
 watch(
@@ -58,6 +59,10 @@ watch(
       })
       subscriptionStore.startPolling()
 
+      checkinStore.fetchStatus().catch((error) => {
+        console.error('Failed to preload check-in status:', error)
+      })
+
       // Announcements: new login vs page refresh restore
       if (oldValue === false) {
         // New login: delay 3s then force fetch
@@ -74,6 +79,7 @@ watch(
       subscriptionStore.clear()
       announcementStore.reset()
       adminComplianceStore.reset()
+      checkinStore.reset()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   },

@@ -1,0 +1,77 @@
+package checkin
+
+import (
+	"context"
+	"fmt"
+	"strings"
+)
+
+func (r *sqlRepository) ListAdminRecords(ctx context.Context, rawFilter AdminRecordFilter) ([]Record, int64, error) {
+	filter := normalizeAdminFilter(rawFilter)
+	where := []string{"TRUE"}
+	args := make([]any, 0, 6)
+	addArgument := func(value any) string {
+		args = append(args, value)
+		return fmt.Sprintf("$%d", len(args))
+	}
+	if filter.UserID > 0 {
+		where = append(where, "user_id = "+addArgument(filter.UserID))
+	}
+	if filter.Search != "" {
+		placeholder := addArgument("%" + filter.Search + "%")
+		where = append(where, "(user_email ILIKE "+placeholder+" OR username ILIKE "+placeholder+")")
+	}
+	if filter.BusinessDate != nil {
+		where = append(where, "business_date = "+addArgument(*filter.BusinessDate))
+	}
+	if filter.Status != "" {
+		where = append(where, "status = "+addArgument(filter.Status))
+	}
+	whereSQL := strings.Join(where, " AND ")
+
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM daily_checkin_records WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count admin check-in records: %w", err)
+	}
+
+	sortColumns := map[string]string{
+		"business_date": "business_date",
+		"checked_at":    "checked_at",
+		"streak_days":   "streak_days",
+		"actual_reward": "actual_reward",
+		"balance_after": "balance_after",
+	}
+	sortColumn := sortColumns[filter.SortBy]
+	if sortColumn == "" {
+		sortColumn = "checked_at"
+	}
+	sortOrder := "DESC"
+	if strings.EqualFold(filter.SortOrder, "asc") {
+		sortOrder = "ASC"
+	}
+	limitPlaceholder := addArgument(filter.PageSize)
+	offsetPlaceholder := addArgument((filter.Page - 1) * filter.PageSize)
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+recordSelectColumns+`
+		FROM daily_checkin_records
+		WHERE `+whereSQL+`
+		ORDER BY `+sortColumn+` `+sortOrder+`, id `+sortOrder+`
+		LIMIT `+limitPlaceholder+` OFFSET `+offsetPlaceholder, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list admin check-in records: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	records := make([]Record, 0, filter.PageSize)
+	for rows.Next() {
+		record, err := scanRecord(rows)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan admin check-in record: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate admin check-in records: %w", err)
+	}
+	return records, total, nil
+}

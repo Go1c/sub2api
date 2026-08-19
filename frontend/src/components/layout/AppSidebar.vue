@@ -158,6 +158,8 @@
 
     <!-- Bottom Section -->
     <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+      <SidebarCheckinCard :collapsed="sidebarCollapsed" />
+
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
@@ -200,8 +202,9 @@
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore, useSiteMessageStore } from '@/stores'
+import { useAdminSettingsStore, useAppStore, useAuthStore, useCheckinStore, useOnboardingStore, useSiteMessageStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import SidebarCheckinCard from '@/features/checkin/SidebarCheckinCard.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
@@ -254,6 +257,7 @@ const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
 const adminSettingsStore = useAdminSettingsStore()
 const siteMessageStore = useSiteMessageStore()
+const checkinStore = useCheckinStore()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
@@ -712,6 +716,7 @@ const flagPayment = makeSidebarFlag(FeatureFlags.payment)
 const flagUserSubscriptions = makeSidebarFlag(FeatureFlags.userSubscriptions)
 const flagAvailableChannels = makeSidebarFlag(FeatureFlags.availableChannels)
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
+const flagCheckin = () => checkinStore.enabled
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagSiteMessages = makeSidebarFlag(FeatureFlags.siteMessages)
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
@@ -738,6 +743,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
+    { path: '/checkin', label: t('nav.checkin'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagCheckin },
     { path: '/site-messages', label: t('nav.siteMessages'), icon: MailIcon, hideInSimpleMode: true, featureFlag: flagSiteMessages, badgeDot: siteMessagesUnreadDot },
     { path: '/invoices', label: t('nav.invoices'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagInvoiceAccess },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
@@ -841,12 +847,12 @@ const adminNavItems = computed((): NavItem[] => {
       icon: UsersIcon,
       hideInSimpleMode: true,
       expandOnly: true,
-      featureFlag: flagAffiliate,
       children: [
-        { path: '/admin/affiliates/invites', label: t('nav.affiliateInviteRecords'), icon: UsersIcon },
-        { path: '/admin/affiliates/rebates', label: t('nav.affiliateRebateRecords'), icon: OrderIcon },
-        { path: '/admin/affiliates/signup-bonuses', label: t('nav.affiliateSignupBonusRecords'), icon: GiftIcon },
-        { path: '/admin/affiliates/transfers', label: t('nav.affiliateTransferRecords'), icon: CreditCardIcon },
+        { path: '/admin/affiliates/checkins', label: t('nav.checkinRecords'), icon: GiftIcon },
+        { path: '/admin/affiliates/invites', label: t('nav.affiliateInviteRecords'), icon: UsersIcon, featureFlag: flagAffiliate },
+        { path: '/admin/affiliates/rebates', label: t('nav.affiliateRebateRecords'), icon: OrderIcon, featureFlag: flagAffiliate },
+        { path: '/admin/affiliates/signup-bonuses', label: t('nav.affiliateSignupBonusRecords'), icon: GiftIcon, featureFlag: flagAffiliate },
+        { path: '/admin/affiliates/transfers', label: t('nav.affiliateTransferRecords'), icon: CreditCardIcon, featureFlag: flagAffiliate },
       ],
     },
     {
