@@ -156,6 +156,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 		}
 		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
+		if isOpenAIHiddenIngressModel(reqModel) {
+			rewritten := normalizeOpenAIModelForUpstream(account, reqModel)
+			if rewritten != "" && rewritten != reqModel {
+				originalBody = ReplaceModelInBody(originalBody, rewritten)
+				body = originalBody
+				reqModel = rewritten
+			}
+		}
 		mappedModel := account.GetMappedModel(reqModel)
 		reasoningEffort := extractOpenAIReasoningEffortFromBody(body, mappedModel)
 		// 国产模型默认 effort 补充：也要用 mappedModel 判定是否是 passback-required 上游。
@@ -291,6 +299,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Upstream model resolved: %s -> %s (account: %s, type: %s, isCodexCLI: %v)", modelForNormalize, upstreamModel, account.Name, account.Type, isCodexCLI)
 			reqModel = upstreamModel
 			markPatchSet("model", upstreamModel)
+		}
+		if isOpenAIHiddenIngressModel(billingModel) && strings.TrimSpace(upstreamModel) != "" {
+			billingModel = upstreamModel
 		}
 	}
 	if strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String()) == "minimal" {

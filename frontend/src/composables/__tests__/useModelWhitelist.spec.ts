@@ -4,7 +4,7 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import { buildModelMappingObject, getModelsByPlatform } from '../useModelWhitelist'
+import { buildModelMappingObject, getModelsByPlatform, getPresetMappingsByPlatform } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
   it('openai 模型列表包含 GPT-5.4 官方快照', () => {
@@ -14,9 +14,17 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-5.4-mini')
     expect(models).toContain('gpt-5.4-2026-03-05')
     expect(models).not.toContain('codex-auto-review')
-    expect(models).not.toContain('gpt-5.6-luna')
+    expect(models).toContain('gpt-5.6-luna')
     expect(models).toContain('gpt-5.6')
     expect(models).toContain('gpt-5.6-terra')
+  })
+
+  it('openai 账号映射预设包含 Luna 直通和 Luna→Terra', () => {
+    const presets = getPresetMappingsByPlatform('openai')
+    expect(presets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Luna', from: 'gpt-5.6-luna', to: 'gpt-5.6-luna' }),
+      expect.objectContaining({ label: 'Luna→Terra', from: 'gpt-5.6-luna', to: 'gpt-5.6-terra' }),
+    ]))
   })
 
   it('openai 模型列表不再暴露已下线的 ChatGPT 登录 Codex 模型', () => {

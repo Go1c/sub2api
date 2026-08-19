@@ -693,6 +693,19 @@ func TestRewriteHiddenOpenAIRequestModel(t *testing.T) {
 	})
 }
 
+func TestRewriteOpenAIRequestModelTo(t *testing.T) {
+	replace := func(body []byte, newModel string) []byte {
+		return service.ReplaceModelInBody(body, newModel)
+	}
+
+	t.Run("keeps_luna_when_resolved_to_luna", func(t *testing.T) {
+		body := []byte(`{"model":"codex-auto-review","input":"review"}`)
+		gotBody, gotModel := rewriteOpenAIRequestModelTo(body, "codex-auto-review", "gpt-5.6-luna", replace)
+		require.Equal(t, "gpt-5.6-luna", gotModel)
+		require.Equal(t, "gpt-5.6-luna", gjson.GetBytes(gotBody, "model").String())
+	})
+}
+
 func TestOpenAIModelMappedBody(t *testing.T) {
 	body := []byte(`{"model":"alias","input":"hello"}`)
 	calls := 0

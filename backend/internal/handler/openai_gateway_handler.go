@@ -71,11 +71,26 @@ func openAIModelMappedBody(body []byte, mapped bool, mappedModel string, replace
 }
 
 func rewriteHiddenOpenAIRequestModel(body []byte, reqModel string, replace openAIModelBodyReplaceFunc) ([]byte, string) {
-	next := service.RewriteOpenAIHiddenIngressModel(reqModel)
+	return rewriteOpenAIRequestModelTo(body, reqModel, service.RewriteOpenAIHiddenIngressModel(reqModel), replace)
+}
+
+func rewriteOpenAIRequestModelTo(body []byte, reqModel, next string, replace openAIModelBodyReplaceFunc) ([]byte, string) {
 	if next == reqModel {
 		return body, reqModel
 	}
 	return openAIModelMappedBody(body, true, next, replace), next
+}
+
+func (h *OpenAIGatewayHandler) rewriteHiddenOpenAIRequestModelForGroup(ctx context.Context, groupID *int64, body []byte, reqModel string) ([]byte, string) {
+	next := service.RewriteOpenAIHiddenIngressModel(reqModel)
+	if h != nil && h.gatewayService != nil {
+		next = h.gatewayService.ResolveOpenAIHiddenIngressModel(ctx, groupID, reqModel)
+	}
+	replace := openAIModelBodyReplaceFunc(nil)
+	if h != nil && h.gatewayService != nil {
+		replace = h.gatewayService.ReplaceModelInBody
+	}
+	return rewriteOpenAIRequestModelTo(body, reqModel, next, replace)
 }
 
 func seedOpenAIForwardImageIntentHint(c *gin.Context, channelMapped bool, imageIntent bool) {
@@ -279,7 +294,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
-	body, reqModel = rewriteHiddenOpenAIRequestModel(body, reqModel, h.gatewayService.ReplaceModelInBody)
+	body, reqModel = h.rewriteHiddenOpenAIRequestModelForGroup(c.Request.Context(), apiKey.GroupID, body, reqModel)
 
 	reqStream, ok := parseOpenAICompatibleStream(body)
 	if !ok {
@@ -893,7 +908,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
-	body, reqModel = rewriteHiddenOpenAIRequestModel(body, reqModel, h.gatewayService.ReplaceModelInBody)
+	body, reqModel = h.rewriteHiddenOpenAIRequestModelForGroup(c.Request.Context(), apiKey.GroupID, body, reqModel)
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
@@ -1522,7 +1537,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
-	firstMessage, reqModel = rewriteHiddenOpenAIRequestModel(firstMessage, reqModel, h.gatewayService.ReplaceModelInBody)
+	firstMessage, reqModel = h.rewriteHiddenOpenAIRequestModelForGroup(ctx, apiKey.GroupID, firstMessage, reqModel)
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(firstMessage, "previous_response_id").String())
 	previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 	if previousResponseID != "" && previousResponseIDKind == service.OpenAIPreviousResponseIDKindMessageID {

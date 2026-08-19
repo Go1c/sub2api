@@ -26,7 +26,13 @@ func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatform(
 	if s == nil {
 		return ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasModelSupport: true}
 	}
-	requestedModel = RewriteOpenAIHiddenIngressModel(strings.TrimSpace(requestedModel))
+	requestedModel = strings.TrimSpace(requestedModel)
+	hiddenIngress := isOpenAIHiddenIngressModel(requestedModel)
+	lunaModel := canonicalizeOpenAIHiddenIngressModel(requestedModel)
+	fallbackModel := requestedModel
+	if hiddenIngress {
+		fallbackModel = openaiHiddenIngressFallbackModel
+	}
 	if requestedModel == "" {
 		return ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasModelSupport: true}
 	}
@@ -59,8 +65,13 @@ func (s *OpenAIGatewayService) DiagnoseModelAvailabilityForPlatform(
 		// Mirrors the per-candidate filter used during account selection
 		// (openai_account_scheduler.isAccountRequestCompatible): empty
 		// model_mapping accepts everything; otherwise the explicit / wildcard
-		// mapping must match.
-		if accounts[i].IsModelSupported(requestedModel) {
+		// mapping must match. Hidden Luna also counts when the account opts in
+		// or when the Terra fallback would be schedulable.
+		if hiddenIngress && accountExplicitlyServesOpenAIHiddenLuna(&accounts[i]) && accounts[i].IsModelSupported(lunaModel) {
+			diag.HasModelSupport = true
+			return diag
+		}
+		if accounts[i].IsModelSupported(fallbackModel) {
 			diag.HasModelSupport = true
 			return diag
 		}

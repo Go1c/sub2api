@@ -75,7 +75,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
-	body, reqModel = rewriteHiddenOpenAIRequestModel(body, reqModel, h.gatewayService.ReplaceModelInBody)
+	body, reqModel = h.rewriteHiddenOpenAIRequestModelForGroup(c.Request.Context(), apiKey.GroupID, body, reqModel)
 	reqStream, ok := parseOpenAICompatibleStream(body)
 	if !ok {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", invalidStreamFieldTypeMessage)
