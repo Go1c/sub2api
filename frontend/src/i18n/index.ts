@@ -45,6 +45,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       dashboard,
       common,
       forkRootGaps,
+      checkin,
     ] = await Promise.all([
       import('./locales/en/admin/accounts'),
       import('./locales/en/admin/ops'),
@@ -56,6 +57,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       import('./locales/en/dashboard'),
       import('./locales/en/common'),
       import('./locales/en/forkRootGaps'),
+      import('@/features/checkin/locales/en'),
     ])
     return [
       { admin: accounts.default },
@@ -68,6 +70,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       dashboard.default,
       common.default,
       forkRootGaps.default,
+      checkin.default,
     ]
   }
 
@@ -86,6 +89,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       misc,
       common,
       forkRootGaps,
+      checkin,
     ] = await Promise.all([
       import('./locales/zh/admin/accounts'),
       import('./locales/zh/admin/ops'),
@@ -98,6 +102,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       import('./locales/zh/misc'),
       import('./locales/zh/common'),
       import('./locales/zh/forkRootGaps'),
+      import('@/features/checkin/locales/zh'),
     ])
     return [
       { admin: accounts.default },
@@ -111,6 +116,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       misc.default,
       common.default,
       forkRootGaps.default,
+      checkin.default,
     ]
   }
 

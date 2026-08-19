@@ -1,0 +1,11 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'; import { createPinia, setActivePinia } from 'pinia'; import type { CheckinResult, CheckinStatus } from '../types'
+const api = vi.hoisted(() => ({ getUserStatus: vi.fn(), checkIn: vi.fn() })); vi.mock('../api', () => ({ checkinAPI: api })); import { useCheckinStore } from '../store'
+const status: CheckinStatus = { enabled: true, checked_in_today: false, total_checkins: 4, total_reward: '1.2000', current_streak: 4, cycle_day: 4, next_milestone: { day: 7, bonus: '1.0000', days_until: 3 }, balance: '8.0000', today_record: null, recent_records: [] }
+const result: CheckinResult = { id: 9, user_id: 3, user_email: 'user@example.com', username: 'user', business_date: '2026-08-19', checked_at: '2026-08-19T01:00:00Z', timezone: 'Asia/Shanghai', streak_days: 5, cycle_day: 5, base_reward: '0.3000', milestone_bonus: '0.0000', actual_reward: '0.0000', status: 'budget_exhausted', balance_after: '8.0000', already_checked_in: false }
+describe('useCheckinStore', () => {
+  beforeEach(() => { setActivePinia(createPinia()); api.getUserStatus.mockReset(); api.checkIn.mockReset() })
+  it('loads switch and user status', async () => { api.getUserStatus.mockResolvedValue(status); const store = useCheckinStore(); await store.fetchStatus(); expect(store.initialized).toBe(true); expect(store.enabled).toBe(true) })
+  it('keeps budget exhaustion and refreshes aggregates', async () => { api.checkIn.mockResolvedValue(result); api.getUserStatus.mockResolvedValue({ ...status, checked_in_today: true, today_record: result }); const store = useCheckinStore(); expect((await store.checkIn()).status).toBe('budget_exhausted'); expect(store.lastResult).toEqual(result) })
+  it('preserves the backend replay marker', async () => { api.checkIn.mockResolvedValue({ ...result, already_checked_in: true }); api.getUserStatus.mockResolvedValue({ ...status, checked_in_today: true, today_record: result }); const store = useCheckinStore(); await store.checkIn(); expect(store.lastResult?.already_checked_in).toBe(true) })
+  it('resets on logout', async () => { api.getUserStatus.mockResolvedValue(status); const store = useCheckinStore(); await store.fetchStatus(); store.reset(); expect(store.status).toBeNull(); expect(store.enabled).toBe(false) })
+})

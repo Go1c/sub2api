@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/checkin"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/websearch"
@@ -22,6 +23,7 @@ import (
 
 // ProviderSet 提供服务器层的依赖
 var ProviderSet = wire.NewSet(
+	ProvideCheckInModule,
 	ProvideRouter,
 	ProvideHTTPServer,
 )
@@ -40,6 +42,7 @@ func ProvideRouter(
 	opsService *service.OpsService,
 	settingService *service.SettingService,
 	redisClient *redis.Client,
+	checkInModule *checkin.Module,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -96,7 +99,7 @@ func ProvideRouter(
 		service.SetWebSearchManager(websearch.NewManager(configs, redisClient))
 	})
 
-	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient)
+	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, checkInModule)
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器

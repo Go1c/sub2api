@@ -279,6 +279,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/checkin',
+    name: 'Checkin',
+    component: () => import('@/features/checkin/CheckinView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Daily Check-in',
+      titleKey: 'checkin.title',
+      descriptionKey: 'checkin.description'
+    }
+  },
+  {
     path: '/redeem',
     name: 'Redeem',
     component: () => import('@/views/user/RedeemView.vue'),
@@ -750,7 +762,19 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/affiliates',
-    redirect: '/admin/affiliates/invites'
+    redirect: '/admin/affiliates/checkins'
+  },
+  {
+    path: '/admin/affiliates/checkins',
+    name: 'AdminCheckins',
+    component: () => import('@/features/checkin/AdminCheckinView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Check-in Records',
+      titleKey: 'checkin.admin.title',
+      descriptionKey: 'checkin.admin.description'
+    }
   },
   {
     path: '/admin/affiliates/invites',
