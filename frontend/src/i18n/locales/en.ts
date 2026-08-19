@@ -7698,6 +7698,13 @@ export default {
           actions: 'Actions',
           requestRefund: 'Request Refund'
         },
+    walletDebits: {
+          title: 'External wallet debit',
+          empty: 'No external wallet debits',
+          debitedAt: 'Debited at',
+          source: 'Source',
+          amount: 'Amount'
+        },
     result: {
           success: 'Payment Successful',
           subscriptionSuccess: 'Subscription Successful',

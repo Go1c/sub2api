@@ -1,5 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { get } = vi.hoisted(() => ({
+  get: vi.fn(),
+}))
+
+vi.mock('@/api/client', () => ({
+  apiClient: {
+    get,
+    put: vi.fn(),
+    post: vi.fn(),
+    delete: vi.fn(),
+  },
+}))
+
 describe('user api oauth binding urls', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -28,5 +41,30 @@ describe('user api oauth binding urls', () => {
     ).toBe(
       'https://api.example.com/api/v1/auth/oauth/wechat/bind/start?redirect=%2Fsettings%2Fprofile&intent=bind_current_user&mode=open'
     )
+  })
+})
+
+describe('user api wallet transactions', () => {
+  beforeEach(() => {
+    get.mockReset()
+    get.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 20, pages: 1 },
+    })
+  })
+
+  it('requests GET /user/balance/transactions with page and page_size', async () => {
+    const { getMyWalletTransactions, userAPI } = await import('@/api/user')
+
+    await userAPI.getMyWalletTransactions({ page: 2, page_size: 20 })
+
+    expect(get).toHaveBeenCalledWith('/user/balance/transactions', {
+      params: { page: 2, page_size: 20 },
+    })
+
+    await getMyWalletTransactions({ page: 1, page_size: 20 })
+
+    expect(get).toHaveBeenNthCalledWith(2, '/user/balance/transactions', {
+      params: { page: 1, page_size: 20 },
+    })
   })
 })

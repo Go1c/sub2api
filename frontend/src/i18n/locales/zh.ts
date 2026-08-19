@@ -7873,6 +7873,13 @@ export default {
           actions: '操作',
           requestRefund: '申请退款'
         },
+    walletDebits: {
+          title: '外部钱包扣款',
+          empty: '暂无外部钱包扣款',
+          debitedAt: '扣款时间',
+          source: '来源',
+          amount: '金额'
+        },
     result: {
           success: '支付成功',
           subscriptionSuccess: '订阅成功',

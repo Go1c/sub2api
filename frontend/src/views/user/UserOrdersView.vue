@@ -6,8 +6,8 @@
         <div class="flex flex-wrap items-center gap-3">
           <Select v-model="currentFilter" :options="statusFilters" class="w-36" @change="fetchOrders" />
           <div class="flex flex-1 items-center justify-end gap-2">
-            <button @click="fetchOrders" :disabled="loading" class="btn btn-secondary" :title="t('common.refresh')">
-              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+            <button @click="refreshAll" :disabled="loading || walletLoading" class="btn btn-secondary" :title="t('common.refresh')">
+              <Icon name="refresh" size="md" :class="loading || walletLoading ? 'animate-spin' : ''" />
             </button>
             <button class="btn btn-primary" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
           </div>
@@ -38,6 +38,31 @@
         :page-size="pagination.page_size"
         @update:page="handlePageChange"
         @update:pageSize="handlePageSizeChange"
+      />
+
+      <div class="card">
+        <div class="border-b border-gray-100 p-4 dark:border-dark-700">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.walletDebits.title') }}</h2>
+        </div>
+        <DataTable :columns="walletColumns" :data="walletDebits" :loading="walletLoading">
+          <template #empty>
+            <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('payment.walletDebits.empty') }}</p>
+          </template>
+          <template #cell-created_at="{ value }">
+            <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatWalletDate(value) }}</span>
+          </template>
+          <template #cell-amount="{ value }">
+            <span class="ui-mono text-red-600 dark:text-red-400">-{{ formatWalletAmount(value) }}</span>
+          </template>
+        </DataTable>
+      </div>
+      <Pagination
+        v-if="walletPagination.total > 0"
+        :page="walletPagination.page"
+        :total="walletPagination.total"
+        :page-size="walletPagination.page_size"
+        @update:page="handleWalletPageChange"
+        @update:pageSize="handleWalletPageSizeChange"
       />
     </div>
 
@@ -86,9 +111,12 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
+import { userAPI, type WalletTransaction } from '@/api/user'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import type { PaymentOrder } from '@/types/payment'
+import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -100,14 +128,26 @@ const router = useRouter()
 const appStore = useAppStore()
 
 const loading = ref(false)
+const walletLoading = ref(false)
 const actionLoading = ref(false)
 const orders = ref<PaymentOrder[]>([])
+const walletDebits = ref<WalletTransaction[]>([])
 const refundEligibleProviders = ref<Set<string>>(new Set())
 const currentFilter = ref('')
 const cancelTargetId = ref<number | null>(null)
 const refundTarget = ref<PaymentOrder | null>(null)
 const refundReason = ref('')
 const pagination = reactive({ page: 1, page_size: 20, total: 0 })
+const walletPagination = reactive({ page: 1, page_size: 20, total: 0 })
+
+const walletColumns = computed((): Column[] => [
+  { key: 'created_at', label: t('payment.walletDebits.debitedAt') },
+  { key: 'client_name', label: t('payment.walletDebits.source') },
+  { key: 'amount', label: t('payment.walletDebits.amount') },
+])
+
+function formatWalletDate(dateStr: string) { return new Date(dateStr).toLocaleString() }
+function formatWalletAmount(amount: number) { return `$${Number(amount).toFixed(2)}` }
 
 const statusFilters = computed(() => [
   { value: '', label: t('common.all') },
@@ -135,8 +175,28 @@ async function fetchOrders() {
   }
 }
 
+async function fetchWalletDebits() {
+  walletLoading.value = true
+  try {
+    const res = await userAPI.getMyWalletTransactions({
+      page: walletPagination.page,
+      page_size: walletPagination.page_size,
+    })
+    walletDebits.value = res.items || []
+    walletPagination.total = res.total || 0
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+  } finally {
+    walletLoading.value = false
+  }
+}
+
+function refreshAll() { return Promise.all([fetchOrders(), fetchWalletDebits()]) }
+
 function handlePageChange(page: number) { pagination.page = page; fetchOrders() }
 function handlePageSizeChange(size: number) { pagination.page_size = size; pagination.page = 1; fetchOrders() }
+function handleWalletPageChange(page: number) { walletPagination.page = page; fetchWalletDebits() }
+function handleWalletPageSizeChange(size: number) { walletPagination.page_size = size; walletPagination.page = 1; fetchWalletDebits() }
 
 function handleCancel(orderId: number) { cancelTargetId.value = orderId }
 
@@ -186,5 +246,5 @@ async function loadRefundEligibility() {
   } catch { /* ignore — default to hiding refund button */ }
 }
 
-onMounted(() => { fetchOrders(); loadRefundEligibility() })
+onMounted(() => { fetchOrders(); fetchWalletDebits(); loadRefundEligibility() })
 </script>
