@@ -168,7 +168,8 @@ func TestModelMarket_DefaultAutoSyncReadsPublicGroupAccountModelsAndRates(t *tes
 	require.Equal(t, "anthropic:claude-sonnet-4-6", model.Key)
 	require.Equal(t, "claude-sonnet-4-6", model.Name)
 	require.Equal(t, PlatformAnthropic, model.Platform)
-	require.Equal(t, []string{"Claude account"}, model.Channels)
+	require.Equal(t, []string{"claude-public"}, model.Channels)
+	require.NotContains(t, model.Channels, "Claude account")
 	require.NotNil(t, model.Pricing)
 	require.Equal(t, string(BillingModeToken), model.BillingMode)
 	require.NotNil(t, model.Pricing.InputPrice)
@@ -177,6 +178,54 @@ func TestModelMarket_DefaultAutoSyncReadsPublicGroupAccountModelsAndRates(t *tes
 	require.Equal(t, int64(10), model.Groups[0].ID)
 	require.Equal(t, 1.4, model.Groups[0].RateMultiplier)
 	require.False(t, model.Groups[0].IsExclusive)
+}
+
+func TestModelMarket_PublicDoesNotExposeAccountNamesInChannels(t *testing.T) {
+	groups := []Group{
+		{
+			ID:          10,
+			Name:        "claude-public",
+			Platform:    PlatformAnthropic,
+			Status:      StatusActive,
+			IsExclusive: false,
+		},
+	}
+	accountsByGroup := map[int64][]Account{
+		10: {
+			{
+				ID:       1,
+				Name:     "CPA-818-Pro20x",
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"claude-sonnet-4-6": "claude-sonnet-4-6",
+					},
+				},
+			},
+			{
+				ID:       2,
+				Name:     "",
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"claude-sonnet-4-6": "claude-sonnet-4-6",
+					},
+				},
+			},
+		},
+	}
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
+
+	got, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got.Models, 1)
+	require.NotContains(t, got.Models[0].Channels, "CPA-818-Pro20x")
+	require.NotContains(t, got.Models[0].Channels, "账号#2")
+	require.Equal(t, []string{"claude-public"}, got.Models[0].Channels)
 }
 
 func TestModelMarket_ManualSelectionFiltersAndOrdersCandidates(t *testing.T) {
