@@ -282,6 +282,7 @@ export default {
       typeBalancePayment: '余额支付订阅',
       typePromoBalance: '余额（优惠码）',
       typeSubscriptionPayment: '订阅消费',
+      typeWalletDebit: '外部钱包扣款',
       passwordCopied: '密码已复制'
     }
 }

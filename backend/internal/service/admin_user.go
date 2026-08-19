@@ -710,6 +710,17 @@ func (s *adminServiceImpl) GetUserBalanceHistory(ctx context.Context, userID int
 		}
 		return codes, total, totalRecharged, nil
 	}
+	if codeType == RedeemTypeWalletDebit {
+		codes, total, err := s.listWalletDebitHistory(ctx, userID, params)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		totalRecharged, err := s.sumUserRechargeHistoryTotal(ctx, userID)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		return codes, total, totalRecharged, nil
+	}
 
 	if codeType == "" {
 		return s.getAllUserBalanceHistory(ctx, userID, params)
@@ -750,14 +761,27 @@ func (s *adminServiceImpl) getAllUserBalanceHistory(ctx context.Context, userID 
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	walletDebitCodes, walletDebitTotal, err := s.listWalletDebitHistoryForMerge(ctx, userID, needed)
+	if err != nil {
+		return nil, 0, 0, err
+	}
 	externalCodes := append(subscriptionPaymentCodes, promoCodes...)
+	externalCodes = append(externalCodes, walletDebitCodes...)
 	codes := mergeBalanceHistoryCodes(redeemCodes, affiliateCodes, externalCodes, params)
 
 	totalRecharged, err := s.sumUserRechargeHistoryTotal(ctx, userID)
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	return codes, redeemTotal + affiliateTotal + subscriptionPaymentTotal + promoTotal, totalRecharged, nil
+	return codes, redeemTotal + affiliateTotal + subscriptionPaymentTotal + promoTotal + walletDebitTotal, totalRecharged, nil
+}
+
+func (s *adminServiceImpl) GetUserWalletDebits(ctx context.Context, userID int64, page, pageSize int) (*BalanceTransactionPage, error) {
+	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
+	if s == nil || s.entClient == nil || userID <= 0 {
+		return &BalanceTransactionPage{Items: []BalanceDebitTransaction{}, Total: 0, Page: params.Page, PageSize: params.PageSize}, nil
+	}
+	return listWalletDebitTransactions(ctx, s.entClient, userID, params)
 }
 
 func (s *adminServiceImpl) listRedeemBalanceHistoryForMerge(ctx context.Context, userID int64, needed int) ([]RedeemCode, int64, error) {

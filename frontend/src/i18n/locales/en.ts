@@ -1344,7 +1344,8 @@ export default {
     balanceAddedPromo: 'Balance Added (Promo)',
     balanceAddedAffiliateSignupBonus: 'Balance Added (Invite Signup Bonus)',
     balancePaymentSubscription: 'Subscription Paid by Balance',
-    subscriptionPayment: 'Subscription Payment'
+    subscriptionPayment: 'Subscription Payment',
+    walletDebit: 'External Wallet Debit'
   },
 
   // Profile
@@ -2249,6 +2250,7 @@ export default {
       typeConcurrency: 'Concurrency (Redeem)',
       typeAdminConcurrency: 'Concurrency (Admin)',
       typeSubscription: 'Subscription',
+      typeWalletDebit: 'External Wallet Debit',
       failedToLoadBalanceHistory: 'Failed to load balance history',
       createdAt: 'Created',
       totalRecharged: 'Total Recharged',

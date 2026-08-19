@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql/driver"
+	"strings"
 	"testing"
 	"time"
 
@@ -294,5 +295,176 @@ func TestListSubscriptionPaymentHistoryIncludesPaidExternalSubscriptionOrders(t 
 	require.Equal(t, paidAt, *codes[0].UsedAt)
 	require.Contains(t, codes[0].Notes, "Pro Plan")
 	require.Contains(t, codes[0].Notes, string(payment.TypeAlipay))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMergeBalanceHistoryCodesIncludesWalletDebitsByDefault(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 8, 19, 8, 0, 0, 0, time.UTC)
+	usedBy := int64(10)
+	at := func(minutes int) *time.Time {
+		v := base.Add(time.Duration(minutes) * time.Minute)
+		return &v
+	}
+
+	got := mergeBalanceHistoryCodes(
+		[]RedeemCode{
+			{ID: 1, Type: RedeemTypeBalance, UsedBy: &usedBy, UsedAt: at(10), CreatedAt: *at(10)},
+		},
+		[]RedeemCode{
+			{ID: -2, Type: RedeemTypeAffiliateBalance, UsedBy: &usedBy, UsedAt: at(20), CreatedAt: *at(20)},
+		},
+		[]RedeemCode{
+			{ID: -900000000003, Type: RedeemTypeSubscriptionPayment, UsedBy: &usedBy, UsedAt: at(30), CreatedAt: *at(30)},
+			{ID: -700000000004, Type: RedeemTypeWalletDebit, UsedBy: &usedBy, UsedAt: at(40), CreatedAt: *at(40), Value: -19.90},
+		},
+		pagination.PaginationParams{Page: 1, PageSize: 4},
+	)
+
+	require.Len(t, got, 4)
+	require.Equal(t, RedeemTypeWalletDebit, got[0].Type)
+	require.Equal(t, -19.90, got[0].Value)
+	require.Equal(t, RedeemTypeSubscriptionPayment, got[1].Type)
+	require.Equal(t, RedeemTypeAffiliateBalance, got[2].Type)
+	require.Equal(t, RedeemTypeBalance, got[3].Type)
+}
+
+func TestWalletDebitHistoryItemMapsExternalDebitFields(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, 8, 19, 8, 12, 0, 0, time.UTC)
+	got := walletDebitHistoryItem(walletDebitHistoryRow{
+		ID:           4,
+		TxnID:        "8d2e3ca4-ccf2-47af-a26e-a0170ea39e7a",
+		ClientID:     "9668f69e-32c4-48e9-9992-280951dcb85c",
+		ClientName:   "CCHaven Control",
+		Amount:       "19.90",
+		BalanceAfter: "583.46000000",
+		Currency:     "CNY",
+		Purpose:      "cchaven_monthly",
+		Ref:          "CC20260819-100001",
+		CreatedAt:    createdAt,
+	}, 7)
+
+	require.Equal(t, int64(-700000000004), got.ID)
+	require.Equal(t, "8d2e3ca4-ccf2-47af-a26e-a0170ea39e7a", got.Code)
+	require.Equal(t, RedeemTypeWalletDebit, got.Type)
+	require.InDelta(t, -19.90, got.Value, 0.0001)
+	require.Equal(t, StatusUsed, got.Status)
+	require.NotNil(t, got.UsedBy)
+	require.Equal(t, int64(7), *got.UsedBy)
+	require.NotNil(t, got.UsedAt)
+	require.Equal(t, createdAt, *got.UsedAt)
+	require.Equal(t, createdAt, got.CreatedAt)
+	require.Contains(t, got.Notes, "CCHaven Control")
+	require.Contains(t, got.Notes, "purpose=cchaven_monthly")
+	require.Contains(t, got.Notes, "ref=CC20260819-100001")
+	require.Contains(t, got.Notes, "txn_id=8d2e3ca4-ccf2-47af-a26e-a0170ea39e7a")
+	require.Contains(t, got.Notes, "583.46000000")
+	require.NotContains(t, got.Notes, "bcs_")
+	require.NotContains(t, strings.ToLower(got.Notes), "secret")
+}
+
+func TestListWalletDebitHistoryIncludesCchavenMonthlyDebit(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	createdAt := time.Date(2026, 8, 19, 8, 12, 0, 0, time.UTC)
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"txn_id",
+		"client_id",
+		"name",
+		"amount",
+		"balance_after",
+		"currency",
+		"purpose",
+		"ref",
+		"created_at",
+	}).AddRow(
+		int64(4),
+		"8d2e3ca4-ccf2-47af-a26e-a0170ea39e7a",
+		"9668f69e-32c4-48e9-9992-280951dcb85c",
+		"CCHaven Control",
+		"19.90",
+		"583.46000000",
+		"CNY",
+		"cchaven_monthly",
+		"CC20260819-100001",
+		createdAt,
+	)
+
+	mock.ExpectQuery("FROM balance_debit_transactions t(?s:.*)JOIN balance_debit_clients c(?s:.*)WHERE t.user_id = \\$1").
+		WithArgs(int64(7), 0, 10).
+		WillReturnRows(rows)
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\)(?s:.*)FROM balance_debit_transactions(?s:.*)WHERE user_id = \\$1").
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(int64(1)))
+
+	codes, total, err := listWalletDebitHistory(context.Background(), db, 7, pagination.PaginationParams{Page: 1, PageSize: 10})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, codes, 1)
+	require.Equal(t, RedeemTypeWalletDebit, codes[0].Type)
+	require.Equal(t, "8d2e3ca4-ccf2-47af-a26e-a0170ea39e7a", codes[0].Code)
+	require.InDelta(t, -19.90, codes[0].Value, 0.0001)
+	require.Contains(t, codes[0].Notes, "purpose=cchaven_monthly")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestListWalletDebitTransactionsAlignsWithUserTransactionFields(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	createdAt := time.Date(2026, 8, 19, 8, 12, 0, 0, time.UTC)
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"txn_id",
+		"client_id",
+		"name",
+		"amount",
+		"balance_after",
+		"currency",
+		"purpose",
+		"ref",
+		"created_at",
+	}).AddRow(
+		int64(4),
+		"8d2e3ca4-ccf2-47af-a26e-a0170ea39e7a",
+		"9668f69e-32c4-48e9-9992-280951dcb85c",
+		"CCHaven Control",
+		"19.90",
+		"583.46000000",
+		"CNY",
+		"cchaven_monthly",
+		"CC20260819-100001",
+		createdAt,
+	)
+
+	mock.ExpectQuery("FROM balance_debit_transactions t(?s:.*)JOIN balance_debit_clients c(?s:.*)WHERE t.user_id = \\$1").
+		WithArgs(int64(7), 0, 20).
+		WillReturnRows(rows)
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\)(?s:.*)FROM balance_debit_transactions(?s:.*)WHERE user_id = \\$1").
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(int64(1)))
+
+	page, err := listWalletDebitTransactions(context.Background(), db, 7, pagination.PaginationParams{Page: 1, PageSize: 20})
+
+	require.NoError(t, err)
+	require.Equal(t, int64(1), page.Total)
+	require.Len(t, page.Items, 1)
+	require.Equal(t, "8d2e3ca4-ccf2-47af-a26e-a0170ea39e7a", page.Items[0].TxnID)
+	require.Equal(t, "9668f69e-32c4-48e9-9992-280951dcb85c", page.Items[0].ClientID)
+	require.Equal(t, "CCHaven Control", page.Items[0].ClientName)
+	require.Equal(t, "19.90", page.Items[0].Amount)
+	require.Equal(t, "583.46000000", page.Items[0].BalanceAfter)
+	require.Equal(t, "CNY", page.Items[0].Currency)
+	require.Equal(t, "cchaven_monthly", page.Items[0].Purpose)
+	require.Equal(t, "CC20260819-100001", page.Items[0].Ref)
+	require.Equal(t, createdAt, page.Items[0].CreatedAt)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
