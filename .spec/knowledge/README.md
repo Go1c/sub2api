@@ -48,6 +48,7 @@ metadata:
 | [`features/api-key-model-restriction.md`](features/api-key-model-restriction.md) | 用户 API 密钥模型允许列表:从模型广场按分组选择模型,网关拦截未授权模型请求 |
 | [`features/user-subscription-purchase-ban.md`](features/user-subscription-purchase-ban.md) | 管理员按用户禁止购买订阅：字段、编辑开关、CreateOrder 硬拦截、「无权限购买」 |
 | [`features/user-access-token.md`](features/user-access-token.md) | 用户长效 opaque Access Token：密钥管理 + 只读用量/余额/订阅；活跃数上限、用户 RPM、usage 查询护栏 |
+| [`features/balance-debit-wallet.md`](features/balance-debit-wallet.md) | 多外部站共用站内余额：双重身份原子扣款、永久幂等账本、本人流水和 durable 缓存失效 |
 | [`features/lumio-desktop-client.md`](features/lumio-desktop-client.md) | Lumio Codex 桌面客户端服务端契约：公开配置、账号级唯一 Key、一次性支付交接，以及 GET /v1/models 不查余额；接入桌面启动或充值流程时查 |
 | [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna，并把 Codex Auto-review 的 luna/codex-auto-review 入站改写到 gpt-5.6-terra |
 | [`features/frontend-seo-meta.md`](features/frontend-seo-meta.md) | 前端 GEO/SEO：Go embed 注入 description/OG/Twitter/JSON-LD，以及 `#app` 内爬虫可见简介 |

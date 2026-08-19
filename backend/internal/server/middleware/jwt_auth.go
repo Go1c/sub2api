@@ -212,6 +212,10 @@ func enforceUserAccessTokenPathScope(c *gin.Context) bool {
 	}
 	path := c.Request.URL.Path
 	method := c.Request.Method
+	if method == "POST" && path == "/api/v1/user/balance/debit" {
+		AbortWithError(c, 401, "INVALID_TOKEN", "invalid token")
+		return false
+	}
 	if isUserAccessTokenAllowedPath(method, path) {
 		return true
 	}
@@ -256,6 +260,13 @@ func isUserAccessTokenAllowedPath(method, path string) bool {
 	// GET /api/v1/auth/me — same wallet balance fields as profile (frontend primary path)
 	if path == "/api/v1/auth/me" && method == "GET" {
 		return true
+	}
+	if path == "/api/v1/user/balance/transactions" && method == "GET" {
+		return true
+	}
+	if strings.HasPrefix(path, "/api/v1/user/balance/transactions/") && method == "GET" {
+		rest := strings.TrimPrefix(path, "/api/v1/user/balance/transactions/")
+		return rest != "" && !strings.Contains(rest, "/")
 	}
 
 	// Usage / request logs (read-only; includes dashboard stats and batch query POST)

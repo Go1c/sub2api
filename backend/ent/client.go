@@ -23,6 +23,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/balancecacheinvalidationoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebitclient"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebittransaction"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -85,6 +88,12 @@ type Client struct {
 	AuthIdentity *AuthIdentityClient
 	// AuthIdentityChannel is the client for interacting with the AuthIdentityChannel builders.
 	AuthIdentityChannel *AuthIdentityChannelClient
+	// BalanceCacheInvalidationOutbox is the client for interacting with the BalanceCacheInvalidationOutbox builders.
+	BalanceCacheInvalidationOutbox *BalanceCacheInvalidationOutboxClient
+	// BalanceDebitClient is the client for interacting with the BalanceDebitClient builders.
+	BalanceDebitClient *BalanceDebitClientClient
+	// BalanceDebitTransaction is the client for interacting with the BalanceDebitTransaction builders.
+	BalanceDebitTransaction *BalanceDebitTransactionClient
 	// BatchImageEvent is the client for interacting with the BatchImageEvent builders.
 	BatchImageEvent *BatchImageEventClient
 	// BatchImageItem is the client for interacting with the BatchImageItem builders.
@@ -178,6 +187,9 @@ func (c *Client) init() {
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
 	c.AuthIdentity = NewAuthIdentityClient(c.config)
 	c.AuthIdentityChannel = NewAuthIdentityChannelClient(c.config)
+	c.BalanceCacheInvalidationOutbox = NewBalanceCacheInvalidationOutboxClient(c.config)
+	c.BalanceDebitClient = NewBalanceDebitClientClient(c.config)
+	c.BalanceDebitTransaction = NewBalanceDebitTransactionClient(c.config)
 	c.BatchImageEvent = NewBatchImageEventClient(c.config)
 	c.BatchImageItem = NewBatchImageItemClient(c.config)
 	c.BatchImageJob = NewBatchImageJobClient(c.config)
@@ -305,53 +317,56 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                           ctx,
-		config:                        cfg,
-		APIKey:                        NewAPIKeyClient(cfg),
-		Account:                       NewAccountClient(cfg),
-		AccountErrorHistory:           NewAccountErrorHistoryClient(cfg),
-		AccountGroup:                  NewAccountGroupClient(cfg),
-		Announcement:                  NewAnnouncementClient(cfg),
-		AnnouncementRead:              NewAnnouncementReadClient(cfg),
-		AuthIdentity:                  NewAuthIdentityClient(cfg),
-		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
-		BatchImageEvent:               NewBatchImageEventClient(cfg),
-		BatchImageItem:                NewBatchImageItemClient(cfg),
-		BatchImageJob:                 NewBatchImageJobClient(cfg),
-		ChannelMonitor:                NewChannelMonitorClient(cfg),
-		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
-		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
-		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
-		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
-		Group:                         NewGroupClient(cfg),
-		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
-		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		LotteryCampaign:               NewLotteryCampaignClient(cfg),
-		LotteryCode:                   NewLotteryCodeClient(cfg),
-		LotteryDraw:                   NewLotteryDrawClient(cfg),
-		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
-		PaymentOrder:                  NewPaymentOrderClient(cfg),
-		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
-		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
-		PromoCode:                     NewPromoCodeClient(cfg),
-		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
-		Proxy:                         NewProxyClient(cfg),
-		RedeemCode:                    NewRedeemCodeClient(cfg),
-		SecuritySecret:                NewSecuritySecretClient(cfg),
-		Setting:                       NewSettingClient(cfg),
-		SiteMessage:                   NewSiteMessageClient(cfg),
-		SubscriptionCreditLedger:      NewSubscriptionCreditLedgerClient(cfg),
-		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
-		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
-		UsageLog:                      NewUsageLogClient(cfg),
-		User:                          NewUserClient(cfg),
-		UserAccessToken:               NewUserAccessTokenClient(cfg),
-		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
-		UserSubscription:              NewUserSubscriptionClient(cfg),
+		ctx:                            ctx,
+		config:                         cfg,
+		APIKey:                         NewAPIKeyClient(cfg),
+		Account:                        NewAccountClient(cfg),
+		AccountErrorHistory:            NewAccountErrorHistoryClient(cfg),
+		AccountGroup:                   NewAccountGroupClient(cfg),
+		Announcement:                   NewAnnouncementClient(cfg),
+		AnnouncementRead:               NewAnnouncementReadClient(cfg),
+		AuthIdentity:                   NewAuthIdentityClient(cfg),
+		AuthIdentityChannel:            NewAuthIdentityChannelClient(cfg),
+		BalanceCacheInvalidationOutbox: NewBalanceCacheInvalidationOutboxClient(cfg),
+		BalanceDebitClient:             NewBalanceDebitClientClient(cfg),
+		BalanceDebitTransaction:        NewBalanceDebitTransactionClient(cfg),
+		BatchImageEvent:                NewBatchImageEventClient(cfg),
+		BatchImageItem:                 NewBatchImageItemClient(cfg),
+		BatchImageJob:                  NewBatchImageJobClient(cfg),
+		ChannelMonitor:                 NewChannelMonitorClient(cfg),
+		ChannelMonitorDailyRollup:      NewChannelMonitorDailyRollupClient(cfg),
+		ChannelMonitorHistory:          NewChannelMonitorHistoryClient(cfg),
+		ChannelMonitorRequestTemplate:  NewChannelMonitorRequestTemplateClient(cfg),
+		ErrorPassthroughRule:           NewErrorPassthroughRuleClient(cfg),
+		Group:                          NewGroupClient(cfg),
+		IdempotencyRecord:              NewIdempotencyRecordClient(cfg),
+		IdentityAdoptionDecision:       NewIdentityAdoptionDecisionClient(cfg),
+		LotteryCampaign:                NewLotteryCampaignClient(cfg),
+		LotteryCode:                    NewLotteryCodeClient(cfg),
+		LotteryDraw:                    NewLotteryDrawClient(cfg),
+		PaymentAuditLog:                NewPaymentAuditLogClient(cfg),
+		PaymentOrder:                   NewPaymentOrderClient(cfg),
+		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
+		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
+		PromoCode:                      NewPromoCodeClient(cfg),
+		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
+		Proxy:                          NewProxyClient(cfg),
+		RedeemCode:                     NewRedeemCodeClient(cfg),
+		SecuritySecret:                 NewSecuritySecretClient(cfg),
+		Setting:                        NewSettingClient(cfg),
+		SiteMessage:                    NewSiteMessageClient(cfg),
+		SubscriptionCreditLedger:       NewSubscriptionCreditLedgerClient(cfg),
+		SubscriptionPlan:               NewSubscriptionPlanClient(cfg),
+		TLSFingerprintProfile:          NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:               NewUsageCleanupTaskClient(cfg),
+		UsageLog:                       NewUsageLogClient(cfg),
+		User:                           NewUserClient(cfg),
+		UserAccessToken:                NewUserAccessTokenClient(cfg),
+		UserAllowedGroup:               NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:        NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:             NewUserAttributeValueClient(cfg),
+		UserPlatformQuota:              NewUserPlatformQuotaClient(cfg),
+		UserSubscription:               NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -369,53 +384,56 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                           ctx,
-		config:                        cfg,
-		APIKey:                        NewAPIKeyClient(cfg),
-		Account:                       NewAccountClient(cfg),
-		AccountErrorHistory:           NewAccountErrorHistoryClient(cfg),
-		AccountGroup:                  NewAccountGroupClient(cfg),
-		Announcement:                  NewAnnouncementClient(cfg),
-		AnnouncementRead:              NewAnnouncementReadClient(cfg),
-		AuthIdentity:                  NewAuthIdentityClient(cfg),
-		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
-		BatchImageEvent:               NewBatchImageEventClient(cfg),
-		BatchImageItem:                NewBatchImageItemClient(cfg),
-		BatchImageJob:                 NewBatchImageJobClient(cfg),
-		ChannelMonitor:                NewChannelMonitorClient(cfg),
-		ChannelMonitorDailyRollup:     NewChannelMonitorDailyRollupClient(cfg),
-		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
-		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
-		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
-		Group:                         NewGroupClient(cfg),
-		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
-		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		LotteryCampaign:               NewLotteryCampaignClient(cfg),
-		LotteryCode:                   NewLotteryCodeClient(cfg),
-		LotteryDraw:                   NewLotteryDrawClient(cfg),
-		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
-		PaymentOrder:                  NewPaymentOrderClient(cfg),
-		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
-		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
-		PromoCode:                     NewPromoCodeClient(cfg),
-		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
-		Proxy:                         NewProxyClient(cfg),
-		RedeemCode:                    NewRedeemCodeClient(cfg),
-		SecuritySecret:                NewSecuritySecretClient(cfg),
-		Setting:                       NewSettingClient(cfg),
-		SiteMessage:                   NewSiteMessageClient(cfg),
-		SubscriptionCreditLedger:      NewSubscriptionCreditLedgerClient(cfg),
-		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
-		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
-		UsageLog:                      NewUsageLogClient(cfg),
-		User:                          NewUserClient(cfg),
-		UserAccessToken:               NewUserAccessTokenClient(cfg),
-		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
-		UserSubscription:              NewUserSubscriptionClient(cfg),
+		ctx:                            ctx,
+		config:                         cfg,
+		APIKey:                         NewAPIKeyClient(cfg),
+		Account:                        NewAccountClient(cfg),
+		AccountErrorHistory:            NewAccountErrorHistoryClient(cfg),
+		AccountGroup:                   NewAccountGroupClient(cfg),
+		Announcement:                   NewAnnouncementClient(cfg),
+		AnnouncementRead:               NewAnnouncementReadClient(cfg),
+		AuthIdentity:                   NewAuthIdentityClient(cfg),
+		AuthIdentityChannel:            NewAuthIdentityChannelClient(cfg),
+		BalanceCacheInvalidationOutbox: NewBalanceCacheInvalidationOutboxClient(cfg),
+		BalanceDebitClient:             NewBalanceDebitClientClient(cfg),
+		BalanceDebitTransaction:        NewBalanceDebitTransactionClient(cfg),
+		BatchImageEvent:                NewBatchImageEventClient(cfg),
+		BatchImageItem:                 NewBatchImageItemClient(cfg),
+		BatchImageJob:                  NewBatchImageJobClient(cfg),
+		ChannelMonitor:                 NewChannelMonitorClient(cfg),
+		ChannelMonitorDailyRollup:      NewChannelMonitorDailyRollupClient(cfg),
+		ChannelMonitorHistory:          NewChannelMonitorHistoryClient(cfg),
+		ChannelMonitorRequestTemplate:  NewChannelMonitorRequestTemplateClient(cfg),
+		ErrorPassthroughRule:           NewErrorPassthroughRuleClient(cfg),
+		Group:                          NewGroupClient(cfg),
+		IdempotencyRecord:              NewIdempotencyRecordClient(cfg),
+		IdentityAdoptionDecision:       NewIdentityAdoptionDecisionClient(cfg),
+		LotteryCampaign:                NewLotteryCampaignClient(cfg),
+		LotteryCode:                    NewLotteryCodeClient(cfg),
+		LotteryDraw:                    NewLotteryDrawClient(cfg),
+		PaymentAuditLog:                NewPaymentAuditLogClient(cfg),
+		PaymentOrder:                   NewPaymentOrderClient(cfg),
+		PaymentProviderInstance:        NewPaymentProviderInstanceClient(cfg),
+		PendingAuthSession:             NewPendingAuthSessionClient(cfg),
+		PromoCode:                      NewPromoCodeClient(cfg),
+		PromoCodeUsage:                 NewPromoCodeUsageClient(cfg),
+		Proxy:                          NewProxyClient(cfg),
+		RedeemCode:                     NewRedeemCodeClient(cfg),
+		SecuritySecret:                 NewSecuritySecretClient(cfg),
+		Setting:                        NewSettingClient(cfg),
+		SiteMessage:                    NewSiteMessageClient(cfg),
+		SubscriptionCreditLedger:       NewSubscriptionCreditLedgerClient(cfg),
+		SubscriptionPlan:               NewSubscriptionPlanClient(cfg),
+		TLSFingerprintProfile:          NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:               NewUsageCleanupTaskClient(cfg),
+		UsageLog:                       NewUsageLogClient(cfg),
+		User:                           NewUserClient(cfg),
+		UserAccessToken:                NewUserAccessTokenClient(cfg),
+		UserAllowedGroup:               NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:        NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:             NewUserAttributeValueClient(cfg),
+		UserPlatformQuota:              NewUserPlatformQuotaClient(cfg),
+		UserSubscription:               NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -446,18 +464,19 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountErrorHistory, c.AccountGroup, c.Announcement,
-		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent,
-		c.BatchImageItem, c.BatchImageJob, c.ChannelMonitor,
-		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
-		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.LotteryCampaign,
-		c.LotteryCode, c.LotteryDraw, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SiteMessage,
-		c.SubscriptionCreditLedger, c.SubscriptionPlan, c.TLSFingerprintProfile,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAccessToken, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel,
+		c.BalanceCacheInvalidationOutbox, c.BalanceDebitClient,
+		c.BalanceDebitTransaction, c.BatchImageEvent, c.BatchImageItem,
+		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
+		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.IdentityAdoptionDecision, c.LotteryCampaign, c.LotteryCode, c.LotteryDraw,
+		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode,
+		c.SecuritySecret, c.Setting, c.SiteMessage, c.SubscriptionCreditLedger,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAccessToken, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -468,18 +487,19 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountErrorHistory, c.AccountGroup, c.Announcement,
-		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel, c.BatchImageEvent,
-		c.BatchImageItem, c.BatchImageJob, c.ChannelMonitor,
-		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
-		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.LotteryCampaign,
-		c.LotteryCode, c.LotteryDraw, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SiteMessage,
-		c.SubscriptionCreditLedger, c.SubscriptionPlan, c.TLSFingerprintProfile,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAccessToken, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
-		c.UserSubscription,
+		c.AnnouncementRead, c.AuthIdentity, c.AuthIdentityChannel,
+		c.BalanceCacheInvalidationOutbox, c.BalanceDebitClient,
+		c.BalanceDebitTransaction, c.BatchImageEvent, c.BatchImageItem,
+		c.BatchImageJob, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
+		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.IdentityAdoptionDecision, c.LotteryCampaign, c.LotteryCode, c.LotteryDraw,
+		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode,
+		c.SecuritySecret, c.Setting, c.SiteMessage, c.SubscriptionCreditLedger,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAccessToken, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -504,6 +524,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuthIdentity.mutate(ctx, m)
 	case *AuthIdentityChannelMutation:
 		return c.AuthIdentityChannel.mutate(ctx, m)
+	case *BalanceCacheInvalidationOutboxMutation:
+		return c.BalanceCacheInvalidationOutbox.mutate(ctx, m)
+	case *BalanceDebitClientMutation:
+		return c.BalanceDebitClient.mutate(ctx, m)
+	case *BalanceDebitTransactionMutation:
+		return c.BalanceDebitTransaction.mutate(ctx, m)
 	case *BatchImageEventMutation:
 		return c.BatchImageEvent.mutate(ctx, m)
 	case *BatchImageItemMutation:
@@ -1935,6 +1961,437 @@ func (c *AuthIdentityChannelClient) mutate(ctx context.Context, m *AuthIdentityC
 		return (&AuthIdentityChannelDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AuthIdentityChannel mutation op: %q", m.Op())
+	}
+}
+
+// BalanceCacheInvalidationOutboxClient is a client for the BalanceCacheInvalidationOutbox schema.
+type BalanceCacheInvalidationOutboxClient struct {
+	config
+}
+
+// NewBalanceCacheInvalidationOutboxClient returns a client for the BalanceCacheInvalidationOutbox from the given config.
+func NewBalanceCacheInvalidationOutboxClient(c config) *BalanceCacheInvalidationOutboxClient {
+	return &BalanceCacheInvalidationOutboxClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `balancecacheinvalidationoutbox.Hooks(f(g(h())))`.
+func (c *BalanceCacheInvalidationOutboxClient) Use(hooks ...Hook) {
+	c.hooks.BalanceCacheInvalidationOutbox = append(c.hooks.BalanceCacheInvalidationOutbox, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `balancecacheinvalidationoutbox.Intercept(f(g(h())))`.
+func (c *BalanceCacheInvalidationOutboxClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BalanceCacheInvalidationOutbox = append(c.inters.BalanceCacheInvalidationOutbox, interceptors...)
+}
+
+// Create returns a builder for creating a BalanceCacheInvalidationOutbox entity.
+func (c *BalanceCacheInvalidationOutboxClient) Create() *BalanceCacheInvalidationOutboxCreate {
+	mutation := newBalanceCacheInvalidationOutboxMutation(c.config, OpCreate)
+	return &BalanceCacheInvalidationOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BalanceCacheInvalidationOutbox entities.
+func (c *BalanceCacheInvalidationOutboxClient) CreateBulk(builders ...*BalanceCacheInvalidationOutboxCreate) *BalanceCacheInvalidationOutboxCreateBulk {
+	return &BalanceCacheInvalidationOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BalanceCacheInvalidationOutboxClient) MapCreateBulk(slice any, setFunc func(*BalanceCacheInvalidationOutboxCreate, int)) *BalanceCacheInvalidationOutboxCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BalanceCacheInvalidationOutboxCreateBulk{err: fmt.Errorf("calling to BalanceCacheInvalidationOutboxClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BalanceCacheInvalidationOutboxCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BalanceCacheInvalidationOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BalanceCacheInvalidationOutbox.
+func (c *BalanceCacheInvalidationOutboxClient) Update() *BalanceCacheInvalidationOutboxUpdate {
+	mutation := newBalanceCacheInvalidationOutboxMutation(c.config, OpUpdate)
+	return &BalanceCacheInvalidationOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BalanceCacheInvalidationOutboxClient) UpdateOne(_m *BalanceCacheInvalidationOutbox) *BalanceCacheInvalidationOutboxUpdateOne {
+	mutation := newBalanceCacheInvalidationOutboxMutation(c.config, OpUpdateOne, withBalanceCacheInvalidationOutbox(_m))
+	return &BalanceCacheInvalidationOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BalanceCacheInvalidationOutboxClient) UpdateOneID(id int64) *BalanceCacheInvalidationOutboxUpdateOne {
+	mutation := newBalanceCacheInvalidationOutboxMutation(c.config, OpUpdateOne, withBalanceCacheInvalidationOutboxID(id))
+	return &BalanceCacheInvalidationOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BalanceCacheInvalidationOutbox.
+func (c *BalanceCacheInvalidationOutboxClient) Delete() *BalanceCacheInvalidationOutboxDelete {
+	mutation := newBalanceCacheInvalidationOutboxMutation(c.config, OpDelete)
+	return &BalanceCacheInvalidationOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BalanceCacheInvalidationOutboxClient) DeleteOne(_m *BalanceCacheInvalidationOutbox) *BalanceCacheInvalidationOutboxDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BalanceCacheInvalidationOutboxClient) DeleteOneID(id int64) *BalanceCacheInvalidationOutboxDeleteOne {
+	builder := c.Delete().Where(balancecacheinvalidationoutbox.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BalanceCacheInvalidationOutboxDeleteOne{builder}
+}
+
+// Query returns a query builder for BalanceCacheInvalidationOutbox.
+func (c *BalanceCacheInvalidationOutboxClient) Query() *BalanceCacheInvalidationOutboxQuery {
+	return &BalanceCacheInvalidationOutboxQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBalanceCacheInvalidationOutbox},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BalanceCacheInvalidationOutbox entity by its id.
+func (c *BalanceCacheInvalidationOutboxClient) Get(ctx context.Context, id int64) (*BalanceCacheInvalidationOutbox, error) {
+	return c.Query().Where(balancecacheinvalidationoutbox.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BalanceCacheInvalidationOutboxClient) GetX(ctx context.Context, id int64) *BalanceCacheInvalidationOutbox {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BalanceCacheInvalidationOutboxClient) Hooks() []Hook {
+	return c.hooks.BalanceCacheInvalidationOutbox
+}
+
+// Interceptors returns the client interceptors.
+func (c *BalanceCacheInvalidationOutboxClient) Interceptors() []Interceptor {
+	return c.inters.BalanceCacheInvalidationOutbox
+}
+
+func (c *BalanceCacheInvalidationOutboxClient) mutate(ctx context.Context, m *BalanceCacheInvalidationOutboxMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BalanceCacheInvalidationOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BalanceCacheInvalidationOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BalanceCacheInvalidationOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BalanceCacheInvalidationOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BalanceCacheInvalidationOutbox mutation op: %q", m.Op())
+	}
+}
+
+// BalanceDebitClientClient is a client for the BalanceDebitClient schema.
+type BalanceDebitClientClient struct {
+	config
+}
+
+// NewBalanceDebitClientClient returns a client for the BalanceDebitClient from the given config.
+func NewBalanceDebitClientClient(c config) *BalanceDebitClientClient {
+	return &BalanceDebitClientClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `balancedebitclient.Hooks(f(g(h())))`.
+func (c *BalanceDebitClientClient) Use(hooks ...Hook) {
+	c.hooks.BalanceDebitClient = append(c.hooks.BalanceDebitClient, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `balancedebitclient.Intercept(f(g(h())))`.
+func (c *BalanceDebitClientClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BalanceDebitClient = append(c.inters.BalanceDebitClient, interceptors...)
+}
+
+// Create returns a builder for creating a BalanceDebitClient entity.
+func (c *BalanceDebitClientClient) Create() *BalanceDebitClientCreate {
+	mutation := newBalanceDebitClientMutation(c.config, OpCreate)
+	return &BalanceDebitClientCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BalanceDebitClient entities.
+func (c *BalanceDebitClientClient) CreateBulk(builders ...*BalanceDebitClientCreate) *BalanceDebitClientCreateBulk {
+	return &BalanceDebitClientCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BalanceDebitClientClient) MapCreateBulk(slice any, setFunc func(*BalanceDebitClientCreate, int)) *BalanceDebitClientCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BalanceDebitClientCreateBulk{err: fmt.Errorf("calling to BalanceDebitClientClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BalanceDebitClientCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BalanceDebitClientCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BalanceDebitClient.
+func (c *BalanceDebitClientClient) Update() *BalanceDebitClientUpdate {
+	mutation := newBalanceDebitClientMutation(c.config, OpUpdate)
+	return &BalanceDebitClientUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BalanceDebitClientClient) UpdateOne(_m *BalanceDebitClient) *BalanceDebitClientUpdateOne {
+	mutation := newBalanceDebitClientMutation(c.config, OpUpdateOne, withBalanceDebitClient(_m))
+	return &BalanceDebitClientUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BalanceDebitClientClient) UpdateOneID(id int64) *BalanceDebitClientUpdateOne {
+	mutation := newBalanceDebitClientMutation(c.config, OpUpdateOne, withBalanceDebitClientID(id))
+	return &BalanceDebitClientUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BalanceDebitClient.
+func (c *BalanceDebitClientClient) Delete() *BalanceDebitClientDelete {
+	mutation := newBalanceDebitClientMutation(c.config, OpDelete)
+	return &BalanceDebitClientDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BalanceDebitClientClient) DeleteOne(_m *BalanceDebitClient) *BalanceDebitClientDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BalanceDebitClientClient) DeleteOneID(id int64) *BalanceDebitClientDeleteOne {
+	builder := c.Delete().Where(balancedebitclient.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BalanceDebitClientDeleteOne{builder}
+}
+
+// Query returns a query builder for BalanceDebitClient.
+func (c *BalanceDebitClientClient) Query() *BalanceDebitClientQuery {
+	return &BalanceDebitClientQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBalanceDebitClient},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BalanceDebitClient entity by its id.
+func (c *BalanceDebitClientClient) Get(ctx context.Context, id int64) (*BalanceDebitClient, error) {
+	return c.Query().Where(balancedebitclient.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BalanceDebitClientClient) GetX(ctx context.Context, id int64) *BalanceDebitClient {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryTransactions queries the transactions edge of a BalanceDebitClient.
+func (c *BalanceDebitClientClient) QueryTransactions(_m *BalanceDebitClient) *BalanceDebitTransactionQuery {
+	query := (&BalanceDebitTransactionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(balancedebitclient.Table, balancedebitclient.FieldID, id),
+			sqlgraph.To(balancedebittransaction.Table, balancedebittransaction.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, balancedebitclient.TransactionsTable, balancedebitclient.TransactionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *BalanceDebitClientClient) Hooks() []Hook {
+	return c.hooks.BalanceDebitClient
+}
+
+// Interceptors returns the client interceptors.
+func (c *BalanceDebitClientClient) Interceptors() []Interceptor {
+	return c.inters.BalanceDebitClient
+}
+
+func (c *BalanceDebitClientClient) mutate(ctx context.Context, m *BalanceDebitClientMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BalanceDebitClientCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BalanceDebitClientUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BalanceDebitClientUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BalanceDebitClientDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BalanceDebitClient mutation op: %q", m.Op())
+	}
+}
+
+// BalanceDebitTransactionClient is a client for the BalanceDebitTransaction schema.
+type BalanceDebitTransactionClient struct {
+	config
+}
+
+// NewBalanceDebitTransactionClient returns a client for the BalanceDebitTransaction from the given config.
+func NewBalanceDebitTransactionClient(c config) *BalanceDebitTransactionClient {
+	return &BalanceDebitTransactionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `balancedebittransaction.Hooks(f(g(h())))`.
+func (c *BalanceDebitTransactionClient) Use(hooks ...Hook) {
+	c.hooks.BalanceDebitTransaction = append(c.hooks.BalanceDebitTransaction, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `balancedebittransaction.Intercept(f(g(h())))`.
+func (c *BalanceDebitTransactionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BalanceDebitTransaction = append(c.inters.BalanceDebitTransaction, interceptors...)
+}
+
+// Create returns a builder for creating a BalanceDebitTransaction entity.
+func (c *BalanceDebitTransactionClient) Create() *BalanceDebitTransactionCreate {
+	mutation := newBalanceDebitTransactionMutation(c.config, OpCreate)
+	return &BalanceDebitTransactionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BalanceDebitTransaction entities.
+func (c *BalanceDebitTransactionClient) CreateBulk(builders ...*BalanceDebitTransactionCreate) *BalanceDebitTransactionCreateBulk {
+	return &BalanceDebitTransactionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BalanceDebitTransactionClient) MapCreateBulk(slice any, setFunc func(*BalanceDebitTransactionCreate, int)) *BalanceDebitTransactionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BalanceDebitTransactionCreateBulk{err: fmt.Errorf("calling to BalanceDebitTransactionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BalanceDebitTransactionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BalanceDebitTransactionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BalanceDebitTransaction.
+func (c *BalanceDebitTransactionClient) Update() *BalanceDebitTransactionUpdate {
+	mutation := newBalanceDebitTransactionMutation(c.config, OpUpdate)
+	return &BalanceDebitTransactionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BalanceDebitTransactionClient) UpdateOne(_m *BalanceDebitTransaction) *BalanceDebitTransactionUpdateOne {
+	mutation := newBalanceDebitTransactionMutation(c.config, OpUpdateOne, withBalanceDebitTransaction(_m))
+	return &BalanceDebitTransactionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BalanceDebitTransactionClient) UpdateOneID(id int64) *BalanceDebitTransactionUpdateOne {
+	mutation := newBalanceDebitTransactionMutation(c.config, OpUpdateOne, withBalanceDebitTransactionID(id))
+	return &BalanceDebitTransactionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BalanceDebitTransaction.
+func (c *BalanceDebitTransactionClient) Delete() *BalanceDebitTransactionDelete {
+	mutation := newBalanceDebitTransactionMutation(c.config, OpDelete)
+	return &BalanceDebitTransactionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BalanceDebitTransactionClient) DeleteOne(_m *BalanceDebitTransaction) *BalanceDebitTransactionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BalanceDebitTransactionClient) DeleteOneID(id int64) *BalanceDebitTransactionDeleteOne {
+	builder := c.Delete().Where(balancedebittransaction.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BalanceDebitTransactionDeleteOne{builder}
+}
+
+// Query returns a query builder for BalanceDebitTransaction.
+func (c *BalanceDebitTransactionClient) Query() *BalanceDebitTransactionQuery {
+	return &BalanceDebitTransactionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBalanceDebitTransaction},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BalanceDebitTransaction entity by its id.
+func (c *BalanceDebitTransactionClient) Get(ctx context.Context, id int64) (*BalanceDebitTransaction, error) {
+	return c.Query().Where(balancedebittransaction.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BalanceDebitTransactionClient) GetX(ctx context.Context, id int64) *BalanceDebitTransaction {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryClient queries the client edge of a BalanceDebitTransaction.
+func (c *BalanceDebitTransactionClient) QueryClient(_m *BalanceDebitTransaction) *BalanceDebitClientQuery {
+	query := (&BalanceDebitClientClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(balancedebittransaction.Table, balancedebittransaction.FieldID, id),
+			sqlgraph.To(balancedebitclient.Table, balancedebitclient.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, balancedebittransaction.ClientTable, balancedebittransaction.ClientColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *BalanceDebitTransactionClient) Hooks() []Hook {
+	return c.hooks.BalanceDebitTransaction
+}
+
+// Interceptors returns the client interceptors.
+func (c *BalanceDebitTransactionClient) Interceptors() []Interceptor {
+	return c.inters.BalanceDebitTransaction
+}
+
+func (c *BalanceDebitTransactionClient) mutate(ctx context.Context, m *BalanceDebitTransactionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BalanceDebitTransactionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BalanceDebitTransactionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BalanceDebitTransactionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BalanceDebitTransactionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BalanceDebitTransaction mutation op: %q", m.Op())
 	}
 }
 
@@ -8010,29 +8467,33 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountErrorHistory, AccountGroup, Announcement,
-		AnnouncementRead, AuthIdentity, AuthIdentityChannel, BatchImageEvent,
-		BatchImageItem, BatchImageJob, ChannelMonitor, ChannelMonitorDailyRollup,
-		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, LotteryCampaign,
-		LotteryCode, LotteryDraw, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAccessToken, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserPlatformQuota, UserSubscription []ent.Hook
+		AnnouncementRead, AuthIdentity, AuthIdentityChannel,
+		BalanceCacheInvalidationOutbox, BalanceDebitClient, BalanceDebitTransaction,
+		BatchImageEvent, BatchImageItem, BatchImageJob, ChannelMonitor,
+		ChannelMonitorDailyRollup, ChannelMonitorHistory,
+		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, LotteryCampaign, LotteryCode, LotteryDraw,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SiteMessage, SubscriptionCreditLedger, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAccessToken, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountErrorHistory, AccountGroup, Announcement,
-		AnnouncementRead, AuthIdentity, AuthIdentityChannel, BatchImageEvent,
-		BatchImageItem, BatchImageJob, ChannelMonitor, ChannelMonitorDailyRollup,
-		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, LotteryCampaign,
-		LotteryCode, LotteryDraw, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SiteMessage, SubscriptionCreditLedger,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAccessToken, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserPlatformQuota, UserSubscription []ent.Interceptor
+		AnnouncementRead, AuthIdentity, AuthIdentityChannel,
+		BalanceCacheInvalidationOutbox, BalanceDebitClient, BalanceDebitTransaction,
+		BatchImageEvent, BatchImageItem, BatchImageJob, ChannelMonitor,
+		ChannelMonitorDailyRollup, ChannelMonitorHistory,
+		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, LotteryCampaign, LotteryCode, LotteryDraw,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		SiteMessage, SubscriptionCreditLedger, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAccessToken, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
+		UserSubscription []ent.Interceptor
 	}
 )
 

@@ -57,6 +57,7 @@ func ProvideAdminHandlers(
 	affiliateHandler *admin.AffiliateHandler,
 	complianceHandler *admin.ComplianceHandler,
 	auditLogHandler *admin.AuditLogHandler,
+	balanceClientHandler *admin.BalanceClientHandler,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
@@ -99,6 +100,7 @@ func ProvideAdminHandlers(
 		Affiliate:              affiliateHandler,
 		Compliance:             complianceHandler,
 		AuditLog:               auditLogHandler,
+		BalanceClient:          balanceClientHandler,
 	}
 }
 
@@ -154,10 +156,12 @@ func ProvideHandlers(
 	batchImageHandler *BatchImageHandler,
 	asyncImageHandler *AsyncImageHandler,
 	desktopPaymentHandoffHandler *DesktopPaymentHandoffHandler,
+	balanceWalletHandler *BalanceWalletHandler,
 	webhookBalanceNotifyService *service.WebhookBalanceNotifyService,
 	_ *service.WebhookBalanceNotifyWiring,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
+	_ *service.BalanceCacheInvalidationWorker,
 ) *Handlers {
 	userHandler.SetWebhookBalanceNotifyService(webhookBalanceNotifyService)
 	return &Handlers{
@@ -185,6 +189,7 @@ func ProvideHandlers(
 		BatchImage:       batchImageHandler,
 		AsyncImage:       asyncImageHandler,
 		DesktopHandoff:   desktopPaymentHandoffHandler,
+		BalanceWallet:    balanceWalletHandler,
 	}
 }
 
@@ -266,6 +271,7 @@ var ProviderSet = wire.NewSet(
 	ProvideOpenAIGatewayHandler,
 	NewTotpHandler,
 	NewUserAccessTokenHandler,
+	NewBalanceWalletHandler,
 	ProvideSettingHandler,
 	NewPaymentHandler,
 	NewPaymentWebhookHandler,
@@ -314,6 +320,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
 	admin.NewAuditLogHandler,
+	admin.NewBalanceClientHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

@@ -30,6 +30,12 @@ type Tx struct {
 	AuthIdentity *AuthIdentityClient
 	// AuthIdentityChannel is the client for interacting with the AuthIdentityChannel builders.
 	AuthIdentityChannel *AuthIdentityChannelClient
+	// BalanceCacheInvalidationOutbox is the client for interacting with the BalanceCacheInvalidationOutbox builders.
+	BalanceCacheInvalidationOutbox *BalanceCacheInvalidationOutboxClient
+	// BalanceDebitClient is the client for interacting with the BalanceDebitClient builders.
+	BalanceDebitClient *BalanceDebitClientClient
+	// BalanceDebitTransaction is the client for interacting with the BalanceDebitTransaction builders.
+	BalanceDebitTransaction *BalanceDebitTransactionClient
 	// BatchImageEvent is the client for interacting with the BatchImageEvent builders.
 	BatchImageEvent *BatchImageEventClient
 	// BatchImageItem is the client for interacting with the BatchImageItem builders.
@@ -243,6 +249,9 @@ func (tx *Tx) init() {
 	tx.AnnouncementRead = NewAnnouncementReadClient(tx.config)
 	tx.AuthIdentity = NewAuthIdentityClient(tx.config)
 	tx.AuthIdentityChannel = NewAuthIdentityChannelClient(tx.config)
+	tx.BalanceCacheInvalidationOutbox = NewBalanceCacheInvalidationOutboxClient(tx.config)
+	tx.BalanceDebitClient = NewBalanceDebitClientClient(tx.config)
+	tx.BalanceDebitTransaction = NewBalanceDebitTransactionClient(tx.config)
 	tx.BatchImageEvent = NewBatchImageEventClient(tx.config)
 	tx.BatchImageItem = NewBatchImageItemClient(tx.config)
 	tx.BatchImageJob = NewBatchImageJobClient(tx.config)

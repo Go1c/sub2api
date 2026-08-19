@@ -7,6 +7,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
+	responsepkg "github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -34,6 +35,8 @@ const (
 	ContextKeyAuthMethod ContextKey = "auth_method"
 	// ContextKeyUserAccessTokenID opaque access token 记录 ID（仅 user_access_token 认证时设置）
 	ContextKeyUserAccessTokenID ContextKey = "user_access_token_id"
+	// ContextKeyBalanceClientID 通过钱包消费方认证后的稳定 client_id（不含 secret/hash）。
+	ContextKeyBalanceClientID ContextKey = "balance_client_id"
 )
 
 // ForcePlatform 返回设置强制平台的中间件
@@ -81,8 +84,36 @@ func NewErrorResponse(code, message string) ErrorResponse {
 
 // AbortWithError 中断请求并返回JSON错误
 func AbortWithError(c *gin.Context, statusCode int, code, message string) {
+	if isBalanceWalletUserPath(c.Request.URL.Path) {
+		switch code {
+		case "TOKEN_EXPIRED":
+			statusCode = http.StatusUnauthorized
+		case "USER_INACTIVE":
+			statusCode = http.StatusForbidden
+		default:
+			statusCode = http.StatusUnauthorized
+			code = "INVALID_TOKEN"
+			message = "invalid token"
+		}
+		responsepkg.WalletError(c, statusCode, code, message, nil)
+		c.Abort()
+		return
+	}
+	if isBalanceClientAdminPath(c.Request.URL.Path) {
+		responsepkg.WalletError(c, statusCode, code, message, nil)
+		c.Abort()
+		return
+	}
 	c.JSON(statusCode, NewErrorResponse(code, message))
 	c.Abort()
+}
+
+func isBalanceWalletUserPath(path string) bool {
+	return path == "/api/v1/user/balance" || strings.HasPrefix(path, "/api/v1/user/balance/")
+}
+
+func isBalanceClientAdminPath(path string) bool {
+	return path == "/api/v1/admin/balance-clients" || strings.HasPrefix(path, "/api/v1/admin/balance-clients/")
 }
 
 // abortWithOpenAIQuotaError writes the OpenAI-compatible insufficient quota response.

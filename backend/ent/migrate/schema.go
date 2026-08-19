@@ -491,6 +491,109 @@ var (
 			},
 		},
 	}
+	// BalanceCacheInvalidationOutboxColumns holds the columns for the "balance_cache_invalidation_outbox" table.
+	BalanceCacheInvalidationOutboxColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64, Unique: true},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "next_attempt_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "claimed_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "claim_token", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "last_error", Type: field.TypeString, Size: 2147483647, Default: ""},
+	}
+	// BalanceCacheInvalidationOutboxTable holds the schema information for the "balance_cache_invalidation_outbox" table.
+	BalanceCacheInvalidationOutboxTable = &schema.Table{
+		Name:       "balance_cache_invalidation_outbox",
+		Columns:    BalanceCacheInvalidationOutboxColumns,
+		PrimaryKey: []*schema.Column{BalanceCacheInvalidationOutboxColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "balancecacheinvalidationoutbox_next_attempt_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceCacheInvalidationOutboxColumns[5], BalanceCacheInvalidationOutboxColumns[0]},
+			},
+		},
+	}
+	// BalanceDebitClientsColumns holds the columns for the "balance_debit_clients" table.
+	BalanceDebitClientsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "client_id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "uuid"}},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "secret_hash", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "secret_prefix", Type: field.TypeString, Size: 32},
+		{Name: "allowed_purposes", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "status", Type: field.TypeString, Size: 16, Default: "active"},
+		{Name: "last_used_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// BalanceDebitClientsTable holds the schema information for the "balance_debit_clients" table.
+	BalanceDebitClientsTable = &schema.Table{
+		Name:       "balance_debit_clients",
+		Columns:    BalanceDebitClientsColumns,
+		PrimaryKey: []*schema.Column{BalanceDebitClientsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "balancedebitclient_status",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceDebitClientsColumns[8]},
+			},
+		},
+	}
+	// BalanceDebitTransactionsColumns holds the columns for the "balance_debit_transactions" table.
+	BalanceDebitTransactionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "txn_id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "uuid"}},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "idempotency_key_hash", Type: field.TypeString, Size: 64},
+		{Name: "request_fingerprint", Type: field.TypeString, Size: 64},
+		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,2)"}},
+		{Name: "currency", Type: field.TypeString, Size: 3},
+		{Name: "purpose", Type: field.TypeString, Size: 64},
+		{Name: "ref", Type: field.TypeString, Size: 128},
+		{Name: "balance_before", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "balance_after", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "balance_client_id", Type: field.TypeInt64},
+	}
+	// BalanceDebitTransactionsTable holds the schema information for the "balance_debit_transactions" table.
+	BalanceDebitTransactionsTable = &schema.Table{
+		Name:       "balance_debit_transactions",
+		Columns:    BalanceDebitTransactionsColumns,
+		PrimaryKey: []*schema.Column{BalanceDebitTransactionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "balance_debit_transactions_balance_debit_clients_transactions",
+				Columns:    []*schema.Column{BalanceDebitTransactionsColumns[12]},
+				RefColumns: []*schema.Column{BalanceDebitClientsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "balancedebittransaction_balance_client_id_user_id_idempotency_key_hash",
+				Unique:  true,
+				Columns: []*schema.Column{BalanceDebitTransactionsColumns[12], BalanceDebitTransactionsColumns[2], BalanceDebitTransactionsColumns[3]},
+			},
+			{
+				Name:    "balancedebittransaction_user_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceDebitTransactionsColumns[2], BalanceDebitTransactionsColumns[11], BalanceDebitTransactionsColumns[0]},
+			},
+			{
+				Name:    "balancedebittransaction_user_id_ref",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceDebitTransactionsColumns[2], BalanceDebitTransactionsColumns[8]},
+			},
+			{
+				Name:    "balancedebittransaction_balance_client_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceDebitTransactionsColumns[12], BalanceDebitTransactionsColumns[11]},
+			},
+		},
+	}
 	// BatchImageEventsColumns holds the columns for the "batch_image_events" table.
 	BatchImageEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2397,6 +2500,9 @@ var (
 		AnnouncementReadsTable,
 		AuthIdentitiesTable,
 		AuthIdentityChannelsTable,
+		BalanceCacheInvalidationOutboxTable,
+		BalanceDebitClientsTable,
+		BalanceDebitTransactionsTable,
 		BatchImageEventsTable,
 		BatchImageItemsTable,
 		BatchImageJobsTable,
@@ -2472,6 +2578,16 @@ func init() {
 	AuthIdentityChannelsTable.ForeignKeys[0].RefTable = AuthIdentitiesTable
 	AuthIdentityChannelsTable.Annotation = &entsql.Annotation{
 		Table: "auth_identity_channels",
+	}
+	BalanceCacheInvalidationOutboxTable.Annotation = &entsql.Annotation{
+		Table: "balance_cache_invalidation_outbox",
+	}
+	BalanceDebitClientsTable.Annotation = &entsql.Annotation{
+		Table: "balance_debit_clients",
+	}
+	BalanceDebitTransactionsTable.ForeignKeys[0].RefTable = BalanceDebitClientsTable
+	BalanceDebitTransactionsTable.Annotation = &entsql.Annotation{
+		Table: "balance_debit_transactions",
 	}
 	BatchImageEventsTable.Annotation = &entsql.Annotation{
 		Table: "batch_image_events",

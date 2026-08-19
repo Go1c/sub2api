@@ -40,6 +40,18 @@ func RegisterUserRoutes(
 		return "ip:" + c.ClientIP()
 	}
 
+	// Wallet queries accept JWT/UAT; debit adds a strict Header-JWT guard and
+	// authenticates the server-side balance client inside the handler.
+	wallet := v1.Group("/user/balance")
+	wallet.Use(gin.HandlerFunc(jwtAuth))
+	wallet.Use(middleware.WalletBackendModeGuard(settingService))
+	wallet.Use(gin.HandlerFunc(auditLog))
+	{
+		wallet.GET("/transactions", h.BalanceWallet.ListTransactions)
+		wallet.GET("/transactions/:txn_id", h.BalanceWallet.GetTransaction)
+		wallet.POST("/debit", middleware.RequireWalletHeaderJWT(), h.BalanceWallet.Debit)
+	}
+
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))

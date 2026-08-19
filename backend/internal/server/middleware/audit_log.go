@@ -58,6 +58,8 @@ var auditExtraAllowedKeys = map[string]struct{}{
 	"http_status": {}, "latency_ms": {}, "token_applied": {}, "retryable": {},
 	"event_id": {}, "requested_count": {}, "deleted_events": {}, "deleted_jobs": {},
 	"matched_count": {}, "snapshot_max_id": {}, "filter_hash": {}, "confirm": {},
+	"client_id": {}, "client_name": {}, "user_id": {}, "txn_id": {},
+	"purpose": {}, "ref": {}, "amount_summary": {},
 }
 
 // SetAuditExtra adds allowlisted, scalar details to the current audit entry.
@@ -146,6 +148,7 @@ var auditActionOverrides = map[string]string{
 // auditBodyOmittedRoutes 请求体几乎整体由凭证构成的路由（如整块粘贴 auth JSON 的导入接口）。
 // 这类 body 的凭证内嵌在普通字符串值里，键级脱敏无法覆盖，整体不入库。
 var auditBodyOmittedRoutes = map[string]struct{}{
+	"POST /api/v1/user/balance/debit":                         {},
 	"POST /api/v1/admin/accounts/import/codex-session":        {},
 	"PUT /api/v1/admin/prompt-audit/config":                   {},
 	"POST /api/v1/admin/prompt-audit/endpoints/probe":         {},
@@ -264,7 +267,9 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 		}
 
 		// 请求头凭证掩码（仅保留首尾）。
-		entry.CredentialMasked = MaskedRequestCredential(c)
+		if routeKey != "POST /api/v1/user/balance/debit" {
+			entry.CredentialMasked = MaskedRequestCredential(c)
+		}
 
 		extra := map[string]any{}
 		if value, ok := c.Get(auditCtxKeyExtra); ok {
