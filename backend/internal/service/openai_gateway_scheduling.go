@@ -242,7 +242,7 @@ func isOpenAICompatibleAccountEligibleForRequest(ctx context.Context, account *A
 			return false
 		}
 	}
-	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+	if requestedModel != "" && !accountSupportsOpenAISchedulingModel(account, requestedModel) {
 		return false
 	}
 	if !account.SupportsOpenAIEndpointCapability(requiredCapability) {
@@ -592,6 +592,9 @@ func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedMode
 		if requireCompact {
 			return resolveOpenAICompactForwardModel(account, upstreamModel)
 		}
+		if isOpenAIHiddenIngressModel(upstreamModel) {
+			return normalizeOpenAIModelForUpstream(account, upstreamModel)
+		}
 		return upstreamModel
 	}
 
@@ -609,48 +612,53 @@ func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedMode
 }
 
 func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiredCapability OpenAIEndpointCapability, preferLowUpstreamRate bool) (*Account, error) {
-	requestedModel = RewriteOpenAIHiddenIngressModel(requestedModel)
 	platform = normalizeOpenAICompatiblePlatform(platform)
-	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
-		slog.Warn("channel pricing restriction blocked request",
-			"group_id", derefGroupID(groupID),
-			"model", requestedModel)
-		return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
+	selectOnce := func(model string) (*Account, error) {
+		if s.checkChannelPricingRestriction(ctx, groupID, model) {
+			slog.Warn("channel pricing restriction blocked request",
+				"group_id", derefGroupID(groupID),
+				"model", model)
+			return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, model)
+		}
+
+		if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, model, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
+			return account, nil
+		}
+
+		accounts, err := s.listSchedulableAccounts(ctx, groupID, platform)
+		if err != nil {
+			return nil, fmt.Errorf("query accounts failed: %w", err)
+		}
+
+		selected, compactBlocked := s.selectBestAccount(ctx, groupID, platform, accounts, model, excludedIDs, requireCompact, requiredCapability, preferLowUpstreamRate)
+		if selected == nil {
+			return nil, noAvailableOpenAISelectionError(model, compactBlocked)
+		}
+
+		hydrated, err := s.hydrateSelectedAccount(ctx, selected)
+		if err != nil {
+			return nil, err
+		}
+
+		if sessionHash != "" {
+			_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, selected.ID, openaiStickySessionTTL)
+		}
+		return hydrated, nil
 	}
 
-	// 1. 尝试粘性会话命中
-	// Try sticky session hit
-	if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
-		return account, nil
+	if isOpenAIHiddenIngressModel(requestedModel) {
+		luna := canonicalizeOpenAIHiddenIngressModel(requestedModel)
+		account, err := selectOnce(luna)
+		if account != nil {
+			return account, nil
+		}
+		if err != nil && !shouldFallbackFromHiddenOpenAIIngress(err) {
+			return nil, err
+		}
+		requestedModel = openaiHiddenIngressFallbackModel
 	}
 
-	// 2. 获取可调度的 OpenAI 账号
-	// Get schedulable OpenAI accounts
-	accounts, err := s.listSchedulableAccounts(ctx, groupID, platform)
-	if err != nil {
-		return nil, fmt.Errorf("query accounts failed: %w", err)
-	}
-
-	// 3. 按优先级 + LRU 选择最佳账号
-	// Select by priority + LRU
-	selected, compactBlocked := s.selectBestAccount(ctx, groupID, platform, accounts, requestedModel, excludedIDs, requireCompact, requiredCapability, preferLowUpstreamRate)
-
-	if selected == nil {
-		return nil, noAvailableOpenAISelectionError(requestedModel, compactBlocked)
-	}
-
-	hydrated, err := s.hydrateSelectedAccount(ctx, selected)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. 设置粘性会话绑定
-	// Set sticky session binding
-	if sessionHash != "" {
-		_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, selected.ID, openaiStickySessionTTL)
-	}
-
-	return hydrated, nil
+	return selectOnce(requestedModel)
 }
 
 // tryStickySessionHit 尝试从粘性会话获取账号。
@@ -825,7 +833,21 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, useUpstreamTokenCost bool) (*AccountSelectionResult, error) {
-	requestedModel = RewriteOpenAIHiddenIngressModel(requestedModel)
+	if isOpenAIHiddenIngressModel(requestedModel) {
+		luna := canonicalizeOpenAIHiddenIngressModel(requestedModel)
+		result, err := s.selectAccountWithLoadAwarenessResolved(ctx, groupID, platform, sessionHash, luna, excludedIDs, requireCompact, requiredCapability, useUpstreamTokenCost)
+		if result != nil && result.Account != nil {
+			return result, err
+		}
+		if err != nil && !shouldFallbackFromHiddenOpenAIIngress(err) {
+			return result, err
+		}
+		requestedModel = openaiHiddenIngressFallbackModel
+	}
+	return s.selectAccountWithLoadAwarenessResolved(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, requiredCapability, useUpstreamTokenCost)
+}
+
+func (s *OpenAIGatewayService) selectAccountWithLoadAwarenessResolved(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, useUpstreamTokenCost bool) (*AccountSelectionResult, error) {
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",

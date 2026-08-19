@@ -1607,7 +1607,7 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatible(ctx context.C
 	}) {
 		return false
 	}
-	if req.RequestedModel != "" && !account.IsModelSupported(req.RequestedModel) {
+	if req.RequestedModel != "" && !accountSupportsOpenAISchedulingModel(account, req.RequestedModel) {
 		return false
 	}
 	if req.GroupID != nil && s != nil && s.service != nil &&
@@ -1954,7 +1954,43 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	previousResponseCanMove bool,
 	useUpstreamTokenCost bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	requestedModel = RewriteOpenAIHiddenIngressModel(requestedModel)
+	if isOpenAIHiddenIngressModel(requestedModel) {
+		luna := canonicalizeOpenAIHiddenIngressModel(requestedModel)
+		selection, decision, err := s.selectAccountWithSchedulerResolved(
+			ctx, groupID, previousResponseID, sessionHash, luna, excludedIDs,
+			requiredTransport, requiredCapability, requiredImageCapability,
+			requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost,
+		)
+		if selection != nil && selection.Account != nil {
+			return selection, decision, err
+		}
+		if err != nil && !shouldFallbackFromHiddenOpenAIIngress(err) {
+			return selection, decision, err
+		}
+		requestedModel = openaiHiddenIngressFallbackModel
+	}
+	return s.selectAccountWithSchedulerResolved(
+		ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs,
+		requiredTransport, requiredCapability, requiredImageCapability,
+		requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost,
+	)
+}
+
+func (s *OpenAIGatewayService) selectAccountWithSchedulerResolved(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+	requiredCapability OpenAIEndpointCapability,
+	requiredImageCapability OpenAIImagesCapability,
+	requireCompact bool,
+	platform string,
+	previousResponseCanMove bool,
+	useUpstreamTokenCost bool,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	decision := OpenAIAccountScheduleDecision{}

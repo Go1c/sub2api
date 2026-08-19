@@ -145,8 +145,7 @@ func TestBillingService_GPT56UsesLongContextPricingAcrossModelsAndTiers(t *testi
 	}{
 		{name: "gpt-5.6-sol", input: 5e-6, cached: 0.5e-6, cacheWrite: 6.25e-6, output: 30e-6},
 		{name: "gpt-5.6-terra", input: 2.5e-6, cached: 0.25e-6, cacheWrite: 3.125e-6, output: 15e-6},
-		// Hidden Luna remaps to Terra before fallback billing.
-		{name: "gpt-5.6-luna", input: 2.5e-6, cached: 0.25e-6, cacheWrite: 3.125e-6, output: 15e-6},
+		{name: "gpt-5.6-luna", input: 1e-6, cached: 0.1e-6, cacheWrite: 1.25e-6, output: 6e-6},
 	}
 	tiers := []struct {
 		name       string
@@ -282,12 +281,7 @@ func TestGPT56DedicatedFallbacksUseOfficialRates(t *testing.T) {
 			svc := NewBillingService(&config.Config{}, nil)
 			pricing, err := svc.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			wantInput, wantCached, wantCacheWrite, wantOutput := tt.input, tt.cached, tt.cacheWrite, tt.output
-			if tt.model == "gpt-5.6-luna" {
-				// BillingService fallback remaps hidden Luna onto Terra rates.
-				wantInput, wantCached, wantCacheWrite, wantOutput = 2.5e-6, 0.25e-6, 3.125e-6, 15e-6
-			}
-			assertGPT56FallbackPricing(t, pricing, wantInput, wantCached, wantCacheWrite, wantOutput)
+			assertGPT56FallbackPricing(t, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
 		})
 	}
 }

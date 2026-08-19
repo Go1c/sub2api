@@ -1,42 +1,48 @@
 ---
 name: openai-hidden-luna-autoreview
-description: 对用户隐藏 GPT-5.6 Luna，并把 Codex Auto-review 的 luna/codex-auto-review 入站改写到 gpt-5.6-terra
+description: 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 入站改写到 gpt-5.6-terra，账号显式映射时可打真 Luna
 metadata:
   type: doc
   level: L2
   status: 已实现
 ---
 
-# 隐藏 Luna，Auto-review 改写到 Terra
+# 隐藏 Luna，默认改写到 Terra，账号可 opt-in 真 Luna
 
-简介：用户不能选、也不能真正跑到 `gpt-5.6-luna`。Codex Auto-review 写死该模型且没有客户端覆盖字段，网关在选账号前把它和 `codex-auto-review` 改写成 `gpt-5.6-terra`，避免 404。
+简介：用户目录不展示 `gpt-5.6-luna` / `codex-auto-review`。默认把这类入站改写成 `gpt-5.6-terra`，避免 Auto-review 404。若某个上游账号的 `model_mapping` **显式**写了 Luna（或 Auto-review）键，则只在这些账号上调度并送真 Luna；这些号全不可用时回退 Terra。
 
 ## 背景 / 目标
 
 - Codex Auto-review 独立打 `/v1/responses`，模型固定 `gpt-5.6-luna`（或 `codex-auto-review`）。项目下拉框和公共配置改不了审批器模型。
 - 账号组若没把 Luna 写进 `model_mapping`，网关会在选账号阶段回 404 `not supported by any configured account in this group`。
-- 产品要求：普通用户不能访问真正的 Luna；Auto-review 不能因此失败，可以落到 Terra。
+- 产品要求：普通用户默认不能访问真正的 Luna；Auto-review 不能因此失败，可以落到 Terra。
+- 运维需要「只给某一个上游账号开 Luna」时，该号必须能接到真 Luna，而不是被全局改写挡死。
 
 ## 设计
 
-- 入站改写函数 `RewriteOpenAIHiddenIngressModel`：`gpt-5.6-luna*` 与 `codex-auto-review*` → `gpt-5.6-terra`。
-- 选账号、可用性诊断、OAuth/API Key 上游归一化、`/v1/responses` / chat / WS 请求体都走同一套改写，避免渠道透传仍把 Luna 送上去。
-- 用户目录不展示 Luna / Auto-review：`openai.DefaultModels`、前端密钥白名单、OpenCode 配置片段。
-- 计费按改写后的 Terra 走；Luna 价卡仍留在定价表里，但不作为可调度模型。
+- 默认改写：`RewriteOpenAIHiddenIngressModel` 把 `gpt-5.6-luna*` 与 `codex-auto-review*` → `gpt-5.6-terra`。
+- 显式 opt-in：账号 `model_mapping` 的**键**含 `gpt-5.6-luna` 或 `codex-auto-review` 才算。空映射、`gpt-5.6-*`、`*` 不算（空映射等于允许全部，不能当信号）。
+- `codex-auto-review*` 在 opt-in 路径归一成 `gpt-5.6-luna`，管理员只配 Luna 即可接住 Auto-review。
+- 调度：先只在显式 Luna 号里选；全挂 / 被排除 / 渠道 restrict 拦截 Luna 时回退 Terra。
+- 上游归一化最后一道闸：当前账号未 opt-in 时，即使请求体仍是 Luna 也改成 Terra。
+- 用户目录不展示 Luna / Auto-review：`openai.DefaultModels`、前端密钥白名单、OpenCode 配置片段。管理端账号白名单和映射预设加回 Luna（另保留 `Luna→Terra`）。
+- 计费：真 Luna 按 Luna 价卡；回退 Terra 按 Terra。
 
 ## 已决策
 
-- 不单独探测 Auto-review 客户端：Codex 公共配置没有审批器模型字段，审批器与用户请求身份难以可靠区分。全部 Luna 入站改写到 Terra，用户也拿不到真 Luna。
-- 不新增管理员设置。目标固定 `gpt-5.6-terra`。若该组账号也不支持 Terra，仍会 404。
-- 不把 Luna 偷偷改成 Sol；Terra 是当前账户组实际在用的公开 5.6 档。
+- 不单独探测 Auto-review 客户端。默认改写到 Terra；账号显式映射除外。
+- 不新增管理员设置。opt-in 沿用现有 `model_mapping` / 白名单。
+- 不把 Luna 偷偷改成 Sol；Terra 是默认公开 5.6 档。
+- 映射值 `luna → terra` 仍合法：该号会接到 Luna 流量，但上游按映射送 Terra。
 
 ## 待解决
 
-- 若以后要按分组配置 Auto-review 落点，再加设置项；当前不需要。
+- 若以后要按分组配置 Auto-review 落点且不想用账号映射，再加设置项。
 
 ## 相关
 
 - 网关 404 分类：`backend/internal/handler/no_account_error.go`
-- 改写：`backend/internal/service/openai_model_alias.go`
+- 改写 / opt-in：`backend/internal/service/openai_model_alias.go`
 - 选账号：`backend/internal/service/openai_account_scheduler.go`、`openai_gateway_scheduling.go`
 - 入站改写请求体：`backend/internal/handler/openai_gateway_handler.go`
+- 管理端白名单：`frontend/src/composables/useModelWhitelist.ts`
