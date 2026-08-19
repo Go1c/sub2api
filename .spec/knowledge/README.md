@@ -50,7 +50,7 @@ metadata:
 | [`features/user-access-token.md`](features/user-access-token.md) | 用户长效 opaque Access Token：密钥管理 + 只读用量/余额/订阅；活跃数上限、用户 RPM、usage 查询护栏 |
 | [`features/balance-debit-wallet.md`](features/balance-debit-wallet.md) | 多外部站共用站内余额：双重身份原子扣款、永久幂等账本、本人流水、管理端 wallet_debit 合并流水、用户「我的订单」可见本人扣款 |
 | [`features/lumio-desktop-client.md`](features/lumio-desktop-client.md) | Lumio Codex 桌面客户端服务端契约：公开配置、账号级唯一 Key、一次性支付交接，以及 GET /v1/models 不查余额；接入桌面启动或充值流程时查 |
-| [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 改写到 Terra，账号显式映射时可打真 Luna |
+| [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 改写到 Terra，仅显式 Luna 键或 Auto-review→Luna 值可打真 Luna |
 | [`features/frontend-seo-meta.md`](features/frontend-seo-meta.md) | 前端 GEO/SEO：Go embed 注入 description/OG/Twitter/JSON-LD，以及 `#app` 内爬虫可见简介 |
 | [`features/umami-public-tracking.md`](features/umami-public-tracking.md) | 前台 Umami：SPA nonce inline 条件插入官方 defer 脚本、直开 /admin 不加载、docs 静态页直接埋、CSP script-src 放行 data.lumio.games |
 | [`features/_TEMPLATE.md`](features/_TEMPLATE.md) | 新功能文档模板——新增功能记录时照此建,放对 领域 / 模块 |
