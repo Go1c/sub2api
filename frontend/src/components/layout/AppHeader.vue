@@ -50,6 +50,17 @@
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
+        <!-- Codex download (shown on smaller screens; home nav already has it on xl) -->
+        <a
+          :href="CODEX_DOWNLOAD_URL"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white xl:hidden"
+        >
+          <Icon name="download" size="sm" />
+          <span class="hidden sm:inline">{{ codexDownloadLabel }}</span>
+        </a>
+
         <!-- Docs Link (shown on smaller screens; home nav already has docs on xl) -->
         <router-link
           v-if="docsNav && !docsNav.external"
@@ -282,6 +293,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
+import { CODEX_DOWNLOAD_URL } from '@/constants/codexDownload'
 import type { SitePage } from '@/types'
 import { normalizeSitePages, resolveDocsNavItem, resolveSitePageNavItem } from '@/utils/sitePages'
 
@@ -324,14 +336,17 @@ const image2LoginHandoffTo = computed(() => ({
     return_to: image2ReturnTo
   }
 }))
+const isZhLocale = computed(() => locale.value.startsWith('zh'))
+const codexDownloadLabel = computed(() => (isZhLocale.value ? 'Codex 下载' : 'Download Codex'))
 const homeNavItems = computed(() => {
-  const isZh = locale.value.startsWith('zh')
+  const isZh = isZhLocale.value
   const docs = docsNav.value
   const terms = termsNav.value
   const privacy = privacyNav.value
   const footerFallback = { path: '/home', hash: '#footer' }
   return [
     { key: 'models', label: isZh ? '模型广场' : 'Model Market', to: { path: '/models' }, href: '', external: false },
+    { key: 'codexDownload', label: codexDownloadLabel.value, to: footerFallback, href: CODEX_DOWNLOAD_URL, external: true },
     { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/status' }, href: '', external: false },
     docs?.external
       ? { key: 'docs', label: t('nav.docs'), to: footerFallback, href: docs.target, external: true }

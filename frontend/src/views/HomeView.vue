@@ -489,6 +489,7 @@ import Icon from '@/components/icons/Icon.vue'
 import type { ContactChannel, SitePage } from '@/types'
 import { normalizeSitePages, resolveDocsNavItem, resolveSitePageNavItem } from '@/utils/sitePages'
 import { sanitizeUrl } from '@/utils/url'
+import { CODEX_DOWNLOAD_URL } from '@/constants/codexDownload'
 
 type HomeIconName =
   | 'sparkles'
@@ -538,6 +539,7 @@ interface StatusItem {
 interface HomeCopy {
   nav: Omit<NavItem, 'target' | 'external' | 'dim'>[]
   dimNav: Omit<NavItem, 'target' | 'external' | 'dim'>[]
+  codexDownloadLabel: string
   headerCta: string
   announcement: string
   announcementBadge: string
@@ -623,6 +625,7 @@ const zhCopy: HomeCopy = {
     { key: 'privacy', label: '隐私保护' },
     { key: 'image2', label: 'Image2生图' }
   ],
+  codexDownloadLabel: 'Codex 下载',
   headerCta: '控制台',
   announcement: 'Claude 4.7 和 GPT-5.5 现已可用',
   announcementBadge: '全新升级',
@@ -696,6 +699,7 @@ const enCopy: HomeCopy = {
     { key: 'privacy', label: 'Privacy' },
     { key: 'image2', label: 'Image2生图' }
   ],
+  codexDownloadLabel: 'Download Codex',
   headerCta: 'Console',
   announcement: 'Claude 4.7 and GPT-5.5 are now live',
   announcementBadge: 'New',
@@ -764,6 +768,7 @@ const image2LoginHandoffTarget = `/login?handoff=1&return_to=${encodeURIComponen
 
 const navItems = computed<NavItem[]>(() => [
   { key: 'models', label: copy.value.nav[0].label, target: '/models' },
+  { key: 'codexDownload', label: copy.value.codexDownloadLabel, target: CODEX_DOWNLOAD_URL, external: true },
   { ...copy.value.nav[1], key: 'status', target: '/status' },
   {
     ...copy.value.nav[2],
