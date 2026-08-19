@@ -7,11 +7,14 @@ const here = dirname(fileURLToPath(import.meta.url))
 const indexHtml = readFileSync(resolve(here, '../../../index.html'), 'utf8')
 
 describe('public homepage SEO', () => {
-  it('ships a Chinese title, crawler-readable Chinese H1, and Bing verification', () => {
+  it('ships a Chinese title, crawler-readable Chinese H1, and search engine verification', () => {
     expect(indexHtml).toContain('<title>LumioAPI · AI API 中转与管理平台</title>')
     expect(indexHtml).toContain('<h1>LumioAPI · AI API 中转与管理平台</h1>')
     expect(indexHtml).toContain(
       '<meta name="msvalidate.01" content="48232FF4A9EAB80D49C7A5AE2D009539" />'
+    )
+    expect(indexHtml).toContain(
+      '<meta name="baidu-site-verification" content="codeva-zP7LfM4N1h" />'
     )
   })
 })
