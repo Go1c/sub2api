@@ -238,7 +238,6 @@
                           {{ platformLabel(model.platform) }}
                         </span>
                         <span>{{ billingModeLabel(model.billingMode) }}</span>
-                        <span>{{ model.channels.join(' / ') }}</span>
                       </div>
                     </div>
                   </div>
