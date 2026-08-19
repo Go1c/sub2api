@@ -328,6 +328,7 @@ func (s *ModelMarketService) GetPublic(ctx context.Context) (*ModelMarketRespons
 	if !cfg.Enabled {
 		models = []ModelMarketModel{}
 	}
+	redactPublicModelMarketAccountChannels(models)
 	return &ModelMarketResponse{
 		Enabled:     cfg.Enabled,
 		AutoSync:    cfg.AutoSync,
@@ -335,6 +336,41 @@ func (s *ModelMarketService) GetPublic(ctx context.Context) (*ModelMarketRespons
 		Description: cfg.Description,
 		Models:      models,
 	}, nil
+}
+
+func redactPublicModelMarketAccountChannels(models []ModelMarketModel) {
+	for i := range models {
+		models[i].Channels = publicModelMarketChannels(models[i])
+	}
+}
+
+func publicModelMarketChannels(model ModelMarketModel) []string {
+	allowed := map[string]struct{}{
+		modelMarketRoutingSource: {},
+		modelMarketCustomChannel: {},
+	}
+	for _, group := range model.Groups {
+		if name := strings.TrimSpace(group.Name); name != "" {
+			allowed[name] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(model.Channels))
+	seen := make(map[string]struct{}, len(model.Channels))
+	for _, channel := range model.Channels {
+		channel = strings.TrimSpace(channel)
+		if channel == "" {
+			continue
+		}
+		if _, ok := allowed[channel]; !ok {
+			continue
+		}
+		if _, dup := seen[channel]; dup {
+			continue
+		}
+		seen[channel] = struct{}{}
+		out = append(out, channel)
+	}
+	return out
 }
 
 func (s *ModelMarketService) GetAdmin(ctx context.Context) (*ModelMarketAdminResponse, error) {
@@ -479,12 +515,8 @@ func (s *ModelMarketService) modelSourcesForGroup(ctx context.Context, group Gro
 		return nil, fmt.Errorf("list model market accounts for group %d: %w", group.ID, err)
 	}
 	for _, account := range accounts {
-		source := strings.TrimSpace(account.Name)
-		if source == "" {
-			source = fmt.Sprintf("账号#%d", account.ID)
-		}
 		for _, model := range accountModelMarketModels(account, group) {
-			add(model, source)
+			add(model, group.Name)
 		}
 	}
 	return out, nil

@@ -186,6 +186,62 @@ describe('ModelMarketView', () => {
     expect(wrapper.text()).toContain('去订阅')
     expect(wrapper.text()).not.toContain('官方价 × 0.35')
     expect(wrapper.text()).not.toContain('充值单位：积分')
+    expect(wrapper.text()).not.toContain('CPA-818-Pro20x')
+  })
+
+  it('does not render leaked account names from channels on public cards', async () => {
+    const { default: modelMarketAPI } = await import('@/api/modelMarket')
+    vi.mocked(modelMarketAPI.getPublicModelMarket).mockResolvedValueOnce({
+      enabled: true,
+      auto_sync: true,
+      title: '模型广场',
+      description: '当前模型',
+      models: [
+        {
+          key: 'openai:gpt-5.6-terra',
+          name: 'gpt-5.6-terra',
+          platform: 'openai',
+          billing_mode: 'token',
+          pricing: {
+            billing_mode: 'token',
+            input_price: 0.000002,
+            output_price: 0.000012,
+            cache_write_price: null,
+            cache_read_price: null,
+            image_output_price: null,
+            per_request_price: null,
+            intervals: [],
+          },
+          groups: [
+            {
+              id: 1,
+              name: 'openai-public',
+              platform: 'openai',
+              subscription_type: 'standard',
+              rate_multiplier: 0.35,
+              is_exclusive: false,
+            },
+          ],
+          channels: ['CPA-818-Pro20x', 'CPA-菲律宾-815-20x'],
+          sort_order: 0,
+        },
+      ],
+    } as never)
+
+    const wrapper = mount(ModelMarketView, {
+      global: {
+        stubs: {
+          Icon: true,
+          PlatformIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('gpt-5.6-terra')
+    expect(wrapper.text()).not.toContain('CPA-818-Pro20x')
+    expect(wrapper.text()).not.toContain('CPA-菲律宾-815-20x')
   })
 
   it('renders configured image tiers without a default image price', async () => {
