@@ -1344,7 +1344,8 @@ export default {
     balanceAddedPromo: '余额充值（优惠码）',
     balanceAddedAffiliateSignupBonus: '余额充值（邀请注册赠送）',
     balancePaymentSubscription: '余额支付订阅',
-    subscriptionPayment: '订阅消费'
+    subscriptionPayment: '订阅消费',
+    walletDebit: '外部钱包扣款'
   },
 
   // Profile
@@ -2301,6 +2302,7 @@ export default {
       typeConcurrency: '并发（兑换码）',
       typeAdminConcurrency: '并发（管理员调整）',
       typeSubscription: '订阅',
+      typeWalletDebit: '外部钱包扣款',
       failedToLoadBalanceHistory: '加载余额记录失败',
       createdAt: '创建时间',
       totalRecharged: '总充值',

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/shopspring/decimal"
 )
 
 type balanceHistorySQLQueryer interface {
@@ -433,4 +434,233 @@ func subscriptionPaymentHistoryItem(id int64, code string, amount float64, statu
 		ValidityDays: validityDays,
 		Notes:        notes,
 	}
+}
+
+const walletDebitHistoryIDOffset int64 = 700000000000
+
+type walletDebitHistoryRow struct {
+	ID           int64
+	TxnID        string
+	ClientID     string
+	ClientName   string
+	Amount       string
+	BalanceAfter string
+	Currency     string
+	Purpose      string
+	Ref          string
+	CreatedAt    time.Time
+}
+
+func (s *adminServiceImpl) listWalletDebitHistoryForMerge(ctx context.Context, userID int64, needed int) ([]RedeemCode, int64, error) {
+	if needed <= 0 {
+		return nil, 0, nil
+	}
+
+	var (
+		out   []RedeemCode
+		total int64
+	)
+	for page := 1; len(out) < needed; page++ {
+		params := pagination.PaginationParams{Page: page, PageSize: 1000}
+		codes, currentTotal, err := s.listWalletDebitHistory(ctx, userID, params)
+		if err != nil {
+			return nil, 0, err
+		}
+		total = currentTotal
+		out = append(out, codes...)
+		if len(codes) < params.Limit() || int64(len(out)) >= total {
+			break
+		}
+	}
+	if len(out) > needed {
+		out = out[:needed]
+	}
+	return out, total, nil
+}
+
+func (s *adminServiceImpl) listWalletDebitHistory(ctx context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, int64, error) {
+	if s == nil || s.entClient == nil || userID <= 0 {
+		return nil, 0, nil
+	}
+	return listWalletDebitHistory(ctx, s.entClient, userID, params)
+}
+
+func listWalletDebitHistory(ctx context.Context, q balanceHistorySQLQueryer, userID int64, params pagination.PaginationParams) ([]RedeemCode, int64, error) {
+	rows, total, err := listWalletDebitHistoryRows(ctx, q, userID, params)
+	if err != nil {
+		return nil, 0, err
+	}
+	codes := make([]RedeemCode, 0, len(rows))
+	for i := range rows {
+		codes = append(codes, walletDebitHistoryItem(rows[i], userID))
+	}
+	return codes, total, nil
+}
+
+func listWalletDebitTransactions(ctx context.Context, q balanceHistorySQLQueryer, userID int64, params pagination.PaginationParams) (*BalanceTransactionPage, error) {
+	page := params.Page
+	pageSize := params.PageSize
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	params.Page = page
+	params.PageSize = pageSize
+	rows, total, err := listWalletDebitHistoryRows(ctx, q, userID, params)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]BalanceDebitTransaction, 0, len(rows))
+	for i := range rows {
+		items = append(items, walletDebitTransactionFromRow(rows[i], userID))
+	}
+	return &BalanceTransactionPage{Items: items, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+func listWalletDebitHistoryRows(ctx context.Context, q balanceHistorySQLQueryer, userID int64, params pagination.PaginationParams) ([]walletDebitHistoryRow, int64, error) {
+	if q == nil || userID <= 0 {
+		return nil, 0, nil
+	}
+
+	queryRows, err := q.QueryContext(ctx, `
+SELECT t.id,
+       t.txn_id::text,
+       c.client_id::text,
+       c.name,
+       t.amount::text,
+       t.balance_after::text,
+       t.currency,
+       t.purpose,
+       t.ref,
+       t.created_at
+FROM balance_debit_transactions t
+JOIN balance_debit_clients c ON c.id = t.balance_client_id
+WHERE t.user_id = $1
+ORDER BY t.created_at DESC, t.id DESC
+OFFSET $2
+LIMIT $3`, userID, params.Offset(), params.Limit())
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = queryRows.Close() }()
+
+	out := make([]walletDebitHistoryRow, 0, params.Limit())
+	for queryRows.Next() {
+		var row walletDebitHistoryRow
+		if err := queryRows.Scan(
+			&row.ID,
+			&row.TxnID,
+			&row.ClientID,
+			&row.ClientName,
+			&row.Amount,
+			&row.BalanceAfter,
+			&row.Currency,
+			&row.Purpose,
+			&row.Ref,
+			&row.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, row)
+	}
+	if err := queryRows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	total, err := countWalletDebitHistory(ctx, q, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+func countWalletDebitHistory(ctx context.Context, q balanceHistorySQLQueryer, userID int64) (int64, error) {
+	if q == nil || userID <= 0 {
+		return 0, nil
+	}
+	rows, err := q.QueryContext(ctx, `
+SELECT COUNT(*)
+FROM balance_debit_transactions
+WHERE user_id = $1`, userID)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var total sql.NullInt64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if !total.Valid {
+		return 0, nil
+	}
+	return total.Int64, nil
+}
+
+func walletDebitHistoryItem(row walletDebitHistoryRow, userID int64) RedeemCode {
+	usedBy := userID
+	usedAt := row.CreatedAt
+	amount := parseWalletDebitAmount(row.Amount)
+	return RedeemCode{
+		ID:        -walletDebitHistoryIDOffset - row.ID,
+		Code:      row.TxnID,
+		Type:      RedeemTypeWalletDebit,
+		Value:     amount.Neg().InexactFloat64(),
+		Status:    StatusUsed,
+		UsedBy:    &usedBy,
+		UsedAt:    &usedAt,
+		CreatedAt: row.CreatedAt,
+		Notes:     walletDebitHistoryNotes(row),
+	}
+}
+
+func walletDebitTransactionFromRow(row walletDebitHistoryRow, userID int64) BalanceDebitTransaction {
+	return BalanceDebitTransaction{
+		ID:           row.ID,
+		TxnID:        row.TxnID,
+		UserID:       userID,
+		ClientID:     row.ClientID,
+		ClientName:   row.ClientName,
+		Amount:       row.Amount,
+		BalanceAfter: row.BalanceAfter,
+		Currency:     row.Currency,
+		Purpose:      row.Purpose,
+		Ref:          row.Ref,
+		CreatedAt:    row.CreatedAt,
+	}
+}
+
+func walletDebitHistoryNotes(row walletDebitHistoryRow) string {
+	parts := make([]string, 0, 5)
+	if name := strings.TrimSpace(row.ClientName); name != "" {
+		parts = append(parts, name)
+	}
+	if purpose := strings.TrimSpace(row.Purpose); purpose != "" {
+		parts = append(parts, "purpose="+purpose)
+	}
+	if ref := strings.TrimSpace(row.Ref); ref != "" {
+		parts = append(parts, "ref="+ref)
+	}
+	if txnID := strings.TrimSpace(row.TxnID); txnID != "" {
+		parts = append(parts, "txn_id="+txnID)
+	}
+	if after := strings.TrimSpace(row.BalanceAfter); after != "" {
+		parts = append(parts, "扣后余额 "+after)
+	}
+	return strings.Join(parts, " · ")
+}
+
+func parseWalletDebitAmount(raw string) decimal.Decimal {
+	value, err := decimal.NewFromString(strings.TrimSpace(raw))
+	if err != nil {
+		return decimal.Zero
+	}
+	return value
 }

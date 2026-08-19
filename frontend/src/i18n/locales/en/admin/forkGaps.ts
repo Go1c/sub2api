@@ -282,6 +282,7 @@ export default {
       typeBalancePayment: 'Subscription via Balance',
       typePromoBalance: 'Balance (Promo)',
       typeSubscriptionPayment: 'Subscription Payment',
+      typeWalletDebit: 'External Wallet Debit',
       passwordCopied: 'Password copied'
     }
 }

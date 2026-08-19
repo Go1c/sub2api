@@ -116,9 +116,10 @@
                 <p
                   v-if="item.notes"
                   class="mt-0.5 text-xs text-gray-500 dark:text-dark-400"
+                  :class="item.type === 'wallet_debit' ? 'whitespace-pre-wrap break-all' : ''"
                   :title="item.notes"
                 >
-                  {{ item.notes.length > 60 ? item.notes.substring(0, 55) + '...' : item.notes }}
+                  {{ item.type === 'wallet_debit' || item.notes.length <= 60 ? item.notes : item.notes.substring(0, 55) + '...' }}
                 </p>
                 <p class="mt-0.5 text-xs text-gray-400 dark:text-dark-500">
                   {{ formatDateTime(item.used_at || item.created_at) }}
@@ -206,7 +207,8 @@ const typeOptions = computed(() => [
   { value: 'concurrency', label: t('admin.users.typeConcurrency') },
   { value: 'admin_concurrency', label: t('admin.users.typeAdminConcurrency') },
   { value: 'subscription', label: t('admin.users.typeSubscription') },
-  { value: 'subscription_payment', label: t('admin.users.typeSubscriptionPayment') }
+  { value: 'subscription_payment', label: t('admin.users.typeSubscriptionPayment') },
+  { value: 'wallet_debit', label: t('admin.users.typeWalletDebit') }
 ])
 
 // Watch modal open
@@ -242,7 +244,7 @@ const loadHistory = async (page: number) => {
 const isAdminType = (type: string) => type === 'admin_balance' || type === 'admin_concurrency'
 
 // Helper: check if balance type (includes admin_balance)
-const isBalanceType = (type: string) => type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'affiliate_balance' || type === 'promo_balance'
+const isBalanceType = (type: string) => type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'affiliate_balance' || type === 'promo_balance' || type === 'wallet_debit'
 
 // Helper: check if subscription type
 const isSubscriptionType = (type: string) => type === 'subscription'
@@ -323,6 +325,8 @@ const getItemTitle = (item: BalanceHistoryItem) => {
       return t('redeem.subscriptionAssigned')
     case 'subscription_payment':
       return t('redeem.subscriptionPayment')
+    case 'wallet_debit':
+      return t('redeem.walletDebit')
     default:
       return t('common.unknown')
   }

@@ -305,7 +305,7 @@ export interface BalanceHistoryResponse extends PaginatedResponse<BalanceHistory
  * @param id - User ID
  * @param page - Page number
  * @param pageSize - Items per page
- * @param type - Optional type filter (balance, promo_balance, affiliate_balance, admin_balance, concurrency, admin_concurrency, subscription, subscription_payment)
+ * @param type - Optional type filter (balance, promo_balance, affiliate_balance, admin_balance, concurrency, admin_concurrency, subscription, subscription_payment, wallet_debit)
  * @returns Paginated balance history with total_recharged
  */
 export async function getUserBalanceHistory(
@@ -319,6 +319,36 @@ export async function getUserBalanceHistory(
   const { data } = await apiClient.get<BalanceHistoryResponse>(
     `/admin/users/${id}/balance-history`,
     { params }
+  )
+  return data
+}
+
+export interface AdminWalletDebitItem {
+  txn_id: string
+  client_id: string
+  client_name: string
+  amount: number
+  balance_after: number
+  currency: string
+  purpose: string
+  ref: string
+  created_at: string
+}
+
+export interface AdminWalletDebitResponse extends PaginatedResponse<AdminWalletDebitItem> {}
+
+/**
+ * Get a user's external wallet debit ledger.
+ * Fields match GET /api/v1/user/balance/transactions; secrets are never returned.
+ */
+export async function getUserWalletDebits(
+  id: number,
+  page: number = 1,
+  pageSize: number = 20
+): Promise<AdminWalletDebitResponse> {
+  const { data } = await apiClient.get<AdminWalletDebitResponse>(
+    `/admin/users/${id}/wallet-debits`,
+    { params: { page, page_size: pageSize } }
   )
   return data
 }
@@ -439,6 +469,7 @@ export const usersAPI = {
   getUserUsageStats,
   getBalanceSummary,
   getUserBalanceHistory,
+  getUserWalletDebits,
   replaceGroup,
   bindUserAuthIdentity,
   getPlatformQuotas,
