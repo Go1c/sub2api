@@ -30,6 +30,15 @@ type AuthIdentity func(*sql.Selector)
 // AuthIdentityChannel is the predicate function for authidentitychannel builders.
 type AuthIdentityChannel func(*sql.Selector)
 
+// BalanceCacheInvalidationOutbox is the predicate function for balancecacheinvalidationoutbox builders.
+type BalanceCacheInvalidationOutbox func(*sql.Selector)
+
+// BalanceDebitClient is the predicate function for balancedebitclient builders.
+type BalanceDebitClient func(*sql.Selector)
+
+// BalanceDebitTransaction is the predicate function for balancedebittransaction builders.
+type BalanceDebitTransaction func(*sql.Selector)
+
 // BatchImageEvent is the predicate function for batchimageevent builders.
 type BatchImageEvent func(*sql.Selector)
 

@@ -99,6 +99,9 @@ func RegisterAdminRoutes(
 		// API Key 管理
 		registerAdminAPIKeyRoutes(admin, h)
 
+		// 站内余额消费方管理
+		registerBalanceClientRoutes(admin, h, stepUpAuth)
+
 		// 定时测试计划
 		registerScheduledTestRoutes(admin, h)
 
@@ -119,6 +122,18 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+	}
+}
+
+func registerBalanceClientRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	clients := admin.Group("/balance-clients")
+	{
+		clients.GET("", h.Admin.BalanceClient.List)
+		clients.GET("/:id", h.Admin.BalanceClient.Get)
+		clients.POST("", gin.HandlerFunc(stepUpAuth), h.Admin.BalanceClient.Create)
+		clients.PUT("/:id", gin.HandlerFunc(stepUpAuth), h.Admin.BalanceClient.Update)
+		clients.POST("/:id/rotate-secret", gin.HandlerFunc(stepUpAuth), h.Admin.BalanceClient.RotateSecret)
+		clients.DELETE("/:id", gin.HandlerFunc(stepUpAuth), h.Admin.BalanceClient.Delete)
 	}
 }
 

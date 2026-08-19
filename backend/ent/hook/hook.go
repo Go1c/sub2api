@@ -105,6 +105,42 @@ func (f AuthIdentityChannelFunc) Mutate(ctx context.Context, m ent.Mutation) (en
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthIdentityChannelMutation", m)
 }
 
+// The BalanceCacheInvalidationOutboxFunc type is an adapter to allow the use of ordinary
+// function as BalanceCacheInvalidationOutbox mutator.
+type BalanceCacheInvalidationOutboxFunc func(context.Context, *ent.BalanceCacheInvalidationOutboxMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BalanceCacheInvalidationOutboxFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BalanceCacheInvalidationOutboxMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BalanceCacheInvalidationOutboxMutation", m)
+}
+
+// The BalanceDebitClientFunc type is an adapter to allow the use of ordinary
+// function as BalanceDebitClient mutator.
+type BalanceDebitClientFunc func(context.Context, *ent.BalanceDebitClientMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BalanceDebitClientFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BalanceDebitClientMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BalanceDebitClientMutation", m)
+}
+
+// The BalanceDebitTransactionFunc type is an adapter to allow the use of ordinary
+// function as BalanceDebitTransaction mutator.
+type BalanceDebitTransactionFunc func(context.Context, *ent.BalanceDebitTransactionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BalanceDebitTransactionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BalanceDebitTransactionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BalanceDebitTransactionMutation", m)
+}
+
 // The BatchImageEventFunc type is an adapter to allow the use of ordinary
 // function as BatchImageEvent mutator.
 type BatchImageEventFunc func(context.Context, *ent.BatchImageEventMutation) (ent.Value, error)

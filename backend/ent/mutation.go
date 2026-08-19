@@ -20,6 +20,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/balancecacheinvalidationoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebitclient"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebittransaction"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -70,51 +73,54 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAPIKey                        = "APIKey"
-	TypeAccount                       = "Account"
-	TypeAccountErrorHistory           = "AccountErrorHistory"
-	TypeAccountGroup                  = "AccountGroup"
-	TypeAnnouncement                  = "Announcement"
-	TypeAnnouncementRead              = "AnnouncementRead"
-	TypeAuthIdentity                  = "AuthIdentity"
-	TypeAuthIdentityChannel           = "AuthIdentityChannel"
-	TypeBatchImageEvent               = "BatchImageEvent"
-	TypeBatchImageItem                = "BatchImageItem"
-	TypeBatchImageJob                 = "BatchImageJob"
-	TypeChannelMonitor                = "ChannelMonitor"
-	TypeChannelMonitorDailyRollup     = "ChannelMonitorDailyRollup"
-	TypeChannelMonitorHistory         = "ChannelMonitorHistory"
-	TypeChannelMonitorRequestTemplate = "ChannelMonitorRequestTemplate"
-	TypeErrorPassthroughRule          = "ErrorPassthroughRule"
-	TypeGroup                         = "Group"
-	TypeIdempotencyRecord             = "IdempotencyRecord"
-	TypeIdentityAdoptionDecision      = "IdentityAdoptionDecision"
-	TypeLotteryCampaign               = "LotteryCampaign"
-	TypeLotteryCode                   = "LotteryCode"
-	TypeLotteryDraw                   = "LotteryDraw"
-	TypePaymentAuditLog               = "PaymentAuditLog"
-	TypePaymentOrder                  = "PaymentOrder"
-	TypePaymentProviderInstance       = "PaymentProviderInstance"
-	TypePendingAuthSession            = "PendingAuthSession"
-	TypePromoCode                     = "PromoCode"
-	TypePromoCodeUsage                = "PromoCodeUsage"
-	TypeProxy                         = "Proxy"
-	TypeRedeemCode                    = "RedeemCode"
-	TypeSecuritySecret                = "SecuritySecret"
-	TypeSetting                       = "Setting"
-	TypeSiteMessage                   = "SiteMessage"
-	TypeSubscriptionCreditLedger      = "SubscriptionCreditLedger"
-	TypeSubscriptionPlan              = "SubscriptionPlan"
-	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
-	TypeUsageCleanupTask              = "UsageCleanupTask"
-	TypeUsageLog                      = "UsageLog"
-	TypeUser                          = "User"
-	TypeUserAccessToken               = "UserAccessToken"
-	TypeUserAllowedGroup              = "UserAllowedGroup"
-	TypeUserAttributeDefinition       = "UserAttributeDefinition"
-	TypeUserAttributeValue            = "UserAttributeValue"
-	TypeUserPlatformQuota             = "UserPlatformQuota"
-	TypeUserSubscription              = "UserSubscription"
+	TypeAPIKey                         = "APIKey"
+	TypeAccount                        = "Account"
+	TypeAccountErrorHistory            = "AccountErrorHistory"
+	TypeAccountGroup                   = "AccountGroup"
+	TypeAnnouncement                   = "Announcement"
+	TypeAnnouncementRead               = "AnnouncementRead"
+	TypeAuthIdentity                   = "AuthIdentity"
+	TypeAuthIdentityChannel            = "AuthIdentityChannel"
+	TypeBalanceCacheInvalidationOutbox = "BalanceCacheInvalidationOutbox"
+	TypeBalanceDebitClient             = "BalanceDebitClient"
+	TypeBalanceDebitTransaction        = "BalanceDebitTransaction"
+	TypeBatchImageEvent                = "BatchImageEvent"
+	TypeBatchImageItem                 = "BatchImageItem"
+	TypeBatchImageJob                  = "BatchImageJob"
+	TypeChannelMonitor                 = "ChannelMonitor"
+	TypeChannelMonitorDailyRollup      = "ChannelMonitorDailyRollup"
+	TypeChannelMonitorHistory          = "ChannelMonitorHistory"
+	TypeChannelMonitorRequestTemplate  = "ChannelMonitorRequestTemplate"
+	TypeErrorPassthroughRule           = "ErrorPassthroughRule"
+	TypeGroup                          = "Group"
+	TypeIdempotencyRecord              = "IdempotencyRecord"
+	TypeIdentityAdoptionDecision       = "IdentityAdoptionDecision"
+	TypeLotteryCampaign                = "LotteryCampaign"
+	TypeLotteryCode                    = "LotteryCode"
+	TypeLotteryDraw                    = "LotteryDraw"
+	TypePaymentAuditLog                = "PaymentAuditLog"
+	TypePaymentOrder                   = "PaymentOrder"
+	TypePaymentProviderInstance        = "PaymentProviderInstance"
+	TypePendingAuthSession             = "PendingAuthSession"
+	TypePromoCode                      = "PromoCode"
+	TypePromoCodeUsage                 = "PromoCodeUsage"
+	TypeProxy                          = "Proxy"
+	TypeRedeemCode                     = "RedeemCode"
+	TypeSecuritySecret                 = "SecuritySecret"
+	TypeSetting                        = "Setting"
+	TypeSiteMessage                    = "SiteMessage"
+	TypeSubscriptionCreditLedger       = "SubscriptionCreditLedger"
+	TypeSubscriptionPlan               = "SubscriptionPlan"
+	TypeTLSFingerprintProfile          = "TLSFingerprintProfile"
+	TypeUsageCleanupTask               = "UsageCleanupTask"
+	TypeUsageLog                       = "UsageLog"
+	TypeUser                           = "User"
+	TypeUserAccessToken                = "UserAccessToken"
+	TypeUserAllowedGroup               = "UserAllowedGroup"
+	TypeUserAttributeDefinition        = "UserAttributeDefinition"
+	TypeUserAttributeValue             = "UserAttributeValue"
+	TypeUserPlatformQuota              = "UserPlatformQuota"
+	TypeUserSubscription               = "UserSubscription"
 )
 
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
@@ -10642,6 +10648,2831 @@ func (m *AuthIdentityChannelMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AuthIdentityChannel edge %s", name)
+}
+
+// BalanceCacheInvalidationOutboxMutation represents an operation that mutates the BalanceCacheInvalidationOutbox nodes in the graph.
+type BalanceCacheInvalidationOutboxMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *int64
+	created_at      *time.Time
+	updated_at      *time.Time
+	user_id         *int64
+	adduser_id      *int64
+	attempts        *int
+	addattempts     *int
+	next_attempt_at *time.Time
+	claimed_at      *time.Time
+	claim_token     *string
+	last_error      *string
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*BalanceCacheInvalidationOutbox, error)
+	predicates      []predicate.BalanceCacheInvalidationOutbox
+}
+
+var _ ent.Mutation = (*BalanceCacheInvalidationOutboxMutation)(nil)
+
+// balancecacheinvalidationoutboxOption allows management of the mutation configuration using functional options.
+type balancecacheinvalidationoutboxOption func(*BalanceCacheInvalidationOutboxMutation)
+
+// newBalanceCacheInvalidationOutboxMutation creates new mutation for the BalanceCacheInvalidationOutbox entity.
+func newBalanceCacheInvalidationOutboxMutation(c config, op Op, opts ...balancecacheinvalidationoutboxOption) *BalanceCacheInvalidationOutboxMutation {
+	m := &BalanceCacheInvalidationOutboxMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBalanceCacheInvalidationOutbox,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBalanceCacheInvalidationOutboxID sets the ID field of the mutation.
+func withBalanceCacheInvalidationOutboxID(id int64) balancecacheinvalidationoutboxOption {
+	return func(m *BalanceCacheInvalidationOutboxMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BalanceCacheInvalidationOutbox
+		)
+		m.oldValue = func(ctx context.Context) (*BalanceCacheInvalidationOutbox, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BalanceCacheInvalidationOutbox.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBalanceCacheInvalidationOutbox sets the old BalanceCacheInvalidationOutbox of the mutation.
+func withBalanceCacheInvalidationOutbox(node *BalanceCacheInvalidationOutbox) balancecacheinvalidationoutboxOption {
+	return func(m *BalanceCacheInvalidationOutboxMutation) {
+		m.oldValue = func(context.Context) (*BalanceCacheInvalidationOutbox, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BalanceCacheInvalidationOutboxMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BalanceCacheInvalidationOutboxMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BalanceCacheInvalidationOutboxMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BalanceCacheInvalidationOutbox.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *BalanceCacheInvalidationOutboxMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetAttempts sets the "attempts" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetAttempts(i int) {
+	m.attempts = &i
+	m.addattempts = nil
+}
+
+// Attempts returns the value of the "attempts" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) Attempts() (r int, exists bool) {
+	v := m.attempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttempts returns the old "attempts" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldAttempts(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttempts is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttempts requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttempts: %w", err)
+	}
+	return oldValue.Attempts, nil
+}
+
+// AddAttempts adds i to the "attempts" field.
+func (m *BalanceCacheInvalidationOutboxMutation) AddAttempts(i int) {
+	if m.addattempts != nil {
+		*m.addattempts += i
+	} else {
+		m.addattempts = &i
+	}
+}
+
+// AddedAttempts returns the value that was added to the "attempts" field in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) AddedAttempts() (r int, exists bool) {
+	v := m.addattempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttempts resets all changes to the "attempts" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetAttempts() {
+	m.attempts = nil
+	m.addattempts = nil
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetNextAttemptAt(t time.Time) {
+	m.next_attempt_at = &t
+}
+
+// NextAttemptAt returns the value of the "next_attempt_at" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) NextAttemptAt() (r time.Time, exists bool) {
+	v := m.next_attempt_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNextAttemptAt returns the old "next_attempt_at" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldNextAttemptAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNextAttemptAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNextAttemptAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNextAttemptAt: %w", err)
+	}
+	return oldValue.NextAttemptAt, nil
+}
+
+// ResetNextAttemptAt resets all changes to the "next_attempt_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetNextAttemptAt() {
+	m.next_attempt_at = nil
+}
+
+// SetClaimedAt sets the "claimed_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetClaimedAt(t time.Time) {
+	m.claimed_at = &t
+}
+
+// ClaimedAt returns the value of the "claimed_at" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) ClaimedAt() (r time.Time, exists bool) {
+	v := m.claimed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimedAt returns the old "claimed_at" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldClaimedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimedAt: %w", err)
+	}
+	return oldValue.ClaimedAt, nil
+}
+
+// ClearClaimedAt clears the value of the "claimed_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ClearClaimedAt() {
+	m.claimed_at = nil
+	m.clearedFields[balancecacheinvalidationoutbox.FieldClaimedAt] = struct{}{}
+}
+
+// ClaimedAtCleared returns if the "claimed_at" field was cleared in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) ClaimedAtCleared() bool {
+	_, ok := m.clearedFields[balancecacheinvalidationoutbox.FieldClaimedAt]
+	return ok
+}
+
+// ResetClaimedAt resets all changes to the "claimed_at" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetClaimedAt() {
+	m.claimed_at = nil
+	delete(m.clearedFields, balancecacheinvalidationoutbox.FieldClaimedAt)
+}
+
+// SetClaimToken sets the "claim_token" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetClaimToken(s string) {
+	m.claim_token = &s
+}
+
+// ClaimToken returns the value of the "claim_token" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) ClaimToken() (r string, exists bool) {
+	v := m.claim_token
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimToken returns the old "claim_token" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldClaimToken(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimToken is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimToken requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimToken: %w", err)
+	}
+	return oldValue.ClaimToken, nil
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ClearClaimToken() {
+	m.claim_token = nil
+	m.clearedFields[balancecacheinvalidationoutbox.FieldClaimToken] = struct{}{}
+}
+
+// ClaimTokenCleared returns if the "claim_token" field was cleared in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) ClaimTokenCleared() bool {
+	_, ok := m.clearedFields[balancecacheinvalidationoutbox.FieldClaimToken]
+	return ok
+}
+
+// ResetClaimToken resets all changes to the "claim_token" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetClaimToken() {
+	m.claim_token = nil
+	delete(m.clearedFields, balancecacheinvalidationoutbox.FieldClaimToken)
+}
+
+// SetLastError sets the "last_error" field.
+func (m *BalanceCacheInvalidationOutboxMutation) SetLastError(s string) {
+	m.last_error = &s
+}
+
+// LastError returns the value of the "last_error" field in the mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) LastError() (r string, exists bool) {
+	v := m.last_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastError returns the old "last_error" field's value of the BalanceCacheInvalidationOutbox entity.
+// If the BalanceCacheInvalidationOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceCacheInvalidationOutboxMutation) OldLastError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastError: %w", err)
+	}
+	return oldValue.LastError, nil
+}
+
+// ResetLastError resets all changes to the "last_error" field.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetLastError() {
+	m.last_error = nil
+}
+
+// Where appends a list predicates to the BalanceCacheInvalidationOutboxMutation builder.
+func (m *BalanceCacheInvalidationOutboxMutation) Where(ps ...predicate.BalanceCacheInvalidationOutbox) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BalanceCacheInvalidationOutboxMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BalanceCacheInvalidationOutboxMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BalanceCacheInvalidationOutbox, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BalanceCacheInvalidationOutboxMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BalanceCacheInvalidationOutboxMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BalanceCacheInvalidationOutbox).
+func (m *BalanceCacheInvalidationOutboxMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BalanceCacheInvalidationOutboxMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.created_at != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldUpdatedAt)
+	}
+	if m.user_id != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldUserID)
+	}
+	if m.attempts != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldAttempts)
+	}
+	if m.next_attempt_at != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldNextAttemptAt)
+	}
+	if m.claimed_at != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldClaimedAt)
+	}
+	if m.claim_token != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldClaimToken)
+	}
+	if m.last_error != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldLastError)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BalanceCacheInvalidationOutboxMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case balancecacheinvalidationoutbox.FieldCreatedAt:
+		return m.CreatedAt()
+	case balancecacheinvalidationoutbox.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case balancecacheinvalidationoutbox.FieldUserID:
+		return m.UserID()
+	case balancecacheinvalidationoutbox.FieldAttempts:
+		return m.Attempts()
+	case balancecacheinvalidationoutbox.FieldNextAttemptAt:
+		return m.NextAttemptAt()
+	case balancecacheinvalidationoutbox.FieldClaimedAt:
+		return m.ClaimedAt()
+	case balancecacheinvalidationoutbox.FieldClaimToken:
+		return m.ClaimToken()
+	case balancecacheinvalidationoutbox.FieldLastError:
+		return m.LastError()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BalanceCacheInvalidationOutboxMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case balancecacheinvalidationoutbox.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case balancecacheinvalidationoutbox.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case balancecacheinvalidationoutbox.FieldUserID:
+		return m.OldUserID(ctx)
+	case balancecacheinvalidationoutbox.FieldAttempts:
+		return m.OldAttempts(ctx)
+	case balancecacheinvalidationoutbox.FieldNextAttemptAt:
+		return m.OldNextAttemptAt(ctx)
+	case balancecacheinvalidationoutbox.FieldClaimedAt:
+		return m.OldClaimedAt(ctx)
+	case balancecacheinvalidationoutbox.FieldClaimToken:
+		return m.OldClaimToken(ctx)
+	case balancecacheinvalidationoutbox.FieldLastError:
+		return m.OldLastError(ctx)
+	}
+	return nil, fmt.Errorf("unknown BalanceCacheInvalidationOutbox field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceCacheInvalidationOutboxMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case balancecacheinvalidationoutbox.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttempts(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldNextAttemptAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNextAttemptAt(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldClaimedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimedAt(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldClaimToken:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimToken(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldLastError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastError(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceCacheInvalidationOutbox field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) AddedFields() []string {
+	var fields []string
+	if m.adduser_id != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldUserID)
+	}
+	if m.addattempts != nil {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldAttempts)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BalanceCacheInvalidationOutboxMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case balancecacheinvalidationoutbox.FieldUserID:
+		return m.AddedUserID()
+	case balancecacheinvalidationoutbox.FieldAttempts:
+		return m.AddedAttempts()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceCacheInvalidationOutboxMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case balancecacheinvalidationoutbox.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case balancecacheinvalidationoutbox.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttempts(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceCacheInvalidationOutbox numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(balancecacheinvalidationoutbox.FieldClaimedAt) {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldClaimedAt)
+	}
+	if m.FieldCleared(balancecacheinvalidationoutbox.FieldClaimToken) {
+		fields = append(fields, balancecacheinvalidationoutbox.FieldClaimToken)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BalanceCacheInvalidationOutboxMutation) ClearField(name string) error {
+	switch name {
+	case balancecacheinvalidationoutbox.FieldClaimedAt:
+		m.ClearClaimedAt()
+		return nil
+	case balancecacheinvalidationoutbox.FieldClaimToken:
+		m.ClearClaimToken()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceCacheInvalidationOutbox nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetField(name string) error {
+	switch name {
+	case balancecacheinvalidationoutbox.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case balancecacheinvalidationoutbox.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case balancecacheinvalidationoutbox.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case balancecacheinvalidationoutbox.FieldAttempts:
+		m.ResetAttempts()
+		return nil
+	case balancecacheinvalidationoutbox.FieldNextAttemptAt:
+		m.ResetNextAttemptAt()
+		return nil
+	case balancecacheinvalidationoutbox.FieldClaimedAt:
+		m.ResetClaimedAt()
+		return nil
+	case balancecacheinvalidationoutbox.FieldClaimToken:
+		m.ResetClaimToken()
+		return nil
+	case balancecacheinvalidationoutbox.FieldLastError:
+		m.ResetLastError()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceCacheInvalidationOutbox field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BalanceCacheInvalidationOutboxMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BalanceCacheInvalidationOutboxMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BalanceCacheInvalidationOutbox unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BalanceCacheInvalidationOutboxMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BalanceCacheInvalidationOutbox edge %s", name)
+}
+
+// BalanceDebitClientMutation represents an operation that mutates the BalanceDebitClient nodes in the graph.
+type BalanceDebitClientMutation struct {
+	config
+	op                     Op
+	typ                    string
+	id                     *int64
+	created_at             *time.Time
+	updated_at             *time.Time
+	client_id              *string
+	name                   *string
+	secret_hash            *string
+	secret_prefix          *string
+	allowed_purposes       *[]string
+	appendallowed_purposes []string
+	status                 *string
+	last_used_at           *time.Time
+	clearedFields          map[string]struct{}
+	transactions           map[int64]struct{}
+	removedtransactions    map[int64]struct{}
+	clearedtransactions    bool
+	done                   bool
+	oldValue               func(context.Context) (*BalanceDebitClient, error)
+	predicates             []predicate.BalanceDebitClient
+}
+
+var _ ent.Mutation = (*BalanceDebitClientMutation)(nil)
+
+// balancedebitclientOption allows management of the mutation configuration using functional options.
+type balancedebitclientOption func(*BalanceDebitClientMutation)
+
+// newBalanceDebitClientMutation creates new mutation for the BalanceDebitClient entity.
+func newBalanceDebitClientMutation(c config, op Op, opts ...balancedebitclientOption) *BalanceDebitClientMutation {
+	m := &BalanceDebitClientMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBalanceDebitClient,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBalanceDebitClientID sets the ID field of the mutation.
+func withBalanceDebitClientID(id int64) balancedebitclientOption {
+	return func(m *BalanceDebitClientMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BalanceDebitClient
+		)
+		m.oldValue = func(ctx context.Context) (*BalanceDebitClient, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BalanceDebitClient.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBalanceDebitClient sets the old BalanceDebitClient of the mutation.
+func withBalanceDebitClient(node *BalanceDebitClient) balancedebitclientOption {
+	return func(m *BalanceDebitClientMutation) {
+		m.oldValue = func(context.Context) (*BalanceDebitClient, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BalanceDebitClientMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BalanceDebitClientMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BalanceDebitClientMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BalanceDebitClientMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BalanceDebitClient.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BalanceDebitClientMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BalanceDebitClientMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BalanceDebitClientMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *BalanceDebitClientMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *BalanceDebitClientMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *BalanceDebitClientMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetClientID sets the "client_id" field.
+func (m *BalanceDebitClientMutation) SetClientID(s string) {
+	m.client_id = &s
+}
+
+// ClientID returns the value of the "client_id" field in the mutation.
+func (m *BalanceDebitClientMutation) ClientID() (r string, exists bool) {
+	v := m.client_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientID returns the old "client_id" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldClientID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientID: %w", err)
+	}
+	return oldValue.ClientID, nil
+}
+
+// ResetClientID resets all changes to the "client_id" field.
+func (m *BalanceDebitClientMutation) ResetClientID() {
+	m.client_id = nil
+}
+
+// SetName sets the "name" field.
+func (m *BalanceDebitClientMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *BalanceDebitClientMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *BalanceDebitClientMutation) ResetName() {
+	m.name = nil
+}
+
+// SetSecretHash sets the "secret_hash" field.
+func (m *BalanceDebitClientMutation) SetSecretHash(s string) {
+	m.secret_hash = &s
+}
+
+// SecretHash returns the value of the "secret_hash" field in the mutation.
+func (m *BalanceDebitClientMutation) SecretHash() (r string, exists bool) {
+	v := m.secret_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecretHash returns the old "secret_hash" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldSecretHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecretHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecretHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecretHash: %w", err)
+	}
+	return oldValue.SecretHash, nil
+}
+
+// ResetSecretHash resets all changes to the "secret_hash" field.
+func (m *BalanceDebitClientMutation) ResetSecretHash() {
+	m.secret_hash = nil
+}
+
+// SetSecretPrefix sets the "secret_prefix" field.
+func (m *BalanceDebitClientMutation) SetSecretPrefix(s string) {
+	m.secret_prefix = &s
+}
+
+// SecretPrefix returns the value of the "secret_prefix" field in the mutation.
+func (m *BalanceDebitClientMutation) SecretPrefix() (r string, exists bool) {
+	v := m.secret_prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecretPrefix returns the old "secret_prefix" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldSecretPrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecretPrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecretPrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecretPrefix: %w", err)
+	}
+	return oldValue.SecretPrefix, nil
+}
+
+// ResetSecretPrefix resets all changes to the "secret_prefix" field.
+func (m *BalanceDebitClientMutation) ResetSecretPrefix() {
+	m.secret_prefix = nil
+}
+
+// SetAllowedPurposes sets the "allowed_purposes" field.
+func (m *BalanceDebitClientMutation) SetAllowedPurposes(s []string) {
+	m.allowed_purposes = &s
+	m.appendallowed_purposes = nil
+}
+
+// AllowedPurposes returns the value of the "allowed_purposes" field in the mutation.
+func (m *BalanceDebitClientMutation) AllowedPurposes() (r []string, exists bool) {
+	v := m.allowed_purposes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowedPurposes returns the old "allowed_purposes" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldAllowedPurposes(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowedPurposes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowedPurposes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowedPurposes: %w", err)
+	}
+	return oldValue.AllowedPurposes, nil
+}
+
+// AppendAllowedPurposes adds s to the "allowed_purposes" field.
+func (m *BalanceDebitClientMutation) AppendAllowedPurposes(s []string) {
+	m.appendallowed_purposes = append(m.appendallowed_purposes, s...)
+}
+
+// AppendedAllowedPurposes returns the list of values that were appended to the "allowed_purposes" field in this mutation.
+func (m *BalanceDebitClientMutation) AppendedAllowedPurposes() ([]string, bool) {
+	if len(m.appendallowed_purposes) == 0 {
+		return nil, false
+	}
+	return m.appendallowed_purposes, true
+}
+
+// ResetAllowedPurposes resets all changes to the "allowed_purposes" field.
+func (m *BalanceDebitClientMutation) ResetAllowedPurposes() {
+	m.allowed_purposes = nil
+	m.appendallowed_purposes = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *BalanceDebitClientMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *BalanceDebitClientMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *BalanceDebitClientMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetLastUsedAt sets the "last_used_at" field.
+func (m *BalanceDebitClientMutation) SetLastUsedAt(t time.Time) {
+	m.last_used_at = &t
+}
+
+// LastUsedAt returns the value of the "last_used_at" field in the mutation.
+func (m *BalanceDebitClientMutation) LastUsedAt() (r time.Time, exists bool) {
+	v := m.last_used_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastUsedAt returns the old "last_used_at" field's value of the BalanceDebitClient entity.
+// If the BalanceDebitClient object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitClientMutation) OldLastUsedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastUsedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastUsedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastUsedAt: %w", err)
+	}
+	return oldValue.LastUsedAt, nil
+}
+
+// ClearLastUsedAt clears the value of the "last_used_at" field.
+func (m *BalanceDebitClientMutation) ClearLastUsedAt() {
+	m.last_used_at = nil
+	m.clearedFields[balancedebitclient.FieldLastUsedAt] = struct{}{}
+}
+
+// LastUsedAtCleared returns if the "last_used_at" field was cleared in this mutation.
+func (m *BalanceDebitClientMutation) LastUsedAtCleared() bool {
+	_, ok := m.clearedFields[balancedebitclient.FieldLastUsedAt]
+	return ok
+}
+
+// ResetLastUsedAt resets all changes to the "last_used_at" field.
+func (m *BalanceDebitClientMutation) ResetLastUsedAt() {
+	m.last_used_at = nil
+	delete(m.clearedFields, balancedebitclient.FieldLastUsedAt)
+}
+
+// AddTransactionIDs adds the "transactions" edge to the BalanceDebitTransaction entity by ids.
+func (m *BalanceDebitClientMutation) AddTransactionIDs(ids ...int64) {
+	if m.transactions == nil {
+		m.transactions = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.transactions[ids[i]] = struct{}{}
+	}
+}
+
+// ClearTransactions clears the "transactions" edge to the BalanceDebitTransaction entity.
+func (m *BalanceDebitClientMutation) ClearTransactions() {
+	m.clearedtransactions = true
+}
+
+// TransactionsCleared reports if the "transactions" edge to the BalanceDebitTransaction entity was cleared.
+func (m *BalanceDebitClientMutation) TransactionsCleared() bool {
+	return m.clearedtransactions
+}
+
+// RemoveTransactionIDs removes the "transactions" edge to the BalanceDebitTransaction entity by IDs.
+func (m *BalanceDebitClientMutation) RemoveTransactionIDs(ids ...int64) {
+	if m.removedtransactions == nil {
+		m.removedtransactions = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.transactions, ids[i])
+		m.removedtransactions[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedTransactions returns the removed IDs of the "transactions" edge to the BalanceDebitTransaction entity.
+func (m *BalanceDebitClientMutation) RemovedTransactionsIDs() (ids []int64) {
+	for id := range m.removedtransactions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// TransactionsIDs returns the "transactions" edge IDs in the mutation.
+func (m *BalanceDebitClientMutation) TransactionsIDs() (ids []int64) {
+	for id := range m.transactions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetTransactions resets all changes to the "transactions" edge.
+func (m *BalanceDebitClientMutation) ResetTransactions() {
+	m.transactions = nil
+	m.clearedtransactions = false
+	m.removedtransactions = nil
+}
+
+// Where appends a list predicates to the BalanceDebitClientMutation builder.
+func (m *BalanceDebitClientMutation) Where(ps ...predicate.BalanceDebitClient) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BalanceDebitClientMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BalanceDebitClientMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BalanceDebitClient, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BalanceDebitClientMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BalanceDebitClientMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BalanceDebitClient).
+func (m *BalanceDebitClientMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BalanceDebitClientMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.created_at != nil {
+		fields = append(fields, balancedebitclient.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, balancedebitclient.FieldUpdatedAt)
+	}
+	if m.client_id != nil {
+		fields = append(fields, balancedebitclient.FieldClientID)
+	}
+	if m.name != nil {
+		fields = append(fields, balancedebitclient.FieldName)
+	}
+	if m.secret_hash != nil {
+		fields = append(fields, balancedebitclient.FieldSecretHash)
+	}
+	if m.secret_prefix != nil {
+		fields = append(fields, balancedebitclient.FieldSecretPrefix)
+	}
+	if m.allowed_purposes != nil {
+		fields = append(fields, balancedebitclient.FieldAllowedPurposes)
+	}
+	if m.status != nil {
+		fields = append(fields, balancedebitclient.FieldStatus)
+	}
+	if m.last_used_at != nil {
+		fields = append(fields, balancedebitclient.FieldLastUsedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BalanceDebitClientMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case balancedebitclient.FieldCreatedAt:
+		return m.CreatedAt()
+	case balancedebitclient.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case balancedebitclient.FieldClientID:
+		return m.ClientID()
+	case balancedebitclient.FieldName:
+		return m.Name()
+	case balancedebitclient.FieldSecretHash:
+		return m.SecretHash()
+	case balancedebitclient.FieldSecretPrefix:
+		return m.SecretPrefix()
+	case balancedebitclient.FieldAllowedPurposes:
+		return m.AllowedPurposes()
+	case balancedebitclient.FieldStatus:
+		return m.Status()
+	case balancedebitclient.FieldLastUsedAt:
+		return m.LastUsedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BalanceDebitClientMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case balancedebitclient.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case balancedebitclient.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case balancedebitclient.FieldClientID:
+		return m.OldClientID(ctx)
+	case balancedebitclient.FieldName:
+		return m.OldName(ctx)
+	case balancedebitclient.FieldSecretHash:
+		return m.OldSecretHash(ctx)
+	case balancedebitclient.FieldSecretPrefix:
+		return m.OldSecretPrefix(ctx)
+	case balancedebitclient.FieldAllowedPurposes:
+		return m.OldAllowedPurposes(ctx)
+	case balancedebitclient.FieldStatus:
+		return m.OldStatus(ctx)
+	case balancedebitclient.FieldLastUsedAt:
+		return m.OldLastUsedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown BalanceDebitClient field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceDebitClientMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case balancedebitclient.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case balancedebitclient.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case balancedebitclient.FieldClientID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientID(v)
+		return nil
+	case balancedebitclient.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case balancedebitclient.FieldSecretHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecretHash(v)
+		return nil
+	case balancedebitclient.FieldSecretPrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecretPrefix(v)
+		return nil
+	case balancedebitclient.FieldAllowedPurposes:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowedPurposes(v)
+		return nil
+	case balancedebitclient.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case balancedebitclient.FieldLastUsedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastUsedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitClient field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BalanceDebitClientMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BalanceDebitClientMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceDebitClientMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown BalanceDebitClient numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BalanceDebitClientMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(balancedebitclient.FieldLastUsedAt) {
+		fields = append(fields, balancedebitclient.FieldLastUsedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BalanceDebitClientMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BalanceDebitClientMutation) ClearField(name string) error {
+	switch name {
+	case balancedebitclient.FieldLastUsedAt:
+		m.ClearLastUsedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitClient nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BalanceDebitClientMutation) ResetField(name string) error {
+	switch name {
+	case balancedebitclient.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case balancedebitclient.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case balancedebitclient.FieldClientID:
+		m.ResetClientID()
+		return nil
+	case balancedebitclient.FieldName:
+		m.ResetName()
+		return nil
+	case balancedebitclient.FieldSecretHash:
+		m.ResetSecretHash()
+		return nil
+	case balancedebitclient.FieldSecretPrefix:
+		m.ResetSecretPrefix()
+		return nil
+	case balancedebitclient.FieldAllowedPurposes:
+		m.ResetAllowedPurposes()
+		return nil
+	case balancedebitclient.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case balancedebitclient.FieldLastUsedAt:
+		m.ResetLastUsedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitClient field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BalanceDebitClientMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.transactions != nil {
+		edges = append(edges, balancedebitclient.EdgeTransactions)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BalanceDebitClientMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case balancedebitclient.EdgeTransactions:
+		ids := make([]ent.Value, 0, len(m.transactions))
+		for id := range m.transactions {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BalanceDebitClientMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.removedtransactions != nil {
+		edges = append(edges, balancedebitclient.EdgeTransactions)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BalanceDebitClientMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case balancedebitclient.EdgeTransactions:
+		ids := make([]ent.Value, 0, len(m.removedtransactions))
+		for id := range m.removedtransactions {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BalanceDebitClientMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedtransactions {
+		edges = append(edges, balancedebitclient.EdgeTransactions)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BalanceDebitClientMutation) EdgeCleared(name string) bool {
+	switch name {
+	case balancedebitclient.EdgeTransactions:
+		return m.clearedtransactions
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BalanceDebitClientMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown BalanceDebitClient unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BalanceDebitClientMutation) ResetEdge(name string) error {
+	switch name {
+	case balancedebitclient.EdgeTransactions:
+		m.ResetTransactions()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitClient edge %s", name)
+}
+
+// BalanceDebitTransactionMutation represents an operation that mutates the BalanceDebitTransaction nodes in the graph.
+type BalanceDebitTransactionMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *int64
+	txn_id               *string
+	user_id              *int64
+	adduser_id           *int64
+	idempotency_key_hash *string
+	request_fingerprint  *string
+	amount               *float64
+	addamount            *float64
+	currency             *string
+	purpose              *string
+	ref                  *string
+	balance_before       *float64
+	addbalance_before    *float64
+	balance_after        *float64
+	addbalance_after     *float64
+	created_at           *time.Time
+	clearedFields        map[string]struct{}
+	client               *int64
+	clearedclient        bool
+	done                 bool
+	oldValue             func(context.Context) (*BalanceDebitTransaction, error)
+	predicates           []predicate.BalanceDebitTransaction
+}
+
+var _ ent.Mutation = (*BalanceDebitTransactionMutation)(nil)
+
+// balancedebittransactionOption allows management of the mutation configuration using functional options.
+type balancedebittransactionOption func(*BalanceDebitTransactionMutation)
+
+// newBalanceDebitTransactionMutation creates new mutation for the BalanceDebitTransaction entity.
+func newBalanceDebitTransactionMutation(c config, op Op, opts ...balancedebittransactionOption) *BalanceDebitTransactionMutation {
+	m := &BalanceDebitTransactionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBalanceDebitTransaction,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBalanceDebitTransactionID sets the ID field of the mutation.
+func withBalanceDebitTransactionID(id int64) balancedebittransactionOption {
+	return func(m *BalanceDebitTransactionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BalanceDebitTransaction
+		)
+		m.oldValue = func(ctx context.Context) (*BalanceDebitTransaction, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BalanceDebitTransaction.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBalanceDebitTransaction sets the old BalanceDebitTransaction of the mutation.
+func withBalanceDebitTransaction(node *BalanceDebitTransaction) balancedebittransactionOption {
+	return func(m *BalanceDebitTransactionMutation) {
+		m.oldValue = func(context.Context) (*BalanceDebitTransaction, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BalanceDebitTransactionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BalanceDebitTransactionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BalanceDebitTransactionMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BalanceDebitTransactionMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BalanceDebitTransaction.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTxnID sets the "txn_id" field.
+func (m *BalanceDebitTransactionMutation) SetTxnID(s string) {
+	m.txn_id = &s
+}
+
+// TxnID returns the value of the "txn_id" field in the mutation.
+func (m *BalanceDebitTransactionMutation) TxnID() (r string, exists bool) {
+	v := m.txn_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTxnID returns the old "txn_id" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldTxnID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTxnID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTxnID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTxnID: %w", err)
+	}
+	return oldValue.TxnID, nil
+}
+
+// ResetTxnID resets all changes to the "txn_id" field.
+func (m *BalanceDebitTransactionMutation) ResetTxnID() {
+	m.txn_id = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *BalanceDebitTransactionMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *BalanceDebitTransactionMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *BalanceDebitTransactionMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *BalanceDebitTransactionMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *BalanceDebitTransactionMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+}
+
+// SetBalanceClientID sets the "balance_client_id" field.
+func (m *BalanceDebitTransactionMutation) SetBalanceClientID(i int64) {
+	m.client = &i
+}
+
+// BalanceClientID returns the value of the "balance_client_id" field in the mutation.
+func (m *BalanceDebitTransactionMutation) BalanceClientID() (r int64, exists bool) {
+	v := m.client
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceClientID returns the old "balance_client_id" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldBalanceClientID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceClientID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceClientID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceClientID: %w", err)
+	}
+	return oldValue.BalanceClientID, nil
+}
+
+// ResetBalanceClientID resets all changes to the "balance_client_id" field.
+func (m *BalanceDebitTransactionMutation) ResetBalanceClientID() {
+	m.client = nil
+}
+
+// SetIdempotencyKeyHash sets the "idempotency_key_hash" field.
+func (m *BalanceDebitTransactionMutation) SetIdempotencyKeyHash(s string) {
+	m.idempotency_key_hash = &s
+}
+
+// IdempotencyKeyHash returns the value of the "idempotency_key_hash" field in the mutation.
+func (m *BalanceDebitTransactionMutation) IdempotencyKeyHash() (r string, exists bool) {
+	v := m.idempotency_key_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyKeyHash returns the old "idempotency_key_hash" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldIdempotencyKeyHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyKeyHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyKeyHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyKeyHash: %w", err)
+	}
+	return oldValue.IdempotencyKeyHash, nil
+}
+
+// ResetIdempotencyKeyHash resets all changes to the "idempotency_key_hash" field.
+func (m *BalanceDebitTransactionMutation) ResetIdempotencyKeyHash() {
+	m.idempotency_key_hash = nil
+}
+
+// SetRequestFingerprint sets the "request_fingerprint" field.
+func (m *BalanceDebitTransactionMutation) SetRequestFingerprint(s string) {
+	m.request_fingerprint = &s
+}
+
+// RequestFingerprint returns the value of the "request_fingerprint" field in the mutation.
+func (m *BalanceDebitTransactionMutation) RequestFingerprint() (r string, exists bool) {
+	v := m.request_fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestFingerprint returns the old "request_fingerprint" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldRequestFingerprint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestFingerprint: %w", err)
+	}
+	return oldValue.RequestFingerprint, nil
+}
+
+// ResetRequestFingerprint resets all changes to the "request_fingerprint" field.
+func (m *BalanceDebitTransactionMutation) ResetRequestFingerprint() {
+	m.request_fingerprint = nil
+}
+
+// SetAmount sets the "amount" field.
+func (m *BalanceDebitTransactionMutation) SetAmount(f float64) {
+	m.amount = &f
+	m.addamount = nil
+}
+
+// Amount returns the value of the "amount" field in the mutation.
+func (m *BalanceDebitTransactionMutation) Amount() (r float64, exists bool) {
+	v := m.amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAmount returns the old "amount" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAmount: %w", err)
+	}
+	return oldValue.Amount, nil
+}
+
+// AddAmount adds f to the "amount" field.
+func (m *BalanceDebitTransactionMutation) AddAmount(f float64) {
+	if m.addamount != nil {
+		*m.addamount += f
+	} else {
+		m.addamount = &f
+	}
+}
+
+// AddedAmount returns the value that was added to the "amount" field in this mutation.
+func (m *BalanceDebitTransactionMutation) AddedAmount() (r float64, exists bool) {
+	v := m.addamount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAmount resets all changes to the "amount" field.
+func (m *BalanceDebitTransactionMutation) ResetAmount() {
+	m.amount = nil
+	m.addamount = nil
+}
+
+// SetCurrency sets the "currency" field.
+func (m *BalanceDebitTransactionMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *BalanceDebitTransactionMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *BalanceDebitTransactionMutation) ResetCurrency() {
+	m.currency = nil
+}
+
+// SetPurpose sets the "purpose" field.
+func (m *BalanceDebitTransactionMutation) SetPurpose(s string) {
+	m.purpose = &s
+}
+
+// Purpose returns the value of the "purpose" field in the mutation.
+func (m *BalanceDebitTransactionMutation) Purpose() (r string, exists bool) {
+	v := m.purpose
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurpose returns the old "purpose" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldPurpose(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurpose is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurpose requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurpose: %w", err)
+	}
+	return oldValue.Purpose, nil
+}
+
+// ResetPurpose resets all changes to the "purpose" field.
+func (m *BalanceDebitTransactionMutation) ResetPurpose() {
+	m.purpose = nil
+}
+
+// SetRef sets the "ref" field.
+func (m *BalanceDebitTransactionMutation) SetRef(s string) {
+	m.ref = &s
+}
+
+// Ref returns the value of the "ref" field in the mutation.
+func (m *BalanceDebitTransactionMutation) Ref() (r string, exists bool) {
+	v := m.ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRef returns the old "ref" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldRef(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRef: %w", err)
+	}
+	return oldValue.Ref, nil
+}
+
+// ResetRef resets all changes to the "ref" field.
+func (m *BalanceDebitTransactionMutation) ResetRef() {
+	m.ref = nil
+}
+
+// SetBalanceBefore sets the "balance_before" field.
+func (m *BalanceDebitTransactionMutation) SetBalanceBefore(f float64) {
+	m.balance_before = &f
+	m.addbalance_before = nil
+}
+
+// BalanceBefore returns the value of the "balance_before" field in the mutation.
+func (m *BalanceDebitTransactionMutation) BalanceBefore() (r float64, exists bool) {
+	v := m.balance_before
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceBefore returns the old "balance_before" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldBalanceBefore(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceBefore is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceBefore requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceBefore: %w", err)
+	}
+	return oldValue.BalanceBefore, nil
+}
+
+// AddBalanceBefore adds f to the "balance_before" field.
+func (m *BalanceDebitTransactionMutation) AddBalanceBefore(f float64) {
+	if m.addbalance_before != nil {
+		*m.addbalance_before += f
+	} else {
+		m.addbalance_before = &f
+	}
+}
+
+// AddedBalanceBefore returns the value that was added to the "balance_before" field in this mutation.
+func (m *BalanceDebitTransactionMutation) AddedBalanceBefore() (r float64, exists bool) {
+	v := m.addbalance_before
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBalanceBefore resets all changes to the "balance_before" field.
+func (m *BalanceDebitTransactionMutation) ResetBalanceBefore() {
+	m.balance_before = nil
+	m.addbalance_before = nil
+}
+
+// SetBalanceAfter sets the "balance_after" field.
+func (m *BalanceDebitTransactionMutation) SetBalanceAfter(f float64) {
+	m.balance_after = &f
+	m.addbalance_after = nil
+}
+
+// BalanceAfter returns the value of the "balance_after" field in the mutation.
+func (m *BalanceDebitTransactionMutation) BalanceAfter() (r float64, exists bool) {
+	v := m.balance_after
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceAfter returns the old "balance_after" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldBalanceAfter(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceAfter is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceAfter requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceAfter: %w", err)
+	}
+	return oldValue.BalanceAfter, nil
+}
+
+// AddBalanceAfter adds f to the "balance_after" field.
+func (m *BalanceDebitTransactionMutation) AddBalanceAfter(f float64) {
+	if m.addbalance_after != nil {
+		*m.addbalance_after += f
+	} else {
+		m.addbalance_after = &f
+	}
+}
+
+// AddedBalanceAfter returns the value that was added to the "balance_after" field in this mutation.
+func (m *BalanceDebitTransactionMutation) AddedBalanceAfter() (r float64, exists bool) {
+	v := m.addbalance_after
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBalanceAfter resets all changes to the "balance_after" field.
+func (m *BalanceDebitTransactionMutation) ResetBalanceAfter() {
+	m.balance_after = nil
+	m.addbalance_after = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BalanceDebitTransactionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BalanceDebitTransactionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BalanceDebitTransaction entity.
+// If the BalanceDebitTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceDebitTransactionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BalanceDebitTransactionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetClientID sets the "client" edge to the BalanceDebitClient entity by id.
+func (m *BalanceDebitTransactionMutation) SetClientID(id int64) {
+	m.client = &id
+}
+
+// ClearClient clears the "client" edge to the BalanceDebitClient entity.
+func (m *BalanceDebitTransactionMutation) ClearClient() {
+	m.clearedclient = true
+	m.clearedFields[balancedebittransaction.FieldBalanceClientID] = struct{}{}
+}
+
+// ClientCleared reports if the "client" edge to the BalanceDebitClient entity was cleared.
+func (m *BalanceDebitTransactionMutation) ClientCleared() bool {
+	return m.clearedclient
+}
+
+// ClientID returns the "client" edge ID in the mutation.
+func (m *BalanceDebitTransactionMutation) ClientID() (id int64, exists bool) {
+	if m.client != nil {
+		return *m.client, true
+	}
+	return
+}
+
+// ClientIDs returns the "client" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ClientID instead. It exists only for internal usage by the builders.
+func (m *BalanceDebitTransactionMutation) ClientIDs() (ids []int64) {
+	if id := m.client; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetClient resets all changes to the "client" edge.
+func (m *BalanceDebitTransactionMutation) ResetClient() {
+	m.client = nil
+	m.clearedclient = false
+}
+
+// Where appends a list predicates to the BalanceDebitTransactionMutation builder.
+func (m *BalanceDebitTransactionMutation) Where(ps ...predicate.BalanceDebitTransaction) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BalanceDebitTransactionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BalanceDebitTransactionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BalanceDebitTransaction, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BalanceDebitTransactionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BalanceDebitTransactionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BalanceDebitTransaction).
+func (m *BalanceDebitTransactionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BalanceDebitTransactionMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.txn_id != nil {
+		fields = append(fields, balancedebittransaction.FieldTxnID)
+	}
+	if m.user_id != nil {
+		fields = append(fields, balancedebittransaction.FieldUserID)
+	}
+	if m.client != nil {
+		fields = append(fields, balancedebittransaction.FieldBalanceClientID)
+	}
+	if m.idempotency_key_hash != nil {
+		fields = append(fields, balancedebittransaction.FieldIdempotencyKeyHash)
+	}
+	if m.request_fingerprint != nil {
+		fields = append(fields, balancedebittransaction.FieldRequestFingerprint)
+	}
+	if m.amount != nil {
+		fields = append(fields, balancedebittransaction.FieldAmount)
+	}
+	if m.currency != nil {
+		fields = append(fields, balancedebittransaction.FieldCurrency)
+	}
+	if m.purpose != nil {
+		fields = append(fields, balancedebittransaction.FieldPurpose)
+	}
+	if m.ref != nil {
+		fields = append(fields, balancedebittransaction.FieldRef)
+	}
+	if m.balance_before != nil {
+		fields = append(fields, balancedebittransaction.FieldBalanceBefore)
+	}
+	if m.balance_after != nil {
+		fields = append(fields, balancedebittransaction.FieldBalanceAfter)
+	}
+	if m.created_at != nil {
+		fields = append(fields, balancedebittransaction.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BalanceDebitTransactionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case balancedebittransaction.FieldTxnID:
+		return m.TxnID()
+	case balancedebittransaction.FieldUserID:
+		return m.UserID()
+	case balancedebittransaction.FieldBalanceClientID:
+		return m.BalanceClientID()
+	case balancedebittransaction.FieldIdempotencyKeyHash:
+		return m.IdempotencyKeyHash()
+	case balancedebittransaction.FieldRequestFingerprint:
+		return m.RequestFingerprint()
+	case balancedebittransaction.FieldAmount:
+		return m.Amount()
+	case balancedebittransaction.FieldCurrency:
+		return m.Currency()
+	case balancedebittransaction.FieldPurpose:
+		return m.Purpose()
+	case balancedebittransaction.FieldRef:
+		return m.Ref()
+	case balancedebittransaction.FieldBalanceBefore:
+		return m.BalanceBefore()
+	case balancedebittransaction.FieldBalanceAfter:
+		return m.BalanceAfter()
+	case balancedebittransaction.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BalanceDebitTransactionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case balancedebittransaction.FieldTxnID:
+		return m.OldTxnID(ctx)
+	case balancedebittransaction.FieldUserID:
+		return m.OldUserID(ctx)
+	case balancedebittransaction.FieldBalanceClientID:
+		return m.OldBalanceClientID(ctx)
+	case balancedebittransaction.FieldIdempotencyKeyHash:
+		return m.OldIdempotencyKeyHash(ctx)
+	case balancedebittransaction.FieldRequestFingerprint:
+		return m.OldRequestFingerprint(ctx)
+	case balancedebittransaction.FieldAmount:
+		return m.OldAmount(ctx)
+	case balancedebittransaction.FieldCurrency:
+		return m.OldCurrency(ctx)
+	case balancedebittransaction.FieldPurpose:
+		return m.OldPurpose(ctx)
+	case balancedebittransaction.FieldRef:
+		return m.OldRef(ctx)
+	case balancedebittransaction.FieldBalanceBefore:
+		return m.OldBalanceBefore(ctx)
+	case balancedebittransaction.FieldBalanceAfter:
+		return m.OldBalanceAfter(ctx)
+	case balancedebittransaction.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown BalanceDebitTransaction field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceDebitTransactionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case balancedebittransaction.FieldTxnID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTxnID(v)
+		return nil
+	case balancedebittransaction.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case balancedebittransaction.FieldBalanceClientID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceClientID(v)
+		return nil
+	case balancedebittransaction.FieldIdempotencyKeyHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyKeyHash(v)
+		return nil
+	case balancedebittransaction.FieldRequestFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestFingerprint(v)
+		return nil
+	case balancedebittransaction.FieldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAmount(v)
+		return nil
+	case balancedebittransaction.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
+	case balancedebittransaction.FieldPurpose:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurpose(v)
+		return nil
+	case balancedebittransaction.FieldRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRef(v)
+		return nil
+	case balancedebittransaction.FieldBalanceBefore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceBefore(v)
+		return nil
+	case balancedebittransaction.FieldBalanceAfter:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceAfter(v)
+		return nil
+	case balancedebittransaction.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitTransaction field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BalanceDebitTransactionMutation) AddedFields() []string {
+	var fields []string
+	if m.adduser_id != nil {
+		fields = append(fields, balancedebittransaction.FieldUserID)
+	}
+	if m.addamount != nil {
+		fields = append(fields, balancedebittransaction.FieldAmount)
+	}
+	if m.addbalance_before != nil {
+		fields = append(fields, balancedebittransaction.FieldBalanceBefore)
+	}
+	if m.addbalance_after != nil {
+		fields = append(fields, balancedebittransaction.FieldBalanceAfter)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BalanceDebitTransactionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case balancedebittransaction.FieldUserID:
+		return m.AddedUserID()
+	case balancedebittransaction.FieldAmount:
+		return m.AddedAmount()
+	case balancedebittransaction.FieldBalanceBefore:
+		return m.AddedBalanceBefore()
+	case balancedebittransaction.FieldBalanceAfter:
+		return m.AddedBalanceAfter()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceDebitTransactionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case balancedebittransaction.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	case balancedebittransaction.FieldAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAmount(v)
+		return nil
+	case balancedebittransaction.FieldBalanceBefore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalanceBefore(v)
+		return nil
+	case balancedebittransaction.FieldBalanceAfter:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalanceAfter(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitTransaction numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BalanceDebitTransactionMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BalanceDebitTransactionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BalanceDebitTransactionMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown BalanceDebitTransaction nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BalanceDebitTransactionMutation) ResetField(name string) error {
+	switch name {
+	case balancedebittransaction.FieldTxnID:
+		m.ResetTxnID()
+		return nil
+	case balancedebittransaction.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case balancedebittransaction.FieldBalanceClientID:
+		m.ResetBalanceClientID()
+		return nil
+	case balancedebittransaction.FieldIdempotencyKeyHash:
+		m.ResetIdempotencyKeyHash()
+		return nil
+	case balancedebittransaction.FieldRequestFingerprint:
+		m.ResetRequestFingerprint()
+		return nil
+	case balancedebittransaction.FieldAmount:
+		m.ResetAmount()
+		return nil
+	case balancedebittransaction.FieldCurrency:
+		m.ResetCurrency()
+		return nil
+	case balancedebittransaction.FieldPurpose:
+		m.ResetPurpose()
+		return nil
+	case balancedebittransaction.FieldRef:
+		m.ResetRef()
+		return nil
+	case balancedebittransaction.FieldBalanceBefore:
+		m.ResetBalanceBefore()
+		return nil
+	case balancedebittransaction.FieldBalanceAfter:
+		m.ResetBalanceAfter()
+		return nil
+	case balancedebittransaction.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitTransaction field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BalanceDebitTransactionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.client != nil {
+		edges = append(edges, balancedebittransaction.EdgeClient)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BalanceDebitTransactionMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case balancedebittransaction.EdgeClient:
+		if id := m.client; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BalanceDebitTransactionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BalanceDebitTransactionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BalanceDebitTransactionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedclient {
+		edges = append(edges, balancedebittransaction.EdgeClient)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BalanceDebitTransactionMutation) EdgeCleared(name string) bool {
+	switch name {
+	case balancedebittransaction.EdgeClient:
+		return m.clearedclient
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BalanceDebitTransactionMutation) ClearEdge(name string) error {
+	switch name {
+	case balancedebittransaction.EdgeClient:
+		m.ClearClient()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitTransaction unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BalanceDebitTransactionMutation) ResetEdge(name string) error {
+	switch name {
+	case balancedebittransaction.EdgeClient:
+		m.ResetClient()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceDebitTransaction edge %s", name)
 }
 
 // BatchImageEventMutation represents an operation that mutates the BatchImageEvent nodes in the graph.

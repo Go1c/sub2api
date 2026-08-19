@@ -13,6 +13,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/balancecacheinvalidationoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebitclient"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebittransaction"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -476,6 +479,134 @@ func init() {
 	authidentitychannelDescMetadata := authidentitychannelFields[6].Descriptor()
 	// authidentitychannel.DefaultMetadata holds the default value on creation for the metadata field.
 	authidentitychannel.DefaultMetadata = authidentitychannelDescMetadata.Default.(func() map[string]interface{})
+	balancecacheinvalidationoutboxMixin := schema.BalanceCacheInvalidationOutbox{}.Mixin()
+	balancecacheinvalidationoutboxMixinFields0 := balancecacheinvalidationoutboxMixin[0].Fields()
+	_ = balancecacheinvalidationoutboxMixinFields0
+	balancecacheinvalidationoutboxFields := schema.BalanceCacheInvalidationOutbox{}.Fields()
+	_ = balancecacheinvalidationoutboxFields
+	// balancecacheinvalidationoutboxDescCreatedAt is the schema descriptor for created_at field.
+	balancecacheinvalidationoutboxDescCreatedAt := balancecacheinvalidationoutboxMixinFields0[0].Descriptor()
+	// balancecacheinvalidationoutbox.DefaultCreatedAt holds the default value on creation for the created_at field.
+	balancecacheinvalidationoutbox.DefaultCreatedAt = balancecacheinvalidationoutboxDescCreatedAt.Default.(func() time.Time)
+	// balancecacheinvalidationoutboxDescUpdatedAt is the schema descriptor for updated_at field.
+	balancecacheinvalidationoutboxDescUpdatedAt := balancecacheinvalidationoutboxMixinFields0[1].Descriptor()
+	// balancecacheinvalidationoutbox.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	balancecacheinvalidationoutbox.DefaultUpdatedAt = balancecacheinvalidationoutboxDescUpdatedAt.Default.(func() time.Time)
+	// balancecacheinvalidationoutbox.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	balancecacheinvalidationoutbox.UpdateDefaultUpdatedAt = balancecacheinvalidationoutboxDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// balancecacheinvalidationoutboxDescAttempts is the schema descriptor for attempts field.
+	balancecacheinvalidationoutboxDescAttempts := balancecacheinvalidationoutboxFields[1].Descriptor()
+	// balancecacheinvalidationoutbox.DefaultAttempts holds the default value on creation for the attempts field.
+	balancecacheinvalidationoutbox.DefaultAttempts = balancecacheinvalidationoutboxDescAttempts.Default.(int)
+	// balancecacheinvalidationoutboxDescClaimToken is the schema descriptor for claim_token field.
+	balancecacheinvalidationoutboxDescClaimToken := balancecacheinvalidationoutboxFields[4].Descriptor()
+	// balancecacheinvalidationoutbox.ClaimTokenValidator is a validator for the "claim_token" field. It is called by the builders before save.
+	balancecacheinvalidationoutbox.ClaimTokenValidator = balancecacheinvalidationoutboxDescClaimToken.Validators[0].(func(string) error)
+	// balancecacheinvalidationoutboxDescLastError is the schema descriptor for last_error field.
+	balancecacheinvalidationoutboxDescLastError := balancecacheinvalidationoutboxFields[5].Descriptor()
+	// balancecacheinvalidationoutbox.DefaultLastError holds the default value on creation for the last_error field.
+	balancecacheinvalidationoutbox.DefaultLastError = balancecacheinvalidationoutboxDescLastError.Default.(string)
+	balancedebitclientMixin := schema.BalanceDebitClient{}.Mixin()
+	balancedebitclientMixinFields0 := balancedebitclientMixin[0].Fields()
+	_ = balancedebitclientMixinFields0
+	balancedebitclientFields := schema.BalanceDebitClient{}.Fields()
+	_ = balancedebitclientFields
+	// balancedebitclientDescCreatedAt is the schema descriptor for created_at field.
+	balancedebitclientDescCreatedAt := balancedebitclientMixinFields0[0].Descriptor()
+	// balancedebitclient.DefaultCreatedAt holds the default value on creation for the created_at field.
+	balancedebitclient.DefaultCreatedAt = balancedebitclientDescCreatedAt.Default.(func() time.Time)
+	// balancedebitclientDescUpdatedAt is the schema descriptor for updated_at field.
+	balancedebitclientDescUpdatedAt := balancedebitclientMixinFields0[1].Descriptor()
+	// balancedebitclient.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	balancedebitclient.DefaultUpdatedAt = balancedebitclientDescUpdatedAt.Default.(func() time.Time)
+	// balancedebitclient.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	balancedebitclient.UpdateDefaultUpdatedAt = balancedebitclientDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// balancedebitclientDescName is the schema descriptor for name field.
+	balancedebitclientDescName := balancedebitclientFields[1].Descriptor()
+	// balancedebitclient.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	balancedebitclient.NameValidator = func() func(string) error {
+		validators := balancedebitclientDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// balancedebitclientDescSecretHash is the schema descriptor for secret_hash field.
+	balancedebitclientDescSecretHash := balancedebitclientFields[2].Descriptor()
+	// balancedebitclient.SecretHashValidator is a validator for the "secret_hash" field. It is called by the builders before save.
+	balancedebitclient.SecretHashValidator = func() func(string) error {
+		validators := balancedebitclientDescSecretHash.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(secret_hash string) error {
+			for _, fn := range fns {
+				if err := fn(secret_hash); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// balancedebitclientDescSecretPrefix is the schema descriptor for secret_prefix field.
+	balancedebitclientDescSecretPrefix := balancedebitclientFields[3].Descriptor()
+	// balancedebitclient.SecretPrefixValidator is a validator for the "secret_prefix" field. It is called by the builders before save.
+	balancedebitclient.SecretPrefixValidator = func() func(string) error {
+		validators := balancedebitclientDescSecretPrefix.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(secret_prefix string) error {
+			for _, fn := range fns {
+				if err := fn(secret_prefix); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// balancedebitclientDescStatus is the schema descriptor for status field.
+	balancedebitclientDescStatus := balancedebitclientFields[5].Descriptor()
+	// balancedebitclient.DefaultStatus holds the default value on creation for the status field.
+	balancedebitclient.DefaultStatus = balancedebitclientDescStatus.Default.(string)
+	// balancedebitclient.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	balancedebitclient.StatusValidator = balancedebitclientDescStatus.Validators[0].(func(string) error)
+	balancedebittransactionFields := schema.BalanceDebitTransaction{}.Fields()
+	_ = balancedebittransactionFields
+	// balancedebittransactionDescIdempotencyKeyHash is the schema descriptor for idempotency_key_hash field.
+	balancedebittransactionDescIdempotencyKeyHash := balancedebittransactionFields[3].Descriptor()
+	// balancedebittransaction.IdempotencyKeyHashValidator is a validator for the "idempotency_key_hash" field. It is called by the builders before save.
+	balancedebittransaction.IdempotencyKeyHashValidator = balancedebittransactionDescIdempotencyKeyHash.Validators[0].(func(string) error)
+	// balancedebittransactionDescRequestFingerprint is the schema descriptor for request_fingerprint field.
+	balancedebittransactionDescRequestFingerprint := balancedebittransactionFields[4].Descriptor()
+	// balancedebittransaction.RequestFingerprintValidator is a validator for the "request_fingerprint" field. It is called by the builders before save.
+	balancedebittransaction.RequestFingerprintValidator = balancedebittransactionDescRequestFingerprint.Validators[0].(func(string) error)
+	// balancedebittransactionDescCurrency is the schema descriptor for currency field.
+	balancedebittransactionDescCurrency := balancedebittransactionFields[6].Descriptor()
+	// balancedebittransaction.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	balancedebittransaction.CurrencyValidator = balancedebittransactionDescCurrency.Validators[0].(func(string) error)
+	// balancedebittransactionDescPurpose is the schema descriptor for purpose field.
+	balancedebittransactionDescPurpose := balancedebittransactionFields[7].Descriptor()
+	// balancedebittransaction.PurposeValidator is a validator for the "purpose" field. It is called by the builders before save.
+	balancedebittransaction.PurposeValidator = balancedebittransactionDescPurpose.Validators[0].(func(string) error)
+	// balancedebittransactionDescRef is the schema descriptor for ref field.
+	balancedebittransactionDescRef := balancedebittransactionFields[8].Descriptor()
+	// balancedebittransaction.RefValidator is a validator for the "ref" field. It is called by the builders before save.
+	balancedebittransaction.RefValidator = balancedebittransactionDescRef.Validators[0].(func(string) error)
+	// balancedebittransactionDescCreatedAt is the schema descriptor for created_at field.
+	balancedebittransactionDescCreatedAt := balancedebittransactionFields[11].Descriptor()
+	// balancedebittransaction.DefaultCreatedAt holds the default value on creation for the created_at field.
+	balancedebittransaction.DefaultCreatedAt = balancedebittransactionDescCreatedAt.Default.(func() time.Time)
 	batchimageeventFields := schema.BatchImageEvent{}.Fields()
 	_ = batchimageeventFields
 	// batchimageeventDescJobID is the schema descriptor for job_id field.

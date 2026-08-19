@@ -60,6 +60,7 @@ metadata:
 - `GET /api/v1/usage/dashboard/stats|trend|models`
 - `POST /api/v1/usage/dashboard/api-keys-usage`（批量查询，只读语义）
 - `GET /api/v1/subscriptions`、`/active`、`/progress`、`/summary`
+- `GET /api/v1/user/balance/transactions`、`/transactions/:txn_id`（本人成功扣款流水）
 
 **明确不放行：** `PUT /user/profile`、access-tokens 管理、`POST /auth/revoke-all-sessions`、`POST /subscriptions/:id/reset-weekly-limit`、支付 / redeem / admin 等。
 
@@ -112,6 +113,7 @@ metadata:
 - 不把 access token 当作网关密钥；不开放自建 Group / Admin。
 - 改密 / TokenVersion 不自动吊销 access token（独立 `revoked_at` 生命周期）；需要时可后续对齐。
 - 钱包余额：`GET /auth/me`（前端主路径）与 `GET /user/profile` 都可读；二者共用 `user-wallet-balance` **30 RPM/用户**，不单独开 balance 端点。
+- 钱包流水：允许两个 `GET /user/balance/transactions*` 路径；`POST /user/balance/debit` 仍只接受 Header JWT。
 - 订阅只读；周限重置仍需 JWT 会话。
 - 活跃 token 上限 10；创建与只读扩展面带 RPM；usage 查询有 page/range 护栏。
 

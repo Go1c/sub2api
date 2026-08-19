@@ -16,6 +16,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
+	"github.com/Wei-Shaw/sub2api/ent/balancecacheinvalidationoutbox"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebitclient"
+	"github.com/Wei-Shaw/sub2api/ent/balancedebittransaction"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageitem"
 	"github.com/Wei-Shaw/sub2api/ent/batchimagejob"
@@ -326,6 +329,87 @@ func (f TraverseAuthIdentityChannel) Traverse(ctx context.Context, q ent.Query) 
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.AuthIdentityChannelQuery", q)
+}
+
+// The BalanceCacheInvalidationOutboxFunc type is an adapter to allow the use of ordinary function as a Querier.
+type BalanceCacheInvalidationOutboxFunc func(context.Context, *ent.BalanceCacheInvalidationOutboxQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f BalanceCacheInvalidationOutboxFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.BalanceCacheInvalidationOutboxQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.BalanceCacheInvalidationOutboxQuery", q)
+}
+
+// The TraverseBalanceCacheInvalidationOutbox type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseBalanceCacheInvalidationOutbox func(context.Context, *ent.BalanceCacheInvalidationOutboxQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseBalanceCacheInvalidationOutbox) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseBalanceCacheInvalidationOutbox) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.BalanceCacheInvalidationOutboxQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.BalanceCacheInvalidationOutboxQuery", q)
+}
+
+// The BalanceDebitClientFunc type is an adapter to allow the use of ordinary function as a Querier.
+type BalanceDebitClientFunc func(context.Context, *ent.BalanceDebitClientQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f BalanceDebitClientFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.BalanceDebitClientQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.BalanceDebitClientQuery", q)
+}
+
+// The TraverseBalanceDebitClient type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseBalanceDebitClient func(context.Context, *ent.BalanceDebitClientQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseBalanceDebitClient) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseBalanceDebitClient) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.BalanceDebitClientQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.BalanceDebitClientQuery", q)
+}
+
+// The BalanceDebitTransactionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type BalanceDebitTransactionFunc func(context.Context, *ent.BalanceDebitTransactionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f BalanceDebitTransactionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.BalanceDebitTransactionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.BalanceDebitTransactionQuery", q)
+}
+
+// The TraverseBalanceDebitTransaction type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseBalanceDebitTransaction func(context.Context, *ent.BalanceDebitTransactionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseBalanceDebitTransaction) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseBalanceDebitTransaction) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.BalanceDebitTransactionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.BalanceDebitTransactionQuery", q)
 }
 
 // The BatchImageEventFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1346,6 +1430,12 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AuthIdentityQuery, predicate.AuthIdentity, authidentity.OrderOption]{typ: ent.TypeAuthIdentity, tq: q}, nil
 	case *ent.AuthIdentityChannelQuery:
 		return &query[*ent.AuthIdentityChannelQuery, predicate.AuthIdentityChannel, authidentitychannel.OrderOption]{typ: ent.TypeAuthIdentityChannel, tq: q}, nil
+	case *ent.BalanceCacheInvalidationOutboxQuery:
+		return &query[*ent.BalanceCacheInvalidationOutboxQuery, predicate.BalanceCacheInvalidationOutbox, balancecacheinvalidationoutbox.OrderOption]{typ: ent.TypeBalanceCacheInvalidationOutbox, tq: q}, nil
+	case *ent.BalanceDebitClientQuery:
+		return &query[*ent.BalanceDebitClientQuery, predicate.BalanceDebitClient, balancedebitclient.OrderOption]{typ: ent.TypeBalanceDebitClient, tq: q}, nil
+	case *ent.BalanceDebitTransactionQuery:
+		return &query[*ent.BalanceDebitTransactionQuery, predicate.BalanceDebitTransaction, balancedebittransaction.OrderOption]{typ: ent.TypeBalanceDebitTransaction, tq: q}, nil
 	case *ent.BatchImageEventQuery:
 		return &query[*ent.BatchImageEventQuery, predicate.BatchImageEvent, batchimageevent.OrderOption]{typ: ent.TypeBatchImageEvent, tq: q}, nil
 	case *ent.BatchImageItemQuery:
