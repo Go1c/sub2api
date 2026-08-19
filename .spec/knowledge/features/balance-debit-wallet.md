@@ -27,6 +27,7 @@ metadata:
 - 交易查询接受 JWT/`uat_`，repository 的所有查询都包含 token 所属 `user_id`。
 - 管理端 `GET /api/v1/admin/users/:id/balance-history` 默认合并 `balance_debit_transactions`，类型为 `wallet_debit`，金额为负；`total_recharged` 不含扣款。
 - 管理端 `GET /api/v1/admin/users/:id/wallet-debits` 按用户返回与本人流水对齐的账本字段，不返回 `secret` / `secret_hash`。
+- 用户「我的订单」页在支付订单表下方独立展示本人外部钱包扣款（扣款时间 / 来源 `client_name` / 负金额 `$`）。数据来自 `GET /user/balance/transactions`，不创建支付订单，也不混入 `GET /payment/orders/my`。
 
 ### 原子性与幂等
 
@@ -54,6 +55,7 @@ metadata:
 
 - `CNY` 只是统一站内余额标签，不换汇。
 - purpose 是普通账本标签，不创建 LumioAPI 订单、订阅、权益、到期日或续费状态。
+- 用户可见的扣款记录只出现在「我的订单」的独立列表，不写成支付订单行。
 - 第一版只支持扣款和查询；退款/冲正必须以后追加独立账本事件，不修改历史交易。
 - 管理端 DELETE 只将 client 设为 inactive；创建和轮换才一次性返回明文 secret。
 
@@ -66,6 +68,7 @@ metadata:
 - Migration / schema：`backend/migrations/928_balance_debit_wallet.sql`、`backend/ent/schema/balance_debit_*.go`
 - Service / repository：`backend/internal/service/balance_wallet*.go`、`backend/internal/repository/balance_wallet_repo.go`
 - HTTP / auth：`backend/internal/handler/balance_wallet_handler.go`、`backend/internal/handler/admin/balance_client_handler.go`、`backend/internal/handler/admin/user_handler.go`、`backend/internal/server/middleware/balance_wallet.go`
+- 用户订单页：`frontend/src/views/user/UserOrdersView.vue`、`frontend/src/api/user.ts`（`getMyWalletTransactions`）
 - 对外 API：`docs/balance-wallet-api.md`
 - 外部开发 Agent 提示词：`docs/balance-wallet-integration-agent-prompt.md`
 - UAT 权限：[`user-access-token.md`](./user-access-token.md)
