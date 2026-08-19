@@ -97,4 +97,16 @@ describe('AppHeader home navigation', () => {
       }
     })
   })
+
+  it('renders Codex download as an outbound link to bestcodex.app', async () => {
+    const wrapper = await mountHeader()
+    const links = wrapper.findAll('a').filter((anchor) => anchor.text().includes('Codex 下载'))
+
+    expect(links.length).toBeGreaterThanOrEqual(1)
+    for (const link of links) {
+      expect(link.attributes('href')).toBe('https://bestcodex.app/')
+      expect(link.attributes('target')).toBe('_blank')
+      expect(link.attributes('rel')).toContain('noopener')
+    }
+  })
 })

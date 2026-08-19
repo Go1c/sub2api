@@ -47,4 +47,15 @@ describe('HomeView navigation', () => {
     expect(navItems).not.toContain("key: 'support'")
     expect(navItems).not.toContain("target: '#support'")
   })
+
+  it('adds a Codex download outbound link next to the model market', () => {
+    const navItems = homeNavItemsBlock()
+
+    expect(viewSource).toContain("from '@/constants/codexDownload'")
+    expect(navItems).toContain("key: 'codexDownload'")
+    expect(navItems).toContain('target: CODEX_DOWNLOAD_URL')
+    expect(navItems).toContain('external: true')
+    expect(navItems.indexOf("key: 'codexDownload'")).toBeGreaterThan(navItems.indexOf("key: 'models'"))
+    expect(navItems.indexOf("key: 'codexDownload'")).toBeLessThan(navItems.indexOf("key: 'status'"))
+  })
 })
