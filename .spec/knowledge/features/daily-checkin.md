@@ -9,12 +9,12 @@ metadata:
 
 # 每日签到
 
-每日签到是一套与邀请返利、公共 Settings DTO 和余额历史解耦的奖励模块。它为活跃用户按运营时区每日发放一次随机奖励，可叠加循环里程碑奖金，并在全站每日预算不足时保留签到连续性但不发放余额。
+每日签到是一套与邀请返利和公共 Settings DTO 解耦的奖励模块。它为活跃用户按运营时区每日发放一次随机奖励，可叠加循环里程碑奖金，并在全站每日预算不足时保留签到连续性但不发放余额。实际发奖通过 `redeem_codes` 记入通用余额流水。
 
 ## 目标与边界
 
 - 签到业务集中在 `backend/internal/checkin/` 和 `frontend/src/features/checkin/`，共享模块只负责依赖注入、路由、导航与页面挂载。
-- 签到流水是该功能唯一的资金审计来源，不写入 `AffiliateService`、`user_affiliate_ledger` 或通用余额历史。
+- 实际发奖（`actual_reward > 0`）在同一签到 SQL 事务内插入一条已使用的 `redeem_codes`（`type=checkin_balance`，`notes=daily_checkin:<recordID>`）。管理端用户充值/并发变动记录展示「余额充值（签到）」；`SumPositiveBalanceByUser` 把该类型计入总充值。不调用 `RedeemService.Redeem`，也不写入 `AffiliateService` 或 `user_affiliate_ledger`。奖池耗尽、0 元发奖或同日重放不写兑换码。
 - 配置由独立管理 API 维护，不加入现有 Settings 请求或解析链。
 - 数据表由独立 SQL migration 创建，Repository 使用 `database/sql`，不修改 Ent Schema。
 
@@ -26,7 +26,7 @@ metadata:
 - `daily_checkin_records`：不可变签到流水，记录用户快照、业务日期、连续/循环天数、奖励拆分、实际发放、余额快照和客户端信息。用户删除后 `user_id` 置空，审计快照保留。
 - `daily_checkin_daily_counters`：按业务日期累计实际发放额，事务内锁行以串行化每日预算分配。
 
-签到事务锁定配置和用户，检查同一业务日的已有流水，再锁定当日预算行。连续天数根据上一条业务日期计算；随机基础奖励使用密码学安全随机源并按万分之一美元取值，最高里程碑天数构成循环周期。余额增加、流水写入和预算累计在同一事务中完成，任一步失败全部回滚。
+签到事务锁定配置和用户，检查同一业务日的已有流水，再锁定当日预算行。连续天数根据上一条业务日期计算；随机基础奖励使用密码学安全随机源并按万分之一美元取值，最高里程碑天数构成循环周期。余额增加、流水写入、预算累计，以及发奖时写入已使用兑换码，都在同一事务中完成，任一步失败全部回滚。
 
 每日上限为 `0` 时不限额。剩余预算不足以完整支付本次奖励时，不做部分发放：流水状态记为 `budget_exhausted`、实际奖励为 `0`，但该日仍计入连续签到。同日重复请求返回原流水，不重复发奖。事务提交后以 best-effort 方式失效余额和认证缓存，失效失败只记录日志。
 
@@ -65,4 +65,4 @@ metadata:
 - 后端：`backend/internal/checkin/`、`backend/internal/server/checkin.go`
 - 前端：`frontend/src/features/checkin/`
 - 数据库：`backend/migrations/929_daily_checkin.sql`
-- 任务卡：`.spec/tasks/daily-checkin.md`
+- 任务卡：`.spec/tasks/daily-checkin.md`、`.spec/tasks/checkin-redeem-dark-nudge.md`

@@ -93,14 +93,28 @@ func setupCheckInIntegrationSchema(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, string(migration))
+	if _, err := db.ExecContext(ctx, string(migration)); err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `
+		CREATE TABLE redeem_codes (
+			id BIGSERIAL PRIMARY KEY,
+			code VARCHAR(32) UNIQUE NOT NULL,
+			type VARCHAR(20) NOT NULL,
+			value NUMERIC(20,8) NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			used_by BIGINT,
+			used_at TIMESTAMPTZ,
+			notes TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`)
 	return err
 }
 
 func resetCheckInIntegrationState(t *testing.T, minReward, maxReward, dailyCap string) {
 	t.Helper()
 	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
-		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users RESTART IDENTITY CASCADE;
+		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users, redeem_codes RESTART IDENTITY CASCADE;
 		UPDATE daily_checkin_settings
 		SET enabled = TRUE,
 			min_reward = $1,
@@ -214,13 +228,40 @@ func TestRepositoryRecordFailureRollsBackBalanceAndBudget(t *testing.T) {
 	require.ErrorContains(t, err, "forced check-in record failure")
 
 	var balance string
-	var records, counters int
+	var records, counters, redeemCodes int
 	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT balance::text FROM users WHERE id = $1`, userID).Scan(&balance))
 	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT COUNT(*) FROM daily_checkin_records`).Scan(&records))
 	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT COUNT(*) FROM daily_checkin_daily_counters`).Scan(&counters))
+	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT COUNT(*) FROM redeem_codes`).Scan(&redeemCodes))
 	require.Equal(t, "0.00000000", balance)
 	require.Zero(t, records)
 	require.Zero(t, counters)
+	require.Zero(t, redeemCodes)
+}
+
+func TestRepositoryCheckInWritesUsedRedeemCode(t *testing.T) {
+	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
+	userID := createCheckInIntegrationUser(t, "redeem@example.test")
+	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
+
+	result, err := repo.CheckIn(context.Background(), userID, time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC), ClientInfo{})
+	require.NoError(t, err)
+	require.Equal(t, StatusAwarded, result.Record.Status)
+
+	var count int
+	var codeType, status, value, notes, code string
+	var usedBy int64
+	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT COUNT(*) FROM redeem_codes`).Scan(&count))
+	require.Equal(t, 1, count)
+	require.NoError(t, checkInIntegrationDB.QueryRow(`
+		SELECT code, type, status, value::text, used_by, notes
+		FROM redeem_codes`).Scan(&code, &codeType, &status, &value, &usedBy, &notes))
+	require.Len(t, code, 32)
+	require.Equal(t, RedeemTypeCheckinBalance, codeType)
+	require.Equal(t, redeemCodeStatusUsed, status)
+	require.Equal(t, "0.10000000", value)
+	require.Equal(t, userID, usedBy)
+	require.Equal(t, fmt.Sprintf("daily_checkin:%d", result.Record.ID), notes)
 }
 
 func TestRepositoryConcurrentRewardsAtomicallyIncreaseBalance(t *testing.T) {
