@@ -1,0 +1,7 @@
+import { describe, expect, it, vi } from 'vitest'; import { mount } from '@vue/test-utils'; import { createPinia, setActivePinia } from 'pinia'
+vi.mock('vue-i18n', async () => { const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n'); return { ...actual, useI18n: () => ({ t: (key: string) => key }) } }); import SidebarCheckinCard from '../SidebarCheckinCard.vue'; import { useCheckinStore } from '../store'
+const base = { checked_in_today: false, total_checkins: 0, total_reward: '0.0000', current_streak: 0, cycle_day: 0, next_milestone: null, balance: '0.0000', today_record: null, recent_records: [] }
+describe('SidebarCheckinCard', () => {
+  it('hides when disabled', () => { setActivePinia(createPinia()); useCheckinStore().status = { ...base, enabled: false }; const wrapper = mount(SidebarCheckinCard, { props: { collapsed: false }, global: { stubs: { RouterLink: true } } }); expect(wrapper.find('[data-test="sidebar-checkin"]').exists()).toBe(false) })
+  it('links to check-in in collapsed mode', () => { setActivePinia(createPinia()); useCheckinStore().status = { ...base, enabled: true }; const wrapper = mount(SidebarCheckinCard, { props: { collapsed: true }, global: { stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } } } }); const link = wrapper.get('[data-test="sidebar-checkin"]'); expect(link.attributes('href')).toBe('/checkin'); expect(link.attributes('title')).toBe('nav.checkin') })
+})

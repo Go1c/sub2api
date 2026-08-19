@@ -6391,6 +6391,8 @@
           </div>
         </div>
 
+        <CheckinSettingsCard />
+
         </div><!-- /Tab: Features -->
 
         <!-- Tab: Email -->
@@ -8034,6 +8036,7 @@ import Toggle from "@/components/common/Toggle.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
+import CheckinSettingsCard from '@/features/checkin/CheckinSettingsCard.vue'
 import { useClipboard } from "@/composables/useClipboard";
 import {
   useStepUp,

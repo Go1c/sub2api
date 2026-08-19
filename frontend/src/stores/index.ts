@@ -13,6 +13,7 @@ export { usePaymentStore } from './payment'
 export { useSiteMessageStore } from './siteMessages'
 export { useLotteryStore } from './lottery'
 export { useAdminComplianceStore } from './adminCompliance'
+export { useCheckinStore } from '@/features/checkin/store'
 
 // Re-export types for convenience
 export type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
