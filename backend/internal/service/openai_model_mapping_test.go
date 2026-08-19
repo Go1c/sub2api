@@ -286,22 +286,55 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 			want:    "gpt-5.5-pro",
 		},
 		{
-			name:    "oauth remaps codex auto review to terra",
+			name:    "oauth remaps codex auto review to terra without luna opt-in",
 			account: &Account{Type: AccountTypeOAuth},
 			model:   "codex-auto-review",
 			want:    "gpt-5.6-terra",
 		},
 		{
-			name:    "oauth remaps luna to terra",
+			name:    "oauth remaps luna to terra without luna opt-in",
 			account: &Account{Type: AccountTypeOAuth},
 			model:   "gpt-5.6-luna",
 			want:    "gpt-5.6-terra",
 		},
 		{
-			name:    "apikey remaps luna to terra",
+			name: "oauth keeps luna when account mapping opts in",
+			account: &Account{
+				Type: AccountTypeOAuth,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-5.6-luna": "gpt-5.6-luna"},
+				},
+			},
+			model: "gpt-5.6-luna",
+			want:  "gpt-5.6-luna",
+		},
+		{
+			name: "oauth auto-review follows luna opt-in",
+			account: &Account{
+				Type: AccountTypeOAuth,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-5.6-luna": "gpt-5.6-luna"},
+				},
+			},
+			model: "codex-auto-review",
+			want:  "gpt-5.6-luna",
+		},
+		{
+			name:    "apikey remaps luna to terra without luna opt-in",
 			account: &Account{Type: AccountTypeAPIKey},
 			model:   "gpt-5.6-luna",
 			want:    "gpt-5.6-terra",
+		},
+		{
+			name: "apikey keeps luna when account mapping opts in",
+			account: &Account{
+				Type: AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-5.6-luna": "gpt-5.6-luna"},
+				},
+			},
+			model: "gpt-5.6-luna",
+			want:  "gpt-5.6-luna",
 		},
 		{
 			name:    "apikey preserves official bare GPT-5.6 alias",
@@ -332,10 +365,10 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 	}
 }
 
-func TestUsageBillingModelCandidatesRewriteCodexAutoReviewToTerra(t *testing.T) {
+func TestUsageBillingModelCandidatesRewriteCodexAutoReviewToLuna(t *testing.T) {
 	candidates := usageBillingModelCandidates("codex-auto-review")
 
-	expected := []string{"codex-auto-review", "gpt-5.6-terra"}
+	expected := []string{"codex-auto-review", "gpt-5.6-luna"}
 	if len(candidates) != len(expected) {
 		t.Fatalf("usageBillingModelCandidates(codex-auto-review) = %#v, want %#v", candidates, expected)
 	}

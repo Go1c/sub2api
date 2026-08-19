@@ -1,33 +1,148 @@
 package service
 
-import "strings"
+import (
+	"context"
+	"errors"
+	"strings"
+)
 
 // openaiHiddenIngressFallbackModel is the public stand-in for models that
-// clients may request but this gateway must not serve as themselves.
+// clients may request but this gateway must not serve as themselves by default.
 // Codex Auto-review hardcodes gpt-5.6-luna / codex-auto-review and has no
-// client-side override; users must not reach real Luna.
+// client-side override. Groups without an explicit Luna account mapping fall
+// back here; accounts that opt in via model_mapping may serve real Luna.
 const openaiHiddenIngressFallbackModel = "gpt-5.6-terra"
+const openaiHiddenLunaModel = "gpt-5.6-luna"
 
 // RewriteOpenAIHiddenIngressModel rewrites models that must not be served
 // (Luna and Codex Auto-review) onto the public fallback. Other names are
 // returned unchanged so later alias / channel mapping still apply.
 func RewriteOpenAIHiddenIngressModel(model string) string {
+	if !isOpenAIHiddenIngressModel(model) {
+		return strings.TrimSpace(model)
+	}
+	return openaiHiddenIngressFallbackModel
+}
+
+// ResolveOpenAIHiddenIngressModel keeps Luna when an account in the group has
+// opted in via an explicit mapping key. Otherwise it falls back to Terra.
+// Codex Auto-review is canonicalized to gpt-5.6-luna on the opt-in path.
+func ResolveOpenAIHiddenIngressModel(model string, allowRealLuna bool) string {
+	trimmed := strings.TrimSpace(model)
+	if trimmed == "" || !isOpenAIHiddenIngressModel(trimmed) {
+		return trimmed
+	}
+	if allowRealLuna {
+		return canonicalizeOpenAIHiddenIngressModel(trimmed)
+	}
+	return openaiHiddenIngressFallbackModel
+}
+
+func isOpenAIHiddenIngressModel(model string) bool {
+	normalized := openAIHiddenIngressNormalizedName(model)
+	if normalized == "" {
+		return false
+	}
+	return isOpenAIHiddenAutoReviewModel(normalized) || strings.Contains(normalized, "gpt-5.6-luna")
+}
+
+func canonicalizeOpenAIHiddenIngressModel(model string) string {
 	trimmed := strings.TrimSpace(model)
 	if trimmed == "" {
 		return trimmed
+	}
+	normalized := openAIHiddenIngressNormalizedName(trimmed)
+	if isOpenAIHiddenAutoReviewModel(normalized) {
+		return openaiHiddenLunaModel
+	}
+	return trimmed
+}
+
+func openAIHiddenIngressNormalizedName(model string) string {
+	trimmed := strings.TrimSpace(model)
+	if trimmed == "" {
+		return ""
 	}
 	normalized := canonicalizeOpenAIModelAliasSpelling(trimmed)
 	if normalized == "" {
 		normalized = strings.ToLower(lastOpenAIModelSegment(trimmed))
 	}
-	switch {
-	case normalized == "codex-auto-review" || strings.HasPrefix(normalized, "codex-auto-review-"):
-		return openaiHiddenIngressFallbackModel
-	case strings.Contains(normalized, "gpt-5.6-luna"):
-		return openaiHiddenIngressFallbackModel
-	default:
-		return trimmed
+	return normalized
+}
+
+func isOpenAIHiddenAutoReviewModel(normalized string) bool {
+	return normalized == "codex-auto-review" || strings.HasPrefix(normalized, "codex-auto-review-")
+}
+
+func mappingKeyServesOpenAIHiddenLuna(key string) bool {
+	normalized := openAIHiddenIngressNormalizedName(key)
+	if normalized == "" {
+		normalized = strings.ToLower(strings.TrimSpace(key))
 	}
+	if isOpenAIHiddenAutoReviewModel(normalized) {
+		return true
+	}
+	return strings.Contains(normalized, "gpt-5.6-luna")
+}
+
+func accountExplicitlyServesOpenAIHiddenLuna(account *Account) bool {
+	if account == nil {
+		return false
+	}
+	mapping := account.GetModelMapping()
+	if len(mapping) == 0 {
+		return false
+	}
+	for key := range mapping {
+		if mappingKeyServesOpenAIHiddenLuna(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func anyAccountExplicitlyServesOpenAIHiddenLuna(accounts []Account) bool {
+	for i := range accounts {
+		if accountExplicitlyServesOpenAIHiddenLuna(&accounts[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func accountSupportsOpenAISchedulingModel(account *Account, requestedModel string) bool {
+	if requestedModel == "" {
+		return true
+	}
+	if isOpenAIHiddenIngressModel(requestedModel) {
+		return accountExplicitlyServesOpenAIHiddenLuna(account)
+	}
+	return account.IsModelSupported(requestedModel)
+}
+
+func shouldFallbackFromHiddenOpenAIIngress(err error) bool {
+	if err == nil {
+		return true
+	}
+	return errors.Is(err, ErrNoAvailableAccounts) || errors.Is(err, ErrNoAvailableCompactAccounts)
+}
+
+func (s *OpenAIGatewayService) ResolveOpenAIHiddenIngressModel(ctx context.Context, groupID *int64, model string) string {
+	if s == nil || !isOpenAIHiddenIngressModel(model) {
+		return strings.TrimSpace(model)
+	}
+	return ResolveOpenAIHiddenIngressModel(model, s.groupHasExplicitOpenAIHiddenLunaAccount(ctx, groupID))
+}
+
+func (s *OpenAIGatewayService) groupHasExplicitOpenAIHiddenLunaAccount(ctx context.Context, groupID *int64) bool {
+	if s == nil {
+		return false
+	}
+	accounts, err := s.listSchedulableAccounts(ctx, groupID, PlatformOpenAI)
+	if err != nil {
+		return false
+	}
+	return anyAccountExplicitlyServesOpenAIHiddenLuna(accounts)
 }
 
 func lastOpenAIModelSegment(model string) string {
@@ -98,7 +213,9 @@ func normalizeKnownOpenAICodexModel(model string) string {
 	case strings.Contains(normalized, "gpt-5.6-terra"):
 		return "gpt-5.6-terra"
 	case strings.Contains(normalized, "gpt-5.6-luna"):
-		return openaiHiddenIngressFallbackModel
+		return openaiHiddenLunaModel
+	case isOpenAIHiddenAutoReviewModel(normalized):
+		return openaiHiddenLunaModel
 	case normalized == "gpt-5.6":
 		return "gpt-5.6-sol"
 	case strings.HasPrefix(normalized, "gpt-5.6-"):
