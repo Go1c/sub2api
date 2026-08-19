@@ -6,6 +6,14 @@ const record = { id: 1, user_id: 4, user_email: 'user@example.com', username: 'u
 const status: CheckinStatus = { enabled: true, checked_in_today: true, total_checkins: 8, total_reward: '2.0000', current_streak: 3, cycle_day: 3, next_milestone: { day: 7, bonus: '1.0000', days_until: 4 }, balance: '10.0000', today_record: record, recent_records: [] }
 describe('CheckinView', () => {
   beforeEach(() => { setActivePinia(createPinia()); api.getUserStatus.mockReset(); api.checkIn.mockReset() })
-  it('disables action when the pool is exhausted', async () => { api.getUserStatus.mockResolvedValue(status); const wrapper = mount(CheckinView, { global: { plugins: [createPinia()], stubs: { AppLayout: { template: '<main><slot /></main>' } } } }); await flushPromises(); const button = wrapper.get('[data-test="checkin-action"]'); expect(button.attributes('disabled')).toBeDefined(); expect(button.text()).toContain("Today's reward pool is exhausted") })
-  it('renders a zero-dollar awarded record as successful', async () => { api.getUserStatus.mockResolvedValue({ ...status, today_record: { ...record, base_reward: '0.0000', status: 'awarded' } }); const wrapper = mount(CheckinView, { global: { plugins: [createPinia()], stubs: { AppLayout: { template: '<main><slot /></main>' } } } }); await flushPromises(); expect(wrapper.get('[data-test="today-result"]').text()).toContain('$0.0000') })
+  it('disables action when the pool is exhausted', async () => { api.getUserStatus.mockResolvedValue(status); const wrapper = mount(CheckinView, { global: { plugins: [createPinia()], stubs: { AppLayout: { template: '<main><slot /></main>' } } } }); await flushPromises(); const button = wrapper.get('[data-test="checkin-action"]'); expect(button.attributes('disabled')).toBeDefined(); expect(button.text()).toContain("Today's reward pool is exhausted"); expect(wrapper.get('[data-test="today-result"]').classes()).toEqual(expect.arrayContaining(['dark:bg-amber-950/40', 'dark:text-amber-300'])) })
+  it('renders a zero-dollar awarded record as successful', async () => { api.getUserStatus.mockResolvedValue({ ...status, today_record: { ...record, base_reward: '0.0000', status: 'awarded' } }); const wrapper = mount(CheckinView, { global: { plugins: [createPinia()], stubs: { AppLayout: { template: '<main><slot /></main>' } } } }); await flushPromises(); expect(wrapper.get('[data-test="today-result"]').text()).toContain('$0.0000'); expect(wrapper.get('[data-test="today-result"]').classes()).toEqual(expect.arrayContaining(['dark:bg-emerald-950/40', 'dark:text-emerald-300'])) })
+  it('applies dark tokens to the history table', async () => {
+    api.getUserStatus.mockResolvedValue({ ...status, recent_records: [record] })
+    const wrapper = mount(CheckinView, { global: { plugins: [createPinia()], stubs: { AppLayout: { template: '<main><slot /></main>' } } } })
+    await flushPromises()
+    expect(wrapper.get('table').classes()).toContain('dark:divide-dark-700')
+    expect(wrapper.get('thead').classes()).toEqual(expect.arrayContaining(['dark:bg-dark-800', 'dark:text-gray-400']))
+    expect(wrapper.get('tbody').classes()).toContain('dark:divide-dark-800')
+  })
 })

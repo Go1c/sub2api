@@ -101,6 +101,7 @@ const (
 	RedeemTypeSubscriptionPayment = "subscription_payment"
 	RedeemTypePromoBalance        = "promo_balance"
 	RedeemTypeWalletDebit         = "wallet_debit"
+	RedeemTypeCheckinBalance      = "checkin_balance"
 )
 
 // PromoCode status constants

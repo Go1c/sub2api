@@ -591,6 +591,7 @@ export default {
     balanceAddedRedeem: 'Balance Added (Redeem)',
     balanceAddedAffiliate: 'Balance Added (Affiliate Transfer)',
     balanceAddedAdmin: 'Balance Added (Admin)',
+    balanceAddedCheckin: 'Balance Added (Check-in)',
     balanceDeductedAdmin: 'Balance Deducted (Admin)',
     concurrencyAddedRedeem: 'Concurrency Added (Redeem)',
     concurrencyAddedAdmin: 'Concurrency Added (Admin)',

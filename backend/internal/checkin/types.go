@@ -12,9 +12,11 @@ import (
 )
 
 const (
-	StatusAwarded         = "awarded"
-	StatusBudgetExhausted = "budget_exhausted"
-	maxMilestones         = 10
+	StatusAwarded            = "awarded"
+	StatusBudgetExhausted    = "budget_exhausted"
+	RedeemTypeCheckinBalance = "checkin_balance"
+	redeemCodeStatusUsed     = "used"
+	maxMilestones            = 10
 )
 
 var rewardUnit = decimal.NewFromInt(10000)

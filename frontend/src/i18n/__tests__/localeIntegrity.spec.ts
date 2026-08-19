@@ -58,4 +58,13 @@ describe('locale integrity', () => {
   it('keeps the simplified Chinese no-active-subscription prompt pointing to purchase', () => {
     expect(zh.userSubscriptions.noActiveSubscriptionsDesc).toBe('您没有任何有效订阅.请前往充值页面订购')
   })
+
+  it('labels check-in redeem history consistently across locales', () => {
+    expect(en.redeem.balanceAddedCheckin).toBe('Balance Added (Check-in)')
+    expect(zh.redeem.balanceAddedCheckin).toBe('余额充值（签到）')
+    expect(zhHant.redeem.balanceAddedCheckin).toBe('餘額充值（簽到）')
+    expect(en.admin.users.typeCheckinBalance).toBe('Balance (Check-in)')
+    expect(zh.admin.users.typeCheckinBalance).toBe('余额（签到）')
+    expect(zhHant.admin.users.typeCheckinBalance).toBe('餘額（簽到）')
+  })
 })

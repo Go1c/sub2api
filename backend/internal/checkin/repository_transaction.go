@@ -2,7 +2,9 @@ package checkin
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -167,11 +169,42 @@ func (r *sqlRepository) CheckIn(ctx context.Context, userID int64, now time.Time
 			WHERE business_date = $1`, businessDate, actual.StringFixed(4)); err != nil {
 			return CheckInResult{}, fmt.Errorf("update daily check-in counter: %w", err)
 		}
+		if err := insertUsedCheckInRedeemCode(ctx, tx, userID, record.ID, actual); err != nil {
+			return CheckInResult{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return CheckInResult{}, fmt.Errorf("commit check-in transaction: %w", err)
 	}
 	return CheckInResult{Record: record}, nil
+}
+
+func generateCheckInRedeemCode() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func insertUsedCheckInRedeemCode(ctx context.Context, tx *sql.Tx, userID, recordID int64, actual decimal.Decimal) error {
+	code, err := generateCheckInRedeemCode()
+	if err != nil {
+		return fmt.Errorf("generate check-in redeem code: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO redeem_codes (code, type, value, status, used_by, used_at, notes, created_at)
+VALUES ($1, $2, $3, $4, $5, NOW(), $6, NOW())`,
+		code,
+		RedeemTypeCheckinBalance,
+		actual.StringFixed(4),
+		redeemCodeStatusUsed,
+		userID,
+		fmt.Sprintf("daily_checkin:%d", recordID),
+	); err != nil {
+		return fmt.Errorf("insert check-in redeem code: %w", err)
+	}
+	return nil
 }
 
 func lockCheckInUser(ctx context.Context, tx *sql.Tx, userID int64) (lockedUser, error) {

@@ -31,7 +31,7 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>MyCustomSite - AI API Gateway</title>")
+		assert.Contains(t, string(result), "<title>MyCustomSite · AI API 中转与管理平台</title>")
 		assert.NotContains(t, string(result), "Sub2API")
 	})
 
@@ -99,7 +99,7 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>A&amp;B - AI API Gateway</title>")
+		assert.Contains(t, string(result), "<title>A&amp;B · AI API 中转与管理平台</title>")
 	})
 
 	t.Run("preserves_rest_of_html", func(t *testing.T) {
@@ -111,7 +111,7 @@ func TestInjectSiteTitle(t *testing.T) {
 		assert.Contains(t, string(result), `<meta charset="UTF-8">`)
 		assert.Contains(t, string(result), `<script src="app.js"></script>`)
 		assert.Contains(t, string(result), `<div id="app"></div>`)
-		assert.Contains(t, string(result), "<title>TestSite - AI API Gateway</title>")
+		assert.Contains(t, string(result), "<title>TestSite · AI API 中转与管理平台</title>")
 	})
 }
 
@@ -191,11 +191,11 @@ func TestInjectSEOMeta(t *testing.T) {
 		assert.Contains(t, html, `<link rel="canonical" href="https://api.example.com/">`)
 		assert.Contains(t, html, `<meta property="og:type" content="website">`)
 		assert.Contains(t, html, `<meta property="og:site_name" content="AcmeAPI">`)
-		assert.Contains(t, html, `<meta property="og:title" content="AcmeAPI - AI API Gateway">`)
+		assert.Contains(t, html, `<meta property="og:title" content="AcmeAPI · AI API 中转与管理平台">`)
 		assert.Contains(t, html, `<meta property="og:description" content="`+wantDescription+`">`)
 		assert.Contains(t, html, `<meta property="og:url" content="https://api.example.com/">`)
 		assert.Contains(t, html, `<meta name="twitter:card" content="summary">`)
-		assert.Contains(t, html, `<meta name="twitter:title" content="AcmeAPI - AI API Gateway">`)
+		assert.Contains(t, html, `<meta name="twitter:title" content="AcmeAPI · AI API 中转与管理平台">`)
 		assert.Contains(t, html, `<meta name="twitter:description" content="`+wantDescription+`">`)
 		assert.Contains(t, html, `application/ld+json`)
 		assert.Contains(t, html, `nonce="`+NonceHTMLPlaceholder+`"`)
@@ -458,7 +458,7 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 
 		assert.Contains(t, html, `window.__APP_CONFIG__={"site_name":"AcmeAPI","site_subtitle":"企业网关","api_base_url":"https://api.example.com"};`)
 		assert.Contains(t, html, `nonce="__CSP_NONCE_VALUE__"`)
-		assert.Contains(t, html, `<title>AcmeAPI - AI API Gateway</title>`)
+		assert.Contains(t, html, `<title>AcmeAPI · AI API 中转与管理平台</title>`)
 		assert.Contains(t, html, `<meta name="description"`)
 		assert.Contains(t, html, `rel="canonical"`)
 		assert.Contains(t, html, `og:title`)
@@ -489,7 +489,7 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 		result := server.injectSettings(settingsJSON)
 		html := string(result)
 
-		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
+		assert.Contains(t, html, `<title>LumioAPI · AI API 中转与管理平台</title>`)
 		assert.Contains(t, html, `og:site_name" content="LumioAPI"`)
 		assert.Contains(t, html, `name="description" content="LumioAPI 是 AI API 中转与管理平台`)
 		assert.Equal(t, 1, strings.Count(html, `name="description"`))
@@ -736,6 +736,19 @@ func TestOverrideFilesNeverReceiveImmutableCacheHeaders(t *testing.T) {
 }
 
 func TestFrontendServer_Middleware(t *testing.T) {
+	t.Run("redirects_legacy_home_to_canonical_root", func(t *testing.T) {
+		server, err := NewFrontendServer(&mockSettingsProvider{})
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.Middleware())
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/home", nil))
+
+		assert.Equal(t, http.StatusMovedPermanently, w.Code)
+		assert.Equal(t, "/", w.Header().Get("Location"))
+	})
+
 	t.Run("skips_api_routes", func(t *testing.T) {
 		provider := &mockSettingsProvider{
 			settings: map[string]string{"test": "value"},
@@ -969,6 +982,16 @@ func TestHasEmbeddedFrontend(t *testing.T) {
 
 // Tests for legacy ServeEmbeddedFrontend function
 func TestServeEmbeddedFrontend(t *testing.T) {
+	t.Run("redirects_legacy_home_to_canonical_root", func(t *testing.T) {
+		router := gin.New()
+		router.Use(ServeEmbeddedFrontend())
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/home", nil))
+
+		assert.Equal(t, http.StatusMovedPermanently, w.Code)
+		assert.Equal(t, "/", w.Header().Get("Location"))
+	})
+
 	t.Run("serves_static_files", func(t *testing.T) {
 		middleware := ServeEmbeddedFrontend()
 

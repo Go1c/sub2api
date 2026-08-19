@@ -88,6 +88,10 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 
+		if redirectLegacyHome(c, path) {
+			return
+		}
+
 		// Skip API routes
 		if shouldBypassEmbeddedFrontend(path) {
 			c.Next()
@@ -286,7 +290,7 @@ func injectSiteTitle(html, settingsJSON []byte) []byte {
 		return html
 	}
 
-	newTitle := []byte("<title>" + htmlpkg.EscapeString(cfg.SiteName) + " - AI API Gateway</title>")
+	newTitle := []byte("<title>" + htmlpkg.EscapeString(cfg.SiteName) + " · AI API 中转与管理平台</title>")
 	var buf bytes.Buffer
 	buf.Write(html[:titleStart])
 	buf.Write(newTitle)
@@ -318,7 +322,7 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 	}
 
 	description := siteName + " " + seoDescriptionBody
-	ogTitle := siteName + " - AI API Gateway"
+	ogTitle := siteName + " · AI API 中转与管理平台"
 	canonical := canonicalSiteURL(cfg.APIBaseURL)
 	if canonical == "" {
 		canonical = existingCanonicalURL(html)
@@ -495,6 +499,10 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 
+		if redirectLegacyHome(c, path) {
+			return
+		}
+
 		if shouldBypassEmbeddedFrontend(path) {
 			c.Next()
 			return
@@ -519,6 +527,15 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 
 		serveIndexHTML(c, distFS)
 	}
+}
+
+func redirectLegacyHome(c *gin.Context, path string) bool {
+	if path != "/home" || (c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead) {
+		return false
+	}
+	c.Redirect(http.StatusMovedPermanently, "/")
+	c.Abort()
+	return true
 }
 
 // tryServeOverrideFile is a standalone version of tryServeOverride for legacy usage.
