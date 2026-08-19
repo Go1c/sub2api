@@ -108,6 +108,29 @@ Authorization: Bearer <jwt-or-uat>
 
 访问他人的 `txn_id` 与不存在的交易均返回 404。
 
+## 管理端流水
+
+外部钱包扣款会进入管理员「用户充值和并发变动记录」的默认合并列表：
+
+```http
+GET /api/v1/admin/users/:id/balance-history
+GET /api/v1/admin/users/:id/balance-history?type=wallet_debit
+```
+
+- 默认（无 `type`）与兑换码、管理员加款、分销、优惠码、站内订阅余额支付、外部订阅消费一起按时间倒序合并。
+- `type=wallet_debit` 只返回外部钱包扣款。
+- 每条 `type` 为 `wallet_debit`，`value` 为负数（例如 `-19.90`），`code` 为 `txn_id`，`notes` 含 `client_name`、`purpose`、`ref`、`txn_id`、扣后余额。
+- `total_recharged` 不把扣款算进去。
+- 不要把这类记录当成 `balance_payment`（那是站内订阅）。
+
+按用户查看完整钱包账本字段（对齐用户侧 `ListTransactions`，不返回 `secret` / `secret_hash`）：
+
+```http
+GET /api/v1/admin/users/:id/wallet-debits
+```
+
+使用现有 admin auth；与 `balance-history` 一样不额外要求 step-up。写操作仍只在 `/admin/balance-clients` 上按既有政策门控。
+
 ```json
 {
   "code": 0,

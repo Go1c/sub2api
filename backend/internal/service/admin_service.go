@@ -32,6 +32,9 @@ type AdminService interface {
 	// codeType is optional - pass empty string to return all types.
 	// Also returns totalRecharged (sum of all positive balance top-ups).
 	GetUserBalanceHistory(ctx context.Context, userID int64, page, pageSize int, codeType string) ([]RedeemCode, int64, float64, error)
+	// GetUserWalletDebits returns the user's external wallet debit ledger.
+	// Fields match the user-facing ListTransactions payload; secrets are never included.
+	GetUserWalletDebits(ctx context.Context, userID int64, page, pageSize int) (*BalanceTransactionPage, error)
 	BindUserAuthIdentity(ctx context.Context, userID int64, input AdminBindAuthIdentityInput) (*AdminBoundAuthIdentity, error)
 
 	// Group management

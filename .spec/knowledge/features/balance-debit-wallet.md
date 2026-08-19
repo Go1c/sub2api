@@ -25,6 +25,8 @@ metadata:
 - 外部服务同时提供 `X-Balance-Client-Key`；数据库只存 SHA-256 与展示前缀。
 - client 在事务内再次锁定并校验 status、当前 secret hash 和 allowed purpose；轮换提交后旧密钥对尚未进入事务的请求立即失效。
 - 交易查询接受 JWT/`uat_`，repository 的所有查询都包含 token 所属 `user_id`。
+- 管理端 `GET /api/v1/admin/users/:id/balance-history` 默认合并 `balance_debit_transactions`，类型为 `wallet_debit`，金额为负；`total_recharged` 不含扣款。
+- 管理端 `GET /api/v1/admin/users/:id/wallet-debits` 按用户返回与本人流水对齐的账本字段，不返回 `secret` / `secret_hash`。
 
 ### 原子性与幂等
 
@@ -63,7 +65,7 @@ metadata:
 
 - Migration / schema：`backend/migrations/928_balance_debit_wallet.sql`、`backend/ent/schema/balance_debit_*.go`
 - Service / repository：`backend/internal/service/balance_wallet*.go`、`backend/internal/repository/balance_wallet_repo.go`
-- HTTP / auth：`backend/internal/handler/balance_wallet_handler.go`、`backend/internal/handler/admin/balance_client_handler.go`、`backend/internal/server/middleware/balance_wallet.go`
+- HTTP / auth：`backend/internal/handler/balance_wallet_handler.go`、`backend/internal/handler/admin/balance_client_handler.go`、`backend/internal/handler/admin/user_handler.go`、`backend/internal/server/middleware/balance_wallet.go`
 - 对外 API：`docs/balance-wallet-api.md`
 - 外部开发 Agent 提示词：`docs/balance-wallet-integration-agent-prompt.md`
 - UAT 权限：[`user-access-token.md`](./user-access-token.md)

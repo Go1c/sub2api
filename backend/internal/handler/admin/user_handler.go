@@ -490,7 +490,7 @@ func (h *UserHandler) GetUserUsage(c *gin.Context) {
 // GetBalanceHistory handles getting user's balance/concurrency change history
 // GET /api/v1/admin/users/:id/balance-history
 // Query params:
-//   - type: filter by record type (balance, affiliate_balance, admin_balance, concurrency, admin_concurrency, subscription, subscription_payment)
+//   - type: filter by record type (balance, affiliate_balance, admin_balance, concurrency, admin_concurrency, subscription, subscription_payment, wallet_debit)
 func (h *UserHandler) GetBalanceHistory(c *gin.Context) {
 	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -526,6 +526,71 @@ func (h *UserHandler) GetBalanceHistory(c *gin.Context) {
 		"pages":           pages,
 		"total_recharged": totalRecharged,
 	})
+}
+
+// GetUserWalletDebits handles listing a user's external wallet debit ledger.
+// GET /api/v1/admin/users/:id/wallet-debits
+func (h *UserHandler) GetUserWalletDebits(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid user ID")
+		return
+	}
+
+	page, pageSize := response.ParsePagination(c)
+	result, err := h.adminService.GetUserWalletDebits(c.Request.Context(), userID, page, pageSize)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if result == nil {
+		result = &service.BalanceTransactionPage{Page: page, PageSize: pageSize}
+	}
+
+	items := make([]adminWalletDebitItem, 0, len(result.Items))
+	for i := range result.Items {
+		items = append(items, toAdminWalletDebitItem(&result.Items[i]))
+	}
+	pages := int((result.Total + int64(pageSize) - 1) / int64(pageSize))
+	if pages < 1 {
+		pages = 1
+	}
+	response.Success(c, gin.H{
+		"items":     items,
+		"total":     result.Total,
+		"page":      result.Page,
+		"page_size": result.PageSize,
+		"pages":     pages,
+	})
+}
+
+type adminWalletDebitItem struct {
+	TxnID        string                `json:"txn_id"`
+	ClientID     string                `json:"client_id"`
+	ClientName   string                `json:"client_name"`
+	Amount       response.WalletNumber `json:"amount"`
+	BalanceAfter response.WalletNumber `json:"balance_after"`
+	Currency     string                `json:"currency"`
+	Purpose      string                `json:"purpose"`
+	Ref          string                `json:"ref"`
+	CreatedAt    string                `json:"created_at"`
+}
+
+func toAdminWalletDebitItem(item *service.BalanceDebitTransaction) adminWalletDebitItem {
+	if item == nil {
+		return adminWalletDebitItem{}
+	}
+	return adminWalletDebitItem{
+		TxnID:        item.TxnID,
+		ClientID:     item.ClientID,
+		ClientName:   item.ClientName,
+		Amount:       response.WalletNumber(item.Amount),
+		BalanceAfter: response.WalletNumber(item.BalanceAfter),
+		Currency:     item.Currency,
+		Purpose:      item.Purpose,
+		Ref:          item.Ref,
+		CreatedAt:    item.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
 }
 
 // ReplaceGroupRequest represents the request to replace a user's exclusive group
