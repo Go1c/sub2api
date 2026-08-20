@@ -16,5 +16,9 @@ describe('public homepage SEO', () => {
     expect(indexHtml).toContain(
       '<meta name="baidu-site-verification" content="codeva-zP7LfM4N1h" />'
     )
+    expect(indexHtml).toContain(
+      '<meta name="google-site-verification" content="YlFC2R5DY626I5yH2cA24zxqOOmciWqMHQcuJAw2El8" />'
+    )
+    expect(indexHtml).toContain('<meta property="og:locale" content="zh_CN" />')
   })
 })
