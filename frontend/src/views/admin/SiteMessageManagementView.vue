@@ -1045,7 +1045,7 @@ function totalCompensation(item: CompensationHistoryItem): number {
   if (item.status === 'cancelled') {
     return 0
   }
-  return item.amount * item.codeCount
+  return item.amount
 }
 
 function statusLabel(status: CompensationStatus): string {
@@ -1201,7 +1201,9 @@ function loadHistoryAsDraft() {
   sendEmail.value = false
   inactiveDaysInput.value = '3'
   compensationEnabled.value = item.codeCount > 0
-  compensationAmount.value = moneyInputValue(item.amount || 5)
+  compensationAmount.value = item.codeCount > 0
+    ? moneyInputValue(parseMoneyInput(String(item.amount / item.codeCount)))
+    : moneyInputValue(0)
   compensationFormat.value = 'block'
   compensationCodesInput.value = item.codes
     .map((code) => code.code)

@@ -125,7 +125,7 @@ type SiteMessageCompensationBatch struct {
 	RecipientCount int
 	SuccessCount   int
 	FailedCount    int
-	Amount         float64
+	Amount         float64 // batch total of successfully issued compensation, not per-user unit.
 	CodeCount      int
 	Operator       string
 	SentAt         time.Time

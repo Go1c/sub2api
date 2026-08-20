@@ -197,11 +197,11 @@ func (s *SiteMessageService) AdminSendCompensationBatch(ctx context.Context, inp
 		results = append(results, result)
 	}
 
+	successCount, failedCount := countBatchResults(results)
 	amount := 0.0
 	if input.CompensationEnabled {
-		amount = input.CompensationAmount
+		amount = float64(moneyCents(input.CompensationAmount*float64(successCount))) / 100
 	}
-	successCount, failedCount := countBatchResults(results)
 	batch := &SiteMessageCompensationBatch{
 		ID:             fmt.Sprintf("CMP-%s", sentAt.Format("20060102-150405")),
 		Subject:        subject,

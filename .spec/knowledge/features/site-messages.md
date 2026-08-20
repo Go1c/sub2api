@@ -94,6 +94,7 @@ ErrSiteMessageDailyLimitExceeded = infraerrors.Forbidden("SITE_MESSAGE_DAILY_LIM
 - 保留期与发送上限按 `created_at` / 当日计数计算；过滤值保留 `affiliate_balance` 之类既有契约不破坏（指 settings 暴露与审计 diff 更新）。
 - 管理员补偿站内信只引用后台已有补偿码，不临时伪造或绕过记录。余额兑换码来源为 `/admin/redeem` 生成的 `balance` 兑换码（一人一码）；优惠码来源为 `/admin/promo-codes`，可在用户侧 `/redeem` 页面兑换，并按优惠码自身使用次数上限与每用户最多一次控制。
 - 管理员回归邮件筛选口径固定为 `usage_logs.created_at`，不是 `users.last_active_at`；即"使用服务"指 API 调用记录，登录过但最近没有 API 调用的用户仍会进入最近 N 天未使用筛选。
+- `site_message_compensation_batches.amount` 是本批成功发出的补偿合计，不是每人单价。管理后台写入 `round(compensation_amount × success_count, 2)`（走现有 `moneyCents`）；无补偿或全部失败为 0。运维脚本按人不同面值时已经写入 `sum(value)`。历史页「累计补偿」对非 cancelled 批次直接加 `amount`，禁止再乘 `code_count`。「按此再发」在 `codeCount > 0` 时用 `amount / codeCount` 还原每人额度填进草稿。请求字段 `compensation_amount` 与站内信正文里的补偿额度仍是每人面值。
 
 ## 相关
 - [[admin-settings-idempotency]]
