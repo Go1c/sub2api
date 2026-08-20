@@ -455,6 +455,7 @@ func TestSiteMessageServiceAdminSendCompensationBatchSendsRealMessages(t *testin
 	require.Equal(t, 2, batch.RecipientCount)
 	require.Equal(t, 2, batch.SuccessCount)
 	require.Equal(t, 0, batch.FailedCount)
+	require.Equal(t, 10.0, batch.Amount)
 	require.Equal(t, 2, batch.CodeCount)
 	require.Len(t, batch.MessageIDs, 2)
 	require.Len(t, batch.Codes, 2)
@@ -671,6 +672,7 @@ func TestSiteMessageServiceAdminSendCompensationBatchPersistsHistory(t *testing.
 	require.Equal(t, batch.ID, historyRepo.created[0].ID)
 	require.Equal(t, 1, historyRepo.created[0].SuccessCount)
 	require.Equal(t, 0, historyRepo.created[0].FailedCount)
+	require.Equal(t, 5.0, historyRepo.created[0].Amount)
 	require.Len(t, historyRepo.created[0].Codes, 1)
 	require.Len(t, historyRepo.created[0].Results, 1)
 }
@@ -745,6 +747,7 @@ func TestSiteMessageServiceAdminSendCompensationBatchRecordsInvalidRedeemCode(t 
 	require.Equal(t, 1, batch.RecipientCount)
 	require.Equal(t, 0, batch.SuccessCount)
 	require.Equal(t, 1, batch.FailedCount)
+	require.Equal(t, 0.0, batch.Amount)
 	require.Len(t, batch.Results, 1)
 	require.Equal(t, SiteMessageBatchResultFailed, batch.Results[0].Status)
 	require.Equal(t, "SITE_MESSAGE_REDEEM_CODE_STATUS_INVALID", batch.Results[0].ErrorReason)
@@ -876,6 +879,7 @@ func TestSiteMessageServiceAdminSendCompensationBatchAllUsersLoopsActiveUsers(t 
 	require.Equal(t, 3, batch.RecipientCount)
 	require.Equal(t, 3, batch.SuccessCount)
 	require.Equal(t, 0, batch.FailedCount)
+	require.Equal(t, 0.0, batch.Amount)
 	require.Len(t, repo.created, 3)
 	for _, message := range repo.created {
 		require.NotEqual(t, int64(4), message.RecipientID)
