@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	ErrDisabled     = errors.New("daily check-in is disabled")
-	ErrUserInactive = errors.New("user is not active")
-	ErrUserNotFound = errors.New("user not found")
+	ErrDisabled           = errors.New("daily check-in is disabled")
+	ErrUserInactive       = errors.New("user is not active")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrInvalidStatsPeriod = errors.New("invalid check-in stats period")
 )
 
 const settingsSelectColumns = `enabled, min_reward::text, max_reward::text, timezone,

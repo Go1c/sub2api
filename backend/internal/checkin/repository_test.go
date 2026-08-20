@@ -167,3 +167,29 @@ func TestRepositoryCheckInRollsBackWhenRecordInsertFails(t *testing.T) {
 	require.ErrorContains(t, err, "write failed")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestRepositoryAdminStatsAggregatesAwardedRewards(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := newSQLRepository(db, fixedRandom{})
+	from := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery(`(?s)WITH filtered AS.+percentile_cont\(0.5\).+percentile_cont\(0.9\).+status = 'awarded'`).
+		WithArgs(from, to).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"checkin_count", "unique_users", "total_amount", "avg_amount", "p50_amount", "p90_amount", "max_amount",
+		}).AddRow(int64(4), int64(3), "2.5000", "0.8333", "0.8000", "1.2000", "1.5000"))
+
+	stats, err := repo.AdminStats(context.Background(), AdminRecordFilter{BusinessDateFrom: &from, BusinessDateTo: &to})
+	require.NoError(t, err)
+	require.Equal(t, int64(4), stats.CheckInCount)
+	require.Equal(t, int64(3), stats.UniqueUsers)
+	require.Equal(t, "2.5000", formatAmount(stats.TotalAmount))
+	require.Equal(t, "0.8333", formatAmount(stats.AvgAmount))
+	require.Equal(t, "0.8000", formatAmount(stats.P50Amount))
+	require.Equal(t, "1.2000", formatAmount(stats.P90Amount))
+	require.Equal(t, "1.5000", formatAmount(stats.MaxAmount))
+	require.NoError(t, mock.ExpectationsWereMet())
+}

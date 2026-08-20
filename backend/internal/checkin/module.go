@@ -26,6 +26,7 @@ func (m *Module) RegisterAdminRoutes(v1 *gin.RouterGroup, middleware ...gin.Hand
 	checkIns := v1.Group("/admin/affiliates/checkins")
 	checkIns.Use(middleware...)
 	checkIns.GET("", m.handler.ListAdminRecords)
+	checkIns.GET("/stats", m.handler.GetAdminStats)
 	checkIns.GET("/settings", m.handler.GetSettings)
 	checkIns.PUT("/settings", m.handler.UpdateSettings)
 }

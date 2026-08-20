@@ -1,5 +1,5 @@
 import { apiClient } from '@/api/client'
-import type { AdminCheckinListParams, AdminCheckinPage, CheckinResult, CheckinSettings, CheckinSettingsRequest, CheckinStatus } from './types'
+import type { AdminCheckinListParams, AdminCheckinPage, AdminCheckinStats, AdminCheckinStatsParams, CheckinResult, CheckinSettings, CheckinSettingsRequest, CheckinStatus } from './types'
 
 const userPath = '/user/checkin'
 const adminPath = '/admin/affiliates/checkins'
@@ -19,6 +19,11 @@ async function listAdminRecords(params: AdminCheckinListParams = {}): Promise<Ad
   return data
 }
 
+async function getAdminStats(params: AdminCheckinStatsParams = {}): Promise<AdminCheckinStats> {
+  const { data } = await apiClient.get<AdminCheckinStats>(`${adminPath}/stats`, { params })
+  return data
+}
+
 async function getSettings(): Promise<CheckinSettings> {
   const { data } = await apiClient.get<CheckinSettings>(`${adminPath}/settings`)
   return data
@@ -29,5 +34,5 @@ async function updateSettings(payload: CheckinSettingsRequest): Promise<CheckinS
   return data
 }
 
-export const checkinAPI = { getUserStatus, checkIn, listAdminRecords, getSettings, updateSettings }
+export const checkinAPI = { getUserStatus, checkIn, listAdminRecords, getAdminStats, getSettings, updateSettings }
 export default checkinAPI

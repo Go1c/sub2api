@@ -53,6 +53,29 @@ export interface CheckinStatus {
 
 export interface CheckinResult extends CheckinRecord { already_checked_in: boolean }
 
+export type AdminCheckinStatsPeriod = 'day' | 'week' | 'month' | 'all'
+
+export interface AdminCheckinStats {
+  period: AdminCheckinStatsPeriod
+  timezone: string
+  from?: string
+  to?: string
+  unique_users: number
+  checkin_count: number
+  total_amount: string
+  avg_amount: string
+  p50_amount: string
+  p90_amount: string
+  max_amount: string
+}
+
+export interface AdminCheckinStatsParams {
+  period?: AdminCheckinStatsPeriod
+  user_id?: number
+  search?: string
+  status?: CheckinRecordStatus
+}
+
 export interface AdminCheckinListParams {
   page?: number
   page_size?: number

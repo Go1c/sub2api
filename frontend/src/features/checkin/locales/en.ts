@@ -21,7 +21,12 @@ export default {
     admin: {
       title: 'Check-in Records', description: 'Audit daily check-ins, streaks, payouts, and zero-award budget events.', search: 'Email or username', userId: 'User ID', date: 'Business date', allStatuses: 'All statuses',
       columns: { user: 'User', businessDate: 'Business date', checkedAt: 'Checked at', streak: 'Streak / cycle', base: 'Base reward', milestone: 'Milestone bonus', actual: 'Actual reward', balance: 'Balance after', status: 'Status' },
-      loadFailed: 'Unable to load check-in records.'
+      loadFailed: 'Unable to load check-in records.',
+      stats: {
+        day: 'Today', week: 'This week', month: 'This month', all: 'All time', range: '{from} ~ {to}', timezone: '{timezone}',
+        uniqueUsers: 'Users', checkins: 'Check-ins', total: 'Total paid', avg: 'Average', p50: 'P50', p90: 'P90', max: 'Max',
+        loadFailed: 'Unable to load check-in stats.'
+      }
     }
   }
 }
