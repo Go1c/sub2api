@@ -109,6 +109,41 @@ func toRecordResponse(record Record, includeClient bool) recordResponse {
 	return response
 }
 
+type adminStatsResponse struct {
+	Period       string `json:"period"`
+	Timezone     string `json:"timezone"`
+	From         string `json:"from,omitempty"`
+	To           string `json:"to,omitempty"`
+	UniqueUsers  int64  `json:"unique_users"`
+	CheckInCount int64  `json:"checkin_count"`
+	TotalAmount  string `json:"total_amount"`
+	AvgAmount    string `json:"avg_amount"`
+	P50Amount    string `json:"p50_amount"`
+	P90Amount    string `json:"p90_amount"`
+	MaxAmount    string `json:"max_amount"`
+}
+
+func toAdminStatsResponse(stats AdminStats) adminStatsResponse {
+	response := adminStatsResponse{
+		Period:       stats.Period,
+		Timezone:     stats.Timezone,
+		UniqueUsers:  stats.UniqueUsers,
+		CheckInCount: stats.CheckInCount,
+		TotalAmount:  formatAmount(stats.TotalAmount),
+		AvgAmount:    formatAmount(stats.AvgAmount),
+		P50Amount:    formatAmount(stats.P50Amount),
+		P90Amount:    formatAmount(stats.P90Amount),
+		MaxAmount:    formatAmount(stats.MaxAmount),
+	}
+	if stats.From != nil {
+		response.From = formatBusinessDate(*stats.From)
+	}
+	if stats.To != nil {
+		response.To = formatBusinessDate(*stats.To)
+	}
+	return response
+}
+
 func toUserStatusResponse(status UserStatus) userStatusResponse {
 	response := userStatusResponse{
 		Enabled:        status.Enabled,

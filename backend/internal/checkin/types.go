@@ -17,6 +17,10 @@ const (
 	RedeemTypeCheckinBalance = "checkin_balance"
 	redeemCodeStatusUsed     = "used"
 	maxMilestones            = 10
+	PeriodDay                = "day"
+	PeriodWeek               = "week"
+	PeriodMonth              = "month"
+	PeriodAll                = "all"
 )
 
 var rewardUnit = decimal.NewFromInt(10000)
@@ -119,14 +123,30 @@ type UserStatus struct {
 }
 
 type AdminRecordFilter struct {
-	UserID       int64
-	Search       string
-	BusinessDate *time.Time
-	Status       string
-	SortBy       string
-	SortOrder    string
-	Page         int
-	PageSize     int
+	UserID           int64
+	Search           string
+	BusinessDate     *time.Time
+	BusinessDateFrom *time.Time
+	BusinessDateTo   *time.Time
+	Status           string
+	SortBy           string
+	SortOrder        string
+	Page             int
+	PageSize         int
+}
+
+type AdminStats struct {
+	Period       string
+	Timezone     string
+	From         *time.Time
+	To           *time.Time
+	UniqueUsers  int64
+	CheckInCount int64
+	TotalAmount  decimal.Decimal
+	AvgAmount    decimal.Decimal
+	P50Amount    decimal.Decimal
+	P90Amount    decimal.Decimal
+	MaxAmount    decimal.Decimal
 }
 
 type randomSource interface{ Int63n(int64) (int64, error) }
@@ -213,6 +233,60 @@ func parseConfiguredAmount(field, raw string) (decimal.Decimal, error) {
 }
 
 func formatAmount(amount decimal.Decimal) string { return amount.Round(4).StringFixed(4) }
+
+func normalizeAdminStatsPeriod(period string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(period)) {
+	case "", PeriodDay:
+		return PeriodDay, nil
+	case PeriodWeek:
+		return PeriodWeek, nil
+	case PeriodMonth:
+		return PeriodMonth, nil
+	case PeriodAll:
+		return PeriodAll, nil
+	default:
+		return "", ErrInvalidStatsPeriod
+	}
+}
+
+func calendarDateUTC(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+func periodDateRange(period string, now time.Time, timezone string) (from, to *time.Time, err error) {
+	period, err = normalizeAdminStatsPeriod(period)
+	if err != nil {
+		return nil, nil, err
+	}
+	if period == PeriodAll {
+		return nil, nil, nil
+	}
+	location, err := time.LoadLocation(timezone)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid timezone: %w", err)
+	}
+	local := now.In(location)
+	today := calendarDateUTC(local)
+	toDate := today
+	switch period {
+	case PeriodDay:
+		fromDate := today
+		return &fromDate, &toDate, nil
+	case PeriodWeek:
+		weekday := int(local.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		fromDate := today.AddDate(0, 0, -(weekday - 1))
+		return &fromDate, &toDate, nil
+	case PeriodMonth:
+		fromDate := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
+		return &fromDate, &toDate, nil
+	default:
+		return nil, nil, ErrInvalidStatsPeriod
+	}
+}
 
 func randomReward(minimum, maximum decimal.Decimal, source randomSource) (decimal.Decimal, error) {
 	minimumUnits, maximumUnits := minimum.Mul(rewardUnit).IntPart(), maximum.Mul(rewardUnit).IntPart()

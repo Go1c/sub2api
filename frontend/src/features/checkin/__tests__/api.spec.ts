@@ -16,6 +16,11 @@ describe('checkinAPI', () => {
     await checkinAPI.listAdminRecords(params)
     expect(client.get).toHaveBeenCalledWith('/admin/affiliates/checkins', { params })
   })
+  it('loads admin payout stats for a period', async () => {
+    client.get.mockResolvedValue({ data: { unique_users: 3, total_amount: '2.5000' } })
+    await checkinAPI.getAdminStats({ period: 'week', search: 'qq.com', status: 'awarded' })
+    expect(client.get).toHaveBeenCalledWith('/admin/affiliates/checkins/stats', { params: { period: 'week', search: 'qq.com', status: 'awarded' } })
+  })
   it('updates only dedicated settings', async () => {
     const settings = { enabled: false, min_reward: '0.1000', max_reward: '0.5000', timezone: 'Asia/Shanghai', daily_cap: '0.0000', milestones: [] }
     client.get.mockResolvedValue({ data: settings }); client.put.mockResolvedValue({ data: settings })

@@ -13,6 +13,7 @@ type Repository interface {
 	GetUserStatus(context.Context, int64, time.Time) (UserStatus, error)
 	CheckIn(context.Context, int64, time.Time, ClientInfo) (CheckInResult, error)
 	ListAdminRecords(context.Context, AdminRecordFilter) ([]Record, int64, error)
+	AdminStats(context.Context, AdminRecordFilter) (AdminStats, error)
 }
 
 type BalanceCacheInvalidator interface {
@@ -79,4 +80,31 @@ func (s *Service) CheckIn(ctx context.Context, userID int64, now time.Time, clie
 
 func (s *Service) ListAdminRecords(ctx context.Context, filter AdminRecordFilter) ([]Record, int64, error) {
 	return s.repository.ListAdminRecords(ctx, filter)
+}
+
+func (s *Service) AdminStats(ctx context.Context, period string, filter AdminRecordFilter, now time.Time) (AdminStats, error) {
+	period, err := normalizeAdminStatsPeriod(period)
+	if err != nil {
+		return AdminStats{}, err
+	}
+	settings, err := s.repository.GetSettings(ctx)
+	if err != nil {
+		return AdminStats{}, err
+	}
+	from, to, err := periodDateRange(period, now, settings.Timezone)
+	if err != nil {
+		return AdminStats{}, err
+	}
+	filter.BusinessDate = nil
+	filter.BusinessDateFrom = from
+	filter.BusinessDateTo = to
+	stats, err := s.repository.AdminStats(ctx, filter)
+	if err != nil {
+		return AdminStats{}, err
+	}
+	stats.Period = period
+	stats.Timezone = settings.Timezone
+	stats.From = from
+	stats.To = to
+	return stats, nil
 }
