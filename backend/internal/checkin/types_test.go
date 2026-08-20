@@ -18,6 +18,33 @@ type fixedRandom struct {
 
 func (f fixedRandom) Int63n(int64) (int64, error) { return f.value, f.err }
 
+func TestPeriodDateRangeUsesOperatingTimezoneAndMondayWeek(t *testing.T) {
+	now := time.Date(2026, 8, 19, 16, 30, 0, 0, time.UTC) // 2026-08-20 00:30 Asia/Shanghai, Thursday
+
+	from, to, err := periodDateRange(PeriodDay, now, "Asia/Shanghai")
+	require.NoError(t, err)
+	require.Equal(t, "2026-08-20", formatBusinessDate(*from))
+	require.Equal(t, "2026-08-20", formatBusinessDate(*to))
+
+	from, to, err = periodDateRange(PeriodWeek, now, "Asia/Shanghai")
+	require.NoError(t, err)
+	require.Equal(t, "2026-08-17", formatBusinessDate(*from))
+	require.Equal(t, "2026-08-20", formatBusinessDate(*to))
+
+	from, to, err = periodDateRange(PeriodMonth, now, "Asia/Shanghai")
+	require.NoError(t, err)
+	require.Equal(t, "2026-08-01", formatBusinessDate(*from))
+	require.Equal(t, "2026-08-20", formatBusinessDate(*to))
+
+	from, to, err = periodDateRange(PeriodAll, now, "Asia/Shanghai")
+	require.NoError(t, err)
+	require.Nil(t, from)
+	require.Nil(t, to)
+
+	_, _, err = periodDateRange("quarter", now, "Asia/Shanghai")
+	require.ErrorIs(t, err, ErrInvalidStatsPeriod)
+}
+
 func TestNormalizeSettingsValidation(t *testing.T) {
 	valid := SettingsRequest{Enabled: true, MinReward: "0.1000", MaxReward: "0.5000", Timezone: "Asia/Shanghai", DailyCap: "10", Milestones: []MilestoneRequest{{Day: 30, Bonus: "2"}, {Day: 7, Bonus: "1.2500"}}}
 	settings, err := normalizeSettings(valid)

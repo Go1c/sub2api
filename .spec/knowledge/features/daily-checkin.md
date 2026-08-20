@@ -40,10 +40,11 @@ metadata:
 管理员接口：
 
 - `GET /api/v1/admin/affiliates/checkins`：按用户、邮箱/用户名、业务日期和状态筛选，并支持排序与分页。
+- `GET /api/v1/admin/affiliates/checkins/stats`：按运营时区汇总今日 / 本周（周一起） / 本月 / 累计的参与用户数、签到次数，以及已发放 `actual_reward` 的总额、平均、P50、P90、最大值。可叠加 search / user_id / status，不使用列表的单日 `business_date`。
 - `GET /api/v1/admin/affiliates/checkins/settings`：读取独立配置。
 - `PUT /api/v1/admin/affiliates/checkins/settings`：校验、规范化并读回独立配置。
 
-用户页位于 `/checkin`，包含签到操作、汇总数据、下一里程碑和最近流水；用户导航与侧栏快捷卡仅在功能开启时显示。管理员流水位于 `/admin/affiliates/checkins`，即使功能关闭也保留入口。功能设置页挂载独立设置卡，可配置奖励、时区、每日上限和里程碑，并提示理论最高单次奖励高于每日预算的风险。
+用户页位于 `/checkin`，包含签到操作、汇总数据、下一里程碑和最近流水；用户导航与侧栏快捷卡仅在功能开启时显示。管理员流水位于 `/admin/affiliates/checkins`，即使功能关闭也保留入口。顶栏可切换今日 / 本周 / 本月 / 累计统计：参与用户与签到次数计入全部流水；发放总额与平均 / P50 / P90 / 最大仅统计 `awarded` 的 `actual_reward`。功能设置页挂载独立设置卡，可配置奖励、时区、每日上限和里程碑，并提示理论最高单次奖励高于每日预算的风险。
 
 ## 配置规则
 

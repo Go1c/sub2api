@@ -95,6 +95,31 @@ func (h *Handler) ListAdminRecords(c *gin.Context) {
 	response.Paginated(c, items, total, page, pageSize)
 }
 
+func (h *Handler) GetAdminStats(c *gin.Context) {
+	filter := AdminRecordFilter{
+		Search: c.Query("search"),
+		Status: strings.TrimSpace(c.Query("status")),
+	}
+	if raw := strings.TrimSpace(c.Query("user_id")); raw != "" {
+		userID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || userID <= 0 {
+			middleware.AbortWithError(c, http.StatusBadRequest, "INVALID_USER_ID", "user_id must be a positive integer")
+			return
+		}
+		filter.UserID = userID
+	}
+	if filter.Status != "" && filter.Status != StatusAwarded && filter.Status != StatusBudgetExhausted {
+		middleware.AbortWithError(c, http.StatusBadRequest, "INVALID_CHECKIN_STATUS", "invalid check-in status")
+		return
+	}
+	stats, err := h.service.AdminStats(c.Request.Context(), c.Query("period"), filter, h.now())
+	if err != nil {
+		writeCheckInError(c, err)
+		return
+	}
+	response.Success(c, toAdminStatsResponse(stats))
+}
+
 func (h *Handler) GetSettings(c *gin.Context) {
 	settings, err := h.service.GetSettings(c.Request.Context())
 	if err != nil {
@@ -132,6 +157,8 @@ func writeCheckInError(c *gin.Context, err error) {
 	switch {
 	case errors.As(err, &validationError):
 		middleware.AbortWithError(c, http.StatusBadRequest, "INVALID_CHECKIN_SETTINGS", validationError.Error())
+	case errors.Is(err, ErrInvalidStatsPeriod):
+		middleware.AbortWithError(c, http.StatusBadRequest, "INVALID_CHECKIN_STATS_PERIOD", "period must be day, week, month, or all")
 	case errors.Is(err, ErrDisabled):
 		middleware.AbortWithError(c, http.StatusForbidden, "CHECKIN_DISABLED", "daily check-in is disabled")
 	case errors.Is(err, ErrUserInactive):

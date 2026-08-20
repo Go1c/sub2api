@@ -16,7 +16,12 @@ export default {
     },
     admin: {
       title: '签到流水', description: '审计每日签到、连续天数、奖励发放和预算耗尽记录。', search: '邮箱或用户名', userId: '用户 ID', date: '业务日期', allStatuses: '全部状态',
-      columns: { user: '用户', businessDate: '业务日期', checkedAt: '签到时间', streak: '连续 / 循环', base: '基础奖励', milestone: '里程碑奖金', actual: '实际奖励', balance: '余额快照', status: '状态' }, loadFailed: '签到流水加载失败。'
+      columns: { user: '用户', businessDate: '业务日期', checkedAt: '签到时间', streak: '连续 / 循环', base: '基础奖励', milestone: '里程碑奖金', actual: '实际奖励', balance: '余额快照', status: '状态' }, loadFailed: '签到流水加载失败。',
+      stats: {
+        day: '今日', week: '本周', month: '本月', all: '累计', range: '{from} ~ {to}', timezone: '{timezone}',
+        uniqueUsers: '参与用户', checkins: '签到次数', total: '发放总额', avg: '平均额度', p50: 'P50', p90: 'P90', max: '最大额度',
+        loadFailed: '签到统计加载失败。'
+      }
     }
   }
 }
