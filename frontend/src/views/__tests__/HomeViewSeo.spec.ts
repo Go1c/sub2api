@@ -19,6 +19,9 @@ describe('public homepage SEO', () => {
     expect(indexHtml).toContain(
       '<meta name="google-site-verification" content="YlFC2R5DY626I5yH2cA24zxqOOmciWqMHQcuJAw2El8" />'
     )
+    expect(indexHtml).toContain(
+      '<meta name="sogou_site_verification" content="5QR2ynT5Cb" />'
+    )
     expect(indexHtml).toContain('<meta property="og:locale" content="zh_CN" />')
   })
 })
