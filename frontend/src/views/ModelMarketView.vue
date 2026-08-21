@@ -522,7 +522,7 @@ const labels = computed(() => {
       rechargeRateValue: '1积分 = 1美元',
       subscriptionRateTitle: '订阅倍率',
       subscriptionRatePrefix: '最低',
-      subscriptionRateValue: '0.75x',
+      subscriptionRateValue: '0.8x',
       subscriptionCta: '去订阅',
     }
   }
@@ -576,7 +576,7 @@ const labels = computed(() => {
     rechargeRateValue: '1 credit = $1',
     subscriptionRateTitle: 'Subscription rate',
     subscriptionRatePrefix: 'from',
-    subscriptionRateValue: '0.75x',
+    subscriptionRateValue: '0.8x',
     subscriptionCta: 'Subscribe',
   }
 })
