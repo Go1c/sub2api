@@ -181,7 +181,7 @@ describe('ModelMarketView', () => {
     expect(wrapper.text()).toContain('订阅倍率')
     expect(wrapper.text()).toContain('×')
     expect(wrapper.text()).toContain('最低')
-    expect(wrapper.text()).toContain('0.75x')
+    expect(wrapper.text()).toContain('0.8x')
     expect(wrapper.text()).not.toContain('开通订阅后可用订阅额度调用此模型')
     expect(wrapper.text()).toContain('去订阅')
     expect(wrapper.text()).not.toContain('官方价 × 0.35')
