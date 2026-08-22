@@ -320,6 +320,33 @@ func TestGetAPIProtocol(t *testing.T) {
 	require.Equal(t, APIProtocolChatCompletions, (&Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}).GetAPIProtocol(), "非 CN 供应商恒为默认")
 }
 
+func TestGetOpenAIProtocolAPIKey(t *testing.T) {
+	t.Parallel()
+
+	cn := &Account{
+		Platform:    PlatformKimi,
+		Type:        AccountTypeAPIKey,
+		Credentials: map[string]any{"api_key": "sk-cn"},
+	}
+	require.Equal(t, "sk-cn", cn.GetOpenAIProtocolAPIKey())
+	require.Equal(t, "sk-cn", cn.GetCNAPIKey())
+	require.Empty(t, cn.GetOpenAIApiKey())
+
+	oauthCN := &Account{
+		Platform:    PlatformDeepseek,
+		Type:        AccountTypeOAuth,
+		Credentials: map[string]any{"api_key": "sk-oauth"},
+	}
+	require.Empty(t, oauthCN.GetOpenAIProtocolAPIKey())
+
+	openai := &Account{
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Credentials: map[string]any{"api_key": "sk-openai"},
+	}
+	require.Equal(t, "sk-openai", openai.GetOpenAIProtocolAPIKey())
+}
+
 func TestAdaptiveProtocolBaseURLs(t *testing.T) {
 	t.Parallel()
 

@@ -1492,6 +1492,21 @@ func (a *Account) GetCNAPIKey() string {
 	return a.GetCredential("api_key")
 }
 
+// GetOpenAIProtocolAPIKey 返回走 OpenAI 协议族上游时使用的 API Key。
+// CN 供应商用 credentials.api_key；openai 仍走 GetOpenAIApiKey。
+func (a *Account) GetOpenAIProtocolAPIKey() string {
+	if a == nil {
+		return ""
+	}
+	if a.IsCNProvider() {
+		if a.Type != AccountTypeAPIKey {
+			return ""
+		}
+		return a.GetCredential("api_key")
+	}
+	return a.GetOpenAIApiKey()
+}
+
 // GetCodingPlanProvider 根据 base_url 识别 Coding Plan 供应商（kimi / zhipu），
 // 用于路由到对应的额度查询端点。非 coding 模式或无法识别时返回空串。
 // 判定规则与 cc-switch coding_plan.rs::detect_provider 保持一致。
