@@ -81,6 +81,13 @@ metadata:
 | `#5676` | OpenAI 容量降载（overloaded 文案/码）标成请求级瞬时故障：不冷却账号、同账号有界重试；空 reasoning/message 前导不算语义输出；SSE keepalive 注释不挡 failover；WS HTTP 桥 turn-1 先暂存再判定 |
 | `#5729` | Chat→Responses fallback 把 `reasoning_content` 按 reasoning item id 写入 Redis（7 天 TTL）；后续历史只剩 `encrypted_content` 时按 id 回填，DeepSeek thinking 400 可过。加密-only 项走 cache；last-turn reasoning 会重放到同轮带 tool_call 的 assistant 消息。fork 只给现有 sticky-session `GatewayCache` 加两个方法，未带 origin 的 Grok-video billed extras / `mediaByCallID` |
 | `#5760` 子集 | 凭据面（OAuth 换 Token / 刷新 / PAT whoami）与探针/models/ForceCodexCLI 默认身份改走 `CodexCanonical*`，去掉硬编码 `codex-cli/0.91.0` 和重复的 `openAICodexProbeVersion`。fork 没有面板 UA 解析器，规范身份 = 编译期 CLI 常量；**未**改 `enforceCodexIdentityHeaders` 为 origin 的强制改写（fork 仍是配对 + 降载归一化） |
+| `#4005` | 顶栏用户角色走 `admin.users.roles.*` i18n，不再 raw `user.role` + CSS capitalize |
+| `#4006` | `html`/`html.dark` 声明 `color-scheme`；日期选择器暗色日历图标不再 invert |
+| `#4049` | 用户仪表盘今日/累计 token 卡补 cache 分解 |
+| `#4053` | 公告空列表文案改为「还没有公告」而不是加载失败 |
+| `#5697` | ops 错误分布图例同时显示 label 与 count |
+| `#5715` | 账号页 proxies/groups 改为 `Promise.allSettled`，代理加载失败不挡分组筛选 |
+| `#5669` | OpenAI OAuth 402 `deactivated_workspace` 联动熔断同 Team 其余 active 账户（进程内去重 60s）；fastpath 与 `HandleUpstreamError` 都先于 model-not-found / 池模式早退 |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -98,6 +105,11 @@ metadata:
 - `#5711` Antigravity mixed tool-config 透传（fork 无 `antigravity_gateway_compat.go`）。
 - `#5609` 认证快照定价字段（fork 已有 v16 `ModelPricing` / `LongContextPricingEnabled`）。
 - `#5716` SMTP 未配置跳过到期提醒（fork 的 `SubscriptionExpiryService` 没有 reminder 路径）。
+- `#5875` 平台筛选目录：origin 把 kimi/zhipu/deepseek + composite 收成共享 catalog；fork 无 Composite / CN provider 面，整包会把排除的平台塞进筛选。
+- `#5839` Grok 创建账号 placeholder 测试：fork 仍是模板内联 `xai-...`，origin 已抽 `apiKeyValuePlaceholder`；只改测试会红。
+- `#2148` ops 错误详情 custom time：fork 弹窗是 `OpsErrorDetailModal.vue`，不是 origin 的 `OpsErrorDetailsModal.vue`；#5888 第三刀已接 fork 时间窗。
+- `#5662` 只改 `docs/ADMIN_PAYMENT_INTEGRATION_API.md`，fork 无该文档。
+- `#5762` usage_log GROUPING SETS + 新 SQL 索引：要 remap 900+ 迁移，且会碰 fork 已有分组用量 rollup，单独立项。
 - `VERSION` / sponsors / gitignore / star-history / Dockerfile Go 镜像钉。
 
 ## 验证
@@ -131,6 +143,9 @@ metadata:
 | `go vet -tags integration ./internal/pkg/apicompat ./internal/repository ./internal/service`（#5729；`internal/testutil` 全是 `//go:build unit`，integration vet 不扫） | 通过 |
 | `go test -tags=unit ./internal/service ./internal/repository`（#5760 identity / OAuth / models） | 通过 |
 | `go vet -tags integration ./internal/service ./internal/repository`（#5760） | 通过 |
+| `go test -tags=unit ./internal/service -run TestTeamLinkedError_`（#5669） | 通过 |
+| `go vet -tags integration ./internal/service`（#5669） | 通过 |
+| 前端 `vue-tsc --noEmit` + `pnpm build` + `AccountsView.usageWindowsHint.spec.ts`（#4005/#4006/#4049/#4053/#5697/#5715） | 通过（3/3；UI 未开浏览器，靠 typecheck/build/vitest） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
