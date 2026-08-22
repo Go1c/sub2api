@@ -27,6 +27,7 @@ type RateLimitService struct {
 	tempUnschedCache      TempUnschedCache
 	timeoutCounterCache   TimeoutCounterCache
 	openAI403CounterCache OpenAI403CounterCache
+	openAIAPIKeyHealth    OpenAIAPIKeyHealthCache
 	settingService        *SettingService
 	tokenCacheInvalidator TokenCacheInvalidator
 	runtimeBlocker        AccountRuntimeBlocker
@@ -102,7 +103,13 @@ func (s *RateLimitService) SetOpenAI403CounterCache(cache OpenAI403CounterCache)
 	s.openAI403CounterCache = cache
 }
 
-// SetSettingService 设置系统设置服务（可选依赖）
+func (s *RateLimitService) SetOpenAIAPIKeyHealthCache(cache OpenAIAPIKeyHealthCache) {
+	if s == nil {
+		return
+	}
+	s.openAIAPIKeyHealth = cache
+}
+
 func (s *RateLimitService) SetSettingService(settingService *SettingService) {
 	s.settingService = settingService
 }

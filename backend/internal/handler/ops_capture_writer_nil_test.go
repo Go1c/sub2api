@@ -14,7 +14,6 @@ import (
 
 func TestOpsCaptureWriter_NilInnerWriter_NoPanic(t *testing.T) {
 	w := &opsCaptureWriter{}
-	w.ResponseWriter = nil
 
 	assert.NotPanics(t, func() {
 		assert.Equal(t, 0, w.Status())

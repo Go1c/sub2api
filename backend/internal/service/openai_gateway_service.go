@@ -445,6 +445,8 @@ type OpenAIGatewayService struct {
 	// 剥离跨账号回带（openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+
+	openaiWSSessionPreemptions openAIWSSessionPreemptRegistry
 }
 
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
