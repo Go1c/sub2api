@@ -822,6 +822,22 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 		upstreamDetail = truncateString(string(body), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+	if isGrokContentPolicyRejection(resp.StatusCode, body) {
+		clientMsg := grokContentPolicyClientMessage(body)
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: resp.StatusCode,
+			UpstreamRequestID:  requestIDHeader,
+			Kind:               "http_error",
+			Message:            clientMsg,
+			Detail:             upstreamDetail,
+		})
+		MarkResponseCommitted(c)
+		writeGrokMediaErrorResponse(c, http.StatusForbidden, "invalid_request_error", clientMsg)
+		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)
+	}
 
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
 		c,
@@ -854,7 +870,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	}
 
 	kind := "http_error"
-	if s.shouldFailoverUpstreamError(resp.StatusCode) {
+	if s.shouldFailoverGrokUpstreamError(resp.StatusCode, body) {
 		kind = "failover"
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -868,11 +884,16 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 		Detail:             upstreamDetail,
 	})
 	if kind == "failover" {
+		retryable, retryDelay, retryDeadline, retryMax := grokSameAccountRetryMetadata(account, resp.StatusCode, body)
 		return nil, &UpstreamFailoverError{
-			StatusCode:             resp.StatusCode,
-			ResponseBody:           body,
-			ResponseHeaders:        resp.Header.Clone(),
-			RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
+			StatusCode:               resp.StatusCode,
+			ResponseBody:             body,
+			ResponseHeaders:          resp.Header.Clone(),
+			RetryableOnSameAccount:   retryable,
+			RequestScopedTransient:   retryable && resp.StatusCode == http.StatusTooManyRequests,
+			SameAccountRetryDelay:    retryDelay,
+			SameAccountRetryDeadline: retryDeadline,
+			SameAccountRetryMax:      retryMax,
 		}
 	}
 

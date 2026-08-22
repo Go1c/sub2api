@@ -83,11 +83,17 @@ func (s *OpenAIGatewayService) DoGrokNativeResponsesJSON(ctx context.Context, c 
 	}
 	if resp.StatusCode >= 400 {
 		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBytes)
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBytes) {
+			retryable, retryDelay, retryDeadline, retryMax := grokSameAccountRetryMetadata(account, resp.StatusCode, respBytes)
 			return nil, &UpstreamFailoverError{
-				StatusCode:      resp.StatusCode,
-				ResponseBody:    respBytes,
-				ResponseHeaders: resp.Header.Clone(),
+				StatusCode:               resp.StatusCode,
+				ResponseBody:             respBytes,
+				ResponseHeaders:          resp.Header.Clone(),
+				RetryableOnSameAccount:   retryable,
+				RequestScopedTransient:   retryable && resp.StatusCode == http.StatusTooManyRequests,
+				SameAccountRetryDelay:    retryDelay,
+				SameAccountRetryDeadline: retryDeadline,
+				SameAccountRetryMax:      retryMax,
 			}
 		}
 		msg := string(respBytes)

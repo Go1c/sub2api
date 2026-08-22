@@ -15,6 +15,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -157,8 +158,14 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	documentScanner := newOpenAISSEJSONDocumentScanner(scanner)
 
 	streamInterval := time.Duration(0)
-	if s.cfg != nil && s.cfg.Gateway.StreamDataIntervalTimeout > 0 {
-		streamInterval = time.Duration(s.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
+	cfgSec := 0
+	if s.cfg != nil {
+		cfgSec = s.cfg.Gateway.StreamDataIntervalTimeout
+	}
+	if account != nil && account.Platform == PlatformGrok {
+		streamInterval = resolveGrokStreamIdleTimeout(cfgSec)
+	} else if cfgSec > 0 {
+		streamInterval = time.Duration(cfgSec) * time.Second
 	}
 	// 仅监控上游数据间隔超时，不被下游写入阻塞影响
 	var intervalTicker *time.Ticker
@@ -691,6 +698,9 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				return resultWithUsage(), fmt.Errorf("stream usage incomplete after timeout")
 			}
 			logger.LegacyPrintf("service.openai_gateway", "Stream data interval timeout: account=%d model=%s interval=%s", account.ID, originalModel, streamInterval)
+			if account != nil && account.Platform == PlatformGrok {
+				return resultWithUsage(), grokStreamIdleFailoverError(account, streamInterval)
+			}
 			// 处理流超时，可能标记账户为临时不可调度或错误状态
 			if s.rateLimitService != nil {
 				s.rateLimitService.HandleStreamTimeout(ctx, account, originalModel)
@@ -1042,6 +1052,15 @@ func openAIUsageFromGJSON(value gjson.Result) (OpenAIUsage, bool) {
 	outputTokens := value.Get("output_tokens").Int()
 	if outputTokens == 0 {
 		outputTokens = value.Get("completion_tokens").Int()
+	}
+	reasoningTokens := max(int(firstPositiveGJSONInt(
+		value.Get("completion_tokens_details.reasoning_tokens"),
+		value.Get("output_tokens_details.reasoning_tokens"),
+	)), 0)
+	if reasoningTokens > 0 {
+		outputTokens = xai.IncludeIndependentReasoningTokens(
+			inputTokens, outputTokens, value.Get("total_tokens").Int(), int64(reasoningTokens),
+		)
 	}
 	cacheReadTokens := openAICacheReadTokensFromUsage(value)
 	cacheCreationTokens := openAICacheCreationTokensFromUsage(value)

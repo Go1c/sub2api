@@ -1264,6 +1264,21 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 	if len(accounts) == 0 {
 		return nil, 0, 0, 0, noAvailableOpenAISelectionError(req.RequestedModel, false)
 	}
+	if req.Platform == PlatformGrok {
+		now := time.Now()
+		filteredTeam := filterGrokTeamModelRateLimitedAccounts(accounts, req.RequestedModel, now)
+		if len(filteredTeam) == 0 && len(accounts) > 0 {
+			return nil, 0, 0, 0, noAvailableOpenAISelectionError(req.RequestedModel, false)
+		}
+		if filteredTeam != nil {
+			accounts = filteredTeam
+		}
+		modelFiltered := filterGrokModelQuotaBlockedAccounts(accounts, req.RequestedModel, now)
+		if len(modelFiltered) == 0 && len(accounts) > 0 {
+			return nil, 0, 0, 0, noAvailableOpenAISelectionError(req.RequestedModel, false)
+		}
+		accounts = modelFiltered
+	}
 
 	// require_privacy_set: 获取分组信息
 	var schedGroup *Group
