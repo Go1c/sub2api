@@ -96,6 +96,7 @@ describe('UserEditModal invoice access', () => {
           BaseDialog: BaseDialogStub,
           UserAttributeForm: true,
           Icon: true,
+          Select: true,
         },
       },
     })
@@ -111,6 +112,34 @@ describe('UserEditModal invoice access', () => {
       42,
       expect.objectContaining({
         invoice_enabled: false,
+        role: 'user',
+      }),
+    )
+  })
+
+  it('includes the selected role in the update payload', async () => {
+    const wrapper = mount(UserEditModal, {
+      props: {
+        show: true,
+        user: createUser({ role: 'admin' }),
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          UserAttributeForm: true,
+          Icon: true,
+          Select: true,
+        },
+      },
+    })
+
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateUser).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({
+        role: 'admin',
       }),
     )
   })
@@ -128,6 +157,7 @@ describe('UserEditModal invoice access', () => {
           BaseDialog: BaseDialogStub,
           UserAttributeForm: true,
           Icon: true,
+          Select: true,
         },
       },
     })

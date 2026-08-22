@@ -97,8 +97,10 @@ metadata:
 | `#2148` | ops 错误列表弹窗在 `time_range=custom` 时改传 `start_time`/`end_time`（后端不认 custom）。fork 仪表盘 header 已有自定义时间，漏接到 `OpsErrorDetailsModal` |
 | `#5839` 子集 | 创建账号 API key placeholder 抽成 `apiKeyValuePlaceholder`（openai/gemini/grok/anthropic）；未带 origin 的 kimi/zhipu/deepseek case |
 | `#5888/#5925` 接线 | Grok `/responses/compact` 转摘要 turn + 回程 compaction item；stream idle 冷却；spending-limit reauth 在 quota/token-refresh 生效。修 CI unused |
+| `#5838` | 编辑用户弹窗补角色 Select。fork 后端本来就收 `role`（升 admin 要 step-up），UI 漏了字段 |
+| `#5738` 子集 | Codex fingerprint seed 写入 extra + `930_backfill_codex_fingerprint_seed.sql`（origin 225 remap）。开启 device/session/full 时仓储原子补 UUID；**未**改 fork 默认 session 收敛，也未整包 origin 出站 ID 派生 |
 
-交付分支：`sync/v0179-newest-gateway` → `--base dev`。
+交付分支：`sync/v0179-newest-gateway` 已合入 `dev`。续做：`sync/v0179-remaining` → `--base dev`。
 
 ## 明确排除（不要当遗漏）
 
@@ -107,10 +109,10 @@ metadata:
 - `#5888` 已切完本窗口要的四刀；未整包 origin transform 的 prompt 兼容函数 / namespace 其余差异。
 - `#5925` 未抽：`grok_free_quota_gate`、origin `xai/models.go` 全量目录（306 vs 76）、`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras。
 - `#5742` Grok 响应模型别名审计：fork 没有 `upstream_response_model.go`，不能只带 helper。
-- `#5738` Codex fingerprint seed：带 migration `225`，fork 走 900+，整包仍拦。`#5760` 已按 fork 语义抽了凭据面/默认身份收口，未带 origin 强制改写与面板 UA resolver。
+- `#5738` 已 remap 为 930 并接 UpdateExtra；未带 origin「缺省改 off」与出站 ID 全量派生（fork 仍默认 session）。
 - 渠道分时价 / 档位乘数 / channel-monitor quota mode。
 - `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
-- `#5708` 首页 model plaza、`#5838` 用户角色 Select（fork 编辑用户弹窗没有 role 下拉）。
+- `#5708` 首页 model plaza（fork `HomeView` 已有 `/models` 导航，不是 origin 那两套 header）。
 - `#5711` Antigravity mixed tool-config 透传（fork 无 `antigravity_gateway_compat.go`）。
 - `#5609` 认证快照定价字段（fork 已有 v16 `ModelPricing` / `LongContextPricingEnabled`）。
 - `#5716` SMTP 未配置跳过到期提醒（fork 的 `SubscriptionExpiryService` 没有 reminder 路径）。
@@ -169,6 +171,9 @@ metadata:
 | `go vet -tags integration ./internal/handler`（#5749） | 通过 |
 | 前端 `vue-tsc --noEmit` + `pnpm build` + i18n vitest（#5636/#5749：`accountStatusExpired` + `localesMessageCompile`） | 通过（8/8；代理列表 expired 文案未开浏览器，靠 locale 单测 + typecheck/build） |
 | 前端 `opsErrorTimeParams.spec.ts` + `CreateAccountModal.grok.spec.ts` + `vue-tsc` + `pnpm build`（#2148/#5839） | 通过（7/7 相关；custom 时间弹窗未开浏览器，靠单测 + typecheck/build） |
+| 前端 `UserEditModal.spec.ts` + `vue-tsc`（#5838） | 通过（3/3） |
+| `go test -tags=unit` fingerprint seed / account_repo SQL helper（#5738 子集） | 通过 |
+| `go vet -tags integration ./internal/service ./internal/repository`（#5738 子集） | 通过 |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
