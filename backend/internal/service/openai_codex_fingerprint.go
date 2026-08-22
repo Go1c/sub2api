@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -69,11 +70,77 @@ const (
 
 const (
 	codexFingerprintModeExtraKey = "codex_fingerprint_mode"
+	codexFingerprintSeedExtraKey = "codex_fingerprint_seed"
 	// boundCodexInstallationID 是本机 ~/.codex/installation_id。
 	boundCodexInstallationID = "12b0b072-d79b-45f9-98af-8fafbe3ef9f5"
 	// boundCodexSessionID 是本机最近一条 Codex 会话，绑机出站时作为默认 session/thread。
 	boundCodexSessionID = "01a005e9-75ac-7140-808a-7a91e2a43b33"
 )
+
+func canonicalCodexFingerprintSeed(value any) (string, bool) {
+	raw, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(raw)
+	parsed, err := uuid.Parse(trimmed)
+	if err != nil || parsed == uuid.Nil || trimmed != parsed.String() {
+		return "", false
+	}
+	return trimmed, true
+}
+
+func newCodexFingerprintSeed() string {
+	return uuid.NewString()
+}
+
+func stripCodexFingerprintSeed(extra map[string]any) map[string]any {
+	if extra == nil {
+		return nil
+	}
+	stripped := maps.Clone(extra)
+	delete(stripped, codexFingerprintSeedExtraKey)
+	return stripped
+}
+
+func codexFingerprintModeFromExtra(extra map[string]any) codexFingerprintMode {
+	if extra == nil {
+		return codexFingerprintOff
+	}
+	raw, _ := extra[codexFingerprintModeExtraKey].(string)
+	switch codexFingerprintMode(strings.TrimSpace(raw)) {
+	case codexFingerprintOff, codexFingerprintDevice, codexFingerprintSession, codexFingerprintFull:
+		return codexFingerprintMode(strings.TrimSpace(raw))
+	default:
+		return codexFingerprintOff
+	}
+}
+
+func codexFingerprintModeRequiresSeed(mode codexFingerprintMode) bool {
+	switch mode {
+	case codexFingerprintDevice, codexFingerprintSession, codexFingerprintFull:
+		return true
+	default:
+		return false
+	}
+}
+
+func codexFingerprintSeed(extra map[string]any) (string, bool) {
+	if extra == nil {
+		return "", false
+	}
+	return canonicalCodexFingerprintSeed(extra[codexFingerprintSeedExtraKey])
+}
+
+// ShouldEnsureCodexFingerprintSeedForExtraUpdates reports whether a JSONB key-level
+// extra update is enabling Codex fingerprint convergence and therefore must atomically
+// preserve or create the system-managed per-account seed in the repository update.
+func ShouldEnsureCodexFingerprintSeedForExtraUpdates(updates map[string]any) bool {
+	if updates == nil {
+		return false
+	}
+	return codexFingerprintModeRequiresSeed(codexFingerprintModeFromExtra(updates))
+}
 
 // GetCodexFingerprintMode 从账号 extra JSON 读取指纹收敛模式。
 // 未设置时默认 session（设备+会话收敛），显式设为 "off" 才关闭。
