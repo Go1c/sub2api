@@ -61,8 +61,15 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) =>
-        key === 'redeem.failedToRedeem' ? 'Unable to redeem. Please try again.' : key,
+      t: (key: string, params?: Record<string, unknown>) => {
+        if (key === 'redeem.failedToRedeem') {
+          return 'Unable to redeem. Please try again.'
+        }
+        if (key === 'redeem.balanceAddedCheckinMilestone') {
+          return `Check-in Milestone Day ${params?.day}`
+        }
+        return key
+      },
     }),
   }
 })
@@ -146,5 +153,43 @@ describe('RedeemView error display', () => {
     expect(wrapper.text()).not.toContain('[object Object]')
     expect(showError).toHaveBeenCalledTimes(1)
     expect(showError).toHaveBeenCalledWith('Unable to redeem. Please try again.')
+  })
+})
+
+describe('RedeemView check-in milestone history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getPublicSettings.mockResolvedValue({ contact_info: '' })
+    refreshUser.mockResolvedValue(undefined)
+    fetchActiveSubscriptions.mockResolvedValue(undefined)
+  })
+
+  it('titles check-in milestone rows with the day parsed from notes', async () => {
+    getHistory.mockResolvedValue([
+      {
+        id: 11,
+        code: 'aabbccddeeff00112233445566778899',
+        type: 'checkin_milestone',
+        value: 3,
+        status: 'used',
+        used_at: '2026-08-21T12:00:00Z',
+        created_at: '2026-08-21T12:00:00Z',
+        notes: 'daily_checkin_milestone:8:3',
+      },
+    ])
+
+    const wrapper = mount(RedeemView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Check-in Milestone Day 3')
+    expect(wrapper.text()).toContain('+$3.00')
+    expect(wrapper.text()).not.toContain('daily_checkin_milestone:8:3')
   })
 })

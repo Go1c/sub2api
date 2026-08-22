@@ -51,7 +51,7 @@ metadata:
 | [`features/balance-debit-wallet.md`](features/balance-debit-wallet.md) | 多外部站共用站内余额：双重身份原子扣款、永久幂等账本、本人流水、管理端 wallet_debit 合并流水、用户「我的订单」可见本人扣款 |
 | [`features/lumio-desktop-client.md`](features/lumio-desktop-client.md) | Lumio Codex 桌面客户端服务端契约：公开配置、账号级唯一 Key、一次性支付交接，以及 GET /v1/models 不查余额；接入桌面启动或充值流程时查 |
 | [`features/codex-download-nav.md`](features/codex-download-nav.md) | 首页与登录后顶栏的 Codex 下载外链，跳转到 bestcodex.app；改导航入口或下载引导时查 |
-| [`features/daily-checkin.md`](features/daily-checkin.md) | 独立每日签到：原子发奖、连续周期、全站每日预算，以及用户和管理员流水（含日/周/月/累计发放统计） |
+| [`features/daily-checkin.md`](features/daily-checkin.md) | 独立每日签到：原子发奖、连续周期、全站每日预算、里程碑独立兑换码，以及用户和管理员流水（含日/周/月/累计发放统计） |
 | [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 改写到 Terra，仅显式 Luna 键或 Auto-review→Luna 值可打真 Luna |
 | [`features/openai-quota-reset.md`](features/openai-quota-reset.md) | 管理端 OpenAI/Codex 重置卡查询与消耗、Codex PAT 登录；面板走 POST /quota/refresh，路由漏挂会 404 |
 | [`features/frontend-seo-meta.md`](features/frontend-seo-meta.md) | 前端 GEO/SEO：Go embed 注入 description/OG/Twitter/JSON-LD，以及 `#app` 内爬虫可见简介 |
