@@ -130,23 +130,58 @@
           :show-now-when-idle="true"
           color="emerald"
         />
-        <OpenAIQuotaResetCell :account="account" />
+        <!--
+          Upstream codex /wham/usage quota query + reset. The local active-sampling
+          refresh button is rendered via the pre-actions slot so the user sees a
+          single row of related buttons instead of two stacked rows.
+        -->
+        <OpenAIQuotaResetCell :account="account" @account-updated="handleQuotaResetAccountUpdated">
+          <template #pre-actions>
+            <button
+              type="button"
+              class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="activeQueryLoading"
+              @click="loadActiveUsage"
+            >
+              <svg
+                class="h-2.5 w-2.5"
+                :class="{ 'animate-spin': activeQueryLoading }"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              {{ t('admin.accounts.usageWindow.activeQuery') }}
+            </button>
+          </template>
+        </OpenAIQuotaResetCell>
       </div>
       <div v-else-if="loading" class="space-y-1.5">
         <div class="flex items-center gap-1">
           <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
+          <div class="h-1.5 w-8 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
           <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
         </div>
         <div class="flex items-center gap-1">
           <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
-          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
+          <div class="h-1.5 w-8 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
           <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
         </div>
       </div>
       <div v-else>
         <div class="text-xs text-gray-400">-</div>
-        <OpenAIQuotaResetCell :account="account" class="mt-1" />
+        <!-- Always allow on-demand upstream quota query, even before local data exists. -->
+        <OpenAIQuotaResetCell
+          :account="account"
+          class="mt-1"
+          @account-updated="handleQuotaResetAccountUpdated"
+        />
       </div>
     </template>
 
@@ -612,6 +647,8 @@ import OpenAIQuotaResetCell from './OpenAIQuotaResetCell.vue'
 // Module-level cache shared across all AccountUsageCell instances
 const _usageCache = new Map<number, { data: AccountUsageInfo; ts: number }>()
 const USAGE_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+// How long a quota-reset response may suppress the row-patch usage refetch.
+const SUPPRESS_USAGE_REFRESH_WINDOW_MS = 5 * 1000
 // xAI Free billing exposes a window without usage_percent, so estimate it from local tokens.
 const GROK_FREE_TOKEN_LIMIT = 2_000_000
 
@@ -629,6 +666,10 @@ const props = withDefaults(
   }
 )
 
+const emit = defineEmits<{
+  'account-updated': [account: Account]
+}>()
+
 const { t } = useI18n()
 const desktopViewportQuery = '(min-width: 768px)'
 
@@ -639,6 +680,7 @@ const loading = ref(false)
 const activeQueryLoading = ref(false)
 const error = ref<string | null>(null)
 const usageInfo = ref<AccountUsageInfo | null>(null)
+const suppressOpenAIUsageRefreshUntil = ref(0)
 const rootRef = ref<HTMLElement | null>(null)
 const isDesktopViewport = ref(
   typeof window === 'undefined' ? true : window.matchMedia(desktopViewportQuery).matches
@@ -1377,6 +1419,15 @@ const attachVisibilityObserver = () => {
   visibilityObserver.observe(rootRef.value)
 }
 
+const handleQuotaResetAccountUpdated = (account: Account) => {
+  // The reset response already carries authoritative quota and account data.
+  // Avoid turning the parent patch into a second automatic /usage request.
+  // The suppression is time-boxed so an unhandled emit (parent that ignores
+  // account-updated) cannot latch it and swallow a later, unrelated refresh.
+  suppressOpenAIUsageRefreshUntil.value = Date.now() + SUPPRESS_USAGE_REFRESH_WINDOW_MS
+  emit('account-updated', account)
+}
+
 const loadActiveUsage = async () => {
   activeQueryLoading.value = true
   try {
@@ -1547,6 +1598,10 @@ onMounted(() => {
 watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
   if (!prevKey || nextKey === prevKey) return
   if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return
+  if (Date.now() < suppressOpenAIUsageRefreshUntil.value) {
+    suppressOpenAIUsageRefreshUntil.value = 0
+    return
+  }
 
   _usageCache.delete(props.account.id)
   requestAutoLoad()

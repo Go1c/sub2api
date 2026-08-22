@@ -53,6 +53,7 @@ metadata:
 | [`features/codex-download-nav.md`](features/codex-download-nav.md) | 首页与登录后顶栏的 Codex 下载外链，跳转到 bestcodex.app；改导航入口或下载引导时查 |
 | [`features/daily-checkin.md`](features/daily-checkin.md) | 独立每日签到：原子发奖、连续周期、全站每日预算，以及用户和管理员流水（含日/周/月/累计发放统计） |
 | [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 改写到 Terra，仅显式 Luna 键或 Auto-review→Luna 值可打真 Luna |
+| [`features/openai-quota-reset.md`](features/openai-quota-reset.md) | 管理端 OpenAI/Codex 重置卡查询与消耗、Codex PAT 登录；面板走 POST /quota/refresh，路由漏挂会 404 |
 | [`features/frontend-seo-meta.md`](features/frontend-seo-meta.md) | 前端 GEO/SEO：Go embed 注入 description/OG/Twitter/JSON-LD，以及 `#app` 内爬虫可见简介 |
 | [`features/umami-public-tracking.md`](features/umami-public-tracking.md) | 前台 Umami：SPA nonce inline 条件插入官方 defer 脚本、直开 /admin 不加载、docs 静态页直接埋、CSP script-src 放行 data.lumio.games |
 | [`features/_TEMPLATE.md`](features/_TEMPLATE.md) | 新功能文档模板——新增功能记录时照此建,放对 领域 / 模块 |
