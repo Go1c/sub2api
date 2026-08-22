@@ -731,6 +731,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			}
 			logger.LegacyPrintf("service.openai_gateway", "Stream data interval timeout: account=%d model=%s interval=%s", account.ID, originalModel, streamInterval)
 			if account != nil && account.Platform == PlatformGrok {
+				s.tempUnscheduleGrok(ctx, account, grokStreamIdleCooldown, "grok stream idle timeout")
 				return resultWithUsage(), grokStreamIdleFailoverError(account, streamInterval)
 			}
 			// 处理流超时，可能标记账户为临时不可调度或错误状态
@@ -1183,6 +1184,12 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 	// "event:" in their text content.
 	if account.Type == AccountTypeOAuth && bodyLooksLikeSSE {
 		return s.handleSSEToJSON(resp, c, account, body, originalModel, mappedModel)
+	}
+	if account != nil && account.IsGrok() && isOpenAIResponsesCompactPath(c) {
+		body, err = convertGrokResponseToOpenAICompact(body)
+		if err != nil {
+			return nil, fmt.Errorf("convert Grok compact response: %w", err)
+		}
 	}
 
 	usageValue, usageOK := extractOpenAIUsageFromJSONBytes(body)

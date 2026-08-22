@@ -39,7 +39,13 @@ func ResponsesToChatCompletionsRequestWithOptions(req *ResponsesRequest, opts *R
 		return nil, fmt.Errorf("responses request is nil")
 	}
 
-	messages, err := responsesInputToChatMessagesWithOptions(req.Instructions, req.Input, opts)
+	var messages []ChatMessage
+	var err error
+	if opts == nil {
+		messages, err = responsesInputToChatMessages(req.Instructions, req.Input)
+	} else {
+		messages, err = responsesInputToChatMessagesWithOptions(req.Instructions, req.Input, opts)
+	}
 	if err != nil {
 		return nil, err
 	}

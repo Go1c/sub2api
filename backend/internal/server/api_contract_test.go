@@ -1009,7 +1009,7 @@ func TestAPIContracts(t *testing.T) {
 				"ccswitch_default_model_antigravity": "",
 				"ccswitch_default_model_antigravity_gemini": "",
 				"ccswitch_default_model_gemini": "",
-				"ccswitch_default_model_openai": "",
+				"ccswitch_default_model_openai": "gpt-5.4",
 				"lumio_desktop_config": {
 					"default_model": "gpt-5.4",
 					"payment_url": "/payment",
@@ -1335,7 +1335,7 @@ func TestAPIContracts(t *testing.T) {
 				"ccswitch_default_model_antigravity": "",
 				"ccswitch_default_model_antigravity_gemini": "",
 				"ccswitch_default_model_gemini": "",
-				"ccswitch_default_model_openai": "",
+				"ccswitch_default_model_openai": "gpt-5.4",
 				"lumio_desktop_config": {
 					"default_model": "gpt-5.4",
 					"payment_url": "/payment",
