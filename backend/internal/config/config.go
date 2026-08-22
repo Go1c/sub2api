@@ -981,6 +981,22 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
+
+	// CNProviders: 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
+	// 仅作用于 payg（按量付费）账号：周期探测余额，低于阈值则临时停调。
+	CNProviders GatewayCNProvidersConfig `mapstructure:"cn_providers"`
+}
+
+// GatewayCNProvidersConfig 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
+//
+// 仅作用于 payg（按量付费）账号（kimi/deepseek 有公开余额端点；zhipu 无，仅靠响应式 429/402）。
+//   - balance_check_enabled: 是否启用周期余额检测（默认 true）
+//   - balance_threshold: 余额低于此值（账户货币单位，默认 0.5）触发临时停调
+//   - balance_check_interval_minutes: 余额检测周期（分钟，默认 10）
+type GatewayCNProvidersConfig struct {
+	BalanceCheckEnabled         bool    `mapstructure:"balance_check_enabled"`
+	BalanceThreshold            float64 `mapstructure:"balance_threshold"`
+	BalanceCheckIntervalMinutes int     `mapstructure:"balance_check_interval_minutes"`
 }
 
 // GatewayOpenAIHTTP2Config OpenAI HTTP 上游协议配置。
@@ -1829,6 +1845,8 @@ func setDefaults() {
 		"api.openai.com",
 		"api.anthropic.com",
 		"api.kimi.com",
+		"api.moonshot.ai",
+		"api.moonshot.cn",
 		"open.bigmodel.cn",
 		"api.minimaxi.com",
 		"generativelanguage.googleapis.com",
@@ -2278,6 +2296,11 @@ func setDefaults() {
 	viper.SetDefault("gateway.models_list_cache_ttl_seconds", 15)
 	// TLS指纹伪装配置（默认关闭，需要账号级别单独启用）
 	// 用户消息串行队列默认值
+	// 国产供应商余额检测（kimi/deepseek payg；zhipu 无余额端点，仅靠响应式 429/402）。
+	viper.SetDefault("gateway.cn_providers.balance_check_enabled", true)
+	viper.SetDefault("gateway.cn_providers.balance_threshold", 0.5)
+	viper.SetDefault("gateway.cn_providers.balance_check_interval_minutes", 10)
+
 	viper.SetDefault("gateway.user_message_queue.enabled", false)
 	viper.SetDefault("gateway.user_message_queue.lock_ttl_ms", 120000)
 	viper.SetDefault("gateway.user_message_queue.wait_timeout_ms", 30000)
