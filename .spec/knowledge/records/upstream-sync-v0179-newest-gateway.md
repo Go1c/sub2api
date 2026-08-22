@@ -78,6 +78,7 @@ metadata:
 | `#5888` 第三刀 | WS session preempt（Redis owner + 进程内 registry；同 session 新请求取消旧连接）；OpenAI 池模式 API-key 健康熔断（默认 `Enabled=false`，不改现网行为）；ops 错误详情：SSE 终帧捕获、2xx recovered 上游遥测、逐次 `skip_monitoring`。fork 保留请求体/重试头、INVALID_API_KEY 删 key 归因、recovered `account_auth` 的 `error_source=gateway`。未带 origin 的 `ResolvedTargetPlatformFromContext` / sticky `ErrStickySessionNotFound`；`ReportOpenAIAccountScheduleResult` 仍用 fork 的 `accountID` 签名，健康观察走独立方法 |
 | `#5888` 第四刀 | Codex OAuth 把上游保留名 `python` 改写成 `python__sub2api`，回程按 context 映射还原（HTTP SSE / JSON / WS）。接到现有 OAuth transform 与 passthrough/WS 帧路径；未改 fork 的 `codex-auto-review→luna` 映射，也未把 origin 的 `normalizeOpenAIOAuthResponsesCompatibilityFields` 再塞进 transform（prompt 收成 input 仍走第一刀的 HTTP legacy ingress） |
 | `#5925` 余下 | Grok 内容策略 403 不 failover / 不冷却；compaction blob 与 nested `encrypted_content` 信封同账号清洗重试；input 递归剥 JSON null；team+model 429 overlay + 调度过滤；stream idle 180s 可同账号再试；独立 xAI reasoning tokens 折算。未整包 origin `xai/models` 目录、`billing_service`、`grok_free_quota_gate`、failover_loop 利润否决 |
+| `#5676` | OpenAI 容量降载（overloaded 文案/码）标成请求级瞬时故障：不冷却账号、同账号有界重试；空 reasoning/message 前导不算语义输出；SSE keepalive 注释不挡 failover；WS HTTP 桥 turn-1 先暂存再判定 |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -87,6 +88,8 @@ metadata:
 - 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override（fork 无 `PlatformComposite` / CN provider 面）。
 - `#5888` 已切完本窗口要的四刀；未整包 origin transform 的 prompt 兼容函数 / namespace 其余差异。
 - `#5925` 未抽：`grok_free_quota_gate`、origin `xai/models.go` 全量目录（306 vs 76）、`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras。
+- `#5742` Grok 响应模型别名审计：fork 没有 `upstream_response_model.go`，不能只带 helper。
+- `#5729` Chat→Responses `reasoning_content` 回放缓存仍待抽。
 - 渠道分时价 / 档位乘数 / channel-monitor quota mode。
 - `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
 - `#5708` 首页 model plaza、`#5838` 用户角色 Select（fork 编辑用户弹窗没有 role 下拉）。
@@ -120,6 +123,8 @@ metadata:
 | `go vet -tags integration ./internal/service`（#5888 第四刀） | 通过 |
 | `go test -tags=unit ./internal/service ./internal/handler ./internal/pkg/xai`（#5925 余下：content-policy / compaction / idle / team 429 / usage） | 通过 |
 | `go vet -tags integration ./internal/service ./internal/handler ./internal/pkg/xai`（#5925 余下） | 通过 |
+| `go test -tags=unit ./internal/service`（#5676 容量降载 / 前导暂存 / keepalive） | 通过 |
+| `go vet -tags integration ./internal/service ./internal/handler`（#5676） | 通过 |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
