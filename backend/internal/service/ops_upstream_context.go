@@ -39,13 +39,14 @@ const (
 
 	OpsStreamErrorKey = "ops_stream_error"
 
-	OpsClientBusinessLimitedKey                          = "ops_client_business_limited"
-	OpsClientBusinessLimitedReasonKey                    = "ops_client_business_limited_reason"
-	OpsClientBusinessLimitedReasonIPRestriction          = "api_key_ip_restriction"
-	OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable = "api_key_group_unavailable"
-	OpsClientBusinessLimitedReasonAPIKeyGroupUnassigned  = "api_key_group_unassigned"
-	OpsClientBusinessLimitedReasonLocalFeatureGate       = "local_feature_gate"
-	OpsClientBusinessLimitedReasonLocalPolicyDenied      = "local_policy_denied"
+	OpsClientBusinessLimitedKey                           = "ops_client_business_limited"
+	OpsClientBusinessLimitedReasonKey                     = "ops_client_business_limited_reason"
+	OpsClientBusinessLimitedReasonIPRestriction           = "api_key_ip_restriction"
+	OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable  = "api_key_group_unavailable"
+	OpsClientBusinessLimitedReasonAPIKeyGroupUnassigned   = "api_key_group_unassigned"
+	OpsClientBusinessLimitedReasonLocalFeatureGate        = "local_feature_gate"
+	OpsClientBusinessLimitedReasonLocalPolicyDenied       = "local_policy_denied"
+	OpsClientBusinessLimitedReasonLocalModelConfiguration = "local_model_configuration"
 
 	// ResponseCommittedKey 由 handleErrorResponse 系列函数在写完 HTTP 错误响应后设置。
 	// ensureForwardErrorResponse 检查此 key，为 true 时跳过兜底写入，避免在已完成的 JSON 后追加 SSE。
@@ -106,6 +107,18 @@ func HasOpsClientBusinessLimited(c *gin.Context) bool {
 	}
 	marked, _ := v.(bool)
 	return marked
+}
+
+func OpsClientBusinessLimitedReason(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	v, ok := c.Get(OpsClientBusinessLimitedReasonKey)
+	if !ok {
+		return ""
+	}
+	reason, _ := v.(string)
+	return strings.TrimSpace(reason)
 }
 
 // OpsStreamError records an in-band SSE error for ops logging when the wire
