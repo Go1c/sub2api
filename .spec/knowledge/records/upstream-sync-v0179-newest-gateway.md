@@ -89,6 +89,7 @@ metadata:
 | `#5715` | 账号页 proxies/groups 改为 `Promise.allSettled`，代理加载失败不挡分组筛选 |
 | `#5669` | OpenAI OAuth 402 `deactivated_workspace` 联动熔断同 Team 其余 active 账户（进程内去重 60s）；fastpath 与 `HandleUpstreamError` 都先于 model-not-found / 池模式早退 |
 | `#5755` | Gemini `ErrorPolicySkipped` 与 OpenAI 对齐：自定义错误码未命中且不可 failover 时对客户端隐藏上游细节（500 + 固定文案）；池模式 4xx 保真透传；可 failover 的 5xx/429 仍换号。fork 原先 Skipped 一律写 500 且仍会 `handleGeminiUpstreamError` |
+| `#5721` | 批量编辑 OpenAI 设置：长上下文计费、端点能力、Responses 路由；影子账号长上下文跟随母账号并回报 inherited count。fork 长上下文 UI 覆盖 oauth/apikey/setup-token（passthrough 开关仍不含 setup-token）；未带 origin 的 ProbeEnabled 批量字段 |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -149,6 +150,9 @@ metadata:
 | 前端 `vue-tsc --noEmit` + `pnpm build` + `AccountsView.usageWindowsHint.spec.ts`（#4005/#4006/#4049/#4053/#5697/#5715） | 通过（3/3；UI 未开浏览器，靠 typecheck/build/vitest） |
 | `go test -tags=unit ./internal/service -run TestGemini`（#5755 skipped-policy write / failover） | 通过 |
 | `go vet -tags integration ./internal/service`（#5755） | 通过 |
+| `go test -tags=unit ./internal/service -run TestAdminServiceBulkUpdateAccounts`（#5721） | 通过 |
+| `go vet -tags integration ./internal/service`（#5721） | 通过 |
+| 前端 `vue-tsc --noEmit` + `pnpm build` + `BulkEditAccountModal.spec.ts`（#5721） | 通过（30/30；批量弹窗未开浏览器，靠 typecheck/build/vitest） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
