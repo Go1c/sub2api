@@ -73,7 +73,7 @@ metadata:
 | `#5834` | 可配置代理探测 URL；fork 默认仍是 ip-api/httpbin，并加 ipify/chatgpt-trace |
 | `#4057` | ops SLA 卡：窗口请求数为 0 时显示中性 `-` |
 | `#5925` 子集 | Grok HTTP upstream profile；`encrypted_content` 422 与 400 一样清洗后同账号重试 |
-| `#5888` 第一刀 | Responses 入口：`messages`/`prompt` 收成原生 `input`；工具 schema 修 null type + 去掉 lookaround；上游拒收字段后同请求重试（含跨账号 budget）。fork 无 CN provider，null-type 只对 OpenAI/Anthropic 开 |
+| `#5888` 第一刀 | Responses 入口：`messages`/`prompt` 收成原生 `input`；工具 schema 修 null type + 去掉 lookaround；上游拒收字段后同请求重试（含跨账号 budget）。国模底座第一刀进行中（常量/探测）；null-type 本窗口仍只对 OpenAI/Anthropic 开 |
 | `#5888` 第二刀 | Grok ModelInput 清洗（Chat/OpenAI 回放项收成 xAI 子集）；explicit compact 模型不可用时同账号换 fallback 模型再试一次。全局 `openai_compact_model` 只作失败后回退，首次请求仍只看账号 `compact_model_mapping` |
 | `#5888` 第三刀 | WS session preempt（Redis owner + 进程内 registry；同 session 新请求取消旧连接）；OpenAI 池模式 API-key 健康熔断（默认 `Enabled=false`，不改现网行为）；ops 错误详情：SSE 终帧捕获、2xx recovered 上游遥测、逐次 `skip_monitoring`。fork 保留请求体/重试头、INVALID_API_KEY 删 key 归因、recovered `account_auth` 的 `error_source=gateway`。未带 origin 的 `ResolvedTargetPlatformFromContext` / sticky `ErrStickySessionNotFound`；`ReportOpenAIAccountScheduleResult` 仍用 fork 的 `accountID` 签名，健康观察走独立方法 |
 | `#5888` 第四刀 | Codex OAuth 把上游保留名 `python` 改写成 `python__sub2api`，回程按 context 映射还原（HTTP SSE / JSON / WS）。接到现有 OAuth transform 与 passthrough/WS 帧路径；未改 fork 的 `codex-auto-review→luna` 映射，也未把 origin 的 `normalizeOpenAIOAuthResponsesCompatibilityFields` 再塞进 transform（prompt 收成 input 仍走第一刀的 HTTP legacy ingress） |
@@ -108,9 +108,9 @@ metadata:
 ## 明确排除（不要当遗漏）
 
 - 整包 merge upstream / 直推 `main` / `publish`。
-- 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override（fork 无 `PlatformComposite` / CN provider 面）。
+- 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override：**已授权合入**。① `sync/v0179-cn-providers`（PR #366）：常量 / schema / **934** 迁移 / 探测 / admin 路由。② `sync/v0179-cn-gateway`：Anthropic native 转发 + 协议分流。③ Create/Edit 弹窗 UI（`sync/v0179-cn-frontend`）。④ 窗口修补（`sync/v0179-cn-window-fixes`）。⑤ Composite：**已授权合入**（`sync/v0179-cn-composite`）。native 路径未接 origin `upstream_response_model` 观察器（fork 无 #5742）。
 - `#5888` 已切完本窗口要的四刀；未整包 origin transform 的 prompt 兼容函数 / namespace 其余差异。
-- `#5925` 未抽：`grok_free_quota_gate`、origin `xai/models.go` 全量目录（306 vs 76）、`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras。
+- `#5925` 已抽：origin `xai/models.go` 全量目录（DefaultTextModel `grok-4.6`、Imagine 常量、runtime mapping）与 `grok_free_quota_gate`（仅 explicit free OAuth，fail-open，`sync/v0179-grok-catalog-free-quota`）。未带：`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras、`GrokDefaultBaseURLMode`。
 - `#5742` Grok 响应模型别名审计：fork 没有 `upstream_response_model.go`，不能只带 helper。
 - `#5738` 已 remap 为 930 并接 UpdateExtra；未带 origin「缺省改 off」与出站 ID 全量派生（fork 仍默认 session）。
 - 渠道分时价 `#5737`（migration 931）与档位乘数 `#5851`（migration 932）已纳入。channel-monitor quota mode（#5761+#5780，migration 933）已纳入四家 provider、无 CN fetcher。未改账号长上下文开关门控。未带 origin 8 平台 CHECK / `fetchCNQuota` / `CNProviderQuotaService` / `CNProviderBalanceService` / antigravity 监控 provider。
@@ -119,16 +119,16 @@ metadata:
 - `#5711` Antigravity mixed tool-config 透传（fork 无 `antigravity_gateway_compat.go`）。
 - `#5609` 认证快照定价字段（fork 已有 v16 `ModelPricing` / `LongContextPricingEnabled`）。
 - `#5716` SMTP 未配置跳过到期提醒（fork 的 `SubscriptionExpiryService` 没有 reminder 路径）。
-- `#5875` 平台筛选目录：origin 把 kimi/zhipu/deepseek + composite 收成共享 catalog；fork 无 Composite / CN provider 面，整包会把排除的平台塞进筛选。
-- `#5839` 已抽 fork 已有平台的 placeholder computed；未带 CN provider 的 kimi/zhipu/deepseek 占位符。
+- `#5875` 平台筛选目录：origin 把 kimi/zhipu/deepseek + composite 收成共享 catalog；第一刀只扩 quota 平台常量，**不**整包筛选 catalog / Composite。
+- `#5839` 已抽 fork 已有平台的 placeholder computed；kimi/zhipu/deepseek 占位符留给 Create/Edit 弹窗第三刀。
 - `#2148` 已接到 fork 的 `OpsErrorDetailsModal`（列表弹窗）+ 仪表盘 props；单条 `OpsErrorDetailModal` 不拉错误列表，无需 custom 时间。
 - `#5662` 只改 `docs/ADMIN_PAYMENT_INTEGRATION_API.md`，fork 无该文档。
 - `#5762` usage_log GROUPING SETS + 新 SQL 索引：要 remap 900+ 迁移，且会碰 fork 已有分组用量 rollup，单独立项。
 - `VERSION` / sponsors / Dockerfile Go 镜像钉。
 - `#5712` Ollama Cloud 用量查询按钮：父功能是窗口外的 `#4776`（`ollama_cloud_usage` 整栈）。fork 没有 `OllamaCloudUsageCell.vue` / `refreshOllamaCloudUsage`，不能只合按钮。
-- `#5913` DeepSeek Responses 账号测试、`#5911` DeepSeek relay balance、`#5842` 自适应 API 协议、`#6009`/`#6011`/`#5919`/`#5847`/`#5837`/`#5782`/`#5730` 等 CN provider 面。fork 无 `GetAPIProtocol` / `PlatformDeepseek` / `testCNProvider*`。
-- `#6048` Composite messages dispatch、`#5654` Composite 视频端点、`#5817`/`#5816` Composite 新平台。fork `sanitizeGroupMessagesDispatchFields` 仍把非 openai 的 `AllowMessagesDispatch` 打成 false。
-- `#5906` CN 额度探测测试加锁：只动 `cn_provider_balance_check_service_test.go`。
+- `#5913` DeepSeek Responses 账号测试、网关 Anthropic native 转发、Create/Edit 弹窗 UI：留给后续刀。`#5911` DeepSeek 非法 relay payload 拒绝与 `#5906` 探测 fake 加锁已纳入第一刀探测单测。
+- `#6048` Composite messages dispatch、`#5654` Composite 视频端点、`#5817`/`#5816` Composite 新平台：**已授权合入**（第五刀 `sync/v0179-cn-composite`）。迁移 **935**（origin 172 建表 + 227 CN CHECK 折进一条；CHECK 含 anthropic/openai/gemini/antigravity/grok/kimi/zhipu/deepseek）。`sanitizeGroupMessagesDispatchFields` 对 openai **或 composite** 保留 `AllowMessagesDispatch`；CN 分组豁免仍在 `allowOpenAICompatibleMessagesDispatch`。fork 未搬 origin reasoning-effort 策略（fork Group 无 `MaxReasoningEffort`）。
+- `#5906` CN 额度探测测试加锁：已随第一刀 `cn_provider_balance_check_service_test.go` 合入。
 - `#5708` 首页 model plaza 入口：origin 往内建 compact/default header 加链接；fork `HomeView.vue` 是独立品牌首页，没有那两套 header，不能原样贴。
 
 ## 验证
@@ -187,6 +187,9 @@ metadata:
 | `TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows` | 按 fork 门控改断言（分组开+账号关 / 分组关+账号开 → 不套官方长上下文阶梯）；与 #5851 恢复的 fork 语义对齐 |
 | `go vet -tags integration ./internal/service ./internal/repository ./internal/handler ./internal/handler/admin ./ent ./migrations`（#5761+#5780） | 通过 |
 | 前端 monitor quota vitest + `pnpm typecheck` + `pnpm build`（#5761+#5780） | 通过（34/34 相关；配额表单未开浏览器，靠单测 + typecheck/build） |
+| `go test -tags=unit`（Grok 全量目录 + free-quota 软闸：xai / config / service Grok\|FreeQuota / handler / api_contract） | 通过 |
+| `go vet -tags integration`（config / xai / service / handler / dto / server） | 通过（`handler/admin` 测试 stub 缺 `CreateCompositeRoute` 是 Composite 栈既有问题，本刀未改 stub） |
+| 前端 `vue-tsc` + `pnpm build` + SettingsView/i18n vitest（Grok 默认模型设置） | 通过（44/44 相关；Settings 表单未开浏览器，靠 typecheck/build/vitest） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关

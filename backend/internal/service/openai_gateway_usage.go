@@ -196,6 +196,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		result.UpstreamModel,
 		result.Model,
 	)
+	billingModels = s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, billingModels)
 	serviceTier := ""
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
@@ -438,7 +439,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		}
 	}
 	if len(billingModels) == 0 || billingModel == "" {
-		return nil, errors.New("openai usage billing model is empty")
+		return nil, fmt.Errorf("%w: openai usage billing model is empty", ErrModelPricingUnavailable)
 	}
 	var lastErr error
 	for _, candidate := range billingModels {
@@ -462,7 +463,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		lastErr = err
 	}
 	if lastErr == nil {
-		lastErr = errors.New("no non-empty billing model candidates")
+		lastErr = fmt.Errorf("%w: no non-empty billing model candidates", ErrModelPricingUnavailable)
 	}
 	return nil, fmt.Errorf("calculate OpenAI usage cost failed for billing models %s: %w", strings.Join(billingModels, ","), lastErr)
 }
@@ -704,6 +705,27 @@ func groupMediaPricingLooksIncomplete(group *Group) bool {
 	}
 	return group.ImagePrice1K == nil && group.ImagePrice2K == nil && group.ImagePrice4K == nil &&
 		group.VideoPrice480P == nil && group.VideoPrice720P == nil && group.VideoPrice1080P == nil
+}
+
+// filterCNProviderBillingModelCandidates 过滤国产供应商（kimi/zhipu/deepseek）
+// 账号的计费候选模型名：claude-* 候选仅在运营者显式配置了分组/渠道定价时保留。
+func (s *OpenAIGatewayService) filterCNProviderBillingModelCandidates(ctx context.Context, account *Account, apiKey *APIKey, candidates []string) []string {
+	if account == nil || !account.IsCNProvider() {
+		return candidates
+	}
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(trimmed), "claude") &&
+			s.resolveOpenAIChannelPricing(ctx, trimmed, apiKey) == nil {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out
 }
 
 func (s *OpenAIGatewayService) resolveOpenAIChannelPricing(ctx context.Context, billingModel string, apiKey *APIKey) *ResolvedPricing {

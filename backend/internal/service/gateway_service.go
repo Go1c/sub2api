@@ -739,6 +739,7 @@ type GatewayService struct {
 	webhookBalanceNotifyService *WebhookBalanceNotifyService
 	accountErrorHistory         *AccountErrorHistoryService
 	userPlatformQuotaRepo       UserPlatformQuotaRepository
+	compositeResolver           *CompositeRouteResolver
 }
 
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
@@ -778,6 +779,7 @@ func NewGatewayService(
 	tlsFPProfileService *TLSFingerprintProfileService,
 	channelService *ChannelService,
 	resolver *ModelPricingResolver,
+	compositeResolver *CompositeRouteResolver,
 	balanceNotifyService *BalanceNotifyService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
 ) *GatewayService {
@@ -814,6 +816,7 @@ func NewGatewayService(
 		tlsFPProfileService:   tlsFPProfileService,
 		channelService:        channelService,
 		resolver:              resolver,
+		compositeResolver:     compositeResolver,
 		balanceNotifyService:  balanceNotifyService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
 	}
@@ -1287,6 +1290,32 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		modelsListCacheStoreTotal.Add(1)
 	}
 	return cloneStringSlice(models)
+}
+
+func (s *GatewayService) GetSchedulablePlatforms(ctx context.Context, groupID *int64) map[string]struct{} {
+	platforms := make(map[string]struct{})
+	if s == nil || s.accountRepo == nil {
+		return platforms
+	}
+
+	var accounts []Account
+	var err error
+	if groupID != nil {
+		accounts, err = s.accountRepo.ListSchedulableByGroupID(ctx, *groupID)
+	} else {
+		accounts, err = s.accountRepo.ListSchedulable(ctx)
+	}
+	if err != nil {
+		return platforms
+	}
+
+	for _, acc := range accounts {
+		platform := strings.TrimSpace(acc.Platform)
+		if platform != "" {
+			platforms[platform] = struct{}{}
+		}
+	}
+	return platforms
 }
 
 func (s *GatewayService) InvalidateAvailableModelsCache(groupID *int64, platform string) {

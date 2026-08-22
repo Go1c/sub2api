@@ -430,6 +430,10 @@ type UpdateSettingsRequest struct {
 	ChannelMonitorStatusBanner           *string `json:"channel_monitor_status_banner"`
 	ChannelMonitorShowQuota              *bool   `json:"channel_monitor_show_quota"`
 
+	// Grok model mapping policy
+	GrokDefaultTextModel           *string `json:"grok_default_text_model"`
+	GrokCrossClientModelMapEnabled *bool   `json:"grok_cross_client_model_map_enabled"`
+
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
 
@@ -2145,6 +2149,18 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.ChannelMonitorShowQuota
 		}(),
+		GrokDefaultTextModel: func() string {
+			if req.GrokDefaultTextModel != nil {
+				return *req.GrokDefaultTextModel
+			}
+			return previousSettings.GrokDefaultTextModel
+		}(),
+		GrokCrossClientModelMapEnabled: func() bool {
+			if req.GrokCrossClientModelMapEnabled != nil {
+				return *req.GrokCrossClientModelMapEnabled
+			}
+			return previousSettings.GrokCrossClientModelMapEnabled
+		}(),
 		AvailableChannelsEnabled: func() bool {
 			if req.AvailableChannelsEnabled != nil {
 				return *req.AvailableChannelsEnabled
@@ -2479,6 +2495,8 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		FallbackModelOpenAI:                                    updatedSettings.FallbackModelOpenAI,
 		FallbackModelGemini:                                    updatedSettings.FallbackModelGemini,
 		FallbackModelAntigravity:                               updatedSettings.FallbackModelAntigravity,
+		GrokDefaultTextModel:                                   updatedSettings.GrokDefaultTextModel,
+		GrokCrossClientModelMapEnabled:                         updatedSettings.GrokCrossClientModelMapEnabled,
 		EnableIdentityPatch:                                    updatedSettings.EnableIdentityPatch,
 		IdentityPatchPrompt:                                    updatedSettings.IdentityPatchPrompt,
 		OpsMonitoringEnabled:                                   updatedSettings.OpsMonitoringEnabled,

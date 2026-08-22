@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/websearch"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -23,7 +24,7 @@ import (
 )
 
 const (
-	grokStandaloneSearchDefaultModel = "grok-4.5"
+	grokStandaloneSearchDefaultModel = xai.DefaultTextModel
 	grokStandaloneSearchBillingModel = "grok-x-search"
 	defaultGrokWebSearchResults      = 5
 	maxGrokWebSearchResults          = 20
@@ -42,7 +43,7 @@ type grokStandaloneSearchRequest struct {
 }
 
 func resolveGrokStandaloneSearchModel() string {
-	return grokStandaloneSearchDefaultModel
+	return xai.ResolveDefaultTextModel(xai.RuntimeModelMappingOptions().DefaultText)
 }
 
 func buildGrokXSearchPrompt(query string, maxResults int) string {
@@ -80,10 +81,7 @@ func buildGrokXSearchResponsesBody(req grokStandaloneSearchRequest, model string
 	if req.MaxResults != nil {
 		maxResults = *req.MaxResults
 	}
-	resolvedModel := strings.TrimSpace(model)
-	if resolvedModel == "" {
-		resolvedModel = grokStandaloneSearchDefaultModel
-	}
+	resolvedModel := xai.ResolveDefaultTextModel(model)
 	return json.Marshal(map[string]any{
 		"model":       resolvedModel,
 		"input":       buildGrokXSearchPrompt(input, maxResults),

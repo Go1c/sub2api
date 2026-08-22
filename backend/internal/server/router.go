@@ -36,6 +36,7 @@ func SetupRouter(
 	cfg *config.Config,
 	redisClient *redis.Client,
 	checkInModule *checkin.Module,
+	compositeResolver *service.CompositeRouteResolver,
 ) *gin.Engine {
 	middleware2.SetIngressRejectRecorder(opsService)
 	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
@@ -99,7 +100,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, checkInModule)
+	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, checkInModule, compositeResolver)
 
 	return r
 }
@@ -120,6 +121,7 @@ func registerRoutes(
 	cfg *config.Config,
 	redisClient *redis.Client,
 	checkInModule *checkin.Module,
+	compositeResolver *service.CompositeRouteResolver,
 ) {
 	// 通用路由（健康检查、状态等）
 	routes.RegisterCommonRoutes(r)
@@ -133,7 +135,7 @@ func registerRoutes(
 	routes.RegisterDesktopRoutes(v1, h, jwtAuth, auditLog, settingService, redisClient)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, auditLog, settingService, redisClient)
 	routes.RegisterAdminRoutes(v1, h, adminAuth, auditLog, stepUpAuth)
-	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
+	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg)
 	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, auditLog, settingService)
 	if checkInModule != nil {
 		checkInModule.RegisterUserRoutes(

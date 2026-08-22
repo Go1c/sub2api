@@ -981,6 +981,45 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
+
+	// Grok: Grok 调度软闸与 OAuth 密码登录开关。
+	Grok GatewayGrokConfig `mapstructure:"grok"`
+
+	// CNProviders: 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
+	// 仅作用于 payg（按量付费）账号：周期探测余额，低于阈值则临时停调。
+	CNProviders GatewayCNProvidersConfig `mapstructure:"cn_providers"`
+}
+
+// GatewayGrokConfig holds Grok-specific gateway scheduling knobs.
+//
+// Free-quota soft gate keys (gateway.grok.*):
+//   - free_quota_soft_gate_enabled: enable local rolling-window scheduling guard for
+//     OAuth accounts whose subscription_tier/plan_type is explicitly "free".
+//     Default true is safe only because free-tier detection is strict (unknown/paid fail open).
+//   - free_quota_token_limit: nominal rolling-window token allowance.
+//   - free_quota_soft_gate_percent: stop new scheduling before the nominal limit (1-100).
+//   - free_quota_window_hours: local usage rolling window length in hours.
+//   - free_quota_stats_cache_seconds: cache TTL for free-tier usage stats
+//     (hot path never blocks on DB; misses fail open and refresh in background).
+type GatewayGrokConfig struct {
+	PasswordAuthEnabled        bool  `mapstructure:"password_auth_enabled"`
+	FreeQuotaSoftGateEnabled   bool  `mapstructure:"free_quota_soft_gate_enabled"`
+	FreeQuotaTokenLimit        int64 `mapstructure:"free_quota_token_limit"`
+	FreeQuotaSoftGatePercent   int   `mapstructure:"free_quota_soft_gate_percent"`
+	FreeQuotaWindowHours       int   `mapstructure:"free_quota_window_hours"`
+	FreeQuotaStatsCacheSeconds int   `mapstructure:"free_quota_stats_cache_seconds"`
+}
+
+// GatewayCNProvidersConfig 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
+//
+// 仅作用于 payg（按量付费）账号（kimi/deepseek 有公开余额端点；zhipu 无，仅靠响应式 429/402）。
+//   - balance_check_enabled: 是否启用周期余额检测（默认 true）
+//   - balance_threshold: 余额低于此值（账户货币单位，默认 0.5）触发临时停调
+//   - balance_check_interval_minutes: 余额检测周期（分钟，默认 10）
+type GatewayCNProvidersConfig struct {
+	BalanceCheckEnabled         bool    `mapstructure:"balance_check_enabled"`
+	BalanceThreshold            float64 `mapstructure:"balance_threshold"`
+	BalanceCheckIntervalMinutes int     `mapstructure:"balance_check_interval_minutes"`
 }
 
 // GatewayOpenAIHTTP2Config OpenAI HTTP 上游协议配置。
@@ -1829,6 +1868,8 @@ func setDefaults() {
 		"api.openai.com",
 		"api.anthropic.com",
 		"api.kimi.com",
+		"api.moonshot.ai",
+		"api.moonshot.cn",
 		"open.bigmodel.cn",
 		"api.minimaxi.com",
 		"generativelanguage.googleapis.com",
@@ -2278,6 +2319,17 @@ func setDefaults() {
 	viper.SetDefault("gateway.models_list_cache_ttl_seconds", 15)
 	// TLS指纹伪装配置（默认关闭，需要账号级别单独启用）
 	// 用户消息串行队列默认值
+	// 国产供应商余额检测（kimi/deepseek payg；zhipu 无余额端点，仅靠响应式 429/402）。
+	viper.SetDefault("gateway.grok.password_auth_enabled", false)
+	viper.SetDefault("gateway.grok.free_quota_soft_gate_enabled", true)
+	viper.SetDefault("gateway.grok.free_quota_token_limit", int64(500_000))
+	viper.SetDefault("gateway.grok.free_quota_soft_gate_percent", 95)
+	viper.SetDefault("gateway.grok.free_quota_window_hours", 24)
+	viper.SetDefault("gateway.grok.free_quota_stats_cache_seconds", 60)
+	viper.SetDefault("gateway.cn_providers.balance_check_enabled", true)
+	viper.SetDefault("gateway.cn_providers.balance_threshold", 0.5)
+	viper.SetDefault("gateway.cn_providers.balance_check_interval_minutes", 10)
+
 	viper.SetDefault("gateway.user_message_queue.enabled", false)
 	viper.SetDefault("gateway.user_message_queue.lock_ttl_ms", 120000)
 	viper.SetDefault("gateway.user_message_queue.wait_timeout_ms", 30000)
@@ -3286,6 +3338,20 @@ func (c *Config) Validate() error {
 	}
 	if c.Concurrency.PingInterval < 5 || c.Concurrency.PingInterval > 30 {
 		return fmt.Errorf("concurrency.ping_interval must be between 5-30 seconds")
+	}
+	if c.Gateway.Grok.FreeQuotaSoftGateEnabled {
+		if c.Gateway.Grok.FreeQuotaTokenLimit <= 0 {
+			return fmt.Errorf("gateway.grok.free_quota_token_limit must be positive")
+		}
+		if c.Gateway.Grok.FreeQuotaSoftGatePercent < 1 || c.Gateway.Grok.FreeQuotaSoftGatePercent > 100 {
+			return fmt.Errorf("gateway.grok.free_quota_soft_gate_percent must be between 1 and 100")
+		}
+		if c.Gateway.Grok.FreeQuotaWindowHours <= 0 {
+			return fmt.Errorf("gateway.grok.free_quota_window_hours must be positive")
+		}
+	}
+	if c.Gateway.Grok.FreeQuotaStatsCacheSeconds < 0 {
+		return fmt.Errorf("gateway.grok.free_quota_stats_cache_seconds must be non-negative")
 	}
 	if err := ValidateDingTalkConfig(c.DingTalk); err != nil {
 		return fmt.Errorf("dingtalk_connect: %w", err)

@@ -528,7 +528,62 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'composite'
+
+export type CompositeRouteMatchType = 'exact' | 'prefix'
+
+export type CompositeRouteEndpoint =
+  | 'any'
+  | 'messages'
+  | 'count_tokens'
+  | 'responses'
+  | 'chat_completions'
+  | 'embeddings'
+  | 'images'
+  | 'gemini'
+
+export type CompositeRouteSource = 'route' | 'detector' | string
+
+export interface CompositeModelRoute {
+  id: number
+  group_id: number
+  public_model: string
+  match_type: CompositeRouteMatchType
+  target_platform: Exclude<GroupPlatform, 'composite'>
+  upstream_model: string
+  endpoint: CompositeRouteEndpoint
+  priority: number
+  enabled: boolean
+  notes?: string
+}
+
+export interface CompositeModelRouteInput {
+  public_model: string
+  match_type: CompositeRouteMatchType
+  target_platform: Exclude<GroupPlatform, 'composite'>
+  upstream_model: string
+  endpoint: CompositeRouteEndpoint
+  priority: number
+  enabled: boolean
+  notes?: string
+}
+
+export interface CompositeRoutePreviewRequest {
+  model: string
+  endpoint: CompositeRouteEndpoint
+}
+
+export interface CompositeRouteDecision {
+  matched: boolean
+  source: CompositeRouteSource
+  group_id: number
+  public_model: string
+  target_platform: Exclude<GroupPlatform, 'composite'> | ''
+  upstream_model: string
+  endpoint: CompositeRouteEndpoint
+  route?: CompositeModelRoute
+  reason?: string
+}
 
 export type SubscriptionType = 'standard' | 'subscription'
 
@@ -789,7 +844,7 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'

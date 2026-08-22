@@ -2507,6 +2507,11 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
+        grok: 'Grok',
+        kimi: 'Kimi',
+        zhipu: 'Zhipu GLM',
+        deepseek: 'DeepSeek',
+        composite: 'Composite',
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
@@ -6161,6 +6166,10 @@ export default {
       gatewayForwarding: {
         title: 'Request Forwarding',
         description: 'Control how requests are forwarded to upstream OAuth accounts',
+        grokDefaultTextModel: 'Default Grok text model',
+        grokDefaultTextModelHint: 'Used for empty model values and, only when the switch is enabled, requests from other client model namespaces. Custom Grok model IDs are accepted.',
+        grokCrossClientMap: 'Map other clients to Grok',
+        grokCrossClientMapHint: 'Default on so Codex and Claude clients keep working against Grok groups. Disable to stop silent cross-vendor rewrites.',
         fingerprintUnification: 'Fingerprint Unification',
         fingerprintUnificationHint: 'Unify X-Stainless-* headers across users sharing the same OAuth account. Disabling passes through each client\'s original headers.',
         metadataPassthrough: 'Metadata Passthrough',

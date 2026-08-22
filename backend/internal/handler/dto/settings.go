@@ -335,6 +335,10 @@ type SystemSettings struct {
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
 
+	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
+	GrokDefaultTextModel           string `json:"grok_default_text_model"`
+	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`
+
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 

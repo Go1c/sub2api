@@ -392,6 +392,8 @@ const baseSettingsResponse = {
   fallback_model_openai: "",
   fallback_model_gemini: "",
   fallback_model_antigravity: "",
+  grok_default_text_model: "grok-4.6",
+  grok_cross_client_model_map_enabled: true,
   enable_identity_patch: false,
   identity_patch_prompt: "",
   ops_monitoring_enabled: false,

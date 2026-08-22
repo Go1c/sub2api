@@ -525,6 +525,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ChannelMonitorShowQuota != after.ChannelMonitorShowQuota {
 		changed = append(changed, "channel_monitor_show_quota")
 	}
+	if before.GrokDefaultTextModel != after.GrokDefaultTextModel {
+		changed = append(changed, "grok_default_text_model")
+	}
+	if before.GrokCrossClientModelMapEnabled != after.GrokCrossClientModelMapEnabled {
+		changed = append(changed, "grok_cross_client_model_map_enabled")
+	}
 	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
 		changed = append(changed, "available_channels_enabled")
 	}
