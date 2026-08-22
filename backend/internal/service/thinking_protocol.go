@@ -56,11 +56,15 @@ func ResolveThinkingProtocol(modelID string) ThinkingProtocol {
 	id := strings.ToLower(modelID)
 
 	// Passback-required 优先匹配（特定厂商前缀），避免误判 claude-* 时也命中。
+	// kimi-k3* 已由 kimi- 前缀覆盖；Kimi Code endpoint 的 bare model ID（k3 / k3-256k）
+	// 无厂商前缀，仅精确匹配，避免 "foo-k3" 等未知型号被宽泛前缀误判。
 	switch {
 	case strings.HasPrefix(id, "deepseek-"),
 		strings.HasPrefix(id, "kimi-"),
 		strings.HasPrefix(id, "moonshot-"),
-		strings.HasPrefix(id, "glm-"):
+		strings.HasPrefix(id, "glm-"),
+		id == "k3",
+		id == "k3-256k":
 		return ThinkingProtocolPassbackRequired
 	}
 	// MiniMax M 系列：走 https://api.minimax.io/anthropic 端点，

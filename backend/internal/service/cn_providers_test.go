@@ -3,9 +3,11 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -464,4 +466,113 @@ func TestGetOpenAIFormatBaseURL_ProtocolAware(t *testing.T) {
 		Credentials: map[string]any{"base_url": "https://ds-relay.example.com"},
 	}
 	require.Equal(t, "https://ds-relay.example.com", ccAccount.GetOpenAIFormatBaseURL())
+}
+
+func TestNormalizeOpenAICompatiblePlatform_SchedulerExactMatch(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, PlatformGrok, NormalizeOpenAICompatiblePlatform(PlatformGrok))
+	require.Equal(t, PlatformKimi, NormalizeOpenAICompatiblePlatform(PlatformKimi))
+	require.Equal(t, PlatformZhipu, NormalizeOpenAICompatiblePlatform(PlatformZhipu))
+	require.Equal(t, PlatformDeepseek, NormalizeOpenAICompatiblePlatform(PlatformDeepseek))
+	require.Equal(t, PlatformOpenAI, NormalizeOpenAICompatiblePlatform(""))
+	require.Equal(t, PlatformOpenAI, NormalizeOpenAICompatiblePlatform(PlatformAnthropic))
+	require.Equal(t, PlatformOpenAI, NormalizeOpenAICompatiblePlatform("something-else"))
+}
+
+func TestBuildUpstreamModelsRequest_CNProviders(t *testing.T) {
+	t.Parallel()
+
+	svc := &AccountTestService{cfg: &config.Config{}}
+	cases := []struct {
+		name     string
+		platform string
+		mode     string
+		wantURL  string
+	}{
+		{"kimi default", PlatformKimi, "", "https://api.moonshot.cn/v1/models"},
+		{"kimi coding", PlatformKimi, AccountModeCoding, "https://api.kimi.com/coding/v1/models"},
+		{"zhipu default", PlatformZhipu, "", "https://open.bigmodel.cn/api/paas/v4/models"},
+		{"zhipu coding", PlatformZhipu, AccountModeCoding, "https://open.bigmodel.cn/api/coding/paas/v4/models"},
+		{"deepseek", PlatformDeepseek, "", "https://api.deepseek.com/v1/models"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			creds := map[string]any{"api_key": "sk-test"}
+			if tc.mode != "" {
+				creds["account_mode"] = tc.mode
+			}
+			account := &Account{ID: 1, Platform: tc.platform, Type: AccountTypeAPIKey, Credentials: creds}
+			req, err := svc.buildUpstreamModelsRequest(context.Background(), account)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantURL, req.URL.String())
+			require.Equal(t, "Bearer sk-test", req.Header.Get("Authorization"))
+		})
+	}
+}
+
+func TestBuildUpstreamModelsRequest_AnthropicProtocol(t *testing.T) {
+	t.Parallel()
+	svc := &AccountTestService{cfg: &config.Config{}}
+	account := &Account{
+		ID: 1, Platform: PlatformZhipu, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":      "sk-test",
+			"api_protocol": APIProtocolAnthropic,
+			"base_url":     "https://open.bigmodel.cn/api/anthropic",
+		},
+	}
+	req, err := svc.buildUpstreamModelsRequest(context.Background(), account)
+	require.NoError(t, err)
+	require.Equal(t, "https://open.bigmodel.cn/api/paas/v4/models", req.URL.String())
+}
+
+func TestBuildOpenAIResponsesURLForPlatform(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, "https://api.deepseek.com/responses", buildOpenAIResponsesURLForPlatform(PlatformDeepseek, "https://api.deepseek.com"))
+	require.Equal(t, "https://relay.example.com/responses", buildOpenAIResponsesURLForPlatform(PlatformDeepseek, "https://relay.example.com"))
+	require.Equal(t, "https://relay.example.com/v1/responses", buildOpenAIResponsesURLForPlatform(PlatformDeepseek, "https://relay.example.com/v1"))
+	require.Equal(t, "https://api.openai.com/v1/responses", buildOpenAIResponsesURLForPlatform(PlatformOpenAI, "https://api.openai.com"))
+	require.Equal(t, "https://open.bigmodel.cn/api/paas/v4/responses", buildOpenAIResponsesURLForPlatform(PlatformZhipu, "https://open.bigmodel.cn/api/paas/v4"))
+}
+
+func TestNormalizeDeepSeekResponsesRequestBody(t *testing.T) {
+	t.Parallel()
+
+	deepseekResponses := &Account{
+		Platform: PlatformDeepseek, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"api_protocol": APIProtocolResponses},
+	}
+	body := []byte(`{"model":"deepseek-v4-pro","store":true,"previous_response_id":"resp_123","input":"hi"}`)
+	normalized := normalizeDeepSeekResponsesRequestBody(deepseekResponses, body)
+	require.False(t, gjson.GetBytes(normalized, "store").Bool())
+	require.False(t, gjson.GetBytes(normalized, "previous_response_id").Exists())
+	require.Equal(t, "deepseek-v4-pro", gjson.GetBytes(normalized, "model").String())
+
+	deepseekAdaptive := &Account{
+		Platform: PlatformDeepseek, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"api_protocol": APIProtocolAdaptive},
+	}
+	adaptiveNormalized := normalizeDeepSeekResponsesRequestBody(deepseekAdaptive, body)
+	require.False(t, gjson.GetBytes(adaptiveNormalized, "store").Bool())
+	require.False(t, gjson.GetBytes(adaptiveNormalized, "previous_response_id").Exists())
+
+	deepseekCC := &Account{Platform: PlatformDeepseek, Type: AccountTypeAPIKey}
+	require.Equal(t, string(body), string(normalizeDeepSeekResponsesRequestBody(deepseekCC, body)))
+
+	openai := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	require.Equal(t, string(body), string(normalizeDeepSeekResponsesRequestBody(openai, body)))
+}
+
+func TestGetAnthropicAPIKeyAuthScheme_CNProvider(t *testing.T) {
+	t.Parallel()
+
+	zhipu := &Account{
+		Platform: PlatformZhipu, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"api_protocol": APIProtocolAnthropic},
+	}
+	require.Equal(t, AnthropicAPIKeyAuthSchemeXAPIKey, zhipu.GetAnthropicAPIKeyAuthScheme())
+
+	zhipu.Extra = map[string]any{"anthropic_apikey_auth_scheme": "authorization_bearer"}
+	require.Equal(t, AnthropicAPIKeyAuthSchemeAuthorizationBearer, zhipu.GetAnthropicAPIKeyAuthScheme())
 }

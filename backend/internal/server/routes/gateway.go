@@ -34,7 +34,9 @@ func RegisterGatewayRoutes(
 
 	isOpenAIResponsesCompatibleGatewayPlatform := func(c *gin.Context) bool {
 		switch getGroupPlatform(c) {
-		case service.PlatformOpenAI, service.PlatformGrok:
+		case service.PlatformOpenAI, service.PlatformGrok,
+			service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek:
+			// 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）与 openai/grok 一样经 OpenAI 网关转发。
 			return true
 		default:
 			return false
@@ -142,7 +144,8 @@ func RegisterGatewayRoutes(
 		// /v1/messages/count_tokens: OpenAI uses Anthropic-compat bridge; other
 		// OpenAI-compatible platforms keep the prior unsupported response.
 		gateway.POST("/messages/count_tokens", func(c *gin.Context) {
-			if isOpenAIGatewayPlatform(c) {
+			switch getGroupPlatform(c) {
+			case service.PlatformOpenAI, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek:
 				h.OpenAIGateway.CountTokens(c)
 				return
 			}
