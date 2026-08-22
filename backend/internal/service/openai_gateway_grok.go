@@ -303,6 +303,10 @@ func patchGrokResponsesBody(body []byte, upstreamModel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	out, err = sanitizeGrokResponsesModelInput(out)
+	if err != nil {
+		return nil, err
+	}
 	out, err = stripRedundantGrokViewImageTool(out)
 	if err != nil {
 		return nil, err
