@@ -96,6 +96,7 @@ metadata:
 | gitignore | 忽略 `.codegraph/`（origin `354825674`） |
 | `#2148` | ops 错误列表弹窗在 `time_range=custom` 时改传 `start_time`/`end_time`（后端不认 custom）。fork 仪表盘 header 已有自定义时间，漏接到 `OpsErrorDetailsModal` |
 | `#5839` 子集 | 创建账号 API key placeholder 抽成 `apiKeyValuePlaceholder`（openai/gemini/grok/anthropic）；未带 origin 的 kimi/zhipu/deepseek case |
+| `#5888/#5925` 接线 | Grok `/responses/compact` 转摘要 turn + 回程 compaction item；stream idle 冷却；spending-limit reauth 在 quota/token-refresh 生效。修 CI unused |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
