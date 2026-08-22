@@ -49,6 +49,7 @@ metadata:
 | `#6049` | OpenAI sticky prefix system |
 | `#6053` | 前端 token refresh 锁 CPU |
 | `#5549` | OpenAI capabilities 空集合 |
+| `#5844` | Grok inline image / 去掉多余 view_image |
 
 手工适配：
 
@@ -56,6 +57,9 @@ metadata:
 |---|---|
 | `#6016` | Prompt Audit `config_loaded` 只在真正变化 / 恢复失败时打日志 |
 | `#5720` | 邀请码占用与建用户原子化（TOCTOU）；`user_repo.Create` 优先加入 `TxFromContext` |
+| `#5815` | grok-4.6 保留 `xhigh`；4.5 仍折成 `high`；`minimal`→`low` |
+| `#5765` 子集 | Grok 用量条带上 24h/7d 本地 window-stats |
+| `#5764` `#5767` `#5822` `#5868` `#5881` | Grok/WS client tools + tool_search_output discoveries；HTTP `forwardGrokResponses` 已接 mapping / 流还原 |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -66,7 +70,7 @@ metadata:
 - `#5888` OpenAI Responses 兼容大改（164 文件）。
 - `#5925` Grok compatibility（51 文件）。
 - 渠道分时价 / 档位乘数 / channel-monitor quota mode。
-- `#5815` grok-4.6 `xhigh`：fork 没有 main 那套 `normalizeGrokReasoningEffortValue`，不能直接摘补丁。
+- `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
 - `#5708` 首页 model plaza、`#5838` 用户角色 Select（fork 编辑用户弹窗没有 role 下拉）。
 - `VERSION` / sponsors / gitignore / star-history / Dockerfile Go 镜像钉。
 
