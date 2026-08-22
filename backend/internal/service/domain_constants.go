@@ -503,6 +503,15 @@ const (
 	// keep the full snapshots regardless of this flag.
 	SettingKeyChannelMonitorShowQuota = "channel_monitor_show_quota"
 
+	// SettingKeyGrokDefaultTextModel is the fallback Grok text model for empty
+	// request models and built-in Grok aliases (e.g. "grok" → this id). Default grok-4.6.
+	SettingKeyGrokDefaultTextModel = "grok_default_text_model"
+
+	// SettingKeyGrokCrossClientModelMapEnabled, when true, includes gpt-*/codex-*/o*/claude-*
+	// wildcards in the default Grok account model_mapping so foreign client model names
+	// can reach Grok groups. Default true (Codex/Claude clients keep working).
+	SettingKeyGrokCrossClientModelMapEnabled = "grok_cross_client_model_map_enabled"
+
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).

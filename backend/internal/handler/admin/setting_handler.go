@@ -292,6 +292,8 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		FallbackModelOpenAI:                                    settings.FallbackModelOpenAI,
 		FallbackModelGemini:                                    settings.FallbackModelGemini,
 		FallbackModelAntigravity:                               settings.FallbackModelAntigravity,
+		GrokDefaultTextModel:                                   settings.GrokDefaultTextModel,
+		GrokCrossClientModelMapEnabled:                         settings.GrokCrossClientModelMapEnabled,
 		EnableIdentityPatch:                                    settings.EnableIdentityPatch,
 		IdentityPatchPrompt:                                    settings.IdentityPatchPrompt,
 		OpsMonitoringEnabled:                                   opsEnabled && settings.OpsMonitoringEnabled,

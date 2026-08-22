@@ -963,6 +963,9 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 						"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 				}
 			}
+			if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
+				accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
+			}
 		}
 		return accounts, useMixed, err
 	}
@@ -1008,6 +1011,9 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 					"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 			}
 		}
+		if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
+			filtered = s.filterGrokFreeQuotaAccountsForGateway(ctx, filtered)
+		}
 		return filtered, useMixed, nil
 	}
 
@@ -1042,6 +1048,9 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 				"status", acc.Status,
 				"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 		}
+	}
+	if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
+		accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 	}
 	return accounts, useMixed, nil
 }
@@ -1414,10 +1423,24 @@ func (s *GatewayService) checkAndRegisterSession(ctx context.Context, account *A
 }
 
 func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID int64) (*Account, error) {
+	var (
+		account *Account
+		err     error
+	)
 	if s.schedulerSnapshot != nil {
-		return s.schedulerSnapshot.GetAccount(ctx, accountID)
+		account, err = s.schedulerSnapshot.GetAccount(ctx, accountID)
+	} else {
+		account, err = s.accountRepo.GetByID(ctx, accountID)
 	}
-	return s.accountRepo.GetByID(ctx, accountID)
+	if err != nil || account == nil {
+		return account, err
+	}
+	if account.IsGrok() {
+		if gated := s.filterGrokFreeQuotaAccountsForGateway(ctx, []Account{*account}); len(gated) == 0 {
+			return nil, nil
+		}
+	}
+	return account, nil
 }
 
 func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {

@@ -212,6 +212,20 @@ gateway:
   #
   # 注意：开启后会影响所有客户端的行为（不仅限于 VS Code / Codex CLI），请谨慎开启。
   force_codex_cli: false
+  grok:
+    # Email/password OAuth is off by default and hidden in the admin UI.
+    # Setting true enables POST /admin/grok/oauth/password (password → SSO → Build OAuth).
+    # Prefer SSO cookie, browser OAuth, or refresh_token re-auth in production.
+    password_auth_enabled: false
+    # Local rolling-window scheduling guard for Grok OAuth accounts whose
+    # subscription_tier/plan_type is explicitly "free". Unknown/paid fail open.
+    free_quota_soft_gate_enabled: true
+    free_quota_token_limit: 500000
+    free_quota_soft_gate_percent: 95
+    free_quota_window_hours: 24
+    # Stats cache for free-tier soft gate. Hot path never waits on DB: misses
+    # fail open and refresh in the background. Prefer >= 60s in production.
+    free_quota_stats_cache_seconds: 60
   # Stop rewriting load-shed Codex originators to the official CLI identity.
   # 关闭「把落在上游降载桶的 Codex originator 改写为官方 CLI 身份（codex_cli_rs）」。
   #

@@ -597,6 +597,8 @@ contact_channels: ContactChannel[];
   fallback_model_openai: string;
   fallback_model_gemini: string;
   fallback_model_antigravity: string;
+  grok_default_text_model: string;
+  grok_cross_client_model_map_enabled: boolean;
 
   // Identity patch configuration (Claude -> Gemini)
   enable_identity_patch: boolean;
@@ -923,6 +925,8 @@ contact_channels?: ContactChannel[];
   fallback_model_openai?: string;
   fallback_model_gemini?: string;
   fallback_model_antigravity?: string;
+  grok_default_text_model?: string;
+  grok_cross_client_model_map_enabled?: boolean;
   enable_identity_patch?: boolean;
   identity_patch_prompt?: string;
   ops_monitoring_enabled?: boolean;

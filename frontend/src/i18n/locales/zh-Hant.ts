@@ -6346,6 +6346,10 @@ export default {
       gatewayForwarding: {
         title: '請求轉發行為',
         description: '控制請求轉發到上游 OAuth 賬號時的行為',
+        grokDefaultTextModel: '預設 Grok 文本模型',
+        grokDefaultTextModelHint: '用於空模型值；僅在右側開關開啟時也用於其他用戶端模型命名空間。允許填寫自訂 Grok 模型 ID。',
+        grokCrossClientMap: '映射其他用戶端模型到 Grok',
+        grokCrossClientMapHint: '預設開啟，便於 Codex / Claude 用戶端打到 Grok 分組。關閉後不再把其他廠商模型名靜默改寫到 Grok。',
         fingerprintUnification: '指紋統一化',
         fingerprintUnificationHint: '統一共享同一 OAuth 賬號的用戶的 X-Stainless-* 請求頭。關閉後透傳客戶端原始請求頭。',
         metadataPassthrough: 'Metadata 透傳',
