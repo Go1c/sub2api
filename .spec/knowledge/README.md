@@ -68,6 +68,7 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
+| [`records/upstream-sync-v0179-newest-gateway.md`](records/upstream-sync-v0179-newest-gateway.md) | 2026-08-22：main 快进 0.1.179 后，按最新窗口把网关/鉴权修复带入 dev；整包 merge 829 冲突已放弃 |
 | [`records/upstream-sync-v0177-codex-compact-group-usage.md`](records/upstream-sync-v0177-codex-compact-group-usage.md) | 2026-08-15：main 快进 0.1.177 后，Codex turn-state、native compaction v2、分组用量日 rollup 的选择性同步（待 Review 合入 dev） |
 | [`records/upstream-sync-grok-v0176-jwt-xsearch-pricing.md`](records/upstream-sync-grok-v0176-jwt-xsearch-pricing.md) | 2026-08-13：Grok JWT 档位、独立 /x_search、分组 model_pricing、SuperGrokPro、用量快照与 4.5/4.6 官方价卡的选择性同步（待 Review 合入 dev） |
 | [`records/prod-frozen-balance-migration-gap-20260728.md`](records/prod-frozen-balance-migration-gap-20260728.md) | 2026-07-28：publish 引入 `users.frozen_balance` Ent 字段却无迁移，登录 503；手改恢复后补 920 + CI 护栏 |

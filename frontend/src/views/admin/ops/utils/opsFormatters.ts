@@ -58,6 +58,21 @@ export function parseTimeRangeMinutes(range: string): number {
   return 60
 }
 
+/** Query params for ops error list APIs. Backend rejects time_range=custom. */
+export function buildOpsErrorTimeParams(
+  timeRange: string,
+  customStartTime?: string | null,
+  customEndTime?: string | null
+): { time_range: string } | { start_time: string; end_time: string } {
+  if (timeRange === 'custom') {
+    if (customStartTime && customEndTime) {
+      return { start_time: customStartTime, end_time: customEndTime }
+    }
+    return { time_range: '1h' }
+  }
+  return { time_range: timeRange || '1h' }
+}
+
 export function formatHistoryLabel(date: string | undefined, timeRange: string): string {
   if (!date) return ''
   const d = new Date(date)

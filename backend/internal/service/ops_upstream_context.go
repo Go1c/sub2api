@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,6 +16,7 @@ const (
 	OpsUpstreamErrorMessageKey = "ops_upstream_error_message"
 	OpsUpstreamErrorDetailKey  = "ops_upstream_error_detail"
 	OpsUpstreamErrorsKey       = "ops_upstream_errors"
+	OpsUpstreamModelKey        = "ops_upstream_model"
 
 	// Best-effort capture of the current upstream request body so ops can
 	// retry the specific upstream attempt (not just the client request).
@@ -37,15 +39,18 @@ const (
 	// ops_error_logger 中间件检查此 key，为 true 时跳过错误记录。
 	OpsSkipPassthroughKey = "ops_skip_passthrough"
 
-	OpsStreamErrorKey = "ops_stream_error"
+	OpsStreamErrorKey  = "ops_stream_error"
+	OpsStreamErrorsKey = "ops_stream_errors"
+	OpsStreamTurnKey   = "ops_stream_turn"
 
-	OpsClientBusinessLimitedKey                          = "ops_client_business_limited"
-	OpsClientBusinessLimitedReasonKey                    = "ops_client_business_limited_reason"
-	OpsClientBusinessLimitedReasonIPRestriction          = "api_key_ip_restriction"
-	OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable = "api_key_group_unavailable"
-	OpsClientBusinessLimitedReasonAPIKeyGroupUnassigned  = "api_key_group_unassigned"
-	OpsClientBusinessLimitedReasonLocalFeatureGate       = "local_feature_gate"
-	OpsClientBusinessLimitedReasonLocalPolicyDenied      = "local_policy_denied"
+	OpsClientBusinessLimitedKey                           = "ops_client_business_limited"
+	OpsClientBusinessLimitedReasonKey                     = "ops_client_business_limited_reason"
+	OpsClientBusinessLimitedReasonIPRestriction           = "api_key_ip_restriction"
+	OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable  = "api_key_group_unavailable"
+	OpsClientBusinessLimitedReasonAPIKeyGroupUnassigned   = "api_key_group_unassigned"
+	OpsClientBusinessLimitedReasonLocalFeatureGate        = "local_feature_gate"
+	OpsClientBusinessLimitedReasonLocalPolicyDenied       = "local_policy_denied"
+	OpsClientBusinessLimitedReasonLocalModelConfiguration = "local_model_configuration"
 
 	// ResponseCommittedKey 由 handleErrorResponse 系列函数在写完 HTTP 错误响应后设置。
 	// ensureForwardErrorResponse 检查此 key，为 true 时跳过兜底写入，避免在已完成的 JSON 后追加 SSE。
@@ -86,6 +91,24 @@ func SetOpsLatencyMs(c *gin.Context, key string, value int64) {
 	c.Set(key, value)
 }
 
+func SetOpsUpstreamModel(c *gin.Context, model string) {
+	if c == nil {
+		return
+	}
+	if model = strings.TrimSpace(model); model != "" {
+		c.Set(OpsUpstreamModelKey, model)
+	}
+}
+
+// ClearOpsUpstreamModel invalidates attempt-scoped model attribution before a
+// newly selected account starts credential resolution or upstream dispatch.
+func ClearOpsUpstreamModel(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	c.Set(OpsUpstreamModelKey, "")
+}
+
 func MarkOpsClientBusinessLimited(c *gin.Context, reason string) {
 	if c == nil {
 		return
@@ -108,6 +131,18 @@ func HasOpsClientBusinessLimited(c *gin.Context) bool {
 	return marked
 }
 
+func OpsClientBusinessLimitedReason(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	v, ok := c.Get(OpsClientBusinessLimitedReasonKey)
+	if !ok {
+		return ""
+	}
+	reason, _ := v.(string)
+	return strings.TrimSpace(reason)
+}
+
 // OpsStreamError records an in-band SSE error for ops logging when the wire
 // status is already committed as HTTP 200 (so middleware would otherwise miss it).
 type OpsStreamError struct {
@@ -124,6 +159,31 @@ type OpsStreamError struct {
 	// CountTowardsSLA 表示虽然 wire 状态已固化为 200，请求在应用语义上仍然失败，
 	// Ops 应使用 IntendedStatus 计入错误率/SLA。
 	CountTowardsSLA bool
+	// Turn identifies a WebSocket turn. HTTP/SSE requests leave it at zero.
+	Turn int
+	// SkipMonitoring snapshots the rule decision for this visible failure.
+	SkipMonitoring  bool
+	AccountID       int64
+	UpstreamModel   string
+	UpstreamStatus  int
+	UpstreamMessage string
+	UpstreamDetail  string
+	UpstreamErrors  []*OpsUpstreamErrorEvent
+}
+
+const maxOpsStreamErrorsPerRequest = 64
+
+// BeginOpsStreamTurn scopes first-wins deduplication to one WebSocket turn.
+func BeginOpsStreamTurn(c *gin.Context, turn int) {
+	if c == nil || turn <= 0 {
+		return
+	}
+	c.Set(OpsStreamTurnKey, turn)
+	c.Set(OpsSkipPassthroughKey, false)
+	c.Set(OpsUpstreamErrorsKey, []*OpsUpstreamErrorEvent{})
+	c.Set(OpsUpstreamStatusCodeKey, 0)
+	c.Set(OpsUpstreamErrorMessageKey, "")
+	c.Set(OpsUpstreamErrorDetailKey, "")
 }
 
 func MarkOpsStreamError(c *gin.Context, errType, message string, intendedStatus int) {
@@ -151,13 +211,99 @@ func markOpsStreamError(c *gin.Context, streamErr OpsStreamError) {
 	if c == nil {
 		return
 	}
-	if _, exists := c.Get(OpsStreamErrorKey); exists {
-		return
-	}
 	streamErr.ErrType = strings.TrimSpace(streamErr.ErrType)
 	streamErr.Code = strings.TrimSpace(streamErr.Code)
 	streamErr.Message = strings.TrimSpace(streamErr.Message)
+	streamErr.SkipMonitoring = currentOpsFailureSkipMonitoring(c)
+	snapshotOpsStreamErrorContext(c, &streamErr)
+	if GetOpenAIClientTransport(c) == OpenAIClientTransportWS {
+		if value, ok := c.Get(OpsStreamTurnKey); ok {
+			streamErr.Turn, _ = value.(int)
+		}
+		var errorsForRequest []OpsStreamError
+		if value, ok := c.Get(OpsStreamErrorsKey); ok {
+			errorsForRequest, _ = value.([]OpsStreamError)
+		}
+		if len(errorsForRequest) > 0 && errorsForRequest[len(errorsForRequest)-1].Turn == streamErr.Turn {
+			return
+		}
+		errorsForRequest = append(errorsForRequest, streamErr)
+		if len(errorsForRequest) > maxOpsStreamErrorsPerRequest {
+			errorsForRequest = append([]OpsStreamError(nil), errorsForRequest[len(errorsForRequest)-maxOpsStreamErrorsPerRequest:]...)
+		}
+		c.Set(OpsStreamErrorsKey, errorsForRequest)
+		c.Set(OpsStreamErrorKey, streamErr)
+		return
+	}
+	if _, exists := c.Get(OpsStreamErrorKey); exists {
+		return
+	}
 	c.Set(OpsStreamErrorKey, streamErr)
+}
+
+func snapshotOpsStreamErrorContext(c *gin.Context, streamErr *OpsStreamError) {
+	if c == nil || streamErr == nil {
+		return
+	}
+	if c.Request != nil {
+		if accountID, ok := c.Request.Context().Value(ctxkey.AccountID).(int64); ok && accountID > 0 {
+			streamErr.AccountID = accountID
+		}
+	}
+	if value, ok := c.Get(OpsUpstreamModelKey); ok {
+		streamErr.UpstreamModel, _ = value.(string)
+		streamErr.UpstreamModel = strings.TrimSpace(streamErr.UpstreamModel)
+	}
+	if value, ok := c.Get(OpsUpstreamStatusCodeKey); ok {
+		switch status := value.(type) {
+		case int:
+			streamErr.UpstreamStatus = status
+		case int64:
+			streamErr.UpstreamStatus = int(status)
+		}
+	}
+	if value, ok := c.Get(OpsUpstreamErrorMessageKey); ok {
+		streamErr.UpstreamMessage, _ = value.(string)
+		streamErr.UpstreamMessage = strings.TrimSpace(streamErr.UpstreamMessage)
+	}
+	if value, ok := c.Get(OpsUpstreamErrorDetailKey); ok {
+		streamErr.UpstreamDetail, _ = value.(string)
+		streamErr.UpstreamDetail = strings.TrimSpace(streamErr.UpstreamDetail)
+	}
+	if value, ok := c.Get(OpsUpstreamErrorsKey); ok {
+		if events, ok := value.([]*OpsUpstreamErrorEvent); ok {
+			streamErr.UpstreamErrors = make([]*OpsUpstreamErrorEvent, 0, len(events))
+			for _, event := range events {
+				if event == nil {
+					streamErr.UpstreamErrors = append(streamErr.UpstreamErrors, nil)
+					continue
+				}
+				copyOfEvent := *event
+				streamErr.UpstreamErrors = append(streamErr.UpstreamErrors, &copyOfEvent)
+			}
+		}
+	}
+}
+
+func currentOpsFailureSkipMonitoring(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	if value, ok := c.Get(OpsSkipPassthroughKey); ok {
+		if skip, _ := value.(bool); skip {
+			return true
+		}
+	}
+	if value, ok := c.Get(OpsUpstreamErrorsKey); ok {
+		if events, ok := value.([]*OpsUpstreamErrorEvent); ok {
+			for i := len(events) - 1; i >= 0; i-- {
+				if events[i] != nil {
+					return events[i].SkipMonitoring
+				}
+			}
+		}
+	}
+	return false
 }
 
 func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
@@ -170,6 +316,21 @@ func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
 	}
 	streamErr, ok := v.(OpsStreamError)
 	return streamErr, ok
+}
+
+func GetOpsStreamErrors(c *gin.Context) []OpsStreamError {
+	if c == nil {
+		return nil
+	}
+	if value, ok := c.Get(OpsStreamErrorsKey); ok {
+		if errorsForRequest, ok := value.([]OpsStreamError); ok && len(errorsForRequest) > 0 {
+			return append([]OpsStreamError(nil), errorsForRequest...)
+		}
+	}
+	if streamErr, ok := GetOpsStreamError(c); ok {
+		return []OpsStreamError{streamErr}
+	}
+	return nil
 }
 
 // SetOpsUpstreamError is the exported wrapper for setOpsUpstreamError, used by
@@ -233,6 +394,12 @@ type OpsUpstreamErrorEvent struct {
 
 	Message string `json:"message,omitempty"`
 	Detail  string `json:"detail,omitempty"`
+
+	// SkipMonitoring is request-local rule state. It is intentionally excluded
+	// from persisted attempt JSON. The logger consults it only when this event is
+	// the final client-visible failure; recovered attempts remain provider-health
+	// telemetry and do not count as failed requests.
+	SkipMonitoring bool `json:"-"`
 }
 
 func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
@@ -309,7 +476,7 @@ func checkSkipMonitoringForUpstreamEvent(c *gin.Context, ev *OpsUpstreamErrorEve
 
 	rule := svc.MatchRule(ev.Platform, ev.UpstreamStatusCode, []byte(body))
 	if rule != nil && rule.SkipMonitoring {
-		c.Set(OpsSkipPassthroughKey, true)
+		ev.SkipMonitoring = true
 	}
 }
 
