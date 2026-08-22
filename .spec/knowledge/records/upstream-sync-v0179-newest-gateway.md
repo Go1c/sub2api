@@ -88,6 +88,7 @@ metadata:
 | `#5697` | ops 错误分布图例同时显示 label 与 count |
 | `#5715` | 账号页 proxies/groups 改为 `Promise.allSettled`，代理加载失败不挡分组筛选 |
 | `#5669` | OpenAI OAuth 402 `deactivated_workspace` 联动熔断同 Team 其余 active 账户（进程内去重 60s）；fastpath 与 `HandleUpstreamError` 都先于 model-not-found / 池模式早退 |
+| `#5755` | Gemini `ErrorPolicySkipped` 与 OpenAI 对齐：自定义错误码未命中且不可 failover 时对客户端隐藏上游细节（500 + 固定文案）；池模式 4xx 保真透传；可 failover 的 5xx/429 仍换号。fork 原先 Skipped 一律写 500 且仍会 `handleGeminiUpstreamError` |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -146,6 +147,8 @@ metadata:
 | `go test -tags=unit ./internal/service -run TestTeamLinkedError_`（#5669） | 通过 |
 | `go vet -tags integration ./internal/service`（#5669） | 通过 |
 | 前端 `vue-tsc --noEmit` + `pnpm build` + `AccountsView.usageWindowsHint.spec.ts`（#4005/#4006/#4049/#4053/#5697/#5715） | 通过（3/3；UI 未开浏览器，靠 typecheck/build/vitest） |
+| `go test -tags=unit ./internal/service -run TestGemini`（#5755 skipped-policy write / failover） | 通过 |
+| `go vet -tags integration ./internal/service`（#5755） | 通过 |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
