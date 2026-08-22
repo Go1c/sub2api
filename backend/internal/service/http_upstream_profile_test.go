@@ -20,6 +20,13 @@ func TestWithHTTPUpstreamProfile_OpenAI(t *testing.T) {
 	}
 }
 
+func TestWithHTTPUpstreamProfile_Grok(t *testing.T) {
+	ctx := WithHTTPUpstreamProfile(context.TODO(), HTTPUpstreamProfileGrok)
+	if profile := HTTPUpstreamProfileFromContext(ctx); profile != HTTPUpstreamProfileGrok {
+		t.Fatalf("expected profile %q, got %q", HTTPUpstreamProfileGrok, profile)
+	}
+}
+
 func TestWithHTTPUpstreamRedirectsDisabled(t *testing.T) {
 	//nolint:staticcheck // Exercises the defensive nil-context fallback.
 	ctx := WithHTTPUpstreamRedirectsDisabled(nil)
