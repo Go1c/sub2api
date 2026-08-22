@@ -1227,9 +1227,10 @@ func TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows(t *test
 			Account: &Account{ID: 3020, Platform: PlatformOpenAI},
 		})
 		require.NoError(t, err)
-		require.True(t, usageRepo.lastLog.LongContextBillingApplied)
-		require.InDelta(t, baseInput*2, usageRepo.lastLog.InputCost, 1e-10)
-		require.InDelta(t, baseOutput*1.5, usageRepo.lastLog.OutputCost, 1e-10)
+		// OpenAI 账号开关缺省为 false，仍否决官方长上下文阶梯（fork，不是 origin OR）。
+		require.False(t, usageRepo.lastLog.LongContextBillingApplied)
+		require.InDelta(t, baseInput, usageRepo.lastLog.InputCost, 1e-10)
+		require.InDelta(t, baseOutput, usageRepo.lastLog.OutputCost, 1e-10)
 	})
 
 	t.Run("group off account on", func(t *testing.T) {
@@ -1245,9 +1246,10 @@ func TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows(t *test
 			},
 		})
 		require.NoError(t, err)
-		require.True(t, usageRepo.lastLog.LongContextBillingApplied)
-		require.InDelta(t, baseInput*2, usageRepo.lastLog.InputCost, 1e-10)
-		require.InDelta(t, baseOutput*1.5, usageRepo.lastLog.OutputCost, 1e-10)
+		// 分组关时账号开关不能单独打开官方长上下文阶梯。
+		require.False(t, usageRepo.lastLog.LongContextBillingApplied)
+		require.InDelta(t, baseInput, usageRepo.lastLog.InputCost, 1e-10)
+		require.InDelta(t, baseOutput, usageRepo.lastLog.OutputCost, 1e-10)
 	})
 
 	t.Run("group on account on", func(t *testing.T) {

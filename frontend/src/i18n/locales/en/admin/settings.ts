@@ -22,6 +22,9 @@ export default {
           enabledHint: 'Disabling stops background checks; existing history is preserved.',
           defaultInterval: 'Default check interval (seconds)',
           defaultIntervalHint: 'Pre-fills the interval when creating a new monitor; each monitor can override it. Range 15 – 3600.',
+          showQuota: 'Show channel usage/balance to users',
+          showQuotaHint:
+            'When on, quota-mode channel monitors expose the linked account usage windows on the user Channel Status page. Disabled by default; admins always see it.',
         },
         availableChannels: {
           title: 'Available Channels',

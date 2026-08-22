@@ -928,6 +928,32 @@ export default {
       gemini: 'Gemini',
       grok: 'Grok'
     },
+    checkMode: {
+      probe: '探活',
+      quota: '配額',
+      quota_probe: '探活 + 配額'
+    },
+    quota: {
+      unavailable: '配額資訊不可用',
+      resetSoon: '即將重置',
+      windows: {
+        '5h': '5 小時',
+        '7d': '7 天',
+        '7dSonnet': '7 天 Sonnet',
+        '7dFable': '7 天 Fable',
+        weekly: '週',
+        daily: '日',
+        '30d': '30 天',
+        total: '總量'
+      },
+      labels: {
+        requests: '請求',
+        tokens: 'Token',
+        shared: '共享',
+        pro: 'Pro',
+        flash: 'Flash'
+      }
+    },
     extraModelsHeader: '附加模型',
     extraModelsEmpty: '無附加模型',
     latencyEmpty: '-',
@@ -2869,6 +2895,7 @@ export default {
       deleteConfirm: '確定要刪除監控「{name}」嗎？此操作不可撤銷。',
       nameRequired: '請輸入監控名稱',
       primaryModelRequired: '請輸入主模型',
+      linkedAccountRequired: '請選擇關聯帳號',
       columns: {
         name: '名稱',
         provider: '供應商',
@@ -2882,6 +2909,19 @@ export default {
         name: '名稱',
         namePlaceholder: '輸入監控名稱',
         provider: '平臺',
+        checkMode: '檢查方式',
+        checkModeProbe: '探活',
+        checkModeProbeHint: '向上游發送輕量 LLM 請求，檢測可用性與延遲',
+        checkModeQuota: '配額',
+        checkModeQuotaHint: '只查詢關聯帳號的用量滾動窗口，不發送探活請求',
+        checkModeQuotaProbe: '探活 + 配額',
+        checkModeQuotaProbeHint: '探活的同時查詢配額，用量快照附加在主模型結果上',
+        linkedAccount: '關聯帳號',
+        linkedAccountPlaceholder: '選擇帳號',
+        linkedAccountHint: '配額資料來自所選帳號（複用帳號管理側的用量查詢）',
+        linkedAccountEmpty: '當前平臺暫無帳號，請先在帳號管理中新增',
+        linkedAccountMissing: '關聯帳號已不存在或不可訪問，請重新選擇帳號',
+        openAIQuotaProbeHint: '注意：OpenAI 平臺的用量查詢可能觸發 Codex 探測請求，會消耗帳號自身的額度（每 10 分鐘最多觸發一次）',
         apiMode: 'OpenAI 協議',
         apiModeChatCompletions: 'OpenAI Compatible',
         apiModeChatCompletionsHint: '使用 /v1/chat/completions，發送 messages；適合大多數兼容站。',
@@ -5976,6 +6016,9 @@ export default {
           enabledHint: '關閉後後臺不再執行定時檢測，已有數據保留。',
           defaultInterval: '默認檢測間隔（秒）',
           defaultIntervalHint: '新建渠道監控時表單的默認值，可被單個渠道覆蓋。範圍 15 – 3600 秒。',
+          showQuota: '向用戶展示渠道用量/餘額',
+          showQuotaHint:
+            '開啟後，配額模式的渠道監控會在用戶端渠道狀態頁展示關聯帳號的用量滾動窗口。默認關閉；管理員始終可見。',
         },
         availableChannels: {
           title: '可用渠道',

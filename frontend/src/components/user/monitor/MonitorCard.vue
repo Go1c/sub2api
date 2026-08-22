@@ -24,7 +24,7 @@
             {{ providerLabel(item.provider) }}
           </span>
           <span class="font-mono text-xs truncate text-gray-500 dark:text-gray-400">
-            {{ item.primary_model }}
+            {{ formatMonitorModel(item.primary_model) }}
           </span>
           <span
             v-if="item.group_name"
@@ -43,6 +43,8 @@
     </div>
 
     <!-- Metrics -->
+    <MonitorQuotaView v-if="quotaVisible" :snapshot="item.latest_quota" class="mt-2" />
+
     <MonitorMetricPair
       primary-icon="bolt"
       :primary-label="t('monitorCommon.dialogLatency')"
@@ -80,6 +82,8 @@ import {
   useChannelMonitorFormat,
   providerGradient,
 } from '@/composables/useChannelMonitorFormat'
+import MonitorQuotaView from '@/components/common/MonitorQuotaView.vue'
+import { isChannelMonitorQuotaVisible } from '@/utils/featureFlags'
 import ProviderIcon from './ProviderIcon.vue'
 import MonitorMetricPair from './MonitorMetricPair.vue'
 import MonitorAvailabilityRow from './MonitorAvailabilityRow.vue'
@@ -110,7 +114,12 @@ const {
   providerLabel,
   providerBadgeClass,
   formatLatency,
+  formatMonitorModel,
 } = useChannelMonitorFormat()
+
+const quotaVisible = computed(
+  () => isChannelMonitorQuotaVisible() && !!props.item.latest_quota,
+)
 
 const providerTintClass = computed(() =>
   PROVIDER_TINT[props.item.provider] ?? 'text-gray-500 dark:text-gray-300'

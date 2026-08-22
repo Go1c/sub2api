@@ -853,6 +853,7 @@ var ProviderSet = wire.NewSet(
 	ProvideWebhookBalanceNotifyWiring,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
+	NewChannelMonitorQuotaFetcher,
 	NewChannelMonitorRequestTemplateService,
 	ProvideSubscriptionNotifyMessenger,
 	ProvideSubscriptionNotifyEmailer,
@@ -1033,8 +1034,11 @@ func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache Lead
 func ProvideChannelMonitorService(
 	repo ChannelMonitorRepository,
 	encryptor SecretEncryptor,
+	quotaFetcher *ChannelMonitorQuotaFetcher,
 ) *ChannelMonitorService {
-	return NewChannelMonitorService(repo, encryptor)
+	svc := NewChannelMonitorService(repo, encryptor)
+	svc.SetQuotaFetcher(quotaFetcher)
+	return svc
 }
 
 // ProvideChannelMonitorRunner 创建并启动渠道监控调度器。

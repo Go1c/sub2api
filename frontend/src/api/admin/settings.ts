@@ -709,6 +709,7 @@ contact_channels: ContactChannel[];
   channel_monitor_enabled: boolean;
   channel_monitor_default_interval_seconds: number;
   channel_monitor_status_banner: string;
+  channel_monitor_show_quota: boolean;
 
   // Available Channels feature switch
   available_channels_enabled: boolean;
@@ -1010,6 +1011,7 @@ contact_channels?: ContactChannel[];
   channel_monitor_enabled?: boolean;
   channel_monitor_default_interval_seconds?: number;
   channel_monitor_status_banner?: string;
+  channel_monitor_show_quota?: boolean;
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;
