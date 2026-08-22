@@ -381,6 +381,7 @@
           label="7d"
           :utilization="grokWeeklyBillingBar.utilization"
           :resets-at="grokWeeklyBillingBar.resetsAt"
+          :window-stats="grokWeeklyBillingBar.windowStats"
           :show-now-when-idle="true"
           color="indigo"
         />
@@ -405,6 +406,7 @@
           label="24h"
           :title="t('admin.accounts.usageWindow.grokFreeQuota24hHint')"
           :utilization="grokFreeTokenBar.utilization"
+          :window-stats="grokFreeTokenBar.windowStats"
           :show-now-when-idle="true"
           color="emerald"
         />
@@ -1133,6 +1135,7 @@ const geminiUsageBars = computed(() => {
 interface GrokQuotaBarInfo {
   utilization: number
   resetsAt: string | null
+  windowStats?: WindowStats | null
 }
 
 const makeGrokQuotaBar = (quota?: { limit?: number | null; remaining?: number | null; reset_at?: string | null } | null): GrokQuotaBarInfo | null => {
@@ -1147,6 +1150,9 @@ const makeGrokQuotaBar = (quota?: { limit?: number | null; remaining?: number | 
 const grokRequestQuotaBar = computed(() => makeGrokQuotaBar(usageInfo.value?.grok_request_quota))
 const grokTokenQuotaBar = computed(() => makeGrokQuotaBar(usageInfo.value?.grok_token_quota))
 const grokBilling = computed(() => usageInfo.value?.grok_billing || null)
+const grokLocalUsage7d = computed(() => (
+  usageInfo.value?.grok_local_usage_7d || usageInfo.value?.seven_day?.window_stats || null
+))
 const grokWeeklyBillingBar = computed((): GrokQuotaBarInfo | null => {
   const billing = grokBilling.value
   if (billing?.period_type?.toLowerCase() !== 'weekly' || billing.usage_percent == null) {
@@ -1154,7 +1160,8 @@ const grokWeeklyBillingBar = computed((): GrokQuotaBarInfo | null => {
   }
   return {
     utilization: Math.min(100, Math.max(0, billing.usage_percent)),
-    resetsAt: billing.period_end || null
+    resetsAt: billing.period_end || null,
+    windowStats: grokLocalUsage7d.value
   }
 })
 const grokPlanLabelIsFree = (value: string) => value.includes('free') || value.includes('basic')
@@ -1193,7 +1200,10 @@ const grokLocalUsage = computed(() => {
 const grokFreeTokenBar = computed(() => {
   if (!grokIsFree.value || !grokFreeQuotaUsage.value) return null
   const used = Math.max(0, grokFreeQuotaUsage.value.tokens || 0)
-  return { utilization: Math.min(100, (used / GROK_FREE_TOKEN_LIMIT) * 100) }
+  return {
+    utilization: Math.min(100, (used / GROK_FREE_TOKEN_LIMIT) * 100),
+    windowStats: grokFreeQuotaUsage.value
+  }
 })
 const grokQuotaUnknown = computed(() => {
   if (props.account.platform !== 'grok') return false

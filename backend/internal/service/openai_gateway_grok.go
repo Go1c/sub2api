@@ -259,6 +259,10 @@ func patchGrokResponsesBody(body []byte, upstreamModel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	out, err = normalizeGrokResponsesReasoningEffort(out, upstreamModel)
+	if err != nil {
+		return nil, err
+	}
 	for _, unsupportedField := range []string{"prompt_cache_retention", "safety_identifier"} {
 		if gjson.GetBytes(out, unsupportedField).Exists() {
 			out, err = sjson.DeleteBytes(out, unsupportedField)
@@ -326,6 +330,73 @@ func grokModelRejectsReasoningEffort(model string) bool {
 	}
 	switch model {
 	case "grok-composer", "grok-composer-2.5-fast", "composer-2.5":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeGrokResponsesReasoningEffort(body []byte, upstreamModel string) ([]byte, error) {
+	if grokModelRejectsReasoningEffort(upstreamModel) {
+		return body, nil
+	}
+	out := body
+	for _, field := range []string{"reasoning.effort", "reasoning_effort"} {
+		value := gjson.GetBytes(out, field)
+		if !value.Exists() {
+			continue
+		}
+		normalized, keep := normalizeGrokReasoningEffortValue(value.String(), upstreamModel)
+		var err error
+		if !keep {
+			out, err = sjson.DeleteBytes(out, field)
+		} else {
+			out, err = sjson.SetBytes(out, field, normalized)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	if camel := gjson.GetBytes(out, "reasoningEffort"); camel.Exists() {
+		normalized, keep := normalizeGrokReasoningEffortValue(camel.String(), upstreamModel)
+		next, err := sjson.DeleteBytes(out, "reasoningEffort")
+		if err != nil {
+			return nil, fmt.Errorf("remove Grok reasoningEffort: %w", err)
+		}
+		out = next
+		if keep {
+			out, err = sjson.SetBytes(out, "reasoning_effort", normalized)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
+}
+
+func normalizeGrokReasoningEffortValue(raw, model string) (string, bool) {
+	value := strings.NewReplacer("-", "", "_", "", " ", "").Replace(strings.ToLower(strings.TrimSpace(raw)))
+	switch value {
+	case "none", "low", "medium", "high":
+		return value, true
+	case "minimal":
+		return "low", true
+	case "xhigh", "extrahigh":
+		if grokSupportsXHighReasoningEffort(model) {
+			return "xhigh", true
+		}
+		return "high", true
+	case "max", "ultra":
+		return "high", true
+	default:
+		return "", false
+	}
+}
+
+func grokSupportsXHighReasoningEffort(model string) bool {
+	model = strings.ToLower(xai.StripGrokProviderPrefix(strings.TrimSpace(model)))
+	switch model {
+	case "grok-4.6", "grok-4.6-latest", "grok-4.6-build":
 		return true
 	default:
 		return false

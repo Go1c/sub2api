@@ -179,12 +179,38 @@ func TestPatchGrokResponsesBodySanitizesComposerReasoningParameters(t *testing.T
 			if tt.wantReasoning {
 				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoning.effort").String())
 				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoning_effort").String())
-				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoningEffort").String())
+				require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
 				return
 			}
 
 			require.False(t, gjson.GetBytes(patched, "reasoning").Exists())
 			require.False(t, gjson.GetBytes(patched, "reasoning_effort").Exists())
+			require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
+		})
+	}
+}
+
+func TestPatchGrokResponsesBodyNormalizesReasoningEffortAliases(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		body          string
+		upstreamModel string
+		path          string
+		want          string
+	}{
+		{name: "minimal nested", body: `{"input":"hi","reasoning":{"effort":"minimal"}}`, upstreamModel: "grok-4.5", path: "reasoning.effort", want: "low"},
+		{name: "xhigh stays high for 4.5", body: `{"input":"hi","reasoning_effort":"xhigh"}`, upstreamModel: "grok-4.5", path: "reasoning_effort", want: "high"},
+		{name: "xhigh nested for 4.6", body: `{"input":"hi","reasoning":{"effort":"xhigh"}}`, upstreamModel: "grok-4.6", path: "reasoning.effort", want: "xhigh"},
+		{name: "xhigh snake for 4.6 latest", body: `{"input":"hi","reasoning_effort":"xhigh"}`, upstreamModel: "grok-4.6-latest", path: "reasoning_effort", want: "xhigh"},
+		{name: "max camel becomes high", body: `{"input":"hi","reasoningEffort":"max"}`, upstreamModel: "grok-4.5", path: "reasoning_effort", want: "high"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			patched, err := patchGrokResponsesBody([]byte(tt.body), tt.upstreamModel)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, gjson.GetBytes(patched, tt.path).String(), string(patched))
 			require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
 		})
 	}
