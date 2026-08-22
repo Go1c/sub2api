@@ -44,18 +44,6 @@ func compositeTargetPlatformResolved(c *gin.Context, apiKey *service.APIKey, mod
 	return ok
 }
 
-func effectiveAPIKeyPlatform(c *gin.Context, apiKey *service.APIKey) string {
-	if c != nil && c.Request != nil {
-		if platform, ok := service.ResolvedTargetPlatformFromContext(c.Request.Context()); ok {
-			return platform
-		}
-	}
-	if apiKey == nil || apiKey.Group == nil {
-		return ""
-	}
-	return apiKey.Group.Platform
-}
-
 func openAICompatibleTextTargetAllowed(c *gin.Context, apiKey *service.APIKey, model string) bool {
 	return compositeTargetPlatformAllowed(c, apiKey, model,
 		service.PlatformOpenAI, service.PlatformGrok,
