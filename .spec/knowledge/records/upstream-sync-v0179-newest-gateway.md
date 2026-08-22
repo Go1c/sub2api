@@ -60,6 +60,9 @@ metadata:
 | `#5815` | grok-4.6 保留 `xhigh`；4.5 仍折成 `high`；`minimal`→`low` |
 | `#5765` 子集 | Grok 用量条带上 24h/7d 本地 window-stats |
 | `#5764` `#5767` `#5822` `#5868` `#5881` | Grok/WS client tools + tool_search_output discoveries；HTTP `forwardGrokResponses` 已接 mapping / 流还原 |
+| `#5685` | Anthropic 兼容池模式 429 可同账号重试 |
+| `#5661` | OpenAI API-key Responses 把 custom/tool_search 降成 function，回程还原 |
+| `#5845` | WS 后手 429：未写出下游时换号重放当前轮，不重放第一轮 |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
