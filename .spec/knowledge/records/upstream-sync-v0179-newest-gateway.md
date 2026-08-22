@@ -108,7 +108,7 @@ metadata:
 ## 明确排除（不要当遗漏）
 
 - 整包 merge upstream / 直推 `main` / `publish`。
-- 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override：**已授权合入**。① `sync/v0179-cn-providers`（PR #366）：常量 / schema / **931** 迁移 / 探测 / admin 路由。② `sync/v0179-cn-gateway`：Anthropic native 转发 + 协议分流。③ Create/Edit 弹窗 UI（`sync/v0179-cn-frontend`）。④ 窗口修补（`sync/v0179-cn-window-fixes`）。⑤ Composite：**已授权合入**（`sync/v0179-cn-composite`）。native 路径未接 origin `upstream_response_model` 观察器（fork 无 #5742）。
+- 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override：**已授权合入**。① `sync/v0179-cn-providers`（PR #366）：常量 / schema / **934** 迁移 / 探测 / admin 路由。② `sync/v0179-cn-gateway`：Anthropic native 转发 + 协议分流。③ Create/Edit 弹窗 UI（`sync/v0179-cn-frontend`）。④ 窗口修补（`sync/v0179-cn-window-fixes`）。⑤ Composite：**已授权合入**（`sync/v0179-cn-composite`）。native 路径未接 origin `upstream_response_model` 观察器（fork 无 #5742）。
 - `#5888` 已切完本窗口要的四刀；未整包 origin transform 的 prompt 兼容函数 / namespace 其余差异。
 - `#5925` 已抽：origin `xai/models.go` 全量目录（DefaultTextModel `grok-4.6`、Imagine 常量、runtime mapping）与 `grok_free_quota_gate`（仅 explicit free OAuth，fail-open，`sync/v0179-grok-catalog-free-quota`）。未带：`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras、`GrokDefaultBaseURLMode`。
 - `#5742` Grok 响应模型别名审计：fork 没有 `upstream_response_model.go`，不能只带 helper。
