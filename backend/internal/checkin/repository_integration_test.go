@@ -113,8 +113,12 @@ func setupCheckInIntegrationSchema(ctx context.Context, db *sql.DB) error {
 
 func resetCheckInIntegrationState(t *testing.T, minReward, maxReward, dailyCap string) {
 	t.Helper()
+	// lib/pq 对带参数的语句走 prepared statement，会拒绝多命令；
+	// TRUNCATE 与带参 UPDATE 必须拆成两次执行。
 	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
-		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users, redeem_codes RESTART IDENTITY CASCADE;
+		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users, redeem_codes RESTART IDENTITY CASCADE`)
+	require.NoError(t, err)
+	_, err = checkInIntegrationDB.ExecContext(context.Background(), `
 		UPDATE daily_checkin_settings
 		SET enabled = TRUE,
 			min_reward = $1,

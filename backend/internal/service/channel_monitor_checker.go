@@ -257,13 +257,6 @@ func providerAdapterFor(provider, apiMode string) (providerAdapter, string, bool
 	return adapter, MonitorAPIModeChatCompletions, ok
 }
 
-// isSupportedProvider 校验 provider 字符串是否在 adapter 表中。
-// 供 validate.go 的 validateProvider 复用，避免两份 switch 漂移。
-func isSupportedProvider(p string) bool {
-	_, ok := providerAdapters[p]
-	return ok
-}
-
 // callProvider 通过 providerAdapters 分发到具体实现。
 // opts 承载用户的自定义 headers / body 覆盖（可为 nil）。
 //

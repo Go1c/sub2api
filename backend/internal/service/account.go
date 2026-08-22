@@ -69,9 +69,9 @@ type Account struct {
 	modelMappingCacheReady          bool
 	modelMappingCacheCredentialsPtr uintptr
 	modelMappingCacheRawPtr         uintptr
-	modelMappingCacheRawLen          int
-	modelMappingCacheRawSig          uint64
-	modelMappingCacheRuntimeVersion  uint64
+	modelMappingCacheRawLen         int
+	modelMappingCacheRawSig         uint64
+	modelMappingCacheRuntimeVersion uint64
 
 	// header_overrides 热路径缓存（非持久化字段，同 model_mapping 缓存先例）
 	headerOverrideCache               map[string]string

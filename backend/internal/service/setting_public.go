@@ -577,13 +577,13 @@ type PublicSettingsInjectionPayload struct {
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 	// ChannelMonitorShowQuota gates the user-facing quota/balance display on
 	// monitors; fail-closed (absent/false = hidden). Admin UI always shows it.
-	ChannelMonitorShowQuota    bool `json:"channel_monitor_show_quota"`
-	AvailableChannelsEnabled   bool `json:"available_channels_enabled"`
-	AffiliateEnabled                     bool   `json:"affiliate_enabled"`
-	RiskControlEnabled                   bool   `json:"risk_control_enabled"`
-	SiteMessagesEnabled                  bool   `json:"site_messages_enabled"`
-	SiteMessagesDefaultRecipientEmail    string `json:"site_messages_default_recipient_email"`
-	AllowUserViewErrorRequests           bool   `json:"allow_user_view_error_requests"`
+	ChannelMonitorShowQuota           bool   `json:"channel_monitor_show_quota"`
+	AvailableChannelsEnabled          bool   `json:"available_channels_enabled"`
+	AffiliateEnabled                  bool   `json:"affiliate_enabled"`
+	RiskControlEnabled                bool   `json:"risk_control_enabled"`
+	SiteMessagesEnabled               bool   `json:"site_messages_enabled"`
+	SiteMessagesDefaultRecipientEmail string `json:"site_messages_default_recipient_email"`
+	AllowUserViewErrorRequests        bool   `json:"allow_user_view_error_requests"`
 }
 
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
