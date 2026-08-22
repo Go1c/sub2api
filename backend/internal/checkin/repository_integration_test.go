@@ -264,6 +264,67 @@ func TestRepositoryCheckInWritesUsedRedeemCode(t *testing.T) {
 	require.Equal(t, fmt.Sprintf("daily_checkin:%d", result.Record.ID), notes)
 }
 
+func TestRepositoryCheckInWritesSplitMilestoneRedeemCodes(t *testing.T) {
+	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
+	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE daily_checkin_settings
+		SET milestones = '[{"day":1,"bonus":"2.0000"}]'::jsonb
+		WHERE id = 1`)
+	require.NoError(t, err)
+
+	userID := createCheckInIntegrationUser(t, "milestone-redeem@example.test")
+	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
+	result, err := repo.CheckIn(context.Background(), userID, time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC), ClientInfo{})
+	require.NoError(t, err)
+	require.Equal(t, StatusAwarded, result.Record.Status)
+	require.Equal(t, 1, result.Record.MilestoneDay)
+	require.Equal(t, "0.1000", formatAmount(result.Record.BaseReward))
+	require.Equal(t, "2.0000", formatAmount(result.Record.MilestoneBonus))
+	require.Equal(t, "2.1000", formatAmount(result.Record.ActualReward))
+
+	rows, err := checkInIntegrationDB.Query(`
+		SELECT code, type, status, value::text, used_by, notes
+		FROM redeem_codes
+		ORDER BY type`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	type redeemRow struct {
+		code     string
+		codeType string
+		status   string
+		value    string
+		usedBy   int64
+		notes    string
+	}
+	var codes []redeemRow
+	for rows.Next() {
+		var row redeemRow
+		require.NoError(t, rows.Scan(&row.code, &row.codeType, &row.status, &row.value, &row.usedBy, &row.notes))
+		codes = append(codes, row)
+	}
+	require.NoError(t, rows.Err())
+	require.Len(t, codes, 2)
+
+	require.Equal(t, RedeemTypeCheckinBalance, codes[0].codeType)
+	require.Equal(t, redeemCodeStatusUsed, codes[0].status)
+	require.Equal(t, "0.10000000", codes[0].value)
+	require.Equal(t, userID, codes[0].usedBy)
+	require.Equal(t, fmt.Sprintf("daily_checkin:%d", result.Record.ID), codes[0].notes)
+	require.Len(t, codes[0].code, 32)
+
+	require.Equal(t, RedeemTypeCheckinMilestone, codes[1].codeType)
+	require.Equal(t, redeemCodeStatusUsed, codes[1].status)
+	require.Equal(t, "2.00000000", codes[1].value)
+	require.Equal(t, userID, codes[1].usedBy)
+	require.Equal(t, fmt.Sprintf("daily_checkin_milestone:%d:1", result.Record.ID), codes[1].notes)
+	require.Len(t, codes[1].code, 32)
+
+	var balance string
+	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT balance::text FROM users WHERE id = $1`, userID).Scan(&balance))
+	require.Equal(t, "2.10000000", balance)
+}
+
 func TestRepositoryConcurrentRewardsAtomicallyIncreaseBalance(t *testing.T) {
 	resetCheckInIntegrationState(t, "1", "1", "0")
 	userID := createCheckInIntegrationUser(t, "atomic@example.test")

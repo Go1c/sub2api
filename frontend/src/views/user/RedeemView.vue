@@ -314,7 +314,7 @@
                 </p>
                 <!-- Display notes for admin adjustments -->
                 <p
-                  v-if="item.notes"
+                  v-if="item.notes && item.type !== 'checkin_milestone'"
                   class="mt-1 text-xs text-gray-500 dark:text-dark-400 italic max-w-[200px] truncate"
                   :title="item.notes"
                 >
@@ -378,8 +378,10 @@ const loadingHistory = ref(false)
 const contactInfo = ref('')
 
 // Helper functions for history display
+const CHECKIN_MILESTONE_DAY = /^daily_checkin_milestone:\d+:(\d+)$/
+
 const isBalanceType = (type: string) => {
-  return type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'promo' || type === 'promo_balance' || type === 'checkin_balance'
+  return type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'promo' || type === 'promo_balance' || type === 'checkin_balance' || type === 'checkin_milestone'
 }
 
 const isSubscriptionType = (type: string) => {
@@ -397,6 +399,9 @@ const getHistoryItemTitle = (item: RedeemHistoryItem) => {
     return t('redeem.balanceAddedPromo')
   } else if (item.type === 'checkin_balance') {
     return t('redeem.balanceAddedCheckin')
+  } else if (item.type === 'checkin_milestone') {
+    const day = item.notes?.match(CHECKIN_MILESTONE_DAY)?.[1] ?? ''
+    return t('redeem.balanceAddedCheckinMilestone', { day })
   } else if (item.type === 'balance_payment') {
     return t('redeem.balancePaymentSubscription')
   } else if (item.type === 'admin_balance') {

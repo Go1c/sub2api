@@ -169,7 +169,7 @@ func (r *sqlRepository) CheckIn(ctx context.Context, userID int64, now time.Time
 			WHERE business_date = $1`, businessDate, actual.StringFixed(4)); err != nil {
 			return CheckInResult{}, fmt.Errorf("update daily check-in counter: %w", err)
 		}
-		if err := insertUsedCheckInRedeemCode(ctx, tx, userID, record.ID, actual); err != nil {
+		if err := insertUsedCheckInRedeemCodes(ctx, tx, userID, record); err != nil {
 			return CheckInResult{}, err
 		}
 	}
@@ -187,7 +187,22 @@ func generateCheckInRedeemCode() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func insertUsedCheckInRedeemCode(ctx context.Context, tx *sql.Tx, userID, recordID int64, actual decimal.Decimal) error {
+func insertUsedCheckInRedeemCodes(ctx context.Context, tx *sql.Tx, userID int64, record Record) error {
+	baseValue := record.ActualReward.Sub(record.MilestoneBonus)
+	if baseValue.IsPositive() {
+		if err := insertUsedCheckInRedeemCode(ctx, tx, userID, RedeemTypeCheckinBalance, baseValue, fmt.Sprintf("daily_checkin:%d", record.ID)); err != nil {
+			return err
+		}
+	}
+	if record.MilestoneBonus.IsPositive() {
+		if err := insertUsedCheckInRedeemCode(ctx, tx, userID, RedeemTypeCheckinMilestone, record.MilestoneBonus, fmt.Sprintf("daily_checkin_milestone:%d:%d", record.ID, record.MilestoneDay)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertUsedCheckInRedeemCode(ctx context.Context, tx *sql.Tx, userID int64, redeemType string, value decimal.Decimal, notes string) error {
 	code, err := generateCheckInRedeemCode()
 	if err != nil {
 		return fmt.Errorf("generate check-in redeem code: %w", err)
@@ -196,11 +211,11 @@ func insertUsedCheckInRedeemCode(ctx context.Context, tx *sql.Tx, userID, record
 INSERT INTO redeem_codes (code, type, value, status, used_by, used_at, notes, created_at)
 VALUES ($1, $2, $3, $4, $5, NOW(), $6, NOW())`,
 		code,
-		RedeemTypeCheckinBalance,
-		actual.StringFixed(4),
+		redeemType,
+		value.StringFixed(4),
 		redeemCodeStatusUsed,
 		userID,
-		fmt.Sprintf("daily_checkin:%d", recordID),
+		notes,
 	); err != nil {
 		return fmt.Errorf("insert check-in redeem code: %w", err)
 	}

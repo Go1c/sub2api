@@ -51,6 +51,46 @@ func TestRepositoryCheckInAwardsAtomically(t *testing.T) {
 	require.False(t, result.AlreadyCheckedIn)
 	require.Equal(t, "0.1000", formatAmount(result.Record.ActualReward))
 	require.Equal(t, 2, result.Record.StreakDays)
+	require.Equal(t, 0, result.Record.MilestoneDay)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryCheckInSplitsMilestoneRedeemCodes(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT enabled.+FROM daily_checkin_settings.+FOR UPDATE`).WillReturnRows(settingsRows(true))
+	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FROM users.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO daily_checkin_daily_counters (business_date)")).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`(?s)SELECT awarded_total::text.+FOR UPDATE`).WillReturnRows(sqlmock.NewRows([]string{"awarded_total"}).AddRow("0"))
+	mock.ExpectQuery(`(?s)SELECT business_date, streak_days.+ORDER BY business_date DESC`).WillReturnRows(sqlmock.NewRows([]string{"business_date", "streak_days"}).AddRow(time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC), 6))
+	mock.ExpectQuery(`(?s)UPDATE users.+RETURNING balance::text`).
+		WithArgs(int64(17), "1.1000").
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow("2.10000000"))
+	mock.ExpectQuery(`(?s)INSERT INTO daily_checkin_records.+RETURNING id, checked_at`).WillReturnRows(sqlmock.NewRows([]string{"id", "checked_at"}).AddRow(8, now))
+	mock.ExpectExec(`(?s)UPDATE daily_checkin_daily_counters`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`(?s)INSERT INTO redeem_codes`).
+		WithArgs(sqlmock.AnyArg(), "checkin_balance", "0.1000", "used", int64(17), "daily_checkin:8").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(`(?s)INSERT INTO redeem_codes`).
+		WithArgs(sqlmock.AnyArg(), "checkin_milestone", "1.0000", "used", int64(17), "daily_checkin_milestone:8:7").
+		WillReturnResult(sqlmock.NewResult(2, 1))
+	mock.ExpectCommit()
+
+	result, err := repo.CheckIn(context.Background(), 17, now, ClientInfo{IP: "127.0.0.1", UserAgent: "test"})
+	require.NoError(t, err)
+	require.False(t, result.AlreadyCheckedIn)
+	require.Equal(t, 7, result.Record.StreakDays)
+	require.Equal(t, 7, result.Record.MilestoneDay)
+	require.Equal(t, "0.1000", formatAmount(result.Record.BaseReward))
+	require.Equal(t, "1.0000", formatAmount(result.Record.MilestoneBonus))
+	require.Equal(t, "1.1000", formatAmount(result.Record.ActualReward))
+	require.Equal(t, "2.1000", formatAmount(result.Record.BalanceAfter))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -126,6 +166,38 @@ func TestRepositoryCheckInRollsBackWhenRedeemCodeInsertFails(t *testing.T) {
 
 	_, err = repo.CheckIn(context.Background(), 17, now, ClientInfo{})
 	require.ErrorContains(t, err, "redeem write failed")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryCheckInRollsBackWhenMilestoneRedeemCodeInsertFails(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT enabled.+FROM daily_checkin_settings.+FOR UPDATE`).WillReturnRows(settingsRows(true))
+	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FROM users.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO daily_checkin_daily_counters (business_date)")).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`(?s)SELECT awarded_total::text.+FOR UPDATE`).WillReturnRows(sqlmock.NewRows([]string{"awarded_total"}).AddRow("0"))
+	mock.ExpectQuery(`(?s)SELECT business_date, streak_days.+ORDER BY business_date DESC`).WillReturnRows(sqlmock.NewRows([]string{"business_date", "streak_days"}).AddRow(time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC), 6))
+	mock.ExpectQuery(`(?s)UPDATE users.+RETURNING balance::text`).
+		WithArgs(int64(17), "1.1000").
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow("2.10000000"))
+	mock.ExpectQuery(`(?s)INSERT INTO daily_checkin_records.+RETURNING id, checked_at`).WillReturnRows(sqlmock.NewRows([]string{"id", "checked_at"}).AddRow(8, now))
+	mock.ExpectExec(`(?s)UPDATE daily_checkin_daily_counters`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`(?s)INSERT INTO redeem_codes`).
+		WithArgs(sqlmock.AnyArg(), "checkin_balance", "0.1000", "used", int64(17), "daily_checkin:8").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(`(?s)INSERT INTO redeem_codes`).
+		WithArgs(sqlmock.AnyArg(), "checkin_milestone", "1.0000", "used", int64(17), "daily_checkin_milestone:8:7").
+		WillReturnError(errors.New("milestone redeem write failed"))
+	mock.ExpectRollback()
+
+	_, err = repo.CheckIn(context.Background(), 17, now, ClientInfo{})
+	require.ErrorContains(t, err, "milestone redeem write failed")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

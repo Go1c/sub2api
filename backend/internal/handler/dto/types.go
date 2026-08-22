@@ -409,8 +409,8 @@ type RedeemCode struct {
 	GroupID      *int64 `json:"group_id"`
 	ValidityDays int    `json:"validity_days"`
 
-	// Notes is only populated for admin_balance/admin_concurrency types
-	// so users can see why they were charged or credited
+	// Notes is populated for admin_balance/admin_concurrency and checkin_milestone
+	// so users can see why they were credited or parse milestone day.
 	Notes *string `json:"notes,omitempty"`
 
 	User  *User  `json:"user,omitempty"`

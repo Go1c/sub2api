@@ -12,15 +12,16 @@ import (
 )
 
 const (
-	StatusAwarded            = "awarded"
-	StatusBudgetExhausted    = "budget_exhausted"
-	RedeemTypeCheckinBalance = "checkin_balance"
-	redeemCodeStatusUsed     = "used"
-	maxMilestones            = 10
-	PeriodDay                = "day"
-	PeriodWeek               = "week"
-	PeriodMonth              = "month"
-	PeriodAll                = "all"
+	StatusAwarded              = "awarded"
+	StatusBudgetExhausted      = "budget_exhausted"
+	RedeemTypeCheckinBalance   = "checkin_balance"
+	RedeemTypeCheckinMilestone = "checkin_milestone"
+	redeemCodeStatusUsed       = "used"
+	maxMilestones              = 10
+	PeriodDay                  = "day"
+	PeriodWeek                 = "week"
+	PeriodMonth                = "month"
+	PeriodAll                  = "all"
 )
 
 var rewardUnit = decimal.NewFromInt(10000)

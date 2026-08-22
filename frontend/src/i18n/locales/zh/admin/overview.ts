@@ -631,6 +631,7 @@ export default {
       typeBalance: '余额（兑换码）',
       typeAffiliateBalance: '余额（返利转入）',
       typeCheckinBalance: '余额（签到）',
+      typeCheckinMilestone: '余额（签到里程碑）',
       typeAdminBalance: '余额（管理员调整）',
       typeConcurrency: '并发（兑换码）',
       typeAdminConcurrency: '并发（管理员调整）',
