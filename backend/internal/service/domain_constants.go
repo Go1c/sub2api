@@ -102,6 +102,7 @@ const (
 	RedeemTypePromoBalance        = "promo_balance"
 	RedeemTypeWalletDebit         = "wallet_debit"
 	RedeemTypeCheckinBalance      = "checkin_balance"
+	RedeemTypeCheckinMilestone    = "checkin_milestone"
 )
 
 // PromoCode status constants
