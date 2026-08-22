@@ -183,7 +183,8 @@ metadata:
 | `go test -tags=unit ./internal/service ./internal/repository ./internal/handler/admin ./migrations`（#5851 档位乘数） | 通过（service 147.4s；repository / handler/admin / migrations 通过。第一次全量曾偶发 `TestSanitizeOpenAIResponsesToolParameterTypes_RewriteCountIndependentOfHits`，与本刀无关，复跑绿） |
 | `go vet -tags integration ./internal/service ./internal/repository ./internal/handler ./internal/handler/admin ./migrations`（#5851） | 通过 |
 | 前端 channel vitest + `pnpm typecheck` + `pnpm build`（#5851） | 通过（32/32；渠道倍率表单未开浏览器，靠单测 + typecheck/build） |
-| `go test -tags=unit`（#5761+#5780：service quota 路径 / repository / handler / handler/admin / domain / migrations） | 通过（quota/monitor 相关 `-run` 绿；全量 service 有既有 `TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows` 失败，与本刀无关，#5851 未改长上下文门控） |
+| `go test -tags=unit`（#5761+#5780：service quota 路径 / repository / handler / handler/admin / domain / migrations） | 通过 |
+| `TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows` | 按 fork 门控改断言（分组开+账号关 / 分组关+账号开 → 不套官方长上下文阶梯）；与 #5851 恢复的 fork 语义对齐 |
 | `go vet -tags integration ./internal/service ./internal/repository ./internal/handler ./internal/handler/admin ./ent ./migrations`（#5761+#5780） | 通过 |
 | 前端 monitor quota vitest + `pnpm typecheck` + `pnpm build`（#5761+#5780） | 通过（34/34 相关；配额表单未开浏览器，靠单测 + typecheck/build） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
