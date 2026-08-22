@@ -108,7 +108,7 @@ metadata:
 ## 明确排除（不要当遗漏）
 
 - 整包 merge upstream / 直推 `main` / `publish`。
-- 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override：**已授权合入**。① `sync/v0179-cn-providers`（PR #366）：常量 / schema / **931** 迁移 / 探测 / admin 路由。② `sync/v0179-cn-gateway`：Anthropic native 转发 + 协议分流。未做 Create/Edit 弹窗 UI、Composite。native 路径未接 origin `upstream_response_model` 观察器（fork 无 #5742）。
+- 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override：**已授权合入**。① `sync/v0179-cn-providers`（PR #366）：常量 / schema / **931** 迁移 / 探测 / admin 路由。② `sync/v0179-cn-gateway`：Anthropic native 转发 + 协议分流。③ Create/Edit 弹窗 UI（`sync/v0179-cn-frontend`）。④ 窗口修补（`sync/v0179-cn-window-fixes`）。⑤ Composite：**已授权合入**（`sync/v0179-cn-composite`）。native 路径未接 origin `upstream_response_model` 观察器（fork 无 #5742）。
 - `#5888` 已切完本窗口要的四刀；未整包 origin transform 的 prompt 兼容函数 / namespace 其余差异。
 - `#5925` 未抽：`grok_free_quota_gate`、origin `xai/models.go` 全量目录（306 vs 76）、`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras。
 - `#5742` Grok 响应模型别名审计：fork 没有 `upstream_response_model.go`，不能只带 helper。
@@ -127,7 +127,7 @@ metadata:
 - `VERSION` / sponsors / Dockerfile Go 镜像钉。
 - `#5712` Ollama Cloud 用量查询按钮：父功能是窗口外的 `#4776`（`ollama_cloud_usage` 整栈）。fork 没有 `OllamaCloudUsageCell.vue` / `refreshOllamaCloudUsage`，不能只合按钮。
 - `#5913` DeepSeek Responses 账号测试、网关 Anthropic native 转发、Create/Edit 弹窗 UI：留给后续刀。`#5911` DeepSeek 非法 relay payload 拒绝与 `#5906` 探测 fake 加锁已纳入第一刀探测单测。
-- `#6048` Composite messages dispatch、`#5654` Composite 视频端点、`#5817`/`#5816` Composite 新平台。fork `sanitizeGroupMessagesDispatchFields` 仍把非 openai 的 `AllowMessagesDispatch` 打成 false。
+- `#6048` Composite messages dispatch、`#5654` Composite 视频端点、`#5817`/`#5816` Composite 新平台：**已授权合入**（第五刀 `sync/v0179-cn-composite`）。迁移 **935**（origin 172 建表 + 227 CN CHECK 折进一条；CHECK 含 anthropic/openai/gemini/antigravity/grok/kimi/zhipu/deepseek）。`sanitizeGroupMessagesDispatchFields` 对 openai **或 composite** 保留 `AllowMessagesDispatch`；CN 分组豁免仍在 `allowOpenAICompatibleMessagesDispatch`。fork 未搬 origin reasoning-effort 策略（fork Group 无 `MaxReasoningEffort`）。
 - `#5906` CN 额度探测测试加锁：已随第一刀 `cn_provider_balance_check_service_test.go` 合入。
 - `#5708` 首页 model plaza 入口：origin 往内建 compact/default header 加链接；fork `HomeView.vue` 是独立品牌首页，没有那两套 header，不能原样贴。
 

@@ -787,6 +787,7 @@ var ProviderSet = wire.NewSet(
 	ProvideInvoiceUserReader,
 	NewInvoiceService,
 	wire.Bind(new(InvoiceEmailSender), new(*EmailService)),
+	NewCompositeRouteResolver,
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,

@@ -2281,6 +2281,7 @@ export default {
         kimi: 'Kimi',
         zhipu: 'Zhipu GLM',
         deepseek: 'DeepSeek',
+        composite: 'Composite',
       },
       saving: '保存中...',
       noGroups: '暫無分組',
@@ -3400,6 +3401,7 @@ export default {
         kimi: 'Kimi',
         zhipu: 'Zhipu GLM',
         deepseek: 'DeepSeek',
+        composite: 'Composite',
       },
       cnProviders: {
         accountMode: {

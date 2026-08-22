@@ -59,3 +59,22 @@ func TestSanitizeGroupMessagesDispatchFields_ClearsNonOpenAIPlatform(t *testing.
 	require.Empty(t, group.DefaultMappedModel)
 	require.Equal(t, OpenAIMessagesDispatchModelConfig{}, group.MessagesDispatchModelConfig)
 }
+
+func TestSanitizeGroupMessagesDispatchFields_KeepsCompositeAllowMessagesDispatch(t *testing.T) {
+	t.Parallel()
+
+	group := &Group{
+		Platform:              PlatformComposite,
+		AllowMessagesDispatch: true,
+		DefaultMappedModel:    "gpt-5.6-sol",
+		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
+			SonnetMappedModel: "gpt-5.3-codex",
+		},
+	}
+
+	sanitizeGroupMessagesDispatchFields(group)
+
+	require.True(t, group.AllowMessagesDispatch)
+	require.Empty(t, group.DefaultMappedModel)
+	require.Equal(t, OpenAIMessagesDispatchModelConfig{}, group.MessagesDispatchModelConfig)
+}

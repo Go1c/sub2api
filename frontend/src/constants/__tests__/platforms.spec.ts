@@ -17,7 +17,10 @@ describe('platform option catalogs', () => {
     expect(CONCRETE_PLATFORM_OPTIONS.map((option) => option.value)).toEqual(concretePlatforms)
   })
 
-  it('keeps group platforms equal to concrete platforms until composite is added', () => {
-    expect(GROUP_PLATFORM_OPTIONS.map((option) => option.value)).toEqual(concretePlatforms)
+  it('adds composite as a group-only platform', () => {
+    expect(GROUP_PLATFORM_OPTIONS.map((option) => option.value)).toEqual([
+      ...concretePlatforms,
+      'composite'
+    ])
   })
 })

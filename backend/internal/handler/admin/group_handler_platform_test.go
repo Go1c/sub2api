@@ -27,7 +27,7 @@ func bindGroupPlatformJSON(t *testing.T, target any, body string) error {
 func TestGroupPlatformBinding_AllowedPlatforms(t *testing.T) {
 	allowed := []string{
 		"anthropic", "openai", "gemini", "antigravity", "grok",
-		"kimi", "zhipu", "deepseek",
+		"kimi", "zhipu", "deepseek", "composite",
 	}
 	for _, platform := range allowed {
 		t.Run("create_"+platform, func(t *testing.T) {
@@ -54,7 +54,6 @@ func TestGroupPlatformBinding_RejectsInvalidPlatforms(t *testing.T) {
 		"openai ",  // 尾随空格
 		"glm",
 		"bogus",
-		"composite", // 第五刀再收
 	}
 	for _, platform := range invalid {
 		t.Run("create_"+platform, func(t *testing.T) {

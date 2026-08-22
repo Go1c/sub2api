@@ -403,6 +403,16 @@
                 </span>
               </button>
               <button
+                v-if="row.platform === 'composite'"
+                @click="handleCompositeRoutes(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-cyan-50 hover:text-cyan-600 dark:hover:bg-cyan-900/20 dark:hover:text-cyan-400"
+              >
+                <Icon name="link" size="sm" />
+                <span class="text-xs">{{
+                  t("admin.groups.compositeRoutes.action")
+                }}</span>
+              </button>
+              <button
                 @click="handleRateMultipliers(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-purple-600 dark:hover:bg-dark-700 dark:hover:text-purple-400"
               >
@@ -1423,9 +1433,9 @@
           </div>
         </div>
 
-        <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
+        <!-- OpenAI Messages 调度配置（OpenAI 与 Composite 平台） -->
         <div
-          v-if="createForm.platform === 'openai'"
+          v-if="supportsMessagesDispatchPlatform(createForm.platform)"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -2994,9 +3004,9 @@
           </div>
         </div>
 
-        <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
+        <!-- OpenAI Messages 调度配置（OpenAI 与 Composite 平台） -->
         <div
-          v-if="editForm.platform === 'openai'"
+          v-if="supportsMessagesDispatchPlatform(editForm.platform)"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -3691,6 +3701,146 @@
       @close="showRPMOverridesModal = false"
       @success="loadGroups"
     />
+
+    <BaseDialog
+      :show="showCompositeRoutesModal"
+      :title="
+        compositeRoutesGroup
+          ? t('admin.groups.compositeRoutes.titleWithGroup', {
+              name: compositeRoutesGroup.name,
+            })
+          : t('admin.groups.compositeRoutes.title')
+      "
+      width="wide"
+      @close="closeCompositeRoutesModal"
+    >
+      <div class="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <section class="min-w-0">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{ t("admin.groups.compositeRoutes.routes") }}
+            </h3>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="compositeRoutesLoading"
+              @click="loadCompositeRoutes"
+            >
+              <Icon
+                name="refresh"
+                size="sm"
+                :class="compositeRoutesLoading ? 'animate-spin' : ''"
+              />
+            </button>
+          </div>
+          <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
+            <div
+              v-if="compositeRoutesLoading"
+              class="flex h-36 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+            >
+              {{ t("common.loading") }}
+            </div>
+            <div
+              v-else-if="compositeRoutes.length === 0"
+              class="flex h-36 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+            >
+              {{ t("admin.groups.compositeRoutes.empty") }}
+            </div>
+            <div v-else class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-600">
+                <thead class="bg-gray-50 dark:bg-dark-800">
+                  <tr>
+                    <th class="px-3 py-2 text-left font-medium">{{ t("admin.groups.compositeRoutes.publicModel") }}</th>
+                    <th class="px-3 py-2 text-left font-medium">{{ t("admin.groups.compositeRoutes.target") }}</th>
+                    <th class="px-3 py-2 text-left font-medium">{{ t("admin.groups.compositeRoutes.scope") }}</th>
+                    <th class="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-dark-600">
+                  <tr v-for="route in compositeRoutes" :key="route.id">
+                    <td class="px-3 py-2">
+                      <div class="font-medium text-gray-900 dark:text-white">{{ route.public_model }}</div>
+                      <div class="text-xs text-gray-500">{{ compositeRouteMatchLabel(route.match_type) }}</div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div>{{ formatCompositePlatform(route.target_platform) }}</div>
+                      <div class="text-xs text-gray-500">{{ route.upstream_model || route.public_model }}</div>
+                    </td>
+                    <td class="px-3 py-2">
+                      {{ formatCompositeEndpoint(route.endpoint) }}
+                      <span class="text-xs text-gray-500"> · {{ t("admin.groups.compositeRoutes.priority") }}: {{ route.priority }}</span>
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <button type="button" class="btn btn-ghost btn-sm" @click="editCompositeRoute(route)">{{ t("common.edit") }}</button>
+                      <button type="button" class="btn btn-ghost btn-sm text-red-600" @click="deleteCompositeRoute(route)">{{ t("common.delete") }}</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        <section class="min-w-0 space-y-4">
+          <form class="space-y-3" @submit.prevent="saveCompositeRoute">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{ compositeRouteEditingId ? t("admin.groups.compositeRoutes.editRoute") : t("admin.groups.compositeRoutes.addRoute") }}
+            </h3>
+            <label class="input-label">{{ t("admin.groups.compositeRoutes.publicModel") }}</label>
+            <input v-model.trim="compositeRouteForm.public_model" class="input" required />
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="input-label">{{ t("admin.groups.compositeRoutes.matchType") }}</label>
+                <Select v-model="compositeRouteForm.match_type" :options="compositeRouteMatchOptions" />
+              </div>
+              <div>
+                <label class="input-label">{{ t("admin.groups.compositeRoutes.endpoint") }}</label>
+                <Select v-model="compositeRouteForm.endpoint" :options="compositeRouteEndpointOptions" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="input-label">{{ t("admin.groups.compositeRoutes.targetPlatform") }}</label>
+                <Select v-model="compositeRouteForm.target_platform" :options="compositeRoutePlatformOptions" />
+              </div>
+              <div>
+                <label class="input-label">{{ t("admin.groups.compositeRoutes.priority") }}</label>
+                <input v-model.number="compositeRouteForm.priority" type="number" class="input" />
+              </div>
+            </div>
+            <label class="input-label">{{ t("admin.groups.compositeRoutes.upstreamModel") }}</label>
+            <input v-model.trim="compositeRouteForm.upstream_model" class="input" />
+            <p class="input-hint">{{ t("admin.groups.compositeRoutes.upstreamModelHint") }}</p>
+            <label class="input-label">{{ t("admin.groups.compositeRoutes.notes") }}</label>
+            <input v-model.trim="compositeRouteForm.notes" class="input" />
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="compositeRouteForm.enabled" type="checkbox" />
+              {{ t("admin.groups.compositeRoutes.enabled") }}
+            </label>
+            <button type="submit" class="btn btn-primary" :disabled="compositeRouteSaving">
+              {{ compositeRouteEditingId ? t("common.update") : t("common.create") }}
+            </button>
+          </form>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t("admin.groups.compositeRoutes.preview") }}</h3>
+            <div class="mt-2 flex gap-2">
+              <input v-model.trim="compositePreviewModel" class="input flex-1" @keyup.enter="previewCompositeRoute" />
+              <Select v-model="compositePreviewEndpoint" :options="compositeRouteEndpointOptions" />
+              <button type="button" class="btn btn-secondary" :disabled="compositePreviewLoading || !compositePreviewModel" @click="previewCompositeRoute">
+                {{ t("admin.groups.compositeRoutes.preview") }}
+              </button>
+            </div>
+            <div v-if="compositePreviewDecision" class="mt-3 rounded-lg border border-gray-200 p-3 text-sm dark:border-dark-600">
+              <div>{{ compositePreviewDecision.matched ? t("admin.groups.compositeRoutes.matched") : t("admin.groups.compositeRoutes.notMatched") }}</div>
+              <div>{{ compositeRouteSourceLabel(compositePreviewDecision.source) }}</div>
+              <div v-if="compositePreviewDecision.matched">
+                {{ t("admin.groups.compositeRoutes.targetPlatform") }}: {{ formatCompositePlatform(compositePreviewDecision.target_platform) }}
+                · {{ t("admin.groups.compositeRoutes.upstreamModel") }}: {{ compositePreviewDecision.upstream_model }}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -3700,8 +3850,17 @@ import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { adminAPI } from "@/api/admin";
-import type { AdminGroup, GroupPlatform, SubscriptionType } from "@/types";
-import { GROUP_PLATFORM_OPTIONS } from "@/constants/platforms";
+import type {
+  AdminGroup,
+  GroupPlatform,
+  SubscriptionType,
+  CompositeModelRoute,
+  CompositeModelRouteInput,
+  CompositeRouteEndpoint,
+  CompositeRouteMatchType,
+  CompositeRouteDecision,
+} from "@/types";
+import { CONCRETE_PLATFORM_OPTIONS, GROUP_PLATFORM_OPTIONS } from "@/constants/platforms";
 import type { ChannelModelPricing } from "@/api/admin/channels";
 import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
 import type { PricingFormEntry } from "@/components/admin/channel/types";
@@ -3737,6 +3896,7 @@ import {
   messagesDispatchConfigToFormState,
   messagesDispatchFormStateToConfig,
   resetMessagesDispatchFormState,
+  supportsMessagesDispatchPlatform,
   type MessagesDispatchMappingRow,
 } from "./groupsMessagesDispatch";
 import {
@@ -4009,6 +4169,26 @@ const platformFilterOptions = computed(() => [
   ...GROUP_PLATFORM_OPTIONS,
 ]);
 
+const compositeRoutePlatformOptions = computed(() => [
+  ...CONCRETE_PLATFORM_OPTIONS,
+]);
+
+const compositeRouteEndpointOptions = computed(() => [
+  { value: "any", label: t("admin.groups.compositeRoutes.endpoints.any") },
+  { value: "messages", label: t("admin.groups.compositeRoutes.endpoints.messages") },
+  { value: "count_tokens", label: t("admin.groups.compositeRoutes.endpoints.countTokens") },
+  { value: "responses", label: t("admin.groups.compositeRoutes.endpoints.responses") },
+  { value: "chat_completions", label: t("admin.groups.compositeRoutes.endpoints.chatCompletions") },
+  { value: "embeddings", label: t("admin.groups.compositeRoutes.endpoints.embeddings") },
+  { value: "images", label: t("admin.groups.compositeRoutes.endpoints.images") },
+  { value: "gemini", label: t("admin.groups.compositeRoutes.endpoints.gemini") },
+]);
+
+const compositeRouteMatchOptions = computed(() => [
+  { value: "exact", label: t("admin.groups.compositeRoutes.match.exact") },
+  { value: "prefix", label: t("admin.groups.compositeRoutes.match.prefix") },
+]);
+
 const editStatusOptions = computed(() => [
   { value: "active", label: t("admin.accounts.status.active") },
   { value: "inactive", label: t("admin.accounts.status.inactive") },
@@ -4093,29 +4273,38 @@ const invalidRequestFallbackOptionsForEdit = computed(() => {
   return options;
 });
 
-// 复制账号的源分组选项（创建时）- 仅包含相同平台且有账号的分组
+const canCopyAccountsFromGroup = (targetPlatform: GroupPlatform, sourcePlatform: GroupPlatform) =>
+  targetPlatform === "composite" || sourcePlatform === targetPlatform;
+
+const copyAccountsGroupLabel = (g: AdminGroup) => {
+  const count = g.account_count || 0;
+  const platform = t("admin.groups.platforms." + g.platform);
+  return `${g.name} - ${platform} (${t("admin.groups.accountsCount", { count })})`;
+};
+
 const copyAccountsGroupOptions = computed(() => {
   const eligibleGroups = groups.value.filter(
-    (g) => g.platform === createForm.platform && (g.account_count || 0) > 0,
+    (g) =>
+      canCopyAccountsFromGroup(createForm.platform, g.platform) &&
+      (g.account_count || 0) > 0,
   );
   return eligibleGroups.map((g) => ({
     value: g.id,
-    label: `${g.name} (${t("admin.groups.accountsCount", { count: g.account_count || 0 })})`,
+    label: copyAccountsGroupLabel(g),
   }));
 });
 
-// 复制账号的源分组选项（编辑时）- 仅包含相同平台且有账号的分组，排除自身
 const copyAccountsGroupOptionsForEdit = computed(() => {
   const currentId = editingGroup.value?.id;
   const eligibleGroups = groups.value.filter(
     (g) =>
-      g.platform === editForm.platform &&
+      canCopyAccountsFromGroup(editForm.platform, g.platform) &&
       (g.account_count || 0) > 0 &&
       g.id !== currentId,
   );
   return eligibleGroups.map((g) => ({
     value: g.id,
-    label: `${g.name} (${t("admin.groups.accountsCount", { count: g.account_count || 0 })})`,
+    label: copyAccountsGroupLabel(g),
   }));
 });
 
@@ -4174,6 +4363,26 @@ const showRateMultipliersModal = ref(false);
 const rateMultipliersGroup = ref<AdminGroup | null>(null);
 const showRPMOverridesModal = ref(false);
 const rpmOverridesGroup = ref<AdminGroup | null>(null);
+const showCompositeRoutesModal = ref(false);
+const compositeRoutesGroup = ref<AdminGroup | null>(null);
+const compositeRoutes = ref<CompositeModelRoute[]>([]);
+const compositeRoutesLoading = ref(false);
+const compositeRouteSaving = ref(false);
+const compositeRouteEditingId = ref<number | null>(null);
+const compositePreviewModel = ref("");
+const compositePreviewEndpoint = ref<CompositeRouteEndpoint>("any");
+const compositePreviewLoading = ref(false);
+const compositePreviewDecision = ref<CompositeRouteDecision | null>(null);
+const compositeRouteForm = reactive({
+  public_model: "",
+  match_type: "exact" as CompositeRouteMatchType,
+  target_platform: "openai" as Exclude<GroupPlatform, "composite">,
+  upstream_model: "",
+  endpoint: "any" as CompositeRouteEndpoint,
+  priority: 100,
+  enabled: true,
+  notes: "",
+});
 const sortableGroups = ref<AdminGroup[]>([]);
 const createMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
 const editMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
@@ -5377,6 +5586,172 @@ const handleRPMOverrides = (group: AdminGroup) => {
   showRPMOverridesModal.value = true;
 };
 
+const compositeRouteMatchLabel = (matchType: CompositeRouteMatchType) =>
+  compositeRouteMatchOptions.value.find((option) => option.value === matchType)?.label || matchType;
+
+const formatCompositeEndpoint = (endpoint: CompositeRouteEndpoint) =>
+  compositeRouteEndpointOptions.value.find((option) => option.value === endpoint)?.label || endpoint;
+
+const formatCompositePlatform = (platform: string) => {
+  if (!platform) return "—";
+  return t(`admin.groups.platforms.${platform}`);
+};
+
+const compositeRouteSourceLabel = (source: string) => {
+  if (source === "route") return t("admin.groups.compositeRoutes.sources.route");
+  if (source === "detector") return t("admin.groups.compositeRoutes.sources.detector");
+  return source || "—";
+};
+
+const resetCompositeRouteForm = () => {
+  compositeRouteEditingId.value = null;
+  compositeRouteForm.public_model = "";
+  compositeRouteForm.match_type = "exact";
+  compositeRouteForm.target_platform = "openai";
+  compositeRouteForm.upstream_model = "";
+  compositeRouteForm.endpoint = "any";
+  compositeRouteForm.priority = 100;
+  compositeRouteForm.enabled = true;
+  compositeRouteForm.notes = "";
+};
+
+const toCompositeRouteInput = (): CompositeModelRouteInput => ({
+  public_model: compositeRouteForm.public_model.trim(),
+  match_type: compositeRouteForm.match_type,
+  target_platform: compositeRouteForm.target_platform,
+  upstream_model: compositeRouteForm.upstream_model.trim(),
+  endpoint: compositeRouteForm.endpoint,
+  priority: Number(compositeRouteForm.priority) || 100,
+  enabled: compositeRouteForm.enabled,
+  notes: compositeRouteForm.notes.trim(),
+});
+
+const loadCompositeRoutes = async () => {
+  if (!compositeRoutesGroup.value) return;
+  compositeRoutesLoading.value = true;
+  try {
+    const routes = await adminAPI.groups.listCompositeRoutes(compositeRoutesGroup.value.id);
+    compositeRoutes.value = routes.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.id - b.id;
+    });
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail ||
+        error.response?.data?.message ||
+        t("admin.groups.compositeRoutes.failedToLoad"),
+    );
+  } finally {
+    compositeRoutesLoading.value = false;
+  }
+};
+
+const handleCompositeRoutes = async (group: AdminGroup) => {
+  compositeRoutesGroup.value = group;
+  compositePreviewModel.value = "";
+  compositePreviewEndpoint.value = "any";
+  compositePreviewDecision.value = null;
+  resetCompositeRouteForm();
+  showCompositeRoutesModal.value = true;
+  await loadCompositeRoutes();
+};
+
+const closeCompositeRoutesModal = () => {
+  showCompositeRoutesModal.value = false;
+  compositeRoutesGroup.value = null;
+  compositeRoutes.value = [];
+  compositePreviewDecision.value = null;
+  resetCompositeRouteForm();
+};
+
+const editCompositeRoute = (route: CompositeModelRoute) => {
+  compositeRouteEditingId.value = route.id;
+  compositeRouteForm.public_model = route.public_model;
+  compositeRouteForm.match_type = route.match_type;
+  compositeRouteForm.target_platform = route.target_platform;
+  compositeRouteForm.upstream_model = route.upstream_model;
+  compositeRouteForm.endpoint = route.endpoint;
+  compositeRouteForm.priority = route.priority || 100;
+  compositeRouteForm.enabled = route.enabled;
+  compositeRouteForm.notes = route.notes || "";
+};
+
+const saveCompositeRoute = async () => {
+  if (!compositeRoutesGroup.value) return;
+  if (!compositeRouteForm.public_model.trim()) {
+    appStore.showError(t("admin.groups.compositeRoutes.publicModelRequired"));
+    return;
+  }
+  compositeRouteSaving.value = true;
+  try {
+    const payload = toCompositeRouteInput();
+    if (compositeRouteEditingId.value) {
+      await adminAPI.groups.updateCompositeRoute(
+        compositeRoutesGroup.value.id,
+        compositeRouteEditingId.value,
+        payload,
+      );
+      appStore.showSuccess(t("admin.groups.compositeRoutes.routeUpdated"));
+    } else {
+      await adminAPI.groups.createCompositeRoute(compositeRoutesGroup.value.id, payload);
+      appStore.showSuccess(t("admin.groups.compositeRoutes.routeCreated"));
+    }
+    resetCompositeRouteForm();
+    await loadCompositeRoutes();
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail ||
+        error.response?.data?.message ||
+        t("admin.groups.compositeRoutes.failedToSave"),
+    );
+  } finally {
+    compositeRouteSaving.value = false;
+  }
+};
+
+const deleteCompositeRoute = async (route: CompositeModelRoute) => {
+  if (!compositeRoutesGroup.value) return;
+  if (!window.confirm(t("admin.groups.compositeRoutes.deleteConfirm"))) return;
+  try {
+    await adminAPI.groups.deleteCompositeRoute(compositeRoutesGroup.value.id, route.id);
+    if (compositeRouteEditingId.value === route.id) {
+      resetCompositeRouteForm();
+    }
+    appStore.showSuccess(t("admin.groups.compositeRoutes.routeDeleted"));
+    await loadCompositeRoutes();
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail ||
+        error.response?.data?.message ||
+        t("admin.groups.compositeRoutes.failedToDelete"),
+    );
+  }
+};
+
+const previewCompositeRoute = async () => {
+  if (!compositeRoutesGroup.value || !compositePreviewModel.value.trim()) {
+    return;
+  }
+  compositePreviewLoading.value = true;
+  try {
+    compositePreviewDecision.value = await adminAPI.groups.previewCompositeRoute(
+      compositeRoutesGroup.value.id,
+      {
+        model: compositePreviewModel.value.trim(),
+        endpoint: compositePreviewEndpoint.value,
+      },
+    );
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail ||
+        error.response?.data?.message ||
+        t("admin.groups.compositeRoutes.failedToPreview"),
+    );
+  } finally {
+    compositePreviewLoading.value = false;
+  }
+};
+
 const handleDuplicate = async (group: AdminGroup) => {
   if (duplicatingGroupIds.has(group.id)) return;
 
@@ -5521,7 +5896,7 @@ watch(
     if (!['anthropic', 'antigravity'].includes(newVal)) {
       editForm.fallback_group_id_on_invalid_request = null
     }
-    if (newVal !== 'openai') {
+    if (!supportsMessagesDispatchPlatform(newVal)) {
       editForm.allow_messages_dispatch = false
       editForm.default_mapped_model = ''
     }

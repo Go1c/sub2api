@@ -177,7 +177,7 @@ func openAIResponsesRequiredCapabilityForRequest(imageIntent bool, needsResponse
 	return openAIResponsesRequiredCapability(imageIntent, platform)
 }
 
-func allowOpenAICompatibleMessagesDispatch(apiKey *service.APIKey) bool {
+func allowOpenAICompatibleMessagesDispatch(c *gin.Context, apiKey *service.APIKey) bool {
 	if apiKey == nil || apiKey.Group == nil {
 		return true
 	}
@@ -186,10 +186,18 @@ func allowOpenAICompatibleMessagesDispatch(apiKey *service.APIKey) bool {
 	}
 	// 国产供应商分组与 grok 同语义:/v1/messages 就是其主要服务形态(anthropic
 	// 协议账号原生直通 Claude Code),无需 allow_messages_dispatch 开关授权——
-	// 该开关对非 openai 平台恒被 sanitizeGroupMessagesDispatchFields 置 false,
+	// 该开关对非 openai/composite 平台恒被 sanitizeGroupMessagesDispatchFields 置 false,
 	// 若不豁免,CN 分组将永远 403。
 	if service.IsCNProvider(apiKey.Group.Platform) {
 		return true
+	}
+	// composite 分组解析到 grok/CN 目标时与对应独立分组同语义豁免；
+	// 解析到 openai 目标则受 composite 分组自身的可配置开关控制。
+	if apiKey.Group.Platform == service.PlatformComposite && c != nil && c.Request != nil {
+		if platform, ok := service.ResolvedTargetPlatformFromContext(c.Request.Context()); ok &&
+			(platform == service.PlatformGrok || service.IsCNProvider(platform)) {
+			return true
+		}
 	}
 	return apiKey.Group.AllowMessagesDispatch
 }
@@ -314,6 +322,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 	reqModel := modelResult.String()
 	body, reqModel = h.rewriteHiddenOpenAIRequestModelForGroup(c.Request.Context(), apiKey.GroupID, body, reqModel)
+	ensureCompositeTargetPlatform(c, apiKey, reqModel)
+	if !openAICompatibleTextTargetAllowed(c, apiKey, reqModel) {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by this OpenAI-compatible endpoint for composite groups")
+		return
+	}
 
 	reqStream, ok := parseOpenAICompatibleStream(body)
 	if !ok {
@@ -909,7 +922,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	)
 
 	// 检查分组是否允许 /v1/messages 调度
-	if !allowOpenAICompatibleMessagesDispatch(apiKey) {
+	if !allowOpenAICompatibleMessagesDispatch(c, apiKey) {
 		h.anthropicErrorResponse(c, http.StatusForbidden, "permission_error",
 			"This group does not allow /v1/messages dispatch")
 		return
@@ -946,6 +959,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	}
 	reqModel := modelResult.String()
 	body, reqModel = h.rewriteHiddenOpenAIRequestModelForGroup(c.Request.Context(), apiKey.GroupID, body, reqModel)
+	ensureCompositeTargetPlatform(c, apiKey, reqModel)
+	if !openAICompatibleTextTargetAllowed(c, apiKey, reqModel) {
+		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by this OpenAI-compatible endpoint for composite groups")
+		return
+	}
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
@@ -1590,6 +1608,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		return
 	}
 	firstMessage, reqModel = h.rewriteHiddenOpenAIRequestModelForGroup(ctx, apiKey.GroupID, firstMessage, reqModel)
+	ensureCompositeTargetPlatform(c, apiKey, reqModel)
+	ctx = c.Request.Context()
+	if apiKey.Group != nil && apiKey.Group.Platform == service.PlatformComposite {
+		platform, ok := service.ResolvedTargetPlatformFromContext(ctx)
+		if !ok || !isResponsesWebSocketCompositePlatform(platform) {
+			closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "Responses WebSocket API only supports OpenAI-compatible models for composite groups")
+			return
+		}
+	}
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(firstMessage, "previous_response_id").String())
 	previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 	if previousResponseID != "" && previousResponseIDKind == service.OpenAIPreviousResponseIDKindMessageID {

@@ -175,11 +175,35 @@ func buildPlatformSections(
 	visibleGroups []userAvailableGroup,
 ) []userChannelPlatformSection {
 	groupsByPlatform := make(map[string][]userAvailableGroup, 4)
+	compositeGroups := make([]userAvailableGroup, 0)
 	for _, g := range visibleGroups {
 		if g.Platform == "" {
 			continue
 		}
+		if g.Platform == service.PlatformComposite {
+			compositeGroups = append(compositeGroups, g)
+			continue
+		}
 		groupsByPlatform[g.Platform] = append(groupsByPlatform[g.Platform], g)
+	}
+
+	if len(compositeGroups) > 0 {
+		modelPlatforms := make(map[string]struct{}, len(ch.SupportedModels))
+		for i := range ch.SupportedModels {
+			if platform := ch.SupportedModels[i].Platform; platform != "" {
+				modelPlatforms[platform] = struct{}{}
+			}
+		}
+		if len(modelPlatforms) == 0 {
+			groupsByPlatform[service.PlatformComposite] = append(
+				groupsByPlatform[service.PlatformComposite],
+				compositeGroups...,
+			)
+		} else {
+			for platform := range modelPlatforms {
+				groupsByPlatform[platform] = append(groupsByPlatform[platform], compositeGroups...)
+			}
+		}
 	}
 	if len(groupsByPlatform) == 0 {
 		return nil

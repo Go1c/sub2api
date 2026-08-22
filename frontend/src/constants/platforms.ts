@@ -21,7 +21,8 @@ export const CONCRETE_PLATFORM_OPTIONS = [
   { value: 'deepseek', label: 'DeepSeek' }
 ] as const satisfies readonly PlatformOption<AccountPlatform>[]
 
-/** Platforms that can own a group. Composite is reserved for a later knife. */
+/** Platforms that can own a group. */
 export const GROUP_PLATFORM_OPTIONS = [
-  ...CONCRETE_PLATFORM_OPTIONS
+  ...CONCRETE_PLATFORM_OPTIONS,
+  { value: 'composite', label: 'Composite' }
 ] as const satisfies readonly PlatformOption<GroupPlatform>[]

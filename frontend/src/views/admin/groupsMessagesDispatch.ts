@@ -5,6 +5,10 @@ export interface MessagesDispatchMappingRow {
   target_model: string;
 }
 
+export function supportsMessagesDispatchPlatform(platform: string): boolean {
+  return platform === "openai" || platform === "composite";
+}
+
 export interface MessagesDispatchFormState {
   allow_messages_dispatch: boolean;
   opus_mapped_model: string;
