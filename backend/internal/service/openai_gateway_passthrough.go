@@ -174,6 +174,16 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			stageCodexFingerprintIDs(c, fpIDs)
 		}
 	}
+	if accountNeedsOpenAIOAuthReservedToolAlias(account) {
+		aliasedBody, reverse, aliased, aliasErr := aliasOpenAIOAuthReservedToolNamesBody(body)
+		if aliasErr != nil {
+			return nil, aliasErr
+		}
+		mergeCodexToolNameReverse(c, reverse)
+		if aliased {
+			body = aliasedBody
+		}
+	}
 
 	sanitizedBody, sanitized, err := sanitizeEmptyBase64InputImagesInOpenAIBody(body)
 	if err != nil {
@@ -1325,6 +1335,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				if restoreErr != nil {
 					return resultWithUsage(), fmt.Errorf("restore OpenAI passthrough namespace response: %w", restoreErr)
 				}
+				rawEventType := strings.TrimSpace(gjson.GetBytes(restoredData, "type").String())
+				restoredData = restoreCodexToolNamesFromSSEContext(c, restoredData, rawEventType)
 				if !bytes.Equal(restoredData, dataBytes) {
 					dataBytes = restoredData
 					trimmedData = strings.TrimSpace(string(restoredData))
@@ -1521,6 +1533,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	if err != nil {
 		return nil, fmt.Errorf("restore OpenAI passthrough namespace response: %w", err)
 	}
+	body = restoreCodexToolNamesFromContext(c, body)
 	if mapping, ok := openAIResponsesClientToolMapping(c); ok && json.Valid(body) {
 		body, _, err = apicompat.RestoreResponsesClientToolPayload(body, mapping)
 		if err != nil {
@@ -1572,7 +1585,7 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 		if restoreErr != nil {
 			return nil, fmt.Errorf("restore OpenAI passthrough namespace response: %w", restoreErr)
 		}
-		body = restoredBody
+		body = restoreCodexToolNamesFromContext(c, restoredBody)
 	} else {
 		terminalType, terminalPayload, terminalOK := extractOpenAISSETerminalEvent(bodyText)
 		if terminalOK && (terminalType == "response.failed" || terminalType == "error") {

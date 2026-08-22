@@ -76,6 +76,7 @@ metadata:
 | `#5888` 第一刀 | Responses 入口：`messages`/`prompt` 收成原生 `input`；工具 schema 修 null type + 去掉 lookaround；上游拒收字段后同请求重试（含跨账号 budget）。fork 无 CN provider，null-type 只对 OpenAI/Anthropic 开 |
 | `#5888` 第二刀 | Grok ModelInput 清洗（Chat/OpenAI 回放项收成 xAI 子集）；explicit compact 模型不可用时同账号换 fallback 模型再试一次。全局 `openai_compact_model` 只作失败后回退，首次请求仍只看账号 `compact_model_mapping` |
 | `#5888` 第三刀 | WS session preempt（Redis owner + 进程内 registry；同 session 新请求取消旧连接）；OpenAI 池模式 API-key 健康熔断（默认 `Enabled=false`，不改现网行为）；ops 错误详情：SSE 终帧捕获、2xx recovered 上游遥测、逐次 `skip_monitoring`。fork 保留请求体/重试头、INVALID_API_KEY 删 key 归因、recovered `account_auth` 的 `error_source=gateway`。未带 origin 的 `ResolvedTargetPlatformFromContext` / sticky `ErrStickySessionNotFound`；`ReportOpenAIAccountScheduleResult` 仍用 fork 的 `accountID` 签名，健康观察走独立方法 |
+| `#5888` 第四刀 | Codex OAuth 把上游保留名 `python` 改写成 `python__sub2api`，回程按 context 映射还原（HTTP SSE / JSON / WS）。接到现有 OAuth transform 与 passthrough/WS 帧路径；未改 fork 的 `codex-auto-review→luna` 映射，也未把 origin 的 `normalizeOpenAIOAuthResponsesCompatibilityFields` 再塞进 transform（prompt 收成 input 仍走第一刀的 HTTP legacy ingress） |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -83,7 +84,7 @@ metadata:
 
 - 整包 merge upstream / 直推 `main` / `publish`。
 - 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override（fork 无 `PlatformComposite` / CN provider 面）。
-- `#5888` 余下：Codex tool-name 改写。
+- `#5888` 已切完本窗口要的四刀；未整包 origin transform 的 prompt 兼容函数 / namespace 其余差异。
 - `#5925` 余下：null-stripping 重写、compaction blob、team capacity 429、用量 reasoning 折算等（51 文件里未抽的部分）。
 - 渠道分时价 / 档位乘数 / channel-monitor quota mode。
 - `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
@@ -114,6 +115,8 @@ metadata:
 | `go test -tags=unit`（#5888 第三刀：WS preempt / health breaker / ops logger） | 通过（service / repository / handler 相关 `-run`） |
 | `go vet -tags integration ./internal/handler ./internal/service ./internal/repository`（#5888 第三刀） | 通过 |
 | 前端 `vue-tsc --noEmit` + `errorDetailResponse.spec.ts`（ops 详情弹窗） | 通过 |
+| `go test -tags=unit ./internal/service`（#5888 第四刀：Codex tool-name rewrite） | 通过 |
+| `go vet -tags integration ./internal/service`（#5888 第四刀） | 通过 |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关

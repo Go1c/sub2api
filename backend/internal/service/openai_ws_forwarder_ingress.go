@@ -46,6 +46,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if account == nil {
 		return errors.New("account is nil")
 	}
+	// A handler may reuse the same gin context across account failover attempts.
+	// Never let an OAuth attempt's response aliases leak into the next account.
+	setCodexToolNameReverse(c, nil)
 	if err := validateOpenAIWSBearerToken(account, token); err != nil {
 		return err
 	}
@@ -253,6 +256,16 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			normalized = litePayload
 		}
+		if accountNeedsOpenAIOAuthReservedToolAlias(account) {
+			aliasedBody, reverse, aliased, aliasErr := aliasOpenAIOAuthReservedToolNamesBody(normalized)
+			if aliasErr != nil {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, aliasErr.Error(), aliasErr)
+			}
+			updateCodexToolNameReverseForWSFrame(c, normalized, reverse)
+			if aliased {
+				normalized = aliasedBody
+			}
+		}
 		apiKey := getAPIKeyFromContext(c)
 		imageGenerationAllowed := GroupAllowsImageGeneration(apiKeyGroup(apiKey))
 		codexImageGenerationExplicitToolPolicy := codexImageGenerationExplicitToolPolicyAllow
@@ -388,6 +401,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	writeClientMessage := func(message []byte) error {
 		writeCtx, cancel := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
 		defer cancel()
+		message = restoreCodexToolNamesFromContext(c, message)
 		return clientConn.Write(writeCtx, coderws.MessageText, message)
 	}
 
