@@ -232,21 +232,23 @@ func TestCalculateTokenCostContextTierEnablement(t *testing.T) {
 			MinTokens:       100,
 			InputMultiplier: pricingMultiplier(2),
 		}},
+		longContextPricingEnabled: true,
 	}
 	resolver := &ModelPricingResolver{}
 	service := &BillingService{}
 	tokens := UsageTokens{InputTokens: 200}
 
-	t.Run("group disabled uses base tier", func(t *testing.T) {
+	t.Run("intervals still match by token count when group long-context is off", func(t *testing.T) {
+		// Resolve 才把分组关闭压成第一档；计费层按实际 token 匹配区间。
 		resolved.longContextPricingEnabled = false
 		cost, err := service.calculateTokenCost(resolved, CostInput{
 			Model: "custom", Tokens: tokens, RateMultiplier: 1, Resolver: resolver,
 		})
 		require.NoError(t, err)
-		require.InDelta(t, 200e-6, cost.TotalCost, 1e-12)
+		require.InDelta(t, 400e-6, cost.TotalCost, 1e-12)
 	})
 
-	t.Run("group enabled uses interval", func(t *testing.T) {
+	t.Run("account false does not drop matching channel intervals", func(t *testing.T) {
 		resolved.longContextPricingEnabled = true
 		accountDisabled := false
 		cost, err := service.calculateTokenCost(resolved, CostInput{
@@ -257,15 +259,22 @@ func TestCalculateTokenCostContextTierEnablement(t *testing.T) {
 		require.InDelta(t, 400e-6, cost.TotalCost, 1e-12)
 	})
 
-	t.Run("account enabled overrides disabled group", func(t *testing.T) {
-		resolved.longContextPricingEnabled = false
-		accountEnabled := true
-		cost, err := service.calculateTokenCost(resolved, CostInput{
+	t.Run("account false still vetoes catalog long-context when there are no intervals", func(t *testing.T) {
+		noIntervals := &ResolvedPricing{
+			BasePricing: &ModelPricing{
+				InputPricePerToken:         1e-6,
+				LongContextInputThreshold:  100,
+				LongContextInputMultiplier: 2,
+			},
+			longContextPricingEnabled: true,
+		}
+		accountDisabled := false
+		cost, err := service.calculateTokenCost(noIntervals, CostInput{
 			Model: "custom", Tokens: tokens, RateMultiplier: 1, Resolver: resolver,
-			LongContextBillingEnabled: &accountEnabled,
+			LongContextBillingEnabled: &accountDisabled,
 		})
 		require.NoError(t, err)
-		require.InDelta(t, 400e-6, cost.TotalCost, 1e-12)
+		require.InDelta(t, 200e-6, cost.TotalCost, 1e-12)
 	})
 }
 

@@ -304,12 +304,10 @@ func TestResolve_WithChannelOverride_TokenWithIntervals(t *testing.T) {
 	resolved := r.Resolve(context.Background(), PricingInput{
 		Model:   "claude-sonnet-4",
 		GroupID: groupIDPtr(),
-		Group:   &Group{LongContextPricingEnabled: false},
 	})
 
 	require.NotNil(t, resolved)
 	require.Equal(t, "channel", resolved.Source)
-	require.False(t, resolved.longContextPricingEnabled)
 	require.Len(t, resolved.Intervals, 2)
 
 	// GetIntervalPricing should use channel intervals
@@ -322,6 +320,31 @@ func TestResolve_WithChannelOverride_TokenWithIntervals(t *testing.T) {
 	require.NotNil(t, iv2)
 	require.InDelta(t, 4e-6, iv2.InputPricePerToken, 1e-12)
 	require.InDelta(t, 16e-6, iv2.OutputPricePerToken, 1e-12)
+}
+
+func TestResolve_ChannelIntervalsFlattenWhenGroupLongContextDisabled(t *testing.T) {
+	r := newResolverWithChannel(t, []ChannelModelPricing{{
+		Platform:    "anthropic",
+		Models:      []string{"claude-sonnet-4"},
+		BillingMode: BillingModeToken,
+		Intervals: []PricingInterval{
+			{MinTokens: 0, MaxTokens: testPtrInt(128000), InputPrice: testPtrFloat64(2e-6), OutputPrice: testPtrFloat64(8e-6)},
+			{MinTokens: 128000, MaxTokens: nil, InputPrice: testPtrFloat64(4e-6), OutputPrice: testPtrFloat64(16e-6)},
+		},
+	}})
+
+	resolved := r.Resolve(context.Background(), PricingInput{
+		Model:   "claude-sonnet-4",
+		GroupID: groupIDPtr(),
+		Group:   &Group{LongContextPricingEnabled: false},
+	})
+
+	require.NotNil(t, resolved)
+	require.False(t, resolved.longContextPricingEnabled)
+	require.Empty(t, resolved.Intervals)
+	require.NotNil(t, resolved.BasePricing)
+	require.InDelta(t, 2e-6, resolved.BasePricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 8e-6, resolved.BasePricing.OutputPricePerToken, 1e-12)
 }
 
 func TestResolve_WithChannelOverride_TokenNilBasePricing(t *testing.T) {

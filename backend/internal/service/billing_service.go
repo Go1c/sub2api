@@ -834,19 +834,7 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input CostInput) (*CostBreakdown, error) {
 	totalContext := input.Tokens.InputTokens + input.Tokens.CacheCreationTokens + input.Tokens.CacheReadTokens
 
-	// 分组开关是统一入口；账号 API 开关保留为额外开启能力，但 false 不否决分组配置。
-	contextTierPricingEnabled := resolved.longContextPricingEnabled
-	if input.LongContextBillingEnabled != nil && *input.LongContextBillingEnabled {
-		contextTierPricingEnabled = true
-	}
-
-	pricingContext := totalContext
-	if !contextTierPricingEnabled {
-		// 渠道可能显式配置了第一档，也可能只配置高上下文档。用 1 token
-		// 选择最低档；未命中时自然回退到渠道基础价。
-		pricingContext = 1
-	}
-	pricing := input.Resolver.GetIntervalPricing(resolved, pricingContext)
+	pricing := input.Resolver.GetIntervalPricing(resolved, totalContext)
 	if pricing == nil {
 		return nil, fmt.Errorf("no pricing available for model: %s: %w", input.Model, ErrModelPricingUnavailable)
 	}
@@ -854,7 +842,11 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 	pricing = s.applyModelSpecificPricingPolicy(input.Model, pricing)
 
 	// 官方长上下文阶梯仅在无区间定价时应用（区间定价已包含上下文分层）。
-	applyLongCtx := len(resolved.Intervals) == 0 && contextTierPricingEnabled
+	// 分组关则 Resolve 已把渠道区间压成第一档；账号 false 仍否决官方阶梯。
+	applyLongCtx := len(resolved.Intervals) == 0 && resolved.longContextPricingEnabled
+	if input.LongContextBillingEnabled != nil {
+		applyLongCtx = applyLongCtx && *input.LongContextBillingEnabled
+	}
 
 	breakdown := s.computeTokenBreakdown(pricing, input.Tokens, input.RateMultiplier, input.ServiceTier, applyLongCtx)
 	applyCostBreakdownMultiplier(breakdown, resolvedChannelTimeMultiplier(resolved, input.PricingAt))

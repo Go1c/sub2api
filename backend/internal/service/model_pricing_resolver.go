@@ -120,8 +120,14 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 		resolved.Source = PricingSourceChannel
 		resolved.channelPricing = chPricing
 		r.applyTokenOverrides(chPricing, resolved)
+		if !longContextPricingEnabled {
+			r.applyFirstTokenTier(resolved, chPricing)
+		}
 	} else if input.GroupID != nil && r.channelService != nil {
 		r.applyChannelOverrides(ctx, *input.GroupID, input.Model, resolved)
+		if resolved.Source == PricingSourceChannel && !longContextPricingEnabled {
+			r.applyFirstTokenTier(resolved, resolved.channelPricing)
+		}
 	}
 
 	return resolved
@@ -141,6 +147,23 @@ func (r *ModelPricingResolver) resolveConfiguredPricing(config *ChannelModelPric
 	resolved.SupportsCacheBreakdown = resolved.BasePricing != nil && resolved.BasePricing.SupportsCacheBreakdown
 	r.applyTokenOverrides(config, resolved)
 	return resolved
+}
+
+func (r *ModelPricingResolver) applyFirstTokenTier(resolved *ResolvedPricing, config *ChannelModelPricing) {
+	if resolved == nil || len(resolved.Intervals) == 0 {
+		return
+	}
+	first := resolved.Intervals[0]
+	for _, interval := range resolved.Intervals[1:] {
+		if interval.MinTokens < first.MinTokens {
+			first = interval
+		}
+	}
+	resolved.BasePricing = intervalToModelPricing(&first, resolved.BasePricing, config)
+	if resolved.BasePricing != nil {
+		resolved.BasePricing.SupportsCacheBreakdown = resolved.SupportsCacheBreakdown
+	}
+	resolved.Intervals = nil
 }
 
 func matchGroupModelPricing(group *Group, model string) *ChannelModelPricing {
