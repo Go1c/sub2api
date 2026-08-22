@@ -55,6 +55,45 @@ func (c *gatewayCache) DeleteSessionAccountID(ctx context.Context, groupID int64
 	return c.rdb.Del(ctx, key).Err()
 }
 
+const reasoningContentPrefix = "reasoning_content:"
+
+// reasoningContentDefaultTTL is the default expiry for cached reasoning text.
+// Codex sessions can resume across days; 7 days is the fallback when the
+// caller passes a non-positive TTL.
+const reasoningContentDefaultTTL = 7 * 24 * time.Hour
+
+func (c *gatewayCache) SetReasoningContent(ctx context.Context, itemID string, content string, ttl time.Duration) error {
+	if c == nil || c.rdb == nil {
+		return errors.New("gateway cache unavailable")
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" || content == "" {
+		return nil
+	}
+	if ttl <= 0 {
+		ttl = reasoningContentDefaultTTL
+	}
+	return c.rdb.Set(ctx, reasoningContentPrefix+itemID, content, ttl).Err()
+}
+
+func (c *gatewayCache) GetReasoningContent(ctx context.Context, itemID string) (string, error) {
+	if c == nil || c.rdb == nil {
+		return "", errors.New("gateway cache unavailable")
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return "", service.ErrReasoningContentNotFound
+	}
+	val, err := c.rdb.Get(ctx, reasoningContentPrefix+itemID).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", service.ErrReasoningContentNotFound
+		}
+		return "", err
+	}
+	return val, nil
+}
+
 func buildOpenAIResponsesSessionWindowKey(groupID int64, sessionHash string) string {
 	return fmt.Sprintf("%s%d:%s", openAIResponsesSessionWindowPrefix, groupID, sessionHash)
 }

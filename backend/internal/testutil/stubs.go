@@ -103,6 +103,12 @@ func (c StubGatewayCache) RefreshSessionTTL(_ context.Context, _ int64, _ string
 func (c StubGatewayCache) DeleteSessionAccountID(_ context.Context, _ int64, _ string) error {
 	return nil
 }
+func (c StubGatewayCache) SetReasoningContent(_ context.Context, _ string, _ string, _ time.Duration) error {
+	return nil
+}
+func (c StubGatewayCache) GetReasoningContent(_ context.Context, _ string) (string, error) {
+	return "", service.ErrReasoningContentNotFound
+}
 
 // ============================================================
 // StubSessionLimitCache — service.SessionLimitCache 的空实现

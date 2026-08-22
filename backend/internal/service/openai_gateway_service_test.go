@@ -453,6 +453,13 @@ func (c *stubGatewayCache) DeleteSessionAccountID(ctx context.Context, groupID i
 	return nil
 }
 
+func (c *stubGatewayCache) SetReasoningContent(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (c *stubGatewayCache) GetReasoningContent(context.Context, string) (string, error) {
+	return "", ErrReasoningContentNotFound
+}
+
 func TestOpenAISelectAccountWithLoadAwareness_FiltersUnschedulable(t *testing.T) {
 	now := time.Now()
 	resetAt := now.Add(10 * time.Minute)

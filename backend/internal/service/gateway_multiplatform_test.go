@@ -275,6 +275,13 @@ func (m *mockGatewayCacheForPlatform) DeleteSessionAccountID(ctx context.Context
 	return nil
 }
 
+func (m *mockGatewayCacheForPlatform) SetReasoningContent(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (m *mockGatewayCacheForPlatform) GetReasoningContent(context.Context, string) (string, error) {
+	return "", ErrReasoningContentNotFound
+}
+
 type mockGroupRepoForGateway struct {
 	groups           map[int64]*Group
 	getByIDCalls     int

@@ -182,6 +182,13 @@ func (c *schedulerTestGatewayCache) DeleteSessionAccountID(ctx context.Context, 
 	return nil
 }
 
+func (c *schedulerTestGatewayCache) SetReasoningContent(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (c *schedulerTestGatewayCache) GetReasoningContent(context.Context, string) (string, error) {
+	return "", ErrReasoningContentNotFound
+}
+
 func newSchedulerTestOpenAIWSV2Config() *config.Config {
 	cfg := &config.Config{}
 	cfg.Gateway.OpenAIWS.Enabled = true

@@ -306,6 +306,13 @@ func (m *mockGatewayCacheForGemini) DeleteSessionAccountID(ctx context.Context, 
 	return nil
 }
 
+func (m *mockGatewayCacheForGemini) SetReasoningContent(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (m *mockGatewayCacheForGemini) GetReasoningContent(context.Context, string) (string, error) {
+	return "", ErrReasoningContentNotFound
+}
+
 // TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_GeminiPlatform 测试 Gemini 单平台选择
 func TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_GeminiPlatform(t *testing.T) {
 	ctx := context.Background()

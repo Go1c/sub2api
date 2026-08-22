@@ -419,6 +419,10 @@ var ErrNoAvailableAccounts = errors.New("no available accounts")
 // ErrClaudeCodeOnly 表示分组仅允许 Claude Code 客户端访问
 var ErrClaudeCodeOnly = errors.New("this group only allows Claude Code clients")
 
+// ErrReasoningContentNotFound is returned by GatewayCache.GetReasoningContent
+// when no cached reasoning content exists for the reasoning item ID.
+var ErrReasoningContentNotFound = errors.New("reasoning content not found")
+
 // allowedHeaders 白名单headers（参考CRS项目）
 var allowedHeaders = map[string]bool{
 	"accept":                                    true,
@@ -462,6 +466,15 @@ type GatewayCache interface {
 	// DeleteSessionAccountID 删除粘性会话绑定，用于账号不可用时主动清理
 	// Delete sticky session binding, used to proactively clean up when account becomes unavailable
 	DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error
+
+	// SetReasoningContent caches reasoning plaintext by reasoning item id so a
+	// later Responses→Chat Completions history that only has encrypted_content
+	// can restore reasoning_content (DeepSeek thinking mode requires it).
+	SetReasoningContent(ctx context.Context, itemID string, content string, ttl time.Duration) error
+	// GetReasoningContent returns cached reasoning plaintext. A miss returns
+	// ErrReasoningContentNotFound so callers can tell "not cached" from a
+	// real read failure.
+	GetReasoningContent(ctx context.Context, itemID string) (string, error)
 }
 
 // derefGroupID safely dereferences *int64 to int64, returning 0 if nil
