@@ -66,6 +66,13 @@ metadata:
 | `#5954` | DeepSeek/Kimi/GLM 的 `max` 保留为 max，旧 GPT 仍折成 xhigh |
 | `#5876` | 组内无此模型视为本地配置问题，不进 SLA / 不记上游账号 |
 | `#5810` | 原生 `POST /v1/responses/input_tokens`；Grok 与自定义 relay 走本地估算 |
+| `#5567` | Anthropic SSE `overloaded_error` 在未写出下游时语义化为 529，可 failover |
+| `#5004` | 延迟加载工具去掉 cache_control，断点打在最后一个非 deferred 工具 |
+| `#5725` | Gemini 混用 builtin + function 时打开 `includeServerSideToolInvocations` |
+| `#5714` | ops 批量写失败不再回退逐条插入 |
+| `#5834` | 可配置代理探测 URL；fork 默认仍是 ip-api/httpbin，并加 ipify/chatgpt-trace |
+| `#4057` | ops SLA 卡：窗口请求数为 0 时显示中性 `-` |
+| `#5925` 子集 | Grok HTTP upstream profile；`encrypted_content` 422 与 400 一样清洗后同账号重试 |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -74,10 +81,13 @@ metadata:
 - 整包 merge upstream / 直推 `main` / `publish`。
 - 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override（fork 无 `PlatformComposite` / CN provider 面）。
 - `#5888` OpenAI Responses 兼容大改（164 文件）。
-- `#5925` Grok compatibility（51 文件）。
+- `#5925` 余下：null-stripping 重写、compaction blob、team capacity 429、用量 reasoning 折算等（51 文件里未抽的部分）。
 - 渠道分时价 / 档位乘数 / channel-monitor quota mode。
 - `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
 - `#5708` 首页 model plaza、`#5838` 用户角色 Select（fork 编辑用户弹窗没有 role 下拉）。
+- `#5711` Antigravity mixed tool-config 透传（fork 无 `antigravity_gateway_compat.go`）。
+- `#5609` 认证快照定价字段（fork 已有 v16 `ModelPricing` / `LongContextPricingEnabled`）。
+- `#5716` SMTP 未配置跳过到期提醒（fork 的 `SubscriptionExpiryService` 没有 reminder 路径）。
 - `VERSION` / sponsors / gitignore / star-history / Dockerfile Go 镜像钉。
 
 ## 验证
@@ -91,6 +101,9 @@ metadata:
 | 前端 `tokenRefresh.spec.ts` | 7/7 通过 |
 | `go test -tags=unit ./internal/service ./internal/handler`（#5954/#5876/#5810） | 通过（service 3.9s / handler 4.1s） |
 | `go vet -tags integration`（改动包，含 input_tokens / ops SLA） | 通过 |
+| `go test -tags=unit`（#5567/#5004/#5725/#5714/#5834/#5925 子集） | 通过（config / repository / antigravity / service） |
+| `go vet -tags integration`（config / repository / antigravity / service） | 通过 |
+| 前端 `vue-tsc --noEmit`（#4057 SLA 空窗口） | 通过 |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
