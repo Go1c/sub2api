@@ -32,9 +32,18 @@ type OpenAIRecordUsageInput struct {
 	RequestPayloadHash string
 	APIKeyService      APIKeyQuotaUpdater
 	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
+	// PricingAt 是请求级定价时刻。零值回退记录时刻。
+	PricingAt time.Time
 	// CyberBlocked 为 true 时把该用量行标记为 cyber（request_type=cyber），计费逻辑不变。
 	CyberBlocked bool
 	ChannelUsageFields
+}
+
+func openAIUsagePricingAt(input *OpenAIRecordUsageInput) time.Time {
+	if input != nil && !input.PricingAt.IsZero() {
+		return input.PricingAt
+	}
+	return timezone.Now()
 }
 
 // CyberPolicyUsageInput 是 cyber 拒绝、未走正常 RecordUsage 的请求记录用量的入参。
@@ -163,7 +172,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
 	// 不并入上面的 Resolve，以免污染 user:group 倍率缓存。
 	baseMultiplier := multiplier
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, baseMultiplier, timezone.Now())
+	pricingAt := openAIUsagePricingAt(input)
+	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, baseMultiplier, pricingAt)
 	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
 
 	var cost *CostBreakdown
@@ -186,6 +196,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		result.UpstreamModel,
 		result.Model,
 	)
+	billingModels = s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, billingModels)
 	serviceTier := ""
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
@@ -210,6 +221,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		tokens,
 		serviceTier,
 		longContextBillingGate,
+		pricingAt,
 	)
 	if err != nil {
 		if !isUsagePricingUnavailableError(err) {
@@ -405,6 +417,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	tokens UsageTokens,
 	serviceTier string,
 	longContextBillingGate *bool,
+	pricingAt time.Time,
 ) (*CostBreakdown, error) {
 	billingModel := firstUsageBillingModel(billingModels)
 	if result != nil && result.WebSearchCalls > 0 {
@@ -426,7 +439,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		}
 	}
 	if len(billingModels) == 0 || billingModel == "" {
-		return nil, errors.New("openai usage billing model is empty")
+		return nil, fmt.Errorf("%w: openai usage billing model is empty", ErrModelPricingUnavailable)
 	}
 	var lastErr error
 	for _, candidate := range billingModels {
@@ -439,6 +452,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 			apiKey,
 			candidate,
 			multiplier,
+			pricingAt,
 			tokens,
 			serviceTier,
 			longContextBillingGate,
@@ -449,7 +463,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 		lastErr = err
 	}
 	if lastErr == nil {
-		lastErr = errors.New("no non-empty billing model candidates")
+		lastErr = fmt.Errorf("%w: no non-empty billing model candidates", ErrModelPricingUnavailable)
 	}
 	return nil, fmt.Errorf("calculate OpenAI usage cost failed for billing models %s: %w", strings.Join(billingModels, ","), lastErr)
 }
@@ -499,6 +513,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageTokenCost(
 	apiKey *APIKey,
 	billingModel string,
 	multiplier float64,
+	pricingAt time.Time,
 	tokens UsageTokens,
 	serviceTier string,
 	longContextBillingGate *bool,
@@ -513,6 +528,7 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageTokenCost(
 			Tokens:                    tokens,
 			RequestCount:              1,
 			RateMultiplier:            multiplier,
+			PricingAt:                 pricingAt,
 			ServiceTier:               serviceTier,
 			Resolver:                  s.resolver,
 			LongContextBillingEnabled: longContextBillingGate,
@@ -689,6 +705,27 @@ func groupMediaPricingLooksIncomplete(group *Group) bool {
 	}
 	return group.ImagePrice1K == nil && group.ImagePrice2K == nil && group.ImagePrice4K == nil &&
 		group.VideoPrice480P == nil && group.VideoPrice720P == nil && group.VideoPrice1080P == nil
+}
+
+// filterCNProviderBillingModelCandidates 过滤国产供应商（kimi/zhipu/deepseek）
+// 账号的计费候选模型名：claude-* 候选仅在运营者显式配置了分组/渠道定价时保留。
+func (s *OpenAIGatewayService) filterCNProviderBillingModelCandidates(ctx context.Context, account *Account, apiKey *APIKey, candidates []string) []string {
+	if account == nil || !account.IsCNProvider() {
+		return candidates
+	}
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(trimmed), "claude") &&
+			s.resolveOpenAIChannelPricing(ctx, trimmed, apiKey) == nil {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out
 }
 
 func (s *OpenAIGatewayService) resolveOpenAIChannelPricing(ctx context.Context, billingModel string, apiKey *APIKey) *ResolvedPricing {

@@ -45,6 +45,34 @@ func buildOpenAIResponsesURL(base string) string {
 	return buildOpenAIEndpointURL(base, "/v1/responses")
 }
 
+// buildOpenAIResponsesURLForPlatform 组装 Responses 端点（平台感知）。
+// DeepSeek 官方 Responses 端点为 /responses（无 /v1 前缀，适配 Codex）；
+// 其余平台维持 /v1/responses。
+func buildOpenAIResponsesURLForPlatform(platform string, base string) string {
+	if platform == PlatformDeepseek {
+		return buildOpenAIEndpointURL(base, "/responses")
+	}
+	return buildOpenAIResponsesURL(base)
+}
+
+// normalizeDeepSeekResponsesRequestBody 适配 DeepSeek 无状态 Responses 端点：
+// 强制 store=false 并清除 previous_response_id（官方 /responses 不支持服务端
+// 状态存储，携带这些字段会被拒绝）。非 deepseek responses 协议账号原样返回。
+func normalizeDeepSeekResponsesRequestBody(account *Account, body []byte) []byte {
+	if account == nil || account.Platform != PlatformDeepseek ||
+		(account.GetAPIProtocol() != APIProtocolResponses && !account.IsAdaptiveAPIProtocol()) {
+		return body
+	}
+	normalized, err := sjson.SetBytes(body, "store", false)
+	if err != nil {
+		return body
+	}
+	if stripped, err := sjson.DeleteBytes(normalized, "previous_response_id"); err == nil {
+		normalized = stripped
+	}
+	return normalized
+}
+
 func trimOpenAIEncryptedReasoningItems(reqBody map[string]any) bool {
 	if len(reqBody) == 0 {
 		return false
@@ -132,7 +160,14 @@ func sanitizeEncryptedReasoningInputItem(item any) (next any, changed bool, keep
 	}
 
 	itemType, _ := inputItem["type"].(string)
-	if strings.TrimSpace(itemType) != "reasoning" {
+	switch strings.TrimSpace(itemType) {
+	case "compaction", "compaction_summary":
+		if _, encrypted := inputItem["encrypted_content"]; encrypted {
+			return nil, true, false
+		}
+		return item, false, true
+	case "reasoning":
+	default:
 		return item, false, true
 	}
 
@@ -288,6 +323,12 @@ func NormalizeOpenAICompactRequestBodyForTest(body []byte) ([]byte, bool, error)
 func isOpenAIResponsesCompactPath(c *gin.Context) bool {
 	suffix := strings.TrimSpace(openAIResponsesRequestPathSuffix(c))
 	return suffix == "/compact" || strings.HasPrefix(suffix, "/compact/")
+}
+
+// IsOpenAIResponsesInputTokensRequestPath reports whether the request targets
+// the native Responses input-token counting endpoint.
+func IsOpenAIResponsesInputTokensRequestPath(c *gin.Context) bool {
+	return openAIResponsesRequestPathSuffix(c) == "/input_tokens"
 }
 
 func normalizeOpenAICompactRequestBody(body []byte) ([]byte, bool, error) {
@@ -1415,8 +1456,31 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 }
 
 func normalizeOpenAIReasoningEffortForModel(raw, model string) string {
-	if strings.EqualFold(strings.TrimSpace(raw), "max") && isOpenAIGPT56Model(model) {
+	if strings.EqualFold(strings.TrimSpace(raw), "max") && supportsOpenAIReasoningEffortMax(model) {
 		return "max"
 	}
 	return normalizeOpenAIReasoningEffort(raw)
+}
+
+// supportsOpenAIReasoningEffortMax reports model families whose upstream scale
+// has a distinct max level. Other models keep the legacy max -> xhigh behavior.
+func supportsOpenAIReasoningEffortMax(model string) bool {
+	if isOpenAIGPT56Model(model) {
+		return true
+	}
+
+	normalized := strings.ToLower(lastOpenAIModelSegment(model))
+	normalized = strings.ReplaceAll(normalized, "_", "-")
+	switch {
+	case strings.HasPrefix(normalized, "deepseek-v4"):
+		return true
+	case strings.HasPrefix(normalized, "glm-"):
+		return true
+	case strings.HasPrefix(normalized, "kimi-"), strings.HasPrefix(normalized, "moonshot-"):
+		return true
+	case normalized == "k3" || strings.HasPrefix(normalized, "k3-"):
+		return true
+	default:
+		return false
+	}
 }

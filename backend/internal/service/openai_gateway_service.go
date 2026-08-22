@@ -264,8 +264,9 @@ type OpenAIForwardResult struct {
 	// WebSearchCalls 是 Codex alpha/search 网页搜索调用次数（每次成功请求为 1）。
 	WebSearchCalls int
 
-	wsReplayInput       []json.RawMessage
-	wsReplayInputExists bool
+	wsReplayInput                []json.RawMessage
+	wsReplayInputExists          bool
+	wsAccountFailoverReplayInput []json.RawMessage
 }
 
 // SucceededForScheduling reports whether this result is an upstream success
@@ -444,6 +445,8 @@ type OpenAIGatewayService struct {
 	// 剥离跨账号回带（openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+
+	openaiWSSessionPreemptions openAIWSSessionPreemptRegistry
 }
 
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
@@ -1199,7 +1202,7 @@ func (s *OpenAIGatewayService) GetAccessToken(ctx context.Context, account *Acco
 			}
 			return apiKey, "apikey", nil
 		}
-		apiKey := account.GetOpenAIApiKey()
+		apiKey := strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
 		if apiKey == "" {
 			return "", "", errors.New("api_key not found in credentials")
 		}

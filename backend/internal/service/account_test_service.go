@@ -193,6 +193,19 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 
 	// Route to platform-specific test method
+	if account.IsCNProvider() {
+		switch account.GetAPIProtocol() {
+		case APIProtocolAdaptive:
+			return s.testCNProviderAdaptiveConnection(c, account, modelID, prompt)
+		case APIProtocolResponses:
+			return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
+		case APIProtocolChatCompletions:
+			return s.testCNProviderChatCompletionsConnection(c, account, modelID, prompt)
+		case APIProtocolAnthropic:
+			return s.testCNProviderAnthropicConnection(c, account, modelID)
+		}
+	}
+
 	if account.IsOpenAI() {
 		return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
 	}
@@ -210,6 +223,27 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 
 	return s.testClaudeAccountConnection(c, account, modelID)
+}
+
+func (s *AccountTestService) testCNProviderChatCompletionsConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
+	testModelID := strings.TrimSpace(modelID)
+	if testModelID == "" {
+		testModelID = openai.DefaultTestModel
+	}
+	testModelID = account.GetMappedModel(testModelID)
+
+	authToken := strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
+	if authToken == "" {
+		return s.sendErrorAndEnd(c, "No API key available")
+	}
+
+	baseURL := account.GetOpenAIBaseURL()
+	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
+	if err != nil {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
+	}
+
+	return s.testOpenAIChatCompletionsConnection(c, account, testModelID, prompt, normalizedBaseURL, authToken)
 }
 
 // testClaudeAccountConnection tests an Anthropic Claude account's connection
@@ -565,7 +599,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		apiURL = chatgptCodexAPIURL
 	} else if credentialAccount.Type == "apikey" {
 		// API Key - use Platform API
-		authToken = credentialAccount.GetOpenAIApiKey()
+		authToken = credentialAccount.GetOpenAIProtocolAPIKey()
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No API key available")
 		}
@@ -581,7 +615,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		if !openai_compat.ShouldUseResponsesAPI(account.Extra) {
 			return s.testOpenAIChatCompletionsConnection(c, account, testModelID, prompt, normalizedBaseURL, authToken)
 		}
-		apiURL = buildOpenAIResponsesURL(normalizedBaseURL)
+		apiURL = buildOpenAIResponsesURLForPlatform(credentialAccount.Platform, normalizedBaseURL)
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -635,11 +669,12 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		req.Host = "chatgpt.com"
 		req.Header.Set("accept", "text/event-stream")
 		req.Header.Set("OpenAI-Beta", "responses=experimental")
-		req.Header.Set("Originator", "codex_cli_rs")
+		canonical := resolveCodexOutboundIdentity("")
+		req.Header.Set("Originator", canonical.originator)
 		if customUA := strings.TrimSpace(credentialAccount.GetOpenAIUserAgent()); customUA != "" {
 			req.Header.Set("User-Agent", customUA)
 		} else {
-			req.Header.Set("User-Agent", codexCLIUserAgent)
+			req.Header.Set("User-Agent", canonical.userAgent)
 		}
 		setOpenAIChatGPTAccountHeaders(req.Header, credentialAccount)
 		// 与真实转发一致：originator 与最终 User-Agent 首段配套，否则上游 404（issue #3901）。
@@ -951,9 +986,10 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	}
 	req.Header.Set("OpenAI-Beta", "responses=experimental")
-	req.Header.Set("Originator", "codex_cli_rs")
-	req.Header.Set("User-Agent", codexCLIUserAgent)
-	req.Header.Set("Version", codexCLIVersion)
+	canonical := resolveCodexOutboundIdentity("")
+	req.Header.Set("Originator", canonical.originator)
+	req.Header.Set("User-Agent", canonical.userAgent)
+	req.Header.Set("Version", canonical.version)
 	probeSessionID := compactProbeSessionID(account.ID)
 	req.Header.Set("Session_ID", probeSessionID)
 	req.Header.Set("Conversation_ID", probeSessionID)
@@ -966,6 +1002,10 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 		if fpIDs := resolveCodexFingerprintIDsFromRequest(account, req.Header); fpIDs != nil {
 			applyCodexFingerprintHeaders(req.Header, fpIDs)
 		}
+		if customUA := strings.TrimSpace(credentialAccount.GetOpenAIUserAgent()); customUA != "" {
+			req.Header.Set("User-Agent", customUA)
+		}
+		enforceCodexIdentityHeaders(req.Header)
 	}
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
@@ -1853,11 +1893,12 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("OpenAI-Beta", "responses=experimental")
-	req.Header.Set("originator", "codex_cli_rs")
+	canonical := resolveCodexOutboundIdentity("")
+	req.Header.Set("originator", canonical.originator)
 	if customUA := strings.TrimSpace(credentialAccount.GetOpenAIUserAgent()); customUA != "" {
 		req.Header.Set("User-Agent", customUA)
 	} else {
-		req.Header.Set("User-Agent", codexCLIUserAgent)
+		req.Header.Set("User-Agent", canonical.userAgent)
 	}
 	setOpenAIChatGPTAccountHeaders(req.Header, credentialAccount)
 	// 与真实转发一致：originator 与最终 User-Agent 首段配套（原 opencode 与 Codex UA 错配会 404，issue #3901）。
@@ -1917,6 +1958,13 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 }
 
 func (s *AccountTestService) sendEvent(c *gin.Context, event TestEvent) {
+	if event.Type == "test_complete" {
+		if suppress, ok := c.Get(accountTestSuppressCompletionContextKey); ok {
+			if suppressCompletion, _ := suppress.(bool); suppressCompletion {
+				return
+			}
+		}
+	}
 	eventJSON, _ := json.Marshal(event)
 	if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", eventJSON); err != nil {
 		log.Printf("failed to write SSE event: %v", err)

@@ -30,6 +30,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -91,6 +92,7 @@ const (
 	TypeChannelMonitorDailyRollup      = "ChannelMonitorDailyRollup"
 	TypeChannelMonitorHistory          = "ChannelMonitorHistory"
 	TypeChannelMonitorRequestTemplate  = "ChannelMonitorRequestTemplate"
+	TypeCompositeModelRoute            = "CompositeModelRoute"
 	TypeErrorPassthroughRule           = "ErrorPassthroughRule"
 	TypeGroup                          = "Group"
 	TypeIdempotencyRecord              = "IdempotencyRecord"
@@ -18955,6 +18957,9 @@ type ChannelMonitorMutation struct {
 	updated_at                  *time.Time
 	name                        *string
 	provider                    *channelmonitor.Provider
+	check_mode                  *string
+	account_id                  *int64
+	addaccount_id               *int64
 	api_mode                    *string
 	endpoint                    *string
 	api_key_encrypted           *string
@@ -19228,6 +19233,112 @@ func (m *ChannelMonitorMutation) OldProvider(ctx context.Context) (v channelmoni
 // ResetProvider resets all changes to the "provider" field.
 func (m *ChannelMonitorMutation) ResetProvider() {
 	m.provider = nil
+}
+
+// SetCheckMode sets the "check_mode" field.
+func (m *ChannelMonitorMutation) SetCheckMode(s string) {
+	m.check_mode = &s
+}
+
+// CheckMode returns the value of the "check_mode" field in the mutation.
+func (m *ChannelMonitorMutation) CheckMode() (r string, exists bool) {
+	v := m.check_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCheckMode returns the old "check_mode" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldCheckMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCheckMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCheckMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCheckMode: %w", err)
+	}
+	return oldValue.CheckMode, nil
+}
+
+// ResetCheckMode resets all changes to the "check_mode" field.
+func (m *ChannelMonitorMutation) ResetCheckMode() {
+	m.check_mode = nil
+}
+
+// SetAccountID sets the "account_id" field.
+func (m *ChannelMonitorMutation) SetAccountID(i int64) {
+	m.account_id = &i
+	m.addaccount_id = nil
+}
+
+// AccountID returns the value of the "account_id" field in the mutation.
+func (m *ChannelMonitorMutation) AccountID() (r int64, exists bool) {
+	v := m.account_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAccountID returns the old "account_id" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldAccountID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAccountID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAccountID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAccountID: %w", err)
+	}
+	return oldValue.AccountID, nil
+}
+
+// AddAccountID adds i to the "account_id" field.
+func (m *ChannelMonitorMutation) AddAccountID(i int64) {
+	if m.addaccount_id != nil {
+		*m.addaccount_id += i
+	} else {
+		m.addaccount_id = &i
+	}
+}
+
+// AddedAccountID returns the value that was added to the "account_id" field in this mutation.
+func (m *ChannelMonitorMutation) AddedAccountID() (r int64, exists bool) {
+	v := m.addaccount_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAccountID clears the value of the "account_id" field.
+func (m *ChannelMonitorMutation) ClearAccountID() {
+	m.account_id = nil
+	m.addaccount_id = nil
+	m.clearedFields[channelmonitor.FieldAccountID] = struct{}{}
+}
+
+// AccountIDCleared returns if the "account_id" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) AccountIDCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldAccountID]
+	return ok
+}
+
+// ResetAccountID resets all changes to the "account_id" field.
+func (m *ChannelMonitorMutation) ResetAccountID() {
+	m.account_id = nil
+	m.addaccount_id = nil
+	delete(m.clearedFields, channelmonitor.FieldAccountID)
 }
 
 // SetAPIMode sets the "api_mode" field.
@@ -20115,7 +20226,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 22)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -20127,6 +20238,12 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	}
 	if m.provider != nil {
 		fields = append(fields, channelmonitor.FieldProvider)
+	}
+	if m.check_mode != nil {
+		fields = append(fields, channelmonitor.FieldCheckMode)
+	}
+	if m.account_id != nil {
+		fields = append(fields, channelmonitor.FieldAccountID)
 	}
 	if m.api_mode != nil {
 		fields = append(fields, channelmonitor.FieldAPIMode)
@@ -20192,6 +20309,10 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case channelmonitor.FieldProvider:
 		return m.Provider()
+	case channelmonitor.FieldCheckMode:
+		return m.CheckMode()
+	case channelmonitor.FieldAccountID:
+		return m.AccountID()
 	case channelmonitor.FieldAPIMode:
 		return m.APIMode()
 	case channelmonitor.FieldEndpoint:
@@ -20241,6 +20362,10 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldName(ctx)
 	case channelmonitor.FieldProvider:
 		return m.OldProvider(ctx)
+	case channelmonitor.FieldCheckMode:
+		return m.OldCheckMode(ctx)
+	case channelmonitor.FieldAccountID:
+		return m.OldAccountID(ctx)
 	case channelmonitor.FieldAPIMode:
 		return m.OldAPIMode(ctx)
 	case channelmonitor.FieldEndpoint:
@@ -20309,6 +20434,20 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProvider(v)
+		return nil
+	case channelmonitor.FieldCheckMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCheckMode(v)
+		return nil
+	case channelmonitor.FieldAccountID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAccountID(v)
 		return nil
 	case channelmonitor.FieldAPIMode:
 		v, ok := value.(string)
@@ -20430,6 +20569,9 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ChannelMonitorMutation) AddedFields() []string {
 	var fields []string
+	if m.addaccount_id != nil {
+		fields = append(fields, channelmonitor.FieldAccountID)
+	}
 	if m.addinterval_seconds != nil {
 		fields = append(fields, channelmonitor.FieldIntervalSeconds)
 	}
@@ -20447,6 +20589,8 @@ func (m *ChannelMonitorMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ChannelMonitorMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case channelmonitor.FieldAccountID:
+		return m.AddedAccountID()
 	case channelmonitor.FieldIntervalSeconds:
 		return m.AddedIntervalSeconds()
 	case channelmonitor.FieldJitterSeconds:
@@ -20462,6 +20606,13 @@ func (m *ChannelMonitorMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ChannelMonitorMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case channelmonitor.FieldAccountID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAccountID(v)
+		return nil
 	case channelmonitor.FieldIntervalSeconds:
 		v, ok := value.(int)
 		if !ok {
@@ -20491,6 +20642,9 @@ func (m *ChannelMonitorMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ChannelMonitorMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(channelmonitor.FieldAccountID) {
+		fields = append(fields, channelmonitor.FieldAccountID)
+	}
 	if m.FieldCleared(channelmonitor.FieldGroupName) {
 		fields = append(fields, channelmonitor.FieldGroupName)
 	}
@@ -20517,6 +20671,9 @@ func (m *ChannelMonitorMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ChannelMonitorMutation) ClearField(name string) error {
 	switch name {
+	case channelmonitor.FieldAccountID:
+		m.ClearAccountID()
+		return nil
 	case channelmonitor.FieldGroupName:
 		m.ClearGroupName()
 		return nil
@@ -20548,6 +20705,12 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldProvider:
 		m.ResetProvider()
+		return nil
+	case channelmonitor.FieldCheckMode:
+		m.ResetCheckMode()
+		return nil
+	case channelmonitor.FieldAccountID:
+		m.ResetAccountID()
 		return nil
 	case channelmonitor.FieldAPIMode:
 		m.ResetAPIMode()
@@ -22157,6 +22320,7 @@ type ChannelMonitorHistoryMutation struct {
 	ping_latency_ms    *int
 	addping_latency_ms *int
 	message            *string
+	quota              **domain.MonitorQuotaSnapshot
 	checked_at         *time.Time
 	clearedFields      map[string]struct{}
 	monitor            *int64
@@ -22561,6 +22725,55 @@ func (m *ChannelMonitorHistoryMutation) ResetMessage() {
 	delete(m.clearedFields, channelmonitorhistory.FieldMessage)
 }
 
+// SetQuota sets the "quota" field.
+func (m *ChannelMonitorHistoryMutation) SetQuota(dqs *domain.MonitorQuotaSnapshot) {
+	m.quota = &dqs
+}
+
+// Quota returns the value of the "quota" field in the mutation.
+func (m *ChannelMonitorHistoryMutation) Quota() (r *domain.MonitorQuotaSnapshot, exists bool) {
+	v := m.quota
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuota returns the old "quota" field's value of the ChannelMonitorHistory entity.
+// If the ChannelMonitorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorHistoryMutation) OldQuota(ctx context.Context) (v *domain.MonitorQuotaSnapshot, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuota is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuota requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuota: %w", err)
+	}
+	return oldValue.Quota, nil
+}
+
+// ClearQuota clears the value of the "quota" field.
+func (m *ChannelMonitorHistoryMutation) ClearQuota() {
+	m.quota = nil
+	m.clearedFields[channelmonitorhistory.FieldQuota] = struct{}{}
+}
+
+// QuotaCleared returns if the "quota" field was cleared in this mutation.
+func (m *ChannelMonitorHistoryMutation) QuotaCleared() bool {
+	_, ok := m.clearedFields[channelmonitorhistory.FieldQuota]
+	return ok
+}
+
+// ResetQuota resets all changes to the "quota" field.
+func (m *ChannelMonitorHistoryMutation) ResetQuota() {
+	m.quota = nil
+	delete(m.clearedFields, channelmonitorhistory.FieldQuota)
+}
+
 // SetCheckedAt sets the "checked_at" field.
 func (m *ChannelMonitorHistoryMutation) SetCheckedAt(t time.Time) {
 	m.checked_at = &t
@@ -22658,7 +22871,7 @@ func (m *ChannelMonitorHistoryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorHistoryMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.monitor != nil {
 		fields = append(fields, channelmonitorhistory.FieldMonitorID)
 	}
@@ -22676,6 +22889,9 @@ func (m *ChannelMonitorHistoryMutation) Fields() []string {
 	}
 	if m.message != nil {
 		fields = append(fields, channelmonitorhistory.FieldMessage)
+	}
+	if m.quota != nil {
+		fields = append(fields, channelmonitorhistory.FieldQuota)
 	}
 	if m.checked_at != nil {
 		fields = append(fields, channelmonitorhistory.FieldCheckedAt)
@@ -22700,6 +22916,8 @@ func (m *ChannelMonitorHistoryMutation) Field(name string) (ent.Value, bool) {
 		return m.PingLatencyMs()
 	case channelmonitorhistory.FieldMessage:
 		return m.Message()
+	case channelmonitorhistory.FieldQuota:
+		return m.Quota()
 	case channelmonitorhistory.FieldCheckedAt:
 		return m.CheckedAt()
 	}
@@ -22723,6 +22941,8 @@ func (m *ChannelMonitorHistoryMutation) OldField(ctx context.Context, name strin
 		return m.OldPingLatencyMs(ctx)
 	case channelmonitorhistory.FieldMessage:
 		return m.OldMessage(ctx)
+	case channelmonitorhistory.FieldQuota:
+		return m.OldQuota(ctx)
 	case channelmonitorhistory.FieldCheckedAt:
 		return m.OldCheckedAt(ctx)
 	}
@@ -22775,6 +22995,13 @@ func (m *ChannelMonitorHistoryMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMessage(v)
+		return nil
+	case channelmonitorhistory.FieldQuota:
+		v, ok := value.(*domain.MonitorQuotaSnapshot)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuota(v)
 		return nil
 	case channelmonitorhistory.FieldCheckedAt:
 		v, ok := value.(time.Time)
@@ -22849,6 +23076,9 @@ func (m *ChannelMonitorHistoryMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitorhistory.FieldMessage) {
 		fields = append(fields, channelmonitorhistory.FieldMessage)
 	}
+	if m.FieldCleared(channelmonitorhistory.FieldQuota) {
+		fields = append(fields, channelmonitorhistory.FieldQuota)
+	}
 	return fields
 }
 
@@ -22871,6 +23101,9 @@ func (m *ChannelMonitorHistoryMutation) ClearField(name string) error {
 		return nil
 	case channelmonitorhistory.FieldMessage:
 		m.ClearMessage()
+		return nil
+	case channelmonitorhistory.FieldQuota:
+		m.ClearQuota()
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitorHistory nullable field %s", name)
@@ -22897,6 +23130,9 @@ func (m *ChannelMonitorHistoryMutation) ResetField(name string) error {
 		return nil
 	case channelmonitorhistory.FieldMessage:
 		m.ResetMessage()
+		return nil
+	case channelmonitorhistory.FieldQuota:
+		m.ResetQuota()
 		return nil
 	case channelmonitorhistory.FieldCheckedAt:
 		m.ResetCheckedAt()
@@ -23869,6 +24105,1057 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitorRequestTemplate edge %s", name)
+}
+
+// CompositeModelRouteMutation represents an operation that mutates the CompositeModelRoute nodes in the graph.
+type CompositeModelRouteMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *int64
+	created_at      *time.Time
+	updated_at      *time.Time
+	deleted_at      *time.Time
+	public_model    *string
+	match_type      *string
+	target_platform *string
+	upstream_model  *string
+	endpoint        *string
+	priority        *int
+	addpriority     *int
+	enabled         *bool
+	notes           *string
+	clearedFields   map[string]struct{}
+	group           *int64
+	clearedgroup    bool
+	done            bool
+	oldValue        func(context.Context) (*CompositeModelRoute, error)
+	predicates      []predicate.CompositeModelRoute
+}
+
+var _ ent.Mutation = (*CompositeModelRouteMutation)(nil)
+
+// compositemodelrouteOption allows management of the mutation configuration using functional options.
+type compositemodelrouteOption func(*CompositeModelRouteMutation)
+
+// newCompositeModelRouteMutation creates new mutation for the CompositeModelRoute entity.
+func newCompositeModelRouteMutation(c config, op Op, opts ...compositemodelrouteOption) *CompositeModelRouteMutation {
+	m := &CompositeModelRouteMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCompositeModelRoute,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCompositeModelRouteID sets the ID field of the mutation.
+func withCompositeModelRouteID(id int64) compositemodelrouteOption {
+	return func(m *CompositeModelRouteMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CompositeModelRoute
+		)
+		m.oldValue = func(ctx context.Context) (*CompositeModelRoute, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CompositeModelRoute.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCompositeModelRoute sets the old CompositeModelRoute of the mutation.
+func withCompositeModelRoute(node *CompositeModelRoute) compositemodelrouteOption {
+	return func(m *CompositeModelRouteMutation) {
+		m.oldValue = func(context.Context) (*CompositeModelRoute, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CompositeModelRouteMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CompositeModelRouteMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CompositeModelRouteMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CompositeModelRouteMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CompositeModelRoute.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CompositeModelRouteMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CompositeModelRouteMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CompositeModelRouteMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CompositeModelRouteMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CompositeModelRouteMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CompositeModelRouteMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *CompositeModelRouteMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *CompositeModelRouteMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *CompositeModelRouteMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[compositemodelroute.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *CompositeModelRouteMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[compositemodelroute.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *CompositeModelRouteMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, compositemodelroute.FieldDeletedAt)
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *CompositeModelRouteMutation) SetGroupID(i int64) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *CompositeModelRouteMutation) GroupID() (r int64, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *CompositeModelRouteMutation) ResetGroupID() {
+	m.group = nil
+}
+
+// SetPublicModel sets the "public_model" field.
+func (m *CompositeModelRouteMutation) SetPublicModel(s string) {
+	m.public_model = &s
+}
+
+// PublicModel returns the value of the "public_model" field in the mutation.
+func (m *CompositeModelRouteMutation) PublicModel() (r string, exists bool) {
+	v := m.public_model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPublicModel returns the old "public_model" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldPublicModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPublicModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPublicModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPublicModel: %w", err)
+	}
+	return oldValue.PublicModel, nil
+}
+
+// ResetPublicModel resets all changes to the "public_model" field.
+func (m *CompositeModelRouteMutation) ResetPublicModel() {
+	m.public_model = nil
+}
+
+// SetMatchType sets the "match_type" field.
+func (m *CompositeModelRouteMutation) SetMatchType(s string) {
+	m.match_type = &s
+}
+
+// MatchType returns the value of the "match_type" field in the mutation.
+func (m *CompositeModelRouteMutation) MatchType() (r string, exists bool) {
+	v := m.match_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMatchType returns the old "match_type" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldMatchType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMatchType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMatchType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMatchType: %w", err)
+	}
+	return oldValue.MatchType, nil
+}
+
+// ResetMatchType resets all changes to the "match_type" field.
+func (m *CompositeModelRouteMutation) ResetMatchType() {
+	m.match_type = nil
+}
+
+// SetTargetPlatform sets the "target_platform" field.
+func (m *CompositeModelRouteMutation) SetTargetPlatform(s string) {
+	m.target_platform = &s
+}
+
+// TargetPlatform returns the value of the "target_platform" field in the mutation.
+func (m *CompositeModelRouteMutation) TargetPlatform() (r string, exists bool) {
+	v := m.target_platform
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetPlatform returns the old "target_platform" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldTargetPlatform(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetPlatform is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetPlatform requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetPlatform: %w", err)
+	}
+	return oldValue.TargetPlatform, nil
+}
+
+// ResetTargetPlatform resets all changes to the "target_platform" field.
+func (m *CompositeModelRouteMutation) ResetTargetPlatform() {
+	m.target_platform = nil
+}
+
+// SetUpstreamModel sets the "upstream_model" field.
+func (m *CompositeModelRouteMutation) SetUpstreamModel(s string) {
+	m.upstream_model = &s
+}
+
+// UpstreamModel returns the value of the "upstream_model" field in the mutation.
+func (m *CompositeModelRouteMutation) UpstreamModel() (r string, exists bool) {
+	v := m.upstream_model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamModel returns the old "upstream_model" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldUpstreamModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamModel: %w", err)
+	}
+	return oldValue.UpstreamModel, nil
+}
+
+// ResetUpstreamModel resets all changes to the "upstream_model" field.
+func (m *CompositeModelRouteMutation) ResetUpstreamModel() {
+	m.upstream_model = nil
+}
+
+// SetEndpoint sets the "endpoint" field.
+func (m *CompositeModelRouteMutation) SetEndpoint(s string) {
+	m.endpoint = &s
+}
+
+// Endpoint returns the value of the "endpoint" field in the mutation.
+func (m *CompositeModelRouteMutation) Endpoint() (r string, exists bool) {
+	v := m.endpoint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndpoint returns the old "endpoint" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldEndpoint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndpoint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndpoint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndpoint: %w", err)
+	}
+	return oldValue.Endpoint, nil
+}
+
+// ResetEndpoint resets all changes to the "endpoint" field.
+func (m *CompositeModelRouteMutation) ResetEndpoint() {
+	m.endpoint = nil
+}
+
+// SetPriority sets the "priority" field.
+func (m *CompositeModelRouteMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *CompositeModelRouteMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *CompositeModelRouteMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *CompositeModelRouteMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *CompositeModelRouteMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *CompositeModelRouteMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *CompositeModelRouteMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *CompositeModelRouteMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetNotes sets the "notes" field.
+func (m *CompositeModelRouteMutation) SetNotes(s string) {
+	m.notes = &s
+}
+
+// Notes returns the value of the "notes" field in the mutation.
+func (m *CompositeModelRouteMutation) Notes() (r string, exists bool) {
+	v := m.notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNotes returns the old "notes" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldNotes(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNotes: %w", err)
+	}
+	return oldValue.Notes, nil
+}
+
+// ClearNotes clears the value of the "notes" field.
+func (m *CompositeModelRouteMutation) ClearNotes() {
+	m.notes = nil
+	m.clearedFields[compositemodelroute.FieldNotes] = struct{}{}
+}
+
+// NotesCleared returns if the "notes" field was cleared in this mutation.
+func (m *CompositeModelRouteMutation) NotesCleared() bool {
+	_, ok := m.clearedFields[compositemodelroute.FieldNotes]
+	return ok
+}
+
+// ResetNotes resets all changes to the "notes" field.
+func (m *CompositeModelRouteMutation) ResetNotes() {
+	m.notes = nil
+	delete(m.clearedFields, compositemodelroute.FieldNotes)
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *CompositeModelRouteMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[compositemodelroute.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *CompositeModelRouteMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *CompositeModelRouteMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *CompositeModelRouteMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// Where appends a list predicates to the CompositeModelRouteMutation builder.
+func (m *CompositeModelRouteMutation) Where(ps ...predicate.CompositeModelRoute) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CompositeModelRouteMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CompositeModelRouteMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CompositeModelRoute, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CompositeModelRouteMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CompositeModelRouteMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CompositeModelRoute).
+func (m *CompositeModelRouteMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CompositeModelRouteMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.created_at != nil {
+		fields = append(fields, compositemodelroute.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, compositemodelroute.FieldUpdatedAt)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, compositemodelroute.FieldDeletedAt)
+	}
+	if m.group != nil {
+		fields = append(fields, compositemodelroute.FieldGroupID)
+	}
+	if m.public_model != nil {
+		fields = append(fields, compositemodelroute.FieldPublicModel)
+	}
+	if m.match_type != nil {
+		fields = append(fields, compositemodelroute.FieldMatchType)
+	}
+	if m.target_platform != nil {
+		fields = append(fields, compositemodelroute.FieldTargetPlatform)
+	}
+	if m.upstream_model != nil {
+		fields = append(fields, compositemodelroute.FieldUpstreamModel)
+	}
+	if m.endpoint != nil {
+		fields = append(fields, compositemodelroute.FieldEndpoint)
+	}
+	if m.priority != nil {
+		fields = append(fields, compositemodelroute.FieldPriority)
+	}
+	if m.enabled != nil {
+		fields = append(fields, compositemodelroute.FieldEnabled)
+	}
+	if m.notes != nil {
+		fields = append(fields, compositemodelroute.FieldNotes)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CompositeModelRouteMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case compositemodelroute.FieldCreatedAt:
+		return m.CreatedAt()
+	case compositemodelroute.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case compositemodelroute.FieldDeletedAt:
+		return m.DeletedAt()
+	case compositemodelroute.FieldGroupID:
+		return m.GroupID()
+	case compositemodelroute.FieldPublicModel:
+		return m.PublicModel()
+	case compositemodelroute.FieldMatchType:
+		return m.MatchType()
+	case compositemodelroute.FieldTargetPlatform:
+		return m.TargetPlatform()
+	case compositemodelroute.FieldUpstreamModel:
+		return m.UpstreamModel()
+	case compositemodelroute.FieldEndpoint:
+		return m.Endpoint()
+	case compositemodelroute.FieldPriority:
+		return m.Priority()
+	case compositemodelroute.FieldEnabled:
+		return m.Enabled()
+	case compositemodelroute.FieldNotes:
+		return m.Notes()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CompositeModelRouteMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case compositemodelroute.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case compositemodelroute.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case compositemodelroute.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
+	case compositemodelroute.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case compositemodelroute.FieldPublicModel:
+		return m.OldPublicModel(ctx)
+	case compositemodelroute.FieldMatchType:
+		return m.OldMatchType(ctx)
+	case compositemodelroute.FieldTargetPlatform:
+		return m.OldTargetPlatform(ctx)
+	case compositemodelroute.FieldUpstreamModel:
+		return m.OldUpstreamModel(ctx)
+	case compositemodelroute.FieldEndpoint:
+		return m.OldEndpoint(ctx)
+	case compositemodelroute.FieldPriority:
+		return m.OldPriority(ctx)
+	case compositemodelroute.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case compositemodelroute.FieldNotes:
+		return m.OldNotes(ctx)
+	}
+	return nil, fmt.Errorf("unknown CompositeModelRoute field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CompositeModelRouteMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case compositemodelroute.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case compositemodelroute.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case compositemodelroute.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
+		return nil
+	case compositemodelroute.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case compositemodelroute.FieldPublicModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPublicModel(v)
+		return nil
+	case compositemodelroute.FieldMatchType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMatchType(v)
+		return nil
+	case compositemodelroute.FieldTargetPlatform:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetPlatform(v)
+		return nil
+	case compositemodelroute.FieldUpstreamModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamModel(v)
+		return nil
+	case compositemodelroute.FieldEndpoint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndpoint(v)
+		return nil
+	case compositemodelroute.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	case compositemodelroute.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case compositemodelroute.FieldNotes:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNotes(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CompositeModelRoute field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CompositeModelRouteMutation) AddedFields() []string {
+	var fields []string
+	if m.addpriority != nil {
+		fields = append(fields, compositemodelroute.FieldPriority)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CompositeModelRouteMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case compositemodelroute.FieldPriority:
+		return m.AddedPriority()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CompositeModelRouteMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case compositemodelroute.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CompositeModelRoute numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CompositeModelRouteMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(compositemodelroute.FieldDeletedAt) {
+		fields = append(fields, compositemodelroute.FieldDeletedAt)
+	}
+	if m.FieldCleared(compositemodelroute.FieldNotes) {
+		fields = append(fields, compositemodelroute.FieldNotes)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CompositeModelRouteMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CompositeModelRouteMutation) ClearField(name string) error {
+	switch name {
+	case compositemodelroute.FieldDeletedAt:
+		m.ClearDeletedAt()
+		return nil
+	case compositemodelroute.FieldNotes:
+		m.ClearNotes()
+		return nil
+	}
+	return fmt.Errorf("unknown CompositeModelRoute nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CompositeModelRouteMutation) ResetField(name string) error {
+	switch name {
+	case compositemodelroute.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case compositemodelroute.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case compositemodelroute.FieldDeletedAt:
+		m.ResetDeletedAt()
+		return nil
+	case compositemodelroute.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case compositemodelroute.FieldPublicModel:
+		m.ResetPublicModel()
+		return nil
+	case compositemodelroute.FieldMatchType:
+		m.ResetMatchType()
+		return nil
+	case compositemodelroute.FieldTargetPlatform:
+		m.ResetTargetPlatform()
+		return nil
+	case compositemodelroute.FieldUpstreamModel:
+		m.ResetUpstreamModel()
+		return nil
+	case compositemodelroute.FieldEndpoint:
+		m.ResetEndpoint()
+		return nil
+	case compositemodelroute.FieldPriority:
+		m.ResetPriority()
+		return nil
+	case compositemodelroute.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case compositemodelroute.FieldNotes:
+		m.ResetNotes()
+		return nil
+	}
+	return fmt.Errorf("unknown CompositeModelRoute field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CompositeModelRouteMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.group != nil {
+		edges = append(edges, compositemodelroute.EdgeGroup)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CompositeModelRouteMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case compositemodelroute.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CompositeModelRouteMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CompositeModelRouteMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CompositeModelRouteMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedgroup {
+		edges = append(edges, compositemodelroute.EdgeGroup)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CompositeModelRouteMutation) EdgeCleared(name string) bool {
+	switch name {
+	case compositemodelroute.EdgeGroup:
+		return m.clearedgroup
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CompositeModelRouteMutation) ClearEdge(name string) error {
+	switch name {
+	case compositemodelroute.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown CompositeModelRoute unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CompositeModelRouteMutation) ResetEdge(name string) error {
+	switch name {
+	case compositemodelroute.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown CompositeModelRoute edge %s", name)
 }
 
 // ErrorPassthroughRuleMutation represents an operation that mutates the ErrorPassthroughRule nodes in the graph.

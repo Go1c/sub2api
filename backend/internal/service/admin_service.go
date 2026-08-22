@@ -46,6 +46,11 @@ type AdminService interface {
 	GetAllGroupsIncludingInactive(ctx context.Context) ([]Group, error)
 	GetGroup(ctx context.Context, id int64) (*Group, error)
 	GetGroupModelsListCandidates(ctx context.Context, id int64, platform string) ([]string, error)
+	ListCompositeRoutes(ctx context.Context, groupID int64) ([]CompositeModelRoute, error)
+	CreateCompositeRoute(ctx context.Context, groupID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
+	UpdateCompositeRoute(ctx context.Context, groupID, routeID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
+	DeleteCompositeRoute(ctx context.Context, groupID, routeID int64) error
+	PreviewCompositeRoute(ctx context.Context, groupID int64, input CompositeRoutePreviewRequest) (*CompositeRouteDecision, error)
 	CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error)
 	// DuplicateGroup creates an inactive independent copy of a group's configuration
 	// and account bindings while preserving each binding's priority.
@@ -444,11 +449,12 @@ type UserGroupRPMStatus struct {
 
 // BulkUpdateAccountsResult is the aggregated response for bulk updates.
 type BulkUpdateAccountsResult struct {
-	Success    int                       `json:"success"`
-	Failed     int                       `json:"failed"`
-	SuccessIDs []int64                   `json:"success_ids"`
-	FailedIDs  []int64                   `json:"failed_ids"`
-	Results    []BulkUpdateAccountResult `json:"results"`
+	Success                   int                       `json:"success"`
+	Failed                    int                       `json:"failed"`
+	SuccessIDs                []int64                   `json:"success_ids"`
+	FailedIDs                 []int64                   `json:"failed_ids"`
+	Results                   []BulkUpdateAccountResult `json:"results"`
+	LongContextInheritedCount int                       `json:"long_context_inherited_count,omitempty"`
 }
 
 type CreateProxyInput struct {
@@ -622,6 +628,8 @@ type adminServiceImpl struct {
 	privacyClientFactory PrivacyClientFactory
 	runtimeBlocker       AccountRuntimeBlocker
 	accountErrorHistory  *AccountErrorHistoryService
+	compositeRouteRepo   CompositeModelRouteRepository
+	compositeResolver    *CompositeRouteResolver
 }
 
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
@@ -653,6 +661,8 @@ func NewAdminService(
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
 	runtimeBlocker AccountRuntimeBlocker,
+	compositeRouteRepo CompositeModelRouteRepository,
+	compositeResolver *CompositeRouteResolver,
 ) AdminService {
 	return &adminServiceImpl{
 		userRepo:             userRepo,
@@ -675,5 +685,7 @@ func NewAdminService(
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
 		runtimeBlocker:       runtimeBlocker,
+		compositeRouteRepo:   compositeRouteRepo,
+		compositeResolver:    compositeResolver,
 	}
 }

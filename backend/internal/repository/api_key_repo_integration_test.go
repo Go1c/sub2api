@@ -120,7 +120,27 @@ func (s *APIKeyRepoSuite) TestReservedDesktopNameIsUniquePerActiveUser() {
 	}
 
 	s.Require().NoError(s.repo.Create(s.ctx, first))
+	// 预期的唯一约束冲突会中止当前测试事务，断言后不得再复用该事务，
+	// 删除后可重建的验证放在独立子测试里（每个子测试有独立事务）。
 	s.Require().ErrorIs(s.repo.Create(s.ctx, second), service.ErrAPIKeyExists)
+}
+
+func (s *APIKeyRepoSuite) TestReservedDesktopNameReusableAfterDelete() {
+	user := s.mustCreateUser("lumio-reuse@test.com")
+	first := &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-lumio-reuse-first",
+		Name:   service.LumioDesktopAPIKeyName,
+		Status: service.StatusActive,
+	}
+	second := &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-lumio-reuse-second",
+		Name:   service.LumioDesktopAPIKeyName,
+		Status: service.StatusActive,
+	}
+
+	s.Require().NoError(s.repo.Create(s.ctx, first))
 	s.Require().NoError(s.repo.Delete(s.ctx, first.ID))
 	s.Require().NoError(s.repo.Create(s.ctx, second))
 }

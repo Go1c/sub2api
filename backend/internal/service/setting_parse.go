@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
 var defaultFrontendLocales = []string{"en", "zh", "zh-Hant"}
@@ -271,6 +272,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyChannelMonitorEnabled:                "true",
 		SettingKeyChannelMonitorDefaultIntervalSeconds: "60",
 		SettingKeyChannelMonitorStatusBanner:           "",
+		SettingKeyChannelMonitorShowQuota:              "false",
+
+		// Grok: default text model grok-4.6; cross-client wildcards on so Codex/Claude keep working.
+		SettingKeyGrokDefaultTextModel:           "grok-4.6",
+		SettingKeyGrokCrossClientModelMapEnabled: "true",
 
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
@@ -444,7 +450,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 
 	if concurrency, err := strconv.Atoi(settings[SettingKeyDefaultConcurrency]); err == nil {
 		result.DefaultConcurrency = concurrency
-	} else {
+	} else if s != nil && s.cfg != nil {
 		result.DefaultConcurrency = s.cfg.Default.UserConcurrency
 	}
 
@@ -455,7 +461,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// 解析浮点数类型
 	if balance, err := strconv.ParseFloat(settings[SettingKeyDefaultBalance], 64); err == nil {
 		result.DefaultBalance = balance
-	} else {
+	} else if s != nil && s.cfg != nil {
 		result.DefaultBalance = s.cfg.Default.UserBalance
 	}
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
@@ -839,6 +845,18 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.ChannelMonitorStatusBanner = normalizeChannelMonitorStatusBanner(
 		settings[SettingKeyChannelMonitorStatusBanner],
 	)
+	// 配额展示默认关闭且 fail-closed：仅字面 "true" 视为开启
+	// （与 setting_public.go 公开读取路径保持一致）。
+	result.ChannelMonitorShowQuota = settings[SettingKeyChannelMonitorShowQuota] == "true"
+
+	// Grok default mapping policy
+	result.GrokDefaultTextModel = strings.TrimSpace(settings[SettingKeyGrokDefaultTextModel])
+	if result.GrokDefaultTextModel == "" {
+		result.GrokDefaultTextModel = "grok-4.6"
+	}
+	// Default true (missing/empty → enabled) so Claude/Codex→Grok mapping keeps working.
+	// Operators can set false to disable silent cross-client rewrite.
+	result.GrokCrossClientModelMapEnabled = !isFalseSettingValue(settings[SettingKeyGrokCrossClientModelMapEnabled])
 
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"
@@ -1013,6 +1031,12 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	result.AllowUserViewErrorRequests = settings[SettingKeyAllowUserViewErrorRequests] == "true" // default false
+
+	// Publish Grok default model_mapping options for accounts with empty mapping.
+	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{
+		DefaultText:          result.GrokDefaultTextModel,
+		EnableCrossClientMap: result.GrokCrossClientModelMapEnabled,
+	})
 
 	return result
 }

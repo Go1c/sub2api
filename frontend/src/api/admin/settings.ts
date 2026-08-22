@@ -597,6 +597,8 @@ contact_channels: ContactChannel[];
   fallback_model_openai: string;
   fallback_model_gemini: string;
   fallback_model_antigravity: string;
+  grok_default_text_model: string;
+  grok_cross_client_model_map_enabled: boolean;
 
   // Identity patch configuration (Claude -> Gemini)
   enable_identity_patch: boolean;
@@ -709,6 +711,7 @@ contact_channels: ContactChannel[];
   channel_monitor_enabled: boolean;
   channel_monitor_default_interval_seconds: number;
   channel_monitor_status_banner: string;
+  channel_monitor_show_quota: boolean;
 
   // Available Channels feature switch
   available_channels_enabled: boolean;
@@ -922,6 +925,8 @@ contact_channels?: ContactChannel[];
   fallback_model_openai?: string;
   fallback_model_gemini?: string;
   fallback_model_antigravity?: string;
+  grok_default_text_model?: string;
+  grok_cross_client_model_map_enabled?: boolean;
   enable_identity_patch?: boolean;
   identity_patch_prompt?: string;
   ops_monitoring_enabled?: boolean;
@@ -1010,6 +1015,7 @@ contact_channels?: ContactChannel[];
   channel_monitor_enabled?: boolean;
   channel_monitor_default_interval_seconds?: number;
   channel_monitor_status_banner?: string;
+  channel_monitor_show_quota?: boolean;
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;

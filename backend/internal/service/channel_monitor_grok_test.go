@@ -13,7 +13,7 @@ import (
 // TestGrokProviderUsesOpenAIV1ChatCompletions 确认 Grok 渠道监控走 OpenAI 兼容
 // /v1/chat/completions + Bearer auth，并复用 OpenAI 响应解析。
 func TestGrokProviderUsesOpenAIV1ChatCompletions(t *testing.T) {
-	if !isSupportedProvider(MonitorProviderGrok) {
+	if _, ok := providerAdapters[MonitorProviderGrok]; !ok {
 		t.Fatal("grok should be a supported channel monitor provider")
 	}
 

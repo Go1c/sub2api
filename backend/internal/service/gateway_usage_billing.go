@@ -42,6 +42,7 @@ type RecordUsageInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription  // 可选：订阅信息
+	PricingAt          time.Time          // 渠道分时定价时刻；零值回退记录时刻
 	InboundEndpoint    string             // 入站端点（客户端请求路径）
 	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
 	UserAgent          string             // 请求的 User-Agent
@@ -100,10 +101,19 @@ func PlatformFromAPIKey(apiKey *APIKey) string {
 // 后扣运行在 worker 池的 background ctx 上没有 ForcePlatform，因此后扣平台由 handler
 // 预先算定、经 RecordUsageInput.QuotaPlatform 传入，不要在后扣链路用 worker ctx 调用本函数。
 func QuotaPlatform(ctx context.Context, apiKey *APIKey) string {
-	if fp, ok := ctx.Value(ctxkey.ForcePlatform).(string); ok && fp != "" {
-		return fp
+	if ctx != nil {
+		if fp, ok := ctx.Value(ctxkey.ForcePlatform).(string); ok && fp != "" {
+			return fp
+		}
 	}
-	return PlatformFromAPIKey(apiKey)
+	if platform, ok := ResolvedTargetPlatformFromContext(ctx); ok {
+		return platform
+	}
+	platform := PlatformFromAPIKey(apiKey)
+	if platform == PlatformComposite {
+		return ""
+	}
+	return platform
 }
 
 func (p *postUsageBillingParams) shouldDeductAPIKeyQuota() bool {
@@ -584,6 +594,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		User:               input.User,
 		Account:            input.Account,
 		Subscription:       input.Subscription,
+		PricingAt:          input.PricingAt,
 		InboundEndpoint:    input.InboundEndpoint,
 		UpstreamEndpoint:   input.UpstreamEndpoint,
 		UserAgent:          input.UserAgent,
@@ -603,6 +614,7 @@ type RecordUsageLongContextInput struct {
 	User                  *User
 	Account               *Account
 	Subscription          *UserSubscription  // 可选：订阅信息
+	PricingAt             time.Time          // 渠道分时定价时刻；零值回退记录时刻
 	InboundEndpoint       string             // 入站端点（客户端请求路径）
 	UpstreamEndpoint      string             // 上游端点（标准化后的上游路径）
 	UserAgent             string             // 请求的 User-Agent
@@ -625,6 +637,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		User:               input.User,
 		Account:            input.Account,
 		Subscription:       input.Subscription,
+		PricingAt:          input.PricingAt,
 		InboundEndpoint:    input.InboundEndpoint,
 		UpstreamEndpoint:   input.UpstreamEndpoint,
 		UserAgent:          input.UserAgent,
@@ -647,6 +660,7 @@ type recordUsageCoreInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
+	PricingAt          time.Time
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string
@@ -696,7 +710,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
 	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, timezone.Now())
+	pricingAt := input.PricingAt
+	if pricingAt.IsZero() {
+		pricingAt = timezone.Now()
+	}
+	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
 
 	// 确定计费模型
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
@@ -714,7 +732,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// 计算费用
-	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
+	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts)
 
 	// 判断计费方式：订阅模式 vs 余额模式
 	// 额度池订阅可覆盖普通分组；不能仅依赖 group.IsSubscriptionType()。
@@ -792,18 +810,19 @@ func (s *GatewayService) calculateRecordUsageCost(
 	billingModel string,
 	multiplier float64,
 	imageMultiplier float64,
+	pricingAt time.Time,
 	opts *recordUsageOpts,
 ) *CostBreakdown {
 	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
 		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil && resolved.Mode == BillingModeToken {
-			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, opts)
+			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt, opts)
 		}
 		return s.calculateImageCost(ctx, result, apiKey, billingModel, imageMultiplier)
 	}
 
 	// Token 计费
-	return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, opts)
+	return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt, opts)
 }
 
 // resolveChannelPricing 检查指定模型是否存在渠道级别定价。
@@ -881,6 +900,7 @@ func (s *GatewayService) calculateTokenCost(
 	apiKey *APIKey,
 	billingModel string,
 	multiplier float64,
+	pricingAt time.Time,
 	opts *recordUsageOpts,
 ) *CostBreakdown {
 	tokens := UsageTokens{
@@ -908,6 +928,8 @@ func (s *GatewayService) calculateTokenCost(
 			Tokens:         tokens,
 			RequestCount:   1,
 			RateMultiplier: multiplier,
+			PricingAt:      pricingAt,
+			ServiceTier:    optionalStringValue(result.ServiceTier),
 			Resolver:       s.resolver,
 			Resolved:       resolved,
 		})
@@ -918,7 +940,8 @@ func (s *GatewayService) calculateTokenCost(
 		gid := apiKey.Group.ID
 		cost, err = s.billingService.CalculateCostUnified(CostInput{
 			Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
-			Tokens: tokens, RequestCount: 1, RateMultiplier: multiplier, Resolver: s.resolver,
+			Tokens: tokens, RequestCount: 1, RateMultiplier: multiplier, PricingAt: pricingAt,
+			ServiceTier: optionalStringValue(result.ServiceTier), Resolver: s.resolver,
 		})
 	} else {
 		cost, err = s.billingService.CalculateCost(billingModel, tokens, multiplier)
@@ -959,6 +982,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		RequestedModel:        requestedModel,
 		UpstreamModel:         optionalNonEqualStringPtr(result.UpstreamModel, result.Model),
 		ReasoningEffort:       result.ReasoningEffort,
+		ServiceTier:           result.ServiceTier,
 		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:      optionalTrimmedStringPtr(input.UpstreamEndpoint),
 		InputTokens:           result.Usage.InputTokens,

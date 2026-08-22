@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	coderws "github.com/coder/websocket"
 	"github.com/tidwall/gjson"
 )
@@ -45,6 +46,7 @@ type RelayTurnResult struct {
 	Usage             Usage
 	RequestID         string
 	TerminalEventType string
+	StartedAt         time.Time
 	Duration          time.Duration
 	FirstTokenMs      *int
 }
@@ -60,6 +62,8 @@ type RelayOptions struct {
 	WriteTimeout                    time.Duration
 	IdleTimeout                     time.Duration
 	UpstreamDrainTimeout            time.Duration
+	FirstTurnStartedAt              time.Time
+	TakeNextTurnStartedAt           func() time.Time
 	FirstMessageType                coderws.MessageType
 	FirstMessageSent                bool
 	StartClientAfterFirstDownstream bool
@@ -87,6 +91,7 @@ type RelayTraceEvent struct {
 type relayState struct {
 	usage             Usage
 	requestModel      string
+	pendingTurnStart  atomic.Pointer[time.Time]
 	lastResponseID    string
 	terminalEventType string
 	firstTokenMs      *int
@@ -106,6 +111,7 @@ type observedUpstreamEvent struct {
 	eventType  string
 	responseID string
 	usage      Usage
+	startedAt  time.Time
 	duration   time.Duration
 	firstToken *int
 }
@@ -148,6 +154,13 @@ func Relay(
 	}
 	startAt := nowFn()
 	state := &relayState{requestModel: result.RequestModel}
+	if isClientResponseCreateFrame(firstMessageType, firstClientMessage) {
+		firstTurnStartedAt := options.FirstTurnStartedAt
+		if firstTurnStartedAt.IsZero() {
+			firstTurnStartedAt = startAt
+		}
+		state.setPendingTurnStartedAt(firstTurnStartedAt)
+	}
 	onTrace := options.OnTrace
 
 	relayCtx, relayCancel := context.WithCancel(ctx)
@@ -163,6 +176,19 @@ func Relay(
 		writeCtx, cancel := context.WithTimeout(relayCtx, writeTimeout)
 		defer cancel()
 		return upstreamConn.WriteFrame(writeCtx, msgType, payload)
+	}
+	writeClientFrameUpstream := func(msgType coderws.MessageType, payload []byte) error {
+		if isClientResponseCreateFrame(msgType, payload) {
+			turnStartedAt := time.Time{}
+			if options.TakeNextTurnStartedAt != nil {
+				turnStartedAt = options.TakeNextTurnStartedAt()
+			}
+			if turnStartedAt.IsZero() {
+				turnStartedAt = nowFn()
+			}
+			state.setPendingTurnStartedAt(turnStartedAt)
+		}
+		return writeUpstream(msgType, payload)
 	}
 	writeClient := func(msgType coderws.MessageType, payload []byte) error {
 		// 下行写超时故意不挂在 relayCtx 上：coder/websocket 在已武装的 write
@@ -221,7 +247,7 @@ func Relay(
 		if !clientReaderStarted.CompareAndSwap(false, true) {
 			return
 		}
-		go runClientToUpstream(relayCtx, clientConn, options.ReadClientFrame, writeUpstream, markActivity, clientToUpstreamFrames, onTrace, exitCh)
+		go runClientToUpstream(relayCtx, clientConn, options.ReadClientFrame, writeClientFrameUpstream, markActivity, clientToUpstreamFrames, onTrace, exitCh)
 	}
 	if !options.StartClientAfterFirstDownstream {
 		startClientReader()
@@ -391,6 +417,13 @@ func Relay(
 	})
 	_ = clientConn.Close()
 	return result, nil
+}
+
+func isClientResponseCreateFrame(msgType coderws.MessageType, payload []byte) bool {
+	if msgType != coderws.MessageText && msgType != coderws.MessageBinary {
+		return false
+	}
+	return strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.create"
 }
 
 func runClientToUpstream(
@@ -697,6 +730,7 @@ func observeUpstreamMessage(
 			if duration < 0 {
 				duration = 0
 			}
+			observed.startedAt = turnTiming.startAt
 			observed.duration = duration
 			observed.firstToken = openAIWSRelayCloneIntPtr(turnTiming.firstTokenMs)
 		}
@@ -725,6 +759,7 @@ func emitTurnComplete(
 		Usage:             observed.usage,
 		RequestID:         responseID,
 		TerminalEventType: observed.eventType,
+		StartedAt:         observed.startedAt,
 		Duration:          observed.duration,
 		FirstTokenMs:      openAIWSRelayCloneIntPtr(observed.firstToken),
 	})
@@ -739,12 +774,35 @@ func openAIWSRelayGetOrInitTurnTiming(state *relayState, responseID string, now 
 	}
 	timing, ok := state.turnTimingByID[responseID]
 	if !ok || timing == nil || timing.startAt.IsZero() {
-		timing = &relayTurnTiming{startAt: now}
+		startAt := state.consumePendingTurnStartedAt()
+		if startAt.IsZero() {
+			startAt = now
+		}
+		timing = &relayTurnTiming{startAt: startAt}
 		state.turnTimingByID[responseID] = timing
 		state.activeTurn = timing
 		return timing
 	}
 	return timing
+}
+
+func (s *relayState) setPendingTurnStartedAt(startedAt time.Time) {
+	if s == nil || startedAt.IsZero() {
+		return
+	}
+	startedAtCopy := startedAt
+	s.pendingTurnStart.Store(&startedAtCopy)
+}
+
+func (s *relayState) consumePendingTurnStartedAt() time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+	startedAt := s.pendingTurnStart.Swap(nil)
+	if startedAt == nil {
+		return time.Time{}
+	}
+	return *startedAt
 }
 
 func openAIWSRelayDeleteTurnTiming(state *relayState, responseID string) (relayTurnTiming, bool) {
@@ -812,6 +870,15 @@ func parseUsageAndAccumulate(
 	inputTokens, inputOK := parseUsageIntField(inputResult, true)
 	outputTokens, outputOK := parseUsageIntField(outputResult, true)
 	cachedTokens, cachedOK := parseUsageIntField(cachedResult, false)
+	reasoningTokens := usageResult.Get("completion_tokens_details.reasoning_tokens").Int()
+	if reasoningTokens == 0 {
+		reasoningTokens = usageResult.Get("output_tokens_details.reasoning_tokens").Int()
+	}
+	if reasoningTokens > 0 {
+		outputTokens = int(xai.IncludeIndependentReasoningTokens(
+			int64(inputTokens), int64(outputTokens), usageResult.Get("total_tokens").Int(), reasoningTokens,
+		))
+	}
 	if !inputOK || !outputOK || !cachedOK {
 		recordUsageParseFailure()
 		if onParseFailure != nil {

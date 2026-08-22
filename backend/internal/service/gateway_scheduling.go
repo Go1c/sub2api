@@ -45,6 +45,18 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 		groupID = resolvedGroupID
 		ctx = s.withGroupContext(ctx, group)
 		platform = group.Platform
+		if group.Platform == PlatformComposite {
+			decision, ok, err := s.resolveCompositeRouteDecision(ctx, group, requestedModel, CompositeRouteEndpointAny)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, fmt.Errorf("%w supporting model: %s (composite target platform unknown)", ErrNoAvailableAccounts, requestedModel)
+			}
+			platform = decision.TargetPlatform
+			requestedModel = decision.UpstreamModel
+			ctx = WithCompositeRouteDecision(ctx, decision)
+		}
 	} else {
 		// 无分组时只使用原生 anthropic 平台
 		platform = PlatformAnthropic
@@ -194,7 +206,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		}
 	}
 
-	platform, hasForcePlatform, err := s.resolvePlatform(ctx, groupID, group)
+	platform, hasForcePlatform, err := s.resolvePlatform(ctx, groupID, group, requestedModel)
 	if err != nil {
 		return nil, err
 	}
@@ -226,9 +238,10 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		return excluded
 	}
 
-	// 获取模型路由配置（仅 anthropic 平台）
+	// 获取模型路由配置（anthropic 目标平台；composite 分组按目标平台判断）
 	var routingAccountIDs []int64
-	if group != nil && requestedModel != "" && group.Platform == PlatformAnthropic {
+	if group != nil && requestedModel != "" && platform == PlatformAnthropic &&
+		(group.Platform == PlatformAnthropic || group.Platform == PlatformComposite) {
 		routingAccountIDs = group.GetRoutingAccountIDs(requestedModel)
 		if s.debugModelRoutingEnabled() {
 			logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] context group routing: group_id=%d model=%s enabled=%v rules=%d matched_ids=%v session=%s sticky_account=%d",
@@ -822,8 +835,9 @@ func (s *GatewayService) routingAccountIDsForRequest(ctx context.Context, groupI
 		}
 		return nil
 	}
-	// Preserve existing behavior: model routing only applies to anthropic groups.
-	if group.Platform != PlatformAnthropic {
+	// Model routing applies only to requests resolved to Anthropic. Composite
+	// groups may still use those rules once their model resolved to Anthropic.
+	if group.Platform != PlatformAnthropic && group.Platform != PlatformComposite {
 		if s.debugModelRoutingEnabled() {
 			logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] skip: non-anthropic group platform: group_id=%d group_platform=%s model=%s", group.ID, group.Platform, requestedModel)
 		}
@@ -888,18 +902,41 @@ func (s *GatewayService) checkClaudeCodeRestriction(ctx context.Context, groupID
 	return group, resolvedID, nil
 }
 
-func (s *GatewayService) resolvePlatform(ctx context.Context, groupID *int64, group *Group) (string, bool, error) {
+func (s *GatewayService) resolvePlatform(ctx context.Context, groupID *int64, group *Group, requestedModel string) (string, bool, error) {
 	forcePlatform, hasForcePlatform := ctx.Value(ctxkey.ForcePlatform).(string)
 	if hasForcePlatform && forcePlatform != "" {
 		return forcePlatform, true, nil
 	}
+	if platform, ok := ResolvedTargetPlatformFromContext(ctx); ok {
+		return platform, false, nil
+	}
 	if group != nil {
+		if group.Platform == PlatformComposite {
+			decision, ok, err := s.resolveCompositeRouteDecision(ctx, group, requestedModel, CompositeRouteEndpointAny)
+			if err != nil {
+				return "", false, err
+			}
+			if !ok {
+				return "", false, fmt.Errorf("%w supporting model: %s (composite target platform unknown)", ErrNoAvailableAccounts, requestedModel)
+			}
+			return decision.TargetPlatform, false, nil
+		}
 		return group.Platform, false, nil
 	}
 	if groupID != nil {
 		group, err := s.resolveGroupByID(ctx, *groupID)
 		if err != nil {
 			return "", false, err
+		}
+		if group.Platform == PlatformComposite {
+			decision, ok, err := s.resolveCompositeRouteDecision(ctx, group, requestedModel, CompositeRouteEndpointAny)
+			if err != nil {
+				return "", false, err
+			}
+			if !ok {
+				return "", false, fmt.Errorf("%w supporting model: %s (composite target platform unknown)", ErrNoAvailableAccounts, requestedModel)
+			}
+			return decision.TargetPlatform, false, nil
 		}
 		return group.Platform, false, nil
 	}
@@ -925,6 +962,9 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 						"status", acc.Status,
 						"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 				}
+			}
+			if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
+				accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 			}
 		}
 		return accounts, useMixed, err
@@ -971,6 +1011,9 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 					"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 			}
 		}
+		if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
+			filtered = s.filterGrokFreeQuotaAccountsForGateway(ctx, filtered)
+		}
 		return filtered, useMixed, nil
 	}
 
@@ -1005,6 +1048,9 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 				"status", acc.Status,
 				"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 		}
+	}
+	if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
+		accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 	}
 	return accounts, useMixed, nil
 }
@@ -1377,10 +1423,24 @@ func (s *GatewayService) checkAndRegisterSession(ctx context.Context, account *A
 }
 
 func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID int64) (*Account, error) {
+	var (
+		account *Account
+		err     error
+	)
 	if s.schedulerSnapshot != nil {
-		return s.schedulerSnapshot.GetAccount(ctx, accountID)
+		account, err = s.schedulerSnapshot.GetAccount(ctx, accountID)
+	} else {
+		account, err = s.accountRepo.GetByID(ctx, accountID)
 	}
-	return s.accountRepo.GetByID(ctx, accountID)
+	if err != nil || account == nil {
+		return account, err
+	}
+	if account.IsGrok() {
+		if gated := s.filterGrokFreeQuotaAccountsForGateway(ctx, []Account{*account}); len(gated) == 0 {
+			return nil, nil
+		}
+	}
+	return account, nil
 }
 
 func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {

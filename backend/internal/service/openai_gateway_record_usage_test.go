@@ -496,6 +496,72 @@ func TestOpenAIGatewayServiceRecordUsage_PeakRateAffectsTokenModeImageOutputToke
 	require.InDelta(t, expectedActual, userRepo.lastAmount, 1e-12)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_TimePricingUsesPricingAt(t *testing.T) {
+	groupID := int64(16)
+	requestStart := time.Date(2024, time.January, 2, 2, 0, 0, 0, time.UTC) // 上海 10:00
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	svc.resolver = newOpenAITokenImageChannelPricingResolverWithTimeForTest(t, groupID, "gpt-5.1", &ChannelTimePricing{
+		Timezone: "Asia/Shanghai",
+		Periods:  []ChannelTimePricingPeriod{{StartTime: "09:00", EndTime: "12:00", Multiplier: 2}},
+	})
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "openai_time_pricing_request_start",
+			Model:     "gpt-5.1",
+			Usage:     OpenAIUsage{InputTokens: 1000, OutputTokens: 500},
+		},
+		APIKey: &APIKey{ID: 1006, GroupID: i64p(groupID), Group: &Group{
+			ID: groupID, RateMultiplier: 0.8, SubscriptionType: SubscriptionTypeSubscription,
+		}},
+		User:      &User{ID: 2006},
+		Account:   &Account{ID: 3006},
+		PricingAt: requestStart,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	baseCost := 1000*3e-6 + 500*15e-6
+	require.InDelta(t, baseCost*2, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, baseCost*2*0.8, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, 0.8, usageRepo.lastLog.RateMultiplier, 1e-12)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_TimePricingUsesExplicitPricingAt(t *testing.T) {
+	groupID := int64(17)
+	pricingAt := time.Date(2024, time.January, 2, 0, 0, 0, 0, time.UTC) // 上海 08:00
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	svc.resolver = newOpenAITokenImageChannelPricingResolverWithTimeForTest(t, groupID, "gpt-5.1", &ChannelTimePricing{
+		Timezone: "Asia/Shanghai",
+		Periods:  []ChannelTimePricingPeriod{{StartTime: "09:00", EndTime: "12:00", Multiplier: 2}},
+	})
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "openai_time_pricing_explicit",
+			Model:     "gpt-5.1",
+			Usage:     OpenAIUsage{InputTokens: 1000, OutputTokens: 500},
+		},
+		APIKey: &APIKey{ID: 1007, GroupID: i64p(groupID), Group: &Group{
+			ID: groupID, RateMultiplier: 0.8, SubscriptionType: SubscriptionTypeSubscription,
+		}},
+		User:      &User{ID: 2007},
+		Account:   &Account{ID: 3007},
+		PricingAt: pricingAt,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	baseCost := 1000*3e-6 + 500*15e-6
+	require.InDelta(t, baseCost, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, baseCost*0.8, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, 0.8, usageRepo.lastLog.RateMultiplier, 1e-12)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_IncludesEndpointMetadata(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -1146,7 +1212,7 @@ func TestOpenAIGatewayServiceRecordUsage_Gpt54LongContextBillingEnabledPerAccoun
 	require.True(t, usageRepo.lastLog.LongContextBillingApplied)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_GroupAndAccountLongContextMustBothAllow(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows(t *testing.T) {
 	tokens := OpenAIUsage{InputTokens: 300000, OutputTokens: 2000}
 	baseInput := 300000 * 2.5e-6
 	baseOutput := 2000 * 15e-6
@@ -1161,6 +1227,7 @@ func TestOpenAIGatewayServiceRecordUsage_GroupAndAccountLongContextMustBothAllow
 			Account: &Account{ID: 3020, Platform: PlatformOpenAI},
 		})
 		require.NoError(t, err)
+		// OpenAI 账号开关缺省为 false，仍否决官方长上下文阶梯（fork，不是 origin OR）。
 		require.False(t, usageRepo.lastLog.LongContextBillingApplied)
 		require.InDelta(t, baseInput, usageRepo.lastLog.InputCost, 1e-10)
 		require.InDelta(t, baseOutput, usageRepo.lastLog.OutputCost, 1e-10)
@@ -1179,8 +1246,10 @@ func TestOpenAIGatewayServiceRecordUsage_GroupAndAccountLongContextMustBothAllow
 			},
 		})
 		require.NoError(t, err)
+		// 分组关时账号开关不能单独打开官方长上下文阶梯。
 		require.False(t, usageRepo.lastLog.LongContextBillingApplied)
 		require.InDelta(t, baseInput, usageRepo.lastLog.InputCost, 1e-10)
+		require.InDelta(t, baseOutput, usageRepo.lastLog.OutputCost, 1e-10)
 	})
 
 	t.Run("group on account on", func(t *testing.T) {
@@ -2519,6 +2588,20 @@ func newOpenAITokenImageChannelPricingResolverForTest(t *testing.T, groupID int6
 	return NewModelPricingResolver(cs, NewBillingService(&config.Config{}, nil))
 }
 
+func newOpenAITokenImageChannelPricingResolverWithTimeForTest(
+	t *testing.T,
+	groupID int64,
+	model string,
+	timePricing *ChannelTimePricing,
+) *ModelPricingResolver {
+	t.Helper()
+	resolver := newOpenAITokenImageChannelPricingResolverForTest(t, groupID, model)
+	cached, ok := resolver.channelService.cache.Load().(*channelCache)
+	require.True(t, ok)
+	cached.pricingByGroupModel[channelModelKey{groupID: groupID, model: model}].TimePricing = timePricing
+	return resolver
+}
+
 type openAIMediaPriceGroupRepoStub struct {
 	GroupRepository
 	group *Group
@@ -2547,6 +2630,7 @@ func TestGatewayServiceCalculateRecordUsageCost_ChannelImageBillingUsesImageCoun
 		"gemini-image",
 		0.15,
 		1.0,
+		time.Time{},
 		nil,
 	)
 
@@ -2586,6 +2670,7 @@ func TestGatewayServiceCalculateRecordUsageCost_ChannelImageBillingUsesSizeTier(
 		"gemini-image",
 		1.0,
 		1.0,
+		time.Time{},
 		nil,
 	)
 
@@ -2618,6 +2703,7 @@ func TestGatewayServiceCalculateRecordUsageCost_GroupImagePriceOverridesChannelI
 		"gemini-image",
 		1.0,
 		1.0,
+		time.Time{},
 		nil,
 	)
 
@@ -2681,6 +2767,7 @@ func TestGatewayServiceCalculateRecordUsageCost_ChannelImageBillingNormalizesMis
 		"gemini-image",
 		1.0,
 		1.0,
+		time.Time{},
 		nil,
 	)
 

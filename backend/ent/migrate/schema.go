@@ -783,6 +783,8 @@ var (
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "provider", Type: field.TypeEnum, Enums: []string{"openai", "anthropic", "gemini", "grok"}},
+		{Name: "check_mode", Type: field.TypeString, Size: 32, Default: "probe"},
+		{Name: "account_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "api_mode", Type: field.TypeString, Size: 32, Default: "chat_completions"},
 		{Name: "endpoint", Type: field.TypeString, Size: 500},
 		{Name: "api_key_encrypted", Type: field.TypeString},
@@ -808,7 +810,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "channel_monitors_channel_monitor_request_templates_request_template",
-				Columns:    []*schema.Column{ChannelMonitorsColumns[20]},
+				Columns:    []*schema.Column{ChannelMonitorsColumns[22]},
 				RefColumns: []*schema.Column{ChannelMonitorRequestTemplatesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -817,7 +819,7 @@ var (
 			{
 				Name:    "channelmonitor_enabled_last_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[11], ChannelMonitorsColumns[14]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[13], ChannelMonitorsColumns[16]},
 			},
 			{
 				Name:    "channelmonitor_provider",
@@ -827,17 +829,22 @@ var (
 			{
 				Name:    "channelmonitor_provider_api_mode",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[4], ChannelMonitorsColumns[5]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[4], ChannelMonitorsColumns[7]},
 			},
 			{
 				Name:    "channelmonitor_group_name",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[10]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[12]},
 			},
 			{
 				Name:    "channelmonitor_template_id",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorsColumns[20]},
+				Columns: []*schema.Column{ChannelMonitorsColumns[22]},
+			},
+			{
+				Name:    "channelmonitor_account_id",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorsColumns[6]},
 			},
 		},
 	}
@@ -893,6 +900,7 @@ var (
 		{Name: "latency_ms", Type: field.TypeInt, Nullable: true},
 		{Name: "ping_latency_ms", Type: field.TypeInt, Nullable: true},
 		{Name: "message", Type: field.TypeString, Nullable: true, Size: 500, Default: ""},
+		{Name: "quota", Type: field.TypeJSON, Nullable: true},
 		{Name: "checked_at", Type: field.TypeTime},
 		{Name: "monitor_id", Type: field.TypeInt64},
 	}
@@ -904,7 +912,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "channel_monitor_histories_channel_monitors_history",
-				Columns:    []*schema.Column{ChannelMonitorHistoriesColumns[7]},
+				Columns:    []*schema.Column{ChannelMonitorHistoriesColumns[8]},
 				RefColumns: []*schema.Column{ChannelMonitorsColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
@@ -913,12 +921,12 @@ var (
 			{
 				Name:    "channelmonitorhistory_monitor_id_model_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[7], ChannelMonitorHistoriesColumns[1], ChannelMonitorHistoriesColumns[6]},
+				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[8], ChannelMonitorHistoriesColumns[1], ChannelMonitorHistoriesColumns[7]},
 			},
 			{
 				Name:    "channelmonitorhistory_checked_at",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[6]},
+				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[7]},
 			},
 		},
 	}
@@ -950,6 +958,68 @@ var (
 				Name:    "channelmonitorrequesttemplate_provider_api_mode",
 				Unique:  false,
 				Columns: []*schema.Column{ChannelMonitorRequestTemplatesColumns[4], ChannelMonitorRequestTemplatesColumns[5]},
+			},
+		},
+	}
+	// CompositeModelRoutesColumns holds the columns for the "composite_model_routes" table.
+	CompositeModelRoutesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "public_model", Type: field.TypeString, Size: 200},
+		{Name: "match_type", Type: field.TypeString, Size: 20, Default: "exact"},
+		{Name: "target_platform", Type: field.TypeString, Size: 50, Default: "openai"},
+		{Name: "upstream_model", Type: field.TypeString, Size: 200, Default: ""},
+		{Name: "endpoint", Type: field.TypeString, Size: 50, Default: "any"},
+		{Name: "priority", Type: field.TypeInt, Default: 100},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "group_id", Type: field.TypeInt64},
+	}
+	// CompositeModelRoutesTable holds the schema information for the "composite_model_routes" table.
+	CompositeModelRoutesTable = &schema.Table{
+		Name:       "composite_model_routes",
+		Columns:    CompositeModelRoutesColumns,
+		PrimaryKey: []*schema.Column{CompositeModelRoutesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "composite_model_routes_groups_group",
+				Columns:    []*schema.Column{CompositeModelRoutesColumns[12]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "compositemodelroute_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{CompositeModelRoutesColumns[12]},
+			},
+			{
+				Name:    "compositemodelroute_group_id_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{CompositeModelRoutesColumns[12], CompositeModelRoutesColumns[10]},
+			},
+			{
+				Name:    "compositemodelroute_group_id_endpoint",
+				Unique:  false,
+				Columns: []*schema.Column{CompositeModelRoutesColumns[12], CompositeModelRoutesColumns[8]},
+			},
+			{
+				Name:    "compositemodelroute_group_id_target_platform",
+				Unique:  false,
+				Columns: []*schema.Column{CompositeModelRoutesColumns[12], CompositeModelRoutesColumns[6]},
+			},
+			{
+				Name:    "compositemodelroute_deleted_at",
+				Unique:  false,
+				Columns: []*schema.Column{CompositeModelRoutesColumns[3]},
+			},
+			{
+				Name:    "compositemodelroute_priority",
+				Unique:  false,
+				Columns: []*schema.Column{CompositeModelRoutesColumns[9]},
 			},
 		},
 	}
@@ -2510,6 +2580,7 @@ var (
 		ChannelMonitorDailyRollupsTable,
 		ChannelMonitorHistoriesTable,
 		ChannelMonitorRequestTemplatesTable,
+		CompositeModelRoutesTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
@@ -2612,6 +2683,10 @@ func init() {
 	}
 	ChannelMonitorRequestTemplatesTable.Annotation = &entsql.Annotation{
 		Table: "channel_monitor_request_templates",
+	}
+	CompositeModelRoutesTable.ForeignKeys[0].RefTable = GroupsTable
+	CompositeModelRoutesTable.Annotation = &entsql.Annotation{
+		Table: "composite_model_routes",
 	}
 	ErrorPassthroughRulesTable.Annotation = &entsql.Annotation{
 		Table: "error_passthrough_rules",

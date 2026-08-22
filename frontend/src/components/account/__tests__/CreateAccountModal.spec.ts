@@ -211,3 +211,50 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
   })
 })
+
+describe('CreateAccountModal CN providers', () => {
+  beforeEach(() => {
+    createAccountMock.mockReset().mockResolvedValue({})
+  })
+
+  it('submits adaptive Kimi protocol endpoints', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'Kimi')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Kimi adaptive')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('sk-kimi')
+
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1)
+    expect(createAccountMock.mock.calls[0]?.[0]?.credentials).toMatchObject({
+      account_mode: 'payg',
+      api_protocol: 'adaptive',
+      base_url: 'https://api.moonshot.cn/v1',
+      api_base_urls: {
+        chat_completions: 'https://api.moonshot.cn/v1',
+        anthropic: 'https://api.moonshot.cn/anthropic'
+      }
+    })
+  })
+
+  it('uses the official DeepSeek endpoint after selecting the platform', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'DeepSeek')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('DeepSeek payg')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('sk-deepseek')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createAccountMock.mock.calls[0]?.[0]?.credentials).toMatchObject({
+      account_mode: 'payg',
+      api_protocol: 'adaptive',
+      base_url: 'https://api.deepseek.com',
+      api_base_urls: {
+        chat_completions: 'https://api.deepseek.com',
+        anthropic: 'https://api.deepseek.com/anthropic',
+        responses: 'https://api.deepseek.com'
+      }
+    })
+  })
+})

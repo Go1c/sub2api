@@ -703,6 +703,83 @@ describe('AccountUsageCell', () => {
     expect(wrapper.text()).not.toContain('2M|')
   })
 
+  it('Grok SuperGrok 7d bar shows period-aligned local usage chips', async () => {
+    getUsage.mockResolvedValue({
+      grok_billing: {
+        period_type: 'weekly',
+        usage_percent: 37,
+        period_end: '2026-07-16T03:25:00Z',
+        plan: 'SuperGrok'
+      },
+      grok_local_usage_7d: {
+        requests: 8,
+        tokens: 2_200_000,
+        cost: 4.42,
+        standard_cost: 4.42
+      }
+    })
+
+    const wrapper = mount(AccountUsageCell, {
+      props: {
+        account: makeAccount({ id: 4411, platform: 'grok', type: 'oauth', extra: {} })
+      },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'windowStats'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}</div>'
+          },
+          AccountQuotaInfo: true,
+          GrokQuotaProbeCell: true
+        }
+      }
+    })
+
+    await flushPromises()
+    expect(wrapper.text()).toContain('7d|37|2200000')
+  })
+
+  it('Grok Free 24h bar shows rolling local usage chips', async () => {
+    getUsage.mockResolvedValue({
+      grok_free_token_limit: 2_000_000,
+      grok_billing: { period_type: 'weekly', usage_percent: null, plan: '' },
+      grok_local_usage: {
+        requests: 2,
+        tokens: 250_000,
+        cost: 0,
+        standard_cost: 0
+      },
+      grok_local_usage_24h: {
+        requests: 12,
+        tokens: 1_500_000,
+        cost: 0.12,
+        standard_cost: 0.12,
+        user_cost: 0.04
+      }
+    })
+
+    const wrapper = mount(AccountUsageCell, {
+      props: {
+        account: makeAccount({ id: 4410, platform: 'grok', type: 'oauth', extra: {} })
+      },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'windowStats'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}</div>'
+          },
+          AccountQuotaInfo: true,
+          GrokQuotaProbeCell: true
+        }
+      }
+    })
+
+    await flushPromises()
+    expect(wrapper.text()).toContain('24h|75|1500000')
+    expect(wrapper.text()).not.toContain('|250000')
+    expect(wrapper.text()).not.toContain('7d|')
+  })
+
   it.each([
     { tokens: 0, expected: 0, compact: '0' },
     { tokens: 1_000_000, expected: 50, compact: '1.0M' },

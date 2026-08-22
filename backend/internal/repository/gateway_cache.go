@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -10,6 +12,7 @@ import (
 )
 
 const stickySessionPrefix = "sticky_session:"
+const openAIResponsesSessionWindowPrefix = "openai_responses_session_window:"
 
 type gatewayCache struct {
 	rdb *redis.Client
@@ -51,6 +54,140 @@ func (c *gatewayCache) DeleteSessionAccountID(ctx context.Context, groupID int64
 	key := buildSessionKey(groupID, sessionHash)
 	return c.rdb.Del(ctx, key).Err()
 }
+
+const reasoningContentPrefix = "reasoning_content:"
+
+// reasoningContentDefaultTTL is the default expiry for cached reasoning text.
+// Codex sessions can resume across days; 7 days is the fallback when the
+// caller passes a non-positive TTL.
+const reasoningContentDefaultTTL = 7 * 24 * time.Hour
+
+func (c *gatewayCache) SetReasoningContent(ctx context.Context, itemID string, content string, ttl time.Duration) error {
+	if c == nil || c.rdb == nil {
+		return errors.New("gateway cache unavailable")
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" || content == "" {
+		return nil
+	}
+	if ttl <= 0 {
+		ttl = reasoningContentDefaultTTL
+	}
+	return c.rdb.Set(ctx, reasoningContentPrefix+itemID, content, ttl).Err()
+}
+
+func (c *gatewayCache) GetReasoningContent(ctx context.Context, itemID string) (string, error) {
+	if c == nil || c.rdb == nil {
+		return "", errors.New("gateway cache unavailable")
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return "", service.ErrReasoningContentNotFound
+	}
+	val, err := c.rdb.Get(ctx, reasoningContentPrefix+itemID).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", service.ErrReasoningContentNotFound
+		}
+		return "", err
+	}
+	return val, nil
+}
+
+func buildOpenAIResponsesSessionWindowKey(groupID int64, sessionHash string) string {
+	return fmt.Sprintf("%s%d:%s", openAIResponsesSessionWindowPrefix, groupID, sessionHash)
+}
+
+var claimOpenAIResponsesSessionWindowScript = redis.NewScript(`
+local previous = redis.call('GET', KEYS[1])
+redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
+return previous
+`)
+
+var compareAndRefreshOpenAIResponsesSessionWindowScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1])
+if current == false or current ~= ARGV[1] then
+  return 0
+end
+redis.call('PEXPIRE', KEYS[1], ARGV[2])
+return 1
+`)
+
+var compareAndDeleteOpenAIResponsesSessionWindowScript = redis.NewScript(`
+local current = redis.call('GET', KEYS[1])
+if current == false or current ~= ARGV[1] then
+  return 0
+end
+redis.call('DEL', KEYS[1])
+return 1
+`)
+
+func (c *gatewayCache) ClaimOpenAIResponsesSessionWindow(ctx context.Context, groupID int64, sessionHash string, owner []byte, ttl time.Duration) ([]byte, error) {
+	if c == nil || c.rdb == nil {
+		return nil, errors.New("gateway cache unavailable")
+	}
+	if len(owner) == 0 || strings.TrimSpace(sessionHash) == "" || ttl <= 0 {
+		return nil, errors.New("invalid OpenAI Responses session-window claim")
+	}
+	result, err := claimOpenAIResponsesSessionWindowScript.Run(
+		ctx,
+		c.rdb,
+		[]string{buildOpenAIResponsesSessionWindowKey(groupID, sessionHash)},
+		owner,
+		ttl.Milliseconds(),
+	).Result()
+	if errors.Is(err, redis.Nil) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	switch value := result.(type) {
+	case nil:
+		return nil, nil
+	case string:
+		return []byte(value), nil
+	case []byte:
+		return append([]byte(nil), value...), nil
+	default:
+		return nil, fmt.Errorf("unexpected OpenAI Responses session-window claim result %T", result)
+	}
+}
+
+func (c *gatewayCache) CompareAndRefreshOpenAIResponsesSessionWindow(ctx context.Context, groupID int64, sessionHash string, expected []byte, ttl time.Duration) (bool, error) {
+	if c == nil || c.rdb == nil {
+		return false, errors.New("gateway cache unavailable")
+	}
+	if len(expected) == 0 || strings.TrimSpace(sessionHash) == "" || ttl <= 0 {
+		return false, errors.New("invalid OpenAI Responses session-window refresh")
+	}
+	n, err := compareAndRefreshOpenAIResponsesSessionWindowScript.Run(
+		ctx,
+		c.rdb,
+		[]string{buildOpenAIResponsesSessionWindowKey(groupID, sessionHash)},
+		expected,
+		ttl.Milliseconds(),
+	).Int()
+	return n == 1, err
+}
+
+func (c *gatewayCache) CompareAndDeleteOpenAIResponsesSessionWindow(ctx context.Context, groupID int64, sessionHash string, expected []byte) (bool, error) {
+	if c == nil || c.rdb == nil {
+		return false, errors.New("gateway cache unavailable")
+	}
+	if len(expected) == 0 || strings.TrimSpace(sessionHash) == "" {
+		return false, errors.New("invalid OpenAI Responses session-window delete")
+	}
+	n, err := compareAndDeleteOpenAIResponsesSessionWindowScript.Run(
+		ctx,
+		c.rdb,
+		[]string{buildOpenAIResponsesSessionWindowKey(groupID, sessionHash)},
+		expected,
+	).Int()
+	return n == 1, err
+}
+
+var _ service.OpenAIWSSessionPreemptionCache = (*gatewayCache)(nil)
 
 // Compile-time assertion: gatewayCache must implement CyberSessionBlockStore.
 var _ service.CyberSessionBlockStore = (*gatewayCache)(nil)

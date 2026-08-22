@@ -4,8 +4,10 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -22,6 +24,14 @@ type groupRepoStubForAdmin struct {
 	getByID *Group // GetByID 返回值
 	getErr  error  // GetByID 返回的错误
 
+	createID int64
+
+	getByIDByID map[int64]*Group
+
+	deleteAccountGroupsByGroupIDFn func(groupID int64) (int64, error)
+	bindAccountsToGroupFn          func(groupID int64, accountIDs []int64) error
+	getAccountIDsByGroupIDsFn      func(groupIDs []int64) ([]int64, error)
+
 	listWithFiltersCalls       int
 	listWithFiltersParams      pagination.PaginationParams
 	listWithFiltersPlatform    string
@@ -34,6 +44,9 @@ type groupRepoStubForAdmin struct {
 }
 
 func (s *groupRepoStubForAdmin) Create(_ context.Context, g *Group) error {
+	if s.createID > 0 {
+		g.ID = s.createID
+	}
 	s.created = g
 	return nil
 }
@@ -43,16 +56,28 @@ func (s *groupRepoStubForAdmin) Update(_ context.Context, g *Group) error {
 	return nil
 }
 
-func (s *groupRepoStubForAdmin) GetByID(_ context.Context, _ int64) (*Group, error) {
+func (s *groupRepoStubForAdmin) GetByID(_ context.Context, id int64) (*Group, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
+	}
+	if s.getByIDByID != nil {
+		if group, ok := s.getByIDByID[id]; ok {
+			return group, nil
+		}
+		return nil, ErrGroupNotFound
 	}
 	return s.getByID, nil
 }
 
-func (s *groupRepoStubForAdmin) GetByIDLite(_ context.Context, _ int64) (*Group, error) {
+func (s *groupRepoStubForAdmin) GetByIDLite(_ context.Context, id int64) (*Group, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
+	}
+	if s.getByIDByID != nil {
+		if group, ok := s.getByIDByID[id]; ok {
+			return group, nil
+		}
+		return nil, ErrGroupNotFound
 	}
 	return s.getByID, nil
 }
@@ -113,20 +138,84 @@ func (s *groupRepoStubForAdmin) GetAccountCount(_ context.Context, _ int64) (int
 	panic("unexpected GetAccountCount call")
 }
 
-func (s *groupRepoStubForAdmin) DeleteAccountGroupsByGroupID(_ context.Context, _ int64) (int64, error) {
+func (s *groupRepoStubForAdmin) DeleteAccountGroupsByGroupID(_ context.Context, groupID int64) (int64, error) {
+	if s.deleteAccountGroupsByGroupIDFn != nil {
+		return s.deleteAccountGroupsByGroupIDFn(groupID)
+	}
 	panic("unexpected DeleteAccountGroupsByGroupID call")
 }
 
-func (s *groupRepoStubForAdmin) BindAccountsToGroup(_ context.Context, _ int64, _ []int64) error {
+func (s *groupRepoStubForAdmin) BindAccountsToGroup(_ context.Context, groupID int64, accountIDs []int64) error {
+	if s.bindAccountsToGroupFn != nil {
+		return s.bindAccountsToGroupFn(groupID, accountIDs)
+	}
 	panic("unexpected BindAccountsToGroup call")
 }
 
-func (s *groupRepoStubForAdmin) GetAccountIDsByGroupIDs(_ context.Context, _ []int64) ([]int64, error) {
+func (s *groupRepoStubForAdmin) GetAccountIDsByGroupIDs(_ context.Context, groupIDs []int64) ([]int64, error) {
+	if s.getAccountIDsByGroupIDsFn != nil {
+		return s.getAccountIDsByGroupIDsFn(groupIDs)
+	}
 	panic("unexpected GetAccountIDsByGroupIDs call")
 }
 
 func (s *groupRepoStubForAdmin) UpdateSortOrders(_ context.Context, _ []GroupSortOrderUpdate) error {
 	return nil
+}
+
+func TestAdminService_CreateGroup_RejectsTimePricing(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name:           "time-pricing-group",
+		Platform:       PlatformOpenAI,
+		RateMultiplier: 1,
+		ModelPricing: []ChannelModelPricing{{
+			Platform:    PlatformOpenAI,
+			Models:      []string{"gpt-5"},
+			BillingMode: BillingModeToken,
+			TimePricing: validTimePricingForTest(),
+		}},
+	})
+
+	require.Error(t, err)
+	appErr := infraerrors.FromError(err)
+	require.Equal(t, int32(http.StatusBadRequest), appErr.Code)
+	require.Equal(t, "GROUP_MODEL_TIME_PRICING_UNSUPPORTED", appErr.Reason)
+	require.Nil(t, repo.created)
+}
+
+func TestAdminService_UpdateGroup_RejectsTimePricing(t *testing.T) {
+	existing := &Group{ID: 1, Name: "existing", Platform: PlatformOpenAI, Status: StatusActive}
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := &adminServiceImpl{groupRepo: repo}
+	pricing := []ChannelModelPricing{{
+		Platform:    PlatformOpenAI,
+		Models:      []string{"gpt-5"},
+		BillingMode: BillingModeToken,
+		TimePricing: validTimePricingForTest(),
+	}}
+
+	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{ModelPricing: &pricing})
+
+	require.Error(t, err)
+	appErr := infraerrors.FromError(err)
+	require.Equal(t, int32(http.StatusBadRequest), appErr.Code)
+	require.Equal(t, "GROUP_MODEL_TIME_PRICING_UNSUPPORTED", appErr.Reason)
+	require.Nil(t, repo.updated)
+}
+
+func TestNormalizeGroupModelPricing_NormalizesEmptyTimePricing(t *testing.T) {
+	pricing, err := normalizeGroupModelPricing(PlatformOpenAI, []ChannelModelPricing{{
+		Models:      []string{"gpt-5"},
+		BillingMode: BillingModeToken,
+		TimePricing: &ChannelTimePricing{Timezone: "Asia/Shanghai"},
+	}})
+
+	require.NoError(t, err)
+	require.Len(t, pricing, 1)
+	require.Nil(t, pricing[0].TimePricing)
 }
 
 func TestAdminService_ListGroups_PassesSortParams(t *testing.T) {

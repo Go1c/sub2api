@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -47,12 +48,16 @@ func TestBuildGrokXSearchResponsesBodyAcceptsInputAlias(t *testing.T) {
 	require.Contains(t, gjson.GetBytes(body, "input").String(), "latest posts from xAI")
 }
 
-func TestResolveGrokStandaloneSearchModelUsesForkDefault(t *testing.T) {
-	t.Parallel()
-	require.Equal(t, "grok-4.5", resolveGrokStandaloneSearchModel())
-	body, err := buildGrokXSearchResponsesBody(grokStandaloneSearchRequest{Query: "latest posts from xAI"}, resolveGrokStandaloneSearchModel())
+func TestResolveGrokStandaloneSearchModelUsesRuntimeDefault(t *testing.T) {
+	original := xai.RuntimeModelMappingOptions()
+	t.Cleanup(func() { xai.SetRuntimeModelMappingOptions(original) })
+	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{DefaultText: "grok-4.6"})
+
+	model := resolveGrokStandaloneSearchModel()
+	body, err := buildGrokXSearchResponsesBody(grokStandaloneSearchRequest{Query: "latest posts from xAI"}, model)
 	require.NoError(t, err)
-	require.Equal(t, "grok-4.5", gjson.GetBytes(body, "model").String())
+	require.Equal(t, "grok-4.6", model)
+	require.Equal(t, model, gjson.GetBytes(body, "model").String())
 }
 
 func TestExtractGrokXSearchSourcesPrefersStructuredResultsOnAllowlist(t *testing.T) {

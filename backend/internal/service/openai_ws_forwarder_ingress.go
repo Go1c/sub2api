@@ -33,7 +33,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	token string,
 	firstClientMessage []byte,
 	hooks *OpenAIWSIngressHooks,
-) error {
+) (returnErr error) {
 	if s == nil {
 		return errors.New("service is nil")
 	}
@@ -46,6 +46,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if account == nil {
 		return errors.New("account is nil")
 	}
+	// A handler may reuse the same gin context across account failover attempts.
+	// Never let an OAuth attempt's response aliases leak into the next account.
+	setCodexToolNameReverse(c, nil)
 	if err := validateOpenAIWSBearerToken(account, token); err != nil {
 		return err
 	}
@@ -57,6 +60,16 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if settings, err := s.settingService.GetOpenAIFastPolicySettings(ctx); err == nil && settings != nil {
 			ctx = withOpenAIFastPolicyContext(ctx, settings)
 		}
+	}
+
+	if preemptCtx, cleanupPreempt, armed := s.BeginOpenAIWSIngressSessionPreemption(ctx, c, account, firstClientMessage); armed {
+		ctx = preemptCtx
+		defer cleanupPreempt()
+		defer func() {
+			if isOpenAIWSSessionPreempted(ctx) {
+				returnErr = errOpenAIWSSessionPreempted
+			}
+		}()
 	}
 
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
@@ -77,6 +90,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
 				return fmt.Errorf("websocket ingress requires ws_v2 transport, got=%s", wsDecision.Transport)
 			}
+			// 透传 relay 通过 TurnStarted 记录每个 turn 的开始时刻，但不触发
+			// BeforeTurn。handler 计费在未传 PricingAt 时回退到对应的 turn 开始时刻。
 			return s.proxyResponsesWebSocketV2Passthrough(
 				ctx,
 				c,
@@ -243,6 +258,16 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			normalized = litePayload
 		}
+		if accountNeedsOpenAIOAuthReservedToolAlias(account) {
+			aliasedBody, reverse, aliased, aliasErr := aliasOpenAIOAuthReservedToolNamesBody(normalized)
+			if aliasErr != nil {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, aliasErr.Error(), aliasErr)
+			}
+			updateCodexToolNameReverseForWSFrame(c, normalized, reverse)
+			if aliased {
+				normalized = aliasedBody
+			}
+		}
 		apiKey := getAPIKeyFromContext(c)
 		imageGenerationAllowed := GroupAllowsImageGeneration(apiKeyGroup(apiKey))
 		codexImageGenerationExplicitToolPolicy := codexImageGenerationExplicitToolPolicyAllow
@@ -378,6 +403,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	writeClientMessage := func(message []byte) error {
 		writeCtx, cancel := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
 		defer cancel()
+		message = restoreCodexToolNamesFromContext(c, message)
 		return clientConn.Write(writeCtx, coderws.MessageText, message)
 	}
 
@@ -463,6 +489,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		grokCacheSeedPayload := firstPayload.payloadRaw
 		var bridgeReplayInput []json.RawMessage
 		bridgeReplayInputExists := false
+		var bridgeAccountFailoverInput []json.RawMessage
+		bridgeAccountFailoverInputExists := false
 		for turn := 1; ; turn++ {
 			if turn > 1 && hooks != nil && hooks.BeforeRequest != nil {
 				if err := hooks.BeforeRequest(turn, currentBridgePayload.payloadRaw, currentBridgePayload.originalModel); err != nil {
@@ -488,6 +516,15 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 			if replayInputErr != nil {
 				return fmt.Errorf("build websocket http bridge replay input: %w", replayInputErr)
+			}
+			turnAccountFailoverInput, turnAccountFailoverInputExists, failoverInputErr := buildOpenAIWSReplayInputSequence(
+				bridgeAccountFailoverInput,
+				bridgeAccountFailoverInputExists,
+				currentBridgePayload.payloadRaw,
+				needsBridgeReplay,
+			)
+			if failoverInputErr != nil {
+				return fmt.Errorf("build websocket account failover input: %w", failoverInputErr)
 			}
 			if needsBridgeReplay && turnReplayInputExists {
 				updatedPayload, setInputErr := setOpenAIWSPayloadInputSequence(
@@ -535,6 +572,22 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				hooks.AfterTurn(turn, result, bridgeErr)
 			}
 			if bridgeErr != nil {
+				var failoverErr *UpstreamFailoverError
+				if turn > 1 && errors.As(bridgeErr, &failoverErr) && failoverErr != nil {
+					retryPayload, retrySafe, retryPayloadErr := buildOpenAIWSCurrentTurnRetryPayload(
+						bridgePayloadRaw,
+						turnAccountFailoverInput,
+						turnAccountFailoverInputExists,
+						currentBridgePayload.originalModel,
+					)
+					if retryPayloadErr != nil {
+						return fmt.Errorf("build websocket current-turn failover payload: %w", retryPayloadErr)
+					}
+					if !retrySafe {
+						retryPayload = nil
+					}
+					return newOpenAIWSCurrentTurnFailoverError(bridgeErr, retryPayload)
+				}
 				return bridgeErr
 			}
 			if result == nil {
@@ -545,6 +598,15 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if result.wsReplayInputExists {
 				bridgeReplayInput = append(bridgeReplayInput, cloneOpenAIWSRawMessages(result.wsReplayInput)...)
 				bridgeReplayInputExists = true
+			}
+			bridgeAccountFailoverInput = cloneOpenAIWSRawMessages(turnAccountFailoverInput)
+			bridgeAccountFailoverInputExists = turnAccountFailoverInputExists
+			if len(result.wsAccountFailoverReplayInput) > 0 {
+				bridgeAccountFailoverInput = append(
+					bridgeAccountFailoverInput,
+					cloneOpenAIWSRawMessages(result.wsAccountFailoverReplayInput)...,
+				)
+				bridgeAccountFailoverInputExists = true
 			}
 			if bridgeTurnState := strings.TrimSpace(result.ResponseHeaders.Get(openAIWSTurnStateHeader)); bridgeTurnState != "" {
 				turnState = bridgeTurnState

@@ -292,6 +292,8 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		FallbackModelOpenAI:                                    settings.FallbackModelOpenAI,
 		FallbackModelGemini:                                    settings.FallbackModelGemini,
 		FallbackModelAntigravity:                               settings.FallbackModelAntigravity,
+		GrokDefaultTextModel:                                   settings.GrokDefaultTextModel,
+		GrokCrossClientModelMapEnabled:                         settings.GrokCrossClientModelMapEnabled,
 		EnableIdentityPatch:                                    settings.EnableIdentityPatch,
 		IdentityPatchPrompt:                                    settings.IdentityPatchPrompt,
 		OpsMonitoringEnabled:                                   opsEnabled && settings.OpsMonitoringEnabled,
@@ -384,6 +386,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorStatusBanner:           settings.ChannelMonitorStatusBanner,
+		ChannelMonitorShowQuota:              settings.ChannelMonitorShowQuota,
 
 		AvailableChannelsEnabled: settings.AvailableChannelsEnabled,
 

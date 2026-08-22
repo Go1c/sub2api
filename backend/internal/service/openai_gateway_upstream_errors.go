@@ -117,7 +117,7 @@ func isOpenAIInstructionsRequiredError(upstreamStatusCode int, upstreamMsg strin
 }
 
 func isOpenAITransientProcessingError(upstreamStatusCode int, upstreamMsg string, upstreamBody []byte) bool {
-	if upstreamStatusCode != http.StatusBadRequest && upstreamStatusCode != http.StatusServiceUnavailable {
+	if upstreamStatusCode < http.StatusBadRequest {
 		return false
 	}
 
@@ -131,6 +131,15 @@ func isOpenAITransientProcessingError(upstreamStatusCode int, upstreamMsg string
 
 	if len(upstreamBody) > 0 && hasOpenAIServerOverloadedCode(upstreamBody) {
 		return true
+	}
+	if isOpenAICapacityShedMessage(upstreamMsg) ||
+		isOpenAICapacityShedMessage(gjson.GetBytes(upstreamBody, "error.message").String()) ||
+		isOpenAICapacityShedMessage(gjson.GetBytes(upstreamBody, "response.error.message").String()) ||
+		isOpenAICapacityShedMessage(string(upstreamBody)) {
+		return true
+	}
+	if upstreamStatusCode != http.StatusBadRequest && upstreamStatusCode != http.StatusServiceUnavailable {
+		return false
 	}
 	if upstreamStatusCode != http.StatusBadRequest {
 		return false
@@ -162,6 +171,19 @@ func isOpenAITransientProcessingError(upstreamStatusCode int, upstreamMsg string
 		return true
 	}
 	return match(string(upstreamBody))
+}
+
+func isOpenAICapacityShedMessage(text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	return strings.Contains(lower, "server is overloaded") ||
+		strings.Contains(lower, "servers are overloaded") ||
+		strings.Contains(lower, "servers are currently overloaded")
+}
+
+func isOpenAIRequestScopedCapacityShed(upstreamMsg string, upstreamBody []byte) bool {
+	return isOpenAIUpstreamCapacityShedEvent(upstreamBody) ||
+		isOpenAICapacityShedMessage(upstreamMsg) ||
+		isOpenAICapacityShedMessage(string(upstreamBody))
 }
 
 func isOpenAIContextWindowError(upstreamMsg string, upstreamBody []byte) bool {
@@ -248,14 +270,17 @@ func newOpenAIUpstreamFailoverError(
 	upstreamMsg string,
 	retryableOnSameAccount bool,
 ) *UpstreamFailoverError {
+	requestScopedCapacity := isOpenAIRequestScopedCapacityShed(upstreamMsg, responseBody)
 	failoverErr := &UpstreamFailoverError{
 		StatusCode:             statusCode,
 		ResponseBody:           responseBody,
 		ResponseHeaders:        responseHeaders.Clone(),
-		RetryableOnSameAccount: retryableOnSameAccount,
+		RetryableOnSameAccount: retryableOnSameAccount || requestScopedCapacity,
+		RequestScopedTransient: requestScopedCapacity,
 	}
 	if isOpenAIRequestBodyTooLargeError(statusCode, upstreamMsg, responseBody) {
 		failoverErr.RetryableOnSameAccount = false
+		failoverErr.RequestScopedTransient = false
 		failoverErr.Scope = GatewayFailureScopeAccount
 		failoverErr.Reason = openAIRequestBodyTooLargeReason
 		failoverErr.NextAccountAction = NextAccountRetry
@@ -344,6 +369,19 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 			return nil, fmt.Errorf("openai cyber_policy: %d", resp.StatusCode)
 		}
 		return nil, fmt.Errorf("openai cyber_policy: %s", cyberMsg)
+	}
+	if account != nil && account.Platform == PlatformGrok && isGrokContentPolicyRejection(resp.StatusCode, body) {
+		clientMsg := grokContentPolicyClientMessage(body)
+		setOpsUpstreamError(c, resp.StatusCode, clientMsg, truncateString(string(body), 2048))
+		writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+		MarkResponseCommitted(c)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": clientMsg,
+			},
+		})
+		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)
 	}
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
@@ -576,6 +614,13 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 			return nil, fmt.Errorf("openai cyber_policy: %d", resp.StatusCode)
 		}
 		return nil, fmt.Errorf("openai cyber_policy: %s", cyberMsg)
+	}
+	if account != nil && account.Platform == PlatformGrok && isGrokContentPolicyRejection(resp.StatusCode, body) {
+		clientMsg := grokContentPolicyClientMessage(body)
+		setOpsUpstreamError(c, resp.StatusCode, clientMsg, truncateString(string(body), 2048))
+		MarkResponseCommitted(c)
+		writeError(c, http.StatusForbidden, "invalid_request_error", clientMsg)
+		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)
 	}
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))

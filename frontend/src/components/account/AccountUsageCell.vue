@@ -381,6 +381,7 @@
           label="7d"
           :utilization="grokWeeklyBillingBar.utilization"
           :resets-at="grokWeeklyBillingBar.resetsAt"
+          :window-stats="grokWeeklyBillingBar.windowStats"
           :show-now-when-idle="true"
           color="indigo"
         />
@@ -405,6 +406,7 @@
           label="24h"
           :title="t('admin.accounts.usageWindow.grokFreeQuota24hHint')"
           :utilization="grokFreeTokenBar.utilization"
+          :window-stats="grokFreeTokenBar.windowStats"
           :show-now-when-idle="true"
           color="emerald"
         />
@@ -423,6 +425,19 @@
         <GrokQuotaProbeCell :account="account" @probed="handleGrokProbed" />
       </div>
       <div v-else class="text-xs text-gray-400">-</div>
+    </template>
+
+    <!-- CN providers (Kimi / Zhipu / DeepSeek): coding-plan quota or payg balance -->
+    <template v-else-if="account.platform === 'kimi' || account.platform === 'zhipu' || account.platform === 'deepseek'">
+      <div class="space-y-1">
+        <div
+          v-if="!cnQuotaCellVisible && !cnBalanceCellVisible"
+          class="text-xs text-gray-400"
+          :title="t('admin.accounts.cnProviders.noBalanceEndpoint')"
+        >-</div>
+        <CNProviderQuotaCell :account="account" />
+        <CNProviderBalanceCell :account="account" />
+      </div>
     </template>
 
     <!-- Gemini platform: show quota + local usage window -->
@@ -643,6 +658,9 @@ import UsageProgressBar from './UsageProgressBar.vue'
 import AccountQuotaInfo from './AccountQuotaInfo.vue'
 import GrokQuotaProbeCell from './GrokQuotaProbeCell.vue'
 import OpenAIQuotaResetCell from './OpenAIQuotaResetCell.vue'
+import CNProviderQuotaCell from './CNProviderQuotaCell.vue'
+import CNProviderBalanceCell from './CNProviderBalanceCell.vue'
+import { cnQuotaCellVisible as cnQuotaCellVisibleFn, cnBalanceCellVisible as cnBalanceCellVisibleFn } from './credentialsBuilder'
 
 // Module-level cache shared across all AccountUsageCell instances
 const _usageCache = new Map<number, { data: AccountUsageInfo; ts: number }>()
@@ -699,8 +717,22 @@ const upstreamBalanceEnabled = computed(() => props.account.extra?.upstream_bala
 const showUsageWindows = computed(() => {
   // Gemini: we can always compute local usage windows from DB logs (simulated quotas).
   if (props.account.platform === 'gemini') return true
+  if (
+    props.account.platform === 'kimi' ||
+    props.account.platform === 'zhipu' ||
+    props.account.platform === 'deepseek'
+  ) {
+    return true
+  }
   return props.account.type === 'oauth' || props.account.type === 'setup-token'
 })
+
+const cnAccountMode = computed(() => {
+  const mode = props.account.credentials?.account_mode
+  return typeof mode === 'string' ? mode : ''
+})
+const cnQuotaCellVisible = computed(() => cnQuotaCellVisibleFn(props.account.platform, cnAccountMode.value))
+const cnBalanceCellVisible = computed(() => cnBalanceCellVisibleFn(props.account.platform, cnAccountMode.value))
 
 const shouldFetchUsage = computed(() => {
   if (upstreamBalanceEnabled.value) return true
@@ -1133,6 +1165,7 @@ const geminiUsageBars = computed(() => {
 interface GrokQuotaBarInfo {
   utilization: number
   resetsAt: string | null
+  windowStats?: WindowStats | null
 }
 
 const makeGrokQuotaBar = (quota?: { limit?: number | null; remaining?: number | null; reset_at?: string | null } | null): GrokQuotaBarInfo | null => {
@@ -1147,6 +1180,9 @@ const makeGrokQuotaBar = (quota?: { limit?: number | null; remaining?: number | 
 const grokRequestQuotaBar = computed(() => makeGrokQuotaBar(usageInfo.value?.grok_request_quota))
 const grokTokenQuotaBar = computed(() => makeGrokQuotaBar(usageInfo.value?.grok_token_quota))
 const grokBilling = computed(() => usageInfo.value?.grok_billing || null)
+const grokLocalUsage7d = computed(() => (
+  usageInfo.value?.grok_local_usage_7d || usageInfo.value?.seven_day?.window_stats || null
+))
 const grokWeeklyBillingBar = computed((): GrokQuotaBarInfo | null => {
   const billing = grokBilling.value
   if (billing?.period_type?.toLowerCase() !== 'weekly' || billing.usage_percent == null) {
@@ -1154,7 +1190,8 @@ const grokWeeklyBillingBar = computed((): GrokQuotaBarInfo | null => {
   }
   return {
     utilization: Math.min(100, Math.max(0, billing.usage_percent)),
-    resetsAt: billing.period_end || null
+    resetsAt: billing.period_end || null,
+    windowStats: grokLocalUsage7d.value
   }
 })
 const grokPlanLabelIsFree = (value: string) => value.includes('free') || value.includes('basic')
@@ -1193,7 +1230,10 @@ const grokLocalUsage = computed(() => {
 const grokFreeTokenBar = computed(() => {
   if (!grokIsFree.value || !grokFreeQuotaUsage.value) return null
   const used = Math.max(0, grokFreeQuotaUsage.value.tokens || 0)
-  return { utilization: Math.min(100, (used / GROK_FREE_TOKEN_LIMIT) * 100) }
+  return {
+    utilization: Math.min(100, (used / GROK_FREE_TOKEN_LIMIT) * 100),
+    windowStats: grokFreeQuotaUsage.value
+  }
 })
 const grokQuotaUnknown = computed(() => {
   if (props.account.platform !== 'grok') return false

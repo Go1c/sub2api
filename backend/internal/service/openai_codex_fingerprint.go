@@ -75,6 +75,38 @@ const (
 	boundCodexSessionID = "01a005e9-75ac-7140-808a-7a91e2a43b33"
 )
 
+func codexFingerprintModeFromExtra(extra map[string]any) codexFingerprintMode {
+	if extra == nil {
+		return codexFingerprintOff
+	}
+	raw, _ := extra[codexFingerprintModeExtraKey].(string)
+	switch codexFingerprintMode(strings.TrimSpace(raw)) {
+	case codexFingerprintOff, codexFingerprintDevice, codexFingerprintSession, codexFingerprintFull:
+		return codexFingerprintMode(strings.TrimSpace(raw))
+	default:
+		return codexFingerprintOff
+	}
+}
+
+func codexFingerprintModeRequiresSeed(mode codexFingerprintMode) bool {
+	switch mode {
+	case codexFingerprintDevice, codexFingerprintSession, codexFingerprintFull:
+		return true
+	default:
+		return false
+	}
+}
+
+// ShouldEnsureCodexFingerprintSeedForExtraUpdates reports whether a JSONB key-level
+// extra update is enabling Codex fingerprint convergence and therefore must atomically
+// preserve or create the system-managed per-account seed in the repository update.
+func ShouldEnsureCodexFingerprintSeedForExtraUpdates(updates map[string]any) bool {
+	if updates == nil {
+		return false
+	}
+	return codexFingerprintModeRequiresSeed(codexFingerprintModeFromExtra(updates))
+}
+
 // GetCodexFingerprintMode 从账号 extra JSON 读取指纹收敛模式。
 // 未设置时默认 session（设备+会话收敛），显式设为 "off" 才关闭。
 func (a *Account) GetCodexFingerprintMode() codexFingerprintMode {

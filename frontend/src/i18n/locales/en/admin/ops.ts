@@ -72,6 +72,7 @@ export default {
         runtimeConfigResetFailed: 'Failed to reset log configuration',
         cleanupConfirm: 'Clean up system logs matching the current filters? This cannot be undone.',
         cleanupSuccess: 'Cleanup complete. Deleted {count} log entries.',
+        cleanupFilterRequired: 'Cleanup requires at least one filter condition (start/end time or another field)',
         cleanupFailed: 'Failed to clean up system logs'
       },
       requestsTotal: 'Requests (total)',
@@ -338,7 +339,17 @@ export default {
         time: 'Time',
         phase: 'Phase',
         status: 'Status',
+        upstreamStatus: 'Upstream Status',
         message: 'Message',
+        rootCause: 'Root Cause',
+        diagnosticPayloads: 'Diagnostic Payloads',
+        payloads: {
+          client: 'Client Response',
+          upstream_message: 'Upstream Message',
+          upstream_detail: 'Upstream Detail',
+          upstream_events: 'Upstream Events',
+          request_body: 'Request Body'
+        },
         basicInfo: 'Basic Info',
         platform: 'Platform',
         model: 'Model',

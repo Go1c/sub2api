@@ -57,6 +57,9 @@ func RegisterAdminRoutes(
 		// Grok OAuth
 		registerGrokOAuthRoutes(admin, h)
 
+		// 国产供应商（kimi/zhipu/deepseek）额度与余额
+		registerCNProviderRoutes(admin, h)
+
 		// 代理管理
 		registerProxyRoutes(admin, h, stepUpAuth)
 
@@ -367,6 +370,11 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		groups.GET("/capacity-summary", h.Admin.Group.GetCapacitySummary)
 		groups.PUT("/sort-order", h.Admin.Group.UpdateSortOrder)
 		groups.GET("/:id/models-list-candidates", h.Admin.Group.GetModelsListCandidates)
+		groups.GET("/:id/composite-routes", h.Admin.Group.ListCompositeRoutes)
+		groups.POST("/:id/composite-routes", h.Admin.Group.CreateCompositeRoute)
+		groups.POST("/:id/composite-routes/preview", h.Admin.Group.PreviewCompositeRoute)
+		groups.PUT("/:id/composite-routes/:route_id", h.Admin.Group.UpdateCompositeRoute)
+		groups.DELETE("/:id/composite-routes/:route_id", h.Admin.Group.DeleteCompositeRoute)
 		groups.GET("/:id", h.Admin.Group.GetByID)
 		groups.POST("", h.Admin.Group.Create)
 		groups.POST("/:id/duplicate", h.Admin.Group.Duplicate)
@@ -500,6 +508,17 @@ func registerGrokOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		grok.GET("/accounts/:id/quota", h.Admin.GrokOAuth.QueryQuota)
 		grok.POST("/accounts/:id/reset-quota", h.Admin.GrokOAuth.ResetQuota)
 		grok.GET("/runtime-sanity", h.Admin.GrokOAuth.RuntimeSanity)
+	}
+}
+
+// registerCNProviderRoutes 注册国产供应商（kimi/zhipu/deepseek）的额度与余额查询端点。
+func registerCNProviderRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	cn := admin.Group("/cn-providers")
+	{
+		// Coding Plan 滚动窗口用量（kimi/zhipu coding 账号）。
+		cn.GET("/accounts/:id/quota", h.Admin.CNProvider.QueryQuota)
+		// payg 账号余额（kimi/deepseek；zhipu 无余额端点）。
+		cn.GET("/accounts/:id/balance", h.Admin.CNProvider.QueryBalance)
 	}
 }
 
@@ -743,6 +762,7 @@ func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		channels.GET("", h.Admin.Channel.List)
 		channels.GET("/model-pricing", h.Admin.Channel.GetModelDefaultPricing)
+		channels.GET("/pricing/sync-models", h.Admin.Channel.SyncPricingModels)
 		channels.GET("/:id", h.Admin.Channel.GetByID)
 		channels.POST("", h.Admin.Channel.Create)
 		channels.PUT("/:id", h.Admin.Channel.Update)

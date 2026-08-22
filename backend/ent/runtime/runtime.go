@@ -23,6 +23,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
+	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -806,36 +807,28 @@ func init() {
 			return nil
 		}
 	}()
+	// channelmonitorDescCheckMode is the schema descriptor for check_mode field.
+	channelmonitorDescCheckMode := channelmonitorFields[2].Descriptor()
+	// channelmonitor.DefaultCheckMode holds the default value on creation for the check_mode field.
+	channelmonitor.DefaultCheckMode = channelmonitorDescCheckMode.Default.(string)
+	// channelmonitor.CheckModeValidator is a validator for the "check_mode" field. It is called by the builders before save.
+	channelmonitor.CheckModeValidator = channelmonitorDescCheckMode.Validators[0].(func(string) error)
 	// channelmonitorDescAPIMode is the schema descriptor for api_mode field.
-	channelmonitorDescAPIMode := channelmonitorFields[2].Descriptor()
+	channelmonitorDescAPIMode := channelmonitorFields[4].Descriptor()
 	// channelmonitor.DefaultAPIMode holds the default value on creation for the api_mode field.
 	channelmonitor.DefaultAPIMode = channelmonitorDescAPIMode.Default.(string)
 	// channelmonitor.APIModeValidator is a validator for the "api_mode" field. It is called by the builders before save.
 	channelmonitor.APIModeValidator = channelmonitorDescAPIMode.Validators[0].(func(string) error)
 	// channelmonitorDescEndpoint is the schema descriptor for endpoint field.
-	channelmonitorDescEndpoint := channelmonitorFields[3].Descriptor()
+	channelmonitorDescEndpoint := channelmonitorFields[5].Descriptor()
 	// channelmonitor.EndpointValidator is a validator for the "endpoint" field. It is called by the builders before save.
-	channelmonitor.EndpointValidator = func() func(string) error {
-		validators := channelmonitorDescEndpoint.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(endpoint string) error {
-			for _, fn := range fns {
-				if err := fn(endpoint); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
+	channelmonitor.EndpointValidator = channelmonitorDescEndpoint.Validators[0].(func(string) error)
 	// channelmonitorDescAPIKeyEncrypted is the schema descriptor for api_key_encrypted field.
-	channelmonitorDescAPIKeyEncrypted := channelmonitorFields[4].Descriptor()
+	channelmonitorDescAPIKeyEncrypted := channelmonitorFields[6].Descriptor()
 	// channelmonitor.APIKeyEncryptedValidator is a validator for the "api_key_encrypted" field. It is called by the builders before save.
 	channelmonitor.APIKeyEncryptedValidator = channelmonitorDescAPIKeyEncrypted.Validators[0].(func(string) error)
 	// channelmonitorDescPrimaryModel is the schema descriptor for primary_model field.
-	channelmonitorDescPrimaryModel := channelmonitorFields[5].Descriptor()
+	channelmonitorDescPrimaryModel := channelmonitorFields[7].Descriptor()
 	// channelmonitor.PrimaryModelValidator is a validator for the "primary_model" field. It is called by the builders before save.
 	channelmonitor.PrimaryModelValidator = func() func(string) error {
 		validators := channelmonitorDescPrimaryModel.Validators
@@ -853,41 +846,41 @@ func init() {
 		}
 	}()
 	// channelmonitorDescExtraModels is the schema descriptor for extra_models field.
-	channelmonitorDescExtraModels := channelmonitorFields[6].Descriptor()
+	channelmonitorDescExtraModels := channelmonitorFields[8].Descriptor()
 	// channelmonitor.DefaultExtraModels holds the default value on creation for the extra_models field.
 	channelmonitor.DefaultExtraModels = channelmonitorDescExtraModels.Default.([]string)
 	// channelmonitorDescGroupName is the schema descriptor for group_name field.
-	channelmonitorDescGroupName := channelmonitorFields[7].Descriptor()
+	channelmonitorDescGroupName := channelmonitorFields[9].Descriptor()
 	// channelmonitor.DefaultGroupName holds the default value on creation for the group_name field.
 	channelmonitor.DefaultGroupName = channelmonitorDescGroupName.Default.(string)
 	// channelmonitor.GroupNameValidator is a validator for the "group_name" field. It is called by the builders before save.
 	channelmonitor.GroupNameValidator = channelmonitorDescGroupName.Validators[0].(func(string) error)
 	// channelmonitorDescEnabled is the schema descriptor for enabled field.
-	channelmonitorDescEnabled := channelmonitorFields[8].Descriptor()
+	channelmonitorDescEnabled := channelmonitorFields[10].Descriptor()
 	// channelmonitor.DefaultEnabled holds the default value on creation for the enabled field.
 	channelmonitor.DefaultEnabled = channelmonitorDescEnabled.Default.(bool)
 	// channelmonitorDescIntervalSeconds is the schema descriptor for interval_seconds field.
-	channelmonitorDescIntervalSeconds := channelmonitorFields[9].Descriptor()
+	channelmonitorDescIntervalSeconds := channelmonitorFields[11].Descriptor()
 	// channelmonitor.IntervalSecondsValidator is a validator for the "interval_seconds" field. It is called by the builders before save.
 	channelmonitor.IntervalSecondsValidator = channelmonitorDescIntervalSeconds.Validators[0].(func(int) error)
 	// channelmonitorDescJitterSeconds is the schema descriptor for jitter_seconds field.
-	channelmonitorDescJitterSeconds := channelmonitorFields[10].Descriptor()
+	channelmonitorDescJitterSeconds := channelmonitorFields[12].Descriptor()
 	// channelmonitor.DefaultJitterSeconds holds the default value on creation for the jitter_seconds field.
 	channelmonitor.DefaultJitterSeconds = channelmonitorDescJitterSeconds.Default.(int)
 	// channelmonitor.JitterSecondsValidator is a validator for the "jitter_seconds" field. It is called by the builders before save.
 	channelmonitor.JitterSecondsValidator = channelmonitorDescJitterSeconds.Validators[0].(func(int) error)
 	// channelmonitorDescExtraHeaders is the schema descriptor for extra_headers field.
-	channelmonitorDescExtraHeaders := channelmonitorFields[14].Descriptor()
+	channelmonitorDescExtraHeaders := channelmonitorFields[16].Descriptor()
 	// channelmonitor.DefaultExtraHeaders holds the default value on creation for the extra_headers field.
 	channelmonitor.DefaultExtraHeaders = channelmonitorDescExtraHeaders.Default.(map[string]string)
 	// channelmonitorDescBodyOverrideMode is the schema descriptor for body_override_mode field.
-	channelmonitorDescBodyOverrideMode := channelmonitorFields[15].Descriptor()
+	channelmonitorDescBodyOverrideMode := channelmonitorFields[17].Descriptor()
 	// channelmonitor.DefaultBodyOverrideMode holds the default value on creation for the body_override_mode field.
 	channelmonitor.DefaultBodyOverrideMode = channelmonitorDescBodyOverrideMode.Default.(string)
 	// channelmonitor.BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.
 	channelmonitor.BodyOverrideModeValidator = channelmonitorDescBodyOverrideMode.Validators[0].(func(string) error)
 	// channelmonitorDescCompatibilityProbeEnabled is the schema descriptor for compatibility_probe_enabled field.
-	channelmonitorDescCompatibilityProbeEnabled := channelmonitorFields[17].Descriptor()
+	channelmonitorDescCompatibilityProbeEnabled := channelmonitorFields[19].Descriptor()
 	// channelmonitor.DefaultCompatibilityProbeEnabled holds the default value on creation for the compatibility_probe_enabled field.
 	channelmonitor.DefaultCompatibilityProbeEnabled = channelmonitorDescCompatibilityProbeEnabled.Default.(bool)
 	channelmonitordailyrollupFields := schema.ChannelMonitorDailyRollup{}.Fields()
@@ -983,7 +976,7 @@ func init() {
 	// channelmonitorhistory.MessageValidator is a validator for the "message" field. It is called by the builders before save.
 	channelmonitorhistory.MessageValidator = channelmonitorhistoryDescMessage.Validators[0].(func(string) error)
 	// channelmonitorhistoryDescCheckedAt is the schema descriptor for checked_at field.
-	channelmonitorhistoryDescCheckedAt := channelmonitorhistoryFields[6].Descriptor()
+	channelmonitorhistoryDescCheckedAt := channelmonitorhistoryFields[7].Descriptor()
 	// channelmonitorhistory.DefaultCheckedAt holds the default value on creation for the checked_at field.
 	channelmonitorhistory.DefaultCheckedAt = channelmonitorhistoryDescCheckedAt.Default.(func() time.Time)
 	channelmonitorrequesttemplateMixin := schema.ChannelMonitorRequestTemplate{}.Mixin()
@@ -1041,6 +1034,75 @@ func init() {
 	channelmonitorrequesttemplate.DefaultBodyOverrideMode = channelmonitorrequesttemplateDescBodyOverrideMode.Default.(string)
 	// channelmonitorrequesttemplate.BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.
 	channelmonitorrequesttemplate.BodyOverrideModeValidator = channelmonitorrequesttemplateDescBodyOverrideMode.Validators[0].(func(string) error)
+	compositemodelrouteMixin := schema.CompositeModelRoute{}.Mixin()
+	compositemodelrouteMixinHooks1 := compositemodelrouteMixin[1].Hooks()
+	compositemodelroute.Hooks[0] = compositemodelrouteMixinHooks1[0]
+	compositemodelrouteMixinInters1 := compositemodelrouteMixin[1].Interceptors()
+	compositemodelroute.Interceptors[0] = compositemodelrouteMixinInters1[0]
+	compositemodelrouteMixinFields0 := compositemodelrouteMixin[0].Fields()
+	_ = compositemodelrouteMixinFields0
+	compositemodelrouteFields := schema.CompositeModelRoute{}.Fields()
+	_ = compositemodelrouteFields
+	// compositemodelrouteDescCreatedAt is the schema descriptor for created_at field.
+	compositemodelrouteDescCreatedAt := compositemodelrouteMixinFields0[0].Descriptor()
+	// compositemodelroute.DefaultCreatedAt holds the default value on creation for the created_at field.
+	compositemodelroute.DefaultCreatedAt = compositemodelrouteDescCreatedAt.Default.(func() time.Time)
+	// compositemodelrouteDescUpdatedAt is the schema descriptor for updated_at field.
+	compositemodelrouteDescUpdatedAt := compositemodelrouteMixinFields0[1].Descriptor()
+	// compositemodelroute.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	compositemodelroute.DefaultUpdatedAt = compositemodelrouteDescUpdatedAt.Default.(func() time.Time)
+	// compositemodelroute.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	compositemodelroute.UpdateDefaultUpdatedAt = compositemodelrouteDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// compositemodelrouteDescPublicModel is the schema descriptor for public_model field.
+	compositemodelrouteDescPublicModel := compositemodelrouteFields[1].Descriptor()
+	// compositemodelroute.PublicModelValidator is a validator for the "public_model" field. It is called by the builders before save.
+	compositemodelroute.PublicModelValidator = func() func(string) error {
+		validators := compositemodelrouteDescPublicModel.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(public_model string) error {
+			for _, fn := range fns {
+				if err := fn(public_model); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// compositemodelrouteDescMatchType is the schema descriptor for match_type field.
+	compositemodelrouteDescMatchType := compositemodelrouteFields[2].Descriptor()
+	// compositemodelroute.DefaultMatchType holds the default value on creation for the match_type field.
+	compositemodelroute.DefaultMatchType = compositemodelrouteDescMatchType.Default.(string)
+	// compositemodelroute.MatchTypeValidator is a validator for the "match_type" field. It is called by the builders before save.
+	compositemodelroute.MatchTypeValidator = compositemodelrouteDescMatchType.Validators[0].(func(string) error)
+	// compositemodelrouteDescTargetPlatform is the schema descriptor for target_platform field.
+	compositemodelrouteDescTargetPlatform := compositemodelrouteFields[3].Descriptor()
+	// compositemodelroute.DefaultTargetPlatform holds the default value on creation for the target_platform field.
+	compositemodelroute.DefaultTargetPlatform = compositemodelrouteDescTargetPlatform.Default.(string)
+	// compositemodelroute.TargetPlatformValidator is a validator for the "target_platform" field. It is called by the builders before save.
+	compositemodelroute.TargetPlatformValidator = compositemodelrouteDescTargetPlatform.Validators[0].(func(string) error)
+	// compositemodelrouteDescUpstreamModel is the schema descriptor for upstream_model field.
+	compositemodelrouteDescUpstreamModel := compositemodelrouteFields[4].Descriptor()
+	// compositemodelroute.DefaultUpstreamModel holds the default value on creation for the upstream_model field.
+	compositemodelroute.DefaultUpstreamModel = compositemodelrouteDescUpstreamModel.Default.(string)
+	// compositemodelroute.UpstreamModelValidator is a validator for the "upstream_model" field. It is called by the builders before save.
+	compositemodelroute.UpstreamModelValidator = compositemodelrouteDescUpstreamModel.Validators[0].(func(string) error)
+	// compositemodelrouteDescEndpoint is the schema descriptor for endpoint field.
+	compositemodelrouteDescEndpoint := compositemodelrouteFields[5].Descriptor()
+	// compositemodelroute.DefaultEndpoint holds the default value on creation for the endpoint field.
+	compositemodelroute.DefaultEndpoint = compositemodelrouteDescEndpoint.Default.(string)
+	// compositemodelroute.EndpointValidator is a validator for the "endpoint" field. It is called by the builders before save.
+	compositemodelroute.EndpointValidator = compositemodelrouteDescEndpoint.Validators[0].(func(string) error)
+	// compositemodelrouteDescPriority is the schema descriptor for priority field.
+	compositemodelrouteDescPriority := compositemodelrouteFields[6].Descriptor()
+	// compositemodelroute.DefaultPriority holds the default value on creation for the priority field.
+	compositemodelroute.DefaultPriority = compositemodelrouteDescPriority.Default.(int)
+	// compositemodelrouteDescEnabled is the schema descriptor for enabled field.
+	compositemodelrouteDescEnabled := compositemodelrouteFields[7].Descriptor()
+	// compositemodelroute.DefaultEnabled holds the default value on creation for the enabled field.
+	compositemodelroute.DefaultEnabled = compositemodelrouteDescEnabled.Default.(bool)
 	errorpassthroughruleMixin := schema.ErrorPassthroughRule{}.Mixin()
 	errorpassthroughruleMixinFields0 := errorpassthroughruleMixin[0].Fields()
 	_ = errorpassthroughruleMixinFields0

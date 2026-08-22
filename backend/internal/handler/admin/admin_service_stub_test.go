@@ -751,6 +751,26 @@ func (s *stubAdminService) RevertAccountProxyFallback(ctx context.Context, id in
 	return nil
 }
 
+func (s *stubAdminService) ListCompositeRoutes(ctx context.Context, groupID int64) ([]service.CompositeModelRoute, error) {
+	return nil, nil
+}
+
+func (s *stubAdminService) CreateCompositeRoute(ctx context.Context, groupID int64, input service.CompositeRouteInput) (*service.CompositeModelRoute, error) {
+	return nil, nil
+}
+
+func (s *stubAdminService) UpdateCompositeRoute(ctx context.Context, groupID, routeID int64, input service.CompositeRouteInput) (*service.CompositeModelRoute, error) {
+	return nil, nil
+}
+
+func (s *stubAdminService) DeleteCompositeRoute(ctx context.Context, groupID, routeID int64) error {
+	return nil
+}
+
+func (s *stubAdminService) PreviewCompositeRoute(ctx context.Context, groupID int64, input service.CompositeRoutePreviewRequest) (*service.CompositeRouteDecision, error) {
+	return nil, nil
+}
+
 func (s *stubAdminService) CreateShadow(ctx context.Context, parentID int64, opts service.ShadowOptions) (*service.Account, error) {
 	if s.createSparkShadowErr != nil {
 		return nil, s.createSparkShadowErr

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/stretchr/testify/require"
 )
 
@@ -217,4 +218,31 @@ func TestEnforceCodexIdentityHeaders_NoOriginatorIsNoop(t *testing.T) {
 
 	require.Empty(t, h.Get("originator"))
 	require.Equal(t, "third-party-client/1.0.0", h.Get("user-agent"))
+}
+
+func TestCodexCanonicalAuthIdentityUsesCLIConstants(t *testing.T) {
+	require.Equal(t, codexCLIUserAgent, CodexCanonicalUserAgent())
+	require.Equal(t, codexCLIVersion, CodexCanonicalClientVersion())
+
+	h := make(http.Header)
+	ApplyCodexCanonicalAuthIdentity(h)
+	require.Equal(t, "codex_cli_rs", h.Get("originator"))
+	require.Equal(t, codexCLIUserAgent, h.Get("user-agent"))
+	// 凭据面不发 version 头（真实客户端在 auth.openai.com 只带 originator + UA）。
+	require.Empty(t, h.Get("version"))
+}
+
+func TestResolveCodexOutboundIdentity_KeepsOfficialCandidateFingerprint(t *testing.T) {
+	const vscodeUA = "codex_vscode/9.9.9 (Mac OS X 14.0; arm64) vscode (codex_vscode; 9.9.9)"
+	got := resolveCodexOutboundIdentity(vscodeUA)
+	require.Equal(t, "codex_vscode", got.originator)
+	require.Equal(t, vscodeUA, got.userAgent)
+	require.Equal(t, "9.9.9", got.version)
+}
+
+func TestResolveCodexOutboundIdentity_FallsBackForUnknownUA(t *testing.T) {
+	got := resolveCodexOutboundIdentity("third-party-client/1.0.0")
+	require.Equal(t, openai.CodexCLIOriginator, got.originator)
+	require.Equal(t, codexCLIUserAgent, got.userAgent)
+	require.Equal(t, codexCLIVersion, got.version)
 }

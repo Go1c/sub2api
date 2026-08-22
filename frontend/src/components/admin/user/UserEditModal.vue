@@ -30,6 +30,14 @@
         <input v-model="form.username" type="text" class="input" />
       </div>
       <div>
+        <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
+        <Select
+          v-model="form.role"
+          :options="roleOptions"
+          :searchable="false"
+        />
+      </div>
+      <div>
         <label class="input-label">{{ t('admin.users.notes') }}</label>
         <textarea v-model="form.notes" rows="3" class="input"></textarea>
       </div>
@@ -90,13 +98,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, UserAttributeValuesMap } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import Select from '@/components/common/Select.vue'
 import UserAttributeForm from '@/components/user/UserAttributeForm.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
@@ -107,11 +116,15 @@ const emit = defineEmits(['close', 'success'])
 const { t } = useI18n(); const appStore = useAppStore(); const { copyToClipboard } = useClipboard()
 
 const submitting = ref(false); const passwordCopied = ref(false)
-const form = reactive({ email: '', password: '', username: '', notes: '', concurrency: 1, rpm_limit: 0, invoice_enabled: false, subscription_purchase_disabled: false, customAttributes: {} as UserAttributeValuesMap })
+const roleOptions = computed(() => [
+  { value: 'user', label: t('admin.users.roles.user') },
+  { value: 'admin', label: t('admin.users.roles.admin') }
+])
+const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as AdminUser['role'], concurrency: 1, rpm_limit: 0, invoice_enabled: false, subscription_purchase_disabled: false, customAttributes: {} as UserAttributeValuesMap })
 
 watch(() => props.user, (u) => {
   if (u) {
-    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, invoice_enabled: u.invoice_enabled ?? false, subscription_purchase_disabled: u.subscription_purchase_disabled ?? false, customAttributes: {} })
+    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', role: u.role || 'user', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, invoice_enabled: u.invoice_enabled ?? false, subscription_purchase_disabled: u.subscription_purchase_disabled ?? false, customAttributes: {} })
     passwordCopied.value = false
   }
 }, { immediate: true })
@@ -141,7 +154,7 @@ const handleUpdateUser = async () => {
   const userId = props.user.id
   submitting.value = true
   try {
-    const data: any = { email: form.email, username: form.username, notes: form.notes, concurrency: form.concurrency, rpm_limit: form.rpm_limit, invoice_enabled: form.invoice_enabled, subscription_purchase_disabled: form.subscription_purchase_disabled }
+    const data: any = { email: form.email, username: form.username, notes: form.notes, role: form.role, concurrency: form.concurrency, rpm_limit: form.rpm_limit, invoice_enabled: form.invoice_enabled, subscription_purchase_disabled: form.subscription_purchase_disabled }
     if (form.password.trim()) data.password = form.password.trim()
     // 提升为管理员属敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 验证并重试
     await stepUp.run(() => adminAPI.users.update(userId, data))

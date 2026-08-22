@@ -212,6 +212,11 @@ type SystemSettings struct {
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
+	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
+
+	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
+	GrokDefaultTextModel           string `json:"grok_default_text_model"`
+	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
@@ -378,6 +383,7 @@ type PublicSettings struct {
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
+	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
@@ -554,6 +560,23 @@ type RateLimit429CooldownSettings struct {
 	Enabled bool `json:"enabled"`
 	// CooldownSeconds 默认回避时长（秒）
 	CooldownSeconds int `json:"cooldown_seconds"`
+}
+
+// OpenAIAPIKeyHealthBreakerSettings controls cross-instance failure counting for OpenAI pool API keys.
+type OpenAIAPIKeyHealthBreakerSettings struct {
+	Enabled          bool `json:"enabled"`
+	WindowMinutes    int  `json:"window_minutes"`
+	FailureThreshold int  `json:"failure_threshold"`
+	CooldownMinutes  int  `json:"cooldown_minutes"`
+}
+
+func DefaultOpenAIAPIKeyHealthBreakerSettings() *OpenAIAPIKeyHealthBreakerSettings {
+	return &OpenAIAPIKeyHealthBreakerSettings{
+		Enabled:          false,
+		WindowMinutes:    2,
+		FailureThreshold: 10,
+		CooldownMinutes:  5,
+	}
 }
 
 // DefaultOverloadCooldownSettings 返回默认的过载冷却配置（启用，10分钟）

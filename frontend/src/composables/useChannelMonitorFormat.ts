@@ -11,16 +11,20 @@
  */
 
 import { useI18n } from 'vue-i18n'
-import type { MonitorStatus, Provider } from '@/api/admin/channelMonitor'
+import type { CheckMode, MonitorStatus, Provider } from '@/api/admin/channelMonitor'
 import {
   PROVIDER_OPENAI,
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
   PROVIDER_GROK,
+  PROVIDERS,
   STATUS_OPERATIONAL,
   STATUS_DEGRADED,
   STATUS_FAILED,
   STATUS_ERROR,
+  CHECK_MODE_PROBE,
+  CHECK_MODE_QUOTA,
+  CHECK_MODE_QUOTA_PROBE,
 } from '@/constants/channelMonitor'
 
 const NEUTRAL_BADGE = 'bg-gray-100 text-gray-800 dark:bg-dark-700 dark:text-gray-300'
@@ -58,15 +62,32 @@ export function useChannelMonitorFormat() {
   }
 
   function providerLabel(p: Provider | string): string {
-    if (
-      p === PROVIDER_OPENAI ||
-      p === PROVIDER_ANTHROPIC ||
-      p === PROVIDER_GEMINI ||
-      p === PROVIDER_GROK
-    ) {
+    if (PROVIDERS.includes(p as Provider)) {
       return t(`monitorCommon.providers.${p}`)
     }
     return p || '-'
+  }
+
+  function checkModeLabel(m: CheckMode | string): string {
+    if (m === 'probe' || m === 'quota' || m === 'quota_probe') {
+      return t(`monitorCommon.checkMode.${m}`)
+    }
+    return m || '-'
+  }
+
+  /**
+   * Display label for a monitor's primary model. Pure-quota monitors carry the
+   * literal placeholder "quota" (the probe target is an account, not a model),
+   * which must not leak into the UI as a fake model name — render the
+   * localized mode label instead. quota_probe keeps a real model name.
+   */
+  const QUOTA_MODEL_PLACEHOLDER = 'quota'
+
+  function formatMonitorModel(model: string): string {
+    if (model === QUOTA_MODEL_PLACEHOLDER) {
+      return t('monitorCommon.checkMode.quota')
+    }
+    return model
   }
 
   function providerBadgeClass(p: Provider | string): string {
@@ -79,6 +100,22 @@ export function useChannelMonitorFormat() {
         return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
       case PROVIDER_GROK:
         return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300'
+      default:
+        return NEUTRAL_BADGE
+    }
+  }
+
+  /**
+   * Tailwind class for the check-mode badge shown next to the provider badge
+   * in the admin monitor list. Quota-bearing modes = blue (数据源是账号配额),
+   * plain probe = neutral grey.
+   */
+  function checkModeBadgeClass(m: CheckMode | string): string {
+    switch (m) {
+      case CHECK_MODE_QUOTA:
+      case CHECK_MODE_QUOTA_PROBE:
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+      case CHECK_MODE_PROBE:
       default:
         return NEUTRAL_BADGE
     }
@@ -147,7 +184,10 @@ export function useChannelMonitorFormat() {
     statusLabel,
     statusBadgeClass,
     providerLabel,
+    checkModeLabel,
+    formatMonitorModel,
     providerBadgeClass,
+    checkModeBadgeClass,
     providerPickerClass,
     formatLatency,
     formatPercent,

@@ -72,6 +72,7 @@ export default {
         runtimeConfigResetFailed: '重置日志配置失败',
         cleanupConfirm: '确定要清理匹配当前筛选条件的系统日志吗？此操作不可撤销。',
         cleanupSuccess: '清理完成，已删除 {count} 条日志。',
+        cleanupFilterRequired: '清理需要至少一个筛选条件（起止时间或其他字段）',
         cleanupFailed: '清理系统日志失败'
       },
       requestsTotal: '请求（总计）',
@@ -338,7 +339,17 @@ export default {
         time: '时间',
         phase: '阶段',
         status: '状态码',
+        upstreamStatus: '上游状态码',
         message: '消息',
+        rootCause: '根因',
+        diagnosticPayloads: '诊断载荷',
+        payloads: {
+          client: '客户端响应',
+          upstream_message: '上游消息',
+          upstream_detail: '上游详情',
+          upstream_events: '上游事件',
+          request_body: '请求体'
+        },
         basicInfo: '基本信息',
         platform: '平台',
         model: '模型',

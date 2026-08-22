@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -551,11 +552,18 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 	if s.accountTestService == nil || s.accountTestService.httpUpstream == nil {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "transport_unavailable", 0)
 	}
-	apiKey := account.GetOpenAIApiKey()
+	apiKey := strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
 	if apiKey == "" {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "missing_api_key", 0)
 	}
 	baseURL := account.GetOpenAIBaseURL()
+	if account.IsCNProvider() && account.IsAdaptiveAPIProtocol() {
+		baseURL = account.GetCNProtocolBaseURL(APIProtocolChatCompletions)
+	}
+	if account.IsCNProvider() && upstreamBillingProbeTargetIsOfficialAPI(baseURL) {
+		// CN 官方域不可能托管 /v1/sub2api/billing，不发请求，直接记 unsupported。
+		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "unsupported", 0)
+	}
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
 	}
@@ -841,7 +849,40 @@ func decodeUpstreamBillingProbeSnapshot(extra map[string]any) *UpstreamBillingPr
 }
 
 func isUpstreamBillingProbeAccount(account *Account) bool {
-	return account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey
+	if account == nil || account.Type != AccountTypeAPIKey {
+		return false
+	}
+	return account.Platform == PlatformOpenAI || account.IsCNProvider()
+}
+
+// CN 官方域（moonshot.cn / kimi.com / bigmodel.cn / deepseek.com）不可能托管
+// /v1/sub2api/billing，探测短接到 unsupported，避免周期性打官方不存在路径。
+var upstreamBillingProbeOfficialAPICNDomains = []string{
+	"moonshot.cn",
+	"kimi.com",
+	"bigmodel.cn",
+	"deepseek.com",
+}
+
+func upstreamBillingProbeTargetIsOfficialAPI(baseURL string) bool {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return true
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if host == "" {
+		return true
+	}
+	for _, domain := range upstreamBillingProbeOfficialAPICNDomains {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
 }
 
 func upstreamBillingProbeEnabled(account *Account) bool {
