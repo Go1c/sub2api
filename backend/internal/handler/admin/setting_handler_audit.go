@@ -522,6 +522,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ChannelMonitorStatusBanner != after.ChannelMonitorStatusBanner {
 		changed = append(changed, "channel_monitor_status_banner")
 	}
+	if before.ChannelMonitorShowQuota != after.ChannelMonitorShowQuota {
+		changed = append(changed, "channel_monitor_show_quota")
+	}
 	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
 		changed = append(changed, "available_channels_enabled")
 	}

@@ -1113,7 +1113,34 @@ export default {
     providers: {
       openai: 'OpenAI',
       anthropic: 'Anthropic',
-      gemini: 'Gemini'
+      gemini: 'Gemini',
+      grok: 'Grok'
+    },
+    checkMode: {
+      probe: 'Probe',
+      quota: 'Quota',
+      quota_probe: 'Probe + Quota'
+    },
+    quota: {
+      unavailable: 'Quota unavailable',
+      resetSoon: 'resetting',
+      windows: {
+        '5h': '5h',
+        '7d': '7d',
+        '7dSonnet': '7d Sonnet',
+        '7dFable': '7d Fable',
+        weekly: 'Weekly',
+        daily: 'Daily',
+        '30d': '30d',
+        total: 'Total'
+      },
+      labels: {
+        requests: 'Requests',
+        tokens: 'Tokens',
+        shared: 'Shared',
+        pro: 'Pro',
+        flash: 'Flash'
+      }
     },
     extraModelsHeader: 'Extra Models',
     extraModelsEmpty: 'No extra models',
@@ -3133,6 +3160,7 @@ export default {
       deleteConfirm: 'Are you sure you want to delete monitor "{name}"? This action cannot be undone.',
       nameRequired: 'Please enter a monitor name',
       primaryModelRequired: 'Please enter a primary model',
+      linkedAccountRequired: 'Please select a linked account',
       columns: {
         name: 'Name',
         provider: 'Provider',
@@ -3146,6 +3174,19 @@ export default {
         name: 'Name',
         namePlaceholder: 'Enter monitor name',
         provider: 'Platform',
+        checkMode: 'Check Mode',
+        checkModeProbe: 'Probe',
+        checkModeProbeHint: 'Sends a lightweight LLM request to measure availability and latency',
+        checkModeQuota: 'Quota',
+        checkModeQuotaHint: 'Only queries the linked account usage windows without probe requests',
+        checkModeQuotaProbe: 'Probe + Quota',
+        checkModeQuotaProbeHint: 'Probes the channel and attaches the quota snapshot to the primary model result',
+        linkedAccount: 'Linked Account',
+        linkedAccountPlaceholder: 'Select an account',
+        linkedAccountHint: 'Quota data comes from the selected account (reuses the account-side usage queries)',
+        linkedAccountEmpty: 'No accounts on this platform yet. Add one in Account Management first',
+        linkedAccountMissing: 'The linked account no longer exists or is not accessible. Please re-select an account',
+        openAIQuotaProbeHint: 'Note: on the OpenAI platform the usage query may trigger a Codex probe request that consumes the account\'s own quota (at most once every 10 minutes)',
         apiMode: 'OpenAI protocol',
         apiModeChatCompletions: 'OpenAI Compatible',
         apiModeChatCompletionsHint: 'Use /v1/chat/completions with messages; works for most compatible providers.',
@@ -5787,6 +5828,9 @@ export default {
           enabledHint: 'Disabling stops background checks; existing history is preserved.',
           defaultInterval: 'Default check interval (seconds)',
           defaultIntervalHint: 'Pre-fills the interval when creating a new monitor; each monitor can override it. Range 15 – 3600.',
+          showQuota: 'Show channel usage/balance to users',
+          showQuotaHint:
+            'When on, quota-mode channel monitors expose the linked account usage windows on the user Channel Status page. Disabled by default; admins always see it.',
         },
         availableChannels: {
           title: 'Available Channels',

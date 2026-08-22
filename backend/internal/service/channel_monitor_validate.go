@@ -9,11 +9,65 @@ import (
 // 渠道监控参数校验与归一化辅助函数。
 // 校验失败一律返回 channel_monitor_const.go 中预定义的 Err* 错误，错误信息不含具体 IP/hostname，避免泄露内网拓扑。
 
+// monitorProviders 渠道监控支持的全部 provider（fork 四家，与 migration 906 CHECK 一致）。
+//
+//nolint:gochecknoglobals // 静态查表，初始化后不变。
+var monitorProviders = map[string]struct{}{
+	MonitorProviderOpenAI:    {},
+	MonitorProviderAnthropic: {},
+	MonitorProviderGemini:    {},
+	MonitorProviderGrok:      {},
+}
+
+// probeCapableProviders 支持探活（probe / quota_probe）的 provider。
+// fork 四家都能探活，所以 probe / quota / quota_probe 都允许。
+//
+//nolint:gochecknoglobals // 静态查表，初始化后不变。
+var probeCapableProviders = map[string]struct{}{
+	MonitorProviderOpenAI:    {},
+	MonitorProviderAnthropic: {},
+	MonitorProviderGemini:    {},
+	MonitorProviderGrok:      {},
+}
+
 // validateProvider 校验 provider 字符串。
-// 唯一来源于 providerAdapters：新增 provider 只需要在 channel_monitor_checker.go 注册 adapter。
 func validateProvider(p string) error {
-	if !isSupportedProvider(p) {
+	if _, ok := monitorProviders[p]; !ok {
 		return ErrChannelMonitorInvalidProvider
+	}
+	return nil
+}
+
+// providerSupportsProbe 该 provider 是否注册了探活 adapter。
+func providerSupportsProbe(p string) bool {
+	_, ok := probeCapableProviders[p]
+	return ok
+}
+
+// defaultCheckMode 空串归一为 probe，保证存量数据与旧客户端兼容。
+func defaultCheckMode(checkMode string) string {
+	if strings.TrimSpace(checkMode) == "" {
+		return MonitorCheckModeProbe
+	}
+	return strings.TrimSpace(checkMode)
+}
+
+// monitorCheckModeUsesQuota 该模式是否需要关联账号查配额。
+func monitorCheckModeUsesQuota(checkMode string) bool {
+	return checkMode == MonitorCheckModeQuota || checkMode == MonitorCheckModeQuotaProbe
+}
+
+// validateCheckMode 校验 check_mode 与 provider 的组合。
+// fork 四家都能探活，probe / quota / quota_probe 均允许。
+func validateCheckMode(provider, checkMode string) error {
+	checkMode = defaultCheckMode(checkMode)
+	switch checkMode {
+	case MonitorCheckModeProbe, MonitorCheckModeQuota, MonitorCheckModeQuotaProbe:
+	default:
+		return ErrChannelMonitorInvalidCheckMode
+	}
+	if checkMode != MonitorCheckModeQuota && !providerSupportsProbe(provider) {
+		return ErrChannelMonitorInvalidCheckMode
 	}
 	return nil
 }
@@ -124,14 +178,49 @@ func normalizeModels(in []string) []string {
 	return out
 }
 
-// normalizeMonitorPrimaryModel applies the Grok health-check default while
-// preserving the existing required-model behavior for every other provider.
-func normalizeMonitorPrimaryModel(provider, model string) string {
+// normalizeMonitorPrimaryModel applies provider/check_mode defaults:
+//   - pure quota mode never sends requests: placeholder "quota" keeps
+//     primary_model NOT NULL (history rows / timeline need no special-casing)
+//   - quota_probe still sends a real probe request: empty model returns ""
+//     so validateCreateParams / applyMonitorUpdate report
+//     ErrChannelMonitorMissingPrimaryModel instead of probing model="quota"
+//   - Grok probing (probe/quota_probe) defaults to the lightweight check model
+func normalizeMonitorPrimaryModel(provider, checkMode, model string) string {
 	model = strings.TrimSpace(model)
+	if model == "" && defaultCheckMode(checkMode) == MonitorCheckModeQuota {
+		return MonitorDefaultQuotaModel
+	}
 	if model == "" && provider == MonitorProviderGrok {
 		return MonitorDefaultGrokModel
 	}
 	return model
+}
+
+// monitorAccountQuotaCapability 校验关联账号能否充当配额数据源。
+// 在创建/更新期拦截注定运行期永久 error 的组合：
+//   - anthropic：OAuth / Setup Token（API-Key 型无 usage 通道，永久 error）
+//   - openai：OAuth（API-Key 型无 usage 通道）
+//   - gemini/grok：本地统计/值通道降级，不会永久 error，放行
+//
+// fork 不接 CN provider（kimi/zhipu/deepseek）配额/余额抓取。
+func monitorAccountQuotaCapability(account *Account) error {
+	if account == nil {
+		return ErrChannelMonitorAccountRequired
+	}
+	switch account.Platform {
+	case PlatformAnthropic:
+		if account.Type == AccountTypeOAuth || account.Type == AccountTypeSetupToken {
+			return nil
+		}
+		return ErrChannelMonitorAccountNotSupportable
+	case PlatformOpenAI:
+		if account.Type == AccountTypeOAuth {
+			return nil
+		}
+		return ErrChannelMonitorAccountNotSupportable
+	default:
+		return nil
+	}
 }
 
 // defaultAPIMode 空串归一为 chat_completions，保证历史数据与旧客户端兼容。

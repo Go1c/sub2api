@@ -253,6 +253,8 @@ export interface PublicSettings {
   channel_monitor_enabled: boolean
   channel_monitor_default_interval_seconds: number
   channel_monitor_status_banner?: string
+  /** When true, user monitor shows account quota/balance snapshots (default off). */
+  channel_monitor_show_quota?: boolean
   available_channels_enabled: boolean
   service_quota_enabled: boolean
   affiliate_enabled: boolean

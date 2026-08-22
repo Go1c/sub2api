@@ -101,8 +101,9 @@ metadata:
 | `#5738` 子集 | Codex fingerprint seed 写入 extra + `930_backfill_codex_fingerprint_seed.sql`（origin 225 remap）。开启 device/session/full 时仓储原子补 UUID；**未**改 fork 默认 session 收敛，也未整包 origin 出站 ID 派生 |
 | `#5737` | 渠道模型分时价 JSONB：`channel_model_pricing.time_pricing`（IANA 时区 + 每日周期倍率）。origin `225` remap 为 fork `931_channel_model_time_pricing.sql`（930 已被 fingerprint seed 占用）。保留 fork 已有 `channel_pricing_intervals` 表与 interval SQL；**未**带 `#5851`（fast_multiplier/flex_multiplier、interval 上的 input/output/cache 乘数）。计费只乘 token 明细，不改 usage log 的 `RateMultiplier`。WS 透传用 TurnStarted / `PricingAt`；HTTP 未传 `PricingAt` 回退 `Now()` |
 | `#5851` | 渠道档位乘数：migration `932_channel_pricing_multipliers.sql`（origin 228 remap）。`channel_model_pricing.fast_multiplier` / `flex_multiplier`；`channel_pricing_intervals` 上 input/output/cache 四个乘数（CHECK > 0）。计费先 interval/fast/flex 算出 token 明细，再走已有 `applyCostBreakdownMultiplier(..., TimePricing)`，不把分时倍率乘进 `RateMultiplier`。Anthropic `speed=fast`（Opus 5 / 4.8，非 Bedrock）归一成 `ServiceTier=fast` 并记用量行。账号成本统计规则丢弃乘数（`allowChannelMultipliers=false`）；分组 UI 不 enable-tier-multipliers。**未**跟 origin 改长上下文门控：分组关时 Resolve 仍把渠道区间压成第一档；账号 `LongContextBillingEnabled=false` 仍否决官方长上下文阶梯。**未**改账号表单（Create/EditAccountModal / `longContextBilling.ts`）。GetModelPricingWithChannel 仍保留 fork「未配 image_output 不强制 $0」。fallback 目录：gpt-5.5 官方价 + 2.5x Fast；Opus 4.8/5 Fast 2x |
+| `#5761+#5780` | 渠道监控配额模式：migration `933_channel_monitor_quota_mode.sql`（origin 226 remap）。`check_mode` probe/quota/quota_probe + `account_id` FK + history.quota JSONB + 公开设置 `channel_monitor_show_quota` 默认 false。fetcher 只走 `AccountUsageService.GetUsage`（fork 签名，非 origin `GetUsageForAccount`），接到现有 `ProvideChannelMonitorService`。provider 保持 openai/anthropic/gemini/grok（不扩 CHECK/enum）。**未**带 CN quota/balance fetcher、`CNProviderQuotaService` / `CNProviderBalanceService`、antigravity 监控 provider、origin 8 平台矩阵。#5780 非 CN 部分：凭据失效→failed、capability 校验（oauth/setup-token）、单次 LoadAccount、quota 占位模型 i18n、60s 负缓存/singleflight。管理端始终可见配额，用户端看开关。 |
 
-交付分支：`sync/v0179-newest-gateway` 已合入 `dev`。本刀：`sync/v0179-channel-pricing-multipliers`（#5851）→ `--base dev`。续做：`sync/v0179-channel-monitor-quota`（#5761+#5780）→ `--base dev`。
+交付分支：`sync/v0179-newest-gateway` 已合入 `dev`。本刀：`sync/v0179-channel-monitor-quota`（#5761+#5780，migration 933）→ `--base dev`。本窗口可落地切片已切完。
 
 ## 明确排除（不要当遗漏）
 
@@ -112,7 +113,7 @@ metadata:
 - `#5925` 未抽：`grok_free_quota_gate`、origin `xai/models.go` 全量目录（306 vs 76）、`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras。
 - `#5742` Grok 响应模型别名审计：fork 没有 `upstream_response_model.go`，不能只带 helper。
 - `#5738` 已 remap 为 930 并接 UpdateExtra；未带 origin「缺省改 off」与出站 ID 全量派生（fork 仍默认 session）。
-- channel-monitor quota mode（#5761+#5780）。渠道分时价 `#5737`（migration 931）与档位乘数 `#5851`（migration 932）已纳入。未改账号长上下文开关门控。
+- 渠道分时价 `#5737`（migration 931）与档位乘数 `#5851`（migration 932）已纳入。channel-monitor quota mode（#5761+#5780，migration 933）已纳入四家 provider、无 CN fetcher。未改账号长上下文开关门控。未带 origin 8 平台 CHECK / `fetchCNQuota` / `CNProviderQuotaService` / `CNProviderBalanceService` / antigravity 监控 provider。
 - `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
 - `#5708` 首页 model plaza（fork `HomeView` 已有 `/models` 导航，不是 origin 那两套 header）。
 - `#5711` Antigravity mixed tool-config 透传（fork 无 `antigravity_gateway_compat.go`）。
@@ -182,6 +183,9 @@ metadata:
 | `go test -tags=unit ./internal/service ./internal/repository ./internal/handler/admin ./migrations`（#5851 档位乘数） | 通过（service 147.4s；repository / handler/admin / migrations 通过。第一次全量曾偶发 `TestSanitizeOpenAIResponsesToolParameterTypes_RewriteCountIndependentOfHits`，与本刀无关，复跑绿） |
 | `go vet -tags integration ./internal/service ./internal/repository ./internal/handler ./internal/handler/admin ./migrations`（#5851） | 通过 |
 | 前端 channel vitest + `pnpm typecheck` + `pnpm build`（#5851） | 通过（32/32；渠道倍率表单未开浏览器，靠单测 + typecheck/build） |
+| `go test -tags=unit`（#5761+#5780：service quota 路径 / repository / handler / handler/admin / domain / migrations） | 通过（quota/monitor 相关 `-run` 绿；全量 service 有既有 `TestOpenAIGatewayServiceRecordUsage_GroupOrAccountLongContextAllows` 失败，与本刀无关，#5851 未改长上下文门控） |
+| `go vet -tags integration ./internal/service ./internal/repository ./internal/handler ./internal/handler/admin ./ent ./migrations`（#5761+#5780） | 通过 |
+| 前端 monitor quota vitest + `pnpm typecheck` + `pnpm build`（#5761+#5780） | 通过（34/34 相关；配额表单未开浏览器，靠单测 + typecheck/build） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关

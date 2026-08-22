@@ -271,6 +271,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyChannelMonitorEnabled:                "true",
 		SettingKeyChannelMonitorDefaultIntervalSeconds: "60",
 		SettingKeyChannelMonitorStatusBanner:           "",
+		SettingKeyChannelMonitorShowQuota:              "false",
 
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
@@ -839,6 +840,9 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.ChannelMonitorStatusBanner = normalizeChannelMonitorStatusBanner(
 		settings[SettingKeyChannelMonitorStatusBanner],
 	)
+	// 配额展示默认关闭且 fail-closed：仅字面 "true" 视为开启
+	// （与 setting_public.go 公开读取路径保持一致）。
+	result.ChannelMonitorShowQuota = settings[SettingKeyChannelMonitorShowQuota] == "true"
 
 	// Available channels feature (default: disabled; strict true)
 	result.AvailableChannelsEnabled = settings[SettingKeyAvailableChannelsEnabled] == "true"

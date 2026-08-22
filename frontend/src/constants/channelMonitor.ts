@@ -7,7 +7,7 @@
  * `useChannelMonitorFormat`.
  */
 
-import type { APIMode, Provider, MonitorStatus } from '@/api/admin/channelMonitor'
+import type { APIMode, CheckMode, Provider, MonitorStatus } from '@/api/admin/channelMonitor'
 
 export const PROVIDER_OPENAI: Provider = 'openai'
 export const PROVIDER_ANTHROPIC: Provider = 'anthropic'
@@ -16,6 +16,16 @@ export const PROVIDER_GROK: Provider = 'grok'
 
 export const DEFAULT_GROK_ENDPOINT = 'https://api.x.ai'
 export const DEFAULT_GROK_MODEL = 'grok-4.5'
+
+export const CHECK_MODE_PROBE: CheckMode = 'probe'
+export const CHECK_MODE_QUOTA: CheckMode = 'quota'
+export const CHECK_MODE_QUOTA_PROBE: CheckMode = 'quota_probe'
+
+export const CHECK_MODES: readonly CheckMode[] = [
+  CHECK_MODE_PROBE,
+  CHECK_MODE_QUOTA,
+  CHECK_MODE_QUOTA_PROBE,
+]
 
 export const API_MODE_CHAT_COMPLETIONS: APIMode = 'chat_completions'
 export const API_MODE_RESPONSES: APIMode = 'responses'

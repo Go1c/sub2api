@@ -434,6 +434,13 @@ const (
 	// top of the user-facing channel status page. Empty string hides the banner.
 	SettingKeyChannelMonitorStatusBanner = "channel_monitor_status_banner"
 
+	// SettingKeyChannelMonitorShowQuota controls whether quota/balance snapshots
+	// attached to channel monitors (check_mode=quota/quota_probe) are exposed on
+	// the user-facing monitor APIs and UI. Default false (hidden); parsed
+	// fail-closed (only the literal "true" enables it). Admin endpoints always
+	// keep the full snapshots regardless of this flag.
+	SettingKeyChannelMonitorShowQuota = "channel_monitor_show_quota"
+
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).

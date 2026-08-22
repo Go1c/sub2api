@@ -428,6 +428,7 @@ type UpdateSettingsRequest struct {
 	ChannelMonitorEnabled                *bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds *int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           *string `json:"channel_monitor_status_banner"`
+	ChannelMonitorShowQuota              *bool   `json:"channel_monitor_show_quota"`
 
 	// Available Channels feature switch (user-facing)
 	AvailableChannelsEnabled *bool `json:"available_channels_enabled"`
@@ -2138,6 +2139,12 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			}
 			return previousSettings.ChannelMonitorStatusBanner
 		}(),
+		ChannelMonitorShowQuota: func() bool {
+			if req.ChannelMonitorShowQuota != nil {
+				return *req.ChannelMonitorShowQuota
+			}
+			return previousSettings.ChannelMonitorShowQuota
+		}(),
 		AvailableChannelsEnabled: func() bool {
 			if req.AvailableChannelsEnabled != nil {
 				return *req.AvailableChannelsEnabled
@@ -2563,6 +2570,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorStatusBanner:           updatedSettings.ChannelMonitorStatusBanner,
+		ChannelMonitorShowQuota:              updatedSettings.ChannelMonitorShowQuota,
 
 		AvailableChannelsEnabled: updatedSettings.AvailableChannelsEnabled,
 

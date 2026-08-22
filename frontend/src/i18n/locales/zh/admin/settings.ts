@@ -22,6 +22,9 @@ export default {
           enabledHint: '关闭后后台不再执行定时检测，已有数据保留。',
           defaultInterval: '默认检测间隔（秒）',
           defaultIntervalHint: '新建渠道监控时表单的默认值，可被单个渠道覆盖。范围 15 – 3600 秒。',
+          showQuota: '向用户展示渠道用量/余额',
+          showQuotaHint:
+            '开启后，配额模式的渠道监控会在用户端渠道状态页展示关联账号的用量滚动窗口。默认关闭；管理员始终可见。',
         },
         availableChannels: {
           title: '可用渠道',

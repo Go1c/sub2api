@@ -1113,7 +1113,34 @@ export default {
     providers: {
       openai: 'OpenAI',
       anthropic: 'Anthropic',
-      gemini: 'Gemini'
+      gemini: 'Gemini',
+      grok: 'Grok'
+    },
+    checkMode: {
+      probe: '探活',
+      quota: '配额',
+      quota_probe: '探活 + 配额'
+    },
+    quota: {
+      unavailable: '配额信息不可用',
+      resetSoon: '即将重置',
+      windows: {
+        '5h': '5 小时',
+        '7d': '7 天',
+        '7dSonnet': '7 天 Sonnet',
+        '7dFable': '7 天 Fable',
+        weekly: '周',
+        daily: '日',
+        '30d': '30 天',
+        total: '总量'
+      },
+      labels: {
+        requests: '请求',
+        tokens: 'Token',
+        shared: '共享',
+        pro: 'Pro',
+        flash: 'Flash'
+      }
     },
     extraModelsHeader: '附加模型',
     extraModelsEmpty: '无附加模型',
@@ -3205,6 +3232,7 @@ export default {
       deleteConfirm: '确定要删除监控「{name}」吗？此操作不可撤销。',
       nameRequired: '请输入监控名称',
       primaryModelRequired: '请输入主模型',
+      linkedAccountRequired: '请选择关联账号',
       columns: {
         name: '名称',
         provider: '供应商',
@@ -3218,6 +3246,19 @@ export default {
         name: '名称',
         namePlaceholder: '输入监控名称',
         provider: '平台',
+        checkMode: '检查方式',
+        checkModeProbe: '探活',
+        checkModeProbeHint: '向上游发送轻量 LLM 请求，检测可用性与延迟',
+        checkModeQuota: '配额',
+        checkModeQuotaHint: '只查询关联账号的用量滚动窗口，不发送探活请求',
+        checkModeQuotaProbe: '探活 + 配额',
+        checkModeQuotaProbeHint: '探活的同时查询配额，用量快照附加在主模型结果上',
+        linkedAccount: '关联账号',
+        linkedAccountPlaceholder: '选择账号',
+        linkedAccountHint: '配额数据来自所选账号（复用账号管理侧的用量查询）',
+        linkedAccountEmpty: '当前平台暂无账号，请先在账号管理中添加',
+        linkedAccountMissing: '关联账号已不存在或不可访问，请重新选择账号',
+        openAIQuotaProbeHint: '注意：OpenAI 平台的用量查询可能触发 Codex 探测请求，会消耗账号自身的额度（每 10 分钟最多触发一次）',
         apiMode: 'OpenAI 协议',
         apiModeChatCompletions: 'OpenAI Compatible',
         apiModeChatCompletionsHint: '使用 /v1/chat/completions，发送 messages；适合大多数兼容站。',
@@ -5942,6 +5983,9 @@ export default {
           enabledHint: '关闭后后台不再执行定时检测，已有数据保留。',
           defaultInterval: '默认检测间隔（秒）',
           defaultIntervalHint: '新建渠道监控时表单的默认值，可被单个渠道覆盖。范围 15 – 3600 秒。',
+          showQuota: '向用户展示渠道用量/余额',
+          showQuotaHint:
+            '开启后，配额模式的渠道监控会在用户端渠道状态页展示关联账号的用量滚动窗口。默认关闭；管理员始终可见。',
         },
         availableChannels: {
           title: '可用渠道',

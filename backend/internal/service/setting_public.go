@@ -236,6 +236,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyChannelMonitorEnabled,
 		SettingKeyChannelMonitorDefaultIntervalSeconds,
 		SettingKeyChannelMonitorStatusBanner,
+		SettingKeyChannelMonitorShowQuota,
 		SettingKeyAvailableChannelsEnabled,
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
@@ -365,6 +366,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ChannelMonitorEnabled:                !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled]),
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
 		ChannelMonitorStatusBanner:           normalizeChannelMonitorStatusBanner(settings[SettingKeyChannelMonitorStatusBanner]),
+		ChannelMonitorShowQuota:              settings[SettingKeyChannelMonitorShowQuota] == "true",
 
 		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
 
@@ -434,6 +436,10 @@ func normalizeChannelMonitorStatusBanner(raw string) string {
 type ChannelMonitorRuntime struct {
 	Enabled                bool
 	DefaultIntervalSeconds int
+	// ShowQuota: when true, user-facing monitor views keep the quota/balance
+	// snapshots; otherwise the user handler strips them server-side.
+	// Parsed fail-closed (only literal "true" enables). Admin always sees them.
+	ShowQuota bool
 }
 
 // GetChannelMonitorRuntime reads the channel monitor feature flags directly from
@@ -442,6 +448,7 @@ func (s *SettingService) GetChannelMonitorRuntime(ctx context.Context) ChannelMo
 	vals, err := s.settingRepo.GetMultiple(ctx, []string{
 		SettingKeyChannelMonitorEnabled,
 		SettingKeyChannelMonitorDefaultIntervalSeconds,
+		SettingKeyChannelMonitorShowQuota,
 	})
 	if err != nil {
 		return ChannelMonitorRuntime{Enabled: true, DefaultIntervalSeconds: channelMonitorIntervalFallback}
@@ -449,6 +456,7 @@ func (s *SettingService) GetChannelMonitorRuntime(ctx context.Context) ChannelMo
 	return ChannelMonitorRuntime{
 		Enabled:                !isFalseSettingValue(vals[SettingKeyChannelMonitorEnabled]),
 		DefaultIntervalSeconds: parseChannelMonitorInterval(vals[SettingKeyChannelMonitorDefaultIntervalSeconds]),
+		ShowQuota:              vals[SettingKeyChannelMonitorShowQuota] == "true",
 	}
 }
 
@@ -567,7 +575,10 @@ type PublicSettingsInjectionPayload struct {
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
-	AvailableChannelsEnabled             bool   `json:"available_channels_enabled"`
+	// ChannelMonitorShowQuota gates the user-facing quota/balance display on
+	// monitors; fail-closed (absent/false = hidden). Admin UI always shows it.
+	ChannelMonitorShowQuota    bool `json:"channel_monitor_show_quota"`
+	AvailableChannelsEnabled   bool `json:"available_channels_enabled"`
 	AffiliateEnabled                     bool   `json:"affiliate_enabled"`
 	RiskControlEnabled                   bool   `json:"risk_control_enabled"`
 	SiteMessagesEnabled                  bool   `json:"site_messages_enabled"`
@@ -651,6 +662,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorStatusBanner:           settings.ChannelMonitorStatusBanner,
+		ChannelMonitorShowQuota:              settings.ChannelMonitorShowQuota,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,

@@ -5662,6 +5662,18 @@
                 {{ t('admin.settings.features.channelMonitor.defaultIntervalHint') }}
               </p>
             </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.channelMonitor.showQuota') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.channelMonitor.showQuotaHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.channel_monitor_show_quota" />
+            </div>
           </div>
         </div>
 
@@ -8637,6 +8649,7 @@ const form = reactive<SettingsForm>({
   channel_monitor_enabled: true,
   channel_monitor_default_interval_seconds: 60,
   channel_monitor_status_banner: "",
+  channel_monitor_show_quota: false,
   // Available Channels feature switch
   available_channels_enabled: false,
   // Site Messages feature switch
@@ -10856,6 +10869,7 @@ async function saveSettings() {
       channel_monitor_enabled: form.channel_monitor_enabled,
       channel_monitor_default_interval_seconds:
         Number(form.channel_monitor_default_interval_seconds) || 60,
+      channel_monitor_show_quota: form.channel_monitor_show_quota,
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
       // Site Messages feature switch

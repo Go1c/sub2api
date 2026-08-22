@@ -62,6 +62,31 @@ const (
 	MonitorProviderGemini    = "gemini"
 	MonitorProviderGrok      = "grok"
 
+	// MonitorCheckMode 检测模式（channel_monitors.check_mode）。
+	//   probe       - LLM 探活（默认，原有行为）
+	//   quota       - 仅查关联账号用量，零 LLM 成本
+	//   quota_probe - 探活 + 配额并存（配额快照挂到主模型历史行）
+	MonitorCheckModeProbe      = "probe"
+	MonitorCheckModeQuota      = "quota"
+	MonitorCheckModeQuotaProbe = "quota_probe"
+
+	// MonitorDefaultQuotaModel 是 quota 模式监控未显式指定模型时占位的虚拟模型名
+	// （primary_model 列 NotEmpty，用 "quota" 让历史行/时间线机制无需特判）。
+	MonitorDefaultQuotaModel = "quota"
+
+	// monitorQuotaFetchCacheTTL 配额快照缓存时长。多个监控可能关联同一账号，
+	// 而 interval 最小 15s，TTL 防止打爆上游配额端点。
+	monitorQuotaFetchCacheTTL = 5 * time.Minute
+	// monitorQuotaErrorCacheTTL 失败快照的负缓存时长：失败也短缓存，避免
+	// 故障/凭据失效期间每次调度（最小 15s）都带真实凭据打上游；到期自动重试。
+	monitorQuotaErrorCacheTTL = 60 * time.Second
+	// monitorQuotaFetchTimeout singleflight 内单次配额抓取的总超时
+	// （脱离调用方 ctx，防止某个监控的取消波及共享同一账号的其他监控）。
+	monitorQuotaFetchTimeout = 45 * time.Second
+	// monitorQuotaDegradedUsedPercent 任一用量窗口使用率超过该阈值时，
+	// 配额检查状态记为 degraded（对齐账号页展示阈值）。
+	monitorQuotaDegradedUsedPercent = 90.0
+
 	// MonitorDefaultGrokModel 是新增 Grok 监控未显式指定模型时使用的轻量测活模型。
 	MonitorDefaultGrokModel = "grok-4.5"
 
@@ -119,6 +144,18 @@ var (
 	)
 	ErrChannelMonitorInvalidProvider = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok",
+	)
+	ErrChannelMonitorInvalidCheckMode = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_CHECK_MODE", "check_mode must be one of probe/quota/quota_probe",
+	)
+	ErrChannelMonitorAccountRequired = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_ACCOUNT_REQUIRED", "account_id is required for quota-based check_mode",
+	)
+	ErrChannelMonitorProviderIncompatible = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_PROVIDER_INCOMPATIBLE", "monitor provider must match the linked account platform",
+	)
+	ErrChannelMonitorAccountNotSupportable = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_ACCOUNT_NOT_SUPPORTABLE", "linked account cannot serve as a quota data source (openai requires an oauth account, anthropic requires oauth or setup-token)",
 	)
 	ErrChannelMonitorInvalidAPIMode = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_API_MODE", "api_mode must be chat_completions or responses; responses is only supported for openai",
