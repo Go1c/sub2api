@@ -94,6 +94,8 @@ metadata:
 | `#5749` | 清掉 Sora 平台删除后的死引用：DTO `sora_client_enabled`、settings/overview i18n、README「暂时不可用」段、`deploy/config.example.yaml` 的 `gateway.sora_*` / 顶层 `sora:` / `sync_linked_sora_accounts`。fork Go 侧已无 Sora 结构体或路由，yaml 不会再生效；fork 另清了单体 `en.ts`/`zh.ts`/`zh-Hant.ts` |
 | `#5794` | README star-history 图源改 `star-history.dera.page`（旧 `api.star-history.com` 因 GitHub API 限制挂了）。fork 没有 README_CN/JA |
 | gitignore | 忽略 `.codegraph/`（origin `354825674`） |
+| `#2148` | ops 错误列表弹窗在 `time_range=custom` 时改传 `start_time`/`end_time`（后端不认 custom）。fork 仪表盘 header 已有自定义时间，漏接到 `OpsErrorDetailsModal` |
+| `#5839` 子集 | 创建账号 API key placeholder 抽成 `apiKeyValuePlaceholder`（openai/gemini/grok/anthropic）；未带 origin 的 kimi/zhipu/deepseek case |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -112,8 +114,8 @@ metadata:
 - `#5609` 认证快照定价字段（fork 已有 v16 `ModelPricing` / `LongContextPricingEnabled`）。
 - `#5716` SMTP 未配置跳过到期提醒（fork 的 `SubscriptionExpiryService` 没有 reminder 路径）。
 - `#5875` 平台筛选目录：origin 把 kimi/zhipu/deepseek + composite 收成共享 catalog；fork 无 Composite / CN provider 面，整包会把排除的平台塞进筛选。
-- `#5839` Grok 创建账号 placeholder 测试：fork 仍是模板内联 `xai-...`，origin 已抽 `apiKeyValuePlaceholder`；只改测试会红。
-- `#2148` ops 错误详情 custom time：fork 弹窗是 `OpsErrorDetailModal.vue`，不是 origin 的 `OpsErrorDetailsModal.vue`；#5888 第三刀已接 fork 时间窗。
+- `#5839` 已抽 fork 已有平台的 placeholder computed；未带 CN provider 的 kimi/zhipu/deepseek 占位符。
+- `#2148` 已接到 fork 的 `OpsErrorDetailsModal`（列表弹窗）+ 仪表盘 props；单条 `OpsErrorDetailModal` 不拉错误列表，无需 custom 时间。
 - `#5662` 只改 `docs/ADMIN_PAYMENT_INTEGRATION_API.md`，fork 无该文档。
 - `#5762` usage_log GROUPING SETS + 新 SQL 索引：要 remap 900+ 迁移，且会碰 fork 已有分组用量 rollup，单独立项。
 - `VERSION` / sponsors / Dockerfile Go 镜像钉。
@@ -165,6 +167,7 @@ metadata:
 | `go test -tags=unit ./internal/handler/dto`（#5749 PublicSettings schema） | 通过 |
 | `go vet -tags integration ./internal/handler`（#5749） | 通过 |
 | 前端 `vue-tsc --noEmit` + `pnpm build` + i18n vitest（#5636/#5749：`accountStatusExpired` + `localesMessageCompile`） | 通过（8/8；代理列表 expired 文案未开浏览器，靠 locale 单测 + typecheck/build） |
+| 前端 `opsErrorTimeParams.spec.ts` + `CreateAccountModal.grok.spec.ts` + `vue-tsc` + `pnpm build`（#2148/#5839） | 通过（7/7 相关；custom 时间弹窗未开浏览器，靠单测 + typecheck/build） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
