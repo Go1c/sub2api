@@ -63,6 +63,9 @@ metadata:
 | `#5685` | Anthropic 兼容池模式 429 可同账号重试 |
 | `#5661` | OpenAI API-key Responses 把 custom/tool_search 降成 function，回程还原 |
 | `#5845` | WS 后手 429：未写出下游时换号重放当前轮，不重放第一轮 |
+| `#5954` | DeepSeek/Kimi/GLM 的 `max` 保留为 max，旧 GPT 仍折成 xhigh |
+| `#5876` | 组内无此模型视为本地配置问题，不进 SLA / 不记上游账号 |
+| `#5810` | 原生 `POST /v1/responses/input_tokens`；Grok 与自定义 relay 走本地估算 |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -86,6 +89,8 @@ metadata:
 | `go test -tags=unit ./internal/pkg/apicompat ./internal/pkg/antigravity ./internal/pkg/openai` | 通过 |
 | `go vet -tags integration`（改动包） | 通过 |
 | 前端 `tokenRefresh.spec.ts` | 7/7 通过 |
+| `go test -tags=unit ./internal/service ./internal/handler`（#5954/#5876/#5810） | 通过（service 3.9s / handler 4.1s） |
+| `go vet -tags integration`（改动包，含 input_tokens / ops SLA） | 通过 |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
