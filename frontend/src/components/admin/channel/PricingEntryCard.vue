@@ -139,6 +139,19 @@
             </div>
           </div>
 
+          <div v-if="enableTierMultipliers" class="mt-3 grid max-w-md grid-cols-2 gap-2">
+            <div>
+              <label class="text-xs text-gray-400">{{ t('admin.channels.form.fastMultiplier') }}</label>
+              <input :value="entry.fast_multiplier" @input="emitField('fast_multiplier', ($event.target as HTMLInputElement).value)"
+                type="number" step="any" min="0.000001" class="input mt-0.5 text-sm" :placeholder="t('admin.channels.form.multiplierPlaceholder')" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">{{ t('admin.channels.form.flexMultiplier') }}</label>
+              <input :value="entry.flex_multiplier" @input="emitField('flex_multiplier', ($event.target as HTMLInputElement).value)"
+                type="number" step="any" min="0.000001" class="input mt-0.5 text-sm" :placeholder="t('admin.channels.form.multiplierPlaceholder')" />
+            </div>
+          </div>
+
           <!-- Token intervals (channel-only; group long-context uses official presets) -->
           <div v-if="!hideTokenIntervals" class="mt-3">
             <div class="flex items-center justify-between">
@@ -156,6 +169,7 @@
                 :key="idx"
                 :interval="iv"
                 :mode="entry.billing_mode"
+                :enable-multipliers="enableTierMultipliers"
                 @update="updateInterval(idx, $event)"
                 @remove="removeInterval(idx)"
               />
@@ -262,9 +276,11 @@ const props = withDefaults(defineProps<{
   platform?: string
   hideTokenIntervals?: boolean
   enableTimePricing?: boolean
+  enableTierMultipliers?: boolean
 }>(), {
   hideTokenIntervals: false,
   enableTimePricing: false,
+  enableTierMultipliers: false,
 })
 
 const emit = defineEmits<{
@@ -296,7 +312,8 @@ function addInterval() {
   intervals.push({
     min_tokens: 0, max_tokens: null, tier_label: '',
     input_price: null, output_price: null, cache_write_price: null,
-    cache_read_price: null, per_request_price: null,
+    cache_read_price: null, input_multiplier: null, output_multiplier: null,
+    cache_write_multiplier: null, cache_read_multiplier: null, per_request_price: null,
     sort_order: intervals.length
   })
   emit('update', { ...props.entry, intervals })
@@ -310,7 +327,8 @@ function addMediaTier() {
   intervals.push({
     min_tokens: 0, max_tokens: null, tier_label: labels[intervals.length] || '',
     input_price: null, output_price: null, cache_write_price: null,
-    cache_read_price: null, per_request_price: null,
+    cache_read_price: null, input_multiplier: null, output_multiplier: null,
+    cache_write_multiplier: null, cache_read_multiplier: null, per_request_price: null,
     sort_order: intervals.length
   })
   emit('update', { ...props.entry, intervals })
