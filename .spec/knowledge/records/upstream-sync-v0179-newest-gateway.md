@@ -4,7 +4,7 @@ description: origin/main 快进到 0.1.179 后，按「最近半个月、从最�
 metadata:
   type: record
   date: 2026-08-22
-  status: 已实现，待 Review 合入 dev
+  status: 进行中
 ---
 
 # Upstream Sync 台账 — 2026-08-22 (v0.1.179 最新窗口)
@@ -99,8 +99,9 @@ metadata:
 | `#5888/#5925` 接线 | Grok `/responses/compact` 转摘要 turn + 回程 compaction item；stream idle 冷却；spending-limit reauth 在 quota/token-refresh 生效。修 CI unused |
 | `#5838` | 编辑用户弹窗补角色 Select。fork 后端本来就收 `role`（升 admin 要 step-up），UI 漏了字段 |
 | `#5738` 子集 | Codex fingerprint seed 写入 extra + `930_backfill_codex_fingerprint_seed.sql`（origin 225 remap）。开启 device/session/full 时仓储原子补 UUID；**未**改 fork 默认 session 收敛，也未整包 origin 出站 ID 派生 |
+| `#5737` | 渠道模型分时价 JSONB：`channel_model_pricing.time_pricing`（IANA 时区 + 每日周期倍率）。origin `225` remap 为 fork `931_channel_model_time_pricing.sql`（930 已被 fingerprint seed 占用）。保留 fork 已有 `channel_pricing_intervals` 表与 interval SQL；**未**带 `#5851`（fast_multiplier/flex_multiplier、interval 上的 input/output/cache 乘数）。计费只乘 token 明细，不改 usage log 的 `RateMultiplier`。WS 透传用 TurnStarted / `PricingAt`；HTTP 未传 `PricingAt` 回退 `Now()` |
 
-交付分支：`sync/v0179-newest-gateway` 已合入 `dev`。续做：`sync/v0179-remaining` → `--base dev`。
+交付分支：`sync/v0179-newest-gateway` 已合入 `dev`。本刀：`sync/v0179-channel-time-pricing`（#5737）→ `--base dev`。续做：`sync/v0179-channel-pricing-multipliers`（#5851）→ `--base dev`。
 
 ## 明确排除（不要当遗漏）
 
@@ -110,7 +111,7 @@ metadata:
 - `#5925` 未抽：`grok_free_quota_gate`、origin `xai/models.go` 全量目录（306 vs 76）、`billing_service` 其余 reasoning 折算（2024 vs 1382）、failover_loop 利润否决整包、`setting_gateway_runtime` extras。
 - `#5742` Grok 响应模型别名审计：fork 没有 `upstream_response_model.go`，不能只带 helper。
 - `#5738` 已 remap 为 930 并接 UpdateExtra；未带 origin「缺省改 off」与出站 ID 全量派生（fork 仍默认 session）。
-- 渠道分时价 / 档位乘数 / channel-monitor quota mode。
+- 档位乘数 `#5851`（fast_multiplier/flex_multiplier、interval 上的 input/output/cache 乘数）/ channel-monitor quota mode。渠道分时价 `#5737` 已纳入（migration 931，保留 interval 表）。
 - `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
 - `#5708` 首页 model plaza（fork `HomeView` 已有 `/models` 导航，不是 origin 那两套 header）。
 - `#5711` Antigravity mixed tool-config 透传（fork 无 `antigravity_gateway_compat.go`）。
@@ -174,6 +175,9 @@ metadata:
 | 前端 `UserEditModal.spec.ts` + `vue-tsc`（#5838） | 通过（3/3） |
 | `go test -tags=unit` fingerprint seed / account_repo SQL helper（#5738 子集） | 通过 |
 | `go vet -tags integration ./internal/service ./internal/repository`（#5738 子集） | 通过 |
+| `go test -tags=unit ./internal/service ./internal/repository ./internal/handler/admin ./migrations`（#5737 分时价） | 通过（service 146.7s） |
+| `go vet -tags integration ./internal/service ./internal/repository ./internal/handler ./internal/handler/admin ./migrations`（#5737） | 通过 |
+| 前端 timePricing vitest + `pnpm typecheck` + `pnpm build`（#5737） | 通过（28/28；渠道分时价表单未开浏览器，靠单测 + typecheck/build） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
