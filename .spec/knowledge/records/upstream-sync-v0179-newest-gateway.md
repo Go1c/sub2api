@@ -90,6 +90,10 @@ metadata:
 | `#5669` | OpenAI OAuth 402 `deactivated_workspace` 联动熔断同 Team 其余 active 账户（进程内去重 60s）；fastpath 与 `HandleUpstreamError` 都先于 model-not-found / 池模式早退 |
 | `#5755` | Gemini `ErrorPolicySkipped` 与 OpenAI 对齐：自定义错误码未命中且不可 failover 时对客户端隐藏上游细节（500 + 固定文案）；池模式 4xx 保真透传；可 failover 的 5xx/429 仍换号。fork 原先 Skipped 一律写 500 且仍会 `handleGeminiUpstreamError` |
 | `#5721` | 批量编辑 OpenAI 设置：长上下文计费、端点能力、Responses 路由；影子账号长上下文跟随母账号并回报 inherited count。fork 长上下文 UI 覆盖 oauth/apikey/setup-token（passthrough 开关仍不含 setup-token）；未带 origin 的 ProbeEnabled 批量字段 |
+| `#5636` | 账号 `status.expired` 文案：代理/分组列表 `t('admin.accounts.status.' + value)` 缺 key 时会露出 raw path。en/zh 模块 + 单体包 + zh-Hant 都补了 |
+| `#5749` | 清掉 Sora 平台删除后的死引用：DTO `sora_client_enabled`、settings/overview i18n、README「暂时不可用」段、`deploy/config.example.yaml` 的 `gateway.sora_*` / 顶层 `sora:` / `sync_linked_sora_accounts`。fork Go 侧已无 Sora 结构体或路由，yaml 不会再生效；fork 另清了单体 `en.ts`/`zh.ts`/`zh-Hant.ts` |
+| `#5794` | README star-history 图源改 `star-history.dera.page`（旧 `api.star-history.com` 因 GitHub API 限制挂了）。fork 没有 README_CN/JA |
+| gitignore | 忽略 `.codegraph/`（origin `354825674`） |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -112,7 +116,12 @@ metadata:
 - `#2148` ops 错误详情 custom time：fork 弹窗是 `OpsErrorDetailModal.vue`，不是 origin 的 `OpsErrorDetailsModal.vue`；#5888 第三刀已接 fork 时间窗。
 - `#5662` 只改 `docs/ADMIN_PAYMENT_INTEGRATION_API.md`，fork 无该文档。
 - `#5762` usage_log GROUPING SETS + 新 SQL 索引：要 remap 900+ 迁移，且会碰 fork 已有分组用量 rollup，单独立项。
-- `VERSION` / sponsors / gitignore / star-history / Dockerfile Go 镜像钉。
+- `VERSION` / sponsors / Dockerfile Go 镜像钉。
+- `#5712` Ollama Cloud 用量查询按钮：父功能是窗口外的 `#4776`（`ollama_cloud_usage` 整栈）。fork 没有 `OllamaCloudUsageCell.vue` / `refreshOllamaCloudUsage`，不能只合按钮。
+- `#5913` DeepSeek Responses 账号测试、`#5911` DeepSeek relay balance、`#5842` 自适应 API 协议、`#6009`/`#6011`/`#5919`/`#5847`/`#5837`/`#5782`/`#5730` 等 CN provider 面。fork 无 `GetAPIProtocol` / `PlatformDeepseek` / `testCNProvider*`。
+- `#6048` Composite messages dispatch、`#5654` Composite 视频端点、`#5817`/`#5816` Composite 新平台。fork `sanitizeGroupMessagesDispatchFields` 仍把非 openai 的 `AllowMessagesDispatch` 打成 false。
+- `#5906` CN 额度探测测试加锁：只动 `cn_provider_balance_check_service_test.go`。
+- `#5708` 首页 model plaza 入口：origin 往内建 compact/default header 加链接；fork `HomeView.vue` 是独立品牌首页，没有那两套 header，不能原样贴。
 
 ## 验证
 
@@ -153,6 +162,9 @@ metadata:
 | `go test -tags=unit ./internal/service -run TestAdminServiceBulkUpdateAccounts`（#5721） | 通过 |
 | `go vet -tags integration ./internal/service`（#5721） | 通过 |
 | 前端 `vue-tsc --noEmit` + `pnpm build` + `BulkEditAccountModal.spec.ts`（#5721） | 通过（30/30；批量弹窗未开浏览器，靠 typecheck/build/vitest） |
+| `go test -tags=unit ./internal/handler/dto`（#5749 PublicSettings schema） | 通过 |
+| `go vet -tags integration ./internal/handler`（#5749） | 通过 |
+| 前端 `vue-tsc --noEmit` + `pnpm build` + i18n vitest（#5636/#5749：`accountStatusExpired` + `localesMessageCompile`） | 通过（8/8；代理列表 expired 文案未开浏览器，靠 locale 单测 + typecheck/build） |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
