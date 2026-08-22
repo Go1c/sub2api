@@ -2489,6 +2489,13 @@ export default {
       duplicateModels: '模型「{0}」在多個定價條目中重複',
       modelConflict: "模型模式 '{model1}' 和 '{model2}' 衝突：匹配範圍重疊",
       mappingConflict: "模型映射源 '{model1}' 和 '{model2}' 衝突：匹配範圍重疊",
+      timePricingValidation: {
+        timezone: '請選擇有效的 IANA 時區',
+        format: '開始時間和結束時間必須使用 HH:mm:ss 格式',
+        range: '開始時間必須早於結束時間；跨午夜請拆分為兩個時間段',
+        overlap: '時間段不能重疊',
+        multiplier: '倍率必須大於 0，且最多保留兩位小數'
+      },
       deleteConfirm: '確定要刪除渠道「{name}」嗎？此操作不可撤銷。',
       columns: {
         name: '名稱',
@@ -2528,6 +2535,13 @@ export default {
         imageOutputPrice: '圖片輸出價格',
         pricePlaceholder: '默認',
         intervals: '上下文區間定價（可選）',
+        timePricing: '時間段定價（可選）',
+        timezone: '時區',
+        addTimePeriod: '添加時間段',
+        startTime: '開始時間',
+        endTime: '結束時間',
+        multiplier: '倍率',
+        removeTimePeriod: '刪除時間段',
         addInterval: '添加區間',
         requestTiers: '按次計費層級',
         imageTiers: '圖片計費層級（按次）',
