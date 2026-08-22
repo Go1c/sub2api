@@ -393,6 +393,7 @@ const tpsAvgLabel = computed(() => {
 const slaPercent = computed(() => {
   const v = overview.value?.sla
   if (typeof v !== 'number') return null
+  if ((overview.value?.request_count_sla ?? 0) <= 0) return null
   return v * 100
 })
 
