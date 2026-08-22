@@ -74,6 +74,7 @@ metadata:
 | `#4057` | ops SLA 卡：窗口请求数为 0 时显示中性 `-` |
 | `#5925` 子集 | Grok HTTP upstream profile；`encrypted_content` 422 与 400 一样清洗后同账号重试 |
 | `#5888` 第一刀 | Responses 入口：`messages`/`prompt` 收成原生 `input`；工具 schema 修 null type + 去掉 lookaround；上游拒收字段后同请求重试（含跨账号 budget）。fork 无 CN provider，null-type 只对 OpenAI/Anthropic 开 |
+| `#5888` 第二刀 | Grok ModelInput 清洗（Chat/OpenAI 回放项收成 xAI 子集）；explicit compact 模型不可用时同账号换 fallback 模型再试一次。全局 `openai_compact_model` 只作失败后回退，首次请求仍只看账号 `compact_model_mapping` |
 
 交付分支：`sync/v0179-newest-gateway` → `--base dev`。
 
@@ -81,7 +82,7 @@ metadata:
 
 - 整包 merge upstream / 直推 `main` / `publish`。
 - 国内部署链 `#5666` 及后续 CN quota / DeepSeek / header-override（fork 无 `PlatformComposite` / CN provider 面）。
-- `#5888` 余下：Codex tool-name 改写、compact fallback、WS session preempt、Grok ModelInput 清洗、API-key 健康熔断、ops 错误详情大改。
+- `#5888` 余下：Codex tool-name 改写、WS session preempt、API-key 健康熔断、ops 错误详情大改。
 - `#5925` 余下：null-stripping 重写、compaction blob、team capacity 429、用量 reasoning 折算等（51 文件里未抽的部分）。
 - 渠道分时价 / 档位乘数 / channel-monitor quota mode。
 - `#5815` 的 Chat 原路径：fork 没有 `normalizeGrokChatReasoningEffort`，只接到了 Responses `patchGrokResponsesBody`。
@@ -107,6 +108,8 @@ metadata:
 | 前端 `vue-tsc --noEmit`（#4057 SLA 空窗口） | 通过 |
 | `go test -tags=unit ./internal/service`（#5888 第一刀：ingress/schema/retry + Forward/Grok） | 通过 |
 | `go vet -tags integration ./internal/service`（#5888 第一刀） | 通过 |
+| `go test -tags=unit ./internal/service`（#5888 第二刀：Grok ModelInput / compact fallback） | 通过 |
+| `go vet -tags integration ./internal/service ./internal/handler`（#5888 第二刀） | 通过 |
 | 全量 `go test ./...` | 未跑（既有时长问题） |
 
 ## 相关
