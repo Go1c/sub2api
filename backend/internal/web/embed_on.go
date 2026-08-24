@@ -333,6 +333,8 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 	buf.WriteString(`<meta name="description" content="` + htmlpkg.EscapeString(description) + `">`)
 	if canonical != "" {
 		buf.WriteString(`<link rel="canonical" href="` + htmlpkg.EscapeString(canonical) + `">`)
+		buf.WriteString(`<link rel="alternate" hreflang="zh-CN" href="` + htmlpkg.EscapeString(canonical) + `">`)
+		buf.WriteString(`<link rel="alternate" hreflang="x-default" href="` + htmlpkg.EscapeString(canonical) + `">`)
 	}
 	buf.WriteString(`<meta property="og:type" content="website">`)
 	buf.WriteString(`<meta property="og:site_name" content="` + htmlpkg.EscapeString(siteName) + `">`)

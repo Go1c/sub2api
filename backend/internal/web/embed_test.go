@@ -189,6 +189,8 @@ func TestInjectSEOMeta(t *testing.T) {
 		assert.Contains(t, html, `<title>Sub2API - AI API Gateway</title>`)
 		assert.Contains(t, html, `<meta name="description" content="`+wantDescription+`">`)
 		assert.Contains(t, html, `<link rel="canonical" href="https://api.example.com/">`)
+		assert.Contains(t, html, `<link rel="alternate" hreflang="zh-CN" href="https://api.example.com/">`)
+		assert.Contains(t, html, `<link rel="alternate" hreflang="x-default" href="https://api.example.com/">`)
 		assert.Contains(t, html, `<meta property="og:type" content="website">`)
 		assert.Contains(t, html, `<meta property="og:site_name" content="AcmeAPI">`)
 		assert.Contains(t, html, `<meta property="og:locale" content="zh_CN">`)

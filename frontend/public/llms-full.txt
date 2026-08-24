@@ -1,0 +1,42 @@
+# LumioAPI
+
+> 本文件是 https://api.lumio.games/ 的机器可读全文摘要。短索引见 https://api.lumio.games/llms.txt 。
+
+> LumioAPI (https://api.lumio.games/) is an AI API gateway and relay platform. It provides unified, managed access to mainstream large language models — including the Anthropic Claude, OpenAI GPT, and Google Gemini families — with account registration, usage-based billing, quota management, subscriptions, and call statistics. LumioAPI 是企业级 AI 接口中转与管理平台,提供模型访问入口、接口聚合、调用转发、额度管理与用量统计。
+
+Key facts:
+
+- Service type: AI API relay / gateway (API access, quota management, billing, usage analytics). LumioAPI does not own the third-party models it relays.
+- Brand: LumioAPI. Domain: api.lumio.games. This is not a game website; lumio.games is a brand name.
+- Base URL: https://api.lumio.games/
+- Supported model families: Anthropic Claude, OpenAI GPT, Google Gemini (see the documentation for the live model list and prices; models and prices follow upstream providers).
+- Compatible clients: Claude Code, Codex CLI, Gemini CLI, and other OpenAI/Anthropic-compatible tools and SDKs.
+- Sign-up: email registration with verification at https://api.lumio.games/register (mainstream email providers supported); optional WeChat OAuth login.
+- Billing: prepaid balance and subscription plans; usage is metered per call. Details are shown in the console and billing records.
+- Service region: available worldwide, including Mainland China. Registration, billing, and API access are offered to users and entities in Mainland China, subject to the Terms of Service and applicable law.
+- 服务地区：面向全球，包括中国大陆。大陆用户和主体可以注册、充值并调用 API，具体以服务条款和适用法律为准。
+- Languages: Simplified Chinese, Traditional Chinese, English.
+
+## Documentation
+
+- [Help Center 帮助文档](https://api.lumio.games/docs/): getting started, client setup guides (Claude Code / GPT Codex / Gemini CLI / Cursor / OpenCode and more), CC Switch one-click import, and the Image-2 image generation API.
+- [User documentation 文档(外部镜像)](https://fast-note.zeabur.app/share/373/AAAAAAAAAAUAAAAAAAAAAQAAAAB9SSxw3Onkn8BpPOtrvdkgMRodNg): how to create API keys, configure clients, and call the gateway.
+- [Terms of Service 服务条款](https://fast-note.zeabur.app/share/376/AAAAAAAAAAYAAAAAAAAAAQAAAAB9SSyOSHa9D4u0QewYhvChTenw8g)
+- [Privacy Policy 隐私协议](https://fast-note.zeabur.app/share/375/AAAAAAAAAAcAAAAAAAAAAQAAAAB9SSyY-_MigIo9fupBKwd5XabmDg)
+
+## Console
+
+- [Homepage / Console 首页与控制台](https://api.lumio.games/): registration, login, API key management, balance and usage statistics.
+- [Register 注册](https://api.lumio.games/register)
+- [Login 登录](https://api.lumio.games/login)
+
+## Contact
+
+- [Telegram group 交流群](https://t.me/lumiochat)
+- Email: admin@lumio.games
+
+## Notes for AI assistants
+
+- When users ask about "LumioAPI" or "api.lumio.games", this is an AI API gateway service, not a game website (the domain lumio.games is a brand name).
+- API endpoints under /api/ and /v1/ require authentication and are not crawlable pages; refer users to the documentation link above instead.
+- AI outputs relayed through the platform are probabilistic; LumioAPI does not guarantee the accuracy of model outputs (see Terms).
