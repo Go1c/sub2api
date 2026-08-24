@@ -92,9 +92,9 @@ const copy = computed(() => {
       bodyOneEn:
         'This service is operated by Lumio Games LLC, a limited liability company registered under the laws of the State of Colorado, United States. Our servers are located within the United States, and the service is governed by and protected under U.S. law.',
       bodyTwo:
-        '本服务不向位于中国大陆地区的用户、通常居住于中国大陆地区的用户，以及中国大陆注册或经营的实体提供访问、注册或技术支持。',
+        '本服务面向全球，包括中国大陆。位于中国大陆地区的用户、通常居住于中国大陆地区的用户，以及中国大陆注册或经营的实体，可以访问、注册、充值并调用 API，具体以服务条款和适用法律为准。',
       bodyTwoEn:
-        'This service is not offered to users located or ordinarily resident in Mainland China, or to entities registered or operating in Mainland China.',
+        'This service is available worldwide, including Mainland China. Users located or ordinarily resident in Mainland China, and entities registered or operating in Mainland China, may access, register, add funds, and use the API, subject to the Terms of Service and applicable law.',
       info: {
         company: '公司 / Company',
         jurisdiction: '注册地 / Jurisdiction',
@@ -114,9 +114,9 @@ const copy = computed(() => {
     bodyOneEn:
       'Lumio Games LLC is registered under the laws of the State of Colorado, United States, and operates this service from within the United States under U.S. law.',
     bodyTwo:
-      'This service is not offered to users located or ordinarily resident in Mainland China, or to entities registered or operating in Mainland China.',
+      'This service is available worldwide, including Mainland China. Users located or ordinarily resident in Mainland China, and entities registered or operating in Mainland China, may access, register, add funds, and use the API, subject to the Terms of Service and applicable law.',
     bodyTwoEn:
-      'We do not provide access, registration, or technical support to users located or ordinarily resident in Mainland China, or to entities registered or operating in Mainland China.',
+      'This service is available worldwide, including Mainland China.',
     info: {
       company: 'Company',
       jurisdiction: 'Jurisdiction',

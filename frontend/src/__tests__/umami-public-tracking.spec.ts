@@ -114,6 +114,6 @@ describe('Umami public tracking HTML', () => {
       .filter(Boolean)
       .filter((body) => body.includes('data.lumio.games') || body.includes(UMAMI_WEBSITE_ID))
     expect(inlineScripts).toEqual([])
-    expect(html).toContain('本服务不向中国大陆地区用户提供')
+    expect(html).toContain('本服务面向全球，包括中国大陆')
   })
 })
