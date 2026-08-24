@@ -14,6 +14,10 @@ Key facts:
 - 服务地区：面向全球，包括中国大陆。大陆用户和主体可以注册、充值并调用 API，具体以服务条款和适用法律为准。
 - Languages: Simplified Chinese, Traditional Chinese, English.
 
+## Optional
+
+- [Full text 全文](https://api.lumio.games/llms-full.txt): longer machine-readable summary of LumioAPI.
+
 ## Documentation
 
 - [Help Center 帮助文档](https://api.lumio.games/docs/): getting started, client setup guides (Claude Code / GPT Codex / Gemini CLI / Cursor / OpenCode and more), CC Switch one-click import, and the Image-2 image generation API.

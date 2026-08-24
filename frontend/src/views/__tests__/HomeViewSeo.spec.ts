@@ -30,11 +30,17 @@ describe('public homepage SEO', () => {
     expect(indexHtml).toContain(
       '<link rel="alternate" hreflang="x-default" href="https://api.lumio.games/" />'
     )
+    expect(indexHtml).toContain('<meta property="og:image" content="https://api.lumio.games/logo.png" />')
   })
 
   it('ships a plain-text llms-full.txt that names LumioAPI', () => {
     expect(llmsFull.startsWith('# LumioAPI')).toBe(true)
     expect(llmsFull).toContain('https://api.lumio.games/')
     expect(llmsFull).not.toMatch(/<!doctype html>/i)
+  })
+
+  it('points llms.txt at the full-text file', () => {
+    const llms = readFileSync(resolve(here, '../../../public/llms.txt'), 'utf8')
+    expect(llms).toContain('https://api.lumio.games/llms-full.txt')
   })
 })

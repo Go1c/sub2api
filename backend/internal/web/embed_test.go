@@ -197,6 +197,7 @@ func TestInjectSEOMeta(t *testing.T) {
 		assert.Contains(t, html, `<meta property="og:title" content="AcmeAPI · AI API 中转与管理平台">`)
 		assert.Contains(t, html, `<meta property="og:description" content="`+wantDescription+`">`)
 		assert.Contains(t, html, `<meta property="og:url" content="https://api.example.com/">`)
+		assert.Contains(t, html, `<meta property="og:image" content="https://api.example.com/logo.png">`)
 		assert.Contains(t, html, `<meta name="twitter:card" content="summary">`)
 		assert.Contains(t, html, `<meta name="twitter:title" content="AcmeAPI · AI API 中转与管理平台">`)
 		assert.Contains(t, html, `<meta name="twitter:description" content="`+wantDescription+`">`)
