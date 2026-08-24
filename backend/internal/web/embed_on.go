@@ -333,6 +333,8 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 	buf.WriteString(`<meta name="description" content="` + htmlpkg.EscapeString(description) + `">`)
 	if canonical != "" {
 		buf.WriteString(`<link rel="canonical" href="` + htmlpkg.EscapeString(canonical) + `">`)
+		buf.WriteString(`<link rel="alternate" hreflang="zh-CN" href="` + htmlpkg.EscapeString(canonical) + `">`)
+		buf.WriteString(`<link rel="alternate" hreflang="x-default" href="` + htmlpkg.EscapeString(canonical) + `">`)
 	}
 	buf.WriteString(`<meta property="og:type" content="website">`)
 	buf.WriteString(`<meta property="og:site_name" content="` + htmlpkg.EscapeString(siteName) + `">`)
@@ -341,6 +343,9 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 	buf.WriteString(`<meta property="og:description" content="` + htmlpkg.EscapeString(description) + `">`)
 	if canonical != "" {
 		buf.WriteString(`<meta property="og:url" content="` + htmlpkg.EscapeString(canonical) + `">`)
+		logo := strings.TrimRight(canonical, "/") + "/logo.png"
+		buf.WriteString(`<meta property="og:image" content="` + htmlpkg.EscapeString(logo) + `">`)
+		buf.WriteString(`<meta name="twitter:image" content="` + htmlpkg.EscapeString(logo) + `">`)
 	}
 	buf.WriteString(`<meta name="twitter:card" content="summary">`)
 	buf.WriteString(`<meta name="twitter:title" content="` + htmlpkg.EscapeString(ogTitle) + `">`)
@@ -356,7 +361,9 @@ func injectSEOMeta(html, settingsJSON []byte) []byte {
 	}
 	if canonical != "" {
 		org["url"] = canonical
+		org["logo"] = strings.TrimRight(canonical, "/") + "/logo.png"
 		website["url"] = canonical
+		website["inLanguage"] = "zh-CN"
 	}
 	if email != "" {
 		org["email"] = email

@@ -1,10 +1,13 @@
 # LumioAPI
 
+> 本文件是 https://api.lumio.games/ 的机器可读全文摘要。短索引见 https://api.lumio.games/llms.txt 。
+
 > LumioAPI (https://api.lumio.games/) is an AI API gateway and relay platform. It provides unified, managed access to mainstream large language models — including the Anthropic Claude, OpenAI GPT, and Google Gemini families — with account registration, usage-based billing, quota management, subscriptions, and call statistics. LumioAPI 是企业级 AI 接口中转与管理平台,提供模型访问入口、接口聚合、调用转发、额度管理与用量统计。
 
 Key facts:
 
 - Service type: AI API relay / gateway (API access, quota management, billing, usage analytics). LumioAPI does not own the third-party models it relays.
+- Brand: LumioAPI. Domain: api.lumio.games. This is not a game website; lumio.games is a brand name.
 - Base URL: https://api.lumio.games/
 - Supported model families: Anthropic Claude, OpenAI GPT, Google Gemini (see the documentation for the live model list and prices; models and prices follow upstream providers).
 - Compatible clients: Claude Code, Codex CLI, Gemini CLI, and other OpenAI/Anthropic-compatible tools and SDKs.
@@ -13,10 +16,6 @@ Key facts:
 - Service region: available worldwide, including Mainland China. Registration, billing, and API access are offered to users and entities in Mainland China, subject to the Terms of Service and applicable law.
 - 服务地区：面向全球，包括中国大陆。大陆用户和主体可以注册、充值并调用 API，具体以服务条款和适用法律为准。
 - Languages: Simplified Chinese, Traditional Chinese, English.
-
-## Optional
-
-- [Full text 全文](https://api.lumio.games/llms-full.txt): longer machine-readable summary of LumioAPI.
 
 ## Documentation
 
