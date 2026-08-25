@@ -79,6 +79,13 @@ type AuthService struct {
 	affiliateService      *AffiliateService
 	defaultSubAssigner    DefaultSubscriptionAssigner
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	firstPartyTelemetry   FirstPartyAuthRecorder
+}
+
+// FirstPartyAuthRecorder records server-authoritative register/login telemetry.
+// Failures must never fail auth.
+type FirstPartyAuthRecorder interface {
+	RecordServerAuthEvent(ctx context.Context, userID int64, event string) error
 }
 
 type DefaultSubscriptionAssigner interface {
@@ -122,6 +129,24 @@ func NewAuthService(
 		affiliateService:      affiliateService,
 		defaultSubAssigner:    defaultSubAssigner,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+	}
+}
+
+// SetFirstPartyTelemetry attaches best-effort first-party auth event recording.
+// Must not change NewAuthService's constructor signature.
+func (s *AuthService) SetFirstPartyTelemetry(r FirstPartyAuthRecorder) {
+	if s == nil {
+		return
+	}
+	s.firstPartyTelemetry = r
+}
+
+func (s *AuthService) recordFirstPartyAuthEvent(ctx context.Context, userID int64, event string) {
+	if s == nil || s.firstPartyTelemetry == nil || userID <= 0 {
+		return
+	}
+	if err := s.firstPartyTelemetry.RecordServerAuthEvent(ctx, userID, event); err != nil {
+		logger.LegacyPrintf("service.auth", "[Auth] Failed to record first-party telemetry: event=%s err=%v", event, err)
 	}
 }
 
@@ -1056,6 +1081,7 @@ func (s *AuthService) postAuthUserBootstrap(ctx context.Context, user *User, sig
 
 	if touchLogin {
 		s.touchUserLogin(ctx, user.ID)
+		s.recordFirstPartyAuthEvent(ctx, user.ID, "auth_register_success")
 	}
 }
 

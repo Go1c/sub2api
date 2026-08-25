@@ -309,3 +309,161 @@ func TestNormalizeOrigins(t *testing.T) {
 		})
 	}
 }
+
+func TestCORS_TelemetryEventsBestCodexOrigin(t *testing.T) {
+	cfg := config.CORSConfig{
+		AllowedOrigins:   []string{"https://allowed.example.com"},
+		AllowCredentials: false,
+	}
+	middleware := CORS(cfg)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry/events", nil)
+	c.Request.Header.Set("Origin", "https://bestcodex.app")
+
+	middleware(c)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Equal(t, "https://bestcodex.app", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Contains(t, w.Header().Get("Access-Control-Allow-Headers"), "Content-Type")
+	assert.Contains(t, w.Header().Get("Access-Control-Allow-Headers"), "Authorization")
+}
+
+func TestCORS_TelemetryEventsMissingOrigin(t *testing.T) {
+	cfg := config.CORSConfig{
+		AllowedOrigins:   []string{"https://allowed.example.com"},
+		AllowCredentials: false,
+	}
+	middleware := CORS(cfg)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry/events", nil)
+
+	middleware(c)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestCORS_TelemetryEventsTauriOrigin(t *testing.T) {
+	cfg := config.CORSConfig{
+		AllowedOrigins:   []string{"https://allowed.example.com"},
+		AllowCredentials: false,
+	}
+	middleware := CORS(cfg)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry/events", nil)
+	c.Request.Header.Set("Origin", "tauri://localhost")
+
+	middleware(c)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Equal(t, "tauri://localhost", w.Header().Get("Access-Control-Allow-Origin"))
+}
+
+func TestCORS_TelemetryStatsBestCodexOriginRejected(t *testing.T) {
+	cfg := config.CORSConfig{
+		AllowedOrigins:   []string{"https://allowed.example.com"},
+		AllowCredentials: false,
+	}
+	middleware := CORS(cfg)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry/stats", nil)
+	c.Request.Header.Set("Origin", "https://bestcodex.app")
+
+	middleware(c)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
+}
+
+func TestCORS_AuthRoutesFromBestCodexRemainUnchanged(t *testing.T) {
+	cfg := config.CORSConfig{
+		AllowedOrigins:   []string{"https://allowed.example.com"},
+		AllowCredentials: false,
+	}
+	router := gin.New()
+	router.Use(CORS(cfg))
+	router.POST("/api/v1/auth/login", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	router.POST("/api/v1/auth/register", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	for _, path := range []string{"/api/v1/auth/login", "/api/v1/auth/register"} {
+		t.Run("options_"+path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodOptions, path, nil)
+			req.Header.Set("Origin", "https://bestcodex.app")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusForbidden, rec.Code)
+			assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+		})
+		t.Run("post_"+path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, path, nil)
+			req.Header.Set("Origin", "https://bestcodex.app")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+			assert.Empty(t, rec.Header().Get("Access-Control-Allow-Headers"))
+		})
+	}
+}
+
+func TestCORS_TelemetryEventsPostIsNotDroppedWithoutBrowserOrigin(t *testing.T) {
+	cfg := config.CORSConfig{
+		AllowedOrigins:   []string{"https://allowed.example.com"},
+		AllowCredentials: false,
+	}
+	router := gin.New()
+	router.Use(CORS(cfg))
+	router.POST("/api/v1/telemetry/events", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	t.Run("missing_origin", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry/events", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+	t.Run("origin_null", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry/events", nil)
+		req.Header.Set("Origin", "null")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+		assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+	})
+	t.Run("staging_bestcodex", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry/events", nil)
+		req.Header.Set("Origin", "https://staging.bestcodex.app")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+		assert.Equal(t, "https://staging.bestcodex.app", rec.Header().Get("Access-Control-Allow-Origin"))
+	})
+	t.Run("tauri_asset_localhost", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry/events", nil)
+		req.Header.Set("Origin", "https://asset.localhost")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+		assert.Equal(t, "https://asset.localhost", rec.Header().Get("Access-Control-Allow-Origin"))
+	})
+	t.Run("unknown_origin_post_still_ingests", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry/events", nil)
+		req.Header.Set("Origin", "https://evil.example.com")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+	})
+}
