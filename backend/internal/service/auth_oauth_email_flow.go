@@ -474,4 +474,5 @@ func (s *AuthService) RecordSuccessfulLogin(ctx context.Context, userID int64) {
 		}
 	}
 	s.touchUserLogin(ctx, userID)
+	s.recordFirstPartyAuthEvent(ctx, userID, "auth_login_success")
 }

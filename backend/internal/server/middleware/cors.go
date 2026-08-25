@@ -3,11 +3,20 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
+)
+
+const telemetryEventsPath = "/api/v1/telemetry/events"
+
+var (
+	bestCodexSiteOrigin  = regexp.MustCompile(`^https://([a-z0-9-]+\.)*bestcodex\.app$`)
+	bestCodexLocalOrigin = regexp.MustCompile(`(?i)^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$`)
+	bestCodexTauriOrigin = regexp.MustCompile(`(?i)^(?:tauri://localhost(?::\d+)?|https?://(?:tauri|asset)\.localhost(?::\d+)?)$`)
 )
 
 var corsWarningOnce sync.Once
@@ -66,15 +75,21 @@ func CORS(cfg config.CORSConfig) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		origin := strings.TrimSpace(c.GetHeader("Origin"))
+		path := requestPath(c)
+		telemetryIngest := isTelemetryEventsPath(path)
 		originAllowed := allowAll
 		if origin != "" && !allowAll {
 			_, originAllowed = allowedSet[origin]
+		}
+		// Path-specific ingest CORS only. Do not widen /api/v1/auth/* or stats.
+		if telemetryIngest && telemetryIngestOriginAllowed(origin) {
+			originAllowed = true
 		}
 
 		if originAllowed {
 			if allowAll {
 				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			} else if origin != "" {
+			} else if shouldEchoCORSOrigin(origin) {
 				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 				c.Writer.Header().Add("Vary", "Origin")
 			}
@@ -98,6 +113,34 @@ func CORS(cfg config.CORSConfig) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func requestPath(c *gin.Context) string {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return ""
+	}
+	return strings.TrimSuffix(c.Request.URL.Path, "/")
+}
+
+func isTelemetryEventsPath(path string) bool {
+	return path == telemetryEventsPath
+}
+
+func telemetryIngestOriginAllowed(origin string) bool {
+	if origin == "" || strings.EqualFold(origin, "null") {
+		return true
+	}
+	return isBestCodexTelemetryOrigin(origin)
+}
+
+func shouldEchoCORSOrigin(origin string) bool {
+	return origin != "" && !strings.EqualFold(origin, "null")
+}
+
+func isBestCodexTelemetryOrigin(origin string) bool {
+	return bestCodexSiteOrigin.MatchString(origin) ||
+		bestCodexLocalOrigin.MatchString(origin) ||
+		bestCodexTauriOrigin.MatchString(origin)
 }
 
 func normalizeOrigins(values []string) []string {

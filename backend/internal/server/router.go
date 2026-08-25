@@ -9,9 +9,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/checkin"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	appmiddleware "github.com/Wei-Shaw/sub2api/internal/middleware"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/telemetry"
 	"github.com/Wei-Shaw/sub2api/internal/web"
 
 	"github.com/gin-gonic/gin"
@@ -37,6 +39,7 @@ func SetupRouter(
 	redisClient *redis.Client,
 	checkInModule *checkin.Module,
 	compositeResolver *service.CompositeRouteResolver,
+	telemetryModule *telemetry.Module,
 ) *gin.Engine {
 	middleware2.SetIngressRejectRecorder(opsService)
 	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
@@ -100,7 +103,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, checkInModule, compositeResolver)
+	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, checkInModule, compositeResolver, telemetryModule)
 
 	return r
 }
@@ -122,6 +125,7 @@ func registerRoutes(
 	redisClient *redis.Client,
 	checkInModule *checkin.Module,
 	compositeResolver *service.CompositeRouteResolver,
+	telemetryModule *telemetry.Module,
 ) {
 	// 通用路由（健康检查、状态等）
 	routes.RegisterCommonRoutes(r)
@@ -145,6 +149,23 @@ func registerRoutes(
 			gin.HandlerFunc(auditLog),
 		)
 		checkInModule.RegisterAdminRoutes(
+			v1,
+			gin.HandlerFunc(adminAuth),
+			gin.HandlerFunc(auditLog),
+		)
+	}
+	if telemetryModule != nil {
+		limiter := appmiddleware.NewRateLimiter(redisClient)
+		telemetryModule.RegisterPublicRoutes(
+			v1,
+			limiter.LimitWithOptions(
+				"telemetry-events",
+				120,
+				time.Minute,
+				appmiddleware.RateLimitOptions{FailureMode: appmiddleware.RateLimitFailOpen},
+			),
+		)
+		telemetryModule.RegisterAdminRoutes(
 			v1,
 			gin.HandlerFunc(adminAuth),
 			gin.HandlerFunc(auditLog),
