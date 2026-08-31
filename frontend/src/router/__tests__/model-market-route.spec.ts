@@ -49,7 +49,7 @@ describe('router model market route', () => {
     const { default: router } = await import('@/router')
     const route = router.getRoutes().find((record) => record.name === 'ModelMarket')
 
-    expect(route?.path).toBe('/models')
+    expect(route?.path).toBe('/model-market')
     expect(route?.meta.requiresAuth).toBe(false)
     expect(route?.meta.title).toBe('Model Market')
   })

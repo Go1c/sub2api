@@ -345,7 +345,7 @@ const homeNavItems = computed(() => {
   const privacy = privacyNav.value
   const footerFallback = { path: '/home', hash: '#footer' }
   return [
-    { key: 'models', label: isZh ? '模型广场' : 'Model Market', to: { path: '/models' }, href: '', external: false },
+    { key: 'models', label: isZh ? '模型广场' : 'Model Market', to: { path: '/model-market' }, href: '', external: false },
     { key: 'codexDownload', label: codexDownloadLabel.value, to: footerFallback, href: CODEX_DOWNLOAD_URL, external: true },
     { key: 'status', label: isZh ? '状态' : 'Status', to: { path: '/status' }, href: '', external: false },
     docs?.external

@@ -28,7 +28,7 @@ metadata:
 
 - 硬编码 URL，不做管理员设置，避免改 `backend/`。
 - 不接入 `lumio_desktop_config` / 桌面支付交接；那是 [[lumio-desktop-client]] 的范围。
-- 公开 `/models` 自有简顶栏本轮不加这条链。
+- 公开 `/model-market` 自有简顶栏本轮不加这条链。
 - 不进侧栏、仪表盘快捷操作或独立 `/codex` 介绍页。
 
 ## 待解决

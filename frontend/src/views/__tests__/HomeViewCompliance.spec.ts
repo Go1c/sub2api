@@ -19,7 +19,7 @@ describe('HomeView compliance — removed homepage pricing', () => {
 
   it('keeps model market as the public model discovery entry', () => {
     expect(homeViewSource).toContain("key: 'models'")
-    expect(homeViewSource).toContain("target: '/models'")
+    expect(homeViewSource).toContain("target: '/model-market'")
     expect(homeViewSource).not.toContain("key: 'pricing'")
     expect(homeViewSource).not.toContain("target: '#pricing'")
   })

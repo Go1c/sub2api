@@ -6894,7 +6894,7 @@ export default {
       },
       modelMarket: {
         title: 'Model Market',
-        description: 'Configure which models appear on the public /models page. Prices come from current billing calculations, and group multipliers come from group settings.',
+        description: 'Configure which models appear on the public /model-market page. Prices come from current billing calculations, and group multipliers come from group settings.',
         enabled: 'Enable model market',
         enabledHint: 'When disabled, the public model market remains reachable but shows no models.',
         autoSync: 'Read current models automatically',

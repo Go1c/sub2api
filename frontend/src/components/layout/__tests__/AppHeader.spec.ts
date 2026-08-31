@@ -23,7 +23,7 @@ async function mountHeader() {
         component: { template: '<div />' }
       },
       {
-        path: '/models',
+        path: '/model-market',
         component: { template: '<div />' }
       },
       {
@@ -71,7 +71,7 @@ describe('AppHeader home navigation', () => {
     expect(wrapper.text()).not.toContain('定价')
     expect(wrapper.text()).not.toContain('特性')
     expect(modelMarketLink).toBeTruthy()
-    expect(modelMarketLink?.props('to')).toEqual({ path: '/models' })
+    expect(modelMarketLink?.props('to')).toEqual({ path: '/model-market' })
     expect(
       links.some((routerLink) => JSON.stringify(routerLink.props('to')).includes('#pricing'))
     ).toBe(false)

@@ -5994,7 +5994,7 @@ export default {
       },
       modelMarket: {
         title: '模型廣場',
-        description: '配置前台 /models 頁面展示哪些模型。價格讀取當前計算價格，分組倍率讀取分組配置。',
+        description: '配置前台 /model-market 頁面展示哪些模型。價格讀取當前計算價格，分組倍率讀取分組配置。',
         enabled: '啟用模型廣場',
         enabledHint: '關閉後前台模型廣場仍可訪問，但不會展示任何模型。',
         autoSync: '自動讀取當前模型',
