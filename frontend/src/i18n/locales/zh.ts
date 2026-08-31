@@ -7079,7 +7079,7 @@ export default {
       },
       modelMarket: {
         title: '模型广场',
-        description: '配置前台 /models 页面展示哪些模型。价格读取当前计算价格，分组倍率读取分组配置。',
+        description: '配置前台 /model-market 页面展示哪些模型。价格读取当前计算价格，分组倍率读取分组配置。',
         enabled: '启用模型广场',
         enabledHint: '关闭后前台模型广场仍可访问，但不会展示任何模型。',
         autoSync: '自动读取当前模型',
