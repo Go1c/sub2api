@@ -7649,6 +7649,27 @@
                             />
                           </label>
                         </div>
+                        <div v-else-if="modelMarketCandidateBillingMode(model) === BILLING_MODE_VIDEO" class="grid min-w-[18rem] gap-2 sm:grid-cols-3">
+                          <label
+                            v-for="tier in modelMarketVideoTierOptions"
+                            :key="tier.key"
+                            class="space-y-1"
+                          >
+                            <span class="block text-[11px] font-medium text-gray-400">
+                              {{ tier.display }}
+                            </span>
+                            <input
+                              :value="modelMarketCandidateVideoTierPriceDisplay(model, tier.label)"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              inputmode="decimal"
+                              class="input input-sm w-24"
+                              :data-testid="`model-market-candidate-video-tier-${tier.key}-${model.key}`"
+                              @input="updateModelMarketCandidateVideoTierPrice(model, tier.label, $event)"
+                            />
+                          </label>
+                        </div>
                         <div v-else class="grid min-w-[18rem] gap-2 sm:grid-cols-2">
                           <label class="space-y-1">
                             <span class="block text-[11px] font-medium text-gray-400">
@@ -7893,6 +7914,27 @@
                         </div>
                       </template>
 
+                      <template v-else-if="custom.billing_mode === BILLING_MODE_VIDEO">
+                        <div
+                          v-for="tier in modelMarketVideoTierOptions"
+                          :key="tier.key"
+                        >
+                          <label class="input-label">
+                            {{ tier.display }}
+                          </label>
+                          <input
+                            :value="modelMarketCustomVideoTierPriceDisplay(custom, tier.label)"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputmode="decimal"
+                            class="input"
+                            :data-testid="`model-market-custom-video-tier-${tier.key}-${index}`"
+                            @input="updateModelMarketCustomVideoTierPrice(custom, tier.label, $event)"
+                          />
+                        </div>
+                      </template>
+
                       <template v-else>
                         <div>
                           <label class="input-label">
@@ -8089,6 +8131,7 @@ import {
   BILLING_MODE_IMAGE,
   BILLING_MODE_PER_REQUEST,
   BILLING_MODE_TOKEN,
+  BILLING_MODE_VIDEO,
 } from "@/constants/channel";
 import type { BillingMode } from "@/constants/channel";
 import type {
@@ -8200,12 +8243,23 @@ const modelMarketBillingModeOptions = [
   { value: BILLING_MODE_TOKEN, labelKey: "admin.settings.modelMarket.billingModeToken" },
   { value: BILLING_MODE_PER_REQUEST, labelKey: "admin.settings.modelMarket.billingModePerRequest" },
   { value: BILLING_MODE_IMAGE, labelKey: "admin.settings.modelMarket.billingModeImage" },
+  { value: BILLING_MODE_VIDEO, labelKey: "admin.settings.modelMarket.billingModeVideo" },
 ];
 type ModelMarketImageTierLabel = "1K" | "2K" | "4K";
 const modelMarketImageTierOptions: Array<{ key: string; label: ModelMarketImageTierLabel }> = [
   { key: "1k", label: "1K" },
   { key: "2k", label: "2K" },
   { key: "4k", label: "4K" },
+];
+type ModelMarketVideoTierLabel = "480p" | "720p" | "1080p";
+const modelMarketVideoTierOptions: Array<{
+  key: ModelMarketVideoTierLabel;
+  label: ModelMarketVideoTierLabel;
+  display: string;
+}> = [
+  { key: "480p", label: "480p", display: "480P" },
+  { key: "720p", label: "720p", display: "720P" },
+  { key: "1080p", label: "1080p", display: "1080P" },
 ];
 const { copyToClipboard } = useClipboard();
 
@@ -9572,7 +9626,8 @@ function isModelMarketBillingMode(mode: unknown): mode is BillingMode {
   return (
     mode === BILLING_MODE_TOKEN ||
     mode === BILLING_MODE_PER_REQUEST ||
-    mode === BILLING_MODE_IMAGE
+    mode === BILLING_MODE_IMAGE ||
+    mode === BILLING_MODE_VIDEO
   );
 }
 
@@ -10081,6 +10136,104 @@ function updateModelMarketCandidateImageTierPrice(
 ) {
   const pricing = ensureModelMarketCandidatePricing(model);
   updateModelMarketImageTierPrice(pricing, tierLabel, event);
+}
+
+function normalizeModelMarketVideoTierLabel(value: unknown): ModelMarketVideoTierLabel | null {
+  const label = String(value || "").trim().toLowerCase();
+  return modelMarketVideoTierOptions.find((option) => option.label === label)?.label || null;
+}
+
+function modelMarketVideoTierOrder(label: string | undefined): number {
+  const normalized = normalizeModelMarketVideoTierLabel(label);
+  const index = normalized
+    ? modelMarketVideoTierOptions.findIndex((option) => option.label === normalized)
+    : -1;
+  return index >= 0 ? index : modelMarketVideoTierOptions.length;
+}
+
+function modelMarketVideoTierPriceDisplay(
+  pricing: ModelMarketPricing | null | undefined,
+  tierLabel: ModelMarketVideoTierLabel,
+): number | "" {
+  const interval = pricing?.intervals?.find(
+    (item) => normalizeModelMarketVideoTierLabel(item.tier_label) === tierLabel,
+  );
+  const value = interval?.per_request_price;
+  if (value == null) return "";
+  return Number(value.toFixed(8));
+}
+
+function modelMarketCandidateVideoTierPriceDisplay(
+  model: ModelMarketModel,
+  tierLabel: ModelMarketVideoTierLabel,
+): number | "" {
+  return modelMarketVideoTierPriceDisplay(
+    selectionForModel(model)?.pricing || model.pricing,
+    tierLabel,
+  );
+}
+
+function modelMarketCustomVideoTierPriceDisplay(
+  custom: ModelMarketCustomModel,
+  tierLabel: ModelMarketVideoTierLabel,
+): number | "" {
+  return modelMarketVideoTierPriceDisplay(custom.pricing, tierLabel);
+}
+
+function createModelMarketVideoTierInterval(
+  tierLabel: ModelMarketVideoTierLabel,
+  price: number,
+): ModelMarketPricingInterval {
+  return {
+    min_tokens: 0,
+    max_tokens: null,
+    tier_label: tierLabel,
+    input_price: null,
+    output_price: null,
+    cache_write_price: null,
+    cache_read_price: null,
+    per_request_price: price,
+  };
+}
+
+function updateModelMarketVideoTierPrice(
+  pricing: ModelMarketPricing,
+  tierLabel: ModelMarketVideoTierLabel,
+  event: Event,
+) {
+  const raw = (event.target as HTMLInputElement | null)?.value;
+  const intervals = normalizeModelMarketPricingIntervals(pricing.intervals).filter(
+    (interval) => normalizeModelMarketVideoTierLabel(interval.tier_label) !== tierLabel,
+  );
+  if (raw != null && raw !== "") {
+    const value = Number(raw);
+    if (Number.isFinite(value) && value >= 0) {
+      intervals.push(createModelMarketVideoTierInterval(tierLabel, value));
+    }
+  }
+  pricing.image_output_price = null;
+  pricing.intervals = intervals.sort(
+    (left, right) =>
+      modelMarketVideoTierOrder(left.tier_label) - modelMarketVideoTierOrder(right.tier_label),
+  );
+}
+
+function updateModelMarketCustomVideoTierPrice(
+  custom: ModelMarketCustomModel,
+  tierLabel: ModelMarketVideoTierLabel,
+  event: Event,
+) {
+  const pricing = ensureModelMarketCustomPricing(custom);
+  updateModelMarketVideoTierPrice(pricing, tierLabel, event);
+}
+
+function updateModelMarketCandidateVideoTierPrice(
+  model: ModelMarketModel,
+  tierLabel: ModelMarketVideoTierLabel,
+  event: Event,
+) {
+  const pricing = ensureModelMarketCandidatePricing(model);
+  updateModelMarketVideoTierPrice(pricing, tierLabel, event);
 }
 
 function hasModelMarketSelectionOverride(selection: ModelMarketSelection): boolean {

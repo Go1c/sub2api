@@ -4,9 +4,11 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -518,4 +520,223 @@ func TestModelMarket_DefaultAutoSyncReadsExactGroupRoutingWithoutChannels(t *tes
 	require.Len(t, model.Groups, 1)
 	require.Equal(t, int64(10), model.Groups[0].ID)
 	require.NotNil(t, model.Pricing)
+}
+
+func grokImagineVideoMarketFixtures() ([]Group, map[int64][]Account) {
+	groups := []Group{
+		{
+			ID:             40,
+			Name:           "grok-public",
+			Platform:       PlatformGrok,
+			RateMultiplier: 1,
+			Status:         StatusActive,
+			IsExclusive:    false,
+		},
+	}
+	accountsByGroup := map[int64][]Account{
+		40: {
+			{
+				ID:       8,
+				Name:     "Grok",
+				Platform: PlatformGrok,
+				Type:     AccountTypeAPIKey,
+				Status:   StatusActive,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"grok-imagine-video": "grok-imagine-video",
+					},
+				},
+			},
+		},
+	}
+	return groups, accountsByGroup
+}
+
+func TestModelMarket_AutoSyncAppliesVideoBillingOverrides(t *testing.T) {
+	price480p := 0.12
+	price720p := 0.24
+	price1080p := 0.48
+	groups, accountsByGroup := grokImagineVideoMarketFixtures()
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
+
+	_, err := svc.SetConfig(context.Background(), ModelMarketConfig{
+		Enabled:  true,
+		AutoSync: true,
+		SelectedModels: []ModelMarketSelection{
+			{
+				Key:         "grok:grok-imagine-video",
+				Platform:    PlatformGrok,
+				Model:       "grok-imagine-video",
+				Enabled:     true,
+				BillingMode: string(BillingModeVideo),
+				Pricing: &ModelMarketPricing{
+					BillingMode: string(BillingModeVideo),
+					Intervals: []ModelMarketPricingInterval{
+						{TierLabel: VideoBillingResolution480P, PerRequestPrice: &price480p},
+						{TierLabel: VideoBillingResolution720P, PerRequestPrice: &price720p},
+						{TierLabel: VideoBillingResolution1080P, PerRequestPrice: &price1080p},
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got.Models, 1)
+
+	model := got.Models[0]
+	require.Equal(t, "grok:grok-imagine-video", model.Key)
+	require.Equal(t, string(BillingModeVideo), model.BillingMode)
+	require.NotNil(t, model.Pricing)
+	require.Equal(t, string(BillingModeVideo), model.Pricing.BillingMode)
+	require.Len(t, model.Pricing.Intervals, 3)
+	require.Equal(t, VideoBillingResolution480P, model.Pricing.Intervals[0].TierLabel)
+	require.NotNil(t, model.Pricing.Intervals[0].PerRequestPrice)
+	require.InDelta(t, price480p, *model.Pricing.Intervals[0].PerRequestPrice, 1e-12)
+	require.Equal(t, VideoBillingResolution720P, model.Pricing.Intervals[1].TierLabel)
+	require.NotNil(t, model.Pricing.Intervals[1].PerRequestPrice)
+	require.InDelta(t, price720p, *model.Pricing.Intervals[1].PerRequestPrice, 1e-12)
+	require.Equal(t, VideoBillingResolution1080P, model.Pricing.Intervals[2].TierLabel)
+	require.NotNil(t, model.Pricing.Intervals[2].PerRequestPrice)
+	require.InDelta(t, price1080p, *model.Pricing.Intervals[2].PerRequestPrice, 1e-12)
+}
+
+func TestModelMarket_VideoBillingPublicOutputOmitsEmptyTiers(t *testing.T) {
+	price720p := 0.24
+	groups, accountsByGroup := grokImagineVideoMarketFixtures()
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
+
+	_, err := svc.SetConfig(context.Background(), ModelMarketConfig{
+		Enabled:  true,
+		AutoSync: true,
+		SelectedModels: []ModelMarketSelection{
+			{
+				Key:         "grok:grok-imagine-video",
+				Platform:    PlatformGrok,
+				Model:       "grok-imagine-video",
+				Enabled:     true,
+				BillingMode: string(BillingModeVideo),
+				Pricing: &ModelMarketPricing{
+					BillingMode: string(BillingModeVideo),
+					Intervals: []ModelMarketPricingInterval{
+						{TierLabel: VideoBillingResolution720P, PerRequestPrice: &price720p},
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got.Models, 1)
+
+	model := got.Models[0]
+	require.Equal(t, string(BillingModeVideo), model.BillingMode)
+	require.NotNil(t, model.Pricing)
+	require.Len(t, model.Pricing.Intervals, 1)
+	require.Equal(t, VideoBillingResolution720P, model.Pricing.Intervals[0].TierLabel)
+	require.NotNil(t, model.Pricing.Intervals[0].PerRequestPrice)
+	require.InDelta(t, price720p, *model.Pricing.Intervals[0].PerRequestPrice, 1e-12)
+}
+
+func TestModelMarket_CustomVideoBillingIsDisplayedWithConfiguredTiers(t *testing.T) {
+	price480p := 0.1
+	price1080p := 0.4
+	svc, _ := newModelMarketTestService(nil, nil, nil)
+
+	_, err := svc.SetConfig(context.Background(), ModelMarketConfig{
+		Enabled:  true,
+		AutoSync: true,
+		CustomModels: []ModelMarketCustomModel{
+			{
+				Platform:    PlatformGrok,
+				Model:       "grok-imagine-video",
+				Enabled:     true,
+				SortOrder:   20,
+				BillingMode: string(BillingModeVideo),
+				Pricing: &ModelMarketPricing{
+					BillingMode: string(BillingModeVideo),
+					Intervals: []ModelMarketPricingInterval{
+						{TierLabel: VideoBillingResolution480P, PerRequestPrice: &price480p},
+						{TierLabel: VideoBillingResolution1080P, PerRequestPrice: &price1080p},
+					},
+				},
+				Groups: []ModelMarketGroup{
+					{
+						ID:               201,
+						Name:             "grok-custom",
+						Platform:         PlatformGrok,
+						SubscriptionType: SubscriptionTypeStandard,
+						RateMultiplier:   1,
+						IsExclusive:      false,
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	got, err := svc.GetPublic(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got.Models, 1)
+
+	model := got.Models[0]
+	require.Equal(t, "custom:grok:grok-imagine-video", model.Key)
+	require.Equal(t, string(BillingModeVideo), model.BillingMode)
+	require.NotNil(t, model.Pricing)
+	require.Equal(t, string(BillingModeVideo), model.Pricing.BillingMode)
+	require.Len(t, model.Pricing.Intervals, 2)
+	require.Equal(t, VideoBillingResolution480P, model.Pricing.Intervals[0].TierLabel)
+	require.InDelta(t, price480p, *model.Pricing.Intervals[0].PerRequestPrice, 1e-12)
+	require.Equal(t, VideoBillingResolution1080P, model.Pricing.Intervals[1].TierLabel)
+	require.InDelta(t, price1080p, *model.Pricing.Intervals[1].PerRequestPrice, 1e-12)
+}
+
+func TestModelMarket_ValidateAcceptsVideoAndRejectsInvalidBillingMode(t *testing.T) {
+	err := ValidateModelMarketConfig(ModelMarketConfig{
+		SelectedModels: []ModelMarketSelection{
+			{
+				Key:         "grok:grok-imagine-video",
+				BillingMode: string(BillingModeVideo),
+			},
+		},
+		CustomModels: []ModelMarketCustomModel{
+			{
+				Platform:    PlatformGrok,
+				Model:       "grok-imagine-video-custom",
+				BillingMode: string(BillingModeVideo),
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	selectionErr := ValidateModelMarketConfig(ModelMarketConfig{
+		SelectedModels: []ModelMarketSelection{
+			{
+				Key:         "openai:gpt-x",
+				BillingMode: "not-a-mode",
+			},
+		},
+	})
+	require.Error(t, selectionErr)
+	require.True(t, infraerrors.IsBadRequest(selectionErr))
+	require.Equal(t, http.StatusBadRequest, infraerrors.Code(selectionErr))
+	require.Equal(t, "MODEL_MARKET_SELECTION_BILLING_MODE_INVALID", infraerrors.FromError(selectionErr).Reason)
+
+	customErr := ValidateModelMarketConfig(ModelMarketConfig{
+		CustomModels: []ModelMarketCustomModel{
+			{
+				Platform:    PlatformOpenAI,
+				Model:       "gpt-x",
+				BillingMode: "bogus",
+			},
+		},
+	})
+	require.Error(t, customErr)
+	require.True(t, infraerrors.IsBadRequest(customErr))
+	require.Equal(t, http.StatusBadRequest, infraerrors.Code(customErr))
+	require.Equal(t, "MODEL_MARKET_CUSTOM_BILLING_MODE_INVALID", infraerrors.FromError(customErr).Reason)
 }
