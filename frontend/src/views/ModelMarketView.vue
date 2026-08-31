@@ -404,7 +404,8 @@ import type { BillingMode } from '@/constants/channel'
 import {
   BILLING_MODE_IMAGE,
   BILLING_MODE_PER_REQUEST,
-  BILLING_MODE_TOKEN
+  BILLING_MODE_TOKEN,
+  BILLING_MODE_VIDEO
 } from '@/constants/channel'
 import type { GroupPlatform } from '@/types'
 import { formatScaled } from '@/utils/pricing'
@@ -488,6 +489,7 @@ const labels = computed(() => {
       tokenBilling: '按量计费',
       requestBilling: '按次计费',
       imageBilling: '图片计费',
+      videoBilling: '视频计费',
       unknownBilling: '未配置',
       models: '模型',
       model: '模型',
@@ -517,6 +519,7 @@ const labels = computed(() => {
       unitPerMillion: '/ 1M Tokens',
       unitPerRequest: '/ 次',
       unitPerImage: '/ 张',
+      unitPerVideo: '/ 秒',
       tokenDiscountTitle: '折扣倍率',
       rechargeRateTitle: '充值倍率',
       rechargeRateValue: '1积分 = 1美元',
@@ -542,6 +545,7 @@ const labels = computed(() => {
     tokenBilling: 'Token',
     requestBilling: 'Per request',
     imageBilling: 'Image',
+    videoBilling: 'Video',
     unknownBilling: 'Unset',
     models: 'Models',
     model: 'Model',
@@ -571,6 +575,7 @@ const labels = computed(() => {
     unitPerMillion: '/ 1M Tokens',
     unitPerRequest: '/ request',
     unitPerImage: '/ image',
+    unitPerVideo: '/ s',
     tokenDiscountTitle: 'Discount',
     rechargeRateTitle: 'Recharge rate',
     rechargeRateValue: '1 credit = $1',
@@ -620,6 +625,7 @@ const billingOptions = computed<BillingFilterOption[]>(() => {
     { value: BILLING_MODE_TOKEN, label: labels.value.tokenBilling, count: count(BILLING_MODE_TOKEN) },
     { value: BILLING_MODE_PER_REQUEST, label: labels.value.requestBilling, count: count(BILLING_MODE_PER_REQUEST) },
     { value: BILLING_MODE_IMAGE, label: labels.value.imageBilling, count: count(BILLING_MODE_IMAGE) },
+    { value: BILLING_MODE_VIDEO, label: labels.value.videoBilling, count: count(BILLING_MODE_VIDEO) },
     { value: 'unknown', label: labels.value.unknownBilling, count: count('unknown') },
   ]
   return options.filter((option) => option.value === 'all' || option.count > 0)
@@ -698,6 +704,8 @@ function billingModeLabel(mode: MarketModel['billingMode']) {
       return labels.value.requestBilling
     case BILLING_MODE_IMAGE:
       return labels.value.imageBilling
+    case BILLING_MODE_VIDEO:
+      return labels.value.videoBilling
     default:
       return labels.value.unknownBilling
   }
@@ -724,6 +732,11 @@ function priceLines(model: MarketModel) {
     if (pricing.image_output_price != null) {
       return [{ label: labels.value.imageOutputPrice, value: `${formatScaled(pricing.image_output_price, 1)} ${labels.value.unitPerImage}` }]
     }
+    return [{ label: labels.value.price, value: labels.value.noPricing }]
+  }
+  if (pricing.billing_mode === BILLING_MODE_VIDEO) {
+    const tierLines = videoTierPriceLines(pricing)
+    if (tierLines.length > 0) return tierLines
     return [{ label: labels.value.price, value: labels.value.noPricing }]
   }
 
@@ -766,6 +779,44 @@ function imageTierPriceLines(pricing: ModelMarketPricing) {
     })
 }
 
+function videoTierDisplayLabel(label: string) {
+  switch (label.trim().toLowerCase()) {
+    case '480p':
+      return '480P'
+    case '720p':
+      return '720P'
+    case '1080p':
+      return '1080P'
+    default:
+      return label.trim()
+  }
+}
+
+function videoTierPriceLines(pricing: ModelMarketPricing) {
+  const tierOrder = new Map([
+    ['480p', 1],
+    ['720p', 2],
+    ['1080p', 3],
+  ])
+  return (pricing.intervals || [])
+    .filter((interval) => interval.per_request_price != null && String(interval.tier_label || '').trim())
+    .map((interval) => {
+      const raw = String(interval.tier_label || '').trim()
+      return {
+        label: videoTierDisplayLabel(raw),
+        orderKey: raw.toLowerCase(),
+        value: `${formatScaled(interval.per_request_price, 1)} ${labels.value.unitPerVideo}`,
+      }
+    })
+    .sort((left, right) => {
+      const leftOrder = tierOrder.get(left.orderKey) || 99
+      const rightOrder = tierOrder.get(right.orderKey) || 99
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder
+      return left.label.localeCompare(right.label)
+    })
+    .map(({ label, value }) => ({ label, value }))
+}
+
 async function loadModelMarket() {
   if (shouldUseMockMarket()) {
     modelMarketEnabled.value = true
@@ -800,6 +851,14 @@ function mockModelMarketModels(): ApiModelMarketModel[] {
     id: 1,
     name: '【自建】Gpt-Pro20x支持Image2',
     platform: 'openai',
+    subscription_type: 'standard',
+    rate_multiplier: 0.35,
+    is_exclusive: false,
+  }
+  const grokDemoGroup: ApiModelMarketGroup = {
+    id: 2,
+    name: '【自建】Grok-Video',
+    platform: 'grok',
     subscription_type: 'standard',
     rate_multiplier: 0.35,
     is_exclusive: false,
@@ -883,6 +942,46 @@ function mockModelMarketModels(): ApiModelMarketModel[] {
       groups: [openaiDemoGroup],
       channels: ['OpenAI'],
       sort_order: 2,
+    },
+    {
+      key: 'grok:grok-imagine-video',
+      name: 'grok-imagine-video',
+      platform: 'grok',
+      billing_mode: BILLING_MODE_VIDEO,
+      pricing: {
+        billing_mode: BILLING_MODE_VIDEO,
+        input_price: null,
+        output_price: null,
+        cache_write_price: null,
+        cache_read_price: null,
+        image_output_price: null,
+        per_request_price: null,
+        intervals: [
+          {
+            min_tokens: 0,
+            max_tokens: null,
+            tier_label: '480p',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            per_request_price: 0.12,
+          },
+          {
+            min_tokens: 0,
+            max_tokens: null,
+            tier_label: '1080p',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            per_request_price: 0.48,
+          },
+        ],
+      },
+      groups: [grokDemoGroup],
+      channels: ['Grok'],
+      sort_order: 3,
     },
   ]
 }

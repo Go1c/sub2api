@@ -116,6 +116,55 @@ vi.mock('@/api/modelMarket', () => ({
           channels: ['OpenAI'],
           sort_order: 0,
         },
+        {
+          key: 'grok:grok-imagine-video',
+          name: 'grok-imagine-video',
+          platform: 'grok',
+          billing_mode: 'video',
+          pricing: {
+            billing_mode: 'video',
+            input_price: null,
+            output_price: null,
+            cache_write_price: null,
+            cache_read_price: null,
+            image_output_price: null,
+            per_request_price: null,
+            intervals: [
+              {
+                min_tokens: 0,
+                max_tokens: null,
+                tier_label: '480p',
+                input_price: null,
+                output_price: null,
+                cache_write_price: null,
+                cache_read_price: null,
+                per_request_price: 0.12,
+              },
+              {
+                min_tokens: 0,
+                max_tokens: null,
+                tier_label: '1080p',
+                input_price: null,
+                output_price: null,
+                cache_write_price: null,
+                cache_read_price: null,
+                per_request_price: 0.48,
+              },
+            ],
+          },
+          groups: [
+            {
+              id: 3,
+              name: 'grok-public',
+              platform: 'grok',
+              subscription_type: 'standard',
+              rate_multiplier: 0.35,
+              is_exclusive: false,
+            },
+          ],
+          channels: ['Grok'],
+          sort_order: 0,
+        },
       ],
     }),
   },
@@ -268,6 +317,92 @@ describe('ModelMarketView', () => {
     expect(imageArticle?.text()).not.toContain('0.35x')
     expect(imageArticle?.text()).not.toContain('订阅倍率')
     expect(imageArticle?.text()).not.toContain('去订阅')
+  })
+
+  it('renders configured video tiers without token discount or subscription copy', async () => {
+    const wrapper = mount(ModelMarketView, {
+      global: {
+        stubs: {
+          Icon: true,
+          PlatformIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('视频计费')
+    expect(wrapper.text()).toContain('grok-imagine-video')
+    expect(wrapper.text()).toContain('480P')
+    expect(wrapper.text()).toContain('$0.12')
+    expect(wrapper.text()).toContain('1080P')
+    expect(wrapper.text()).toContain('$0.48')
+    expect(wrapper.text()).not.toContain('720P')
+
+    const videoArticle = wrapper.findAll('article').find((node) => node.text().includes('grok-imagine-video'))
+    expect(videoArticle).toBeDefined()
+    expect(videoArticle?.text()).toContain('/ 秒')
+    expect(videoArticle?.text()).not.toContain('折扣倍率')
+    expect(videoArticle?.text()).not.toContain('0.35x')
+    expect(videoArticle?.text()).not.toContain('订阅倍率')
+    expect(videoArticle?.text()).not.toContain('去订阅')
+  })
+
+  it('includes a video model in the local DEV mock preview', async () => {
+    const { default: modelMarketAPI } = await import('@/api/modelMarket')
+    vi.mocked(modelMarketAPI.getPublicModelMarket).mockClear()
+    window.history.replaceState({}, '', '/model-market?mock=1')
+
+    try {
+      const wrapper = mount(ModelMarketView, {
+        global: {
+          stubs: {
+            Icon: true,
+            PlatformIcon: true,
+          },
+        },
+      })
+
+      await flushPromises()
+
+      expect(modelMarketAPI.getPublicModelMarket).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('本地预览数据')
+      expect(wrapper.text()).toContain('视频计费')
+      expect(wrapper.text()).toContain('grok-imagine-video')
+      expect(wrapper.text()).toContain('480P')
+      expect(wrapper.text()).toContain('$0.12')
+      expect(wrapper.text()).toContain('1080P')
+      expect(wrapper.text()).toContain('$0.48')
+      expect(wrapper.text()).not.toContain('720P')
+
+      const videoArticle = wrapper.findAll('article').find((node) => node.text().includes('grok-imagine-video'))
+      expect(videoArticle).toBeDefined()
+      expect(videoArticle?.text()).toContain('/ 秒')
+    } finally {
+      window.history.replaceState({}, '', '/model-market')
+    }
+  })
+
+  it('filters to video models when video billing is selected', async () => {
+    const wrapper = mount(ModelMarketView, {
+      global: {
+        stubs: {
+          Icon: true,
+          PlatformIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const videoFilter = wrapper.findAll('button').find((node) => node.text().includes('视频计费'))
+    expect(videoFilter).toBeDefined()
+    await videoFilter?.trigger('click')
+
+    expect(wrapper.findAll('article')).toHaveLength(1)
+    expect(wrapper.text()).toContain('grok-imagine-video')
+    expect(wrapper.text()).not.toContain('gpt-5.4')
+    expect(wrapper.text()).not.toContain('gpt-image-2')
   })
 
   it('resets the provider filter when selecting a group filter', async () => {

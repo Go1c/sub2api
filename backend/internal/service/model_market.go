@@ -928,7 +928,7 @@ func normalizeModelMarketCustomGroups(groups []ModelMarketGroup, fallbackPlatfor
 
 func isModelMarketBillingMode(mode string) bool {
 	switch BillingMode(mode) {
-	case BillingModeToken, BillingModePerRequest, BillingModeImage:
+	case BillingModeToken, BillingModePerRequest, BillingModeImage, BillingModeVideo:
 		return true
 	default:
 		return false
