@@ -767,7 +767,7 @@ const image2ReturnTo = 'https://img.lumio.games/'
 const image2LoginHandoffTarget = `/login?handoff=1&return_to=${encodeURIComponent(image2ReturnTo)}`
 
 const navItems = computed<NavItem[]>(() => [
-  { key: 'models', label: copy.value.nav[0].label, target: '/models' },
+  { key: 'models', label: copy.value.nav[0].label, target: '/model-market' },
   { key: 'codexDownload', label: copy.value.codexDownloadLabel, target: CODEX_DOWNLOAD_URL, external: true },
   { ...copy.value.nav[1], key: 'status', target: '/status' },
   {

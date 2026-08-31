@@ -17,7 +17,7 @@ describe('HomeView navigation', () => {
     const navItems = homeNavItemsBlock()
 
     expect(navItems).toContain("key: 'models'")
-    expect(navItems).toContain("target: '/models'")
+    expect(navItems).toContain("target: '/model-market'")
     expect(navItems).not.toContain("target: '#features'")
     expect(navItems).not.toContain("key: 'features'")
   })
