@@ -523,6 +523,31 @@ func TestShippedPricingOverridesPinGPT56Luna(t *testing.T) {
 	require.Contains(t, parsed, "gpt-5.6-luna")
 }
 
+func TestShippedPricingOverridesPinClaudeFable51CacheRates(t *testing.T) {
+	overridesPath := filepath.Join("..", "..", "resources", "model-pricing", "pricing_overrides.json")
+	svc := &PricingService{cfg: &config.Config{}}
+	svc.cfg.Pricing.OverridesFile = overridesPath
+
+	remoteData, err := svc.parsePricingData([]byte(`{
+		"claude-fable-5-1": {
+			"input_cost_per_token": 1e-05,
+			"output_cost_per_token": 5e-05,
+			"cache_read_input_token_cost": 3e-07,
+			"cache_creation_input_token_cost": 3.75e-06,
+			"litellm_provider": "anthropic",
+			"mode": "chat"
+		}
+	}`))
+	require.NoError(t, err)
+
+	applied := svc.applyLocalPricingOverrides(remoteData)
+	require.InDelta(t, 10e-6, applied["claude-fable-5-1"].InputCostPerToken, 1e-12)
+	require.InDelta(t, 50e-6, applied["claude-fable-5-1"].OutputCostPerToken, 1e-12)
+	require.InDelta(t, 0.25e-6, applied["claude-fable-5-1"].CacheReadInputTokenCost, 1e-12)
+	require.InDelta(t, 12.5e-6, applied["claude-fable-5-1"].CacheCreationInputTokenCost, 1e-12)
+	require.InDelta(t, 20e-6, applied["claude-fable-5-1"].CacheCreationInputTokenCostAbove1hr, 1e-12)
+}
+
 func TestGetModelPricing_Gpt53CodexSparkUsesGpt51CodexPricing(t *testing.T) {
 	sparkPricing := &LiteLLMModelPricing{InputCostPerToken: 1}
 	gpt53Pricing := &LiteLLMModelPricing{InputCostPerToken: 9}

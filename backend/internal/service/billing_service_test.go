@@ -108,10 +108,40 @@ func TestGetModelPricing_CaseInsensitive(t *testing.T) {
 func TestGetModelPricing_UnknownClaudeModelFallsBackToSonnet(t *testing.T) {
 	svc := newTestBillingService()
 
-	// 不包含 opus/sonnet/haiku 关键词的 Claude 模型会走默认 Sonnet 价格
+	// 不包含 opus/sonnet/haiku/fable 关键词的 Claude 模型会走默认 Sonnet 价格
 	pricing, err := svc.GetModelPricing("claude-unknown-model")
 	require.NoError(t, err)
 	require.InDelta(t, 3e-6, pricing.InputPricePerToken, 1e-12)
+}
+
+func TestGetModelPricing_Fable51FallbackPricing(t *testing.T) {
+	svc := newTestBillingService()
+
+	pricing, err := svc.GetModelPricing("claude-fable-5-1")
+	require.NoError(t, err)
+	require.InDelta(t, 10e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 50e-6, pricing.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 12.5e-6, pricing.CacheCreationPricePerToken, 1e-12)
+	require.InDelta(t, 12.5e-6, pricing.CacheCreation5mPrice, 1e-12)
+	require.InDelta(t, 20e-6, pricing.CacheCreation1hPrice, 1e-12)
+	require.InDelta(t, 0.25e-6, pricing.CacheReadPricePerToken, 1e-12)
+	require.True(t, pricing.SupportsCacheBreakdown)
+
+	variant, err := svc.GetModelPricing("claude-fable-5-1[1m]")
+	require.NoError(t, err)
+	require.InDelta(t, 0.25e-6, variant.CacheReadPricePerToken, 1e-12)
+}
+
+func TestGetModelPricing_Fable5FallbackPricing(t *testing.T) {
+	svc := newTestBillingService()
+
+	pricing, err := svc.GetModelPricing("claude-fable-5")
+	require.NoError(t, err)
+	require.InDelta(t, 10e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 50e-6, pricing.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 12.5e-6, pricing.CacheCreationPricePerToken, 1e-12)
+	require.InDelta(t, 1e-6, pricing.CacheReadPricePerToken, 1e-12)
+	require.True(t, pricing.SupportsCacheBreakdown)
 }
 
 func TestGetModelPricing_UnknownOpenAIModelReturnsError(t *testing.T) {

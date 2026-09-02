@@ -23,7 +23,7 @@ pricing:
   overrides_file: "./resources/model-pricing/pricing_overrides.json"
 ```
 
-Default ships with `gpt-5.6-luna` pinned to pre-2026-07-31 rates. Edit or empty the file to change policy; restart (or wait for next pricing reload after process restart) to apply.
+Default ships with `gpt-5.6-luna` pinned to pre-2026-07-31 rates, and Claude Fable 5 / 5.1 pinned to Anthropic official cache rates (`$12.50` 5m write / `$20` 1h write; Fable 5.1 cache read `$0.25`). Edit or empty the file to change policy; restart (or wait for next pricing reload after process restart) to apply.
 
 ## Source
 The original file is maintained by the LiteLLM project and mirrored into the `price-mirror` branch of this repository via GitHub Actions:
