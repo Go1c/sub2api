@@ -4,7 +4,7 @@ description: 站内 AI 客服浮窗——接入外部 gateway、登录态请求�
 metadata:
   type: doc
   level: L2
-  status: 已落地
+  status: 已交付
 ---
 
 # AI 客服（Support Chat）

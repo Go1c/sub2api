@@ -1,6 +1,4 @@
 ---
-name: v0179-cn-2-gateway-forward
-description: 国模第二刀——Anthropic native 转发 + 协议分流
 status: completed
 ---
 

@@ -4,7 +4,7 @@ description: 用户级订阅额度池——订阅额度优先消费、多订阅�
 metadata:
   type: doc
   level: L2
-  status: 已落地
+  status: 已交付
 ---
 
 # 用户级订阅额度池（Subscription Credit Pool）

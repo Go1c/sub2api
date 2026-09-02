@@ -1,6 +1,5 @@
 ---
 status: completed
-title: BestCodex 跨域登录交接 /auth/bridge
 ---
 
 # BestCodex 跨域登录交接（`/auth/bridge`）

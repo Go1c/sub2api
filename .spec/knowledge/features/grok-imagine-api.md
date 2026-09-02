@@ -4,7 +4,7 @@ description: Grok Imagine 图片/视频对外 API 契约（给调用方 Agent �
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # Grok Imagine API

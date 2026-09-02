@@ -4,7 +4,7 @@ description: 中国大陆 IP 网页访问拦截（屏蔽网站、保持 API 开�
 metadata:
   type: doc
   level: L2
-  status: 已上线
+  status: 已交付
 ---
 
 # 合规：中国大陆地区网页访问拦截（Geo Block）

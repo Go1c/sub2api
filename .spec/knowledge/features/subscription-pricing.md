@@ -4,7 +4,7 @@ description: LumioAPI 订阅套餐的计价口径与计算器工具——定价�
 metadata:
   type: doc
   level: L2
-  status: 已上线
+  status: 已交付
 ---
 
 # LumioAPI 订阅计价计算器

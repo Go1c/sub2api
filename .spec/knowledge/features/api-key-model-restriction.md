@@ -4,7 +4,7 @@ description: 用户 API 密钥的模型允许列表：创建/编辑密钥时从�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # API 密钥模型限制

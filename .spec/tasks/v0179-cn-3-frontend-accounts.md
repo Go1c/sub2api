@@ -1,6 +1,4 @@
 ---
-name: v0179-cn-3-frontend-accounts
-description: 国模第三刀——账号创建/编辑 UI 与用量单元格
 status: completed
 ---
 

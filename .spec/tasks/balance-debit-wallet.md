@@ -1,6 +1,4 @@
 ---
-name: balance-debit-wallet
-description: 通用外部消费方站内余额扣款、本人流水查询与消费方管理
 status: completed
 ---
 

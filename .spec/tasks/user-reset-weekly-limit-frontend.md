@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 用户重置周限 — SubscriptionsView UI / API / i18n / 测试
 ---
 
 # 用户重置周限 — Frontend

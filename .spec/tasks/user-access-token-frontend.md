@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 个人资料页 Access Token 管理 UI
 ---
 
 # 个人资料页 Access Token 管理 UI

@@ -1,6 +1,4 @@
 ---
-name: checkin-redeem-dark-nudge
-description: 签到发奖走兑换码流水、暗色适配、未签到侧栏跳动
 status: completed
 ---
 

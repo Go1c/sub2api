@@ -4,7 +4,7 @@ description: 个人资料 Webhook 通知：余额/站内信/公告经 HTTPS POST
 metadata:
   type: doc
   level: L2
-  status: 实现中
+  status: 实施中
 ---
 
 # Webhook 通知

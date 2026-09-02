@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 用户重置周限 — Service / Repo CAS / Handler / Route / DTO
 ---
 
 # 用户重置周限 — Backend API

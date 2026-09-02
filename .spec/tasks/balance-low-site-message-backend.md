@@ -1,6 +1,5 @@
 ---
-status: cancelled
-title: 余额低告警站内信 — 后端（已作废：通道改为 WebSocket）
+status: completed
 ---
 
 # 余额低告警站内信 — Backend

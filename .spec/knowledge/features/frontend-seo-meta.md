@@ -4,7 +4,7 @@ description: 前端 GEO/SEO 头部元数据与爬虫可见简介——静态 ind
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 前端 GEO/SEO 头部元数据

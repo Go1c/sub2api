@@ -4,7 +4,7 @@ description: BestCodex 第一方遥测：公开 ingest、管理 stats、注册/�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # BestCodex 第一方遥测

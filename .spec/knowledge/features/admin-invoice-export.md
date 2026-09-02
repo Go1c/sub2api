@@ -4,7 +4,7 @@ description: 管理员发票记录页的 Excel 导出（全部 / 正在开票）
 metadata:
   type: doc
   level: L2
-  status: 已落地
+  status: 已交付
 ---
 
 # 管理员发票记录导出
