@@ -1,6 +1,4 @@
 ---
-name: v0179-cn-4-window-fixes
-description: 国模第四刀——0.1.178/179 窗口内 CN 修复
 status: completed
 ---
 

@@ -45,7 +45,7 @@ metadata:
 | [`features/account-error-alert.md`](features/account-error-alert.md) | 账号异常 Telegram 告警:后台定时聚合 `ops_error_logs`,通知最近窗口内异常账号 |
 | [`features/group-fallback.md`](features/group-fallback.md) | 分组级兜底:A 分组账号不可用时切到管理员配置的 B 分组重试 |
 | [`features/grok-imagine-api.md`](features/grok-imagine-api.md) | Grok Imagine 图片/视频对外 API 索引；完整契约见仓库 `docs/grok-imagine-api.md`（调用方 Agent 用） |
-| [`features/model-market.md`](features/model-market.md) | 公共模型广场页面与后台配置:按平台 / 分组 / 计费类型展示可用模型,支持 token / per_request / image / video 展示计费覆盖 |
+| [`features/model-market.md`](features/model-market.md) | 公共模型广场页面与后台配置:按平台 / 分组 / 计费类型展示可用模型,支持 token / per_request / image / video 展示计费覆盖;候选行可「恢复自动价格」去掉 overlay |
 | [`features/api-key-model-restriction.md`](features/api-key-model-restriction.md) | 用户 API 密钥模型允许列表:从模型广场按分组选择模型,网关拦截未授权模型请求 |
 | [`features/user-subscription-purchase-ban.md`](features/user-subscription-purchase-ban.md) | 管理员按用户禁止购买订阅：字段、编辑开关、CreateOrder 硬拦截、「无权限购买」 |
 | [`features/user-access-token.md`](features/user-access-token.md) | 用户长效 opaque Access Token：密钥管理 + 只读用量/余额/订阅；活跃数上限、用户 RPM、usage 查询护栏 |

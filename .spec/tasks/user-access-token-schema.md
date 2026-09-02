@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 用户 Access Token 数据模型与迁移
 ---
 
 # 用户 Access Token 数据模型与迁移

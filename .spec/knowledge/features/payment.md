@@ -4,7 +4,7 @@ description: Sub2API 内置支付系统的配置与流程——服务商接入�
 metadata:
   type: doc
   level: L2
-  status: 已上线
+  status: 已交付
 ---
 
 # 支付系统

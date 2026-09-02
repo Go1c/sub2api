@@ -4,7 +4,7 @@ description: 分组级兜底: A 分组账号不可用时切到管理员配置的
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 分组级兜底

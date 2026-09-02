@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 用户重置周限 — 知识库沉淀
 ---
 
 # 用户重置周限 — Knowledge

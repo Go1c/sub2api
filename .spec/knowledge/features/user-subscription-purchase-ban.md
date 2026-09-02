@@ -4,7 +4,7 @@ description: 管理员可按用户禁止购买订阅——字段、管理端开�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 禁止用户购买订阅

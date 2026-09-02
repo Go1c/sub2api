@@ -4,7 +4,7 @@ description: 充值页新增开票须知提示，并优化首次使用余额门�
 metadata:
   type: doc
   level: L2
-  status: 已落地
+  status: 已交付
 ---
 
 # 充值开票须知与余额使用门槛文案

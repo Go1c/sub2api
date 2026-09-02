@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 修复公开接口漏传 site_pages 导致服务条款/隐私不跳转
 ---
 
 # 修复公开接口漏传 site_pages 导致服务条款/隐私不跳转

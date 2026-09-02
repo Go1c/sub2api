@@ -4,7 +4,7 @@ description: 管理端 OpenAI/Codex Auth 登录、查询重置卡、消耗重置
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # OpenAI 重置卡查询 / 消耗与 Codex PAT 登录

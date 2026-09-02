@@ -4,7 +4,7 @@ description: 个人资料独立 WebSocket 设置；余额/站内信/公告实时
 metadata:
   type: doc
   level: L2
-  status: 实现中
+  status: 实施中
 ---
 
 # 用户 WebSocket 设置（已确认口径）

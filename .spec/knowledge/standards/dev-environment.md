@@ -4,7 +4,7 @@ description: 本地开发环境、技术栈、常见坑点与解决方案；搭�
 metadata:
   type: doc
   level: L1
-  status: 生效
+  status: 已交付
 ---
 
 # 开发环境与常见坑点

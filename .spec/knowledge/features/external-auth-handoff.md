@@ -4,7 +4,7 @@ description: 外部应用把用户带到 Sub2API 登录、登录成功后把 acc
 metadata:
   type: doc
   level: L2
-  status: 已上线
+  status: 已交付
 ---
 
 # 外部登录回跳接入（External Auth Handoff）

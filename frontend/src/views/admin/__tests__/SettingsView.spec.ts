@@ -24,6 +24,8 @@ const {
   deleteProvider,
   fetchPublicSettings,
   adminSettingsFetch,
+  getModelMarket,
+  updateModelMarket,
   showError,
   showSuccess,
 } = vi.hoisted(() => ({
@@ -46,6 +48,8 @@ const {
   deleteProvider: vi.fn(),
   fetchPublicSettings: vi.fn(),
   adminSettingsFetch: vi.fn(),
+  getModelMarket: vi.fn(),
+  updateModelMarket: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }));
@@ -66,6 +70,8 @@ vi.mock("@/api", () => ({
       getStreamTimeoutSettings,
       getRectifierSettings,
       getBetaPolicySettings,
+      getModelMarket,
+      updateModelMarket,
     },
     groups: {
       getAll: getGroups,
@@ -553,6 +559,8 @@ describe("admin SettingsView payment visible method controls", () => {
     deleteProvider.mockReset();
     fetchPublicSettings.mockReset();
     adminSettingsFetch.mockReset();
+    getModelMarket.mockReset();
+    updateModelMarket.mockReset();
     showError.mockReset();
     showSuccess.mockReset();
     localeRef.value = "zh-CN";
@@ -609,6 +617,23 @@ describe("admin SettingsView payment visible method controls", () => {
     });
     fetchPublicSettings.mockResolvedValue(undefined);
     adminSettingsFetch.mockResolvedValue(undefined);
+    getModelMarket.mockResolvedValue({
+      config: {
+        enabled: true,
+        auto_sync: true,
+        title: "",
+        description: "",
+        selected_models: [],
+        custom_models: [],
+      },
+      candidates: [],
+      models: [],
+    });
+    updateModelMarket.mockImplementation(async (config) => ({
+      config,
+      candidates: [],
+      models: [],
+    }));
   });
 
   it("does not render legacy visible payment method controls", async () => {
@@ -1372,5 +1397,130 @@ describe("admin SettingsView platform quota matrix", () => {
     const quotas = payload["default_platform_quotas"] as Record<string, Record<string, unknown>>;
     // 不管输入是什么，提交值应为 null（而非 "" 或 NaN）
     expect(quotas["anthropic"]?.["daily"]).toBe(null);
+  });
+});
+
+describe("admin SettingsView model market restore auto price", () => {
+  beforeEach(() => {
+    getSettings.mockReset();
+    updateSettings.mockReset();
+    getWebSearchEmulationConfig.mockReset();
+    updateWebSearchEmulationConfig.mockReset();
+    getAdminApiKey.mockReset();
+    getOverloadCooldownSettings.mockReset();
+    getRateLimit429CooldownSettings.mockReset();
+    updateRateLimit429CooldownSettings.mockReset();
+    getStreamTimeoutSettings.mockReset();
+    getRectifierSettings.mockReset();
+    getBetaPolicySettings.mockReset();
+    getGroups.mockReset();
+    listProxies.mockReset();
+    getProviders.mockReset();
+    fetchPublicSettings.mockReset();
+    adminSettingsFetch.mockReset();
+    getModelMarket.mockReset();
+    updateModelMarket.mockReset();
+    showError.mockReset();
+    showSuccess.mockReset();
+    localeRef.value = "zh-CN";
+
+    getSettings.mockResolvedValue({ ...baseSettingsResponse });
+    getWebSearchEmulationConfig.mockResolvedValue({ enabled: false, providers: [] });
+    getAdminApiKey.mockResolvedValue({ exists: false, masked_key: "" });
+    getOverloadCooldownSettings.mockResolvedValue({ enabled: true, cooldown_minutes: 10 });
+    getRateLimit429CooldownSettings.mockResolvedValue({ enabled: true, cooldown_seconds: 5 });
+    getStreamTimeoutSettings.mockResolvedValue({});
+    getRectifierSettings.mockResolvedValue({});
+    getBetaPolicySettings.mockResolvedValue({ rules: [] });
+    getGroups.mockResolvedValue([]);
+    listProxies.mockResolvedValue({ items: [] });
+    getProviders.mockResolvedValue({ data: [] });
+    fetchPublicSettings.mockResolvedValue(undefined);
+    adminSettingsFetch.mockResolvedValue(undefined);
+    updateModelMarket.mockImplementation(async (config) => ({
+      config,
+      candidates: [],
+      models: [],
+    }));
+  });
+
+  it("drops a cache-only overlay from auto-sync selected_models on save", async () => {
+    getModelMarket.mockResolvedValue({
+      config: {
+        enabled: true,
+        auto_sync: true,
+        title: "模型广场",
+        description: "",
+        selected_models: [
+          {
+            key: "anthropic:claude-fable-5-1",
+            platform: "anthropic",
+            model: "claude-fable-5-1",
+            enabled: true,
+            sort_order: 0,
+            billing_mode: "token",
+            pricing: {
+              billing_mode: "token",
+              input_price: null,
+              output_price: null,
+              cache_write_price: 3.75e-6,
+              cache_read_price: 0.3e-6,
+              image_output_price: null,
+              per_request_price: null,
+              intervals: [],
+            },
+          },
+        ],
+        custom_models: [],
+      },
+      candidates: [
+        {
+          key: "anthropic:claude-fable-5-1",
+          name: "claude-fable-5-1",
+          platform: "anthropic",
+          billing_mode: "token",
+          pricing: {
+            billing_mode: "token",
+            input_price: 10e-6,
+            output_price: 50e-6,
+            cache_write_price: 12.5e-6,
+            cache_read_price: 0.25e-6,
+            image_output_price: null,
+            per_request_price: null,
+            intervals: [],
+          },
+          groups: [],
+          channels: [],
+          sort_order: 0,
+        },
+      ],
+      models: [],
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    const restore = wrapper.get(
+      '[data-testid="model-market-candidate-restore-auto-price-anthropic:claude-fable-5-1"]',
+    );
+    await restore.trigger("click");
+    await flushPromises();
+
+    expect(
+      wrapper.find(
+        '[data-testid="model-market-candidate-restore-auto-price-anthropic:claude-fable-5-1"]',
+      ).exists(),
+    ).toBe(false);
+
+    await wrapper.get('[data-testid="model-market-save"]').trigger("click");
+    await flushPromises();
+
+    expect(updateModelMarket).toHaveBeenCalledTimes(1);
+    const payload = updateModelMarket.mock.calls[0][0] as {
+      selected_models: Array<{ key: string }>;
+    };
+    expect(payload.selected_models.map((item) => item.key)).not.toContain(
+      "anthropic:claude-fable-5-1",
+    );
   });
 });

@@ -1,6 +1,5 @@
 ---
 status: completed
-title: Lumio Desktop 支付交接启用与知识同步
 ---
 
 # Lumio Desktop 支付交接启用与知识同步

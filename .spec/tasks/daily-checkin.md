@@ -1,6 +1,4 @@
 ---
-name: daily-checkin
-description: 独立每日签到模块，包含原子发奖、预算控制、用户与管理员界面
 status: completed
 ---
 

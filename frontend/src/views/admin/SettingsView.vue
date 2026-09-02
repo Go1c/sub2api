@@ -7702,6 +7702,15 @@
                             />
                           </label>
                         </div>
+                        <button
+                          v-if="modelMarketCandidateHasDisplayOverride(model)"
+                          type="button"
+                          class="btn btn-secondary btn-sm mt-2"
+                          :data-testid="`model-market-candidate-restore-auto-price-${model.key}`"
+                          @click="restoreModelMarketCandidateAutoPrice(model)"
+                        >
+                          {{ t("admin.settings.modelMarket.restoreAutoPrice") }}
+                        </button>
                       </td>
                     </tr>
                     <tr v-if="modelMarketCandidates.length === 0">
@@ -8179,6 +8188,10 @@ import {
   isHttpUrl,
   normalizeSitePages,
 } from "@/utils/sitePages";
+import {
+  restoreModelMarketCandidateSelection,
+  selectionHasDisplayOverride,
+} from "@/utils/modelMarketDisplayOverride";
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
@@ -10237,7 +10250,20 @@ function updateModelMarketCandidateVideoTierPrice(
 }
 
 function hasModelMarketSelectionOverride(selection: ModelMarketSelection): boolean {
-  return isModelMarketBillingMode(selection.billing_mode) || selection.pricing != null;
+  return selectionHasDisplayOverride(selection);
+}
+
+function modelMarketCandidateHasDisplayOverride(model: ModelMarketModel): boolean {
+  const selection = selectionForModel(model);
+  return !!selection && selectionHasDisplayOverride(selection);
+}
+
+function restoreModelMarketCandidateAutoPrice(model: ModelMarketModel) {
+  modelMarketConfig.selected_models = restoreModelMarketCandidateSelection(
+    modelMarketConfig.selected_models,
+    model.key,
+    modelMarketConfig.auto_sync,
+  );
 }
 
 function validateModelMarketConfigBeforeSave(): boolean {

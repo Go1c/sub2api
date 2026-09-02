@@ -4,7 +4,7 @@ description: 代码风格与视觉识别——LumioAPI 品牌色 / 字体 / 类�
 metadata:
   type: doc
   level: L1
-  status: 生效
+  status: 已交付
 ---
 
 # 代码风格与视觉识别

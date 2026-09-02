@@ -4,7 +4,7 @@ description: 阶梯式邀请返利：管理员配置 L1-L4 门槛与返利比例
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 阶梯式邀请返利

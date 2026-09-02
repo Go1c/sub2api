@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 用户重置周限 — DB schema / migration / Ent / domain 字段
 ---
 
 # 用户重置周限 — Schema

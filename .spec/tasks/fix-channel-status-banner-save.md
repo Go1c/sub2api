@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 修复渠道状态 Banner 单字段保存失败
 ---
 
 # 修复渠道状态 Banner 单字段保存失败

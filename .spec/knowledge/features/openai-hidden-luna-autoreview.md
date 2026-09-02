@@ -4,7 +4,7 @@ description: 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 入站�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 隐藏 Luna，默认改写到 Terra，账号可 opt-in 真 Luna

@@ -1,8 +1,5 @@
 ---
 status: completed
-title: 禁止购买订阅 — CreateOrder 硬拦截
-depends_on:
-  - ban-subscription-purchase-schema
 ---
 
 # 禁止购买订阅 — 购买硬拦截

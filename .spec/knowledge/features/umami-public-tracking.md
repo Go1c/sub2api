@@ -4,7 +4,7 @@ description: 前台 Umami 官方脚本埋点：SPA 条件插入、/admin 首屏�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 前台 Umami 公共页跟踪
