@@ -1,7 +1,5 @@
 ---
 status: completed
-title: 禁止购买订阅 — Schema / Migration / Domain 字段
-depends_on: []
 ---
 
 # 禁止购买订阅 — Schema / Migration / Domain

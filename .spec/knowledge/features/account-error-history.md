@@ -4,7 +4,7 @@ description: 账号错误历史——多来源 best-effort 记录账号错误、
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 账号错误历史

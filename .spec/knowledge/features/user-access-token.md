@@ -4,7 +4,7 @@ description: 用户长效 opaque Access Token——个人资料创建/撤销、�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 用户长效 Access Token

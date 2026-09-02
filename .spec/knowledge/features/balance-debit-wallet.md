@@ -4,7 +4,7 @@ description: 多外部站共用的站内余额原子扣款账本、本人流水�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 通用站内余额扣款账本

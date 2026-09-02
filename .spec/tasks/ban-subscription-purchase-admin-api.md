@@ -1,8 +1,5 @@
 ---
 status: completed
-title: 禁止购买订阅 — 管理端 Update API 透传
-depends_on:
-  - ban-subscription-purchase-schema
 ---
 
 # 禁止购买订阅 — 管理端 Update API

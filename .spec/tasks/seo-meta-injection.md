@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 前端 GEO/SEO 头部元数据与爬虫可见简介
 ---
 
 # 前端 GEO/SEO 头部元数据与爬虫可见简介

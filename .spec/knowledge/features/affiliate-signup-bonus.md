@@ -4,7 +4,7 @@ description: 把邀请注册赠送记录纳入与返利余额转账相同的管�
 metadata:
   type: doc
   level: L2
-  status: 已落地
+  status: 已交付
 ---
 
 # 邀请注册赠送记录（Affiliate Signup Bonus History）

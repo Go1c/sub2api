@@ -4,7 +4,7 @@ description: 主站 access JWT 经 /auth/bridge 换成控制台 localStorage 会
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 跨域登录交接（`/auth/bridge`）

@@ -1,6 +1,4 @@
 ---
-name: v0179-cn-1-constants-schema-probe
-description: 国模底座第一刀——常量、schema/931 迁移、额度/余额探测、admin 路由、wire
 status: completed
 ---
 

@@ -4,7 +4,7 @@ description: 开发工作流——分支角色 / 提交 / PR / 上游同步 / �
 metadata:
   type: doc
   level: L1
-  status: 生效
+  status: 已交付
 ---
 
 # 开发工作流(分支 / 提交 / 合并 / 同步)

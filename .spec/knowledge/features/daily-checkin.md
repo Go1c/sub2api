@@ -4,7 +4,7 @@ description: 独立每日签到模块：原子发奖、连续周期、全站每�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 每日签到

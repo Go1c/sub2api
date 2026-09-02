@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 用户 Access Token 管理 API（创建/列表/撤销）
 ---
 
 # 用户 Access Token 管理 API（创建/列表/撤销）

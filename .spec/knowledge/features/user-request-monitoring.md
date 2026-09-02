@@ -4,7 +4,7 @@ description: 管理员在运维/风控中心针对指定用户监控其未来请
 metadata:
   type: doc
   level: L2
-  status: 已落地
+  status: 已交付
 ---
 
 # 用户请求监控

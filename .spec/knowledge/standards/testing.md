@@ -4,7 +4,7 @@ description: 测试与验收——本地必跑命令、CI 流水线、集成测�
 metadata:
   type: doc
   level: L1
-  status: 生效
+  status: 已交付
 ---
 
 # 测试与验收(含本地验证政策)

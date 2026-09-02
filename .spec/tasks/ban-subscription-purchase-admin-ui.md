@@ -1,8 +1,5 @@
 ---
 status: completed
-title: 禁止购买订阅 — 管理端用户编辑开关
-depends_on:
-  - ban-subscription-purchase-admin-api
 ---
 
 # 禁止购买订阅 — 管理端 UI

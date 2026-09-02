@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 前台埋 Umami 官方脚本，/admin 直开不加载
 ---
 
 # 前台埋 Umami（官方 script defer）

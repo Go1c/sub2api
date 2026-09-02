@@ -1,6 +1,5 @@
 ---
 status: in_progress
-title: 个人资料 WebSocket 设置 — 实现中
 ---
 
 # 个人资料 · WebSocket 设置

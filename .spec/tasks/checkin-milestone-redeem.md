@@ -1,6 +1,4 @@
 ---
-name: checkin-milestone-redeem
-description: 签到里程碑奖金拆成独立兑换码流水，用户/管理端显示「签到里程碑x天」
 status: completed
 ---
 

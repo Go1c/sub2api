@@ -1,12 +1,5 @@
 ---
 status: completed
-title: 禁止购买订阅 — 知识沉淀
-depends_on:
-  - ban-subscription-purchase-schema
-  - ban-subscription-purchase-admin-api
-  - ban-subscription-purchase-enforce
-  - ban-subscription-purchase-admin-ui
-  - ban-subscription-purchase-user-ui
 ---
 
 # 禁止购买订阅 — 知识沉淀

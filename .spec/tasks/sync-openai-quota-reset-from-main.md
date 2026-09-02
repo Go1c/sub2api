@@ -1,6 +1,4 @@
 ---
-name: sync-openai-quota-reset-from-main
-description: 从 origin/main 合入 OpenAI Auth 登录 / 查询重置卡 / 使用重置卡，修复当前 404
 status: completed
 ---
 

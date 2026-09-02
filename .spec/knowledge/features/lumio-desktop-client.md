@@ -4,7 +4,7 @@ description: Lumio Codex 桌面客户端服务端契约：公开配置、账号�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # Lumio Codex 桌面客户端服务端契约

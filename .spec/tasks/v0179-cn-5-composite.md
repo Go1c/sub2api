@@ -1,6 +1,4 @@
 ---
-name: v0179-cn-5-composite
-description: 国模第五刀——Composite 分组路由
 status: completed
 ---
 

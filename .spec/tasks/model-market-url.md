@@ -1,6 +1,5 @@
 ---
 status: completed
-title: 把模型广场 SPA 路径从 /models 改成 /model-market
 ---
 
 # 把模型广场 SPA 路径从 `/models` 改成 `/model-market`

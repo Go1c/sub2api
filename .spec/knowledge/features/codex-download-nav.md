@@ -4,7 +4,7 @@ description: 首页与登录后顶栏的 Codex 下载外链，跳转到 bestcode
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # Codex 下载导航入口

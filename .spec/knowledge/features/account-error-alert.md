@@ -4,7 +4,7 @@ description: 账号异常 Telegram 告警：后台定时聚合 ops_error_logs，
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 账号异常 Telegram 告警

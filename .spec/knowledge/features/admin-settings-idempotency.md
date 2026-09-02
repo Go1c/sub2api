@@ -4,7 +4,7 @@ description: 管理员设置保存（PUT /api/v1/admin/settings）的隐式幂�
 metadata:
   type: doc
   level: L2
-  status: 已上线
+  status: 已交付
 ---
 
 # 管理员设置保存幂等性

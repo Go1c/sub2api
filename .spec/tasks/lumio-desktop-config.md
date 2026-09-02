@@ -1,6 +1,5 @@
 ---
 status: completed
-title: Lumio 桌面公开配置接口
 ---
 
 # Lumio 桌面公开配置接口

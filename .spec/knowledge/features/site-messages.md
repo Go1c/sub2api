@@ -4,7 +4,7 @@ description: 站内信功能，类轻量邮件：用户收发读回复，红点�
 metadata:
   type: doc
   level: L2
-  status: 已落地
+  status: 已交付
 ---
 
 # 站内信（Site Messages）

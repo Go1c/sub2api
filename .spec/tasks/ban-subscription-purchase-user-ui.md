@@ -1,8 +1,5 @@
 ---
 status: completed
-title: 禁止购买订阅 — 用户购买页错误提示
-depends_on:
-  - ban-subscription-purchase-enforce
 ---
 
 # 禁止购买订阅 — 用户侧提示
