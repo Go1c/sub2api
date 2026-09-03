@@ -102,6 +102,7 @@ func TestOpenAIStreamCapacityShedErrorFramePrecedingFailedStillFailsOver(t *test
 	require.ErrorAs(t, err, &failoverErr)
 	require.False(t, c.Writer.Written())
 	require.Empty(t, rec.Body.String())
+	requireOpenAICapacityShedLimitedRetry(t, failoverErr)
 }
 
 func TestTempUnscheduleRetryableErrorSkipsRequestScopedTransient(t *testing.T) {
@@ -141,8 +142,7 @@ func TestOpenAIHTTPCapacityShedIsRequestScopedForOAuthAccounts(t *testing.T) {
 		false,
 	)
 
-	require.True(t, failoverErr.RetryableOnSameAccount)
-	require.True(t, failoverErr.RequestScopedTransient)
+	requireOpenAICapacityShedLimitedRetry(t, failoverErr)
 
 	repo := &capacityShedAccountRepoStub{}
 	(&GatewayService{accountRepo: repo}).TempUnscheduleRetryableError(context.Background(), 1, failoverErr)
@@ -217,8 +217,7 @@ func TestOpenAIStreamMetadataPreambleAndMessageOnlyOverloadFailOver(t *testing.T
 			require.Error(t, err)
 			var failoverErr *UpstreamFailoverError
 			require.ErrorAs(t, err, &failoverErr)
-			require.True(t, failoverErr.RetryableOnSameAccount)
-			require.True(t, failoverErr.RequestScopedTransient)
+			requireOpenAICapacityShedLimitedRetry(t, failoverErr)
 			require.False(t, c.Writer.Written())
 			require.Empty(t, rec.Body.String())
 		})
@@ -336,4 +335,16 @@ func TestSanitizeOpenAICapacityShedErrorCodeForClient(t *testing.T) {
 			}
 		})
 	}
+}
+
+func requireOpenAICapacityShedLimitedRetry(t *testing.T, failoverErr *UpstreamFailoverError) {
+	t.Helper()
+	require.True(t, failoverErr.IsOpenAICapacityShed())
+	require.True(t, failoverErr.RetryableOnSameAccount, "one silent same-account retry keeps the client from reconnecting")
+	require.Equal(t, openAICapacityShedSameAccountRetryMax, failoverErr.SameAccountRetryMax)
+	require.True(t, failoverErr.ShouldRetryNextAccount(), "after that retry the handler may switch accounts on the same client request")
+	require.True(t, failoverErr.RequestScopedTransient, "capacity shed is still not an account-health failure")
+	require.Equal(t, NextAccountRetry, failoverErr.NextAccountAction)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.ClientStatusCode)
+	require.NotEmpty(t, failoverErr.ClientMessage)
 }

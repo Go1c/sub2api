@@ -11,6 +11,19 @@ describe('public homepage SEO', () => {
   it('ships a Chinese title, crawler-readable Chinese H1, and search engine verification', () => {
     expect(indexHtml).toContain('<title>LumioAPI · AI API 中转与管理平台</title>')
     expect(indexHtml).toContain('<h1>LumioAPI · AI API 中转与管理平台</h1>')
+    expect(indexHtml).not.toContain('seo-crawler-intro')
+    expect(indexHtml).not.toMatch(/display\s*:\s*none/i)
+    const appOpen = indexHtml.indexOf('<div id="app">')
+    const appClose = indexHtml.indexOf('</div>', appOpen)
+    expect(appOpen).toBeGreaterThan(-1)
+    expect(appClose).toBeGreaterThan(appOpen)
+    const appInner = indexHtml.slice(appOpen, appClose)
+    expect(appInner).toContain('<h1>LumioAPI · AI API 中转与管理平台</h1>')
+    expect(appInner).toContain(
+      'LumioAPI 是 AI API 中转与管理平台，统一接入 Anthropic Claude、OpenAI GPT、Google Gemini 等主流模型。注册地址 https://api.lumio.games/register ，文档地址 https://api.lumio.games/docs/ 。'
+    )
+    expect(appInner).not.toMatch(/\bhidden\b/)
+    expect(appInner).not.toMatch(/aria-hidden|visibility\s*:\s*hidden/i)
     expect(indexHtml).toContain(
       '<meta name="msvalidate.01" content="48232FF4A9EAB80D49C7A5AE2D009539" />'
     )

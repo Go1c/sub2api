@@ -160,8 +160,12 @@ func TestInjectSEOMeta(t *testing.T) {
     <title>Sub2API - AI API Gateway</title>
   </head>
   <body>
-    <section id="seo-crawler-intro" hidden>static intro</section>
-    <div id="app"></div>
+    <div id="app">
+      <main>
+        <h1>Sub2API</h1>
+        <p>static intro</p>
+      </main>
+    </div>
   </body>
 </html>`)
 
@@ -176,8 +180,12 @@ func TestInjectSEOMeta(t *testing.T) {
 <!--/seo-meta-->
 </head>
 <body>
-<section id="seo-crawler-intro" hidden>LumioAPI 是 AI API 中转与管理平台。注册地址 https://api.lumio.games/register</section>
-<div id="app"></div>
+<div id="app">
+<main>
+<h1>LumioAPI · AI API 中转与管理平台</h1>
+<p>LumioAPI 是 AI API 中转与管理平台。注册地址 https://api.lumio.games/register ，文档地址 https://api.lumio.games/docs/ 。</p>
+</main>
+</div>
 </body></html>`)
 
 	t.Run("full_config_injects_description_canonical_og_twitter_and_jsonld", func(t *testing.T) {
@@ -203,7 +211,10 @@ func TestInjectSEOMeta(t *testing.T) {
 		assert.Contains(t, html, `<meta name="twitter:description" content="`+wantDescription+`">`)
 		assert.Contains(t, html, `application/ld+json`)
 		assert.Contains(t, html, `nonce="`+NonceHTMLPlaceholder+`"`)
-		assert.Contains(t, html, `id="seo-crawler-intro"`)
+		assert.Contains(t, html, `<div id="app">`)
+		assert.Contains(t, html, `<h1>Sub2API</h1>`)
+		assert.NotContains(t, html, `id="seo-crawler-intro"`)
+		assert.NotContains(t, html, `display: none`)
 		assert.Equal(t, 1, strings.Count(html, `name="description"`))
 		assert.NotContains(t, html, "LumioAPI")
 
@@ -234,7 +245,10 @@ func TestInjectSEOMeta(t *testing.T) {
 		assert.Equal(t, 1, strings.Count(html, `application/ld+json`))
 		assert.Contains(t, html, `content="AcmeAPI 是 AI API 中转与管理平台`)
 		assert.NotContains(t, html, `og:site_name" content="LumioAPI"`)
-		assert.Contains(t, html, `id="seo-crawler-intro"`)
+		assert.Contains(t, html, `<div id="app">`)
+		assert.Contains(t, html, `<h1>LumioAPI · AI API 中转与管理平台</h1>`)
+		assert.NotContains(t, html, `id="seo-crawler-intro"`)
+		assert.NotContains(t, html, `display: none`)
 		assert.Contains(t, html, `https://api.lumio.games/register`)
 
 		graph := extractJSONLDGraph(t, html)
@@ -469,7 +483,10 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 		assert.Contains(t, html, `twitter:card`)
 		assert.Contains(t, html, `twitter:title`)
 		assert.Contains(t, html, `application/ld+json`)
-		assert.Contains(t, html, `id="seo-crawler-intro"`)
+		assert.Contains(t, html, `<div id="app">`)
+		assert.Contains(t, html, `<h1>LumioAPI · AI API 中转与管理平台</h1>`)
+		assert.NotContains(t, html, `id="seo-crawler-intro"`)
+		assert.NotContains(t, html, `display: none`)
 		assert.Contains(t, html, `https://api.lumio.games/register`)
 		assert.Contains(t, html, `https://api.lumio.games/docs/`)
 		assert.Equal(t, 1, strings.Count(html, `name="description"`))

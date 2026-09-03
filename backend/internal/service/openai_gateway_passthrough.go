@@ -1111,10 +1111,10 @@ func logOpenAICapacityFailoverSuppressed(
 	logger.FromContext(ctx).Warn("gateway.failover_suppressed_after_semantic_output", fields...)
 }
 
-// openAICapacityShedRetryableClientCode 是把上游容量降载错误转发给客户端时改写
+// OpenAICapacityShedRetryableClientCode 是把上游容量降载错误转发给客户端时改写
 // 使用的错误码。Codex CLI 按闭集对错误码分类：server_is_overloaded / slow_down
 // 被判为致命错误，而 server_error 会进入客户端内置退避重试。
-const openAICapacityShedRetryableClientCode = "server_error"
+const OpenAICapacityShedRetryableClientCode = "server_error"
 
 // sanitizeOpenAICapacityShedErrorCodeForClient 把即将写给下游客户端的
 // error / response.failed 事件中的容量降载错误码改写为客户端可重试的错误码。
@@ -1133,7 +1133,7 @@ func sanitizeOpenAICapacityShedErrorCodeForClient(payload []byte) ([]byte, bool)
 		if code != "" && code != "server_is_overloaded" && code != "slow_down" {
 			continue
 		}
-		next, err := sjson.SetBytes(updated, path, openAICapacityShedRetryableClientCode)
+		next, err := sjson.SetBytes(updated, path, OpenAICapacityShedRetryableClientCode)
 		if err != nil {
 			return payload, false
 		}
@@ -1394,8 +1394,7 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 		ResponseHeaders: headers,
 	}
 	if isOpenAIRequestScopedCapacityShed(message, payload) {
-		failoverErr.RetryableOnSameAccount = true
-		failoverErr.RequestScopedTransient = true
+		applyOpenAICapacityShedLimitedRetry(failoverErr, message)
 	}
 	return failoverErr
 }

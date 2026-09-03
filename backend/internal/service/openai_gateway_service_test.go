@@ -1398,6 +1398,8 @@ func TestOpenAIStreamingResponseFailedBeforeOutputServerOverloadedCodeReturnsFai
 	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
 	require.Contains(t, string(failoverErr.ResponseBody), "Please retry later")
 	require.True(t, failoverErr.RetryableOnSameAccount)
+	require.Equal(t, 1, failoverErr.SameAccountRetryMax)
+	require.True(t, failoverErr.ShouldRetryNextAccount())
 	require.True(t, failoverErr.RequestScopedTransient)
 	require.False(t, c.Writer.Written())
 	require.Empty(t, rec.Body.String())
