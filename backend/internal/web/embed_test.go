@@ -160,8 +160,7 @@ func TestInjectSEOMeta(t *testing.T) {
     <title>Sub2API - AI API Gateway</title>
   </head>
   <body>
-    <section id="seo-crawler-intro" hidden>static intro</section>
-    <div id="app"></div>
+    <div id="app"><section id="seo-crawler-intro"><h1>static intro</h1></section></div>
   </body>
 </html>`)
 
@@ -176,8 +175,7 @@ func TestInjectSEOMeta(t *testing.T) {
 <!--/seo-meta-->
 </head>
 <body>
-<section id="seo-crawler-intro" hidden>LumioAPI 是 AI API 中转与管理平台。注册地址 https://api.lumio.games/register</section>
-<div id="app"></div>
+<div id="app"><section id="seo-crawler-intro"><h1>LumioAPI · AI API 中转与管理平台</h1><p>LumioAPI 是 AI API 中转与管理平台。注册地址 https://api.lumio.games/register</p></section></div>
 </body></html>`)
 
 	t.Run("full_config_injects_description_canonical_og_twitter_and_jsonld", func(t *testing.T) {

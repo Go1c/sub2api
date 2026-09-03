@@ -5,9 +5,6 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LumioAPI · AI API 中转与管理平台</title>
-    <style>
-      #seo-crawler-intro { display: none !important; }
-    </style>
     <!--seo-meta-->
     <meta name="description" content="LumioAPI 是 AI API 中转与管理平台,统一接入 Anthropic Claude、OpenAI GPT、Google Gemini 等主流模型,提供 API Key 管理、额度计费与用量统计。" />
     <link rel="canonical" href="https://api.lumio.games/" />
@@ -43,11 +40,12 @@
     </script>
   </head>
   <body>
-    <section id="seo-crawler-intro" hidden>
-      <h1>LumioAPI · AI API 中转与管理平台</h1>
-      <p>LumioAPI 是 AI API 中转与管理平台，统一接入 Anthropic Claude、OpenAI GPT、Google Gemini 等主流模型。注册地址 https://api.lumio.games/register ，文档地址 https://api.lumio.games/docs/ 。</p>
-    </section>
-    <div id="app"></div>
+    <div id="app">
+      <section id="seo-crawler-intro">
+        <h1>LumioAPI · AI API 中转与管理平台</h1>
+        <p>LumioAPI 是 AI API 中转与管理平台，统一接入 Anthropic Claude、OpenAI GPT、Google Gemini 等主流模型，提供 API Key 管理、额度计费与用量统计。无需执行 JavaScript 即可了解产品：可在 https://api.lumio.games/register 注册使用，文档见 https://api.lumio.games/docs/ 。</p>
+      </section>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
