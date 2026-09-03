@@ -1328,6 +1328,10 @@ func (h *OpenAIGatewayHandler) handleAnthropicFailoverExhausted(c *gin.Context, 
 		h.anthropicStreamingAwareError(c, status, "api_error", message, streamStarted)
 		return
 	}
+	if failoverErr != nil && failoverErr.IsOpenAICapacityShed() {
+		h.anthropicStreamingAwareError(c, 529, "overloaded_error", failoverErr.OpenAICapacityShedClientMessage(), streamStarted)
+		return
+	}
 	status, errType, errMsg := h.mapUpstreamError(failoverErr.StatusCode)
 	h.anthropicStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
@@ -2325,6 +2329,20 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 		)
 		return
 	}
+	if failoverErr.IsOpenAICapacityShed() {
+		msg := failoverErr.OpenAICapacityShedClientMessage()
+		service.SetOpsUpstreamError(c, failoverErr.StatusCode, msg, "")
+		h.handleStreamingAwareErrorWithCode(
+			c,
+			http.StatusServiceUnavailable,
+			"server_error",
+			service.OpenAICapacityShedRetryableClientCode,
+			msg,
+			streamStarted,
+			false,
+		)
+		return
+	}
 	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	if failoverErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(failoverErr)
@@ -2712,6 +2730,10 @@ func closeOpenAIWSFailoverExhausted(conn *coderws.Conn, failoverErr *service.Ups
 	}
 	if failoverErr.Stage == service.GatewayFailureStageAccountAuth {
 		closeOpenAIClientWS(conn, coderws.StatusTryAgainLater, service.GrokCredentialUnavailableClientMessage)
+		return
+	}
+	if failoverErr.IsOpenAICapacityShed() {
+		closeOpenAIClientWS(conn, coderws.StatusTryAgainLater, failoverErr.OpenAICapacityShedClientMessage())
 		return
 	}
 	switch failoverErr.StatusCode {

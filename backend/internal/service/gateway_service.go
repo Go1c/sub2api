@@ -630,7 +630,7 @@ type UpstreamFailoverError struct {
 	ResponseHeaders          http.Header   // 上游响应头，用于透传 cf-ray/cf-mitigated/content-type 等诊断信息
 	ForceCacheBilling        bool          // Antigravity 粘性会话切换时设为 true
 	RetryableOnSameAccount   bool          // 临时性错误（如 Google 间歇性 400、空响应），应在同一账号上重试 N 次再切换
-	RequestScopedTransient   bool          // 仅当前请求可同账号重试的瞬时压力，不作为账号健康失败
+	RequestScopedTransient   bool          // 请求级瞬时压力，不作为账号健康失败；OpenAI 容量降载只允许有界同账号重试
 	SameAccountRetryDelay    time.Duration // 错误级同账号重试间隔；零值用 handler 默认
 	SameAccountRetryDeadline time.Time     // 错误级同账号重试窗口；零值不限制
 	SameAccountRetryMax      int           // 错误级同账号重试上限；<=0 表示沿用账号 pool_mode 配置

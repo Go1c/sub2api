@@ -257,11 +257,12 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(statusCode i
 // after all account-specific request body limit failovers are exhausted.
 const OpenAIRequestBodyTooLargeClientMessage = "Request payload is too large"
 
-const openAIRequestBodyTooLargeReason = GatewayFailureReason("openai_request_body_too_large")
-
-func isOpenAIRequestBodyTooLargeError(statusCode int, upstreamMsg string, upstreamBody []byte) bool {
-	return statusCode == http.StatusRequestEntityTooLarge && !isOpenAIContextWindowError(upstreamMsg, upstreamBody)
-}
+const (
+	openAIRequestBodyTooLargeReason        = GatewayFailureReason("openai_request_body_too_large")
+	OpenAICapacityShedReason               = GatewayFailureReason("openai_capacity_shed")
+	openAICapacityShedDefaultClientMessage = "Our servers are currently overloaded. Please try again later."
+	openAICapacityShedSameAccountRetryMax  = 1
+)
 
 func newOpenAIUpstreamFailoverError(
 	statusCode int,
@@ -275,8 +276,11 @@ func newOpenAIUpstreamFailoverError(
 		StatusCode:             statusCode,
 		ResponseBody:           responseBody,
 		ResponseHeaders:        responseHeaders.Clone(),
-		RetryableOnSameAccount: retryableOnSameAccount || requestScopedCapacity,
+		RetryableOnSameAccount: retryableOnSameAccount,
 		RequestScopedTransient: requestScopedCapacity,
+	}
+	if requestScopedCapacity {
+		applyOpenAICapacityShedLimitedRetry(failoverErr, upstreamMsg)
 	}
 	if isOpenAIRequestBodyTooLargeError(statusCode, upstreamMsg, responseBody) {
 		failoverErr.RetryableOnSameAccount = false
@@ -288,6 +292,53 @@ func newOpenAIUpstreamFailoverError(
 		failoverErr.ClientMessage = OpenAIRequestBodyTooLargeClientMessage
 	}
 	return failoverErr
+}
+
+// applyOpenAICapacityShedLimitedRetry keeps recovery on the current HTTP/WS
+// request so the client does not reconnect. Same-account retry is capped at
+// one extra attempt to avoid burning ChatGPT/Codex RPM; after that the
+// handler may switch accounts. The account is not marked unhealthy.
+func applyOpenAICapacityShedLimitedRetry(failoverErr *UpstreamFailoverError, message string) {
+	if failoverErr == nil {
+		return
+	}
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		msg = strings.TrimSpace(ExtractUpstreamErrorMessage(failoverErr.ResponseBody))
+	}
+	if msg == "" {
+		msg = openAICapacityShedDefaultClientMessage
+	}
+	failoverErr.RetryableOnSameAccount = true
+	failoverErr.SameAccountRetryMax = openAICapacityShedSameAccountRetryMax
+	failoverErr.RequestScopedTransient = true
+	failoverErr.NextAccountAction = NextAccountRetry
+	failoverErr.Reason = OpenAICapacityShedReason
+	failoverErr.ClientStatusCode = http.StatusServiceUnavailable
+	failoverErr.ClientMessage = msg
+}
+
+// IsOpenAICapacityShed reports whether exhausted failover should be returned as
+// a client-retryable server_error instead of a generic upstream mapping.
+func (e *UpstreamFailoverError) IsOpenAICapacityShed() bool {
+	return e != nil && e.Reason == OpenAICapacityShedReason
+}
+
+func (e *UpstreamFailoverError) OpenAICapacityShedClientMessage() string {
+	if e == nil {
+		return openAICapacityShedDefaultClientMessage
+	}
+	if msg := strings.TrimSpace(e.ClientMessage); msg != "" {
+		return msg
+	}
+	if msg := strings.TrimSpace(ExtractUpstreamErrorMessage(e.ResponseBody)); msg != "" {
+		return msg
+	}
+	return openAICapacityShedDefaultClientMessage
+}
+
+func isOpenAIRequestBodyTooLargeError(statusCode int, upstreamMsg string, upstreamBody []byte) bool {
+	return statusCode == http.StatusRequestEntityTooLarge && !isOpenAIContextWindowError(upstreamMsg, upstreamBody)
 }
 
 // IsOpenAIRequestBodyTooLarge reports whether another account may accept the
