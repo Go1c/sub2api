@@ -50,6 +50,12 @@ func (LotteryCampaign) Fields() []ent.Field {
 		field.Int("recharge_boost_cap_percent").
 			Default(0).
 			NonNegative(),
+		field.String("promo_text").
+			MaxLen(240).
+			Default(""),
+		field.String("promo_image_url").
+			MaxLen(2048).
+			Default(""),
 		field.Int64("created_by"),
 		field.Time("created_at").
 			Immutable().

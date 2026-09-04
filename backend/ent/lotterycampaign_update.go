@@ -196,6 +196,34 @@ func (_u *LotteryCampaignUpdate) AddRechargeBoostCapPercent(v int) *LotteryCampa
 	return _u
 }
 
+// SetPromoText sets the "promo_text" field.
+func (_u *LotteryCampaignUpdate) SetPromoText(v string) *LotteryCampaignUpdate {
+	_u.mutation.SetPromoText(v)
+	return _u
+}
+
+// SetNillablePromoText sets the "promo_text" field if the given value is not nil.
+func (_u *LotteryCampaignUpdate) SetNillablePromoText(v *string) *LotteryCampaignUpdate {
+	if v != nil {
+		_u.SetPromoText(*v)
+	}
+	return _u
+}
+
+// SetPromoImageURL sets the "promo_image_url" field.
+func (_u *LotteryCampaignUpdate) SetPromoImageURL(v string) *LotteryCampaignUpdate {
+	_u.mutation.SetPromoImageURL(v)
+	return _u
+}
+
+// SetNillablePromoImageURL sets the "promo_image_url" field if the given value is not nil.
+func (_u *LotteryCampaignUpdate) SetNillablePromoImageURL(v *string) *LotteryCampaignUpdate {
+	if v != nil {
+		_u.SetPromoImageURL(*v)
+	}
+	return _u
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_u *LotteryCampaignUpdate) SetCreatedBy(v int64) *LotteryCampaignUpdate {
 	_u.mutation.ResetCreatedBy()
@@ -331,6 +359,16 @@ func (_u *LotteryCampaignUpdate) check() error {
 			return &ValidationError{Name: "recharge_boost_cap_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.recharge_boost_cap_percent": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromoText(); ok {
+		if err := lotterycampaign.PromoTextValidator(v); err != nil {
+			return &ValidationError{Name: "promo_text", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.promo_text": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PromoImageURL(); ok {
+		if err := lotterycampaign.PromoImageURLValidator(v); err != nil {
+			return &ValidationError{Name: "promo_image_url", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.promo_image_url": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -390,6 +428,12 @@ func (_u *LotteryCampaignUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.AddedRechargeBoostCapPercent(); ok {
 		_spec.AddField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PromoText(); ok {
+		_spec.SetField(lotterycampaign.FieldPromoText, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PromoImageURL(); ok {
+		_spec.SetField(lotterycampaign.FieldPromoImageURL, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreatedBy(); ok {
 		_spec.SetField(lotterycampaign.FieldCreatedBy, field.TypeInt64, value)
@@ -594,6 +638,34 @@ func (_u *LotteryCampaignUpdateOne) AddRechargeBoostCapPercent(v int) *LotteryCa
 	return _u
 }
 
+// SetPromoText sets the "promo_text" field.
+func (_u *LotteryCampaignUpdateOne) SetPromoText(v string) *LotteryCampaignUpdateOne {
+	_u.mutation.SetPromoText(v)
+	return _u
+}
+
+// SetNillablePromoText sets the "promo_text" field if the given value is not nil.
+func (_u *LotteryCampaignUpdateOne) SetNillablePromoText(v *string) *LotteryCampaignUpdateOne {
+	if v != nil {
+		_u.SetPromoText(*v)
+	}
+	return _u
+}
+
+// SetPromoImageURL sets the "promo_image_url" field.
+func (_u *LotteryCampaignUpdateOne) SetPromoImageURL(v string) *LotteryCampaignUpdateOne {
+	_u.mutation.SetPromoImageURL(v)
+	return _u
+}
+
+// SetNillablePromoImageURL sets the "promo_image_url" field if the given value is not nil.
+func (_u *LotteryCampaignUpdateOne) SetNillablePromoImageURL(v *string) *LotteryCampaignUpdateOne {
+	if v != nil {
+		_u.SetPromoImageURL(*v)
+	}
+	return _u
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_u *LotteryCampaignUpdateOne) SetCreatedBy(v int64) *LotteryCampaignUpdateOne {
 	_u.mutation.ResetCreatedBy()
@@ -742,6 +814,16 @@ func (_u *LotteryCampaignUpdateOne) check() error {
 			return &ValidationError{Name: "recharge_boost_cap_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.recharge_boost_cap_percent": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromoText(); ok {
+		if err := lotterycampaign.PromoTextValidator(v); err != nil {
+			return &ValidationError{Name: "promo_text", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.promo_text": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PromoImageURL(); ok {
+		if err := lotterycampaign.PromoImageURLValidator(v); err != nil {
+			return &ValidationError{Name: "promo_image_url", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.promo_image_url": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -818,6 +900,12 @@ func (_u *LotteryCampaignUpdateOne) sqlSave(ctx context.Context) (_node *Lottery
 	}
 	if value, ok := _u.mutation.AddedRechargeBoostCapPercent(); ok {
 		_spec.AddField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PromoText(); ok {
+		_spec.SetField(lotterycampaign.FieldPromoText, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PromoImageURL(); ok {
+		_spec.SetField(lotterycampaign.FieldPromoImageURL, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreatedBy(); ok {
 		_spec.SetField(lotterycampaign.FieldCreatedBy, field.TypeInt64, value)

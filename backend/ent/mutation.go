@@ -33101,6 +33101,8 @@ type LotteryCampaignMutation struct {
 	addearly_boost_participant_percent *int
 	recharge_boost_cap_percent         *int
 	addrecharge_boost_cap_percent      *int
+	promo_text                         *string
+	promo_image_url                    *string
 	created_by                         *int64
 	addcreated_by                      *int64
 	created_at                         *time.Time
@@ -33654,6 +33656,78 @@ func (m *LotteryCampaignMutation) ResetRechargeBoostCapPercent() {
 	m.addrecharge_boost_cap_percent = nil
 }
 
+// SetPromoText sets the "promo_text" field.
+func (m *LotteryCampaignMutation) SetPromoText(s string) {
+	m.promo_text = &s
+}
+
+// PromoText returns the value of the "promo_text" field in the mutation.
+func (m *LotteryCampaignMutation) PromoText() (r string, exists bool) {
+	v := m.promo_text
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPromoText returns the old "promo_text" field's value of the LotteryCampaign entity.
+// If the LotteryCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LotteryCampaignMutation) OldPromoText(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPromoText is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPromoText requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPromoText: %w", err)
+	}
+	return oldValue.PromoText, nil
+}
+
+// ResetPromoText resets all changes to the "promo_text" field.
+func (m *LotteryCampaignMutation) ResetPromoText() {
+	m.promo_text = nil
+}
+
+// SetPromoImageURL sets the "promo_image_url" field.
+func (m *LotteryCampaignMutation) SetPromoImageURL(s string) {
+	m.promo_image_url = &s
+}
+
+// PromoImageURL returns the value of the "promo_image_url" field in the mutation.
+func (m *LotteryCampaignMutation) PromoImageURL() (r string, exists bool) {
+	v := m.promo_image_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPromoImageURL returns the old "promo_image_url" field's value of the LotteryCampaign entity.
+// If the LotteryCampaign object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LotteryCampaignMutation) OldPromoImageURL(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPromoImageURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPromoImageURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPromoImageURL: %w", err)
+	}
+	return oldValue.PromoImageURL, nil
+}
+
+// ResetPromoImageURL resets all changes to the "promo_image_url" field.
+func (m *LotteryCampaignMutation) ResetPromoImageURL() {
+	m.promo_image_url = nil
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (m *LotteryCampaignMutation) SetCreatedBy(i int64) {
 	m.created_by = &i
@@ -33865,7 +33939,7 @@ func (m *LotteryCampaignMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *LotteryCampaignMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 15)
 	if m.name != nil {
 		fields = append(fields, lotterycampaign.FieldName)
 	}
@@ -33892,6 +33966,12 @@ func (m *LotteryCampaignMutation) Fields() []string {
 	}
 	if m.recharge_boost_cap_percent != nil {
 		fields = append(fields, lotterycampaign.FieldRechargeBoostCapPercent)
+	}
+	if m.promo_text != nil {
+		fields = append(fields, lotterycampaign.FieldPromoText)
+	}
+	if m.promo_image_url != nil {
+		fields = append(fields, lotterycampaign.FieldPromoImageURL)
 	}
 	if m.created_by != nil {
 		fields = append(fields, lotterycampaign.FieldCreatedBy)
@@ -33931,6 +34011,10 @@ func (m *LotteryCampaignMutation) Field(name string) (ent.Value, bool) {
 		return m.EarlyBoostParticipantPercent()
 	case lotterycampaign.FieldRechargeBoostCapPercent:
 		return m.RechargeBoostCapPercent()
+	case lotterycampaign.FieldPromoText:
+		return m.PromoText()
+	case lotterycampaign.FieldPromoImageURL:
+		return m.PromoImageURL()
 	case lotterycampaign.FieldCreatedBy:
 		return m.CreatedBy()
 	case lotterycampaign.FieldCreatedAt:
@@ -33966,6 +34050,10 @@ func (m *LotteryCampaignMutation) OldField(ctx context.Context, name string) (en
 		return m.OldEarlyBoostParticipantPercent(ctx)
 	case lotterycampaign.FieldRechargeBoostCapPercent:
 		return m.OldRechargeBoostCapPercent(ctx)
+	case lotterycampaign.FieldPromoText:
+		return m.OldPromoText(ctx)
+	case lotterycampaign.FieldPromoImageURL:
+		return m.OldPromoImageURL(ctx)
 	case lotterycampaign.FieldCreatedBy:
 		return m.OldCreatedBy(ctx)
 	case lotterycampaign.FieldCreatedAt:
@@ -34045,6 +34133,20 @@ func (m *LotteryCampaignMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRechargeBoostCapPercent(v)
+		return nil
+	case lotterycampaign.FieldPromoText:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPromoText(v)
+		return nil
+	case lotterycampaign.FieldPromoImageURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPromoImageURL(v)
 		return nil
 	case lotterycampaign.FieldCreatedBy:
 		v, ok := value.(int64)
@@ -34245,6 +34347,12 @@ func (m *LotteryCampaignMutation) ResetField(name string) error {
 		return nil
 	case lotterycampaign.FieldRechargeBoostCapPercent:
 		m.ResetRechargeBoostCapPercent()
+		return nil
+	case lotterycampaign.FieldPromoText:
+		m.ResetPromoText()
+		return nil
+	case lotterycampaign.FieldPromoImageURL:
+		m.ResetPromoImageURL()
 		return nil
 	case lotterycampaign.FieldCreatedBy:
 		m.ResetCreatedBy()

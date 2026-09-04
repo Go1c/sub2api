@@ -46,13 +46,31 @@
                   <span>登录有礼 · 限时活动</span>
                 </div>
                 <h2 class="mt-4 text-2xl font-extrabold tracking-tight text-white">
-                  {{ campaignTitle }}
+                  {{ stage === 'promo' ? '关注公众号再抽奖' : campaignTitle }}
                 </h2>
                 <p class="mt-1.5 text-sm text-slate-400">
-                  {{ subtitle }}
+                  {{ stage === 'promo' ? (promoText || '关注后可了解更多活动与兑换码') : subtitle }}
                 </p>
               </div>
 
+              <div v-if="stage === 'promo'" class="mt-5 text-center" data-test="lottery-promo-step">
+                <img
+                  :src="promoImageSrc"
+                  alt="公众号关注海报"
+                  class="mx-auto max-h-[360px] w-full max-w-[280px] rounded-3xl bg-white object-contain shadow-[0_18px_48px_-18px_rgba(79,140,255,0.55)] ring-1 ring-white/15"
+                />
+                <button
+                  type="button"
+                  data-test="lottery-promo-continue"
+                  class="mt-5 w-full rounded-full bg-gradient-to-r from-[#4f8cff] via-[#2f6dff] to-[#1a2f5a] px-5 py-3 text-sm font-extrabold text-white shadow-[0_14px_42px_-12px_rgba(79,140,255,0.9)]"
+                  @click="stage = 'wheel'"
+                >
+                  去抽奖
+                </button>
+                <p class="mt-3 text-xs text-slate-500">可跳过，不验证是否已经关注</p>
+              </div>
+
+              <template v-else>
               <!-- Stats -->
               <div class="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-white/[0.04] p-3 text-center text-xs ring-1 ring-white/10">
                 <div>
@@ -97,6 +115,7 @@
               <div v-if="!result" class="mt-4 text-center">
                 <p class="text-xs text-slate-500">每位用户每场活动仅限一次</p>
               </div>
+              </template>
             </div>
           </div>
         </transition>
@@ -149,6 +168,22 @@
                   {{ result.message }}
                 </p>
 
+                <div
+                  v-if="result.won && (promoImageSrc || promoText)"
+                  class="mt-5 rounded-3xl bg-white/8 p-3 ring-1 ring-white/15"
+                  data-test="lottery-result-promo"
+                >
+                  <img
+                    v-if="promoImageSrc"
+                    :src="promoImageSrc"
+                    alt="公众号关注海报"
+                    class="mx-auto max-h-48 w-full max-w-[200px] rounded-2xl bg-white object-contain"
+                  />
+                  <p v-if="promoText" class="mt-3 text-xs leading-6 text-slate-200">
+                    {{ promoText }}
+                  </p>
+                </div>
+
                 <div class="mt-6 flex flex-col gap-3">
                   <a
                     v-if="result.won"
@@ -178,6 +213,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LotteryWheel, { type WheelSegment } from './LotteryWheel.vue'
+import { safeLotteryPromoImageUrl } from '@/utils/siteMessageContent'
 
 export interface DrawResult {
   won: boolean
@@ -197,10 +233,14 @@ const props = withDefaults(
     joined: number
     segments: WheelSegment[]
     drawFn: () => Promise<DrawResult>
+    promoText?: string
+    promoImageUrl?: string
   }>(),
   {
     campaignTitle: '幸运转盘',
-    subtitle: '登录就有机会，转一转赢取兑换码'
+    subtitle: '登录就有机会，转一转赢取兑换码',
+    promoText: '',
+    promoImageUrl: ''
   }
 )
 
@@ -215,6 +255,9 @@ const result = ref<DrawResult | null>(null)
 const pendingResult = ref<DrawResult | null>(null)
 const errorMessage = ref('')
 const viewportWidth = ref(getViewportWidth())
+const promoImageSrc = computed(() => safeLotteryPromoImageUrl(props.promoImageUrl))
+const hasPromo = computed(() => Boolean(promoImageSrc.value))
+const stage = ref<'promo' | 'wheel'>(hasPromo.value ? 'promo' : 'wheel')
 
 const remaining = computed(() => Math.max(0, props.maxParticipants - props.joined))
 const canSpin = computed(() => props.joined < props.maxParticipants && !result.value)
@@ -283,6 +326,7 @@ watch(
       result.value = null
       pendingResult.value = null
       errorMessage.value = ''
+      stage.value = hasPromo.value ? 'promo' : 'wheel'
     }
   }
 )

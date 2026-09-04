@@ -53,6 +53,8 @@ func (h *LotteryHandler) CreateCampaign(c *gin.Context) {
 		MaxParticipants:              req.MaxParticipants,
 		EarlyBoostParticipantPercent: req.EarlyBoostParticipantPercent,
 		RechargeBoostCapPercent:      req.RechargeBoostCapPercent,
+		PromoText:                    req.PromoText,
+		PromoImageURL:                req.PromoImageURL,
 		Codes:                        req.Codes,
 	})
 	if err != nil {

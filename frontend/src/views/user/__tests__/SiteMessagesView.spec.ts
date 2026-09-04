@@ -294,4 +294,57 @@ describe('SiteMessagesView', () => {
     const recipientInput = wrapper.get('input[type="text"]').element as HTMLInputElement
     expect(recipientInput.value).toBe('support@lumio.games')
   })
+
+  it('renders a standalone https line as an image in the conversation', async () => {
+    const parent = message({
+      subject: '恭喜中奖：五月幸运转盘',
+      content: '你在「五月」中中奖。\n\n兑换码：LUCK-001\n\nhttps://cdn.example.com/qr.png',
+    })
+    vi.mocked(siteMessagesAPI.listInbox).mockResolvedValue({
+      items: [parent],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+    vi.mocked(siteMessagesAPI.getById).mockResolvedValue(parent)
+
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('恭喜中奖'))
+      ?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="site-message-promo-image"]').attributes('src')).toBe(
+      'https://cdn.example.com/qr.png',
+    )
+    expect(wrapper.text()).toContain('LUCK-001')
+  })
+
+  it('does not render http image lines as images', async () => {
+    const parent = message({
+      content: '封面\nhttp://evil.example/x.png',
+    })
+    vi.mocked(siteMessagesAPI.listInbox).mockResolvedValue({
+      items: [parent],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+    vi.mocked(siteMessagesAPI.getById).mockResolvedValue(parent)
+
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('测试一下'))
+      ?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="site-message-promo-image"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('http://evil.example/x.png')
+  })
 })

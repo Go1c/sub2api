@@ -237,7 +237,7 @@ func (s *SiteMessageService) ListCompensationBatches(ctx context.Context, params
 	return s.compensationBatches.List(ctx, params)
 }
 
-func (s *SiteMessageService) SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code string) (*SiteMessage, error) {
+func (s *SiteMessageService) SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code, promoText, promoImageURL string) (*SiteMessage, error) {
 	if _, err := s.enabledSettings(ctx); err != nil {
 		return nil, err
 	}
@@ -247,6 +247,14 @@ func (s *SiteMessageService) SendLotteryPrize(ctx context.Context, senderID, rec
 	}
 	subject := fmt.Sprintf("恭喜中奖：%s", campaignName)
 	content := fmt.Sprintf("你在「%s」中中奖。\n\n兑换码：%s\n\n请复制该兑换码前往兑换页面使用。", campaignName, strings.TrimSpace(code))
+	promoText = strings.TrimSpace(promoText)
+	if promoText != "" {
+		content += "\n\n" + promoText
+	}
+	promoImageURL = strings.TrimSpace(promoImageURL)
+	if strings.HasPrefix(promoImageURL, "https://") {
+		content += "\n\n" + promoImageURL
+	}
 	return s.create(ctx, senderID, recipientID, nil, subject, content)
 }
 

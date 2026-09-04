@@ -29,10 +29,20 @@ const LotteryDialogStub = defineComponent({
       type: Function,
       required: true,
     },
+    promoText: {
+      type: String,
+      default: '',
+    },
+    promoImageUrl: {
+      type: String,
+      default: '',
+    },
   },
   template: `
     <div v-if="open" data-test="lottery-dialog">
       {{ campaignTitle }}
+      <span data-test="promo-image-url">{{ promoImageUrl }}</span>
+      <span data-test="promo-text">{{ promoText }}</span>
       <button data-test="draw" @click="drawFn()">draw</button>
       <button data-test="close" @click="$emit('close')">close</button>
     </div>
@@ -120,6 +130,26 @@ describe('LotteryPromptManager', () => {
 
     expect(lotteryAPI.getActive).toHaveBeenCalledTimes(1)
     expect(wrapper.find('[data-test="lottery-dialog"]').exists()).toBe(true)
+  })
+
+  it('passes WeChat promo assets from the active campaign into the dialog', async () => {
+    vi.mocked(lotteryAPI.getActive).mockResolvedValue({
+      campaign: {
+        ...activeCampaign,
+        promo_text: '关注公众号领福利',
+        promo_image_url: 'https://cdn.example.com/qr.png',
+      },
+    })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+
+    const wrapper = mountPromptManager(pinia)
+
+    loginUser()
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="promo-text"]').text()).toBe('关注公众号领福利')
+    expect(wrapper.get('[data-test="promo-image-url"]').text()).toBe('https://cdn.example.com/qr.png')
   })
 
   it('does not reopen during the same login session after dismissal without draw', async () => {

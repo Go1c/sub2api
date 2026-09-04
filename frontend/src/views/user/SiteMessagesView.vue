@@ -164,12 +164,21 @@
                       <span class="shrink-0 tabular-nums">{{ formatDateTime(message.created_at) }}</span>
                     </div>
                     <div
-                      class="whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm [overflow-wrap:anywhere]"
+                      class="break-words rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm [overflow-wrap:anywhere]"
                       :class="isOwnConversationMessage(message)
                         ? 'rounded-br-md bg-primary-600 text-white shadow-primary-600/20'
                         : 'rounded-bl-md border border-gray-200 bg-gray-50 text-gray-800 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-100'"
                     >
-                      {{ message.content }}
+                      <template v-for="(part, partIndex) in splitSiteMessageContent(message.content)" :key="partIndex">
+                        <p v-if="part.type === 'text'" class="whitespace-pre-wrap">{{ part.text }}</p>
+                        <img
+                          v-else
+                          data-testid="site-message-promo-image"
+                          :src="part.url"
+                          alt=""
+                          class="mt-3 max-h-64 w-full max-w-[240px] rounded-2xl bg-white object-contain"
+                        />
+                      </template>
                     </div>
                   </div>
                 </div>
@@ -251,6 +260,7 @@ import { useAppStore, useAuthStore, useSiteMessageStore } from '@/stores'
 import type { SiteMessage, SiteMessageRecipient } from '@/types'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
+import { splitSiteMessageContent } from '@/utils/siteMessageContent'
 
 type MailboxTab = 'inbox' | 'sent'
 

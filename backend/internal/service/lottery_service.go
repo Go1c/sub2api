@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"strings"
 	"time"
 
@@ -62,6 +63,10 @@ func (s *LotteryService) CreateCampaign(ctx context.Context, adminID int64, inpu
 		input.RechargeBoostCapPercent > LotteryMaxRechargeBoostCapPercent {
 		return nil, ErrLotteryInvalidCampaign
 	}
+	promoText, promoImageURL, err := normalizeLotteryPromo(input.PromoText, input.PromoImageURL)
+	if err != nil {
+		return nil, err
+	}
 
 	now := s.now()
 	var created *LotteryCampaign
@@ -77,6 +82,8 @@ func (s *LotteryService) CreateCampaign(ctx context.Context, adminID int64, inpu
 			MaxParticipants:              input.MaxParticipants,
 			EarlyBoostParticipantPercent: earlyBoostParticipantPercent,
 			RechargeBoostCapPercent:      input.RechargeBoostCapPercent,
+			PromoText:                    promoText,
+			PromoImageURL:                promoImageURL,
 			CreatedBy:                    adminID,
 			CreatedAt:                    now,
 			UpdatedAt:                    now,
@@ -159,6 +166,8 @@ func (s *LotteryService) GetActiveForUser(ctx context.Context, userID int64) (*L
 		JoinedCount:                  campaign.JoinedCount,
 		EarlyBoostParticipantPercent: campaign.EarlyBoostParticipantPercent,
 		RechargeBoostCapPercent:      campaign.RechargeBoostCapPercent,
+		PromoText:                    campaign.PromoText,
+		PromoImageURL:                campaign.PromoImageURL,
 		Segments:                     BuildLotterySegments(campaign.PrizeCount, 8),
 	}, nil
 }
@@ -208,7 +217,7 @@ func (s *LotteryService) Draw(ctx context.Context, userID, campaignID int64) (*L
 			if s.siteMessages == nil {
 				return fmt.Errorf("lottery prize messenger is not configured")
 			}
-			msg, err := s.siteMessages.SendLotteryPrize(txCtx, campaign.CreatedBy, userID, campaign.Name, code.Code)
+			msg, err := s.siteMessages.SendLotteryPrize(txCtx, campaign.CreatedBy, userID, campaign.Name, code.Code, campaign.PromoText, campaign.PromoImageURL)
 			if err != nil {
 				return err
 			}
@@ -315,6 +324,9 @@ func (s *LotteryService) winProbability(ctx context.Context, campaign *LotteryCa
 	if campaign == nil || remainingPrizes <= 0 || remainingSlots <= 0 {
 		return 0, nil
 	}
+	if remainingPrizes >= remainingSlots {
+		return 1, nil
+	}
 
 	probability := float64(remainingPrizes) / float64(remainingSlots)
 	probability *= lotteryParticipantPhaseMultiplier(
@@ -385,15 +397,36 @@ func clampLotteryProbability(value float64) float64 {
 	return value
 }
 
-func BuildLotterySegments(prizeCount int, totalSlots int) []LotterySegment {
-	slots := totalSlots
-	if prizeCount+2 > slots {
-		slots = prizeCount + 2
+func normalizeLotteryPromo(rawText, rawImageURL string) (string, string, error) {
+	text := strings.TrimSpace(rawText)
+	if len([]rune(text)) > 240 {
+		return "", "", ErrLotteryInvalidCampaign
 	}
+	imageURL := strings.TrimSpace(rawImageURL)
+	if imageURL == "" {
+		return text, "", nil
+	}
+	if len(imageURL) > 2048 {
+		return "", "", ErrLotteryInvalidCampaign
+	}
+	parsed, err := url.Parse(imageURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+		return "", "", ErrLotteryInvalidCampaign
+	}
+	return text, parsed.String(), nil
+}
+
+func BuildLotterySegments(prizeCount int, totalSlots int) []LotterySegment {
+	_ = prizeCount
+	slots := totalSlots
+	if slots != 8 {
+		slots = 8
+	}
+	pattern := []bool{true, false, true, true, false, true, false, true}
 	segs := make([]LotterySegment, 0, slots)
 	for i := 0; i < slots; i++ {
-		if i < prizeCount {
-			segs = append(segs, LotterySegment{Label: fmt.Sprintf("%s %d", LotteryPrizeLabel, i+1), IsPrize: true})
+		if pattern[i] {
+			segs = append(segs, LotterySegment{Label: LotteryPrizeLabel, IsPrize: true})
 		} else {
 			segs = append(segs, LotterySegment{Label: LotteryLoseLabel, IsPrize: false})
 		}
