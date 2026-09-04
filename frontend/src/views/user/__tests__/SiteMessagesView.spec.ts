@@ -217,6 +217,66 @@ describe('SiteMessagesView', () => {
     expect(wrapper.text()).toContain('新的回复')
   })
 
+  it('keeps mailbox rows shrinkable so long sender addresses cannot stretch the page', async () => {
+    vi.mocked(siteMessagesAPI.listInbox).mockResolvedValue({
+      items: [
+        message({
+          subject: '恭喜中奖：关注才能抽奖哦这是一段很长的标题',
+          content: '兑换码：ABCDEFGH-1234-5678-VERY-LONG',
+          sender: {
+            id: 2,
+            email: 'admin@lumio.games',
+            username: 'admin',
+            is_admin: true,
+          },
+        }),
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const mailbox = wrapper.get('[data-testid="site-messages-mailbox"]')
+    expect(mailbox.classes()).toContain('min-w-0')
+    expect(mailbox.classes().some((cls) => cls.includes('minmax(0'))).toBe(true)
+
+    const meta = wrapper.get('[data-testid="site-message-row-meta"]')
+    expect(meta.classes()).toContain('min-w-0')
+    expect(meta.get('span').classes()).toEqual(expect.arrayContaining(['min-w-0', 'truncate']))
+  })
+
+  it('shows a back control after opening a message so the list can be restored', async () => {
+    const parent = message()
+    vi.mocked(siteMessagesAPI.listInbox).mockResolvedValue({
+      items: [parent],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+    vi.mocked(siteMessagesAPI.getById).mockResolvedValue(parent)
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('测试一下'))
+      ?.trigger('click')
+    await flushPromises()
+
+    const list = wrapper.get('[data-testid="site-messages-list"]')
+    expect(list.classes()).toContain('hidden')
+    expect(wrapper.get('[data-testid="site-messages-back"]').text()).toBe('common.back')
+
+    await wrapper.get('[data-testid="site-messages-back"]').trigger('click')
+    expect(wrapper.get('[data-testid="site-messages-list"]').classes()).not.toContain('hidden')
+  })
+
   it('prefills compose recipient from the public site-message setting', async () => {
     cachedPublicSettings.value = {
       site_messages_default_recipient_email: 'support@lumio.games',

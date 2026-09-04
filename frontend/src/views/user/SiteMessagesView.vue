@@ -1,12 +1,12 @@
 <template>
   <AppLayout>
-    <div class="space-y-5">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div class="min-w-0 max-w-full overflow-x-hidden space-y-5">
+      <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="min-w-0">
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ t('siteMessages.title') }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('siteMessages.description') }}</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex shrink-0 items-center gap-2">
           <button class="btn btn-secondary" :disabled="loading" @click="loadMessages">
             <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
           </button>
@@ -17,8 +17,15 @@
         </div>
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-[minmax(280px,390px)_1fr]">
-        <section class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+      <div
+        data-testid="site-messages-mailbox"
+        class="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,390px)_minmax(0,1fr)]"
+      >
+        <section
+          data-testid="site-messages-list"
+          class="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800"
+          :class="selectedMessage ? 'hidden lg:block' : ''"
+        >
           <div class="border-b border-gray-100 p-3 dark:border-dark-700">
             <div class="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
               <button
@@ -51,7 +58,7 @@
               v-for="message in messages"
               :key="message.id"
               type="button"
-              class="block w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-dark-700/60"
+              class="block w-full min-w-0 px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-dark-700/60"
               :class="[
                 selectedMessage?.id === message.id ? 'bg-primary-50/70 dark:bg-primary-900/20' : '',
                 isUnread(message) ? 'font-semibold' : ''
@@ -67,17 +74,20 @@
                 <span v-else class="mt-1.5 h-2 w-2 flex-shrink-0"></span>
                 <div class="min-w-0 flex-1">
                   <div class="flex min-w-0 items-center gap-2">
-                    <span class="truncate text-sm text-gray-900 dark:text-white">{{ message.subject }}</span>
+                    <span class="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-white">{{ message.subject }}</span>
                     <AdminSenderBadge
                       v-if="activeTab === 'inbox'"
+                      class="shrink-0"
                       :is-admin="Boolean(message.sender?.is_admin)"
                       :label="t('siteMessages.adminSender')"
                     />
                   </div>
-                  <div class="mt-1 flex min-w-0 items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <span class="truncate">{{ activeTab === 'inbox' ? displayUser(message.sender, message.sender_id) : displayUser(message.recipient, message.recipient_id) }}</span>
-                    <span class="text-gray-300 dark:text-dark-600">·</span>
-                    <span class="flex-shrink-0">{{ formatDateTime(message.created_at) }}</span>
+                  <div
+                    data-testid="site-message-row-meta"
+                    class="mt-1 flex min-w-0 flex-col gap-0.5 text-xs text-gray-500 dark:text-gray-400 sm:flex-row sm:items-center sm:gap-2"
+                  >
+                    <span class="min-w-0 truncate">{{ activeTab === 'inbox' ? displayUser(message.sender, message.sender_id) : displayUser(message.recipient, message.recipient_id) }}</span>
+                    <span class="shrink-0 tabular-nums">{{ formatDateTime(message.created_at) }}</span>
                   </div>
                   <p class="mt-1 truncate text-sm text-gray-500 dark:text-gray-400">{{ message.content }}</p>
                 </div>
@@ -96,52 +106,65 @@
           </div>
         </section>
 
-        <section class="min-h-[520px] overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
-          <div v-if="detailLoading" class="flex h-full min-h-[520px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+        <section
+          data-testid="site-messages-detail"
+          class="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800 lg:min-h-[520px]"
+          :class="selectedMessage ? '' : 'hidden lg:block'"
+        >
+          <div v-if="detailLoading" class="flex h-full min-h-[240px] items-center justify-center text-sm text-gray-500 dark:text-gray-400 lg:min-h-[520px]">
             {{ t('common.loading') }}
           </div>
-          <div v-else-if="!selectedMessage" class="flex h-full min-h-[520px] items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          <div v-else-if="!selectedMessage" class="flex h-full min-h-[240px] items-center justify-center p-8 text-center text-sm text-gray-500 dark:text-gray-400 lg:min-h-[520px]">
             {{ t('siteMessages.emptyDetail') }}
           </div>
-          <div v-else class="flex h-full min-h-[520px] flex-col">
-            <div class="border-b border-gray-100 p-5 dark:border-dark-700">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div v-else class="flex h-full min-h-[240px] flex-col lg:min-h-[520px]">
+            <div class="border-b border-gray-100 p-4 sm:p-5 dark:border-dark-700">
+              <button
+                type="button"
+                data-testid="site-messages-back"
+                class="mb-3 inline-flex items-center text-sm text-gray-500 lg:hidden dark:text-gray-400"
+                @click="clearSelection"
+              >
+                {{ t('common.back') }}
+              </button>
+              <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
                   <h2 class="break-words text-xl font-semibold text-gray-900 dark:text-white">{{ selectedMessage.subject }}</h2>
-                  <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div class="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                     <span>{{ t(activeTab === 'inbox' ? 'siteMessages.from' : 'siteMessages.to') }}</span>
-                    <span class="font-medium text-gray-700 dark:text-gray-200">
+                    <span class="min-w-0 break-all font-medium text-gray-700 dark:text-gray-200">
                       {{ activeTab === 'inbox' ? displayUser(selectedMessage.sender, selectedMessage.sender_id) : displayUser(selectedMessage.recipient, selectedMessage.recipient_id) }}
                     </span>
                     <AdminSenderBadge
                       v-if="activeTab === 'inbox'"
+                      class="shrink-0"
                       :is-admin="Boolean(selectedMessage.sender?.is_admin)"
                       :label="t('siteMessages.adminSender')"
                     />
                   </div>
                 </div>
-                <span class="flex-shrink-0 text-sm text-gray-500 dark:text-gray-400">{{ formatDateTime(selectedMessage.created_at) }}</span>
+                <span class="shrink-0 text-sm tabular-nums text-gray-500 dark:text-gray-400">{{ formatDateTime(selectedMessage.created_at) }}</span>
               </div>
             </div>
 
-            <div class="min-h-0 flex-1 overflow-y-auto p-5">
+            <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
               <div class="space-y-4">
                 <div
                   v-for="message in conversationMessages"
                   :key="message.id"
-                  class="flex"
+                  class="flex min-w-0"
                   :class="isOwnConversationMessage(message) ? 'justify-end' : 'justify-start'"
                 >
-                  <div class="max-w-[min(78%,42rem)]">
+                  <div class="min-w-0 w-[min(78%,42rem)] max-w-full">
                     <div
-                      class="mb-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
+                      class="mb-1 flex min-w-0 items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
                       :class="isOwnConversationMessage(message) ? 'justify-end text-right' : 'justify-start'"
                     >
-                      <span class="truncate">{{ displayUser(message.sender, message.sender_id) }}</span>
-                      <span class="flex-shrink-0">{{ formatDateTime(message.created_at) }}</span>
+                      <span class="min-w-0 flex-1 truncate">{{ displayUser(message.sender, message.sender_id) }}</span>
+                      <span class="shrink-0 tabular-nums">{{ formatDateTime(message.created_at) }}</span>
                     </div>
                     <div
-                      class="whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm"
+                      class="whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm [overflow-wrap:anywhere]"
                       :class="isOwnConversationMessage(message)
                         ? 'rounded-br-md bg-primary-600 text-white shadow-primary-600/20'
                         : 'rounded-bl-md border border-gray-200 bg-gray-50 text-gray-800 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-100'"
@@ -153,7 +176,7 @@
               </div>
             </div>
 
-            <form class="border-t border-gray-100 p-5 dark:border-dark-700" @submit.prevent="sendReply">
+            <form class="border-t border-gray-100 p-4 dark:border-dark-700 sm:p-5" @submit.prevent="sendReply">
               <label class="input-label">{{ t('siteMessages.reply') }}</label>
               <textarea
                 v-model="replyContent"
@@ -341,25 +364,29 @@ async function selectMessage(message: SiteMessage): Promise<void> {
   }
 }
 
+function clearSelection(): void {
+  selectedMessage.value = null
+  replyContent.value = ''
+}
+
 function switchTab(tab: MailboxTab): void {
   if (activeTab.value === tab) return
   activeTab.value = tab
   pagination.page = 1
-  selectedMessage.value = null
-  replyContent.value = ''
+  clearSelection()
   void loadMessages()
 }
 
 function handlePageChange(page: number): void {
   pagination.page = Math.max(1, page)
-  selectedMessage.value = null
+  clearSelection()
   void loadMessages()
 }
 
 function handlePageSizeChange(pageSize: number): void {
   pagination.page_size = pageSize
   pagination.page = 1
-  selectedMessage.value = null
+  clearSelection()
   void loadMessages()
 }
 
