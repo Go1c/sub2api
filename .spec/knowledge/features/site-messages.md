@@ -75,7 +75,7 @@ ErrSiteMessageDailyLimitExceeded = infraerrors.Forbidden("SITE_MESSAGE_DAILY_LIM
 
 ### 前端设计
 - 导航：`AppSidebar.vue` 加"站内信"项，`featureFlags.ts` 注册 `site_messages_enabled`，未读数 >0 时渲染红点；在 public settings 与认证就绪后拉未读数，读/发/回复后刷新。store（`stores/siteMessages.ts`）暴露 `unreadCount`、`hasUnread`、`refreshUnreadCount()`。
-- 用户页 `SiteMessagesView.vue`：收件/发件标签页；收件行显示未读态/发件人/主题/预览/时间；发件行显示收件人等；详情含读态与回复；撰写表单校验收件人/主题/内容，收件人仅精确邮箱或 ID。
+- 用户页 `SiteMessagesView.vue`：收件/发件标签页；收件行显示未读态/发件人/主题/预览/时间；发件行显示收件人等；详情含读态与回复；撰写表单校验收件人/主题/内容，收件人仅精确邮箱或 ID。窄屏上列表与详情互斥（打开详情后可返回列表）；发件人与时间戳上下排列、长文本截断，避免撑出视口。
 - 管理员用户管理：`UsersView.vue` 的"更多"菜单加"发送站内信"，弹 `UserSiteMessageModal.vue`，收件人固定，提交标题+内容到 `POST /admin/site-messages/users/:id`。
 - 管理员站内信管理：`/admin/site-message-management` 仅管理员可见，侧栏放在"公告"后。页面提供"历史补偿"与"新增补偿"两个视图；发布版默认不预置任何补偿历史、收件人或补偿码数据，真实发送后由后端持久化补偿批次，刷新页面通过 `GET /api/v1/admin/site-messages/compensation-batches` 重新加载。新增补偿页支持指定邮箱 / 全员站内信、标题 / 内容、是否同时发送邮箱副本、是否补偿、补偿额度、补偿码粘贴与发送前提示。提交走 `POST /api/v1/admin/site-messages/compensation-batches`，后端按收件人循环创建真实站内信；指定邮箱按精确邮箱解析，全员模式分页拉取 active 用户逐个发送，若传 `inactive_days > 0` 则只拉取最近 N 天没有 `usage_logs` 记录的 active 用户（从未使用过服务的用户也包含）。该页不在站内信页面生成补偿码，只引用后台已有记录：`/admin/redeem` 生成的 `balance` 兑换码需一人一码并校验状态 `unused`、类型 `balance`、面值匹配；`/admin/promo-codes` 中的优惠码可单码复用，后端校验优惠码状态、过期、全局次数上限、本批次已分配次数、收件用户是否已使用过该优惠码，以及赠送余额是否匹配。单个收件人、补偿码或邮件入队失败不会阻塞整批，接口返回并持久化每条成功 / 失败结果供前端历史详情展示。
 - 设置页：站内信卡片，含启停开关、每日发送上限（默认 10）、保留天数（默认 30）。
