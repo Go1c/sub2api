@@ -17,6 +17,7 @@ import (
 const (
 	userUsageListRPM         = 60  // list / get-by-id
 	userUsageAggregateRPM    = 20  // stats + dashboard aggregates
+	userUsageExportRPM       = 10  // reseller incremental export
 	userAccessTokenCreateRPM = 10  // create uat_
 	userUATAPIReadRPM        = 120 // general UAT-allowed keys/groups/subscriptions
 	// Wallet balance polling (auth/me + user/profile). Keep low to protect DB under scripts.
@@ -155,6 +156,11 @@ func RegisterUserRoutes(
 				KeyFunc:     userKey,
 				FailureMode: appmiddleware.RateLimitFailOpen,
 			})
+			usageExportLimit := rateLimiter.LimitWithOptions("user-usage-export", userUsageExportRPM, time.Minute, appmiddleware.RateLimitOptions{
+				KeyFunc:     userKey,
+				FailureMode: appmiddleware.RateLimitFailClose,
+			})
+			usage.GET("/export", usageExportLimit, middleware.UsageExportInflight(redisClient), h.Usage.Export)
 			usage.GET("", usageListLimit, h.Usage.List)
 			usage.GET("/:id", usageListLimit, h.Usage.GetByID)
 			usage.GET("/stats", usageAggLimit, h.Usage.Stats)

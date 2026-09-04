@@ -76,7 +76,7 @@ curl -H "Authorization: Bearer $UAT" \
 | `/keys*` | 管理自己的 API Key |
 | `/groups/available`、`/groups/rates` | 可选分组与倍率 |
 | `GET /user/profile` | 钱包余额（`balance` / `frozen_balance` 等） |
-| `GET /usage*`、`POST /usage/dashboard/api-keys-usage` | 使用日志 / 统计 |
+| `GET /usage*`、`POST /usage/dashboard/api-keys-usage` | 使用日志 / 统计；分销增量对账用 `GET /usage/export`，见 [reseller-usage-export.md](./reseller-usage-export.md) |
 | `GET /user/balance/transactions*` | 本人成功扣款流水；不含扣款权限 |
 | `GET /subscriptions`、`/active`、`/progress`、`/summary` | 订阅额度与进度 |
 

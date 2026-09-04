@@ -152,6 +152,7 @@ func TestUserAccessTokenAuth_AllowsKeysAndGroups(t *testing.T) {
 		"/api/v1/auth/me",
 		"/api/v1/usage",
 		"/api/v1/usage/1",
+		"/api/v1/usage/export",
 		"/api/v1/usage/stats",
 		"/api/v1/usage/dashboard/stats",
 		"/api/v1/subscriptions",
@@ -270,6 +271,7 @@ func TestIsUserAccessTokenAllowedPath(t *testing.T) {
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/user/profile"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/auth/me"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage"))
+	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage/export"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage/stats"))
 	require.True(t, isUserAccessTokenAllowedPath("GET", "/api/v1/usage/dashboard/trend"))
 	require.True(t, isUserAccessTokenAllowedPath("POST", "/api/v1/usage/dashboard/api-keys-usage"))
