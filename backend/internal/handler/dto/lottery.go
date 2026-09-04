@@ -20,6 +20,8 @@ type LotteryActiveCampaign struct {
 	JoinedCount                  int              `json:"joined_count"`
 	EarlyBoostParticipantPercent int              `json:"early_boost_participant_percent"`
 	RechargeBoostCapPercent      int              `json:"recharge_boost_cap_percent"`
+	PromoText                    string           `json:"promo_text"`
+	PromoImageURL                string           `json:"promo_image_url"`
 	Segments                     []LotterySegment `json:"segments"`
 }
 
@@ -46,6 +48,8 @@ type LotteryCampaign struct {
 	WinnerCount                  int           `json:"winner_count"`
 	EarlyBoostParticipantPercent int           `json:"early_boost_participant_percent"`
 	RechargeBoostCapPercent      int           `json:"recharge_boost_cap_percent"`
+	PromoText                    string        `json:"promo_text"`
+	PromoImageURL                string        `json:"promo_image_url"`
 	CreatedBy                    int64         `json:"created_by"`
 	CreatedAt                    time.Time     `json:"created_at"`
 	UpdatedAt                    time.Time     `json:"updated_at"`
@@ -84,6 +88,8 @@ type CreateLotteryCampaignRequest struct {
 	MaxParticipants              int      `json:"max_participants" binding:"required"`
 	EarlyBoostParticipantPercent *int     `json:"early_boost_participant_percent"`
 	RechargeBoostCapPercent      int      `json:"recharge_boost_cap_percent"`
+	PromoText                    string   `json:"promo_text"`
+	PromoImageURL                string   `json:"promo_image_url"`
 	Codes                        []string `json:"codes" binding:"required"`
 }
 
@@ -100,6 +106,8 @@ func LotteryActiveCampaignFromService(c *service.LotteryActiveCampaign) *Lottery
 		JoinedCount:                  c.JoinedCount,
 		EarlyBoostParticipantPercent: c.EarlyBoostParticipantPercent,
 		RechargeBoostCapPercent:      c.RechargeBoostCapPercent,
+		PromoText:                    c.PromoText,
+		PromoImageURL:                c.PromoImageURL,
 		Segments:                     LotterySegmentsFromService(c.Segments),
 	}
 }
@@ -140,6 +148,8 @@ func LotteryCampaignFromService(c *service.LotteryCampaign) *LotteryCampaign {
 		WinnerCount:                  c.WinnerCount,
 		EarlyBoostParticipantPercent: c.EarlyBoostParticipantPercent,
 		RechargeBoostCapPercent:      c.RechargeBoostCapPercent,
+		PromoText:                    c.PromoText,
+		PromoImageURL:                c.PromoImageURL,
 		CreatedBy:                    c.CreatedBy,
 		CreatedAt:                    c.CreatedAt,
 		UpdatedAt:                    c.UpdatedAt,

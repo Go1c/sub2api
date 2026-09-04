@@ -34,6 +34,17 @@
         <p class="mt-1 text-sm text-gray-500 dark:text-dark-300">
           {{ t('admin.lottery.create.description') }}
         </p>
+        <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
+          {{ t('admin.lottery.create.wheelNote') }}
+        </p>
+
+        <div
+          v-if="showGuaranteedWin"
+          data-test="lottery-guaranteed-win-hint"
+          class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
+        >
+          {{ t('admin.lottery.create.guaranteedWinHint') }}
+        </div>
 
         <div class="mt-5 grid gap-4 md:grid-cols-2">
           <label class="block">
@@ -90,6 +101,53 @@
           </label>
         </div>
 
+        <section class="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/60 md:p-5">
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+            {{ t('admin.lottery.create.promoSection') }}
+          </h3>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">
+            {{ t('admin.lottery.create.promoSectionHint') }}
+          </p>
+          <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+            <div class="space-y-4">
+              <label class="block">
+                <span class="input-label">{{ t('admin.lottery.create.promoText') }}</span>
+                <input
+                  v-model="form.promoText"
+                  data-test="lottery-promo-text"
+                  type="text"
+                  maxlength="240"
+                  :placeholder="t('admin.lottery.create.promoTextPlaceholder')"
+                  class="input"
+                />
+              </label>
+              <label class="block">
+                <span class="input-label">{{ t('admin.lottery.create.promoImageUrl') }}</span>
+                <input
+                  v-model="form.promoImageUrl"
+                  data-test="lottery-promo-image-url"
+                  type="url"
+                  :placeholder="t('admin.lottery.create.promoImageUrlPlaceholder')"
+                  class="input font-mono text-xs"
+                />
+                <span class="input-hint">{{ t('admin.lottery.create.promoImageUrlHint') }}</span>
+              </label>
+            </div>
+            <div class="flex items-center justify-center rounded-2xl bg-white p-3 ring-1 ring-gray-200 dark:bg-dark-900 dark:ring-dark-700">
+              <img
+                v-if="livePromoImageUrl"
+                data-test="lottery-promo-preview"
+                :src="livePromoImageUrl"
+                alt=""
+                class="max-h-48 w-full max-w-[180px] rounded-xl object-contain"
+              />
+              <p v-else class="px-2 text-center text-xs text-gray-400 dark:text-dark-500">
+                {{ t('admin.lottery.create.promoPreviewEmpty') }}
+              </p>
+            </div>
+          </div>
+        </section>
+
         <div class="mt-5">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="input-label !mb-0">{{ t('admin.lottery.create.codes') }}</span>
@@ -117,8 +175,11 @@
           <button class="btn btn-secondary" @click="resetForm">
             {{ t('common.reset') }}
           </button>
-          <button class="btn btn-ghost btn-sm" @click="openPreview = true" :disabled="!canSubmit || submitting">
+          <button class="btn btn-ghost btn-sm" @click="openPreview = true" :disabled="submitting">
             {{ t('admin.lottery.create.preview') }}
+          </button>
+          <button class="btn btn-ghost btn-sm" data-test="lottery-ux-preview" :disabled="submitting" @click="openUxPreview = true">
+            {{ t('admin.lottery.create.uxPreview') }}
           </button>
           <span v-if="formError" class="text-xs text-red-500">{{ formError }}</span>
           <span v-if="formSaved" class="text-xs text-emerald-500">
@@ -238,7 +299,7 @@
 
     <!-- Admin preview dialog (lets admin try the wheel without using a real user account) -->
     <LotteryDialog
-      v-if="previewSegments && previewSegments.length > 0"
+      v-if="previewSegments.length > 0"
       :open="openPreview"
       :campaign-title="form.name || t('admin.lottery.create.previewTitle')"
       :subtitle="form.subtitle || t('admin.lottery.create.previewSubtitle')"
@@ -246,9 +307,34 @@
       :max-participants="form.maxParticipants"
       :joined="0"
       :segments="previewSegments"
+      :promo-text="livePromoText"
+      :promo-image-url="previewPromoImageSrc"
       :draw-fn="previewDrawFn"
       @close="openPreview = false"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="openUxPreview"
+        class="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm"
+        data-test="lottery-ux-preview-modal"
+        @click.self="openUxPreview = false"
+      >
+        <div class="relative flex h-[min(92dvh,880px)] w-[min(96vw,1180px)] flex-col overflow-hidden rounded-3xl bg-[#07101f] shadow-2xl ring-1 ring-white/10">
+          <div class="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <div class="text-sm font-semibold text-white">{{ t('admin.lottery.create.uxPreview') }}</div>
+            <button type="button" class="rounded-full px-3 py-1 text-sm text-slate-300 hover:bg-white/10" @click="openUxPreview = false">
+              {{ t('common.close') }}
+            </button>
+          </div>
+          <iframe
+            class="h-full w-full flex-1 border-0 bg-[#07101f]"
+            title="抽奖体验预览"
+            :srcdoc="uxPreviewHtml"
+          />
+        </div>
+      </div>
+    </Teleport>
   </AppLayout>
 </template>
 
@@ -262,7 +348,9 @@ import type { WheelSegment } from '@/components/lottery/LotteryWheel.vue'
 import { useAppStore } from '@/stores/app'
 import { useLotteryStore } from '@/stores/lottery'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { publicHttpsImageUrl } from '@/utils/siteMessageContent'
 import type { CreateLotteryCampaignRequest, LotteryCampaign, LotteryDraw } from '@/types'
+import uxPreviewHtml from '@/assets/lottery-ux-preview.html?raw'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -281,6 +369,8 @@ const form = ref({
   maxParticipants: 20,
   earlyBoostParticipantPercent: 25,
   rechargeBoostCapPercent: 0,
+  promoText: '',
+  promoImageUrl: '',
   codesRaw: ''
 })
 const formError = ref('')
@@ -296,6 +386,17 @@ const displayCampaigns = computed(() =>
 const codeLines = computed(() =>
   form.value.codesRaw.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
 )
+const promoImageUrlValid = computed(() => {
+  const url = form.value.promoImageUrl.trim()
+  return url === '' || Boolean(publicHttpsImageUrl(url))
+})
+const showGuaranteedWin = computed(
+  () => form.value.prizeCount > 0 && form.value.maxParticipants > 0 && form.value.prizeCount >= form.value.maxParticipants,
+)
+const livePromoImageUrl = computed(() => publicHttpsImageUrl(form.value.promoImageUrl))
+const livePromoText = computed(
+  () => form.value.promoText.trim() || t('admin.lottery.create.previewPromoText'),
+)
 const canSubmit = computed(
   () =>
     form.value.name.trim().length > 0 &&
@@ -305,6 +406,7 @@ const canSubmit = computed(
     form.value.earlyBoostParticipantPercent <= 100 &&
     form.value.rechargeBoostCapPercent >= 0 &&
     form.value.rechargeBoostCapPercent <= 50 &&
+    promoImageUrlValid.value &&
     codeLines.value.length >= form.value.prizeCount
 )
 
@@ -321,6 +423,10 @@ onMounted(async () => {
 async function submitCampaign() {
   formError.value = ''
   formSaved.value = false
+  if (!promoImageUrlValid.value) {
+    formError.value = t('admin.lottery.create.invalidPromoImage')
+    return
+  }
   if (!canSubmit.value) {
     formError.value = t('admin.lottery.create.invalid')
     return
@@ -334,6 +440,8 @@ async function submitCampaign() {
       max_participants: form.value.maxParticipants,
       early_boost_participant_percent: form.value.earlyBoostParticipantPercent,
       recharge_boost_cap_percent: form.value.rechargeBoostCapPercent,
+      promo_text: form.value.promoText.trim(),
+      promo_image_url: form.value.promoImageUrl.trim(),
       codes: codeLines.value,
     }
     await lotteryStore.createCampaign(input)
@@ -357,6 +465,8 @@ function resetForm() {
     maxParticipants: 20,
     earlyBoostParticipantPercent: 25,
     rechargeBoostCapPercent: 0,
+    promoText: '',
+    promoImageUrl: '',
     codesRaw: '',
   }
   formError.value = ''
@@ -413,18 +523,21 @@ function winnerUserLabel(draw: LotteryDraw) {
 
 // Preview wheel (no persistence, no user impact)
 const openPreview = ref(false)
-const previewSegments = computed<WheelSegment[]>(() => {
-  const total = Math.max(form.value.prizeCount + 2, 8)
-  const segs: WheelSegment[] = []
-  for (let i = 0; i < total; i++) {
-    segs.push(
-      i < form.value.prizeCount
-        ? { label: `奖品 ${i + 1}`, isPrize: true }
-        : { label: '谢谢参与', isPrize: false }
-    )
-  }
-  return segs
-})
+const openUxPreview = ref(false)
+const previewPromoImageUrl = '/lottery-preview-qr.svg'
+const previewPromoImageSrc = computed(
+  () => livePromoImageUrl.value || previewPromoImageUrl,
+)
+const previewSegments = computed<WheelSegment[]>(() => [
+  { label: '奖品', isPrize: true },
+  { label: '谢谢参与', isPrize: false },
+  { label: '奖品', isPrize: true },
+  { label: '奖品', isPrize: true },
+  { label: '谢谢参与', isPrize: false },
+  { label: '奖品', isPrize: true },
+  { label: '谢谢参与', isPrize: false },
+  { label: '奖品', isPrize: true },
+])
 
 async function previewDrawFn(): Promise<DrawResult> {
   await new Promise(r => setTimeout(r, 250))

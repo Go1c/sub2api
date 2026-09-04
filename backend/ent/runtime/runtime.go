@@ -1481,12 +1481,24 @@ func init() {
 	lotterycampaign.DefaultRechargeBoostCapPercent = lotterycampaignDescRechargeBoostCapPercent.Default.(int)
 	// lotterycampaign.RechargeBoostCapPercentValidator is a validator for the "recharge_boost_cap_percent" field. It is called by the builders before save.
 	lotterycampaign.RechargeBoostCapPercentValidator = lotterycampaignDescRechargeBoostCapPercent.Validators[0].(func(int) error)
+	// lotterycampaignDescPromoText is the schema descriptor for promo_text field.
+	lotterycampaignDescPromoText := lotterycampaignFields[9].Descriptor()
+	// lotterycampaign.DefaultPromoText holds the default value on creation for the promo_text field.
+	lotterycampaign.DefaultPromoText = lotterycampaignDescPromoText.Default.(string)
+	// lotterycampaign.PromoTextValidator is a validator for the "promo_text" field. It is called by the builders before save.
+	lotterycampaign.PromoTextValidator = lotterycampaignDescPromoText.Validators[0].(func(string) error)
+	// lotterycampaignDescPromoImageURL is the schema descriptor for promo_image_url field.
+	lotterycampaignDescPromoImageURL := lotterycampaignFields[10].Descriptor()
+	// lotterycampaign.DefaultPromoImageURL holds the default value on creation for the promo_image_url field.
+	lotterycampaign.DefaultPromoImageURL = lotterycampaignDescPromoImageURL.Default.(string)
+	// lotterycampaign.PromoImageURLValidator is a validator for the "promo_image_url" field. It is called by the builders before save.
+	lotterycampaign.PromoImageURLValidator = lotterycampaignDescPromoImageURL.Validators[0].(func(string) error)
 	// lotterycampaignDescCreatedAt is the schema descriptor for created_at field.
-	lotterycampaignDescCreatedAt := lotterycampaignFields[10].Descriptor()
+	lotterycampaignDescCreatedAt := lotterycampaignFields[12].Descriptor()
 	// lotterycampaign.DefaultCreatedAt holds the default value on creation for the created_at field.
 	lotterycampaign.DefaultCreatedAt = lotterycampaignDescCreatedAt.Default.(func() time.Time)
 	// lotterycampaignDescUpdatedAt is the schema descriptor for updated_at field.
-	lotterycampaignDescUpdatedAt := lotterycampaignFields[11].Descriptor()
+	lotterycampaignDescUpdatedAt := lotterycampaignFields[13].Descriptor()
 	// lotterycampaign.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	lotterycampaign.DefaultUpdatedAt = lotterycampaignDescUpdatedAt.Default.(func() time.Time)
 	// lotterycampaign.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

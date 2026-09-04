@@ -99,6 +99,16 @@ func RechargeBoostCapPercent(v int) predicate.LotteryCampaign {
 	return predicate.LotteryCampaign(sql.FieldEQ(FieldRechargeBoostCapPercent, v))
 }
 
+// PromoText applies equality check predicate on the "promo_text" field. It's identical to PromoTextEQ.
+func PromoText(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldPromoText, v))
+}
+
+// PromoImageURL applies equality check predicate on the "promo_image_url" field. It's identical to PromoImageURLEQ.
+func PromoImageURL(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldPromoImageURL, v))
+}
+
 // CreatedBy applies equality check predicate on the "created_by" field. It's identical to CreatedByEQ.
 func CreatedBy(v int64) predicate.LotteryCampaign {
 	return predicate.LotteryCampaign(sql.FieldEQ(FieldCreatedBy, v))
@@ -552,6 +562,136 @@ func RechargeBoostCapPercentLT(v int) predicate.LotteryCampaign {
 // RechargeBoostCapPercentLTE applies the LTE predicate on the "recharge_boost_cap_percent" field.
 func RechargeBoostCapPercentLTE(v int) predicate.LotteryCampaign {
 	return predicate.LotteryCampaign(sql.FieldLTE(FieldRechargeBoostCapPercent, v))
+}
+
+// PromoTextEQ applies the EQ predicate on the "promo_text" field.
+func PromoTextEQ(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldPromoText, v))
+}
+
+// PromoTextNEQ applies the NEQ predicate on the "promo_text" field.
+func PromoTextNEQ(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNEQ(FieldPromoText, v))
+}
+
+// PromoTextIn applies the In predicate on the "promo_text" field.
+func PromoTextIn(vs ...string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldIn(FieldPromoText, vs...))
+}
+
+// PromoTextNotIn applies the NotIn predicate on the "promo_text" field.
+func PromoTextNotIn(vs ...string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNotIn(FieldPromoText, vs...))
+}
+
+// PromoTextGT applies the GT predicate on the "promo_text" field.
+func PromoTextGT(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGT(FieldPromoText, v))
+}
+
+// PromoTextGTE applies the GTE predicate on the "promo_text" field.
+func PromoTextGTE(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGTE(FieldPromoText, v))
+}
+
+// PromoTextLT applies the LT predicate on the "promo_text" field.
+func PromoTextLT(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLT(FieldPromoText, v))
+}
+
+// PromoTextLTE applies the LTE predicate on the "promo_text" field.
+func PromoTextLTE(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLTE(FieldPromoText, v))
+}
+
+// PromoTextContains applies the Contains predicate on the "promo_text" field.
+func PromoTextContains(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldContains(FieldPromoText, v))
+}
+
+// PromoTextHasPrefix applies the HasPrefix predicate on the "promo_text" field.
+func PromoTextHasPrefix(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldHasPrefix(FieldPromoText, v))
+}
+
+// PromoTextHasSuffix applies the HasSuffix predicate on the "promo_text" field.
+func PromoTextHasSuffix(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldHasSuffix(FieldPromoText, v))
+}
+
+// PromoTextEqualFold applies the EqualFold predicate on the "promo_text" field.
+func PromoTextEqualFold(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEqualFold(FieldPromoText, v))
+}
+
+// PromoTextContainsFold applies the ContainsFold predicate on the "promo_text" field.
+func PromoTextContainsFold(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldContainsFold(FieldPromoText, v))
+}
+
+// PromoImageURLEQ applies the EQ predicate on the "promo_image_url" field.
+func PromoImageURLEQ(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEQ(FieldPromoImageURL, v))
+}
+
+// PromoImageURLNEQ applies the NEQ predicate on the "promo_image_url" field.
+func PromoImageURLNEQ(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNEQ(FieldPromoImageURL, v))
+}
+
+// PromoImageURLIn applies the In predicate on the "promo_image_url" field.
+func PromoImageURLIn(vs ...string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldIn(FieldPromoImageURL, vs...))
+}
+
+// PromoImageURLNotIn applies the NotIn predicate on the "promo_image_url" field.
+func PromoImageURLNotIn(vs ...string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldNotIn(FieldPromoImageURL, vs...))
+}
+
+// PromoImageURLGT applies the GT predicate on the "promo_image_url" field.
+func PromoImageURLGT(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGT(FieldPromoImageURL, v))
+}
+
+// PromoImageURLGTE applies the GTE predicate on the "promo_image_url" field.
+func PromoImageURLGTE(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldGTE(FieldPromoImageURL, v))
+}
+
+// PromoImageURLLT applies the LT predicate on the "promo_image_url" field.
+func PromoImageURLLT(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLT(FieldPromoImageURL, v))
+}
+
+// PromoImageURLLTE applies the LTE predicate on the "promo_image_url" field.
+func PromoImageURLLTE(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldLTE(FieldPromoImageURL, v))
+}
+
+// PromoImageURLContains applies the Contains predicate on the "promo_image_url" field.
+func PromoImageURLContains(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldContains(FieldPromoImageURL, v))
+}
+
+// PromoImageURLHasPrefix applies the HasPrefix predicate on the "promo_image_url" field.
+func PromoImageURLHasPrefix(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldHasPrefix(FieldPromoImageURL, v))
+}
+
+// PromoImageURLHasSuffix applies the HasSuffix predicate on the "promo_image_url" field.
+func PromoImageURLHasSuffix(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldHasSuffix(FieldPromoImageURL, v))
+}
+
+// PromoImageURLEqualFold applies the EqualFold predicate on the "promo_image_url" field.
+func PromoImageURLEqualFold(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldEqualFold(FieldPromoImageURL, v))
+}
+
+// PromoImageURLContainsFold applies the ContainsFold predicate on the "promo_image_url" field.
+func PromoImageURLContainsFold(v string) predicate.LotteryCampaign {
+	return predicate.LotteryCampaign(sql.FieldContainsFold(FieldPromoImageURL, v))
 }
 
 // CreatedByEQ applies the EQ predicate on the "created_by" field.

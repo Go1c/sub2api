@@ -9,6 +9,8 @@
     :joined="dialogCampaign.joined_count"
     :segments="dialogSegments"
     :draw-fn="doDraw"
+    :promo-text="dialogCampaign.promo_text"
+    :promo-image-url="dialogCampaign.promo_image_url"
     @drawn="handleDrawn"
     @close="dismiss"
   />

@@ -1027,3 +1027,25 @@ func TestSiteMessageServicePropagatesSettingsError(t *testing.T) {
 
 	require.ErrorContains(t, err, "settings down")
 }
+
+func TestSiteMessageServiceSendLotteryPrizeAppendsPromo(t *testing.T) {
+	repo := newSiteMessageRepoStub()
+	svc := newSiteMessageTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, siteMessageTestUsers(), time.Unix(1778000000, 0))
+
+	msg, err := svc.SendLotteryPrize(
+		context.Background(),
+		1,
+		2,
+		"五月幸运转盘",
+		"LUCK-001",
+		"关注公众号领福利",
+		"https://cdn.example.com/qr.png",
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+	require.Equal(t, "恭喜中奖：五月幸运转盘", repo.created[0].Subject)
+	require.Contains(t, repo.created[0].Content, "LUCK-001")
+	require.Contains(t, repo.created[0].Content, "关注公众号领福利")
+	require.Contains(t, repo.created[0].Content, "https://cdn.example.com/qr.png")
+}

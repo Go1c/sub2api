@@ -50,6 +50,8 @@ type LotteryCampaign struct {
 	// EarlyBoostParticipantPercent is the first N percent of participants who receive boosted odds.
 	EarlyBoostParticipantPercent int
 	RechargeBoostCapPercent      int
+	PromoText                    string
+	PromoImageURL                string
 	CreatedBy                    int64
 	CreatedAt                    time.Time
 	UpdatedAt                    time.Time
@@ -89,6 +91,8 @@ type CreateLotteryCampaignInput struct {
 	MaxParticipants              int
 	EarlyBoostParticipantPercent *int
 	RechargeBoostCapPercent      int
+	PromoText                    string
+	PromoImageURL                string
 	Codes                        []string
 }
 
@@ -101,6 +105,8 @@ type LotteryActiveCampaign struct {
 	JoinedCount                  int
 	EarlyBoostParticipantPercent int
 	RechargeBoostCapPercent      int
+	PromoText                    string
+	PromoImageURL                string
 	Segments                     []LotterySegment
 }
 
@@ -138,5 +144,5 @@ type LotterySettingsReader interface {
 }
 
 type LotteryPrizeMessenger interface {
-	SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code string) (*SiteMessage, error)
+	SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code, promoText, promoImageURL string) (*SiteMessage, error)
 }

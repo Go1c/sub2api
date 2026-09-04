@@ -1256,6 +1256,8 @@ var (
 		{Name: "winner_count", Type: field.TypeInt, Default: 0},
 		{Name: "early_boost_participant_percent", Type: field.TypeInt, Default: 25},
 		{Name: "recharge_boost_cap_percent", Type: field.TypeInt, Default: 0},
+		{Name: "promo_text", Type: field.TypeString, Size: 240, Default: ""},
+		{Name: "promo_image_url", Type: field.TypeString, Size: 2048, Default: ""},
 		{Name: "created_by", Type: field.TypeInt64},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -1275,12 +1277,12 @@ var (
 			{
 				Name:    "lotterycampaign_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{LotteryCampaignsColumns[11]},
+				Columns: []*schema.Column{LotteryCampaignsColumns[13]},
 			},
 			{
 				Name:    "lotterycampaign_created_by",
 				Unique:  false,
-				Columns: []*schema.Column{LotteryCampaignsColumns[10]},
+				Columns: []*schema.Column{LotteryCampaignsColumns[12]},
 			},
 		},
 	}

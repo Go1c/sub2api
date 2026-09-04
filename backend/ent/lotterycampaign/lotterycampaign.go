@@ -31,6 +31,10 @@ const (
 	FieldEarlyBoostParticipantPercent = "early_boost_participant_percent"
 	// FieldRechargeBoostCapPercent holds the string denoting the recharge_boost_cap_percent field in the database.
 	FieldRechargeBoostCapPercent = "recharge_boost_cap_percent"
+	// FieldPromoText holds the string denoting the promo_text field in the database.
+	FieldPromoText = "promo_text"
+	// FieldPromoImageURL holds the string denoting the promo_image_url field in the database.
+	FieldPromoImageURL = "promo_image_url"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
 	FieldCreatedBy = "created_by"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -55,6 +59,8 @@ var Columns = []string{
 	FieldWinnerCount,
 	FieldEarlyBoostParticipantPercent,
 	FieldRechargeBoostCapPercent,
+	FieldPromoText,
+	FieldPromoImageURL,
 	FieldCreatedBy,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -100,6 +106,14 @@ var (
 	DefaultRechargeBoostCapPercent int
 	// RechargeBoostCapPercentValidator is a validator for the "recharge_boost_cap_percent" field. It is called by the builders before save.
 	RechargeBoostCapPercentValidator func(int) error
+	// DefaultPromoText holds the default value on creation for the "promo_text" field.
+	DefaultPromoText string
+	// PromoTextValidator is a validator for the "promo_text" field. It is called by the builders before save.
+	PromoTextValidator func(string) error
+	// DefaultPromoImageURL holds the default value on creation for the "promo_image_url" field.
+	DefaultPromoImageURL string
+	// PromoImageURLValidator is a validator for the "promo_image_url" field. It is called by the builders before save.
+	PromoImageURLValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -159,6 +173,16 @@ func ByEarlyBoostParticipantPercent(opts ...sql.OrderTermOption) OrderOption {
 // ByRechargeBoostCapPercent orders the results by the recharge_boost_cap_percent field.
 func ByRechargeBoostCapPercent(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRechargeBoostCapPercent, opts...).ToFunc()
+}
+
+// ByPromoText orders the results by the promo_text field.
+func ByPromoText(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromoText, opts...).ToFunc()
+}
+
+// ByPromoImageURL orders the results by the promo_image_url field.
+func ByPromoImageURL(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromoImageURL, opts...).ToFunc()
 }
 
 // ByCreatedBy orders the results by the created_by field.
