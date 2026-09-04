@@ -135,6 +135,7 @@ docs/*
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
 !docs/user-access-token-api.md
+!docs/reseller-usage-export.md
 !docs/balance-wallet-api.md
 !docs/balance-wallet-integration-agent-prompt.md
 # Admin compliance gate + Docker frontend build import docs/legal/*.md?raw

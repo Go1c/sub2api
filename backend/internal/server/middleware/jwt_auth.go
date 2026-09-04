@@ -276,7 +276,7 @@ func isUserAccessTokenAllowedPath(method, path string) bool {
 	if strings.HasPrefix(path, "/api/v1/usage/") {
 		rest := strings.TrimPrefix(path, "/api/v1/usage/")
 		switch rest {
-		case "stats", "dashboard/stats", "dashboard/trend", "dashboard/models":
+		case "export", "stats", "dashboard/stats", "dashboard/trend", "dashboard/models":
 			return method == "GET"
 		case "dashboard/api-keys-usage":
 			return method == "POST"

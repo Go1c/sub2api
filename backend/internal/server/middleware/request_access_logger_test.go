@@ -112,6 +112,48 @@ func TestRequestLogger_KeepIncomingRequestID(t *testing.T) {
 	}
 }
 
+func TestRequestLogger_KeepIncomingSub2RequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(RequestLogger())
+	r.GET("/t", func(c *gin.Context) {
+		got, _ := c.Request.Context().Value(ctxkey.Sub2RequestID).(string)
+		if got != "downstream-client-uuid" {
+			t.Fatalf("sub2_request_id=%q", got)
+		}
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set(sub2RequestIDHeader, "downstream-client-uuid")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d", w.Code)
+	}
+}
+
+func TestRequestLogger_IgnoresOversizedSub2RequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(RequestLogger())
+	r.GET("/t", func(c *gin.Context) {
+		got, _ := c.Request.Context().Value(ctxkey.Sub2RequestID).(string)
+		if got != "" {
+			t.Fatalf("oversized sub2_request_id should be ignored, got %q", got)
+		}
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set(sub2RequestIDHeader, strings.Repeat("x", 65))
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d", w.Code)
+	}
+}
+
 func TestRequestLoggerBoundsIncomingRequestID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

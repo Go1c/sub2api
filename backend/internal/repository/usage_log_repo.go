@@ -97,6 +97,7 @@ var usageLogInsertArgTypes = [...]string{
 	"text",        // billing_tier
 	"text",        // billing_mode
 	"numeric",     // account_stats_cost
+	"text",        // correlation_id
 	"timestamptz", // created_at
 }
 
@@ -450,6 +451,7 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			billing_tier,
 			billing_mode,
 			account_stats_cost,
+			correlation_id,
 			created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
@@ -457,7 +459,7 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			$10, $11, $12, $13,
 			$14, $15, $16, $17,
 			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58
+			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -900,6 +902,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			billing_tier,
 			billing_mode,
 			account_stats_cost,
+			correlation_id,
 			created_at
 		) AS (VALUES `)
 
@@ -989,6 +992,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				billing_tier,
 				billing_mode,
 				account_stats_cost,
+				correlation_id,
 				created_at
 			)
 			SELECT
@@ -1049,6 +1053,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				billing_tier,
 				billing_mode,
 				account_stats_cost,
+				correlation_id,
 				created_at
 			FROM input
 			ON CONFLICT (request_id, api_key_id) DO NOTHING
@@ -1149,6 +1154,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			billing_tier,
 			billing_mode,
 			account_stats_cost,
+			correlation_id,
 			created_at
 		) AS (VALUES `)
 
@@ -1235,6 +1241,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			billing_tier,
 			billing_mode,
 			account_stats_cost,
+			correlation_id,
 			created_at
 		)
 		SELECT
@@ -1295,6 +1302,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			billing_tier,
 			billing_mode,
 			account_stats_cost,
+			correlation_id,
 			created_at
 		FROM input
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
@@ -1363,6 +1371,7 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			billing_tier,
 			billing_mode,
 			account_stats_cost,
+			correlation_id,
 			created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
@@ -1370,7 +1379,7 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			$10, $11, $12, $13,
 			$14, $15, $16, $17,
 			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58
+			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1485,6 +1494,7 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			billingTier,
 			billingMode,
 			log.AccountStatsCost, // account_stats_cost
+			nullString(log.CorrelationID),
 			createdAt,
 		},
 	}
@@ -2863,6 +2873,89 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 		return nil, nil, err
 	}
 	return logs, page, nil
+}
+
+func (r *usageLogRepository) ListExport(ctx context.Context, userID, afterID int64, since *time.Time, limit int) ([]service.UsageExportRow, error) {
+	if userID <= 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = service.UsageExportDefaultLimit
+	}
+	conditions := []string{"user_id = $1"}
+	args := []any{userID}
+	if afterID > 0 {
+		conditions = append(conditions, fmt.Sprintf("id > $%d", len(args)+1))
+		args = append(args, afterID)
+	} else if since != nil {
+		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", len(args)+1))
+		args = append(args, *since)
+	} else {
+		return nil, nil
+	}
+	args = append(args, limit)
+	query := fmt.Sprintf(`
+		SELECT
+			id,
+			correlation_id,
+			request_id,
+			created_at,
+			api_key_id,
+			model,
+			COALESCE(NULLIF(requested_model, ''), model),
+			input_tokens,
+			output_tokens,
+			cache_creation_tokens,
+			cache_read_tokens,
+			total_cost,
+			actual_cost,
+			billing_type
+		FROM usage_logs
+		WHERE %s
+		ORDER BY id ASC
+		LIMIT $%d
+	`, strings.Join(conditions, " AND "), len(args))
+
+	rows, err := r.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]service.UsageExportRow, 0, limit)
+	for rows.Next() {
+		var (
+			row           service.UsageExportRow
+			correlationID sql.NullString
+		)
+		if err := rows.Scan(
+			&row.ID,
+			&correlationID,
+			&row.RequestID,
+			&row.CreatedAt,
+			&row.APIKeyID,
+			&row.Model,
+			&row.RequestedModel,
+			&row.InputTokens,
+			&row.OutputTokens,
+			&row.CacheCreationTokens,
+			&row.CacheReadTokens,
+			&row.TotalCost,
+			&row.ActualCost,
+			&row.BillingType,
+		); err != nil {
+			return nil, err
+		}
+		if correlationID.Valid {
+			value := correlationID.String
+			row.CorrelationID = &value
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func shouldUseFastUsageLogTotal(filters UsageLogFilters) bool {

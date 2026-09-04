@@ -103,7 +103,10 @@ type UsageLog struct {
 	APIKeyID  int64
 	AccountID int64
 	RequestID string
-	Model     string
+	// CorrelationID is the downstream reseller join key from X-Sub2-Request-ID.
+	// Nil means the caller did not send a valid header.
+	CorrelationID *string
+	Model         string
 	// RequestedModel is the client-requested model name recorded for stable user/admin display.
 	// Empty should be treated as Model for backward compatibility with historical rows.
 	RequestedModel string

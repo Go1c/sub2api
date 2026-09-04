@@ -4,7 +4,7 @@ description: 下游 sub2API 分销对账：请求头写入 correlation_id，专�
 metadata:
   type: doc
   level: L2
-  status: 设计中
+  status: 已交付
 ---
 
 # 下游分销用量对账
@@ -75,7 +75,7 @@ Query：
 
 必须提供 `after_id` 或 `since` 之一，否则 400。两者都有时以 `after_id` 为准（严格增量）。禁止 `after_id=0` 当全量扫描：没有游标就用 `since`。
 
-响应（无 `total` / 无 COUNT）：
+响应信封仍是 `{code,message,data}`；`data` 无 `total` / 无 COUNT：
 
 ```json
 {
@@ -91,6 +91,26 @@ Query：
 - `correlation_id` **只出现在本接口**，不改现有 `GET /usage` DTO。
 
 下游：存 `next_after_id`，之后只带 `after_id`。join 在他们库上完成。
+
+不是「最近一小时打成一个 JSON 包」。我们不推送、不打包文件。每次 HTTP 最多 `limit` 条（默认 100，最大 500）。几千条/小时由他们的任务循环拉完：
+
+1. **第一次对齐**（还没有游标）：`since=<最多 24h 内的起点>`，例如现在−1h。返回一页 `items` + `next_after_id` + `has_more`。
+2. **同一轮还没拉完**：带着上一页的 `next_after_id` 再请求，直到 `has_more=false`。
+3. **以后每小时**（或他们自己的间隔）：只带上次存下的 `after_id`。这时拿到的是「上次拉完之后新产生的行」，若他们真的一小时跑一次，大约就是这一小时的增量，而不是每次重扫最近一小时。
+
+举例：一小时 3000 条、`limit=500` → 一轮 6 次请求（约几十秒，远低于 10 次/分钟）。他们若要把这一轮结果存成一个本地 JSON，是下游自己 `concat(items)`，不是我们返回一个大包。
+
+```http
+GET /api/v1/usage/export?since=2026-09-04T06:00:00Z&limit=500
+Authorization: Bearer uat_...
+```
+
+```http
+GET /api/v1/usage/export?after_id=88100231&limit=500
+Authorization: Bearer uat_...
+```
+
+空闲时（没有新消费）第二步起就是空页，成本接近一次主键顺扫 0 行。
 
 ### 限流与稳定性
 
@@ -108,10 +128,12 @@ Query：
 ### 实现面
 
 - 迁移：`usage_logs.correlation_id VARCHAR(64) NULL`，无 default、无 index。分区表上同样只加列。
-- Ent `UsageLog` 增加对应字段；`RecordUsage` / billing insert 写入 context 中的关联 ID。
+- **不改 Ent schema、不 `go generate`**：`usage_logs` 写入走 raw SQL；控制台 / `GET /usage` 的 SELECT 也不暴露该列。
+- `RecordUsage` / OpenAI billing insert 写入 context 中的关联 ID。
 - 网关入口读取 `X-Sub2-Request-ID` 放入独立 ctx key（不要改 `ClientRequestID` 中间件的生成逻辑）。
-- `uat_` 白名单显式加入 `GET /api/v1/usage/export`（现在 `/usage/` 下非嵌套 GET 会落到 `/:id` 分支，handler 会把 `export` 当数字解析失败）。
+- `uat_` 白名单显式加入 `GET /api/v1/usage/export`（`/usage/` 下非嵌套 GET 会落到 `/:id`；路由必须注册在 `/:id` 之前）。
 - 下游（他们的 sub2API）：对指向上游池的 apikey 出站增加该头，并放进出站白名单。本仓库若一并做出站自动带上头，他们升级即可对齐；不是我们上线的阻塞项。
+- 接入说明：仓库 `docs/reseller-usage-export.md`。
 
 ## 已决策
 
@@ -123,12 +145,13 @@ Query：
 
 ## 待解决
 
-- 无。实现拆卡即可。下游出站改动由对方仓库负责；本仓库可随后加「出站自动带 `X-Sub2-Request-ID`」，不阻塞本功能交付。
+- 无。下游出站改动由对方仓库负责；本仓库可随后加「出站自动带 `X-Sub2-Request-ID`」，不阻塞本功能交付。
 
 ## 相关
 
-- [[user-access-token]]（`uat_` 只读白名单需加 export）
+- [[user-access-token]]（`uat_` 只读白名单含 export）
 - [[user-request-monitoring]]（`request_id` 关联的是运维抓取，不是分销对账）
 - ADR：`.spec/decisions/2026-09-04-reseller-usage-correlation.md`
+- 给下游的接入说明：`docs/reseller-usage-export.md`
 - 计费去重：`backend/internal/service/gateway_usage_billing.go` 的 `resolveUsageBillingRequestID`
 - 现有用量列表：`backend/internal/handler/usage_handler.go`、`backend/internal/repository/usage_log_repo.go`

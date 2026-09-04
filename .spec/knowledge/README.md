@@ -49,7 +49,7 @@ metadata:
 | [`features/api-key-model-restriction.md`](features/api-key-model-restriction.md) | 用户 API 密钥模型允许列表:从模型广场按分组选择模型,网关拦截未授权模型请求 |
 | [`features/user-subscription-purchase-ban.md`](features/user-subscription-purchase-ban.md) | 管理员按用户禁止购买订阅：字段、编辑开关、CreateOrder 硬拦截、「无权限购买」 |
 | [`features/user-access-token.md`](features/user-access-token.md) | 用户长效 opaque Access Token：密钥管理 + 只读用量/余额/订阅；活跃数上限、用户 RPM、usage 查询护栏 |
-| [`features/reseller-usage-correlation.md`](features/reseller-usage-correlation.md) | 下游 sub2API 分销对账：`X-Sub2-Request-ID` → `correlation_id`，专用增量 export；与其他用户 GET /usage 隔离 |
+| [`features/reseller-usage-correlation.md`](features/reseller-usage-correlation.md) | 下游 sub2API 分销对账：`X-Sub2-Request-ID` → `correlation_id`，专用增量 export；接入说明 `docs/reseller-usage-export.md` |
 | [`features/balance-debit-wallet.md`](features/balance-debit-wallet.md) | 多外部站共用站内余额：双重身份原子扣款、永久幂等账本、本人流水、管理端 wallet_debit 合并流水、用户「我的订单」可见本人扣款 |
 | [`features/lumio-desktop-client.md`](features/lumio-desktop-client.md) | Lumio Codex 桌面客户端服务端契约：公开配置、账号级唯一 Key、一次性支付交接，以及 GET /v1/models 不查余额；接入桌面启动或充值流程时查 |
 | [`features/codex-download-nav.md`](features/codex-download-nav.md) | 首页与登录后顶栏的 Codex 下载外链，跳转到 bestcodex.app；改导航入口或下载引导时查 |
