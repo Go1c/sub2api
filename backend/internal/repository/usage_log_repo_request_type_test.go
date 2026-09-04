@@ -98,6 +98,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // billing_tier
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
+			sqlmock.AnyArg(), // correlation_id
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
@@ -189,6 +190,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // billing_tier
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
+			sqlmock.AnyArg(), // correlation_id
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
@@ -215,6 +217,7 @@ func TestBuildUsageLogBestEffortInsertQuery_IncludesRequestedModelColumn(t *test
 	require.Contains(t, query, "INSERT INTO usage_logs (")
 	require.Contains(t, query, "\n\t\t\tmodel,\n\t\t\trequested_model,\n\t\t\tupstream_model,")
 	require.Contains(t, query, "\n\t\t\trequest_id,\n\t\t\tmodel,\n\t\t\trequested_model,\n\t\t\tupstream_model,")
+	require.Contains(t, query, "correlation_id")
 	require.Len(t, args, len(prepared.args))
 	require.Equal(t, prepared.args[5], args[5])
 }
@@ -252,6 +255,71 @@ func TestPrepareUsageLogInsert_ArgCountMatchesTypes(t *testing.T) {
 	})
 
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
+}
+
+func TestPrepareUsageLogInsert_PersistsCorrelationID(t *testing.T) {
+	corr := "downstream-client-uuid"
+	prepared := prepareUsageLogInsert(&service.UsageLog{
+		UserID:         1,
+		APIKeyID:       2,
+		AccountID:      3,
+		RequestID:      "req-corr",
+		Model:          "gpt-5",
+		RequestedModel: "gpt-5",
+		CorrelationID:  &corr,
+		CreatedAt:      time.Date(2025, 1, 7, 12, 0, 0, 0, time.UTC),
+	})
+	require.Equal(t, sql.NullString{String: corr, Valid: true}, prepared.args[len(prepared.args)-2])
+}
+
+func TestListExport_UsesIDCursorWithoutHydration(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+	createdAt := time.Date(2026, 9, 4, 8, 0, 0, 0, time.UTC)
+	corr := "downstream-client-uuid"
+
+	mock.ExpectQuery(`SELECT[\s\S]*correlation_id[\s\S]*FROM usage_logs[\s\S]*id > \$2[\s\S]*ORDER BY id ASC`).
+		WithArgs(int64(42), int64(100), 50).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id",
+			"correlation_id",
+			"request_id",
+			"created_at",
+			"api_key_id",
+			"model",
+			"requested_model",
+			"input_tokens",
+			"output_tokens",
+			"cache_creation_tokens",
+			"cache_read_tokens",
+			"total_cost",
+			"actual_cost",
+			"billing_type",
+		}).AddRow(
+			int64(101),
+			corr,
+			"client:"+corr,
+			createdAt,
+			int64(9),
+			"gpt-5",
+			"gpt-5",
+			10,
+			4,
+			0,
+			0,
+			0.02,
+			0.01,
+			int8(0),
+		))
+
+	rows, err := repo.ListExport(context.Background(), 42, 100, nil, 50)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, int64(101), rows[0].ID)
+	require.NotNil(t, rows[0].CorrelationID)
+	require.Equal(t, corr, *rows[0].CorrelationID)
+	require.Equal(t, "client:"+corr, rows[0].RequestID)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestPrepareUsageLogInsert_PersistsImageSizeMetadata(t *testing.T) {

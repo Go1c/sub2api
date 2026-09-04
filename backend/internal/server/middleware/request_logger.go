@@ -12,6 +12,7 @@ import (
 )
 
 const requestIDHeader = "X-Request-ID"
+const sub2RequestIDHeader = "X-Sub2-Request-ID"
 
 // RequestLogger 在请求入口注入 request-scoped logger。
 func RequestLogger() gin.HandlerFunc {
@@ -28,6 +29,9 @@ func RequestLogger() gin.HandlerFunc {
 		c.Header(requestIDHeader, requestID)
 
 		ctx := context.WithValue(c.Request.Context(), ctxkey.RequestID, requestID)
+		if sub2ID, ok := normalizeCorrelationID(c.GetHeader(sub2RequestIDHeader)); ok {
+			ctx = context.WithValue(ctx, ctxkey.Sub2RequestID, sub2ID)
+		}
 		clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string)
 		clientRequestID, _ = normalizeCorrelationID(clientRequestID)
 

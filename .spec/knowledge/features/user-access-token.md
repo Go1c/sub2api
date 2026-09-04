@@ -56,7 +56,7 @@ metadata:
 - `GET /api/v1/groups/rates`
 - `GET /api/v1/user/profile`（含 `balance` / `frozen_balance` 钱包余额字段）
 - `GET /api/v1/auth/me`（前端主路径；同样含 `balance` / `frozen_balance`；与 profile **共用** 余额轮询 RPM）
-- `GET /api/v1/usage`、`GET /api/v1/usage/:id`、`GET /api/v1/usage/stats`
+- `GET /api/v1/usage`、`GET /api/v1/usage/:id`、`GET /api/v1/usage/export`、`GET /api/v1/usage/stats`
 - `GET /api/v1/usage/dashboard/stats|trend|models`
 - `POST /api/v1/usage/dashboard/api-keys-usage`（批量查询，只读语义）
 - `GET /api/v1/subscriptions`、`/active`、`/progress`、`/summary`
@@ -97,6 +97,7 @@ metadata:
 | 配额 key | RPM | 覆盖 |
 |----------|-----|------|
 | `user-usage-list` | 60 | `GET /usage`、`GET /usage/:id` |
+| `user-usage-export` | **10** | `GET /usage/export`；Redis **fail-closed**；同用户并发 1 |
 | `user-usage-agg` | 20 | `stats` + dashboard 聚合 |
 | `user-wallet-balance` | **30** | `GET /auth/me` + `GET /user/profile`（**共享同一桶**，防交替刷） |
 | `user-keys` / `user-groups` / `user-subscriptions-read` | 120 | keys CRUD、groups、订阅只读 |
@@ -125,5 +126,6 @@ metadata:
 ## 相关
 
 - 任务总览：`.spec/tasks/user-access-token-overview.md`
+- 分销增量对账：[`reseller-usage-correlation.md`](./reseller-usage-correlation.md)（`GET /usage/export`，`uat_` 可调）
 - 网关 API Key 模型限制：[`api-key-model-restriction.md`](./api-key-model-restriction.md)
 - 订阅额度池：[`subscription-credit-pool.md`](./subscription-credit-pool.md)
