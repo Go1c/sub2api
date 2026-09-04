@@ -35,6 +35,10 @@ type LotteryCampaign struct {
 	EarlyBoostParticipantPercent int `json:"early_boost_participant_percent,omitempty"`
 	// RechargeBoostCapPercent holds the value of the "recharge_boost_cap_percent" field.
 	RechargeBoostCapPercent int `json:"recharge_boost_cap_percent,omitempty"`
+	// PromoText holds the value of the "promo_text" field.
+	PromoText string `json:"promo_text,omitempty"`
+	// PromoImageURL holds the value of the "promo_image_url" field.
+	PromoImageURL string `json:"promo_image_url,omitempty"`
 	// CreatedBy holds the value of the "created_by" field.
 	CreatedBy int64 `json:"created_by,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -53,7 +57,7 @@ func (*LotteryCampaign) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case lotterycampaign.FieldID, lotterycampaign.FieldPrizeCount, lotterycampaign.FieldMaxParticipants, lotterycampaign.FieldJoinedCount, lotterycampaign.FieldWinnerCount, lotterycampaign.FieldEarlyBoostParticipantPercent, lotterycampaign.FieldRechargeBoostCapPercent, lotterycampaign.FieldCreatedBy:
 			values[i] = new(sql.NullInt64)
-		case lotterycampaign.FieldName, lotterycampaign.FieldSubtitle, lotterycampaign.FieldStatus:
+		case lotterycampaign.FieldName, lotterycampaign.FieldSubtitle, lotterycampaign.FieldStatus, lotterycampaign.FieldPromoText, lotterycampaign.FieldPromoImageURL:
 			values[i] = new(sql.NullString)
 		case lotterycampaign.FieldCreatedAt, lotterycampaign.FieldUpdatedAt, lotterycampaign.FieldFinishedAt:
 			values[i] = new(sql.NullTime)
@@ -131,6 +135,18 @@ func (_m *LotteryCampaign) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field recharge_boost_cap_percent", values[i])
 			} else if value.Valid {
 				_m.RechargeBoostCapPercent = int(value.Int64)
+			}
+		case lotterycampaign.FieldPromoText:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field promo_text", values[i])
+			} else if value.Valid {
+				_m.PromoText = value.String
+			}
+		case lotterycampaign.FieldPromoImageURL:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field promo_image_url", values[i])
+			} else if value.Valid {
+				_m.PromoImageURL = value.String
 			}
 		case lotterycampaign.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -219,6 +235,12 @@ func (_m *LotteryCampaign) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("recharge_boost_cap_percent=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RechargeBoostCapPercent))
+	builder.WriteString(", ")
+	builder.WriteString("promo_text=")
+	builder.WriteString(_m.PromoText)
+	builder.WriteString(", ")
+	builder.WriteString("promo_image_url=")
+	builder.WriteString(_m.PromoImageURL)
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CreatedBy))

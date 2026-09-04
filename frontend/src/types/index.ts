@@ -2406,6 +2406,8 @@ export interface LotteryActiveCampaign {
   joined_count: number
   early_boost_participant_percent?: number
   recharge_boost_cap_percent?: number
+  promo_text?: string
+  promo_image_url?: string
   segments: LotterySegment[]
 }
 
@@ -2455,6 +2457,8 @@ export interface LotteryCampaign {
   winner_count: number
   early_boost_participant_percent?: number
   recharge_boost_cap_percent?: number
+  promo_text?: string
+  promo_image_url?: string
   created_by: number
   created_at: string
   updated_at: string
@@ -2470,6 +2474,8 @@ export interface CreateLotteryCampaignRequest {
   max_participants: number
   early_boost_participant_percent: number
   recharge_boost_cap_percent: number
+  promo_text?: string
+  promo_image_url?: string
   codes: string[]
 }
 

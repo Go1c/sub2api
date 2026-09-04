@@ -116,6 +116,34 @@ func (_c *LotteryCampaignCreate) SetNillableRechargeBoostCapPercent(v *int) *Lot
 	return _c
 }
 
+// SetPromoText sets the "promo_text" field.
+func (_c *LotteryCampaignCreate) SetPromoText(v string) *LotteryCampaignCreate {
+	_c.mutation.SetPromoText(v)
+	return _c
+}
+
+// SetNillablePromoText sets the "promo_text" field if the given value is not nil.
+func (_c *LotteryCampaignCreate) SetNillablePromoText(v *string) *LotteryCampaignCreate {
+	if v != nil {
+		_c.SetPromoText(*v)
+	}
+	return _c
+}
+
+// SetPromoImageURL sets the "promo_image_url" field.
+func (_c *LotteryCampaignCreate) SetPromoImageURL(v string) *LotteryCampaignCreate {
+	_c.mutation.SetPromoImageURL(v)
+	return _c
+}
+
+// SetNillablePromoImageURL sets the "promo_image_url" field if the given value is not nil.
+func (_c *LotteryCampaignCreate) SetNillablePromoImageURL(v *string) *LotteryCampaignCreate {
+	if v != nil {
+		_c.SetPromoImageURL(*v)
+	}
+	return _c
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_c *LotteryCampaignCreate) SetCreatedBy(v int64) *LotteryCampaignCreate {
 	_c.mutation.SetCreatedBy(v)
@@ -219,6 +247,14 @@ func (_c *LotteryCampaignCreate) defaults() {
 		v := lotterycampaign.DefaultRechargeBoostCapPercent
 		_c.mutation.SetRechargeBoostCapPercent(v)
 	}
+	if _, ok := _c.mutation.PromoText(); !ok {
+		v := lotterycampaign.DefaultPromoText
+		_c.mutation.SetPromoText(v)
+	}
+	if _, ok := _c.mutation.PromoImageURL(); !ok {
+		v := lotterycampaign.DefaultPromoImageURL
+		_c.mutation.SetPromoImageURL(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := lotterycampaign.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -303,6 +339,22 @@ func (_c *LotteryCampaignCreate) check() error {
 			return &ValidationError{Name: "recharge_boost_cap_percent", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.recharge_boost_cap_percent": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.PromoText(); !ok {
+		return &ValidationError{Name: "promo_text", err: errors.New(`ent: missing required field "LotteryCampaign.promo_text"`)}
+	}
+	if v, ok := _c.mutation.PromoText(); ok {
+		if err := lotterycampaign.PromoTextValidator(v); err != nil {
+			return &ValidationError{Name: "promo_text", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.promo_text": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.PromoImageURL(); !ok {
+		return &ValidationError{Name: "promo_image_url", err: errors.New(`ent: missing required field "LotteryCampaign.promo_image_url"`)}
+	}
+	if v, ok := _c.mutation.PromoImageURL(); ok {
+		if err := lotterycampaign.PromoImageURLValidator(v); err != nil {
+			return &ValidationError{Name: "promo_image_url", err: fmt.Errorf(`ent: validator failed for field "LotteryCampaign.promo_image_url": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CreatedBy(); !ok {
 		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "LotteryCampaign.created_by"`)}
 	}
@@ -374,6 +426,14 @@ func (_c *LotteryCampaignCreate) createSpec() (*LotteryCampaign, *sqlgraph.Creat
 	if value, ok := _c.mutation.RechargeBoostCapPercent(); ok {
 		_spec.SetField(lotterycampaign.FieldRechargeBoostCapPercent, field.TypeInt, value)
 		_node.RechargeBoostCapPercent = value
+	}
+	if value, ok := _c.mutation.PromoText(); ok {
+		_spec.SetField(lotterycampaign.FieldPromoText, field.TypeString, value)
+		_node.PromoText = value
+	}
+	if value, ok := _c.mutation.PromoImageURL(); ok {
+		_spec.SetField(lotterycampaign.FieldPromoImageURL, field.TypeString, value)
+		_node.PromoImageURL = value
 	}
 	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(lotterycampaign.FieldCreatedBy, field.TypeInt64, value)
@@ -584,6 +644,30 @@ func (u *LotteryCampaignUpsert) UpdateRechargeBoostCapPercent() *LotteryCampaign
 // AddRechargeBoostCapPercent adds v to the "recharge_boost_cap_percent" field.
 func (u *LotteryCampaignUpsert) AddRechargeBoostCapPercent(v int) *LotteryCampaignUpsert {
 	u.Add(lotterycampaign.FieldRechargeBoostCapPercent, v)
+	return u
+}
+
+// SetPromoText sets the "promo_text" field.
+func (u *LotteryCampaignUpsert) SetPromoText(v string) *LotteryCampaignUpsert {
+	u.Set(lotterycampaign.FieldPromoText, v)
+	return u
+}
+
+// UpdatePromoText sets the "promo_text" field to the value that was provided on create.
+func (u *LotteryCampaignUpsert) UpdatePromoText() *LotteryCampaignUpsert {
+	u.SetExcluded(lotterycampaign.FieldPromoText)
+	return u
+}
+
+// SetPromoImageURL sets the "promo_image_url" field.
+func (u *LotteryCampaignUpsert) SetPromoImageURL(v string) *LotteryCampaignUpsert {
+	u.Set(lotterycampaign.FieldPromoImageURL, v)
+	return u
+}
+
+// UpdatePromoImageURL sets the "promo_image_url" field to the value that was provided on create.
+func (u *LotteryCampaignUpsert) UpdatePromoImageURL() *LotteryCampaignUpsert {
+	u.SetExcluded(lotterycampaign.FieldPromoImageURL)
 	return u
 }
 
@@ -845,6 +929,34 @@ func (u *LotteryCampaignUpsertOne) AddRechargeBoostCapPercent(v int) *LotteryCam
 func (u *LotteryCampaignUpsertOne) UpdateRechargeBoostCapPercent() *LotteryCampaignUpsertOne {
 	return u.Update(func(s *LotteryCampaignUpsert) {
 		s.UpdateRechargeBoostCapPercent()
+	})
+}
+
+// SetPromoText sets the "promo_text" field.
+func (u *LotteryCampaignUpsertOne) SetPromoText(v string) *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetPromoText(v)
+	})
+}
+
+// UpdatePromoText sets the "promo_text" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertOne) UpdatePromoText() *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdatePromoText()
+	})
+}
+
+// SetPromoImageURL sets the "promo_image_url" field.
+func (u *LotteryCampaignUpsertOne) SetPromoImageURL(v string) *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetPromoImageURL(v)
+	})
+}
+
+// UpdatePromoImageURL sets the "promo_image_url" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertOne) UpdatePromoImageURL() *LotteryCampaignUpsertOne {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdatePromoImageURL()
 	})
 }
 
@@ -1280,6 +1392,34 @@ func (u *LotteryCampaignUpsertBulk) AddRechargeBoostCapPercent(v int) *LotteryCa
 func (u *LotteryCampaignUpsertBulk) UpdateRechargeBoostCapPercent() *LotteryCampaignUpsertBulk {
 	return u.Update(func(s *LotteryCampaignUpsert) {
 		s.UpdateRechargeBoostCapPercent()
+	})
+}
+
+// SetPromoText sets the "promo_text" field.
+func (u *LotteryCampaignUpsertBulk) SetPromoText(v string) *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetPromoText(v)
+	})
+}
+
+// UpdatePromoText sets the "promo_text" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertBulk) UpdatePromoText() *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdatePromoText()
+	})
+}
+
+// SetPromoImageURL sets the "promo_image_url" field.
+func (u *LotteryCampaignUpsertBulk) SetPromoImageURL(v string) *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.SetPromoImageURL(v)
+	})
+}
+
+// UpdatePromoImageURL sets the "promo_image_url" field to the value that was provided on create.
+func (u *LotteryCampaignUpsertBulk) UpdatePromoImageURL() *LotteryCampaignUpsertBulk {
+	return u.Update(func(s *LotteryCampaignUpsert) {
+		s.UpdatePromoImageURL()
 	})
 }
 

@@ -30,7 +30,7 @@ metadata:
 | [`features/admin-invoice-export.md`](features/admin-invoice-export.md) | 管理员发票记录页 Excel 导出(全部 / 正在开票) |
 | [`features/affiliate-signup-bonus.md`](features/affiliate-signup-bonus.md) | 邀请注册赠送纳入返利余额历史框架 + 独立管理员记录页 |
 | [`features/affiliate-tier-rebate.md`](features/affiliate-tier-rebate.md) | 阶梯式邀请返利：管理员配置 L1-L4；用户 GET /user/aff 返回阶梯进度与运行规则 |
-| [`features/real-lottery.md`](features/real-lottery.md) | 后端驱动多用户抽奖,中奖兑换码经站内信发放 |
+| [`features/real-lottery.md`](features/real-lottery.md) | 后端驱动多用户抽奖；转盘 8 格；中奖兑换码经站内信发放；可选公众号海报（备份 S3 公开 HTTPS） |
 | [`features/site-messages.md`](features/site-messages.md) | 站内信(类轻量邮件):收发读回复、未读红点、管理员开关与发信；补偿批次 amount 为成功发出合计 |
 | [`features/balance-low-websocket-notify.md`](features/balance-low-websocket-notify.md) | （已废弃）用户侧浏览器 WebSocket 通知，已由 Webhook 替代 |
 | [`features/webhook-balance-robot-notify.md`](features/webhook-balance-robot-notify.md) | 个人资料 Webhook 通知：余额/站内信/公告 HTTPS POST（无 WebSocket） |

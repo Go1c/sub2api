@@ -120,8 +120,40 @@ describe('admin LotteryView', () => {
         max_participants: 3,
         early_boost_participant_percent: 25,
         recharge_boost_cap_percent: 0,
+        promo_text: '',
+        promo_image_url: '',
         codes: ['CODE-1'],
       }),
+    )
+  })
+
+  it('sends WeChat promo HTTPS fields when creating a campaign', async () => {
+    vi.mocked(adminLotteryAPI.createCampaign).mockResolvedValue(campaignSummary)
+
+    const wrapper = mountView()
+    await flushPromises()
+    await fillForm(wrapper)
+    await wrapper.get('[data-test="lottery-promo-text"]').setValue('关注公众号领福利')
+    await wrapper.get('[data-test="lottery-promo-image-url"]').setValue('https://cdn.example.com/qr.png')
+    await wrapper.get('[data-test="lottery-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(adminLotteryAPI.createCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promo_text: '关注公众号领福利',
+        promo_image_url: 'https://cdn.example.com/qr.png',
+      }),
+    )
+  })
+
+  it('shows a guaranteed-win hint when prizes cover every participant slot', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-test="lottery-prize-count"]').setValue('100')
+    await wrapper.get('[data-test="lottery-max-participants"]').setValue('100')
+
+    expect(wrapper.get('[data-test="lottery-guaranteed-win-hint"]').text()).toContain(
+      'admin.lottery.create.guaranteedWinHint',
     )
   })
 

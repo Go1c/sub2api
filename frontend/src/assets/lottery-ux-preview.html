@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>抽奖体验预览 · LumioAPI</title>
+  <style>
+    :root {
+      --brand: #4f8cff;
+      --navy: #1a2f5a;
+      --ink: #0a0a14;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(79,140,255,.28), transparent 32%),
+        linear-gradient(180deg, #07101f 0%, #101826 100%);
+      color: #e2e8f0;
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+    }
+    h1 { font-size: 28px; margin: 0 0 8px; color: #fff; }
+    .lead { margin: 0 0 22px; color: #94a3b8; line-height: 1.6; }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .tabs button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,.08);
+      color: #cbd5e1;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .tabs button.active {
+      background: linear-gradient(135deg, #4f8cff, #1a2f5a);
+      color: #fff;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 420px) 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .phone {
+      margin: 0 auto;
+      width: min(100%, 400px);
+      min-height: 720px;
+      border-radius: 32px;
+      background: #0a0a14;
+      box-shadow: 0 30px 90px -12px rgba(139,92,246,.35);
+      ring: 1px solid rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.12);
+      overflow: hidden;
+      position: relative;
+    }
+    .badge {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: #34d399; }
+    .panel { padding: 28px 22px 24px; text-align: center; }
+    h2 { margin: 16px 0 6px; font-size: 26px; color: #fff; }
+    .sub { color: #94a3b8; font-size: 14px; margin: 0 0 18px; }
+    .poster {
+      width: min(100%, 280px);
+      height: auto;
+      border-radius: 24px;
+      background: #fff;
+      margin: 0 auto 16px;
+      display: block;
+    }
+    .btn {
+      width: 100%;
+      border: 0;
+      border-radius: 999px;
+      padding: 14px 18px;
+      font-weight: 800;
+      cursor: pointer;
+      color: #fff;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #4f8cff, #1a2f5a);
+      box-shadow: 0 14px 42px -12px rgba(79,140,255,.9);
+    }
+    .btn-ghost {
+      margin-top: 10px;
+      background: rgba(255,255,255,.08);
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 18px;
+      padding: 12px;
+      margin-bottom: 18px;
+    }
+    .stats b { display: block; color: #7db2ff; font-size: 18px; }
+    .stats span { color: #94a3b8; font-size: 12px; }
+    .wheel-wrap { display: flex; justify-content: center; margin: 12px 0 8px; }
+    .hint { color: #64748b; font-size: 12px; }
+    .result {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(0,0,0,.35);
+    }
+    .result-card {
+      width: 100%;
+      border-radius: 28px;
+      padding: 24px 18px;
+      text-align: center;
+      background: linear-gradient(145deg, #081631 0%, #1a2f5a 52%, #070b17 100%);
+      border: 1px solid rgba(255,255,255,.16);
+    }
+    .result-card img { width: 180px; border-radius: 18px; margin: 12px auto; display: block; }
+    .mail {
+      text-align: left;
+      background: #fff;
+      color: #0f172a;
+      border-radius: 24px;
+      margin: 18px;
+      padding: 20px;
+      min-height: 640px;
+    }
+    .mail h3 { margin: 0 0 12px; font-size: 18px; }
+    .mail p { line-height: 1.7; color: #334155; }
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #eff6ff;
+      color: #1a2f5a;
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+    .side {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 24px;
+      padding: 20px;
+    }
+    .side h3 { margin-top: 0; color: #fff; }
+    .side label { display: block; font-size: 13px; color: #94a3b8; margin: 12px 0 6px; }
+    .side input, .side textarea {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(8,16,32,.7);
+      color: #fff;
+      padding: 10px 12px;
+    }
+    .side code, .example {
+      display: block;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #0b1220;
+      color: #93c5fd;
+      font-size: 12px;
+      word-break: break-all;
+    }
+    .note { color: #fda4af; font-size: 13px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>抽奖体验预览</h1>
+    <p class="lead">
+      这是交互稿，还没有接发布接口。转盘固定 8 格；公众号图使用备份 S3 / R2 的公开 HTTPS 直链（方式 A）。
+      可点下方步骤，或在手机框里按真实用户路径走一遍。
+    </p>
+    <div class="tabs">
+      <button class="active" data-tab="follow">1. 抽奖前关注</button>
+      <button data-tab="wheel">2. 稀疏转盘</button>
+      <button data-tab="win">3. 中奖结果</button>
+      <button data-tab="mail">4. 中奖站内信</button>
+      <button data-tab="admin">5. 管理端填图</button>
+    </div>
+    <div class="layout">
+      <div class="phone" id="phone"></div>
+      <div class="side" id="side"></div>
+    </div>
+  </div>
+  <script>
+    const posterHtml = `
+      <svg class="poster" viewBox="0 0 640 800" role="img" aria-label="公众号关注海报预览">
+        <rect width="640" height="800" rx="36" fill="#1a2f5a"/>
+        <rect x="48" y="48" width="544" height="704" rx="28" fill="#ffffff"/>
+        <text x="320" y="120" text-anchor="middle" font-size="28" font-weight="700" fill="#1a2f5a" font-family="system-ui,sans-serif">LumioAPI 公众号</text>
+        <text x="320" y="158" text-anchor="middle" font-size="16" fill="#64748b" font-family="system-ui,sans-serif">扫码关注 · 领取活动通知</text>
+        <rect x="160" y="200" width="320" height="320" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+        <g fill="#0f172a" transform="translate(188 228)">
+          <rect width="84" height="84" rx="8"/><rect x="12" y="12" width="60" height="60" fill="#f8fafc"/><rect x="30" y="30" width="24" height="24" rx="4"/>
+          <rect x="180" width="84" height="84" rx="8"/><rect x="192" y="12" width="60" height="60" fill="#f8fafc"/><rect x="210" y="30" width="24" height="24" rx="4"/>
+          <rect y="180" width="84" height="84" rx="8"/><rect x="12" y="192" width="60" height="60" fill="#f8fafc"/><rect x="30" y="210" width="24" height="24" rx="4"/>
+          <rect x="104" y="8" width="18" height="18"/><rect x="136" y="8" width="18" height="18"/><rect x="104" y="40" width="18" height="18"/>
+          <rect x="120" y="72" width="18" height="18"/><rect x="96" y="112" width="22" height="22"/><rect x="136" y="120" width="18" height="18"/>
+          <rect x="168" y="104" width="18" height="18"/><rect x="200" y="120" width="22" height="22"/><rect x="104" y="160" width="18" height="18"/>
+          <rect x="144" y="168" width="22" height="22"/><rect x="8" y="104" width="18" height="18"/><rect x="40" y="120" width="22" height="22"/>
+        </g>
+        <text x="320" y="560" text-anchor="middle" font-size="18" font-weight="600" fill="#1a2f5a" font-family="system-ui,sans-serif">预览用示意图 · 非真实二维码</text>
+        <text x="320" y="598" text-anchor="middle" font-size="14" fill="#64748b" font-family="system-ui,sans-serif">上线后请换成备份 S3 / R2 的公开图片链接</text>
+        <rect x="200" y="640" width="240" height="48" rx="24" fill="#4f8cff"/>
+        <text x="320" y="670" text-anchor="middle" font-size="16" font-weight="700" fill="#ffffff" font-family="system-ui,sans-serif">微信扫一扫</text>
+      </svg>`;
+    const promoText = "关注微信公众号，领取更多兑换码与活动通知";
+    const s3Example = "https://pub-xxxxxxxx.r2.dev/lottery/wechat-qr.png";
+    let tab = "follow";
+    let spinning = false;
+
+    const slices = [
+      ["奖品", true, "#3b82f6"],
+      ["谢谢参与", false, "#1f2030"],
+      ["奖品", true, "#8b5cf6"],
+      ["奖品", true, "#d946ef"],
+      ["谢谢参与", false, "#2a2b40"],
+      ["奖品", true, "#06b6d4"],
+      ["谢谢参与", false, "#1f2030"],
+      ["奖品", true, "#a855f7"],
+    ];
+
+    function wheelSvg(rotation = -22) {
+      const cx = 140, cy = 140, r = 128;
+      const arc = 360 / slices.length;
+      const paths = slices.map((slice, i) => {
+        const start = (i * arc - 90) * Math.PI / 180;
+        const end = ((i + 1) * arc - 90) * Math.PI / 180;
+        const x1 = cx + r * Math.cos(start);
+        const y1 = cy + r * Math.sin(start);
+        const x2 = cx + r * Math.cos(end);
+        const y2 = cy + r * Math.sin(end);
+        const mid = ((i + 0.5) * arc - 90) * Math.PI / 180;
+        const lx = cx + r * 0.62 * Math.cos(mid);
+        const ly = cy + r * 0.62 * Math.sin(mid);
+        const rot = i * arc + arc / 2;
+        return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z" fill="${slice[2]}" stroke="#0b0b14" stroke-width="2"/>
+          <text x="${lx}" y="${ly}" fill="${slice[1] ? "#fff" : "#94a3b8"}" font-size="12" font-weight="700" text-anchor="middle" transform="rotate(${rot} ${lx} ${ly})">${slice[0]}</text>`;
+      }).join("");
+      return `<div class="wheel-wrap">
+        <svg width="280" height="280" viewBox="0 0 280 280" style="transform:rotate(${rotation}deg);transition:transform 4s cubic-bezier(0.17, 0.85, 0.32, 1.04)">
+          ${paths}
+          <circle cx="140" cy="140" r="42" fill="#0b0b14" stroke="#fff" stroke-opacity=".2"/>
+        </svg>
+      </div>`;
+    }
+
+    function render() {
+      const phone = document.getElementById("phone");
+      const side = document.getElementById("side");
+      document.querySelectorAll(".tabs button").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tab === tab);
+      });
+
+      if (tab === "follow") {
+        phone.innerHTML = `
+          <div class="panel">
+            <div class="badge"><span class="dot"></span>登录有礼 · 限时活动</div>
+            <h2>关注公众号再抽奖</h2>
+            <p class="sub">可跳过，不验证是否真的关注</p>
+            ${posterHtml}
+            <p class="sub">${promoText}</p>
+            <button class="btn btn-primary" id="go-draw">去抽奖</button>
+          </div>`;
+        side.innerHTML = `
+          <h3>抽奖前</h3>
+          <p>用户登录后先看到大图，方便扫码。主按钮直接进入转盘，不拦截。</p>
+          <p class="note">备份 S3 的私有预签名下载链接（带附件下载头）不能当图片用。请填桶的公开域名 / R2 公共链接。</p>`;
+        document.getElementById("go-draw").onclick = () => { tab = "wheel"; render(); };
+      }
+
+      if (tab === "wheel") {
+        phone.innerHTML = `
+          <div class="panel">
+            <div class="badge"><span class="dot"></span>登录有礼 · 限时活动</div>
+            <h2>五月幸运转盘</h2>
+            <p class="sub">登录就有机会，转一转赢取兑换码</p>
+            <div class="stats">
+              <div><b>100</b><span>奖品</span></div>
+              <div><b>76/100</b><span>已参与</span></div>
+              <div><b>24</b><span>剩余</span></div>
+            </div>
+            ${wheelSvg(spinning ? 2200 : -22)}
+            <button class="btn btn-primary" id="spin">开始抽奖</button>
+            <p class="hint">转盘固定 8 格，100 个兑换码不会画成 100 格</p>
+          </div>`;
+        side.innerHTML = `
+          <h3>转盘</h3>
+          <p>视觉格子和奖品数量脱钩。中不中仍由后端概率决定，指针只落到「奖品」或「谢谢参与」。</p>`;
+        document.getElementById("spin").onclick = () => {
+          spinning = true;
+          render();
+          setTimeout(() => { spinning = false; tab = "win"; render(); }, 1800);
+        };
+      }
+
+      if (tab === "win") {
+        phone.innerHTML = `
+          <div class="panel" style="opacity:.35;filter:blur(1px)">
+            <h2>五月幸运转盘</h2>
+            ${wheelSvg(2200)}
+          </div>
+          <div class="result">
+            <div class="result-card">
+              <div style="font-size:42px">✦</div>
+              <h2>恭喜中奖</h2>
+              <p class="sub">兑换码已通过站内信发放</p>
+              ${posterHtml}
+              <p class="sub">${promoText}</p>
+              <button class="btn btn-primary" id="to-mail">前往站内信领取</button>
+              <button class="btn btn-ghost" id="done">完成</button>
+            </div>
+          </div>`;
+        side.innerHTML = `
+          <h3>中奖结果</h3>
+          <p>未中奖不展示海报。中奖后同一张图再出一次，提醒去站内信拿码。</p>`;
+        document.getElementById("to-mail").onclick = () => { tab = "mail"; render(); };
+        document.getElementById("done").onclick = () => { tab = "follow"; render(); };
+      }
+
+      if (tab === "mail") {
+        phone.innerHTML = `
+          <div class="mail">
+            <div class="hint" style="margin-bottom:8px">收件箱</div>
+            <h3>恭喜中奖：五月幸运转盘</h3>
+            <p>你在「五月幸运转盘」中中奖。</p>
+            <p class="code">兑换码：LUCK-001-ABCD</p>
+            <p>请复制该兑换码前往兑换页面使用。</p>
+            <p>${promoText}</p>
+            ${posterHtml}
+          </div>`;
+        side.innerHTML = `
+          <h3>中奖站内信</h3>
+          <p>兑换码仍走站内信。文案和图片与弹窗共用一套。没中奖不发广告信。</p>
+          <p class="note">站内信要内嵌图片，必须是浏览器能直接打开的 https 图片地址。</p>`;
+      }
+
+      if (tab === "admin") {
+        phone.innerHTML = `
+          <div class="panel">
+            <div class="badge"><span class="dot"></span>创建活动 · 素材预览</div>
+            <h2>填公开链接即可</h2>
+            ${posterHtml}
+            <p class="sub">预览用示意图。上线后换成你上传到备份 S3 的图。</p>
+          </div>`;
+        side.innerHTML = `
+          <h3>管理端怎么填</h3>
+          <label>引导文案</label>
+          <input value="${promoText}" readonly />
+          <label>图片 HTTPS（方式 A）</label>
+          <input value="${s3Example}" readonly />
+          <span class="example">把二维码/海报传到现有备份桶，建议 key：lottery/wechat-qr.png<br/>然后填公开域名下的地址，例如 R2：${s3Example}</span>
+          <p class="note" style="margin-top:14px">不要填 S3 API endpoint（如 https://xxx.r2.cloudflarestorage.com），也不要填备份下载用的临时签名 URL。R2 请开公共访问或自定义域。</p>
+          <p>本期预览只演示效果，发布抽奖还不会保存这两个字段。</p>`;
+      }
+    }
+
+    document.querySelectorAll(".tabs button").forEach((btn) => {
+      btn.onclick = () => { tab = btn.dataset.tab; spinning = false; render(); };
+    });
+    render();
+  </script>
+</body>
+</html>

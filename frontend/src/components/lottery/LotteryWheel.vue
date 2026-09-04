@@ -5,9 +5,8 @@
       <svg width="40" height="52" viewBox="0 0 40 52">
         <defs>
           <linearGradient :id="`ptr-${uid}`" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#3b82f6" />
-            <stop offset="60%" stop-color="#8b5cf6" />
-            <stop offset="100%" stop-color="#d946ef" />
+            <stop offset="0%" stop-color="#4f8cff" />
+            <stop offset="100%" stop-color="#1a2f5a" />
           </linearGradient>
         </defs>
         <path d="M20 52 L4 14 A16 16 0 0 1 36 14 Z" :fill="`url(#ptr-${uid})`" />
@@ -17,13 +16,13 @@
 
     <!-- Disk -->
     <div
-      class="relative overflow-hidden rounded-full bg-[#0b0b14] shadow-[0_20px_60px_-12px_rgba(139,92,246,0.45)] ring-1 ring-white/10"
+      class="relative overflow-hidden rounded-full bg-[#0b0b14] shadow-[0_20px_60px_-12px_rgba(79,140,255,0.45)] ring-1 ring-white/10"
       :style="{
         width: `${size}px`,
         height: `${size}px`,
         padding: '6px',
         backgroundImage:
-          'linear-gradient(#0b0b14, #0b0b14), linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #d946ef 100%)',
+          'linear-gradient(#0b0b14, #0b0b14), linear-gradient(135deg, #4f8cff 0%, #2f6dff 50%, #1a2f5a 100%)',
         backgroundOrigin: 'border-box',
         backgroundClip: 'padding-box, border-box',
         border: '2px solid transparent'
@@ -64,7 +63,7 @@
         v-if="showSpinButton"
         type="button"
         :disabled="spinning || disabled"
-        class="absolute left-1/2 top-1/2 z-10 flex h-[88px] w-[88px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 text-sm font-bold text-white shadow-[0_8px_28px_-4px_rgba(139,92,246,0.65)] ring-2 ring-white/20 transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+        class="absolute left-1/2 top-1/2 z-10 flex h-[88px] w-[88px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-[#4f8cff] via-[#2f6dff] to-[#1a2f5a] text-sm font-bold text-white shadow-[0_8px_28px_-4px_rgba(79,140,255,0.65)] ring-2 ring-white/20 transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
         @click="$emit('start')"
       >
         <span v-if="spinning">抽奖中</span>
@@ -113,7 +112,7 @@ const radius = computed(() => innerSize.value / 2 - 2)
 const hubR = computed(() => Math.max(14, innerSize.value * 0.07))
 
 // Prize palette: stay within blue → purple → fuchsia → cyan spectrum
-const PRIZE_PALETTE = ['#3b82f6', '#8b5cf6', '#d946ef', '#06b6d4', '#a855f7', '#6366f1']
+const PRIZE_PALETTE = ['#4f8cff', '#2f6dff', '#1a2f5a', '#7db2ff', '#3b82f6']
 // Blank palette: dark translucent so the wheel feels "carbon" with bright prize accents
 const BLANK_A = '#1f2030'
 const BLANK_B = '#2a2b40'

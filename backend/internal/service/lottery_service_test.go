@@ -30,23 +30,27 @@ type lotteryMessengerStub struct {
 }
 
 type lotteryPrizeMessage struct {
-	senderID     int64
-	recipientID  int64
-	campaignName string
-	code         string
+	senderID      int64
+	recipientID   int64
+	campaignName  string
+	code          string
+	promoText     string
+	promoImageURL string
 }
 
-func (s *lotteryMessengerStub) SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code string) (*SiteMessage, error) {
+func (s *lotteryMessengerStub) SendLotteryPrize(ctx context.Context, senderID, recipientID int64, campaignName, code, promoText, promoImageURL string) (*SiteMessage, error) {
 	_ = ctx
 	if s.err != nil {
 		return nil, s.err
 	}
 	s.nextID++
 	s.sent = append(s.sent, lotteryPrizeMessage{
-		senderID:     senderID,
-		recipientID:  recipientID,
-		campaignName: campaignName,
-		code:         code,
+		senderID:      senderID,
+		recipientID:   recipientID,
+		campaignName:  campaignName,
+		code:          code,
+		promoText:     promoText,
+		promoImageURL: promoImageURL,
 	})
 	return &SiteMessage{ID: s.nextID, SenderID: senderID, RecipientID: recipientID}, nil
 }
@@ -512,4 +516,137 @@ func TestLotteryServiceDrawRollsBackWhenSiteMessageFails(t *testing.T) {
 	require.ErrorContains(t, err, "message failed")
 	require.Empty(t, repo.draws)
 	require.Equal(t, 0, repo.campaigns[campaign.ID].JoinedCount)
+}
+
+func TestLotteryServiceDrawGuaranteesWinWhenPrizesCoverRemainingSlots(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	campaign := seedLotteryCampaign(repo, LotteryCampaign{
+		Name:                         "full house",
+		Subtitle:                     "subtitle",
+		Status:                       LotteryStatusActive,
+		PrizeCount:                   100,
+		MaxParticipants:              100,
+		JoinedCount:                  76,
+		WinnerCount:                  76,
+		EarlyBoostParticipantPercent: 25,
+		CreatedBy:                    99,
+		CreatedAt:                    now,
+		UpdatedAt:                    now,
+	}, "CODE-77")
+	messenger := &lotteryMessengerStub{}
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, messenger, now)
+	svc.randFloat = func() float64 { return 0.99 }
+
+	result, err := svc.Draw(context.Background(), 7, campaign.ID)
+
+	require.NoError(t, err)
+	require.True(t, result.Won)
+	require.Equal(t, 77, repo.campaigns[campaign.ID].WinnerCount)
+	require.Len(t, messenger.sent, 1)
+}
+
+func TestBuildLotterySegmentsStaysAtEightWhenPrizeCountIsLarge(t *testing.T) {
+	segments := BuildLotterySegments(100, 8)
+
+	require.Len(t, segments, 8)
+	prizeSlots := 0
+	loseSlots := 0
+	for _, segment := range segments {
+		if segment.IsPrize {
+			prizeSlots++
+		} else {
+			loseSlots++
+		}
+	}
+	require.Equal(t, 5, prizeSlots)
+	require.Equal(t, 3, loseSlots)
+}
+
+func TestLotteryServiceCreateCampaignStoresHttpsPromo(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, &lotteryMessengerStub{}, now)
+
+	created, err := svc.CreateCampaign(context.Background(), 99, CreateLotteryCampaignInput{
+		Name:            "promo",
+		PrizeCount:      1,
+		MaxParticipants: 1,
+		Codes:           []string{"A"},
+		PromoText:       "关注公众号领福利",
+		PromoImageURL:   "https://pub-xxxx.r2.dev/lottery/wechat-qr.png",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "关注公众号领福利", created.PromoText)
+	require.Equal(t, "https://pub-xxxx.r2.dev/lottery/wechat-qr.png", created.PromoImageURL)
+}
+
+func TestLotteryServiceGetActiveForUserIncludesPromo(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	seedLotteryCampaign(repo, LotteryCampaign{
+		Name:            "promo",
+		Subtitle:        "subtitle",
+		Status:          LotteryStatusActive,
+		PrizeCount:      1,
+		MaxParticipants: 3,
+		PromoText:       "关注公众号领福利",
+		PromoImageURL:   "https://cdn.example.com/qr.png",
+		CreatedBy:       99,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}, "A")
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, &lotteryMessengerStub{}, now)
+
+	active, err := svc.GetActiveForUser(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.NotNil(t, active)
+	require.Equal(t, "关注公众号领福利", active.PromoText)
+	require.Equal(t, "https://cdn.example.com/qr.png", active.PromoImageURL)
+	require.Len(t, active.Segments, 8)
+}
+
+func TestLotteryServiceCreateCampaignRejectsNonHttpsPromoImage(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, &lotteryMessengerStub{}, now)
+
+	_, err := svc.CreateCampaign(context.Background(), 99, CreateLotteryCampaignInput{
+		Name:            "promo",
+		PrizeCount:      1,
+		MaxParticipants: 1,
+		Codes:           []string{"A"},
+		PromoImageURL:   "http://example.com/qr.png",
+	})
+
+	require.ErrorIs(t, err, ErrLotteryInvalidCampaign)
+}
+
+func TestLotteryServiceDrawPassesPromoIntoSiteMessage(t *testing.T) {
+	now := time.Unix(1779000000, 0)
+	repo := newLotteryRepoStub()
+	campaign := seedLotteryCampaign(repo, LotteryCampaign{
+		Name:          "lucky",
+		Subtitle:      "subtitle",
+		Status:        LotteryStatusActive,
+		PrizeCount:    1,
+		MaxParticipants: 1,
+		PromoText:     "关注公众号",
+		PromoImageURL: "https://cdn.example.com/qr.png",
+		CreatedBy:     99,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}, "LUCKY-CODE")
+	messenger := &lotteryMessengerStub{}
+	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, messenger, now)
+	svc.randFloat = func() float64 { return 0.0 }
+
+	_, err := svc.Draw(context.Background(), 7, campaign.ID)
+
+	require.NoError(t, err)
+	require.Len(t, messenger.sent, 1)
+	require.Equal(t, "关注公众号", messenger.sent[0].promoText)
+	require.Equal(t, "https://cdn.example.com/qr.png", messenger.sent[0].promoImageURL)
 }

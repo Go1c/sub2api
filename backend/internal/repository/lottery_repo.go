@@ -61,6 +61,8 @@ func (r *lotteryRepository) CreateCampaign(ctx context.Context, campaign *servic
 		SetWinnerCount(campaign.WinnerCount).
 		SetEarlyBoostParticipantPercent(campaign.EarlyBoostParticipantPercent).
 		SetRechargeBoostCapPercent(campaign.RechargeBoostCapPercent).
+		SetPromoText(campaign.PromoText).
+		SetPromoImageURL(campaign.PromoImageURL).
 		SetCreatedBy(campaign.CreatedBy)
 	if !campaign.CreatedAt.IsZero() {
 		builder.SetCreatedAt(campaign.CreatedAt)
@@ -307,6 +309,8 @@ func lotteryCampaignEntity(c *dbent.LotteryCampaign) *service.LotteryCampaign {
 		WinnerCount:                  c.WinnerCount,
 		EarlyBoostParticipantPercent: c.EarlyBoostParticipantPercent,
 		RechargeBoostCapPercent:      c.RechargeBoostCapPercent,
+		PromoText:                    c.PromoText,
+		PromoImageURL:                c.PromoImageURL,
 		CreatedBy:                    c.CreatedBy,
 		CreatedAt:                    c.CreatedAt,
 		UpdatedAt:                    c.UpdatedAt,
