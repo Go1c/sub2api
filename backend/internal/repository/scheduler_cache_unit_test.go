@@ -963,3 +963,35 @@ func schedulerCacheBenchmarkAccounts(size int) []service.Account {
 	}
 	return accounts
 }
+
+func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *testing.T) {
+	for _, key := range []string{"openai_passthrough", "openai_oauth_passthrough"} {
+		t.Run(key, func(t *testing.T) {
+			account := service.Account{
+				ID:       383,
+				Platform: service.PlatformOpenAI,
+				Type:     service.AccountTypeOAuth,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-5.5": "gpt-5.5"},
+					"access_token":  "drop-me",
+				},
+				Extra: map[string]any{key: true},
+			}
+			require.True(t, account.IsModelSupported("gpt-5.6-sol"),
+				"前置条件：透传账号本应放行白名单外的模型")
+
+			meta := buildSchedulerMetadataAccount(account)
+
+			payload, err := json.Marshal(meta)
+			require.NoError(t, err)
+			var restored service.Account
+			require.NoError(t, json.Unmarshal(payload, &restored))
+
+			require.Equal(t, true, restored.Extra[key])
+			require.True(t, restored.IsOpenAIPassthroughEnabled())
+			require.True(t, restored.IsModelSupported("gpt-5.6-sol"),
+				"投影裁掉透传开关会让透传账号在候选过滤阶段被误判为 model_not_supported")
+			require.Equal(t, map[string]any{"gpt-5.5": "gpt-5.5"}, restored.Credentials["model_mapping"])
+		})
+	}
+}

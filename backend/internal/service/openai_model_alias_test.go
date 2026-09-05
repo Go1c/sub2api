@@ -160,6 +160,17 @@ func TestResolveOpenAIHiddenIngressModel_FallbackVsOptIn(t *testing.T) {
 	require.Equal(t, "gpt-5.6-sol", ResolveOpenAIHiddenIngressModel("gpt-5.6-sol", true))
 }
 
+func TestNormalizeKnownOpenAICodexModel_GPT6Astra(t *testing.T) {
+	t.Parallel()
+	for _, model := range []string{"gpt-6-astra", "GPT-6-Astra", "gpt-6", "openai/gpt-6", "openai/gpt-6-astra", "gpt-6-astra-high", "gpt-6-high"} {
+		require.Equal(t, "gpt-6-astra", normalizeKnownOpenAICodexModel(model), model)
+	}
+	require.Empty(t, normalizeKnownOpenAICodexModel("gpt-6-mini"))
+	require.True(t, isOpenAIGPT6AstraModel("gpt-6"))
+	require.True(t, isOpenAIGPT6AstraModel("gpt-6-astra"))
+	require.False(t, isOpenAIGPT6AstraModel("gpt-6-mini"))
+}
+
 func TestUsageBillingModelCandidates_BareGPT56IncludesSol(t *testing.T) {
 	require.Equal(t,
 		[]string{"gpt-5.6", "gpt-5.6-sol"},
@@ -168,5 +179,9 @@ func TestUsageBillingModelCandidates_BareGPT56IncludesSol(t *testing.T) {
 	require.Equal(t,
 		[]string{"openai/gpt-5.6", "gpt-5.6", "gpt-5.6-sol"},
 		usageBillingModelCandidates("openai/gpt-5.6"),
+	)
+	require.Equal(t,
+		[]string{"gpt-6", "gpt-6-astra"},
+		usageBillingModelCandidates("gpt-6"),
 	)
 }

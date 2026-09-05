@@ -193,6 +193,96 @@ func TestBillingService_GPT56LongContextBoundaryIsExclusive(t *testing.T) {
 	require.InDelta(t, 10*30e-6, cost.OutputCost, 1e-12)
 }
 
+func TestBillingService_GPT6AstraUsesOfficialPricingAcrossTiersAndLongContext(t *testing.T) {
+	svc := NewBillingService(&config.Config{}, nil)
+	boundaryTokens := UsageTokens{InputTokens: 100000, CacheCreationTokens: 100000, CacheReadTokens: 72000, OutputTokens: 10}
+	boundary, err := svc.CalculateCost("gpt-6-astra", boundaryTokens, 1)
+	require.NoError(t, err)
+	require.False(t, boundary.LongContextBillingApplied)
+	require.InDelta(t, 100000*10e-6, boundary.InputCost, 1e-12)
+	require.InDelta(t, 100000*12.5e-6, boundary.CacheCreationCost, 1e-12)
+	require.InDelta(t, 72000*1e-6, boundary.CacheReadCost, 1e-12)
+	require.InDelta(t, 10*50e-6, boundary.OutputCost, 1e-12)
+
+	tokens := UsageTokens{InputTokens: 100000, CacheCreationTokens: 100000, CacheReadTokens: 73000, OutputTokens: 10}
+	tiers := []struct {
+		name        string
+		serviceTier string
+		priceScale  float64
+	}{
+		{name: "standard", priceScale: 1},
+		{name: "priority", serviceTier: "priority", priceScale: 2},
+		{name: "flex", serviceTier: "flex", priceScale: 0.5},
+	}
+	for _, tier := range tiers {
+		t.Run(tier.name, func(t *testing.T) {
+			cost, err := svc.CalculateCostWithServiceTier("gpt-6-astra", tokens, 1, tier.serviceTier)
+			require.NoError(t, err)
+			require.True(t, cost.LongContextBillingApplied)
+			require.InDelta(t, 100000*10e-6*tier.priceScale*2, cost.InputCost, 1e-12)
+			require.InDelta(t, 100000*12.5e-6*tier.priceScale*2, cost.CacheCreationCost, 1e-12)
+			require.InDelta(t, 73000*1e-6*tier.priceScale*2, cost.CacheReadCost, 1e-12)
+			require.InDelta(t, 10*50e-6*tier.priceScale*1.5, cost.OutputCost, 1e-12)
+		})
+	}
+}
+
+func TestGPT6AstraDedicatedFallbacksUseOfficialRates(t *testing.T) {
+	tests := []struct {
+		name string
+		svc  *BillingService
+	}{
+		{name: "pricing_service", svc: NewBillingService(&config.Config{}, &PricingService{pricingData: map[string]*LiteLLMModelPricing{}})},
+		{name: "billing_service", svc: NewBillingService(&config.Config{}, nil)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pricing, err := tt.svc.GetModelPricing("gpt-6-astra")
+			require.NoError(t, err)
+			require.InDelta(t, 10e-6, pricing.InputPricePerToken, 1e-12)
+			require.InDelta(t, 20e-6, pricing.InputPricePerTokenPriority, 1e-12)
+			require.InDelta(t, 50e-6, pricing.OutputPricePerToken, 1e-12)
+			require.InDelta(t, 100e-6, pricing.OutputPricePerTokenPriority, 1e-12)
+			require.InDelta(t, 12.5e-6, pricing.CacheCreationPricePerToken, 1e-12)
+			require.InDelta(t, 25e-6, pricing.CacheCreationPricePerTokenPriority, 1e-12)
+			require.InDelta(t, 1e-6, pricing.CacheReadPricePerToken, 1e-12)
+			require.InDelta(t, 2e-6, pricing.CacheReadPricePerTokenPriority, 1e-12)
+			require.Equal(t, 272000, pricing.LongContextInputThreshold)
+			require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
+			require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+		})
+	}
+}
+
+func TestPricingServiceBareGPT6AliasUsesAstra(t *testing.T) {
+	astraPricing := &LiteLLMModelPricing{InputCostPerToken: 123e-6, OutputCostPerToken: 456e-6}
+	pricingSvc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{"gpt-6-astra": astraPricing}}
+	for _, model := range []string{"gpt-6", "openai/gpt-6"} {
+		pricing := pricingSvc.GetModelPricing(model)
+		require.Same(t, astraPricing, pricing)
+	}
+}
+
+func TestBillingServiceGPT6AstraPinsLongContextWhenCatalogOmitsIt(t *testing.T) {
+	svc := NewBillingService(&config.Config{}, &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gpt-6-astra": {
+			InputCostPerToken:               10e-6,
+			InputCostPerTokenPriority:       20e-6,
+			OutputCostPerToken:              50e-6,
+			OutputCostPerTokenPriority:      100e-6,
+			CacheReadInputTokenCost:         1e-6,
+			CacheReadInputTokenCostPriority: 2e-6,
+		},
+	}})
+	pricing, err := svc.GetModelPricing("gpt-6-astra")
+	require.NoError(t, err)
+	require.Equal(t, 272000, pricing.LongContextInputThreshold)
+	require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
+	require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+	require.InDelta(t, 12.5e-6, pricing.CacheCreationPricePerToken, 1e-12)
+	require.InDelta(t, 25e-6, pricing.CacheCreationPricePerTokenPriority, 1e-12)
+}
+
 func TestPricingService_BareGPT56AliasDeterministicallyUsesSol(t *testing.T) {
 	pricingSvc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
 		"gpt-5.6-sol":   {InputCostPerToken: 5e-6},

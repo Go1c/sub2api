@@ -17,6 +17,8 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-5.6-luna')
     expect(models).toContain('gpt-5.6')
     expect(models).toContain('gpt-5.6-terra')
+    expect(models).toContain('gpt-6')
+    expect(models).toContain('gpt-6-astra')
   })
 
   it('openai 账号映射预设包含 Luna 直通和 Luna→Terra', () => {
@@ -24,6 +26,8 @@ describe('useModelWhitelist', () => {
     expect(presets).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Luna', from: 'gpt-5.6-luna', to: 'gpt-5.6-luna' }),
       expect.objectContaining({ label: 'Luna→Terra', from: 'gpt-5.6-luna', to: 'gpt-5.6-terra' }),
+      expect.objectContaining({ label: 'GPT-6', from: 'gpt-6', to: 'gpt-6' }),
+      expect.objectContaining({ label: 'GPT-6 Astra', from: 'gpt-6-astra', to: 'gpt-6-astra' }),
     ]))
   })
 
