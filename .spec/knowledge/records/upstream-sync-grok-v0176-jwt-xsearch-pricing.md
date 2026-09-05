@@ -17,7 +17,7 @@ metadata:
 
 - **JWT 订阅档位**（已单独提交 `d6cc299f3`）：从 Grok Build access token 解码 `tier`，刷新后覆盖失效订阅。
 - **grok-4.6 目录与官方价卡**（已单独提交 `0f9883ffb`）：`/models` 接入 4.6 别名；独立回退价 `$2 / $0.50 cache read / $6`，≥200k 全项 2×；保留 `reasoning_effort`。
-- **独立 `/v1/x_search` 与 `/x_search`**：不复用 `forwardGrokResponses`（该函数会写客户端）。新增 `DoGrokNativeResponsesJSON` 拉非流式 Responses JSON，handler 抽出 `x_search` / `web_search` sources 后返回统一搜索结果。独立搜索默认模型硬编码 `grok-4.5`，计费模型 `grok-x-search`。
+- **独立 `/v1/x_search` 与 `/x_search`**：不复用 `forwardGrokResponses`（该函数会写客户端）。新增 `DoGrokNativeResponsesJSON` 拉非流式 Responses JSON，handler 抽出 `x_search` / `web_search` sources 后返回统一搜索结果。独立搜索默认模型硬编码 `grok-4.5`，计费模型 `grok-x-search`。现网契约补丁见 [`../features/grok-x-search.md`](../features/grok-x-search.md)：不要发 `include=x_search_call.action.sources`；抽取覆盖 live `custom_tool_call` + `url_citation`。
 - **Chat ↔ Responses `x_search` 工具桥**：声明与回传保留 `type: x_search`，以及 handles / 日期 / 图视频理解字段。
 - **分组 `model_pricing` + `long_context_pricing_enabled`**：migration `923_group_model_pricing.sql`；解析链 **Group → Channel → LiteLLM → Fallback**。分组 token 价卡只覆盖首档/一口价，区间 `Intervals` 在 resolver 剥离（管理端 `hide-token-intervals`）。
 - **鉴权缓存 v16**：快照写入分组 `ModelPricing` 与 `LongContextPricingEnabled`。

@@ -90,9 +90,10 @@ func grokChatResponsesBridgeEligibility(body []byte) (bool, string) {
 		if ok, reason := grokChatToolChoiceBridgeable(raw); !ok {
 			return false, reason
 		}
-		var choice string
-		if json.Unmarshal(raw, &choice) == nil && choice == "required" && !grokChatHasFunctionDeclarations(root) {
-			return false, "required_tool_choice_without_tools"
+		if !grokChatHasFunctionDeclarations(root) {
+			if reason := grokChatToolChoiceWithoutToolsReason(raw); reason != "" {
+				return false, reason
+			}
 		}
 	}
 	if raw, exists := root["function_call"]; exists && !grokChatNullOrNone(raw) {
@@ -261,50 +262,92 @@ func grokChatFunctionDeclarationsBridgeable(raw json.RawMessage) (bool, string) 
 		if json.Unmarshal(declaration, &tool) != nil || tool == nil {
 			return false, "invalid_tool"
 		}
-		for field := range tool {
-			if field != "type" && field != "function" {
-				return false, "unsafe_tool_field_" + field
-			}
-		}
 		var toolType string
-		if rawType, exists := tool["type"]; !exists || json.Unmarshal(rawType, &toolType) != nil || toolType != "function" {
+		if rawType, exists := tool["type"]; !exists || json.Unmarshal(rawType, &toolType) != nil {
 			return false, "unsupported_tool_type"
 		}
-		functionRaw, exists := tool["function"]
-		if !exists {
-			return false, "invalid_tool_function"
+		switch toolType {
+		case "function":
+			if ok, reason := grokChatFunctionToolBridgeable(tool); !ok {
+				return false, reason
+			}
+		case "x_search":
+			if ok, reason := grokChatXSearchToolBridgeable(tool); !ok {
+				return false, reason
+			}
+		default:
+			return false, "unsupported_tool_type"
 		}
+	}
+	return true, ""
+}
 
-		var function map[string]json.RawMessage
-		if json.Unmarshal(functionRaw, &function) != nil || function == nil {
-			return false, "invalid_tool_function"
+func grokChatFunctionToolBridgeable(tool map[string]json.RawMessage) (bool, string) {
+	for field := range tool {
+		if field != "type" && field != "function" {
+			return false, "unsafe_tool_field_" + field
 		}
-		for field := range function {
-			switch field {
-			case "name", "description", "parameters", "strict":
-			default:
-				return false, "unsafe_tool_function_field_" + field
+	}
+	functionRaw, exists := tool["function"]
+	if !exists {
+		return false, "invalid_tool_function"
+	}
+
+	var function map[string]json.RawMessage
+	if json.Unmarshal(functionRaw, &function) != nil || function == nil {
+		return false, "invalid_tool_function"
+	}
+	for field := range function {
+		switch field {
+		case "name", "description", "parameters", "strict":
+		default:
+			return false, "unsafe_tool_function_field_" + field
+		}
+	}
+	var name string
+	if rawName, exists := function["name"]; !exists || json.Unmarshal(rawName, &name) != nil || strings.TrimSpace(name) == "" {
+		return false, "invalid_tool_function_name"
+	}
+	if rawDescription, exists := function["description"]; exists {
+		var description string
+		if json.Unmarshal(rawDescription, &description) != nil {
+			return false, "invalid_tool_function_description"
+		}
+	}
+	var parameters map[string]json.RawMessage
+	if rawParameters, exists := function["parameters"]; !exists || json.Unmarshal(rawParameters, &parameters) != nil || parameters == nil {
+		return false, "invalid_tool_function_parameters"
+	}
+	if rawStrict, exists := function["strict"]; exists {
+		var strict bool
+		if json.Unmarshal(rawStrict, &strict) != nil {
+			return false, "invalid_tool_function_strict"
+		}
+	}
+	return true, ""
+}
+
+func grokChatXSearchToolBridgeable(tool map[string]json.RawMessage) (bool, string) {
+	for field, value := range tool {
+		switch field {
+		case "type":
+		case "allowed_x_handles", "excluded_x_handles":
+			var handles []string
+			if json.Unmarshal(value, &handles) != nil {
+				return false, "invalid_x_search_" + field
 			}
-		}
-		var name string
-		if rawName, exists := function["name"]; !exists || json.Unmarshal(rawName, &name) != nil || strings.TrimSpace(name) == "" {
-			return false, "invalid_tool_function_name"
-		}
-		if rawDescription, exists := function["description"]; exists {
-			var description string
-			if json.Unmarshal(rawDescription, &description) != nil {
-				return false, "invalid_tool_function_description"
+		case "from_date", "to_date":
+			var date string
+			if json.Unmarshal(value, &date) != nil {
+				return false, "invalid_x_search_" + field
 			}
-		}
-		var parameters map[string]json.RawMessage
-		if rawParameters, exists := function["parameters"]; !exists || json.Unmarshal(rawParameters, &parameters) != nil || parameters == nil {
-			return false, "invalid_tool_function_parameters"
-		}
-		if rawStrict, exists := function["strict"]; exists {
-			var strict bool
-			if json.Unmarshal(rawStrict, &strict) != nil {
-				return false, "invalid_tool_function_strict"
+		case "enable_image_understanding", "enable_video_understanding":
+			var enabled *bool
+			if json.Unmarshal(value, &enabled) != nil || enabled == nil {
+				return false, "invalid_x_search_" + field
 			}
+		default:
+			return false, "unsafe_tool_field_" + field
 		}
 	}
 	return true, ""
@@ -315,15 +358,51 @@ func grokChatToolChoiceBridgeable(raw json.RawMessage) (bool, string) {
 		return true, ""
 	}
 	var choice string
-	if json.Unmarshal(raw, &choice) != nil {
+	if json.Unmarshal(raw, &choice) == nil {
+		switch choice {
+		case "auto", "none", "required", "x_search":
+			return true, ""
+		default:
+			return false, "unsupported_tool_choice"
+		}
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) != nil || obj == nil {
 		return false, "unsupported_tool_choice"
 	}
-	switch choice {
-	case "auto", "none", "required":
-		return true, ""
-	default:
+	for field := range obj {
+		if field != "type" {
+			return false, "unsupported_tool_choice"
+		}
+	}
+	var toolType string
+	if rawType, exists := obj["type"]; !exists || json.Unmarshal(rawType, &toolType) != nil || toolType != "x_search" {
 		return false, "unsupported_tool_choice"
 	}
+	return true, ""
+}
+
+func grokChatToolChoiceWithoutToolsReason(raw json.RawMessage) string {
+	var choice string
+	if json.Unmarshal(raw, &choice) == nil {
+		switch choice {
+		case "required":
+			return "required_tool_choice_without_tools"
+		case "x_search":
+			return "x_search_tool_choice_without_tools"
+		default:
+			return ""
+		}
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) != nil {
+		return ""
+	}
+	var toolType string
+	if rawType, exists := obj["type"]; exists && json.Unmarshal(rawType, &toolType) == nil && toolType == "x_search" {
+		return "x_search_tool_choice_without_tools"
+	}
+	return ""
 }
 
 func grokChatHasFunctionDeclarations(root map[string]json.RawMessage) bool {

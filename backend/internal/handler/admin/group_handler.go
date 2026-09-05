@@ -114,6 +114,8 @@ type CreateGroupRequest struct {
 	VideoPrice720P                  *float64                      `json:"video_price_720p"`
 	VideoPrice1080P                 *float64                      `json:"video_price_1080p"`
 	WebSearchPricePerCall           *float64                      `json:"web_search_price_per_call"`
+	WebSearchRateIndependent        bool                          `json:"web_search_rate_independent"`
+	WebSearchRateMultiplier         *float64                      `json:"web_search_rate_multiplier"`
 	LongContextPricingEnabled       bool                          `json:"long_context_pricing_enabled"`
 	ModelPricing                    []service.ChannelModelPricing `json:"model_pricing"`
 	ClaudeCodeOnly                  bool                          `json:"claude_code_only"`
@@ -170,6 +172,8 @@ type UpdateGroupRequest struct {
 	VideoPrice720P                  *float64                       `json:"video_price_720p"`
 	VideoPrice1080P                 *float64                       `json:"video_price_1080p"`
 	WebSearchPricePerCall           *float64                       `json:"web_search_price_per_call"`
+	WebSearchRateIndependent        *bool                          `json:"web_search_rate_independent"`
+	WebSearchRateMultiplier         *float64                       `json:"web_search_rate_multiplier"`
 	LongContextPricingEnabled       *bool                          `json:"long_context_pricing_enabled"`
 	ModelPricing                    *[]service.ChannelModelPricing `json:"model_pricing"`
 	ClaudeCodeOnly                  *bool                          `json:"claude_code_only"`
@@ -487,6 +491,8 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		VideoPrice720P:                  req.VideoPrice720P,
 		VideoPrice1080P:                 req.VideoPrice1080P,
 		WebSearchPricePerCall:           req.WebSearchPricePerCall,
+		WebSearchRateIndependent:        req.WebSearchRateIndependent,
+		WebSearchRateMultiplier:         req.WebSearchRateMultiplier,
 		LongContextPricingEnabled:       req.LongContextPricingEnabled,
 		ModelPricing:                    req.ModelPricing,
 		ClaudeCodeOnly:                  req.ClaudeCodeOnly,
@@ -605,6 +611,8 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		VideoPrice720P:                  req.VideoPrice720P,
 		VideoPrice1080P:                 req.VideoPrice1080P,
 		WebSearchPricePerCall:           req.WebSearchPricePerCall,
+		WebSearchRateIndependent:        req.WebSearchRateIndependent,
+		WebSearchRateMultiplier:         req.WebSearchRateMultiplier,
 		LongContextPricingEnabled:       req.LongContextPricingEnabled,
 		ModelPricing:                    req.ModelPricing,
 		ClaudeCodeOnly:                  req.ClaudeCodeOnly,

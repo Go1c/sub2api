@@ -960,10 +960,12 @@ export default {
         add: '添加模型价格'
       },
       webSearchPricing: {
-        title: 'Codex 网页搜索计费',
+        title: '网页搜索计费',
         pricePerCall: '搜索单次价格（USD/次）',
+        independentMultiplier: '搜索倍率独立',
+        searchMultiplier: '搜索独立倍率',
         pricePerCallHint:
-          '留空使用默认价 $0.01/次（官方定价 $10/1000 次）；填 0 表示免费。实际扣费会叠加分组费率倍数。',
+          '留空使用官方默认 $0.01/次（$10/1000）。适用于 Codex web_search 和 Grok 独立 x_search；填 0 表示免费。默认叠加当前分组有效倍率；开启独立倍率后改用搜索独立倍率。',
         finalPricePreview: '应用当前倍率后的单次价格：{price}'
       },
       peakRate: {

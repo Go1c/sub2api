@@ -225,6 +225,16 @@ func WebSearchPricePerCall(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldWebSearchPricePerCall, v))
 }
 
+// WebSearchRateIndependent applies equality check predicate on the "web_search_rate_independent" field. It's identical to WebSearchRateIndependentEQ.
+func WebSearchRateIndependent(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldWebSearchRateIndependent, v))
+}
+
+// WebSearchRateMultiplier applies equality check predicate on the "web_search_rate_multiplier" field. It's identical to WebSearchRateMultiplierEQ.
+func WebSearchRateMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldWebSearchRateMultiplier, v))
+}
+
 // LongContextPricingEnabled applies equality check predicate on the "long_context_pricing_enabled" field. It's identical to LongContextPricingEnabledEQ.
 func LongContextPricingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldLongContextPricingEnabled, v))
@@ -1803,6 +1813,56 @@ func WebSearchPricePerCallIsNil() predicate.Group {
 // WebSearchPricePerCallNotNil applies the NotNil predicate on the "web_search_price_per_call" field.
 func WebSearchPricePerCallNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldWebSearchPricePerCall))
+}
+
+// WebSearchRateIndependentEQ applies the EQ predicate on the "web_search_rate_independent" field.
+func WebSearchRateIndependentEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldWebSearchRateIndependent, v))
+}
+
+// WebSearchRateIndependentNEQ applies the NEQ predicate on the "web_search_rate_independent" field.
+func WebSearchRateIndependentNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldWebSearchRateIndependent, v))
+}
+
+// WebSearchRateMultiplierEQ applies the EQ predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldWebSearchRateMultiplier, v))
+}
+
+// WebSearchRateMultiplierNEQ applies the NEQ predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldWebSearchRateMultiplier, v))
+}
+
+// WebSearchRateMultiplierIn applies the In predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldWebSearchRateMultiplier, vs...))
+}
+
+// WebSearchRateMultiplierNotIn applies the NotIn predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldWebSearchRateMultiplier, vs...))
+}
+
+// WebSearchRateMultiplierGT applies the GT predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldWebSearchRateMultiplier, v))
+}
+
+// WebSearchRateMultiplierGTE applies the GTE predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldWebSearchRateMultiplier, v))
+}
+
+// WebSearchRateMultiplierLT applies the LT predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldWebSearchRateMultiplier, v))
+}
+
+// WebSearchRateMultiplierLTE applies the LTE predicate on the "web_search_rate_multiplier" field.
+func WebSearchRateMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldWebSearchRateMultiplier, v))
 }
 
 // LongContextPricingEnabledEQ applies the EQ predicate on the "long_context_pricing_enabled" field.

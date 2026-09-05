@@ -43,6 +43,11 @@ func (s *OpenAIGatewayService) DoGrokNativeResponsesJSON(ctx context.Context, c 
 		} else if patched, patchErr := sjson.SetBytes(body, "model", grokDefaultResponsesModel); patchErr == nil {
 			body = patched
 		}
+		stripped, stripErr := stripRejectedGrokSearchInclude(body)
+		if stripErr != nil {
+			return nil, stripErr
+		}
+		body = stripped
 	}
 	ctx = withGrokTeamRateLimitModel(ctx, upstreamModel)
 

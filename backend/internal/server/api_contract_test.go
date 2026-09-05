@@ -387,6 +387,8 @@ func TestAPIContracts(t *testing.T) {
 						"image_rate_multiplier": 0,
 						"video_rate_independent": false,
 						"video_rate_multiplier": 0,
+						"web_search_rate_independent": false,
+						"web_search_rate_multiplier": 0,
 						"long_context_pricing_enabled": false,
 						"claude_code_only": false,
 						"allow_messages_dispatch": false,
