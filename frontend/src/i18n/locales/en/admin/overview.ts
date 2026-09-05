@@ -963,10 +963,12 @@ export default {
         add: 'Add model price'
       },
       webSearchPricing: {
-        title: 'Codex Web Search Pricing',
+        title: 'Web Search Pricing',
         pricePerCall: 'Price per search call (USD)',
+        independentMultiplier: 'Use independent search multiplier',
+        searchMultiplier: 'Search multiplier',
         pricePerCallHint:
-          'Leave empty to use the default $0.01 per call (official pricing: $10 per 1,000 calls); 0 means free. The group rate multiplier is applied on top.',
+          'Leave empty to use the official default $0.01 per call ($10 per 1,000). Applies to Codex web_search and Grok standalone x_search; 0 means free. By default the current effective group multiplier applies; independent mode uses the search multiplier instead.',
         finalPricePreview: 'Per-call price after current multiplier: {price}'
       },
       peakRate: {

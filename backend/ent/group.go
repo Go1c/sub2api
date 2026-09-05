@@ -87,6 +87,10 @@ type Group struct {
 	VideoPrice1080p *float64 `json:"video_price_1080p,omitempty"`
 	// Codex alpha/search 网页搜索单次价格（USD/次）；nil 表示使用默认价 0.01（官方 $10/1000 次）
 	WebSearchPricePerCall *float64 `json:"web_search_price_per_call,omitempty"`
+	// 网页搜索是否使用独立倍率；false 表示共享分组有效倍率
+	WebSearchRateIndependent bool `json:"web_search_rate_independent,omitempty"`
+	// 网页搜索独立倍率，仅 web_search_rate_independent=true 时生效
+	WebSearchRateMultiplier float64 `json:"web_search_rate_multiplier,omitempty"`
 	// Whether token pricing selects official/preset long-context tiers; default true preserves existing long-context billing
 	LongContextPricingEnabled bool `json:"long_context_pricing_enabled,omitempty"`
 	// Per-model group pricing overrides channel and built-in model pricing
@@ -244,9 +248,9 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case group.FieldModelPricing, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelsListConfig:
 			values[i] = new([]byte)
-		case group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldExposeUpstreamModelToUser:
+		case group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldWebSearchRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldExposeUpstreamModelToUser:
 			values[i] = new(sql.NullBool)
-		case group.FieldRateMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall:
+		case group.FieldRateMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall, group.FieldWebSearchRateMultiplier:
 			values[i] = new(sql.NullFloat64)
 		case group.FieldID, group.FieldDefaultValidityDays, group.FieldFallbackGroupID, group.FieldFallbackGroupIDOnInvalidRequest, group.FieldFallbackGroupIDOnExhausted, group.FieldSortOrder, group.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
@@ -491,6 +495,18 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.WebSearchPricePerCall = new(float64)
 				*_m.WebSearchPricePerCall = value.Float64
+			}
+		case group.FieldWebSearchRateIndependent:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field web_search_rate_independent", values[i])
+			} else if value.Valid {
+				_m.WebSearchRateIndependent = value.Bool
+			}
+		case group.FieldWebSearchRateMultiplier:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field web_search_rate_multiplier", values[i])
+			} else if value.Valid {
+				_m.WebSearchRateMultiplier = value.Float64
 			}
 		case group.FieldLongContextPricingEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -827,6 +843,12 @@ func (_m *Group) String() string {
 		builder.WriteString("web_search_price_per_call=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("web_search_rate_independent=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WebSearchRateIndependent))
+	builder.WriteString(", ")
+	builder.WriteString("web_search_rate_multiplier=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WebSearchRateMultiplier))
 	builder.WriteString(", ")
 	builder.WriteString("long_context_pricing_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.LongContextPricingEnabled))

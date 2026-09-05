@@ -669,6 +669,41 @@ func (_u *GroupUpdate) ClearWebSearchPricePerCall() *GroupUpdate {
 	return _u
 }
 
+// SetWebSearchRateIndependent sets the "web_search_rate_independent" field.
+func (_u *GroupUpdate) SetWebSearchRateIndependent(v bool) *GroupUpdate {
+	_u.mutation.SetWebSearchRateIndependent(v)
+	return _u
+}
+
+// SetNillableWebSearchRateIndependent sets the "web_search_rate_independent" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableWebSearchRateIndependent(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetWebSearchRateIndependent(*v)
+	}
+	return _u
+}
+
+// SetWebSearchRateMultiplier sets the "web_search_rate_multiplier" field.
+func (_u *GroupUpdate) SetWebSearchRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetWebSearchRateMultiplier()
+	_u.mutation.SetWebSearchRateMultiplier(v)
+	return _u
+}
+
+// SetNillableWebSearchRateMultiplier sets the "web_search_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableWebSearchRateMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetWebSearchRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddWebSearchRateMultiplier adds value to the "web_search_rate_multiplier" field.
+func (_u *GroupUpdate) AddWebSearchRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddWebSearchRateMultiplier(v)
+	return _u
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (_u *GroupUpdate) SetLongContextPricingEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetLongContextPricingEnabled(v)
@@ -1524,6 +1559,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.WebSearchPricePerCallCleared() {
 		_spec.ClearField(group.FieldWebSearchPricePerCall, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WebSearchRateIndependent(); ok {
+		_spec.SetField(group.FieldWebSearchRateIndependent, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebSearchRateMultiplier(); ok {
+		_spec.SetField(group.FieldWebSearchRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWebSearchRateMultiplier(); ok {
+		_spec.AddField(group.FieldWebSearchRateMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.LongContextPricingEnabled(); ok {
 		_spec.SetField(group.FieldLongContextPricingEnabled, field.TypeBool, value)
@@ -2612,6 +2656,41 @@ func (_u *GroupUpdateOne) ClearWebSearchPricePerCall() *GroupUpdateOne {
 	return _u
 }
 
+// SetWebSearchRateIndependent sets the "web_search_rate_independent" field.
+func (_u *GroupUpdateOne) SetWebSearchRateIndependent(v bool) *GroupUpdateOne {
+	_u.mutation.SetWebSearchRateIndependent(v)
+	return _u
+}
+
+// SetNillableWebSearchRateIndependent sets the "web_search_rate_independent" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableWebSearchRateIndependent(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetWebSearchRateIndependent(*v)
+	}
+	return _u
+}
+
+// SetWebSearchRateMultiplier sets the "web_search_rate_multiplier" field.
+func (_u *GroupUpdateOne) SetWebSearchRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetWebSearchRateMultiplier()
+	_u.mutation.SetWebSearchRateMultiplier(v)
+	return _u
+}
+
+// SetNillableWebSearchRateMultiplier sets the "web_search_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableWebSearchRateMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetWebSearchRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddWebSearchRateMultiplier adds value to the "web_search_rate_multiplier" field.
+func (_u *GroupUpdateOne) AddWebSearchRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddWebSearchRateMultiplier(v)
+	return _u
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (_u *GroupUpdateOne) SetLongContextPricingEnabled(v bool) *GroupUpdateOne {
 	_u.mutation.SetLongContextPricingEnabled(v)
@@ -3497,6 +3576,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.WebSearchPricePerCallCleared() {
 		_spec.ClearField(group.FieldWebSearchPricePerCall, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WebSearchRateIndependent(); ok {
+		_spec.SetField(group.FieldWebSearchRateIndependent, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WebSearchRateMultiplier(); ok {
+		_spec.SetField(group.FieldWebSearchRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWebSearchRateMultiplier(); ok {
+		_spec.AddField(group.FieldWebSearchRateMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.LongContextPricingEnabled(); ok {
 		_spec.SetField(group.FieldLongContextPricingEnabled, field.TypeBool, value)

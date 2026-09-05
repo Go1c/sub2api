@@ -19,3 +19,13 @@ func resolveVideoRateMultiplier(apiKey *APIKey, effectiveGroupMultiplier float64
 	}
 	return effectiveGroupMultiplier
 }
+
+func resolveWebSearchRateMultiplier(apiKey *APIKey, effectiveGroupMultiplier float64) float64 {
+	if apiKey != nil && apiKey.Group != nil && apiKey.Group.WebSearchRateIndependent {
+		if apiKey.Group.WebSearchRateMultiplier < 0 {
+			return 0
+		}
+		return apiKey.Group.WebSearchRateMultiplier
+	}
+	return effectiveGroupMultiplier
+}

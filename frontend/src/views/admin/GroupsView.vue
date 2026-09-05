@@ -1367,14 +1367,40 @@
           </div>
         </div>
 
-        <!-- Codex 网页搜索按次计费（仅 openai 平台） -->
+        <!-- Codex / Grok 网页搜索按次计费 -->
         <div
-          v-if="createForm.platform === 'openai'"
+          v-if="supportsWebSearchPricingPlatform(createForm.platform)"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {{ t("admin.groups.webSearchPricing.title") }}
           </h4>
+          <div class="mb-4">
+            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                v-model="createForm.web_search_rate_independent"
+                type="checkbox"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              {{ t("admin.groups.webSearchPricing.independentMultiplier") }}
+            </label>
+          </div>
+          <div
+            v-if="createForm.web_search_rate_independent"
+            class="mb-4"
+          >
+            <label class="input-label">{{
+              t("admin.groups.webSearchPricing.searchMultiplier")
+            }}</label>
+            <input
+              v-model.number="createForm.web_search_rate_multiplier"
+              type="number"
+              step="0.0001"
+              min="0"
+              class="input"
+              placeholder="1"
+            />
+          </div>
           <div>
             <label class="input-label">{{
               t("admin.groups.webSearchPricing.pricePerCall")
@@ -2938,14 +2964,40 @@
           </div>
         </div>
 
-        <!-- Codex 网页搜索按次计费（仅 openai 平台） -->
+        <!-- Codex / Grok 网页搜索按次计费 -->
         <div
-          v-if="editForm.platform === 'openai'"
+          v-if="supportsWebSearchPricingPlatform(editForm.platform)"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {{ t("admin.groups.webSearchPricing.title") }}
           </h4>
+          <div class="mb-4">
+            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                v-model="editForm.web_search_rate_independent"
+                type="checkbox"
+                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              {{ t("admin.groups.webSearchPricing.independentMultiplier") }}
+            </label>
+          </div>
+          <div
+            v-if="editForm.web_search_rate_independent"
+            class="mb-4"
+          >
+            <label class="input-label">{{
+              t("admin.groups.webSearchPricing.searchMultiplier")
+            }}</label>
+            <input
+              v-model.number="editForm.web_search_rate_multiplier"
+              type="number"
+              step="0.0001"
+              min="0"
+              class="input"
+              placeholder="1"
+            />
+          </div>
           <div>
             <label class="input-label">{{
               t("admin.groups.webSearchPricing.pricePerCall")
@@ -3919,6 +3971,11 @@ import {
   supportsVideoPricingPlatform,
   videoPricingI18nKey,
 } from "./groupsImagePricing";
+import {
+  DEFAULT_WEB_SEARCH_PRICE_PER_CALL,
+  resolveWebSearchPreviewMultiplier,
+  supportsWebSearchPricingPlatform,
+} from "./groupsWebSearchPricing";
 
 const emptyGroupPricing = (): PricingFormEntry => ({
   models: [],
@@ -4445,8 +4502,10 @@ const createForm = reactive({
   video_price_480p: null as number | null,
   video_price_720p: null as number | null,
   video_price_1080p: null as number | null,
-  // Codex 网页搜索按次计费（仅 openai 平台使用）；null = 使用默认价 0.01
+  // Codex / Grok 独立搜索按次计费；null = 使用默认价 0.01
   web_search_price_per_call: null as number | null,
+  web_search_rate_independent: false,
+  web_search_rate_multiplier: 1,
   long_context_pricing_enabled: true,
   model_pricing: [] as PricingFormEntry[],
   // 高峰时段倍率配置
@@ -4795,8 +4854,10 @@ const editForm = reactive({
   video_price_480p: null as number | null,
   video_price_720p: null as number | null,
   video_price_1080p: null as number | null,
-  // Codex 网页搜索按次计费（仅 openai 平台使用）；null = 使用默认价 0.01
+  // Codex / Grok 独立搜索按次计费；null = 使用默认价 0.01
   web_search_price_per_call: null as number | null,
+  web_search_rate_independent: false,
+  web_search_rate_multiplier: 1,
   long_context_pricing_enabled: true,
   model_pricing: [] as PricingFormEntry[],
   // 高峰时段倍率配置
@@ -4957,17 +5018,20 @@ const editVideoFinalPricePreview = computed(() =>
   buildVideoFinalPricePreview(editForm),
 );
 
-// Codex 网页搜索单次默认价（与后端 defaultWebSearchPricePerCall 一致，官方 $10/1000 次）
-const DEFAULT_WEB_SEARCH_PRICE_PER_CALL = 0.01;
-
 const buildWebSearchFinalPricePreview = (form: {
   web_search_price_per_call: number | string | null;
+  web_search_rate_independent: boolean;
+  web_search_rate_multiplier: number | string | null;
   rate_multiplier: number | string | null;
 }) => {
   const basePrice =
     parsePreviewPrice(form.web_search_price_per_call) ??
     DEFAULT_WEB_SEARCH_PRICE_PER_CALL;
-  const multiplier = normalizePreviewNumber(form.rate_multiplier, 1);
+  const multiplier = resolveWebSearchPreviewMultiplier(
+    form.web_search_rate_independent,
+    form.web_search_rate_multiplier,
+    form.rate_multiplier,
+  );
   return formatImagePricePreview(basePrice * multiplier);
 };
 
@@ -5204,6 +5268,8 @@ const closeCreateModal = () => {
   createForm.video_price_720p = null;
   createForm.video_price_1080p = null;
   createForm.web_search_price_per_call = null;
+  createForm.web_search_rate_independent = false;
+  createForm.web_search_rate_multiplier = 1;
   createForm.long_context_pricing_enabled = true;
   createForm.model_pricing = [];
   createForm.peak_rate_enabled = false;
@@ -5314,6 +5380,9 @@ const handleCreateGroup = async () => {
     requestData.video_rate_multiplier = normalizeRateMultiplier(
       requestData.video_rate_multiplier,
     );
+    requestData.web_search_rate_multiplier = normalizeRateMultiplier(
+      requestData.web_search_rate_multiplier,
+    );
     // 媒体价格输入清空时 v-model.number 产生 ""，直接提交会被后端 *float64 反序列化拒绝（400），
     // 创建时按"未配置"（null）处理。
     requestData.image_price_1k = emptyToNull(requestData.image_price_1k);
@@ -5382,6 +5451,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.video_price_720p = group.video_price_720p;
   editForm.video_price_1080p = group.video_price_1080p;
   editForm.web_search_price_per_call = group.web_search_price_per_call ?? null;
+  editForm.web_search_rate_independent = group.web_search_rate_independent ?? false;
+  editForm.web_search_rate_multiplier = group.web_search_rate_multiplier ?? 1;
   editForm.peak_rate_enabled = group.peak_rate_enabled ?? false;
   editForm.peak_start = group.peak_start ?? "";
   editForm.peak_end = group.peak_end ?? "";
@@ -5441,6 +5512,8 @@ const closeEditModal = () => {
   editForm.video_price_720p = null;
   editForm.video_price_1080p = null;
   editForm.web_search_price_per_call = null;
+  editForm.web_search_rate_independent = false;
+  editForm.web_search_rate_multiplier = 1;
   editForm.long_context_pricing_enabled = true;
   editForm.model_pricing = [];
   resetMessagesDispatchFormState(editForm);
@@ -5518,6 +5591,9 @@ const handleUpdateGroup = async () => {
     );
     payload.video_rate_multiplier = normalizeRateMultiplier(
       payload.video_rate_multiplier,
+    );
+    payload.web_search_rate_multiplier = normalizeRateMultiplier(
+      payload.web_search_rate_multiplier,
     );
     // 媒体价格输入清空时 v-model.number 产生 ""，直接提交会被后端 *float64 反序列化拒绝（400）。
     // 更新语义中 null 表示"不修改"，因此清空后的字段发送 -1：后端 normalizePrice 将负价归一为

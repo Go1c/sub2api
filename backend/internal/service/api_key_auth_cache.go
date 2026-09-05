@@ -83,6 +83,8 @@ type APIKeyAuthGroupSnapshot struct {
 	VideoPrice720P                  *float64              `json:"video_price_720p,omitempty"`
 	VideoPrice1080P                 *float64              `json:"video_price_1080p,omitempty"`
 	WebSearchPricePerCall           *float64              `json:"web_search_price_per_call,omitempty"`
+	WebSearchRateIndependent        bool                  `json:"web_search_rate_independent"`
+	WebSearchRateMultiplier         float64               `json:"web_search_rate_multiplier"`
 	LongContextPricingEnabled       bool                  `json:"long_context_pricing_enabled"`
 	ModelPricing                    []ChannelModelPricing `json:"model_pricing,omitempty"`
 	ClaudeCodeOnly                  bool                  `json:"claude_code_only"`

@@ -84,6 +84,10 @@ const (
 	FieldVideoPrice1080p = "video_price_1080p"
 	// FieldWebSearchPricePerCall holds the string denoting the web_search_price_per_call field in the database.
 	FieldWebSearchPricePerCall = "web_search_price_per_call"
+	// FieldWebSearchRateIndependent holds the string denoting the web_search_rate_independent field in the database.
+	FieldWebSearchRateIndependent = "web_search_rate_independent"
+	// FieldWebSearchRateMultiplier holds the string denoting the web_search_rate_multiplier field in the database.
+	FieldWebSearchRateMultiplier = "web_search_rate_multiplier"
 	// FieldLongContextPricingEnabled holds the string denoting the long_context_pricing_enabled field in the database.
 	FieldLongContextPricingEnabled = "long_context_pricing_enabled"
 	// FieldModelPricing holds the string denoting the model_pricing field in the database.
@@ -240,6 +244,8 @@ var Columns = []string{
 	FieldVideoPrice720p,
 	FieldVideoPrice1080p,
 	FieldWebSearchPricePerCall,
+	FieldWebSearchRateIndependent,
+	FieldWebSearchRateMultiplier,
 	FieldLongContextPricingEnabled,
 	FieldModelPricing,
 	FieldClaudeCodeOnly,
@@ -344,6 +350,10 @@ var (
 	DefaultVideoRateIndependent bool
 	// DefaultVideoRateMultiplier holds the default value on creation for the "video_rate_multiplier" field.
 	DefaultVideoRateMultiplier float64
+	// DefaultWebSearchRateIndependent holds the default value on creation for the "web_search_rate_independent" field.
+	DefaultWebSearchRateIndependent bool
+	// DefaultWebSearchRateMultiplier holds the default value on creation for the "web_search_rate_multiplier" field.
+	DefaultWebSearchRateMultiplier float64
 	// DefaultLongContextPricingEnabled holds the default value on creation for the "long_context_pricing_enabled" field.
 	DefaultLongContextPricingEnabled bool
 	// DefaultClaudeCodeOnly holds the default value on creation for the "claude_code_only" field.
@@ -552,6 +562,16 @@ func ByVideoPrice1080p(opts ...sql.OrderTermOption) OrderOption {
 // ByWebSearchPricePerCall orders the results by the web_search_price_per_call field.
 func ByWebSearchPricePerCall(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebSearchPricePerCall, opts...).ToFunc()
+}
+
+// ByWebSearchRateIndependent orders the results by the web_search_rate_independent field.
+func ByWebSearchRateIndependent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebSearchRateIndependent, opts...).ToFunc()
+}
+
+// ByWebSearchRateMultiplier orders the results by the web_search_rate_multiplier field.
+func ByWebSearchRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWebSearchRateMultiplier, opts...).ToFunc()
 }
 
 // ByLongContextPricingEnabled orders the results by the long_context_pricing_enabled field.

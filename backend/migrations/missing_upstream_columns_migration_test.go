@@ -79,6 +79,15 @@ func TestMigration179GroupWebSearchPrice(t *testing.T) {
 	require.Contains(t, string(content), "web_search_price_per_call")
 }
 
+func TestMigration940GroupWebSearchRateControls(t *testing.T) {
+	content, err := FS.ReadFile("940_group_web_search_rate_controls.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "web_search_rate_independent")
+	require.Contains(t, sql, "web_search_rate_multiplier")
+}
+
 func TestMigration181DeletedAPIKeyAudit(t *testing.T) {
 	content, err := FS.ReadFile("181_deleted_api_key_audit.sql")
 	require.NoError(t, err)

@@ -155,6 +155,13 @@ func (Group) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Comment("Codex alpha/search 网页搜索单次价格（USD/次）；nil 表示使用默认价 0.01（官方 $10/1000 次）"),
+		field.Bool("web_search_rate_independent").
+			Default(false).
+			Comment("网页搜索是否使用独立倍率；false 表示共享分组有效倍率"),
+		field.Float("web_search_rate_multiplier").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(1.0).
+			Comment("网页搜索独立倍率，仅 web_search_rate_independent=true 时生效"),
 		field.Bool("long_context_pricing_enabled").
 			Default(true).
 			Comment("Whether token pricing selects official/preset long-context tiers; default true preserves existing long-context billing"),

@@ -82,12 +82,12 @@ func buildGrokXSearchResponsesBody(req grokStandaloneSearchRequest, model string
 		maxResults = *req.MaxResults
 	}
 	resolvedModel := xai.ResolveDefaultTextModel(model)
+	// Do not send include=x_search_call.action.sources: live xAI rejects it with HTTP 400.
 	return json.Marshal(map[string]any{
 		"model":       resolvedModel,
 		"input":       buildGrokXSearchPrompt(input, maxResults),
 		"tools":       []map[string]any{tool},
 		"tool_choice": "required",
-		"include":     []string{"x_search_call.action.sources"},
 		"store":       false,
 		"stream":      false,
 	})
@@ -103,8 +103,10 @@ func normalizeGrokWebSearchMaxResults(maxResults int) int {
 	return maxResults
 }
 
-// extractGrokWebSearchSources returns model-enriched results only when their URLs
-// are present in the actual web_search / x_search sources, then falls back to raw sources.
+// extractGrokWebSearchSources prefers structured JSON results whose URLs appear
+// in native web_search / x_search / custom_tool_call sources or url_citation
+// annotations, then falls back to those sources. When the model returns
+// structured JSON without any native source list, the JSON results are used.
 func extractGrokWebSearchSources(body []byte, maxResults int) []websearch.SearchResult {
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return nil
@@ -135,7 +137,7 @@ func extractGrokWebSearchSources(body []byte, maxResults int) []websearch.Search
 	output := gjson.GetBytes(body, "output")
 	output.ForEach(func(_, item gjson.Result) bool {
 		callType := item.Get("type").String()
-		if callType == "web_search_call" || callType == "x_search_call" {
+		if callType == "web_search_call" || callType == "x_search_call" || callType == "custom_tool_call" {
 			callSources := item.Get("action.sources")
 			if callSources.IsArray() {
 				callSources.ForEach(func(_, src gjson.Result) bool {
@@ -161,6 +163,7 @@ func extractGrokWebSearchSources(body []byte, maxResults int) []websearch.Search
 		return true
 	})
 
+	allowlistOnly := len(sourceOrder) > 0
 	var out []websearch.SearchResult
 	seen := make(map[string]bool)
 	output.ForEach(func(_, item gjson.Result) bool {
@@ -176,20 +179,26 @@ func extractGrokWebSearchSources(body []byte, maxResults int) []websearch.Search
 				if !ok || seen[key] {
 					continue
 				}
-				source, allowed := sources[key]
-				if !allowed {
+				if source, allowed := sources[key]; allowed {
+					result.URL = source.URL
+					result.Title = usableGrokWebSearchTitle(result.Title, result.URL)
+					if result.Title == "" {
+						result.Title = source.Title
+					}
+					result.Snippet = strings.TrimSpace(result.Snippet)
+					if result.Snippet == "" {
+						result.Snippet = source.Snippet
+					}
+				} else if allowlistOnly {
 					continue
+				} else {
+					result.Title = usableGrokWebSearchTitle(result.Title, result.URL)
+					if result.Title == "" {
+						result.Title = grokWebSearchTitleFromURL(result.URL)
+					}
+					result.Snippet = strings.TrimSpace(result.Snippet)
 				}
 				seen[key] = true
-				result.URL = source.URL
-				result.Title = usableGrokWebSearchTitle(result.Title, result.URL)
-				if result.Title == "" {
-					result.Title = source.Title
-				}
-				result.Snippet = strings.TrimSpace(result.Snippet)
-				if result.Snippet == "" {
-					result.Snippet = source.Snippet
-				}
 				out = append(out, result)
 				if len(out) >= maxResults {
 					break

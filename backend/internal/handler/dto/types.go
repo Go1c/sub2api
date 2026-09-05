@@ -136,7 +136,9 @@ type Group struct {
 	VideoPrice720P     *float64 `json:"video_price_720p"`
 	VideoPrice1080P    *float64 `json:"video_price_1080p"`
 	// Codex alpha/search 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
-	WebSearchPricePerCall *float64 `json:"web_search_price_per_call"`
+	WebSearchPricePerCall    *float64 `json:"web_search_price_per_call"`
+	WebSearchRateIndependent bool     `json:"web_search_rate_independent"`
+	WebSearchRateMultiplier  float64  `json:"web_search_rate_multiplier"`
 	// LongContextPricingEnabled 控制 token 计费是否走官方/预设长上下文阶梯。
 	LongContextPricingEnabled bool `json:"long_context_pricing_enabled"`
 

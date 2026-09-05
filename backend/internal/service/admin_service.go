@@ -250,6 +250,8 @@ type CreateGroupInput struct {
 	VideoPrice1080P    *float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；nil/负数按默认价 0.01 处理
 	WebSearchPricePerCall     *float64
+	WebSearchRateIndependent  bool
+	WebSearchRateMultiplier   *float64
 	LongContextPricingEnabled bool
 	ModelPricing              []ChannelModelPricing
 	ClaudeCodeOnly            bool   // 仅允许 Claude Code 客户端
@@ -308,6 +310,8 @@ type UpdateGroupInput struct {
 	VideoPrice1080P    *float64
 	// Codex alpha/search 网页搜索单次价格（USD/次）；nil 表示不修改，负数表示清除回默认价 0.01
 	WebSearchPricePerCall     *float64
+	WebSearchRateIndependent  *bool
+	WebSearchRateMultiplier   *float64
 	LongContextPricingEnabled *bool
 	ModelPricing              *[]ChannelModelPricing
 	ClaudeCodeOnly            *bool  // 仅允许 Claude Code 客户端

@@ -105,6 +105,26 @@ func TestGrokChatResponsesBridgeEligibility(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "x_search tool bridges",
+			body: `{"model":"grok","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"x_search","allowed_x_handles":["xai"]}]}`,
+			want: true,
+		},
+		{
+			name: "x_search tool_choice object bridges",
+			body: `{"model":"grok","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"x_search"}],"tool_choice":{"type":"x_search"}}`,
+			want: true,
+		},
+		{
+			name: "mixed function and x_search tools bridge",
+			body: `{"model":"grok","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}},{"type":"x_search"}]}`,
+			want: true,
+		},
+		{
+			name:   "x_search tool_choice without tools falls back",
+			body:   `{"model":"grok","messages":[{"role":"user","content":"hi"}],"tool_choice":{"type":"x_search"}}`,
+			reason: "x_search_tool_choice_without_tools",
+		},
+		{
 			name:   "legacy functions fall back",
 			body:   `{"model":"grok","messages":[{"role":"user","content":"hi"}],"functions":[{"name":"lookup","parameters":{"type":"object"}}]}`,
 			reason: "unsupported_functions",

@@ -459,7 +459,46 @@ func patchGrokResponsesBody(body []byte, upstreamModel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	return stripRejectedGrokSearchInclude(out)
+}
+
+const grokRejectedSearchInclude = "x_search_call.action.sources"
+
+// stripRejectedGrokSearchInclude drops include values that live xAI rejects
+// with HTTP 400. Other include entries (for example reasoning.encrypted_content)
+// are kept; an empty include array is removed.
+func stripRejectedGrokSearchInclude(body []byte) ([]byte, error) {
+	include := gjson.GetBytes(body, "include")
+	if !include.Exists() {
+		return body, nil
+	}
+	if !include.IsArray() {
+		if strings.TrimSpace(include.String()) == grokRejectedSearchInclude {
+			return sjson.DeleteBytes(body, "include")
+		}
+		return body, nil
+	}
+
+	kept := make([]json.RawMessage, 0, len(include.Array()))
+	changed := false
+	for _, item := range include.Array() {
+		if strings.TrimSpace(item.String()) == grokRejectedSearchInclude {
+			changed = true
+			continue
+		}
+		kept = append(kept, json.RawMessage(item.Raw))
+	}
+	if !changed {
+		return body, nil
+	}
+	if len(kept) == 0 {
+		return sjson.DeleteBytes(body, "include")
+	}
+	encoded, err := json.Marshal(kept)
+	if err != nil {
+		return nil, err
+	}
+	return sjson.SetRawBytes(body, "include", encoded)
 }
 
 func sanitizeGrokResponsesModelCapabilities(body []byte, upstreamModel string) ([]byte, error) {

@@ -43,6 +43,21 @@ func TestPatchGrokResponsesBodySetsMappedModelAndDropsUnsupportedFields(t *testi
 	require.Equal(t, "high", gjson.GetBytes(patched, "reasoning.effort").String())
 }
 
+func TestPatchGrokResponsesBodyStripsRejectedSearchInclude(t *testing.T) {
+	t.Parallel()
+
+	onlyRejected := []byte(`{"model":"grok","input":"hi","tools":[{"type":"x_search"}],"include":["x_search_call.action.sources"]}`)
+	patched, err := patchGrokResponsesBody(onlyRejected, "grok-4.6")
+	require.NoError(t, err)
+	require.False(t, gjson.GetBytes(patched, "include").Exists())
+
+	mixed := []byte(`{"model":"grok","input":"hi","include":["reasoning.encrypted_content","x_search_call.action.sources"]}`)
+	patched, err = patchGrokResponsesBody(mixed, "grok-4.6")
+	require.NoError(t, err)
+	require.Equal(t, 1, int(gjson.GetBytes(patched, "include.#").Int()))
+	require.Equal(t, "reasoning.encrypted_content", gjson.GetBytes(patched, "include.0").String())
+}
+
 func TestPatchGrokResponsesBodyDropsRedundantViewImageForCurrentInlineImage(t *testing.T) {
 	t.Parallel()
 
