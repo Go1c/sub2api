@@ -1232,6 +1232,11 @@ func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex-spark",
 		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex-spark",
 		"gpt 5.3 codex":             "gpt-5.3-codex",
+		"gpt-6-astra":               "gpt-6-astra",
+		"gpt-6":                     "gpt-6-astra",
+		"gpt6-astra":                "gpt-6-astra",
+		"openai/gpt-6-astra":        "gpt-6-astra",
+		"openai/gpt-6":              "gpt-6-astra",
 	}
 
 	for input, expected := range cases {

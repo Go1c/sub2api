@@ -72,6 +72,7 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
+| [`records/upstream-sync-v0200-astra-codex.md`](records/upstream-sync-v0200-astra-codex.md) | 2026-09-05：0.2.0 窗口后选择性带入 GPT-6 Astra 与 Codex 透传/bootstrap/API Key 聊天缓存身份；不整包 merge |
 | [`records/upstream-sync-v0179-newest-gateway.md`](records/upstream-sync-v0179-newest-gateway.md) | 2026-08-22：main 快进 0.1.179 后网关/鉴权修复入 dev；国模/CN provider 已授权合入；Composite 已授权合入（迁移 **935**）；Grok 全量目录 + free-quota 软闸已授权合入 |
 | [`records/upstream-sync-v0177-codex-compact-group-usage.md`](records/upstream-sync-v0177-codex-compact-group-usage.md) | 2026-08-15：main 快进 0.1.177 后，Codex turn-state、native compaction v2、分组用量日 rollup 的选择性同步（待 Review 合入 dev） |
 | [`records/upstream-sync-grok-v0176-jwt-xsearch-pricing.md`](records/upstream-sync-grok-v0176-jwt-xsearch-pricing.md) | 2026-08-13：Grok JWT 档位、独立 /x_search、分组 model_pricing、SuperGrokPro、用量快照与 4.5/4.6 官方价卡的选择性同步（待 Review 合入 dev） |
