@@ -26535,6 +26535,9 @@ type GroupMutation struct {
 	addvideo_price_1080p                    *float64
 	web_search_price_per_call               *float64
 	addweb_search_price_per_call            *float64
+	web_search_rate_independent             *bool
+	web_search_rate_multiplier              *float64
+	addweb_search_rate_multiplier           *float64
 	long_context_pricing_enabled            *bool
 	model_pricing                           *json.RawMessage
 	appendmodel_pricing                     json.RawMessage
@@ -28429,6 +28432,98 @@ func (m *GroupMutation) ResetWebSearchPricePerCall() {
 	delete(m.clearedFields, group.FieldWebSearchPricePerCall)
 }
 
+// SetWebSearchRateIndependent sets the "web_search_rate_independent" field.
+func (m *GroupMutation) SetWebSearchRateIndependent(b bool) {
+	m.web_search_rate_independent = &b
+}
+
+// WebSearchRateIndependent returns the value of the "web_search_rate_independent" field in the mutation.
+func (m *GroupMutation) WebSearchRateIndependent() (r bool, exists bool) {
+	v := m.web_search_rate_independent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebSearchRateIndependent returns the old "web_search_rate_independent" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldWebSearchRateIndependent(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebSearchRateIndependent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebSearchRateIndependent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebSearchRateIndependent: %w", err)
+	}
+	return oldValue.WebSearchRateIndependent, nil
+}
+
+// ResetWebSearchRateIndependent resets all changes to the "web_search_rate_independent" field.
+func (m *GroupMutation) ResetWebSearchRateIndependent() {
+	m.web_search_rate_independent = nil
+}
+
+// SetWebSearchRateMultiplier sets the "web_search_rate_multiplier" field.
+func (m *GroupMutation) SetWebSearchRateMultiplier(f float64) {
+	m.web_search_rate_multiplier = &f
+	m.addweb_search_rate_multiplier = nil
+}
+
+// WebSearchRateMultiplier returns the value of the "web_search_rate_multiplier" field in the mutation.
+func (m *GroupMutation) WebSearchRateMultiplier() (r float64, exists bool) {
+	v := m.web_search_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebSearchRateMultiplier returns the old "web_search_rate_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldWebSearchRateMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebSearchRateMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebSearchRateMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebSearchRateMultiplier: %w", err)
+	}
+	return oldValue.WebSearchRateMultiplier, nil
+}
+
+// AddWebSearchRateMultiplier adds f to the "web_search_rate_multiplier" field.
+func (m *GroupMutation) AddWebSearchRateMultiplier(f float64) {
+	if m.addweb_search_rate_multiplier != nil {
+		*m.addweb_search_rate_multiplier += f
+	} else {
+		m.addweb_search_rate_multiplier = &f
+	}
+}
+
+// AddedWebSearchRateMultiplier returns the value that was added to the "web_search_rate_multiplier" field in this mutation.
+func (m *GroupMutation) AddedWebSearchRateMultiplier() (r float64, exists bool) {
+	v := m.addweb_search_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetWebSearchRateMultiplier resets all changes to the "web_search_rate_multiplier" field.
+func (m *GroupMutation) ResetWebSearchRateMultiplier() {
+	m.web_search_rate_multiplier = nil
+	m.addweb_search_rate_multiplier = nil
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (m *GroupMutation) SetLongContextPricingEnabled(b bool) {
 	m.long_context_pricing_enabled = &b
@@ -29724,7 +29819,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 53)
+	fields := make([]string, 0, 55)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -29826,6 +29921,12 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.web_search_price_per_call != nil {
 		fields = append(fields, group.FieldWebSearchPricePerCall)
+	}
+	if m.web_search_rate_independent != nil {
+		fields = append(fields, group.FieldWebSearchRateIndependent)
+	}
+	if m.web_search_rate_multiplier != nil {
+		fields = append(fields, group.FieldWebSearchRateMultiplier)
 	}
 	if m.long_context_pricing_enabled != nil {
 		fields = append(fields, group.FieldLongContextPricingEnabled)
@@ -29960,6 +30061,10 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.VideoPrice1080p()
 	case group.FieldWebSearchPricePerCall:
 		return m.WebSearchPricePerCall()
+	case group.FieldWebSearchRateIndependent:
+		return m.WebSearchRateIndependent()
+	case group.FieldWebSearchRateMultiplier:
+		return m.WebSearchRateMultiplier()
 	case group.FieldLongContextPricingEnabled:
 		return m.LongContextPricingEnabled()
 	case group.FieldModelPricing:
@@ -30075,6 +30180,10 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldVideoPrice1080p(ctx)
 	case group.FieldWebSearchPricePerCall:
 		return m.OldWebSearchPricePerCall(ctx)
+	case group.FieldWebSearchRateIndependent:
+		return m.OldWebSearchRateIndependent(ctx)
+	case group.FieldWebSearchRateMultiplier:
+		return m.OldWebSearchRateMultiplier(ctx)
 	case group.FieldLongContextPricingEnabled:
 		return m.OldLongContextPricingEnabled(ctx)
 	case group.FieldModelPricing:
@@ -30360,6 +30469,20 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetWebSearchPricePerCall(v)
 		return nil
+	case group.FieldWebSearchRateIndependent:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebSearchRateIndependent(v)
+		return nil
+	case group.FieldWebSearchRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebSearchRateMultiplier(v)
+		return nil
 	case group.FieldLongContextPricingEnabled:
 		v, ok := value.(bool)
 		if !ok {
@@ -30552,6 +30675,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addweb_search_price_per_call != nil {
 		fields = append(fields, group.FieldWebSearchPricePerCall)
 	}
+	if m.addweb_search_rate_multiplier != nil {
+		fields = append(fields, group.FieldWebSearchRateMultiplier)
+	}
 	if m.addfallback_group_id != nil {
 		fields = append(fields, group.FieldFallbackGroupID)
 	}
@@ -30609,6 +30735,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedVideoPrice1080p()
 	case group.FieldWebSearchPricePerCall:
 		return m.AddedWebSearchPricePerCall()
+	case group.FieldWebSearchRateMultiplier:
+		return m.AddedWebSearchRateMultiplier()
 	case group.FieldFallbackGroupID:
 		return m.AddedFallbackGroupID()
 	case group.FieldFallbackGroupIDOnInvalidRequest:
@@ -30746,6 +30874,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddWebSearchPricePerCall(v)
+		return nil
+	case group.FieldWebSearchRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWebSearchRateMultiplier(v)
 		return nil
 	case group.FieldFallbackGroupID:
 		v, ok := value.(int64)
@@ -31021,6 +31156,12 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldWebSearchPricePerCall:
 		m.ResetWebSearchPricePerCall()
+		return nil
+	case group.FieldWebSearchRateIndependent:
+		m.ResetWebSearchRateIndependent()
+		return nil
+	case group.FieldWebSearchRateMultiplier:
+		m.ResetWebSearchRateMultiplier()
 		return nil
 	case group.FieldLongContextPricingEnabled:
 		m.ResetLongContextPricingEnabled()

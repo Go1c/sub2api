@@ -91,6 +91,8 @@ const sourceGroup: AdminGroup = {
   video_price_720p: null,
   video_price_1080p: null,
   web_search_price_per_call: null,
+  web_search_rate_independent: false,
+  web_search_rate_multiplier: 1,
   peak_rate_enabled: false,
   peak_start: '',
   peak_end: '',

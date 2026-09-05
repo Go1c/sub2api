@@ -356,6 +356,13 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 		videoRateMultiplier = *input.VideoRateMultiplier
 	}
+	webSearchRateMultiplier := 1.0
+	if input.WebSearchRateMultiplier != nil {
+		if *input.WebSearchRateMultiplier < 0 {
+			return nil, errors.New("web_search_rate_multiplier must be >= 0")
+		}
+		webSearchRateMultiplier = *input.WebSearchRateMultiplier
+	}
 
 	peakRateMultiplier := 1.0
 	if input.PeakRateMultiplier != nil {
@@ -460,6 +467,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		VideoPrice720P:                  videoPrice720P,
 		VideoPrice1080P:                 videoPrice1080P,
 		WebSearchPricePerCall:           webSearchPricePerCall,
+		WebSearchRateIndependent:        input.WebSearchRateIndependent,
+		WebSearchRateMultiplier:         webSearchRateMultiplier,
 		LongContextPricingEnabled:       input.LongContextPricingEnabled,
 		ModelPricing:                    modelPricing,
 		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
@@ -720,6 +729,15 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.WebSearchPricePerCall != nil {
 		group.WebSearchPricePerCall = normalizePrice(input.WebSearchPricePerCall)
+	}
+	if input.WebSearchRateIndependent != nil {
+		group.WebSearchRateIndependent = *input.WebSearchRateIndependent
+	}
+	if input.WebSearchRateMultiplier != nil {
+		if *input.WebSearchRateMultiplier < 0 {
+			return nil, errors.New("web_search_rate_multiplier must be >= 0")
+		}
+		group.WebSearchRateMultiplier = *input.WebSearchRateMultiplier
 	}
 	if input.LongContextPricingEnabled != nil {
 		group.LongContextPricingEnabled = *input.LongContextPricingEnabled

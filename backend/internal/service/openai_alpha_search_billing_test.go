@@ -82,13 +82,15 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesWebSearchPricePerCall(t *testi
 		Status:  StatusActive,
 		User:    &User{ID: 2, Status: StatusActive, Role: RoleUser},
 		Group: &Group{
-			ID:                    groupID,
-			Name:                  "openai",
-			Platform:              PlatformOpenAI,
-			Status:                StatusActive,
-			SubscriptionType:      SubscriptionTypeStandard,
-			RateMultiplier:        1,
-			WebSearchPricePerCall: float64Ptr(0.008),
+			ID:                       groupID,
+			Name:                     "openai",
+			Platform:                 PlatformOpenAI,
+			Status:                   StatusActive,
+			SubscriptionType:         SubscriptionTypeStandard,
+			RateMultiplier:           1,
+			WebSearchPricePerCall:    float64Ptr(0.008),
+			WebSearchRateIndependent: true,
+			WebSearchRateMultiplier:  2.5,
 		},
 	}
 
@@ -99,6 +101,115 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesWebSearchPricePerCall(t *testi
 	require.NotNil(t, roundTrip.Group)
 	require.NotNil(t, roundTrip.Group.WebSearchPricePerCall)
 	require.InDelta(t, 0.008, *roundTrip.Group.WebSearchPricePerCall, 1e-12)
+	require.True(t, roundTrip.Group.WebSearchRateIndependent)
+	require.InDelta(t, 2.5, roundTrip.Group.WebSearchRateMultiplier, 1e-12)
+}
+
+func TestResolveWebSearchRateMultiplier(t *testing.T) {
+	t.Parallel()
+
+	t.Run("independent false uses effective group multiplier", func(t *testing.T) {
+		t.Parallel()
+		apiKey := &APIKey{Group: &Group{WebSearchRateIndependent: false, WebSearchRateMultiplier: 9}}
+		require.InDelta(t, 1.5, resolveWebSearchRateMultiplier(apiKey, 1.5), 1e-12)
+	})
+
+	t.Run("independent true uses search multiplier", func(t *testing.T) {
+		t.Parallel()
+		apiKey := &APIKey{Group: &Group{WebSearchRateIndependent: true, WebSearchRateMultiplier: 2.5}}
+		require.InDelta(t, 2.5, resolveWebSearchRateMultiplier(apiKey, 1.5), 1e-12)
+	})
+
+	t.Run("independent true and negative multiplier returns 0", func(t *testing.T) {
+		t.Parallel()
+		apiKey := &APIKey{Group: &Group{WebSearchRateIndependent: true, WebSearchRateMultiplier: -1}}
+		require.Zero(t, resolveWebSearchRateMultiplier(apiKey, 1.5))
+	})
+
+	t.Run("nil apiKey or group returns effective", func(t *testing.T) {
+		t.Parallel()
+		require.InDelta(t, 1.5, resolveWebSearchRateMultiplier(nil, 1.5), 1e-12)
+		require.InDelta(t, 1.5, resolveWebSearchRateMultiplier(&APIKey{}, 1.5), 1e-12)
+	})
+}
+
+func TestCalculateOpenAIRecordUsageCostWebSearchIndependentMultiplier(t *testing.T) {
+	t.Parallel()
+	svc := &OpenAIGatewayService{billingService: &BillingService{}}
+	groupID := int64(11)
+	apiKey := &APIKey{
+		ID:      1,
+		GroupID: &groupID,
+		Group: &Group{
+			ID:                       groupID,
+			Platform:                 PlatformOpenAI,
+			RateMultiplier:           3.0,
+			WebSearchRateIndependent: true,
+			WebSearchRateMultiplier:  2.0,
+		},
+	}
+	result := &OpenAIForwardResult{Model: "gpt-5.6-sol", UpstreamModel: "gpt-5.6-sol", WebSearchCalls: 1}
+
+	webSearchMultiplier := resolveWebSearchRateMultiplier(apiKey, 1.5)
+	cost, err := svc.calculateOpenAIRecordUsageCost(
+		context.Background(),
+		result,
+		apiKey,
+		[]string{"gpt-5.6-sol"},
+		3.0,
+		4.0,
+		5.0,
+		webSearchMultiplier,
+		UsageTokens{},
+		"",
+		boolPtr(false),
+		time.Time{},
+	)
+	require.NoError(t, err)
+	require.Equal(t, string(BillingModePerRequest), cost.BillingMode)
+	require.InDelta(t, 0.01, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.02, cost.ActualCost, 1e-12)
+}
+
+func TestRecordUsage_WebSearchIndependentMultiplierIgnoresTokenAndPeak(t *testing.T) {
+	groupID := int64(77)
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:      "web-search-independent",
+			ResponseID:     "web-search-independent",
+			Model:          "grok-x-search",
+			UpstreamModel:  "grok-x-search",
+			WebSearchCalls: 1,
+			Duration:       time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      101,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:                       groupID,
+				Platform:                 PlatformGrok,
+				RateMultiplier:           9,
+				PeakRateEnabled:          true,
+				PeakStart:                "00:00",
+				PeakEnd:                  "23:59",
+				PeakRateMultiplier:       4,
+				WebSearchRateIndependent: true,
+				WebSearchRateMultiplier:  2.0,
+			},
+		},
+		User:    &User{ID: 201},
+		Account: &Account{ID: 301, Platform: PlatformGrok},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, string(BillingModePerRequest), *usageRepo.lastLog.BillingMode)
+	require.InDelta(t, 0.01, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, 0.02, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, 2.0, usageRepo.lastLog.RateMultiplier, 1e-12)
 }
 
 func TestAPIKeyService_SnapshotRoundTrip_PreservesGroupModelPricing(t *testing.T) {

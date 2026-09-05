@@ -214,6 +214,8 @@ func groupFromServiceBase(g *service.Group) Group {
 		VideoPrice720P:                  g.VideoPrice720P,
 		VideoPrice1080P:                 g.VideoPrice1080P,
 		WebSearchPricePerCall:           g.WebSearchPricePerCall,
+		WebSearchRateIndependent:        g.WebSearchRateIndependent,
+		WebSearchRateMultiplier:         g.WebSearchRateMultiplier,
 		LongContextPricingEnabled:       g.LongContextPricingEnabled,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,

@@ -38,6 +38,29 @@ func TestDoGrokNativeResponsesJSONPatchesEmptyModel(t *testing.T) {
 	require.Equal(t, "Bearer xai-test", upstream.lastReq.Header.Get("Authorization"))
 }
 
+func TestDoGrokNativeResponsesJSONStripsRejectedSearchInclude(t *testing.T) {
+	t.Parallel()
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"id":"resp_2","output":[]}`)),
+	}}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+	account := &Account{
+		ID:       9,
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "xai-test",
+			"base_url": "https://api.x.ai",
+		},
+	}
+
+	_, err := svc.DoGrokNativeResponsesJSON(context.Background(), nil, account, []byte(`{"model":"grok-4.6","input":"hi","tools":[{"type":"x_search"}],"include":["x_search_call.action.sources"]}`))
+	require.NoError(t, err)
+	require.False(t, gjson.GetBytes(upstream.lastBody, "include").Exists())
+}
+
 func TestDoGrokNativeResponsesJSONFailoversOnUnauthorized(t *testing.T) {
 	t.Parallel()
 	upstream := &httpUpstreamRecorder{resp: &http.Response{

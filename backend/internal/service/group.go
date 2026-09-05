@@ -56,6 +56,9 @@ type Group struct {
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；
 	// nil 表示使用默认价 defaultWebSearchPricePerCall（官方 $10/1000 次）。
 	WebSearchPricePerCall *float64
+	// 网页搜索独立倍率：false 表示共享分组有效倍率；true 时使用 WebSearchRateMultiplier。
+	WebSearchRateIndependent bool
+	WebSearchRateMultiplier  float64
 	// LongContextPricingEnabled 控制 token 计费是否走官方/预设长上下文阶梯。
 	// 默认 true；关闭后始终按第一档基础价。
 	LongContextPricingEnabled bool

@@ -499,6 +499,34 @@ func (_c *GroupCreate) SetNillableWebSearchPricePerCall(v *float64) *GroupCreate
 	return _c
 }
 
+// SetWebSearchRateIndependent sets the "web_search_rate_independent" field.
+func (_c *GroupCreate) SetWebSearchRateIndependent(v bool) *GroupCreate {
+	_c.mutation.SetWebSearchRateIndependent(v)
+	return _c
+}
+
+// SetNillableWebSearchRateIndependent sets the "web_search_rate_independent" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableWebSearchRateIndependent(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetWebSearchRateIndependent(*v)
+	}
+	return _c
+}
+
+// SetWebSearchRateMultiplier sets the "web_search_rate_multiplier" field.
+func (_c *GroupCreate) SetWebSearchRateMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetWebSearchRateMultiplier(v)
+	return _c
+}
+
+// SetNillableWebSearchRateMultiplier sets the "web_search_rate_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableWebSearchRateMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetWebSearchRateMultiplier(*v)
+	}
+	return _c
+}
+
 // SetLongContextPricingEnabled sets the "long_context_pricing_enabled" field.
 func (_c *GroupCreate) SetLongContextPricingEnabled(v bool) *GroupCreate {
 	_c.mutation.SetLongContextPricingEnabled(v)
@@ -969,6 +997,14 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultVideoRateMultiplier
 		_c.mutation.SetVideoRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.WebSearchRateIndependent(); !ok {
+		v := group.DefaultWebSearchRateIndependent
+		_c.mutation.SetWebSearchRateIndependent(v)
+	}
+	if _, ok := _c.mutation.WebSearchRateMultiplier(); !ok {
+		v := group.DefaultWebSearchRateMultiplier
+		_c.mutation.SetWebSearchRateMultiplier(v)
+	}
 	if _, ok := _c.mutation.LongContextPricingEnabled(); !ok {
 		v := group.DefaultLongContextPricingEnabled
 		_c.mutation.SetLongContextPricingEnabled(v)
@@ -1127,6 +1163,12 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.VideoRateMultiplier(); !ok {
 		return &ValidationError{Name: "video_rate_multiplier", err: errors.New(`ent: missing required field "Group.video_rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.WebSearchRateIndependent(); !ok {
+		return &ValidationError{Name: "web_search_rate_independent", err: errors.New(`ent: missing required field "Group.web_search_rate_independent"`)}
+	}
+	if _, ok := _c.mutation.WebSearchRateMultiplier(); !ok {
+		return &ValidationError{Name: "web_search_rate_multiplier", err: errors.New(`ent: missing required field "Group.web_search_rate_multiplier"`)}
 	}
 	if _, ok := _c.mutation.LongContextPricingEnabled(); !ok {
 		return &ValidationError{Name: "long_context_pricing_enabled", err: errors.New(`ent: missing required field "Group.long_context_pricing_enabled"`)}
@@ -1337,6 +1379,14 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.WebSearchPricePerCall(); ok {
 		_spec.SetField(group.FieldWebSearchPricePerCall, field.TypeFloat64, value)
 		_node.WebSearchPricePerCall = &value
+	}
+	if value, ok := _c.mutation.WebSearchRateIndependent(); ok {
+		_spec.SetField(group.FieldWebSearchRateIndependent, field.TypeBool, value)
+		_node.WebSearchRateIndependent = value
+	}
+	if value, ok := _c.mutation.WebSearchRateMultiplier(); ok {
+		_spec.SetField(group.FieldWebSearchRateMultiplier, field.TypeFloat64, value)
+		_node.WebSearchRateMultiplier = value
 	}
 	if value, ok := _c.mutation.LongContextPricingEnabled(); ok {
 		_spec.SetField(group.FieldLongContextPricingEnabled, field.TypeBool, value)
@@ -2141,6 +2191,36 @@ func (u *GroupUpsert) AddWebSearchPricePerCall(v float64) *GroupUpsert {
 // ClearWebSearchPricePerCall clears the value of the "web_search_price_per_call" field.
 func (u *GroupUpsert) ClearWebSearchPricePerCall() *GroupUpsert {
 	u.SetNull(group.FieldWebSearchPricePerCall)
+	return u
+}
+
+// SetWebSearchRateIndependent sets the "web_search_rate_independent" field.
+func (u *GroupUpsert) SetWebSearchRateIndependent(v bool) *GroupUpsert {
+	u.Set(group.FieldWebSearchRateIndependent, v)
+	return u
+}
+
+// UpdateWebSearchRateIndependent sets the "web_search_rate_independent" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateWebSearchRateIndependent() *GroupUpsert {
+	u.SetExcluded(group.FieldWebSearchRateIndependent)
+	return u
+}
+
+// SetWebSearchRateMultiplier sets the "web_search_rate_multiplier" field.
+func (u *GroupUpsert) SetWebSearchRateMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldWebSearchRateMultiplier, v)
+	return u
+}
+
+// UpdateWebSearchRateMultiplier sets the "web_search_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateWebSearchRateMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldWebSearchRateMultiplier)
+	return u
+}
+
+// AddWebSearchRateMultiplier adds v to the "web_search_rate_multiplier" field.
+func (u *GroupUpsert) AddWebSearchRateMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldWebSearchRateMultiplier, v)
 	return u
 }
 
@@ -3128,6 +3208,41 @@ func (u *GroupUpsertOne) UpdateWebSearchPricePerCall() *GroupUpsertOne {
 func (u *GroupUpsertOne) ClearWebSearchPricePerCall() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearWebSearchPricePerCall()
+	})
+}
+
+// SetWebSearchRateIndependent sets the "web_search_rate_independent" field.
+func (u *GroupUpsertOne) SetWebSearchRateIndependent(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetWebSearchRateIndependent(v)
+	})
+}
+
+// UpdateWebSearchRateIndependent sets the "web_search_rate_independent" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateWebSearchRateIndependent() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateWebSearchRateIndependent()
+	})
+}
+
+// SetWebSearchRateMultiplier sets the "web_search_rate_multiplier" field.
+func (u *GroupUpsertOne) SetWebSearchRateMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetWebSearchRateMultiplier(v)
+	})
+}
+
+// AddWebSearchRateMultiplier adds v to the "web_search_rate_multiplier" field.
+func (u *GroupUpsertOne) AddWebSearchRateMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddWebSearchRateMultiplier(v)
+	})
+}
+
+// UpdateWebSearchRateMultiplier sets the "web_search_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateWebSearchRateMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateWebSearchRateMultiplier()
 	})
 }
 
@@ -4329,6 +4444,41 @@ func (u *GroupUpsertBulk) UpdateWebSearchPricePerCall() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearWebSearchPricePerCall() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearWebSearchPricePerCall()
+	})
+}
+
+// SetWebSearchRateIndependent sets the "web_search_rate_independent" field.
+func (u *GroupUpsertBulk) SetWebSearchRateIndependent(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetWebSearchRateIndependent(v)
+	})
+}
+
+// UpdateWebSearchRateIndependent sets the "web_search_rate_independent" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateWebSearchRateIndependent() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateWebSearchRateIndependent()
+	})
+}
+
+// SetWebSearchRateMultiplier sets the "web_search_rate_multiplier" field.
+func (u *GroupUpsertBulk) SetWebSearchRateMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetWebSearchRateMultiplier(v)
+	})
+}
+
+// AddWebSearchRateMultiplier adds v to the "web_search_rate_multiplier" field.
+func (u *GroupUpsertBulk) AddWebSearchRateMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddWebSearchRateMultiplier(v)
+	})
+}
+
+// UpdateWebSearchRateMultiplier sets the "web_search_rate_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateWebSearchRateMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateWebSearchRateMultiplier()
 	})
 }
 

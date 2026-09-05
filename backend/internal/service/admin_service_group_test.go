@@ -1373,3 +1373,56 @@ func TestAdminService_UpdateGroup_RejectsNegativeVideoRateMultiplier(t *testing.
 	require.Error(t, err)
 	require.Nil(t, repo.updated)
 }
+
+func TestAdminService_CreateGroup_WithWebSearchRateControls(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+	searchMultiplier := 2.5
+
+	group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name: "openai-search", Platform: PlatformOpenAI, RateMultiplier: 1,
+		WebSearchRateIndependent: true, WebSearchRateMultiplier: &searchMultiplier,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.True(t, repo.created.WebSearchRateIndependent)
+	require.InDelta(t, 2.5, repo.created.WebSearchRateMultiplier, 1e-12)
+}
+
+func TestAdminService_UpdateGroup_WithWebSearchRateControls(t *testing.T) {
+	repo := &groupRepoStubForAdmin{getByID: &Group{ID: 1, Name: "existing-openai", Platform: PlatformOpenAI, Status: StatusActive}}
+	svc := &adminServiceImpl{groupRepo: repo}
+	searchMultiplier := 1.75
+	independent := true
+
+	group, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{
+		WebSearchRateIndependent: &independent, WebSearchRateMultiplier: &searchMultiplier,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.True(t, repo.updated.WebSearchRateIndependent)
+	require.InDelta(t, 1.75, repo.updated.WebSearchRateMultiplier, 1e-12)
+}
+
+func TestAdminService_UpdateGroup_RejectsNegativeWebSearchRateMultiplier(t *testing.T) {
+	repo := &groupRepoStubForAdmin{getByID: &Group{ID: 1, Name: "existing-group", Platform: PlatformOpenAI, Status: StatusActive, WebSearchRateMultiplier: 1}}
+	svc := &adminServiceImpl{groupRepo: repo}
+	negative := -0.1
+	_, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{WebSearchRateMultiplier: &negative})
+	require.Error(t, err)
+	require.Equal(t, "web_search_rate_multiplier must be >= 0", err.Error())
+	require.Nil(t, repo.updated)
+}
+
+func TestAdminService_CreateGroup_RejectsNegativeWebSearchRateMultiplier(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+	negative := -0.2
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name: "openai-search", Platform: PlatformOpenAI, RateMultiplier: 1,
+		WebSearchRateMultiplier: &negative,
+	})
+	require.Error(t, err)
+	require.Equal(t, "web_search_rate_multiplier must be >= 0", err.Error())
+	require.Nil(t, repo.created)
+}
