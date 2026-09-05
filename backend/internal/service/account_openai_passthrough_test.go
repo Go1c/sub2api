@@ -313,3 +313,16 @@ func TestAccount_OpenAIWSExtraFlags(t *testing.T) {
 	}
 	require.False(t, nonOpenAI.IsOpenAIWSAllowStoreRecoveryEnabled())
 }
+
+func TestAccount_IsModelSupported_PassthroughIgnoresStaleWhitelist(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"gpt-5.5": "gpt-5.5"},
+		},
+		Extra: map[string]any{"openai_passthrough": true},
+	}
+	require.True(t, account.IsModelSupported("gpt-6-astra"))
+	require.True(t, account.IsModelSupported("gpt-5.6-sol"))
+}

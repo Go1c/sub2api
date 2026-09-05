@@ -812,6 +812,12 @@ func resolveRequestedModelInMapping(mapping map[string]string, requestedModel st
 // 请求卡死在该账号上、无法 failover 到真正支持该模型的 API Key 账号（#3662）。
 // 未知/自定义别名仍保持允许（兼容渠道级映射），见 isOpenAIOAuthServableModel。
 func (a *Account) IsModelSupported(requestedModel string) bool {
+	// 透传模式仅替换认证、模型语义完全交由上游决定，因此放行所有模型。
+	// 必须在 model_mapping 判定之前短路：账号从白名单切到透传后常残留旧映射，
+	// 否则会被误判为 model_not_supported（upstream #4936 / #6458）。
+	if a.IsOpenAIPassthroughEnabled() {
+		return true
+	}
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
 		if a.IsOpenAIOAuth() && !a.IsOpenAIPassthroughEnabled() {
