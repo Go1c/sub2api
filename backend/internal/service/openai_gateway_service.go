@@ -32,14 +32,13 @@ const (
 	openaiPlatformAPIURL            = "https://api.openai.com/v1/responses"
 	openaiPlatformAPIInputTokensURL = "https://api.openai.com/v1/responses/input_tokens"
 	openaiStickySessionTTL          = time.Hour // 粘性会话TTL
-	// 与真实 Codex CLI 的 User-Agent 结构对齐：
-	// {originator}/{version} ({OS} {OS_version}; {arch}) {terminal} ({originator}; {version})
-	// 旧值 "codex_cli_rs/0.125.0" 缺少 OS/架构/终端后缀，易被上游指纹识别为非官方客户端。
-	// 各段取自本机 0.146.0 实测：codex exec 抓包 OS 段为 "Mac OS"（非 "Mac OS X"）；
-	// 尾段 (originator; version) 在 exec/vscode/tui 抓包中均存在（如
-	// "codex-tui/0.140.2 (Mac OS X 14.0; arm64) iTerm (codex-tui; 0.140.2)"）；
-	// 终端按本机常用 iTerm2 取 0.146.0 二进制终端表中的 "iTerm2"。
-	codexCLIUserAgent = "codex_cli_rs/0.146.0 (Mac OS 26.5.2; arm64) iTerm2 (codex_cli_rs; 0.146.0)"
+	// 规范身份跟 CLI（plugin / models / TUI HEAD 预检同源），不是 TUI/exec。
+	// CLI 形态：{originator}/{version} ({OS} {OS_version}; {arch}) {terminal}
+	// 本机 Codex CLI 0.153.4 实测（iTerm.app 3.6.8，Mac OS 26.5.2，arm64）：
+	// OS 段为 "Mac OS"（不是 "Mac OS X"）；终端取 TERM_PROGRAM/TERM_PROGRAM_VERSION
+	// 的 "iTerm.app/3.6.8"，不是二进制终端表显示名 "iTerm2"。
+	// CLI 没有 (originator; version) trailer；该尾段只属于 TUI/exec。
+	codexCLIUserAgent = "codex_cli_rs/0.153.4 (Mac OS 26.5.2; arm64) iTerm.app/3.6.8"
 	// codex_cli_only 拒绝时单个请求头日志长度上限（字符）
 	codexCLIOnlyHeaderValueMaxBytes = 256
 
@@ -54,7 +53,7 @@ const (
 	openAIWSRetryJitterRatioDefault    = 0.2
 	openAICompactSessionSeedKey        = "openai_compact_session_seed"
 	openAIUpstreamEndpointContextKey   = "openai_actual_upstream_endpoint"
-	codexCLIVersion                    = "0.146.0"
+	codexCLIVersion                    = "0.153.4"
 	// Codex 限额快照仅用于后台展示/诊断，不需要每个成功请求都立即落库。
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 	// 配额自动暂停时，超过该时长仍未刷新的 used% 快照视为陈旧，不再据此暂停账号。

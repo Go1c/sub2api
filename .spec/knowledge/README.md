@@ -59,6 +59,7 @@ metadata:
 | [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 改写到 Terra，仅显式 Luna 键或 Auto-review→Luna 值可打真 Luna |
 | [`features/openai-quota-reset.md`](features/openai-quota-reset.md) | 管理端 OpenAI/Codex 重置卡查询与消耗、Codex PAT 登录；面板走 POST /quota/refresh，路由漏挂会 404 |
 | [`features/openai-capacity-shed-retry.md`](features/openai-capacity-shed-retry.md) | OpenAI/Codex 容量降载：同账号静默再打 1 次再换号，耗尽才回 server_error，避免 4 次连打烧 RPM 或立刻让客户端重连 |
+| [`features/openai-codex-fingerprint.md`](features/openai-codex-fingerprint.md) | 网关编译期 Codex CLI 规范身份与绑机指纹（0.153.4 实测，无 trailer）；改 UA / version / session 常量或对照 live 抓包时查 |
 | [`features/frontend-seo-meta.md`](features/frontend-seo-meta.md) | 前端 GEO/SEO：Go embed 注入 description/OG/Twitter/JSON-LD；爬虫简介在 `#app` 内且不得 `display:none` |
 | [`features/umami-public-tracking.md`](features/umami-public-tracking.md) | 前台 Umami：SPA nonce inline 条件插入官方 defer 脚本、直开 /admin 不加载、docs 静态页直接埋、CSP script-src 放行 data.lumio.games |
 | [`features/bestcodex-first-party-telemetry.md`](features/bestcodex-first-party-telemetry.md) | BestCodex 第一方遥测：公开 ingest、管理 stats、注册/登录权威事件、first/last touch 衔接；权威计数以事件表为准 |
