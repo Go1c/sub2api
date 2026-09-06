@@ -71,8 +71,9 @@ const (
 	codexFingerprintModeExtraKey = "codex_fingerprint_mode"
 	// boundCodexInstallationID 是本机 ~/.codex/installation_id。
 	boundCodexInstallationID = "12b0b072-d79b-45f9-98af-8fafbe3ef9f5"
-	// boundCodexSessionID 是本机最近一条 Codex 会话，绑机出站时作为默认 session/thread。
-	boundCodexSessionID = "01a005e9-75ac-7140-808a-7a91e2a43b33"
+	// boundCodexSessionID 是本机 Codex CLI 0.153.4 TUI user 会话（seq 67），
+	// 绑机出站时作为默认 session/thread。
+	boundCodexSessionID = "01a0755d-dbf8-7fb1-8295-17dbb9e447f2"
 )
 
 func codexFingerprintModeFromExtra(extra map[string]any) codexFingerprintMode {
