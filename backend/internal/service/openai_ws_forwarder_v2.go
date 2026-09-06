@@ -562,6 +562,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		if openAIWSEventShouldParseUsage(eventType) {
 			parseOpenAIWSResponseUsageFromCompletedEvent(message, usage)
 		}
+		ensureUpstreamResponseModelObserver(c).ObserveOpenAI(message, eventType)
 		imageCounter.AddSSEData(message)
 
 		if eventType == "response.failed" {
@@ -703,6 +704,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			return nil, errors.New("ws finished without final response")
 		}
 
+		ensureUpstreamResponseModelObserver(c).ObserveOpenAI(finalResponse, strings.TrimSpace(gjson.GetBytes(finalResponse, "type").String()))
 		if needModelReplace {
 			finalResponse = s.replaceModelInResponseBody(finalResponse, mappedModel, originalModel)
 		}

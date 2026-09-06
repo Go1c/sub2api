@@ -306,6 +306,10 @@ func TestGeminiMessagesCompatServiceForward_NormalizesWebSearchToolForAIStudio(t
 	require.False(t, hasCamel)
 	_, hasFuncDecl := searchTool["functionDeclarations"]
 	require.False(t, hasFuncDecl)
+
+	toolConfig, ok := posted["toolConfig"].(map[string]any)
+	require.True(t, ok, "AI Studio mixed tools must keep includeServerSideToolInvocations")
+	require.Equal(t, true, toolConfig["includeServerSideToolInvocations"])
 }
 
 func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToolUse(t *testing.T) {
@@ -356,6 +360,49 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToo
 	}
 	if !strings.Contains(s, "\"thoughtSignature\":\""+geminiDummyThoughtSignature+"\"") {
 		t.Fatalf("expected injected thoughtSignature %q, got: %s", geminiDummyThoughtSignature, s)
+	}
+}
+
+func TestEnableMixedGeminiToolInvocations(t *testing.T) {
+	tests := []struct {
+		name      string
+		tools     string
+		wantField bool
+	}{
+		{
+			name:      "mixed server and client tools",
+			tools:     `[{"name":"get_weather","input_schema":{"type":"object"}},{"type":"web_search_20250305","name":"web_search"}]`,
+			wantField: true,
+		},
+		{
+			name:  "client tools only",
+			tools: `[{"name":"get_weather","input_schema":{"type":"object"}}]`,
+		},
+		{
+			name:  "server tools only",
+			tools: `[{"type":"web_search_20250305","name":"web_search"}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			claudeBody := []byte(`{"messages":[{"role":"user","content":"hello"}],"tools":` + tt.tools + `}`)
+			body, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody)
+			require.NoError(t, err)
+			body, err = enableMixedGeminiToolInvocations(body)
+			require.NoError(t, err)
+
+			var request map[string]any
+			require.NoError(t, json.Unmarshal(body, &request))
+			toolConfig, exists := request["toolConfig"].(map[string]any)
+			if !tt.wantField {
+				require.False(t, exists)
+				return
+			}
+			require.True(t, exists)
+			require.Equal(t, true, toolConfig["includeServerSideToolInvocations"])
+			require.NotContains(t, toolConfig, "include_server_side_tool_invocations")
+		})
 	}
 }
 

@@ -90,6 +90,8 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
 	startTime := time.Now()
+	beginUpstreamResponseModelObservation(c)
+	defer func() { attachObservedForwardResult(c, result) }()
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
 	}
@@ -969,6 +971,10 @@ func billingModelForRestriction(source, requestedModel, channelMappedModel strin
 		return requestedModel
 	case BillingModelSourceUpstream:
 		return ""
+	case BillingModelSourceResponse:
+		// The response is not available during dispatch; use mapped pricing
+		// for restriction prechecks and decide billing after the response.
+		return channelMappedModel
 	case BillingModelSourceChannelMapped:
 		return channelMappedModel
 	default:

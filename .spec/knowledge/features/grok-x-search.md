@@ -4,7 +4,7 @@ description: Grok x_search 三条路径（独立 /v1/x_search、Chat tools、Res
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # Grok x_search
