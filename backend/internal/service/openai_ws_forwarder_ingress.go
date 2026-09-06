@@ -969,6 +969,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if openAIWSEventShouldParseUsage(eventType) {
 				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
 			}
+			ensureUpstreamResponseModelObserver(c).ObserveOpenAI(upstreamMessage, eventType)
 			imageCounter.AddSSEData(upstreamMessage)
 
 			if eventType == "response.failed" {

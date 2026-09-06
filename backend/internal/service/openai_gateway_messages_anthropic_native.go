@@ -215,6 +215,8 @@ func (s *OpenAIGatewayService) handleNativeAnthropicBufferedResponse(
 		return nil, err
 	}
 
+	ensureUpstreamResponseModelObserver(c).ObserveAnthropic(body)
+
 	var raw json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, nativeAnthropicInvalidJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err, billingModel)
@@ -263,6 +265,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicStreamingResponse(
 	reasoningEffort *string,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
+	observer := ensureUpstreamResponseModelObserver(c)
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
@@ -413,6 +416,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicStreamingResponse(
 			line := ev.line
 			if data, ok := extractAnthropicSSEDataLine(line); ok {
 				trimmed := strings.TrimSpace(data)
+				observer.ObserveAnthropic([]byte(trimmed))
 				if anthropicStreamEventIsTerminal("", trimmed) {
 					sawTerminalEvent = true
 				}

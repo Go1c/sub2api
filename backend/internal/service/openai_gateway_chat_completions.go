@@ -59,7 +59,10 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
-	return s.forwardAsChatCompletions(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
+	beginUpstreamResponseModelObservation(c)
+	result, err := s.forwardAsChatCompletions(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
+	attachObservedOpenAIForwardResult(c, result)
+	return result, err
 }
 
 func (s *OpenAIGatewayService) forwardAsChatCompletions(

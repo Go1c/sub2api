@@ -2601,6 +2601,7 @@ export default {
         billingModelSourceChannelMapped: '以渠道映射後的模型計費',
         billingModelSourceRequested: '以請求模型計費',
         billingModelSourceUpstream: '以最終模型計費',
+        billingModelSourceResponse: '按上游響應模型計費',
         billingModelSourceHint: '控制使用哪個模型名稱進行定價查找',
         selectedCount: '已選 {count} 個',
         searchGroups: '搜索分組...',
