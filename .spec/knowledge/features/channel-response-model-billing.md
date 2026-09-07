@@ -4,7 +4,7 @@ description: 渠道计费基准「按上游响应模型计费」：只降不升�
 metadata:
   type: doc
   level: L2
-  status: 已实现
+  status: 已交付
 ---
 
 # 按上游响应模型计费
