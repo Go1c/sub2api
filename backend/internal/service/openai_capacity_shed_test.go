@@ -340,9 +340,9 @@ func TestSanitizeOpenAICapacityShedErrorCodeForClient(t *testing.T) {
 func requireOpenAICapacityShedLimitedRetry(t *testing.T, failoverErr *UpstreamFailoverError) {
 	t.Helper()
 	require.True(t, failoverErr.IsOpenAICapacityShed())
-	require.True(t, failoverErr.RetryableOnSameAccount, "one silent same-account retry keeps the client from reconnecting")
-	require.Equal(t, openAICapacityShedSameAccountRetryMax, failoverErr.SameAccountRetryMax)
-	require.True(t, failoverErr.ShouldRetryNextAccount(), "after that retry the handler may switch accounts on the same client request")
+	require.True(t, failoverErr.RetryableOnSameAccount, "same-account retries keep the client from reconnecting")
+	require.Zero(t, failoverErr.SameAccountRetryMax, "capacity shed uses account pool_mode retry count, default three extra attempts")
+	require.True(t, failoverErr.ShouldRetryNextAccount(), "after same-account retries the handler may switch accounts on the same client request")
 	require.True(t, failoverErr.RequestScopedTransient, "capacity shed is still not an account-health failure")
 	require.Equal(t, NextAccountRetry, failoverErr.NextAccountAction)
 	require.Equal(t, http.StatusServiceUnavailable, failoverErr.ClientStatusCode)

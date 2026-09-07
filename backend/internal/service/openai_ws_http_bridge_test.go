@@ -617,7 +617,7 @@ func TestProxyOpenAIWSHTTPBridgeTurnStagesMetadataBeforeCapacityFailover(t *test
 	var failoverErr *UpstreamFailoverError
 	require.ErrorAs(t, err, &failoverErr)
 	require.True(t, failoverErr.RetryableOnSameAccount)
-	require.Equal(t, 1, failoverErr.SameAccountRetryMax)
+	require.Zero(t, failoverErr.SameAccountRetryMax)
 	require.True(t, failoverErr.ShouldRetryNextAccount())
 	require.True(t, failoverErr.RequestScopedTransient)
 	require.Empty(t, writes)

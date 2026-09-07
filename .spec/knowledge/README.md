@@ -44,7 +44,7 @@ metadata:
 | [`features/account-error-history.md`](features/account-error-history.md) | 账号错误历史:多来源 best-effort 异步记录、去重/节流/裁剪、账号「更多」菜单懒加载弹窗查看 |
 | [`features/account-error-alert.md`](features/account-error-alert.md) | 账号异常 Telegram 告警:后台定时聚合 `ops_error_logs`,通知最近窗口内异常账号 |
 | [`features/group-fallback.md`](features/group-fallback.md) | 分组级兜底:A 分组账号不可用时切到管理员配置的 B 分组重试 |
-| [`features/grok-imagine-api.md`](features/grok-imagine-api.md) | Grok Imagine 图片/视频对外 API 索引；完整契约见仓库 `docs/grok-imagine-api.md`（调用方 Agent 用） |
+| [`features/grok-imagine-api.md`](features/grok-imagine-api.md) | Grok Imagine 图片/视频对外 API 索引；契约以 `grok_media` handler 与 xai 模型表为准 |
 | [`features/grok-x-search.md`](features/grok-x-search.md) | Grok x_search：独立 /v1/x_search、Chat 桥、Responses 嵌入；现网去掉被拒 include；独立搜索按次计费，倍率可独立于 token `rate_multiplier` |
 | [`features/channel-response-model-billing.md`](features/channel-response-model-billing.md) | 渠道计费基准「按上游响应模型计费」：只降不升、仅确定性识别、媒体请求不采纳 |
 | [`features/model-market.md`](features/model-market.md) | 公共模型广场页面与后台配置:按平台 / 分组 / 计费类型展示可用模型,支持 token / per_request / image / video 展示计费覆盖;候选行可「恢复自动价格」去掉 overlay |
@@ -58,7 +58,7 @@ metadata:
 | [`features/daily-checkin.md`](features/daily-checkin.md) | 独立每日签到：原子发奖、连续周期、全站每日预算、里程碑独立兑换码，以及用户和管理员流水（含日/周/月/累计发放统计） |
 | [`features/openai-hidden-luna-autoreview.md`](features/openai-hidden-luna-autoreview.md) | 对用户隐藏 GPT-5.6 Luna；默认把 Auto-review / luna 改写到 Terra，仅显式 Luna 键或 Auto-review→Luna 值可打真 Luna |
 | [`features/openai-quota-reset.md`](features/openai-quota-reset.md) | 管理端 OpenAI/Codex 重置卡查询与消耗、Codex PAT 登录；面板走 POST /quota/refresh，路由漏挂会 404 |
-| [`features/openai-capacity-shed-retry.md`](features/openai-capacity-shed-retry.md) | OpenAI/Codex 容量降载：同账号静默再打 1 次再换号，耗尽才回 server_error，避免 4 次连打烧 RPM 或立刻让客户端重连 |
+| [`features/openai-capacity-shed-retry.md`](features/openai-capacity-shed-retry.md) | OpenAI/Codex 容量降载：同账号沿用 pool 默认三次额外尝试再换号，耗尽才回 server_error，避免立刻让客户端重连 |
 | [`features/openai-codex-fingerprint.md`](features/openai-codex-fingerprint.md) | 网关编译期 Codex CLI 规范身份与绑机指纹（0.153.4 实测，无 trailer）；改 UA / version / session 常量或对照 live 抓包时查 |
 | [`features/frontend-seo-meta.md`](features/frontend-seo-meta.md) | 前端 GEO/SEO：Go embed 注入 description/OG/Twitter/JSON-LD；爬虫简介在 `#app` 内且不得 `display:none` |
 | [`features/umami-public-tracking.md`](features/umami-public-tracking.md) | 前台 Umami：SPA nonce inline 条件插入官方 defer 脚本、直开 /admin 不加载、docs 静态页直接埋、CSP script-src 放行 data.lumio.games |

@@ -471,26 +471,28 @@ func TestHandleFailoverError_SameAccountRetry(t *testing.T) {
 		require.Len(t, mock.calls, 1, "重试耗尽应触发 TempUnschedule")
 	})
 
-	t.Run("容量降载SameAccountRetryMax为1时只静默重试一次再换号且不摘号", func(t *testing.T) {
+	t.Run("容量降载沿用默认三次额外尝试再换号且不摘号", func(t *testing.T) {
 		mock := &mockTempUnscheduler{}
 		fs := NewFailoverState(5, false)
 		err := &service.UpstreamFailoverError{
 			StatusCode:             http.StatusServiceUnavailable,
 			RetryableOnSameAccount: true,
 			RequestScopedTransient: true,
-			SameAccountRetryMax:    1,
+			SameAccountRetryMax:    0,
 			NextAccountAction:      service.NextAccountRetry,
+		}
+
+		for i := 1; i <= maxSameAccountRetries; i++ {
+			action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", maxSameAccountRetries, err)
+			require.Equal(t, FailoverContinue, action)
+			require.Equal(t, i, fs.SameAccountRetryCount[100])
+			require.Equal(t, 0, fs.SwitchCount)
+			require.Empty(t, mock.calls)
 		}
 
 		action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", maxSameAccountRetries, err)
 		require.Equal(t, FailoverContinue, action)
-		require.Equal(t, 1, fs.SameAccountRetryCount[100])
-		require.Equal(t, 0, fs.SwitchCount)
-		require.Empty(t, mock.calls)
-
-		action = fs.HandleFailoverError(context.Background(), mock, 100, "openai", maxSameAccountRetries, err)
-		require.Equal(t, FailoverContinue, action)
-		require.Equal(t, 1, fs.SameAccountRetryCount[100])
+		require.Equal(t, maxSameAccountRetries, fs.SameAccountRetryCount[100])
 		require.Equal(t, 1, fs.SwitchCount)
 		require.Contains(t, fs.FailedAccountIDs, int64(100))
 		require.Len(t, mock.calls, 1, "handler still invokes TempUnschedule; service skips request-scoped transients")
