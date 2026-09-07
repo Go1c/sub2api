@@ -261,7 +261,6 @@ const (
 	openAIRequestBodyTooLargeReason        = GatewayFailureReason("openai_request_body_too_large")
 	OpenAICapacityShedReason               = GatewayFailureReason("openai_capacity_shed")
 	openAICapacityShedDefaultClientMessage = "Our servers are currently overloaded. Please try again later."
-	openAICapacityShedSameAccountRetryMax  = 1
 )
 
 func newOpenAIUpstreamFailoverError(
@@ -295,9 +294,9 @@ func newOpenAIUpstreamFailoverError(
 }
 
 // applyOpenAICapacityShedLimitedRetry keeps recovery on the current HTTP/WS
-// request so the client does not reconnect. Same-account retry is capped at
-// one extra attempt to avoid burning ChatGPT/Codex RPM; after that the
-// handler may switch accounts. The account is not marked unhealthy.
+// request so the client does not reconnect. Same-account retries follow the
+// account pool_mode default (three extra attempts). After that the handler
+// may switch accounts. The account is not marked unhealthy.
 func applyOpenAICapacityShedLimitedRetry(failoverErr *UpstreamFailoverError, message string) {
 	if failoverErr == nil {
 		return
@@ -310,7 +309,7 @@ func applyOpenAICapacityShedLimitedRetry(failoverErr *UpstreamFailoverError, mes
 		msg = openAICapacityShedDefaultClientMessage
 	}
 	failoverErr.RetryableOnSameAccount = true
-	failoverErr.SameAccountRetryMax = openAICapacityShedSameAccountRetryMax
+	failoverErr.SameAccountRetryMax = 0
 	failoverErr.RequestScopedTransient = true
 	failoverErr.NextAccountAction = NextAccountRetry
 	failoverErr.Reason = OpenAICapacityShedReason
