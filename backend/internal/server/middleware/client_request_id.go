@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -12,6 +13,7 @@ import (
 )
 
 const clientRequestIDHeader = "X-Client-Request-ID"
+const invalidSub2RequestIDMessage = "X-Sub2-Request-ID must be the Client Request ID. Do not send the internal request ID."
 
 // ClientRequestID ensures every request has a unique client_request_id in request.Context().
 //
@@ -32,6 +34,9 @@ func ClientRequestID() gin.HandlerFunc {
 			c.Header(clientRequestIDHeader, v)
 			ctx := context.WithValue(c.Request.Context(), ctxkey.ClientRequestID, v)
 			c.Request = c.Request.WithContext(ctx)
+			if rejectNonClientSub2RequestID(c) {
+				return
+			}
 			c.Next()
 			return
 		}
@@ -42,6 +47,28 @@ func ClientRequestID() gin.HandlerFunc {
 		requestLogger := logger.FromContext(ctx).With(zap.String("client_request_id", strings.TrimSpace(id)))
 		ctx = logger.IntoContext(ctx, requestLogger)
 		c.Request = c.Request.WithContext(ctx)
+		if rejectNonClientSub2RequestID(c) {
+			return
+		}
 		c.Next()
 	}
+}
+
+func rejectNonClientSub2RequestID(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	path := c.Request.URL.Path
+	if isGatewayUsagePath(path) || isGatewayModelsListPath(c.Request.Method, path) {
+		return false
+	}
+	value, ok := normalizeCorrelationID(c.GetHeader(sub2RequestIDHeader))
+	if !ok {
+		return false
+	}
+	if uuid.Validate(value) == nil {
+		return false
+	}
+	AbortWithError(c, http.StatusBadRequest, "INVALID_SUB2_REQUEST_ID", invalidSub2RequestIDMessage)
+	return true
 }
