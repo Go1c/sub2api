@@ -43,10 +43,13 @@ metadata:
 X-Sub2-Request-ID: <下游 ClientRequestID>
 ```
 
-- 最长 64 字节；去空白后须为合法 UTF-8。非法或过长 **忽略**（当没传），网关照常计费。
+- 最长 64 字节；去空白后须为合法 UTF-8 UUID（下游 `ClientRequestID`）。
+- 未传或过长：**忽略**（当没传），网关照常计费，`correlation_id` 为 NULL。不带头的其他用户路径不变。
+- 网关推理请求若带头且**不是 UUID**（例如下游内部 request id）：HTTP 400，`INVALID_SUB2_REQUEST_ID`，提示改用 Client Request ID。`GET /v1/models` 与 `GET /v1/usage` 不拦，避免影响模型列表和额度查询。
 - **不**复用 `X-Client-Request-ID` / `x-client-request-id`（Claude CLI 模仿会改写或丢掉）。
 - **不**写入 `usage_logs.request_id`。我们照旧用本进程生成的 ID 做计费去重。
 - 落库字段：`usage_logs.correlation_id`（原文）。未传则为 NULL。
+- 异步计费必须从请求 context **拷贝** `Sub2RequestID`；只拷 `ClientRequestID` / `RequestID` 会把对账键弄丢。
 
 对账（下游本地 join）：
 
@@ -131,6 +134,8 @@ Authorization: Bearer uat_...
 - **不改 Ent schema、不 `go generate`**：`usage_logs` 写入走 raw SQL；控制台 / `GET /usage` 的 SELECT 也不暴露该列。
 - `RecordUsage` / OpenAI billing insert 写入 context 中的关联 ID。
 - 网关入口读取 `X-Sub2-Request-ID` 放入独立 ctx key（不要改 `ClientRequestID` 中间件的生成逻辑）。
+- 异步计费 `usageRecordContext` 必须拷贝 `Sub2RequestID`，否则 worker 里 `correlation_id` 恒为 NULL。
+- 网关 `ClientRequestID` 中间件：推理请求若 `X-Sub2-Request-ID` 不是 UUID，400 并提示改用 Client Request ID；模型目录 / `/v1/usage` / 控制面 `/api/v1` 不拦。
 - `uat_` 白名单显式加入 `GET /api/v1/usage/export`（`/usage/` 下非嵌套 GET 会落到 `/:id`；路由必须注册在 `/:id` 之前）。
 - 下游（他们的 sub2API）：对指向上游池的 apikey 出站增加该头，并放进出站白名单。本仓库若一并做出站自动带上头，他们升级即可对齐；不是我们上线的阻塞项。
 - 接入说明：仓库 `docs/reseller-usage-export.md`。
@@ -140,7 +145,8 @@ Authorization: Bearer uat_...
 - 对账键是独立头 + `correlation_id` 列，不是 `usage_logs.request_id`（避免计费去重被对方 ID 误伤）。
 - 拉取走专用 export，不复用 `GET /usage`（避免 COUNT/OFFSET 与 60 RPM fail-open）。
 - 第一版不加 `correlation_id` 索引、不做点查（大表索引会拖所有写入）。
-- 头非法则忽略，不失败请求（保护网关，也保护未升级的下游）。
+- 未传或过长则忽略，不失败请求（保护未升级的下游与其他用户）。
+- 网关推理请求若带头且不是 Client Request ID（UUID），400 提示改用 Client Request ID；不拦模型列表、额度查询、控制面。
 - 其他用户的用量 API 与计费路径保持原样。
 
 ## 待解决
@@ -151,7 +157,7 @@ Authorization: Bearer uat_...
 
 - [[user-access-token]]（`uat_` 只读白名单含 export）
 - [[user-request-monitoring]]（`request_id` 关联的是运维抓取，不是分销对账）
-- ADR：`.spec/decisions/2026-09-04-reseller-usage-correlation.md`
+- ADR：`.spec/decisions/2026-09-04-reseller-usage-correlation.md`、`.spec/decisions/2026-09-08-reseller-sub2-client-request-id.md`
 - 给下游的接入说明：`docs/reseller-usage-export.md`
 - 计费去重：`backend/internal/service/gateway_usage_billing.go` 的 `resolveUsageBillingRequestID`
 - 现有用量列表：`backend/internal/handler/usage_handler.go`、`backend/internal/repository/usage_log_repo.go`

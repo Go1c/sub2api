@@ -25,11 +25,18 @@ X-Sub2-Request-ID: <你们的 ClientRequestID>
 
 | 项 | 要求 |
 |----|------|
-| 值 | 你们的 `ClientRequestID` 原文。一般是裸 UUID，不要加 `client:` 前缀 |
+| 值 | 你们的 `ClientRequestID` 原文。必须是 UUID，不要加 `client:` 前缀 |
 | 长度 | 去空白后 ≤ 64 字节，合法 UTF-8 |
-| 非法 / 过长 / 未传 | 我们**忽略**（当没传），请求照常计费，该行 `correlation_id` 为 `null` |
+| 未传 / 过长 | 我们**忽略**（当没传），请求照常计费，该行 `correlation_id` 为 `null` |
+| 带头但不是 UUID（例如内部 request id） | 网关推理请求 **HTTP 400**，`INVALID_SUB2_REQUEST_ID`。请改成 Client Request ID 后再打。`GET /v1/models`、`GET /v1/usage` 不拦 |
 | 不要用 | `X-Client-Request-ID` / `x-client-request-id`（Claude CLI 模仿会改写或丢掉） |
-| 不要用 | 我们响应里的 `X-Request-ID`（那不是用量对账键） |
+| 不要用 | 我们响应里的 `X-Request-ID`，也不要用你们的内部 request id（那不是用量对账键） |
+
+错误形态：
+
+```json
+{"code":"INVALID_SUB2_REQUEST_ID","message":"X-Sub2-Request-ID must be the Client Request ID. Do not send the internal request ID."}
+```
 
 请把该头加入你们出站白名单，并在指向上游池的 apikey 请求上发送。
 
@@ -186,6 +193,7 @@ loop:
 | HTTP | 何时 |
 |------|------|
 | 400 | 缺 `after_id`/`since`、`after_id=0`、非法 `since`、`since` 早于 24h、非法 `limit` |
+| 400 | 调模型时 `X-Sub2-Request-ID` 不是 Client Request ID（UUID）。见第 1 节 |
 | 401 | 未登录 / token 无效 |
 | 403 | `uat_` 调了白名单外的路径 |
 | 429 | 超 10 RPM、Redis 故障、或同用户已有一次 export 在飞 |
