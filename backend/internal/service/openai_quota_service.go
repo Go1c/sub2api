@@ -602,14 +602,30 @@ func buildCodexSparkWindowExtraUpdates(usage *OpenAIQuotaUsage, now time.Time) m
 			break
 		}
 	}
-	if spark == nil {
+	return buildCodexWindowExtraUpdates(spark, now)
+}
+
+// buildCodexPrimaryWindowExtraUpdates 取 /wham/usage 顶层 rate_limit 的窗口，
+// 即普通 Codex 账号的额度。真实客户端也从这个接口读额度，网关据此不必再向
+// /responses 发合成推理请求去蹭响应头。
+func buildCodexPrimaryWindowExtraUpdates(usage *OpenAIQuotaUsage, now time.Time) map[string]any {
+	if usage == nil {
+		return nil
+	}
+	return buildCodexWindowExtraUpdates(usage.RateLimit, now)
+}
+
+// buildCodexWindowExtraUpdates 把一段 rate_limit 的 primary/secondary 窗口映射成
+// 规范的 codex_5h_* / codex_7d_* extra 键。spark 与普通账号只是取哪一段的差别。
+func buildCodexWindowExtraUpdates(limit *OpenAIRateLimit, now time.Time) map[string]any {
+	if limit == nil {
 		return nil
 	}
 
 	// Reuse OpenAICodexUsageSnapshot / Normalize to map primary/secondary windows
-	// to canonical 5h/7d buckets (same logic as probeOpenAICodexSnapshot).
+	// to canonical 5h/7d buckets (same logic as the legacy /responses probe).
 	snap := &OpenAICodexUsageSnapshot{}
-	if w := spark.PrimaryWindow; w != nil {
+	if w := limit.PrimaryWindow; w != nil {
 		p := w.UsedPercent
 		snap.PrimaryUsedPercent = &p
 		ra := int(w.ResetAfterSeconds)
@@ -617,7 +633,7 @@ func buildCodexSparkWindowExtraUpdates(usage *OpenAIQuotaUsage, now time.Time) m
 		wm := int(w.LimitWindowSeconds / 60)
 		snap.PrimaryWindowMinutes = &wm
 	}
-	if w := spark.SecondaryWindow; w != nil {
+	if w := limit.SecondaryWindow; w != nil {
 		p := w.UsedPercent
 		snap.SecondaryUsedPercent = &p
 		ra := int(w.ResetAfterSeconds)
