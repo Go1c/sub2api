@@ -227,6 +227,8 @@ func (s *OpenAIGatewayService) buildOpenAIWSCreatePayload(reqBody map[string]any
 	return payload
 }
 
+// setOpenAIWSTurnMetadata fills missing frame metadata from the request headers.
+// A frame's own metadata includes its current turn/window, unlike a reused handshake.
 func setOpenAIWSTurnMetadata(payload map[string]any, turnMetadata string) {
 	if len(payload) == 0 {
 		return
@@ -238,9 +240,15 @@ func setOpenAIWSTurnMetadata(payload map[string]any, turnMetadata string) {
 
 	switch existing := payload["client_metadata"].(type) {
 	case map[string]any:
+		if current, ok := existing[openAIWSTurnMetadataHeader].(string); ok && strings.TrimSpace(current) != "" {
+			return
+		}
 		existing[openAIWSTurnMetadataHeader] = metadata
 		payload["client_metadata"] = existing
 	case map[string]string:
+		if strings.TrimSpace(existing[openAIWSTurnMetadataHeader]) != "" {
+			return
+		}
 		next := make(map[string]any, len(existing)+1)
 		for k, v := range existing {
 			next[k] = v

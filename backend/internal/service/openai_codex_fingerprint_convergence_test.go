@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -580,10 +581,77 @@ func TestCodexFingerprintConvergence_RootSessionKeepsThreadIdentity(t *testing.T
 		scopeCodexAccountIdentityValue(on, 77, "session", convTestSession),
 		scopeCodexAccountIdentityValue(on, 77, "thread", subThread),
 		"子代理：session_id 与自己的 thread_id 不同，派生后仍须不同")
+	// 这层关系与实验开关无关：账号隔离可以换值，但不该把官方"根 session == 根 thread"
+	// 的等式打散。开关关闭的账号同样保留。
+	require.Equal(t,
+		scopeCodexAccountIdentityValue(off, 77, "thread", convTestSession),
+		scopeCodexAccountIdentityValue(off, 77, "session", convTestSession),
+		"开关关闭时同样保留根会话等式")
 	require.NotEqual(t,
 		scopeCodexAccountIdentityValue(off, 77, "session", convTestSession),
-		scopeCodexAccountIdentityValue(off, 77, "thread", convTestSession),
-		"开关关闭时保持上游行为：session / thread 仍各自独立派生")
+		scopeCodexAccountIdentityValue(off, 77, "thread", subThread),
+		"关系另一侧也要保住：原值不同则派生后仍不同")
+}
+
+// 窗口标识的形态是 "<thread>:<window_number>"（core/src/session/mod.rs current_window），
+// 序号随 auto-compact 递增、初值 0（core/src/state/auto_compact_window.rs:51）。账号隔离
+// 只该替换 thread 部分，不能把整串压成裸 UUID，也不能把序号写死。
+func TestCodexIdentityWindowKeepsStructureAndNumber(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		account := convTestAccount(on)
+		for _, number := range []string{"0", "3", "17"} {
+			raw := convTestSession + ":" + number
+			derived := scopeCodexAccountIdentityValue(account, 77, "window", raw)
+			thread, seq, ok := strings.Cut(derived, ":")
+			require.True(t, ok, "convergence=%v number=%s 派生结果丢了复合形态：%q", on, number, derived)
+			require.Equal(t, number, seq, "窗口序号必须原样保留")
+			require.Equal(t, scopeCodexAccountIdentityValue(account, 77, "thread", convTestSession), thread,
+				"窗口的 thread 部分必须与 thread 类同值")
+			require.NotEqual(t, raw, derived, "仍须落到账号命名空间")
+		}
+		// 未知形态不猜测解析，退回整体派生。
+		require.NotContains(t, scopeCodexAccountIdentityValue(account, 77, "window", convTestSession+":x"), ":")
+	}
+}
+
+// session / full 模式自建窗口标识时，序号取客户端当前窗口，缺失才回落 0。
+func TestResolveCodexFingerprintIDsWindowNumberFollowsClient(t *testing.T) {
+	account := convTestAccount(true)
+	account.Extra[codexFingerprintModeExtraKey] = "full"
+	account.Extra[codexFingerprintSeedExtraKey] = "951af12d-881d-4865-8f1b-3d952e328525"
+	for raw, want := range map[string]string{"": "0", "3": "3", "abc": "0", "-1": "0"} {
+		ids := resolveCodexFingerprintIDsWithWindow(account, convTestSession, codexFingerprintFull, raw)
+		require.NotNil(t, ids)
+		require.Equal(t, ids.threadID+":"+want, ids.windowID, "客户端窗口序号 %q", raw)
+	}
+}
+
+func TestCodexWindowNumberEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name, value, want string
+	}{
+		{"number", "3", "3"},
+		{"string", `" 3 "`, "3"},
+		{"bad_string", `"bad"`, "4"},
+		{"negative", "-1", "4"},
+		{"fraction", "1.5", "4"},
+		{"boolean", "true", "4"},
+		{"null", "null", "4"},
+		{"large_integer", "9007199254740993", "9007199254740993"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			metadata := fmt.Sprintf(`{"window_number":%s,"window_id":"%s:4"}`, tc.value, convTestSession)
+			headers := http.Header{}
+			headers.Set(openAIWSTurnMetadataHeader, metadata)
+			require.Equal(t, tc.want, extractClientWindowNumber(headers))
+			for _, cm := range []any{
+				map[string]any{openAIWSTurnMetadataHeader: metadata},
+				map[string]string{openAIWSTurnMetadataHeader: metadata},
+			} {
+				require.Equal(t, tc.want, codexFingerprintWindowNumberEvidence(cm))
+			}
+		})
+	}
 }
 
 // astra 复核 #1：入站带连字符会话头、但请求体只有 prompt_cache_key（没有 client_metadata）。

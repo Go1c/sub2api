@@ -184,6 +184,28 @@ type convHandshakeDialer struct {
 	headers chan http.Header
 }
 
+func TestCodexWSFrameTurnMetadataBeatsHandshakeFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cm   any
+		want string
+	}{
+		{"map", map[string]any{openAIWSTurnMetadataHeader: "current-frame"}, "current-frame"},
+		{"string_map", map[string]string{openAIWSTurnMetadataHeader: "current-frame"}, "current-frame"},
+		{"absent", nil, "handshake"},
+		{"blank", map[string]any{openAIWSTurnMetadataHeader: " "}, "handshake"},
+		{"invalid_type", map[string]any{openAIWSTurnMetadataHeader: true}, "handshake"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := map[string]any{"client_metadata": tc.cm}
+			setOpenAIWSTurnMetadata(payload, "handshake")
+			raw, err := json.Marshal(payload)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, gjson.GetBytes(raw, "client_metadata."+openAIWSTurnMetadataHeader).String())
+		})
+	}
+}
+
 type convJSONFrameConn struct{ *stagedPassthroughConn }
 
 func (c *convJSONFrameConn) WriteJSON(ctx context.Context, value any) error {
@@ -252,6 +274,16 @@ func TestCodexFingerprintConvergence_WSEntriesKeepIdentityAcrossTurns(t *testing
 							var body map[string]any
 							require.NoError(t, json.Unmarshal(raw, &body))
 							body["type"] = "response.create"
+							cm, ok := body["client_metadata"].(map[string]any)
+							require.True(t, ok)
+							cm["x-codex-window-id"] = fmt.Sprintf("%s:%d", convTestSession, turn)
+							var metadata map[string]any
+							require.NoError(t, json.Unmarshal([]byte(convTestTurnMetadata()), &metadata))
+							metadata["window_id"] = cm["x-codex-window-id"]
+							metadata["window_number"] = turn
+							encodedMetadata, err := json.Marshal(metadata)
+							require.NoError(t, err)
+							cm[openAIWSTurnMetadataHeader] = string(encodedMetadata)
 							payload, err := json.Marshal(body)
 							require.NoError(t, err)
 							writeCtx, cancelWrite := context.WithTimeout(context.Background(), 3*time.Second)
@@ -283,6 +315,15 @@ func TestCodexFingerprintConvergence_WSEntriesKeepIdentityAcrossTurns(t *testing
 								require.Equal(t, headers.Get(field[0]), gjson.GetBytes(forwarded, "client_metadata").Get(field[1]).String(), "turn %d %s", turn, field[0])
 							}
 							require.Equal(t, headers.Get("session-id"), gjson.GetBytes(forwarded, "prompt_cache_key").String(), "turn %d default cache", turn)
+							frameMetadata := gjson.GetBytes(forwarded, "client_metadata")
+							window := fmt.Sprintf("%s:%d", frameMetadata.Get("thread_id").String(), turn)
+							require.Equal(t, window, frameMetadata.Get("x-codex-window-id").String(), "current frame, not the fixed handshake, owns its window")
+							embedded := gjson.Parse(frameMetadata.Get(openAIWSTurnMetadataHeader).String())
+							require.Equal(t, window, embedded.Get("window_id").String())
+							require.Equal(t, int64(turn), embedded.Get("window_number").Int())
+							if turn == 1 {
+								require.Equal(t, window, headers.Get("x-codex-window-id"))
+							}
 							upstream.Send(fmt.Sprintf(`{"type":"response.completed","response":{"id":"resp_convergence_%d","model":"gpt-5.5","usage":{"input_tokens":1,"output_tokens":1}}}`, turn))
 							_, err = readPassthroughLifecycleFrame(t, client, 3*time.Second)
 							require.NoError(t, err)

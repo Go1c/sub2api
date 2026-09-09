@@ -312,7 +312,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				nil,
 			)
 		}
-		if turnMetadata := strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)); turnMetadata != "" {
+		frameTurnMetadata := gjson.GetBytes(normalized, "client_metadata."+openAIWSTurnMetadataHeader)
+		hasFrameTurnMetadata := frameTurnMetadata.Type == gjson.String && strings.TrimSpace(frameTurnMetadata.Str) != ""
+		// 握手 metadata 只补缺失值，不能覆盖后续帧自己的轮次和窗口。
+		if turnMetadata := strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)); turnMetadata != "" && !hasFrameTurnMetadata {
 			next, setErr := applyPayloadMutation(normalized, "client_metadata."+openAIWSTurnMetadataHeader, turnMetadata)
 			if setErr != nil {
 				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", setErr)

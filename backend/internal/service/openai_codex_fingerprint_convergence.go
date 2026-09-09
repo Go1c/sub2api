@@ -199,19 +199,17 @@ func applyCodexConvergenceIdentityFields(values map[string]any, account *Account
 	return changed
 }
 
-// codexConvergenceSeedKind 由 scopeCodexAccountIdentityValue 调用：开关开启时把整个"会话族"
-// 并成一类。codex 里这三者本就是同一个 UUID——根会话的 session_id 就是根线程的 ID
+// codexIdentitySeedKind 由 scopeCodexAccountIdentityValue 调用：把整个"会话族"并成一类。
+// 与实验开关无关——这是账号隔离层的正确性，不是收敛特性：codex 里这三者本就是同一个 UUID——根会话的 session_id 就是根线程的 ID
 // （core/src/session/session.rs:791 SessionId::from(thread_id)），prompt_cache_key 默认又直接
 // 返回 session_id（core/src/client.rs:515）。分成三类各自派生，相等的原始值会变成三个不同的
 // UUID：上游看到的每个请求都成了"子代理线程"，而且头、体、turn-metadata 三处对不上。
 // 原始值本就不同（子代理的 thread_id、显式 prompt_cache_key override）时派生结果仍然不同，
 // 关系两侧都保住。复合形态的 prompt_cache_key 在这之前已被 composite 分支接走。
-func codexConvergenceSeedKind(account *Account, kind string) string {
+func codexIdentitySeedKind(kind string) string {
 	switch kind {
 	case "session", "prompt-cache":
-		if codexFingerprintConvergenceEnabled(account) {
-			return "thread"
-		}
+		return "thread"
 	}
 	return kind
 }
@@ -242,13 +240,10 @@ var codexConvergenceWindowIDPattern = regexp.MustCompile(`^(` + codexConvergence
 // guardian/review_session.rs:304 的 "guardian:{parent_thread_id}"）。
 var codexConvergencePromptCacheKeyPattern = regexp.MustCompile(`^([A-Za-z0-9_-]{1,64}):(` + codexConvergenceUUIDPattern + `)$`)
 
-// deriveCodexConvergenceCompositeValue 由 scopeCodexAccountIdentityValue 调用：开关开启且原始值
-// 是 codex 的复合形态时，只派生其中的 UUID 部分、保留整体形态。整串直接哈希会压成一个裸
-// UUID，而真客户端在这两个分支上从不发裸 UUID。
-func deriveCodexConvergenceCompositeValue(account *Account, apiKeyID int64, kind, raw string) (string, bool) {
-	if !codexFingerprintConvergenceEnabled(account) {
-		return "", false
-	}
+// deriveCodexIdentityCompositeValue 由 scopeCodexAccountIdentityValue 调用：原始值是 codex 的
+// 复合形态时，只派生其中的 UUID 部分、保留整体形态。整串直接哈希会压成一个裸 UUID，而真
+// 客户端在这两个分支上从不发裸 UUID。同样与实验开关无关：隔离可以换值，不该换形态。
+func deriveCodexIdentityCompositeValue(account *Account, apiKeyID int64, kind, raw string) (string, bool) {
 	switch kind {
 	case "window": // "<thread>:<n>"：thread 部分按 thread 类派生，序号原样保留
 		if m := codexConvergenceWindowIDPattern.FindStringSubmatch(raw); m != nil {

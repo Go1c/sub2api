@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -269,6 +271,7 @@ type codexFingerprintIDs struct {
 	threadID                      string
 	turnID                        string
 	windowID                      string
+	windowNumber                  uint64
 	turnStartedAtUnixMs           int64
 	originalBodySessionID         string
 	originalBodySessionIDCaptured bool
@@ -285,6 +288,13 @@ type codexFingerprintIDs struct {
 // 返回 nil 表示 off 模式，不需要改写。
 // 注意：包含随机生成的 turn_id，调用方必须只调用一次并共享结果给头改写和体改写。
 func resolveCodexFingerprintIDs(account *Account, clientSessionID string, mode codexFingerprintMode) *codexFingerprintIDs {
+	return resolveCodexFingerprintIDsWithWindow(account, clientSessionID, mode, "")
+}
+
+// clientWindowNumber 是客户端当前的上下文窗口序号（x-codex-window-id 的 ":<n>" 部分，
+// 或 turn-metadata.window_number）。空串按真实客户端的初始值 0 处理
+// （codex-rs core/src/state/auto_compact_window.rs:51 window_number: 0），每次 auto-compact 递增。
+func resolveCodexFingerprintIDsWithWindow(account *Account, clientSessionID string, mode codexFingerprintMode, clientWindowNumber string) *codexFingerprintIDs {
 	if account == nil || mode == codexFingerprintOff {
 		return nil
 	}
@@ -304,6 +314,9 @@ func resolveCodexFingerprintIDs(account *Account, clientSessionID string, mode c
 	if ids.installationID == "" {
 		return nil
 	}
+	// OrDefault 只返回至多 19 位十进制非负整数，必定落在 uint64 范围内。
+	ids.windowNumber, _ = strconv.ParseUint(codexWindowNumberOrDefault(clientWindowNumber), 10, 64)
+	windowNumber := strconv.FormatUint(ids.windowNumber, 10)
 
 	switch mode {
 	case codexFingerprintDevice:
@@ -316,14 +329,14 @@ func resolveCodexFingerprintIDs(account *Account, clientSessionID string, mode c
 			ids.threadID = ids.sessionID
 		}
 		ids.turnID = uuid.Must(uuid.NewV7()).String()
-		ids.windowID = ids.threadID + ":0"
+		ids.windowID = ids.threadID + ":" + windowNumber
 		return ids
 
 	case codexFingerprintFull:
 		ids.sessionID = resolveConvergedSessionID(seed)
 		ids.threadID = ids.sessionID
 		ids.turnID = uuid.Must(uuid.NewV7()).String()
-		ids.windowID = ids.threadID + ":0"
+		ids.windowID = ids.threadID + ":" + windowNumber
 		return ids
 	}
 
@@ -338,6 +351,33 @@ func extractClientSessionID(h http.Header) string {
 		return v
 	}
 	return strings.TrimSpace(h.Get("session_id"))
+}
+
+// codexWindowNumberOrDefault 归一化窗口序号；非法或缺失时回落到真实客户端的初始值 0。
+func codexWindowNumberOrDefault(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || !codexWindowNumberPattern.MatchString(raw) {
+		return "0"
+	}
+	return raw
+}
+
+// extractClientWindowNumber 从 x-codex-window-id 的 "<thread>:<n>" 里取序号，
+// 取不到时回退 turn-metadata.window_number。
+func extractClientWindowNumber(h http.Header) string {
+	for _, name := range [...]string{"x-codex-window-id", "window_id"} {
+		if m := codexConvergenceWindowIDPattern.FindStringSubmatch(strings.TrimSpace(h.Get(name))); m != nil {
+			return m[2]
+		}
+	}
+	meta := gjson.Parse(h.Get(openAIWSTurnMetadataHeader))
+	if number := codexWindowNumberFromJSON(meta.Get("window_number")); number != "" {
+		return number
+	}
+	if m := codexConvergenceWindowIDPattern.FindStringSubmatch(meta.Get("window_id").String()); m != nil {
+		return m[2]
+	}
+	return ""
 }
 
 // resolveCodexFingerprintIDsFromRequest 从客户端原始请求头中提取 session-id，
@@ -373,7 +413,12 @@ func resolveCodexFingerprintIDsWithBody(c *gin.Context, account *Account, client
 	if clientSessionID == "" && convergence && clientHeaders != nil {
 		clientSessionID = codexConvergenceMetadataString(gjson.Parse(clientHeaders.Get(openAIWSTurnMetadataHeader)), "session_id")
 	}
-	ids := resolveCodexFingerprintIDs(account, clientSessionID, mode)
+	// 后续 WS 帧的窗口会递增，握手头却固定不变；当前 body 优先，头仅兜底。
+	clientWindowNumber := codexFingerprintWindowNumberEvidence(rawClientMetadata)
+	if clientWindowNumber == "" && clientHeaders != nil {
+		clientWindowNumber = extractClientWindowNumber(clientHeaders)
+	}
+	ids := resolveCodexFingerprintIDsWithWindow(account, clientSessionID, mode, clientWindowNumber)
 	if ids == nil {
 		return nil
 	}
@@ -418,6 +463,7 @@ func applyCodexFingerprintHeaders(h http.Header, ids *codexFingerprintIDs) {
 		"thread_id":               ids.threadID,
 		"turn_id":                 ids.turnID,
 		"window_id":               ids.windowID,
+		"window_number":           ids.windowNumber,
 		"turn_started_at_unix_ms": ids.turnStartedAtUnixMs,
 	}, ids)
 }
@@ -504,6 +550,7 @@ func applyCodexFingerprintToClientMetadataMap(existing map[string]any, ids *code
 		"thread_id":               ids.threadID,
 		"turn_id":                 ids.turnID,
 		"window_id":               ids.windowID,
+		"window_number":           ids.windowNumber,
 		"turn_started_at_unix_ms": ids.turnStartedAtUnixMs,
 	}, ids)
 	return true
@@ -537,6 +584,54 @@ func codexFingerprintSessionEvidence(clientMetadata any, allowEmbedded bool) str
 	}
 	if allowEmbedded {
 		return codexConvergenceMetadataString(gjson.Parse(embedded), "session_id")
+	}
+	return ""
+}
+
+// codexWindowNumberPattern 只接受十进制序号，避免把未知形态猜着解析。
+var codexWindowNumberPattern = regexp.MustCompile(`^[0-9]{1,19}$`)
+
+// codexWindowNumberFromJSON 把 window_number 归一化成字符串：真实客户端发的是数字，
+// 但中继链上有把它序列化成字符串的。非整数一律当作缺失。
+func codexWindowNumberFromJSON(value gjson.Result) string {
+	var raw string
+	switch value.Type {
+	case gjson.Number:
+		// 不经 float64：大的合法整数也要保持原值。
+		raw = value.Raw
+	case gjson.String:
+		raw = strings.TrimSpace(value.Str)
+	}
+	if codexWindowNumberPattern.MatchString(raw) {
+		return raw
+	}
+	return ""
+}
+
+// codexFingerprintWindowNumberEvidence 与 codexFingerprintSessionEvidence 同构：
+// 优先从当前请求/帧的 client_metadata 取窗口；没有有效证据时才回退到头。
+func codexFingerprintWindowNumberEvidence(clientMetadata any) string {
+	var window, embedded string
+	switch metadata := clientMetadata.(type) {
+	case map[string]any:
+		window, _ = metadata["x-codex-window-id"].(string)
+		embedded, _ = metadata[openAIWSTurnMetadataHeader].(string)
+	case map[string]string:
+		window = metadata["x-codex-window-id"]
+		embedded = metadata[openAIWSTurnMetadataHeader]
+	case gjson.Result:
+		window = codexConvergenceMetadataString(metadata, "x-codex-window-id")
+		embedded = codexConvergenceMetadataString(metadata, openAIWSTurnMetadataHeader)
+	}
+	if m := codexConvergenceWindowIDPattern.FindStringSubmatch(strings.TrimSpace(window)); m != nil {
+		return m[2]
+	}
+	meta := gjson.Parse(embedded)
+	if number := codexWindowNumberFromJSON(meta.Get("window_number")); number != "" {
+		return number
+	}
+	if m := codexConvergenceWindowIDPattern.FindStringSubmatch(meta.Get("window_id").String()); m != nil {
+		return m[2]
 	}
 	return ""
 }
