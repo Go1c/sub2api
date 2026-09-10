@@ -95,6 +95,39 @@ func TestAccountTestService_OpenAIResponsesIQModeOverridesPromptAndReasoning(t *
 	require.Equal(t, "reasoning.encrypted_content", gjson.GetBytes(body, "include.0").String())
 }
 
+func TestAccountTestService_OpenAIResponsesIQModeSurvivesPublicEntryNormalize(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := newTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader(`data: {"type":"response.completed"}
+
+`))
+	account := &Account{
+		ID:          99,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{"access_token": "test-token"},
+	}
+	repo := &openAIAccountTestRepo{
+		mockAccountRepoForGemini: mockAccountRepoForGemini{
+			accountsByID: map[int64]*Account{99: account},
+		},
+	}
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{accountRepo: repo, httpUpstream: upstream}
+
+	err := svc.TestAccountConnection(ctx, account.ID, "gpt-6-astra", "Generate an SVG of a pelican riding a bicycle", "iq")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+
+	body, err := io.ReadAll(upstream.requests[0].Body)
+	require.NoError(t, err)
+	require.Equal(t, "Generate an SVG of a pelican riding a bicycle", gjson.GetBytes(body, "input.0.content.0.text").String())
+	require.Equal(t, "high", gjson.GetBytes(body, "reasoning.effort").String())
+}
+
 func TestAccountTestService_OpenAIResponsesEmptyPromptStaysHi(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := newTestContext()
