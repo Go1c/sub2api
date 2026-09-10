@@ -114,6 +114,9 @@ func RegisterAdminRoutes(
 		// 渠道监控
 		registerChannelMonitorRoutes(admin, h)
 
+		// 渠道智商检测
+		registerChannelIQRoutes(admin, h)
+
 		// 风控中心
 		registerContentModerationRoutes(admin, h)
 
@@ -792,6 +795,19 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		templates.DELETE("/:id", h.Admin.ChannelMonitorTemplate.Delete)
 		templates.GET("/:id/monitors", h.Admin.ChannelMonitorTemplate.AssociatedMonitors)
 		templates.POST("/:id/apply", h.Admin.ChannelMonitorTemplate.Apply)
+	}
+}
+
+func registerChannelIQRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h == nil || h.Admin == nil || h.Admin.ChannelIQ == nil {
+		return
+	}
+	iq := admin.Group("/channel-iq")
+	{
+		iq.GET("", h.Admin.ChannelIQ.Overview)
+		iq.PUT("/settings", h.Admin.ChannelIQ.UpdateSettings)
+		iq.POST("/run", h.Admin.ChannelIQ.RunAll)
+		iq.POST("/accounts/:id/run", h.Admin.ChannelIQ.RunOne)
 	}
 }
 

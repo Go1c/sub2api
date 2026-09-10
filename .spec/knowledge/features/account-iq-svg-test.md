@@ -20,13 +20,14 @@ metadata:
 ## 设计
 
 - **交互面**：仅 `platform === 'openai'`（OAuth / API Key / 影子）显示「智商检测」。弹窗上半是模型 + 可编辑提示词，下半是终端原文；抽出完整 SVG 后在终端下方用 `<img data:image/svg+xml>` 预览。排除 `gpt-image-*`（那条路是生图 API）。
-- **实现面（后端）**：继续 `POST /admin/accounts/:id/test`，**不改 handler**。弹窗传 `mode: "iq"`（`normalizeAccountTestMode` 会把它当成 default，不会走进 compact）。`TestAccountConnection` 必须在 normalize **之前**记住原始 mode，否则公开入口会先把 `iq` 收成 `default`，payload 仍发 `"hi"`，Astra 就会回 `Hi! What would you like to work on?`。`account_test_service.go` 只留三处钩子：记住原始 mode、Responses payload、Chat Completions payload。真正改 payload 的唯一入口是 `ApplyOpenAIAccountIQTestPayload`（`backend/internal/service/account_iq.go`）：非 iq 原样返回；iq 时覆盖 prompt、Responses 写 `reasoning.effort=high`（OAuth 补 `include`）、Chat Completions 写 `reasoning_effort=high`。回归必须走 `TestAccountConnection`，只测内层 `testOpenAIAccountConnection` 测不出这次丢 mode。
+- **实现面（后端）**：继续 `POST /admin/accounts/:id/test`，**不改 handler**。弹窗传 `mode: "iq"`（`normalizeAccountTestMode` 会把它当成 default，不会走进 compact）。`TestAccountConnection` 必须在 normalize **之前**记住原始 mode，否则公开入口会先把 `iq` 收成 `default`，payload 仍发 `"hi"`，Astra 就会回 `Hi! What would you like to work on?`。`account_test_service.go` 只留三处钩子：记住原始 mode、Responses payload、Chat Completions payload。真正改 payload 的唯一入口是 `ApplyOpenAIAccountIQTestPayload`（`backend/internal/service/account_iq.go`）：非 iq 原样返回；iq 时覆盖 prompt、把 Codex 默认 coding-agent instructions 换成「直接在回复里输出完整 SVG、不要问文件名」、Responses 写 `reasoning.effort=low`（OAuth 补 `include`）、Chat Completions 写 `reasoning_effort=low` 并加 system 消息。回归必须走 `TestAccountConnection`，只测内层 `testOpenAIAccountConnection` 测不出这次丢 mode。智商检测遇到上游过载 / 503 / 流被掐断时最多试 3 次，失败那次的正文先不推给前端，成功后再一次性吐 SVG；401 不重试。普通测试连接不走这套重试。
 - **实现面（前端）**：抽取与请求体在 `frontend/src/components/admin/account/iqTest.ts`。弹窗只调 `buildIqTestRequest` 和 `applyIqTestOutput`。完整 `<svg>…</svg>`（优先围栏）经 `sanitizeSvg` 做成 data URL。Codex reasoning 事件本来就不会进测试 SSE 的 `content`。
 
 ## 已决策
 
 - 提示词用户可改，默认 `Generate an SVG of a pelican riding a bicycle`。
-- 默认模型优先 `gpt-6-astra`（没有则 `gpt-6` / `gpt-5.4`），思考强度 `high`。
+- 默认模型优先 `gpt-6-astra`（没有则 `gpt-6` / `gpt-5.4`），思考强度 `low`。Codex 默认 instructions 会让 Astra 问文件名或写文件，智商检测必须换成内联 SVG 指令，否则测完抽不出图。
+- 上游过载（`server_is_overloaded` / HTTP 503 / 流未完成）时智商检测自动重试，不把 `Our servers are currently overloaded` 当成检测结果。401 不重试。
 - 成图用 `<img>` + data URL，不用 `v-html`，避免把模型输出当 HTML 执行。
 - 不改 `createOpenAITestPayload` 签名，避免误伤用量探测和国模 adaptive。
 - 用已有 `mode` 字段表达 iq，不加 `reasoning_effort` JSON 字段，handler 保持与 upstream 同形。
@@ -40,3 +41,4 @@ metadata:
 - 测试连接：`frontend/src/components/admin/account/AccountTestModal.vue`、`backend/internal/service/account_test_service.go`
 - 弹窗：`frontend/src/components/admin/account/AccountIqTestModal.vue`
 - 入口：`backend/internal/service/account_iq.go`、`frontend/src/components/admin/account/iqTest.ts`
+- 网关容量降载重试：[openai-capacity-shed-retry.md](openai-capacity-shed-retry.md)

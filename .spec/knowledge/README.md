@@ -42,7 +42,8 @@ metadata:
 | [`features/admin-settings-idempotency.md`](features/admin-settings-idempotency.md) | 管理员设置保存的隐式幂等、Banner 单字段更新、PostgreSQL fallback，以及 fork 字段必须经 parseSettings 读回 |
 | [`features/compliance-geo-block.md`](features/compliance-geo-block.md) | 中国大陆 IP 网页访问拦截(屏蔽网站、保持 API 开放)的实现与验收 |
 | [`features/account-error-history.md`](features/account-error-history.md) | 账号错误历史:多来源 best-effort 异步记录、去重/节流/裁剪、账号「更多」菜单懒加载弹窗查看 |
-| [`features/account-iq-svg-test.md`](features/account-iq-svg-test.md) | 管理端 OpenAI/Codex 账号智商检测：独立文件单入口改测试 payload（`mode=iq`），前端抽出完整 SVG 渲染成图 |
+| [`features/account-iq-svg-test.md`](features/account-iq-svg-test.md) | 管理端 OpenAI/Codex 账号智商检测：`mode=iq` 改 payload、过载自动重试、前端抽出完整 SVG 成图 |
+| [`features/channel-iq-detect.md`](features/channel-iq-detect.md) | 渠道管理智商检测看板：按分组纳入 OpenAI 账号、并发 SVG 成图、定时自动检测 |
 | [`features/account-error-alert.md`](features/account-error-alert.md) | 账号异常 Telegram 告警:后台定时聚合 `ops_error_logs`,通知最近窗口内异常账号 |
 | [`features/group-fallback.md`](features/group-fallback.md) | 分组级兜底:A 分组账号不可用时切到管理员配置的 B 分组重试 |
 | [`features/grok-imagine-api.md`](features/grok-imagine-api.md) | Grok Imagine 图片/视频对外 API 索引；契约以 `grok_media` handler 与 xai 模型表为准 |

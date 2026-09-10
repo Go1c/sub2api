@@ -568,6 +568,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/channels/iq',
+    name: 'AdminChannelIq',
+    component: () => import('@/views/admin/ChannelIqView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'IQ Detect',
+      titleKey: 'admin.channelIq.title',
+      descriptionKey: 'admin.channelIq.description'
+    }
+  },
+  {
     path: '/monitor',
     name: 'ChannelStatus',
     component: () => import('@/views/user/ChannelStatusView.vue'),
