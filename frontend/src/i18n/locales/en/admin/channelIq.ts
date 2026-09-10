@@ -1,0 +1,51 @@
+export default {
+  channelIq: {
+    title: 'IQ Detect',
+    description: 'Run SVG IQ tests on OpenAI accounts from selected groups',
+    runAll: 'Run all',
+    settings: 'Settings',
+    settingsTitle: 'IQ detect settings',
+    groups: 'Groups',
+    groupsHint: 'Active OpenAI accounts in these groups are added to the list.',
+    autoEnabled: 'Auto detect',
+    autoHint: 'Automatically rerun every selected interval.',
+    interval: 'Interval',
+    intervalMinutes: '{n} min',
+    model: 'Model',
+    prompt: 'Prompt',
+    includedCount: '{n} OpenAI accounts in the list',
+    autoOn: 'Auto every {minutes} min',
+    autoOff: 'Auto detect off',
+    emptyGroupsTitle: 'No groups selected',
+    emptyGroupsDescription: 'Open settings and pick groups so their OpenAI accounts appear here.',
+    emptyAccountsTitle: 'No OpenAI accounts in the selected groups',
+    emptyAccountsDescription: 'The selected groups have no active OpenAI accounts right now.',
+    columns: {
+      name: 'Account',
+      status: 'Status',
+      testCount: 'Tests',
+      preview: 'Preview',
+      model: 'Model',
+      reasoning: 'Effort',
+      stats: 'Duration / tokens',
+      actions: 'Actions'
+    },
+    status: {
+      idle: 'Idle',
+      running: 'Testing',
+      success: 'Success',
+      failed: 'Failed'
+    },
+    testCount: '{n} tests',
+    runOne: 'Run',
+    noPreview: 'No image yet',
+    started: 'Detection started',
+    saveSuccess: 'Settings saved',
+    loadError: 'Failed to load IQ detect list',
+    saveFailed: 'Failed to save settings',
+    runFailed: 'Failed to start detection',
+    busy: 'A detection batch is already running',
+    emptyRun: 'Select groups in settings first',
+    statsValue: '{duration} · {tokens} tokens'
+  }
+}

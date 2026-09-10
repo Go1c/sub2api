@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyIqTestOutput, buildIqTestRequest, extractCompleteSvg } from '../iqTest'
+import { applyIqTestOutput, buildIqTestRequest, extractCompleteSvg, iqSvgToImageUrl } from '../iqTest'
 
 const pelican = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 80"><circle cx="50" cy="40" r="20"/></svg>'
 
@@ -22,6 +22,18 @@ describe('applyIqTestOutput', () => {
 
   it('returns null until the svg is complete', () => {
     expect(applyIqTestOutput('<svg viewBox="0 0 10 10"><rect')).toBeNull()
+  })
+})
+
+describe('iqSvgToImageUrl', () => {
+  it('sanitizes a stored svg into an img data url', () => {
+    const url = iqSvgToImageUrl(pelican)
+    expect(url).toContain('data:image/svg+xml')
+    expect(decodeURIComponent(url || '')).toContain('<svg')
+  })
+
+  it('returns null for empty svg', () => {
+    expect(iqSvgToImageUrl('')).toBeNull()
   })
 })
 

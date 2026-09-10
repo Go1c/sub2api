@@ -1,0 +1,51 @@
+export default {
+  channelIq: {
+    title: '智商检测',
+    description: '按分组纳入 OpenAI 账号，并发跑 SVG 成图检测',
+    runAll: '全部检测',
+    settings: '设置',
+    settingsTitle: '智商检测设置',
+    groups: '纳入分组',
+    groupsHint: '所选分组里的活跃 OpenAI 账号会进入检测列表。',
+    autoEnabled: '自动检测',
+    autoHint: '按设定间隔自动再跑一轮。',
+    interval: '检测间隔',
+    intervalMinutes: '{n} 分钟',
+    model: '模型',
+    prompt: '提示词',
+    includedCount: '列表中有 {n} 个 OpenAI 账号',
+    autoOn: '每 {minutes} 分钟自动检测',
+    autoOff: '自动检测未开启',
+    emptyGroupsTitle: '还没有选择分组',
+    emptyGroupsDescription: '打开右上角设置，勾选要检测的分组，分组里的号会自动进入列表。',
+    emptyAccountsTitle: '所选分组里没有 OpenAI 账号',
+    emptyAccountsDescription: '换一组，或确认分组下有活跃的 OpenAI / Codex 账号。',
+    columns: {
+      name: '账号',
+      status: '状态',
+      testCount: '测试次数',
+      preview: '成图',
+      model: '模型',
+      reasoning: '思考',
+      stats: '耗时 / Token',
+      actions: '操作'
+    },
+    status: {
+      idle: '空闲',
+      running: '检测中',
+      success: '成功',
+      failed: '失败'
+    },
+    testCount: '测试 {n} 次',
+    runOne: '检测',
+    noPreview: '暂无成图',
+    started: '已开始检测',
+    saveSuccess: '设置已保存',
+    loadError: '加载智商检测列表失败',
+    saveFailed: '保存设置失败',
+    runFailed: '启动检测失败',
+    busy: '已有检测任务在跑',
+    emptyRun: '请先在设置里选择分组',
+    statsValue: '{duration} · {tokens} tokens'
+  }
+}
