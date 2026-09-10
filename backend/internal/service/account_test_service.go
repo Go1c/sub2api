@@ -184,6 +184,9 @@ func createTestPayload(modelID string) (map[string]any, error) {
 // modelID is optional - if empty, defaults to claude.DefaultTestModel
 // mode is optional - "compact" routes OpenAI accounts to the /responses/compact probe path
 func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int64, modelID string, prompt string, mode string) error {
+	// Remember the raw mode before compact/default normalize. IQ uses mode=iq,
+	// which normalizeAccountTestMode maps to default so it does not enter compact.
+	rememberAccountIQTestMode(c, mode)
 	ctx := c.Request.Context()
 
 	// Get account
