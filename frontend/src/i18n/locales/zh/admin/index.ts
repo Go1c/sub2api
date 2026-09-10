@@ -4,9 +4,11 @@ import ops from './ops'
 import settings from './settings'
 import audit from './audit'
 import promptAudit from './promptAudit'
+import channelIq from './channelIq'
 
 export default {
   promptAudit,
+  channelIq,
   ...overview,
   ...accounts,
   ...ops,

@@ -30,6 +30,12 @@ export function extractCompleteSvg(text: string): string | null {
   return extractLastCompleteSvg(maybeUnescape(normalized))
 }
 
+export function iqSvgToImageUrl(svg: string): string | null {
+  if (!svg) return null
+  const url = svgToImageUrl(svg)
+  return url || null
+}
+
 function svgToImageUrl(svg: string): string {
   const clean = sanitizeSvg(svg).trim()
   if (!clean) return ''

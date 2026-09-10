@@ -898,6 +898,8 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorQuotaFetcher,
 	NewChannelMonitorRequestTemplateService,
+	ProvideChannelIQService,
+	ProvideChannelIQRunner,
 	ProvideSubscriptionNotifyMessenger,
 	ProvideSubscriptionNotifyEmailer,
 	ProvideSubscriptionNotifyService,
