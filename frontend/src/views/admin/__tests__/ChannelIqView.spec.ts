@@ -5,11 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChannelIQOverview } from '@/api/admin/channelIq'
 import ChannelIqView from '@/views/admin/ChannelIqView.vue'
 
-const { getOverview, updateSettings, runAll, runOne, getAllGroups, showSuccess, showError } = vi.hoisted(() => ({
+const { getOverview, updateSettings, runAll, runOne, excludeAccount, restoreAccount, getAllGroups, showSuccess, showError } = vi.hoisted(() => ({
   getOverview: vi.fn(),
   updateSettings: vi.fn(),
   runAll: vi.fn(),
   runOne: vi.fn(),
+  excludeAccount: vi.fn(),
+  restoreAccount: vi.fn(),
   getAllGroups: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn()
@@ -21,7 +23,9 @@ vi.mock('@/api/admin', () => ({
       getOverview,
       updateSettings,
       runAll,
-      runOne
+      runOne,
+      excludeAccount,
+      restoreAccount
     },
     groups: {
       getAll: getAllGroups
@@ -81,6 +85,17 @@ const BaseDialogStub = defineComponent({
   template: '<div v-if="show" class="dialog"><slot /><slot name="footer" /></div>'
 })
 
+const ConfirmDialogStub = defineComponent({
+  props: {
+    show: { type: Boolean, default: false },
+    title: { type: String, default: '' },
+    message: { type: String, default: '' }
+  },
+  emits: ['confirm', 'cancel'],
+  template:
+    '<div v-if="show" class="confirm"><p>{{ message }}</p><button data-test="confirm-exclude" type="button" @click="$emit(\'confirm\')">ok</button></div>'
+})
+
 function makeOverview(overrides: Partial<ChannelIQOverview> = {}): ChannelIQOverview {
   return {
     settings: {
@@ -115,6 +130,7 @@ function mountView() {
         TablePageLayout: TablePageLayoutStub,
         DataTable: DataTableStub,
         BaseDialog: BaseDialogStub,
+        ConfirmDialog: ConfirmDialogStub,
         EmptyState: true,
         Toggle: true,
         Icon: true,
@@ -127,13 +143,25 @@ function mountView() {
 
 describe('ChannelIqView', () => {
   beforeEach(() => {
-    for (const fn of [getOverview, updateSettings, runAll, runOne, getAllGroups, showSuccess, showError]) {
+    for (const fn of [
+      getOverview,
+      updateSettings,
+      runAll,
+      runOne,
+      excludeAccount,
+      restoreAccount,
+      getAllGroups,
+      showSuccess,
+      showError
+    ]) {
       fn.mockReset()
     }
     getOverview.mockResolvedValue(makeOverview())
     updateSettings.mockResolvedValue(makeOverview().settings)
     runAll.mockResolvedValue({ started: true })
     runOne.mockResolvedValue({ started: true })
+    excludeAccount.mockResolvedValue({ excluded: true })
+    restoreAccount.mockResolvedValue({ restored: true })
     getAllGroups.mockResolvedValue([
       { id: 7, name: 'codex', platform: 'openai' },
       { id: 8, name: 'claude', platform: 'anthropic' }
@@ -173,5 +201,31 @@ describe('ChannelIqView', () => {
         model: 'gpt-6-astra'
       })
     )
+  })
+
+  it('removes an account from monitoring after confirm', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-test="channel-iq-exclude-11"]').trigger('click')
+    await wrapper.get('[data-test="confirm-exclude"]').trigger('click')
+    await flushPromises()
+    expect(excludeAccount).toHaveBeenCalledWith(11)
+    expect(showSuccess).toHaveBeenCalledWith('admin.channelIq.removeSuccess')
+  })
+
+  it('restores an excluded account from settings', async () => {
+    getOverview.mockResolvedValue(
+      makeOverview({
+        items: [],
+        excluded: [{ account_id: 11, name: 'astra' }]
+      })
+    )
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-test="channel-iq-settings"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="channel-iq-restore-11"]').trigger('click')
+    await flushPromises()
+    expect(restoreAccount).toHaveBeenCalledWith(11)
   })
 })

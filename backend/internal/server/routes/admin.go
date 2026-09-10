@@ -808,6 +808,8 @@ func registerChannelIQRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		iq.PUT("/settings", h.Admin.ChannelIQ.UpdateSettings)
 		iq.POST("/run", h.Admin.ChannelIQ.RunAll)
 		iq.POST("/accounts/:id/run", h.Admin.ChannelIQ.RunOne)
+		iq.POST("/accounts/:id/exclude", h.Admin.ChannelIQ.Exclude)
+		iq.POST("/accounts/:id/restore", h.Admin.ChannelIQ.Restore)
 	}
 }
 

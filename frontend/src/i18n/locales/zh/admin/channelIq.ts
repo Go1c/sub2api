@@ -46,6 +46,17 @@ export default {
     runFailed: '启动检测失败',
     busy: '已有检测任务在跑',
     emptyRun: '请先在设置里选择分组',
-    statsValue: '{duration} · {tokens} tokens'
+    statsValue: '{duration} · {tokens} tokens',
+    remove: '移除',
+    removeTitle: '从监测列表移除',
+    removeConfirm: '从智商检测列表移除「{name}」？不会改分组，只是不再监测。已保存的成图会一并删除，可在设置里恢复。',
+    removeSuccess: '已从监测列表移除',
+    removeFailed: '移除账号失败',
+    excluded: '已移除的账号',
+    excludedHint: '这些号仍在分组里，只是智商检测不再跑它们。',
+    excludedEmpty: '没有手动移除的账号。',
+    restore: '恢复监测',
+    restoreSuccess: '已恢复监测',
+    restoreFailed: '恢复监测失败'
   }
 }

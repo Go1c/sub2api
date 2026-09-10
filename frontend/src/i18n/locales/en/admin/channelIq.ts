@@ -46,6 +46,18 @@ export default {
     runFailed: 'Failed to start detection',
     busy: 'A detection batch is already running',
     emptyRun: 'Select groups in settings first',
-    statsValue: '{duration} · {tokens} tokens'
+    statsValue: '{duration} · {tokens} tokens',
+    remove: 'Remove',
+    removeTitle: 'Remove from monitoring',
+    removeConfirm:
+      'Remove “{name}” from IQ detect? This does not change groups. The saved SVG will be deleted. You can restore it in settings.',
+    removeSuccess: 'Removed from the monitoring list',
+    removeFailed: 'Failed to remove account',
+    excluded: 'Removed accounts',
+    excludedHint: 'These accounts stay in their groups, but IQ detect will skip them.',
+    excludedEmpty: 'No accounts have been removed.',
+    restore: 'Restore',
+    restoreSuccess: 'Monitoring restored',
+    restoreFailed: 'Failed to restore account'
   }
 }
