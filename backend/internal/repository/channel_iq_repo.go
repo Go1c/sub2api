@@ -22,12 +22,13 @@ func (r *channelIQRepository) GetSettings(ctx context.Context) (*service.Channel
 		return nil, err
 	}
 	row := r.db.QueryRowContext(ctx, `
-		SELECT group_ids, auto_enabled, interval_seconds, prompt, model, updated_at
+		SELECT group_ids, excluded_account_ids, auto_enabled, interval_seconds, prompt, model, updated_at
 		FROM channel_iq_settings WHERE id = 1
 	`)
 	var raw []byte
+	var excludedRaw []byte
 	out := &service.ChannelIQSettings{}
-	if err := row.Scan(&raw, &out.AutoEnabled, &out.IntervalSeconds, &out.Prompt, &out.Model, &out.UpdatedAt); err != nil {
+	if err := row.Scan(&raw, &excludedRaw, &out.AutoEnabled, &out.IntervalSeconds, &out.Prompt, &out.Model, &out.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if len(raw) > 0 {
@@ -35,6 +36,12 @@ func (r *channelIQRepository) GetSettings(ctx context.Context) (*service.Channel
 	}
 	if out.GroupIDs == nil {
 		out.GroupIDs = []int64{}
+	}
+	if len(excludedRaw) > 0 {
+		_ = json.Unmarshal(excludedRaw, &out.ExcludedAccountIDs)
+	}
+	if out.ExcludedAccountIDs == nil {
+		out.ExcludedAccountIDs = []int64{}
 	}
 	return out, nil
 }
@@ -47,17 +54,22 @@ func (r *channelIQRepository) SaveSettings(ctx context.Context, settings *servic
 	if err != nil {
 		return err
 	}
+	excludedRaw, err := json.Marshal(settings.ExcludedAccountIDs)
+	if err != nil {
+		return err
+	}
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO channel_iq_settings (id, group_ids, auto_enabled, interval_seconds, prompt, model, updated_at)
-		VALUES (1, $1, $2, $3, $4, $5, NOW())
+		INSERT INTO channel_iq_settings (id, group_ids, excluded_account_ids, auto_enabled, interval_seconds, prompt, model, updated_at)
+		VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
 		ON CONFLICT (id) DO UPDATE SET
 			group_ids = EXCLUDED.group_ids,
+			excluded_account_ids = EXCLUDED.excluded_account_ids,
 			auto_enabled = EXCLUDED.auto_enabled,
 			interval_seconds = EXCLUDED.interval_seconds,
 			prompt = EXCLUDED.prompt,
 			model = EXCLUDED.model,
 			updated_at = NOW()
-	`, raw, settings.AutoEnabled, settings.IntervalSeconds, settings.Prompt, settings.Model)
+	`, raw, excludedRaw, settings.AutoEnabled, settings.IntervalSeconds, settings.Prompt, settings.Model)
 	return err
 }
 
@@ -129,5 +141,10 @@ func (r *channelIQRepository) SaveResult(ctx context.Context, result *service.Ch
 			last_run_at = EXCLUDED.last_run_at,
 			updated_at = NOW()
 	`, result.AccountID, result.Status, result.Model, result.ReasoningEffort, result.DurationMs, result.TotalTokens, result.SVG, result.Error, lastRun)
+	return err
+}
+
+func (r *channelIQRepository) DeleteResult(ctx context.Context, accountID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM channel_iq_results WHERE account_id = $1`, accountID)
 	return err
 }

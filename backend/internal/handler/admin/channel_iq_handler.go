@@ -98,3 +98,29 @@ func (h *ChannelIQHandler) RunOne(c *gin.Context) {
 	}
 	response.Success(c, gin.H{"started": true})
 }
+
+func (h *ChannelIQHandler) Exclude(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.Error(c, http.StatusBadRequest, "invalid account id")
+		return
+	}
+	if err := h.svc.ExcludeAccount(c.Request.Context(), id); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"excluded": true})
+}
+
+func (h *ChannelIQHandler) Restore(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.Error(c, http.StatusBadRequest, "invalid account id")
+		return
+	}
+	if err := h.svc.RestoreAccount(c.Request.Context(), id); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"restored": true})
+}

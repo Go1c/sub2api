@@ -25,12 +25,13 @@ const (
 var ErrChannelIQBusy = errors.New("channel iq detection already running")
 
 type ChannelIQSettings struct {
-	GroupIDs        []int64   `json:"group_ids"`
-	AutoEnabled     bool      `json:"auto_enabled"`
-	IntervalSeconds int       `json:"interval_seconds"`
-	Prompt          string    `json:"prompt"`
-	Model           string    `json:"model"`
-	UpdatedAt       time.Time `json:"updated_at,omitempty"`
+	GroupIDs           []int64   `json:"group_ids"`
+	ExcludedAccountIDs []int64   `json:"excluded_account_ids"`
+	AutoEnabled        bool      `json:"auto_enabled"`
+	IntervalSeconds    int       `json:"interval_seconds"`
+	Prompt             string    `json:"prompt"`
+	Model              string    `json:"model"`
+	UpdatedAt          time.Time `json:"updated_at,omitempty"`
 }
 
 type ChannelIQResult struct {
@@ -60,9 +61,15 @@ type ChannelIQItem struct {
 	LastRunAt       *time.Time `json:"last_run_at,omitempty"`
 }
 
+type ChannelIQExcludedAccount struct {
+	AccountID int64  `json:"account_id"`
+	Name      string `json:"name"`
+}
+
 type ChannelIQOverview struct {
-	Settings ChannelIQSettings `json:"settings"`
-	Items    []ChannelIQItem   `json:"items"`
+	Settings ChannelIQSettings          `json:"settings"`
+	Items    []ChannelIQItem            `json:"items"`
+	Excluded []ChannelIQExcludedAccount `json:"excluded"`
 }
 
 type IQTestRunResult struct {
@@ -80,6 +87,7 @@ type ChannelIQStore interface {
 	GetResults(ctx context.Context, accountIDs []int64) (map[int64]*ChannelIQResult, error)
 	MarkRunning(ctx context.Context, accountID int64) error
 	SaveResult(ctx context.Context, result *ChannelIQResult) error
+	DeleteResult(ctx context.Context, accountID int64) error
 }
 
 type channelIQAccountLister interface {
@@ -112,7 +120,7 @@ func (s *ChannelIQService) GetOverview(ctx context.Context) (*ChannelIQOverview,
 	if err != nil {
 		return nil, err
 	}
-	accounts, err := s.listWatchAccounts(ctx, settings.GroupIDs)
+	accounts, err := s.listWatchAccounts(ctx, settings)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +154,15 @@ func (s *ChannelIQService) GetOverview(ctx context.Context) (*ChannelIQOverview,
 		}
 		items = append(items, item)
 	}
-	return &ChannelIQOverview{Settings: *settings, Items: items}, nil
+	excludedAccounts, err := s.listExcludedAccounts(ctx, settings)
+	if err != nil {
+		return nil, err
+	}
+	excluded := make([]ChannelIQExcludedAccount, 0, len(excludedAccounts))
+	for _, account := range excludedAccounts {
+		excluded = append(excluded, ChannelIQExcludedAccount{AccountID: account.ID, Name: account.Name})
+	}
+	return &ChannelIQOverview{Settings: *settings, Items: items, Excluded: excluded}, nil
 }
 
 func (s *ChannelIQService) SaveSettings(ctx context.Context, incoming ChannelIQSettings) (*ChannelIQSettings, error) {
@@ -162,7 +178,7 @@ func (s *ChannelIQService) RunAll(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	accounts, err := s.listWatchAccounts(ctx, settings.GroupIDs)
+	accounts, err := s.listWatchAccounts(ctx, settings)
 	if err != nil {
 		return err
 	}
@@ -173,12 +189,40 @@ func (s *ChannelIQService) RunAll(ctx context.Context) error {
 	return s.startBatch(ctx, ids, settings)
 }
 
+func (s *ChannelIQService) ExcludeAccount(ctx context.Context, accountID int64) error {
+	settings, err := s.normalizedSettings(ctx)
+	if err != nil {
+		return err
+	}
+	inGroup, err := s.accountInSelectedGroups(ctx, settings, accountID)
+	if err != nil {
+		return err
+	}
+	if !inGroup {
+		return errors.New("account is not in the channel iq list")
+	}
+	settings.ExcludedAccountIDs = channelIQAppendID(settings.ExcludedAccountIDs, accountID)
+	if err := s.store.SaveSettings(ctx, settings); err != nil {
+		return err
+	}
+	return s.store.DeleteResult(ctx, accountID)
+}
+
+func (s *ChannelIQService) RestoreAccount(ctx context.Context, accountID int64) error {
+	settings, err := s.normalizedSettings(ctx)
+	if err != nil {
+		return err
+	}
+	settings.ExcludedAccountIDs = channelIQRemoveID(settings.ExcludedAccountIDs, accountID)
+	return s.store.SaveSettings(ctx, settings)
+}
+
 func (s *ChannelIQService) RunOne(ctx context.Context, accountID int64) error {
 	settings, err := s.normalizedSettings(ctx)
 	if err != nil {
 		return err
 	}
-	accounts, err := s.listWatchAccounts(ctx, settings.GroupIDs)
+	accounts, err := s.listWatchAccounts(ctx, settings)
 	if err != nil {
 		return err
 	}
@@ -267,6 +311,10 @@ func (s *ChannelIQService) runBatch(ctx context.Context, accountIDs []int64, set
 func (s *ChannelIQService) runOne(ctx context.Context, accountID int64, settings ChannelIQSettings) {
 	started := time.Now()
 	run, err := s.tester.RunIQTestBackground(ctx, accountID, settings.Model, settings.Prompt)
+	if s.accountExcluded(ctx, accountID) {
+		_ = s.store.DeleteResult(ctx, accountID)
+		return
+	}
 	result := &ChannelIQResult{
 		AccountID:       accountID,
 		Status:          ChannelIQStatusFailed,
@@ -298,6 +346,14 @@ func (s *ChannelIQService) runOne(ctx context.Context, accountID int64, settings
 	_ = s.store.SaveResult(ctx, result)
 }
 
+func (s *ChannelIQService) accountExcluded(ctx context.Context, accountID int64) bool {
+	current, err := s.normalizedSettings(ctx)
+	if err != nil || current == nil {
+		return false
+	}
+	return channelIQHasID(current.ExcludedAccountIDs, accountID)
+}
+
 func (s *ChannelIQService) normalizedSettings(ctx context.Context) (*ChannelIQSettings, error) {
 	settings, err := s.store.GetSettings(ctx)
 	if err != nil {
@@ -309,7 +365,36 @@ func (s *ChannelIQService) normalizedSettings(ctx context.Context) (*ChannelIQSe
 	return normalizeChannelIQSettings(*settings), nil
 }
 
-func (s *ChannelIQService) listWatchAccounts(ctx context.Context, groupIDs []int64) ([]Account, error) {
+func (s *ChannelIQService) listWatchAccounts(ctx context.Context, settings *ChannelIQSettings) ([]Account, error) {
+	accounts, err := s.listGroupOpenAIAccounts(ctx, settings.GroupIDs)
+	if err != nil {
+		return nil, err
+	}
+	return channelIQRejectIDs(accounts, settings.ExcludedAccountIDs), nil
+}
+
+func (s *ChannelIQService) listExcludedAccounts(ctx context.Context, settings *ChannelIQSettings) ([]Account, error) {
+	accounts, err := s.listGroupOpenAIAccounts(ctx, settings.GroupIDs)
+	if err != nil {
+		return nil, err
+	}
+	return channelIQKeepIDs(accounts, settings.ExcludedAccountIDs), nil
+}
+
+func (s *ChannelIQService) accountInSelectedGroups(ctx context.Context, settings *ChannelIQSettings, accountID int64) (bool, error) {
+	accounts, err := s.listGroupOpenAIAccounts(ctx, settings.GroupIDs)
+	if err != nil {
+		return false, err
+	}
+	for _, account := range accounts {
+		if account.ID == accountID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *ChannelIQService) listGroupOpenAIAccounts(ctx context.Context, groupIDs []int64) ([]Account, error) {
 	seen := map[int64]Account{}
 	for _, groupID := range groupIDs {
 		if groupID <= 0 {
@@ -343,9 +428,47 @@ func (s *ChannelIQService) listWatchAccounts(ctx context.Context, groupIDs []int
 }
 
 func normalizeChannelIQSettings(in ChannelIQSettings) *ChannelIQSettings {
+	return &ChannelIQSettings{
+		GroupIDs:           channelIQUniquePositiveIDs(in.GroupIDs),
+		ExcludedAccountIDs: channelIQUniquePositiveIDs(in.ExcludedAccountIDs),
+		AutoEnabled:        in.AutoEnabled,
+		IntervalSeconds:    channelIQNormalizeInterval(in.IntervalSeconds),
+		Prompt:             channelIQNormalizePrompt(in.Prompt),
+		Model:              channelIQNormalizeModel(in.Model),
+		UpdatedAt:          in.UpdatedAt,
+	}
+}
+
+func channelIQNormalizeInterval(interval int) int {
+	if interval < channelIQMinIntervalSec {
+		return channelIQDefaultInterval
+	}
+	if interval > channelIQMaxIntervalSec {
+		return channelIQMaxIntervalSec
+	}
+	return interval
+}
+
+func channelIQNormalizePrompt(prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return channelIQDefaultPrompt
+	}
+	return prompt
+}
+
+func channelIQNormalizeModel(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return channelIQDefaultModel
+	}
+	return model
+}
+
+func channelIQUniquePositiveIDs(ids []int64) []int64 {
 	seen := map[int64]struct{}{}
-	groupIDs := make([]int64, 0, len(in.GroupIDs))
-	for _, id := range in.GroupIDs {
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
 		if id <= 0 {
 			continue
 		}
@@ -353,31 +476,65 @@ func normalizeChannelIQSettings(in ChannelIQSettings) *ChannelIQSettings {
 			continue
 		}
 		seen[id] = struct{}{}
-		groupIDs = append(groupIDs, id)
+		out = append(out, id)
 	}
-	interval := in.IntervalSeconds
-	if interval < channelIQMinIntervalSec {
-		interval = channelIQDefaultInterval
+	return out
+}
+
+func channelIQHasID(ids []int64, id int64) bool {
+	for _, existing := range ids {
+		if existing == id {
+			return true
+		}
 	}
-	if interval > channelIQMaxIntervalSec {
-		interval = channelIQMaxIntervalSec
+	return false
+}
+
+func channelIQAppendID(ids []int64, id int64) []int64 {
+	if channelIQHasID(ids, id) {
+		return channelIQUniquePositiveIDs(ids)
 	}
-	prompt := strings.TrimSpace(in.Prompt)
-	if prompt == "" {
-		prompt = channelIQDefaultPrompt
+	return channelIQUniquePositiveIDs(append(append([]int64(nil), ids...), id))
+}
+
+func channelIQRemoveID(ids []int64, id int64) []int64 {
+	out := make([]int64, 0, len(ids))
+	for _, existing := range ids {
+		if existing == id {
+			continue
+		}
+		out = append(out, existing)
 	}
-	model := strings.TrimSpace(in.Model)
-	if model == "" {
-		model = channelIQDefaultModel
+	return channelIQUniquePositiveIDs(out)
+}
+
+func channelIQRejectIDs(accounts []Account, excluded []int64) []Account {
+	skip := map[int64]struct{}{}
+	for _, id := range excluded {
+		skip[id] = struct{}{}
 	}
-	return &ChannelIQSettings{
-		GroupIDs:        groupIDs,
-		AutoEnabled:     in.AutoEnabled,
-		IntervalSeconds: interval,
-		Prompt:          prompt,
-		Model:           model,
-		UpdatedAt:       in.UpdatedAt,
+	out := make([]Account, 0, len(accounts))
+	for _, account := range accounts {
+		if _, ok := skip[account.ID]; ok {
+			continue
+		}
+		out = append(out, account)
 	}
+	return out
+}
+
+func channelIQKeepIDs(accounts []Account, keep []int64) []Account {
+	want := map[int64]struct{}{}
+	for _, id := range keep {
+		want[id] = struct{}{}
+	}
+	out := make([]Account, 0, len(keep))
+	for _, account := range accounts {
+		if _, ok := want[account.ID]; ok {
+			out = append(out, account)
+		}
+	}
+	return out
 }
 
 func channelIQTimePtr(t time.Time) *time.Time {

@@ -109,16 +109,28 @@
           </template>
 
           <template #cell-actions="{ row }">
-            <button
-              type="button"
-              class="btn btn-secondary btn-sm inline-flex items-center gap-1"
-              :data-test="`channel-iq-run-one-${row.account_id}`"
-              :disabled="running || starting || row.status === 'running'"
-              @click="handleRunOne(row.account_id)"
-            >
-              <Icon name="play" size="sm" />
-              {{ t('admin.channelIq.runOne') }}
-            </button>
+            <div class="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm inline-flex items-center gap-1"
+                :data-test="`channel-iq-run-one-${row.account_id}`"
+                :disabled="running || starting || row.status === 'running'"
+                @click="handleRunOne(row.account_id)"
+              >
+                <Icon name="play" size="sm" />
+                {{ t('admin.channelIq.runOne') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm inline-flex items-center gap-1 text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
+                :data-test="`channel-iq-exclude-${row.account_id}`"
+                :disabled="starting"
+                @click="askExclude(row)"
+              >
+                <Icon name="trash" size="sm" />
+                {{ t('admin.channelIq.remove') }}
+              </button>
+            </div>
           </template>
         </DataTable>
       </template>
@@ -180,6 +192,33 @@
           <label class="input-label" for="channel-iq-prompt">{{ t('admin.channelIq.prompt') }}</label>
           <textarea id="channel-iq-prompt" v-model="draft.prompt" rows="3" class="input" />
         </div>
+
+        <div>
+          <p class="input-label">{{ t('admin.channelIq.excluded') }}</p>
+          <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.channelIq.excludedHint') }}</p>
+          <div
+            v-if="excluded.length > 0"
+            class="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-gray-200 p-3 dark:border-dark-600"
+          >
+            <div
+              v-for="account in excluded"
+              :key="account.account_id"
+              class="flex items-center justify-between gap-3 text-sm"
+            >
+              <span class="min-w-0 truncate text-gray-800 dark:text-gray-200">{{ account.name }}</span>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs shrink-0 text-primary-600 dark:text-primary-400"
+                :data-test="`channel-iq-restore-${account.account_id}`"
+                :disabled="restoringId === account.account_id"
+                @click="handleRestore(account.account_id)"
+              >
+                {{ t('admin.channelIq.restore') }}
+              </button>
+            </div>
+          </div>
+          <p v-else class="text-sm text-gray-500">{{ t('admin.channelIq.excludedEmpty') }}</p>
+        </div>
       </div>
 
       <template #footer>
@@ -199,6 +238,17 @@
         </div>
       </template>
     </BaseDialog>
+
+    <ConfirmDialog
+      :show="pendingExclude !== null"
+      :title="t('admin.channelIq.removeTitle')"
+      :message="t('admin.channelIq.removeConfirm', { name: pendingExclude?.name || '' })"
+      :confirm-text="t('admin.channelIq.remove')"
+      :cancel-text="t('common.cancel')"
+      danger
+      @confirm="confirmExclude"
+      @cancel="pendingExclude = null"
+    />
 
     <Teleport to="body">
       <Transition name="fade">
@@ -225,7 +275,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { ChannelIQItem, ChannelIQSettings, ChannelIQStatus } from '@/api/admin/channelIq'
+import type { ChannelIQExcludedAccount, ChannelIQItem, ChannelIQSettings, ChannelIQStatus } from '@/api/admin/channelIq'
 import type { AdminGroup } from '@/types'
 import { iqSvgToImageUrl } from '@/components/admin/account/iqTest'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -233,6 +283,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
@@ -250,6 +301,9 @@ const saving = ref(false)
 const showSettings = ref(false)
 const lightboxUrl = ref('')
 const items = ref<ChannelIQItem[]>([])
+const excluded = ref<ChannelIQExcludedAccount[]>([])
+const pendingExclude = ref<ChannelIQItem | null>(null)
+const restoringId = ref<number | null>(null)
 const settings = ref<ChannelIQSettings>({
   group_ids: [],
   auto_enabled: false,
@@ -345,6 +399,7 @@ async function loadOverview(quiet = false) {
     const out = await adminAPI.channelIq.getOverview({ signal: ctrl.signal })
     settings.value = out.settings
     items.value = out.items || []
+    excluded.value = out.excluded || []
   } catch (err) {
     if ((err as { code?: string }).code === 'ERR_CANCELED') return
     appStore.showError(extractApiErrorMessage(err, t('admin.channelIq.loadError')))
@@ -422,6 +477,41 @@ function handleRunAll() {
 
 function handleRunOne(accountId: number) {
   return startRun(() => adminAPI.channelIq.runOne(accountId))
+}
+
+function askExclude(row: ChannelIQItem) {
+  pendingExclude.value = row
+}
+
+async function confirmExclude() {
+  const row = pendingExclude.value
+  pendingExclude.value = null
+  if (!row) return
+  starting.value = true
+  try {
+    await adminAPI.channelIq.excludeAccount(row.account_id)
+    appStore.showSuccess(t('admin.channelIq.removeSuccess'))
+    await loadOverview(true)
+    schedulePoll()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelIq.removeFailed')))
+  } finally {
+    starting.value = false
+  }
+}
+
+async function handleRestore(accountId: number) {
+  restoringId.value = accountId
+  try {
+    await adminAPI.channelIq.restoreAccount(accountId)
+    appStore.showSuccess(t('admin.channelIq.restoreSuccess'))
+    await loadOverview(true)
+    schedulePoll()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelIq.restoreFailed')))
+  } finally {
+    restoringId.value = null
+  }
 }
 
 onMounted(async () => {

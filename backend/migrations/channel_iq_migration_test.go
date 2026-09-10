@@ -22,3 +22,10 @@ func TestChannelIQMigrationContract(t *testing.T) {
 	require.Contains(t, sql, "on delete cascade")
 	require.Contains(t, sql, "references accounts(id)")
 }
+
+func TestChannelIQExcludedMigrationContract(t *testing.T) {
+	raw, err := FS.ReadFile("944_channel_iq_excluded.sql")
+	require.NoError(t, err)
+	sql := strings.ToLower(string(raw))
+	require.Contains(t, sql, "excluded_account_ids jsonb")
+}

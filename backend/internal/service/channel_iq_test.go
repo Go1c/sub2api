@@ -29,6 +29,7 @@ func (s *memoryChannelIQStore) GetSettings(context.Context) (*ChannelIQSettings,
 	}
 	copySettings := *s.settings
 	copySettings.GroupIDs = append([]int64(nil), s.settings.GroupIDs...)
+	copySettings.ExcludedAccountIDs = append([]int64(nil), s.settings.ExcludedAccountIDs...)
 	return &copySettings, nil
 }
 
@@ -37,6 +38,7 @@ func (s *memoryChannelIQStore) SaveSettings(_ context.Context, settings *Channel
 	defer s.mu.Unlock()
 	copySettings := *settings
 	copySettings.GroupIDs = append([]int64(nil), settings.GroupIDs...)
+	copySettings.ExcludedAccountIDs = append([]int64(nil), settings.ExcludedAccountIDs...)
 	s.settings = &copySettings
 	return nil
 }
@@ -78,6 +80,13 @@ func (s *memoryChannelIQStore) SaveResult(_ context.Context, result *ChannelIQRe
 	copyResult := *result
 	copyResult.TestCount = count
 	s.results[result.AccountID] = &copyResult
+	return nil
+}
+
+func (s *memoryChannelIQStore) DeleteResult(_ context.Context, accountID int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.results, accountID)
 	return nil
 }
 
@@ -226,5 +235,76 @@ func TestChannelIQService_AutoTickHonorsEnabledAndInterval(t *testing.T) {
 		tester.mu.Lock()
 		defer tester.mu.Unlock()
 		return len(tester.calls) == 1
+	}, 2*time.Second, 20*time.Millisecond)
+}
+
+func TestChannelIQService_ExcludeAccountRemovesFromListAndDeletesSVG(t *testing.T) {
+	store := newMemoryChannelIQStore()
+	store.results[11] = &ChannelIQResult{
+		AccountID: 11,
+		Status:    ChannelIQStatusSuccess,
+		SVG:       `<svg xmlns="http://www.w3.org/2000/svg"><circle/></svg>`,
+		TestCount: 2,
+	}
+	svc := NewChannelIQService(store, stubChannelIQAccounts{byGroup: map[int64][]Account{
+		9: {
+			{ID: 11, Name: "keep-out", Platform: PlatformOpenAI},
+			{ID: 12, Name: "keep-in", Platform: PlatformOpenAI},
+		},
+	}}, &stubChannelIQTester{})
+	_, err := svc.SaveSettings(context.Background(), ChannelIQSettings{GroupIDs: []int64{9}})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.ExcludeAccount(context.Background(), 11))
+
+	out, err := svc.GetOverview(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out.Items, 1)
+	require.Equal(t, int64(12), out.Items[0].AccountID)
+	require.Len(t, out.Excluded, 1)
+	require.Equal(t, int64(11), out.Excluded[0].AccountID)
+	require.Equal(t, "keep-out", out.Excluded[0].Name)
+	_, stillStored := store.results[11]
+	require.False(t, stillStored)
+	require.Error(t, svc.RunOne(context.Background(), 11))
+}
+
+func TestChannelIQService_RestoreAccountReturnsToIdleList(t *testing.T) {
+	store := newMemoryChannelIQStore()
+	svc := NewChannelIQService(store, stubChannelIQAccounts{byGroup: map[int64][]Account{
+		1: {{ID: 5, Name: "astra", Platform: PlatformOpenAI}},
+	}}, &stubChannelIQTester{})
+	_, err := svc.SaveSettings(context.Background(), ChannelIQSettings{GroupIDs: []int64{1}})
+	require.NoError(t, err)
+	require.NoError(t, svc.ExcludeAccount(context.Background(), 5))
+	require.NoError(t, svc.RestoreAccount(context.Background(), 5))
+
+	out, err := svc.GetOverview(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out.Items, 1)
+	require.Equal(t, int64(5), out.Items[0].AccountID)
+	require.Equal(t, ChannelIQStatusIdle, out.Items[0].Status)
+	require.Empty(t, out.Items[0].SVG)
+	require.Empty(t, out.Excluded)
+}
+
+func TestChannelIQService_RunAllSkipsExcludedAccounts(t *testing.T) {
+	store := newMemoryChannelIQStore()
+	tester := &stubChannelIQTester{}
+	svc := NewChannelIQService(store, stubChannelIQAccounts{byGroup: map[int64][]Account{
+		1: {
+			{ID: 1, Name: "a", Platform: PlatformOpenAI},
+			{ID: 2, Name: "b", Platform: PlatformOpenAI},
+		},
+	}}, tester)
+	_, err := svc.SaveSettings(context.Background(), ChannelIQSettings{GroupIDs: []int64{1}})
+	require.NoError(t, err)
+	require.NoError(t, svc.ExcludeAccount(context.Background(), 2))
+	require.NoError(t, svc.RunAll(context.Background()))
+
+	require.Eventually(t, func() bool {
+		tester.mu.Lock()
+		defer tester.mu.Unlock()
+		return len(tester.calls) == 1 && tester.calls[0] == 1
 	}, 2*time.Second, 20*time.Millisecond)
 }
