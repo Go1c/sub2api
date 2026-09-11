@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -108,30 +109,87 @@ func writeOpenAICompactSSEFailure(c *gin.Context, statusCode int, errorBody []by
 // 不被识别，会退化为 "stream closed before response.completed" 盲重连）。
 // 同时标记流内错误，保证挂在 200 流上的失败仍进入 ops 错误看板。
 func writeOpenAICompactSSEFailureMessage(c *gin.Context, statusCode int, errType, message string) {
-	if c == nil {
-		return
+	writeOpenAIResponsesFailedSSE(c, statusCode, errType, errType, message)
+}
+
+// writeOpenAIResponsesFailedSSE 在已经提交 HTTP 200 的 Responses SSE 上流上
+// 补一条 response.failed 终止事件。OpenAI Responses 流式协议的终止事件是
+// response.completed/failed/incomplete/cancelled；裸 {"type":"error"} 不算终态。
+// 缺终态时客户端会报 missing_terminal 或 stream closed before response.completed。
+// created_at 对齐 #5623：严格客户端把它当必填字段。
+func writeOpenAIResponsesFailedSSE(c *gin.Context, statusCode int, errType, code, message string) bool {
+	if c == nil || c.Writer == nil {
+		return false
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "OpenAI stream ended before a terminal event"
+	}
+	if strings.TrimSpace(errType) == "" {
+		errType = "upstream_error"
+	}
+	if strings.TrimSpace(code) == "" {
+		code = errType
+	}
+	if statusCode <= 0 {
+		statusCode = http.StatusBadGateway
 	}
 	MarkOpsStreamError(c, errType, message, statusCode)
 	payload, err := json.Marshal(map[string]any{
 		"type": "response.failed",
 		"response": map[string]any{
-			"id":     "resp_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-			"object": "response",
-			"status": "failed",
-			"output": []any{},
+			"id":         "resp_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+			"object":     "response",
+			"created_at": time.Now().Unix(),
+			"status":     "failed",
+			"output":     []any{},
 			"error": map[string]any{
-				"code":    errType,
+				"code":    code,
 				"message": message,
 			},
 		},
 	})
 	if err != nil {
-		return
+		return false
 	}
-	_, _ = c.Writer.Write([]byte("event: response.failed\ndata: "))
-	_, _ = c.Writer.Write(payload)
-	_, _ = c.Writer.Write([]byte("\n\n"))
+	if _, err := c.Writer.Write([]byte("event: response.failed\ndata: ")); err != nil {
+		return false
+	}
+	if _, err := c.Writer.Write(payload); err != nil {
+		return false
+	}
+	if _, err := c.Writer.Write([]byte("\n\n")); err != nil {
+		return false
+	}
 	c.Writer.Flush()
+	MarkResponseCommitted(c)
+	return true
+}
+
+func openAIResponsesStreamAbortLabels(reason string) (kind, code, message string) {
+	switch strings.TrimSpace(reason) {
+	case "stream_timeout":
+		return "stream_timeout", "stream_timeout", "OpenAI stream idle timeout"
+	case "stream_read_error":
+		return "stream_read_error", "stream_read_error", "OpenAI stream read error"
+	case "response_too_large":
+		return "response_too_large", "response_too_large", "OpenAI SSE line too large"
+	default:
+		return "stream_missing_terminal", "missing_terminal", "OpenAI stream ended before a terminal event"
+	}
+}
+
+func emitOpenAIResponsesStreamAbortSSE(
+	s *OpenAIGatewayService,
+	c *gin.Context,
+	account *Account,
+	passthrough bool,
+	upstreamRequestID, kind, code, message string,
+) bool {
+	if s != nil {
+		s.recordOpenAIStreamUpstreamError(c, account, passthrough, upstreamRequestID, kind, nil, message)
+	}
+	return writeOpenAIResponsesFailedSSE(c, http.StatusBadGateway, "upstream_error", code, message)
 }
 
 // buildOpenAICompactSSEPayload 把 compact 的 Response JSON 转成 SSE 事件序列：
