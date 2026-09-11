@@ -658,6 +658,15 @@ func (e *UpstreamFailoverError) ShouldRetryNextAccount() bool {
 	return e != nil && e.NextAccountAction != NextAccountStop
 }
 
+// EffectiveSameAccountRetryLimit returns the error-level same-account retry
+// budget when set. Otherwise it keeps the account pool_mode default.
+func (e *UpstreamFailoverError) EffectiveSameAccountRetryLimit(poolLimit int) int {
+	if e != nil && e.SameAccountRetryMax > 0 {
+		return e.SameAccountRetryMax
+	}
+	return poolLimit
+}
+
 func (e *UpstreamFailoverError) IsCredentialFailure() bool {
 	return e != nil && e.Stage == GatewayFailureStageAccountAuth
 }

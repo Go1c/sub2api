@@ -614,7 +614,10 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 		return nil, err
 	}
 
-	proxyURL, releaseProxy := s.lookupOpenAIProxyURL(ctx, c, account, forwardBody)
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, forwardBody)
+	if proxyErr != nil {
+		return nil, proxyErr
+	}
 	defer releaseProxy()
 	upstreamStart := time.Now()
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)

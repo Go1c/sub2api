@@ -1,6 +1,6 @@
 ---
 name: openai-oauth-ip-group
-description: OpenAI OAuth 账号 IP 组：默认单代理；选组后同一套指纹换出口，对话钉 IP，每账号每 IP 并发
+description: OpenAI OAuth 账号 IP 组：默认单代理；选组后同一套指纹换出口，对话钉 IP，每账号每 IP 并发；IP 级 429/过载扫两遍组内 IP 后换号，不把账号打 429
 metadata:
   type: doc
   level: L2
@@ -37,7 +37,8 @@ metadata:
 - 同一条对话钉在第一次选中的 IP。新对话才在组里挑「该账号下还未打满」的 IP。
 - 并发两把锁都要过：账号 `concurrency` 总闸 + `(account_id, proxy_id)` 每 IP 锁。多账号共用同一条法国 IP 时各算各的上限。
 - 绑定 IP **死亡**（禁用 / 非 active / 过期 / 已从组里删除）时，这条对话才允许换组内另一条可用 IP 并改绑。
-- 不算死亡、因此不换：IP 并发满、账号总并发满、上游 429、overloaded、单次延迟探测失败。这些走现有排队 / 失败 / [`openai-capacity-shed-retry.md`](openai-capacity-shed-retry.md)。
+- 不算死亡、因此不换：IP 并发满、账号总并发满、单次延迟探测失败。这些走现有排队 / 失败。
+- **IP 级瞬时故障**（上游 429 且不是额度耗尽、overloaded、可重试 processing error）：当前请求内按 `proxy_id` 升序扫一遍组内活 IP，全失败再扫第二遍；两遍仍失败才换号。没有下一个号则回客户端错误。这条路径**不得** `SetRateLimited` / 运行时 429 熔断该账号。真额度耗尽（`usage_limit_reached` 或 5h/7d `used_percent >= 100`）仍走账号级 429。见 [`openai-capacity-shed-retry.md`](openai-capacity-shed-retry.md)。
 
 ### 实现面（约定，实现时按计划落地）
 
@@ -52,6 +53,7 @@ metadata:
 - 不整包合并 #6650；只允许参考其「对话绑槽 + 每槽并发」思路。
 - 默认单 IP；选组才多 IP。指纹不变。
 - 对话钉 IP；新对话才换；出口死亡才允许进行中的对话换绑。
+- IP 级 429/过载：同请求扫组内 IP 两遍，再换号；无号则报错；不把账号打 429。
 - 账号并发 = 总闸；每 IP 上限统一配在组上；计数维度是账号 × IP。
 - v1 只对 OpenAI OAuth 生效。
 - 一个号不能同时既有生效的单 IP 又有组；选组后 `proxy_id` 必须清空（或保存时清掉），出站只看组。

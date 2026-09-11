@@ -11,8 +11,14 @@ import (
 
 const openAIIPGroupBindKeyPrefix = "openai:ip_group_bind:"
 
+const openAIIPGroupCooldownKeyPrefix = "openai:ip_group_cooldown:"
+
 func openAIIPGroupBindKey(accountID int64, sessionHash string) string {
 	return openAIIPGroupBindKeyPrefix + strconv.FormatInt(accountID, 10) + ":" + sessionHash
+}
+
+func openAIIPGroupCooldownKey(accountID, proxyID int64) string {
+	return openAIIPGroupCooldownKeyPrefix + strconv.FormatInt(accountID, 10) + ":" + strconv.FormatInt(proxyID, 10)
 }
 
 type openAIIPGroupBindStore struct {
@@ -53,4 +59,32 @@ func (s *openAIIPGroupBindStore) SetBoundProxyID(ctx context.Context, accountID 
 		ttl = time.Hour
 	}
 	return s.rdb.Set(ctx, openAIIPGroupBindKey(accountID, sessionHash), strconv.FormatInt(proxyID, 10), ttl).Err()
+}
+
+func (s *openAIIPGroupBindStore) DeleteBoundProxyID(ctx context.Context, accountID int64, sessionHash string) error {
+	if s == nil || s.rdb == nil || sessionHash == "" {
+		return nil
+	}
+	return s.rdb.Del(ctx, openAIIPGroupBindKey(accountID, sessionHash)).Err()
+}
+
+func (s *openAIIPGroupBindStore) MarkProxyCooldown(ctx context.Context, accountID, proxyID int64, ttl time.Duration) error {
+	if s == nil || s.rdb == nil || accountID <= 0 || proxyID <= 0 {
+		return nil
+	}
+	if ttl <= 0 {
+		ttl = 30 * time.Second
+	}
+	return s.rdb.Set(ctx, openAIIPGroupCooldownKey(accountID, proxyID), "1", ttl).Err()
+}
+
+func (s *openAIIPGroupBindStore) IsProxyCoolingDown(ctx context.Context, accountID, proxyID int64) (bool, error) {
+	if s == nil || s.rdb == nil || accountID <= 0 || proxyID <= 0 {
+		return false, nil
+	}
+	n, err := s.rdb.Exists(ctx, openAIIPGroupCooldownKey(accountID, proxyID)).Result()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }

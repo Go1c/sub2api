@@ -87,7 +87,10 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效）
 	account.ApplyHeaderOverrides(upstreamReq.Header)
 
-	proxyURL, releaseProxy := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	if proxyErr != nil {
+		return nil, proxyErr
+	}
 	defer releaseProxy()
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	if err != nil {

@@ -83,9 +83,7 @@ func (s *FailoverState) HandleFailoverError(
 		return FailoverExhausted
 	}
 
-	if failoverErr.SameAccountRetryMax > 0 && (retryLimit <= 0 || failoverErr.SameAccountRetryMax < retryLimit) {
-		retryLimit = failoverErr.SameAccountRetryMax
-	}
+	retryLimit = failoverErr.EffectiveSameAccountRetryLimit(retryLimit)
 	retryAllowed := failoverErr.RetryableOnSameAccount &&
 		s.SameAccountRetryCount[accountID] < retryLimit &&
 		(failoverErr.SameAccountRetryDeadline.IsZero() || time.Now().Before(failoverErr.SameAccountRetryDeadline))
@@ -98,7 +96,7 @@ func (s *FailoverState) HandleFailoverError(
 
 	// 同账号重试：对 RetryableOnSameAccount 的临时性错误，先在同一账号上重试。
 	// 重试次数上限 retryLimit 由调用方传入（账号级 pool_mode_retry_count 配置），
-	// 可被错误级 SameAccountRetryMax / deadline 再收紧（Grok capacity / stream idle）。
+	// 错误级 SameAccountRetryMax 覆盖该上限（可收紧或抬高，例如 IP 组两遍扫描）。
 	if retryAllowed {
 		s.SameAccountRetryCount[accountID]++
 		delay := sameAccountRetryDelay

@@ -295,7 +295,10 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		return nil, err
 	}
 
-	proxyURL, releaseProxy := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	if proxyErr != nil {
+		return nil, proxyErr
+	}
 	defer releaseProxy()
 
 	if c != nil {
@@ -780,7 +783,7 @@ func (s *OpenAIGatewayService) handleFailoverErrorResponsePassthrough(
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
 	reqModel, _, _ := extractOpenAIRequestMetaFromBody(requestBody)
 	canonicalModel := canonicalOpenAIAccountSchedulingModel(account, reqModel)
-	shouldDisable := s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, canonicalModel)
+	shouldDisable := s.handleOpenAIAccountUpstreamError(openAIErrorContext(ctx, c), account, resp.StatusCode, resp.Header, body, canonicalModel)
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 		Platform:             account.Platform,
 		AccountID:            account.ID,
@@ -794,11 +797,13 @@ func (s *OpenAIGatewayService) handleFailoverErrorResponsePassthrough(
 		UpstreamResponseBody: upstreamDetail,
 	})
 	return newOpenAIUpstreamFailoverError(
+		openAIErrorContext(ctx, c),
 		resp.StatusCode,
 		resp.Header,
 		body,
 		upstreamMsg,
 		!shouldDisable && account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
+		account,
 	)
 }
 
@@ -843,7 +848,7 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	if !cyberHit {
 		reqModel, _, _ := extractOpenAIRequestMetaFromBody(requestBody)
 		canonicalModel := canonicalOpenAIAccountSchedulingModel(account, reqModel)
-		_ = s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, canonicalModel)
+		_ = s.handleOpenAIAccountUpstreamError(openAIErrorContext(ctx, c), account, resp.StatusCode, resp.Header, body, canonicalModel)
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 		Platform:             account.Platform,
@@ -1393,6 +1398,9 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 	}
 	if isOpenAIRequestScopedCapacityShed(message, payload) {
 		applyOpenAICapacityShedLimitedRetry(failoverErr, message)
+	}
+	if shouldRotateOpenAIIPGroup(account, failoverErr.StatusCode, headers, message, payload) {
+		applyOpenAIIPGroupRotateRetry(failoverErr, openAIIPGroupRetryStateFrom(openAIErrorContext(context.Background(), c)))
 	}
 	return failoverErr
 }

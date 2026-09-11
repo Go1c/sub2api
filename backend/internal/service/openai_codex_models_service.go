@@ -320,7 +320,10 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 	}
 	headers.Set("Version", headerVersion)
 
-	proxyURL, releaseProxy := s.mustOpenAIAccountProxyURL(ctx, account, "")
+	proxyURL, releaseProxy, proxyErr := s.mustOpenAIAccountProxyURL(ctx, account, "")
+	if proxyErr != nil {
+		return nil, proxyErr
+	}
 	defer releaseProxy()
 
 	request := codexModelsManifestRequest{

@@ -260,15 +260,81 @@ const OpenAIRequestBodyTooLargeClientMessage = "Request payload is too large"
 const (
 	openAIRequestBodyTooLargeReason        = GatewayFailureReason("openai_request_body_too_large")
 	OpenAICapacityShedReason               = GatewayFailureReason("openai_capacity_shed")
+	OpenAIIPGroupRotateReason              = GatewayFailureReason("openai_ip_group_rotate")
 	openAICapacityShedDefaultClientMessage = "Our servers are currently overloaded. Please try again later."
 )
 
+func isOpenAIAccountQuotaExhausted(headers http.Header, body []byte) bool {
+	errType := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "error.type").String()))
+	if errType == "" {
+		errType = strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "response.error.type").String()))
+	}
+	if errType == "usage_limit_reached" {
+		return true
+	}
+	snapshot := ParseCodexRateLimitHeaders(headers)
+	if snapshot == nil {
+		return false
+	}
+	normalized := snapshot.Normalize()
+	if normalized == nil {
+		return false
+	}
+	if normalized.Used7dPercent != nil && *normalized.Used7dPercent >= 100 {
+		return true
+	}
+	if normalized.Used5hPercent != nil && *normalized.Used5hPercent >= 100 {
+		return true
+	}
+	return false
+}
+
+func isOpenAIIPGroupTransientUpstreamError(statusCode int, headers http.Header, upstreamMsg string, body []byte) bool {
+	if isOpenAIAccountQuotaExhausted(headers, body) {
+		return false
+	}
+	if statusCode == http.StatusTooManyRequests {
+		return true
+	}
+	if isOpenAIRequestScopedCapacityShed(upstreamMsg, body) {
+		return true
+	}
+	return isOpenAITransientProcessingError(statusCode, upstreamMsg, body)
+}
+
+func shouldRotateOpenAIIPGroup(account *Account, statusCode int, headers http.Header, upstreamMsg string, body []byte) bool {
+	return accountUsesOpenAIIPGroup(account) && isOpenAIIPGroupTransientUpstreamError(statusCode, headers, upstreamMsg, body)
+}
+
+func applyOpenAIIPGroupRotateRetry(failoverErr *UpstreamFailoverError, st *openAIIPGroupRetryState) {
+	if failoverErr == nil {
+		return
+	}
+	failoverErr.RequestScopedTransient = true
+	failoverErr.NextAccountAction = NextAccountRetry
+	if failoverErr.Reason == "" {
+		failoverErr.Reason = OpenAIIPGroupRotateReason
+	}
+	if st != nil && st.done {
+		failoverErr.RetryableOnSameAccount = false
+		failoverErr.SameAccountRetryMax = 0
+		return
+	}
+	failoverErr.RetryableOnSameAccount = true
+	failoverErr.SameAccountRetryMax = defaultPoolModeRetryCount
+	if st != nil {
+		failoverErr.SameAccountRetryMax = st.extraRetries()
+	}
+}
+
 func newOpenAIUpstreamFailoverError(
+	ctx context.Context,
 	statusCode int,
 	responseHeaders http.Header,
 	responseBody []byte,
 	upstreamMsg string,
 	retryableOnSameAccount bool,
+	account ...*Account,
 ) *UpstreamFailoverError {
 	requestScopedCapacity := isOpenAIRequestScopedCapacityShed(upstreamMsg, responseBody)
 	failoverErr := &UpstreamFailoverError{
@@ -289,6 +355,13 @@ func newOpenAIUpstreamFailoverError(
 		failoverErr.NextAccountAction = NextAccountRetry
 		failoverErr.ClientStatusCode = http.StatusRequestEntityTooLarge
 		failoverErr.ClientMessage = OpenAIRequestBodyTooLargeClientMessage
+	}
+	var acc *Account
+	if len(account) > 0 {
+		acc = account[0]
+	}
+	if shouldRotateOpenAIIPGroup(acc, statusCode, responseHeaders, upstreamMsg, responseBody) {
+		applyOpenAIIPGroupRotateRetry(failoverErr, openAIIPGroupRetryStateFrom(ctx))
 	}
 	return failoverErr
 }
@@ -471,6 +544,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		})
 		s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, requestedModel...)
 		return nil, newOpenAIUpstreamFailoverError(
+			ctx,
 			resp.StatusCode,
 			resp.Header,
 			body,
@@ -538,7 +612,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		reqModel, _, _ = extractOpenAIRequestMetaFromBody(requestBody)
 		reqModel = canonicalOpenAIAccountSchedulingModel(account, reqModel)
 	}
-	shouldDisable := s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, reqModel)
+	shouldDisable := s.handleOpenAIAccountUpstreamError(openAIErrorContext(ctx, c), account, resp.StatusCode, resp.Header, body, reqModel)
 	kind := "http_error"
 	if shouldDisable {
 		kind = "failover"
@@ -732,7 +806,7 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 		modelForCooldown = requestedModel[0]
 	}
 	shouldDisable := s.handleOpenAIAccountUpstreamError(
-		c.Request.Context(), account, resp.StatusCode, resp.Header, body, modelForCooldown,
+		openAIErrorContext(c.Request.Context(), c), account, resp.StatusCode, resp.Header, body, modelForCooldown,
 	)
 	kind := "http_error"
 	if shouldDisable {

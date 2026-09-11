@@ -19,12 +19,18 @@ func openAIIPGroupBindKey(accountID int64, sessionHash string) string {
 }
 
 type memoryIPGroupBindStore struct {
-	mu   sync.Mutex
-	data map[string]int64
+	mu       sync.Mutex
+	data     map[string]int64
+	cooldown map[string]time.Time
+	now      func() time.Time
 }
 
 func newMemoryIPGroupBindStore() *memoryIPGroupBindStore {
-	return &memoryIPGroupBindStore{data: map[string]int64{}}
+	return &memoryIPGroupBindStore{data: map[string]int64{}, cooldown: map[string]time.Time{}, now: time.Now}
+}
+
+func memoryIPGroupCooldownKey(accountID, proxyID int64) string {
+	return "openai:ip_group_cooldown:" + strconv.FormatInt(accountID, 10) + ":" + strconv.FormatInt(proxyID, 10)
 }
 
 func (s *memoryIPGroupBindStore) GetBoundProxyID(_ context.Context, accountID int64, sessionHash string) (int64, bool, error) {
@@ -39,6 +45,45 @@ func (s *memoryIPGroupBindStore) SetBoundProxyID(_ context.Context, accountID in
 	defer s.mu.Unlock()
 	s.data[openAIIPGroupBindKey(accountID, sessionHash)] = proxyID
 	return nil
+}
+
+func (s *memoryIPGroupBindStore) DeleteBoundProxyID(_ context.Context, accountID int64, sessionHash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.data, openAIIPGroupBindKey(accountID, sessionHash))
+	return nil
+}
+
+func (s *memoryIPGroupBindStore) MarkProxyCooldown(_ context.Context, accountID, proxyID int64, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+	if ttl <= 0 {
+		ttl = openAIIPGroupTransientCooldown
+	}
+	s.cooldown[memoryIPGroupCooldownKey(accountID, proxyID)] = now.Add(ttl)
+	return nil
+}
+
+func (s *memoryIPGroupBindStore) IsProxyCoolingDown(_ context.Context, accountID, proxyID int64) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	until, ok := s.cooldown[memoryIPGroupCooldownKey(accountID, proxyID)]
+	if !ok {
+		return false, nil
+	}
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+	if !now.Before(until) {
+		delete(s.cooldown, memoryIPGroupCooldownKey(accountID, proxyID))
+		return false, nil
+	}
+	return true, nil
 }
 
 func accountProxySlotKey(accountID, proxyID int64) string {
@@ -290,4 +335,56 @@ func TestResolveOpenAIAccountProxy_ExpiredIsDead(t *testing.T) {
 	resolved, err := resolveOpenAIAccountProxy(context.Background(), resolver, account, "conv-1")
 	require.NoError(t, err)
 	require.Equal(t, int64(3), resolved.Proxy.ID)
+}
+
+func TestResolveOpenAIAccountProxy_TriedIPRebinds(t *testing.T) {
+	groups := newProxyIPGroupRepoStub()
+	require.NoError(t, groups.Create(context.Background(), &ProxyIPGroup{
+		Name:             "eu",
+		PerIPConcurrency: 10,
+		ProxyIDs:         []int64{2, 3},
+	}))
+	gid := int64(1)
+	proxies := map[int64]Proxy{2: liveProxy(2, "a.example"), 3: liveProxy(3, "b.example")}
+	bind := newMemoryIPGroupBindStore()
+	resolver := testResolver(groups, proxies, bind, newMemoryAccountProxySlots())
+	account := &Account{ID: 9, Platform: PlatformOpenAI, Type: AccountTypeOAuth, ProxyIPGroupID: &gid}
+	ctx := withOpenAIIPGroupSession(context.Background(), "conv-1")
+
+	first, err := resolveOpenAIAccountProxy(ctx, resolver, account, "conv-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(2), first.Proxy.ID)
+
+	st := openAIIPGroupRetryStateFrom(ctx)
+	require.NotNil(t, st)
+	st.markTried(2)
+	require.NoError(t, bind.DeleteBoundProxyID(ctx, account.ID, "conv-1"))
+
+	again, err := resolveOpenAIAccountProxy(ctx, resolver, account, "conv-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(3), again.Proxy.ID)
+}
+
+func TestResolveOpenAIAccountProxy_AllSlotsFullReturnsError(t *testing.T) {
+	groups := newProxyIPGroupRepoStub()
+	require.NoError(t, groups.Create(context.Background(), &ProxyIPGroup{
+		Name:             "eu",
+		PerIPConcurrency: 1,
+		ProxyIDs:         []int64{2, 3},
+	}))
+	gid := int64(1)
+	proxies := map[int64]Proxy{2: liveProxy(2, "a.example"), 3: liveProxy(3, "b.example")}
+	slots := newMemoryAccountProxySlots()
+	resolver := testResolver(groups, proxies, newMemoryIPGroupBindStore(), slots)
+	account := &Account{ID: 9, Platform: PlatformOpenAI, Type: AccountTypeOAuth, ProxyIPGroupID: &gid}
+
+	first, err := resolveOpenAIAccountProxy(context.Background(), resolver, account, "conv-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(2), first.Proxy.ID)
+	second, err := resolveOpenAIAccountProxy(context.Background(), resolver, account, "conv-2")
+	require.NoError(t, err)
+	require.Equal(t, int64(3), second.Proxy.ID)
+
+	_, err = resolveOpenAIAccountProxy(context.Background(), resolver, account, "conv-3")
+	require.ErrorIs(t, err, errOpenAIIPGroupNoProxy)
 }
