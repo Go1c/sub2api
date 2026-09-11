@@ -928,6 +928,15 @@ export interface ProxyQualityCheckResult {
   items: ProxyQualityCheckItem[]
 }
 
+export interface ProxyIPGroup {
+  id: number
+  name: string
+  per_ip_concurrency: number
+  proxy_ids: number[]
+  created_at: string
+  updated_at: string
+}
+
 // Gemini credentials structure for OAuth and API Key authentication
 export interface GeminiCredentials {
   // API Key authentication
@@ -1043,6 +1052,7 @@ export interface Account {
     }
   } & Record<string, unknown>)
   proxy_id: number | null
+  proxy_ip_group_id?: number | null
   proxy_fallback_origin_id?: number | null
   proxy_fallback_origin_name?: string | null
   concurrency: number
@@ -1326,6 +1336,7 @@ export interface CreateAccountRequest {
   credentials: Record<string, unknown>
   extra?: Record<string, unknown>
   proxy_id?: number | null
+  proxy_ip_group_id?: number | null
   concurrency?: number
   load_factor?: number | null
   priority?: number
@@ -1343,6 +1354,7 @@ export interface UpdateAccountRequest {
   credentials?: Record<string, unknown>
   extra?: Record<string, unknown>
   proxy_id?: number | null
+  proxy_ip_group_id?: number | null
   concurrency?: number
   load_factor?: number | null
   priority?: number

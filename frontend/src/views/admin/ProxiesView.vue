@@ -79,6 +79,9 @@
             <button @click="showExportDataDialog = true" class="btn btn-secondary">
               {{ selectedCount > 0 ? t('admin.proxies.dataExportSelected') : t('admin.proxies.dataExport') }}
             </button>
+            <button @click="showIpGroupsModal = true" class="btn btn-secondary">
+              {{ t('admin.proxies.ipGroups') }}
+            </button>
             <button @click="showCreateModal = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.proxies.createProxy') }}
@@ -748,6 +751,8 @@
       @imported="handleDataImported"
     />
 
+    <ProxyIPGroupsDialog :show="showIpGroupsModal" @close="showIpGroupsModal = false" />
+
     <BaseDialog
       :show="showQualityReportDialog"
       :title="t('admin.proxies.qualityReportTitle')"
@@ -886,6 +891,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ImportDataModal from '@/components/admin/proxy/ImportDataModal.vue'
+import ProxyIPGroupsDialog from '@/components/admin/proxy/ProxyIPGroupsDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
@@ -959,6 +965,7 @@ const sortState = reactive({
   sort_order: 'desc' as 'asc' | 'desc'
 })
 
+const showIpGroupsModal = ref(false)
 const showCreateModal = ref(false)
 const createPasswordVisible = ref(false)
 const showEditModal = ref(false)

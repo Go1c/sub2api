@@ -120,6 +120,7 @@ type OpenAIQuotaService struct {
 	privacyClientFactory PrivacyClientFactory
 	agentIdentityTaskMu  sync.Mutex
 	agentIdentityWS      agentIdentityWSConnectionInvalidator
+	ipGroupResolver      *openAIIPGroupResolver
 }
 
 // NewOpenAIQuotaService constructs a quota service. token provider is required —
@@ -137,6 +138,13 @@ func NewOpenAIQuotaService(
 		tokenProvider:        tokenProvider,
 		privacyClientFactory: privacyClientFactory,
 	}
+}
+
+func (s *OpenAIQuotaService) SetIPGroupResolver(resolver *openAIIPGroupResolver) {
+	if s == nil {
+		return
+	}
+	s.ipGroupResolver = resolver
 }
 
 // QueryUsage fetches the latest rate-limit/usage snapshot for the given OpenAI
@@ -407,12 +415,14 @@ func (s *OpenAIQuotaService) prepareUpstreamCall(ctx context.Context, accountID 
 	}
 	fedRAMP = account.IsChatGPTAccountFedRAMP()
 
-	// account.Proxy is eager-loaded by accountRepo.GetByID (see
-	// repository.accountsToService), so we can read the proxy URL directly
-	// instead of round-tripping the DB again. Fall back to proxyRepo only
-	// when Proxy isn't pre-populated (defensive — e.g. callers that built
-	// the Account by hand).
-	if account.ProxyID != nil {
+	resolvedURL, release, rerr := resolveOpenAIProxyURL(ctx, s.ipGroupResolver, account, "")
+	if rerr == nil {
+		proxyURL = resolvedURL
+		if release != nil {
+			defer release()
+		}
+	}
+	if proxyURL == "" && account.ProxyID != nil {
 		switch {
 		case account.Proxy != nil:
 			proxyURL = account.Proxy.URL()

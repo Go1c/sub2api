@@ -79,6 +79,7 @@ var ProviderSet = wire.NewSet(
 	NewScheduledTestResultRepository, // 定时测试结果仓储
 	NewChannelIQRepository,
 	NewProxyRepository,
+	NewProxyIPGroupRepository,
 	NewRedeemCodeRepository,
 	NewPromoCodeRepository,
 	NewAnnouncementRepository,
@@ -122,6 +123,7 @@ var ProviderSet = wire.NewSet(
 	NewOpenAI403CounterCache,
 	NewInternal500CounterCache,
 	ProvideConcurrencyCache,
+	NewOpenAIIPGroupBindStore,
 	ProvideSessionLimitCache,
 	NewRPMCache,
 	NewUserRPMCache,

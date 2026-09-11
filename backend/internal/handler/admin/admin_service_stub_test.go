@@ -723,6 +723,47 @@ func (s *stubAdminService) AdminResetAPIKeyRateLimitUsage(ctx context.Context, k
 	return nil, service.ErrAPIKeyNotFound
 }
 
+func (s *stubAdminService) ListProxyIPGroups(ctx context.Context) ([]service.ProxyIPGroup, error) {
+	return []service.ProxyIPGroup{{
+		ID:               1,
+		Name:             "france",
+		PerIPConcurrency: 10,
+		ProxyIDs:         []int64{4},
+	}}, nil
+}
+
+func (s *stubAdminService) GetProxyIPGroup(ctx context.Context, id int64) (*service.ProxyIPGroup, error) {
+	return &service.ProxyIPGroup{ID: id, Name: "france", PerIPConcurrency: 10, ProxyIDs: []int64{4}}, nil
+}
+
+func (s *stubAdminService) CreateProxyIPGroup(ctx context.Context, input *service.CreateProxyIPGroupInput) (*service.ProxyIPGroup, error) {
+	concurrency := input.PerIPConcurrency
+	if concurrency == 0 {
+		concurrency = 10
+	}
+	return &service.ProxyIPGroup{ID: 8, Name: input.Name, PerIPConcurrency: concurrency, ProxyIDs: input.ProxyIDs}, nil
+}
+
+func (s *stubAdminService) UpdateProxyIPGroup(ctx context.Context, id int64, input *service.UpdateProxyIPGroupInput) (*service.ProxyIPGroup, error) {
+	concurrency := 10
+	if input.PerIPConcurrency != nil {
+		concurrency = *input.PerIPConcurrency
+	}
+	name := input.Name
+	if name == "" {
+		name = "france"
+	}
+	return &service.ProxyIPGroup{ID: id, Name: name, PerIPConcurrency: concurrency}, nil
+}
+
+func (s *stubAdminService) DeleteProxyIPGroup(ctx context.Context, id int64) error {
+	return nil
+}
+
+func (s *stubAdminService) SetProxyIPGroupMembers(ctx context.Context, id int64, proxyIDs []int64) (*service.ProxyIPGroup, error) {
+	return &service.ProxyIPGroup{ID: id, Name: "france", PerIPConcurrency: 10, ProxyIDs: proxyIDs}, nil
+}
+
 func (s *stubAdminService) ResetAccountQuota(ctx context.Context, id int64) error {
 	return nil
 }

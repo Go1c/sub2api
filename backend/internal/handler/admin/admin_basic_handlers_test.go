@@ -19,6 +19,7 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 	userHandler := NewUserHandler(adminSvc, nil, nil, nil, nil, nil, nil)
 	groupHandler := NewGroupHandler(adminSvc, nil, nil)
 	proxyHandler := NewProxyHandler(adminSvc)
+	proxyIPGroupHandler := NewProxyIPGroupHandler(adminSvc)
 	redeemHandler := NewRedeemHandler(adminSvc, nil)
 
 	router.GET("/api/v1/admin/users", userHandler.List)
@@ -53,6 +54,13 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 	router.POST("/api/v1/admin/proxies/:id/quality-check", proxyHandler.CheckQuality)
 	router.GET("/api/v1/admin/proxies/:id/stats", proxyHandler.GetStats)
 	router.GET("/api/v1/admin/proxies/:id/accounts", proxyHandler.GetProxyAccounts)
+
+	router.GET("/api/v1/admin/proxy-ip-groups", proxyIPGroupHandler.List)
+	router.POST("/api/v1/admin/proxy-ip-groups", proxyIPGroupHandler.Create)
+	router.GET("/api/v1/admin/proxy-ip-groups/:id", proxyIPGroupHandler.GetByID)
+	router.PUT("/api/v1/admin/proxy-ip-groups/:id", proxyIPGroupHandler.Update)
+	router.DELETE("/api/v1/admin/proxy-ip-groups/:id", proxyIPGroupHandler.Delete)
+	router.PUT("/api/v1/admin/proxy-ip-groups/:id/members", proxyIPGroupHandler.SetMembers)
 
 	router.GET("/api/v1/admin/redeem-codes", redeemHandler.List)
 	router.GET("/api/v1/admin/redeem-codes/:id", redeemHandler.GetByID)

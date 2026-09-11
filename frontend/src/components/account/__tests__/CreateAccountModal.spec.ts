@@ -39,6 +39,9 @@ vi.mock('@/api/admin', () => ({
     tlsFingerprintProfiles: {
       list: vi.fn().mockResolvedValue([]),
     },
+    proxyIpGroups: {
+      list: vi.fn().mockResolvedValue([]),
+    },
   },
 }))
 

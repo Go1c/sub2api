@@ -543,6 +543,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+	if err := s.applyAccountProxyIPGroup(ctx, account, input.Platform, input.Type, input.ProxyIPGroupID, true); err != nil {
+		return nil, err
+	}
 	if err := s.accountRepo.Create(ctx, account); err != nil {
 		return nil, err
 	}
@@ -718,6 +721,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		account.Proxy = nil // 清除关联对象，防止 GORM Save 时根据 Proxy.ID 覆盖 ProxyID
 	}
+	if !account.IsCredentialShadow() {
+		if err := s.applyAccountProxyIPGroup(ctx, account, account.Platform, account.Type, input.ProxyIPGroupID, false); err != nil {
+			return nil, err
+		}
+	}
 	if !reflect.DeepEqual(previousProbeIdentity, upstreamBillingProbeIdentity(account)) && account.Extra != nil {
 		delete(account.Extra, UpstreamBillingProbeExtraKey)
 		if !isUpstreamBillingProbeAccount(account) {
@@ -800,8 +808,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 
 	// 将 proxy 变更传播到 spark 影子账号（同步；Update 内部已触发调度快照）。
 	// 影子自身 proxy 不可独立编辑(见上),故对影子的更新不触发传播。
-	if input.ProxyID != nil && !account.IsCredentialShadow() {
-		if err := s.propagateProxyToShadows(ctx, id, account.ProxyID); err != nil {
+	if (input.ProxyID != nil || input.ProxyIPGroupID != nil) && !account.IsCredentialShadow() {
+		if err := s.propagateProxyToShadows(ctx, id, account.ProxyID, account.ProxyIPGroupID); err != nil {
 			return nil, err
 		}
 	}
@@ -1012,7 +1020,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			effectiveProxyID = repoUpdates.ProxyID
 		}
 		for _, accountID := range input.AccountIDs {
-			if err := s.propagateProxyToShadows(ctx, accountID, effectiveProxyID); err != nil {
+			if err := s.propagateProxyToShadows(ctx, accountID, effectiveProxyID, nil); err != nil {
 				return nil, err
 			}
 		}
@@ -1188,7 +1196,7 @@ func (s *adminServiceImpl) RevertAccountProxyFallback(ctx context.Context, id in
 	if err != nil {
 		return fmt.Errorf("get account after proxy revert: %w", err)
 	}
-	return s.propagateProxyToShadows(ctx, id, account.ProxyID)
+	return s.propagateProxyToShadows(ctx, id, account.ProxyID, account.ProxyIPGroupID)
 }
 
 // CreateShadow 为指定 OpenAI OAuth 母账号创建 spark 维度影子账号（一母一影）。
@@ -1277,6 +1285,7 @@ func (s *adminServiceImpl) CreateShadow(ctx context.Context, parentID int64, opt
 		ParentAccountID: &parentID,
 		QuotaDimension:  QuotaDimensionSpark,
 		ProxyID:         parent.ProxyID,
+		ProxyIPGroupID:  parent.ProxyIPGroupID,
 		Priority:        priority,
 		Concurrency:     concurrency,
 		Schedulable:     true,
@@ -1317,24 +1326,47 @@ func (s *adminServiceImpl) CreateShadow(ctx context.Context, parentID int64, opt
 // It is called synchronously so that proxy changes are immediately consistent;
 // accountRepo.Update triggers the scheduler outbox + cache propagation internally.
 // Calling this for a non-parent account is a harmless no-op.
-func (s *adminServiceImpl) propagateProxyToShadows(ctx context.Context, parentID int64, proxyID *int64) error {
-	return propagateAccountProxyToShadows(ctx, s.accountRepo, parentID, proxyID)
+func (s *adminServiceImpl) propagateProxyToShadows(ctx context.Context, parentID int64, proxyID *int64, proxyIPGroupID *int64) error {
+	return propagateAccountProxyToShadows(ctx, s.accountRepo, parentID, proxyID, proxyIPGroupID)
 }
 
-// propagateAccountProxyToShadows 把母账号的 proxy 同步到其所有 spark 影子(影子 proxy 恒继承母账号)。
-// 供 AdminService 编辑路径与 CRS 同步路径共用——后者改动母账号 proxy 后必须同样传播,否则影子保留
-// 旧 proxy 出现出站漂移(外审第8轮)。
-func propagateAccountProxyToShadows(ctx context.Context, repo AccountRepository, parentID int64, proxyID *int64) error {
+// propagateAccountProxyToShadows 把母账号的 proxy / IP 组同步到其所有 spark 影子。
+func propagateAccountProxyToShadows(ctx context.Context, repo AccountRepository, parentID int64, proxyID *int64, proxyIPGroupID *int64) error {
 	shadows, err := repo.ListShadowsByParent(ctx, parentID)
 	if err != nil {
 		return fmt.Errorf("list spark shadows for proxy propagation: %w", err)
 	}
 	for _, shadow := range shadows {
 		shadow.ProxyID = proxyID
+		shadow.ProxyIPGroupID = proxyIPGroupID
 		if err := repo.Update(ctx, shadow); err != nil {
 			return fmt.Errorf("update spark shadow %d proxy: %w", shadow.ID, err)
 		}
 	}
+	return nil
+}
+
+func (s *adminServiceImpl) applyAccountProxyIPGroup(ctx context.Context, account *Account, platform, accountType string, groupID *int64, creating bool) error {
+	if groupID == nil {
+		return nil
+	}
+	if *groupID == 0 {
+		account.ProxyIPGroupID = nil
+		return nil
+	}
+	if platform != PlatformOpenAI || accountType != AccountTypeOAuth {
+		return ErrProxyIPGroupNotAllowed
+	}
+	if s.proxyIPGroupRepo == nil {
+		return ErrProxyIPGroupNotFound
+	}
+	if _, err := s.proxyIPGroupRepo.GetByID(ctx, *groupID); err != nil {
+		return err
+	}
+	account.ProxyIPGroupID = groupID
+	account.ProxyID = nil
+	account.Proxy = nil
+	_ = creating
 	return nil
 }
 

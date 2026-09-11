@@ -1610,7 +1610,7 @@ func (s *AccountTestService) processOpenAIChatCompletionsStream(c *gin.Context, 
 	}
 	emitText := func(text string) {
 		if iq {
-			buffered.WriteString(text)
+			_, _ = buffered.WriteString(text)
 			return
 		}
 		s.sendEvent(c, TestEvent{Type: "content", Text: text})
@@ -1742,7 +1742,7 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 		case "response.output_text.delta":
 			if delta, ok := data["delta"].(string); ok && delta != "" {
 				if iq {
-					buffered.WriteString(delta)
+					_, _ = buffered.WriteString(delta)
 				} else {
 					s.sendEvent(c, TestEvent{Type: "content", Text: delta})
 				}
