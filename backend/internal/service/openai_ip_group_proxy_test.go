@@ -4,12 +4,19 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+const openAIIPGroupBindKeyPrefix = "openai:ip_group_bind:"
+
+func openAIIPGroupBindKey(accountID int64, sessionHash string) string {
+	return openAIIPGroupBindKeyPrefix + strconv.FormatInt(accountID, 10) + ":" + sessionHash
+}
 
 type memoryIPGroupBindStore struct {
 	mu   sync.Mutex
@@ -32,6 +39,10 @@ func (s *memoryIPGroupBindStore) SetBoundProxyID(_ context.Context, accountID in
 	defer s.mu.Unlock()
 	s.data[openAIIPGroupBindKey(accountID, sessionHash)] = proxyID
 	return nil
+}
+
+func accountProxySlotKey(accountID, proxyID int64) string {
+	return "conc:acct-proxy:" + strconv.FormatInt(accountID, 10) + ":" + strconv.FormatInt(proxyID, 10)
 }
 
 type memoryAccountProxySlots struct {

@@ -2,16 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
-
-const openAIIPGroupBindKeyPrefix = "openai:ip_group_bind:"
 
 // OpenAIIPGroupBindStore persists conversation -> proxy bindings for an account.
 type OpenAIIPGroupBindStore interface {
@@ -204,10 +199,6 @@ func (r *openAIIPGroupResolver) tryOccupy(ctx context.Context, accountID, proxyI
 	}, true, nil
 }
 
-func openAIIPGroupBindKey(accountID int64, sessionHash string) string {
-	return openAIIPGroupBindKeyPrefix + strconv.FormatInt(accountID, 10) + ":" + sessionHash
-}
-
 func (s *OpenAIGatewayService) resolveOpenAIAccountProxy(ctx context.Context, account *Account, sessionHash string) (*resolvedOpenAIProxy, error) {
 	return resolveOpenAIAccountProxy(ctx, s.ipGroupResolver, account, sessionHash)
 }
@@ -309,47 +300,4 @@ func (s *ConcurrencyService) AcquireAccountProxySlot(ctx context.Context, accoun
 			}
 		},
 	}, nil
-}
-
-func accountProxySlotKey(accountID, proxyID int64) string {
-	return fmt.Sprintf("conc:acct-proxy:%d:%d", accountID, proxyID)
-}
-
-type redisOpenAIIPGroupBindStore struct {
-	rdb *redis.Client
-}
-
-func NewRedisOpenAIIPGroupBindStore(rdb *redis.Client) OpenAIIPGroupBindStore {
-	if rdb == nil {
-		return nil
-	}
-	return &redisOpenAIIPGroupBindStore{rdb: rdb}
-}
-
-func (s *redisOpenAIIPGroupBindStore) GetBoundProxyID(ctx context.Context, accountID int64, sessionHash string) (int64, bool, error) {
-	if s == nil || s.rdb == nil || sessionHash == "" {
-		return 0, false, nil
-	}
-	val, err := s.rdb.Get(ctx, openAIIPGroupBindKey(accountID, sessionHash)).Result()
-	if err == redis.Nil {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, err
-	}
-	id, err := strconv.ParseInt(val, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, false, nil
-	}
-	return id, true, nil
-}
-
-func (s *redisOpenAIIPGroupBindStore) SetBoundProxyID(ctx context.Context, accountID int64, sessionHash string, proxyID int64, ttl time.Duration) error {
-	if s == nil || s.rdb == nil || sessionHash == "" || proxyID <= 0 {
-		return nil
-	}
-	if ttl <= 0 {
-		ttl = openaiStickySessionTTL
-	}
-	return s.rdb.Set(ctx, openAIIPGroupBindKey(accountID, sessionHash), strconv.FormatInt(proxyID, 10), ttl).Err()
 }

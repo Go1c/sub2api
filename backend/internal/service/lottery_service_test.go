@@ -628,16 +628,16 @@ func TestLotteryServiceDrawPassesPromoIntoSiteMessage(t *testing.T) {
 	now := time.Unix(1779000000, 0)
 	repo := newLotteryRepoStub()
 	campaign := seedLotteryCampaign(repo, LotteryCampaign{
-		Name:          "lucky",
-		Subtitle:      "subtitle",
-		Status:        LotteryStatusActive,
-		PrizeCount:    1,
+		Name:            "lucky",
+		Subtitle:        "subtitle",
+		Status:          LotteryStatusActive,
+		PrizeCount:      1,
 		MaxParticipants: 1,
-		PromoText:     "关注公众号",
-		PromoImageURL: "https://cdn.example.com/qr.png",
-		CreatedBy:     99,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		PromoText:       "关注公众号",
+		PromoImageURL:   "https://cdn.example.com/qr.png",
+		CreatedBy:       99,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}, "LUCKY-CODE")
 	messenger := &lotteryMessengerStub{}
 	svc := newLotteryTestService(repo, SiteMessageSettings{Enabled: true, DailySendLimit: 10, RetentionDays: 30}, messenger, now)

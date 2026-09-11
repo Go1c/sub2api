@@ -106,7 +106,7 @@ func ProvideOpenAIOAuthService(
 func ProvideOpenAIIPGroupResolver(
 	groups ProxyIPGroupRepository,
 	proxies ProxyRepository,
-	redisClient *redis.Client,
+	bind OpenAIIPGroupBindStore,
 	cache ConcurrencyCache,
 	cfg *config.Config,
 ) *openAIIPGroupResolver {
@@ -118,7 +118,7 @@ func ProvideOpenAIIPGroupResolver(
 	if cfg != nil && cfg.Gateway.OpenAIWS.StickySessionTTLSeconds > 0 {
 		ttl = time.Duration(cfg.Gateway.OpenAIWS.StickySessionTTLSeconds) * time.Second
 	}
-	return newOpenAIIPGroupResolver(groups, proxies, NewRedisOpenAIIPGroupBindStore(redisClient), slots, ttl)
+	return newOpenAIIPGroupResolver(groups, proxies, bind, slots, ttl)
 }
 
 func ProvideOpenAIGatewayService(

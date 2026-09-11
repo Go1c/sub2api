@@ -14,9 +14,9 @@ const (
 )
 
 var (
-	ErrProxyIPGroupNotFound  = infraerrors.NotFound("PROXY_IP_GROUP_NOT_FOUND", "IP group not found")
-	ErrProxyIPGroupInUse     = infraerrors.Conflict("PROXY_IP_GROUP_IN_USE", "IP group is still assigned to accounts")
-	ErrProxyIPGroupNameTaken = infraerrors.Conflict("PROXY_IP_GROUP_NAME_TAKEN", "IP group name already exists")
+	ErrProxyIPGroupNotFound   = infraerrors.NotFound("PROXY_IP_GROUP_NOT_FOUND", "IP group not found")
+	ErrProxyIPGroupInUse      = infraerrors.Conflict("PROXY_IP_GROUP_IN_USE", "IP group is still assigned to accounts")
+	ErrProxyIPGroupNameTaken  = infraerrors.Conflict("PROXY_IP_GROUP_NAME_TAKEN", "IP group name already exists")
 	ErrProxyIPGroupNotAllowed = infraerrors.BadRequest("PROXY_IP_GROUP_NOT_ALLOWED", "IP group can only be assigned to OpenAI OAuth accounts")
 )
 
