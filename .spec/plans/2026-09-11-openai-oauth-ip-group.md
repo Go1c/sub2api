@@ -1,5 +1,5 @@
 ---
-status: pending
+status: implemented
 ---
 
 # OpenAI OAuth IP 组 Implementation Plan

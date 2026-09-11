@@ -141,6 +141,7 @@ var (
 		{Name: "session_window_status", Type: field.TypeString, Nullable: true, Size: 20},
 		{Name: "quota_dimension", Type: field.TypeEnum, Enums: []string{"global", "spark"}, Default: "global"},
 		{Name: "proxy_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "proxy_ip_group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "parent_account_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// AccountsTable holds the schema information for the "accounts" table.
@@ -156,8 +157,14 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "accounts_accounts_children",
+				Symbol:     "accounts_proxy_ip_groups_proxy_ip_group",
 				Columns:    []*schema.Column{AccountsColumns[31]},
+				RefColumns: []*schema.Column{ProxyIPGroupsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "accounts_accounts_children",
+				Columns:    []*schema.Column{AccountsColumns[32]},
 				RefColumns: []*schema.Column{AccountsColumns[0]},
 				OnDelete:   schema.Restrict,
 			},
@@ -182,6 +189,11 @@ var (
 				Name:    "account_proxy_id",
 				Unique:  false,
 				Columns: []*schema.Column{AccountsColumns[30]},
+			},
+			{
+				Name:    "account_proxy_ip_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{AccountsColumns[31]},
 			},
 			{
 				Name:    "account_priority",
@@ -231,7 +243,7 @@ var (
 			{
 				Name:    "account_parent_account_id",
 				Unique:  false,
-				Columns: []*schema.Column{AccountsColumns[31]},
+				Columns: []*schema.Column{AccountsColumns[32]},
 			},
 		},
 	}
@@ -1731,6 +1743,33 @@ var (
 			},
 		},
 	}
+	// ProxyIPGroupsColumns holds the columns for the "proxy_ip_groups" table.
+	ProxyIPGroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "per_ip_concurrency", Type: field.TypeInt, Default: 10},
+	}
+	// ProxyIPGroupsTable holds the schema information for the "proxy_ip_groups" table.
+	ProxyIPGroupsTable = &schema.Table{
+		Name:       "proxy_ip_groups",
+		Columns:    ProxyIPGroupsColumns,
+		PrimaryKey: []*schema.Column{ProxyIPGroupsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "proxyipgroup_name",
+				Unique:  false,
+				Columns: []*schema.Column{ProxyIPGroupsColumns[4]},
+			},
+			{
+				Name:    "proxyipgroup_deleted_at",
+				Unique:  false,
+				Columns: []*schema.Column{ProxyIPGroupsColumns[3]},
+			},
+		},
+	}
 	// RedeemCodesColumns holds the columns for the "redeem_codes" table.
 	RedeemCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2599,6 +2638,7 @@ var (
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
+		ProxyIPGroupsTable,
 		RedeemCodesTable,
 		SecuritySecretsTable,
 		SettingsTable,
@@ -2625,7 +2665,8 @@ func init() {
 		Table: "api_keys",
 	}
 	AccountsTable.ForeignKeys[0].RefTable = ProxiesTable
-	AccountsTable.ForeignKeys[1].RefTable = AccountsTable
+	AccountsTable.ForeignKeys[1].RefTable = ProxyIPGroupsTable
+	AccountsTable.ForeignKeys[2].RefTable = AccountsTable
 	AccountsTable.Annotation = &entsql.Annotation{
 		Table: "accounts",
 	}
@@ -2740,6 +2781,9 @@ func init() {
 	ProxiesTable.ForeignKeys[0].RefTable = ProxiesTable
 	ProxiesTable.Annotation = &entsql.Annotation{
 		Table: "proxies",
+	}
+	ProxyIPGroupsTable.Annotation = &entsql.Annotation{
+		Table: "proxy_ip_groups",
 	}
 	RedeemCodesTable.ForeignKeys[0].RefTable = GroupsTable
 	RedeemCodesTable.ForeignKeys[1].RefTable = UsersTable

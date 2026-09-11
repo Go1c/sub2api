@@ -154,6 +154,11 @@ func (s *adminServiceImpl) DeleteProxy(ctx context.Context, id int64) error {
 	if count > 0 {
 		return ErrProxyInUse
 	}
+	if s.proxyIPGroupRepo != nil {
+		if err := s.proxyIPGroupRepo.RemoveMembersByProxyID(ctx, id); err != nil {
+			return err
+		}
+	}
 	return s.proxyRepo.Delete(ctx, id)
 }
 
@@ -178,6 +183,15 @@ func (s *adminServiceImpl) BatchDeleteProxies(ctx context.Context, ids []int64) 
 				Reason: ErrProxyInUse.Error(),
 			})
 			continue
+		}
+		if s.proxyIPGroupRepo != nil {
+			if err := s.proxyIPGroupRepo.RemoveMembersByProxyID(ctx, id); err != nil {
+				result.Skipped = append(result.Skipped, ProxyBatchDeleteSkipped{
+					ID:     id,
+					Reason: err.Error(),
+				})
+				continue
+			}
 		}
 		if err := s.proxyRepo.Delete(ctx, id); err != nil {
 			result.Skipped = append(result.Skipped, ProxyBatchDeleteSkipped{

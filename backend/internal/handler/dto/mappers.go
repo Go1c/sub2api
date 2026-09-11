@@ -246,6 +246,7 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		CredentialsStatus:       credsStatus,
 		Extra:                   a.Extra,
 		ProxyID:                 a.ProxyID,
+		ProxyIPGroupID:          a.ProxyIPGroupID,
 		ProxyFallbackOriginID:   a.ProxyFallbackOriginID,
 		ProxyFallbackOriginName: a.ProxyFallbackOriginName,
 		Concurrency:             a.Concurrency,
@@ -487,6 +488,24 @@ func ProxyWithAccountCountFromService(p *service.ProxyWithAccountCount) *ProxyWi
 		QualityGrade:   p.QualityGrade,
 		QualitySummary: p.QualitySummary,
 		QualityChecked: p.QualityChecked,
+	}
+}
+
+func ProxyIPGroupFromService(g *service.ProxyIPGroup) *AdminProxyIPGroup {
+	if g == nil {
+		return nil
+	}
+	proxyIDs := g.ProxyIDs
+	if proxyIDs == nil {
+		proxyIDs = []int64{}
+	}
+	return &AdminProxyIPGroup{
+		ID:               g.ID,
+		Name:             g.Name,
+		PerIPConcurrency: g.PerIPConcurrency,
+		ProxyIDs:         proxyIDs,
+		CreatedAt:        g.CreatedAt,
+		UpdatedAt:        g.UpdatedAt,
 	}
 }
 

@@ -4,7 +4,7 @@ description: OpenAI OAuth 账号 IP 组：默认单代理；选组后同一套�
 metadata:
   type: doc
   level: L2
-  status: 设计中
+  status: 已交付
 ---
 
 # OpenAI OAuth IP 组
@@ -58,7 +58,7 @@ metadata:
 
 ## 待解决
 
-- 无产品待决。实现细节见 [`.spec/plans/2026-09-11-openai-oauth-ip-group.md`](../../plans/2026-09-11-openai-oauth-ip-group.md)。
+- 无。实现细节见 [`.spec/plans/2026-09-11-openai-oauth-ip-group.md`](../../plans/2026-09-11-openai-oauth-ip-group.md)。
 
 ## 相关
 
@@ -67,3 +67,7 @@ metadata:
 - 上游社区 PR（**禁止整包合入**）：https://github.com/Wei-Shaw/sub2api/pull/6650
 - 实现计划：`.spec/plans/2026-09-11-openai-oauth-ip-group.md`
 - 开工提示词：`.spec/plans/2026-09-11-openai-oauth-ip-group-AGENT-PROMPT.md`
+- 迁移：`backend/migrations/945_proxy_ip_groups.sql`
+- 运行时选 IP：`backend/internal/service/openai_ip_group_proxy.go`
+- Admin API：`/api/v1/admin/proxy-ip-groups`（`backend/internal/server/routes/admin.go`）
+- 前端：`frontend/src/components/admin/proxy/ProxyIPGroupsDialog.vue`、`frontend/src/components/account/OpenAIAccountProxyFields.vue`

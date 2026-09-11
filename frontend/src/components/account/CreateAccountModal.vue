@@ -2873,13 +2873,20 @@
         </div>
       </div>
 
-      <div>
-        <div class="mb-1 flex items-center gap-2">
-          <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
+      <OpenAIAccountProxyFields
+        :platform="form.platform"
+        :type="form.type"
+        :proxy-id="form.proxy_id"
+        :proxy-ip-group-id="form.proxy_ip_group_id"
+        :proxies="proxies"
+        :ip-groups="ipGroups"
+        @update:proxy-id="form.proxy_id = $event"
+        @update:proxy-ip-group-id="form.proxy_ip_group_id = $event"
+      >
+        <template #banner>
           <ProxyAdBanner />
-        </div>
-        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
-      </div>
+        </template>
+      </OpenAIAccountProxyFields>
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div>
@@ -3713,14 +3720,15 @@ import type {
   CodexSessionImportMessage,
   OpenAICompactMode,
   OpenAIResponsesMode,
-  OpenAIEndpointCapability
+  OpenAIEndpointCapability,
+  ProxyIPGroup
 } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
-import ProxySelector from '@/components/common/ProxySelector.vue'
+import OpenAIAccountProxyFields from '@/components/account/OpenAIAccountProxyFields.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
@@ -3847,6 +3855,48 @@ const emit = defineEmits<{
 }>()
 
 const appStore = useAppStore()
+const ipGroups = ref<ProxyIPGroup[]>([])
+
+const loadIpGroups = async () => {
+  try {
+    ipGroups.value = await adminAPI.proxyIpGroups.list()
+  } catch {
+    ipGroups.value = []
+  }
+}
+
+watch(
+  () => props.show,
+  (show) => {
+    if (show) {
+      void loadIpGroups()
+    }
+  },
+  { immediate: true }
+)
+
+const handshakeProxyId = computed(() => {
+  if (form.platform === 'openai' && form.proxy_ip_group_id) {
+    const group = ipGroups.value.find((item) => item.id === form.proxy_ip_group_id)
+    return group?.proxy_ids?.[0] ?? null
+  }
+  return form.proxy_id
+})
+
+const accountProxyPayload = () => {
+  if (form.platform === 'openai' && form.type === 'oauth' && form.proxy_ip_group_id) {
+    return { proxy_id: null as number | null, proxy_ip_group_id: form.proxy_ip_group_id }
+  }
+  return { proxy_id: form.proxy_id, proxy_ip_group_id: 0 }
+}
+
+const openaiHandshakeAndAccountProxyPayload = () => {
+  const payload = accountProxyPayload()
+  return {
+    ...payload,
+    proxy_id: handshakeProxyId.value
+  }
+}
 
 // OAuth composables
 const oauth = useAccountOAuth() // For Anthropic OAuth
@@ -4430,6 +4480,7 @@ const form = reactive({
   type: 'oauth' as AccountType, // Will be 'oauth', 'setup-token', or 'apikey'
   credentials: {} as Record<string, unknown>,
   proxy_id: null as number | null,
+  proxy_ip_group_id: null as number | null,
   concurrency: 10,
   load_factor: null as number | null,
   priority: 1,
@@ -4973,6 +5024,7 @@ const resetForm = () => {
   form.type = 'oauth'
   form.credentials = {}
   form.proxy_id = null
+  form.proxy_ip_group_id = null
   form.concurrency = 10
   form.load_factor = null
   form.priority = 1
@@ -5531,7 +5583,7 @@ const goBackToBasicInfo = () => {
 
 const handleGenerateUrl = async () => {
   if (form.platform === 'openai') {
-    await openaiOAuth.generateAuthUrl(form.proxy_id)
+    await openaiOAuth.generateAuthUrl(handshakeProxyId.value)
   } else if (form.platform === 'gemini') {
     await geminiOAuth.generateAuthUrl(
       form.proxy_id,
@@ -5641,7 +5693,7 @@ const createAccountAndFinish = async (
     type,
     credentials,
     extra: finalExtra,
-    proxy_id: form.proxy_id,
+    ...accountProxyPayload(),
     concurrency: form.concurrency,
     load_factor: form.load_factor ?? undefined,
     priority: form.priority,
@@ -5835,7 +5887,7 @@ const handleOpenAIExchange = async (authCode: string) => {
       authCode.trim(),
       oauthClient.sessionId.value,
       stateToUse,
-      form.proxy_id
+      handshakeProxyId.value
     )
     if (!tokenInfo) return
 
@@ -5871,7 +5923,7 @@ const handleOpenAIExchange = async (authCode: string) => {
         type: 'oauth',
         credentials,
         extra,
-        proxy_id: form.proxy_id,
+        ...accountProxyPayload(),
         concurrency: form.concurrency,
         load_factor: form.load_factor ?? undefined,
         priority: form.priority,
@@ -5948,7 +6000,7 @@ const handleOpenAIImportCodexSession = async (content: string) => {
       content: trimmed,
       name: form.name,
       notes: form.notes || null,
-      proxy_id: form.proxy_id,
+      ...openaiHandshakeAndAccountProxyPayload(),
       concurrency: form.concurrency,
       load_factor: form.load_factor ?? undefined,
       priority: form.priority,
@@ -6026,7 +6078,7 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
       access_token: trimmed,
       name: form.name,
       notes: form.notes || null,
-      proxy_id: form.proxy_id,
+      ...openaiHandshakeAndAccountProxyPayload(),
       concurrency: form.concurrency,
       load_factor: form.load_factor ?? undefined,
       priority: form.priority,
@@ -6081,7 +6133,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
       try {
         const tokenInfo = await oauthClient.validateRefreshToken(
           refreshTokens[i],
-          form.proxy_id,
+          handshakeProxyId.value,
           clientId
         )
         if (!tokenInfo) {
@@ -6124,7 +6176,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
             type: 'oauth',
             credentials,
             extra,
-            proxy_id: form.proxy_id,
+            ...accountProxyPayload(),
             concurrency: form.concurrency,
             load_factor: form.load_factor ?? undefined,
             priority: form.priority,
