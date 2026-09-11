@@ -837,7 +837,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		firstOutputTimeout = s.openAIFirstOutputTimeout(reasoningEffortValue)
 	}
 
-	proxyURL, releaseProxy := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	if proxyErr != nil {
+		return nil, proxyErr
+	}
 	defer releaseProxy()
 
 	httpInvalidEncryptedContentRetryTried := false
@@ -977,13 +980,15 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 					Detail:             upstreamDetail,
 				})
 
-				shouldDisable := s.handleFailoverSideEffects(ctx, resp, account, respBody, upstreamModel)
+				shouldDisable := s.handleFailoverSideEffects(openAIErrorContext(ctx, c), resp, account, respBody, upstreamModel)
 				return nil, newOpenAIUpstreamFailoverError(
+					openAIErrorContext(ctx, c),
 					resp.StatusCode,
 					resp.Header,
 					respBody,
 					upstreamMsg,
 					!shouldDisable && account.IsPoolMode() && (account.IsPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
+					account,
 				)
 			}
 			return s.handleErrorResponse(ctx, resp, c, account, body, billingModel)
@@ -1029,13 +1034,15 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 							Kind:               "failover",
 							Message:            signal.message,
 						})
-						shouldDisable := s.handleFailoverSideEffects(ctx, compactResp, account, compactBody, upstreamModel)
+						shouldDisable := s.handleFailoverSideEffects(openAIErrorContext(ctx, c), compactResp, account, compactBody, upstreamModel)
 						return nil, newOpenAIUpstreamFailoverError(
+							openAIErrorContext(ctx, c),
 							compactResp.StatusCode,
 							compactResp.Header,
 							compactBody,
 							signal.message,
 							!shouldDisable && account.IsPoolMode() && (account.IsPoolModeRetryableStatus(compactResp.StatusCode) || isOpenAITransientProcessingError(compactResp.StatusCode, signal.message, compactBody)),
+							account,
 						)
 					}
 					return s.handleErrorResponse(ctx, compactResp, c, account, body, billingModel)

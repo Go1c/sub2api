@@ -498,6 +498,32 @@ func TestHandleFailoverError_SameAccountRetry(t *testing.T) {
 		require.Len(t, mock.calls, 1, "handler still invokes TempUnschedule; service skips request-scoped transients")
 	})
 
+	t.Run("SameAccountRetryMax可以高于pool默认以便扫完IP组", func(t *testing.T) {
+		mock := &mockTempUnscheduler{}
+		fs := NewFailoverState(5, false)
+		err := &service.UpstreamFailoverError{
+			StatusCode:             http.StatusTooManyRequests,
+			RetryableOnSameAccount: true,
+			RequestScopedTransient: true,
+			SameAccountRetryMax:    5,
+			NextAccountAction:      service.NextAccountRetry,
+		}
+
+		for i := 1; i <= 5; i++ {
+			action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", 3, err)
+			require.Equal(t, FailoverContinue, action)
+			require.Equal(t, i, fs.SameAccountRetryCount[100])
+			require.Equal(t, 0, fs.SwitchCount)
+			require.Empty(t, mock.calls)
+		}
+
+		action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", 3, err)
+		require.Equal(t, FailoverContinue, action)
+		require.Equal(t, 5, fs.SameAccountRetryCount[100])
+		require.Equal(t, 1, fs.SwitchCount)
+		require.Contains(t, fs.FailedAccountIDs, int64(100))
+	})
+
 	t.Run("retryLimit为0时立即切换不重试", func(t *testing.T) {
 		// pool_mode_retry_count=0 表示关闭同账号重试（如 GPT Image 账号）。
 		mock := &mockTempUnscheduler{}

@@ -135,6 +135,7 @@ func TestTempUnscheduleRetryableErrorSkipsRequestScopedTransient(t *testing.T) {
 func TestOpenAIHTTPCapacityShedIsRequestScopedForOAuthAccounts(t *testing.T) {
 	payload := []byte(`{"error":{"type":"server_error","message":"Our servers are currently overloaded. Please try again later."}}`)
 	failoverErr := newOpenAIUpstreamFailoverError(
+		context.Background(),
 		http.StatusBadRequest,
 		http.Header{"X-Request-Id": []string{"rid-http-capacity"}},
 		payload,
