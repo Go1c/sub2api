@@ -1400,7 +1400,7 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 		applyOpenAICapacityShedLimitedRetry(failoverErr, message)
 	}
 	if shouldRotateOpenAIIPGroup(account, failoverErr.StatusCode, headers, message, payload) {
-		applyOpenAIIPGroupRotateRetry(failoverErr, openAIIPGroupRetryStateFrom(openAIErrorContext(nil, c)))
+		applyOpenAIIPGroupRotateRetry(failoverErr, openAIIPGroupRetryStateFrom(openAIErrorContext(context.Background(), c)))
 	}
 	return failoverErr
 }
