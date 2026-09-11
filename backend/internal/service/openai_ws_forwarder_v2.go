@@ -172,7 +172,11 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		account.ProxyID != nil && account.Proxy != nil,
 	)
 
-	proxyURL, releaseProxy := s.mustOpenAIAccountProxyURL(ctx, account, sessionHash)
+	ctx = withOpenAIIPGroupSession(ctx, sessionHash)
+	proxyURL, releaseProxy, proxyErr := s.mustOpenAIAccountProxyURL(ctx, account, sessionHash)
+	if proxyErr != nil {
+		return nil, proxyErr
+	}
 	defer releaseProxy()
 
 	acquireCtx, acquireCancel := context.WithTimeout(ctx, s.openAIWSAcquireTimeout())

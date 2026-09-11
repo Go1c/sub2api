@@ -51,6 +51,14 @@ func (s *OpenAIGatewayService) handleOpenAIAccountUpstreamError(ctx context.Cont
 	if account != nil && account.Platform == PlatformGrok && isGrokContentPolicyRejection(statusCode, responseBody) {
 		return false
 	}
+	// IP-group egress 429 / overloaded is an exit problem, not account quota.
+	// Walk the live IP list (two passes) and keep the account schedulable.
+	if shouldRotateOpenAIIPGroup(account, statusCode, headers, "", responseBody) {
+		if s != nil {
+			s.rotateOpenAIIPGroupAfterTransient(ctx, account)
+		}
+		return false
+	}
 	// Capacity shedding describes this request, not account health. Keep the
 	// account schedulable; the request-local retry budget (one extra attempt)
 	// handles recovery without cooling the account.

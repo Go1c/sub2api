@@ -645,7 +645,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if buildHdrErr != nil {
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
-	proxyURL, releaseProxy := s.mustOpenAIAccountProxyURL(ctx, account, sessionHash)
+	ctx = withOpenAIIPGroupSession(ctx, sessionHash)
+	proxyURL, releaseProxy, proxyErr := s.mustOpenAIAccountProxyURL(ctx, account, sessionHash)
+	if proxyErr != nil {
+		return proxyErr
+	}
 	defer releaseProxy()
 	baseAcquireReq := openAIWSAcquireRequest{
 		Account: account,

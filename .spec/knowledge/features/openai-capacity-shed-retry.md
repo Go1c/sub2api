@@ -18,7 +18,7 @@ metadata:
 
 ## 设计
 
-- **实现面**：`applyOpenAICapacityShedLimitedRetry` 把降载标成请求级瞬时故障（不冷却账号）。不设 `SameAccountRetryMax`（0 = 沿用账号 pool_mode，默认 3 次额外尝试），间隔沿用 handler 默认 500ms；同账号用尽后仍可换号（同一 HTTP/WS 请求未结束）。
+- **实现面**：`applyOpenAICapacityShedLimitedRetry` 把降载标成请求级瞬时故障（不冷却账号）。不设 `SameAccountRetryMax`（0 = 沿用账号 pool_mode，默认 3 次额外尝试），间隔沿用 handler 默认 500ms；同账号用尽后仍可换号（同一 HTTP/WS 请求未结束）。OpenAI OAuth **IP 组**上的过载/软 429 另走 `applyOpenAIIPGroupRotateRetry`：同请求扫组内 IP 两遍再换号，且不把账号打 429。见 [`openai-oauth-ip-group.md`](openai-oauth-ip-group.md)。
 - **交互面**：尚未写出语义输出时，客户端一直等首包。整池耗尽才回 `503` + `code=server_error`（Codex 对 `server_is_overloaded` 判致命，必须改写）。WS 耗尽才关连接。
 - **设计面**：降载通常是上游容量问题，换号救不了成片过载，但能挡住单号毛刺且不把错误提前抛给客户端。
 
