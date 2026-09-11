@@ -42,6 +42,32 @@ TOOLS = ["shell", "apply_patch"]
 # format!("{thread_id}:{window_number}")）。探针故意发一个非初值：写死成 :0/:1 的
 # 实现只有在探针恰好发同一个数时才会"通过"。
 WINDOW_NUMBER = 3
+# 探针发的 inference-call-id 原值；网关每次出站新铸 v4（原值直通即跨账号关联；真客户端
+# 每次 attempt 新铸，rollout-trace/src/inference.rs:347-349）。
+INFER_ID = "bbd9bf7b-cb3d-48e7-bdcb-1c4bba7ee0a1"
+# 顶层字段序，抄自 codex-rs 16ff14c codex-api/src/common.rs（Responses :282-307 /
+# CompactionInput :48-65 / ResponseCreateWsRequest :334-363 + serde tag 让 type 最前）。
+RESPONSES_ORDER = ["model", "instructions", "input", "tools", "tool_choice", "parallel_tool_calls",
+                   "reasoning", "store", "stream", "stream_options", "include", "service_tier",
+                   "prompt_cache_key", "text", "client_metadata", "access_programs"]
+COMPACT_ORDER = ["model", "input", "instructions", "tools", "parallel_tool_calls", "reasoning",
+                 "service_tier", "prompt_cache_key", "text", "access_programs"]
+WS_CREATE_ORDER = ["type", "model", "instructions", "previous_response_id", "input", "tools",
+                   "tool_choice", "parallel_tool_calls", "reasoning", "store", "stream",
+                   "stream_options", "include", "service_tier", "prompt_cache_key", "text",
+                   "generate", "client_metadata", "access_programs"]
+# WS turn-state：探针入站握手带 WS_TURN_STATE、首帧不带（网关按真客户端的位置补进帧内，
+# core/src/client.rs:1792-1793），第二帧自带 WS_OWN_TURN_STATE（不得被覆盖）。
+WS_TURN_STATE = "ts-handshake"
+WS_OWN_TURN_STATE = "ts-own"
+# 真客户端发送前给每个 response.create 帧盖 x-codex-ws-stream-request-start-ms（unix 毫秒的
+# 十进制字符串，core/src/client.rs:2103-2112）。语义是无条件覆盖（HashMap::insert）且在重试
+# 循环内（:1746 loop），每次 attempt 重盖，注释写明"发送到 socket 之前才盖"（:2099-2101）。
+# 探针首帧不带（网关必须盖），第二帧自带 WS_OWN_STREAM_START（网关必须在发送边界重盖成
+# 自己的时刻，出站不得仍是这个值）。
+WS_OWN_STREAM_START = "1700000000123"
+# 受控回放里代表"网关重盖后的值"：与 WS_OWN_STREAM_START 不同的合法十进制毫秒。
+WS_RESTAMPED = "1700000000999"
 
 # ── 端点契约 ───────────────────────────────────────────────────────────────
 # device_carrier 取值：
@@ -54,12 +80,17 @@ CONTRACTS = {
         "required_headers": ["originator", "user-agent", "version", "session-id", "thread-id",
                              "x-client-request-id", "x-codex-window-id", "x-codex-turn-metadata"],
         "forbidden_headers": ["x-codex-installation-id", "session_id", "conversation_id"],
+        # rollout-trace 只在 HTTP /responses 的 attempt 上生成（core/src/client.rs:1646）；
+        # 网关按账号派生，出站值必须存在且 != 探针原值。
+        "namespaced_headers": {"x-codex-inference-call-id": INFER_ID},
         "required_body": ["prompt_cache_key", "client_metadata.session_id",
                           "client_metadata.thread_id", "client_metadata.x-codex-installation-id",
                           "client_metadata.x-codex-window-id",
                           "client_metadata.x-codex-turn-metadata"],
+        "body_order": RESPONSES_ORDER,
         "device_carrier": ["body_install", "meta_install", "body_meta_install"],
         "relations": [
+            ("h:version", "expr:ua_version"),
             ("h:session-id", "h:thread-id"),
             ("h:thread-id", "h:x-client-request-id"),
             ("h:x-codex-window-id", "expr:thread_window"),
@@ -81,13 +112,18 @@ CONTRACTS = {
         ],
     },
     # 图片是自建 Responses body：只带设备身份，没有会话级 client_metadata，也没有缓存键。
+    # 各契约里 x-codex-inference-call-id 的 forbidden 与 ("h:version","expr:ua_version") 关系在
+    # 当前实现下恒真（转发白名单不含该头；version 与 UA 由同一个规范身份重建），只是回归护栏。
     "images": {
         "required_headers": ["originator", "user-agent", "version", "session-id", "thread-id",
                              "x-client-request-id", "x-codex-window-id", "x-codex-turn-metadata"],
-        "forbidden_headers": ["x-codex-installation-id", "session_id", "conversation_id"],
+        "forbidden_headers": ["x-codex-installation-id", "session_id", "conversation_id",
+                              "x-codex-inference-call-id"],
         "required_body": ["client_metadata.x-codex-installation-id"],
+        "body_order": RESPONSES_ORDER,
         "device_carrier": ["body_install", "meta_install"],
         "relations": [
+            ("h:version", "expr:ua_version"),
             ("h:session-id", "h:thread-id"),
             ("h:thread-id", "h:x-client-request-id"),
             ("h:x-codex-window-id", "expr:thread_window"),
@@ -100,27 +136,40 @@ CONTRACTS = {
     "compact": {
         "required_headers": ["originator", "user-agent", "version", "session-id", "thread-id",
                              "x-codex-window-id", "x-codex-turn-metadata", "x-codex-installation-id"],
-        "forbidden_headers": ["x-client-request-id", "session_id", "conversation_id"],
+        "forbidden_headers": ["x-client-request-id", "session_id", "conversation_id",
+                              "x-codex-inference-call-id"],
         "required_body": ["prompt_cache_key"],
         "forbidden_body": ["client_metadata"],
+        "body_order": COMPACT_ORDER,
         "device_carrier": ["header_install", "meta_install"],
         "relations": [
+            ("h:version", "expr:ua_version"),
             ("h:session-id", "h:thread-id"),
             ("h:x-codex-window-id", "expr:thread_window"),
             ("b:prompt_cache_key", "h:session-id"),
             ("m:session_id", "h:session-id"),
         ],
     },
-    # 真实客户端在该端点只发 turn-metadata + originator（ext/web-search/src/tool.rs 的
-    # search_request_headers），不发任何会话头；body.id 就是 session_id。
+    # 搜索使用 MCP metadata 投影（16ff14c: core/src/turn_metadata.rs:234-280）：
+    # 无 Responses 的设备/窗口/请求种类字段，body.id 与 session_id 同源；
+    # metadata.codex_version / model 与出站 version 头 / body.model 同源。
     "search": {
         "required_headers": ["originator", "user-agent", "version", "x-codex-turn-metadata"],
         "forbidden_headers": ["session-id", "thread-id", "x-client-request-id",
                               "x-codex-window-id", "x-codex-installation-id",
-                              "session_id", "conversation_id", "openai-beta"],
+                              "session_id", "conversation_id", "openai-beta",
+                              "x-codex-inference-call-id"],
         "required_body": ["id"],
-        "device_carrier": ["meta_install"],
-        "relations": [("b:id", "m:session_id")],
+        "required_metadata": ["session_id", "thread_id", "turn_id", "codex_version", "model"],
+        "forbidden_metadata": ["installation_id", "window_id", "window_number", "context_window_id",
+                               "agent_name", "parent_turn_id", "root_turn_id", "request_kind", "compaction",
+                               "history_ingest_requested", "forked_from_ordinal_exclusive", "tool_namespaces_info"],
+        "check_window_number": False,
+        "device_carrier": [],
+        "relations": [("b:id", "m:session_id"),
+                      ("h:version", "expr:ua_version"),
+                      ("m:codex_version", "h:version"),
+                      ("m:model", "b:model")],
     },
 }
 
@@ -143,11 +192,21 @@ def turn_meta(s, window_number=WINDOW_NUMBER):
                       separators=(",", ":"))
 
 
+def turn_meta_mcp(s):
+    """搜索工具的 MCP 投影形态（core/src/turn_metadata.rs:390-444）：codex_version / model
+    故意填错值，证明网关会把它们对齐到出站 version 头与 body.model。"""
+    return json.dumps({"session_id": s, "thread_id": s,
+                       "turn_id": "01a07c73-e3a0-7ae1-baf0-ce1c532f019c",
+                       "codex_version": "0.0.1", "model": "wrong-model", "reasoning_effort": "medium"},
+                      separators=(",", ":"))
+
+
 def codex_headers(s, relayed=False):
     """relayed=True 模拟 31.108 中继：连字符会话头被剥掉，只剩体内 client_metadata。"""
     h = {"originator": "codex-tui", "user-agent": UA, "version": "0.153.4",
          "x-codex-installation-id": INSTALL, "x-codex-window-id": "%s:%d" % (s, WINDOW_NUMBER),
-         "x-codex-turn-metadata": turn_meta(s), "openai-beta": FORBIDDEN_BETA}
+         "x-codex-turn-metadata": turn_meta(s), "openai-beta": FORBIDDEN_BETA,
+         "x-codex-inference-call-id": INFER_ID}
     if not relayed:
         h.update({"session-id": s, "thread-id": s, "x-client-request-id": s})
     return h
@@ -188,7 +247,8 @@ def build_cases():
          "headers": codex_headers(s5)},
         {"label": "F alpha/search", "path": "/v1/alpha/search", "contract": "search",
          "upstream": "/backend-api/codex/alpha/search",
-         "body": {"id": s6, "model": "gpt-5.4", "query": "x"}, "headers": codex_headers(s6)},
+         "body": {"id": s6, "model": "gpt-5.4", "query": "x"},
+         "headers": dict(codex_headers(s6), **{"x-codex-turn-metadata": turn_meta_mcp(s6)})},
     ]
 
 
@@ -244,6 +304,10 @@ def resolve(token, ctx):
         return jget(ctx["body_meta"] or {}, name)
     if kind == "expr" and name == "window_number":
         return ctx.get("window_number", WINDOW_NUMBER)
+    if kind == "expr" and name == "ua_version":
+        # version 头是 provider 头（model-provider-info/src/lib.rs:397），值与 UA 版本段同源。
+        ua = hdr(ctx["row"], "user-agent") or ""
+        return ua.split("/", 1)[1].split(" ", 1)[0] if "/" in ua else None
     if kind == "expr" and name == "thread_window":
         # 契约是"<出站 thread>:<入站序号>"，不是某个固定数字。上一版把 ":1" 写死，
         # 只在探针恰好发 1 时成立，反而会保护"序号被改写"的实现。
@@ -304,13 +368,28 @@ def check_rows(rows, cases, cross_check=True):
         for field in spec.get("forbidden_body", []):
             if field in body:
                 problems.append("%s 不该有的 body 字段 %s" % (label, field))
+        if body and spec.get("body_order"):
+            problems += order_problems(label, list(body.keys()), spec["body_order"])
+        for name, raw in spec.get("namespaced_headers", {}).items():
+            got = hdr(row, name)
+            if not (got or "").strip():
+                problems.append("%s 缺必需头 %s" % (label, name))
+            elif got == raw:
+                problems.append("%s 头 %s 原值直通（必须按账号派生）" % (label, name))
+        for field in spec.get("required_metadata", []):
+            value = (meta_hdr or {}).get(field)
+            if not isinstance(value, str) or not value.strip():
+                problems.append("%s 缺必需 metadata 字段 %s" % (label, field))
+        for field in spec.get("forbidden_metadata", []):
+            if field in (meta_hdr or {}):
+                problems.append("%s 不该有的 metadata 字段 %s" % (label, field))
 
         beta = (hdr(row, "openai-beta") or "").lower()
         if FORBIDDEN_BETA in beta:
             problems.append("%s 仍在发旧的 openai-beta %s" % (label, FORBIDDEN_BETA))
         if meta_hdr is not None and "tool_namespaces_info" in meta_hdr:
             problems.append("%s 兼容头 turn-metadata 未剥掉 tool_namespaces_info" % label)
-        if meta_hdr is not None and meta_hdr.get("window_number") != WINDOW_NUMBER:
+        if spec.get("check_window_number", True) and meta_hdr is not None and meta_hdr.get("window_number") != WINDOW_NUMBER:
             problems.append("%s turn-metadata 的 window_number 被改写：%r != %r"
                             % (label, meta_hdr.get("window_number"), WINDOW_NUMBER))
         if meta_body is not None and meta_body.get("tool_namespaces_info") != TOOLS:
@@ -353,6 +432,22 @@ def check_rows(rows, cases, cross_check=True):
     return problems, devices
 
 
+def order_problems(label, keys, order):
+    """keys 必须全在 order 里且是它的子序列（echo server 的 json.loads 保留原始键序）。"""
+    problems = []
+    at = 0
+    for key in keys:
+        if key not in order:
+            problems.append("%s 顶层字段 %s 不在字段序表里" % (label, key))
+            continue
+        idx = order.index(key)
+        if idx < at:
+            problems.append("%s 顶层字段序错乱：%s（实际 %s）" % (label, key, keys))
+            return problems
+        at = idx + 1
+    return problems
+
+
 def cross_device_problems(devices):
     if len(devices) > 1:
         return ["跨路径出现 %d 个不同设备身份：%s" %
@@ -370,8 +465,9 @@ def selftest():
     base_headers = [["originator", "codex-tui"], ["user-agent", UA], ["version", "0.153.4"],
                     ["session-id", "S"], ["thread-id", "S"], ["x-client-request-id", "S"],
                     ["x-codex-window-id", "S:%d" % WINDOW_NUMBER],
-                    ["x-codex-turn-metadata", json.dumps(good_meta)]]
-    base_body = {"prompt_cache_key": "S",
+                    ["x-codex-turn-metadata", json.dumps(good_meta)],
+                    ["x-codex-inference-call-id", "DERIVED"]]
+    base_body = {"model": "gpt-5.4", "prompt_cache_key": "S",
                  "client_metadata": {"session_id": "S", "thread_id": "S",
                                      "x-codex-installation-id": "I",
                                      "x-codex-window-id": "S:%d" % WINDOW_NUMBER,
@@ -403,6 +499,25 @@ def selftest():
         ("缺必需头 session-id",
          [mutate(lambda h, b: h.remove(next(x for x in h if x[0] == "session-id")))], [case],
          "缺必需头"),
+        ("缺 version 头（provider 头每条请求都带）",
+         [mutate(lambda h, b: h.remove(next(x for x in h if x[0] == "version")))], [case],
+         "缺必需头 version"),
+        ("version 与 UA 版本段不同源",
+         [mutate(lambda h, b: h.__setitem__(
+             next(i for i, x in enumerate(h) if x[0] == "version"), ["version", "9.9.9"]))],
+         [case], "关系不成立"),
+        ("inference-call-id 原值直通",
+         [mutate(lambda h, b: h.__setitem__(
+             next(i for i, x in enumerate(h) if x[0] == "x-codex-inference-call-id"),
+             ["x-codex-inference-call-id", INFER_ID]))],
+         [case], "原值直通"),
+        ("inference-call-id 丢失",
+         [mutate(lambda h, b: h.remove(next(x for x in h if x[0] == "x-codex-inference-call-id")))],
+         [case], "缺必需头 x-codex-inference-call-id"),
+        ("顶层字段序错乱（map 字典序）",
+         [mutate(lambda h, b: (b.__setitem__("model", b.pop("model"))))], [case], "字段序错乱"),
+        ("未知顶层字段",
+         [mutate(lambda h, b: b.__setitem__("zzz_unknown", 1))], [case], "不在字段序表里"),
         ("多发独立安装头",
          [mutate(lambda h, b: h.append(["x-codex-installation-id", "I"]))], [case],
          "不该发的头"),
@@ -488,9 +603,62 @@ def selftest():
     else:
         print("  [ok] 反例被拦下：跨路径设备不一致")
 
+    failures += selftest_search()
     failures += selftest_ws()
     print("\n自检结果：%s" % ("全部反例均被拦下" if failures == 0 else "%d 条未被拦下" % failures))
     return 1 if failures else 0
+
+
+def selftest_search():
+    case = {"label": "search", "upstream": "/backend-api/codex/alpha/search", "contract": "search"}
+    good_meta = {"session_id": "S", "thread_id": "S", "turn_id": "T",
+                 "codex_version": "0.153.4", "model": "gpt-5.4"}
+
+    def row(metadata, version="0.153.4", model="gpt-5.4"):
+        return {"kind": "http", "path": case["upstream"],
+                "headers": [["originator", "codex-tui"], ["user-agent", UA], ["version", version],
+                            ["x-codex-turn-metadata", json.dumps(metadata)]],
+                "body": {"id": "S", "model": model}}
+
+    problems, devices = check_rows([row(good_meta)], [case])
+    if problems or devices:
+        print("[SELFTEST FAIL] 搜索 MCP 正样本被误报/当成设备载体：%s %s" % (problems, devices))
+        return 1
+    failures = 0
+    for name, rs, expect in [
+        ("搜索 metadata.codex_version 未对齐 version 头",
+         [row(dict(good_meta, codex_version="0.0.1"))], "关系不成立"),
+        ("搜索 metadata.model 未对齐出站 body.model",
+         [row(dict(good_meta, model="wrong-model"))], "关系不成立"),
+        ("搜索缺 version 头", [dict(row(good_meta), headers=[
+            ["originator", "codex-tui"], ["user-agent", UA],
+            ["x-codex-turn-metadata", json.dumps(good_meta)]])], "缺必需头 version"),
+    ]:
+        problems, _ = check_rows(rs, [case])
+        if not any(expect in p for p in problems):
+            print("[SELFTEST FAIL] 反例「%s」没有被 %r 捕获，实得：%s" % (name, expect, problems))
+            failures += 1
+        else:
+            print("  [ok] 反例被拦下：%s" % name)
+    for field in ("installation_id", "window_id", "window_number", "context_window_id",
+                  "agent_name", "parent_turn_id", "root_turn_id", "request_kind", "compaction",
+                  "history_ingest_requested", "forked_from_ordinal_exclusive", "tool_namespaces_info"):
+        problems, _ = check_rows([row(dict(good_meta, **{field: None}))], [case])
+        if not any("不该有的 metadata 字段 " + field in p for p in problems):
+            print("[SELFTEST FAIL] 搜索多发字段未被拦下：%s" % field)
+            failures += 1
+        else:
+            print("  [ok] 反例被拦下：搜索 metadata." + field)
+    for field in good_meta:
+        metadata = dict(good_meta)
+        del metadata[field]
+        problems, _ = check_rows([row(metadata)], [case])
+        if not any("缺必需 metadata 字段 " + field in p for p in problems):
+            print("[SELFTEST FAIL] 搜索缺字段未被拦下：%s" % field)
+            failures += 1
+        else:
+            print("  [ok] 反例被拦下：搜索缺 metadata." + field)
+    return failures
 
 
 def selftest_ws():
@@ -508,6 +676,7 @@ def selftest_ws():
                   "client_metadata": {"session_id": "S", "thread_id": "S",
                                       "x-codex-installation-id": "I",
                                       "x-codex-window-id": "S:%d" % WINDOW_NUMBER,
+                                      "x-codex-turn-state": WS_TURN_STATE,
                                       "x-codex-turn-metadata": json.dumps(
                                           dict(good_meta, tool_namespaces_info=TOOLS))}}
 
@@ -523,6 +692,10 @@ def selftest_ws():
             b["client_metadata"]["x-codex-turn-metadata"] = json.dumps(
                 dict(good_meta, window_id="S:%d" % number, window_number=number,
                      tool_namespaces_info=TOOLS))
+            b["client_metadata"]["x-codex-ws-stream-request-start-ms"] = "1700000000000"
+            if i == 1:
+                b["client_metadata"]["x-codex-turn-state"] = WS_OWN_TURN_STATE
+                b["client_metadata"]["x-codex-ws-stream-request-start-ms"] = WS_RESTAMPED
             if mutate_frame:
                 mutate_frame(i, b)
             out.append({"kind": "ws_message", "opcode": 1, "body": b})
@@ -608,6 +781,37 @@ def selftest_ws():
                                                      tool_namespaces_info=TOOLS)))
               if i == 1 else None),
          "第2轮帧关系不成立"),
+        ("WS 握手带了 turn-state（真客户端握手传 None）",
+         rows(headers=hs_with("x-codex-turn-state", "TS")), "握手不该发的头"),
+        ("WS 握手缺 version 头（provider 头）",
+         rows(headers=hs_without("version")), "握手缺必需头 version"),
+        ("WS 握手 version 与 UA 版本段不同源",
+         rows(headers=hs_with("version", "9.9.9")), "握手关系不成立"),
+        ("WS 握手把 inference-call-id 带上了",
+         rows(headers=hs_with("x-codex-inference-call-id", "X")), "握手不该发的头"),
+        ("WS 首帧没有补入握手上的 turn-state",
+         rows(mutate_frame=lambda i, b: b["client_metadata"].pop("x-codex-turn-state")
+              if i == 0 else None),
+         "缺 client_metadata.x-codex-turn-state"),
+        ("WS 第二轮帧自带的 turn-state 被握手值覆盖",
+         rows(mutate_frame=lambda i, b: b["client_metadata"].__setitem__(
+             "x-codex-turn-state", WS_TURN_STATE) if i == 1 else None),
+         "turn-state 被覆盖"),
+        ("WS 帧顶层字段序错乱（type 不在最前）",
+         rows(mutate_frame=lambda i, b: b.__setitem__("type", b.pop("type"))),
+         "字段序错乱"),
+        ("WS 首帧没有盖 stream-request-start-ms",
+         rows(mutate_frame=lambda i, b: b["client_metadata"].pop("x-codex-ws-stream-request-start-ms")
+              if i == 0 else None),
+         "缺 client_metadata.x-codex-ws-stream-request-start-ms"),
+        ("WS 第二帧沿用了客户端自带的 stream-request-start-ms（没有在发送边界重盖）",
+         rows(mutate_frame=lambda i, b: b["client_metadata"].__setitem__(
+             "x-codex-ws-stream-request-start-ms", WS_OWN_STREAM_START) if i == 1 else None),
+         "没有在发送边界重盖"),
+        ("WS 帧 stream-request-start-ms 不是十进制毫秒",
+         rows(mutate_frame=lambda i, b: b["client_metadata"].__setitem__(
+             "x-codex-ws-stream-request-start-ms", "abc") if i == 0 else None),
+         "不是十进制毫秒"),
     ]
     for field in ("context_window_id", "turn_id", "root_turn_id"):
         for remove in (False, True):
@@ -652,9 +856,14 @@ WS_HANDSHAKE_CONTRACT = {
     "required_headers": ["originator", "user-agent", "version", "session-id", "thread-id",
                          "x-client-request-id", "x-codex-window-id", "x-codex-turn-metadata",
                          "openai-beta"] + sorted(WS_CONDITIONAL),
-    "forbidden_headers": ["x-codex-installation-id", "session_id", "conversation_id"],
+    # 真客户端握手显式传 turn_state=None（core/src/client.rs:1241），turn-state 只在帧内
+    # client_metadata（client.rs:1792-1793，OnceLock 有值才带）；version 是 provider 头
+    # （model-provider-info/src/lib.rs:397），握手经 merge_request_headers 同样带。
+    "forbidden_headers": ["x-codex-turn-state", "x-codex-installation-id",
+                          "session_id", "conversation_id", "x-codex-inference-call-id"],
     "device_carrier": ["meta_install"],
     "relations": [
+        ("h:version", "expr:ua_version"),
         ("h:session-id", "h:thread-id"),
         ("h:thread-id", "h:x-client-request-id"),
         ("h:x-codex-window-id", "expr:thread_window"),
@@ -669,6 +878,12 @@ WS_FRAME_CONTRACT = {
     "required_body": ["type", "prompt_cache_key", "client_metadata.session_id",
                       "client_metadata.thread_id", "client_metadata.x-codex-installation-id",
                       "client_metadata.x-codex-window-id", "client_metadata.x-codex-turn-metadata"],
+    # 首帧不带 turn-state → 网关用入站握手上的值补进帧内；第二帧自带 → 原样保留。
+    "turn_state_by_turn": {1: WS_TURN_STATE, 2: WS_OWN_TURN_STATE},
+    # 两帧都必须带十进制毫秒；第二帧自带的值必须被发送边界重盖，出站不得仍是它。
+    "stream_start_by_turn": {1: None, 2: None},
+    "stream_start_rejects": {2: WS_OWN_STREAM_START},
+    "body_order": WS_CREATE_ORDER,
     "relations": [
         ("b:client_metadata.thread_id", "h:thread-id"),
         ("b:client_metadata.x-codex-window-id", "expr:thread_window"),
@@ -715,6 +930,14 @@ def ws_drain(sock, seconds):
     return True
 
 
+def ws_turn_state(session):
+    """探针入站握手上的不透明 turn-state。真客户端握手传 None（core/src/client.rs:1241），只在
+    帧内 client_metadata 携带（client.rs:1792-1793）；探针在入站握手上带一份，证明网关会把它
+    从出站握手上剥掉、补进不带 turn-state 的首帧，而第二帧自带的值原样保留。"""
+    _ = session
+    return WS_TURN_STATE
+
+
 def ws_probe(session, problems):
     """连一次网关 WS 入口，同一条连接上发两轮 response.create。失败直接记 problem。"""
     host, port = "127.0.0.1", 18080
@@ -725,9 +948,10 @@ def ws_probe(session, problems):
         "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n"
         "authorization: Bearer %s\r\noriginator: codex-tui\r\nuser-agent: %s\r\nversion: 0.153.4\r\n"
         "session-id: %s\r\nthread-id: %s\r\nx-client-request-id: %s\r\n"
-        "x-codex-installation-id: %s\r\nx-codex-window-id: %s:%d\r\nx-codex-turn-metadata: %s\r\n%s\r\n"
+        "x-codex-installation-id: %s\r\nx-codex-window-id: %s:%d\r\nx-codex-turn-metadata: %s\r\n"
+        "x-codex-turn-state: %s\r\nx-codex-inference-call-id: %s\r\n%s\r\n"
         % (WS_PATH, host, port, key, KEY, UA, session, session, session, INSTALL,
-           session, WINDOW_NUMBER, tm,
+           session, WINDOW_NUMBER, tm, ws_turn_state(session), INFER_ID,
            "".join("%s: %s\r\n" % kv for kv in sorted(WS_CONDITIONAL.items())))
     )
     try:
@@ -746,9 +970,12 @@ def ws_probe(session, problems):
             sock.close()
             return
         for turn in (1, 2):
+            cm = meta(session, WINDOW_NUMBER + turn - 1)
+            if turn == 2:
+                cm["x-codex-turn-state"] = WS_OWN_TURN_STATE
+                cm["x-codex-ws-stream-request-start-ms"] = WS_OWN_STREAM_START
             payload = {"type": "response.create", "model": "gpt-5.4", "stream": True,
-                       "prompt_cache_key": session,
-                       "client_metadata": meta(session, WINDOW_NUMBER + turn - 1),
+                       "prompt_cache_key": session, "client_metadata": cm,
                        "input": [{"type": "message", "role": "user", "content": "hi %d" % turn}]}
             sock.sendall(ws_frame(json.dumps(payload)))
             print("  sent: WS 第%d轮 response.create" % turn, flush=True)
@@ -831,6 +1058,23 @@ def check_ws(rows, problems):
                 problems.append("WS 第%d轮帧缺必需 body 字段 %s" % (i, field))
         if fb.get("type") != "response.create":
             problems.append("WS 第%d轮帧不是 response.create" % i)
+        want_state = WS_FRAME_CONTRACT["turn_state_by_turn"].get(i)
+        got_state = cm.get("x-codex-turn-state")
+        if not got_state:
+            problems.append("WS 第%d轮帧缺 client_metadata.x-codex-turn-state（首帧应由握手值补入）" % i)
+        elif got_state != want_state:
+            problems.append("WS 第%d轮帧 turn-state 被覆盖或错位：%r != %r" % (i, got_state, want_state))
+        want_start = WS_FRAME_CONTRACT["stream_start_by_turn"].get(i)
+        got_start = cm.get("x-codex-ws-stream-request-start-ms")
+        if not isinstance(got_start, str) or not got_start.isdigit():
+            problems.append("WS 第%d轮帧缺 client_metadata.x-codex-ws-stream-request-start-ms 或不是十进制毫秒：%r"
+                            % (i, got_start))
+        elif want_start is not None and got_start != want_start:
+            problems.append("WS 第%d轮帧的 stream-request-start-ms 不是期望值：%r != %r" % (i, got_start, want_start))
+        elif got_start == WS_FRAME_CONTRACT["stream_start_rejects"].get(i):
+            problems.append("WS 第%d轮帧的 stream-request-start-ms 没有在发送边界重盖：%r" % (i, got_start))
+        if fb:
+            problems += order_problems("WS 第%d轮帧" % i, list(fb.keys()), WS_FRAME_CONTRACT["body_order"])
         for left, right in WS_FRAME_CONTRACT["relations"]:
             lv, rv = resolve(left, frame_ctx), resolve(right, frame_ctx)
             if lv is None or rv is None or lv != rv:
