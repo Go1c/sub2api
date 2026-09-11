@@ -80,6 +80,11 @@ CONTRACTS = {
         "required_headers": ["originator", "user-agent", "version", "session-id", "thread-id",
                              "x-client-request-id", "x-codex-window-id", "x-codex-turn-metadata"],
         "forbidden_headers": ["x-codex-installation-id", "session_id", "conversation_id"],
+        # 真客户端默认 enable_request_compression（features/src/lib.rs:1221-1224 Stable+default_enabled）：
+        # ChatGPT 登录态的每条 /responses 请求体 zstd 压缩并带 content-encoding: zstd
+        # （core/src/client.rs:1534-1541、http-client/src/request.rs:192-222）；compact / 搜索 / WS 不压。
+        # echo server 记录的是解压后的体，这里只看头。
+        "content_encoding": "zstd",
         # rollout-trace 只在 HTTP /responses 的 attempt 上生成（core/src/client.rs:1646）；
         # 网关按账号派生，出站值必须存在且 != 探针原值。
         "namespaced_headers": {"x-codex-inference-call-id": INFER_ID},
@@ -119,6 +124,7 @@ CONTRACTS = {
                              "x-client-request-id", "x-codex-window-id", "x-codex-turn-metadata"],
         "forbidden_headers": ["x-codex-installation-id", "session_id", "conversation_id",
                               "x-codex-inference-call-id"],
+        "content_encoding": "zstd",
         "required_body": ["client_metadata.x-codex-installation-id"],
         "body_order": RESPONSES_ORDER,
         "device_carrier": ["body_install", "meta_install"],
@@ -138,6 +144,7 @@ CONTRACTS = {
                              "x-codex-window-id", "x-codex-turn-metadata", "x-codex-installation-id"],
         "forbidden_headers": ["x-client-request-id", "session_id", "conversation_id",
                               "x-codex-inference-call-id"],
+        "content_encoding": None,
         "required_body": ["prompt_cache_key"],
         "forbidden_body": ["client_metadata"],
         "body_order": COMPACT_ORDER,
@@ -361,6 +368,24 @@ def check_rows(rows, cases, cross_check=True):
         for name in spec["forbidden_headers"]:
             if hdr(row, name) is not None:
                 problems.append("%s 不该发的头 %s=%r" % (label, name, hdr(row, name)))
+        want_encoding = spec.get("content_encoding")
+        got_encoding = (hdr(row, "content-encoding") or "").strip().lower()
+        if want_encoding and got_encoding != want_encoding:
+            problems.append("%s 请求体编码 %r != %r（真客户端默认 enable_request_compression）"
+                            % (label, got_encoding, want_encoding))
+        if not want_encoding and got_encoding:
+            problems.append("%s 不该压缩的端点带了 content-encoding=%r" % (label, got_encoding))
+        # echo server 记录压缩体的前 6 字节：libzstd 流式 level 3 默认帧头 = magic + FHD 00（无 FCS / 无校验和 /
+        # 非 single segment）+ 窗口描述 58（2MB）。klauspost 的自选帧头（single segment / FCS / 小窗口）在这里会红。
+        raw_head = row.get("body_raw_head_hex")
+        if want_encoding == "zstd":
+            if raw_head is None or row.get("zstd_rc") is None:
+                problems.append("%s echo server 没记录 body_raw_head_hex / zstd_rc（未打 zstd 补丁），帧头断言不能静默跳过" % label)
+            else:
+                if raw_head.lower() != "28b52ffd0058":
+                    problems.append("%s zstd 帧头 %s != 28b52ffd0058（libzstd 流式默认）" % (label, raw_head))
+                if row.get("zstd_rc") != 0:
+                    problems.append("%s zstd 解压失败 rc=%s" % (label, row.get("zstd_rc")))
         for field in spec["required_body"]:
             value = jget(body, field)
             if not isinstance(value, str) or not value.strip():
@@ -466,7 +491,8 @@ def selftest():
                     ["session-id", "S"], ["thread-id", "S"], ["x-client-request-id", "S"],
                     ["x-codex-window-id", "S:%d" % WINDOW_NUMBER],
                     ["x-codex-turn-metadata", json.dumps(good_meta)],
-                    ["x-codex-inference-call-id", "DERIVED"]]
+                    ["x-codex-inference-call-id", "DERIVED"],
+                    ["content-encoding", "zstd"]]
     base_body = {"model": "gpt-5.4", "prompt_cache_key": "S",
                  "client_metadata": {"session_id": "S", "thread_id": "S",
                                      "x-codex-installation-id": "I",
@@ -479,7 +505,8 @@ def selftest():
     def row(headers=None, body=None):
         return {"kind": "http", "path": "/backend-api/codex/responses",
                 "headers": [list(h) for h in (headers if headers is not None else base_headers)],
-                "body": json.loads(json.dumps(body if body is not None else base_body))}
+                "body": json.loads(json.dumps(body if body is not None else base_body)),
+                "body_raw_head_hex": "28b52ffd0058", "zstd_rc": 0}
 
     ok, _ = check_rows([row()], [case])
     if ok:
@@ -514,6 +541,29 @@ def selftest():
         ("inference-call-id 丢失",
          [mutate(lambda h, b: h.remove(next(x for x in h if x[0] == "x-codex-inference-call-id")))],
          [case], "缺必需头 x-codex-inference-call-id"),
+        ("/responses 请求体未压缩（真客户端默认 zstd）",
+         [mutate(lambda h, b: h.remove(next(x for x in h if x[0] == "content-encoding")))],
+         [case], "请求体编码"),
+        ("zstd 帧头不是 libzstd 流式默认（single segment + FCS）",
+         [dict(row(), body_raw_head_hex="28b52ffd605b")], [case], "zstd 帧头"),
+        ("echo server 未打 zstd 补丁（没记录帧头 / 解压结果）",
+         [{k: v for k, v in row().items() if k not in ("body_raw_head_hex", "zstd_rc")}], [case],
+         "没记录 body_raw_head_hex"),
+        ("zstd 体解压失败",
+         [dict(row(), zstd_rc=1)], [case], "解压失败"),
+        ("/responses 用了 gzip 而不是 zstd",
+         [mutate(lambda h, b: h.__setitem__(
+             next(i for i, x in enumerate(h) if x[0] == "content-encoding"), ["content-encoding", "gzip"]))],
+         [case], "请求体编码"),
+        ("compact 不该压缩却带了 content-encoding",
+         [dict(mutate(lambda h, b: (b.pop("client_metadata"), b.pop("prompt_cache_key", None),
+                                    b.__setitem__("prompt_cache_key", "S"),
+                                    h.remove(next(x for x in h if x[0] == "x-client-request-id")),
+                                    h.remove(next(x for x in h if x[0] == "x-codex-inference-call-id")),
+                                    h.append(["x-codex-installation-id", "I"]))),
+               path="/backend-api/codex/responses/compact")],
+         [dict(case, upstream="/backend-api/codex/responses/compact", contract="compact")],
+         "不该压缩的端点"),
         ("顶层字段序错乱（map 字典序）",
          [mutate(lambda h, b: (b.__setitem__("model", b.pop("model"))))], [case], "字段序错乱"),
         ("未知顶层字段",

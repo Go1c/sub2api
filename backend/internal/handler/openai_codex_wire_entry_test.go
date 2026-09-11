@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -60,6 +61,16 @@ func (u *codexWireUpstream) Do(req *http.Request, _ string, accountID int64, _ i
 	var body []byte
 	if req.Body != nil {
 		body, _ = io.ReadAll(req.Body)
+		// 双开 /responses 的体是 zstd（真客户端默认 enable_request_compression）；断言看明文。
+		if strings.EqualFold(req.Header.Get("Content-Encoding"), "zstd") {
+			dec, err := zstd.NewReader(bytes.NewReader(body))
+			if err == nil {
+				if plain, err := io.ReadAll(dec); err == nil {
+					body = plain
+				}
+				dec.Close()
+			}
+		}
 	}
 	u.mu.Lock()
 	u.captures = append(u.captures, codexWireCapture{

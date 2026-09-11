@@ -1397,9 +1397,18 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// 最后一步：请求体此时已定稿，只重排顶层键序，不改任何值。
 	body = applyCodexBodyFieldOrder(c, account, targetURL, body)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
+	// 上线字节：双开 /responses 的请求体按真客户端默认做 zstd 压缩（openai_codex_request_compression.go）。
+	// body 仍是明文 JSON，供下面的路由提示与诊断日志读取；每次构造独立压缩。
+	wireBody, contentEncoding, err := compressCodexRequestBody(c, account, targetURL, body)
 	if err != nil {
 		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(wireBody))
+	if err != nil {
+		return nil, err
+	}
+	if contentEncoding != "" {
+		req.Header.Set("Content-Encoding", contentEncoding)
 	}
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
 

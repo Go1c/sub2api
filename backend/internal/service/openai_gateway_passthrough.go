@@ -629,9 +629,17 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	// 与非透传路径同一条规则。透传的入站若本就是真客户端形态，这一步是恒等变换。
 	body = applyCodexBodyFieldOrder(c, account, targetURL, body)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	// 上线字节：双开 /responses 的请求体按真客户端默认做 zstd 压缩，与非透传路径同一条规则。
+	wireBody, contentEncoding, err := compressCodexRequestBody(c, account, targetURL, body)
 	if err != nil {
 		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(wireBody))
+	if err != nil {
+		return nil, err
+	}
+	if contentEncoding != "" {
+		req.Header.Set("Content-Encoding", contentEncoding)
 	}
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
 

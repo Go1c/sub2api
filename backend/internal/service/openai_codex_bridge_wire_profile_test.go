@@ -197,7 +197,7 @@ func TestForwardAsAnthropic_DeviceWireProfileBridgeSessionIdentity(t *testing.T)
 		// （x-codex-parent-thread-id / x-openai-subagent）不会出现——桥不是子代理；体内仍无 tools（桥只转
 		// 发客户端给的工具）。
 		require.ElementsMatch(t, []string{
-			"accept", "authorization", "chatgpt-account-id", "content-type", "originator",
+			"accept", "authorization", "chatgpt-account-id", "content-encoding", "content-type", "originator",
 			"session-id", "thread-id", "user-agent", "version", "x-client-request-id",
 			"x-codex-beta-features", "x-codex-routing-hint", "x-codex-turn-metadata", "x-codex-window-id",
 		}, codexProbeHeaderNames(up.requests[0].Header))
