@@ -837,6 +837,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		firstOutputTimeout = s.openAIFirstOutputTimeout(reasoningEffortValue)
 	}
 
+	proxyURL, releaseProxy := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	defer releaseProxy()
+
 	httpInvalidEncryptedContentRetryTried := false
 	agentTaskRecoveryTried := false
 	compactModelFallbackRetried := false
@@ -859,12 +862,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				headerGuard.close()
 			}
 			return nil, err
-		}
-
-		// Get proxy URL
-		proxyURL := ""
-		if account.ProxyID != nil && account.Proxy != nil {
-			proxyURL = account.Proxy.URL()
 		}
 
 		// Send request

@@ -95,9 +95,82 @@ func ProvideOpenAIOAuthService(
 	proxyRepo ProxyRepository,
 	oauthClient OpenAIOAuthClient,
 	privacyClientFactory PrivacyClientFactory,
+	ipGroupResolver *openAIIPGroupResolver,
 ) *OpenAIOAuthService {
 	svc := NewOpenAIOAuthService(proxyRepo, oauthClient)
 	svc.SetPrivacyClientFactory(privacyClientFactory)
+	svc.SetIPGroupResolver(ipGroupResolver)
+	return svc
+}
+
+func ProvideOpenAIIPGroupResolver(
+	groups ProxyIPGroupRepository,
+	proxies ProxyRepository,
+	bind OpenAIIPGroupBindStore,
+	cache ConcurrencyCache,
+	cfg *config.Config,
+) *openAIIPGroupResolver {
+	var slots AccountProxySlotCache
+	if s, ok := cache.(AccountProxySlotCache); ok {
+		slots = s
+	}
+	ttl := openaiStickySessionTTL
+	if cfg != nil && cfg.Gateway.OpenAIWS.StickySessionTTLSeconds > 0 {
+		ttl = time.Duration(cfg.Gateway.OpenAIWS.StickySessionTTLSeconds) * time.Second
+	}
+	return newOpenAIIPGroupResolver(groups, proxies, bind, slots, ttl)
+}
+
+func ProvideOpenAIGatewayService(
+	accountRepo AccountRepository,
+	usageLogRepo UsageLogRepository,
+	usageBillingRepo UsageBillingRepository,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	cache GatewayCache,
+	cfg *config.Config,
+	schedulerSnapshot *SchedulerSnapshotService,
+	concurrencyService *ConcurrencyService,
+	billingService *BillingService,
+	rateLimitService *RateLimitService,
+	billingCacheService *BillingCacheService,
+	httpUpstream HTTPUpstream,
+	deferredService *DeferredService,
+	openAITokenProvider *OpenAITokenProvider,
+	grokTokenProvider *GrokTokenProvider,
+	resolver *ModelPricingResolver,
+	channelService *ChannelService,
+	balanceNotifyService *BalanceNotifyService,
+	settingService *SettingService,
+	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	ipGroupResolver *openAIIPGroupResolver,
+) *OpenAIGatewayService {
+	svc := NewOpenAIGatewayService(
+		accountRepo,
+		usageLogRepo,
+		usageBillingRepo,
+		userRepo,
+		userSubRepo,
+		userGroupRateRepo,
+		cache,
+		cfg,
+		schedulerSnapshot,
+		concurrencyService,
+		billingService,
+		rateLimitService,
+		billingCacheService,
+		httpUpstream,
+		deferredService,
+		openAITokenProvider,
+		grokTokenProvider,
+		resolver,
+		channelService,
+		balanceNotifyService,
+		settingService,
+		userPlatformQuotaRepo,
+	)
+	svc.SetIPGroupResolver(ipGroupResolver)
 	return svc
 }
 
@@ -170,6 +243,7 @@ func ProvideOpenAIQuotaService(
 ) *OpenAIQuotaService {
 	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, privacyClientFactory)
 	service.agentIdentityWS = openAIGatewayService
+	service.SetIPGroupResolver(openAIGatewayService.IPGroupResolver())
 	return service
 }
 
@@ -790,7 +864,8 @@ var ProviderSet = wire.NewSet(
 	NewCompositeRouteResolver,
 	NewAdminService,
 	NewGatewayService,
-	NewOpenAIGatewayService,
+	ProvideOpenAIGatewayService,
+	ProvideOpenAIIPGroupResolver,
 	ProvideBatchImageModelPricingResolver,
 	NewBatchImagePublicService,
 	NewBatchImageDownloadService,

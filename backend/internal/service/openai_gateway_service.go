@@ -415,6 +415,7 @@ type OpenAIGatewayService struct {
 	settingService              *SettingService
 	userPlatformQuotaRepo       UserPlatformQuotaRepository
 	accountErrorHistory         *AccountErrorHistoryService
+	ipGroupResolver             *openAIIPGroupResolver
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once

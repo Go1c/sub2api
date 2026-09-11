@@ -159,6 +159,9 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 	if account.ProxyID != nil {
 		builder.SetProxyID(*account.ProxyID)
 	}
+	if account.ProxyIPGroupID != nil {
+		builder.SetProxyIPGroupID(*account.ProxyIPGroupID)
+	}
 	if account.LastUsedAt != nil {
 		builder.SetLastUsedAt(*account.LastUsedAt)
 	}
@@ -524,6 +527,11 @@ func (r *accountRepository) updateLockedAccount(ctx context.Context, client *dbe
 		builder.SetProxyID(*account.ProxyID)
 	} else {
 		builder.ClearProxyID()
+	}
+	if account.ProxyIPGroupID != nil {
+		builder.SetProxyIPGroupID(*account.ProxyIPGroupID)
+	} else {
+		builder.ClearProxyIPGroupID()
 	}
 	if account.LastUsedAt != nil {
 		builder.SetLastUsedAt(*account.LastUsedAt)
@@ -3071,6 +3079,7 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		Credentials:             copyJSONMap(m.Credentials),
 		Extra:                   copyJSONMap(m.Extra),
 		ProxyID:                 m.ProxyID,
+		ProxyIPGroupID:          m.ProxyIPGroupID,
 		ProxyFallbackOriginID:   m.ProxyFallbackOriginID,
 		Concurrency:             m.Concurrency,
 		Priority:                m.Priority,

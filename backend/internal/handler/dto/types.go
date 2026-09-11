@@ -210,6 +210,7 @@ type Account struct {
 	CredentialsStatus       map[string]bool `json:"credentials_status,omitempty"`
 	Extra                   map[string]any  `json:"extra"`
 	ProxyID                 *int64          `json:"proxy_id"`
+	ProxyIPGroupID          *int64          `json:"proxy_ip_group_id"`
 	ProxyFallbackOriginID   *int64          `json:"proxy_fallback_origin_id"`
 	ProxyFallbackOriginName *string         `json:"proxy_fallback_origin_name,omitempty"`
 	Concurrency             int             `json:"concurrency"`
@@ -361,6 +362,16 @@ type ProxyWithAccountCount struct {
 	QualityGrade   string `json:"quality_grade,omitempty"`
 	QualitySummary string `json:"quality_summary,omitempty"`
 	QualityChecked *int64 `json:"quality_checked,omitempty"`
+}
+
+// AdminProxyIPGroup is the admin DTO for an IP group and its member proxy IDs.
+type AdminProxyIPGroup struct {
+	ID               int64     `json:"id"`
+	Name             string    `json:"name"`
+	PerIPConcurrency int       `json:"per_ip_concurrency"`
+	ProxyIDs         []int64   `json:"proxy_ids"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // AdminProxy 是管理员接口使用的 proxy DTO（包含密码等敏感字段）。

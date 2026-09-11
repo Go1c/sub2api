@@ -807,6 +807,7 @@ export interface CodexSessionImportRequest {
   notes?: string | null
   group_ids?: number[]
   proxy_id?: number | null
+  proxy_ip_group_id?: number | null
   concurrency?: number
   priority?: number
   rate_multiplier?: number
@@ -837,6 +838,7 @@ export interface CreateOpenAICodexPATRequest {
   notes?: string | null
   group_ids?: number[]
   proxy_id?: number | null
+  proxy_ip_group_id?: number | null
   concurrency?: number
   priority?: number
   rate_multiplier?: number
