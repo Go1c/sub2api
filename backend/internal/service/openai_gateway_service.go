@@ -499,10 +499,11 @@ type OpenAIGatewayService struct {
 	codexSnapshotThrottle               *accountWriteThrottle
 	openAIModelsCache                   openAIModelsCache
 	openaiCompatSessionResponses        sync.Map
+	// openaiCompatBridgeSessions：双开兼容桥会话键 → openAICompatBridgeSession（会话/上下文窗口 v7）
+	openaiCompatBridgeSessions          sync.Map
 	openaiCompatAnthropicDigestSessions sync.Map
-	// openaiCodexTurnStateOrigins: 下游会话 seed → openAICodexTurnStateOrigin，
-	// 记录最近一次向该会话下发 x-codex-turn-state 的铸造账号，供出站守卫
-	// 剥离跨账号回带（openai_codex_turn_state.go）。
+	// openaiCodexTurnStateOrigins: x-codex-turn-state blob 的哈希 → openAICodexTurnStateOrigin
+	// （铸造者 = 凭证域身份），供出站守卫剥离跨账号回带（设计见 openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
 }
