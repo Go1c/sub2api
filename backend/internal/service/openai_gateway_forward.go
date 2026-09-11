@@ -207,7 +207,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	compatMessagesBridge := isOpenAICompatMessagesBridgeBody(body)
-	setOpenAICompatMessagesBridgeContext(c, compatMessagesBridge)
+	// 上下文键决定出站头形态（见 buildUpstreamRequest）：双开账号不按请求体嗅探置位，只由 /v1/messages 入口置位。
+	setOpenAICompatMessagesBridgeContext(c, compatMessagesBridge && !codexDeviceWireProfileEnabled(c, account))
 
 	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
 	codexImageGenerationExplicitToolPolicy := codexImageGenerationExplicitToolPolicyAllow
@@ -1388,6 +1389,14 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// previous_response_id，避免携带状态字段被上游拒绝。
 	body = normalizeDeepSeekResponsesRequestBody(account, body)
 
+	body, err := filterCodexCompactAccessPrograms(c, account, body)
+	if err != nil {
+		return nil, fmt.Errorf("filter compact access programs: %w", err)
+	}
+
+	// 最后一步：请求体此时已定稿，只重排顶层键序，不改任何值。
+	body = applyCodexBodyFieldOrder(c, account, targetURL, body)
+
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -1428,7 +1437,11 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// 剥离后再出站——异账号 blob 与本账号的（指纹收敛后）出站身份自相矛盾。
 	s.guardOpenAICodexTurnStateEcho(c, account, req.Header)
 	if account.UsesOpenAICodexProtocol() {
-		compatMessagesBridge := isOpenAICompatMessagesBridgeContext(c) || isOpenAICompatMessagesBridgeBody(body)
+		// 桥的判定：/v1/messages 入口置位的上下文键，或请求体里的桥标记（两层 sub2api 串联时前一层的桥
+		// 请求直连到这里的 /v1/responses）。双开账号不按请求体嗅探：真客户端每条 /responses 都无条件带
+		// originator / version，出站身份不能随请求体内容（<todo-guard> 字面量、anthropic-* 缓存键）变形。
+		compatMessagesBridge := isOpenAICompatMessagesBridgeContext(c) ||
+			(!codexDeviceWireProfileEnabled(c, account) && isOpenAICompatMessagesBridgeBody(body))
 		// 清除客户端透传的 session 头，后续用隔离后的值重新设置，防止跨用户会话碰撞。
 		clientConversationID := strings.TrimSpace(req.Header.Get("conversation_id"))
 		req.Header.Del("conversation_id")
@@ -1453,6 +1466,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		}
 		if promptCacheKey != "" {
 			isolated := isolateOpenAIUpstreamSessionID(apiKeyID, codexAccountIdentitySource(c, account), promptCacheKey)
+			// 双开兼容桥的连字符会话头不在这里写：桥在入站侧合成了客户端原始身份（openai_compat_bridge_identity.go），
+			// session-id / thread-id 由收敛投影按入站头派生，这个下划线别名随后被它删掉——与真客户端请求同一条路。
 			req.Header.Set("session_id", isolated)
 			if !compatMessagesBridge || clientConversationID != "" {
 				req.Header.Set("conversation_id", isolated)

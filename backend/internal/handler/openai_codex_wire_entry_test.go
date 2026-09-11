@@ -279,6 +279,83 @@ func TestCodexWireEntryCompact(t *testing.T) {
 	}
 }
 
+func TestCodexWireEntryCompactAccessPrograms(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		for _, passthrough := range []bool{false, true} {
+			for _, program := range []string{"", "standard", "daybreak_blue", "daybreak_red"} {
+				name := "disabled/map/"
+				if enabled {
+					name = "enabled/map/"
+				}
+				if passthrough {
+					name += "raw/"
+				}
+				t.Run(name+program, func(t *testing.T) {
+					extra := map[string]any{
+						codexWireFPModeKey:   "device",
+						codexWireFPSeedKey:   codexWireConverged[codexWireFPSeedKey],
+						codexWireConvergeKey: enabled,
+						"openai_passthrough": passthrough,
+					}
+					upstream, router, cleanup := newCodexWireEntry(t, []service.Account{
+						codexWireAccount(707, "target", extra),
+					})
+					defer cleanup()
+					body := codexWireCompactBody()
+					if program != "" {
+						body = strings.TrimSuffix(body, "}") + `,"access_programs":{"cyber":"` + program + `"}}`
+					}
+					rec := codexWireSend(t, router, "/v1/responses/compact", body)
+					require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+					taken := upstream.taken()
+					require.Len(t, taken, 1)
+					programs := gjson.GetBytes(taken[0].body, "access_programs")
+					if enabled && program != "" {
+						require.JSONEq(t, `{"cyber":"`+program+`"}`, programs.Raw)
+					} else {
+						require.False(t, programs.Exists(), "do not synthesize a program or change opt-out traffic")
+					}
+				})
+			}
+		}
+	}
+}
+
+// 双开账号在 /responses 与 /compact 上必须声明同一个准入等级。/responses 那条路径没有
+// 任何字段裁剪，access_programs 一路原样出站；compact 若单独丢弃，同一个账号就会按端点
+// 报出两套准入等级——那是确凿的形态矛盾，比"透传客户端声明"更糟。
+func TestCodexWireEntryAccessProgramsAgreeAcrossEndpoints(t *testing.T) {
+	for _, program := range []string{"standard", "daybreak_blue", "daybreak_red"} {
+		t.Run(program, func(t *testing.T) {
+			extra := map[string]any{
+				codexWireFPModeKey:   "device",
+				codexWireFPSeedKey:   codexWireConverged[codexWireFPSeedKey],
+				codexWireConvergeKey: true,
+			}
+			upstream, router, cleanup := newCodexWireEntry(t, []service.Account{
+				codexWireAccount(709, "target", extra),
+			})
+			defer cleanup()
+			want := `{"cyber":"` + program + `"}`
+			seen := make([]string, 0, 2)
+			for _, path := range []string{"/v1/responses", "/v1/responses/compact"} {
+				base := codexWireResponsesBody(false)
+				if path == "/v1/responses/compact" {
+					base = codexWireCompactBody()
+				}
+				rec := codexWireSend(t, router, path,
+					strings.TrimSuffix(base, "}")+`,"access_programs":`+want+`}`)
+				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+				taken := upstream.taken()
+				require.NotEmpty(t, taken)
+				seen = append(seen, gjson.GetBytes(taken[len(taken)-1].body, "access_programs").Raw)
+			}
+			require.JSONEq(t, want, seen[0], "/v1/responses")
+			require.JSONEq(t, seen[0], seen[1], "两个端点必须声明同一个准入等级")
+		})
+	}
+}
+
 // TestCodexWireEntryCompactDropsClientRequestID 把 compact 的 x-client-request-id
 // 剥离钉死：同一个双开账号，非 compact 发该头、compact 不发。上一个用例里三种账号
 // 都是空，单看无法区分「被投影删掉」和「这条路径本来就不发」。

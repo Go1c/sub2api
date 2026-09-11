@@ -66,9 +66,12 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	turnState := ""
 	turnMetadata := ""
 	if c != nil && c.Request != nil {
-		turnState = strings.TrimSpace(c.GetHeader(openAIWSTurnStateHeader))
+		// 客户端回带的 turn-state：已知由其他账号铸造（failover 换号）则剥离。
+		turnState = s.guardOpenAICodexTurnStateValue(c, account, c.GetHeader(openAIWSTurnStateHeader))
 		turnMetadata = strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader))
 	}
+	// 帧内只承载客户端自己持有的值（理由见 ingress 的 clientTurnState 注释）。
+	clientTurnState := turnState
 	setOpenAIWSTurnMetadata(payload, turnMetadata)
 	applyStagedCodexFingerprintClientMetadata(c, account, payload)
 	previousResponseID := openAIWSPayloadString(payload, "previous_response_id")
@@ -126,7 +129,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	}
 	if turnState == "" && stateStore != nil && sessionHash != "" {
 		if savedTurnState, ok := stateStore.GetSessionTurnState(groupID, sessionHash); ok {
-			turnState = savedTurnState
+			turnState = s.guardOpenAICodexTurnStateValue(c, account, savedTurnState)
 		}
 	}
 	preferredConnID := ""
@@ -310,6 +313,8 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		len(handshakeTurnState),
 	)
 	if handshakeTurnState != "" {
+		// 该 blob 由本账号铸造，记下来供跨账号回带守卫；客户端经下面的响应头收到它。
+		s.noteOpenAICodexTurnStateOrigin(c, account, handshakeTurnState)
 		if stateStore != nil && sessionHash != "" {
 			stateStore.BindSessionTurnState(groupID, sessionHash, handshakeTurnState, s.openAIWSSessionStickyTTL())
 		}
@@ -320,10 +325,12 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 
 	if err := s.performOpenAIWSGeneratePrewarm(
 		ctx,
+		c,
 		lease,
 		decision,
 		payload,
 		previousResponseID,
+		clientTurnState,
 		reqBody,
 		account,
 		stateStore,
@@ -332,7 +339,20 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
-	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
+	var writeErr error
+	if codexDeviceWireProfileEnabled(c, account) {
+		// 双开：map 序列化是字典序且转义 HTML；按真客户端的帧字段序出站，字节原样写出。
+		// 帧内只承载客户端自己持有的 clientTurnState；会话存储回落值（turnState）只用于
+		// 非双开的握手与 HTTP 桥。
+		raw, marshalErr := marshalOpenAIUpstreamJSON(payload)
+		if marshalErr != nil {
+			return nil, wrapOpenAIWSFallback("write_request", marshalErr)
+		}
+		writeErr = lease.WriteTextWithContextTimeout(ctx, applyCodexWSFrameWireProfile(c, account, raw, clientTurnState), s.openAIWSWriteTimeout())
+	} else {
+		writeErr = lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout())
+	}
+	if err := writeErr; err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
 			"write_request_fail account_id=%d conn_id=%s cause=%s payload_bytes=%d",
