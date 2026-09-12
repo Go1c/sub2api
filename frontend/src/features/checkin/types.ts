@@ -10,6 +10,7 @@ export interface CheckinSettingsRequest {
   max_reward: string
   timezone: string
   daily_cap: string
+  min_spend: string
   milestones: CheckinMilestone[]
 }
 
@@ -47,6 +48,9 @@ export interface CheckinStatus {
   cycle_day: number
   next_milestone: { day: number; bonus: string; days_until: number } | null
   balance: string
+  spend_eligible: boolean
+  spend_required: string
+  spend_total: string
   today_record: CheckinRecord | null
   recent_records: CheckinRecord[]
 }

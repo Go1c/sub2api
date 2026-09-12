@@ -63,7 +63,7 @@ func (s *invalidatorStub) InvalidateAuthCacheByUserIDStrict(context.Context, int
 func TestServiceUpdateSettingsValidatesBeforeRepository(t *testing.T) {
 	repo := &repositoryStub{}
 	service := NewService(repo, nil, nil)
-	_, err := service.UpdateSettings(context.Background(), SettingsRequest{Enabled: true, MinReward: "1", MaxReward: "0", Timezone: "UTC", DailyCap: "0"})
+	_, err := service.UpdateSettings(context.Background(), SettingsRequest{Enabled: true, MinReward: "1", MaxReward: "0", Timezone: "UTC", DailyCap: "0", MinSpend: "0"})
 	var validationError *SettingsValidationError
 	require.ErrorAs(t, err, &validationError)
 	require.Zero(t, repo.updateCalls)

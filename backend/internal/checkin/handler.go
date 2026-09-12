@@ -161,6 +161,8 @@ func writeCheckInError(c *gin.Context, err error) {
 		middleware.AbortWithError(c, http.StatusBadRequest, "INVALID_CHECKIN_STATS_PERIOD", "period must be day, week, month, or all")
 	case errors.Is(err, ErrDisabled):
 		middleware.AbortWithError(c, http.StatusForbidden, "CHECKIN_DISABLED", "daily check-in is disabled")
+	case errors.Is(err, ErrEligibilityNotMet):
+		middleware.AbortWithError(c, http.StatusForbidden, "CHECKIN_ELIGIBILITY_NOT_MET", "historical spend does not meet the check-in threshold")
 	case errors.Is(err, ErrUserInactive):
 		middleware.AbortWithError(c, http.StatusForbidden, "USER_INACTIVE", "user account is not active")
 	case errors.Is(err, ErrUserNotFound):

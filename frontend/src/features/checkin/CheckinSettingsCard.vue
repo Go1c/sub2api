@@ -26,7 +26,7 @@
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">$</span>
             <input v-model.trim="draft[field.key]" class="input pl-7 ui-mono" inputmode="decimal" autocomplete="off" />
           </div>
-          <span v-if="field.key === 'daily_cap'" class="mt-1 block text-xs text-gray-400">{{ t('checkin.settings.dailyCapHint') }}</span>
+          <span v-if="field.hint" class="mt-1 block text-xs text-gray-400">{{ t(field.hint) }}</span>
         </label>
         <label class="block">
           <span class="input-label">{{ t('checkin.settings.timezone') }}</span>
@@ -82,16 +82,20 @@ import type { CheckinSettings, CheckinSettingsRequest } from './types'
 
 const { t } = useI18n()
 const loading = ref(true), saving = ref(false), loadError = ref(false), saveError = ref(false), saved = ref(false)
-const draft = reactive<CheckinSettingsRequest>({ enabled: false, min_reward: '0.1000', max_reward: '0.5000', timezone: 'Asia/Shanghai', daily_cap: '0.0000', milestones: [] })
-const moneyFields: { key: 'min_reward' | 'max_reward' | 'daily_cap'; label: string }[] = [
-  { key: 'min_reward', label: 'checkin.settings.minReward' }, { key: 'max_reward', label: 'checkin.settings.maxReward' }, { key: 'daily_cap', label: 'checkin.settings.dailyCap' }
+const draft = reactive<CheckinSettingsRequest>({ enabled: false, min_reward: '0.1000', max_reward: '0.5000', timezone: 'Asia/Shanghai', daily_cap: '0.0000', min_spend: '0.0000', milestones: [] })
+const moneyFields: { key: 'min_reward' | 'max_reward' | 'daily_cap' | 'min_spend'; label: string; hint?: string }[] = [
+  { key: 'min_reward', label: 'checkin.settings.minReward' },
+  { key: 'max_reward', label: 'checkin.settings.maxReward' },
+  { key: 'daily_cap', label: 'checkin.settings.dailyCap', hint: 'checkin.settings.dailyCapHint' },
+  { key: 'min_spend', label: 'checkin.settings.minSpend', hint: 'checkin.settings.minSpendHint' }
 ]
 const liveMaximum = computed(() => maximumSingleReward(draft))
 const budgetRisk = computed(() => hasDailyCapRisk(draft))
 
 function applySettings(settings: CheckinSettings) {
   draft.enabled = settings.enabled; draft.min_reward = settings.min_reward; draft.max_reward = settings.max_reward
-  draft.timezone = settings.timezone; draft.daily_cap = settings.daily_cap; draft.milestones = settings.milestones.map(item => ({ ...item }))
+  draft.timezone = settings.timezone; draft.daily_cap = settings.daily_cap; draft.min_spend = settings.min_spend
+  draft.milestones = settings.milestones.map(item => ({ ...item }))
 }
 async function loadSettings() {
   loading.value = true; loadError.value = false
@@ -105,7 +109,7 @@ function removeMilestone(index: number) { draft.milestones.splice(index, 1) }
 async function saveSettings() {
   saving.value = true; saved.value = false; saveError.value = false
   try {
-    const payload: CheckinSettingsRequest = { enabled: draft.enabled, min_reward: draft.min_reward, max_reward: draft.max_reward, timezone: draft.timezone, daily_cap: draft.daily_cap, milestones: draft.milestones.map(item => ({ ...item })) }
+    const payload: CheckinSettingsRequest = { enabled: draft.enabled, min_reward: draft.min_reward, max_reward: draft.max_reward, timezone: draft.timezone, daily_cap: draft.daily_cap, min_spend: draft.min_spend, milestones: draft.milestones.map(item => ({ ...item })) }
     applySettings(await checkinAPI.updateSettings(payload)); saved.value = true
     const pinia = getActivePinia(); if (pinia) void useCheckinStore(pinia).fetchStatus()
   } catch { saveError.value = true } finally { saving.value = false }

@@ -49,8 +49,8 @@ func TestHandlerUserStatusAndCheckInResponseContract(t *testing.T) {
 		status: UserStatus{
 			Enabled: true, CheckedInToday: true, TotalCheckIns: 7,
 			TotalReward: decimal.RequireFromString("3.2"), CurrentStreak: 7, CycleDay: 7,
-			Balance: decimal.RequireFromString("9.25"), TodayRecord: &record,
-			RecentRecords: []Record{record},
+			Balance: decimal.RequireFromString("9.25"), SpendEligible: true,
+			TodayRecord: &record, RecentRecords: []Record{record},
 		},
 		result: CheckInResult{Record: record, AlreadyCheckedIn: true},
 	}
@@ -69,6 +69,9 @@ func TestHandlerUserStatusAndCheckInResponseContract(t *testing.T) {
 	require.Equal(t, "3.2000", status["total_reward"])
 	require.Equal(t, "9.2500", status["balance"])
 	require.Equal(t, float64(7), status["total_checkins"])
+	require.Equal(t, true, status["spend_eligible"])
+	require.Equal(t, "0.0000", status["spend_required"])
+	require.Equal(t, "0.0000", status["spend_total"])
 
 	postRecorder := httptest.NewRecorder()
 	router.ServeHTTP(postRecorder, httptest.NewRequest(http.MethodPost, "/user/checkin", nil))
@@ -92,6 +95,15 @@ func TestHandlerMapsValidationAndDisabledErrors(t *testing.T) {
 	router.ServeHTTP(disabled, httptest.NewRequest(http.MethodPost, "/user/checkin", nil))
 	require.Equal(t, http.StatusForbidden, disabled.Code)
 	require.Contains(t, disabled.Body.String(), "CHECKIN_DISABLED")
+
+	ineligible := httptest.NewRecorder()
+	ineligibleHandler := newHandler(NewService(&repositoryStub{err: ErrEligibilityNotMet}, nil, nil))
+	ineligibleRouter := gin.New()
+	ineligibleRouter.Use(authenticatedContext(17))
+	ineligibleRouter.POST("/user/checkin", ineligibleHandler.CheckIn)
+	ineligibleRouter.ServeHTTP(ineligible, httptest.NewRequest(http.MethodPost, "/user/checkin", nil))
+	require.Equal(t, http.StatusForbidden, ineligible.Code)
+	require.Contains(t, ineligible.Body.String(), "CHECKIN_ELIGIBILITY_NOT_MET")
 
 	invalid := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPut, "/admin/settings", nil)

@@ -22,7 +22,7 @@ describe('checkinAPI', () => {
     expect(client.get).toHaveBeenCalledWith('/admin/affiliates/checkins/stats', { params: { period: 'week', search: 'qq.com', status: 'awarded' } })
   })
   it('updates only dedicated settings', async () => {
-    const settings = { enabled: false, min_reward: '0.1000', max_reward: '0.5000', timezone: 'Asia/Shanghai', daily_cap: '0.0000', milestones: [] }
+    const settings = { enabled: false, min_reward: '0.1000', max_reward: '0.5000', timezone: 'Asia/Shanghai', daily_cap: '0.0000', min_spend: '0.0000', milestones: [] }
     client.get.mockResolvedValue({ data: settings }); client.put.mockResolvedValue({ data: settings })
     await checkinAPI.getSettings(); await checkinAPI.updateSettings(settings)
     expect(client.get).toHaveBeenCalledWith('/admin/affiliates/checkins/settings'); expect(client.put).toHaveBeenCalledWith('/admin/affiliates/checkins/settings', settings)
