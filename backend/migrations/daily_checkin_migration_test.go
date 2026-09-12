@@ -27,3 +27,15 @@ func TestDailyCheckinMigrationContract(t *testing.T) {
 	require.Regexp(t, regexp.MustCompile(`awarded_total\s+numeric\(20,8\)`), sql)
 	require.NotContains(t, sql, "user_affiliate_ledger")
 }
+
+func TestCheckinMinSpendMigrationContract(t *testing.T) {
+	raw, err := FS.ReadFile("943_checkin_min_spend.sql")
+	require.NoError(t, err)
+	sql := strings.ToLower(string(raw))
+
+	require.Contains(t, sql, "add column if not exists min_spend")
+	require.Regexp(t, regexp.MustCompile(`min_spend\s+numeric\(20,8\)`), sql)
+	require.Contains(t, sql, "not null default 0")
+	require.Contains(t, sql, "daily_checkin_settings_min_spend_nonnegative")
+	require.Contains(t, sql, "usage_logs.actual_cost")
+}

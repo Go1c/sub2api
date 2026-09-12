@@ -63,6 +63,16 @@ func (r *sqlRepository) CheckIn(ctx context.Context, userID int64, now time.Time
 		return CheckInResult{}, fmt.Errorf("find existing check-in: %w", err)
 	}
 
+	if settings.MinSpend.IsPositive() {
+		total, err := sumUserSpend(ctx, tx, userID)
+		if err != nil {
+			return CheckInResult{}, err
+		}
+		if !spendGateMet(settings.MinSpend, total) {
+			return CheckInResult{}, ErrEligibilityNotMet
+		}
+	}
+
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO daily_checkin_daily_counters (business_date)
 		VALUES ($1)

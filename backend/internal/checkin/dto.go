@@ -16,6 +16,7 @@ type settingsResponse struct {
 	MaxReward           string              `json:"max_reward"`
 	Timezone            string              `json:"timezone"`
 	DailyCap            string              `json:"daily_cap"`
+	MinSpend            string              `json:"min_spend"`
 	Milestones          []milestoneResponse `json:"milestones"`
 	MaximumSingleReward string              `json:"maximum_single_reward"`
 	UpdatedAt           string              `json:"updated_at"`
@@ -57,6 +58,9 @@ type userStatusResponse struct {
 	CycleDay       int                    `json:"cycle_day"`
 	NextMilestone  *nextMilestoneResponse `json:"next_milestone"`
 	Balance        string                 `json:"balance"`
+	SpendEligible  bool                   `json:"spend_eligible"`
+	SpendRequired  string                 `json:"spend_required"`
+	SpendTotal     string                 `json:"spend_total"`
 	TodayRecord    *recordResponse        `json:"today_record"`
 	RecentRecords  []recordResponse       `json:"recent_records"`
 }
@@ -72,6 +76,7 @@ func toSettingsResponse(settings Settings) settingsResponse {
 		MaxReward:           formatAmount(settings.MaxReward),
 		Timezone:            settings.Timezone,
 		DailyCap:            formatAmount(settings.DailyCap),
+		MinSpend:            formatAmount(settings.MinSpend),
 		Milestones:          milestones,
 		MaximumSingleReward: formatAmount(settings.MaximumSingleReward()),
 		UpdatedAt:           formatTimestamp(settings.UpdatedAt),
@@ -153,6 +158,9 @@ func toUserStatusResponse(status UserStatus) userStatusResponse {
 		CurrentStreak:  status.CurrentStreak,
 		CycleDay:       status.CycleDay,
 		Balance:        formatAmount(status.Balance),
+		SpendEligible:  status.SpendEligible,
+		SpendRequired:  formatAmount(status.SpendRequired),
+		SpendTotal:     formatAmount(status.SpendTotal),
 		RecentRecords:  make([]recordResponse, 0, len(status.RecentRecords)),
 	}
 	if status.NextMilestone != nil {

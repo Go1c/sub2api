@@ -17,10 +17,11 @@ var (
 	ErrUserInactive       = errors.New("user is not active")
 	ErrUserNotFound       = errors.New("user not found")
 	ErrInvalidStatsPeriod = errors.New("invalid check-in stats period")
+	ErrEligibilityNotMet  = errors.New("historical spend does not meet the check-in threshold")
 )
 
 const settingsSelectColumns = `enabled, min_reward::text, max_reward::text, timezone,
-	daily_cap::text, milestones, updated_at`
+	daily_cap::text, min_spend::text, milestones, updated_at`
 
 const recordSelectColumns = `id, user_id, user_email, username, business_date, checked_at,
 	timezone, streak_days, cycle_day, milestone_day, base_reward::text,
@@ -43,6 +44,10 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
+type rowQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 type storedMilestone struct {
 	Day   int    `json:"day"`
 	Bonus string `json:"bonus"`
@@ -54,6 +59,7 @@ func scanSettings(row rowScanner) (Settings, error) {
 		minimum        string
 		maximum        string
 		dailyCap       string
+		minSpend       string
 		milestonesJSON []byte
 	)
 	if err := row.Scan(
@@ -62,6 +68,7 @@ func scanSettings(row rowScanner) (Settings, error) {
 		&maximum,
 		&settings.Timezone,
 		&dailyCap,
+		&minSpend,
 		&milestonesJSON,
 		&settings.UpdatedAt,
 	); err != nil {
@@ -77,6 +84,9 @@ func scanSettings(row rowScanner) (Settings, error) {
 	}
 	if settings.DailyCap, err = decimal.NewFromString(dailyCap); err != nil {
 		return Settings{}, fmt.Errorf("parse daily_cap: %w", err)
+	}
+	if settings.MinSpend, err = decimal.NewFromString(minSpend); err != nil {
+		return Settings{}, fmt.Errorf("parse min_spend: %w", err)
 	}
 
 	var stored []storedMilestone
@@ -131,7 +141,8 @@ func (r *sqlRepository) UpdateSettings(ctx context.Context, settings Settings) (
 			max_reward = $3,
 			timezone = $4,
 			daily_cap = $5,
-			milestones = $6,
+			min_spend = $6,
+			milestones = $7,
 			updated_at = NOW()
 		WHERE id = 1
 		RETURNING `+settingsSelectColumns,
@@ -140,6 +151,7 @@ func (r *sqlRepository) UpdateSettings(ctx context.Context, settings Settings) (
 		settings.MaxReward.StringFixed(4),
 		settings.Timezone,
 		settings.DailyCap.StringFixed(4),
+		settings.MinSpend.StringFixed(4),
 		milestones,
 	))
 	if err != nil {
@@ -293,7 +305,36 @@ func (r *sqlRepository) GetUserStatus(ctx context.Context, userID int64, now tim
 		}
 	}
 	status.NextMilestone = nextMilestone(settings, status.CycleDay)
+	if err := applySpendStatus(ctx, r.db, userID, settings, &status); err != nil {
+		return UserStatus{}, err
+	}
 	return status, nil
+}
+
+func sumUserSpend(ctx context.Context, q rowQueryer, userID int64) (decimal.Decimal, error) {
+	var raw string
+	if err := q.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(actual_cost), 0)::text
+		FROM usage_logs
+		WHERE user_id = $1`, userID).Scan(&raw); err != nil {
+		return decimal.Zero, fmt.Errorf("sum check-in spend: %w", err)
+	}
+	return parseDatabaseAmount("spend_total", raw)
+}
+
+func applySpendStatus(ctx context.Context, q rowQueryer, userID int64, settings Settings, status *UserStatus) error {
+	status.SpendRequired = settings.MinSpend
+	status.SpendEligible = true
+	if !settings.Enabled || !settings.MinSpend.IsPositive() || status.CheckedInToday {
+		return nil
+	}
+	total, err := sumUserSpend(ctx, q, userID)
+	if err != nil {
+		return err
+	}
+	status.SpendTotal = total
+	status.SpendEligible = spendGateMet(settings.MinSpend, total)
+	return nil
 }
 
 func sameBusinessDate(left, right time.Time) bool {
