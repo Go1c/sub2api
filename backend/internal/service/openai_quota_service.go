@@ -187,6 +187,9 @@ func (s *OpenAIQuotaService) QueryUsage(ctx context.Context, accountID int64) (*
 	}
 
 	payload.FetchedAt = time.Now().Unix()
+	// 顺带解析出口时区，供双开账号改写请求体 environment_context
+	// （openai_quota_wire_timezone.go 内部按 24 小时 / 换代理节流；失败只记日志）。
+	s.refreshCodexWireTimezone(ctx, accountID)
 	details := s.queryResetCreditDetails(callCtx, client, accessToken, chatGPTAccountID, fedRAMP, accountID)
 	if details != nil {
 		payload.autoResetCandidates = details.AutoResetCandidates

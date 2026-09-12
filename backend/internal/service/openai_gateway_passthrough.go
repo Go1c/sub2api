@@ -629,6 +629,10 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	// 与非透传路径同一条规则。透传的入站若本就是真客户端形态，这一步是恒等变换。
 	body = applyCodexBodyFieldOrder(c, account, targetURL, body)
 
+	// 双开出站时区收口：真客户端把本机时区与当天日期写进 environment_context，客户端在国内、
+	// 出口在美国时两者矛盾。按出口时区改写这两个标签（openai_codex_wire_timezone.go）。
+	body = rewriteCodexEnvironmentTimezone(c, account, body)
+
 	// 上线字节：双开 /responses 的请求体按真客户端默认做 zstd 压缩，与非透传路径同一条规则。
 	wireBody, contentEncoding, err := compressCodexRequestBody(c, account, targetURL, body)
 	if err != nil {
