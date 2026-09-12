@@ -1,6 +1,6 @@
 ---
 name: daily-checkin
-description: 独立每日签到模块：原子发奖、连续周期、全站每日预算，以及用户和管理员界面
+description: 独立每日签到模块：原子发奖、连续周期、全站每日预算、历史消费门槛，以及用户和管理员界面
 metadata:
   type: doc
   level: L2
@@ -27,7 +27,7 @@ metadata:
 
 迁移 `backend/migrations/929_daily_checkin.sql` 创建三张表：
 
-- `daily_checkin_settings`：单行配置，默认关闭；保存奖励区间、IANA 时区、每日上限和最多 10 条里程碑。
+- `daily_checkin_settings`：单行配置，默认关闭；保存奖励区间、IANA 时区、每日上限、历史消费门槛 `min_spend` 和最多 10 条里程碑。迁移 `943_checkin_min_spend.sql` 增加 `min_spend`（默认 `0`）。
 - `daily_checkin_records`：不可变签到流水，记录用户快照、业务日期、连续/循环天数、奖励拆分、实际发放、余额快照和客户端信息。用户删除后 `user_id` 置空，审计快照保留。
 - `daily_checkin_daily_counters`：按业务日期累计实际发放额，事务内锁行以串行化每日预算分配。
 
@@ -35,12 +35,14 @@ metadata:
 
 每日上限为 `0` 时不限额。剩余预算不足以完整支付本次奖励时，不做部分发放：流水状态记为 `budget_exhausted`、实际奖励为 `0`，但该日仍计入连续签到。同日重复请求返回原流水，不重复发奖。事务提交后以 best-effort 方式失效余额和认证缓存，失效失败只记录日志。
 
+历史消费门槛在锁定配置与用户、确认当日尚无流水之后、写入预算计数之前检查。不满足时返回错误并回滚，不插入 `daily_checkin_records`、不改余额、不占当日名额。当日已有流水的重放跳过门槛。
+
 ## 接口与界面
 
 用户接口：
 
-- `GET /api/v1/user/checkin`：功能开关、今日状态、累计次数与奖励、连续/循环天数、下一里程碑、余额和最近 20 条流水。
-- `POST /api/v1/user/checkin`：执行或重放当日签到，返回奖励拆分、状态、余额快照和 `already_checked_in`。
+- `GET /api/v1/user/checkin`：功能开关、今日状态、累计次数与奖励、连续/循环天数、下一里程碑、余额、历史消费门槛（`spend_eligible` / `spend_required` / `spend_total`）和最近 20 条流水。`min_spend > 0` 且今日尚未签到时才 `SUM(usage_logs.actual_cost)`；门槛关闭、功能关闭或今日已签到时 `spend_eligible=true` 且不扫用量。
+- `POST /api/v1/user/checkin`：执行或重放当日签到，返回奖励拆分、状态、余额快照和 `already_checked_in`。未达消费门槛时 HTTP 403、`code=CHECKIN_ELIGIBILITY_NOT_MET`，不写流水。
 
 管理员接口：
 
@@ -49,7 +51,7 @@ metadata:
 - `GET /api/v1/admin/affiliates/checkins/settings`：读取独立配置。
 - `PUT /api/v1/admin/affiliates/checkins/settings`：校验、规范化并读回独立配置。
 
-用户页位于 `/checkin`，包含签到操作、汇总数据、下一里程碑和最近流水；用户导航与侧栏快捷卡仅在功能开启时显示。管理员流水位于 `/admin/affiliates/checkins`，即使功能关闭也保留入口。顶栏可切换今日 / 本周 / 本月 / 累计统计：参与用户与签到次数计入全部流水；发放总额与平均 / P50 / P90 / 最大仅统计 `awarded` 的 `actual_reward`。功能设置页挂载独立设置卡，可配置奖励、时区、每日上限和里程碑，并提示理论最高单次奖励高于每日预算的风险。
+用户页位于 `/checkin`，包含签到操作、汇总数据、下一里程碑和最近流水；用户导航与侧栏快捷卡仅在功能开启时显示。管理员流水位于 `/admin/affiliates/checkins`，即使功能关闭也保留入口。顶栏可切换今日 / 本周 / 本月 / 累计统计：参与用户与签到次数计入全部流水；发放总额与平均 / P50 / P90 / 最大仅统计 `awarded` 的 `actual_reward`。功能设置页挂载独立设置卡，可配置奖励、时区、每日上限、历史消费门槛和里程碑，并提示理论最高单次奖励高于每日预算的风险。用户侧栏在未达门槛时显示「当前不满足门槛」且不跳动；签到页按钮禁用，文案为「当前不满足，累计消费 $X 才可以签到」。已签到 / 奖池耗尽优先于门槛文案。
 
 ## 配置规则
 
@@ -57,18 +59,19 @@ metadata:
 - 时区必须是有效 IANA 时区。
 - 里程碑天数必须为唯一正整数，奖金非负，最多 10 条；后端按天数排序后保存。
 - 每日上限允许为 `0` 或正数。低于理论最高单次奖励时仍可保存，由管理界面显示风险提示。
+- `min_spend` 为历史消费门槛，口径是该用户全部 `usage_logs.actual_cost`（订阅扣费 + 余额扣费）。必须**严格大于**该值才能签到；填 `0` 关闭门槛（默认）。不含订阅购买价、充值到账、签到奖励、邀请赠送、外部钱包扣款。与「使用余额门槛」的历史充值口径分开。
 - 配置和时区变更只影响后续签到，历史流水不重算。
 
 ## 验证
 
-- 后端单元测试覆盖金额精度、随机边界、连续签到、循环里程碑、预算耗尽、重复请求、回滚、缓存失效容错，以及命中里程碑时 `checkin_balance` / `checkin_milestone` 兑换码拆分与第二条插入失败回滚。
+- 后端单元测试覆盖金额精度、随机边界、连续签到、循环里程碑、预算耗尽、重复请求、回滚、缓存失效容错、历史消费门槛（`min_spend=0` 不拦截、`current <= required` 拒绝且无流水、已签到重放跳过门槛），以及命中里程碑时 `checkin_balance` / `checkin_milestone` 兑换码拆分与第二条插入失败回滚。
 - PostgreSQL 集成测试覆盖并发重复签到、并发预算限制、余额原子增加和事务回滚；本地无 Docker 时测试按既有 TestMain 约定跳过。
-- 前端 Vitest 覆盖 API、Store、用户页、管理员筛选、设置保存、侧栏状态和共享接线。
-- `go vet -tags integration ./...`、签到包定向 lint、前端 `pnpm typecheck`、`pnpm build`、`pnpm lint:check` 已通过；桌面 1440x900 与移动 375x811 已完成浏览器验收。
+- 前端 Vitest 覆盖 API、Store、用户页、管理员筛选、设置保存、侧栏状态、消费门槛文案/禁用按钮，以及共享接线。
+- 本次门槛改动验证：`go test -tags=unit ./internal/checkin/ ./migrations/`、`go test -tags=integration ./internal/checkin/`、`go vet -tags integration ./...`、`golangci-lint run ./internal/checkin/ ./migrations/`（0 issues）、`pnpm exec vitest run src/features/checkin`（8 files / 30）、`eslint src/features/checkin`、`pnpm typecheck`、`pnpm build` 通过。未达标文案经静态预览确认。全量 `pnpm lint:check` 未跑。
 
 ## 相关
 
 - 后端：`backend/internal/checkin/`、`backend/internal/server/checkin.go`
 - 前端：`frontend/src/features/checkin/`
-- 数据库：`backend/migrations/929_daily_checkin.sql`
+- 数据库：`backend/migrations/929_daily_checkin.sql`、`backend/migrations/943_checkin_min_spend.sql`
 - 任务卡：`.spec/tasks/daily-checkin.md`、`.spec/tasks/checkin-redeem-dark-nudge.md`、`.spec/tasks/checkin-milestone-redeem.md`

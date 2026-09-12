@@ -46,19 +46,21 @@ func TestPeriodDateRangeUsesOperatingTimezoneAndMondayWeek(t *testing.T) {
 }
 
 func TestNormalizeSettingsValidation(t *testing.T) {
-	valid := SettingsRequest{Enabled: true, MinReward: "0.1000", MaxReward: "0.5000", Timezone: "Asia/Shanghai", DailyCap: "10", Milestones: []MilestoneRequest{{Day: 30, Bonus: "2"}, {Day: 7, Bonus: "1.2500"}}}
+	valid := SettingsRequest{Enabled: true, MinReward: "0.1000", MaxReward: "0.5000", Timezone: "Asia/Shanghai", DailyCap: "10", MinSpend: "10.0000", Milestones: []MilestoneRequest{{Day: 30, Bonus: "2"}, {Day: 7, Bonus: "1.2500"}}}
 	settings, err := normalizeSettings(valid)
 	require.NoError(t, err)
 	require.Equal(t, []Milestone{{Day: 7, Bonus: decimal.RequireFromString("1.2500")}, {Day: 30, Bonus: decimal.RequireFromString("2")}}, settings.Milestones)
 	require.Equal(t, "2.5000", formatAmount(settings.MaximumSingleReward()))
+	require.Equal(t, "10.0000", formatAmount(settings.MinSpend))
 
 	tests := []SettingsRequest{
-		{Enabled: true, MinReward: "0", MaxReward: "0", Timezone: "UTC", DailyCap: "0"},
-		{MinReward: "1", MaxReward: "0.5", Timezone: "UTC", DailyCap: "0"},
-		{MinReward: "0.00001", MaxReward: "1", Timezone: "UTC", DailyCap: "0"},
-		{MinReward: "0", MaxReward: "1", Timezone: "Not/AZone", DailyCap: "0"},
-		{MinReward: "0", MaxReward: "1", Timezone: "UTC", DailyCap: "0", Milestones: []MilestoneRequest{{Day: 7, Bonus: "1"}, {Day: 7, Bonus: "2"}}},
-		{MinReward: "0", MaxReward: "1", Timezone: "UTC", DailyCap: "0", Milestones: []MilestoneRequest{{Day: 0, Bonus: "1"}}},
+		{Enabled: true, MinReward: "0", MaxReward: "0", Timezone: "UTC", DailyCap: "0", MinSpend: "0"},
+		{MinReward: "1", MaxReward: "0.5", Timezone: "UTC", DailyCap: "0", MinSpend: "0"},
+		{MinReward: "0.00001", MaxReward: "1", Timezone: "UTC", DailyCap: "0", MinSpend: "0"},
+		{MinReward: "0", MaxReward: "1", Timezone: "Not/AZone", DailyCap: "0", MinSpend: "0"},
+		{MinReward: "0", MaxReward: "1", Timezone: "UTC", DailyCap: "0", MinSpend: "-1"},
+		{MinReward: "0", MaxReward: "1", Timezone: "UTC", DailyCap: "0", MinSpend: "0", Milestones: []MilestoneRequest{{Day: 7, Bonus: "1"}, {Day: 7, Bonus: "2"}}},
+		{MinReward: "0", MaxReward: "1", Timezone: "UTC", DailyCap: "0", MinSpend: "0", Milestones: []MilestoneRequest{{Day: 0, Bonus: "1"}}},
 	}
 	for _, request := range tests {
 		_, err := normalizeSettings(request)
@@ -99,4 +101,11 @@ func TestStreakCycleMilestoneAndBudget(t *testing.T) {
 	actual, status = applyDailyCap(decimal.Zero, decimal.RequireFromString("999"), decimal.RequireFromString("0.2"))
 	require.Equal(t, "0.2000", formatAmount(actual))
 	require.Equal(t, StatusAwarded, status)
+}
+
+func TestSpendGateMetRequiresStrictlyGreaterSpend(t *testing.T) {
+	require.True(t, spendGateMet(decimal.Zero, decimal.Zero))
+	require.False(t, spendGateMet(decimal.RequireFromString("10"), decimal.RequireFromString("10")))
+	require.False(t, spendGateMet(decimal.RequireFromString("10"), decimal.RequireFromString("9.9999")))
+	require.True(t, spendGateMet(decimal.RequireFromString("10"), decimal.RequireFromString("10.0001")))
 }

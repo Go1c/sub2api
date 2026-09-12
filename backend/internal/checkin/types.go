@@ -37,6 +37,7 @@ type SettingsRequest struct {
 	MaxReward  string             `json:"max_reward"`
 	Timezone   string             `json:"timezone"`
 	DailyCap   string             `json:"daily_cap"`
+	MinSpend   string             `json:"min_spend"`
 	Milestones []MilestoneRequest `json:"milestones"`
 }
 
@@ -51,6 +52,7 @@ type Settings struct {
 	MaxReward  decimal.Decimal
 	Timezone   string
 	DailyCap   decimal.Decimal
+	MinSpend   decimal.Decimal
 	Milestones []Milestone
 	UpdatedAt  time.Time
 }
@@ -119,6 +121,9 @@ type UserStatus struct {
 	CycleDay       int
 	NextMilestone  *NextMilestone
 	Balance        decimal.Decimal
+	SpendEligible  bool
+	SpendRequired  decimal.Decimal
+	SpendTotal     decimal.Decimal
 	TodayRecord    *Record
 	RecentRecords  []Record
 }
@@ -178,6 +183,10 @@ func normalizeSettings(request SettingsRequest) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
+	minSpend, err := parseConfiguredAmount("min_spend", request.MinSpend)
+	if err != nil {
+		return Settings{}, err
+	}
 	if minimum.GreaterThan(maximum) {
 		return Settings{}, fmt.Errorf("min_reward must not exceed max_reward")
 	}
@@ -212,7 +221,11 @@ func normalizeSettings(request SettingsRequest) (Settings, error) {
 		milestones = append(milestones, Milestone{Day: item.Day, Bonus: bonus})
 	}
 	sort.Slice(milestones, func(i, j int) bool { return milestones[i].Day < milestones[j].Day })
-	return Settings{Enabled: request.Enabled, MinReward: minimum, MaxReward: maximum, Timezone: timezone, DailyCap: dailyCap, Milestones: milestones}, nil
+	return Settings{Enabled: request.Enabled, MinReward: minimum, MaxReward: maximum, Timezone: timezone, DailyCap: dailyCap, MinSpend: minSpend, Milestones: milestones}, nil
+}
+
+func spendGateMet(minSpend, total decimal.Decimal) bool {
+	return !minSpend.IsPositive() || total.GreaterThan(minSpend)
 }
 
 func parseConfiguredAmount(field, raw string) (decimal.Decimal, error) {

@@ -96,6 +96,21 @@ func setupCheckInIntegrationSchema(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, string(migration)); err != nil {
 		return err
 	}
+	minSpendMigration, err := migrations.FS.ReadFile("943_checkin_min_spend.sql")
+	if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, string(minSpendMigration)); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE usage_logs (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			actual_cost NUMERIC(20,10) NOT NULL DEFAULT 0
+		)`); err != nil {
+		return err
+	}
 	_, err = db.ExecContext(ctx, `
 		CREATE TABLE redeem_codes (
 			id BIGSERIAL PRIMARY KEY,
@@ -116,7 +131,7 @@ func resetCheckInIntegrationState(t *testing.T, minReward, maxReward, dailyCap s
 	// lib/pq 对带参数的语句走 prepared statement，会拒绝多命令；
 	// TRUNCATE 与带参 UPDATE 必须拆成两次执行。
 	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
-		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users, redeem_codes RESTART IDENTITY CASCADE`)
+		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users, redeem_codes, usage_logs RESTART IDENTITY CASCADE`)
 	require.NoError(t, err)
 	_, err = checkInIntegrationDB.ExecContext(context.Background(), `
 		UPDATE daily_checkin_settings
@@ -348,4 +363,30 @@ func TestRepositoryConcurrentRewardsAtomicallyIncreaseBalance(t *testing.T) {
 	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT COUNT(*) FROM daily_checkin_records WHERE user_id = $1`, userID).Scan(&records))
 	require.Equal(t, "2.00000000", balance)
 	require.Equal(t, 2, records)
+}
+
+func TestRepositoryCheckInEnforcesHistoricalSpendGate(t *testing.T) {
+	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
+	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE daily_checkin_settings SET min_spend = 10 WHERE id = 1`)
+	require.NoError(t, err)
+
+	userID := createCheckInIntegrationUser(t, "spend-gate@example.test")
+	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
+	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+
+	_, err = repo.CheckIn(context.Background(), userID, now, ClientInfo{})
+	require.ErrorIs(t, err, ErrEligibilityNotMet)
+	var records int
+	require.NoError(t, checkInIntegrationDB.QueryRow(`SELECT COUNT(*) FROM daily_checkin_records WHERE user_id = $1`, userID).Scan(&records))
+	require.Zero(t, records)
+
+	_, err = checkInIntegrationDB.ExecContext(context.Background(), `
+		INSERT INTO usage_logs (user_id, actual_cost) VALUES ($1, 10.0001)`, userID)
+	require.NoError(t, err)
+
+	result, err := repo.CheckIn(context.Background(), userID, now, ClientInfo{})
+	require.NoError(t, err)
+	require.Equal(t, StatusAwarded, result.Record.Status)
+	require.Equal(t, "0.1000", formatAmount(result.Record.ActualReward))
 }

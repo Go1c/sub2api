@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'; import { mount } from '@vue/test-utils'; import { createPinia, setActivePinia } from 'pinia'
 vi.mock('vue-i18n', async () => { const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n'); return { ...actual, useI18n: () => ({ t: (key: string) => key }) } }); import SidebarCheckinCard from '../SidebarCheckinCard.vue'; import { useCheckinStore } from '../store'
-const base = { checked_in_today: false, total_checkins: 0, total_reward: '0.0000', current_streak: 0, cycle_day: 0, next_milestone: null, balance: '0.0000', today_record: null, recent_records: [] }
+const base = { checked_in_today: false, total_checkins: 0, total_reward: '0.0000', current_streak: 0, cycle_day: 0, next_milestone: null, balance: '0.0000', spend_eligible: true, spend_required: '0.0000', spend_total: '0.0000', today_record: null, recent_records: [] }
 const RouterLinkStub = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 describe('SidebarCheckinCard', () => {
   it('hides when disabled', () => { setActivePinia(createPinia()); useCheckinStore().status = { ...base, enabled: false }; const wrapper = mount(SidebarCheckinCard, { props: { collapsed: false }, global: { stubs: { RouterLink: true } } }); expect(wrapper.find('[data-test="sidebar-checkin"]').exists()).toBe(false) })
@@ -24,5 +24,12 @@ describe('SidebarCheckinCard', () => {
     useCheckinStore().status = { ...base, enabled: true, checked_in_today: true, today_record: { status: 'budget_exhausted' } as never }
     const wrapper = mount(SidebarCheckinCard, { props: { collapsed: false }, global: { stubs: { RouterLink: RouterLinkStub } } })
     expect(wrapper.find('[data-test="sidebar-checkin-nudge"]').exists()).toBe(false)
+  })
+  it('does not nudge and shows ineligible copy when spend gate is not met', () => {
+    setActivePinia(createPinia())
+    useCheckinStore().status = { ...base, enabled: true, checked_in_today: false, spend_eligible: false, spend_required: '10.0000', spend_total: '3.2500' }
+    const wrapper = mount(SidebarCheckinCard, { props: { collapsed: false }, global: { stubs: { RouterLink: RouterLinkStub } } })
+    expect(wrapper.find('[data-test="sidebar-checkin-nudge"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('checkin.sidebar.ineligible')
   })
 })

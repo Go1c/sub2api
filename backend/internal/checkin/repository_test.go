@@ -15,8 +15,12 @@ import (
 )
 
 func settingsRows(enabled bool) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{"enabled", "min_reward", "max_reward", "timezone", "daily_cap", "milestones", "updated_at"}).
-		AddRow(enabled, "0.10000000", "0.10000000", "Asia/Shanghai", "10.00000000", []byte(`[{"day":7,"bonus":"1.0000"}]`), time.Now())
+	return settingsDetailRows(enabled, "0.10000000", "0.10000000", "10.00000000", "0.00000000", []byte(`[{"day":7,"bonus":"1.0000"}]`))
+}
+
+func settingsDetailRows(enabled bool, minReward, maxReward, dailyCap, minSpend string, milestones []byte) *sqlmock.Rows {
+	return sqlmock.NewRows([]string{"enabled", "min_reward", "max_reward", "timezone", "daily_cap", "min_spend", "milestones", "updated_at"}).
+		AddRow(enabled, minReward, maxReward, "Asia/Shanghai", dailyCap, minSpend, milestones, time.Now())
 }
 
 func recordRows(now time.Time) *sqlmock.Rows {
@@ -124,8 +128,7 @@ func TestRepositoryCheckInSkipsRedeemCodeWhenActualIsZero(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
 	repo := newSQLRepository(db, fixedRandom{})
-	zeroRows := sqlmock.NewRows([]string{"enabled", "min_reward", "max_reward", "timezone", "daily_cap", "milestones", "updated_at"}).
-		AddRow(true, "0.00000000", "0.00000000", "Asia/Shanghai", "10.00000000", []byte(`[]`), now)
+	zeroRows := settingsDetailRows(true, "0.00000000", "0.00000000", "10.00000000", "0.00000000", []byte(`[]`))
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`(?s)SELECT enabled.+FOR UPDATE`).WillReturnRows(zeroRows)
@@ -237,6 +240,91 @@ func TestRepositoryCheckInRollsBackWhenRecordInsertFails(t *testing.T) {
 	mock.ExpectRollback()
 	_, err = repo.CheckIn(context.Background(), 17, now, ClientInfo{})
 	require.ErrorContains(t, err, "write failed")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryCheckInRejectsWhenSpendGateNotMet(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT enabled.+FOR UPDATE`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "10.00000000", []byte(`[]`)))
+	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`(?s)SELECT COALESCE\(SUM\(actual_cost\), 0\)::text\s+FROM usage_logs`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow("10.00000000"))
+	mock.ExpectRollback()
+
+	_, err = repo.CheckIn(context.Background(), 17, now, ClientInfo{})
+	require.ErrorIs(t, err, ErrEligibilityNotMet)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryCheckInAllowsWhenSpendExceedsGate(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT enabled.+FROM daily_checkin_settings.+FOR UPDATE`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "10.00000000", []byte(`[]`)))
+	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FROM users.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`(?s)SELECT COALESCE\(SUM\(actual_cost\), 0\)::text\s+FROM usage_logs`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow("10.0001"))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO daily_checkin_daily_counters (business_date)")).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`(?s)SELECT awarded_total::text.+FOR UPDATE`).WillReturnRows(sqlmock.NewRows([]string{"awarded_total"}).AddRow("0"))
+	mock.ExpectQuery(`(?s)SELECT business_date, streak_days`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`(?s)UPDATE users.+RETURNING balance::text`).WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow("1.10000000"))
+	mock.ExpectQuery(`(?s)INSERT INTO daily_checkin_records.+RETURNING id, checked_at`).WillReturnRows(sqlmock.NewRows([]string{"id", "checked_at"}).AddRow(8, now))
+	mock.ExpectExec(`(?s)UPDATE daily_checkin_daily_counters`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`(?s)INSERT INTO redeem_codes`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	result, err := repo.CheckIn(context.Background(), 17, now, ClientInfo{})
+	require.NoError(t, err)
+	require.False(t, result.AlreadyCheckedIn)
+	require.Equal(t, "0.1000", formatAmount(result.Record.ActualReward))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryCheckInReplaySkipsSpendGate(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT enabled.+FOR UPDATE`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "10.00000000", []byte(`[]`)))
+	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.1"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnRows(recordRows(now))
+	mock.ExpectCommit()
+	result, err := repo.CheckIn(context.Background(), 17, now, ClientInfo{})
+	require.NoError(t, err)
+	require.True(t, result.AlreadyCheckedIn)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryGetUserStatusReportsSpendGate(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+
+	mock.ExpectQuery(`(?s)SELECT enabled.+FROM daily_checkin_settings`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "10.00000000", []byte(`[]`)))
+	mock.ExpectQuery(`(?s)SELECT status, balance::text\s+FROM users`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"status", "balance"}).AddRow("active", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\), COALESCE\(SUM\(actual_reward\), 0\)::text\s+FROM daily_checkin_records`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"count", "sum"}).AddRow(int64(0), "0"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records\s+WHERE user_id = \$1`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "user_email", "username", "business_date", "checked_at", "timezone", "streak_days", "cycle_day", "milestone_day", "base_reward", "milestone_bonus", "actual_reward", "status", "balance_after", "client_ip", "user_agent"}))
+	mock.ExpectQuery(`(?s)SELECT COALESCE\(SUM\(actual_cost\), 0\)::text\s+FROM usage_logs`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow("3.2500"))
+
+	status, err := repo.GetUserStatus(context.Background(), 17, now)
+	require.NoError(t, err)
+	require.False(t, status.SpendEligible)
+	require.Equal(t, "10.0000", formatAmount(status.SpendRequired))
+	require.Equal(t, "3.2500", formatAmount(status.SpendTotal))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

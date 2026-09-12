@@ -11,8 +11,8 @@ import Icon from '@/components/icons/Icon.vue'
 import { useCheckinStore } from './store'
 defineProps<{ collapsed: boolean }>()
 const { t } = useI18n(); const store = useCheckinStore()
-const shouldNudge = computed(() => store.enabled && !store.checkedInToday)
-const statusText = computed(() => store.status?.today_record?.status === 'budget_exhausted' ? t('checkin.sidebar.exhausted') : store.checkedInToday ? t('checkin.sidebar.checked') : t('checkin.sidebar.ready'))
+const shouldNudge = computed(() => store.enabled && !store.checkedInToday && store.status?.spend_eligible !== false)
+const statusText = computed(() => store.status?.today_record?.status === 'budget_exhausted' ? t('checkin.sidebar.exhausted') : store.checkedInToday ? t('checkin.sidebar.checked') : store.status?.spend_eligible === false ? t('checkin.sidebar.ineligible') : t('checkin.sidebar.ready'))
 </script>
 <style scoped>
 .checkin-nudge {
