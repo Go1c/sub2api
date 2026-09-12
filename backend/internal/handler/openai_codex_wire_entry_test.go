@@ -44,6 +44,7 @@ const (
 
 type codexWireCapture struct {
 	accountID int64
+	method    string
 	path      string
 	header    http.Header
 	body      []byte
@@ -75,6 +76,7 @@ func (u *codexWireUpstream) Do(req *http.Request, _ string, accountID int64, _ i
 	u.mu.Lock()
 	u.captures = append(u.captures, codexWireCapture{
 		accountID: accountID,
+		method:    req.Method,
 		path:      req.URL.Path,
 		header:    req.Header.Clone(),
 		body:      body,
@@ -105,11 +107,27 @@ func (u *codexWireUpstream) Do(req *http.Request, _ string, accountID int64, _ i
 	}, nil
 }
 
+// taken 只返回推理请求（POST）。双开账号还会异步补一条只读 GET
+// （settings/user，见 service/openai_codex_side_calls.go），
+// 它不属于出站推理形态，由 sideCalls 单独断言。
 func (u *codexWireUpstream) taken() []codexWireCapture {
+	return u.capturedWithMethod(http.MethodPost)
+}
+
+// sideCalls 返回账号面的只读 GET。异步补发，调用方需自行等待。
+func (u *codexWireUpstream) sideCalls() []codexWireCapture {
+	return u.capturedWithMethod(http.MethodGet)
+}
+
+func (u *codexWireUpstream) capturedWithMethod(method string) []codexWireCapture {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	out := make([]codexWireCapture, len(u.captures))
-	copy(out, u.captures)
+	out := make([]codexWireCapture, 0, len(u.captures))
+	for _, capture := range u.captures {
+		if capture.method == method {
+			out = append(out, capture)
+		}
+	}
 	return out
 }
 
@@ -652,4 +670,39 @@ func TestCodexWireEntryMessagesBridgeMatchesResponses(t *testing.T) {
 		require.Empty(t, c.header.Get("conversation_id"))
 		require.NotEmpty(t, c.header.Get("session-id"))
 	}
+}
+
+// TestCodexWireEntrySideCalls 盯的是构造器真的把线程去重窗口装上了：codexSideCalls 为 nil
+// 时整条侧信道静默停用，service 包里用裸结构体拼的用例发现不了（那里本来就期望它是 nil）。
+func TestCodexWireEntrySideCalls(t *testing.T) {
+	t.Run("双开按真客户端补发 settings/user", func(t *testing.T) {
+		upstream, router, cleanup := newCodexWireEntry(t, []service.Account{
+			codexWireAccount(704, "target", codexWireConverged),
+		})
+		defer cleanup()
+
+		require.Equal(t, http.StatusOK,
+			codexWireSend(t, router, "/v1/responses", codexWireResponsesBody(true)).Code)
+
+		require.Eventually(t, func() bool { return len(upstream.sideCalls()) == 1 },
+			3*time.Second, 10*time.Millisecond, "线程首见补一条 settings/user")
+
+		side := upstream.sideCalls()[0]
+		require.Equal(t, "/backend-api/wham/settings/user", side.path,
+			"config/bundle 只在 business/edu/enterprise plan 上由真客户端发起，一条都不该有")
+		require.NotEmpty(t, side.header.Get("authorization"))
+	})
+
+	t.Run("非双开一条都不发", func(t *testing.T) {
+		upstream, router, cleanup := newCodexWireEntry(t, []service.Account{
+			codexWireAccount(705, "target", map[string]any{}),
+		})
+		defer cleanup()
+
+		require.Equal(t, http.StatusOK,
+			codexWireSend(t, router, "/v1/responses", codexWireResponsesBody(true)).Code)
+
+		time.Sleep(300 * time.Millisecond) // 异步补发：给足触发窗口再判空
+		require.Empty(t, upstream.sideCalls())
+	})
 }

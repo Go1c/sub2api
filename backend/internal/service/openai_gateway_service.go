@@ -506,6 +506,9 @@ type OpenAIGatewayService struct {
 	// （铸造者 = 凭证域身份），供出站守卫剥离跨账号回带（设计见 openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+	// codexSideCalls：双开账号侧信道 GET 的去重窗口（openai_codex_side_calls.go）。
+	// 由构造器初始化；裸结构体（单元测试）里为 nil，侧信道整体停用。
+	codexSideCalls *codexSideCallState
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -583,6 +586,7 @@ func NewOpenAIGatewayService(
 		openAITokenProvider.SetAccountRuntimeBlocker(svc)
 	}
 	svc.logOpenAIWSModeBootstrap()
+	svc.codexSideCalls = newCodexSideCallState()
 	return svc
 }
 

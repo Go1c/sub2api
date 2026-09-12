@@ -975,6 +975,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		// turn-state 头仍是网关持有的值，不套帧内规则。
 		payload = s.guardOpenAICodexWSFrameTurnState(c, account, payload)
 		payload = applyCodexWSFrameWireProfile(c, account, payload, clientTurnState)
+		s.scheduleCodexWSSideCalls(c, account, baseAcquireReq.Headers, payload)
 		if err := writeCodexWSFrame(ctx, c, account, lease, payload, s.openAIWSWriteTimeout()); err != nil {
 			return nil, wrapOpenAIWSIngressTurnError(
 				"write_upstream",
