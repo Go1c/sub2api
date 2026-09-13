@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'; import { flushPromises, mount } from '@vue/test-utils'; import { createPinia, setActivePinia } from 'pinia'; import type { CheckinStatus } from '../types'
-const messages: Record<string, string> = { 'checkin.action.exhausted': "Today's reward pool is exhausted", 'checkin.action.ineligible': 'Spend threshold not met', 'checkin.today.awarded': 'Today you received ${amount}.', 'checkin.today.ineligible': 'Not eligible yet. Cumulative spend ${amount} to check in.', 'checkin.today.ineligibleCurrent': 'Current billed spend ${amount}' }
+const messages: Record<string, string> = { 'checkin.action.exhausted': "Today's reward pool is exhausted", 'checkin.action.ineligible': 'Spend threshold not met', 'checkin.today.awarded': 'Today you received ${amount}.', 'checkin.today.ineligible': 'Not eligible yet. Cumulative spend or recharge ${amount} to check in.', 'checkin.today.ineligibleCurrent': 'Current total ${amount}' }
 vi.mock('vue-i18n', async () => { const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n'); return { ...actual, useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => Object.entries(params ?? {}).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), messages[key] ?? key) }) } })
 const api = vi.hoisted(() => ({ getUserStatus: vi.fn(), checkIn: vi.fn() })); vi.mock('../api', () => ({ checkinAPI: api })); import CheckinView from '../CheckinView.vue'
 const record = { id: 1, user_id: 4, user_email: 'user@example.com', username: 'user', business_date: '2026-08-19', checked_at: '2026-08-19T01:00:00Z', timezone: 'Asia/Shanghai', streak_days: 3, cycle_day: 3, base_reward: '0.4000', milestone_bonus: '0.0000', actual_reward: '0.0000', status: 'budget_exhausted' as const, balance_after: '10.0000' }
@@ -24,7 +24,7 @@ describe('CheckinView', () => {
     expect(button.attributes('disabled')).toBeDefined()
     expect(button.text()).toContain('Spend threshold not met')
     const gate = wrapper.get('[data-test="spend-gate"]')
-    expect(gate.text()).toContain('Not eligible yet. Cumulative spend $10.0000 to check in.')
-    expect(gate.text()).toContain('Current billed spend $3.2500')
+    expect(gate.text()).toContain('Not eligible yet. Cumulative spend or recharge $10.0000 to check in.')
+    expect(gate.text()).toContain('Current total $3.2500')
   })
 })

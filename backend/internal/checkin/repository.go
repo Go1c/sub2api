@@ -312,14 +312,23 @@ func (r *sqlRepository) GetUserStatus(ctx context.Context, userID int64, now tim
 }
 
 func sumUserSpend(ctx context.Context, q rowQueryer, userID int64) (decimal.Decimal, error) {
-	var raw string
+	var usageRaw, rechargeRaw string
 	if err := q.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(actual_cost), 0)::text
-		FROM usage_logs
-		WHERE user_id = $1`, userID).Scan(&raw); err != nil {
+		SELECT
+			COALESCE((SELECT SUM(actual_cost) FROM usage_logs WHERE user_id = $1), 0)::text,
+			COALESCE((SELECT total_recharged FROM users WHERE id = $1), 0)::text`,
+		userID).Scan(&usageRaw, &rechargeRaw); err != nil {
 		return decimal.Zero, fmt.Errorf("sum check-in spend: %w", err)
 	}
-	return parseDatabaseAmount("spend_total", raw)
+	usage, err := parseDatabaseAmount("spend_usage", usageRaw)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	recharge, err := parseDatabaseAmount("total_recharged", rechargeRaw)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return qualifySpend(usage, recharge), nil
 }
 
 func applySpendStatus(ctx context.Context, q rowQueryer, userID int64, settings Settings, status *UserStatus) error {
