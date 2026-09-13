@@ -412,7 +412,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			normalized = stripped
 			logOpenAIWSModeInfo("ingress_ws_codex_spark_image_tool_stripped account_id=%d", account.ID)
 		}
-		imageIntent := IsImageGenerationIntentForPlatform(openAIResponsesEndpoint, originalModel, normalized, account.Platform)
+		// HTTP /v1/responses (#4447) 只用显式生图意图做分组权限：Codex 会在
+		// 普通文本 turn 上被动声明 image_gen namespace，宽检测会把禁生图分组
+		// 的整条 WS 会话掐成 1008，CLI 再误报 websocket closed before
+		// response.completed。Grok 的平台特例已包含在显式检测里。
+		imageIntent := IsExplicitImageGenerationIntent(openAIResponsesEndpoint, originalModel, normalized)
 		if imageIntent && !imageGenerationAllowed {
 			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, ImageGenerationPermissionMessage(), nil)
 		}

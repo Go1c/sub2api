@@ -21,7 +21,7 @@ func TestIsExplicitImageGenerationIntent_IgnoresPassiveNamespace(t *testing.T) {
 		"passive image_gen namespace should NOT be explicit image intent")
 
 	assert.True(t, IsImageGenerationIntent("/v1/responses", "gpt-5.5", body),
-		"passive image_gen namespace SHOULD be general image intent (for permission check)")
+		"passive image_gen namespace stays general image intent for billing/capability routing, not the group permission gate")
 }
 
 func TestIsExplicitImageGenerationIntent_DetectsNativeTool(t *testing.T) {
