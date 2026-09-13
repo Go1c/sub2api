@@ -83,10 +83,13 @@ func TestCodexDeviceWireProfileHTTP(t *testing.T) {
 				require.Equal(t, !enabled, headerMetadata.Get("tool_namespaces_info").Exists())
 				if enabled {
 					require.Empty(t, up.lastReq.Header.Get("x-codex-installation-id"))
+					require.Empty(t, up.lastReq.Header.Get(responsesLiteHeader),
+						"双开不 invent lite：入站没带就不出站")
 					require.Equal(t, up.lastReq.Header.Get("session-id"), gjson.GetBytes(up.lastBody, "prompt_cache_key").String())
 					require.Empty(t, up.lastReq.Header.Get("session_id"))
 				} else {
 					require.Equal(t, wantInstall, up.lastReq.Header.Get("x-codex-installation-id"))
+					require.Empty(t, up.lastReq.Header.Get(responsesLiteHeader))
 				}
 			})
 		}
@@ -275,6 +278,7 @@ func TestCodexDeviceWireProfileGuards(t *testing.T) {
 	stageCodexFingerprintIDs(c, resolveCodexFingerprintIDsFromRequest(c, account, nil))
 	applyCodexDeviceWireProfile(c, account, h, false)
 	require.Empty(t, h.Get("x-codex-installation-id"))
+	require.Empty(t, h.Get(responsesLiteHeader), "入站未声明 lite 时双开 HTTP 不 invent")
 	require.Equal(t, "independent=enabled", h.Get("OpenAI-Beta"))
 	require.Equal(t, "0.153.4", h.Get("version"), "version 是 provider 头（model-provider-info/src/lib.rs:397），投影不碰")
 	require.Equal(t, "fallback-session", h.Get("session_id"))
@@ -283,15 +287,21 @@ func TestCodexDeviceWireProfileGuards(t *testing.T) {
 	once := h.Clone()
 	applyCodexDeviceWireProfile(c, account, h, false)
 	require.Equal(t, once, h, "projection must be idempotent")
+	c.Request.Header.Set(responsesLiteHeader, "true")
+	h.Set(responsesLiteHeader, "true")
+	applyCodexDeviceWireProfile(c, account, h, false)
+	require.Equal(t, "true", h.Get(responsesLiteHeader), "入站已是 Lite 时 HTTP 出站保持 true")
 	h.Set("OpenAI-Beta", openAIWSBetaV2Value)
 	h.Set(openAICodexTurnStateHeader, "turn-state-token")
 	applyCodexDeviceWireProfile(c, account, h, true)
 	require.Equal(t, openAIWSBetaV2Value, h.Get("OpenAI-Beta"))
 	require.Empty(t, h.Get(openAICodexTurnStateHeader), "WS 握手不带 turn-state（client.rs:1241 传 None）")
+	require.Empty(t, h.Get(responsesLiteHeader), "0.154.0 WS 握手不发 lite 头")
 	// HTTP 路径不动 turn-state 头：真客户端的 HTTP /responses 就是用头带它（client.rs:2135）。
 	h.Set(openAICodexTurnStateHeader, "turn-state-token")
 	applyCodexDeviceWireProfile(c, account, h, false)
 	require.Equal(t, "turn-state-token", h.Get(openAICodexTurnStateHeader))
+	require.Equal(t, "true", h.Get(responsesLiteHeader), "回到 HTTP 且入站仍是 Lite 时补回")
 
 	other := wireProfileTestAccount(true)
 	other.ID++

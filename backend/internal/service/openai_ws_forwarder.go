@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	openAIWSBetaV1Value = "responses_websockets=2026-02-04"
+	// 0.154.0 实抓 WS 握手只用 2026-02-06；V1/V2 常量保留是为了分流代码仍能选，值已对齐。
+	openAIWSBetaV1Value = "responses_websockets=2026-02-06"
 	openAIWSBetaV2Value = "responses_websockets=2026-02-06"
 
 	openAIWSTurnStateHeader    = "x-codex-turn-state"

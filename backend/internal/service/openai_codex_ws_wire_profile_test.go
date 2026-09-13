@@ -442,6 +442,15 @@ func TestCodexDeviceWireProfileWSHandshakeBuilder(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, resolveCodexOutboundIdentity("").version, headers.Get("version"), "enabled=%v", enabled)
 		require.Equal(t, !enabled, headers.Get(openAICodexTurnStateHeader) != "", "enabled=%v", enabled)
+		require.Equal(t, "responses_websockets=2026-02-06", headers.Get("OpenAI-Beta"), "enabled=%v", enabled)
+		c.Request.Header.Set(responsesLiteHeader, "true")
+		headers, _, err = svc.buildOpenAIWSHeaders(context.Background(), c, account, "tok",
+			OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
+			true, "turn-state-1", convTestTurnMetadata(), convTestSession, "", "")
+		require.NoError(t, err)
+		if enabled {
+			require.Empty(t, headers.Get(responsesLiteHeader), "0.154.0 WS 握手不发 lite 头")
+		}
 	}
 }
 

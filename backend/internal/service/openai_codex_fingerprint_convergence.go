@@ -159,6 +159,13 @@ func compactPromptCacheSessionEvidence(c *gin.Context) string {
 	return value.Str
 }
 
+// isCodexHTTPResponsesAttempt 是 ChatGPT HTTP POST /responses（不含 compact、不含 WS 回落）。
+func isCodexHTTPResponsesAttempt(c *gin.Context) bool {
+	return c != nil && c.Request != nil && c.Request.Method == http.MethodPost &&
+		GetOpenAIClientTransport(c) != OpenAIClientTransportWS && c.Request.URL != nil &&
+		strings.HasSuffix(c.Request.URL.Path, "/responses") && !isOpenAIResponsesCompactPath(c)
+}
+
 // 在所有身份/账号头改写之后调用。设备数据仍留在 body/turn-metadata 中；
 // compact 则必须保留独立安装头。未成功暂存 IDs 时不删除唯一设备载体，也不惰性重算。
 func applyCodexDeviceWireProfile(c *gin.Context, account *Account, headers http.Header, websocket bool) {
@@ -169,16 +176,22 @@ func applyCodexDeviceWireProfile(c *gin.Context, account *Account, headers http.
 		stripOpenAILegacyResponsesBeta(headers)
 		// rollout-trace generates this only for an actual HTTP Responses attempt.
 		// Preserve an explicit value; do not invent one or project it to WS/search/compact.
-		if c != nil && c.Request != nil && c.Request.Method == http.MethodPost &&
-			GetOpenAIClientTransport(c) != OpenAIClientTransportWS && c.Request.URL != nil &&
-			strings.HasSuffix(c.Request.URL.Path, "/responses") && !isOpenAIResponsesCompactPath(c) {
+		if isCodexHTTPResponsesAttempt(c) {
 			// 真客户端每次 attempt 都新铸一个 v4（rollout-trace/src/inference.rs:129-130 start_attempt
 			// → :347-349 Uuid::new_v4），网关同样每次出站新铸：既不让客户端原值经 failover 发给
 			// 两个账号形成跨账号关联，也不会在同账号重试时重复同一个值。
 			if value := c.GetHeader("x-codex-inference-call-id"); strings.TrimSpace(value) != "" {
 				headers.Set("x-codex-inference-call-id", uuid.NewString())
 			}
+			// lite 头是 Responses Lite 线协议开关，不是指纹。入站已声明才保证出站
+			// 为 true；普通 /responses 不 invent，避免把 SDK / 兼容桥推进私有线。
+			if isOpenAIResponsesLiteHeader(c.GetHeader(responsesLiteHeader)) {
+				headers.Set(responsesLiteHeader, "true")
+			}
 		}
+	} else {
+		// 0.154.0 WS 握手不带 lite；真客户端 HTTP 回落才发。
+		deleteOpenAIHeaderEqualFold(headers, responsesLiteHeader)
 	}
 	if !websocket && isOpenAIResponsesCompactPath(c) {
 		headers.Del("x-client-request-id")
