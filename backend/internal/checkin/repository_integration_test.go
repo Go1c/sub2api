@@ -83,6 +83,7 @@ func setupCheckInIntegrationSchema(ctx context.Context, db *sql.DB) error {
 			username VARCHAR(255) NOT NULL DEFAULT '',
 			status VARCHAR(20) NOT NULL DEFAULT 'active',
 			balance NUMERIC(20,8) NOT NULL DEFAULT 0,
+			total_recharged NUMERIC(20,8) NOT NULL DEFAULT 0,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			deleted_at TIMESTAMPTZ
@@ -389,4 +390,22 @@ func TestRepositoryCheckInEnforcesHistoricalSpendGate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, StatusAwarded, result.Record.Status)
 	require.Equal(t, "0.1000", formatAmount(result.Record.ActualReward))
+}
+
+func TestRepositoryCheckInAllowsRechargeFallbackWhenUsageLogsAreGone(t *testing.T) {
+	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
+	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE daily_checkin_settings SET min_spend = 99 WHERE id = 1`)
+	require.NoError(t, err)
+
+	userID := createCheckInIntegrationUser(t, "recharge-fallback@example.test")
+	_, err = checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE users SET total_recharged = 389.2500 WHERE id = $1`, userID)
+	require.NoError(t, err)
+
+	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
+	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+	result, err := repo.CheckIn(context.Background(), userID, now, ClientInfo{})
+	require.NoError(t, err)
+	require.Equal(t, StatusAwarded, result.Record.Status)
 }

@@ -28,6 +28,12 @@ func recordRows(now time.Time) *sqlmock.Rows {
 		AddRow(8, 17, "u@example.com", "user", now, now, "Asia/Shanghai", 2, 2, nil, "0.1", "0", "0.1", StatusAwarded, "1.1", "127.0.0.1", "test")
 }
 
+const spendGateQuery = `(?s)COALESCE\(\(SELECT SUM\(actual_cost\) FROM usage_logs WHERE user_id = \$1\), 0\)::text`
+
+func spendGateRows(usage, recharge string) *sqlmock.Rows {
+	return sqlmock.NewRows([]string{"usage", "recharge"}).AddRow(usage, recharge)
+}
+
 func TestRepositoryCheckInAwardsAtomically(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err)
@@ -254,7 +260,7 @@ func TestRepositoryCheckInRejectsWhenSpendGateNotMet(t *testing.T) {
 	mock.ExpectQuery(`(?s)SELECT enabled.+FOR UPDATE`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "10.00000000", []byte(`[]`)))
 	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.00000000"))
 	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery(`(?s)SELECT COALESCE\(SUM\(actual_cost\), 0\)::text\s+FROM usage_logs`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow("10.00000000"))
+	mock.ExpectQuery(spendGateQuery).WithArgs(int64(17)).WillReturnRows(spendGateRows("10.00000000", "0"))
 	mock.ExpectRollback()
 
 	_, err = repo.CheckIn(context.Background(), 17, now, ClientInfo{})
@@ -273,7 +279,7 @@ func TestRepositoryCheckInAllowsWhenSpendExceedsGate(t *testing.T) {
 	mock.ExpectQuery(`(?s)SELECT enabled.+FROM daily_checkin_settings.+FOR UPDATE`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "10.00000000", []byte(`[]`)))
 	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FROM users.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.00000000"))
 	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery(`(?s)SELECT COALESCE\(SUM\(actual_cost\), 0\)::text\s+FROM usage_logs`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow("10.0001"))
+	mock.ExpectQuery(spendGateQuery).WithArgs(int64(17)).WillReturnRows(spendGateRows("10.0001", "0"))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO daily_checkin_daily_counters (business_date)")).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`(?s)SELECT awarded_total::text.+FOR UPDATE`).WillReturnRows(sqlmock.NewRows([]string{"awarded_total"}).AddRow("0"))
 	mock.ExpectQuery(`(?s)SELECT business_date, streak_days`).WillReturnError(sql.ErrNoRows)
@@ -318,13 +324,62 @@ func TestRepositoryGetUserStatusReportsSpendGate(t *testing.T) {
 	mock.ExpectQuery(`(?s)SELECT status, balance::text\s+FROM users`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"status", "balance"}).AddRow("active", "1.00000000"))
 	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\), COALESCE\(SUM\(actual_reward\), 0\)::text\s+FROM daily_checkin_records`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"count", "sum"}).AddRow(int64(0), "0"))
 	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records\s+WHERE user_id = \$1`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "user_email", "username", "business_date", "checked_at", "timezone", "streak_days", "cycle_day", "milestone_day", "base_reward", "milestone_bonus", "actual_reward", "status", "balance_after", "client_ip", "user_agent"}))
-	mock.ExpectQuery(`(?s)SELECT COALESCE\(SUM\(actual_cost\), 0\)::text\s+FROM usage_logs`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow("3.2500"))
+	mock.ExpectQuery(spendGateQuery).WithArgs(int64(17)).WillReturnRows(spendGateRows("3.2500", "0"))
 
 	status, err := repo.GetUserStatus(context.Background(), 17, now)
 	require.NoError(t, err)
 	require.False(t, status.SpendEligible)
 	require.Equal(t, "10.0000", formatAmount(status.SpendRequired))
 	require.Equal(t, "3.2500", formatAmount(status.SpendTotal))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryCheckInAllowsWhenRechargeExceedsGateDespiteLowUsage(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`(?s)SELECT enabled.+FROM daily_checkin_settings.+FOR UPDATE`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "99.00000000", []byte(`[]`)))
+	mock.ExpectQuery(`(?s)SELECT email, username, status, balance::text.+FROM users.+FOR UPDATE`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"email", "username", "status", "balance"}).AddRow("u@example.com", "user", "active", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records.+business_date = \$2`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(spendGateQuery).WithArgs(int64(17)).WillReturnRows(spendGateRows("26.7310", "389.2500"))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO daily_checkin_daily_counters (business_date)")).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`(?s)SELECT awarded_total::text.+FOR UPDATE`).WillReturnRows(sqlmock.NewRows([]string{"awarded_total"}).AddRow("0"))
+	mock.ExpectQuery(`(?s)SELECT business_date, streak_days`).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`(?s)UPDATE users.+RETURNING balance::text`).WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow("1.10000000"))
+	mock.ExpectQuery(`(?s)INSERT INTO daily_checkin_records.+RETURNING id, checked_at`).WillReturnRows(sqlmock.NewRows([]string{"id", "checked_at"}).AddRow(8, now))
+	mock.ExpectExec(`(?s)UPDATE daily_checkin_daily_counters`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`(?s)INSERT INTO redeem_codes`).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	result, err := repo.CheckIn(context.Background(), 17, now, ClientInfo{})
+	require.NoError(t, err)
+	require.False(t, result.AlreadyCheckedIn)
+	require.Equal(t, "0.1000", formatAmount(result.Record.ActualReward))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRepositoryGetUserStatusReportsRechargeWhenHigherThanUsage(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Date(2026, 8, 19, 1, 0, 0, 0, time.UTC)
+	repo := newSQLRepository(db, fixedRandom{})
+
+	mock.ExpectQuery(`(?s)SELECT enabled.+FROM daily_checkin_settings`).WillReturnRows(settingsDetailRows(true, "0.10000000", "0.10000000", "10.00000000", "99.00000000", []byte(`[]`)))
+	mock.ExpectQuery(`(?s)SELECT status, balance::text\s+FROM users`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"status", "balance"}).AddRow("active", "1.00000000"))
+	mock.ExpectQuery(`(?s)SELECT COUNT\(\*\), COALESCE\(SUM\(actual_reward\), 0\)::text\s+FROM daily_checkin_records`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"count", "sum"}).AddRow(int64(0), "0"))
+	mock.ExpectQuery(`(?s)SELECT .+FROM daily_checkin_records\s+WHERE user_id = \$1`).WithArgs(int64(17)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "user_email", "username", "business_date", "checked_at", "timezone", "streak_days", "cycle_day", "milestone_day", "base_reward", "milestone_bonus", "actual_reward", "status", "balance_after", "client_ip", "user_agent"}))
+	mock.ExpectQuery(spendGateQuery).WithArgs(int64(17)).WillReturnRows(spendGateRows("26.7310", "389.2500"))
+
+	status, err := repo.GetUserStatus(context.Background(), 17, now)
+	require.NoError(t, err)
+	require.True(t, status.SpendEligible)
+	require.Equal(t, "99.0000", formatAmount(status.SpendRequired))
+	require.Equal(t, "389.2500", formatAmount(status.SpendTotal))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
