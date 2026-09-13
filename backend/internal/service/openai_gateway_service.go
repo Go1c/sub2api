@@ -34,11 +34,10 @@ const (
 	openaiStickySessionTTL          = time.Hour // 粘性会话TTL
 	// 规范身份跟 CLI（plugin / models / TUI HEAD 预检同源），不是 TUI/exec。
 	// CLI 形态：{originator}/{version} ({OS} {OS_version}; {arch}) {terminal}
-	// 本机 Codex CLI 0.153.4 实测（iTerm.app 3.6.8，Mac OS 26.5.2，arm64）：
-	// OS 段为 "Mac OS"（不是 "Mac OS X"）；终端取 TERM_PROGRAM/TERM_PROGRAM_VERSION
-	// 的 "iTerm.app/3.6.8"，不是二进制终端表显示名 "iTerm2"。
+	// 156.238.225.247 Ubuntu 22.04 x86_64 上官方 Codex CLI 0.154.0 实测：
+	// os_info 把 22.04 显示成 22.4.0；TERM=xterm-256color 时终端段就是该值。
 	// CLI 没有 (originator; version) trailer；该尾段只属于 TUI/exec。
-	codexCLIUserAgent = "codex_cli_rs/0.153.4 (Mac OS 26.5.2; arm64) iTerm.app/3.6.8"
+	codexCLIUserAgent = "codex_cli_rs/0.154.0 (Ubuntu 22.4.0; x86_64) xterm-256color"
 	// codex_cli_only 拒绝时单个请求头日志长度上限（字符）
 	codexCLIOnlyHeaderValueMaxBytes = 256
 
@@ -53,7 +52,7 @@ const (
 	openAIWSRetryJitterRatioDefault    = 0.2
 	openAICompactSessionSeedKey        = "openai_compact_session_seed"
 	openAIUpstreamEndpointContextKey   = "openai_actual_upstream_endpoint"
-	codexCLIVersion                    = "0.153.4"
+	codexCLIVersion                    = "0.154.0"
 	// Codex 限额快照仅用于后台展示/诊断，不需要每个成功请求都立即落库。
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 	// 配额自动暂停时，超过该时长仍未刷新的 used% 快照视为陈旧，不再据此暂停账号。

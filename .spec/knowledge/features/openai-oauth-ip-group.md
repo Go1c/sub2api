@@ -15,7 +15,7 @@ metadata:
 
 - 一个 ChatGPT OAuth 号希望同时走多条出口（多国家 IP），每条 IP 对这个号有本地并发上限；满了只让**新对话**换下一条。
 - 官方社区 PR [#6650](https://github.com/Wei-Shaw/sub2api/pull/6650) 做的是「出站模板 + 设备槽 + 换身份」，不能整包合进本 fork。
-- 本仓库已有编译期 Codex CLI 0.153.4 绑机指纹，必须保持。见 [`openai-codex-fingerprint.md`](openai-codex-fingerprint.md)。
+- 本仓库已有编译期 Codex CLI 0.154.0 Ubuntu 绑机指纹，必须保持。见 [`openai-codex-fingerprint.md`](openai-codex-fingerprint.md)。
 
 ## 设计
 

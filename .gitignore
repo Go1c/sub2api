@@ -138,6 +138,7 @@ docs/*
 !docs/reseller-usage-export.md
 !docs/balance-wallet-api.md
 !docs/balance-wallet-integration-agent-prompt.md
+!docs/codex-linux-fingerprint-0.154.0.md
 # Admin compliance gate + Docker frontend build import docs/legal/*.md?raw
 !docs/legal/
 !docs/legal/**
