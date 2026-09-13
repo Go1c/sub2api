@@ -7,14 +7,14 @@ export default {
     stats: { balance: 'Current balance', totalCheckins: 'Total check-ins', totalReward: 'Total rewards', currentStreak: 'Current streak', days: '{count} days' },
     nextMilestone: { title: 'Next milestone', detail: 'Day {day} · +${bonus}', remaining: '{count} days to go', none: 'No milestone configured' },
     action: { ready: 'Check in now', loading: 'Checking in...', checked: 'Checked in today', exhausted: "Today's reward pool is exhausted", disabled: 'Check-in unavailable', ineligible: 'Spend threshold not met' },
-    today: { awarded: 'Today you received ${amount}.', exhausted: 'Your streak is recorded. The daily reward pool was already exhausted.', replayed: 'This check-in was already recorded; no duplicate reward was issued.', ineligible: 'Not eligible yet. Cumulative spend ${amount} to check in.', ineligibleCurrent: 'Current billed spend ${amount}' },
+    today: { awarded: 'Today you received ${amount}.', exhausted: 'Your streak is recorded. The daily reward pool was already exhausted.', replayed: 'This check-in was already recorded; no duplicate reward was issued.', ineligible: 'Not eligible yet. Cumulative spend or recharge ${amount} to check in.', ineligibleCurrent: 'Current total ${amount}' },
     history: { title: 'Recent check-ins', empty: 'No check-in records yet.', time: 'Time', base: 'Base reward', milestone: 'Milestone bonus', actual: 'Actual reward', balance: 'Balance after', streak: 'Streak / cycle', status: 'Status', awarded: 'Awarded', exhausted: 'Pool exhausted' },
     sidebar: { ready: 'Reward available today', checked: 'Checked in today', exhausted: 'Streak recorded today', ineligible: 'Spend threshold not met' },
     settings: {
       title: 'Daily check-in', description: 'Configure rewards, the operating timezone, and the global daily budget independently.',
       enabled: 'Enable daily check-in', enabledHint: 'When disabled, user entry points are hidden while historical records remain available to administrators.',
       minReward: 'Minimum random reward', maxReward: 'Maximum random reward', timezone: 'Operating timezone', dailyCap: 'Global daily payout cap', dailyCapHint: 'Use 0 for no daily limit. Rewards are never partially paid.',
-      minSpend: 'Historical spend threshold', minSpendHint: 'Cumulative billed spend (subscription plus balance) must be greater than this amount to check in. Use 0 for no limit.',
+      minSpend: 'Historical spend/recharge threshold', minSpendHint: 'The higher of billed usage and account total recharge must exceed this amount. Usage logs are truncated; recharge is the fallback. Check-in rewards do not count. Use 0 for no limit.',
       milestones: 'Streak milestones', milestoneDay: 'Cycle day', milestoneBonus: 'Fixed bonus', addMilestone: 'Add milestone', removeMilestone: 'Remove milestone',
       maximumReward: 'Maximum single reward', budgetWarning: 'The daily cap is below the theoretical maximum single reward. A valid check-in may receive no reward.',
       save: 'Save check-in settings', saving: 'Saving...', saved: 'Check-in settings saved.', loadFailed: 'Unable to load check-in settings.', saveFailed: 'Unable to save check-in settings.'

@@ -8,3 +8,4 @@
 | [`2026-09-04-reseller-usage-correlation.md`](2026-09-04-reseller-usage-correlation.md) | 分销对账用独立 correlation 头/列 + 专用增量 export，不用计费 request_id |
 | [`2026-09-07-openai-capacity-shed-default-retries.md`](2026-09-07-openai-capacity-shed-default-retries.md) | 容量降载同账号重试恢复为 pool 默认三次额外尝试，不再单独收成 1 次 |
 | [`2026-09-08-reseller-sub2-client-request-id.md`](2026-09-08-reseller-sub2-client-request-id.md) | 网关 X-Sub2-Request-ID 必须是 Client Request ID；异步计费必须拷贝该键 |
+| [`2026-09-13-checkin-gate-recharge-fallback.md`](2026-09-13-checkin-gate-recharge-fallback.md) | 签到 min_spend 取用量实际扣除与累计充值的较高值 |
