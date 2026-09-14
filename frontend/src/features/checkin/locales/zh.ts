@@ -11,7 +11,7 @@ export default {
     settings: {
       title: '每日签到', description: '独立配置签到奖励、运营时区和全站每日预算。', enabled: '开启每日签到', enabledHint: '关闭后隐藏用户入口，管理员仍可查看历史签到流水。',
       minReward: '最小随机奖励', maxReward: '最大随机奖励', timezone: '运营时区', dailyCap: '全站每日发放上限', dailyCapHint: '填 0 表示不限额；余额不足时不会部分发放。',
-      minSpend: '历史消费/充值门槛', minSpendHint: '累计消费（用量实际扣除）与账户累计充值取较高值，须大于该金额才能签到。用量明细会被清理截断，此时以累计充值为准。不含签到奖励。填 0 表示不限制。',
+      minSpend: '历史消费/充值门槛', minSpendHint: '累计消费（用量实际扣除）与实付金额取较高值，须大于该金额才能签到。实付=支付宝/微信等完成的余额充值和订阅，扣退款；不含余额买订阅、签到奖励、后台加款、返利。用量明细会被清理截断，此时以实付为准。填 0 表示不限制。',
       milestones: '连续签到里程碑', milestoneDay: '循环天数', milestoneBonus: '固定奖金', addMilestone: '添加里程碑', removeMilestone: '删除里程碑', maximumReward: '理论最高单次奖励',
       budgetWarning: '每日上限低于理论最高单次奖励，部分有效签到可能无法获得奖励。', save: '保存签到设置', saving: '保存中...', saved: '签到设置已保存。', loadFailed: '签到设置加载失败。', saveFailed: '签到设置保存失败。'
     },

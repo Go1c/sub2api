@@ -5,7 +5,8 @@ description: 签到 min_spend 取用量实际扣除与 users.total_recharged 的
 
 # 签到门槛在用量明细被清理时回退累计充值
 
-- 状态: 生效
+- 状态: 被取代
+- 被取代于: [`2026-09-14-checkin-gate-paid-orders.md`](2026-09-14-checkin-gate-paid-orders.md)
 
 ## 背景
 

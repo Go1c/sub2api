@@ -312,23 +312,36 @@ func (r *sqlRepository) GetUserStatus(ctx context.Context, userID int64, now tim
 }
 
 func sumUserSpend(ctx context.Context, q rowQueryer, userID int64) (decimal.Decimal, error) {
-	var usageRaw, rechargeRaw string
+	var usageRaw, paidRaw string
 	if err := q.QueryRowContext(ctx, `
 		SELECT
 			COALESCE((SELECT SUM(actual_cost) FROM usage_logs WHERE user_id = $1), 0)::text,
-			COALESCE((SELECT total_recharged FROM users WHERE id = $1), 0)::text`,
-		userID).Scan(&usageRaw, &rechargeRaw); err != nil {
+			COALESCE((
+				SELECT SUM(amount - COALESCE(refund_amount, 0))
+				FROM payment_orders
+				WHERE user_id = $1
+				  AND status = 'COMPLETED'
+				  AND amount > 0
+				  AND (
+				      order_type = 'balance'
+				      OR (
+				          order_type = 'subscription'
+				          AND LOWER(TRIM(payment_type)) <> 'balance'
+				      )
+				  )
+			), 0)::text`,
+		userID).Scan(&usageRaw, &paidRaw); err != nil {
 		return decimal.Zero, fmt.Errorf("sum check-in spend: %w", err)
 	}
 	usage, err := parseDatabaseAmount("spend_usage", usageRaw)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	recharge, err := parseDatabaseAmount("total_recharged", rechargeRaw)
+	paid, err := parseDatabaseAmount("paid_orders", paidRaw)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	return qualifySpend(usage, recharge), nil
+	return qualifySpend(usage, paid), nil
 }
 
 func applySpendStatus(ctx context.Context, q rowQueryer, userID int64, settings Settings, status *UserStatus) error {

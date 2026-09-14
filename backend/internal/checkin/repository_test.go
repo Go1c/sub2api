@@ -28,10 +28,10 @@ func recordRows(now time.Time) *sqlmock.Rows {
 		AddRow(8, 17, "u@example.com", "user", now, now, "Asia/Shanghai", 2, 2, nil, "0.1", "0", "0.1", StatusAwarded, "1.1", "127.0.0.1", "test")
 }
 
-const spendGateQuery = `(?s)COALESCE\(\(SELECT SUM\(actual_cost\) FROM usage_logs WHERE user_id = \$1\), 0\)::text`
+const spendGateQuery = `(?s)COALESCE\(\(SELECT SUM\(actual_cost\) FROM usage_logs WHERE user_id = \$1\), 0\)::text,.+payment_orders`
 
-func spendGateRows(usage, recharge string) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{"usage", "recharge"}).AddRow(usage, recharge)
+func spendGateRows(usage, paid string) *sqlmock.Rows {
+	return sqlmock.NewRows([]string{"usage", "paid"}).AddRow(usage, paid)
 }
 
 func TestRepositoryCheckInAwardsAtomically(t *testing.T) {
