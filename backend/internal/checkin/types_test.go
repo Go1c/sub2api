@@ -110,10 +110,10 @@ func TestSpendGateMetRequiresStrictlyGreaterSpend(t *testing.T) {
 	require.True(t, spendGateMet(decimal.RequireFromString("10"), decimal.RequireFromString("10.0001")))
 }
 
-func TestQualifySpendPrefersHigherRechargeWhenUsageIsTruncated(t *testing.T) {
-	usage := decimal.RequireFromString("26.7310")
-	recharge := decimal.RequireFromString("389.2500")
-	require.Equal(t, "389.2500", formatAmount(qualifySpend(usage, recharge)))
-	require.Equal(t, "26.7310", formatAmount(qualifySpend(usage, decimal.Zero)))
+func TestQualifySpendPrefersHigherPaidOrdersWhenUsageIsTruncated(t *testing.T) {
+	usage := decimal.RequireFromString("51.1664")
+	paid := decimal.RequireFromString("139.0000")
+	require.Equal(t, "139.0000", formatAmount(qualifySpend(usage, paid)))
+	require.Equal(t, "51.1664", formatAmount(qualifySpend(usage, decimal.Zero)))
 	require.Equal(t, "150.0000", formatAmount(qualifySpend(decimal.RequireFromString("150"), decimal.RequireFromString("10"))))
 }

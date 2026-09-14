@@ -229,12 +229,13 @@ func spendGateMet(minSpend, total decimal.Decimal) bool {
 }
 
 // qualifySpend is the durable check-in gate amount: remaining billed usage,
-// or users.total_recharged when that is higher. usage_logs are retained only
-// a few weeks, so recharge is the fallback when consumption history is gone.
-// Check-in rewards do not increment total_recharged.
-func qualifySpend(usage, recharge decimal.Decimal) decimal.Decimal {
-	if recharge.GreaterThan(usage) {
-		return recharge
+// or completed cash payments (balance top-up and subscription) when that is
+// higher. usage_logs are retained only a few weeks, so paid orders are the
+// fallback when consumption history is gone. Admin credits, affiliate
+// transfers, promo codes, and check-in rewards are not cash payments.
+func qualifySpend(usage, paid decimal.Decimal) decimal.Decimal {
+	if paid.GreaterThan(usage) {
+		return paid
 	}
 	return usage
 }

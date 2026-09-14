@@ -112,7 +112,7 @@ func setupCheckInIntegrationSchema(ctx context.Context, db *sql.DB) error {
 		)`); err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, `
+	if _, err := db.ExecContext(ctx, `
 		CREATE TABLE redeem_codes (
 			id BIGSERIAL PRIMARY KEY,
 			code VARCHAR(32) UNIQUE NOT NULL,
@@ -123,6 +123,18 @@ func setupCheckInIntegrationSchema(ctx context.Context, db *sql.DB) error {
 			used_at TIMESTAMPTZ,
 			notes TEXT,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`); err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `
+		CREATE TABLE payment_orders (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL,
+			amount NUMERIC(20,2) NOT NULL,
+			refund_amount NUMERIC(20,2) NOT NULL DEFAULT 0,
+			status VARCHAR(30) NOT NULL,
+			order_type VARCHAR(20) NOT NULL,
+			payment_type VARCHAR(30) NOT NULL DEFAULT ''
 		)`)
 	return err
 }
@@ -132,7 +144,7 @@ func resetCheckInIntegrationState(t *testing.T, minReward, maxReward, dailyCap s
 	// lib/pq 对带参数的语句走 prepared statement，会拒绝多命令；
 	// TRUNCATE 与带参 UPDATE 必须拆成两次执行。
 	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
-		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users, redeem_codes, usage_logs RESTART IDENTITY CASCADE`)
+		TRUNCATE TABLE daily_checkin_records, daily_checkin_daily_counters, users, redeem_codes, usage_logs, payment_orders RESTART IDENTITY CASCADE`)
 	require.NoError(t, err)
 	_, err = checkInIntegrationDB.ExecContext(context.Background(), `
 		UPDATE daily_checkin_settings
@@ -392,20 +404,78 @@ func TestRepositoryCheckInEnforcesHistoricalSpendGate(t *testing.T) {
 	require.Equal(t, "0.1000", formatAmount(result.Record.ActualReward))
 }
 
-func TestRepositoryCheckInAllowsRechargeFallbackWhenUsageLogsAreGone(t *testing.T) {
+func insertCheckInPaidOrder(t *testing.T, userID int64, orderType, paymentType, status string, amount, refund string) {
+	t.Helper()
+	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
+		INSERT INTO payment_orders (user_id, amount, refund_amount, status, order_type, payment_type)
+		VALUES ($1, $2, $3, $4, $5, $6)`, userID, amount, refund, status, orderType, paymentType)
+	require.NoError(t, err)
+}
+
+func TestRepositoryCheckInAllowsPaidOrdersWhenUsageLogsAreGone(t *testing.T) {
 	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
 	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
 		UPDATE daily_checkin_settings SET min_spend = 99 WHERE id = 1`)
 	require.NoError(t, err)
 
-	userID := createCheckInIntegrationUser(t, "recharge-fallback@example.test")
-	_, err = checkInIntegrationDB.ExecContext(context.Background(), `
-		UPDATE users SET total_recharged = 389.2500 WHERE id = $1`, userID)
-	require.NoError(t, err)
+	userID := createCheckInIntegrationUser(t, "paid-orders@example.test")
+	insertCheckInPaidOrder(t, userID, "balance", "alipay", "COMPLETED", "20.00", "0")
+	insertCheckInPaidOrder(t, userID, "balance", "alipay", "COMPLETED", "20.00", "0")
+	insertCheckInPaidOrder(t, userID, "balance", "wxpay", "COMPLETED", "20.00", "0")
+	insertCheckInPaidOrder(t, userID, "subscription", "alipay", "COMPLETED", "79.00", "0")
 
 	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
 	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
 	result, err := repo.CheckIn(context.Background(), userID, now, ClientInfo{})
 	require.NoError(t, err)
 	require.Equal(t, StatusAwarded, result.Record.Status)
+}
+
+func TestRepositoryCheckInIgnoresAccountTotalRechargedWithoutPaidOrders(t *testing.T) {
+	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
+	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE daily_checkin_settings SET min_spend = 99 WHERE id = 1`)
+	require.NoError(t, err)
+
+	userID := createCheckInIntegrationUser(t, "gifted-recharge@example.test")
+	_, err = checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE users SET total_recharged = 389.2500 WHERE id = $1`, userID)
+	require.NoError(t, err)
+
+	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
+	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+	_, err = repo.CheckIn(context.Background(), userID, now, ClientInfo{})
+	require.ErrorIs(t, err, ErrEligibilityNotMet)
+}
+
+func TestRepositoryCheckInIgnoresSubscriptionPaidWithBalance(t *testing.T) {
+	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
+	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE daily_checkin_settings SET min_spend = 99 WHERE id = 1`)
+	require.NoError(t, err)
+
+	userID := createCheckInIntegrationUser(t, "balance-paid-sub@example.test")
+	insertCheckInPaidOrder(t, userID, "subscription", "balance", "COMPLETED", "79.00", "0")
+	insertCheckInPaidOrder(t, userID, "balance", "alipay", "COMPLETED", "20.00", "0")
+
+	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
+	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+	_, err = repo.CheckIn(context.Background(), userID, now, ClientInfo{})
+	require.ErrorIs(t, err, ErrEligibilityNotMet)
+}
+
+func TestRepositoryCheckInUsesNetPaidAmountAfterRefunds(t *testing.T) {
+	resetCheckInIntegrationState(t, "0.1", "0.1", "0")
+	_, err := checkInIntegrationDB.ExecContext(context.Background(), `
+		UPDATE daily_checkin_settings SET min_spend = 99 WHERE id = 1`)
+	require.NoError(t, err)
+
+	userID := createCheckInIntegrationUser(t, "refunded-orders@example.test")
+	insertCheckInPaidOrder(t, userID, "balance", "alipay", "COMPLETED", "120.00", "30.00")
+	insertCheckInPaidOrder(t, userID, "subscription", "alipay", "PENDING", "79.00", "0")
+
+	repo := newSQLRepository(checkInIntegrationDB, zeroRandom{})
+	now := time.Date(2026, 8, 19, 12, 0, 0, 0, time.UTC)
+	_, err = repo.CheckIn(context.Background(), userID, now, ClientInfo{})
+	require.ErrorIs(t, err, ErrEligibilityNotMet)
 }
