@@ -162,7 +162,7 @@ func applyKinOpenAIAccountDefaults(platform, accountType string, extra map[strin
 		}
 		if accountType == AccountTypeOAuth {
 			if _, ok := extra["codex_cli_only"]; !ok {
-				extra["codex_cli_only"] = true
+				extra["codex_cli_only"] = false
 			}
 			if _, ok := extra[codexFingerprintModeExtraKey]; !ok {
 				extra[codexFingerprintModeExtraKey] = string(codexFingerprintDevice)

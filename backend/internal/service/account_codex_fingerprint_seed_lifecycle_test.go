@@ -30,7 +30,7 @@ func TestAdminCreateAccountAppliesKinOpenAIDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, OpenAIWSIngressModeCtxPool, created.Extra["openai_oauth_responses_websockets_v2_mode"])
 	require.Equal(t, true, created.Extra["openai_oauth_responses_websockets_v2_enabled"])
-	require.Equal(t, true, created.Extra["codex_cli_only"])
+	require.Equal(t, false, created.Extra["codex_cli_only"])
 	require.Equal(t, string(codexFingerprintDevice), created.Extra[codexFingerprintModeExtraKey])
 	require.Equal(t, true, created.Extra[codexFingerprintConvergenceExtraKey])
 	requireValidCodexFingerprintSeed(t, created.Extra)
@@ -55,7 +55,7 @@ func TestAdminCreateAccountJSONImportFillsMissingKinDefaults(t *testing.T) {
 	require.Equal(t, false, created.Extra["openai_long_context_billing_enabled"])
 	require.Equal(t, true, created.Extra["session_token_present"])
 	require.Equal(t, OpenAIWSIngressModeCtxPool, created.Extra["openai_oauth_responses_websockets_v2_mode"])
-	require.Equal(t, true, created.Extra["codex_cli_only"])
+	require.Equal(t, false, created.Extra["codex_cli_only"])
 	require.Equal(t, string(codexFingerprintDevice), created.Extra[codexFingerprintModeExtraKey])
 	require.Equal(t, true, created.Extra[codexFingerprintConvergenceExtraKey])
 	requireValidCodexFingerprintSeed(t, created.Extra)
@@ -83,6 +83,24 @@ func TestAdminCreateAccountJSONImportPreservesExplicitOff(t *testing.T) {
 	require.Equal(t, false, created.Extra["codex_cli_only"])
 	require.Equal(t, "off", created.Extra[codexFingerprintModeExtraKey])
 	require.Equal(t, false, created.Extra[codexFingerprintConvergenceExtraKey])
+}
+
+func TestAdminCreateAccountJSONImportPreservesExplicitOn(t *testing.T) {
+	repo := &upstreamBillingProbeAccountRepo{}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	created, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                 "imported-on",
+		Platform:             PlatformOpenAI,
+		Type:                 AccountTypeOAuth,
+		SkipDefaultGroupBind: true,
+		Extra: map[string]any{
+			"codex_cli_only": true,
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, true, created.Extra["codex_cli_only"])
 }
 
 func TestAdminCreateAccountStripsUserSeedAndCreatesFreshSeedWhenEnabled(t *testing.T) {

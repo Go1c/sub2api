@@ -3,7 +3,7 @@ import { OPENAI_WS_MODE_CTX_POOL, type OpenAIWSMode } from './openaiWsMode'
 export type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
 
 export const KIN_DEFAULT_OPENAI_WS_MODE: OpenAIWSMode = OPENAI_WS_MODE_CTX_POOL
-export const KIN_DEFAULT_CODEX_CLI_ONLY = true
+export const KIN_DEFAULT_CODEX_CLI_ONLY = false
 export const KIN_DEFAULT_CODEX_FINGERPRINT_MODE: CodexFingerprintMode = 'device'
 export const KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE = true
 export const KIN_DEFAULT_CODEX_CONCURRENCY = 10
@@ -42,7 +42,7 @@ const CODEX_FINGERPRINT_MODES = new Set<CodexFingerprintMode>([
 
 export const resolveCodexCLIOnlyFromExtra = (
   extra: Record<string, unknown> | null | undefined
-): boolean => extra?.codex_cli_only !== false
+): boolean => extra?.codex_cli_only === true
 
 export const resolveCodexFingerprintModeFromExtra = (
   extra: Record<string, unknown> | null | undefined
