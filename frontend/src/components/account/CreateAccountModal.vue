@@ -2944,8 +2944,14 @@
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div>
           <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
-          <input v-model.number="form.concurrency" type="number" min="1" class="input"
-            @input="form.concurrency = Math.max(1, form.concurrency || 1)" />
+          <input
+            v-model.number="form.concurrency"
+            type="number"
+            min="1"
+            class="input"
+            data-testid="create-account-concurrency"
+            @input="form.concurrency = Math.max(1, form.concurrency || 1)"
+          />
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.loadFactor') }}</label>
@@ -3923,9 +3929,11 @@ import {
 } from '@/utils/openaiWsMode'
 import {
   KIN_DEFAULT_CODEX_CLI_ONLY,
+  KIN_DEFAULT_CODEX_CONCURRENCY,
   KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE,
   KIN_DEFAULT_CODEX_FINGERPRINT_MODE,
   KIN_DEFAULT_OPENAI_WS_MODE,
+  resolveCodexDefaultGroupIds,
   type CodexFingerprintMode
 } from '@/utils/openaiCodexAccountDefaults'
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
@@ -4621,7 +4629,7 @@ const form = reactive({
   type: 'oauth' as AccountType, // Will be 'oauth', 'setup-token', or 'apikey'
   credentials: {} as Record<string, unknown>,
   proxy_id: null as number | null,
-  concurrency: 10,
+  concurrency: KIN_DEFAULT_CODEX_CONCURRENCY,
   load_factor: null as number | null,
   priority: 1,
   rate_multiplier: 1,
@@ -4641,6 +4649,40 @@ const isOAuthFlow = computed(() => {
   }
   return accountCategory.value === 'oauth-based'
 })
+
+let pendingCodexGroupDefault = false
+
+const isKinCodexImportForm = () =>
+  form.platform === 'openai' && accountCategory.value === 'oauth-based'
+
+const applyKinCodexGroupDefault = (force: boolean) => {
+  if (!force && form.group_ids.length > 0) {
+    pendingCodexGroupDefault = false
+    return
+  }
+  const groupIds = resolveCodexDefaultGroupIds(props.groups)
+  if (groupIds.length > 0) {
+    form.group_ids = groupIds
+    pendingCodexGroupDefault = false
+    return
+  }
+  pendingCodexGroupDefault = true
+}
+
+const applyKinCodexCreateDefaults = () => {
+  form.concurrency = KIN_DEFAULT_CODEX_CONCURRENCY
+  modelRestrictionMode.value = 'whitelist'
+  allowedModels.value = [...getModelsByPlatform('openai')]
+  applyKinCodexGroupDefault(true)
+}
+
+watch(
+  () => props.groups,
+  () => {
+    if (!pendingCodexGroupDefault || !isKinCodexImportForm()) return
+    applyKinCodexGroupDefault(false)
+  }
+)
 
 const isGrokSSOInputMethod = computed(() => form.platform === 'grok' && oauthFlowRef.value?.inputMethod === 'sso_cookie')
 
@@ -4840,6 +4882,7 @@ watch(
       codexCLIOnlyEnabled.value = KIN_DEFAULT_CODEX_CLI_ONLY
       codexFingerprintMode.value = KIN_DEFAULT_CODEX_FINGERPRINT_MODE
       codexFingerprintConvergence.value = KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE
+      applyKinCodexCreateDefaults()
     } else if (platform === 'openai' && category !== 'oauth-based') {
       codexCLIOnlyEnabled.value = false
       codexCLIOnlyAppServerEnabled.value = false
@@ -5211,7 +5254,8 @@ const resetForm = () => {
   form.type = 'oauth'
   form.credentials = {}
   form.proxy_id = null
-  form.concurrency = 10
+  form.concurrency = KIN_DEFAULT_CODEX_CONCURRENCY
+  pendingCodexGroupDefault = false
   form.load_factor = null
   form.priority = 1
   form.rate_multiplier = 1

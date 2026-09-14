@@ -416,7 +416,7 @@ func (h *OpenAIOAuthHandler) CreateAccountFromCodexPAT(c *gin.Context) {
 		"access_token_sha256": codexTokenFingerprint(req.AccessToken),
 	})
 
-	concurrency := 3
+	concurrency := defaultCodexImportConcurrency
 	if req.Concurrency != nil {
 		concurrency = *req.Concurrency
 	}

@@ -19,7 +19,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const codexImportClockSkewSeconds int64 = 120
+const (
+	codexImportClockSkewSeconds   int64 = 120
+	defaultCodexImportConcurrency       = 10
+)
 
 type CodexSessionImportRequest struct {
 	Content                 string         `json:"content"`
@@ -173,7 +176,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 	if req.UpdateExisting != nil {
 		updateExisting = *req.UpdateExisting
 	}
-	concurrency := 3
+	concurrency := defaultCodexImportConcurrency
 	if req.Concurrency != nil {
 		concurrency = *req.Concurrency
 	}

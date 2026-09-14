@@ -69,6 +69,8 @@ vi.mock('vue-i18n', async () => {
 })
 
 import CreateAccountModal from '../CreateAccountModal.vue'
+import { getModelsByPlatform } from '@/composables/useModelWhitelist'
+import { KIN_DEFAULT_CODEX_CONCURRENCY } from '@/utils/openaiCodexAccountDefaults'
 
 const BaseDialogStub = defineComponent({
   name: 'BaseDialog',
@@ -651,5 +653,55 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     await flushPromises()
 
     expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
+  })
+
+  it('applies Kin Codex import defaults when selecting OpenAI OAuth', async () => {
+    const wrapper = mountModal([
+      { id: 1, name: 'Claude', platform: 'anthropic' },
+      { id: 6, name: 'Codex', platform: 'openai', rate_multiplier: 1 },
+      { id: 7, name: 'GPT', platform: 'openai' },
+    ])
+    await selectButtonByText(wrapper, 'OpenAI')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="create-account-concurrency"]').element).toHaveProperty('value', String(KIN_DEFAULT_CODEX_CONCURRENCY))
+    expect(wrapper.getComponent(GroupSelectorStub).props('modelValue')).toEqual([6])
+    expect(wrapper.getComponent(ModelWhitelistSelectorStub).props('modelValue')).toEqual(getModelsByPlatform('openai'))
+  })
+
+  it('sends Kin Codex import defaults on session import', async () => {
+    const wrapper = mountModal([
+      { id: 6, name: 'Codex', platform: 'openai' },
+    ])
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Codex import')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+
+    const payload = importCodexSessionMock.mock.calls[0]?.[0]
+    expect(payload?.concurrency).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
+    expect(payload?.group_ids).toEqual([6])
+    const mapping = payload?.credential_extras?.model_mapping as Record<string, string>
+    expect(mapping).toBeTruthy()
+    for (const model of getModelsByPlatform('openai')) {
+      expect(mapping[model]).toBe(model)
+    }
+  })
+
+  it('selects the Codex group after groups load for an OpenAI OAuth form', async () => {
+    const wrapper = mountModal([])
+    await selectButtonByText(wrapper, 'OpenAI')
+    await flushPromises()
+    expect(wrapper.getComponent(GroupSelectorStub).props('modelValue')).toEqual([])
+
+    await wrapper.setProps({
+      groups: [
+        { id: 6, name: 'Codex', platform: 'openai' },
+        { id: 7, name: 'GPT', platform: 'openai' },
+      ],
+    })
+    await flushPromises()
+    expect(wrapper.getComponent(GroupSelectorStub).props('modelValue')).toEqual([6])
   })
 })
