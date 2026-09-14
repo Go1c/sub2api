@@ -92,13 +92,11 @@ func newConvTestContext(t *testing.T, body []byte) *gin.Context {
 }
 
 func convTestAccount(enabled bool) *Account {
-	extra := map[string]any{}
-	if enabled {
-		extra[codexFingerprintConvergenceExtraKey] = true
-	}
 	return &Account{ID: 11, Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-account-11", "chatgpt_user_id": "user-11"},
-		Extra:       extra}
+		Extra: map[string]any{
+			codexFingerprintConvergenceExtraKey: enabled,
+		}}
 }
 
 func requireV7SameTimestamp(t *testing.T, raw, derived, label string) {

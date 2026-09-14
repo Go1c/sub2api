@@ -1413,6 +1413,7 @@ func (s *adminServiceImpl) CreateShadow(ctx context.Context, parentID int64, opt
 			openAILongContextBillingEnabledKey: parent.IsOpenAILongContextBillingEnabled(),
 		},
 	}
+	shadow.Extra = prepareCodexFingerprintExtraForCreate(PlatformOpenAI, AccountTypeOAuth, shadow.Extra)
 
 	// 5. 持久化（Create 填充 shadow.ID）。并发竞态:预查(步骤2)放行后另一请求抢先建成,本次会撞
 	// 一母一影唯一索引。复查确认确为"已存在"竞态时返回结构化 409 而非裸 500——外审 A/P1。

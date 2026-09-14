@@ -3245,6 +3245,26 @@
         </div>
       </div>
 
+      <div
+        v-if="form.platform === 'openai' && accountCategory === 'oauth-based'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.codexFingerprintConvergence') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.codexFingerprintConvergenceDesc') }}
+            </p>
+          </div>
+          <input
+            v-model="codexFingerprintConvergence"
+            data-testid="create-codex-fingerprint-convergence"
+            type="checkbox"
+            class="h-4 w-4 flex-shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+      </div>
+
       <!-- OpenAI Compact 能力配置 -->
       <div
         v-if="form.platform === 'openai' && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
@@ -3901,6 +3921,13 @@ import {
   resolveOpenAIWSModeConcurrencyHintKey,
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
+import {
+  KIN_DEFAULT_CODEX_CLI_ONLY,
+  KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE,
+  KIN_DEFAULT_CODEX_FINGERPRINT_MODE,
+  KIN_DEFAULT_OPENAI_WS_MODE,
+  type CodexFingerprintMode
+} from '@/utils/openaiCodexAccountDefaults'
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
 
 // Type for exposed OAuthAuthorizationFlow component
@@ -4306,12 +4333,12 @@ const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
-const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
-const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
-const codexCLIOnlyEnabled = ref(false)
+const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI_WS_MODE)
+const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI_WS_MODE)
+const codexCLIOnlyEnabled = ref(KIN_DEFAULT_CODEX_CLI_ONLY)
 const codexCLIOnlyAppServerEnabled = ref(false)
-type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
-const codexFingerprintMode = ref<CodexFingerprintMode>('off')
+const codexFingerprintMode = ref<CodexFingerprintMode>(KIN_DEFAULT_CODEX_FINGERPRINT_MODE)
+const codexFingerprintConvergence = ref(KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE)
 const codexFingerprintModeOptions = computed(() => [
   { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
   { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
@@ -4765,7 +4792,15 @@ watch(
     if (newPlatform !== 'anthropic' && newPlatform !== 'antigravity') {
       interceptWarmupRequests.value = false
     }
-    if (newPlatform !== 'openai') {
+    if (newPlatform === 'openai') {
+      openaiOAuthResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
+      openaiAPIKeyResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
+      if (accountCategory.value === 'oauth-based') {
+        codexCLIOnlyEnabled.value = KIN_DEFAULT_CODEX_CLI_ONLY
+        codexFingerprintMode.value = KIN_DEFAULT_CODEX_FINGERPRINT_MODE
+        codexFingerprintConvergence.value = KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE
+      }
+    } else {
       openaiPassthroughEnabled.value = false
       openaiFlattenNamespacesEnabled.value = false
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
@@ -4773,6 +4808,7 @@ watch(
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       codexCLIOnlyEnabled.value = false
       codexCLIOnlyAppServerEnabled.value = false
+      codexFingerprintConvergence.value = false
     }
     if (newPlatform !== 'anthropic') {
       anthropicPassthroughEnabled.value = false
@@ -4800,9 +4836,14 @@ watch(
 watch(
   [accountCategory, () => form.platform],
   ([category, platform]) => {
-    if (platform === 'openai' && category !== 'oauth-based') {
+    if (platform === 'openai' && category === 'oauth-based') {
+      codexCLIOnlyEnabled.value = KIN_DEFAULT_CODEX_CLI_ONLY
+      codexFingerprintMode.value = KIN_DEFAULT_CODEX_FINGERPRINT_MODE
+      codexFingerprintConvergence.value = KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE
+    } else if (platform === 'openai' && category !== 'oauth-based') {
       codexCLIOnlyEnabled.value = false
       codexCLIOnlyAppServerEnabled.value = false
+      codexFingerprintConvergence.value = false
     }
     if (platform !== 'anthropic' || category !== 'apikey') {
       anthropicPassthroughEnabled.value = false
@@ -5224,11 +5265,12 @@ const resetForm = () => {
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
-  openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
-  openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
-  codexCLIOnlyEnabled.value = false
+  openaiOAuthResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
+  openaiAPIKeyResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
+  codexCLIOnlyEnabled.value = KIN_DEFAULT_CODEX_CLI_ONLY
   codexCLIOnlyAppServerEnabled.value = false
-  codexFingerprintMode.value = 'off'
+  codexFingerprintMode.value = KIN_DEFAULT_CODEX_FINGERPRINT_MODE
+  codexFingerprintConvergence.value = KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
   webSearchEmulationMode.value = 'default'
@@ -5313,8 +5355,8 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   }
   extra.openai_long_context_billing_enabled = openAILongContextBillingEnabled.value
 
-  if (accountCategory.value === 'oauth-based' && codexCLIOnlyEnabled.value) {
-    extra.codex_cli_only = true
+  if (accountCategory.value === 'oauth-based') {
+    extra.codex_cli_only = codexCLIOnlyEnabled.value
   } else {
     delete extra.codex_cli_only
   }
@@ -5328,12 +5370,12 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   } else {
     delete extra.codex_cli_only_allow_app_server
   }
-  // 收敛是显式 opt-in：off 即默认值，不落键；device/session/full 必须显式写入，
-  // 否则管理员的选择会被当成默认而丢失（#5610）。
-  if (codexFingerprintMode.value !== 'off') {
+  if (accountCategory.value === 'oauth-based') {
     extra.codex_fingerprint_mode = codexFingerprintMode.value
+    extra.codex_experimental_fingerprint_convergence = codexFingerprintConvergence.value
   } else {
     delete extra.codex_fingerprint_mode
+    delete extra.codex_experimental_fingerprint_convergence
   }
   if (openAICompactMode.value !== 'auto') {
     extra.openai_compact_mode = openAICompactMode.value

@@ -1,6 +1,7 @@
 package service
 
-// klno 实验性指纹收敛（按账号开关：accounts.extra["codex_experimental_fingerprint_convergence"] = true）。
+// klno 实验性指纹收敛（按账号开关：accounts.extra["codex_experimental_fingerprint_convergence"] = true；
+// main-kin 新建 OAuth 账号会默认写入 true）。
 //
 // 目标：同一把 API key 的出站身份在 HTTP / 透传 / WS 三条路径上与真 Codex 客户端形态一致，
 // 逐条依据 openai/codex codex-rs（commit 16ff14c）：

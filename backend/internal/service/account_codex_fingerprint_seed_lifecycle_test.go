@@ -16,6 +16,75 @@ func requireValidCodexFingerprintSeed(t *testing.T, extra map[string]any) string
 	return seed
 }
 
+func TestAdminCreateAccountAppliesKinOpenAIDefaults(t *testing.T) {
+	repo := &upstreamBillingProbeAccountRepo{}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	created, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                 "kin-defaults",
+		Platform:             PlatformOpenAI,
+		Type:                 AccountTypeOAuth,
+		SkipDefaultGroupBind: true,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, OpenAIWSIngressModeCtxPool, created.Extra["openai_oauth_responses_websockets_v2_mode"])
+	require.Equal(t, true, created.Extra["openai_oauth_responses_websockets_v2_enabled"])
+	require.Equal(t, true, created.Extra["codex_cli_only"])
+	require.Equal(t, string(codexFingerprintDevice), created.Extra[codexFingerprintModeExtraKey])
+	require.Equal(t, true, created.Extra[codexFingerprintConvergenceExtraKey])
+	requireValidCodexFingerprintSeed(t, created.Extra)
+}
+
+func TestAdminCreateAccountJSONImportFillsMissingKinDefaults(t *testing.T) {
+	repo := &upstreamBillingProbeAccountRepo{}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	created, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                 "imported-oauth",
+		Platform:             PlatformOpenAI,
+		Type:                 AccountTypeOAuth,
+		SkipDefaultGroupBind: true,
+		Extra: map[string]any{
+			"openai_long_context_billing_enabled": false,
+			"session_token_present":               true,
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, false, created.Extra["openai_long_context_billing_enabled"])
+	require.Equal(t, true, created.Extra["session_token_present"])
+	require.Equal(t, OpenAIWSIngressModeCtxPool, created.Extra["openai_oauth_responses_websockets_v2_mode"])
+	require.Equal(t, true, created.Extra["codex_cli_only"])
+	require.Equal(t, string(codexFingerprintDevice), created.Extra[codexFingerprintModeExtraKey])
+	require.Equal(t, true, created.Extra[codexFingerprintConvergenceExtraKey])
+	requireValidCodexFingerprintSeed(t, created.Extra)
+}
+
+func TestAdminCreateAccountJSONImportPreservesExplicitOff(t *testing.T) {
+	repo := &upstreamBillingProbeAccountRepo{}
+	svc := &adminServiceImpl{accountRepo: repo}
+
+	created, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                 "imported-off",
+		Platform:             PlatformOpenAI,
+		Type:                 AccountTypeOAuth,
+		SkipDefaultGroupBind: true,
+		Extra: map[string]any{
+			"openai_oauth_responses_websockets_v2_mode": "off",
+			"codex_cli_only":                            false,
+			codexFingerprintModeExtraKey:                "off",
+			codexFingerprintConvergenceExtraKey:         false,
+		},
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, OpenAIWSIngressModeOff, created.Extra["openai_oauth_responses_websockets_v2_mode"])
+	require.Equal(t, false, created.Extra["codex_cli_only"])
+	require.Equal(t, "off", created.Extra[codexFingerprintModeExtraKey])
+	require.Equal(t, false, created.Extra[codexFingerprintConvergenceExtraKey])
+}
+
 func TestAdminCreateAccountStripsUserSeedAndCreatesFreshSeedWhenEnabled(t *testing.T) {
 	repo := &upstreamBillingProbeAccountRepo{}
 	svc := &adminServiceImpl{accountRepo: repo}

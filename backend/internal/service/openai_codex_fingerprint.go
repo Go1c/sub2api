@@ -67,7 +67,7 @@ type codexFingerprintMode string
 
 const (
 	// codexFingerprintOff 不做任何收敛，原样透传客户端标识。
-	// 这是默认值：收敛是显式 opt-in 的（见 GetCodexFingerprintMode）。
+	// 读取侧缺省仍是 off；main-kin 新建 OpenAI OAuth 账号会写入 device。
 	codexFingerprintOff codexFingerprintMode = "off"
 	// codexFingerprintDevice 仅收敛 installation_id 为账号级恒定值。
 	// 上游看到 1 台设备 + 多会话（每用户各自的 session）。
@@ -85,6 +85,10 @@ const (
 	codexFingerprintModeExtraKey = "codex_fingerprint_mode"
 	codexFingerprintSeedExtraKey = "codex_fingerprint_seed"
 )
+
+// kinCodexFingerprintSeedNamespace 给尚未落盘 seed 的存量 OAuth 账号一个稳定派生源，
+// 避免 main-kin 默认 device 之后每次请求换身份。
+var kinCodexFingerprintSeedNamespace = uuid.MustParse("a8e0c4f2-3b91-4d6e-9c17-2f8a0b5d4e31")
 
 func canonicalCodexFingerprintSeed(value any) (string, bool) {
 	raw, ok := value.(string)
@@ -141,8 +145,67 @@ func codexFingerprintSeed(extra map[string]any) (string, bool) {
 	return canonicalCodexFingerprintSeed(extra[codexFingerprintSeedExtraKey])
 }
 
+func applyKinOpenAIAccountDefaults(platform, accountType string, extra map[string]any) map[string]any {
+	if platform != PlatformOpenAI {
+		return extra
+	}
+	if extra == nil {
+		extra = make(map[string]any)
+	}
+	switch accountType {
+	case AccountTypeOAuth, AccountTypeSetupToken:
+		if _, ok := extra["openai_oauth_responses_websockets_v2_mode"]; !ok {
+			extra["openai_oauth_responses_websockets_v2_mode"] = OpenAIWSIngressModeCtxPool
+			if _, exists := extra["openai_oauth_responses_websockets_v2_enabled"]; !exists {
+				extra["openai_oauth_responses_websockets_v2_enabled"] = true
+			}
+		}
+		if accountType == AccountTypeOAuth {
+			if _, ok := extra["codex_cli_only"]; !ok {
+				extra["codex_cli_only"] = true
+			}
+			if _, ok := extra[codexFingerprintModeExtraKey]; !ok {
+				extra[codexFingerprintModeExtraKey] = string(codexFingerprintDevice)
+			}
+			if _, ok := extra[codexFingerprintConvergenceExtraKey]; !ok {
+				extra[codexFingerprintConvergenceExtraKey] = true
+			}
+		}
+	case AccountTypeAPIKey:
+		if _, ok := extra["openai_apikey_responses_websockets_v2_mode"]; !ok {
+			extra["openai_apikey_responses_websockets_v2_mode"] = OpenAIWSIngressModeCtxPool
+			if _, exists := extra["openai_apikey_responses_websockets_v2_enabled"]; !exists {
+				extra["openai_apikey_responses_websockets_v2_enabled"] = true
+			}
+		}
+	}
+	return extra
+}
+
+func kinFallbackCodexFingerprintSeed(account *Account) (string, bool) {
+	if account == nil || account.ID <= 0 {
+		return "", false
+	}
+	return uuid.NewSHA1(kinCodexFingerprintSeedNamespace, []byte("account:"+strconv.FormatInt(account.ID, 10))).String(), true
+}
+
+func resolveAccountCodexFingerprintSeed(account *Account) (string, bool) {
+	if account == nil {
+		return "", false
+	}
+	if seed, ok := codexFingerprintSeed(account.Extra); ok {
+		return seed, true
+	}
+	if account.Extra != nil {
+		if _, exists := account.Extra[codexFingerprintSeedExtraKey]; exists {
+			return "", false
+		}
+	}
+	return kinFallbackCodexFingerprintSeed(account)
+}
+
 func prepareCodexFingerprintExtraForCreate(platform, accountType string, extra map[string]any) map[string]any {
-	prepared := stripCodexFingerprintSeed(extra)
+	prepared := stripCodexFingerprintSeed(applyKinOpenAIAccountDefaults(platform, accountType, extra))
 	if platform != PlatformOpenAI || (accountType != AccountTypeOAuth && accountType != AccountTypeSetupToken) || !codexFingerprintModeRequiresSeed(codexFingerprintModeFromExtra(prepared)) {
 		return prepared
 	}
@@ -195,15 +258,8 @@ func ShouldEnsureCodexFingerprintSeedForExtraUpdates(updates map[string]any) boo
 
 // GetCodexFingerprintMode 从账号 extra JSON 读取指纹收敛模式。
 //
-// **收敛是显式 opt-in**：未设置、空值或非法值一律按 off 处理，只有管理员
-// 明确配置 device / session / full 才收敛。
-//
-// 历史：v0.1.175（#5553）把缺省值当作 session，导致升级后存量 OAuth 账号
-// （普遍没有这个 extra 键）的每个非透传请求都被静默改写 installation /
-// session / thread / turn / window 五类标识；#5555、#5556、#5582 报告的额度
-// 缩水都卡在该版本边界，并有"回退 v0.1.173 即恢复"与"新账号开收敛后降额"
-// 的 A/B 实测。上游的配额判定策略不可观测，因此这里取兼容安全的一侧：
-// 不显式 opt-in 就保持 v0.1.175 之前的客户端身份（#5610）。
+// 未设置、空值或非法值一律按 off 处理。main-kin 新建 OpenAI OAuth 账号会写入
+// device，因此新号默认收敛；存量号仍要显式配置或保存一次编辑表单。
 func (a *Account) GetCodexFingerprintMode() codexFingerprintMode {
 	if a == nil || !a.IsOpenAIOAuthLike() {
 		return codexFingerprintOff
@@ -298,7 +354,7 @@ func resolveCodexFingerprintIDsWithWindow(account *Account, clientSessionID stri
 	if account == nil || mode == codexFingerprintOff {
 		return nil
 	}
-	seed, ok := codexFingerprintSeed(account.Extra)
+	seed, ok := resolveAccountCodexFingerprintSeed(account)
 	if !ok {
 		return nil
 	}

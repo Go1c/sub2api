@@ -3080,6 +3080,16 @@ import {
   resolveOpenAIWSModeFromExtra
 } from '@/utils/openaiWsMode'
 import {
+  KIN_DEFAULT_CODEX_CLI_ONLY,
+  KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE,
+  KIN_DEFAULT_CODEX_FINGERPRINT_MODE,
+  KIN_DEFAULT_OPENAI_WS_MODE,
+  resolveCodexCLIOnlyFromExtra,
+  resolveCodexFingerprintConvergenceFromExtra,
+  resolveCodexFingerprintModeFromExtra,
+  type CodexFingerprintMode
+} from '@/utils/openaiCodexAccountDefaults'
+import {
   getPresetMappingsByPlatform,
   commonErrorCodes,
   buildModelMappingObject,
@@ -3465,15 +3475,14 @@ const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
-const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
-const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
-const codexCLIOnlyEnabled = ref(false)
+const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI_WS_MODE)
+const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI_WS_MODE)
+const codexCLIOnlyEnabled = ref(KIN_DEFAULT_CODEX_CLI_ONLY)
 const codexCLIOnlyAppServerEnabled = ref(false)
-type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
-const codexFingerprintMode = ref<CodexFingerprintMode>('off')
+const codexFingerprintMode = ref<CodexFingerprintMode>(KIN_DEFAULT_CODEX_FINGERPRINT_MODE)
 // 账号级出站 User-Agent：留空表示沿用全局设置（后端 GetOpenAIUserAgent 的回落顺序）
 const codexUserAgent = ref('')
-const codexFingerprintConvergence = ref(false)
+const codexFingerprintConvergence = ref(KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE)
 type CodexImageToolMode = 'inherit' | 'enabled' | 'disabled' | 'block'
 const codexImageToolMode = ref<CodexImageToolMode>('inherit')
 type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
@@ -3950,12 +3959,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
   openAICompactModelMappings.value = []
-  openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
-  openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
-  codexCLIOnlyEnabled.value = false
+  openaiOAuthResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
+  openaiAPIKeyResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
+  codexCLIOnlyEnabled.value = KIN_DEFAULT_CODEX_CLI_ONLY
   codexCLIOnlyAppServerEnabled.value = false
-  codexFingerprintMode.value = 'off'
-  codexFingerprintConvergence.value = false
+  codexFingerprintMode.value = KIN_DEFAULT_CODEX_FINGERPRINT_MODE
+  codexFingerprintConvergence.value = KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE
   codexUserAgent.value = ''
   codexImageToolMode.value = 'inherit'
   anthropicPassthroughEnabled.value = false
@@ -3995,26 +4004,23 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       modeKey: 'openai_oauth_responses_websockets_v2_mode',
       enabledKey: 'openai_oauth_responses_websockets_v2_enabled',
       fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-      defaultMode: OPENAI_WS_MODE_OFF
+      defaultMode: KIN_DEFAULT_OPENAI_WS_MODE
     })
     openaiAPIKeyResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
       modeKey: 'openai_apikey_responses_websockets_v2_mode',
       enabledKey: 'openai_apikey_responses_websockets_v2_enabled',
       fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-      defaultMode: OPENAI_WS_MODE_OFF
+      defaultMode: KIN_DEFAULT_OPENAI_WS_MODE
     })
     if (newAccount.type === 'oauth' || newAccount.type === 'setup-token') {
-      codexCLIOnlyEnabled.value = extra?.codex_cli_only === true
+      codexCLIOnlyEnabled.value = resolveCodexCLIOnlyFromExtra(extra)
       codexCLIOnlyAppServerEnabled.value =
         extra?.codex_cli_only_allow_app_server === true
     }
     if (newAccount.type === 'oauth') {
-      const fpMode = extra?.codex_fingerprint_mode as string | undefined
-      // 缺省/非法值按 off 呈现，与后端 GetCodexFingerprintMode 的 opt-in 语义一致（#5610）
-      codexFingerprintMode.value = (['off', 'device', 'session', 'full'].includes(fpMode || '')
-        ? fpMode as CodexFingerprintMode
-        : 'off')
-      codexFingerprintConvergence.value = extra?.codex_experimental_fingerprint_convergence === true
+      // 缺省按 device 呈现，与后端 GetCodexFingerprintMode 的 main-kin 默认一致
+      codexFingerprintMode.value = resolveCodexFingerprintModeFromExtra(extra)
+      codexFingerprintConvergence.value = resolveCodexFingerprintConvergenceFromExtra(extra)
       codexUserAgent.value = typeof extra?.codex_user_agent === 'string' ? extra.codex_user_agent : ''
     }
     const credentials = newAccount.credentials as Record<string, unknown> | undefined
@@ -5424,7 +5430,6 @@ const handleSubmit = async () => {
     if (props.account.platform === 'openai' && (props.account.type === 'oauth' || props.account.type === 'setup-token' || props.account.type === 'apikey')) {
       const currentExtra = (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
-      const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
       if (props.account.type === 'oauth' || props.account.type === 'setup-token') {
         newExtra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
         newExtra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(openaiOAuthResponsesWebSocketV2Mode.value)
@@ -5513,14 +5518,7 @@ const handleSubmit = async () => {
       }
 
       if (props.account.type === 'oauth' || props.account.type === 'setup-token') {
-        if (codexCLIOnlyEnabled.value) {
-          newExtra.codex_cli_only = true
-        } else if (hadCodexCLIOnlyEnabled) {
-          // 关闭时显式写 false，避免 extra 为空被后端忽略导致旧值无法清除
-          newExtra.codex_cli_only = false
-        } else {
-          delete newExtra.codex_cli_only
-        }
+        newExtra.codex_cli_only = codexCLIOnlyEnabled.value
         // Claude Code 插件放行已迁移到全局 codex_cli_only_whitelist，编辑时清理废弃账号级快捷字段。
         delete newExtra.codex_cli_only_allowed_clients
         if (codexCLIOnlyEnabled.value && codexCLIOnlyAppServerEnabled.value) {
@@ -5530,20 +5528,10 @@ const handleSubmit = async () => {
         }
       }
 
-      // 指纹收敛模式：默认 off（不写入）；device/session/full 是显式 opt-in，
-      // 必须落键，否则管理员的选择会被后端当作"未设置"而回落到 off（#5610）。
+      // 指纹收敛与实验开关：缺省是开，关闭必须显式落键，否则会被后端当成未设置而回落到默认开。
       if (props.account.type === 'oauth') {
-        if (codexFingerprintMode.value !== 'off') {
-          newExtra.codex_fingerprint_mode = codexFingerprintMode.value
-        } else {
-          delete newExtra.codex_fingerprint_mode
-        }
-        // klno 实验性指纹收敛：勾选落 true，不勾删键（对应后端 codexFingerprintConvergenceEnabled）
-        if (codexFingerprintConvergence.value) {
-          newExtra.codex_experimental_fingerprint_convergence = true
-        } else {
-          delete newExtra.codex_experimental_fingerprint_convergence
-        }
+        newExtra.codex_fingerprint_mode = codexFingerprintMode.value
+        newExtra.codex_experimental_fingerprint_convergence = codexFingerprintConvergence.value
         // 账号级出站 UA：留空删键，回落到全局设置
         const codexUA = codexUserAgent.value.trim()
         if (codexUA) {

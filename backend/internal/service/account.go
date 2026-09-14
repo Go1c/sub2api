@@ -2324,7 +2324,7 @@ func (a *Account) GetWebSearchEmulationMode() string {
 
 // IsCodexCLIOnlyEnabled 返回 OpenAI OAuth 账号是否启用"仅允许 Codex 官方客户端"。
 // 字段：accounts.extra.codex_cli_only。
-// 字段缺失或类型不正确时，按 false（关闭）处理。
+// 字段缺失或类型不正确时，按 false（关闭）处理。main-kin 新建 OAuth 账号会写入 true。
 func (a *Account) IsCodexCLIOnlyEnabled() bool {
 	if a == nil || !a.IsOpenAIOAuth() || a.Extra == nil {
 		return false
