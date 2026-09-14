@@ -14,7 +14,7 @@ export default {
       title: 'Daily check-in', description: 'Configure rewards, the operating timezone, and the global daily budget independently.',
       enabled: 'Enable daily check-in', enabledHint: 'When disabled, user entry points are hidden while historical records remain available to administrators.',
       minReward: 'Minimum random reward', maxReward: 'Maximum random reward', timezone: 'Operating timezone', dailyCap: 'Global daily payout cap', dailyCapHint: 'Use 0 for no daily limit. Rewards are never partially paid.',
-      minSpend: 'Historical spend/recharge threshold', minSpendHint: 'The higher of billed usage and account total recharge must exceed this amount. Usage logs are truncated; recharge is the fallback. Check-in rewards do not count. Use 0 for no limit.',
+      minSpend: 'Historical spend/recharge threshold', minSpendHint: 'The higher of billed usage and completed cash payments must exceed this amount. Paid orders include completed balance top-ups and subscriptions (Alipay/WeChat, etc.), minus refunds. Paying a subscription with balance, check-in rewards, admin credits, and affiliate transfers do not count. Usage logs are truncated; cash payments are the fallback. Use 0 for no limit.',
       milestones: 'Streak milestones', milestoneDay: 'Cycle day', milestoneBonus: 'Fixed bonus', addMilestone: 'Add milestone', removeMilestone: 'Remove milestone',
       maximumReward: 'Maximum single reward', budgetWarning: 'The daily cap is below the theoretical maximum single reward. A valid check-in may receive no reward.',
       save: 'Save check-in settings', saving: 'Saving...', saved: 'Check-in settings saved.', loadFailed: 'Unable to load check-in settings.', saveFailed: 'Unable to save check-in settings.'

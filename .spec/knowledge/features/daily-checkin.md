@@ -41,7 +41,7 @@ metadata:
 
 用户接口：
 
-- `GET /api/v1/user/checkin`：功能开关、今日状态、累计次数与奖励、连续/循环天数、下一里程碑、余额、历史门槛（`spend_eligible` / `spend_required` / `spend_total`）和最近 20 条流水。`min_spend > 0` 且今日尚未签到时才取 `GREATEST(SUM(usage_logs.actual_cost), users.total_recharged)`；门槛关闭、功能关闭或今日已签到时 `spend_eligible=true` 且不扫用量/充值。
+- `GET /api/v1/user/checkin`：功能开关、今日状态、累计次数与奖励、连续/循环天数、下一里程碑、余额、历史门槛（`spend_eligible` / `spend_required` / `spend_total`）和最近 20 条流水。`min_spend > 0` 且今日尚未签到时才取 `GREATEST(SUM(usage_logs.actual_cost), 已完成实付净额)`；门槛关闭、功能关闭或今日已签到时 `spend_eligible=true` 且不扫用量/订单。
 - `POST /api/v1/user/checkin`：执行或重放当日签到，返回奖励拆分、状态、余额快照和 `already_checked_in`。未达门槛时 HTTP 403、`code=CHECKIN_ELIGIBILITY_NOT_MET`，不写流水。
 
 管理员接口：
@@ -59,15 +59,15 @@ metadata:
 - 时区必须是有效 IANA 时区。
 - 里程碑天数必须为唯一正整数，奖金非负，最多 10 条；后端按天数排序后保存。
 - 每日上限允许为 `0` 或正数。低于理论最高单次奖励时仍可保存，由管理界面显示风险提示。
-- `min_spend` 为历史门槛：`GREATEST(SUM(usage_logs.actual_cost), users.total_recharged)` 必须**严格大于**该值才能签到；填 `0` 关闭门槛（默认）。用量明细会被 `pg-log-retention` 截断，不能当终身消费；`users.total_recharged` 是账户累计充值（`UpdateBalance` 正数，含付费兑换与管理员加款、邀请返利转入），**不含签到奖励**。取两者较高值，避免老用户因日志清理被误拦，同时防止只靠签到奖自我滚门槛。不含外部钱包扣款。
+- `min_spend` 为历史门槛：`GREATEST(SUM(usage_logs.actual_cost), 已完成实付净额)` 必须**严格大于**该值才能签到；填 `0` 关闭门槛（默认）。用量明细会被 `pg-log-retention` 截断，不能当终身消费。实付净额来自 `payment_orders`：`COMPLETED` 且 `amount > 0` 的余额充值，以及非余额支付的订阅，金额为 `amount - refund_amount`。不含用余额买订阅、签到奖励、后台加款、返利转入、兑换码。不读 `users.total_recharged`（那个字段会把赠送/返利算进去，却漏掉订阅实付）。取两者较高值，避免老付费用户因日志清理被误拦。不含外部钱包扣款。
 - 配置和时区变更只影响后续签到，历史流水不重算。
 
 ## 验证
 
-- 后端单元测试覆盖金额精度、随机边界、连续签到、循环里程碑、预算耗尽、重复请求、回滚、缓存失效容错、历史门槛（`min_spend=0` 不拦截、消费不足且充值不足则拒绝且无流水、充值高于门槛即使用量被截断也放行、已签到重放跳过门槛），以及命中里程碑时 `checkin_balance` / `checkin_milestone` 兑换码拆分与第二条插入失败回滚。
-- PostgreSQL 集成测试覆盖并发重复签到、并发预算限制、余额原子增加和事务回滚；本地无 Docker 时测试按既有 TestMain 约定跳过。
+- 后端单元测试覆盖金额精度、随机边界、连续签到、循环里程碑、预算耗尽、重复请求、回滚、缓存失效容错、历史门槛（`min_spend=0` 不拦截、消费不足且实付不足则拒绝且无流水、实付高于门槛即使用量被截断也放行、已签到重放跳过门槛），以及命中里程碑时 `checkin_balance` / `checkin_milestone` 兑换码拆分与第二条插入失败回滚。
+- PostgreSQL 集成测试覆盖并发重复签到、并发预算限制、余额原子增加、事务回滚，以及实付门槛（余额+订阅过门、仅 `total_recharged` 不过、余额买订阅不计、未完成/已退款按净额）。本地无 Docker 时测试按既有 TestMain 约定跳过。
 - 前端 Vitest 覆盖 API、Store、用户页、管理员筛选、设置保存、侧栏状态、消费门槛文案/禁用按钮，以及共享接线。
-- 本次门槛改动验证：`go test -tags=unit ./internal/checkin/ ./migrations/`、`go test -tags=integration ./internal/checkin/`、`go vet -tags integration ./...`、`golangci-lint run ./internal/checkin/ ./migrations/`（0 issues）、`pnpm exec vitest run src/features/checkin`（8 files / 30）、`eslint src/features/checkin`、`pnpm typecheck`、`pnpm build` 通过。未达标文案经静态预览确认。全量 `pnpm lint:check` 未跑。
+- 本次门槛改动：`go test -tags=unit ./internal/checkin/` 通过；`go vet -tags=unit ./internal/checkin/` 与 `go vet -tags integration ./internal/checkin/` 通过。集成测试因本机无 Docker 按 TestMain 跳过。`pnpm typecheck` 与 `pnpm build` 通过。现网只读核验用户 38 实付净额 $139.00，按新口径过 $99 门槛。
 
 ## 相关
 
