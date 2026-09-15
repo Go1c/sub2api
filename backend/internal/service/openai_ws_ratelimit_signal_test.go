@@ -558,7 +558,7 @@ func TestOpenAIWSRateLimitFailoverError_OAuthKeepsSameAccountDeadline(t *testing
 	headers := http.Header{"Retry-After": []string{"30"}}
 	body := []byte(`{"error":{"type":"rate_limit_error","message":"limited"}}`)
 
-	oauthErr := svc.newOpenAIWSRateLimitFailoverError(&Account{
+	oauthErr := svc.newOpenAIWSRateLimitFailoverError(context.Background(), &Account{
 		ID:       904,
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
@@ -570,7 +570,7 @@ func TestOpenAIWSRateLimitFailoverError_OAuthKeepsSameAccountDeadline(t *testing
 	require.Equal(t, body, oauthErr.ResponseBody)
 	require.Equal(t, "30", oauthErr.ResponseHeaders.Get("Retry-After"))
 
-	apiKeyErr := svc.newOpenAIWSRateLimitFailoverError(&Account{
+	apiKeyErr := svc.newOpenAIWSRateLimitFailoverError(context.Background(), &Account{
 		ID:       905,
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeAPIKey,

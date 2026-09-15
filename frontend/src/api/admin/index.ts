@@ -8,6 +8,7 @@ import usersAPI from './users'
 import groupsAPI from './groups'
 import accountsAPI from './accounts'
 import proxiesAPI from './proxies'
+import proxyIpGroupsAPI from './proxyIpGroups'
 import redeemAPI from './redeem'
 import promoAPI from './promo'
 import announcementsAPI from './announcements'
@@ -30,6 +31,7 @@ import tlsFingerprintProfileAPI from './tlsFingerprintProfile'
 import channelsAPI from './channels'
 import channelMonitorAPI from './channelMonitor'
 import channelMonitorTemplateAPI from './channelMonitorTemplate'
+import channelIqAPI from './channelIq'
 import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
@@ -46,6 +48,7 @@ export const adminAPI = {
   groups: groupsAPI,
   accounts: accountsAPI,
   proxies: proxiesAPI,
+  proxyIpGroups: proxyIpGroupsAPI,
   redeem: redeemAPI,
   promo: promoAPI,
   announcements: announcementsAPI,
@@ -68,6 +71,7 @@ export const adminAPI = {
   channels: channelsAPI,
   channelMonitor: channelMonitorAPI,
   channelMonitorTemplate: channelMonitorTemplateAPI,
+  channelIq: channelIqAPI,
   payment: adminPaymentAPI,
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
@@ -82,6 +86,7 @@ export {
   groupsAPI,
   accountsAPI,
   proxiesAPI,
+  proxyIpGroupsAPI,
   redeemAPI,
   promoAPI,
   announcementsAPI,
@@ -104,6 +109,7 @@ export {
   channelsAPI,
   channelMonitorAPI,
   channelMonitorTemplateAPI,
+  channelIqAPI,
   adminPaymentAPI,
   affiliatesAPI,
   riskControlAPI,

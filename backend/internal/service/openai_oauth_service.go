@@ -18,6 +18,7 @@ type OpenAIOAuthService struct {
 	proxyRepo            ProxyRepository
 	oauthClient          OpenAIOAuthClient
 	privacyClientFactory PrivacyClientFactory // 用于调用 chatgpt.com/backend-api（ImpersonateChrome）
+	ipGroupResolver      *openAIIPGroupResolver
 }
 
 // NewOpenAIOAuthService creates a new OpenAI OAuth service
@@ -33,6 +34,13 @@ func NewOpenAIOAuthService(proxyRepo ProxyRepository, oauthClient OpenAIOAuthCli
 // 用于调用 chatgpt.com/backend-api 获取账号信息（plan_type 等）。
 func (s *OpenAIOAuthService) SetPrivacyClientFactory(factory PrivacyClientFactory) {
 	s.privacyClientFactory = factory
+}
+
+func (s *OpenAIOAuthService) SetIPGroupResolver(resolver *openAIIPGroupResolver) {
+	if s == nil {
+		return
+	}
+	s.ipGroupResolver = resolver
 }
 
 // OpenAIAuthURLResult contains the authorization URL and session info
@@ -346,9 +354,15 @@ func (s *OpenAIOAuthService) RefreshAccountToken(ctx context.Context, account *A
 	}
 
 	var proxyURL string
-	if account.ProxyID != nil && s.proxyRepo != nil {
-		proxy, err := s.proxyRepo.GetByID(ctx, *account.ProxyID)
-		if err == nil && proxy != nil {
+	resolvedURL, release, err := resolveOpenAIProxyURL(ctx, s.ipGroupResolver, account, "")
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	proxyURL = resolvedURL
+	if proxyURL == "" && account.ProxyID != nil && s.proxyRepo != nil {
+		proxy, perr := s.proxyRepo.GetByID(ctx, *account.ProxyID)
+		if perr == nil && proxy != nil {
 			proxyURL = proxy.URL()
 		}
 	}

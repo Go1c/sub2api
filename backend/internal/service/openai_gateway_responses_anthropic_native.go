@@ -110,10 +110,11 @@ func (s *OpenAIGatewayService) forwardResponsesViaNativeAnthropic(
 		return nil, err
 	}
 
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, anthropicBody)
+	if proxyErr != nil {
+		return nil, proxyErr
 	}
+	defer releaseProxy()
 
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 	upstreamReq, _, err := s.buildNativeAnthropicUpstreamRequest(upstreamCtx, c, account, anthropicBody, apiKey, targetURL)

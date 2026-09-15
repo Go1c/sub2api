@@ -32,7 +32,8 @@ vi.mock('@/api/admin', () => ({
       getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false, providers: [] }),
       getSettings: vi.fn().mockResolvedValue({})
     },
-    tlsFingerprintProfiles: { list: vi.fn().mockResolvedValue([]) }
+    tlsFingerprintProfiles: { list: vi.fn().mockResolvedValue([]) },
+    proxyIpGroups: { list: vi.fn().mockResolvedValue([]) }
   }
 }))
 vi.mock('@/api/admin/accounts', () => ({ getAntigravityDefaultModelMapping: vi.fn() }))
@@ -60,7 +61,7 @@ function mountModal(value = account()) {
   return mount(EditAccountModal, {
     props: { show: true, account: value, proxies: [], groups: [] },
     global: { stubs: {
-      BaseDialog: BaseDialogStub, Select: true, Icon: true, ProxySelector: true,
+      BaseDialog: BaseDialogStub, Select: true, Icon: true, ProxySelector: true, OpenAIAccountProxyFields: true,
       GroupSelector: true, ModelWhitelistSelector: true
     } }
   })

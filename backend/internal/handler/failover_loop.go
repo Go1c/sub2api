@@ -86,11 +86,9 @@ func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, retryCo
 	// Error-specific caps (Grok capacity/stream-idle) remain hard limits even
 	// when the error also carries a freshly reconstructed deadline.
 	if failoverErr.SameAccountRetryMax > 0 {
+		retryLimit = failoverErr.EffectiveSameAccountRetryLimit(retryLimit)
 		if retryLimit <= 0 {
 			return false
-		}
-		if failoverErr.SameAccountRetryMax < retryLimit {
-			retryLimit = failoverErr.SameAccountRetryMax
 		}
 		return retryCount < retryLimit
 	}
@@ -108,17 +106,17 @@ func sameAccountRetryDeadlineAllows(failoverErr *service.UpstreamFailoverError) 
 	return failoverErr == nil || failoverErr.SameAccountRetryDeadline.IsZero() || time.Now().Before(failoverErr.SameAccountRetryDeadline)
 }
 
-// effectiveSameAccountRetryLimit applies an error-specific cap without
-// overriding an explicit account setting of zero (which disables retries).
+// effectiveSameAccountRetryLimit applies an error-specific cap or raise
+// without overriding an explicit account setting of zero (which disables retries).
 func effectiveSameAccountRetryLimit(failoverErr *service.UpstreamFailoverError, account *service.Account) int {
 	if account == nil {
 		return 0
 	}
 	limit := account.GetPoolModeRetryCount()
-	if limit > 0 && failoverErr != nil && failoverErr.SameAccountRetryMax > 0 && failoverErr.SameAccountRetryMax < limit {
-		return failoverErr.SameAccountRetryMax
+	if limit <= 0 {
+		return 0
 	}
-	return limit
+	return failoverErr.EffectiveSameAccountRetryLimit(limit)
 }
 
 // FailoverState 跨循环迭代共享的 failover 状态

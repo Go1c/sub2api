@@ -1024,6 +1024,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		firstOutputTimeout = s.openAIFirstOutputTimeout(reasoningEffortValue)
 	}
 
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	if proxyErr != nil {
+		return nil, proxyErr
+	}
+	defer releaseProxy()
+
 	httpInvalidEncryptedContentRetryTried := false
 	compactModelFallbackRetried := false
 	agentTaskRecoveryTried := false
@@ -1046,12 +1052,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				headerGuard.close()
 			}
 			return nil, err
-		}
-
-		// Get proxy URL
-		proxyURL := ""
-		if account.ProxyID != nil && account.Proxy != nil {
-			proxyURL = account.Proxy.URL()
 		}
 
 		// Send request
@@ -1177,8 +1177,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 					Detail:             upstreamDetail,
 				})
 
-				shouldDisable := s.handleFailoverSideEffects(ctx, resp, account, respBody, upstreamModel)
+				shouldDisable := s.handleFailoverSideEffects(openAIErrorContext(ctx, c), resp, account, respBody, upstreamModel)
 				return nil, s.newOpenAIAccountFailoverError(
+					openAIErrorContext(ctx, c),
 					account,
 					resp.StatusCode,
 					resp.Header,
@@ -1242,8 +1243,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 							Kind:               "failover",
 							Message:            signal.message,
 						})
-						shouldDisable := s.handleFailoverSideEffects(ctx, compactResp, account, compactBody, upstreamModel)
+						shouldDisable := s.handleFailoverSideEffects(openAIErrorContext(ctx, c), compactResp, account, compactBody, upstreamModel)
 						return nil, s.newOpenAIAccountFailoverError(
+							openAIErrorContext(ctx, c),
 							account, compactResp.StatusCode, compactResp.Header, compactBody, signal.message, shouldDisable,
 							!shouldDisable && account.IsPoolMode() && (account.IsPoolModeRetryableStatus(compactResp.StatusCode) || isOpenAITransientProcessingError(compactResp.StatusCode, signal.message, compactBody)),
 						)

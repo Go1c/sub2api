@@ -1587,11 +1587,20 @@
       </div>
 
       <div v-if="!isSparkShadow">
-        <div class="mb-1 flex items-center gap-2">
-          <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
-          <ProxyAdBanner />
-        </div>
-        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
+        <OpenAIAccountProxyFields
+          :platform="account.platform"
+          :type="account.type"
+          :proxy-id="form.proxy_id"
+          :proxy-ip-group-id="form.proxy_ip_group_id"
+          :proxies="proxies"
+          :ip-groups="ipGroups"
+          @update:proxy-id="form.proxy_id = $event"
+          @update:proxy-ip-group-id="form.proxy_ip_group_id = $event"
+        >
+          <template #banner>
+            <ProxyAdBanner />
+          </template>
+        </OpenAIAccountProxyFields>
       </div>
 
       <UpstreamRequestIdHeaderField
@@ -3010,6 +3019,7 @@ import { useQuotaNotifyState } from '@/composables/useQuotaNotifyState'
 import type {
   Account,
   Proxy,
+  ProxyIPGroup,
   AdminGroup,
   Group,
   CheckMixedChannelResponse,
@@ -3027,7 +3037,7 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
-import ProxySelector from '@/components/common/ProxySelector.vue'
+import OpenAIAccountProxyFields from '@/components/account/OpenAIAccountProxyFields.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
@@ -3111,6 +3121,25 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const ipGroups = ref<ProxyIPGroup[]>([])
+
+const loadIpGroups = async () => {
+  try {
+    ipGroups.value = await adminAPI.proxyIpGroups.list()
+  } catch {
+    ipGroups.value = []
+  }
+}
+
+watch(
+  () => props.show,
+  (show) => {
+    if (show) {
+      void loadIpGroups()
+    }
+  },
+  { immediate: true }
+)
 const browserTimeZone = getBrowserTimeZone()
 
 const selectableGroups = computed(() => {
@@ -3792,6 +3821,7 @@ const form = reactive({
   name: '',
   notes: '',
   proxy_id: null as number | null,
+  proxy_ip_group_id: null as number | null,
   concurrency: 1,
   load_factor: null as number | null,
   priority: 1,
@@ -3900,6 +3930,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   form.name = newAccount.name
   form.notes = newAccount.notes || ''
   form.proxy_id = newAccount.proxy_id
+  form.proxy_ip_group_id = newAccount.proxy_ip_group_id ?? null
   form.concurrency = newAccount.concurrency
   form.load_factor = newAccount.load_factor ?? null
   form.priority = newAccount.priority
@@ -4913,6 +4944,12 @@ const handleSubmit = async () => {
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
     if (updatePayload.proxy_id === null) {
       updatePayload.proxy_id = 0
+    }
+    if (form.proxy_ip_group_id) {
+      updatePayload.proxy_ip_group_id = form.proxy_ip_group_id
+      updatePayload.proxy_id = 0
+    } else {
+      updatePayload.proxy_ip_group_id = 0
     }
     if (form.expires_at === null) {
       updatePayload.expires_at = 0

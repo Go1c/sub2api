@@ -58,6 +58,14 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 	router.GET("/api/v1/admin/proxies/:id/stats", proxyHandler.GetStats)
 	router.GET("/api/v1/admin/proxies/:id/accounts", proxyHandler.GetProxyAccounts)
 
+	ipGroupHandler := NewProxyIPGroupHandler(adminSvc)
+	router.GET("/api/v1/admin/proxy-ip-groups", ipGroupHandler.List)
+	router.POST("/api/v1/admin/proxy-ip-groups", ipGroupHandler.Create)
+	router.GET("/api/v1/admin/proxy-ip-groups/:id", ipGroupHandler.GetByID)
+	router.PUT("/api/v1/admin/proxy-ip-groups/:id", ipGroupHandler.Update)
+	router.DELETE("/api/v1/admin/proxy-ip-groups/:id", ipGroupHandler.Delete)
+	router.PUT("/api/v1/admin/proxy-ip-groups/:id/members", ipGroupHandler.SetMembers)
+
 	router.GET("/api/v1/admin/redeem-codes", redeemHandler.List)
 	router.GET("/api/v1/admin/redeem-codes/:id", redeemHandler.GetByID)
 	router.POST("/api/v1/admin/redeem-codes", redeemHandler.Generate)

@@ -861,10 +861,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if buildHdrErr != nil {
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, firstClientMessage)
+	if proxyErr != nil {
+		return proxyErr
 	}
+	defer releaseProxy()
 
 	dialer := s.getOpenAIWSPassthroughDialer()
 	if dialer == nil {
@@ -908,7 +909,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		s.handleOpenAIWSDialTransientFailure(ctx, account, capturedSessionModel, dialErr)
 		if statusCode == http.StatusTooManyRequests {
 			s.persistOpenAIWSRateLimitSignal(ctx, account, handshakeHeaders, nil, "rate_limit_exceeded", "rate_limit_error", strings.TrimSpace(err.Error()), capturedSessionModel)
-			return s.newOpenAIWSRateLimitFailoverError(account, handshakeHeaders, nil, err.Error())
+			return s.newOpenAIWSRateLimitFailoverError(ctx, account, handshakeHeaders, nil, err.Error())
 		}
 		return s.mapOpenAIWSPassthroughDialError(err, statusCode, handshakeHeaders)
 	}
@@ -1333,7 +1334,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						errors.New("later passthrough turn was rate limited before output"),
 					)
 				}
-				return s.newOpenAIWSRateLimitFailoverError(account, handshakeHeaders, payload, errMsgRaw)
+				return s.newOpenAIWSRateLimitFailoverError(ctx, account, handshakeHeaders, payload, errMsgRaw)
 			},
 			OnTrace: func(event openaiwsv2.RelayTraceEvent) {
 				logOpenAIWSV2Passthrough(

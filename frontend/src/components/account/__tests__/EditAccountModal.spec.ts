@@ -36,6 +36,9 @@ vi.mock('@/api/admin', () => ({
     },
     tlsFingerprintProfiles: {
       list: vi.fn().mockResolvedValue([])
+    },
+    proxyIpGroups: {
+      list: vi.fn().mockResolvedValue([])
     }
   }
 }))
@@ -316,6 +319,7 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
         Select: SelectStub,
         Icon: true,
         ProxySelector: true,
+        OpenAIAccountProxyFields: true,
         GroupSelector: renderGroupSelector ? false : GroupSelectorStub,
         ModelWhitelistSelector: ModelWhitelistSelectorStub
       }

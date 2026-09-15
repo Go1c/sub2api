@@ -119,6 +119,9 @@ func RegisterAdminRoutes(
 		registerChannelMonitorRoutes(admin, h, settingService)
 		registerChannelMonitorV2Routes(admin, h, settingService)
 
+		// 渠道智商检测
+		registerChannelIQRoutes(admin, h)
+
 		// 风控中心
 		registerContentModerationRoutes(admin, h)
 
@@ -524,6 +527,18 @@ func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth
 		proxies.POST("/batch-delete", h.Admin.Proxy.BatchDelete)
 		proxies.POST("/batch", h.Admin.Proxy.BatchCreate)
 	}
+
+	if h.Admin != nil && h.Admin.ProxyIPGroup != nil {
+		ipGroups := admin.Group("/proxy-ip-groups")
+		{
+			ipGroups.GET("", h.Admin.ProxyIPGroup.List)
+			ipGroups.POST("", h.Admin.ProxyIPGroup.Create)
+			ipGroups.GET("/:id", h.Admin.ProxyIPGroup.GetByID)
+			ipGroups.PUT("/:id", h.Admin.ProxyIPGroup.Update)
+			ipGroups.DELETE("/:id", h.Admin.ProxyIPGroup.Delete)
+			ipGroups.PUT("/:id/members", h.Admin.ProxyIPGroup.SetMembers)
+		}
+	}
 }
 
 func registerRedeemCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
@@ -802,6 +817,21 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 		templates.DELETE("/:id", h.Admin.ChannelMonitorTemplate.Delete)
 		templates.GET("/:id/monitors", h.Admin.ChannelMonitorTemplate.AssociatedMonitors)
 		templates.POST("/:id/apply", h.Admin.ChannelMonitorTemplate.Apply)
+	}
+}
+
+func registerChannelIQRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h == nil || h.Admin == nil || h.Admin.ChannelIQ == nil {
+		return
+	}
+	iq := admin.Group("/channel-iq")
+	{
+		iq.GET("", h.Admin.ChannelIQ.Overview)
+		iq.PUT("/settings", h.Admin.ChannelIQ.UpdateSettings)
+		iq.POST("/run", h.Admin.ChannelIQ.RunAll)
+		iq.POST("/accounts/:id/run", h.Admin.ChannelIQ.RunOne)
+		iq.POST("/accounts/:id/exclude", h.Admin.ChannelIQ.Exclude)
+		iq.POST("/accounts/:id/restore", h.Admin.ChannelIQ.Restore)
 	}
 }
 

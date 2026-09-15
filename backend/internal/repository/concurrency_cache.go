@@ -626,6 +626,36 @@ func runScriptInt64Pair(ctx context.Context, rdb *redis.Client, script *redis.Sc
 	return first, second, nil
 }
 
+func accountProxySlotKey(accountID, proxyID int64) string {
+	return fmt.Sprintf("conc:acct-proxy:%d:%d", accountID, proxyID)
+}
+
+func liveAccountProxySlotKey(accountID, proxyID int64) string {
+	return fmt.Sprintf("concurrency:live:acct-proxy:%d:%d", accountID, proxyID)
+}
+
+func (c *concurrencyCache) AcquireAccountProxySlot(ctx context.Context, accountID, proxyID int64, maxConcurrency int, requestID string) (bool, error) {
+	key := accountProxySlotKey(accountID, proxyID)
+	result, _, err := runScriptInt64Pair(ctx, c.rdb, acquireScript, []string{key, liveAccountProxySlotKey(accountID, proxyID)}, maxConcurrency, c.slotTTLSeconds, requestID)
+	if err != nil {
+		return false, err
+	}
+	return result == 1, nil
+}
+
+func (c *concurrencyCache) ReleaseAccountProxySlot(ctx context.Context, accountID, proxyID int64, requestID string) error {
+	return c.rdb.ZRem(ctx, accountProxySlotKey(accountID, proxyID), requestID).Err()
+}
+
+func (c *concurrencyCache) GetAccountProxyConcurrency(ctx context.Context, accountID, proxyID int64) (int, error) {
+	key := accountProxySlotKey(accountID, proxyID)
+	result, err := getCountScript.Run(ctx, c.rdb, []string{key, liveAccountProxySlotKey(accountID, proxyID)}, c.slotTTLSeconds).Int()
+	if err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
 // Account slot operations
 
 func (c *concurrencyCache) AcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error) {

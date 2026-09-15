@@ -996,6 +996,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesErrorResponse(
 	}
 	shouldDisable := s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, modelForCooldown)
 	failoverErr := s.newOpenAIAccountFailoverError(
+		ctx,
 		account,
 		resp.StatusCode,
 		resp.Header,
@@ -1847,10 +1848,11 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		upstreamReq.Header.Set("OpenAI-Beta", "responses=experimental")
 	}
 
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, responsesBody)
+	if proxyErr != nil {
+		return nil, proxyErr
 	}
+	defer releaseProxy()
 	upstreamStart := time.Now()
 	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
@@ -1897,8 +1899,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 				Kind:               "failover",
 				Message:            upstreamMsg,
 			})
-			shouldDisable := s.handleFailoverSideEffects(upstreamCtx, resp, account, respBody, requestModel)
+			shouldDisable := s.handleFailoverSideEffects(openAIErrorContext(upstreamCtx, c), resp, account, respBody, requestModel)
 			return nil, s.newOpenAIAccountFailoverError(
+				openAIErrorContext(upstreamCtx, c),
 				account,
 				resp.StatusCode,
 				resp.Header,
@@ -2074,6 +2077,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthResponseError(
 		responseBody := []byte(fmt.Sprintf(`{"error":{"type":"upstream_error","code":%q,"message":%q}}`, code, message))
 		shouldDisable := s.handleOpenAIAccountUpstreamError(ctx, account, statusCode, headers, responseBody, requestedModel)
 		return s.newOpenAIAccountFailoverError(
+			ctx,
 			account,
 			statusCode,
 			headers,
@@ -2127,6 +2131,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthResponseError(
 			return err
 		}
 		return s.newOpenAIAccountFailoverError(
+			ctx,
 			account,
 			upstreamErr.StatusCode,
 			headers,
@@ -2141,6 +2146,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthResponseError(
 	}
 	shouldDisable := s.handleOpenAIAccountUpstreamError(ctx, account, upstreamErr.StatusCode, headers, responseBody, requestedModel)
 	return s.newOpenAIAccountFailoverError(
+		ctx,
 		account,
 		upstreamErr.StatusCode,
 		headers,

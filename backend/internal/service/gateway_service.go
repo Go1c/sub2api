@@ -713,6 +713,13 @@ func (e *UpstreamFailoverError) ShouldRetryNextAccount() bool {
 	return e != nil && e.NextAccountAction != NextAccountStop
 }
 
+func (e *UpstreamFailoverError) EffectiveSameAccountRetryLimit(poolLimit int) int {
+	if e != nil && e.SameAccountRetryMax > 0 {
+		return e.SameAccountRetryMax
+	}
+	return poolLimit
+}
+
 func (e *UpstreamFailoverError) IsCredentialFailure() bool {
 	return e != nil && e.Stage == GatewayFailureStageAccountAuth
 }

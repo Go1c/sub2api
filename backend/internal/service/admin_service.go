@@ -130,6 +130,14 @@ type AdminService interface {
 	TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error)
 	CheckProxyQuality(ctx context.Context, id int64) (*ProxyQualityCheckResult, error)
 
+	// Proxy IP group management
+	ListProxyIPGroups(ctx context.Context) ([]ProxyIPGroup, error)
+	GetProxyIPGroup(ctx context.Context, id int64) (*ProxyIPGroup, error)
+	CreateProxyIPGroup(ctx context.Context, input *CreateProxyIPGroupInput) (*ProxyIPGroup, error)
+	UpdateProxyIPGroup(ctx context.Context, id int64, input *UpdateProxyIPGroupInput) (*ProxyIPGroup, error)
+	DeleteProxyIPGroup(ctx context.Context, id int64) error
+	SetProxyIPGroupMembers(ctx context.Context, id int64, proxyIDs []int64) (*ProxyIPGroup, error)
+
 	// Redeem code management
 	ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string, sortBy, sortOrder string) ([]RedeemCode, int64, error)
 	GetRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
@@ -401,6 +409,7 @@ type CreateAccountInput struct {
 	Credentials        map[string]any
 	Extra              map[string]any
 	ProxyID            *int64
+	ProxyIPGroupID     *int64
 	Concurrency        int
 	Priority           int
 	RateMultiplier     *float64 // 账号计费倍率（>=0，允许 0）
@@ -432,6 +441,7 @@ type UpdateAccountInput struct {
 	Credentials           map[string]any
 	Extra                 map[string]any
 	ProxyID               *int64
+	ProxyIPGroupID        *int64
 	Concurrency           *int     // 使用指针区分"未提供"和"设置为0"
 	Priority              *int     // 使用指针区分"未提供"和"设置为0"
 	RateMultiplier        *float64 // 账号计费倍率（>=0，允许 0）
@@ -692,6 +702,7 @@ type adminServiceImpl struct {
 	accountDuplicateRepo AccountDuplicateRepository
 	accountBillingRepo   AccountBillingSettingsRepository
 	proxyRepo            ProxyRepository
+	proxyIPGroupRepo     ProxyIPGroupRepository
 	apiKeyRepo           APIKeyRepository
 	redeemCodeRepo       RedeemCodeRepository
 	userGroupRateRepo    UserGroupRateRepository
@@ -734,6 +745,7 @@ func NewAdminService(
 	groupRepo AdminGroupRepository,
 	accountRepo AdminAccountRepository,
 	proxyRepo ProxyRepository,
+	proxyIPGroupRepo ProxyIPGroupRepository,
 	apiKeyRepo APIKeyRepository,
 	redeemCodeRepo RedeemCodeRepository,
 	userGroupRateRepo UserGroupRateRepository,
@@ -763,6 +775,7 @@ func NewAdminService(
 		accountDuplicateRepo: accountRepo,
 		accountBillingRepo:   accountRepo,
 		proxyRepo:            proxyRepo,
+		proxyIPGroupRepo:     proxyIPGroupRepo,
 		apiKeyRepo:           apiKeyRepo,
 		redeemCodeRepo:       redeemCodeRepo,
 		userGroupRateRepo:    userGroupRateRepo,

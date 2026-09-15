@@ -1781,10 +1781,11 @@ func (s *OpenAIGatewayService) buildCodexModelsManifestRequest(ctx context.Conte
 	}
 	headers.Set("Version", headerVersion)
 
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
+	proxyURL, releaseProxy, proxyErr := s.mustOpenAIAccountProxyURL(ctx, account, "")
+	if proxyErr != nil {
+		return openAIModelsRequest{}, nil, proxyErr
 	}
+	defer releaseProxy()
 
 	request := openAIModelsRequest{
 		url:                 requestURL.String(),

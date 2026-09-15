@@ -729,8 +729,9 @@ func openAIWSSemantic429Headers(account *Account, model string, headers http.Hea
 	return nil
 }
 
-func (s *OpenAIGatewayService) newOpenAIWSRateLimitFailoverError(account *Account, headers http.Header, responseBody []byte, message string) *UpstreamFailoverError {
+func (s *OpenAIGatewayService) newOpenAIWSRateLimitFailoverError(ctx context.Context, account *Account, headers http.Header, responseBody []byte, message string) *UpstreamFailoverError {
 	return s.newOpenAIAccountFailoverError(
+		ctx,
 		account,
 		http.StatusTooManyRequests,
 		headers,

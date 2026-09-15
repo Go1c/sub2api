@@ -357,10 +357,11 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		return nil, err
 	}
 
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	if proxyErr != nil {
+		return nil, proxyErr
 	}
+	defer releaseProxy()
 
 	if c != nil {
 		c.Set("openai_passthrough", true)
@@ -933,7 +934,7 @@ func (s *OpenAIGatewayService) handleFailoverErrorResponsePassthrough(
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
 	reqModel, _, _ := extractOpenAIRequestMetaFromBody(requestBody)
 	canonicalModel := canonicalOpenAIAccountSchedulingModel(account, reqModel)
-	shouldDisable := s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, canonicalModel)
+	shouldDisable := s.handleOpenAIAccountUpstreamError(openAIErrorContext(ctx, c), account, resp.StatusCode, resp.Header, body, canonicalModel)
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 		ProxyID:              opsUpstreamProxyID(account),
 		ProxyName:            opsUpstreamProxyName(account),
@@ -949,6 +950,7 @@ func (s *OpenAIGatewayService) handleFailoverErrorResponsePassthrough(
 		UpstreamResponseBody: upstreamDetail,
 	})
 	return s.newOpenAIAccountFailoverError(
+		openAIErrorContext(ctx, c),
 		account,
 		resp.StatusCode,
 		resp.Header,
@@ -1000,7 +1002,7 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	if !cyberHit {
 		reqModel, _, _ := extractOpenAIRequestMetaFromBody(requestBody)
 		canonicalModel := canonicalOpenAIAccountSchedulingModel(account, reqModel)
-		_ = s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, canonicalModel)
+		_ = s.handleOpenAIAccountUpstreamError(openAIErrorContext(ctx, c), account, resp.StatusCode, resp.Header, body, canonicalModel)
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 		ProxyID:              opsUpstreamProxyID(account),
@@ -1793,7 +1795,7 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverErrorWithModel(
 	if statusCode == http.StatusTooManyRequests {
 		classificationHeaders = nil
 	}
-	failoverErr := s.newOpenAIAccountFailoverErrorWithClassificationHeaders(account, statusCode, headers, classificationHeaders, payload, message, shouldDisable, retryableOnSameAccount)
+	failoverErr := s.newOpenAIAccountFailoverErrorWithClassificationHeaders(openAIErrorContext(context.Background(), c), account, statusCode, headers, classificationHeaders, payload, message, shouldDisable, retryableOnSameAccount)
 	if failoverErr.IsCredentialFailure() || failoverErr.RequestScopedTransient {
 		return failoverErr
 	}

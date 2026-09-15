@@ -252,6 +252,7 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		Extra:                   extra,
 		OllamaCloudUsage:        ollamaCloudUsage,
 		ProxyID:                 a.ProxyID,
+		ProxyIPGroupID:          a.ProxyIPGroupID,
 		ProxyFallbackOriginID:   a.ProxyFallbackOriginID,
 		ProxyFallbackOriginName: a.ProxyFallbackOriginName,
 		Concurrency:             a.Concurrency,
@@ -459,7 +460,7 @@ func AccountListItemFromAccount(a *Account) *AccountListItem {
 		ID: a.ID, Name: a.Name, Notes: a.Notes, Platform: a.Platform, Type: a.Type,
 		Credentials: a.Credentials, CredentialsStatus: a.CredentialsStatus, Extra: a.Extra,
 		OllamaCloudUsage: a.OllamaCloudUsage,
-		ProxyID:          a.ProxyID, ProxyFallbackOriginID: a.ProxyFallbackOriginID, ProxyFallbackOriginName: a.ProxyFallbackOriginName,
+		ProxyID:          a.ProxyID, ProxyIPGroupID: a.ProxyIPGroupID, ProxyFallbackOriginID: a.ProxyFallbackOriginID, ProxyFallbackOriginName: a.ProxyFallbackOriginName,
 		Concurrency: a.Concurrency, LoadFactor: a.LoadFactor, Priority: a.Priority, RateMultiplier: a.RateMultiplier,
 		Status: a.Status, ErrorMessage: a.ErrorMessage, LastUsedAt: a.LastUsedAt, ExpiresAt: a.ExpiresAt,
 		AutoPauseOnExpired: a.AutoPauseOnExpired, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
@@ -552,6 +553,24 @@ func ProxyWithAccountCountFromService(p *service.ProxyWithAccountCount) *ProxyWi
 		QualityGrade:   p.QualityGrade,
 		QualitySummary: p.QualitySummary,
 		QualityChecked: p.QualityChecked,
+	}
+}
+
+func ProxyIPGroupFromService(g *service.ProxyIPGroup) *AdminProxyIPGroup {
+	if g == nil {
+		return nil
+	}
+	proxyIDs := g.ProxyIDs
+	if proxyIDs == nil {
+		proxyIDs = []int64{}
+	}
+	return &AdminProxyIPGroup{
+		ID:               g.ID,
+		Name:             g.Name,
+		PerIPConcurrency: g.PerIPConcurrency,
+		ProxyIDs:         proxyIDs,
+		CreatedAt:        g.CreatedAt,
+		UpdatedAt:        g.UpdatedAt,
 	}
 }
 

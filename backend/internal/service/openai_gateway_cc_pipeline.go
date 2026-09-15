@@ -125,9 +125,10 @@ func (s *OpenAIGatewayService) failoverOpenAIUpstreamHTTPError(
 	})
 	shouldDisable := tempUnscheduled
 	if account.Platform != PlatformGrok && !tempUnscheduled {
-		shouldDisable = s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody, upstreamModel)
+		shouldDisable = s.handleOpenAIAccountUpstreamError(openAIErrorContext(ctx, c), account, resp.StatusCode, resp.Header, respBody, upstreamModel)
 	}
 	return s.newOpenAIAccountFailoverError(
+		openAIErrorContext(ctx, c),
 		account,
 		resp.StatusCode,
 		resp.Header,
@@ -225,10 +226,11 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 	account.ApplyHeaderOverrides(upstreamReq.Header)
 	applyOpenCodeSessionHeader(c, account, targetURL, upstreamReq.Header)
 
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIProxyURL(ctx, c, account, body)
+	if proxyErr != nil {
+		return nil, proxyErr
 	}
+	defer releaseProxy()
 	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
