@@ -7,6 +7,7 @@ export const KIN_DEFAULT_CODEX_CLI_ONLY = false
 export const KIN_DEFAULT_CODEX_FINGERPRINT_MODE: CodexFingerprintMode = 'device'
 export const KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE = true
 export const KIN_DEFAULT_CODEX_CONCURRENCY = 10
+export const KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING = true
 export const KIN_DEFAULT_CODEX_GROUP_NAME = 'Codex'
 
 export type CodexDefaultGroup = {
@@ -31,6 +32,29 @@ export const resolveCodexDefaultGroupIds = (
   if (openaiGroups.length === 1) return [openaiGroups[0].id]
   if (compatible.length === 1) return [compatible[0].id]
   return []
+}
+
+export const resolveKinCodexImportGroupIds = (
+  selected: number[] | null | undefined,
+  snapshot: number[] | null | undefined,
+  groups: CodexDefaultGroup[] | null | undefined
+): number[] => {
+  if (selected && selected.length > 0) return [...selected]
+  if (snapshot && snapshot.length > 0) return [...snapshot]
+  return resolveCodexDefaultGroupIds(groups)
+}
+
+export const resolveKinCodexImportConcurrency = (
+  selected: number | null | undefined,
+  snapshot?: number | null
+): number => {
+  if (typeof selected === 'number' && Number.isFinite(selected) && selected > 0) {
+    return selected
+  }
+  if (typeof snapshot === 'number' && Number.isFinite(snapshot) && snapshot > 0) {
+    return snapshot
+  }
+  return KIN_DEFAULT_CODEX_CONCURRENCY
 }
 
 const CODEX_FINGERPRINT_MODES = new Set<CodexFingerprintMode>([

@@ -28,8 +28,10 @@ func TestAdminCreateAccountAppliesKinOpenAIDefaults(t *testing.T) {
 	})
 
 	require.NoError(t, err)
+	require.Equal(t, DefaultOpenAIAccountConcurrency, created.Concurrency)
 	require.Equal(t, OpenAIWSIngressModeCtxPool, created.Extra["openai_oauth_responses_websockets_v2_mode"])
 	require.Equal(t, true, created.Extra["openai_oauth_responses_websockets_v2_enabled"])
+	require.Equal(t, true, created.Extra["openai_long_context_billing_enabled"])
 	require.Equal(t, false, created.Extra["codex_cli_only"])
 	require.Equal(t, string(codexFingerprintDevice), created.Extra[codexFingerprintModeExtraKey])
 	require.Equal(t, true, created.Extra[codexFingerprintConvergenceExtraKey])
@@ -72,9 +74,9 @@ func TestAdminCreateAccountJSONImportPreservesExplicitOff(t *testing.T) {
 		SkipDefaultGroupBind: true,
 		Extra: map[string]any{
 			"openai_oauth_responses_websockets_v2_mode": "off",
-			"codex_cli_only":                            false,
-			codexFingerprintModeExtraKey:                "off",
-			codexFingerprintConvergenceExtraKey:         false,
+			"codex_cli_only":                    false,
+			codexFingerprintModeExtraKey:        "off",
+			codexFingerprintConvergenceExtraKey: false,
 		},
 	})
 

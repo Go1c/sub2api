@@ -160,6 +160,9 @@ func applyKinOpenAIAccountDefaults(platform, accountType string, extra map[strin
 				extra["openai_oauth_responses_websockets_v2_enabled"] = true
 			}
 		}
+		if _, ok := extra[openAILongContextBillingEnabledKey]; !ok {
+			extra[openAILongContextBillingEnabledKey] = true
+		}
 		if accountType == AccountTypeOAuth {
 			if _, ok := extra["codex_cli_only"]; !ok {
 				extra["codex_cli_only"] = false
@@ -202,6 +205,12 @@ func resolveAccountCodexFingerprintSeed(account *Account) (string, bool) {
 		}
 	}
 	return kinFallbackCodexFingerprintSeed(account)
+}
+
+// PrepareOpenAICodexImportExtra fills Kin create defaults for missing extra keys.
+// Explicit values already present, including false/off, are left unchanged.
+func PrepareOpenAICodexImportExtra(extra map[string]any) map[string]any {
+	return applyKinOpenAIAccountDefaults(PlatformOpenAI, AccountTypeOAuth, extra)
 }
 
 func prepareCodexFingerprintExtraForCreate(platform, accountType string, extra map[string]any) map[string]any {

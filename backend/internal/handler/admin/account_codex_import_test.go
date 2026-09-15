@@ -642,8 +642,63 @@ func TestImportCodexSessionsDefaultsConcurrencyToTen(t *testing.T) {
 	if len(svc.createdAccounts) != 1 {
 		t.Fatalf("created accounts = %d, want 1", len(svc.createdAccounts))
 	}
-	if svc.createdAccounts[0].Concurrency != defaultCodexImportConcurrency {
-		t.Fatalf("concurrency = %d, want %d", svc.createdAccounts[0].Concurrency, defaultCodexImportConcurrency)
+	if svc.createdAccounts[0].Concurrency != service.DefaultOpenAIAccountConcurrency {
+		t.Fatalf("concurrency = %d, want %d", svc.createdAccounts[0].Concurrency, service.DefaultOpenAIAccountConcurrency)
+	}
+}
+
+func TestImportCodexSessionsUpdateAppliesKinDefaultsAndFormConcurrency(t *testing.T) {
+	existingToken := buildCodexAccessToken(t, "workspace-1", "user-1", time.Now().Add(time.Hour))
+	svc := newCodexImportMemoryAdminService([]service.Account{{
+		ID:          10,
+		Name:        "existing",
+		Platform:    service.PlatformOpenAI,
+		Type:        service.AccountTypeOAuth,
+		Concurrency: 3,
+		Credentials: map[string]any{
+			"chatgpt_account_id": "workspace-1",
+			"chatgpt_user_id":    "user-1",
+			"access_token":       existingToken,
+		},
+		Extra: map[string]any{"session_token_present": true},
+	}})
+	handler := NewAccountHandler(svc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	req := CodexSessionImportRequest{
+		SkipDefaultGroupBind: boolPtr(true),
+		GroupIDs:             []int64{6},
+	}
+	entries := []codexImportEntry{
+		{Index: 1, Value: map[string]any{"access_token": existingToken}},
+	}
+
+	result, err := handler.importCodexSessions(context.Background(), req, entries)
+	if err != nil {
+		t.Fatalf("importCodexSessions error = %v", err)
+	}
+	if result.Created != 0 || result.Updated != 1 || result.Failed != 0 {
+		t.Fatalf("result = %+v, want one updated account", result)
+	}
+	if len(svc.updatedAccounts) != 1 {
+		t.Fatalf("updated accounts = %d, want 1", len(svc.updatedAccounts))
+	}
+	update := svc.updatedAccounts[0].input
+	if update.Concurrency == nil || *update.Concurrency != service.DefaultOpenAIAccountConcurrency {
+		t.Fatalf("concurrency = %v, want %d", update.Concurrency, service.DefaultOpenAIAccountConcurrency)
+	}
+	if update.GroupIDs == nil || len(*update.GroupIDs) != 1 || (*update.GroupIDs)[0] != 6 {
+		t.Fatalf("group_ids = %v, want [6]", update.GroupIDs)
+	}
+	if got := update.Extra["session_token_present"]; got != true {
+		t.Fatalf("session_token_present = %v, want true", got)
+	}
+	if got := update.Extra["openai_oauth_responses_websockets_v2_mode"]; got != service.OpenAIWSIngressModeCtxPool {
+		t.Fatalf("ws mode = %v, want %s", got, service.OpenAIWSIngressModeCtxPool)
+	}
+	if got := update.Extra["codex_fingerprint_mode"]; got != "device" {
+		t.Fatalf("fingerprint mode = %v, want device", got)
+	}
+	if got := update.Extra["openai_long_context_billing_enabled"]; got != true {
+		t.Fatalf("long context billing = %v, want true", got)
 	}
 }
 
@@ -740,6 +795,41 @@ func TestImportCodexSessionsAccessTokenOnlySameUserUpdatesExisting(t *testing.T)
 	}
 	if len(svc.updatedAccounts) != 1 || svc.updatedAccounts[0].id != 10 {
 		t.Fatalf("updated accounts = %+v, want account 10", svc.updatedAccounts)
+	}
+	if got := svc.updatedAccounts[0].input.Extra["openai_long_context_billing_enabled"]; got != true {
+		t.Fatalf("openai_long_context_billing_enabled = %v, want true", got)
+	}
+}
+
+func TestImportCodexSessionsUpdateKeepsExplicitLongContextOff(t *testing.T) {
+	existingToken := buildCodexAccessToken(t, "workspace-1", "user-1", time.Now().Add(time.Hour))
+	svc := newCodexImportMemoryAdminService([]service.Account{{
+		ID:       11,
+		Name:     "existing",
+		Platform: service.PlatformOpenAI,
+		Type:     service.AccountTypeOAuth,
+		Credentials: map[string]any{
+			"chatgpt_account_id": "workspace-1",
+			"chatgpt_user_id":    "user-1",
+			"access_token":       existingToken,
+		},
+		Extra: map[string]any{"openai_long_context_billing_enabled": true},
+	}})
+	handler := NewAccountHandler(svc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	req := CodexSessionImportRequest{
+		SkipDefaultGroupBind: boolPtr(true),
+		Extra:                map[string]any{"openai_long_context_billing_enabled": false},
+	}
+	entries := []codexImportEntry{
+		{Index: 1, Value: map[string]any{"access_token": existingToken}},
+	}
+
+	result, err := handler.importCodexSessions(context.Background(), req, entries)
+	if err != nil {
+		t.Fatalf("importCodexSessions error = %v", err)
+	}
+	if result.Updated != 1 || result.Failed != 0 {
+		t.Fatalf("result = %+v, want one updated account", result)
 	}
 	if got := svc.updatedAccounts[0].input.Extra["openai_long_context_billing_enabled"]; got != false {
 		t.Fatalf("openai_long_context_billing_enabled = %v, want false", got)

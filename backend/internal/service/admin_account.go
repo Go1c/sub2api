@@ -348,6 +348,12 @@ func normalizeAccountConcurrency(platform, accountType string, concurrency int) 
 		if concurrency <= 0 {
 			return 1
 		}
+		return concurrency
+	}
+	if platform == PlatformOpenAI && (accountType == AccountTypeOAuth || accountType == AccountTypeSetupToken) {
+		if concurrency <= 0 {
+			return DefaultOpenAIAccountConcurrency
+		}
 	}
 	return concurrency
 }
@@ -384,7 +390,7 @@ func normalizeOpenAILongContextBillingExtra(platform string, extra map[string]an
 	}
 	_, exists := normalized[openAILongContextBillingEnabledKey]
 	if !exists {
-		normalized[openAILongContextBillingEnabledKey] = false
+		normalized[openAILongContextBillingEnabledKey] = true
 	}
 	return normalized, nil
 }

@@ -3147,7 +3147,7 @@
 
       <!-- OpenAI API 长上下文计费开关 -->
       <div
-        v-if="form.platform === 'openai' && !hideAccountLongContextBilling && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
+        v-if="form.platform === 'openai' && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div class="flex items-center justify-between gap-4">
@@ -3893,7 +3893,6 @@ import Toggle from '@/components/common/Toggle.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
-import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
@@ -3932,8 +3931,11 @@ import {
   KIN_DEFAULT_CODEX_CONCURRENCY,
   KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE,
   KIN_DEFAULT_CODEX_FINGERPRINT_MODE,
+  KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING,
   KIN_DEFAULT_OPENAI_WS_MODE,
   resolveCodexDefaultGroupIds,
+  resolveKinCodexImportConcurrency,
+  resolveKinCodexImportGroupIds,
   type CodexFingerprintMode
 } from '@/utils/openaiCodexAccountDefaults'
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
@@ -4039,10 +4041,6 @@ const emit = defineEmits<{
 }>()
 
 const appStore = useAppStore()
-
-const hideAccountLongContextBilling = computed(() => {
-  return allSelectedGroupsEnableLongContextPricing(form.group_ids, props.groups)
-})
 
 // OAuth composables
 const oauth = useAccountOAuth() // For Anthropic OAuth
@@ -4334,8 +4332,7 @@ const autoPauseOnExpired = ref(true)
 const openaiPassthroughEnabled = ref(false)
 // OpenAI Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
 const openaiFlattenNamespacesEnabled = ref(false)
-const openAILongContextBillingEnabled = ref(false)
-const openAILongContextBillingTouched = ref(false)
+const openAILongContextBillingEnabled = ref(KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING)
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
@@ -4361,7 +4358,6 @@ const webSearchGlobalEnabled = ref(false)
 
 const toggleOpenAILongContextBilling = () => {
   openAILongContextBillingEnabled.value = !openAILongContextBillingEnabled.value
-  openAILongContextBillingTouched.value = true
 }
 const {
   globalEnabled: quotaNotifyGlobalEnabled,
@@ -4651,9 +4647,36 @@ const isOAuthFlow = computed(() => {
 })
 
 let pendingCodexGroupDefault = false
+let kinCodexImportSnapshot: { concurrency: number; group_ids: number[] } | null = null
 
 const isKinCodexImportForm = () =>
   form.platform === 'openai' && accountCategory.value === 'oauth-based'
+
+const captureKinCodexImportSnapshot = () => {
+  if (!isKinCodexImportForm()) {
+    kinCodexImportSnapshot = null
+    return
+  }
+  if (form.group_ids.length === 0) {
+    applyKinCodexGroupDefault(true)
+  }
+  kinCodexImportSnapshot = {
+    concurrency: resolveKinCodexImportConcurrency(form.concurrency, null),
+    group_ids: [...form.group_ids]
+  }
+}
+
+const resolveKinCodexImportFields = () => ({
+  concurrency: resolveKinCodexImportConcurrency(
+    form.concurrency,
+    kinCodexImportSnapshot?.concurrency
+  ),
+  group_ids: resolveKinCodexImportGroupIds(
+    form.group_ids,
+    kinCodexImportSnapshot?.group_ids,
+    props.groups
+  )
+})
 
 const applyKinCodexGroupDefault = (force: boolean) => {
   if (!force && form.group_ids.length > 0) {
@@ -4671,6 +4694,7 @@ const applyKinCodexGroupDefault = (force: boolean) => {
 
 const applyKinCodexCreateDefaults = () => {
   form.concurrency = KIN_DEFAULT_CODEX_CONCURRENCY
+  openAILongContextBillingEnabled.value = KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING
   modelRestrictionMode.value = 'whitelist'
   allowedModels.value = [...getModelsByPlatform('openai')]
   applyKinCodexGroupDefault(true)
@@ -4681,7 +4705,8 @@ watch(
   () => {
     if (!pendingCodexGroupDefault || !isKinCodexImportForm()) return
     applyKinCodexGroupDefault(false)
-  }
+  },
+  { immediate: true }
 )
 
 const isGrokSSOInputMethod = computed(() => form.platform === 'grok' && oauthFlowRef.value?.inputMethod === 'sso_cookie')
@@ -4887,13 +4912,15 @@ watch(
       codexCLIOnlyEnabled.value = false
       codexCLIOnlyAppServerEnabled.value = false
       codexFingerprintConvergence.value = false
+      openAILongContextBillingEnabled.value = KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING
     }
     if (platform !== 'anthropic' || category !== 'apikey') {
       anthropicPassthroughEnabled.value = false
       anthropicAPIKeyAuthScheme.value = 'x_api_key'
       webSearchEmulationMode.value = 'default'
     }
-  }
+  },
+  { immediate: true }
 )
 
 watch(
@@ -5256,6 +5283,7 @@ const resetForm = () => {
   form.proxy_id = null
   form.concurrency = KIN_DEFAULT_CODEX_CONCURRENCY
   pendingCodexGroupDefault = false
+  kinCodexImportSnapshot = null
   form.load_factor = null
   form.priority = 1
   form.rate_multiplier = 1
@@ -5304,8 +5332,7 @@ const resetForm = () => {
   autoPauseOnExpired.value = true
   openaiPassthroughEnabled.value = false
   openaiFlattenNamespacesEnabled.value = false
-  openAILongContextBillingEnabled.value = false
-  openAILongContextBillingTouched.value = false
+  openAILongContextBillingEnabled.value = KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
@@ -5446,14 +5473,7 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
 }
 
 const buildOpenAICodexImportExtra = (): Record<string, unknown> | undefined => {
-  const extra = buildOpenAIExtra()
-  if (!extra) {
-    return undefined
-  }
-  if (!openAILongContextBillingTouched.value) {
-    delete extra.openai_long_context_billing_enabled
-  }
-  return Object.keys(extra).length > 0 ? extra : undefined
+  return buildOpenAIExtra()
 }
 
 const buildAnthropicExtra = (base?: Record<string, unknown>): Record<string, unknown> | undefined => {
@@ -5580,11 +5600,13 @@ const handleSubmit = async () => {
       return
     }
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
+      captureKinCodexImportSnapshot()
       step.value = 2
     })
     if (!canContinue) {
       return
     }
+    captureKinCodexImportSnapshot()
     step.value = 2
     return
   }
@@ -5943,7 +5965,7 @@ const createAccountAndFinish = async (
     credentials,
     extra: finalExtra,
     proxy_id: form.proxy_id,
-    concurrency: form.concurrency,
+    concurrency: form.concurrency > 0 ? form.concurrency : KIN_DEFAULT_CODEX_CONCURRENCY,
     load_factor: form.load_factor ?? undefined,
     priority: form.priority,
     rate_multiplier: form.rate_multiplier,
@@ -6010,7 +6032,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           credentials,
           extra: withUpstreamRequestIdHeader(extra),
           proxy_id: form.proxy_id,
-          concurrency: form.concurrency,
+          concurrency: form.concurrency > 0 ? form.concurrency : KIN_DEFAULT_CODEX_CONCURRENCY,
           load_factor: form.load_factor ?? undefined,
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
@@ -6078,7 +6100,7 @@ const handleGrokImportSSO = async (ssoInput: string) => {
       proxy_id: form.proxy_id,
       group_ids: form.group_ids,
       credentials,
-      concurrency: form.concurrency,
+      concurrency: form.concurrency > 0 ? form.concurrency : KIN_DEFAULT_CODEX_CONCURRENCY,
       load_factor: form.load_factor ?? undefined,
       priority: form.priority,
       rate_multiplier: form.rate_multiplier,
@@ -6187,7 +6209,7 @@ const handleGrokAuthorizePassword = async (emailPasswordInput: string) => {
           credentials,
           extra: withUpstreamRequestIdHeader(extra),
           proxy_id: form.proxy_id,
-          concurrency: form.concurrency,
+          concurrency: form.concurrency > 0 ? form.concurrency : KIN_DEFAULT_CODEX_CONCURRENCY,
           load_factor: form.load_factor ?? undefined,
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
@@ -6278,6 +6300,7 @@ const handleOpenAIExchange = async (authCode: string) => {
     }
 
     if (shouldCreateOpenAI) {
+      const binding = resolveKinCodexImportFields()
       await adminAPI.accounts.create({
         name: form.name,
         notes: form.notes,
@@ -6286,11 +6309,11 @@ const handleOpenAIExchange = async (authCode: string) => {
         credentials,
         extra: withUpstreamRequestIdHeader(extra),
         proxy_id: form.proxy_id,
-        concurrency: form.concurrency,
+        concurrency: binding.concurrency,
         load_factor: form.load_factor ?? undefined,
         priority: form.priority,
         rate_multiplier: form.rate_multiplier,
-        group_ids: form.group_ids,
+        group_ids: binding.group_ids,
         expires_at: form.expires_at,
         auto_pause_on_expired: autoPauseOnExpired.value
       })
@@ -6386,16 +6409,17 @@ const handleOpenAIImportCodexSession = async (content: string) => {
 
   try {
     const extra = buildOpenAICodexImportExtra()
+    const binding = resolveKinCodexImportFields()
     const result = await adminAPI.accounts.importCodexSession({
       content: trimmed,
       name: form.name,
       notes: form.notes || null,
       proxy_id: form.proxy_id,
-      concurrency: form.concurrency,
+      concurrency: binding.concurrency,
       load_factor: form.load_factor ?? undefined,
       priority: form.priority,
       rate_multiplier: form.rate_multiplier,
-      group_ids: form.group_ids,
+      group_ids: binding.group_ids,
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
@@ -6464,16 +6488,17 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
 
   try {
     const extra = buildOpenAICodexImportExtra()
+    const binding = resolveKinCodexImportFields()
     await adminAPI.accounts.createOpenAICodexPAT({
       access_token: trimmed,
       name: form.name,
       notes: form.notes || null,
       proxy_id: form.proxy_id,
-      concurrency: form.concurrency,
+      concurrency: binding.concurrency,
       load_factor: form.load_factor ?? undefined,
       priority: form.priority,
       rate_multiplier: form.rate_multiplier,
-      group_ids: form.group_ids,
+      group_ids: binding.group_ids,
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
@@ -6559,6 +6584,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
         const accountName = refreshTokens.length > 1 ? `${baseName} #${i + 1}` : baseName
 
         if (shouldCreateOpenAI) {
+          const binding = resolveKinCodexImportFields()
           await adminAPI.accounts.create({
             name: accountName,
             notes: form.notes,
@@ -6567,11 +6593,11 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
             credentials,
             extra: withUpstreamRequestIdHeader(extra),
             proxy_id: form.proxy_id,
-            concurrency: form.concurrency,
+            concurrency: binding.concurrency,
             load_factor: form.load_factor ?? undefined,
             priority: form.priority,
             rate_multiplier: form.rate_multiplier,
-            group_ids: form.group_ids,
+            group_ids: binding.group_ids,
             expires_at: form.expires_at,
             auto_pause_on_expired: autoPauseOnExpired.value
           })
@@ -6666,7 +6692,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           credentials,
           extra: withUpstreamRequestIdHeader({}),
           proxy_id: form.proxy_id,
-          concurrency: form.concurrency,
+          concurrency: form.concurrency > 0 ? form.concurrency : KIN_DEFAULT_CODEX_CONCURRENCY,
           load_factor: form.load_factor ?? undefined,
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
@@ -7047,7 +7073,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           credentials,
           extra: withUpstreamRequestIdHeader(extra),
           proxy_id: form.proxy_id,
-          concurrency: form.concurrency,
+          concurrency: form.concurrency > 0 ? form.concurrency : KIN_DEFAULT_CODEX_CONCURRENCY,
           load_factor: form.load_factor ?? undefined,
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,

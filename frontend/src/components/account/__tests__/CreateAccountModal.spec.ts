@@ -70,7 +70,11 @@ vi.mock('vue-i18n', async () => {
 
 import CreateAccountModal from '../CreateAccountModal.vue'
 import { getModelsByPlatform } from '@/composables/useModelWhitelist'
-import { KIN_DEFAULT_CODEX_CONCURRENCY } from '@/utils/openaiCodexAccountDefaults'
+import {
+  KIN_DEFAULT_CODEX_CONCURRENCY,
+  KIN_DEFAULT_CODEX_FINGERPRINT_MODE,
+  KIN_DEFAULT_OPENAI_WS_MODE
+} from '@/utils/openaiCodexAccountDefaults'
 
 const BaseDialogStub = defineComponent({
   name: 'BaseDialog',
@@ -106,6 +110,9 @@ const GroupSelectorStub = defineComponent({
     },
   },
   emits: ['update:modelValue'],
+  unmounted() {
+    this.$emit('update:modelValue', [])
+  },
   template: `
     <button
       type="button"
@@ -258,7 +265,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     wrapper.unmount()
   })
 
-  it('hides only the redundant account toggle when every selected group enables tier pricing', async () => {
+  it('keeps the account toggle when every selected group enables tier pricing', async () => {
     authIsSimpleMode.value = false
     const wrapper = mountModal([
       { id: 1, long_context_pricing_enabled: true },
@@ -268,7 +275,8 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     await selectButtonByText(wrapper, 'OpenAI')
     await wrapper.get('[data-testid="select-pricing-groups"]').trigger('click')
 
-    expect(wrapper.find('[data-testid="openai-long-context-billing-toggle"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="openai-long-context-billing-toggle"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="openai-long-context-billing-toggle"]').attributes('aria-checked')).toBe('true')
     expect(wrapper.find('[data-testid="create-openai-ws-mode"]').exists()).toBe(true)
   })
 
@@ -286,11 +294,11 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(wrapper.find('[data-testid="create-openai-ws-mode"]').exists()).toBe(true)
   })
 
-  it('sends false explicitly for normal OpenAI account creation by default', async () => {
+  it('sends true explicitly for normal OpenAI account creation by default', async () => {
     await submitApiKeyAccount('openai')
 
     expect(createAccountMock).toHaveBeenCalledTimes(1)
-    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
   })
 
   it('omits the upstream request id header from extra when left empty', async () => {
@@ -558,11 +566,11 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(importCodexSessionMock).toHaveBeenCalledTimes(1)
   })
 
-  it('sends true explicitly when OpenAI long-context billing is enabled', async () => {
+  it('sends false when the OpenAI long-context billing toggle is turned off', async () => {
     await submitApiKeyAccount('openai', true)
 
     expect(createAccountMock).toHaveBeenCalledTimes(1)
-    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
   })
 
   it('omits the OpenAI setting for non-OpenAI account creation', async () => {
@@ -605,54 +613,56 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
   })
 
-  it('leaves Codex session import billing ownership to the backend', async () => {
+  it('sends true by default for Codex session import', async () => {
     const wrapper = await openCodexImportStep()
     await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
     await flushPromises()
 
     expect(importCodexSessionMock).toHaveBeenCalledTimes(1)
-    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBeUndefined()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.concurrency).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
   })
 
-  it('leaves Codex PAT import billing ownership to the backend', async () => {
+  it('sends true by default for Codex PAT import', async () => {
     const wrapper = await openCodexImportStep()
     await wrapper.get('[data-testid="import-codex-pat"]').trigger('click')
     await flushPromises()
 
     expect(createOpenAICodexPATMock).toHaveBeenCalledTimes(1)
-    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBeUndefined()
+    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
+    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.concurrency).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
   })
 
-  it('sends explicit true for Codex session import after the toggle is enabled', async () => {
+  it('sends explicit false for Codex session import after the toggle is turned off', async () => {
     const wrapper = await openCodexImportStep(1)
-    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
-    await flushPromises()
-
-    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
-  })
-
-  it('sends explicit false for Codex session import after the toggle is changed back', async () => {
-    const wrapper = await openCodexImportStep(2)
     await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
     await flushPromises()
 
     expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
   })
 
-  it('sends explicit true for Codex PAT import after the toggle is enabled', async () => {
+  it('sends explicit true for Codex session import after the toggle is turned back on', async () => {
+    const wrapper = await openCodexImportStep(2)
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
+  })
+
+  it('sends explicit false for Codex PAT import after the toggle is turned off', async () => {
     const wrapper = await openCodexImportStep(1)
     await wrapper.get('[data-testid="import-codex-pat"]').trigger('click')
     await flushPromises()
 
-    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
+    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
   })
 
-  it('sends explicit false for Codex PAT import after the toggle is changed back', async () => {
+  it('sends explicit true for Codex PAT import after the toggle is turned back on', async () => {
     const wrapper = await openCodexImportStep(2)
     await wrapper.get('[data-testid="import-codex-pat"]').trigger('click')
     await flushPromises()
 
-    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(false)
+    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBe(true)
   })
 
   it('applies Kin Codex import defaults when selecting OpenAI OAuth', async () => {
@@ -682,11 +692,31 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     const payload = importCodexSessionMock.mock.calls[0]?.[0]
     expect(payload?.concurrency).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
     expect(payload?.group_ids).toEqual([6])
+    expect(payload?.extra?.openai_oauth_responses_websockets_v2_mode).toBe(KIN_DEFAULT_OPENAI_WS_MODE)
+    expect(payload?.extra?.codex_fingerprint_mode).toBe(KIN_DEFAULT_CODEX_FINGERPRINT_MODE)
+    expect(payload?.extra?.openai_long_context_billing_enabled).toBe(true)
     const mapping = payload?.credential_extras?.model_mapping as Record<string, string>
     expect(mapping).toBeTruthy()
     for (const model of getModelsByPlatform('openai')) {
       expect(mapping[model]).toBe(model)
     }
+  })
+
+  it('sends Kin Codex import defaults on PAT import after leaving step 1', async () => {
+    const wrapper = mountModal([
+      { id: 6, name: 'Codex', platform: 'openai' },
+    ])
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Codex import')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get('[data-testid="import-codex-pat"]').trigger('click')
+    await flushPromises()
+
+    const payload = createOpenAICodexPATMock.mock.calls[0]?.[0]
+    expect(payload?.concurrency).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
+    expect(payload?.group_ids).toEqual([6])
+    expect(payload?.extra?.openai_oauth_responses_websockets_v2_mode).toBe(KIN_DEFAULT_OPENAI_WS_MODE)
+    expect(payload?.extra?.codex_fingerprint_mode).toBe(KIN_DEFAULT_CODEX_FINGERPRINT_MODE)
   })
 
   it('selects the Codex group after groups load for an OpenAI OAuth form', async () => {

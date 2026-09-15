@@ -5,11 +5,14 @@ import {
   KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE,
   KIN_DEFAULT_CODEX_FINGERPRINT_MODE,
   KIN_DEFAULT_CODEX_GROUP_NAME,
+  KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING,
   KIN_DEFAULT_OPENAI_WS_MODE,
   resolveCodexCLIOnlyFromExtra,
   resolveCodexDefaultGroupIds,
   resolveCodexFingerprintConvergenceFromExtra,
-  resolveCodexFingerprintModeFromExtra
+  resolveCodexFingerprintModeFromExtra,
+  resolveKinCodexImportConcurrency,
+  resolveKinCodexImportGroupIds
 } from '@/utils/openaiCodexAccountDefaults'
 import { OPENAI_WS_MODE_CTX_POOL } from '@/utils/openaiWsMode'
 
@@ -20,6 +23,7 @@ describe('openaiCodexAccountDefaults', () => {
     expect(KIN_DEFAULT_CODEX_FINGERPRINT_MODE).toBe('device')
     expect(KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE).toBe(true)
     expect(KIN_DEFAULT_CODEX_CONCURRENCY).toBe(10)
+    expect(KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING).toBe(true)
     expect(KIN_DEFAULT_CODEX_GROUP_NAME).toBe('Codex')
     expect(resolveCodexCLIOnlyFromExtra(undefined)).toBe(false)
     expect(resolveCodexCLIOnlyFromExtra({})).toBe(false)
@@ -59,5 +63,22 @@ describe('openaiCodexAccountDefaults', () => {
       { id: 9, name: 'Shared', platform: 'composite' }
     ])).toEqual([9])
     expect(resolveCodexDefaultGroupIds(undefined)).toEqual([])
+  })
+
+  it('keeps JSON-import group ids after the step-1 selector is cleared', () => {
+    const groups = [
+      { id: 1, name: 'Claude', platform: 'anthropic' },
+      { id: 6, name: 'Codex', platform: 'openai' }
+    ]
+    expect(resolveKinCodexImportGroupIds([], [6], groups)).toEqual([6])
+    expect(resolveKinCodexImportGroupIds([], [], groups)).toEqual([6])
+    expect(resolveKinCodexImportGroupIds([7], [6], groups)).toEqual([7])
+  })
+
+  it('falls back to Kin concurrency when the live form value is cleared', () => {
+    expect(resolveKinCodexImportConcurrency(0, 10)).toBe(10)
+    expect(resolveKinCodexImportConcurrency(Number.NaN, 10)).toBe(10)
+    expect(resolveKinCodexImportConcurrency(4, 10)).toBe(4)
+    expect(resolveKinCodexImportConcurrency(0, 0)).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
   })
 })

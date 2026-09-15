@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	codexImportClockSkewSeconds   int64 = 120
-	defaultCodexImportConcurrency       = 10
+	codexImportClockSkewSeconds int64 = 120
 )
 
 type CodexSessionImportRequest struct {
@@ -176,8 +175,8 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 	if req.UpdateExisting != nil {
 		updateExisting = *req.UpdateExisting
 	}
-	concurrency := defaultCodexImportConcurrency
-	if req.Concurrency != nil {
+	concurrency := service.DefaultOpenAIAccountConcurrency
+	if req.Concurrency != nil && *req.Concurrency > 0 {
 		concurrency = *req.Concurrency
 	}
 	priority := 50
@@ -278,11 +277,18 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 				autoPauseOnExpired = nil
 			}
 			mergedCredentials := mergeCodexImportCredentials(existing.Credentials, credentials, item)
-			mergedExtra := mergeCodexImportMap(existing.Extra, extra)
+			mergedExtra := service.PrepareOpenAICodexImportExtra(mergeCodexImportMap(existing.Extra, extra))
+			if _, provided := extra["openai_long_context_billing_enabled"]; !provided {
+				if mergedExtra == nil {
+					mergedExtra = make(map[string]any, 1)
+				}
+				mergedExtra["openai_long_context_billing_enabled"] = true
+			}
+			concurrencyCopy := concurrency
 			updateInput := &service.UpdateAccountInput{
 				Credentials:        mergedCredentials,
 				Extra:              mergedExtra,
-				Concurrency:        req.Concurrency,
+				Concurrency:        &concurrencyCopy,
 				Priority:           req.Priority,
 				RateMultiplier:     req.RateMultiplier,
 				LoadFactor:         req.LoadFactor,
