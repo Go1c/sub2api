@@ -28,14 +28,9 @@ function dotClass(health: AccountHealthRow['lines'][number]['health']): string {
     <div
       v-if="isGroup"
       class="overflow-hidden"
-      :class="isScrollList ? 'max-h-[7.5rem] overflow-y-auto overscroll-contain' : ''"
+      :class="isScrollList ? 'max-h-[5rem] overflow-y-auto overscroll-contain' : ''"
       @wheel.stop
     >
-      <div class="sticky top-0 z-10 grid grid-cols-[9rem_1fr_7.5rem] gap-3 bg-white px-1 pb-2 pt-0.5 text-[11px] text-gray-400 dark:bg-dark-900 dark:text-gray-500">
-        <span>IP</span>
-        <span>{{ $t('admin.requestHealth.recentRequests') }}</span>
-        <span class="text-right">{{ $t('admin.requestHealth.limitStatus') }}</span>
-      </div>
       <div class="flex flex-col">
         <div
           v-for="item in row.lines"

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"net/http"
 	"sort"
 	"strings"
@@ -169,6 +170,7 @@ type openAIIPGroupResolver struct {
 	bind    OpenAIIPGroupBindStore
 	slots   AccountProxySlotCache
 	now     func() time.Time
+	shuffle func(int, func(int, int))
 	ttl     time.Duration
 }
 
@@ -188,6 +190,7 @@ func newOpenAIIPGroupResolver(
 		bind:    bind,
 		slots:   slots,
 		now:     time.Now,
+		shuffle: rand.Shuffle,
 		ttl:     ttl,
 	}
 }
@@ -305,15 +308,22 @@ func (r *openAIIPGroupResolver) loadLiveMembers(ctx context.Context, group *Prox
 
 func (r *openAIIPGroupResolver) pickAndOccupy(ctx context.Context, accountID int64, group *ProxyIPGroup, members map[int64]*Proxy, occupySlot bool, skipTried bool) (*Proxy, func(), error) {
 	ids := make([]int64, 0, len(members))
-	for id := range members {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	tried := openAIIPGroupRetryStateFrom(ctx)
-	for _, id := range ids {
+	for id := range members {
 		if skipTried && tried != nil && tried.isTried(id) {
 			continue
 		}
+		ids = append(ids, id)
+	}
+	// Shuffle only the remaining candidates. Each full slot is skipped once,
+	// while the existing retry state controls when a new pass may begin.
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	shuffle := r.shuffle
+	if shuffle == nil {
+		shuffle = rand.Shuffle
+	}
+	shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
+	for _, id := range ids {
 		release, ok, err := r.tryOccupy(ctx, accountID, id, group.PerIPConcurrency, occupySlot)
 		if err != nil {
 			return nil, nil, err

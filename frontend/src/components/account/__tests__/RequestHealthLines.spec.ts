@@ -31,7 +31,7 @@ describe('RequestHealthLines', () => {
         stubs: { RequestHealthBar: true, RequestHealthStatus: true, Icon: true }
       }
     })
-    expect(wrapper.html()).toContain('max-h-[7.5rem]')
+    expect(wrapper.html()).toContain('max-h-[5rem]')
     expect(wrapper.html()).toContain('overflow-y-auto')
   })
 
@@ -48,6 +48,6 @@ describe('RequestHealthLines', () => {
         stubs: { RequestHealthBar: true, RequestHealthStatus: true, Icon: true }
       }
     })
-    expect(wrapper.html()).not.toContain('max-h-[7.5rem]')
+    expect(wrapper.html()).not.toContain('max-h-[5rem]')
   })
 })

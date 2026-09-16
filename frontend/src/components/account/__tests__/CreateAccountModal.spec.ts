@@ -6,6 +6,7 @@ const {
   createAccountMock,
   probeUpstreamBillingMock,
   syncUpstreamModelsMock,
+  listIpGroupsMock,
   showWarningMock,
   importCodexSessionMock,
   createOpenAICodexPATMock,
@@ -14,6 +15,7 @@ const {
   createAccountMock: vi.fn(),
   probeUpstreamBillingMock: vi.fn(),
   syncUpstreamModelsMock: vi.fn(),
+  listIpGroupsMock: vi.fn(),
   showWarningMock: vi.fn(),
   importCodexSessionMock: vi.fn(),
   createOpenAICodexPATMock: vi.fn(),
@@ -54,7 +56,7 @@ vi.mock('@/api/admin', () => ({
       list: vi.fn().mockResolvedValue([]),
     },
     proxyIpGroups: {
-      list: vi.fn().mockResolvedValue([]),
+      list: listIpGroupsMock,
     },
   },
 }))
@@ -209,6 +211,7 @@ async function openCodexImportStep(toggleClicks = 0) {
 
 describe('CreateAccountModal OpenAI long-context billing', () => {
   beforeEach(() => {
+    listIpGroupsMock.mockReset().mockResolvedValue([])
     authIsSimpleMode.value = true
     createAccountMock.mockReset().mockResolvedValue({ id: 42, platform: 'openai', type: 'apikey' })
     probeUpstreamBillingMock.mockReset().mockResolvedValue({})
@@ -674,6 +677,49 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload?.upstream_billing_probe_enabled).toBe(true)
     // 创建成功后前端立即发起一次首探（与其他 apikey 平台一致）。
     expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
+  })
+
+  it('defaults JSON import to latest models, alerts off, first compatible group and first IP group', async () => {
+    listIpGroupsMock.mockResolvedValue([{ id: 91, name: 'first', proxy_ids: [101] }, { id: 92, name: 'second', proxy_ids: [102] }])
+    const wrapper = mountModal([
+      { id: 1, name: 'Claude', platform: 'anthropic' },
+      { id: 5, name: 'First OpenAI', platform: 'openai' },
+      { id: 6, name: 'Codex', platform: 'openai' },
+    ])
+    await selectButtonByText(wrapper, 'OpenAI')
+    await flushPromises()
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('JSON import')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    const payload = importCodexSessionMock.mock.calls[0]?.[0]
+    expect(payload.group_ids).toEqual([5])
+    expect(payload.proxy_ip_group_id).toBe(91)
+    expect(payload.proxy_id).toBe(101)
+    expect(payload.extra.error_alert).toEqual({ enabled: false })
+    expect(payload.credential_extras.model_mapping).toEqual(Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model])))
+  })
+
+  it('preserves manually selected group and IP group during JSON import', async () => {
+    listIpGroupsMock.mockResolvedValue([{ id: 91, proxy_ids: [101] }, { id: 92, proxy_ids: [102] }])
+    const wrapper = mountModal([{ id: 5, name: 'First', platform: 'openai' }, { id: 6, name: 'Codex', platform: 'openai' }])
+    await selectButtonByText(wrapper, 'OpenAI')
+    await flushPromises()
+    wrapper.getComponent(GroupSelectorStub).vm.$emit('update:modelValue', [6])
+    wrapper.getComponent({ name: 'OpenAIAccountProxyFields' }).vm.$emit('update:proxyIpGroupId', 92)
+    await flushPromises()
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Selected import')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]).toMatchObject({ group_ids: [6], proxy_ip_group_id: 92, proxy_id: 102 })
+  })
+
+  it('keeps JSON import available without groups or IP groups', async () => {
+    const wrapper = await openCodexImportStep()
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]).toMatchObject({ group_ids: [], proxy_ip_group_id: 0, proxy_id: null, extra: { error_alert: { enabled: false } } })
   })
 
   it('sends true by default for Codex session import', async () => {

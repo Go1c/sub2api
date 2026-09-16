@@ -3005,8 +3005,8 @@
         :proxy-ip-group-id="form.proxy_ip_group_id"
         :proxies="proxies"
         :ip-groups="ipGroups"
-        @update:proxy-id="form.proxy_id = $event"
-        @update:proxy-ip-group-id="form.proxy_ip_group_id = $event"
+        @update:proxy-id="form.proxy_id = $event; codexImportProxySelected = true"
+        @update:proxy-ip-group-id="form.proxy_ip_group_id = $event; codexImportProxySelected = true"
       >
         <template #banner>
           <ProxyAdBanner />
@@ -3558,6 +3558,7 @@
         <!-- Group Selection - 仅标准模式显示 -->
         <GroupSelector
           v-model="form.group_ids"
+          @update:model-value="step === 1 && (codexImportGroupSelected = true)"
           :groups="groups"
           :platform="form.platform"
           :mixed-scheduling="mixedScheduling"
@@ -4825,6 +4826,8 @@ const isOAuthFlow = computed(() => {
   return accountCategory.value === 'oauth-based'
 })
 
+let codexImportGroupSelected = false
+let codexImportProxySelected = false
 let pendingCodexGroupDefault = false
 let kinCodexImportSnapshot: { concurrency: number; group_ids: number[] } | null = null
 
@@ -5454,6 +5457,8 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
 
 // Methods
 const resetForm = () => {
+  codexImportGroupSelected = false
+  codexImportProxySelected = false
   step.value = 1
   form.name = ''
   form.notes = ''
@@ -6588,6 +6593,10 @@ const handleOpenAIImportCodexSession = async (content: string) => {
     return
   }
 
+  // Match “sync latest supported models” while retaining any custom whitelist entries.
+  if (modelRestrictionMode.value === 'whitelist') {
+    allowedModels.value = [...new Set([...allowedModels.value, ...getModelsByPlatform('openai')])]
+  }
   const credentialExtras = buildOpenAICodexImportCredentialExtras()
   if (credentialExtras === null) {
     return
@@ -6597,8 +6606,17 @@ const handleOpenAIImportCodexSession = async (content: string) => {
   oauthClient.error.value = ''
 
   try {
-    const extra = buildOpenAICodexImportExtra()
+    const extra = { ...buildOpenAICodexImportExtra(), error_alert: { enabled: false } }
     const binding = resolveKinCodexImportFields()
+    if (!codexImportGroupSelected) {
+      const firstGroup = props.groups.find(group => group.platform === 'openai' || group.platform === 'composite')
+      binding.group_ids = firstGroup ? [firstGroup.id] : []
+    }
+    if (!codexImportProxySelected && !form.proxy_id && !form.proxy_ip_group_id) {
+      // Refresh here as well: the modal's initial request may still be in flight.
+      await loadIpGroups()
+      form.proxy_ip_group_id = ipGroups.value[0]?.id ?? null
+    }
     const result = await adminAPI.accounts.importCodexSession({
       content: trimmed,
       name: form.name,

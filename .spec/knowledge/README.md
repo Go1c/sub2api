@@ -15,3 +15,4 @@ metadata:
 |------|--------|
 | [`features/account-error-alert.md`](features/account-error-alert.md) | 账号异常 Telegram 告警：后台聚合 `ops_error_logs`，按账号 extra 开关/关键字/规则推送 |
 | [`features/account-request-health.md`](features/account-request-health.md) | 账号列表最近 N 次请求健康条：单 IP 一根、IP 组按出口拆条，Redis 环形缓冲 |
+| [`features/openai-oauth-ip-group.md`](features/openai-oauth-ip-group.md) | OpenAI OAuth IP 组选路：会话粘性、随机选择未尝试出口与两轮重试 |

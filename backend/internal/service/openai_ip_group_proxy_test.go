@@ -4,6 +4,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"sync"
 	"testing"
@@ -147,6 +149,8 @@ func liveProxy(id int64, host string) Proxy {
 func testResolver(groups *proxyIPGroupRepoStub, proxies map[int64]Proxy, bind *memoryIPGroupBindStore, slots *memoryAccountProxySlots) *openAIIPGroupResolver {
 	r := newOpenAIIPGroupResolver(groups, &staticProxyRepo{proxies: proxies}, bind, slots, time.Hour)
 	r.now = func() time.Time { return time.Unix(1_700_000_000, 0).UTC() }
+	// Keep existing routing fixtures deterministic; random selection is tested separately.
+	r.shuffle = func(int, func(int, int)) {}
 	return r
 }
 
@@ -387,4 +391,45 @@ func TestResolveOpenAIAccountProxy_AllSlotsFullReturnsError(t *testing.T) {
 
 	_, err = resolveOpenAIAccountProxy(context.Background(), resolver, account, "conv-3")
 	require.ErrorIs(t, err, errOpenAIIPGroupNoProxy)
+}
+
+func TestIPGroupRandomSelectionWithoutReplacement(t *testing.T) {
+	groups := newProxyIPGroupRepoStub()
+	ids := []int64{2, 3, 4, 5}
+	require.NoError(t, groups.Create(t.Context(), &ProxyIPGroup{Name: "random", PerIPConcurrency: 10, ProxyIDs: ids}))
+	proxies := map[int64]Proxy{}
+	for _, id := range ids {
+		proxies[id] = liveProxy(id, "proxy.example")
+	}
+	bind := newMemoryIPGroupBindStore()
+	resolver := newOpenAIIPGroupResolver(groups, &staticProxyRepo{proxies: proxies}, bind, newMemoryAccountProxySlots(), time.Hour)
+	resolver.shuffle = rand.New(rand.NewPCG(42, 17)).Shuffle
+	gid := int64(1)
+	account := &Account{ID: 9, Platform: PlatformOpenAI, Type: AccountTypeOAuth, ProxyIPGroupID: &gid}
+	firstIDs := map[int64]bool{}
+	for trial := 0; trial < 64; trial++ {
+		session := fmt.Sprintf("random-%d", trial)
+		ctx := withOpenAIIPGroupSession(t.Context(), session)
+		st := openAIIPGroupRetryStateFrom(ctx)
+		for pass := 0; pass < openAIIPGroupPassLimit; pass++ {
+			seen := map[int64]bool{}
+			for i := range ids {
+				resolved, err := resolver.resolve(ctx, account, session)
+				require.NoError(t, err)
+				id := resolved.Proxy.ID
+				require.False(t, seen[id], "must exhaust untried IPs before repeating")
+				seen[id] = true
+				if pass == 0 && i == 0 {
+					firstIDs[id] = true
+				}
+				resolved.Release()
+				st.advanceAfterTransient(ids, id)
+				require.NoError(t, bind.DeleteBoundProxyID(ctx, account.ID, session))
+			}
+			require.Len(t, seen, len(ids))
+		}
+		require.True(t, st.done)
+	}
+	// A fixed random seed makes this regression deterministic; a sorted picker always starts at 2.
+	require.Greater(t, len(firstIDs), 1, "new selections must not always start with the smallest IP ID")
 }
