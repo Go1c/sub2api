@@ -756,8 +756,27 @@ export default {
           ttftP99MaxRange: 'TTFT P99 maximum must be a number ≥ 0',
           requestErrorRateMaxRange: 'Request error rate maximum must be between 0 and 100',
           upstreamErrorRateMaxRange: 'Upstream error rate maximum must be between 0 and 100',
-          openaiQuotaAutoPauseRange: 'OpenAI quota auto-pause threshold must be between 0 and 100'
-        }
+          openaiQuotaAutoPauseRange: 'OpenAI quota auto-pause threshold must be between 0 and 100',
+          accountAlertCooldownRange: 'Account error alert cooldown must be between 0 and 10080 minutes',
+          accountAlertIntervalRange: 'Account error alert scan interval must be between 1 and 1440 minutes',
+          accountAlertMaxRowsRange: 'Account error alert max accounts must be between 1 and 50',
+          accountAlertMaxUsersRange: 'Account error alert top user emails must be between 0 and 10',
+          accountAlertMinCountRange: 'Account error alert trigger count must be between 1 and 100000',
+          accountAlertWindowRange: 'Account error alert window must be between 1 and 1440 minutes',
+          telegramBotTokenRequired: 'Telegram Bot Token is required when account error alert is enabled',
+          telegramChatIdRequired: 'Telegram Chat ID is required when account error alert is enabled'
+        },
+        accountAlertCooldownMinutes: 'Cooldown (minutes)',
+        accountAlertIntervalMinutes: 'Scan interval (minutes)',
+        accountAlertMaxRows: 'Max accounts',
+        accountAlertMaxUsers: 'Top user emails',
+        accountAlertMinCount: 'Trigger count',
+        accountAlertWindowMinutes: 'Window (minutes)',
+        accountErrorAlert: 'Account Error Telegram Alert',
+        accountErrorAlertHint: 'Configure the Telegram bot, scan interval, and default thresholds here. Per-account monitoring, keywords, and rules are set on the account edit page.',
+        enableAccountErrorAlert: 'Enable account error alert',
+        telegramBotToken: 'Telegram Bot Token',
+        telegramChatId: 'Telegram Chat ID'
       },
       concurrency: {
         title: 'Concurrency / Queue',

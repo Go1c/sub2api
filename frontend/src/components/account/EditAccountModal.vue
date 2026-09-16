@@ -26,6 +26,176 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.errorAlert.title') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.errorAlert.hint') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="errorAlertEnabled"
+            data-testid="error-alert-enabled"
+            :aria-label="t('admin.accounts.errorAlert.title')"
+          />
+        </div>
+
+        <div v-if="errorAlertEnabled" class="mt-4 space-y-4">
+          <div>
+            <label class="input-label">{{ t('admin.accounts.errorAlert.keywords') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.errorAlert.keywordsHint') }}
+            </p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button
+                v-for="keyword in errorAlertSuggestedKeywords"
+                :key="keyword"
+                type="button"
+                :data-testid="`error-alert-suggest-${keyword}`"
+                class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                :class="
+                  errorAlertKeywords.includes(keyword)
+                    ? 'bg-primary-100 text-primary-700 ring-1 ring-primary-500 dark:bg-primary-900/30 dark:text-primary-300'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+                "
+                @click="toggleErrorAlertKeyword(keyword)"
+              >
+                {{ keyword }}
+              </button>
+            </div>
+            <div class="mt-2 flex items-center gap-2">
+              <input
+                v-model="errorAlertKeywordInput"
+                type="text"
+                class="input flex-1"
+                data-testid="error-alert-keyword-input"
+                :placeholder="t('admin.accounts.errorAlert.keywordPlaceholder')"
+                @keydown.enter.prevent="addErrorAlertKeyword"
+              />
+              <button
+                type="button"
+                class="btn btn-secondary px-3"
+                data-testid="error-alert-keyword-add"
+                @click="addErrorAlertKeyword"
+              >
+                {{ t('common.add') }}
+              </button>
+            </div>
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              <span
+                v-for="keyword in errorAlertKeywords"
+                :key="keyword"
+                class="inline-flex items-center gap-1 rounded-full bg-primary-100 px-2.5 py-0.5 text-sm font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+              >
+                {{ keyword }}
+                <button
+                  type="button"
+                  :data-testid="`error-alert-keyword-remove-${keyword}`"
+                  class="hover:text-primary-900 dark:hover:text-primary-200"
+                  @click="removeErrorAlertKeyword(keyword)"
+                >
+                  <Icon name="x" size="sm" :stroke-width="2" />
+                </button>
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <label class="input-label mb-0">{{ t('admin.accounts.errorAlert.rules') }}</label>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.accounts.errorAlert.rulesHint') }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="btn btn-secondary px-3 py-1.5 text-sm"
+                data-testid="error-alert-rule-add"
+                :disabled="errorAlertRules.length >= ERROR_ALERT_MAX_RULES"
+                @click="addErrorAlertRule"
+              >
+                {{ t('admin.accounts.errorAlert.addRule') }}
+              </button>
+            </div>
+            <div v-if="errorAlertRules.length === 0" class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.errorAlert.noRules') }}
+            </div>
+            <div class="space-y-3">
+              <div
+                v-for="(rule, index) in errorAlertRules"
+                :key="index"
+                class="rounded-lg border border-gray-200 p-3 dark:border-dark-600"
+                :data-testid="`error-alert-rule-${index}`"
+              >
+                <div class="mb-3 flex items-center justify-between">
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {{ t('admin.accounts.errorAlert.ruleN', { n: index + 1 }) }}
+                  </span>
+                  <button
+                    type="button"
+                    class="text-sm text-gray-500 hover:text-red-600"
+                    :data-testid="`error-alert-rule-remove-${index}`"
+                    @click="removeErrorAlertRule(index)"
+                  >
+                    {{ t('common.delete') }}
+                  </button>
+                </div>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div class="md:col-span-2">
+                    <label class="input-label">{{ t('admin.accounts.errorAlert.ruleKeyword') }}</label>
+                    <input
+                      v-model="rule.keyword"
+                      type="text"
+                      class="input"
+                      :data-testid="`error-alert-rule-keyword-${index}`"
+                      :placeholder="t('admin.accounts.errorAlert.ruleKeywordPlaceholder')"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.accounts.errorAlert.windowMinutes') }}</label>
+                    <input
+                      v-model.number="rule.window_minutes"
+                      type="number"
+                      min="0"
+                      max="1440"
+                      class="input"
+                      :data-testid="`error-alert-rule-window-${index}`"
+                      :placeholder="t('admin.accounts.errorAlert.useOpsDefault')"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.accounts.errorAlert.minErrorCount') }}</label>
+                    <input
+                      v-model.number="rule.min_error_count"
+                      type="number"
+                      min="0"
+                      max="100000"
+                      class="input"
+                      :data-testid="`error-alert-rule-min-${index}`"
+                      :placeholder="t('admin.accounts.errorAlert.useOpsDefault')"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.accounts.errorAlert.maxSends') }}</label>
+                    <input
+                      v-model.number="rule.max_sends"
+                      type="number"
+                      min="0"
+                      max="60"
+                      class="input"
+                      :data-testid="`error-alert-rule-max-sends-${index}`"
+                      :placeholder="t('admin.accounts.errorAlert.maxSendsPlaceholder')"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
@@ -3420,6 +3590,22 @@ const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
+const ERROR_ALERT_EXTRA_KEY = 'error_alert'
+const ERROR_ALERT_MAX_KEYWORDS = 20
+const ERROR_ALERT_MAX_KEYWORD_LEN = 80
+const ERROR_ALERT_MAX_RULES = 10
+const ERROR_ALERT_MAX_SENDS = 60
+const errorAlertSuggestedKeywords = ['503', '429', '529', 'overloaded']
+type ErrorAlertRuleForm = {
+  keyword: string
+  window_minutes: number | null
+  min_error_count: number | null
+  max_sends: number | null
+}
+const errorAlertEnabled = ref(true)
+const errorAlertKeywords = ref<string[]>([])
+const errorAlertKeywordInput = ref('')
+const errorAlertRules = ref<ErrorAlertRuleForm[]>([])
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
@@ -3455,6 +3641,151 @@ function formatPoolModeRetryStatusCodes(value: unknown): string {
   }
   return out.sort((a, b) => a - b).join(', ')
 }
+
+function normalizeErrorAlertKeyword(raw: string): string {
+  const keyword = raw.trim()
+  if (!keyword) return ''
+  return keyword.length > ERROR_ALERT_MAX_KEYWORD_LEN ? keyword.slice(0, ERROR_ALERT_MAX_KEYWORD_LEN) : keyword
+}
+
+function normalizeErrorAlertKeywords(keywords: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of keywords) {
+    const keyword = normalizeErrorAlertKeyword(raw)
+    if (!keyword) continue
+    const key = keyword.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(keyword)
+    if (out.length >= ERROR_ALERT_MAX_KEYWORDS) break
+  }
+  return out
+}
+
+function optionalErrorAlertNumber(value: unknown, max: number): number | null {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.min(Math.floor(n), max)
+}
+
+function loadErrorAlertFromExtra(extra: Record<string, unknown> | undefined) {
+  const raw = extra?.[ERROR_ALERT_EXTRA_KEY]
+  errorAlertKeywordInput.value = ''
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    errorAlertEnabled.value = true
+    errorAlertKeywords.value = []
+    errorAlertRules.value = []
+    return
+  }
+  const cfg = raw as Record<string, unknown>
+  errorAlertEnabled.value = cfg.enabled !== false
+  errorAlertKeywords.value = Array.isArray(cfg.keywords)
+    ? normalizeErrorAlertKeywords(cfg.keywords.map(item => String(item)))
+    : []
+  const rules = Array.isArray(cfg.rules) ? cfg.rules : []
+  errorAlertRules.value = rules.slice(0, ERROR_ALERT_MAX_RULES).map(item => {
+    const rule = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
+    return {
+      keyword: normalizeErrorAlertKeyword(typeof rule.keyword === 'string' ? rule.keyword : ''),
+      window_minutes: optionalErrorAlertNumber(rule.window_minutes, 1440),
+      min_error_count: optionalErrorAlertNumber(rule.min_error_count, 100000),
+      max_sends: optionalErrorAlertNumber(rule.max_sends, ERROR_ALERT_MAX_SENDS)
+    }
+  })
+}
+
+function toggleErrorAlertKeyword(keyword: string) {
+  const normalized = normalizeErrorAlertKeyword(keyword)
+  if (!normalized) return
+  const key = normalized.toLowerCase()
+  const exists = errorAlertKeywords.value.some(item => item.toLowerCase() === key)
+  if (exists) {
+    errorAlertKeywords.value = errorAlertKeywords.value.filter(item => item.toLowerCase() !== key)
+    return
+  }
+  if (errorAlertKeywords.value.length >= ERROR_ALERT_MAX_KEYWORDS) return
+  errorAlertKeywords.value = [...errorAlertKeywords.value, normalized]
+}
+
+function addErrorAlertKeyword() {
+  const normalized = normalizeErrorAlertKeyword(errorAlertKeywordInput.value)
+  if (!normalized) return
+  const key = normalized.toLowerCase()
+  if (!errorAlertKeywords.value.some(item => item.toLowerCase() === key) && errorAlertKeywords.value.length < ERROR_ALERT_MAX_KEYWORDS) {
+    errorAlertKeywords.value = [...errorAlertKeywords.value, normalized]
+  }
+  errorAlertKeywordInput.value = ''
+}
+
+function removeErrorAlertKeyword(keyword: string) {
+  const key = keyword.toLowerCase()
+  errorAlertKeywords.value = errorAlertKeywords.value.filter(item => item.toLowerCase() !== key)
+}
+
+function addErrorAlertRule() {
+  if (errorAlertRules.value.length >= ERROR_ALERT_MAX_RULES) return
+  errorAlertRules.value = [
+    ...errorAlertRules.value,
+    { keyword: '', window_minutes: null, min_error_count: null, max_sends: 1 }
+  ]
+}
+
+function removeErrorAlertRule(index: number) {
+  errorAlertRules.value = errorAlertRules.value.filter((_, i) => i !== index)
+}
+
+function serializeErrorAlertExtra(): Record<string, unknown> | null {
+  if (!errorAlertEnabled.value) {
+    return { enabled: false }
+  }
+  const keywords = normalizeErrorAlertKeywords(errorAlertKeywords.value)
+  const rules = errorAlertRules.value.slice(0, ERROR_ALERT_MAX_RULES).map(rule => {
+    const out: Record<string, unknown> = {}
+    const keyword = normalizeErrorAlertKeyword(rule.keyword)
+    if (keyword) out.keyword = keyword
+    const windowMinutes = optionalErrorAlertNumber(rule.window_minutes, 1440)
+    if (windowMinutes != null) out.window_minutes = windowMinutes
+    const minErrorCount = optionalErrorAlertNumber(rule.min_error_count, 100000)
+    if (minErrorCount != null) out.min_error_count = minErrorCount
+    const maxSends = optionalErrorAlertNumber(rule.max_sends, ERROR_ALERT_MAX_SENDS)
+    if (maxSends != null) out.max_sends = maxSends
+    return out
+  })
+  if (keywords.length === 0 && rules.length === 0) {
+    return null
+  }
+  const payload: Record<string, unknown> = { enabled: true }
+  if (keywords.length > 0) payload.keywords = keywords
+  if (rules.length > 0) payload.rules = rules
+  return payload
+}
+
+function applyErrorAlertToUpdatePayload(updatePayload: Record<string, unknown>) {
+  const next = serializeErrorAlertExtra()
+  const stored = (props.account?.extra as Record<string, unknown> | undefined)?.[ERROR_ALERT_EXTRA_KEY]
+  if (updatePayload.extra != null) {
+    const extra = { ...(updatePayload.extra as Record<string, unknown>) }
+    if (next == null) {
+      delete extra[ERROR_ALERT_EXTRA_KEY]
+    } else {
+      extra[ERROR_ALERT_EXTRA_KEY] = next
+    }
+    updatePayload.extra = extra
+    return
+  }
+  if (next == null && stored == null) {
+    return
+  }
+  const extra: Record<string, unknown> = { ...((props.account?.extra as Record<string, unknown>) || {}) }
+  if (next == null) {
+    delete extra[ERROR_ALERT_EXTRA_KEY]
+  } else {
+    extra[ERROR_ALERT_EXTRA_KEY] = next
+  }
+  updatePayload.extra = extra
+}
+
 const customErrorCodesEnabled = ref(false)
 const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
@@ -4073,6 +4404,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	upstreamBillingAutoProbeEnabled.value = extra?.upstream_billing_probe_enabled === true
   upstreamBillingRateSyncEnabled.value =
     upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
+	loadErrorAlertFromExtra(extra)
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
@@ -5760,6 +6092,8 @@ const handleSubmit = async () => {
       }
       updatePayload.extra = newExtra
     }
+
+    applyErrorAlertToUpdatePayload(updatePayload)
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
       await submitUpdateAccount(accountID, updatePayload)

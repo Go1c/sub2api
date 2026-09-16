@@ -26,6 +26,65 @@ func ProvideGrokOAuthService(proxyRepo ProxyRepository, oauthClient GrokOAuthCli
 	return svc
 }
 
+var opsAccountErrorAlertReleaseScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
+
+var opsAccountErrorAlertIncrScript = redis.NewScript(`
+local n = redis.call("INCR", KEYS[1])
+if n == 1 then
+  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
+return n
+`)
+
+type opsAccountErrorAlertRedisStore struct {
+	client *redis.Client
+}
+
+func ProvideOpsAccountErrorAlertLockStore(redisClient *redis.Client) OpsAccountErrorAlertLockStore {
+	if redisClient == nil {
+		return nil
+	}
+	return &opsAccountErrorAlertRedisStore{client: redisClient}
+}
+
+func (s *opsAccountErrorAlertRedisStore) Acquire(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	return s.client.SetNX(ctx, key, value, ttl).Result()
+}
+
+func (s *opsAccountErrorAlertRedisStore) Release(ctx context.Context, key, value string) error {
+	return opsAccountErrorAlertReleaseScript.Run(ctx, s.client, []string{key}, value).Err()
+}
+
+func (s *opsAccountErrorAlertRedisStore) Exists(ctx context.Context, key string) (bool, error) {
+	count, err := s.client.Exists(ctx, key).Result()
+	return count > 0, err
+}
+
+func (s *opsAccountErrorAlertRedisStore) SetCooldown(ctx context.Context, key string, ttl time.Duration) error {
+	return s.client.Set(ctx, key, "1", ttl).Err()
+}
+
+func (s *opsAccountErrorAlertRedisStore) GetInt(ctx context.Context, key string) (int64, error) {
+	n, err := s.client.Get(ctx, key).Int64()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	return n, err
+}
+
+func (s *opsAccountErrorAlertRedisStore) Incr(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	ms := ttl.Milliseconds()
+	if ms < 1 {
+		ms = 1
+	}
+	return opsAccountErrorAlertIncrScript.Run(ctx, s.client, []string{key}, ms).Int64()
+}
+
 // BuildInfo contains build information
 type BuildInfo struct {
 	Version   string
@@ -965,6 +1024,10 @@ var ProviderSet = wire.NewSet(
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
 	ProvideOpsAlertEvaluatorService,
+	NewTelegramOpsSender,
+	wire.Bind(new(OpsTelegramSender), new(*telegramOpsSender)),
+	ProvideOpsAccountErrorAlertLockStore,
+	ProvideOpsAccountErrorAlertService,
 	ProvideOpsCleanupService,
 	ProvideOpsScheduledReportService,
 	NewEmailService,

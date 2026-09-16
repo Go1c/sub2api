@@ -781,6 +781,19 @@ export interface OpsAlertRuntimeSettings {
   thresholds: OpsMetricThresholds // 指标阈值配置
 }
 
+export interface OpsAccountErrorAlertConfig {
+  enabled: boolean
+  interval_minutes: number
+  window_minutes: number
+  min_error_count: number
+  cooldown_minutes: number
+  max_accounts_per_alert: number
+  max_users_per_alert: number
+  telegram_bot_token: string
+  telegram_chat_id: string
+  distributed_lock: OpsDistributedLockSettings
+}
+
 export interface OpsOpenAIAccountQuotaAutoPauseSettings {
   default_threshold_5h: number // 0~1，0 表示不启用全局默认 5h 阈值
   default_threshold_7d: number // 0~1，0 表示不启用全局默认 7d 阈值
@@ -1255,6 +1268,16 @@ export async function updateAlertRuntimeSettings(config: OpsAlertRuntimeSettings
   return data
 }
 
+export async function getAccountErrorAlertConfig(): Promise<OpsAccountErrorAlertConfig> {
+  const { data } = await apiClient.get<OpsAccountErrorAlertConfig>('/admin/ops/account-error-alert/config')
+  return data
+}
+
+export async function updateAccountErrorAlertConfig(config: OpsAccountErrorAlertConfig): Promise<OpsAccountErrorAlertConfig> {
+  const { data } = await apiClient.put<OpsAccountErrorAlertConfig>('/admin/ops/account-error-alert/config', config)
+  return data
+}
+
 export async function getRuntimeLogConfig(): Promise<OpsRuntimeLogConfig> {
   const { data } = await apiClient.get<OpsRuntimeLogConfig>('/admin/ops/runtime/logging')
   return data
@@ -1348,6 +1371,8 @@ export const opsAPI = {
   updateEmailNotificationConfig,
   getAlertRuntimeSettings,
   updateAlertRuntimeSettings,
+  getAccountErrorAlertConfig,
+  updateAccountErrorAlertConfig,
   getRuntimeLogConfig,
   updateRuntimeLogConfig,
   resetRuntimeLogConfig,

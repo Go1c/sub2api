@@ -757,8 +757,27 @@ export default {
           ttftP99MaxRange: 'TTFT P99最大值必须大于等于0',
           requestErrorRateMaxRange: '请求错误率最大值必须在0-100之间',
           upstreamErrorRateMaxRange: '上游错误率最大值必须在0-100之间',
-          openaiQuotaAutoPauseRange: 'OpenAI 配额自动暂停阈值必须在 0-100 之间'
-        }
+          openaiQuotaAutoPauseRange: 'OpenAI 配额自动暂停阈值必须在 0-100 之间',
+          accountAlertCooldownRange: '账号异常告警冷却时间必须在 0-10080 分钟之间',
+          accountAlertIntervalRange: '账号异常告警扫描间隔必须在 1-1440 分钟之间',
+          accountAlertMaxRowsRange: '账号异常告警最多账号数必须在 1-50 之间',
+          accountAlertMaxUsersRange: '账号异常告警影响用户邮箱数必须在 0-10 之间',
+          accountAlertMinCountRange: '账号异常告警触发次数必须在 1-100000 之间',
+          accountAlertWindowRange: '账号异常告警统计窗口必须在 1-1440 分钟之间',
+          telegramBotTokenRequired: '开启账号异常告警时必须填写 Telegram Bot Token',
+          telegramChatIdRequired: '开启账号异常告警时必须填写 Telegram Chat ID'
+        },
+        accountAlertCooldownMinutes: '冷却时间（分钟）',
+        accountAlertIntervalMinutes: '扫描间隔（分钟）',
+        accountAlertMaxRows: '最多账号数',
+        accountAlertMaxUsers: '影响用户邮箱数',
+        accountAlertMinCount: '触发次数',
+        accountAlertWindowMinutes: '统计窗口（分钟）',
+        accountErrorAlert: '账号异常 Telegram 告警',
+        accountErrorAlertHint: 'Telegram Bot、扫描间隔和默认阈值在这里配置。每个账号可在账号编辑页开关监控、设置关键字和规则。',
+        enableAccountErrorAlert: '开启账号异常告警',
+        telegramBotToken: 'Telegram Bot Token',
+        telegramChatId: 'Telegram Chat ID'
       },
       concurrency: {
         title: '并发 / 排队',

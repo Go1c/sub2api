@@ -50,6 +50,11 @@ type OpsRepository interface {
 	UpdateAlertEventStatus(ctx context.Context, eventID int64, status string, resolvedAt *time.Time) error
 	UpdateAlertEventEmailSent(ctx context.Context, eventID int64, emailSent bool) error
 
+	ListAccountErrorAlertCandidates(ctx context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error)
+	ListAccountErrorAlertTopUsers(ctx context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error)
+	ListAccountIDsWithErrorAlertRules(ctx context.Context) ([]int64, error)
+	GetAccountErrorAlertSettings(ctx context.Context, accountIDs []int64) (map[int64]AccountErrorAlertSettings, error)
+
 	// Alert silences
 	CreateAlertSilence(ctx context.Context, input *OpsAlertSilence) (*OpsAlertSilence, error)
 	IsAlertSilenced(ctx context.Context, ruleID int64, platform string, groupID *int64, region *string, now time.Time) (bool, error)
@@ -301,6 +306,40 @@ type OpsJobHeartbeat struct {
 	LastResult     *string    `json:"last_result"`
 
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type OpsAccountErrorAlertCandidateFilter struct {
+	StartTime          time.Time
+	EndTime            time.Time
+	MinErrorCount      int
+	Limit              int
+	AccountID          int64
+	Keyword            string
+	UseAccountKeywords bool
+}
+
+type OpsAccountErrorAlertTopUserFilter struct {
+	StartTime          time.Time
+	EndTime            time.Time
+	MinErrorCount      int
+	Limit              int
+	AccountID          int64
+	Keyword            string
+	UseAccountKeywords bool
+}
+
+type OpsAccountErrorAlertCandidate struct {
+	AccountID    int64     `json:"account_id"`
+	AccountName  string    `json:"account_name"`
+	StatusCode   int       `json:"status_code"`
+	ErrorCount   int64     `json:"error_count"`
+	LatestAt     time.Time `json:"latest_at"`
+	ErrorMessage string    `json:"error_message"`
+}
+
+type OpsAccountErrorAlertTopUser struct {
+	UserEmail  string `json:"user_email"`
+	ErrorCount int64  `json:"error_count"`
 }
 
 type OpsWindowStats struct {

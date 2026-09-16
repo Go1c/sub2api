@@ -13,7 +13,11 @@ type opsRepoMock struct {
 	BatchInsertSystemLogsFn       func(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error)
 	ListSystemLogsFn              func(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error)
 	DeleteSystemLogsFn            func(ctx context.Context, filter *OpsSystemLogCleanupFilter) (int64, error)
-	InsertSystemLogCleanupAuditFn func(ctx context.Context, input *OpsSystemLogCleanupAudit) error
+	InsertSystemLogCleanupAuditFn     func(ctx context.Context, input *OpsSystemLogCleanupAudit) error
+	ListAccountErrorAlertCandidatesFn func(ctx context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error)
+	ListAccountErrorAlertTopUsersFn   func(ctx context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error)
+	ListAccountIDsWithErrorAlertRulesFn func(ctx context.Context) ([]int64, error)
+	GetAccountErrorAlertSettingsFn      func(ctx context.Context, accountIDs []int64) (map[int64]AccountErrorAlertSettings, error)
 }
 
 func (m *opsRepoMock) InsertErrorLog(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error) {
@@ -191,6 +195,34 @@ func (m *opsRepoMock) GetLatestHourlyBucketStart(ctx context.Context) (time.Time
 
 func (m *opsRepoMock) GetLatestDailyBucketDate(ctx context.Context) (time.Time, bool, error) {
 	return time.Time{}, false, nil
+}
+
+func (m *opsRepoMock) ListAccountErrorAlertCandidates(ctx context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error) {
+	if m.ListAccountErrorAlertCandidatesFn != nil {
+		return m.ListAccountErrorAlertCandidatesFn(ctx, filter)
+	}
+	return []*OpsAccountErrorAlertCandidate{}, nil
+}
+
+func (m *opsRepoMock) ListAccountErrorAlertTopUsers(ctx context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error) {
+	if m.ListAccountErrorAlertTopUsersFn != nil {
+		return m.ListAccountErrorAlertTopUsersFn(ctx, filter)
+	}
+	return []*OpsAccountErrorAlertTopUser{}, nil
+}
+
+func (m *opsRepoMock) ListAccountIDsWithErrorAlertRules(ctx context.Context) ([]int64, error) {
+	if m.ListAccountIDsWithErrorAlertRulesFn != nil {
+		return m.ListAccountIDsWithErrorAlertRulesFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *opsRepoMock) GetAccountErrorAlertSettings(ctx context.Context, accountIDs []int64) (map[int64]AccountErrorAlertSettings, error) {
+	if m.GetAccountErrorAlertSettingsFn != nil {
+		return m.GetAccountErrorAlertSettingsFn(ctx, accountIDs)
+	}
+	return map[int64]AccountErrorAlertSettings{}, nil
 }
 
 var _ OpsRepository = (*opsRepoMock)(nil)
