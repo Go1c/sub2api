@@ -58,18 +58,21 @@ type DataProxy struct {
 // 影子的独立调度配置(priority/并发/分组/status 管理员可单独调)亦不在本备份范围,属已知局限
 // (外审第6轮裁决:保持排除 + 前端警告,而非升级格式做完整往返)。
 type DataAccount struct {
-	Name               string         `json:"name"`
-	Notes              *string        `json:"notes,omitempty"`
-	Platform           string         `json:"platform"`
-	Type               string         `json:"type"`
-	Credentials        map[string]any `json:"credentials"`
-	Extra              map[string]any `json:"extra,omitempty"`
-	ProxyKey           *string        `json:"proxy_key,omitempty"`
-	Concurrency        int            `json:"concurrency"`
-	Priority           int            `json:"priority"`
-	RateMultiplier     *float64       `json:"rate_multiplier,omitempty"`
-	ExpiresAt          *int64         `json:"expires_at,omitempty"`
-	AutoPauseOnExpired *bool          `json:"auto_pause_on_expired,omitempty"`
+	Name        string         `json:"name"`
+	Notes       *string        `json:"notes,omitempty"`
+	Platform    string         `json:"platform"`
+	Type        string         `json:"type"`
+	Credentials map[string]any `json:"credentials"`
+	Extra       map[string]any `json:"extra,omitempty"`
+	ProxyKey    *string        `json:"proxy_key,omitempty"`
+	// Import-only local bindings. ExportData deliberately leaves these unset.
+	GroupIDs           []int64  `json:"group_ids,omitempty"`
+	ProxyIPGroupID     *int64   `json:"proxy_ip_group_id,omitempty"`
+	Concurrency        int      `json:"concurrency"`
+	Priority           int      `json:"priority"`
+	RateMultiplier     *float64 `json:"rate_multiplier,omitempty"`
+	ExpiresAt          *int64   `json:"expires_at,omitempty"`
+	AutoPauseOnExpired *bool    `json:"auto_pause_on_expired,omitempty"`
 }
 
 type DataImportRequest struct {
@@ -444,7 +447,8 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			Concurrency:          item.Concurrency,
 			Priority:             item.Priority,
 			RateMultiplier:       item.RateMultiplier,
-			GroupIDs:             nil,
+			GroupIDs:             item.GroupIDs,
+			ProxyIPGroupID:       item.ProxyIPGroupID,
 			ExpiresAt:            item.ExpiresAt,
 			AutoPauseOnExpired:   item.AutoPauseOnExpired,
 			SkipDefaultGroupBind: skipDefaultGroupBind,

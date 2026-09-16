@@ -1607,6 +1607,9 @@ export interface AdminDataAccount {
   credentials: Record<string, unknown>
   extra?: Record<string, unknown>
   proxy_key?: string | null
+  // Import-only local bindings; exports do not carry instance-specific IDs.
+  group_ids?: number[]
+  proxy_ip_group_id?: number | null
   concurrency: number
   priority: number
   rate_multiplier?: number | null

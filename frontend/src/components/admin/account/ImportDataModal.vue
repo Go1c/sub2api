@@ -98,6 +98,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getModelsByPlatform } from '@/composables/useModelWhitelist'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -292,6 +293,30 @@ const handleImport = async () => {
       dataPayloads.push(parsed)
     }
     const dataPayload = mergeDataPayloads(dataPayloads)
+    if (dataPayload.accounts.some(account => account.platform === 'openai' && account.type === 'oauth')) {
+      // Resolve local bindings for the JSON file import path, not the OAuth wizard.
+      // Fail visibly if loading defaults fails rather than silently importing unbound accounts.
+      const [groups, ipGroups] = await Promise.all([
+        adminAPI.groups.getAll(),
+        adminAPI.proxyIpGroups.list()
+      ])
+      const firstGroup = groups.find(group => group.platform === 'openai' || group.platform === 'composite')
+      const latestModels = Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model]))
+      dataPayload.accounts = dataPayload.accounts.map(account => {
+        if (account.platform !== 'openai' || account.type !== 'oauth') return account
+        const mapping = account.credentials?.model_mapping
+        return {
+          ...account,
+          credentials: {
+            ...account.credentials,
+            model_mapping: { ...latestModels, ...(mapping && typeof mapping === 'object' && !Array.isArray(mapping) ? mapping : {}) }
+          },
+          extra: { ...account.extra, error_alert: { enabled: false } },
+          group_ids: account.group_ids?.length ? account.group_ids : firstGroup ? [firstGroup.id] : [],
+          proxy_ip_group_id: account.proxy_ip_group_id ?? (account.proxy_key ? undefined : ipGroups[0]?.id)
+        }
+      })
+    }
 
     const res = await adminAPI.accounts.importData({
       data: dataPayload,

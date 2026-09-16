@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { getModelsByPlatform } from '@/composables/useModelWhitelist'
 import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 
 const showError = vi.fn()
@@ -16,13 +17,16 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
+    groups: { getAll: vi.fn().mockResolvedValue([{ id: 5, platform: 'openai' }]) },
+    proxyIpGroups: { list: vi.fn().mockResolvedValue([{ id: 91 }]) },
     accounts: {
       importData: vi.fn()
     }
   }
 }))
 
-vi.mock('vue-i18n', () => ({
+vi.mock('vue-i18n', async () => ({
+  ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
   useI18n: () => ({
     t: (key: string) => key
   })
@@ -60,6 +64,51 @@ describe('ImportDataModal', () => {
     showWarning.mockReset()
     const { adminAPI } = await import('@/api/admin')
     vi.mocked(adminAPI.accounts.importData).mockReset()
+  })
+
+  it('applies OpenAI JSON file import defaults to the actual data endpoint', async () => {
+    const { adminAPI } = await import('@/api/admin')
+    vi.mocked(adminAPI.accounts.importData).mockResolvedValue({ proxy_created: 0, proxy_reused: 0, proxy_failed: 0, account_created: 1, account_failed: 0 })
+    const wrapper = mountModal()
+    const input = wrapper.find('input[type="file"]')
+    setInputFiles(input.element, [makeJsonFile('accounts.json', JSON.stringify({ proxies: [], accounts: [{ name: 'imported', platform: 'openai', type: 'oauth', credentials: { access_token: 'test', model_mapping: { custom: 'upstream' } }, extra: { keep: true }, concurrency: 10, priority: 1 }] }))])
+    await input.trigger('change')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    const account = vi.mocked(adminAPI.accounts.importData).mock.calls[0][0].data.accounts[0]
+    expect(account).toMatchObject({ group_ids: [5], proxy_ip_group_id: 91, extra: { keep: true, error_alert: { enabled: false } } })
+    expect(account.credentials.model_mapping).toEqual({ ...Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model])), custom: 'upstream' })
+  })
+
+  it('keeps explicit bindings and leaves other platforms unchanged', async () => {
+    const { adminAPI } = await import('@/api/admin')
+    vi.mocked(adminAPI.accounts.importData).mockResolvedValue({ proxy_created: 0, proxy_reused: 0, proxy_failed: 0, account_created: 2, account_failed: 0 })
+    const other = { name: 'claude', platform: 'anthropic', type: 'oauth', credentials: { token: 'test' } }
+    const wrapper = mountModal()
+    const input = wrapper.find('input[type="file"]')
+    setInputFiles(input.element, [makeJsonFile('accounts.json', JSON.stringify({ proxies: [], accounts: [
+      { name: 'openai', platform: 'openai', type: 'oauth', credentials: { token: 'test' }, group_ids: [7], proxy_key: 'explicit-proxy' }, other
+    ] }))])
+    await input.trigger('change')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    const accounts = vi.mocked(adminAPI.accounts.importData).mock.calls[0][0].data.accounts
+    expect(accounts[0]).toMatchObject({ group_ids: [7], proxy_key: 'explicit-proxy' })
+    expect(accounts[0].proxy_ip_group_id).toBeUndefined()
+    expect(accounts[1]).toEqual(other)
+  })
+
+  it('does not silently import without defaults when the IP group lookup fails', async () => {
+    const { adminAPI } = await import('@/api/admin')
+    vi.mocked(adminAPI.proxyIpGroups.list).mockRejectedValueOnce(new Error('IP groups unavailable'))
+    const wrapper = mountModal()
+    const input = wrapper.find('input[type="file"]')
+    setInputFiles(input.element, [makeJsonFile('accounts.json', JSON.stringify({ proxies: [], accounts: [{ name: 'openai', platform: 'openai', type: 'oauth', credentials: { token: 'test' } }] }))])
+    await input.trigger('change')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(adminAPI.accounts.importData).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('IP groups unavailable')
   })
 
   it('未选择文件时提示错误', async () => {

@@ -317,3 +317,20 @@ func TestImportDataReusesProxyAndSkipsDefaultGroup(t *testing.T) {
 	require.Len(t, adminSvc.createdAccounts, 1)
 	require.True(t, adminSvc.createdAccounts[0].SkipDefaultGroupBind)
 }
+
+func TestImportDataCarriesJSONDefaultBindings(t *testing.T) {
+	router, svc := setupAccountDataRouter()
+	body := []byte(`{"data":{"proxies":[],"accounts":[{"name":"imported","platform":"openai","type":"oauth","credentials":{"access_token":"test","model_mapping":{"gpt-test":"gpt-test"}},"extra":{"error_alert":{"enabled":false}},"group_ids":[5],"proxy_ip_group_id":91,"concurrency":10,"priority":1}]},"skip_default_group_bind":true}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, svc.createdAccounts, 1)
+	input := svc.createdAccounts[0]
+	require.Equal(t, []int64{5}, input.GroupIDs)
+	require.NotNil(t, input.ProxyIPGroupID)
+	require.Equal(t, int64(91), *input.ProxyIPGroupID)
+	require.Equal(t, false, input.Extra["error_alert"].(map[string]any)["enabled"])
+	require.Equal(t, "gpt-test", input.Credentials["model_mapping"].(map[string]any)["gpt-test"])
+}
