@@ -24,7 +24,7 @@ function dotClass(health: AccountHealthRow['lines'][number]['health']): string {
 </script>
 
 <template>
-  <div :class="isGroup ? 'w-[28rem]' : 'min-w-[18rem]'">
+  <div class="w-max">
     <div
       v-if="isGroup"
       class="overflow-hidden"
@@ -35,7 +35,7 @@ function dotClass(health: AccountHealthRow['lines'][number]['health']): string {
         <div
           v-for="item in row.lines"
           :key="item.ip"
-          class="grid grid-cols-[9rem_1fr_7.5rem] items-center gap-3 px-1 py-2.5"
+          class="grid grid-cols-[8rem_max-content_max-content] items-center gap-3 px-1 py-2.5"
         >
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 flex-shrink-0 rounded-full" :class="dotClass(item.health)" />
@@ -51,7 +51,7 @@ function dotClass(health: AccountHealthRow['lines'][number]['health']): string {
       </div>
     </div>
 
-    <div v-else class="flex items-center gap-4">
+    <div v-else class="flex items-center gap-3">
       <span class="h-2 w-2 flex-shrink-0 rounded-full" :class="dotClass(row.lines[0]?.health ?? { outcomes: [], current: 0, max: 1 })" />
       <RequestHealthBar
         :outcomes="row.lines[0]?.health.outcomes ?? []"

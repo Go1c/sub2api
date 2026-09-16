@@ -15,7 +15,7 @@ const countdown = computed(() =>
 </script>
 
 <template>
-  <div class="flex min-w-[7.5rem] items-center justify-end">
+  <div class="flex items-center whitespace-nowrap">
     <span
       v-if="badge === 'cooling'"
       class="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-sm text-amber-400"
