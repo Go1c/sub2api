@@ -472,6 +472,8 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 		enrichCredentialsFromIDToken(&item)
 
 		if item.Platform == service.PlatformOpenAI && item.Type == service.AccountTypeOAuth {
+			// JSON imports use local onboarding settings, not the source instance's limits.
+			item.Concurrency = 100
 			if len(item.GroupIDs) == 0 && defaultGroupID != nil {
 				item.GroupIDs = []int64{*defaultGroupID}
 			}
@@ -485,6 +487,7 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			if _, exists := extra[service.AccountErrorAlertExtraKey]; !exists {
 				extra[service.AccountErrorAlertExtraKey] = map[string]any{"enabled": false}
 			}
+			extra["codex_fingerprint_mode"] = "device"
 			item.Extra = extra
 			credentials := make(map[string]any, len(item.Credentials)+1)
 			for key, value := range item.Credentials {

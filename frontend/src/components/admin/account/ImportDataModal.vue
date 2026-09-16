@@ -99,6 +99,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getModelsByPlatform } from '@/composables/useModelWhitelist'
+import { KIN_DEFAULT_CODEX_CONCURRENCY, KIN_DEFAULT_CODEX_FINGERPRINT_MODE } from '@/utils/openaiCodexAccountDefaults'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -307,11 +308,12 @@ const handleImport = async () => {
         const mapping = account.credentials?.model_mapping
         return {
           ...account,
+          concurrency: KIN_DEFAULT_CODEX_CONCURRENCY,
           credentials: {
             ...account.credentials,
             model_mapping: { ...latestModels, ...(mapping && typeof mapping === 'object' && !Array.isArray(mapping) ? mapping : {}) }
           },
-          extra: { ...account.extra, error_alert: { enabled: false } },
+          extra: { ...account.extra, codex_fingerprint_mode: KIN_DEFAULT_CODEX_FINGERPRINT_MODE, error_alert: { enabled: false } },
           group_ids: account.group_ids?.length ? account.group_ids : firstGroup ? [firstGroup.id] : [],
           proxy_ip_group_id: account.proxy_ip_group_id ?? (account.proxy_key ? undefined : ipGroups[0]?.id)
         }

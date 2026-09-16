@@ -338,7 +338,7 @@ func TestImportDataCarriesJSONDefaultBindings(t *testing.T) {
 func TestImportDataDefaultsWithoutFrontendEnrichment(t *testing.T) {
 	router, svc := setupAccountDataRouter()
 	svc.groups = []service.Group{{ID: 8, Platform: service.PlatformAnthropic}, {ID: 5, Platform: service.PlatformOpenAI}, {ID: 6, Platform: service.PlatformOpenAI}}
-	body := []byte(`{"data":{"type":"sub2api-data","version":1,"proxies":[],"accounts":[{"name":"imported","platform":"openai","type":"oauth","credentials":{"access_token":"test","model_mapping":{"custom":"target"}},"extra":{"source":"test"},"concurrency":15,"priority":1}]},"skip_default_group_bind":true}`)
+	body := []byte(`{"data":{"type":"sub2api-data","version":1,"proxies":[],"accounts":[{"name":"imported","platform":"openai","type":"oauth","credentials":{"access_token":"test","model_mapping":{"custom":"target"}},"extra":{"source":"test","codex_fingerprint_mode":"off"},"concurrency":15,"priority":1}]},"skip_default_group_bind":true}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -346,6 +346,8 @@ func TestImportDataDefaultsWithoutFrontendEnrichment(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Len(t, svc.createdAccounts, 1)
 	input := svc.createdAccounts[0]
+	require.Equal(t, 100, input.Concurrency)
+	require.Equal(t, "device", input.Extra["codex_fingerprint_mode"])
 	require.Equal(t, []int64{5}, input.GroupIDs)
 	require.NotNil(t, input.ProxyIPGroupID)
 	require.Equal(t, int64(1), *input.ProxyIPGroupID)

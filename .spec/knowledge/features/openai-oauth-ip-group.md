@@ -23,6 +23,7 @@ metadata:
 - 白名单模式导入时合并最新内置 OpenAI 模型清单，等同「同步最新支持模型」；保留自定义模型与映射模式。
 - `/admin/accounts/data` 在后端补齐 OpenAI OAuth 账号缺失的默认分组、IP 组、模型和监控配置；旧客户端直接提交原始 JSON 也适用，不依赖前端加工。显式配置优先，`proxy_ip_group_id: 0` 保留为不绑定。
 - 文件导入通过 `group_ids` / `proxy_ip_group_id` 传递本地绑定；导出不写这些实例内 ID。文件已有代理绑定与自定义模型映射保留；加载默认分组或 IP 组失败时中止并提示错误。
+- OpenAI OAuth JSON 文件导入统一使用并发 `100` 和 `extra.codex_fingerprint_mode: device`（仅设备），覆盖源文件中的这两项值；创建向导默认并发也为 `100`，允许手动调整。
 - 导入请求写入 `extra.error_alert.enabled: false`，默认关闭 Telegram 报错监控。
 
 相关实现：`backend/internal/service/openai_ip_group_proxy.go`；回归测试：`openai_ip_group_proxy_test.go`、`openai_ip_group_rate_limit_test.go`（`unit` build tag）。
