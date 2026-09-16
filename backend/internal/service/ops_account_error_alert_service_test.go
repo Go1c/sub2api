@@ -127,3 +127,103 @@ func TestUpdateOpsAccountErrorAlertConfig_ValidatesTelegramAndBounds(t *testing.
 		t.Fatalf("expected config persisted under %s", SettingKeyOpsAccountErrorAlertConfig)
 	}
 }
+
+func TestCollectAccountErrorAlertItems_PrefersRuleHits(t *testing.T) {
+	windowEnd := time.Date(2026, 9, 16, 5, 0, 0, 0, time.UTC)
+	windowStart := windowEnd.Add(-10 * time.Minute)
+	ruleItem := &OpsAccountErrorAlertCandidate{
+		AccountID:    7,
+		AccountName:  "CPA-Pro20-817",
+		StatusCode:   503,
+		ErrorCount:   2,
+		ErrorMessage: "Our servers are currently overloaded",
+	}
+	defaultOther := &OpsAccountErrorAlertCandidate{
+		AccountID:    8,
+		AccountName:  "other",
+		StatusCode:   500,
+		ErrorCount:   6,
+		ErrorMessage: "boom",
+	}
+	repo := &opsRepoMock{
+		ListAccountErrorAlertCandidatesFn: func(_ context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error) {
+			if filter.AccountID == 7 && filter.Keyword == "overloaded" {
+				return []*OpsAccountErrorAlertCandidate{ruleItem}, nil
+			}
+			if filter.UseAccountKeywords {
+				return []*OpsAccountErrorAlertCandidate{ruleItem, defaultOther}, nil
+			}
+			return nil, nil
+		},
+		ListAccountIDsWithErrorAlertRulesFn: func(context.Context) ([]int64, error) {
+			return []int64{7}, nil
+		},
+		GetAccountErrorAlertSettingsFn: func(_ context.Context, _ []int64) (map[int64]AccountErrorAlertSettings, error) {
+			return map[int64]AccountErrorAlertSettings{
+				7: {
+					Enabled: true,
+					Rules: []AccountErrorAlertRule{{
+						Keyword:       "overloaded",
+						WindowMinutes: 10,
+						MinErrorCount: 1,
+						MaxSends:      1,
+					}},
+				},
+			}, nil
+		},
+	}
+	svc := &OpsAccountErrorAlertService{opsRepo: repo}
+	got, err := svc.collectAccountErrorAlertItems(context.Background(), &OpsAccountErrorAlertConfig{
+		WindowMinutes:       10,
+		MinErrorCount:       5,
+		MaxAccountsPerAlert: 10,
+	}, windowStart, windowEnd)
+	if err != nil {
+		t.Fatalf("collectAccountErrorAlertItems() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0].AccountID != 7 || got[1].AccountID != 8 {
+		t.Fatalf("unexpected order: %+v", got)
+	}
+}
+
+func TestFilterAccountErrorAlertItems_RespectsMaxSends(t *testing.T) {
+	item := &OpsAccountErrorAlertCandidate{
+		AccountID:    7,
+		AccountName:  "CPA-Pro20-817",
+		StatusCode:   503,
+		ErrorCount:   3,
+		ErrorMessage: "Our servers are currently overloaded",
+	}
+	repo := &opsRepoMock{
+		GetAccountErrorAlertSettingsFn: func(_ context.Context, _ []int64) (map[int64]AccountErrorAlertSettings, error) {
+			return map[int64]AccountErrorAlertSettings{
+				7: {
+					Enabled: true,
+					Rules: []AccountErrorAlertRule{{
+						Keyword:       "overloaded",
+						WindowMinutes: 10,
+						MinErrorCount: 1,
+						MaxSends:      1,
+					}},
+				},
+			}, nil
+		},
+	}
+	svc := &OpsAccountErrorAlertService{
+		opsRepo:    repo,
+		sendCounts: map[string]sendWindowCounter{},
+	}
+	cfg := &OpsAccountErrorAlertConfig{WindowMinutes: 10, CooldownMinutes: 60}
+	got, marks := svc.filterAccountErrorAlertItems(context.Background(), cfg, []*OpsAccountErrorAlertCandidate{item})
+	if len(got) != 1 {
+		t.Fatalf("first filter len = %d, want 1", len(got))
+	}
+	svc.markSends(context.Background(), marks)
+	got, _ = svc.filterAccountErrorAlertItems(context.Background(), cfg, []*OpsAccountErrorAlertCandidate{item})
+	if len(got) != 0 {
+		t.Fatal("expected max_sends to drop the second alert")
+	}
+}

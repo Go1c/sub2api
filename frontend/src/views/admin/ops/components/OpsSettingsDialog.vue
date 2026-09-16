@@ -270,6 +270,7 @@ async function saveAllSettings() {
       <!-- 账号异常 Telegram 告警 -->
       <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
         <h4 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.settings.accountErrorAlert') }}</h4>
+        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.ops.settings.accountErrorAlertHint') }}</p>
 
         <div class="space-y-4">
           <div class="flex items-center justify-between">

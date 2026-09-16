@@ -27,6 +27,14 @@ end
 return 0
 `)
 
+var opsAccountErrorAlertIncrScript = redis.NewScript(`
+local n = redis.call("INCR", KEYS[1])
+if n == 1 then
+  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
+return n
+`)
+
 type opsAccountErrorAlertRedisStore struct {
 	client *redis.Client
 }
@@ -53,6 +61,22 @@ func (s *opsAccountErrorAlertRedisStore) Exists(ctx context.Context, key string)
 
 func (s *opsAccountErrorAlertRedisStore) SetCooldown(ctx context.Context, key string, ttl time.Duration) error {
 	return s.client.Set(ctx, key, "1", ttl).Err()
+}
+
+func (s *opsAccountErrorAlertRedisStore) GetInt(ctx context.Context, key string) (int64, error) {
+	n, err := s.client.Get(ctx, key).Int64()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	return n, err
+}
+
+func (s *opsAccountErrorAlertRedisStore) Incr(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	ms := ttl.Milliseconds()
+	if ms < 1 {
+		ms = 1
+	}
+	return opsAccountErrorAlertIncrScript.Run(ctx, s.client, []string{key}, ms).Int64()
 }
 
 // ProvidePricingService creates and initializes PricingService
@@ -95,82 +119,9 @@ func ProvideOpenAIOAuthService(
 	proxyRepo ProxyRepository,
 	oauthClient OpenAIOAuthClient,
 	privacyClientFactory PrivacyClientFactory,
-	ipGroupResolver *openAIIPGroupResolver,
 ) *OpenAIOAuthService {
 	svc := NewOpenAIOAuthService(proxyRepo, oauthClient)
 	svc.SetPrivacyClientFactory(privacyClientFactory)
-	svc.SetIPGroupResolver(ipGroupResolver)
-	return svc
-}
-
-func ProvideOpenAIIPGroupResolver(
-	groups ProxyIPGroupRepository,
-	proxies ProxyRepository,
-	bind OpenAIIPGroupBindStore,
-	cache ConcurrencyCache,
-	cfg *config.Config,
-) *openAIIPGroupResolver {
-	var slots AccountProxySlotCache
-	if s, ok := cache.(AccountProxySlotCache); ok {
-		slots = s
-	}
-	ttl := openaiStickySessionTTL
-	if cfg != nil && cfg.Gateway.OpenAIWS.StickySessionTTLSeconds > 0 {
-		ttl = time.Duration(cfg.Gateway.OpenAIWS.StickySessionTTLSeconds) * time.Second
-	}
-	return newOpenAIIPGroupResolver(groups, proxies, bind, slots, ttl)
-}
-
-func ProvideOpenAIGatewayService(
-	accountRepo AccountRepository,
-	usageLogRepo UsageLogRepository,
-	usageBillingRepo UsageBillingRepository,
-	userRepo UserRepository,
-	userSubRepo UserSubscriptionRepository,
-	userGroupRateRepo UserGroupRateRepository,
-	cache GatewayCache,
-	cfg *config.Config,
-	schedulerSnapshot *SchedulerSnapshotService,
-	concurrencyService *ConcurrencyService,
-	billingService *BillingService,
-	rateLimitService *RateLimitService,
-	billingCacheService *BillingCacheService,
-	httpUpstream HTTPUpstream,
-	deferredService *DeferredService,
-	openAITokenProvider *OpenAITokenProvider,
-	grokTokenProvider *GrokTokenProvider,
-	resolver *ModelPricingResolver,
-	channelService *ChannelService,
-	balanceNotifyService *BalanceNotifyService,
-	settingService *SettingService,
-	userPlatformQuotaRepo UserPlatformQuotaRepository,
-	ipGroupResolver *openAIIPGroupResolver,
-) *OpenAIGatewayService {
-	svc := NewOpenAIGatewayService(
-		accountRepo,
-		usageLogRepo,
-		usageBillingRepo,
-		userRepo,
-		userSubRepo,
-		userGroupRateRepo,
-		cache,
-		cfg,
-		schedulerSnapshot,
-		concurrencyService,
-		billingService,
-		rateLimitService,
-		billingCacheService,
-		httpUpstream,
-		deferredService,
-		openAITokenProvider,
-		grokTokenProvider,
-		resolver,
-		channelService,
-		balanceNotifyService,
-		settingService,
-		userPlatformQuotaRepo,
-	)
-	svc.SetIPGroupResolver(ipGroupResolver)
 	return svc
 }
 
@@ -243,7 +194,6 @@ func ProvideOpenAIQuotaService(
 ) *OpenAIQuotaService {
 	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, privacyClientFactory)
 	service.agentIdentityWS = openAIGatewayService
-	service.SetIPGroupResolver(openAIGatewayService.IPGroupResolver())
 	return service
 }
 
@@ -864,8 +814,7 @@ var ProviderSet = wire.NewSet(
 	NewCompositeRouteResolver,
 	NewAdminService,
 	NewGatewayService,
-	ProvideOpenAIGatewayService,
-	ProvideOpenAIIPGroupResolver,
+	NewOpenAIGatewayService,
 	ProvideBatchImageModelPricingResolver,
 	NewBatchImagePublicService,
 	NewBatchImageDownloadService,
@@ -973,8 +922,6 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorQuotaFetcher,
 	NewChannelMonitorRequestTemplateService,
-	ProvideChannelIQService,
-	ProvideChannelIQRunner,
 	ProvideSubscriptionNotifyMessenger,
 	ProvideSubscriptionNotifyEmailer,
 	ProvideSubscriptionNotifyService,

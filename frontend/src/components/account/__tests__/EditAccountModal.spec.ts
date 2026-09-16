@@ -1174,4 +1174,61 @@ describe('EditAccountModal', () => {
       }
     })
   })
+
+  it('omits error_alert extra when monitoring stays on the default', async () => {
+    const account = buildAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    expect(wrapper.get('[data-testid="error-alert-enabled"]').attributes('aria-checked')).toBe('true')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).not.toHaveProperty('error_alert')
+  })
+
+  it('persists error-alert opt-out for oauth accounts', async () => {
+    const account = buildGrokOAuthAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="error-alert-enabled"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.error_alert).toEqual({ enabled: false })
+  })
+
+  it('persists error-alert keywords and rules', async () => {
+    const account = buildAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="error-alert-suggest-overloaded"]').trigger('click')
+    await wrapper.get('[data-testid="error-alert-keyword-input"]').setValue('503')
+    await wrapper.get('[data-testid="error-alert-keyword-add"]').trigger('click')
+    await wrapper.get('[data-testid="error-alert-rule-add"]').trigger('click')
+    await wrapper.get('[data-testid="error-alert-rule-keyword-0"]').setValue('overloaded')
+    await wrapper.get('[data-testid="error-alert-rule-window-0"]').setValue('10')
+    await wrapper.get('[data-testid="error-alert-rule-min-0"]').setValue('3')
+    await wrapper.get('[data-testid="error-alert-rule-max-sends-0"]').setValue('1')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.error_alert).toEqual({
+      enabled: true,
+      keywords: ['overloaded', '503'],
+      rules: [
+        {
+          keyword: 'overloaded',
+          window_minutes: 10,
+          min_error_count: 3,
+          max_sends: 1
+        }
+      ]
+    })
+  })
 })
