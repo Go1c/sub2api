@@ -248,6 +248,9 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if parent == nil {
 		return base
 	}
+	if proxyID, ok := parent.Value(ctxkey.EgressProxyID).(int64); ok {
+		base = context.WithValue(base, ctxkey.EgressProxyID, proxyID)
+	}
 	if clientRequestID, _ := parent.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
 		base = context.WithValue(base, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
 	}

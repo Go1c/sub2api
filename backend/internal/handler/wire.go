@@ -53,6 +53,7 @@ func ProvideAdminHandlers(
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	redisClient *redis.Client,
+	concurrencyCache service.ConcurrencyCache,
 	adminService service.AdminService,
 	gatewayService *service.GatewayService,
 	openaiGatewayService *service.OpenAIGatewayService,
@@ -61,7 +62,7 @@ func ProvideAdminHandlers(
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
 	health := service.NewAccountRequestHealthService(
-		service.NewAccountRequestHealthStore(redisClient),
+		service.NewAccountRequestHealthStore(redisClient, concurrencyCache),
 		adminService,
 	)
 	accountHandler.SetRequestHealthService(health)

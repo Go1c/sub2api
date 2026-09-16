@@ -151,7 +151,53 @@ func (s *OpsService) SetRequestHealthService(svc *AccountRequestHealthService) {
 }
 
 func (s *OpsService) recordRequestHealthFail(ctx context.Context, entry *OpsInsertErrorLogInput) {
-	if s == nil || s.requestHealth == nil || entry == nil || entry.AccountID == nil || *entry.AccountID <= 0 {
+	if s == nil || s.requestHealth == nil || entry == nil {
+		return
+	}
+	endpoint := strings.TrimSpace(entry.InboundEndpoint)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(entry.RequestPath)
+	}
+	model := strings.TrimSpace(entry.UpstreamModel)
+	if model == "" {
+		model = strings.TrimSpace(entry.Model)
+	}
+	// The queue serializes and releases the original events before batching.
+	events := entry.UpstreamErrors
+	if len(events) == 0 && entry.UpstreamErrorsJSON != nil {
+		_ = json.Unmarshal([]byte(*entry.UpstreamErrorsJSON), &events)
+	}
+	// Attempt snapshots retain their own account/proxy across failover and queue batching.
+	if len(events) > 0 {
+		for i, ev := range events {
+			if ev == nil || ev.AccountID <= 0 {
+				continue
+			}
+			proxyID := int64(0)
+			if i < len(entry.requestHealthProxyIDs) && entry.requestHealthProxyIDs[i] != nil {
+				proxyID = *entry.requestHealthProxyIDs[i]
+			} else if ev.requestHealthProxyID != nil {
+				proxyID = *ev.requestHealthProxyID
+			} else if ev.ProxyID != nil {
+				proxyID = *ev.ProxyID
+			}
+			message := ev.Message
+			if strings.TrimSpace(message) == "" {
+				message = ev.Detail
+			}
+			occurredAt := entry.CreatedAt
+			if ev.AtUnixMs > 0 {
+				occurredAt = time.UnixMilli(ev.AtUnixMs)
+			}
+			s.requestHealth.Record(ctx, RequestHealthRecordInput{
+				AccountID: ev.AccountID, ProxyID: proxyID, Slot: RequestHealthSlotFail,
+				StatusCode: ev.UpstreamStatusCode, Message: message, Model: model,
+				Endpoint: endpoint, OccurredAt: occurredAt,
+			})
+		}
+		return
+	}
+	if entry.AccountID == nil || *entry.AccountID <= 0 {
 		return
 	}
 	status := entry.StatusCode
@@ -162,17 +208,13 @@ func (s *OpsService) recordRequestHealthFail(ctx context.Context, entry *OpsInse
 	if message == "" && entry.UpstreamErrorMessage != nil {
 		message = strings.TrimSpace(*entry.UpstreamErrorMessage)
 	}
-	endpoint := strings.TrimSpace(entry.InboundEndpoint)
-	if endpoint == "" {
-		endpoint = strings.TrimSpace(entry.RequestPath)
-	}
-	model := strings.TrimSpace(entry.UpstreamModel)
-	if model == "" {
-		model = strings.TrimSpace(entry.Model)
+	proxyID := entry.EgressProxyID
+	if proxyID == 0 {
+		proxyID = EgressProxyIDFrom(ctx, nil)
 	}
 	s.requestHealth.Record(ctx, RequestHealthRecordInput{
 		AccountID:  *entry.AccountID,
-		ProxyID:    EgressProxyIDFrom(ctx, nil),
+		ProxyID:    proxyID,
 		Slot:       RequestHealthSlotFail,
 		StatusCode: status,
 		Message:    message,
@@ -685,6 +727,10 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 	}
 
 	sanitized, _ = boundOpsUpstreamErrors(sanitized)
+	entry.requestHealthProxyIDs = make([]*int64, len(sanitized))
+	for i, ev := range sanitized {
+		entry.requestHealthProxyIDs[i] = ev.requestHealthProxyID
+	}
 	entry.UpstreamErrorsJSON = marshalOpsUpstreamErrors(sanitized)
 	entry.UpstreamErrors = nil
 	return nil

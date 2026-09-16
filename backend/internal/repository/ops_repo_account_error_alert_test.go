@@ -2,6 +2,8 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
@@ -224,4 +226,20 @@ func TestGetAccountErrorAlertSettings(t *testing.T) {
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
 	}
+}
+
+func TestListAccountErrorAlertTopUsersBindsEligibleScopes(t *testing.T) {
+	db, mock := newOpsRepoSQLMock(t)
+	repo := &opsRepository{db: db}
+	end := time.Date(2026, 9, 16, 10, 0, 0, 0, time.UTC)
+	scopes := []service.OpsAccountErrorAlertScope{{AccountID: 7, StartTime: end.Add(-time.Hour), EndTime: end, Keyword: "429"}}
+	raw, err := json.Marshal(scopes)
+	require.NoError(t, err)
+	mock.ExpectQuery(`jsonb_to_recordset\(\$8::jsonb\)`).
+		WithArgs(end.Add(-time.Hour), end, 1, 3, int64(0), "", false, string(raw)).
+		WillReturnRows(sqlmock.NewRows([]string{"user_email", "error_count"}).AddRow("affected@example.test", 1))
+	users, err := repo.ListAccountErrorAlertTopUsers(t.Context(), &service.OpsAccountErrorAlertTopUserFilter{StartTime: end.Add(-time.Hour), EndTime: end, MinErrorCount: 1, Limit: 3, Scopes: scopes})
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

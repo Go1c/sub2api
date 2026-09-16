@@ -21,10 +21,10 @@ metadata:
 ## 设计
 
 - **数据口径**：以线上 `ops_error_logs` 为准，不使用 `account_error_histories`；后者会折叠和节流，不适合判断 10 分钟内真实异常次数。
-- **聚合方式**：后台定时任务按配置窗口查询 `ops_error_logs`，优先展开 `upstream_errors` 中的账号失败事件；没有事件数组时回落到行级 `account_id`。影响用户邮箱 Top N 只统计这些已触发异常账号上的 `user_id` 错误次数，通知中展示对应用户邮箱，不展示用户 ID，避免混入无关客户端错误。
+- **聚合方式**：后台定时任务按配置窗口查询 `ops_error_logs`，优先展开 `upstream_errors` 中的账号失败事件；没有事件数组时回落到行级 `account_id`。影响用户邮箱 Top N 只统计这些已触发异常账号上的 `user_id` 错误次数，通知中展示对应用户邮箱，不展示用户 ID，避免混入无关客户端错误。Top N 只统计本次实际通知的账号，沿用各候选命中的窗口与关键字；冷却或限额排除的账号不计入，也不再按全局阈值重新筛选用户。
 - **账号配置**：存在 `accounts.extra.error_alert`。缺省或未写该键视为加入监控；`enabled: false` 才排除。`keywords` 为空表示统计该账号全部错误，否则按关键字（消息包含，大小写不敏感）或状态码字符串匹配。`rules` 可覆盖窗口、最少次数，以及同一账号+关键字在窗口内的 `max_sends`。
 - **性能边界**：SQL 内完成窗口过滤、JSONB 展开、账号聚合、排序、账号开关 / 关键字过滤和 `LIMIT`；Go 层只处理聚合后的候选账号。带规则的账号会再查一次（可能低于全局最少次数）。查询使用现有 `created_at` / `account_id, created_at` 索引覆盖最近窗口扫描。
-- **通知方式**：Telegram `sendMessage` 纯文本发送，不启用 Markdown/HTML parse mode，避免转义导致发送失败。
+- **通知方式**：Telegram `sendMessage` 纯文本发送，不启用 Markdown/HTML parse mode，避免转义导致发送失败。发送错误在返回前脱敏 Bot Token，HTTP 错误中的请求 URL 不得原样写入日志或 heartbeat。
 - **降噪**：无规则时按账号 + 状态码 + 归一化错误信息生成冷却 key。命中规则时改用 Redis（或进程内）计数，限制该账号+关键字在规则窗口内的发送次数。Redis 可用时跨实例冷却 / 计数，不可用时退化为进程内。有 Redis 时还用 leader lock 避免多副本重复发送。
 
 ## 已决策

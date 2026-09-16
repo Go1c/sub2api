@@ -378,6 +378,9 @@ func setOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage
 // OpsUpstreamErrorEvent describes one upstream error attempt during a single gateway request.
 // It is stored in ops_error_logs.upstream_errors as a JSON array.
 type OpsUpstreamErrorEvent struct {
+	// Request-local transport snapshot for the health queue; not part of persisted ops JSON.
+	requestHealthProxyID *int64
+
 	AtUnixMs int64 `json:"at_unix_ms,omitempty"`
 
 	// Passthrough 表示本次请求是否命中“原样透传（仅替换认证）”分支。
@@ -443,6 +446,10 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 	}
 	if ev.AtUnixMs <= 0 {
 		ev.AtUnixMs = time.Now().UnixMilli()
+	}
+	if accountID, ok := c.Get(requestHealthEgressAccountKey); ok && accountID == ev.AccountID {
+		proxyID := EgressProxyIDFrom(c, nil)
+		ev.requestHealthProxyID = &proxyID
 	}
 	ev.Platform = strings.TrimSpace(ev.Platform)
 	normalizeOpsUpstreamProxyAttribution(&ev)

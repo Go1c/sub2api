@@ -15,16 +15,17 @@ const (
 )
 
 type redisRequestHealthStore struct {
-	rdb *redis.Client
+	rdb         *redis.Client
+	concurrency ConcurrencyCache
 }
 
 type noopRequestHealthStore struct{}
 
-func NewAccountRequestHealthStore(rdb *redis.Client) RequestHealthStore {
+func NewAccountRequestHealthStore(rdb *redis.Client, concurrency ConcurrencyCache) RequestHealthStore {
 	if rdb == nil {
 		return noopRequestHealthStore{}
 	}
-	return &redisRequestHealthStore{rdb: rdb}
+	return &redisRequestHealthStore{rdb: rdb, concurrency: concurrency}
 }
 
 func requestHealthAccountKey(accountID int64) string {
@@ -83,10 +84,21 @@ func (s *redisRequestHealthStore) List(ctx context.Context, accountID, proxyID i
 
 func (s *redisRequestHealthStore) Runtime(ctx context.Context, accountID, proxyID int64) (int, *time.Time) {
 	current := 0
-	if proxyID > 0 {
-		if n, err := s.rdb.Get(ctx, requestHealthConcurrencyKey(accountID, proxyID)).Int(); err == nil {
+	if s.concurrency != nil {
+		var n int
+		var err error
+		if proxyID > 0 {
+			if cache, ok := s.concurrency.(AccountProxySlotCache); ok {
+				n, err = cache.GetAccountProxyConcurrency(ctx, accountID, proxyID)
+			}
+		} else {
+			n, err = s.concurrency.GetAccountConcurrency(ctx, accountID)
+		}
+		if err == nil {
 			current = n
 		}
+	}
+	if proxyID > 0 {
 		ttl, err := s.rdb.PTTL(ctx, requestHealthCooldownKey(accountID, proxyID)).Result()
 		if err == nil && ttl > 0 {
 			until := time.Now().Add(ttl)
@@ -94,10 +106,6 @@ func (s *redisRequestHealthStore) Runtime(ctx context.Context, accountID, proxyI
 		}
 	}
 	return current, nil
-}
-
-func requestHealthConcurrencyKey(accountID, proxyID int64) string {
-	return "conc:acct-proxy:" + strconv.FormatInt(accountID, 10) + ":" + strconv.FormatInt(proxyID, 10)
 }
 
 func requestHealthCooldownKey(accountID, proxyID int64) string {

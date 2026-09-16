@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
@@ -38,4 +40,24 @@ func TestOpenAISubmitUsageRecordTaskCopiesRequestContext(t *testing.T) {
 
 	require.Equal(t, "openai-client-request-123", gotClientRequestID)
 	require.Equal(t, "openai-request-456", gotRequestID)
+}
+
+func TestUsageWorkerPreservesEgressProxyID(t *testing.T) {
+	pool := service.NewUsageRecordWorkerPoolWithOptions(service.UsageRecordWorkerPoolOptions{WorkerCount: 1, QueueSize: 4})
+	defer pool.Stop()
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), ctxkey.EgressProxyID, int64(42)))
+	cancel()
+	for _, submit := range []func(context.Context, service.UsageRecordTask){
+		(&GatewayHandler{usageRecordWorkerPool: pool}).submitUsageRecordTask,
+		(&OpenAIGatewayHandler{usageRecordWorkerPool: pool}).submitUsageRecordTask,
+	} {
+		result := make(chan int64, 1)
+		submit(parent, func(ctx context.Context) { result <- service.EgressProxyIDFrom(ctx, nil) })
+		select {
+		case id := <-result:
+			require.Equal(t, int64(42), id)
+		case <-time.After(5 * time.Second):
+			t.Fatal("usage worker did not run")
+		}
+	}
 }

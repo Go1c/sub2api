@@ -2,6 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"github.com/stretchr/testify/require"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -226,4 +231,68 @@ func TestFilterAccountErrorAlertItems_RespectsMaxSends(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatal("expected max_sends to drop the second alert")
 	}
+}
+
+type telegramFailTransport struct{}
+
+func (telegramFailTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("dial failed")
+}
+func TestTelegramTransportErrorRedactsBotToken(t *testing.T) {
+	const token = "123456:private-bot-token"
+	sender := &telegramOpsSender{client: &http.Client{Transport: telegramFailTransport{}}, baseURL: "https://api.telegram.org"}
+	err := sender.SendMessage(t.Context(), token, "chat", "alert")
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), token)
+	require.Contains(t, err.Error(), "dial failed")
+	var urlErr *url.Error
+	require.False(t, errors.As(err, &urlErr), "wrapped URL errors must not expose the secret")
+}
+
+type captureTelegramAlert struct{ message string }
+
+func (s *captureTelegramAlert) SendMessage(_ context.Context, _, _, text string) error {
+	s.message = text
+	return nil
+}
+
+func TestAccountAlertTopUsersFollowEligibleRuleWindow(t *testing.T) {
+	settings := newRuntimeSettingRepoStub()
+	cfg := defaultOpsAccountErrorAlertConfig()
+	cfg.Enabled = true
+	cfg.TelegramBotToken, cfg.TelegramChatID = "test", "chat"
+	raw, err := json.Marshal(cfg)
+	require.NoError(t, err)
+	settings.values[SettingKeyOpsAccountErrorAlertConfig] = string(raw)
+	ruleItem := &OpsAccountErrorAlertCandidate{AccountID: 7, StatusCode: 429, ErrorCount: 1, ErrorMessage: "rate limited"}
+	coolingItem := &OpsAccountErrorAlertCandidate{AccountID: 8, StatusCode: 500, ErrorCount: 10, ErrorMessage: "cooling"}
+	var topFilter *OpsAccountErrorAlertTopUserFilter
+	repo := &opsRepoMock{
+		ListAccountErrorAlertCandidatesFn: func(_ context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error) {
+			if filter.AccountID == 7 {
+				return []*OpsAccountErrorAlertCandidate{ruleItem}, nil
+			}
+			return []*OpsAccountErrorAlertCandidate{coolingItem}, nil
+		},
+		ListAccountIDsWithErrorAlertRulesFn: func(context.Context) ([]int64, error) { return []int64{7}, nil },
+		GetAccountErrorAlertSettingsFn: func(context.Context, []int64) (map[int64]AccountErrorAlertSettings, error) {
+			return map[int64]AccountErrorAlertSettings{7: {Enabled: true, Rules: []AccountErrorAlertRule{{Keyword: "429", WindowMinutes: 60, MinErrorCount: 1}}}, 8: {Enabled: true}}, nil
+		},
+		ListAccountErrorAlertTopUsersFn: func(_ context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error) {
+			topFilter = filter
+			return nil, nil
+		},
+	}
+	sender := &captureTelegramAlert{}
+	svc := NewOpsAccountErrorAlertService(&OpsService{settingRepo: settings}, repo, sender, nil, nil)
+	svc.cooldowns[accountErrorAlertCooldownKey(coolingItem)] = time.Now().Add(time.Hour)
+	svc.runOnce()
+	require.NotEmpty(t, sender.message)
+	require.NotNil(t, topFilter)
+	require.Equal(t, time.Hour, topFilter.EndTime.Sub(topFilter.StartTime), "top users must include the triggered rule's full window")
+	require.Equal(t, 1, topFilter.MinErrorCount, "eligible accounts were already qualified before the user query")
+	require.Len(t, topFilter.Scopes, 1, "cooling accounts must not contribute users")
+	require.Equal(t, int64(7), topFilter.Scopes[0].AccountID)
+	require.Equal(t, "429", topFilter.Scopes[0].Keyword)
+	require.False(t, topFilter.Scopes[0].UseAccountKeywords)
 }

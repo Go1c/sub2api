@@ -54,11 +54,18 @@ func NewTelegramOpsSender() *telegramOpsSender {
 	}
 }
 
-func (s *telegramOpsSender) SendMessage(ctx context.Context, botToken, chatID, text string) error {
+func (s *telegramOpsSender) SendMessage(ctx context.Context, botToken, chatID, text string) (sendErr error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	botToken = strings.TrimSpace(botToken)
+	// net/http errors include the request URL, whose path contains the bot secret.
+	// Return a sanitized value (not a wrapped URL error) before logs/heartbeats see it.
+	defer func() {
+		if sendErr != nil && botToken != "" {
+			sendErr = fmt.Errorf("%s", strings.ReplaceAll(sendErr.Error(), botToken, "[REDACTED]"))
+		}
+	}()
 	chatID = strings.TrimSpace(chatID)
 	text = strings.TrimSpace(text)
 	if botToken == "" {
@@ -295,12 +302,18 @@ func (s *OpsAccountErrorAlertService) runOnce() {
 
 	topUsers := []*OpsAccountErrorAlertTopUser{}
 	if cfg.MaxUsersPerAlert > 0 {
+		// Preserve the actual rule selection; don't re-qualify users with global thresholds.
+		scopes := make([]OpsAccountErrorAlertScope, 0, len(eligible))
+		userWindowStart := windowEnd
+		for _, item := range eligible {
+			scopes = append(scopes, item.alertScope)
+			if item.alertScope.StartTime.Before(userWindowStart) {
+				userWindowStart = item.alertScope.StartTime
+			}
+		}
 		topUsers, err = s.opsRepo.ListAccountErrorAlertTopUsers(ctx, &OpsAccountErrorAlertTopUserFilter{
-			StartTime:          windowStart,
-			EndTime:            windowEnd,
-			MinErrorCount:      cfg.MinErrorCount,
-			Limit:              cfg.MaxUsersPerAlert,
-			UseAccountKeywords: true,
+			StartTime: userWindowStart, EndTime: windowEnd, MinErrorCount: 1,
+			Limit: cfg.MaxUsersPerAlert, Scopes: scopes,
 		})
 		if err != nil {
 			s.recordHeartbeatError(runAt, time.Since(startedAt), err)
@@ -450,7 +463,9 @@ func (s *OpsAccountErrorAlertService) collectAccountErrorAlertItems(ctx context.
 					continue
 				}
 				seen[item.AccountID] = struct{}{}
-				merged = append(merged, item)
+				candidate := *item
+				candidate.alertScope = OpsAccountErrorAlertScope{AccountID: item.AccountID, StartTime: ruleStartAt, EndTime: windowEnd, Keyword: strings.TrimSpace(rule.Keyword)}
+				merged = append(merged, &candidate)
 			}
 		}
 	}
@@ -466,7 +481,9 @@ func (s *OpsAccountErrorAlertService) collectAccountErrorAlertItems(ctx context.
 			continue
 		}
 		seen[item.AccountID] = struct{}{}
-		merged = append(merged, item)
+		candidate := *item
+		candidate.alertScope = OpsAccountErrorAlertScope{AccountID: item.AccountID, StartTime: windowStart, EndTime: windowEnd, UseAccountKeywords: true}
+		merged = append(merged, &candidate)
 	}
 
 	if cfg.MaxAccountsPerAlert > 0 && len(merged) > cfg.MaxAccountsPerAlert {

@@ -469,6 +469,11 @@ func (s *OpenAIGatewayService) mustOpenAIAccountProxyURL(ctx context.Context, ac
 }
 
 func (s *OpenAIGatewayService) lookupOpenAIProxyURL(ctx context.Context, c *gin.Context, account *Account, body []byte) (string, func(), error) {
+	// Clear the previous attempt's egress before resolving a new route.
+	RememberEgressProxyID(c, 0)
+	if c != nil && account != nil {
+		c.Set(requestHealthEgressAccountKey, account.ID)
+	}
 	sessionHash := ""
 	if s != nil && c != nil {
 		sessionHash = s.GenerateSessionHash(c, body)

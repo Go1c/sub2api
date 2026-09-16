@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -2166,5 +2167,55 @@ func TestNormalizeOpsErrorType_KeepsGeminiInBandSignalTypes(t *testing.T) {
 		"not_found_error", "rate_limit_error", "upstream_error",
 	} {
 		require.Equal(t, errType, normalizeOpsErrorType(errType, "PROHIBITED_CONTENT"), errType)
+	}
+}
+
+type healthEventChannel chan service.RequestHealthEvent
+
+func (ch healthEventChannel) Append(_ context.Context, ev service.RequestHealthEvent) error {
+	ch <- ev
+	return nil
+}
+func (ch healthEventChannel) List(context.Context, int64, int64, int) ([]service.RequestHealthEvent, error) {
+	return nil, nil
+}
+func (ch healthEventChannel) Runtime(context.Context, int64, int64) (int, *time.Time) { return 0, nil }
+
+func TestOpsErrorBatchPreservesAttemptProxyAttribution(t *testing.T) {
+	ch := make(healthEventChannel, 4)
+	ops := &service.OpsService{}
+	ops.SetRequestHealthService(service.NewAccountRequestHealthService(ch, nil))
+	accountID, proxyID := int64(11), int64(42)
+	entry := &service.OpsInsertErrorLogInput{AccountID: &accountID, StatusCode: 502,
+		UpstreamErrors: []*service.OpsUpstreamErrorEvent{{AccountID: 11, ProxyID: &proxyID, UpstreamStatusCode: 429, Message: "rate limited"}},
+	}
+	require.NoError(t, service.SanitizeOpsUpstreamErrorsForQueue(entry))
+	flushOpsErrorLogBatch([]opsErrorLogJob{{ops: ops, entry: entry}})
+	select {
+	case ev := <-ch:
+		require.Equal(t, int64(42), ev.ProxyID)
+		require.Equal(t, 429, ev.StatusCode)
+		require.Equal(t, "rate limited", ev.Message)
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing failure health record")
+	}
+}
+
+func TestOpsErrorBatchPreservesEgressWithoutAttemptEvent(t *testing.T) {
+	ch := make(healthEventChannel, 1)
+	ops := &service.OpsService{}
+	ops.SetRequestHealthService(service.NewAccountRequestHealthService(ch, nil))
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	service.RememberEgressProxyID(c, 42)
+	accountID := int64(11)
+	entry := &service.OpsInsertErrorLogInput{AccountID: &accountID, StatusCode: 502}
+	applyOpsUpstreamFieldsFromContext(c, entry)
+	flushOpsErrorLogBatch([]opsErrorLogJob{{ops: ops, entry: entry}})
+	select {
+	case ev := <-ch:
+		require.Equal(t, int64(42), ev.ProxyID)
+	case <-time.After(5 * time.Second):
+		t.Fatal("missing failure health record")
 	}
 }

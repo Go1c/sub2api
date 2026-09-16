@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -195,4 +197,41 @@ func outcomeSlots(items []RequestHealthOutcomeDTO) []string {
 		out = append(out, item.Slot)
 	}
 	return out
+}
+
+func TestSingleProxyHealthIncludesAccountLevelFailures(t *testing.T) {
+	store := newMemoryRequestHealthStore()
+	proxyID := int64(7)
+	svc := NewAccountRequestHealthService(store, &requestHealthDirStub{accounts: []*Account{{ID: 11, ProxyID: &proxyID}}})
+	require.NoError(t, svc.recordSync(t.Context(), RequestHealthRecordInput{AccountID: 11, ProxyID: 7, Slot: RequestHealthSlotOK}))
+	require.NoError(t, svc.recordSync(t.Context(), RequestHealthRecordInput{AccountID: 11, Slot: RequestHealthSlotFail, StatusCode: 502}))
+	rows, err := svc.ListForAccounts(t.Context(), []int64{11}, 12)
+	require.NoError(t, err)
+	require.Equal(t, []string{"ok", "fail"}, outcomeSlots(rows[0].Lines[0].Outcomes))
+}
+
+func TestRequestHealthIPGroupAttemptsKeepResolvedEgress(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	gateway := &OpenAIGatewayService{}
+	// The transport-resolved proxy can differ from the account's stored proxy metadata.
+	for _, proxyID := range []int64{42, 43} {
+		account := &Account{ID: 11, Proxy: &Proxy{ID: proxyID, Host: "127.0.0.1", Port: 8080, Protocol: "http"}}
+		_, release, err := gateway.lookupOpenAIProxyURL(c.Request.Context(), c, account, nil)
+		require.NoError(t, err)
+		release()
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{AccountID: 11, UpstreamStatusCode: 429, Message: "rate limited"})
+	}
+	raw, _ := c.Get(OpsUpstreamErrorsKey)
+	entry := &OpsInsertErrorLogInput{UpstreamErrors: raw.([]*OpsUpstreamErrorEvent)}
+	require.NoError(t, SanitizeOpsUpstreamErrorsForQueue(entry))
+	store := newMemoryRequestHealthStore()
+	ops := &OpsService{requestHealth: NewAccountRequestHealthService(store, nil)}
+	require.NoError(t, ops.RecordErrorBatch(context.Background(), []*OpsInsertErrorLogInput{entry}))
+	for _, proxyID := range []int64{42, 43} {
+		require.Eventually(t, func() bool {
+			events, _ := store.List(context.Background(), 11, proxyID, 20)
+			return len(events) == 1 && events[0].StatusCode == 429
+		}, time.Second, time.Millisecond)
+	}
 }

@@ -70,6 +70,11 @@ type OpsInsertErrorLogInput struct {
 	RequestID       string
 	ClientRequestID string
 
+	// EgressProxyID is a request-local snapshot carried through the error queue; not persisted.
+	EgressProxyID int64
+	// Aligned with the bounded, sanitized UpstreamErrorsJSON array; never persisted.
+	requestHealthProxyIDs []*int64
+
 	UserID    *int64
 	APIKeyID  *int64
 	AccountID *int64
@@ -318,7 +323,18 @@ type OpsAccountErrorAlertCandidateFilter struct {
 	UseAccountKeywords bool
 }
 
+// OpsAccountErrorAlertScope is the exact account/window/keyword selection that triggered an alert.
+type OpsAccountErrorAlertScope struct {
+	AccountID          int64     `json:"account_id"`
+	StartTime          time.Time `json:"start_time"`
+	EndTime            time.Time `json:"end_time"`
+	Keyword            string    `json:"keyword"`
+	UseAccountKeywords bool      `json:"use_account_keywords"`
+}
+
 type OpsAccountErrorAlertTopUserFilter struct {
+	Scopes []OpsAccountErrorAlertScope
+
 	StartTime          time.Time
 	EndTime            time.Time
 	MinErrorCount      int
@@ -329,6 +345,8 @@ type OpsAccountErrorAlertTopUserFilter struct {
 }
 
 type OpsAccountErrorAlertCandidate struct {
+	alertScope OpsAccountErrorAlertScope
+
 	AccountID    int64     `json:"account_id"`
 	AccountName  string    `json:"account_name"`
 	StatusCode   int       `json:"status_code"`

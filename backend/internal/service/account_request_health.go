@@ -18,11 +18,12 @@ const (
 	RequestHealthModeSingle  = "single"
 	RequestHealthModeIPGroup = "ip_group"
 
-	RequestHealthMaxEvents       = 20
-	DefaultRequestHealthWindow   = 12
-	requestHealthMessageMaxRunes = 512
-	requestHealthTTL             = 7 * 24 * time.Hour
-	requestHealthBatchLimit      = 200
+	RequestHealthMaxEvents        = 20
+	DefaultRequestHealthWindow    = 12
+	requestHealthMessageMaxRunes  = 512
+	requestHealthTTL              = 7 * 24 * time.Hour
+	requestHealthBatchLimit       = 200
+	requestHealthEgressAccountKey = "request_health_egress_account_id"
 )
 
 type RequestHealthEvent struct {
@@ -126,12 +127,12 @@ func MaskRequestHealthHost(host string) string {
 
 func EgressProxyIDFrom(ctx context.Context, account *Account) int64 {
 	if ctx != nil {
-		if id, ok := ctx.Value(ctxkey.EgressProxyID).(int64); ok && id > 0 {
+		if id, ok := ctx.Value(ctxkey.EgressProxyID).(int64); ok && id >= 0 {
 			return id
 		}
 		if gc, ok := ctx.(*gin.Context); ok {
 			if v, exists := gc.Get(string(ctxkey.EgressProxyID)); exists {
-				if id, ok := v.(int64); ok && id > 0 {
+				if id, ok := v.(int64); ok && id >= 0 {
 					return id
 				}
 			}
@@ -144,7 +145,7 @@ func EgressProxyIDFrom(ctx context.Context, account *Account) int64 {
 }
 
 func RememberEgressProxyID(c *gin.Context, proxyID int64) {
-	if c == nil || proxyID <= 0 {
+	if c == nil || proxyID < 0 {
 		return
 	}
 	c.Set(string(ctxkey.EgressProxyID), proxyID)

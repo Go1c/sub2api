@@ -1675,6 +1675,7 @@ func applyOpsUpstreamFieldsFromContext(c *gin.Context, entry *service.OpsInsertE
 	if c == nil || entry == nil {
 		return
 	}
+	entry.EgressProxyID = service.EgressProxyIDFrom(c, nil)
 	if v, ok := c.Get(service.OpsUpstreamStatusCodeKey); ok {
 		switch t := v.(type) {
 		case int:

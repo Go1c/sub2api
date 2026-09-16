@@ -151,16 +151,17 @@ func (s *AccountRequestHealthService) buildLine(ctx context.Context, accountID, 
 	if max <= 0 {
 		max = 1
 	}
-	events, err := s.store.List(ctx, accountID, proxyID, window)
+	// A single line is the account history, including failures without an egress snapshot.
+	historyProxyID := proxyID
+	if fallbackAccount {
+		historyProxyID = 0
+	}
+	events, err := s.store.List(ctx, accountID, historyProxyID, window)
 	if err != nil {
 		log.Printf("[request-health] list events failed: %v", err)
 		events = nil
-	} else if fallbackAccount && proxyID > 0 && len(events) == 0 {
-		if fallback, fallbackErr := s.store.List(ctx, accountID, 0, window); fallbackErr == nil {
-			events = fallback
-		}
 	}
-	current, cooldown := s.store.Runtime(ctx, accountID, proxyID)
+	current, cooldown := s.store.Runtime(ctx, accountID, historyProxyID)
 	line := AccountRequestHealthLineDTO{
 		ProxyID:       proxyID,
 		IP:            ip,

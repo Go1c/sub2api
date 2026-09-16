@@ -35,6 +35,36 @@ filtered_errors AS (
     )
 )`
 
+const accountErrorAlertScopedErrorsCTE = `,
+filtered_errors AS (
+ SELECT b.*
+ FROM unscoped_errors b
+ LEFT JOIN accounts a ON a.id = b.account_id AND a.deleted_at IS NULL
+ WHERE EXISTS (
+  SELECT 1 FROM jsonb_to_recordset($8::jsonb) AS scope(
+   account_id bigint, start_time timestamptz, end_time timestamptz,
+   keyword text, use_account_keywords boolean
+  )
+  WHERE scope.account_id = b.account_id
+    AND b.occurred_at >= scope.start_time AND b.occurred_at < scope.end_time
+    AND (
+      CASE
+        WHEN scope.keyword <> '' THEN (
+          b.error_message ILIKE '%' || replace(replace(replace(scope.keyword, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') || '%' ESCAPE '\'
+          OR b.status_code::text = scope.keyword
+        )
+        WHEN scope.use_account_keywords AND jsonb_typeof(COALESCE(a.extra->'error_alert'->'keywords', '[]'::jsonb)) = 'array'
+             AND jsonb_array_length(a.extra->'error_alert'->'keywords') > 0 THEN EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(a.extra->'error_alert'->'keywords') kw
+          WHERE b.error_message ILIKE '%' || replace(replace(replace(kw, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') || '%' ESCAPE '\'
+             OR b.status_code::text = kw
+        )
+        ELSE TRUE
+      END
+    )
+ )
+)`
+
 func accountErrorAlertFilterArgs(accountID int64, keyword string, useAccountKeywords bool) (int64, string, bool) {
 	return accountID, strings.TrimSpace(keyword), useAccountKeywords
 }
@@ -207,6 +237,16 @@ func (r *opsRepository) ListAccountErrorAlertTopUsers(ctx context.Context, filte
 	}
 	accountID, keyword, useAccountKeywords := accountErrorAlertFilterArgs(filter.AccountID, filter.Keyword, filter.UseAccountKeywords)
 
+	filterCTE := accountErrorAlertFilteredErrorsCTE
+	args := []any{start, end, minCount, limit, accountID, keyword, useAccountKeywords}
+	if len(filter.Scopes) > 0 {
+		raw, err := json.Marshal(filter.Scopes)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, string(raw))
+		filterCTE = strings.Replace(filterCTE, "filtered_errors AS (", "unscoped_errors AS (", 1) + accountErrorAlertScopedErrorsCTE
+	}
 	q := `
 WITH event_errors AS (
   SELECT
@@ -247,7 +287,7 @@ base_errors AS (
   UNION ALL
   SELECT * FROM row_errors
 ),
-` + accountErrorAlertFilteredErrorsCTE + `,
+` + filterCTE + `,
 account_totals AS (
   SELECT account_id, COUNT(*)::bigint AS error_count
   FROM filtered_errors
@@ -268,7 +308,7 @@ JOIN users u ON u.id = ut.user_id AND NULLIF(u.email, '') IS NOT NULL
 ORDER BY ut.error_count DESC, ut.latest_at DESC, ut.user_id ASC
 LIMIT $4`
 
-	rows, err := r.db.QueryContext(ctx, q, start, end, minCount, limit, accountID, keyword, useAccountKeywords)
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
