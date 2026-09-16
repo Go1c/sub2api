@@ -170,6 +170,24 @@
                     <div class="my-2 border-t border-gray-100 dark:border-dark-700"></div>
                     <div class="px-2 py-2">
                       <div class="flex items-center justify-between gap-3">
+                        <label class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500" for="request-health-window">
+                          {{ t('admin.requestHealth.window') }}
+                        </label>
+                        <select
+                          id="request-health-window"
+                          class="input h-8 w-28 px-2 text-sm"
+                          :value="requestHealthWindow"
+                          @change="setRequestHealthWindow(Number(($event.target as HTMLSelectElement).value))"
+                        >
+                          <option v-for="size in requestHealthWindowOptions" :key="size" :value="size">
+                            {{ t('admin.requestHealth.windowN', { n: size }) }}
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="my-2 border-t border-gray-100 dark:border-dark-700"></div>
+                    <div class="px-2 py-2">
+                      <div class="flex items-center justify-between gap-3">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                           {{ t('admin.accounts.viewColumns') }}
                         </span>
@@ -313,6 +331,13 @@
           </template>
           <template #cell-capacity="{ row }">
             <AccountCapacityCell :account="row" />
+          </template>
+          <template #cell-request_health="{ row }">
+            <RequestHealthLines
+              :row="requestHealthByAccountId[row.id] ?? emptyAccountHealth(row.id)"
+              :window-size="requestHealthWindow"
+              :now="requestHealthNow"
+            />
           </template>
           <template #cell-status="{ row }">
             <div class="flex items-center gap-1.5">
@@ -534,6 +559,16 @@ import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
+import RequestHealthLines from '@/components/account/RequestHealthLines.vue'
+import {
+  DEFAULT_REQUEST_HEALTH_WINDOW,
+  REQUEST_HEALTH_WINDOW_KEY,
+  REQUEST_HEALTH_WINDOW_OPTIONS,
+  clampRequestHealthWindow,
+  emptyAccountHealth,
+  toAccountHealthRow,
+  type AccountHealthRow
+} from '@/components/account/requestHealth'
 import UpstreamBillingRateCell from '@/components/account/UpstreamBillingRateCell.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -699,6 +734,12 @@ const todayStatsError = ref<string | null>(null)
 const todayStatsReqSeq = ref(0)
 const pendingTodayStatsRefresh = ref(false)
 const usageManualRefreshToken = ref(0)
+const requestHealthWindowOptions = REQUEST_HEALTH_WINDOW_OPTIONS
+const requestHealthWindow = ref(DEFAULT_REQUEST_HEALTH_WINDOW)
+const requestHealthByAccountId = ref<Record<number, AccountHealthRow>>({})
+const requestHealthReqSeq = ref(0)
+const requestHealthNow = ref(Date.now())
+useIntervalFn(() => { requestHealthNow.value = Date.now() }, 1000)
 
 const buildDefaultTodayStats = (): WindowStats => ({
   requests: 0,
@@ -749,6 +790,53 @@ const refreshTodayStatsBatch = async () => {
     if (reqSeq === todayStatsReqSeq.value) {
       todayStatsLoading.value = false
     }
+  }
+}
+
+const loadSavedRequestHealthWindow = () => {
+  try {
+    const saved = Number(localStorage.getItem(REQUEST_HEALTH_WINDOW_KEY))
+    requestHealthWindow.value = clampRequestHealthWindow(saved)
+  } catch {
+    requestHealthWindow.value = DEFAULT_REQUEST_HEALTH_WINDOW
+  }
+}
+
+const setRequestHealthWindow = (size: number) => {
+  requestHealthWindow.value = clampRequestHealthWindow(size)
+  try {
+    localStorage.setItem(REQUEST_HEALTH_WINDOW_KEY, String(requestHealthWindow.value))
+  } catch {
+    // ignore quota / private mode
+  }
+  refreshRequestHealthBatch().catch((error) => {
+    console.error('Failed to refresh request health after window change:', error)
+  })
+}
+
+const refreshRequestHealthBatch = async () => {
+  if (hiddenColumns.has('request_health')) {
+    return
+  }
+
+  const accountIDs = accounts.value.map(account => account.id)
+  const reqSeq = ++requestHealthReqSeq.value
+  if (accountIDs.length === 0) {
+    requestHealthByAccountId.value = {}
+    return
+  }
+
+  try {
+    const result = await adminAPI.accounts.getBatchRequestHealth(accountIDs, requestHealthWindow.value)
+    if (reqSeq !== requestHealthReqSeq.value) return
+    const next: Record<number, AccountHealthRow> = {}
+    for (const item of result.items ?? []) {
+      next[item.account_id] = toAccountHealthRow(item)
+    }
+    requestHealthByAccountId.value = next
+  } catch (error) {
+    if (reqSeq !== requestHealthReqSeq.value) return
+    console.error('Failed to load account request health:', error)
   }
 }
 
@@ -859,6 +947,7 @@ const saveAutoRefreshToStorage = () => {
 if (typeof window !== 'undefined') {
   loadSavedColumns()
   loadSavedAutoRefresh()
+  loadSavedRequestHealthWindow()
 }
 
 const setAutoRefreshEnabled = (enabled: boolean) => {
@@ -892,6 +981,11 @@ const toggleColumn = (key: string) => {
   if ((key === 'today_stats' || key === 'usage') && wasHidden) {
     refreshTodayStatsBatch().catch((error) => {
       console.error('Failed to load account today stats after showing column:', error)
+    })
+  }
+  if (key === 'request_health' && wasHidden) {
+    refreshRequestHealthBatch().catch((error) => {
+      console.error('Failed to load account request health after showing column:', error)
     })
   }
   if (key === 'scheduler_score') {
@@ -987,7 +1081,7 @@ const load = async () => {
     isFirstLoad.value = false
     delete requestParams.lite
   }
-  await refreshTodayStatsBatch()
+  await Promise.all([refreshTodayStatsBatch(), refreshRequestHealthBatch()])
 }
 
 const reload = async () => {
@@ -996,7 +1090,7 @@ const reload = async () => {
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
   await baseReload()
-  await refreshTodayStatsBatch()
+  await Promise.all([refreshTodayStatsBatch(), refreshRequestHealthBatch()])
 }
 
 const debouncedReload = () => {
@@ -1040,7 +1134,7 @@ const handleSort = (key: string, order: AccountSortOrder) => {
 watch(loading, (isLoading, wasLoading) => {
   if (wasLoading && !isLoading && pendingTodayStatsRefresh.value) {
     pendingTodayStatsRefresh.value = false
-    refreshTodayStatsBatch().catch((error) => {
+    Promise.all([refreshTodayStatsBatch(), refreshRequestHealthBatch()]).catch((error) => {
       console.error('Failed to refresh account today stats after table load:', error)
     })
   }
@@ -1161,7 +1255,7 @@ const refreshAccountsIncrementally = async () => {
       hasPendingListSync.value = false
     }
 
-    await refreshTodayStatsBatch()
+    await Promise.all([refreshTodayStatsBatch(), refreshRequestHealthBatch()])
   } catch (error) {
     console.error('Auto refresh failed:', error)
   } finally {
@@ -1475,6 +1569,7 @@ const allColumns = computed(() => {
     { key: 'id', label: t('admin.accounts.columns.id'), sortable: true },
     { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false },
     { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
+    { key: 'request_health', label: t('admin.requestHealth.column'), sortable: false },
     { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
     { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: true },
     { key: 'today_stats', label: t('admin.accounts.columns.todayStats'), sortable: false }

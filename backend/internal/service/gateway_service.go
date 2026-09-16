@@ -751,6 +751,7 @@ type GatewayService struct {
 	balanceNotifyService        *BalanceNotifyService
 	webhookBalanceNotifyService *WebhookBalanceNotifyService
 	accountErrorHistory         *AccountErrorHistoryService
+	requestHealth               *AccountRequestHealthService
 	userPlatformQuotaRepo       UserPlatformQuotaRepository
 	compositeResolver           *CompositeRouteResolver
 }
@@ -758,6 +759,10 @@ type GatewayService struct {
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort 监控，可选）。
 func (s *GatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
 	s.accountErrorHistory = svc
+}
+
+func (s *GatewayService) SetRequestHealthService(svc *AccountRequestHealthService) {
+	s.requestHealth = svc
 }
 
 // SetWebhookBalanceNotifyService injects optional external robot/webhook balance alerts (WeCom etc.).
