@@ -21,6 +21,7 @@ metadata:
 - 未手动指定时取列表中第一个 OpenAI / composite 分组和第一个 IP 组；没有可选项时不强制绑定。
 - 保留用户手动选择的分组和代理。IP 组握手沿用既有逻辑，使用组内第一个代理。
 - 白名单模式导入时合并最新内置 OpenAI 模型清单，等同「同步最新支持模型」；保留自定义模型与映射模式。
+- `/admin/accounts/data` 在后端补齐 OpenAI OAuth 账号缺失的默认分组、IP 组、模型和监控配置；旧客户端直接提交原始 JSON 也适用，不依赖前端加工。显式配置优先，`proxy_ip_group_id: 0` 保留为不绑定。
 - 文件导入通过 `group_ids` / `proxy_ip_group_id` 传递本地绑定；导出不写这些实例内 ID。文件已有代理绑定与自定义模型映射保留；加载默认分组或 IP 组失败时中止并提示错误。
 - 导入请求写入 `extra.error_alert.enabled: false`，默认关闭 Telegram 报错监控。
 

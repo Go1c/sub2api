@@ -254,6 +254,41 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 	dataPayload := req.Data
 	result := DataImportResult{}
 
+	// The data endpoint also serves older clients and direct JSON uploads.
+	// Resolve missing bindings here rather than relying on frontend enrichment.
+	var defaultGroupID, defaultIPGroupID *int64
+	needGroups, needIPGroups := false, false
+	for _, item := range dataPayload.Accounts {
+		if item.Platform != service.PlatformOpenAI || item.Type != service.AccountTypeOAuth {
+			continue
+		}
+		needGroups = needGroups || len(item.GroupIDs) == 0
+		needIPGroups = needIPGroups || (item.ProxyIPGroupID == nil && (item.ProxyKey == nil || *item.ProxyKey == ""))
+	}
+	if needGroups {
+		groups, err := h.adminService.GetAllGroups(ctx)
+		if err != nil {
+			return result, err
+		}
+		for _, group := range groups {
+			if group.Platform == service.PlatformOpenAI || group.Platform == service.PlatformComposite {
+				id := group.ID
+				defaultGroupID = &id
+				break
+			}
+		}
+	}
+	if needIPGroups {
+		groups, err := h.adminService.ListProxyIPGroups(ctx)
+		if err != nil {
+			return result, err
+		}
+		if len(groups) > 0 {
+			id := groups[0].ID
+			defaultIPGroupID = &id
+		}
+	}
+
 	existingProxies, err := h.listAllProxies(ctx)
 	if err != nil {
 		return result, err
@@ -435,6 +470,42 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 		}
 
 		enrichCredentialsFromIDToken(&item)
+
+		if item.Platform == service.PlatformOpenAI && item.Type == service.AccountTypeOAuth {
+			if len(item.GroupIDs) == 0 && defaultGroupID != nil {
+				item.GroupIDs = []int64{*defaultGroupID}
+			}
+			if item.ProxyIPGroupID == nil && proxyID == nil {
+				item.ProxyIPGroupID = defaultIPGroupID
+			}
+			extra := make(map[string]any, len(item.Extra)+1)
+			for key, value := range item.Extra {
+				extra[key] = value
+			}
+			if _, exists := extra[service.AccountErrorAlertExtraKey]; !exists {
+				extra[service.AccountErrorAlertExtraKey] = map[string]any{"enabled": false}
+			}
+			item.Extra = extra
+			credentials := make(map[string]any, len(item.Credentials)+1)
+			for key, value := range item.Credentials {
+				credentials[key] = value
+			}
+			mapping := make(map[string]any)
+			for _, model := range openai.DefaultModelIDs() {
+				mapping[model] = model
+			}
+			// Versioned and compatibility aliases offered by the model whitelist UI.
+			for _, model := range []string{"gpt-5.2-2025-12-11", "gpt-5.2-chat-latest", "gpt-5.2-pro", "gpt-5.2-pro-2025-12-11", "gpt-5.4-2026-03-05", "gpt-4o-audio-preview", "gpt-4o-realtime-preview"} {
+				mapping[model] = model
+			}
+			if existing, ok := credentials["model_mapping"].(map[string]any); ok {
+				for key, value := range existing {
+					mapping[key] = value
+				}
+			}
+			credentials["model_mapping"] = mapping
+			item.Credentials = credentials
+		}
 
 		accountInput := &service.CreateAccountInput{
 			Name:                 item.Name,

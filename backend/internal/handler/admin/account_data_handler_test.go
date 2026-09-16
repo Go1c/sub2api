@@ -334,3 +334,42 @@ func TestImportDataCarriesJSONDefaultBindings(t *testing.T) {
 	require.Equal(t, false, input.Extra["error_alert"].(map[string]any)["enabled"])
 	require.Equal(t, "gpt-test", input.Credentials["model_mapping"].(map[string]any)["gpt-test"])
 }
+
+func TestImportDataDefaultsWithoutFrontendEnrichment(t *testing.T) {
+	router, svc := setupAccountDataRouter()
+	svc.groups = []service.Group{{ID: 8, Platform: service.PlatformAnthropic}, {ID: 5, Platform: service.PlatformOpenAI}, {ID: 6, Platform: service.PlatformOpenAI}}
+	body := []byte(`{"data":{"type":"sub2api-data","version":1,"proxies":[],"accounts":[{"name":"imported","platform":"openai","type":"oauth","credentials":{"access_token":"test","model_mapping":{"custom":"target"}},"extra":{"source":"test"},"concurrency":15,"priority":1}]},"skip_default_group_bind":true}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, svc.createdAccounts, 1)
+	input := svc.createdAccounts[0]
+	require.Equal(t, []int64{5}, input.GroupIDs)
+	require.NotNil(t, input.ProxyIPGroupID)
+	require.Equal(t, int64(1), *input.ProxyIPGroupID)
+	require.Equal(t, false, input.Extra["error_alert"].(map[string]any)["enabled"])
+	mapping := input.Credentials["model_mapping"].(map[string]any)
+	require.Equal(t, "target", mapping["custom"])
+	require.Equal(t, "gpt-5.6", mapping["gpt-5.6"])
+	require.Equal(t, "test", input.Extra["source"])
+}
+
+func TestImportDataPreservesExplicitOAuthSettings(t *testing.T) {
+	router, svc := setupAccountDataRouter()
+	svc.groups = []service.Group{{ID: 5, Platform: service.PlatformOpenAI}}
+	body := []byte(`{"data":{"proxies":[],"accounts":[{"name":"explicit","platform":"openai","type":"oauth","credentials":{"token":"test","model_mapping":{"gpt-5.6":"custom-target"}},"extra":{"error_alert":{"enabled":true}},"group_ids":[9],"proxy_ip_group_id":0,"concurrency":1}]}}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, svc.createdAccounts, 1)
+	input := svc.createdAccounts[0]
+	require.Equal(t, []int64{9}, input.GroupIDs)
+	require.NotNil(t, input.ProxyIPGroupID)
+	require.Zero(t, *input.ProxyIPGroupID)
+	require.Equal(t, true, input.Extra["error_alert"].(map[string]any)["enabled"])
+	require.Equal(t, "custom-target", input.Credentials["model_mapping"].(map[string]any)["gpt-5.6"])
+}
