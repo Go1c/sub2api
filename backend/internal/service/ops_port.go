@@ -57,6 +57,8 @@ type OpsRepository interface {
 
 	ListAccountErrorAlertCandidates(ctx context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error)
 	ListAccountErrorAlertTopUsers(ctx context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error)
+	ListAccountIDsWithErrorAlertRules(ctx context.Context) ([]int64, error)
+	GetAccountErrorAlertSettings(ctx context.Context, accountIDs []int64) (map[int64]AccountErrorAlertSettings, error)
 
 	// Alert silences
 	CreateAlertSilence(ctx context.Context, input *OpsAlertSilence) (*OpsAlertSilence, error)
@@ -178,17 +180,23 @@ type OpsInsertUserRequestCaptureInput struct {
 }
 
 type OpsAccountErrorAlertCandidateFilter struct {
-	StartTime     time.Time
-	EndTime       time.Time
-	MinErrorCount int
-	Limit         int
+	StartTime          time.Time
+	EndTime            time.Time
+	MinErrorCount      int
+	Limit              int
+	AccountID          int64
+	Keyword            string
+	UseAccountKeywords bool
 }
 
 type OpsAccountErrorAlertTopUserFilter struct {
-	StartTime     time.Time
-	EndTime       time.Time
-	MinErrorCount int
-	Limit         int
+	StartTime          time.Time
+	EndTime            time.Time
+	MinErrorCount      int
+	Limit              int
+	AccountID          int64
+	Keyword            string
+	UseAccountKeywords bool
 }
 
 type OpsAccountErrorAlertCandidate struct {

@@ -15,6 +15,8 @@ type opsRepoMock struct {
 	InsertSystemLogCleanupAuditFn     func(ctx context.Context, input *OpsSystemLogCleanupAudit) error
 	ListAccountErrorAlertCandidatesFn func(ctx context.Context, filter *OpsAccountErrorAlertCandidateFilter) ([]*OpsAccountErrorAlertCandidate, error)
 	ListAccountErrorAlertTopUsersFn   func(ctx context.Context, filter *OpsAccountErrorAlertTopUserFilter) ([]*OpsAccountErrorAlertTopUser, error)
+	ListAccountIDsWithErrorAlertRulesFn func(ctx context.Context) ([]int64, error)
+	GetAccountErrorAlertSettingsFn     func(ctx context.Context, accountIDs []int64) (map[int64]AccountErrorAlertSettings, error)
 
 	CreateUserRequestMonitorFn         func(ctx context.Context, input *OpsCreateUserRequestMonitorRecord) (*OpsUserRequestMonitor, error)
 	ListUserRequestMonitorsFn          func(ctx context.Context, filter *OpsUserRequestMonitorFilter) ([]*OpsUserRequestMonitor, int64, error)
@@ -213,6 +215,20 @@ func (m *opsRepoMock) ListAccountErrorAlertTopUsers(ctx context.Context, filter 
 		return m.ListAccountErrorAlertTopUsersFn(ctx, filter)
 	}
 	return []*OpsAccountErrorAlertTopUser{}, nil
+}
+
+func (m *opsRepoMock) ListAccountIDsWithErrorAlertRules(ctx context.Context) ([]int64, error) {
+	if m.ListAccountIDsWithErrorAlertRulesFn != nil {
+		return m.ListAccountIDsWithErrorAlertRulesFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *opsRepoMock) GetAccountErrorAlertSettings(ctx context.Context, accountIDs []int64) (map[int64]AccountErrorAlertSettings, error) {
+	if m.GetAccountErrorAlertSettingsFn != nil {
+		return m.GetAccountErrorAlertSettingsFn(ctx, accountIDs)
+	}
+	return map[int64]AccountErrorAlertSettings{}, nil
 }
 
 func (m *opsRepoMock) CreateAlertSilence(ctx context.Context, input *OpsAlertSilence) (*OpsAlertSilence, error) {
