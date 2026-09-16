@@ -79,7 +79,6 @@ type OpsService struct {
 	ingressRejectAggregator     *OpsIngressRejectAggregator
 	authCacheInvalidationWorker *AuthCacheInvalidationWorker
 	apiKeyService               *APIKeyService
-	requestHealth               *AccountRequestHealthService
 
 	// cleanupReloader 由 wire 在 OpsCleanupService 构造完成后通过 SetCleanupReloader 注入。
 	// 解耦避免 OpsService -> OpsCleanupService 的硬依赖（cleanup 也读 settings，会循环）。
@@ -159,43 +158,6 @@ func NewOpsService(
 	svc.initRuntimeSettings(context.Background())
 	svc.applyRuntimeLogConfigOnStartup(context.Background())
 	return svc
-}
-
-func (s *OpsService) SetRequestHealthService(svc *AccountRequestHealthService) {
-	if s != nil {
-		s.requestHealth = svc
-	}
-}
-
-func (s *OpsService) recordRequestHealthFail(ctx context.Context, entry *OpsInsertErrorLogInput) {
-	if s == nil || s.requestHealth == nil || entry == nil || entry.AccountID == nil || *entry.AccountID <= 0 {
-		return
-	}
-	status := entry.StatusCode
-	if entry.UpstreamStatusCode != nil && *entry.UpstreamStatusCode > 0 {
-		status = *entry.UpstreamStatusCode
-	}
-	message := strings.TrimSpace(entry.ErrorMessage)
-	if message == "" && entry.UpstreamErrorMessage != nil {
-		message = strings.TrimSpace(*entry.UpstreamErrorMessage)
-	}
-	endpoint := strings.TrimSpace(entry.InboundEndpoint)
-	if endpoint == "" {
-		endpoint = strings.TrimSpace(entry.RequestPath)
-	}
-	model := strings.TrimSpace(entry.UpstreamModel)
-	if model == "" {
-		model = strings.TrimSpace(entry.Model)
-	}
-	s.requestHealth.Record(ctx, RequestHealthRecordInput{
-		AccountID:  *entry.AccountID,
-		ProxyID:    EgressProxyIDFrom(ctx, nil),
-		Slot:       RequestHealthSlotFail,
-		StatusCode: status,
-		Message:    message,
-		Model:      model,
-		Endpoint:   endpoint,
-	})
 }
 
 func (s *OpsService) RequireMonitoringEnabled(ctx context.Context) error {
@@ -450,7 +412,6 @@ func SanitizeOpsUpstreamErrorsForQueue(entry *OpsInsertErrorLogInput) error {
 }
 
 func (s *OpsService) RecordError(ctx context.Context, entry *OpsInsertErrorLogInput) error {
-	s.recordRequestHealthFail(ctx, entry)
 	prepared, ok, err := s.prepareErrorLogInput(ctx, entry)
 	if err != nil {
 		log.Printf("[Ops] RecordError prepare failed: %v", err)
@@ -471,9 +432,6 @@ func (s *OpsService) RecordError(ctx context.Context, entry *OpsInsertErrorLogIn
 func (s *OpsService) RecordErrorBatch(ctx context.Context, entries []*OpsInsertErrorLogInput) error {
 	if len(entries) == 0 {
 		return nil
-	}
-	for _, entry := range entries {
-		s.recordRequestHealthFail(ctx, entry)
 	}
 	prepared := make([]*OpsInsertErrorLogInput, 0, len(entries))
 	for _, entry := range entries {

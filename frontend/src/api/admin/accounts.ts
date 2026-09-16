@@ -21,7 +21,6 @@ import type {
   UpstreamBillingProbeResult,
   UpstreamBillingProbeSettings
 } from '@/types'
-import type { AccountRequestHealthDTO } from '@/components/account/requestHealth'
 
 /**
  * List all accounts with pagination
@@ -553,21 +552,6 @@ export async function getBatchTodayStats(accountIds: number[]): Promise<BatchTod
   return data
 }
 
-export interface BatchRequestHealthResponse {
-  items: AccountRequestHealthDTO[]
-}
-
-export async function getBatchRequestHealth(
-  accountIds: number[],
-  windowSize: number
-): Promise<BatchRequestHealthResponse> {
-  const { data } = await apiClient.post<BatchRequestHealthResponse>('/admin/accounts/request-health/batch', {
-    account_ids: accountIds,
-    window: windowSize
-  })
-  return data
-}
-
 /**
  * Set account schedulable status
  * @param id - Account ID
@@ -1062,7 +1046,6 @@ export const accountsAPI = {
   getUsage,
   getTodayStats,
   getBatchTodayStats,
-  getBatchRequestHealth,
   clearRateLimit,
   recoverState,
   resetAccountQuota,

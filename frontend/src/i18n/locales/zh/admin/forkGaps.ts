@@ -66,7 +66,6 @@ export default {
             accountAlertMinCount: '触发次数',
             accountAlertWindowMinutes: '统计窗口（分钟）',
             accountErrorAlert: '账号异常 Telegram 告警',
-            accountErrorAlertHint: 'Telegram Bot、扫描间隔和默认阈值在这里配置。每个账号可在账号编辑页开关监控、设置关键字和规则。',
             enableAccountErrorAlert: '开启账号异常告警',
             telegramBotToken: 'Telegram Bot Token',
             telegramChatId: 'Telegram Chat ID',

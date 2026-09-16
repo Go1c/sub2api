@@ -38,8 +38,6 @@ type OpsAccountErrorAlertLockStore interface {
 	Release(ctx context.Context, key, value string) error
 	Exists(ctx context.Context, key string) (bool, error)
 	SetCooldown(ctx context.Context, key string, ttl time.Duration) error
-	GetInt(ctx context.Context, key string) (int64, error)
-	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }
 
 type telegramOpsSender struct {
@@ -126,14 +124,6 @@ type OpsAccountErrorAlertService struct {
 
 	skipLogMu sync.Mutex
 	skipLogAt time.Time
-
-	sendMu     sync.Mutex
-	sendCounts map[string]sendWindowCounter
-}
-
-type sendWindowCounter struct {
-	until time.Time
-	n     int64
 }
 
 func NewOpsAccountErrorAlertService(
@@ -151,7 +141,6 @@ func NewOpsAccountErrorAlertService(
 		cfg:        cfg,
 		instanceID: uuid.NewString(),
 		cooldowns:  map[string]time.Time{},
-		sendCounts: map[string]sendWindowCounter{},
 		startOnce:  sync.Once{},
 		stopOnce:   sync.Once{},
 		cooldownMu: sync.Mutex{},
@@ -276,7 +265,12 @@ func (s *OpsAccountErrorAlertService) runOnce() {
 		windowEnd = time.Now().UTC()
 	}
 	windowStart := windowEnd.Add(-time.Duration(cfg.WindowMinutes) * time.Minute)
-	candidates, err := s.collectAccountErrorAlertItems(ctx, cfg, windowStart, windowEnd)
+	candidates, err := s.opsRepo.ListAccountErrorAlertCandidates(ctx, &OpsAccountErrorAlertCandidateFilter{
+		StartTime:     windowStart,
+		EndTime:       windowEnd,
+		MinErrorCount: cfg.MinErrorCount,
+		Limit:         cfg.MaxAccountsPerAlert,
+	})
 	if err != nil {
 		s.recordHeartbeatError(runAt, time.Since(startedAt), err)
 		logger.LegacyPrintf("service.ops_account_error_alert", "[OpsAccountErrorAlert] list candidates failed: %v", err)
@@ -287,7 +281,7 @@ func (s *OpsAccountErrorAlertService) runOnce() {
 		return
 	}
 
-	eligible, sendKeys := s.filterAccountErrorAlertItems(ctx, cfg, candidates)
+	eligible := s.filterCooldown(ctx, cfg, candidates)
 	if len(eligible) == 0 {
 		s.recordHeartbeatSuccess(runAt, time.Since(startedAt), fmt.Sprintf("candidates=%d sent=0 cooldown=all", len(candidates)))
 		return
@@ -296,11 +290,10 @@ func (s *OpsAccountErrorAlertService) runOnce() {
 	topUsers := []*OpsAccountErrorAlertTopUser{}
 	if cfg.MaxUsersPerAlert > 0 {
 		topUsers, err = s.opsRepo.ListAccountErrorAlertTopUsers(ctx, &OpsAccountErrorAlertTopUserFilter{
-			StartTime:          windowStart,
-			EndTime:            windowEnd,
-			MinErrorCount:      cfg.MinErrorCount,
-			Limit:              cfg.MaxUsersPerAlert,
-			UseAccountKeywords: true,
+			StartTime:     windowStart,
+			EndTime:       windowEnd,
+			MinErrorCount: cfg.MinErrorCount,
+			Limit:         cfg.MaxUsersPerAlert,
 		})
 		if err != nil {
 			s.recordHeartbeatError(runAt, time.Since(startedAt), err)
@@ -317,7 +310,6 @@ func (s *OpsAccountErrorAlertService) runOnce() {
 	}
 
 	s.markCooldown(ctx, cfg, eligible)
-	s.markSends(ctx, sendKeys)
 	result := truncateString(fmt.Sprintf("candidates=%d sent=%d top_users=%d window=%s..%s", len(candidates), len(eligible), len(topUsers), windowStart.Format(time.RFC3339), windowEnd.Format(time.RFC3339)), 2048)
 	s.recordHeartbeatSuccess(runAt, time.Since(startedAt), result)
 }
@@ -376,236 +368,6 @@ func (s *OpsAccountErrorAlertService) maybeLogSkip(key string) {
 	}
 	s.skipLogAt = now
 	logger.LegacyPrintf("service.ops_account_error_alert", "[OpsAccountErrorAlert] another instance holds leader lock %s; skipping", key)
-}
-
-type accountErrorAlertSendMark struct {
-	key string
-	ttl time.Duration
-}
-
-func (s *OpsAccountErrorAlertService) collectAccountErrorAlertItems(ctx context.Context, cfg *OpsAccountErrorAlertConfig, windowStart, windowEnd time.Time) ([]*OpsAccountErrorAlertCandidate, error) {
-	if s == nil || s.opsRepo == nil || cfg == nil {
-		return nil, nil
-	}
-	defaultItems, err := s.opsRepo.ListAccountErrorAlertCandidates(ctx, &OpsAccountErrorAlertCandidateFilter{
-		StartTime:          windowStart,
-		EndTime:            windowEnd,
-		MinErrorCount:      cfg.MinErrorCount,
-		Limit:              cfg.MaxAccountsPerAlert,
-		UseAccountKeywords: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	ruleAccountIDs, err := s.opsRepo.ListAccountIDsWithErrorAlertRules(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ids := append([]int64{}, ruleAccountIDs...)
-	for _, item := range defaultItems {
-		if item != nil && item.AccountID > 0 {
-			ids = append(ids, item.AccountID)
-		}
-	}
-	settingsByID := map[int64]AccountErrorAlertSettings{}
-	if len(ids) > 0 {
-		settingsByID, err = s.opsRepo.GetAccountErrorAlertSettings(ctx, ids)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	merged := make([]*OpsAccountErrorAlertCandidate, 0, len(defaultItems)+len(ruleAccountIDs))
-	seen := map[int64]struct{}{}
-
-	for _, accountID := range ruleAccountIDs {
-		settings := settingsByID[accountID]
-		if !settings.Enabled {
-			continue
-		}
-		for _, rule := range settings.Rules {
-			ruleWindow := resolveAccountErrorAlertRuleWindow(cfg, rule)
-			ruleMin := resolveAccountErrorAlertRuleMinCount(cfg, rule)
-			ruleStartAt := windowEnd.Add(-time.Duration(ruleWindow) * time.Minute)
-			if !ruleStartAt.Before(windowEnd) {
-				ruleStartAt = windowEnd.Add(-time.Minute)
-			}
-			items, listErr := s.opsRepo.ListAccountErrorAlertCandidates(ctx, &OpsAccountErrorAlertCandidateFilter{
-				StartTime:     ruleStartAt,
-				EndTime:       windowEnd,
-				MinErrorCount: ruleMin,
-				Limit:         cfg.MaxAccountsPerAlert,
-				AccountID:     accountID,
-				Keyword:       strings.TrimSpace(rule.Keyword),
-			})
-			if listErr != nil {
-				return nil, listErr
-			}
-			for _, item := range items {
-				if item == nil || item.AccountID <= 0 {
-					continue
-				}
-				if _, ok := seen[item.AccountID]; ok {
-					continue
-				}
-				seen[item.AccountID] = struct{}{}
-				merged = append(merged, item)
-			}
-		}
-	}
-
-	for _, item := range defaultItems {
-		if item == nil || item.AccountID <= 0 {
-			continue
-		}
-		if _, ok := seen[item.AccountID]; ok {
-			continue
-		}
-		if coveredByAccountErrorAlertRule(settingsByID[item.AccountID], item) {
-			continue
-		}
-		seen[item.AccountID] = struct{}{}
-		merged = append(merged, item)
-	}
-
-	if cfg.MaxAccountsPerAlert > 0 && len(merged) > cfg.MaxAccountsPerAlert {
-		merged = merged[:cfg.MaxAccountsPerAlert]
-	}
-	return merged, nil
-}
-
-func coveredByAccountErrorAlertRule(settings AccountErrorAlertSettings, item *OpsAccountErrorAlertCandidate) bool {
-	if !settings.Enabled || item == nil {
-		return false
-	}
-	for _, rule := range settings.Rules {
-		if accountErrorAlertRuleCoversItem(rule, item) {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *OpsAccountErrorAlertService) filterAccountErrorAlertItems(ctx context.Context, cfg *OpsAccountErrorAlertConfig, items []*OpsAccountErrorAlertCandidate) ([]*OpsAccountErrorAlertCandidate, []accountErrorAlertSendMark) {
-	if len(items) == 0 {
-		return items, nil
-	}
-	ids := make([]int64, 0, len(items))
-	for _, item := range items {
-		if item != nil && item.AccountID > 0 {
-			ids = append(ids, item.AccountID)
-		}
-	}
-	settingsByID := map[int64]AccountErrorAlertSettings{}
-	if s.opsRepo != nil && len(ids) > 0 {
-		if loaded, err := s.opsRepo.GetAccountErrorAlertSettings(ctx, ids); err == nil {
-			settingsByID = loaded
-		}
-	}
-
-	out := make([]*OpsAccountErrorAlertCandidate, 0, len(items))
-	marks := make([]accountErrorAlertSendMark, 0, len(items))
-	for _, item := range items {
-		if item == nil {
-			continue
-		}
-		settings := settingsByID[item.AccountID]
-		matchedRule, ok := matchingAccountErrorAlertRule(settings, item)
-		if ok {
-			maxSends := resolveAccountErrorAlertRuleMaxSends(matchedRule)
-			ttl := time.Duration(resolveAccountErrorAlertRuleWindow(cfg, matchedRule)) * time.Minute
-			key := accountErrorAlertSendKey(item.AccountID, matchedRule.Keyword)
-			if !s.canSend(ctx, key, maxSends) {
-				continue
-			}
-			out = append(out, item)
-			marks = append(marks, accountErrorAlertSendMark{key: key, ttl: ttl})
-			continue
-		}
-		if s.isCoolingDown(ctx, cfg, item) {
-			continue
-		}
-		out = append(out, item)
-	}
-	return out, marks
-}
-
-func matchingAccountErrorAlertRule(settings AccountErrorAlertSettings, item *OpsAccountErrorAlertCandidate) (AccountErrorAlertRule, bool) {
-	if !settings.Enabled || item == nil {
-		return AccountErrorAlertRule{}, false
-	}
-	for _, rule := range settings.Rules {
-		if accountErrorAlertRuleCoversItem(rule, item) {
-			return rule, true
-		}
-	}
-	return AccountErrorAlertRule{}, false
-}
-
-func accountErrorAlertSendKey(accountID int64, keyword string) string {
-	kw := strings.ToLower(strings.TrimSpace(keyword))
-	if kw == "" {
-		kw = "*"
-	}
-	return fmt.Sprintf("ops:account_error_alert:sends:%d:%s", accountID, kw)
-}
-
-func (s *OpsAccountErrorAlertService) canSend(ctx context.Context, key string, maxSends int) bool {
-	if maxSends <= 0 {
-		maxSends = 1
-	}
-	if key == "" {
-		return true
-	}
-	if s.lockStore != nil {
-		n, err := s.lockStore.GetInt(ctx, key)
-		if err == nil {
-			return n < int64(maxSends)
-		}
-	}
-	now := time.Now().UTC()
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	if s.sendCounts == nil {
-		s.sendCounts = map[string]sendWindowCounter{}
-	}
-	cur, ok := s.sendCounts[key]
-	if !ok || now.After(cur.until) {
-		return true
-	}
-	return cur.n < int64(maxSends)
-}
-
-func (s *OpsAccountErrorAlertService) markSends(ctx context.Context, marks []accountErrorAlertSendMark) {
-	if len(marks) == 0 {
-		return
-	}
-	now := time.Now().UTC()
-	for _, mark := range marks {
-		if mark.key == "" {
-			continue
-		}
-		ttl := mark.ttl
-		if ttl <= 0 {
-			ttl = 10 * time.Minute
-		}
-		if s.lockStore != nil {
-			_, _ = s.lockStore.Incr(ctx, mark.key, ttl)
-			continue
-		}
-		s.sendMu.Lock()
-		if s.sendCounts == nil {
-			s.sendCounts = map[string]sendWindowCounter{}
-		}
-		cur := s.sendCounts[mark.key]
-		if now.After(cur.until) {
-			cur = sendWindowCounter{until: now.Add(ttl), n: 0}
-		}
-		cur.n++
-		s.sendCounts[mark.key] = cur
-		s.sendMu.Unlock()
-	}
 }
 
 func (s *OpsAccountErrorAlertService) filterCooldown(ctx context.Context, cfg *OpsAccountErrorAlertConfig, items []*OpsAccountErrorAlertCandidate) []*OpsAccountErrorAlertCandidate {
