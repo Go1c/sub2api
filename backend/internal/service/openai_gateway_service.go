@@ -415,7 +415,6 @@ type OpenAIGatewayService struct {
 	settingService              *SettingService
 	userPlatformQuotaRepo       UserPlatformQuotaRepository
 	accountErrorHistory         *AccountErrorHistoryService
-	requestHealth               *AccountRequestHealthService
 	ipGroupResolver             *openAIIPGroupResolver
 
 	openaiWSPoolOnce              sync.Once
@@ -457,10 +456,6 @@ type OpenAIGatewayService struct {
 // SetAccountErrorHistoryService 注入账号错误历史服务（best-effort，可选）。
 func (s *OpenAIGatewayService) SetAccountErrorHistoryService(svc *AccountErrorHistoryService) {
 	s.accountErrorHistory = svc
-}
-
-func (s *OpenAIGatewayService) SetRequestHealthService(svc *AccountRequestHealthService) {
-	s.requestHealth = svc
 }
 
 // SetWebhookBalanceNotifyService injects optional external robot/webhook balance alerts (WeCom etc.).

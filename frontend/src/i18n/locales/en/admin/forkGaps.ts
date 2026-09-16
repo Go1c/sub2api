@@ -66,7 +66,6 @@ export default {
             accountAlertMinCount: 'Trigger count',
             accountAlertWindowMinutes: 'Window (minutes)',
             accountErrorAlert: 'Account Error Telegram Alert',
-            accountErrorAlertHint: 'Configure the Telegram bot, scan interval, and default thresholds here. Per-account monitoring, keywords, and rules are set on the account edit page.',
             enableAccountErrorAlert: 'Enable account error alert',
             telegramBotToken: 'Telegram Bot Token',
             telegramChatId: 'Telegram Chat ID',

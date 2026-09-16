@@ -64,16 +64,11 @@ type AccountHandler struct {
 	grokImportProber           grokImportProber
 	accountErrorHistoryService *service.AccountErrorHistoryService
 	upstreamBillingProbe       *service.UpstreamBillingProbeService
-	requestHealth              *service.AccountRequestHealthService
 }
 
 // SetUpstreamBillingProbeService attaches the optional remote billing probe service.
 func (h *AccountHandler) SetUpstreamBillingProbeService(probe *service.UpstreamBillingProbeService) {
 	h.upstreamBillingProbe = probe
-}
-
-func (h *AccountHandler) SetRequestHealthService(svc *service.AccountRequestHealthService) {
-	h.requestHealth = svc
 }
 
 // NewAccountHandler creates a new admin account handler
