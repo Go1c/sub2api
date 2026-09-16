@@ -174,9 +174,18 @@ func TestCreateCodexBackendReqClientSendsNoBrowserFingerprint(t *testing.T) {
 		t.Errorf("codex backend client 不应自报 Chrome UA: %q", ua)
 	}
 
-	// 区分力对照：隐私设置那条路径仍然是 Chrome 伪装。
+	// 区分力对照：隐私设置那条路径仍然会做浏览器伪装（当前是 Firefox）。
 	privacy := capture(CreatePrivacyReqClient)
-	if privacy.Get("sec-ch-ua") == "" {
-		t.Fatal("对照组失效：CreatePrivacyReqClient 未发 sec-ch-ua，本用例无法证明差异")
+	if privacy.Get("sec-ch-ua") == "" && !strings.Contains(privacy.Get("User-Agent"), "Firefox") {
+		t.Fatal("对照组失效：CreatePrivacyReqClient 未发浏览器指纹，本用例无法证明差异")
 	}
+}
+
+func TestGetSharedReqClient_ImpersonateUsesFirefoxFingerprint(t *testing.T) {
+	sharedReqClients = sync.Map{}
+	client, err := getSharedReqClient(reqClientOptions{Timeout: time.Second, Impersonate: true})
+	require.NoError(t, err)
+	// chatgpt.com 的 Cloudflare 会质询 req 内置的 Chrome/120 伪装，必须保持 Firefox 指纹。
+	require.Contains(t, client.Headers.Get("User-Agent"), "Firefox/")
+	require.NotContains(t, client.Headers.Get("User-Agent"), "Chrome/")
 }
