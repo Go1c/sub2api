@@ -7,6 +7,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
 )
 
 // ProvideAdminHandlers creates the AdminHandlers struct
@@ -51,9 +52,28 @@ func ProvideAdminHandlers(
 	auditLogHandler *admin.AuditLogHandler,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
+	redisClient *redis.Client,
+	adminService service.AdminService,
+	gatewayService *service.GatewayService,
+	openaiGatewayService *service.OpenAIGatewayService,
+	opsService *service.OpsService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
+	health := service.NewAccountRequestHealthService(
+		service.NewAccountRequestHealthStore(redisClient),
+		adminService,
+	)
+	accountHandler.SetRequestHealthService(health)
+	if gatewayService != nil {
+		gatewayService.SetRequestHealthService(health)
+	}
+	if openaiGatewayService != nil {
+		openaiGatewayService.SetRequestHealthService(health)
+	}
+	if opsService != nil {
+		opsService.SetRequestHealthService(health)
+	}
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,

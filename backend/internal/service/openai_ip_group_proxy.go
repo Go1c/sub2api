@@ -480,7 +480,23 @@ func (s *OpenAIGatewayService) lookupOpenAIProxyURL(ctx context.Context, c *gin.
 		}
 	}
 	ctx = withOpenAIIPGroupSession(ctx, sessionHash)
-	return s.mustOpenAIAccountProxyURL(ctx, account, sessionHash)
+	resolved, err := s.resolveOpenAIAccountProxy(ctx, account, sessionHash)
+	if resolved != nil && resolved.Proxy != nil {
+		RememberEgressProxyID(c, resolved.Proxy.ID)
+	}
+	if err != nil {
+		return finishOpenAIProxyLookup(account, "", func() {}, err)
+	}
+	if resolved == nil {
+		return finishOpenAIProxyLookup(account, "", func() {}, nil)
+	}
+	if resolved.Release == nil {
+		resolved.Release = func() {}
+	}
+	if resolved.Proxy == nil {
+		return finishOpenAIProxyLookup(account, "", resolved.Release, nil)
+	}
+	return finishOpenAIProxyLookup(account, resolved.Proxy.URL(), resolved.Release, nil)
 }
 
 func (s *ConcurrencyService) AcquireAccountProxySlot(ctx context.Context, accountID, proxyID int64, maxConcurrency int) (*AcquireResult, error) {

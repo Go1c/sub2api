@@ -804,6 +804,11 @@ type GatewayService struct {
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	requestHealth         *AccountRequestHealthService
+}
+
+func (s *GatewayService) SetRequestHealthService(svc *AccountRequestHealthService) {
+	s.requestHealth = svc
 }
 
 // NewGatewayService creates a new GatewayService

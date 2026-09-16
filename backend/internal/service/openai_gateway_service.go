@@ -527,6 +527,11 @@ type OpenAIGatewayService struct {
 	// codexSideCalls：双开账号侧信道 GET 的去重窗口（openai_codex_side_calls.go）。
 	// 由构造器初始化；裸结构体（单元测试）里为 nil，侧信道整体停用。
 	codexSideCalls *codexSideCallState
+	requestHealth  *AccountRequestHealthService
+}
+
+func (s *OpenAIGatewayService) SetRequestHealthService(svc *AccountRequestHealthService) {
+	s.requestHealth = svc
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService

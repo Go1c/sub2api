@@ -2,6 +2,7 @@ import overview from './overview'
 import channels from './channels'
 import accounts from './accounts'
 import channelIq from './channelIq'
+import requestHealth from './requestHealth'
 import resources from './resources'
 import ops from './ops'
 import settings from './settings'
@@ -14,6 +15,7 @@ export default {
   ...channels,
   ...accounts,
   ...channelIq,
+  ...requestHealth,
   ...resources,
   ...ops,
   ...settings,

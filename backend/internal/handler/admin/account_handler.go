@@ -65,6 +65,7 @@ type AccountHandler struct {
 	grokImportProber        grokImportProber
 	upstreamBillingProbe    *service.UpstreamBillingProbeService
 	ollamaCloudUsage        *service.OllamaCloudUsageService
+	requestHealth           *service.AccountRequestHealthService
 	cfg                     *config.Config
 }
 
@@ -75,6 +76,10 @@ func (h *AccountHandler) SetUpstreamBillingProbeService(probe *service.UpstreamB
 
 func (h *AccountHandler) SetOllamaCloudUsageService(usage *service.OllamaCloudUsageService) {
 	h.ollamaCloudUsage = usage
+}
+
+func (h *AccountHandler) SetRequestHealthService(svc *service.AccountRequestHealthService) {
+	h.requestHealth = svc
 }
 
 // NewAccountHandler creates a new admin account handler
