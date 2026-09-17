@@ -618,6 +618,10 @@ const (
 	// anthropic-beta header.
 	SettingKeyOpenAIFastPolicySettings = "openai_fast_policy_settings"
 
+	// SettingKeyTurnStateProbePolicy stores the channel-level Codex turn-state
+	// probe policy (exits, quiz, model, recheck). Account extra only holds the switch.
+	SettingKeyTurnStateProbePolicy = "turn_state_probe_policy"
+
 	// =========================
 	// Claude Code Version Check
 	// =========================

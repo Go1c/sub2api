@@ -498,6 +498,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if _, err := ParseAccountTrafficPolicy(accountExtra); err != nil {
 		return nil, err
 	}
+	accountExtra = EnsureTurnStateProbeExtra(input.Platform, input.Type, accountExtra, true)
 
 	// 绑定分组
 	groupIDs := input.GroupIDs

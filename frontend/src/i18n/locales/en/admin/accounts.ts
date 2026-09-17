@@ -862,6 +862,10 @@ export default {
         '429 already has built-in rate limit handling. Adding it to custom error codes will disable the account instead of temporary rate limiting. Are you sure?',
       customErrorCodes529Warning:
         '529 already has built-in overload handling. Adding it to custom error codes will disable the account instead of temporary overload marking. Are you sure?',
+      turnStateProbe: {
+        title: 'Turn-State Probe',
+        hint: 'Switch only. Probe exits, quiz, and recheck interval live on the channel subpage. When on, this account harvests and injects its current ticket from channel policy. Turning it off stops new harvests and new-turn injection. The full state string is never shown.'
+      },
       errorAlert: {
         title: 'Error monitoring',
         hint: 'Included in Telegram account-error alerts by default. Turn this off to exclude the account. Keywords and rules do not affect custom error-code scheduling.',

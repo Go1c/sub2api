@@ -121,6 +121,7 @@ func RegisterAdminRoutes(
 
 		// 渠道智商检测
 		registerChannelIQRoutes(admin, h)
+		registerTurnStateProbeRoutes(admin, h)
 
 		// 风控中心
 		registerContentModerationRoutes(admin, h)
@@ -843,6 +844,24 @@ func registerChannelIQRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		iq.POST("/accounts/:id/run", h.Admin.ChannelIQ.RunOne)
 		iq.POST("/accounts/:id/exclude", h.Admin.ChannelIQ.Exclude)
 		iq.POST("/accounts/:id/restore", h.Admin.ChannelIQ.Restore)
+	}
+}
+
+func registerTurnStateProbeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h == nil || h.Admin == nil || h.Admin.TurnStateProbe == nil {
+		return
+	}
+	g := admin.Group("/channels/turn-state-probe")
+	{
+		g.GET("", h.Admin.TurnStateProbe.Overview)
+		g.PUT("", h.Admin.TurnStateProbe.UpdatePolicy)
+		g.GET("/accounts", h.Admin.TurnStateProbe.Overview)
+	}
+	accounts := admin.Group("/accounts")
+	{
+		accounts.POST("/:id/turn-state-probe/enabled", h.Admin.TurnStateProbe.SetEnabled)
+		accounts.POST("/:id/turn-state-probe/run", h.Admin.TurnStateProbe.RunOne)
+		accounts.DELETE("/:id/turn-state-probe", h.Admin.TurnStateProbe.Clear)
 	}
 }
 

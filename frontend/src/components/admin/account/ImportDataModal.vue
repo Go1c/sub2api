@@ -313,7 +313,7 @@ const handleImport = async () => {
             ...account.credentials,
             model_mapping: { ...latestModels, ...(mapping && typeof mapping === 'object' && !Array.isArray(mapping) ? mapping : {}) }
           },
-          extra: { ...account.extra, codex_fingerprint_mode: KIN_DEFAULT_CODEX_FINGERPRINT_MODE, error_alert: { enabled: false } },
+          extra: { ...account.extra, codex_fingerprint_mode: KIN_DEFAULT_CODEX_FINGERPRINT_MODE, error_alert: { enabled: false }, turn_state_probe: { enabled: true } },
           group_ids: account.group_ids?.length ? account.group_ids : firstGroup ? [firstGroup.id] : [],
           proxy_ip_group_id: account.proxy_ip_group_id ?? (account.proxy_key ? undefined : ipGroups[0]?.id)
         }

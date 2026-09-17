@@ -487,6 +487,7 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			if _, exists := extra[service.AccountErrorAlertExtraKey]; !exists {
 				extra[service.AccountErrorAlertExtraKey] = map[string]any{"enabled": false}
 			}
+			extra = service.EnsureTurnStateProbeExtra(item.Platform, item.Type, extra, true)
 			extra["codex_fingerprint_mode"] = "device"
 			item.Extra = extra
 			credentials := make(map[string]any, len(item.Credentials)+1)

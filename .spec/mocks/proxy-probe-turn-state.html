@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mock · 探测代理池与 Turn-State 注入</title>
+  <style>
+    :root {
+      --bg: #020617;
+      --panel: #0f172a;
+      --panel-2: #1e293b;
+      --line: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --teal: #14b8a6;
+      --teal-2: #0d9488;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --ok: #34d399;
+      --shadow: 0 18px 50px rgba(0, 0, 0, .35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, rgba(20,184,166,.12), transparent 50%), var(--bg);
+      color: var(--text);
+    }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .app { max-width: 1280px; margin: 0 auto; padding: 20px 20px 80px; }
+    header.top {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+      margin-bottom: 18px;
+    }
+    .brand { font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+    .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--line); background: var(--panel);
+      border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--muted);
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+    nav.tabs {
+      display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 18px;
+      border-bottom: 1px solid var(--line); padding-bottom: 10px;
+    }
+    nav.tabs button {
+      appearance: none; border: 0; background: transparent; color: var(--muted);
+      padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600;
+    }
+    nav.tabs button.active { background: var(--panel-2); color: #fff; }
+    .panel {
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+      border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px;
+      box-shadow: var(--shadow);
+    }
+    h2 { font-size: 16px; margin: 0 0 10px; }
+    h3 { font-size: 13px; margin: 0 0 8px; color: #fff; }
+    p.hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .track {
+      border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #0b1224;
+      min-height: 280px;
+    }
+    .track.probe { box-shadow: inset 0 0 0 1px rgba(20,184,166,.18); }
+    .track.biz { box-shadow: inset 0 0 0 1px rgba(251,191,36,.14); }
+    ol.steps { margin: 0; padding-left: 18px; }
+    ol.steps li { margin: 8px 0; }
+    ol.steps small { display: block; color: var(--muted); }
+    .tag {
+      display: inline-block; background: #334155; border-radius: 6px; padding: 1px 6px;
+      font-size: 12px;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      appearance: none; border: 0; border-radius: 11px; padding: 8px 12px; cursor: pointer;
+      font-weight: 650; color: #042f2e; background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    }
+    .btn.secondary { background: #1e293b; color: var(--text); border: 1px solid var(--line); }
+    .btn.danger { background: #7f1d1d; color: #fecaca; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    label.field { display: block; margin: 10px 0; }
+    label.field span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    input, select, textarea {
+      width: 100%; background: #020617; color: var(--text); border: 1px solid var(--line);
+      border-radius: 10px; padding: 8px 10px; font: inherit;
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--rose); }
+    .muted { color: var(--muted); }
+    .toast {
+      position: fixed; right: 18px; bottom: 18px; background: #134e4a; color: #ccfbf1;
+      border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); display: none;
+    }
+    .stat { background: #0b1224; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .stat b { display: block; font-size: 20px; margin-top: 4px; }
+    .flow {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px;
+    }
+    .chip {
+      background: #1e293b; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px;
+      font-size: 12px;
+    }
+    .chip.on { border-color: var(--teal); color: #99f6e4; }
+    .req {
+      border: 1px dashed var(--line); border-radius: 12px; padding: 12px; margin-top: 10px;
+      background: #020617;
+    }
+    .hidden { display: none !important; }
+    .check { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+    .member { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #1e293b; }
+    .banner {
+      background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.28);
+      color: #fde68a; border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 13px;
+    }
+    .need li { margin: 8px 0; }
+    @media (max-width: 900px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div>
+        <div class="brand">探测代理池 · Turn-State 业务注入</div>
+        <div class="sub">静态 Mock，不连真实后台。核心闭环：探测轨采集 → 题目验证入池 → 住宅业务轨按轮注入。</div>
+      </div>
+      <span class="pill"><span class="dot"></span> 设计预览 · 非生产页</span>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button class="active" data-tab="overview">双轨总览</button>
+      <button data-tab="pool">IP 管理 · 探测池</button>
+      <button data-tab="account">账号配置</button>
+      <button data-tab="results">探测结果</button>
+      <button data-tab="inject">一轮注入演示</button>
+      <button data-tab="needs">联调我需要什么</button>
+    </nav>
+
+    <section id="overview" class="panel">
+      <div class="banner">X-Codex-Turn-State 是不透明路由状态。跨轮复用是实验行为。「答题通过」只作为入池条件，不标记为已证明的算力等级；效果以同模型同参数的启用/关闭对照测量为准。</div>
+      <div class="grid-2">
+        <div class="track probe">
+          <h2>探测轨（刷门票）</h2>
+          <p class="hint">廉价动态 IPv6 探测池，独立于业务出口调度。普通连通性 ping 不采集 state。</p>
+          <ol class="steps">
+            <li>准备海量廉价动态 IP 池<small>图中为 IPv6。成本极低；动态供应商每次换 <span class="tag">sid</span> 即换出口。</small></li>
+            <li>发送轻量探针，不停换 IP 撞击<small>图里的 ping 是短 Responses，不是 ICMP。目标：捕获响应头 <span class="tag">X-Codex-Turn-State</span>。必须仍是 gpt-6-astra，改成 Luna 则换下一个 IP。</small></li>
+            <li>评估过滤<small>长度门槛（如 ≥ 160）粗筛；或/再走轻量题目（默认摸糖果题，答案 21）。筛出可用门票。</small></li>
+            <li>通过后入池<small>题目答对一次即可。长度会展示，也参与筛选。</small></li>
+          </ol>
+        </div>
+        <div class="track biz">
+          <h2>业务轨（实际生产使用）</h2>
+          <p class="hint">对应原文：日常请求中强制注入 / 替换 X-Codex-Turn-State。</p>
+          <ol class="steps">
+            <li>使用常规住宅 IP / 原 IP 组<small>日常流量沿用账号原配置，探测池不进选路。本功能只换 state。</small></li>
+            <li>由网关中间件强制注入或替换 state<small>HTTP 写请求头；WebSocket 写请求帧 <span class="tag">client_metadata</span>，不看握手头。客户端自带值被覆盖。</small></li>
+            <li>同轮首次选票，后续钉死<small>换账号则按新凭证重选。现有跨凭证守卫仍生效。</small></li>
+            <li>池空默认正常转发并后台补池<small>可选等 2 秒，或直接 503。</small></li>
+          </ol>
+        </div>
+      </div>
+      <div class="flow">
+        <span class="chip">JSON 导入 / 新建 Codex 账号</span>
+        <span class="muted">→</span>
+        <span class="chip on">自动入队探测</span>
+        <span class="muted">→</span>
+        <span class="chip on">答对一次即入池</span>
+        <span class="muted">→</span>
+        <span class="chip on">业务首包注入</span>
+      </div>
+      <p class="hint">一句话：探测轨用廉价池刷出通过题目的 state 门票，业务轨在住宅 IP 的同轮请求里强制带上这张票。</p>
+    </section>
+
+    <section id="pool" class="panel hidden">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div>
+          <h2>探测代理池</h2>
+          <p class="hint">与「IP 组」并列，但不参与日常选路。被账号引用时禁止删除。</p>
+        </div>
+        <button class="btn" id="newPool">新建探测池</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>名称</th><th>状态</th><th>成员</th><th>被引用账号</th><th></th></tr>
+        </thead>
+        <tbody id="poolTable"></tbody>
+      </table>
+      <div id="poolForm" class="hidden" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+        <h3 id="poolFormTitle">新建探测池</h3>
+        <label class="field"><span>名称</span><input id="poolName" value="cheap-ipv6-probe" /></label>
+        <label class="field"><span>启用</span>
+          <select id="poolEnabled"><option value="1">启用</option><option value="0">停用</option></select>
+        </label>
+        <div>
+          <span class="muted">成员（现有代理）</span>
+          <div class="member"><input type="checkbox" checked /> ipv6-dyn-01 · socks5://[2400:…] :1080</div>
+          <div class="member"><input type="checkbox" checked /> ipv6-dyn-02 · socks5://[2401:…] :1080</div>
+          <div class="member"><input type="checkbox" /> ipv6-dyn-03 · socks5://[2402:…] :1080</div>
+          <div class="member"><input type="checkbox" /> house-01 · http://1.2.3.4:8080 <span class="muted">（也可加入探测池，但不建议）</span></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="savePool">保存池</button>
+          <button class="btn secondary" id="cancelPool">取消</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="account" class="panel hidden">
+      <h2>编辑账号 · Codex OAuth</h2>
+      <p class="hint">仅 OpenAI OAuth。配置随账号保存。JSON 导入或新建时：若有启用中的探测池，则默认打开并入队探测。</p>
+      <div class="grid-2">
+        <div>
+          <label class="check"><input id="enabled" type="checkbox" checked /> 启用探测采集与业务注入</label>
+          <label class="field"><span>探测池</span>
+            <select id="accountPool">
+              <option>cheap-ipv6-probe</option>
+              <option>probe-backup</option>
+            </select>
+          </label>
+          <label class="field"><span>模型列表</span>
+            <select multiple size="3">
+              <option selected>gpt-5.4</option>
+              <option selected>gpt-5.3-codex</option>
+              <option>gpt-5.2</option>
+            </select>
+          </label>
+          <label class="field"><span>测试题（必填）</span>
+            <textarea id="question">黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?</textarea>
+          </label>
+          <label class="field"><span>标准答案（必填）</span>
+            <input id="answer" value="21" />
+          </label>
+          <label class="check"><input id="lenFilter" type="checkbox" checked /> 长度过滤（默认最低 160，低于则换下一个 IP）</label>
+          <label class="field"><span>最低 state 长度</span><input id="minLen" type="number" value="160" min="1" /></label>
+          <label class="check"><input id="fuzzy" type="checkbox" checked /> 模糊匹配（区分大小写的包含；关闭则为去空白后精确相等）</label>
+        </div>
+        <div>
+          <label class="field"><span>池空策略</span>
+            <select id="emptyPolicy">
+              <option value="forward">正常转发，并后台补池（默认）</option>
+              <option value="wait">等待最多 2 秒后正常转发</option>
+              <option value="reject">返回 503</option>
+            </select>
+          </label>
+          <label class="field"><span>每分钟上游调用预算</span><input type="number" value="6" min="1" max="60" /></label>
+          <label class="field"><span>账号探测并发</span><input value="1（固定）" disabled /></label>
+          <label class="field"><span>候选寿命（秒，仅本地过期，不代表上游承诺）</span><input type="number" value="600" /></label>
+          <div class="stat">
+            <span class="muted">最近入池 state 长度</span>
+            <b>356 字符 ≥ 160</b>
+            <div class="muted">哈希 e4af…e784 · 采自 HTTP 响应头 · 过长度粗筛后再答题</div>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="saveAccount">保存配置</button>
+        <button class="btn secondary" id="runNow">立即探测</button>
+        <button class="btn secondary" id="pauseBtn">暂停采集</button>
+        <button class="btn danger" id="clearBtn">清空候选</button>
+      </div>
+      <div id="jobBox" class="req hidden">
+        <strong>任务 #probe-1842</strong>
+        <div class="muted" id="jobLog">排队中…</div>
+      </div>
+    </section>
+
+    <section id="results" class="panel hidden">
+      <div class="grid-3" style="margin-bottom:14px">
+        <div class="stat"><span class="muted">池内合格门票</span><b id="statOk">2</b></div>
+        <div class="stat"><span class="muted">最近通过率</span><b>67%</b></div>
+        <div class="stat"><span class="muted">本分钟已用预算</span><b>2 / 6</b></div>
+      </div>
+      <h2>按凭证身份 / 模型 / 业务出口隔离</h2>
+      <p class="hint">完整 state 不进管理页。推理内容、元数据、错误体不参与判定。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>模型</th><th>探测出口</th><th>验证出口</th><th>长度</th><th>判定</th><th>耗时</th><th>tokens</th><th>到期</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>gpt-5.4</td><td>ipv6-dyn-01</td><td>house-01</td>
+            <td>356</td><td class="ok">通过 · 已入池</td><td>1.8s</td><td>46</td><td>9 分钟后</td>
+          </tr>
+          <tr>
+            <td>gpt-5.4</td><td>ipv6-dyn-02</td><td>house-01</td>
+            <td>181</td><td class="ok">通过 · 已入池</td><td>2.1s</td><td>51</td><td>11 分钟后</td>
+          </tr>
+          <tr>
+            <td>gpt-5.3-codex</td><td>ipv6-dyn-01</td><td>house-01</td>
+            <td>176</td><td class="bad">最终答案不匹配</td><td>1.4s</td><td>38</td><td>—</td>
+          </tr>
+          <tr>
+            <td>gpt-5.4</td><td>ipv6-dyn-03</td><td>—</td>
+            <td>—</td><td class="muted">采集无 state（连通性 ping 不计）</td><td>0.4s</td><td>0</td><td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="inject" class="panel hidden">
+      <h2>同一轮业务请求</h2>
+      <p class="hint">调用方 + 会话 + 凭证身份 + 改写前的客户端轮次标识。无法识别轮次则跳过并记原因。</p>
+      <div class="row">
+        <button class="btn" id="simFirst">模拟本轮第 1 个请求</button>
+        <button class="btn secondary" id="simNext">模拟同轮后续请求</button>
+        <button class="btn secondary" id="simSwitch">换账号</button>
+        <button class="btn secondary" id="simOff">关闭功能后再来一轮</button>
+      </div>
+      <div class="req" id="injectLog">还没有请求。</div>
+    </section>
+
+    <section id="needs" class="panel hidden">
+      <h2>为了验证「真能拿到 X-Codex-Turn-State」我需要这些</h2>
+      <p class="hint">你可以只给最小可用集。完整 blob 可以不贴，长度 + SHA256 前 12 位就够证明捕获成功。密钥不要发到这个 HTML 里，直接发会话即可。</p>
+      <ol class="need">
+        <li>
+          <strong>一条能打到 Codex Responses 的账号</strong><br />
+          优先：本仓库可登录的管理后台地址、管理员 Token、一个 OpenAI OAuth 账号 ID。<br />
+          备选：一份可刷新的 Codex auth.json / session JSON（我会只用一次探测，用完告诉你已停）。
+        </li>
+        <li>
+          <strong>探测出口 1 条</strong>：廉价 IPv6 代理 URL（协议/主机/端口/账号密码）。用来跑采集轨。
+        </li>
+        <li>
+          <strong>业务出口 1 条</strong>：住宅 IP 代理 URL。用来带着候选 state 问测试题。
+        </li>
+        <li>
+          <strong>一次真实响应的证据</strong>（任选一种）：
+          <ul>
+            <li>HTTP <code>POST https://chatgpt.com/backend-api/codex/responses</code> 的响应头，确认是否出现 <code>x-codex-turn-state</code>，以及它在<strong>响应头</strong>还是只在 SSE/WS 的 <code>response.metadata.headers</code>。</li>
+            <li>或 HAR / <code>curl -D -</code> 输出（Authorization 可打码）。</li>
+            <li>请附：状态码、state 长度、SHA256 前 12 位、是否截断、用的模型。</li>
+          </ul>
+        </li>
+        <li>
+          <strong>测试题和标准答案</strong>：你们实际上想用来当入池门槛的那一题。没有的话我先用 Mock 里这题做通路测试。
+        </li>
+        <li>
+          <strong>可选</strong>：WebSocket 一条 <code>response.metadata</code> 帧样例（打码），确认帧内头名是否就是 <code>x-codex-turn-state</code>。
+        </li>
+      </ol>
+      <p>我<strong>不需要</strong>整池代理、不需要完整 state 原文、不需要把「高算力」当成已证明事实。先证明两件事：探测轨能采到头，业务轨能把同一个值注入到 HTTP 头和 WS 帧的 <code>client_metadata</code>。</p>
+    </section>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const toast = (msg) => {
+      const el = $("toast");
+      el.textContent = msg;
+      el.style.display = "block";
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.style.display = "none", 2200);
+    };
+
+    document.querySelectorAll("nav.tabs button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll("nav.tabs button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        ["overview","pool","account","results","inject","needs"].forEach((id) => {
+          $(id).classList.toggle("hidden", id !== btn.dataset.tab);
+        });
+      };
+    });
+
+    const pools = [
+      { name: "cheap-ipv6-probe", enabled: true, members: 2, refs: 3 },
+      { name: "probe-backup", enabled: false, members: 1, refs: 0 },
+    ];
+    const renderPools = () => {
+      $("poolTable").innerHTML = pools.map((p, i) => `<tr>
+        <td>${p.name}</td>
+        <td>${p.enabled ? '<span class="ok">启用</span>' : '<span class="muted">停用</span>'}</td>
+        <td>${p.members} 个代理</td>
+        <td>${p.refs}</td>
+        <td class="row">
+          <button class="btn secondary" data-edit="${i}">编辑</button>
+          <button class="btn danger" data-del="${i}" ${p.refs ? "disabled" : ""}>${p.refs ? "使用中" : "删除"}</button>
+        </td>
+      </tr>`).join("");
+      $("poolTable").onclick = (e) => {
+        const edit = e.target.dataset.edit;
+        const del = e.target.dataset.del;
+        if (edit != null) {
+          $("poolForm").classList.remove("hidden");
+          $("poolFormTitle").textContent = "编辑探测池";
+          $("poolName").value = pools[edit].name;
+        }
+        if (del != null) {
+          if (pools[del].refs) return toast("仍有账号引用，不能删除");
+          pools.splice(del, 1);
+          renderPools();
+          toast("已删除探测池");
+        }
+      };
+    };
+    renderPools();
+    $("newPool").onclick = () => { $("poolForm").classList.remove("hidden"); $("poolFormTitle").textContent = "新建探测池"; };
+    $("cancelPool").onclick = () => $("poolForm").classList.add("hidden");
+    $("savePool").onclick = () => { toast("探测池已保存（Mock）"); $("poolForm").classList.add("hidden"); };
+
+    let paused = false;
+    $("saveAccount").onclick = () => toast("配置已保存。未保存草稿不会拿去探测。");
+    $("pauseBtn").onclick = () => {
+      paused = !paused;
+      $("pauseBtn").textContent = paused ? "恢复采集" : "暂停采集";
+      toast(paused ? "已停止新采集和新轮注入；已有轮次保留绑定" : "已恢复采集与新轮注入");
+    };
+    $("clearBtn").onclick = () => {
+      $("statOk").textContent = "0";
+      toast("已清空本账号候选与历史结果，在途任务不得回写入池");
+    };
+    $("runNow").onclick = () => {
+      if (paused) return toast("已暂停，不会开始新探测");
+      $("jobBox").classList.remove("hidden");
+      const log = $("jobLog");
+      const steps = [
+        "queued → 占用账号探测租约（并发 1）",
+        "采集：探测池 ipv6-dyn-01 发简短 Responses…",
+        "捕获 x-codex-turn-state · 长度 356 ≥ 160 · 哈希 e4afd006e784",
+        "验证：住宅出口 house-01 携带候选 state 提问…",
+        "最终文本包含「21」→ 通过，入池",
+        "completed · 本分钟预算 3/6",
+      ];
+      let i = 0;
+      log.textContent = steps[0];
+      const t = setInterval(() => {
+        i += 1;
+        if (i >= steps.length) { clearInterval(t); toast("立即探测完成（Mock）"); return; }
+        log.textContent = steps[i];
+      }, 700);
+    };
+
+    let turnBound = null;
+    let account = "codex-A";
+    const showInject = (html) => { $("injectLog").innerHTML = html; };
+    $("simFirst").onclick = () => {
+      turnBound = { state: "e4af…e784", len: 356, turn: "client-turn-9f2", account };
+      showInject(`<div><strong>HTTP 第 1 请求</strong> · 轮次 <code>${turnBound.turn}</code> · 账号 ${account}</div>
+        改写前客户端未带 state。<br/>
+        选中凭证/模型/业务出口 house-01 下最近验证通过的门票，<strong>覆盖写入</strong> <code>X-Codex-Turn-State</code>（长度 ${turnBound.len}）。<br/>
+        <span class="ok">本轮绑定已建立，后续请求不再改票。</span>`);
+    };
+    $("simNext").onclick = () => {
+      if (!turnBound) return toast("先模拟本轮第一个请求");
+      showInject(`<div><strong>同轮后续请求</strong> · 轮次 <code>${turnBound.turn}</code></div>
+        WebSocket 请求帧 <code>client_metadata.x-codex-turn-state</code> 写入绑定值（不读握手头）。<br/>
+        池里即使又进了新门票，<strong>本轮仍用 ${turnBound.state}</strong>。`);
+    };
+    $("simSwitch").onclick = () => {
+      account = account === "codex-A" ? "codex-B" : "codex-A";
+      turnBound = null;
+      showInject(`已切换到 ${account}。旧绑定丢弃，下一请求按新凭证重新选票。跨凭证守卫仍会剥掉别人铸的 state。`);
+    };
+    $("simOff").onclick = () => {
+      turnBound = null;
+      showInject(`功能已关：<strong>不再采集、不再给新轮注入</strong>。若上一轮还活着，会把绑定保留到轮结束或清理超时。本演示视为新轮，因此没有注入，原样转发。`);
+    };
+  </script>
+</body>
+</html>

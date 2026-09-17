@@ -44,6 +44,8 @@ func ProvideAdminHandlers(
 	channelMonitorHandler *admin.ChannelMonitorHandler,
 	channelMonitorTemplateHandler *admin.ChannelMonitorRequestTemplateHandler,
 	channelIQHandler *admin.ChannelIQHandler,
+	turnStateProbeHandler *admin.TurnStateProbeHandler,
+	turnStateProbeService *service.TurnStateProbeService,
 	contentModerationHandler *admin.ContentModerationHandler,
 	promptAuditHandler *securityaudit.PromptAdminHandler,
 	paymentHandler *admin.PaymentHandler,
@@ -75,6 +77,7 @@ func ProvideAdminHandlers(
 	}
 	if openaiGatewayService != nil {
 		openaiGatewayService.SetRequestHealthService(health)
+		openaiGatewayService.SetTurnStateTicketLookup(turnStateProbeService)
 	}
 	if opsService != nil {
 		opsService.SetRequestHealthService(health)
@@ -112,6 +115,7 @@ func ProvideAdminHandlers(
 		ChannelMonitor:         channelMonitorHandler,
 		ChannelMonitorTemplate: channelMonitorTemplateHandler,
 		ChannelIQ:              channelIQHandler,
+		TurnStateProbe:         turnStateProbeHandler,
 		ContentModeration:      contentModerationHandler,
 		PromptAudit:            promptAuditHandler,
 		Payment:                paymentHandler,
@@ -309,6 +313,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewChannelMonitorHandler,
 	admin.NewChannelMonitorRequestTemplateHandler,
 	admin.NewChannelIQHandler,
+	admin.NewTurnStateProbeHandler,
 	admin.NewContentModerationHandler,
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,

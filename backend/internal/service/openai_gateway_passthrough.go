@@ -662,6 +662,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		}
 	}
 
+	// 探测票注入先于跨凭证守卫：有票则替换客户端回带；无票保持原样，再由守卫剥异账号 blob。
+	s.applyTurnStateProbeHTTP(c, account, req.Header, body, strings.TrimSpace(gjson.GetBytes(body, "model").String()))
 	// 客户端回带的 x-codex-turn-state 若已知由其他账号铸造（failover 换号），
 	// 剥离后再出站（openai_codex_turn_state.go）。
 	s.guardOpenAICodexTurnStateEcho(c, account, req.Header)

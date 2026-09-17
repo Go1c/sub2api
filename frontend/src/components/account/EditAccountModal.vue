@@ -196,6 +196,25 @@
         </div>
       </div>
 
+      <div
+        v-if="account.platform === 'openai' && account.type === 'oauth'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.turnStateProbe.title') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.turnStateProbe.hint') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="turnStateProbeEnabled"
+            data-testid="turn-state-probe-enabled"
+            :aria-label="t('admin.accounts.turnStateProbe.title')"
+          />
+        </div>
+      </div>
+
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
@@ -3602,6 +3621,7 @@ const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
+const TURN_STATE_PROBE_EXTRA_KEY = 'turn_state_probe'
 const ERROR_ALERT_EXTRA_KEY = 'error_alert'
 const ERROR_ALERT_MAX_KEYWORDS = 20
 const ERROR_ALERT_MAX_KEYWORD_LEN = 80
@@ -3614,6 +3634,7 @@ type ErrorAlertRuleForm = {
   min_error_count: number | null
   max_sends: number | null
 }
+const turnStateProbeEnabled = ref(false)
 const errorAlertEnabled = ref(true)
 const errorAlertKeywords = ref<string[]>([])
 const errorAlertKeywordInput = ref('')
@@ -3800,6 +3821,34 @@ function applyErrorAlertToUpdatePayload(updatePayload: Record<string, unknown>) 
   } else {
     extra[ERROR_ALERT_EXTRA_KEY] = next
   }
+  updatePayload.extra = extra
+}
+
+function isOpenAIOauthAccount() {
+  return props.account?.platform === 'openai' && props.account?.type === 'oauth'
+}
+
+function loadTurnStateProbeFromExtra(extra: Record<string, unknown> | undefined) {
+  const raw = extra?.[TURN_STATE_PROBE_EXTRA_KEY]
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    turnStateProbeEnabled.value = false
+    return
+  }
+  turnStateProbeEnabled.value = (raw as Record<string, unknown>).enabled === true
+}
+
+function applyTurnStateProbeToUpdatePayload(updatePayload: Record<string, unknown>) {
+  if (!isOpenAIOauthAccount()) return
+  const next = { enabled: turnStateProbeEnabled.value }
+  if (updatePayload.extra != null) {
+    updatePayload.extra = {
+      ...(updatePayload.extra as Record<string, unknown>),
+      [TURN_STATE_PROBE_EXTRA_KEY]: next
+    }
+    return
+  }
+  const extra: Record<string, unknown> = { ...((props.account?.extra as Record<string, unknown>) || {}) }
+  extra[TURN_STATE_PROBE_EXTRA_KEY] = next
   updatePayload.extra = extra
 }
 
@@ -4422,6 +4471,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   upstreamBillingRateSyncEnabled.value =
     upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
   loadErrorAlertFromExtra(extra)
+  loadTurnStateProbeFromExtra(extra)
   if (newAccount.id !== trafficDraftAccountID) {
     trafficPolicyDraft.value = { ...defaultTrafficPolicy(), ...((extra?.account_traffic_control as Partial<AccountTrafficPolicy>) || {}) }
     initialTrafficPolicy = JSON.stringify(trafficPolicyDraft.value)
@@ -6124,6 +6174,7 @@ const handleSubmit = async () => {
     }
 
     applyErrorAlertToUpdatePayload(updatePayload)
+    applyTurnStateProbeToUpdatePayload(updatePayload)
     if (JSON.stringify(traffic) !== initialTrafficPolicy) {
       updatePayload.extra = { ...((updatePayload.extra as Record<string, unknown>) || props.account.extra || {}), account_traffic_control: { ...traffic } }
     }

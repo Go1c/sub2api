@@ -209,6 +209,7 @@ export default {
     channelPricing: 'Channel Pricing',
     channelMonitor: 'Channel Monitor',
     channelIq: 'IQ Detect',
+    channelTurnState: 'Turn-State Probe',
     channelStatus: 'Channel Status',
     riskControl: 'Risk Control',
     securityAudit: 'Security Audit',

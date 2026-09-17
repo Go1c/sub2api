@@ -503,6 +503,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/channels/turn-state',
+    name: 'AdminChannelTurnState',
+    component: () => import('@/views/admin/ChannelTurnStateView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Turn-State Probe',
+      titleKey: 'admin.channelTurnState.title',
+      descriptionKey: 'admin.channelTurnState.description'
+    }
+  },
+  {
     path: '/monitor',
     name: 'ChannelStatus',
     component: () => import('@/views/user/ChannelStatusView.vue'),

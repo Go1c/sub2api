@@ -1,0 +1,94 @@
+---
+name: proxy-probe-quality
+description: 渠道子页集中配置探测出口与 Turn-State 策略，账号只留开关，日常请求替换该账号当前票
+metadata:
+  type: doc
+  level: L2
+  status: 已交付
+---
+
+# 探测代理池与 Turn-State 业务注入
+
+## 目标与边界
+
+探测轨按图中三步跑：廉价动态 **IP**（图中为 IPv6）→ 轻量探针捕获 `X-Codex-Turn-State` → 长度或题目过滤。**每个账号当前只有一张 state**。业务轨：日常请求走账号原 IP 配置，网关中间件强制注入或替换这一张票。
+
+**探测出口、题目、模型、复查间隔全部放在渠道管理子页**，不在 IP 管理再开「探测代理池」。账号编辑只留开关。到期复查；数据不对就作废再采。答对一次即可挂上。
+
+日常流量完全沿用账号原本的代理 / IP 组选路。必须打在目标模型上；`gpt-6-astra` 被改成 `gpt-5.6-luna` 废本趟、换 IP。图里的 ping 是短 Responses。完整 state 不进管理页。注入在跨凭证守卫之前。
+
+非 OpenAI OAuth、认不出轮次则跳过注入。关闭账号开关或渠道策略后，停止新采集和新轮注入。
+
+## 现有能力与接入位置
+
+| 现有资产 | 接入方式 |
+| --- | --- |
+| 渠道管理侧栏 | 新增子页，与定价、监控、智商检测并列；探测出口与策略都在这里 |
+| 代理记录、IP 组 | 子页可勾选已有代理，或直接填动态探测出口；IP 组 / 住宅 IP 仍只服务业务选路 |
+| Codex turn-state 守卫 | 采集用 HTTP 响应头；注入写 HTTP 头和 WS 帧 `client_metadata` |
+| JSON 导入 / 新建 Codex | 账号开关默认开，策略用渠道子页默认值 |
+
+界面 Mock：`.spec/mocks/proxy-probe-turn-state.html`。
+
+## 管理界面
+
+配置和开关拆开：渠道管策略，账号只管开不开。
+
+### 渠道管理：新增子页
+
+`/admin/channels/turn-state`。探测出口和策略都在这一页，IP 管理不新增入口。
+
+| 字段 | 默认 |
+| --- | --- |
+| 探测出口 | 勾选已有代理，和/或填写动态代理（主机、账号模板、`sid` 轮换）。日常选路不用这些出口 |
+| 目标模型 | `gpt-6-astra` |
+| 长度过滤 | 开，最低 160 |
+| 测试题 / 标准答案 | 摸糖果题 / `21` |
+| 模糊匹配 | 开 |
+| 复查间隔 | 10 分钟（可选 20 / 30 或 5–1440） |
+| 每分钟调用预算 | 6 |
+
+立即探测、暂停、按账号查看当前票也在这个子页。策略 revision 变了，已挂的 state 要按新策略复查或重采。
+
+住宅 IP 和 IP 组仍只在 IP 管理里，给账号日常流量用。
+
+### 账号：仅一个开关
+
+仅 OpenAI OAuth。开：用渠道策略采票并在日常请求替换 state。关：立刻停新采和新轮注入。
+
+`accounts.extra.turn_state_probe` 只存 `{ "enabled": true|false }`。存量缺省 = 关。新建 / JSON 导入 Codex 默认开。
+
+## 探测、复查与换新
+
+1. 探测 IP 池只换出口。每账号并发 1。失败换 `sid`，直到答对一次，挂到该账号。
+2. 短 Responses 从 HTTP 响应头取 `x-codex-turn-state`。不要发 `max_output_tokens`。必须是渠道目标模型。
+3. 每个账号一张当前 state。禁止跨账号复用。
+4. 按渠道复查间隔检测。数据不对（题错、模型改写、无 state、长度不够）→ 作废再采。通过则继续用。
+5. 401/403 走现有凭证错误处理。不存 state 原文。
+
+## 业务注入
+
+不管选路。有当前 state 则强制替换出站 `X-Codex-Turn-State`。HTTP 写请求头；WS 写帧内 `client_metadata`。同轮首次绑定、后续钉死。还没有票时不注入、原样转发，不 503。
+
+## 数据与接口
+
+渠道一份策略（含探测出口与题目等，带 revision）。账号 extra 只有开关。Redis 存账号当前 state、复查时间、租约、预算、轮内绑定。
+
+| 接口 | 行为 |
+| --- | --- |
+| `GET/PUT /admin/channels/turn-state-probe` | 渠道子页：探测出口 + 策略 |
+| `GET /admin/channels/turn-state-probe/accounts` | 已开开关的账号及票摘要 |
+| `POST /admin/accounts/:id/turn-state-probe/enabled` | 只改开关 |
+| `POST /admin/accounts/:id/turn-state-probe/run` | 立即探测 |
+| `DELETE /admin/accounts/:id/turn-state-probe` | 清空该账号当前票 |
+
+现有业务 API 请求格式不变。
+
+## 验收
+
+- 账号页不能改题目、间隔、探测出口，只能开关。
+- 探测出口只出现在渠道子页，不在 IP 管理增加菜单。
+- 渠道子页改策略后走新 revision。
+- 答对一次挂票；Astra 变 Luna 废本趟；日常选路不变。
+
+回退：关账号开关或关渠道策略。不删表、不拆业务流。

@@ -528,10 +528,18 @@ type OpenAIGatewayService struct {
 	// 由构造器初始化；裸结构体（单元测试）里为 nil，侧信道整体停用。
 	codexSideCalls *codexSideCallState
 	requestHealth  *AccountRequestHealthService
+	turnStateTickets TurnStateTicketLookup
 }
 
 func (s *OpenAIGatewayService) SetRequestHealthService(svc *AccountRequestHealthService) {
 	s.requestHealth = svc
+}
+
+func (s *OpenAIGatewayService) SetTurnStateTicketLookup(lookup TurnStateTicketLookup) {
+	if s == nil {
+		return
+	}
+	s.turnStateTickets = lookup
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService

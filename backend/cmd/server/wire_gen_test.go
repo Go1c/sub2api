@@ -92,6 +92,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // paymentOrderExpiry
 		nil, // channelMonitorRunner
 		nil, // channelIQRunner
+		nil, // turnStateProbeRunner
 		nil, // channelMonitorV2Aggregator
 		nil, // quotaFlusher
 		nil, // upstreamBillingProbe

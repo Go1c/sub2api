@@ -32,6 +32,7 @@ import channelsAPI from './channels'
 import channelMonitorAPI from './channelMonitor'
 import channelMonitorTemplateAPI from './channelMonitorTemplate'
 import channelIqAPI from './channelIq'
+import turnStateProbeAPI from './turnStateProbe'
 import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
@@ -72,6 +73,7 @@ export const adminAPI = {
   channelMonitor: channelMonitorAPI,
   channelMonitorTemplate: channelMonitorTemplateAPI,
   channelIq: channelIqAPI,
+  turnStateProbe: turnStateProbeAPI,
   payment: adminPaymentAPI,
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
@@ -110,6 +112,7 @@ export {
   channelMonitorAPI,
   channelMonitorTemplateAPI,
   channelIqAPI,
+  turnStateProbeAPI,
   adminPaymentAPI,
   affiliatesAPI,
   riskControlAPI,

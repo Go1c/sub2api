@@ -1234,6 +1234,40 @@ describe('EditAccountModal', () => {
     })
   })
 
+  it('shows the turn-state probe switch for OpenAI OAuth only', () => {
+    const oauth = mountModal(buildOpenAIOAuthParentAccount())
+    expect(oauth.find('[data-testid="turn-state-probe-enabled"]').exists()).toBe(true)
+    expect(oauth.get('[data-testid="turn-state-probe-enabled"]').attributes('aria-checked')).toBe('false')
+    oauth.unmount()
+
+    const anthropic = mountModal({
+      ...buildGrokOAuthAccount(),
+      id: 9,
+      name: 'Claude OAuth',
+      platform: 'anthropic',
+      credentials: { access_token: 'at' }
+    })
+    expect(anthropic.find('[data-testid="turn-state-probe-enabled"]').exists()).toBe(false)
+    anthropic.unmount()
+
+    const apiKey = mountModal(buildAccount())
+    expect(apiKey.find('[data-testid="turn-state-probe-enabled"]').exists()).toBe(false)
+    apiKey.unmount()
+  })
+
+  it('persists turn-state probe extra on save even if only this changed', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="turn-state-probe-enabled"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.turn_state_probe).toEqual({ enabled: true })
+  })
+
   it('disabling probing also disables rate sync and restores manual rate editing', async () => {
     const account = buildAccount()
     account.extra = {

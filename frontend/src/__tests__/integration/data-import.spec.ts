@@ -76,7 +76,7 @@ describe('ImportDataModal', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     const account = vi.mocked(adminAPI.accounts.importData).mock.calls[0][0].data.accounts[0]
-    expect(account).toMatchObject({ concurrency: 100, group_ids: [5], proxy_ip_group_id: 91, extra: { keep: true, codex_fingerprint_mode: 'device', error_alert: { enabled: false } } })
+    expect(account).toMatchObject({ concurrency: 100, group_ids: [5], proxy_ip_group_id: 91, extra: { keep: true, codex_fingerprint_mode: 'device', error_alert: { enabled: false }, turn_state_probe: { enabled: true } } })
     expect(account.credentials.model_mapping).toEqual({ ...Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model])), custom: 'upstream' })
   })
 

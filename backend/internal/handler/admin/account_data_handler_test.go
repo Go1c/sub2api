@@ -332,6 +332,7 @@ func TestImportDataCarriesJSONDefaultBindings(t *testing.T) {
 	require.NotNil(t, input.ProxyIPGroupID)
 	require.Equal(t, int64(91), *input.ProxyIPGroupID)
 	require.Equal(t, false, input.Extra["error_alert"].(map[string]any)["enabled"])
+	require.Equal(t, true, input.Extra[service.TurnStateProbeExtraKey].(map[string]any)["enabled"])
 	require.Equal(t, "gpt-test", input.Credentials["model_mapping"].(map[string]any)["gpt-test"])
 }
 
@@ -352,6 +353,7 @@ func TestImportDataDefaultsWithoutFrontendEnrichment(t *testing.T) {
 	require.NotNil(t, input.ProxyIPGroupID)
 	require.Equal(t, int64(1), *input.ProxyIPGroupID)
 	require.Equal(t, false, input.Extra["error_alert"].(map[string]any)["enabled"])
+	require.Equal(t, true, input.Extra[service.TurnStateProbeExtraKey].(map[string]any)["enabled"])
 	mapping := input.Credentials["model_mapping"].(map[string]any)
 	require.Equal(t, "target", mapping["custom"])
 	require.Equal(t, "gpt-5.6", mapping["gpt-5.6"])
@@ -373,5 +375,6 @@ func TestImportDataPreservesExplicitOAuthSettings(t *testing.T) {
 	require.NotNil(t, input.ProxyIPGroupID)
 	require.Zero(t, *input.ProxyIPGroupID)
 	require.Equal(t, true, input.Extra["error_alert"].(map[string]any)["enabled"])
+	require.Equal(t, true, input.Extra[service.TurnStateProbeExtraKey].(map[string]any)["enabled"])
 	require.Equal(t, "custom-target", input.Credentials["model_mapping"].(map[string]any)["gpt-5.6"])
 }

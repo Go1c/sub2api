@@ -697,6 +697,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload.proxy_ip_group_id).toBe(91)
     expect(payload.proxy_id).toBe(101)
     expect(payload.extra.error_alert).toEqual({ enabled: false })
+    expect(payload.extra.turn_state_probe).toEqual({ enabled: true })
     expect(payload.credential_extras.model_mapping).toEqual(Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model])))
   })
 
@@ -719,7 +720,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     const wrapper = await openCodexImportStep()
     await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
     await flushPromises()
-    expect(importCodexSessionMock.mock.calls[0]?.[0]).toMatchObject({ group_ids: [], proxy_ip_group_id: 0, proxy_id: null, extra: { error_alert: { enabled: false } } })
+    expect(importCodexSessionMock.mock.calls[0]?.[0]).toMatchObject({ group_ids: [], proxy_ip_group_id: 0, proxy_id: null, extra: { error_alert: { enabled: false }, turn_state_probe: { enabled: true } } })
   })
 
   it('sends true by default for Codex session import', async () => {

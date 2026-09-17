@@ -5632,9 +5632,11 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   if (accountCategory.value === 'oauth-based') {
     extra.codex_fingerprint_mode = codexFingerprintMode.value
     extra.codex_experimental_fingerprint_convergence = codexFingerprintConvergence.value
+    extra.turn_state_probe = { enabled: true }
   } else {
     delete extra.codex_fingerprint_mode
     delete extra.codex_experimental_fingerprint_convergence
+    delete extra.turn_state_probe
   }
   if (openAICompactMode.value !== 'auto') {
     extra.openai_compact_mode = openAICompactMode.value
@@ -6606,7 +6608,7 @@ const handleOpenAIImportCodexSession = async (content: string) => {
   oauthClient.error.value = ''
 
   try {
-    const extra = { ...buildOpenAICodexImportExtra(), error_alert: { enabled: false } }
+    const extra = { ...buildOpenAICodexImportExtra(), error_alert: { enabled: false }, turn_state_probe: { enabled: true } }
     const binding = resolveKinCodexImportFields()
     if (!codexImportGroupSelected) {
       const firstGroup = props.groups.find(group => group.platform === 'openai' || group.platform === 'composite')
