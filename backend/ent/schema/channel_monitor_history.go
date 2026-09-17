@@ -49,6 +49,11 @@ func (ChannelMonitorHistory) Fields() []ent.Field {
 		// 归一化配额快照（domain.MonitorQuotaSnapshot，JSONB）；探活模式为 NULL。
 		field.JSON("quota", &domain.MonitorQuotaSnapshot{}).
 			Optional(),
+		field.String("iq_status").
+			Optional().
+			Default("").
+			MaxLen(32).
+			Comment("iq_ok / iq_down / test_error / monitor_network; empty for non-iq checks"),
 		field.Time("checked_at").
 			Default(time.Now),
 	}

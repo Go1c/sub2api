@@ -20,12 +20,18 @@ export const DEFAULT_GROK_MODEL = 'grok-4.5'
 export const CHECK_MODE_PROBE: CheckMode = 'probe'
 export const CHECK_MODE_QUOTA: CheckMode = 'quota'
 export const CHECK_MODE_QUOTA_PROBE: CheckMode = 'quota_probe'
+export const CHECK_MODE_IQ: CheckMode = 'iq'
 
 export const CHECK_MODES: readonly CheckMode[] = [
   CHECK_MODE_PROBE,
   CHECK_MODE_QUOTA,
   CHECK_MODE_QUOTA_PROBE,
+  CHECK_MODE_IQ,
 ]
+
+export const DEFAULT_IQ_QUESTION =
+  '黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?'
+export const DEFAULT_IQ_ANSWER = '21'
 
 export const API_MODE_CHAT_COMPLETIONS: APIMode = 'chat_completions'
 export const API_MODE_RESPONSES: APIMode = 'responses'

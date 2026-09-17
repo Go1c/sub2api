@@ -253,6 +253,48 @@ func (_c *ChannelMonitorCreate) SetNillableCompatibilityProbeEnabled(v *bool) *C
 	return _c
 }
 
+// SetIqQuestion sets the "iq_question" field.
+func (_c *ChannelMonitorCreate) SetIqQuestion(v string) *ChannelMonitorCreate {
+	_c.mutation.SetIqQuestion(v)
+	return _c
+}
+
+// SetNillableIqQuestion sets the "iq_question" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableIqQuestion(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetIqQuestion(*v)
+	}
+	return _c
+}
+
+// SetIqAnswer sets the "iq_answer" field.
+func (_c *ChannelMonitorCreate) SetIqAnswer(v string) *ChannelMonitorCreate {
+	_c.mutation.SetIqAnswer(v)
+	return _c
+}
+
+// SetNillableIqAnswer sets the "iq_answer" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableIqAnswer(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetIqAnswer(*v)
+	}
+	return _c
+}
+
+// SetIqFuzzyMatch sets the "iq_fuzzy_match" field.
+func (_c *ChannelMonitorCreate) SetIqFuzzyMatch(v bool) *ChannelMonitorCreate {
+	_c.mutation.SetIqFuzzyMatch(v)
+	return _c
+}
+
+// SetNillableIqFuzzyMatch sets the "iq_fuzzy_match" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableIqFuzzyMatch(v *bool) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetIqFuzzyMatch(*v)
+	}
+	return _c
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by IDs.
 func (_c *ChannelMonitorCreate) AddHistoryIDs(ids ...int64) *ChannelMonitorCreate {
 	_c.mutation.AddHistoryIDs(ids...)
@@ -381,6 +423,18 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultCompatibilityProbeEnabled
 		_c.mutation.SetCompatibilityProbeEnabled(v)
 	}
+	if _, ok := _c.mutation.IqQuestion(); !ok {
+		v := channelmonitor.DefaultIqQuestion
+		_c.mutation.SetIqQuestion(v)
+	}
+	if _, ok := _c.mutation.IqAnswer(); !ok {
+		v := channelmonitor.DefaultIqAnswer
+		_c.mutation.SetIqAnswer(v)
+	}
+	if _, ok := _c.mutation.IqFuzzyMatch(); !ok {
+		v := channelmonitor.DefaultIqFuzzyMatch
+		_c.mutation.SetIqFuzzyMatch(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -490,6 +544,14 @@ func (_c *ChannelMonitorCreate) check() error {
 	}
 	if _, ok := _c.mutation.CompatibilityProbeEnabled(); !ok {
 		return &ValidationError{Name: "compatibility_probe_enabled", err: errors.New(`ent: missing required field "ChannelMonitor.compatibility_probe_enabled"`)}
+	}
+	if v, ok := _c.mutation.IqAnswer(); ok {
+		if err := channelmonitor.IqAnswerValidator(v); err != nil {
+			return &ValidationError{Name: "iq_answer", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.iq_answer": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.IqFuzzyMatch(); !ok {
+		return &ValidationError{Name: "iq_fuzzy_match", err: errors.New(`ent: missing required field "ChannelMonitor.iq_fuzzy_match"`)}
 	}
 	return nil
 }
@@ -601,6 +663,18 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.CompatibilityProbeEnabled(); ok {
 		_spec.SetField(channelmonitor.FieldCompatibilityProbeEnabled, field.TypeBool, value)
 		_node.CompatibilityProbeEnabled = value
+	}
+	if value, ok := _c.mutation.IqQuestion(); ok {
+		_spec.SetField(channelmonitor.FieldIqQuestion, field.TypeString, value)
+		_node.IqQuestion = value
+	}
+	if value, ok := _c.mutation.IqAnswer(); ok {
+		_spec.SetField(channelmonitor.FieldIqAnswer, field.TypeString, value)
+		_node.IqAnswer = value
+	}
+	if value, ok := _c.mutation.IqFuzzyMatch(); ok {
+		_spec.SetField(channelmonitor.FieldIqFuzzyMatch, field.TypeBool, value)
+		_node.IqFuzzyMatch = value
 	}
 	if nodes := _c.mutation.HistoryIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1009,6 +1083,54 @@ func (u *ChannelMonitorUpsert) UpdateCompatibilityProbeEnabled() *ChannelMonitor
 	return u
 }
 
+// SetIqQuestion sets the "iq_question" field.
+func (u *ChannelMonitorUpsert) SetIqQuestion(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldIqQuestion, v)
+	return u
+}
+
+// UpdateIqQuestion sets the "iq_question" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateIqQuestion() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldIqQuestion)
+	return u
+}
+
+// ClearIqQuestion clears the value of the "iq_question" field.
+func (u *ChannelMonitorUpsert) ClearIqQuestion() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldIqQuestion)
+	return u
+}
+
+// SetIqAnswer sets the "iq_answer" field.
+func (u *ChannelMonitorUpsert) SetIqAnswer(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldIqAnswer, v)
+	return u
+}
+
+// UpdateIqAnswer sets the "iq_answer" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateIqAnswer() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldIqAnswer)
+	return u
+}
+
+// ClearIqAnswer clears the value of the "iq_answer" field.
+func (u *ChannelMonitorUpsert) ClearIqAnswer() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldIqAnswer)
+	return u
+}
+
+// SetIqFuzzyMatch sets the "iq_fuzzy_match" field.
+func (u *ChannelMonitorUpsert) SetIqFuzzyMatch(v bool) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldIqFuzzyMatch, v)
+	return u
+}
+
+// UpdateIqFuzzyMatch sets the "iq_fuzzy_match" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateIqFuzzyMatch() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldIqFuzzyMatch)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1408,6 +1530,62 @@ func (u *ChannelMonitorUpsertOne) SetCompatibilityProbeEnabled(v bool) *ChannelM
 func (u *ChannelMonitorUpsertOne) UpdateCompatibilityProbeEnabled() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateCompatibilityProbeEnabled()
+	})
+}
+
+// SetIqQuestion sets the "iq_question" field.
+func (u *ChannelMonitorUpsertOne) SetIqQuestion(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetIqQuestion(v)
+	})
+}
+
+// UpdateIqQuestion sets the "iq_question" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateIqQuestion() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateIqQuestion()
+	})
+}
+
+// ClearIqQuestion clears the value of the "iq_question" field.
+func (u *ChannelMonitorUpsertOne) ClearIqQuestion() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearIqQuestion()
+	})
+}
+
+// SetIqAnswer sets the "iq_answer" field.
+func (u *ChannelMonitorUpsertOne) SetIqAnswer(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetIqAnswer(v)
+	})
+}
+
+// UpdateIqAnswer sets the "iq_answer" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateIqAnswer() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateIqAnswer()
+	})
+}
+
+// ClearIqAnswer clears the value of the "iq_answer" field.
+func (u *ChannelMonitorUpsertOne) ClearIqAnswer() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearIqAnswer()
+	})
+}
+
+// SetIqFuzzyMatch sets the "iq_fuzzy_match" field.
+func (u *ChannelMonitorUpsertOne) SetIqFuzzyMatch(v bool) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetIqFuzzyMatch(v)
+	})
+}
+
+// UpdateIqFuzzyMatch sets the "iq_fuzzy_match" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateIqFuzzyMatch() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateIqFuzzyMatch()
 	})
 }
 
@@ -1976,6 +2154,62 @@ func (u *ChannelMonitorUpsertBulk) SetCompatibilityProbeEnabled(v bool) *Channel
 func (u *ChannelMonitorUpsertBulk) UpdateCompatibilityProbeEnabled() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateCompatibilityProbeEnabled()
+	})
+}
+
+// SetIqQuestion sets the "iq_question" field.
+func (u *ChannelMonitorUpsertBulk) SetIqQuestion(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetIqQuestion(v)
+	})
+}
+
+// UpdateIqQuestion sets the "iq_question" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateIqQuestion() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateIqQuestion()
+	})
+}
+
+// ClearIqQuestion clears the value of the "iq_question" field.
+func (u *ChannelMonitorUpsertBulk) ClearIqQuestion() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearIqQuestion()
+	})
+}
+
+// SetIqAnswer sets the "iq_answer" field.
+func (u *ChannelMonitorUpsertBulk) SetIqAnswer(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetIqAnswer(v)
+	})
+}
+
+// UpdateIqAnswer sets the "iq_answer" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateIqAnswer() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateIqAnswer()
+	})
+}
+
+// ClearIqAnswer clears the value of the "iq_answer" field.
+func (u *ChannelMonitorUpsertBulk) ClearIqAnswer() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearIqAnswer()
+	})
+}
+
+// SetIqFuzzyMatch sets the "iq_fuzzy_match" field.
+func (u *ChannelMonitorUpsertBulk) SetIqFuzzyMatch(v bool) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetIqFuzzyMatch(v)
+	})
+}
+
+// UpdateIqFuzzyMatch sets the "iq_fuzzy_match" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateIqFuzzyMatch() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateIqFuzzyMatch()
 	})
 }
 

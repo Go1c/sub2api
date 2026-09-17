@@ -931,7 +931,14 @@ export default {
     checkMode: {
       probe: '探活',
       quota: '配額',
-      quota_probe: '探活 + 配額'
+      quota_probe: '探活 + 配額',
+      iq: '狀態 + 智商'
+    },
+    iqStatus: {
+      iq_ok: '不降智',
+      iq_down: '降智',
+      test_error: '測試異常',
+      monitor_network: '監控網絡異常'
     },
     quota: {
       unavailable: '配額資訊不可用',
@@ -961,6 +968,8 @@ export default {
     dialogLatency: '對話延遲',
     endpointPing: '端點 PING',
     history60pts: '近 {n} 次記錄',
+    timelineServer: '服務器 · 近 {n} 次',
+    timelineIQ: '智商 · 近 {n} 次',
     nextUpdateIn: '{n}s 後刷新',
     past: 'PAST',
     now: 'NOW',
@@ -2891,6 +2900,7 @@ export default {
         status: '狀態',
         latency: '延遲',
         pingLatency: 'Ping 延遲',
+        iqStatus: '智商',
         message: '消息'
       },
       apiKeyDecryptFailed: 'API Key 解密失敗，請重新編輯該監控並填入新的 Key',
@@ -2922,6 +2932,12 @@ export default {
         checkModeQuotaHint: '只查詢關聯帳號的用量滾動窗口，不發送探活請求',
         checkModeQuotaProbe: '探活 + 配額',
         checkModeQuotaProbeHint: '探活的同時查詢配額，用量快照附加在主模型結果上',
+        checkModeIQ: '狀態 + 智商',
+        checkModeIQHint: '發送糖果題，一次請求同時記下服務器狀態和智商四態',
+        iqQuestion: '測試題',
+        iqQuestionHint: '默認與 Turn-State 糖果題相同；答案判定可開模糊匹配',
+        iqAnswer: '標準答案',
+        iqFuzzyMatch: '模糊匹配答案',
         linkedAccount: '關聯帳號',
         linkedAccountPlaceholder: '選擇帳號',
         linkedAccountHint: '配額資料來自所選帳號（複用帳號管理側的用量查詢）',

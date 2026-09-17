@@ -27,7 +27,7 @@ type ChannelMonitor struct {
 	Name string `json:"name,omitempty"`
 	// Provider holds the value of the "provider" field.
 	Provider channelmonitor.Provider `json:"provider,omitempty"`
-	// probe = LLM probe (default); quota = account usage only; quota_probe = both
+	// probe = LLM probe (default); quota = account usage only; quota_probe = both; iq = status + IQ quiz
 	CheckMode string `json:"check_mode,omitempty"`
 	// AccountID holds the value of the "account_id" field.
 	AccountID *int64 `json:"account_id,omitempty"`
@@ -63,6 +63,12 @@ type ChannelMonitor struct {
 	BodyOverride map[string]interface{} `json:"body_override,omitempty"`
 	// CompatibilityProbeEnabled holds the value of the "compatibility_probe_enabled" field.
 	CompatibilityProbeEnabled bool `json:"compatibility_probe_enabled,omitempty"`
+	// IQ candy-quiz prompt; empty uses service-layer default when check_mode=iq
+	IqQuestion string `json:"iq_question,omitempty"`
+	// IQ candy-quiz expected answer; empty uses 21 when check_mode=iq
+	IqAnswer string `json:"iq_answer,omitempty"`
+	// IQ matching: true = contains answer after normalize; false = exact
+	IqFuzzyMatch bool `json:"iq_fuzzy_match,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ChannelMonitorQuery when eager-loading is set.
 	Edges        ChannelMonitorEdges `json:"edges"`
@@ -118,11 +124,11 @@ func (*ChannelMonitor) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case channelmonitor.FieldExtraModels, channelmonitor.FieldExtraHeaders, channelmonitor.FieldBodyOverride:
 			values[i] = new([]byte)
-		case channelmonitor.FieldEnabled, channelmonitor.FieldCompatibilityProbeEnabled:
+		case channelmonitor.FieldEnabled, channelmonitor.FieldCompatibilityProbeEnabled, channelmonitor.FieldIqFuzzyMatch:
 			values[i] = new(sql.NullBool)
 		case channelmonitor.FieldID, channelmonitor.FieldAccountID, channelmonitor.FieldIntervalSeconds, channelmonitor.FieldJitterSeconds, channelmonitor.FieldCreatedBy, channelmonitor.FieldTemplateID:
 			values[i] = new(sql.NullInt64)
-		case channelmonitor.FieldName, channelmonitor.FieldProvider, channelmonitor.FieldCheckMode, channelmonitor.FieldAPIMode, channelmonitor.FieldEndpoint, channelmonitor.FieldAPIKeyEncrypted, channelmonitor.FieldPrimaryModel, channelmonitor.FieldGroupName, channelmonitor.FieldBodyOverrideMode:
+		case channelmonitor.FieldName, channelmonitor.FieldProvider, channelmonitor.FieldCheckMode, channelmonitor.FieldAPIMode, channelmonitor.FieldEndpoint, channelmonitor.FieldAPIKeyEncrypted, channelmonitor.FieldPrimaryModel, channelmonitor.FieldGroupName, channelmonitor.FieldBodyOverrideMode, channelmonitor.FieldIqQuestion, channelmonitor.FieldIqAnswer:
 			values[i] = new(sql.NullString)
 		case channelmonitor.FieldCreatedAt, channelmonitor.FieldUpdatedAt, channelmonitor.FieldLastCheckedAt:
 			values[i] = new(sql.NullTime)
@@ -288,6 +294,24 @@ func (_m *ChannelMonitor) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CompatibilityProbeEnabled = value.Bool
 			}
+		case channelmonitor.FieldIqQuestion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field iq_question", values[i])
+			} else if value.Valid {
+				_m.IqQuestion = value.String
+			}
+		case channelmonitor.FieldIqAnswer:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field iq_answer", values[i])
+			} else if value.Valid {
+				_m.IqAnswer = value.String
+			}
+		case channelmonitor.FieldIqFuzzyMatch:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field iq_fuzzy_match", values[i])
+			} else if value.Valid {
+				_m.IqFuzzyMatch = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -409,6 +433,15 @@ func (_m *ChannelMonitor) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("compatibility_probe_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CompatibilityProbeEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("iq_question=")
+	builder.WriteString(_m.IqQuestion)
+	builder.WriteString(", ")
+	builder.WriteString("iq_answer=")
+	builder.WriteString(_m.IqAnswer)
+	builder.WriteString(", ")
+	builder.WriteString("iq_fuzzy_match=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IqFuzzyMatch))
 	builder.WriteByte(')')
 	return builder.String()
 }

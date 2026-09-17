@@ -50,6 +50,12 @@ type CheckOptions struct {
 	// BodyOverride 在 merge 模式下做浅合并（key 命中黑名单时静默丢弃），
 	// 在 replace 模式下直接当作完整 body。
 	BodyOverride map[string]any
+	// IQPrompt 非空时走智商糖果题，不再发算术 challenge。
+	IQPrompt     string
+	IQAnswer     string
+	IQFuzzyMatch bool
+	// MaxTokens > 0 时覆盖 adapter 默认 max_tokens / max_output_tokens。
+	MaxTokens int
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -57,6 +63,10 @@ type CheckOptions struct {
 //
 // opts 承载模板 / 监控快照带来的自定义配置。nil 等同于 "off + 无 extra headers"。
 func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model string, opts *CheckOptions) *CheckResult {
+	if usesIQ(opts) {
+		return runIQCheckForModel(ctx, provider, endpoint, apiKey, model, opts)
+	}
+
 	res := &CheckResult{
 		Model:     model,
 		Status:    MonitorStatusError,
@@ -78,17 +88,12 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 		return res
 	}
 	if statusCode < 200 || statusCode >= 300 {
-		// 错误路径：用 rawBody 而非 respText（gjson textPath 抽取在错误响应里通常为空，
-		// 会丢掉真正的上游错误信息，例如 `{"error":{"message":"No available accounts ..."}}`）。
 		res.Status = MonitorStatusError
 		bodySnippet := truncateForErrorBody(rawBody)
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("upstream HTTP %d: %s", statusCode, bodySnippet)))
 		return res
 	}
 
-	// Replace 模式：跳过 challenge 校验（用户 body 是静态的，challenge 没法嵌入）。
-	// 改用「HTTP 2xx + 响应文本（adapter.textPath 抽取）非空」作为 operational 判定。
-	// 响应文本为空则降级为 failed（视为上游回了 200 但没实际内容）。
 	if mode == MonitorBodyOverrideModeReplace {
 		if strings.TrimSpace(respText) == "" {
 			res.Status = MonitorStatusFailed
@@ -105,6 +110,42 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 	}
 
 	return finalizeOperationalOrDegraded(res, latency, latencyMs)
+}
+
+func runIQCheckForModel(ctx context.Context, provider, endpoint, apiKey, model string, opts *CheckOptions) *CheckResult {
+	res := &CheckResult{
+		Model:     model,
+		Status:    MonitorStatusFailed,
+		CheckedAt: time.Now(),
+	}
+	prompt := defaultIQQuestion("")
+	expected := defaultIQAnswer("")
+	fuzzy := true
+	if opts != nil {
+		prompt = defaultIQQuestion(opts.IQPrompt)
+		expected = defaultIQAnswer(opts.IQAnswer)
+		fuzzy = opts.IQFuzzyMatch
+	}
+
+	start := time.Now()
+	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, prompt, opts)
+	latency := time.Since(start)
+	latencyMs := int(latency / time.Millisecond)
+	res.LatencyMs = &latencyMs
+
+	status, iqStatus, message := classifyIQOutcome(iqClassifyInput{
+		err:        err,
+		statusCode: statusCode,
+		respText:   respText,
+		rawBody:    rawBody,
+		latency:    latency,
+		expected:   expected,
+		fuzzy:      fuzzy,
+	})
+	res.Status = status
+	res.IqStatus = iqStatus
+	res.Message = message
+	return res
 }
 
 // finalizeOperationalOrDegraded 负责走到最后一步的 operational/degraded 判定。
@@ -408,7 +449,7 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 		return nil, fmt.Errorf("marshal default body: %w", err)
 	}
 	if mode != MonitorBodyOverrideModeMerge || opts == nil || len(opts.BodyOverride) == 0 {
-		return defaultBody, nil
+		return applyMaxTokensOverride(defaultBody, provider, apiMode, opts)
 	}
 
 	var defaultMap map[string]any
@@ -426,7 +467,34 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 	if err != nil {
 		return nil, fmt.Errorf("marshal merged body: %w", err)
 	}
-	return merged, nil
+	return applyMaxTokensOverride(merged, provider, apiMode, opts)
+}
+
+func applyMaxTokensOverride(body []byte, provider, apiMode string, opts *CheckOptions) ([]byte, error) {
+	if opts == nil || opts.MaxTokens <= 0 {
+		return body, nil
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal body for max_tokens: %w", err)
+	}
+	if provider == MonitorProviderGemini {
+		cfg, _ := payload["generationConfig"].(map[string]any)
+		if cfg == nil {
+			cfg = map[string]any{}
+		}
+		cfg["maxOutputTokens"] = opts.MaxTokens
+		payload["generationConfig"] = cfg
+	} else if provider == MonitorProviderOpenAI && defaultAPIMode(apiMode) == MonitorAPIModeResponses {
+		payload["max_output_tokens"] = opts.MaxTokens
+	} else {
+		payload["max_tokens"] = opts.MaxTokens
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal body with max_tokens: %w", err)
+	}
+	return out, nil
 }
 
 // bodyMergeKeyDenyList 在 merge 模式下，禁止用户覆盖这些 provider-specific 的关键字段。

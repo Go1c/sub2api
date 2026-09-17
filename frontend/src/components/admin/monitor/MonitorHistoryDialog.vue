@@ -20,6 +20,7 @@
             <th class="py-2 pr-4 font-medium">{{ t('admin.channelMonitor.logs.checkedAt') }}</th>
             <th class="py-2 pr-4 font-medium">{{ t('admin.channelMonitor.logs.model') }}</th>
             <th class="py-2 pr-4 font-medium">{{ t('admin.channelMonitor.logs.status') }}</th>
+            <th v-if="showIq" class="py-2 pr-4 font-medium">{{ t('admin.channelMonitor.logs.iqStatus') }}</th>
             <th class="py-2 pr-4 font-medium">{{ t('admin.channelMonitor.logs.latency') }}</th>
             <th class="py-2 pr-4 font-medium">{{ t('admin.channelMonitor.logs.pingLatency') }}</th>
             <th class="py-2 font-medium">{{ t('admin.channelMonitor.logs.message') }}</th>
@@ -44,6 +45,16 @@
               >
                 {{ statusLabel(item.status) }}
               </span>
+            </td>
+            <td v-if="showIq" class="py-2 pr-4">
+              <span
+                v-if="item.iq_status"
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
+                :class="iqStatusBadgeClass(item.iq_status)"
+              >
+                {{ iqStatusLabel(item.iq_status) }}
+              </span>
+              <span v-else>-</span>
             </td>
             <td class="whitespace-nowrap py-2 pr-4 text-xs">
               {{ formatLatencyWithUnit(item.latency_ms) }}
@@ -93,11 +104,13 @@ defineEmits<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
-const { statusLabel, statusBadgeClass, formatLatency } = useChannelMonitorFormat()
+const { statusLabel, statusBadgeClass, formatLatency, iqStatusLabel, iqStatusBadgeClass } = useChannelMonitorFormat()
 
 const items = ref<HistoryItem[]>([])
 const loading = ref(false)
 let loadSeq = 0
+
+const showIq = computed(() => items.value.some(item => !!item.iq_status))
 
 const dialogTitle = computed(() => (
   t('admin.channelMonitor.logs.title', { name: props.monitor?.name || '' })

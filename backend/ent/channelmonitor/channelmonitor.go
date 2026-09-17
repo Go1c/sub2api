@@ -59,6 +59,12 @@ const (
 	FieldBodyOverride = "body_override"
 	// FieldCompatibilityProbeEnabled holds the string denoting the compatibility_probe_enabled field in the database.
 	FieldCompatibilityProbeEnabled = "compatibility_probe_enabled"
+	// FieldIqQuestion holds the string denoting the iq_question field in the database.
+	FieldIqQuestion = "iq_question"
+	// FieldIqAnswer holds the string denoting the iq_answer field in the database.
+	FieldIqAnswer = "iq_answer"
+	// FieldIqFuzzyMatch holds the string denoting the iq_fuzzy_match field in the database.
+	FieldIqFuzzyMatch = "iq_fuzzy_match"
 	// EdgeHistory holds the string denoting the history edge name in mutations.
 	EdgeHistory = "history"
 	// EdgeDailyRollups holds the string denoting the daily_rollups edge name in mutations.
@@ -115,6 +121,9 @@ var Columns = []string{
 	FieldBodyOverrideMode,
 	FieldBodyOverride,
 	FieldCompatibilityProbeEnabled,
+	FieldIqQuestion,
+	FieldIqAnswer,
+	FieldIqFuzzyMatch,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -172,6 +181,14 @@ var (
 	BodyOverrideModeValidator func(string) error
 	// DefaultCompatibilityProbeEnabled holds the default value on creation for the "compatibility_probe_enabled" field.
 	DefaultCompatibilityProbeEnabled bool
+	// DefaultIqQuestion holds the default value on creation for the "iq_question" field.
+	DefaultIqQuestion string
+	// DefaultIqAnswer holds the default value on creation for the "iq_answer" field.
+	DefaultIqAnswer string
+	// IqAnswerValidator is a validator for the "iq_answer" field. It is called by the builders before save.
+	IqAnswerValidator func(string) error
+	// DefaultIqFuzzyMatch holds the default value on creation for the "iq_fuzzy_match" field.
+	DefaultIqFuzzyMatch bool
 )
 
 // Provider defines the type for the "provider" enum field.
@@ -300,6 +317,21 @@ func ByBodyOverrideMode(opts ...sql.OrderTermOption) OrderOption {
 // ByCompatibilityProbeEnabled orders the results by the compatibility_probe_enabled field.
 func ByCompatibilityProbeEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCompatibilityProbeEnabled, opts...).ToFunc()
+}
+
+// ByIqQuestion orders the results by the iq_question field.
+func ByIqQuestion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIqQuestion, opts...).ToFunc()
+}
+
+// ByIqAnswer orders the results by the iq_answer field.
+func ByIqAnswer(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIqAnswer, opts...).ToFunc()
+}
+
+// ByIqFuzzyMatch orders the results by the iq_fuzzy_match field.
+func ByIqFuzzyMatch(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIqFuzzyMatch, opts...).ToFunc()
 }
 
 // ByHistoryCount orders the results by history count.

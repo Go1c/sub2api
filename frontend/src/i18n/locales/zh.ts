@@ -1119,7 +1119,14 @@ export default {
     checkMode: {
       probe: '探活',
       quota: '配额',
-      quota_probe: '探活 + 配额'
+      quota_probe: '探活 + 配额',
+      iq: '状态 + 智商'
+    },
+    iqStatus: {
+      iq_ok: '不降智',
+      iq_down: '降智',
+      test_error: '测试异常',
+      monitor_network: '监控网络异常'
     },
     quota: {
       unavailable: '配额信息不可用',
@@ -1149,6 +1156,8 @@ export default {
     dialogLatency: '对话延迟',
     endpointPing: '端点 PING',
     history60pts: '近 {n} 次记录',
+    timelineServer: '服务器 · 近 {n} 次',
+    timelineIQ: '智商 · 近 {n} 次',
     nextUpdateIn: '{n}s 后刷新',
     past: 'PAST',
     now: 'NOW',
@@ -3228,6 +3237,7 @@ export default {
         status: '状态',
         latency: '延迟',
         pingLatency: 'Ping 延迟',
+        iqStatus: '智商',
         message: '消息'
       },
       apiKeyDecryptFailed: 'API Key 解密失败，请重新编辑该监控并填入新的 Key',
@@ -3259,6 +3269,12 @@ export default {
         checkModeQuotaHint: '只查询关联账号的用量滚动窗口，不发送探活请求',
         checkModeQuotaProbe: '探活 + 配额',
         checkModeQuotaProbeHint: '探活的同时查询配额，用量快照附加在主模型结果上',
+        checkModeIQ: '状态 + 智商',
+        checkModeIQHint: '发送糖果题，一次请求同时记下服务器状态和智商四态',
+        iqQuestion: '测试题',
+        iqQuestionHint: '默认与 Turn-State 糖果题相同；答案判定可开模糊匹配',
+        iqAnswer: '标准答案',
+        iqFuzzyMatch: '模糊匹配答案',
         linkedAccount: '关联账号',
         linkedAccountPlaceholder: '选择账号',
         linkedAccountHint: '配额数据来自所选账号（复用账号管理侧的用量查询）',

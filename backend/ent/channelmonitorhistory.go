@@ -34,6 +34,8 @@ type ChannelMonitorHistory struct {
 	Message string `json:"message,omitempty"`
 	// Quota holds the value of the "quota" field.
 	Quota *domain.MonitorQuotaSnapshot `json:"quota,omitempty"`
+	// iq_ok / iq_down / test_error / monitor_network; empty for non-iq checks
+	IqStatus string `json:"iq_status,omitempty"`
 	// CheckedAt holds the value of the "checked_at" field.
 	CheckedAt time.Time `json:"checked_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -71,7 +73,7 @@ func (*ChannelMonitorHistory) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case channelmonitorhistory.FieldID, channelmonitorhistory.FieldMonitorID, channelmonitorhistory.FieldLatencyMs, channelmonitorhistory.FieldPingLatencyMs:
 			values[i] = new(sql.NullInt64)
-		case channelmonitorhistory.FieldModel, channelmonitorhistory.FieldStatus, channelmonitorhistory.FieldMessage:
+		case channelmonitorhistory.FieldModel, channelmonitorhistory.FieldStatus, channelmonitorhistory.FieldMessage, channelmonitorhistory.FieldIqStatus:
 			values[i] = new(sql.NullString)
 		case channelmonitorhistory.FieldCheckedAt:
 			values[i] = new(sql.NullTime)
@@ -141,6 +143,12 @@ func (_m *ChannelMonitorHistory) assignValues(columns []string, values []any) er
 				if err := json.Unmarshal(*value, &_m.Quota); err != nil {
 					return fmt.Errorf("unmarshal field quota: %w", err)
 				}
+			}
+		case channelmonitorhistory.FieldIqStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field iq_status", values[i])
+			} else if value.Valid {
+				_m.IqStatus = value.String
 			}
 		case channelmonitorhistory.FieldCheckedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -213,6 +221,9 @@ func (_m *ChannelMonitorHistory) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("quota=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Quota))
+	builder.WriteString(", ")
+	builder.WriteString("iq_status=")
+	builder.WriteString(_m.IqStatus)
 	builder.WriteString(", ")
 	builder.WriteString("checked_at=")
 	builder.WriteString(_m.CheckedAt.Format(time.ANSIC))

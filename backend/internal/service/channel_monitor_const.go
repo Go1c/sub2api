@@ -66,9 +66,11 @@ const (
 	//   probe       - LLM 探活（默认，原有行为）
 	//   quota       - 仅查关联账号用量，零 LLM 成本
 	//   quota_probe - 探活 + 配额并存（配额快照挂到主模型历史行）
+	//   iq          - 状态 + 智商（一次糖果题同时记下服务器状态与智商四态）
 	MonitorCheckModeProbe      = "probe"
 	MonitorCheckModeQuota      = "quota"
 	MonitorCheckModeQuotaProbe = "quota_probe"
+	MonitorCheckModeIQ         = "iq"
 
 	// MonitorDefaultQuotaModel 是 quota 模式监控未显式指定模型时占位的虚拟模型名
 	// （primary_model 列 NotEmpty，用 "quota" 让历史行/时间线机制无需特判）。
@@ -118,6 +120,8 @@ const (
 	monitorAnthropicAPIVersion = "2023-06-01"
 	// monitorChallengeMaxTokens 单次 challenge 请求的 max_tokens（足够回答个位数算术）。
 	monitorChallengeMaxTokens = 50
+	// monitorIQMaxTokens 智商糖果题需要更长输出（模型常先解释再给数字）。
+	monitorIQMaxTokens = 512
 
 	// monitorRunOneBuffer runOne 的总超时缓冲（除请求超时与 ping 超时外的额外裕量）。
 	monitorRunOneBuffer = 10 * time.Second
@@ -146,7 +150,7 @@ var (
 		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok",
 	)
 	ErrChannelMonitorInvalidCheckMode = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_CHECK_MODE", "check_mode must be one of probe/quota/quota_probe",
+		"CHANNEL_MONITOR_INVALID_CHECK_MODE", "check_mode must be one of probe/quota/quota_probe/iq",
 	)
 	ErrChannelMonitorAccountRequired = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_ACCOUNT_REQUIRED", "account_id is required for quota-based check_mode",

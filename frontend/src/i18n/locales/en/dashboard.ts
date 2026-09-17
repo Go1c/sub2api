@@ -418,7 +418,14 @@ export default {
     checkMode: {
       probe: 'Probe',
       quota: 'Quota',
-      quota_probe: 'Probe + Quota'
+      quota_probe: 'Probe + Quota',
+      iq: 'Status + IQ'
+    },
+    iqStatus: {
+      iq_ok: 'Not degraded',
+      iq_down: 'IQ down',
+      test_error: 'Test error',
+      monitor_network: 'Monitor network error'
     },
     quota: {
       unavailable: 'Quota unavailable',
@@ -448,6 +455,8 @@ export default {
     dialogLatency: 'Dialog Latency',
     endpointPing: 'Endpoint PING',
     history60pts: 'HISTORY ({n} PTS)',
+    timelineServer: 'SERVER · {n} PTS',
+    timelineIQ: 'IQ · {n} PTS',
     nextUpdateIn: 'NEXT UPDATE IN {n}s',
     past: 'PAST',
     now: 'NOW',

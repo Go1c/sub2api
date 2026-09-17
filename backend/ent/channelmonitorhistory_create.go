@@ -90,6 +90,20 @@ func (_c *ChannelMonitorHistoryCreate) SetQuota(v *domain.MonitorQuotaSnapshot) 
 	return _c
 }
 
+// SetIqStatus sets the "iq_status" field.
+func (_c *ChannelMonitorHistoryCreate) SetIqStatus(v string) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetIqStatus(v)
+	return _c
+}
+
+// SetNillableIqStatus sets the "iq_status" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableIqStatus(v *string) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetIqStatus(*v)
+	}
+	return _c
+}
+
 // SetCheckedAt sets the "checked_at" field.
 func (_c *ChannelMonitorHistoryCreate) SetCheckedAt(v time.Time) *ChannelMonitorHistoryCreate {
 	_c.mutation.SetCheckedAt(v)
@@ -148,6 +162,10 @@ func (_c *ChannelMonitorHistoryCreate) defaults() {
 		v := channelmonitorhistory.DefaultMessage
 		_c.mutation.SetMessage(v)
 	}
+	if _, ok := _c.mutation.IqStatus(); !ok {
+		v := channelmonitorhistory.DefaultIqStatus
+		_c.mutation.SetIqStatus(v)
+	}
 	if _, ok := _c.mutation.CheckedAt(); !ok {
 		v := channelmonitorhistory.DefaultCheckedAt()
 		_c.mutation.SetCheckedAt(v)
@@ -178,6 +196,11 @@ func (_c *ChannelMonitorHistoryCreate) check() error {
 	if v, ok := _c.mutation.Message(); ok {
 		if err := channelmonitorhistory.MessageValidator(v); err != nil {
 			return &ValidationError{Name: "message", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.message": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.IqStatus(); ok {
+		if err := channelmonitorhistory.IqStatusValidator(v); err != nil {
+			return &ValidationError{Name: "iq_status", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.iq_status": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CheckedAt(); !ok {
@@ -236,6 +259,10 @@ func (_c *ChannelMonitorHistoryCreate) createSpec() (*ChannelMonitorHistory, *sq
 	if value, ok := _c.mutation.Quota(); ok {
 		_spec.SetField(channelmonitorhistory.FieldQuota, field.TypeJSON, value)
 		_node.Quota = value
+	}
+	if value, ok := _c.mutation.IqStatus(); ok {
+		_spec.SetField(channelmonitorhistory.FieldIqStatus, field.TypeString, value)
+		_node.IqStatus = value
 	}
 	if value, ok := _c.mutation.CheckedAt(); ok {
 		_spec.SetField(channelmonitorhistory.FieldCheckedAt, field.TypeTime, value)
@@ -430,6 +457,24 @@ func (u *ChannelMonitorHistoryUpsert) ClearQuota() *ChannelMonitorHistoryUpsert 
 	return u
 }
 
+// SetIqStatus sets the "iq_status" field.
+func (u *ChannelMonitorHistoryUpsert) SetIqStatus(v string) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldIqStatus, v)
+	return u
+}
+
+// UpdateIqStatus sets the "iq_status" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateIqStatus() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldIqStatus)
+	return u
+}
+
+// ClearIqStatus clears the value of the "iq_status" field.
+func (u *ChannelMonitorHistoryUpsert) ClearIqStatus() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldIqStatus)
+	return u
+}
+
 // SetCheckedAt sets the "checked_at" field.
 func (u *ChannelMonitorHistoryUpsert) SetCheckedAt(v time.Time) *ChannelMonitorHistoryUpsert {
 	u.Set(channelmonitorhistory.FieldCheckedAt, v)
@@ -619,6 +664,27 @@ func (u *ChannelMonitorHistoryUpsertOne) UpdateQuota() *ChannelMonitorHistoryUps
 func (u *ChannelMonitorHistoryUpsertOne) ClearQuota() *ChannelMonitorHistoryUpsertOne {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.ClearQuota()
+	})
+}
+
+// SetIqStatus sets the "iq_status" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetIqStatus(v string) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetIqStatus(v)
+	})
+}
+
+// UpdateIqStatus sets the "iq_status" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateIqStatus() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateIqStatus()
+	})
+}
+
+// ClearIqStatus clears the value of the "iq_status" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearIqStatus() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearIqStatus()
 	})
 }
 
@@ -977,6 +1043,27 @@ func (u *ChannelMonitorHistoryUpsertBulk) UpdateQuota() *ChannelMonitorHistoryUp
 func (u *ChannelMonitorHistoryUpsertBulk) ClearQuota() *ChannelMonitorHistoryUpsertBulk {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.ClearQuota()
+	})
+}
+
+// SetIqStatus sets the "iq_status" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetIqStatus(v string) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetIqStatus(v)
+	})
+}
+
+// UpdateIqStatus sets the "iq_status" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateIqStatus() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateIqStatus()
+	})
+}
+
+// ClearIqStatus clears the value of the "iq_status" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearIqStatus() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearIqStatus()
 	})
 }
 

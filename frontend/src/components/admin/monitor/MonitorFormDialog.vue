@@ -13,7 +13,7 @@
 
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.checkMode') }}</label>
-        <div class="grid gap-3 sm:grid-cols-3" data-testid="monitor-check-mode">
+        <div class="grid grid-cols-2 gap-3" data-testid="monitor-check-mode">
           <button
             v-for="opt in checkModeOptions"
             :key="opt.value"
@@ -145,6 +145,32 @@
         />
       </div>
 
+      <div v-if="usesIQMode" class="space-y-4 rounded-lg border border-violet-100 bg-violet-50/40 p-3 dark:border-violet-500/20 dark:bg-violet-500/10">
+        <div>
+          <label class="input-label">{{ t('admin.channelMonitor.form.iqQuestion') }}</label>
+          <textarea
+            v-model="form.iq_question"
+            data-testid="monitor-iq-question"
+            rows="4"
+            class="input"
+          />
+          <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.iqQuestionHint') }}</p>
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.channelMonitor.form.iqAnswer') }}</label>
+          <input
+            v-model="form.iq_answer"
+            data-testid="monitor-iq-answer"
+            type="text"
+            class="input"
+          />
+        </div>
+        <div class="flex items-center justify-between">
+          <label class="input-label mb-0">{{ t('admin.channelMonitor.form.iqFuzzyMatch') }}</label>
+          <Toggle v-model="form.iq_fuzzy_match" />
+        </div>
+      </div>
+
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.groupName') }}</label>
         <input v-model="form.group_name" type="text" class="input" :placeholder="t('admin.channelMonitor.form.groupNamePlaceholder')" />
@@ -152,7 +178,7 @@
 
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.intervalSeconds') }} <span class="text-red-500">*</span></label>
-        <input v-model.number="form.interval_seconds" type="number" min="15" max="3600" required class="input" />
+        <input v-model.number="form.interval_seconds" data-testid="monitor-interval-seconds" type="number" min="15" max="3600" required class="input" />
         <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.intervalSecondsHint') }}</p>
       </div>
 
@@ -270,6 +296,9 @@ import {
   CHECK_MODE_PROBE,
   CHECK_MODE_QUOTA,
   CHECK_MODE_QUOTA_PROBE,
+  CHECK_MODE_IQ,
+  DEFAULT_IQ_QUESTION,
+  DEFAULT_IQ_ANSWER,
 } from '@/constants/channelMonitor'
 
 const props = defineProps<{
@@ -323,6 +352,9 @@ interface MonitorForm {
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
   body_override: Record<string, unknown> | null
+  iq_question: string
+  iq_answer: string
+  iq_fuzzy_match: boolean
 }
 
 const form = reactive<MonitorForm>({
@@ -343,11 +375,17 @@ const form = reactive<MonitorForm>({
   extra_headers: {},
   body_override_mode: 'off',
   body_override: null,
+  iq_question: DEFAULT_IQ_QUESTION,
+  iq_answer: DEFAULT_IQ_ANSWER,
+  iq_fuzzy_match: true,
 })
 
 // jitter 上限与后端校验一致：interval - jitter 不得低于最小检测间隔 15 秒。
-const usesQuotaMode = computed(() => form.check_mode !== CHECK_MODE_PROBE)
+const usesQuotaMode = computed(() =>
+  form.check_mode === CHECK_MODE_QUOTA || form.check_mode === CHECK_MODE_QUOTA_PROBE,
+)
 const usesProbePart = computed(() => form.check_mode !== CHECK_MODE_QUOTA)
+const usesIQMode = computed(() => form.check_mode === CHECK_MODE_IQ)
 
 const maxJitterSeconds = computed<number>(() => Math.max(0, (form.interval_seconds || 0) - 15))
 
@@ -482,6 +520,11 @@ const checkModeOptions = computed<CheckModeOption[]>(() => [
     label: t('admin.channelMonitor.form.checkModeQuotaProbe'),
     hint: t('admin.channelMonitor.form.checkModeQuotaProbeHint'),
   },
+  {
+    value: CHECK_MODE_IQ,
+    label: t('admin.channelMonitor.form.checkModeIQ'),
+    hint: t('admin.channelMonitor.form.checkModeIQHint'),
+  },
 ])
 
 function checkModeButtonClass(mode: CheckMode): string {
@@ -495,6 +538,10 @@ function checkModeButtonClass(mode: CheckMode): string {
 function selectCheckMode(mode: CheckMode) {
   form.check_mode = mode
   if (!usesQuotaMode.value) form.account_id = null
+  if (mode === CHECK_MODE_IQ) {
+    if (!form.iq_question.trim()) form.iq_question = DEFAULT_IQ_QUESTION
+    if (!form.iq_answer.trim()) form.iq_answer = DEFAULT_IQ_ANSWER
+  }
 }
 
 interface LinkedAccount {
@@ -676,6 +723,9 @@ function resetForm() {
   form.extra_headers = {}
   form.body_override_mode = 'off'
   form.body_override = null
+  form.iq_question = DEFAULT_IQ_QUESTION
+  form.iq_answer = DEFAULT_IQ_ANSWER
+  form.iq_fuzzy_match = true
   suppressFormWatchers = false
 }
 
@@ -698,6 +748,9 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.extra_headers = { ...(m.extra_headers || {}) }
   form.body_override_mode = m.body_override_mode || 'off'
   form.body_override = m.body_override ? { ...m.body_override } : null
+  form.iq_question = m.iq_question?.trim() ? m.iq_question : DEFAULT_IQ_QUESTION
+  form.iq_answer = m.iq_answer?.trim() ? m.iq_answer : DEFAULT_IQ_ANSWER
+  form.iq_fuzzy_match = m.iq_fuzzy_match !== false
   suppressFormWatchers = false
 }
 
@@ -766,6 +819,9 @@ function buildPayload(): CreateParams {
     extra_headers: form.extra_headers,
     body_override_mode: form.body_override_mode,
     body_override: form.body_override,
+    iq_question: usesIQMode.value ? form.iq_question.trim() : '',
+    iq_answer: usesIQMode.value ? form.iq_answer.trim() : '',
+    iq_fuzzy_match: usesIQMode.value ? form.iq_fuzzy_match : true,
   }
 }
 
