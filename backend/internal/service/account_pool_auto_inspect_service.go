@@ -25,6 +25,7 @@ type poolAutoInspectAccounts interface {
 	ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, error)
 	BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error
 	Update(ctx context.Context, account *Account) error
+	UpdateExtra(ctx context.Context, id int64, updates map[string]any) error
 }
 
 type poolAutoInspectSettings interface {
@@ -427,6 +428,11 @@ func (s *AccountPoolAutoInspectService) applyRemediation(ctx context.Context, ac
 			}
 		}
 	}
+	if plan.Close429Exemption {
+		if err := s.accounts.UpdateExtra(ctx, account.ID, map[string]any{OAuth429CooldownEnforcedExtraKey: true}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -481,6 +487,9 @@ func formatDegradeLine(account Account, verdict poolAutoInspectHealthVerdict, pl
 	}
 	if len(plan.RemovedModels) > 0 {
 		parts = append(parts, "移除 "+strings.Join(plan.RemovedModels, ","))
+	}
+	if plan.Close429Exemption {
+		parts = append(parts, "关闭 429 豁免")
 	}
 	return strings.Join(parts, "；")
 }

@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -366,7 +367,7 @@ func TestOpenAI429FastPath_ExplicitRetryAfterWaitsBeforeScheduling(t *testing.T)
 	limits := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
 	svc := &OpenAIGatewayService{rateLimitService: limits}
 	limits.SetAccountRuntimeBlocker(svc)
-	a := &Account{ID: 425, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	a := &Account{ID: 425, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{OAuth429CooldownEnforcedExtraKey: true}}
 	headers := http.Header{"Retry-After": []string{"90"}}
 	body := []byte(`{"error":{"type":"rate_limit_error","message":"slow down"}}`)
 	require.False(t, svc.ShouldRetryOpenAIOAuth429(a, headers, body))
@@ -376,6 +377,13 @@ func TestOpenAI429FastPath_ExplicitRetryAfterWaitsBeforeScheduling(t *testing.T)
 	until, ok := svc.openaiAccountRuntimeBlockUntil.Load(a.ID)
 	require.True(t, ok)
 	require.Greater(t, time.Until(until.(time.Time)), 89*time.Second)
+
+	// 默认（豁免）账号：90s 在重试窗口内，归瞬时、同账号等待重试，不拉闸不落库。
+	exempt := &Account{ID: 427, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	require.True(t, svc.ShouldRetryOpenAIOAuth429(exempt, headers, body))
+	svc.handleOpenAIAccountUpstreamError(context.Background(), exempt, 429, headers, body)
+	require.False(t, svc.isOpenAIAccountRuntimeBlocked(exempt))
+	require.Equal(t, 1, repo.setRateLimitedCalls)
 }
 
 func TestOpenAI429RetryDelayHonorsFullRetryAfter(t *testing.T) {
@@ -866,4 +874,78 @@ func TestShouldStopOpenAIOAuth429Failover_TracksOneGrokFollowupAttempt(t *testin
 	var state OpenAIOAuth429FailoverState
 	require.False(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusTooManyRequests, 0, &state))
 	require.False(t, svc.ShouldStopOpenAIOAuth429Failover(apiKeyAccount, http.StatusTooManyRequests, 2, &state))
+}
+
+func TestClassifyOpenAIOAuth429RetryAfterIsExemptedByDefault(t *testing.T) {
+	headers := http.Header{"Retry-After": []string{"30"}}
+	disposition, resetAt := classifyOpenAIOAuth429(headers, nil)
+	require.Equal(t, openAIOAuth429RetryAfter, disposition, "自由分类保留 Retry-After 停调信号")
+	require.NotNil(t, resetAt)
+
+	exempt := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	disposition, resetAt = classifyOpenAIOAuth429ForAccount(exempt, headers, nil)
+	require.Equal(t, openAIOAuth429Transient, disposition, "豁免账号（缺省）：Retry-After 归瞬时")
+	require.Nil(t, resetAt)
+}
+
+func TestAccountOAuth429CooldownExempt(t *testing.T) {
+	require.True(t, (&Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth}).OAuth429CooldownExempt(), "缺省豁免")
+	require.True(t, (&Account{ID: 2, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{OAuth429CooldownEnforcedExtraKey: false}}).OAuth429CooldownExempt())
+	require.False(t, (&Account{ID: 3, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{OAuth429CooldownEnforcedExtraKey: true}}).OAuth429CooldownExempt())
+}
+
+func TestClassifyOpenAIOAuth429ForAccountExemption(t *testing.T) {
+	exempt := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	enforced := &Account{ID: 2, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{OAuth429CooldownEnforcedExtraKey: true}}
+
+	longRetryAfter := http.Header{"Retry-After": []string{"3600"}}
+	disposition, resetAt := classifyOpenAIOAuth429ForAccount(exempt, longRetryAfter, nil)
+	require.Equal(t, openAIOAuth429Transient, disposition, "豁免账号：长 Retry-After 也不拉闸")
+	require.Nil(t, resetAt)
+	disposition, resetAt = classifyOpenAIOAuth429ForAccount(enforced, longRetryAfter, nil)
+	require.Equal(t, openAIOAuth429RetryAfter, disposition)
+	require.NotNil(t, resetAt)
+
+	// 未到 100% 的 codex 窗口头对任何账号都不构成长冷却（当前实现只认
+	// ≥100% 或 usage_limit_reached），豁免与否均为瞬时。
+	underHeaders := http.Header{}
+	underHeaders.Set("x-codex-primary-used-percent", "37")
+	underHeaders.Set("x-codex-primary-reset-after-seconds", "604800")
+	underHeaders.Set("x-codex-primary-window-minutes", "10080")
+	disposition, _ = classifyOpenAIOAuth429ForAccount(exempt, underHeaders, nil)
+	require.Equal(t, openAIOAuth429Transient, disposition, "豁免账号：未到 100% 的窗口余量不拉闸")
+	disposition, _ = classifyOpenAIOAuth429ForAccount(enforced, underHeaders, nil)
+	require.Equal(t, openAIOAuth429Transient, disposition, "enforced 账号：未到 100% 的窗口余量同样不拉闸")
+
+	exhaustedHeaders := http.Header{}
+	exhaustedHeaders.Set("x-codex-secondary-used-percent", "100")
+	exhaustedHeaders.Set("x-codex-secondary-reset-after-seconds", "3600")
+	disposition, resetAt = classifyOpenAIOAuth429ForAccount(exempt, exhaustedHeaders, nil)
+	require.Equal(t, openAIOAuth429Quota5h, disposition, "真实耗尽不受豁免影响")
+	require.NotNil(t, resetAt)
+
+	resetUnix := time.Now().Add(time.Hour).Unix()
+	body := []byte(`{"error":{"type":"usage_limit_reached","resets_at":` + fmt.Sprintf("%d", resetUnix) + `}}`)
+	disposition, _ = classifyOpenAIOAuth429ForAccount(exempt, http.Header{}, body)
+	require.Equal(t, openAIOAuth429QuotaReset, disposition, "usage_limit_reached 不受豁免影响")
+}
+
+func TestOpenAI429FastPath_ExemptAccountKeepsSchedulingOnLongRetryAfter(t *testing.T) {
+	repo := &oauth429RateLimitRepo{}
+	rateLimits := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	svc := &OpenAIGatewayService{rateLimitService: rateLimits}
+	rateLimits.SetAccountRuntimeBlocker(svc)
+	exempt := &Account{ID: 501, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	enforced := &Account{ID: 502, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{OAuth429CooldownEnforcedExtraKey: true}}
+	headers := http.Header{"Retry-After": []string{"3600"}}
+
+	shouldDisable := svc.handleOpenAIAccountUpstreamError(context.Background(), exempt, http.StatusTooManyRequests, headers, nil)
+	require.False(t, shouldDisable)
+	require.False(t, svc.isOpenAIAccountRuntimeBlocked(exempt), "豁免账号不因长 Retry-After 熔断")
+	require.Zero(t, repo.setRateLimitedCalls, "豁免账号在重试窗口内不落库限流")
+	require.True(t, svc.shouldRetryOpenAIOAuth429OnSameAccount(exempt, http.StatusTooManyRequests, false))
+
+	svc.handleOpenAIAccountUpstreamError(context.Background(), enforced, http.StatusTooManyRequests, headers, nil)
+	require.True(t, svc.isOpenAIAccountRuntimeBlocked(enforced), "enforced 账号仍按 Retry-After 拉闸")
+	require.False(t, svc.shouldRetryOpenAIOAuth429OnSameAccount(enforced, http.StatusTooManyRequests, false))
 }

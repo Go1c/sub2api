@@ -2387,6 +2387,22 @@ func (a *Account) IsCodexCLIOnlyAppServerAllowed() bool {
 	return ok && v
 }
 
+// OAuth429CooldownEnforcedExtraKey 显式开启账号级 OpenAI OAuth 429 拉闸
+// （Retry-After 冷却 / 未到 100% 的窗口余量停调）。缺省（无键或 false）= 豁免。
+// 号池自动巡检在降级账号时会写入 true，且不随恢复自动回写。
+const OAuth429CooldownEnforcedExtraKey = "oauth429_cooldown_enforced"
+
+// OAuth429CooldownExempt 报告该 OpenAI OAuth 账号是否豁免 429 拉闸：
+// 瞬时/带 Retry-After 的 429 走同账号重试消化，不做账号级熔断与限流落库。
+// 仅真实配额耗尽（5h/7d 到 100% 或 usage_limit_reached）不受豁免影响。
+func (a *Account) OAuth429CooldownExempt() bool {
+	if a == nil {
+		return false
+	}
+	enforced, ok := a.Extra[OAuth429CooldownEnforcedExtraKey].(bool)
+	return !ok || !enforced
+}
+
 // WindowCostSchedulability 窗口费用调度状态
 type WindowCostSchedulability int
 

@@ -58,6 +58,25 @@ func (s *poolInspectAccountStub) Update(_ context.Context, account *Account) err
 	return nil
 }
 
+func (s *poolInspectAccountStub) UpdateExtra(_ context.Context, accountID int64, updates map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.accounts {
+		if s.accounts[i].ID != accountID {
+			continue
+		}
+		extra := map[string]any{}
+		for k, v := range s.accounts[i].Extra {
+			extra[k] = v
+		}
+		for k, v := range updates {
+			extra[k] = v
+		}
+		s.accounts[i].Extra = extra
+	}
+	return nil
+}
+
 type poolInspectHealthStub struct {
 	items []AccountRequestHealthDTO
 }
@@ -333,4 +352,92 @@ func (s *poolInspectGroupStub) GetByIDLite(_ context.Context, id int64) (*Group,
 		return nil, ErrGroupNotFound
 	}
 	return &group, nil
+}
+
+func TestAccountPoolAutoInspectServiceRunOnceCloses429ExemptionOnDegrade(t *testing.T) {
+	accounts := &poolInspectAccountStub{accounts: []Account{
+		{ID: 31, Name: "codex-exempt", Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, GroupIDs: []int64{1}},
+		{ID: 32, Name: "codex-enforced", Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, GroupIDs: []int64{1}, Extra: map[string]any{OAuth429CooldownEnforcedExtraKey: true}},
+		{ID: 33, Name: "gemini-1", Platform: PlatformGemini, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, GroupIDs: []int64{1}},
+	}}
+	allFail := []AccountRequestHealthDTO{
+		{AccountID: 31, Mode: RequestHealthModeIPGroup, Lines: []AccountRequestHealthLineDTO{{IP: "a", Outcomes: failOutcomes(6)}}},
+		{AccountID: 32, Mode: RequestHealthModeIPGroup, Lines: []AccountRequestHealthLineDTO{{IP: "a", Outcomes: failOutcomes(6)}}},
+		{AccountID: 33, Mode: RequestHealthModeIPGroup, Lines: []AccountRequestHealthLineDTO{{IP: "a", Outcomes: failOutcomes(6)}}},
+	}
+	sender := &poolInspectSenderStub{}
+	svc := NewAccountPoolAutoInspectService(
+		&poolInspectSettingsStub{},
+		accounts,
+		&poolInspectHealthStub{items: allFail},
+		sender,
+		&poolInspectFallbackStub{cfg: &OpsAccountErrorAlertConfig{TelegramBotToken: "bot", TelegramChatID: "chat"}},
+		&poolInspectLockStub{},
+		nil,
+	)
+	cfg := defaultAccountPoolAutoInspectConfig()
+	cfg.Enabled = true
+	cfg.Close429ExemptionOnDegrade = true
+	_, err := svc.UpdateConfig(context.Background(), cfg)
+	require.NoError(t, err)
+
+	status := svc.RunOnce(context.Background(), true)
+	require.Empty(t, status.LastError)
+	require.Contains(t, status.LastResult, "degraded=1", "只有豁免中的 OpenAI 账号有可执行动作")
+	require.Equal(t, true, accounts.accounts[0].Extra[OAuth429CooldownEnforcedExtraKey], "降级后关闭豁免")
+	require.Equal(t, true, accounts.accounts[1].Extra[OAuth429CooldownEnforcedExtraKey], "已 enforced 的账号不重复处理")
+	require.Nil(t, accounts.accounts[2].Extra, "非 OpenAI 账号不写豁免键")
+	require.Len(t, sender.messages, 1)
+	require.Contains(t, sender.messages[0], "关闭 429 豁免")
+
+	// 恢复健康后不自动回开豁免：与分组/模型降级一致，恢复不撤销动作。
+	healthy := []AccountRequestHealthDTO{
+		{AccountID: 31, Mode: RequestHealthModeIPGroup, Lines: []AccountRequestHealthLineDTO{{IP: "a", Outcomes: okOutcomes(6)}}},
+	}
+	svc2 := NewAccountPoolAutoInspectService(
+		&poolInspectSettingsStub{},
+		accounts,
+		&poolInspectHealthStub{items: healthy},
+		&poolInspectSenderStub{},
+		&poolInspectFallbackStub{},
+		&poolInspectLockStub{},
+		nil,
+	)
+	svc2.RunOnce(context.Background(), true)
+	require.Equal(t, true, accounts.accounts[0].Extra[OAuth429CooldownEnforcedExtraKey], "巡检恢复不自动重新豁免")
+}
+
+func TestAccountPoolAutoInspectServiceDegradeKeeps429ExemptionWhenDisabled(t *testing.T) {
+	accounts := &poolInspectAccountStub{accounts: []Account{
+		{ID: 41, Name: "codex-1", Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, GroupIDs: []int64{1}},
+	}}
+	svc := NewAccountPoolAutoInspectService(
+		&poolInspectSettingsStub{},
+		accounts,
+		&poolInspectHealthStub{items: []AccountRequestHealthDTO{
+			{AccountID: 41, Mode: RequestHealthModeIPGroup, Lines: []AccountRequestHealthLineDTO{{IP: "a", Outcomes: failOutcomes(6)}}},
+		}},
+		&poolInspectSenderStub{},
+		&poolInspectFallbackStub{},
+		&poolInspectLockStub{},
+		nil,
+	)
+	cfg := defaultAccountPoolAutoInspectConfig()
+	cfg.Enabled = true
+	cfg.AddGroupIDs = []int64{7}
+	cfg.Close429ExemptionOnDegrade = false
+	_, err := svc.UpdateConfig(context.Background(), cfg)
+	require.NoError(t, err)
+
+	status := svc.RunOnce(context.Background(), true)
+	require.Empty(t, status.LastError)
+	require.Contains(t, status.LastResult, "degraded=1")
+	require.Equal(t, []int64{1, 7}, accounts.bound[41])
+	require.Nil(t, accounts.accounts[0].Extra, "关闭联动时降级不写豁免键")
+}
+
+func TestAccountPoolAutoInspectConfigDefaultCloses429Exemption(t *testing.T) {
+	require.True(t, defaultAccountPoolAutoInspectConfig().Close429ExemptionOnDegrade, "联动默认开启")
+	parsed := parseAccountPoolAutoInspectConfig(`{"enabled":true,"interval_minutes":5,"success_rate_threshold":50,"min_samples":4,"add_group_ids":[],"remove_models":[]}`)
+	require.True(t, parsed.Close429ExemptionOnDegrade, "存量配置缺键时按默认联动处理")
 }

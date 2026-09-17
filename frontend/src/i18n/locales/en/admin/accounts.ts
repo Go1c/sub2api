@@ -25,6 +25,8 @@ export default {
         removeModels: 'Models to remove',
         removeModelsHint: 'Delete these IDs from the account model whitelist, e.g. gpt-6-astra.',
         removeModelsPlaceholder: 'Type a model ID and press Enter',
+        close429Exemption: 'Close 429 exemption on degrade',
+        close429ExemptionHint: 'Also disable the account 429 rate-limit exemption when degrading so the upstream Retry-After cooldown applies again; like group/model changes, recovery does not re-enable it automatically.',
         notify401: 'Notify bot when 401 stops scheduling',
         notify401Hint: 'Send Telegram when an account is auto-stopped after a login 401. Leave the token blank to reuse the ops account-error bot.',
         cooldown: '401 notify cooldown (minutes)',
@@ -690,6 +692,9 @@ export default {
         codexCLIOnly: 'Codex official clients only',
         codexCLIOnlyDesc:
           'Only applies to OpenAI OAuth. When enabled, only Codex official client families are allowed; when disabled, the gateway bypasses this restriction and keeps existing behavior.',
+        oauth429Exempt: '429 rate-limit exemption',
+        oauth429ExemptDesc:
+          'On by default: transient 429s carrying Retry-After are absorbed via same-account retries instead of an account-level cooldown; turn it off to cool the account down per the upstream Retry-After. Pool auto-inspect disables the exemption automatically when it degrades this account (not re-enabled on recovery). Genuine quota exhaustion (5h/7d at 100%) is never exempted.',
         codexCLIOnlyAppServer: 'Allow Codex app-server clients',
         codexCLIOnlyAppServerDesc:
           "Effective only when the switch above is on. When enabled, this account also allows third-party clients that embed the Codex engine over the app-server protocol (e.g. Claude Code's codex plugin); they still pass the global engine-fingerprint gate. OR-combined with the global app-server toggle.",

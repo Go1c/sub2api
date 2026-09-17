@@ -1053,6 +1053,7 @@ export interface PoolAutoInspectConfig {
   remove_models: string[]
   notify_oauth_401: boolean
   oauth_401_cooldown_minutes: number
+  close_429_exemption_on_degrade: boolean
   telegram_bot_token?: string
   telegram_chat_id?: string
 }

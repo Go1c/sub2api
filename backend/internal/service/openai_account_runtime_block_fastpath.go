@@ -38,40 +38,70 @@ const (
 	openAIOAuth429RetryAfter
 )
 
+// openAIOAuth429Signal 除分类与重置点外，还标记 exhausted：5h/7d 窗口达到
+// 100% 或响应体明确 usage_limit_reached，即真实配额耗尽，不受豁免影响。
+type openAIOAuth429Signal struct {
+	disposition openAIOAuth429Disposition
+	resetAt     *time.Time
+	exhausted   bool
+}
+
 // classifyOpenAIOAuth429 区分账号配额耗尽信号与普通瞬时 429。只有窗口达到
-// 100% 或响应体明确给出 reset 时间时，才视为配额限流信号。
+// 100% 或响应体明确给出 reset 时间时，才视为配额限流信号；带 Retry-After 的
+// 429 是否升级为账号级拉闸由 classifyOpenAIOAuth429ForAccount 按账号豁免决定。
 func classifyOpenAIOAuth429(headers http.Header, responseBody []byte) (openAIOAuth429Disposition, *time.Time) {
+	signal := classifyOpenAIOAuth429Signal(headers, responseBody)
+	return signal.disposition, signal.resetAt
+}
+
+func classifyOpenAIOAuth429Signal(headers http.Header, responseBody []byte) openAIOAuth429Signal {
 	if snapshot := ParseCodexRateLimitHeaders(headers); snapshot != nil {
 		if normalized := snapshot.Normalize(); normalized != nil {
 			if normalized.Used7dPercent != nil && *normalized.Used7dPercent >= 100 {
 				if normalized.Reset7dSeconds != nil {
 					now := time.Now()
 					resetAt := now.Add(time.Duration(*normalized.Reset7dSeconds) * time.Second)
-					return openAIOAuth429Quota7d, &resetAt
+					return openAIOAuth429Signal{disposition: openAIOAuth429Quota7d, resetAt: &resetAt, exhausted: true}
 				}
-				return openAIOAuth429Quota7d, nil
+				return openAIOAuth429Signal{disposition: openAIOAuth429Quota7d, exhausted: true}
 			}
 			if normalized.Used5hPercent != nil && *normalized.Used5hPercent >= 100 {
 				if normalized.Reset5hSeconds != nil {
 					now := time.Now()
 					resetAt := now.Add(time.Duration(*normalized.Reset5hSeconds) * time.Second)
-					return openAIOAuth429Quota5h, &resetAt
+					return openAIOAuth429Signal{disposition: openAIOAuth429Quota5h, resetAt: &resetAt, exhausted: true}
 				}
-				return openAIOAuth429Quota5h, nil
+				return openAIOAuth429Signal{disposition: openAIOAuth429Quota5h, exhausted: true}
 			}
 		}
 	}
+	// calculateOpenAI429ResetTime 只在窗口 ≥100% 时给 reset（≥100% 已在上面
+	// 返回）；这里仅作防御，未耗尽的窗口头不会再产生长冷却。
 	if resetAt := calculateOpenAI429ResetTime(headers); resetAt != nil {
-		return openAIOAuth429QuotaReset, resetAt
+		return openAIOAuth429Signal{disposition: openAIOAuth429QuotaReset, resetAt: resetAt, exhausted: true}
 	}
 	if resetUnix := parseOpenAIRateLimitResetTime(responseBody); resetUnix != nil {
 		resetAt := time.Unix(*resetUnix, 0)
-		return openAIOAuth429QuotaReset, &resetAt
+		return openAIOAuth429Signal{disposition: openAIOAuth429QuotaReset, resetAt: &resetAt, exhausted: true}
 	}
-	if resetAt := parseRetryAfterResetTime(headers, time.Now()); resetAt != nil && resetAt.After(time.Now()) {
-		return openAIOAuth429RetryAfter, resetAt
+	now := time.Now()
+	if resetAt := parseRetryAfterResetTime(headers, now); resetAt != nil && resetAt.After(now) {
+		return openAIOAuth429Signal{disposition: openAIOAuth429RetryAfter, resetAt: resetAt}
 	}
-	return openAIOAuth429Transient, nil
+	return openAIOAuth429Signal{disposition: openAIOAuth429Transient}
+}
+
+// classifyOpenAIOAuth429ForAccount 在账号维度收紧 429 分类：豁免拉闸的账号
+// （extra.oauth429_cooldown_enforced 缺省/为 false）把非耗尽的停调信号
+// （Retry-After）一律归瞬时，交由同账号重试窗口消化；真实配额耗尽
+// （5h/7d 到 100%、usage_limit_reached）保留原分类与重置点。
+func classifyOpenAIOAuth429ForAccount(account *Account, headers http.Header, responseBody []byte) (openAIOAuth429Disposition, *time.Time) {
+	signal := classifyOpenAIOAuth429Signal(headers, responseBody)
+	if signal.disposition != openAIOAuth429Transient && !signal.exhausted &&
+		isOpenAIOAuthAccount(account) && account.OAuth429CooldownExempt() {
+		return openAIOAuth429Transient, nil
+	}
+	return signal.disposition, signal.resetAt
 }
 
 func openAIAccountStateContext(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -230,7 +260,7 @@ func (s *OpenAIGatewayService) markOpenAIOAuth429RateLimited(ctx context.Context
 		return
 	}
 	s.recordOpenAIOAuth429()
-	disposition, resetAt := classifyOpenAIOAuth429(headers, responseBody)
+	disposition, resetAt := classifyOpenAIOAuth429ForAccount(account, headers, responseBody)
 	if disposition == openAIOAuth429Transient && s.openAIOAuth429RetryWindowActive(account) {
 		return
 	}
@@ -259,7 +289,7 @@ func (s *OpenAIGatewayService) shouldRetryOpenAIOAuth429OnSameAccountWithRespons
 	if shouldDisable || statusCode != http.StatusTooManyRequests || !isOpenAIOAuthAccount(account) || account.IsShadow() {
 		return false
 	}
-	disposition, _ := classifyOpenAIOAuth429(headers, responseBody)
+	disposition, _ := classifyOpenAIOAuth429ForAccount(account, headers, responseBody)
 	if disposition != openAIOAuth429Transient {
 		return false
 	}
@@ -277,7 +307,7 @@ func (s *OpenAIGatewayService) ShouldRetryOpenAIOAuth429(account *Account, heade
 	if s == nil || !isOpenAIOAuthAccount(account) || account.IsShadow() || s.isOpenAIAccountRuntimeBlocked(account) {
 		return false
 	}
-	disposition, _ := classifyOpenAIOAuth429(headers, responseBody)
+	disposition, _ := classifyOpenAIOAuth429ForAccount(account, headers, responseBody)
 	if disposition != openAIOAuth429Transient {
 		return false
 	}
