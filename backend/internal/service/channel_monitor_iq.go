@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -27,10 +28,6 @@ var monitorIQSpaceRE = regexp.MustCompile(`\s+`)
 
 func monitorCheckModeUsesIQ(checkMode string) bool {
 	return defaultCheckMode(checkMode) == MonitorCheckModeIQ
-}
-
-func usesIQ(opts *CheckOptions) bool {
-	return opts != nil && strings.TrimSpace(opts.IQPrompt) != ""
 }
 
 func defaultIQQuestion(question string) string {
@@ -65,6 +62,31 @@ func applyIQCheckOptions(opts *CheckOptions, m *ChannelMonitor) {
 	opts.IQAnswer = defaultIQAnswer(m.IQAnswer)
 	opts.IQFuzzyMatch = m.IQFuzzyMatch
 	opts.MaxTokens = monitorIQMaxTokens
+}
+
+func cloneCheckOptions(opts *CheckOptions) *CheckOptions {
+	if opts == nil {
+		return &CheckOptions{}
+	}
+	cp := *opts
+	return &cp
+}
+
+func runIQModeCheckForModel(ctx context.Context, provider, endpoint, apiKey, model string, probeOpts, iqOpts *CheckOptions) *CheckResult {
+	server := runCheckForModel(ctx, provider, endpoint, apiKey, model, probeOpts)
+	iq := runIQCheckForModel(ctx, provider, endpoint, apiKey, model, iqOpts)
+	attachIQResult(server, iq)
+	return server
+}
+
+func attachIQResult(server, iq *CheckResult) {
+	if server == nil || iq == nil {
+		return
+	}
+	server.IqStatus = iq.IqStatus
+	if strings.TrimSpace(server.Message) == "" {
+		server.Message = iq.Message
+	}
 }
 
 func monitorIQAnswerMatches(got, want string, fuzzy bool) bool {
@@ -121,47 +143,27 @@ type iqClassifyInput struct {
 	statusCode int
 	respText   string
 	rawBody    string
-	latency    durationMillis
 	expected   string
 	fuzzy      bool
 }
 
-type durationMillis interface {
-	Milliseconds() int64
-}
-
-func classifyIQOutcome(in iqClassifyInput) (status, iqStatus, message string) {
+func classifyIQOutcome(in iqClassifyInput) (iqStatus, message string) {
 	if in.err != nil {
 		if isMonitorNetworkError(in.err) {
-			return MonitorStatusError, MonitorIQStatusNetwork, "monitor-side DNS lookup failed"
+			return MonitorIQStatusNetwork, "monitor-side DNS lookup failed"
 		}
-		return MonitorStatusFailed, MonitorIQStatusTestErr, truncateMessage(sanitizeErrorMessage(in.err.Error()))
+		return MonitorIQStatusTestErr, truncateMessage(sanitizeErrorMessage(in.err.Error()))
 	}
 	if in.statusCode < 200 || in.statusCode >= 300 {
 		bodySnippet := truncateForErrorBody(in.rawBody)
-		return MonitorStatusFailed, MonitorIQStatusTestErr,
+		return MonitorIQStatusTestErr,
 			truncateMessage(sanitizeErrorMessage(fmt.Sprintf("upstream HTTP %d: %s", in.statusCode, bodySnippet)))
 	}
 	if strings.TrimSpace(in.respText) == "" {
-		return MonitorStatusFailed, MonitorIQStatusTestErr, "iq: empty upstream text"
-	}
-
-	latencyMs := 0
-	if in.latency != nil {
-		latencyMs = int(in.latency.Milliseconds())
-	}
-	status = MonitorStatusOperational
-	message = ""
-	if in.latency != nil && in.latency.Milliseconds() >= monitorDegradedThreshold.Milliseconds() {
-		status = MonitorStatusDegraded
-		message = truncateMessage(fmt.Sprintf("slow response: %dms", latencyMs))
+		return MonitorIQStatusTestErr, "iq: empty upstream text"
 	}
 	if monitorIQAnswerMatches(in.respText, in.expected, in.fuzzy) {
-		return status, MonitorIQStatusOK, message
+		return MonitorIQStatusOK, ""
 	}
-	mismatch := truncateMessage(sanitizeErrorMessage(fmt.Sprintf("iq mismatch (expected %s, got %q)", in.expected, in.respText)))
-	if message == "" {
-		message = mismatch
-	}
-	return status, MonitorIQStatusDown, message
+	return MonitorIQStatusDown, truncateMessage(sanitizeErrorMessage(fmt.Sprintf("iq mismatch (expected %s, got %q)", in.expected, in.respText)))
 }

@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -35,77 +34,52 @@ func TestIsMonitorNetworkError_DNS(t *testing.T) {
 }
 
 func TestClassifyIQOutcome_FourStates(t *testing.T) {
-	fast := 200 * time.Millisecond
-	slow := monitorDegradedThreshold + time.Second
-
-	status, iq, msg := classifyIQOutcome(iqClassifyInput{
+	iq, msg := classifyIQOutcome(iqClassifyInput{
 		statusCode: 200,
 		respText:   "最少取 21 颗",
-		latency:    fast,
 		expected:   "21",
 		fuzzy:      true,
 	})
-	require.Equal(t, MonitorStatusOperational, status)
 	require.Equal(t, MonitorIQStatusOK, iq)
 	require.Empty(t, msg)
 
-	status, iq, _ = classifyIQOutcome(iqClassifyInput{
-		statusCode: 200,
-		respText:   "最少取 21 颗",
-		latency:    slow,
-		expected:   "21",
-		fuzzy:      true,
-	})
-	require.Equal(t, MonitorStatusDegraded, status)
-	require.Equal(t, MonitorIQStatusOK, iq)
-
-	status, iq, _ = classifyIQOutcome(iqClassifyInput{
+	iq, _ = classifyIQOutcome(iqClassifyInput{
 		statusCode: 200,
 		respText:   "我猜是 20",
-		latency:    fast,
 		expected:   "21",
 		fuzzy:      true,
 	})
-	require.Equal(t, MonitorStatusOperational, status)
 	require.Equal(t, MonitorIQStatusDown, iq)
 
-	status, iq, _ = classifyIQOutcome(iqClassifyInput{
+	iq, _ = classifyIQOutcome(iqClassifyInput{
 		statusCode: 500,
 		rawBody:    `{"error":"boom"}`,
-		latency:    fast,
 		expected:   "21",
 		fuzzy:      true,
 	})
-	require.Equal(t, MonitorStatusFailed, status)
 	require.Equal(t, MonitorIQStatusTestErr, iq)
 
-	status, iq, _ = classifyIQOutcome(iqClassifyInput{
+	iq, _ = classifyIQOutcome(iqClassifyInput{
 		statusCode: 200,
 		respText:   "   ",
-		latency:    fast,
 		expected:   "21",
 		fuzzy:      true,
 	})
-	require.Equal(t, MonitorStatusFailed, status)
 	require.Equal(t, MonitorIQStatusTestErr, iq)
 
-	status, iq, msg = classifyIQOutcome(iqClassifyInput{
+	iq, msg = classifyIQOutcome(iqClassifyInput{
 		err:      &net.DNSError{Err: "no such host", Name: "gone.invalid", IsNotFound: true},
-		latency:  fast,
 		expected: "21",
 		fuzzy:    true,
 	})
-	require.Equal(t, MonitorStatusError, status)
 	require.Equal(t, MonitorIQStatusNetwork, iq)
 	require.Equal(t, "monitor-side DNS lookup failed", msg)
 
-	status, iq, _ = classifyIQOutcome(iqClassifyInput{
+	iq, _ = classifyIQOutcome(iqClassifyInput{
 		err:      errors.New("context deadline exceeded"),
-		latency:  fast,
 		expected: "21",
 		fuzzy:    true,
 	})
-	require.Equal(t, MonitorStatusFailed, status)
 	require.Equal(t, MonitorIQStatusTestErr, iq)
 }
 

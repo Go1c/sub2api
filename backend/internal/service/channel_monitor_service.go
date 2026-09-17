@@ -681,8 +681,10 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 		BodyOverrideMode: m.BodyOverrideMode,
 		BodyOverride:     m.BodyOverride,
 	}
+	var iqOpts *CheckOptions
 	if monitorCheckModeUsesIQ(m.CheckMode) {
-		applyIQCheckOptions(opts, m)
+		iqOpts = cloneCheckOptions(opts)
+		applyIQCheckOptions(iqOpts, m)
 	}
 
 	var eg errgroup.Group
@@ -690,7 +692,12 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 	for i, model := range models {
 		i, model := i, model
 		eg.Go(func() error {
-			r := runCheckForModel(ctx, m.Provider, m.Endpoint, m.APIKey, model, opts)
+			var r *CheckResult
+			if iqOpts != nil {
+				r = runIQModeCheckForModel(ctx, m.Provider, m.Endpoint, m.APIKey, model, opts, iqOpts)
+			} else {
+				r = runCheckForModel(ctx, m.Provider, m.Endpoint, m.APIKey, model, opts)
+			}
 			r.PingLatencyMs = pingMs
 			mu.Lock()
 			results[i] = r

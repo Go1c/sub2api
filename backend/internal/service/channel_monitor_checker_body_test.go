@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -68,21 +69,45 @@ func setupFakeMonitorProvider(t *testing.T, handler http.Handler) string {
 }
 
 type openAICaptureHandler struct {
+	mu                        sync.Mutex
+	bodies                    []map[string]any
 	lastBody                  map[string]any
 	lastHeaders               http.Header
 	lastPath                  string
 	status                    int
 	rawResponse               string
+	iqStatus                  int
+	iqRawResponse             string
 	responsesLeadingReasoning bool
 }
 
 func (h *openAICaptureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.lastHeaders = r.Header.Clone()
 	h.lastPath = r.URL.Path
 	defer func() { _ = r.Body.Close() }()
 	var parsed map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&parsed)
 	h.lastBody = parsed
+	h.bodies = append(h.bodies, parsed)
+
+	if isMonitorIQPrompt(openAIRequestPrompt(parsed)) {
+		status := h.iqStatus
+		if status == 0 {
+			status = http.StatusOK
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		if h.iqRawResponse != "" {
+			_, _ = w.Write([]byte(h.iqRawResponse))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": "21"}}},
+		})
+		return
+	}
 
 	if h.status == 0 {
 		h.status = http.StatusOK
@@ -129,16 +154,25 @@ func setupFakeOpenAI(t *testing.T, handler *openAICaptureHandler) string {
 	return srv.URL
 }
 
-func answerFromOpenAIRequest(body map[string]any) string {
+func openAIRequestPrompt(body map[string]any) string {
 	prompt, _ := body["input"].(string)
-	if prompt == "" {
-		if messages, ok := body["messages"].([]any); ok && len(messages) > 0 {
-			if msg, ok := messages[0].(map[string]any); ok {
-				prompt, _ = msg["content"].(string)
-			}
+	if prompt != "" {
+		return prompt
+	}
+	if messages, ok := body["messages"].([]any); ok && len(messages) > 0 {
+		if msg, ok := messages[0].(map[string]any); ok {
+			prompt, _ = msg["content"].(string)
 		}
 	}
-	return answerFromChallengePrompt(prompt)
+	return prompt
+}
+
+func isMonitorIQPrompt(prompt string) bool {
+	return strings.Contains(prompt, "苹果味") || strings.Contains(prompt, "西瓜味")
+}
+
+func answerFromOpenAIRequest(body map[string]any) string {
+	return answerFromChallengePrompt(openAIRequestPrompt(body))
 }
 
 var challengeQuestionRegex = regexp.MustCompile(`Q: (\d+) ([+-]) (\d+) = \?\nA:$`)

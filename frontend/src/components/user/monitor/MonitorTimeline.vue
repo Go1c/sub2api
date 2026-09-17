@@ -113,10 +113,7 @@ const displayBars = computed<Bar[]>(() => {
   }
 
   for (const point of real) {
-    let status = String(point.status || 'empty')
-    if (props.kind === 'server' && point.iq_status === 'monitor_network') {
-      status = 'monitor_network'
-    }
+    const status = String(point.status || 'empty')
     const colorClass = STATUS_COLOR[status] ?? STATUS_COLOR.empty
     const heightPct = STATUS_HEIGHT[status] ?? STATUS_HEIGHT.empty
     const latency = formatLatency(point.latency_ms)

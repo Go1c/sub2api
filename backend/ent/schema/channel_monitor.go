@@ -40,7 +40,7 @@ func (ChannelMonitor) Fields() []ent.Field {
 		//   probe       - LLM 探活（默认，原有行为）
 		//   quota       - 仅查关联账号的用量（零 LLM 成本；endpoint/api_key 可空）
 		//   quota_probe - 探活 + 配额并存（配额快照挂到主模型历史行）
-		//   iq          - 状态 + 智商（一次糖果题同时记下服务器状态与智商四态）
+		//   iq          - 状态 + 智商（算术探活记服务器，糖果题另打一枪记智商）
 		field.String("check_mode").
 			Default("probe").
 			MaxLen(32).
