@@ -80,6 +80,11 @@ func Message(v string) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldMessage, v))
 }
 
+// IqStatus applies equality check predicate on the "iq_status" field. It's identical to IqStatusEQ.
+func IqStatus(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldIqStatus, v))
+}
+
 // CheckedAt applies equality check predicate on the "checked_at" field. It's identical to CheckedAtEQ.
 func CheckedAt(v time.Time) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldCheckedAt, v))
@@ -373,6 +378,81 @@ func QuotaIsNil() predicate.ChannelMonitorHistory {
 // QuotaNotNil applies the NotNil predicate on the "quota" field.
 func QuotaNotNil() predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldQuota))
+}
+
+// IqStatusEQ applies the EQ predicate on the "iq_status" field.
+func IqStatusEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldIqStatus, v))
+}
+
+// IqStatusNEQ applies the NEQ predicate on the "iq_status" field.
+func IqStatusNEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldIqStatus, v))
+}
+
+// IqStatusIn applies the In predicate on the "iq_status" field.
+func IqStatusIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldIqStatus, vs...))
+}
+
+// IqStatusNotIn applies the NotIn predicate on the "iq_status" field.
+func IqStatusNotIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldIqStatus, vs...))
+}
+
+// IqStatusGT applies the GT predicate on the "iq_status" field.
+func IqStatusGT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldIqStatus, v))
+}
+
+// IqStatusGTE applies the GTE predicate on the "iq_status" field.
+func IqStatusGTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldIqStatus, v))
+}
+
+// IqStatusLT applies the LT predicate on the "iq_status" field.
+func IqStatusLT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldIqStatus, v))
+}
+
+// IqStatusLTE applies the LTE predicate on the "iq_status" field.
+func IqStatusLTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldIqStatus, v))
+}
+
+// IqStatusContains applies the Contains predicate on the "iq_status" field.
+func IqStatusContains(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContains(FieldIqStatus, v))
+}
+
+// IqStatusHasPrefix applies the HasPrefix predicate on the "iq_status" field.
+func IqStatusHasPrefix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasPrefix(FieldIqStatus, v))
+}
+
+// IqStatusHasSuffix applies the HasSuffix predicate on the "iq_status" field.
+func IqStatusHasSuffix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasSuffix(FieldIqStatus, v))
+}
+
+// IqStatusIsNil applies the IsNil predicate on the "iq_status" field.
+func IqStatusIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldIqStatus))
+}
+
+// IqStatusNotNil applies the NotNil predicate on the "iq_status" field.
+func IqStatusNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldIqStatus))
+}
+
+// IqStatusEqualFold applies the EqualFold predicate on the "iq_status" field.
+func IqStatusEqualFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEqualFold(FieldIqStatus, v))
+}
+
+// IqStatusContainsFold applies the ContainsFold predicate on the "iq_status" field.
+func IqStatusContainsFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContainsFold(FieldIqStatus, v))
 }
 
 // CheckedAtEQ applies the EQ predicate on the "checked_at" field.

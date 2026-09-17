@@ -1119,7 +1119,14 @@ export default {
     checkMode: {
       probe: 'Probe',
       quota: 'Quota',
-      quota_probe: 'Probe + Quota'
+      quota_probe: 'Probe + Quota',
+      iq: 'Status + IQ'
+    },
+    iqStatus: {
+      iq_ok: 'Not degraded',
+      iq_down: 'IQ down',
+      test_error: 'Test error',
+      monitor_network: 'Monitor network error'
     },
     quota: {
       unavailable: 'Quota unavailable',
@@ -1149,6 +1156,8 @@ export default {
     dialogLatency: 'Dialog Latency',
     endpointPing: 'Endpoint PING',
     history60pts: 'HISTORY ({n} PTS)',
+    timelineServer: 'SERVER · {n} PTS',
+    timelineIQ: 'IQ · {n} PTS',
     nextUpdateIn: 'NEXT UPDATE IN {n}s',
     past: 'PAST',
     now: 'NOW',
@@ -3156,6 +3165,7 @@ export default {
         status: 'Status',
         latency: 'Latency',
         pingLatency: 'Ping Latency',
+        iqStatus: 'IQ',
         message: 'Message'
       },
       apiKeyDecryptFailed: 'API Key decryption failed. Please re-edit this monitor with a fresh key.',
@@ -3187,6 +3197,12 @@ export default {
         checkModeQuotaHint: 'Only queries the linked account usage windows without probe requests',
         checkModeQuotaProbe: 'Probe + Quota',
         checkModeQuotaProbeHint: 'Probes the channel and attaches the quota snapshot to the primary model result',
+        checkModeIQ: 'Status + IQ',
+        checkModeIQHint: 'Sends the candy quiz once to record server health and IQ state together',
+        iqQuestion: 'Quiz question',
+        iqQuestionHint: 'Defaults to the Turn-State candy quiz; matching can be fuzzy',
+        iqAnswer: 'Expected answer',
+        iqFuzzyMatch: 'Fuzzy-match answer',
         linkedAccount: 'Linked Account',
         linkedAccountPlaceholder: 'Select an account',
         linkedAccountHint: 'Quota data comes from the selected account (reuses the account-side usage queries)',

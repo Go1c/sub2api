@@ -23,6 +23,13 @@
           >
             {{ statusLabel(r.status) }}
           </span>
+          <span
+            v-if="r.iq_status"
+            class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
+            :class="iqStatusBadgeClass(r.iq_status)"
+          >
+            {{ iqStatusLabel(r.iq_status) }}
+          </span>
           <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatLatency(r.latency_ms) }} ms</span>
         </div>
       </div>
@@ -54,5 +61,5 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { statusLabel, statusBadgeClass, formatLatency, formatMonitorModel } = useChannelMonitorFormat()
+const { statusLabel, statusBadgeClass, formatLatency, formatMonitorModel, iqStatusLabel, iqStatusBadgeClass } = useChannelMonitorFormat()
 </script>

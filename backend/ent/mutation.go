@@ -19100,6 +19100,9 @@ type ChannelMonitorMutation struct {
 	body_override_mode          *string
 	body_override               *map[string]interface{}
 	compatibility_probe_enabled *bool
+	iq_question                 *string
+	iq_answer                   *string
+	iq_fuzzy_match              *bool
 	clearedFields               map[string]struct{}
 	history                     map[int64]struct{}
 	removedhistory              map[int64]struct{}
@@ -20165,6 +20168,140 @@ func (m *ChannelMonitorMutation) ResetCompatibilityProbeEnabled() {
 	m.compatibility_probe_enabled = nil
 }
 
+// SetIqQuestion sets the "iq_question" field.
+func (m *ChannelMonitorMutation) SetIqQuestion(s string) {
+	m.iq_question = &s
+}
+
+// IqQuestion returns the value of the "iq_question" field in the mutation.
+func (m *ChannelMonitorMutation) IqQuestion() (r string, exists bool) {
+	v := m.iq_question
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIqQuestion returns the old "iq_question" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldIqQuestion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIqQuestion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIqQuestion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIqQuestion: %w", err)
+	}
+	return oldValue.IqQuestion, nil
+}
+
+// ClearIqQuestion clears the value of the "iq_question" field.
+func (m *ChannelMonitorMutation) ClearIqQuestion() {
+	m.iq_question = nil
+	m.clearedFields[channelmonitor.FieldIqQuestion] = struct{}{}
+}
+
+// IqQuestionCleared returns if the "iq_question" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) IqQuestionCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldIqQuestion]
+	return ok
+}
+
+// ResetIqQuestion resets all changes to the "iq_question" field.
+func (m *ChannelMonitorMutation) ResetIqQuestion() {
+	m.iq_question = nil
+	delete(m.clearedFields, channelmonitor.FieldIqQuestion)
+}
+
+// SetIqAnswer sets the "iq_answer" field.
+func (m *ChannelMonitorMutation) SetIqAnswer(s string) {
+	m.iq_answer = &s
+}
+
+// IqAnswer returns the value of the "iq_answer" field in the mutation.
+func (m *ChannelMonitorMutation) IqAnswer() (r string, exists bool) {
+	v := m.iq_answer
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIqAnswer returns the old "iq_answer" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldIqAnswer(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIqAnswer is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIqAnswer requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIqAnswer: %w", err)
+	}
+	return oldValue.IqAnswer, nil
+}
+
+// ClearIqAnswer clears the value of the "iq_answer" field.
+func (m *ChannelMonitorMutation) ClearIqAnswer() {
+	m.iq_answer = nil
+	m.clearedFields[channelmonitor.FieldIqAnswer] = struct{}{}
+}
+
+// IqAnswerCleared returns if the "iq_answer" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) IqAnswerCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldIqAnswer]
+	return ok
+}
+
+// ResetIqAnswer resets all changes to the "iq_answer" field.
+func (m *ChannelMonitorMutation) ResetIqAnswer() {
+	m.iq_answer = nil
+	delete(m.clearedFields, channelmonitor.FieldIqAnswer)
+}
+
+// SetIqFuzzyMatch sets the "iq_fuzzy_match" field.
+func (m *ChannelMonitorMutation) SetIqFuzzyMatch(b bool) {
+	m.iq_fuzzy_match = &b
+}
+
+// IqFuzzyMatch returns the value of the "iq_fuzzy_match" field in the mutation.
+func (m *ChannelMonitorMutation) IqFuzzyMatch() (r bool, exists bool) {
+	v := m.iq_fuzzy_match
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIqFuzzyMatch returns the old "iq_fuzzy_match" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldIqFuzzyMatch(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIqFuzzyMatch is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIqFuzzyMatch requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIqFuzzyMatch: %w", err)
+	}
+	return oldValue.IqFuzzyMatch, nil
+}
+
+// ResetIqFuzzyMatch resets all changes to the "iq_fuzzy_match" field.
+func (m *ChannelMonitorMutation) ResetIqFuzzyMatch() {
+	m.iq_fuzzy_match = nil
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by ids.
 func (m *ChannelMonitorMutation) AddHistoryIDs(ids ...int64) {
 	if m.history == nil {
@@ -20347,7 +20484,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -20414,6 +20551,15 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	if m.compatibility_probe_enabled != nil {
 		fields = append(fields, channelmonitor.FieldCompatibilityProbeEnabled)
 	}
+	if m.iq_question != nil {
+		fields = append(fields, channelmonitor.FieldIqQuestion)
+	}
+	if m.iq_answer != nil {
+		fields = append(fields, channelmonitor.FieldIqAnswer)
+	}
+	if m.iq_fuzzy_match != nil {
+		fields = append(fields, channelmonitor.FieldIqFuzzyMatch)
+	}
 	return fields
 }
 
@@ -20466,6 +20612,12 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.BodyOverride()
 	case channelmonitor.FieldCompatibilityProbeEnabled:
 		return m.CompatibilityProbeEnabled()
+	case channelmonitor.FieldIqQuestion:
+		return m.IqQuestion()
+	case channelmonitor.FieldIqAnswer:
+		return m.IqAnswer()
+	case channelmonitor.FieldIqFuzzyMatch:
+		return m.IqFuzzyMatch()
 	}
 	return nil, false
 }
@@ -20519,6 +20671,12 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldBodyOverride(ctx)
 	case channelmonitor.FieldCompatibilityProbeEnabled:
 		return m.OldCompatibilityProbeEnabled(ctx)
+	case channelmonitor.FieldIqQuestion:
+		return m.OldIqQuestion(ctx)
+	case channelmonitor.FieldIqAnswer:
+		return m.OldIqAnswer(ctx)
+	case channelmonitor.FieldIqFuzzyMatch:
+		return m.OldIqFuzzyMatch(ctx)
 	}
 	return nil, fmt.Errorf("unknown ChannelMonitor field %s", name)
 }
@@ -20682,6 +20840,27 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCompatibilityProbeEnabled(v)
 		return nil
+	case channelmonitor.FieldIqQuestion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIqQuestion(v)
+		return nil
+	case channelmonitor.FieldIqAnswer:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIqAnswer(v)
+		return nil
+	case channelmonitor.FieldIqFuzzyMatch:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIqFuzzyMatch(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitor field %s", name)
 }
@@ -20778,6 +20957,12 @@ func (m *ChannelMonitorMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitor.FieldBodyOverride) {
 		fields = append(fields, channelmonitor.FieldBodyOverride)
 	}
+	if m.FieldCleared(channelmonitor.FieldIqQuestion) {
+		fields = append(fields, channelmonitor.FieldIqQuestion)
+	}
+	if m.FieldCleared(channelmonitor.FieldIqAnswer) {
+		fields = append(fields, channelmonitor.FieldIqAnswer)
+	}
 	return fields
 }
 
@@ -20806,6 +20991,12 @@ func (m *ChannelMonitorMutation) ClearField(name string) error {
 		return nil
 	case channelmonitor.FieldBodyOverride:
 		m.ClearBodyOverride()
+		return nil
+	case channelmonitor.FieldIqQuestion:
+		m.ClearIqQuestion()
+		return nil
+	case channelmonitor.FieldIqAnswer:
+		m.ClearIqAnswer()
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitor nullable field %s", name)
@@ -20880,6 +21071,15 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldCompatibilityProbeEnabled:
 		m.ResetCompatibilityProbeEnabled()
+		return nil
+	case channelmonitor.FieldIqQuestion:
+		m.ResetIqQuestion()
+		return nil
+	case channelmonitor.FieldIqAnswer:
+		m.ResetIqAnswer()
+		return nil
+	case channelmonitor.FieldIqFuzzyMatch:
+		m.ResetIqFuzzyMatch()
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitor field %s", name)
@@ -22442,6 +22642,7 @@ type ChannelMonitorHistoryMutation struct {
 	addping_latency_ms *int
 	message            *string
 	quota              **domain.MonitorQuotaSnapshot
+	iq_status          *string
 	checked_at         *time.Time
 	clearedFields      map[string]struct{}
 	monitor            *int64
@@ -22895,6 +23096,55 @@ func (m *ChannelMonitorHistoryMutation) ResetQuota() {
 	delete(m.clearedFields, channelmonitorhistory.FieldQuota)
 }
 
+// SetIqStatus sets the "iq_status" field.
+func (m *ChannelMonitorHistoryMutation) SetIqStatus(s string) {
+	m.iq_status = &s
+}
+
+// IqStatus returns the value of the "iq_status" field in the mutation.
+func (m *ChannelMonitorHistoryMutation) IqStatus() (r string, exists bool) {
+	v := m.iq_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIqStatus returns the old "iq_status" field's value of the ChannelMonitorHistory entity.
+// If the ChannelMonitorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorHistoryMutation) OldIqStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIqStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIqStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIqStatus: %w", err)
+	}
+	return oldValue.IqStatus, nil
+}
+
+// ClearIqStatus clears the value of the "iq_status" field.
+func (m *ChannelMonitorHistoryMutation) ClearIqStatus() {
+	m.iq_status = nil
+	m.clearedFields[channelmonitorhistory.FieldIqStatus] = struct{}{}
+}
+
+// IqStatusCleared returns if the "iq_status" field was cleared in this mutation.
+func (m *ChannelMonitorHistoryMutation) IqStatusCleared() bool {
+	_, ok := m.clearedFields[channelmonitorhistory.FieldIqStatus]
+	return ok
+}
+
+// ResetIqStatus resets all changes to the "iq_status" field.
+func (m *ChannelMonitorHistoryMutation) ResetIqStatus() {
+	m.iq_status = nil
+	delete(m.clearedFields, channelmonitorhistory.FieldIqStatus)
+}
+
 // SetCheckedAt sets the "checked_at" field.
 func (m *ChannelMonitorHistoryMutation) SetCheckedAt(t time.Time) {
 	m.checked_at = &t
@@ -22992,7 +23242,7 @@ func (m *ChannelMonitorHistoryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorHistoryMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.monitor != nil {
 		fields = append(fields, channelmonitorhistory.FieldMonitorID)
 	}
@@ -23013,6 +23263,9 @@ func (m *ChannelMonitorHistoryMutation) Fields() []string {
 	}
 	if m.quota != nil {
 		fields = append(fields, channelmonitorhistory.FieldQuota)
+	}
+	if m.iq_status != nil {
+		fields = append(fields, channelmonitorhistory.FieldIqStatus)
 	}
 	if m.checked_at != nil {
 		fields = append(fields, channelmonitorhistory.FieldCheckedAt)
@@ -23039,6 +23292,8 @@ func (m *ChannelMonitorHistoryMutation) Field(name string) (ent.Value, bool) {
 		return m.Message()
 	case channelmonitorhistory.FieldQuota:
 		return m.Quota()
+	case channelmonitorhistory.FieldIqStatus:
+		return m.IqStatus()
 	case channelmonitorhistory.FieldCheckedAt:
 		return m.CheckedAt()
 	}
@@ -23064,6 +23319,8 @@ func (m *ChannelMonitorHistoryMutation) OldField(ctx context.Context, name strin
 		return m.OldMessage(ctx)
 	case channelmonitorhistory.FieldQuota:
 		return m.OldQuota(ctx)
+	case channelmonitorhistory.FieldIqStatus:
+		return m.OldIqStatus(ctx)
 	case channelmonitorhistory.FieldCheckedAt:
 		return m.OldCheckedAt(ctx)
 	}
@@ -23123,6 +23380,13 @@ func (m *ChannelMonitorHistoryMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetQuota(v)
+		return nil
+	case channelmonitorhistory.FieldIqStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIqStatus(v)
 		return nil
 	case channelmonitorhistory.FieldCheckedAt:
 		v, ok := value.(time.Time)
@@ -23200,6 +23464,9 @@ func (m *ChannelMonitorHistoryMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitorhistory.FieldQuota) {
 		fields = append(fields, channelmonitorhistory.FieldQuota)
 	}
+	if m.FieldCleared(channelmonitorhistory.FieldIqStatus) {
+		fields = append(fields, channelmonitorhistory.FieldIqStatus)
+	}
 	return fields
 }
 
@@ -23225,6 +23492,9 @@ func (m *ChannelMonitorHistoryMutation) ClearField(name string) error {
 		return nil
 	case channelmonitorhistory.FieldQuota:
 		m.ClearQuota()
+		return nil
+	case channelmonitorhistory.FieldIqStatus:
+		m.ClearIqStatus()
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitorHistory nullable field %s", name)
@@ -23254,6 +23524,9 @@ func (m *ChannelMonitorHistoryMutation) ResetField(name string) error {
 		return nil
 	case channelmonitorhistory.FieldQuota:
 		m.ResetQuota()
+		return nil
+	case channelmonitorhistory.FieldIqStatus:
+		m.ResetIqStatus()
 		return nil
 	case channelmonitorhistory.FieldCheckedAt:
 		m.ResetCheckedAt()

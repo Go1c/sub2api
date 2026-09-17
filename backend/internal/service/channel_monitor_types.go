@@ -51,8 +51,13 @@ type ChannelMonitor struct {
 
 	// 配额模式（check_mode = quota / quota_probe）：
 	// 关联已有账号复用账号侧用量服务，Endpoint/APIKey 可为空（quota 模式）。
-	CheckMode string // probe（默认）/ quota / quota_probe；空串按 probe 处理
+	CheckMode string // probe（默认）/ quota / quota_probe / iq；空串按 probe 处理
 	AccountID *int64 // 关联账号 ID；账号删除后被 DB 置空（监控保留并报「账号未关联」）
+
+	// 智商模式（check_mode = iq）题目快照；空串在 applyIQDefaults 填 kin 默认糖果题。
+	IQQuestion   string
+	IQAnswer     string
+	IQFuzzyMatch bool
 
 	// 请求自定义快照（来自模板拷贝 or 用户手填，运行时直接读取）
 	TemplateID       *int64            // 仅用于 UI 分组 + 一键应用，运行时不用
@@ -106,6 +111,10 @@ type ChannelMonitorCreateParams struct {
 	// 配额模式：CheckMode 空串默认 probe；quota/quota_probe 必须关联账号。
 	CheckMode string
 	AccountID *int64
+
+	IQQuestion   string
+	IQAnswer     string
+	IQFuzzyMatch *bool // nil = iq 模式默认 true
 }
 
 // ChannelMonitorUpdateParams 更新参数（指针字段表示"未提供则不更新"）。
@@ -135,12 +144,17 @@ type ChannelMonitorUpdateParams struct {
 	// 指向 0 = 清空关联（退回 probe 模式时由 CheckMode 分支兜底）。
 	CheckMode *string
 	AccountID *int64
+
+	IQQuestion   *string
+	IQAnswer     *string
+	IQFuzzyMatch *bool
 }
 
 // CheckResult 单个模型一次检测的结果。
 type CheckResult struct {
 	Model         string
 	Status        string // operational / degraded / failed / error
+	IqStatus      string // iq_ok / iq_down / test_error / monitor_network；非 iq 为空
 	LatencyMs     *int
 	PingLatencyMs *int
 	Message       string
@@ -162,6 +176,8 @@ type UserMonitorView struct {
 	Availability7d       float64 // 0-100
 	ExtraModels          []ExtraModelStatus
 	Timeline             []UserMonitorTimelinePoint // 主模型最近 N 个历史点（按 checked_at DESC，最新在前）
+	IQTimeline           []UserMonitorTimelinePoint // check_mode=iq 时智商棒；status 为 iq 四态
+	CheckMode            string
 	// LatestQuota 主模型最近一次配额快照；channel_monitor_show_quota=false
 	// 时由 handler 服务端剥离。
 	LatestQuota *domain.MonitorQuotaSnapshot
@@ -170,6 +186,7 @@ type UserMonitorView struct {
 // UserMonitorTimelinePoint 用户视图 timeline 单点数据（去除 message 以减小响应体）。
 type UserMonitorTimelinePoint struct {
 	Status        string    `json:"status"`
+	IqStatus      string    `json:"iq_status,omitempty"`
 	LatencyMs     *int      `json:"latency_ms"`
 	PingLatencyMs *int      `json:"ping_latency_ms"`
 	CheckedAt     time.Time `json:"checked_at"`
@@ -207,6 +224,7 @@ type ChannelMonitorHistoryRow struct {
 	MonitorID     int64
 	Model         string
 	Status        string
+	IqStatus      string
 	LatencyMs     *int
 	PingLatencyMs *int
 	Message       string
@@ -219,6 +237,7 @@ type ChannelMonitorHistoryEntry struct {
 	ID            int64
 	Model         string
 	Status        string
+	IqStatus      string
 	LatencyMs     *int
 	PingLatencyMs *int
 	Message       string

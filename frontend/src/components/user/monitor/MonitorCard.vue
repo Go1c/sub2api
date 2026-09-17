@@ -70,6 +70,17 @@
     <MonitorTimeline
       :buckets="item.timeline"
       :countdown-seconds="countdownSeconds"
+      kind="server"
+      :label="isIQ ? t('monitorCommon.timelineServer', { n: 60 }) : undefined"
+    />
+    <MonitorTimeline
+      v-if="isIQ"
+      :buckets="item.iq_timeline"
+      :countdown-seconds="countdownSeconds"
+      kind="iq"
+      :show-countdown="false"
+      embedded
+      :label="t('monitorCommon.timelineIQ', { n: 60 })"
     />
   </button>
 </template>
@@ -135,4 +146,6 @@ const extraModelsCountLabel = computed(() => {
   if (count === 0) return undefined
   return t('monitorCommon.extraModelsCount', { n: count })
 })
+
+const isIQ = computed(() => props.item.check_mode === 'iq')
 </script>

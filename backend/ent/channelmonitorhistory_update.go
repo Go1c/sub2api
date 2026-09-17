@@ -158,6 +158,26 @@ func (_u *ChannelMonitorHistoryUpdate) ClearQuota() *ChannelMonitorHistoryUpdate
 	return _u
 }
 
+// SetIqStatus sets the "iq_status" field.
+func (_u *ChannelMonitorHistoryUpdate) SetIqStatus(v string) *ChannelMonitorHistoryUpdate {
+	_u.mutation.SetIqStatus(v)
+	return _u
+}
+
+// SetNillableIqStatus sets the "iq_status" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableIqStatus(v *string) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetIqStatus(*v)
+	}
+	return _u
+}
+
+// ClearIqStatus clears the value of the "iq_status" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearIqStatus() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearIqStatus()
+	return _u
+}
+
 // SetCheckedAt sets the "checked_at" field.
 func (_u *ChannelMonitorHistoryUpdate) SetCheckedAt(v time.Time) *ChannelMonitorHistoryUpdate {
 	_u.mutation.SetCheckedAt(v)
@@ -232,6 +252,11 @@ func (_u *ChannelMonitorHistoryUpdate) check() error {
 			return &ValidationError{Name: "message", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.message": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.IqStatus(); ok {
+		if err := channelmonitorhistory.IqStatusValidator(v); err != nil {
+			return &ValidationError{Name: "iq_status", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.iq_status": %w`, err)}
+		}
+	}
 	if _u.mutation.MonitorCleared() && len(_u.mutation.MonitorIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "ChannelMonitorHistory.monitor"`)
 	}
@@ -285,6 +310,12 @@ func (_u *ChannelMonitorHistoryUpdate) sqlSave(ctx context.Context) (_node int, 
 	}
 	if _u.mutation.QuotaCleared() {
 		_spec.ClearField(channelmonitorhistory.FieldQuota, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.IqStatus(); ok {
+		_spec.SetField(channelmonitorhistory.FieldIqStatus, field.TypeString, value)
+	}
+	if _u.mutation.IqStatusCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldIqStatus, field.TypeString)
 	}
 	if value, ok := _u.mutation.CheckedAt(); ok {
 		_spec.SetField(channelmonitorhistory.FieldCheckedAt, field.TypeTime, value)
@@ -466,6 +497,26 @@ func (_u *ChannelMonitorHistoryUpdateOne) ClearQuota() *ChannelMonitorHistoryUpd
 	return _u
 }
 
+// SetIqStatus sets the "iq_status" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetIqStatus(v string) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.SetIqStatus(v)
+	return _u
+}
+
+// SetNillableIqStatus sets the "iq_status" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableIqStatus(v *string) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetIqStatus(*v)
+	}
+	return _u
+}
+
+// ClearIqStatus clears the value of the "iq_status" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearIqStatus() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearIqStatus()
+	return _u
+}
+
 // SetCheckedAt sets the "checked_at" field.
 func (_u *ChannelMonitorHistoryUpdateOne) SetCheckedAt(v time.Time) *ChannelMonitorHistoryUpdateOne {
 	_u.mutation.SetCheckedAt(v)
@@ -553,6 +604,11 @@ func (_u *ChannelMonitorHistoryUpdateOne) check() error {
 			return &ValidationError{Name: "message", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.message": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.IqStatus(); ok {
+		if err := channelmonitorhistory.IqStatusValidator(v); err != nil {
+			return &ValidationError{Name: "iq_status", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.iq_status": %w`, err)}
+		}
+	}
 	if _u.mutation.MonitorCleared() && len(_u.mutation.MonitorIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "ChannelMonitorHistory.monitor"`)
 	}
@@ -623,6 +679,12 @@ func (_u *ChannelMonitorHistoryUpdateOne) sqlSave(ctx context.Context) (_node *C
 	}
 	if _u.mutation.QuotaCleared() {
 		_spec.ClearField(channelmonitorhistory.FieldQuota, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.IqStatus(); ok {
+		_spec.SetField(channelmonitorhistory.FieldIqStatus, field.TypeString, value)
+	}
+	if _u.mutation.IqStatusCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldIqStatus, field.TypeString)
 	}
 	if value, ok := _u.mutation.CheckedAt(); ok {
 		_spec.SetField(channelmonitorhistory.FieldCheckedAt, field.TypeTime, value)

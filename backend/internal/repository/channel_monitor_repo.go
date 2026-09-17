@@ -55,7 +55,10 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetExtraHeaders(channelMonitorHeadersForPersistence(m)).
 		SetBodyOverrideMode(defaultBodyModeRepo(m.BodyOverrideMode)).
 		SetCompatibilityProbeEnabled(m.CompatibilityProbeEnabled).
-		SetCheckMode(defaultCheckModeRepo(m.CheckMode))
+		SetCheckMode(defaultCheckModeRepo(m.CheckMode)).
+		SetIqQuestion(m.IQQuestion).
+		SetIqAnswer(m.IQAnswer).
+		SetIqFuzzyMatch(m.IQFuzzyMatch)
 	if m.TemplateID != nil {
 		builder = builder.SetTemplateID(*m.TemplateID)
 	}
@@ -127,7 +130,10 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		SetExtraHeaders(channelMonitorHeadersForPersistence(m)).
 		SetBodyOverrideMode(defaultBodyModeRepo(m.BodyOverrideMode)).
 		SetCompatibilityProbeEnabled(m.CompatibilityProbeEnabled).
-		SetCheckMode(defaultCheckModeRepo(m.CheckMode))
+		SetCheckMode(defaultCheckModeRepo(m.CheckMode)).
+		SetIqQuestion(m.IQQuestion).
+		SetIqAnswer(m.IQAnswer).
+		SetIqFuzzyMatch(m.IQFuzzyMatch)
 	if m.TemplateID != nil {
 		updater = updater.SetTemplateID(*m.TemplateID)
 	} else {
@@ -243,6 +249,7 @@ func (r *channelMonitorRepository) InsertHistoryBatch(ctx context.Context, rows 
 			SetMonitorID(row.MonitorID).
 			SetModel(row.Model).
 			SetStatus(channelmonitorhistory.Status(row.Status)).
+			SetIqStatus(row.IqStatus).
 			SetMessage(row.Message).
 			SetCheckedAt(row.CheckedAt)
 		if row.LatencyMs != nil {
@@ -289,6 +296,7 @@ func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID in
 			ID:            row.ID,
 			Model:         row.Model,
 			Status:        string(row.Status),
+			IqStatus:      row.IqStatus,
 			LatencyMs:     row.LatencyMs,
 			PingLatencyMs: row.PingLatencyMs,
 			Message:       row.Message,
@@ -486,6 +494,7 @@ func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 		ranked AS (
 		    SELECT h.monitor_id,
 		           h.status,
+		           h.iq_status,
 		           h.latency_ms,
 		           h.ping_latency_ms,
 		           h.checked_at,
@@ -494,7 +503,7 @@ func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 		    JOIN targets t
 		      ON t.monitor_id = h.monitor_id AND t.model = h.model
 		)
-		SELECT monitor_id, status, latency_ms, ping_latency_ms, checked_at
+		SELECT monitor_id, status, iq_status, latency_ms, ping_latency_ms, checked_at
 		FROM ranked
 		WHERE rn <= $3
 		ORDER BY monitor_id, checked_at DESC
@@ -509,7 +518,7 @@ func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 		var monitorID int64
 		entry := &service.ChannelMonitorHistoryEntry{}
 		var latency, ping sql.NullInt64
-		if err := rows.Scan(&monitorID, &entry.Status, &latency, &ping, &entry.CheckedAt); err != nil {
+		if err := rows.Scan(&monitorID, &entry.Status, &entry.IqStatus, &latency, &ping, &entry.CheckedAt); err != nil {
 			return nil, fmt.Errorf("scan recent history row: %w", err)
 		}
 		assignNullInt(&entry.LatencyMs, latency)
@@ -793,6 +802,9 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		BodyOverride:              row.BodyOverride,
 		CompatibilityProbeEnabled: row.CompatibilityProbeEnabled,
 		CheckMode:                 defaultCheckModeRepo(row.CheckMode),
+		IQQuestion:                row.IqQuestion,
+		IQAnswer:                  row.IqAnswer,
+		IQFuzzyMatch:              row.IqFuzzyMatch,
 		DuplicateOperationID:      duplicateOperationID,
 	}
 	if row.TemplateID != nil {

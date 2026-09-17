@@ -113,6 +113,7 @@ describe('ChannelMonitorView check-mode badge', () => {
     ['quota', 'monitorCommon.checkMode.quota'],
     ['quota_probe', 'monitorCommon.checkMode.quota_probe'],
     ['probe', 'monitorCommon.checkMode.probe'],
+    ['iq', 'monitorCommon.checkMode.iq'],
   ] as const)('renders the %s badge next to the provider badge', async (mode, label) => {
     listMonitors.mockResolvedValue({
       items: [makeMonitor({ check_mode: mode })],
@@ -134,6 +135,10 @@ describe('ChannelMonitorView check-mode badge', () => {
     const cls = modeBadge!.attributes('class')
     if (mode === 'probe') {
       expect(cls).toContain('bg-gray-100')
+      expect(cls).not.toContain('bg-blue-100')
+      expect(cls).not.toContain('bg-violet-100')
+    } else if (mode === 'iq') {
+      expect(cls).toContain('bg-violet-100')
       expect(cls).not.toContain('bg-blue-100')
     } else {
       expect(cls).toContain('bg-blue-100')

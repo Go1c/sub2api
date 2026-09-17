@@ -29,6 +29,8 @@ const (
 	FieldMessage = "message"
 	// FieldQuota holds the string denoting the quota field in the database.
 	FieldQuota = "quota"
+	// FieldIqStatus holds the string denoting the iq_status field in the database.
+	FieldIqStatus = "iq_status"
 	// FieldCheckedAt holds the string denoting the checked_at field in the database.
 	FieldCheckedAt = "checked_at"
 	// EdgeMonitor holds the string denoting the monitor edge name in mutations.
@@ -54,6 +56,7 @@ var Columns = []string{
 	FieldPingLatencyMs,
 	FieldMessage,
 	FieldQuota,
+	FieldIqStatus,
 	FieldCheckedAt,
 }
 
@@ -74,6 +77,10 @@ var (
 	DefaultMessage string
 	// MessageValidator is a validator for the "message" field. It is called by the builders before save.
 	MessageValidator func(string) error
+	// DefaultIqStatus holds the default value on creation for the "iq_status" field.
+	DefaultIqStatus string
+	// IqStatusValidator is a validator for the "iq_status" field. It is called by the builders before save.
+	IqStatusValidator func(string) error
 	// DefaultCheckedAt holds the default value on creation for the "checked_at" field.
 	DefaultCheckedAt func() time.Time
 )
@@ -139,6 +146,11 @@ func ByPingLatencyMs(opts ...sql.OrderTermOption) OrderOption {
 // ByMessage orders the results by the message field.
 func ByMessage(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMessage, opts...).ToFunc()
+}
+
+// ByIqStatus orders the results by the iq_status field.
+func ByIqStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIqStatus, opts...).ToFunc()
 }
 
 // ByCheckedAt orders the results by the checked_at field.

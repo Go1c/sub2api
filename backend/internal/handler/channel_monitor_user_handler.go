@@ -62,6 +62,8 @@ type channelMonitorUserListItem struct {
 	Availability7d       float64                              `json:"availability_7d"`
 	ExtraModels          []dto.ChannelMonitorExtraModelStatus `json:"extra_models"`
 	Timeline             []channelMonitorUserTimelinePoint    `json:"timeline"`
+	IQTimeline           []channelMonitorUserTimelinePoint    `json:"iq_timeline,omitempty"`
+	CheckMode            string                               `json:"check_mode"`
 	// LatestQuota 主模型最近配额快照；channel_monitor_show_quota=false 时
 	// 由 userMonitorViewToItem 的调用方传入 false 剥离（服务端脱敏，非仅前端隐藏）。
 	LatestQuota *domain.MonitorQuotaSnapshot `json:"latest_quota,omitempty"`
@@ -71,6 +73,7 @@ type channelMonitorUserListItem struct {
 // 仅用于用户视图 list 响应，admin 视图不使用。
 type channelMonitorUserTimelinePoint struct {
 	Status        string `json:"status"`
+	IqStatus      string `json:"iq_status,omitempty"`
 	LatencyMs     *int   `json:"latency_ms"`
 	PingLatencyMs *int   `json:"ping_latency_ms"`
 	CheckedAt     string `json:"checked_at"`
@@ -107,6 +110,17 @@ func userMonitorViewToItem(v *service.UserMonitorView, includeQuota bool) channe
 	for _, p := range v.Timeline {
 		timeline = append(timeline, channelMonitorUserTimelinePoint{
 			Status:        p.Status,
+			IqStatus:      p.IqStatus,
+			LatencyMs:     p.LatencyMs,
+			PingLatencyMs: p.PingLatencyMs,
+			CheckedAt:     p.CheckedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	iqTimeline := make([]channelMonitorUserTimelinePoint, 0, len(v.IQTimeline))
+	for _, p := range v.IQTimeline {
+		iqTimeline = append(iqTimeline, channelMonitorUserTimelinePoint{
+			Status:        p.Status,
+			IqStatus:      p.IqStatus,
 			LatencyMs:     p.LatencyMs,
 			PingLatencyMs: p.PingLatencyMs,
 			CheckedAt:     p.CheckedAt.UTC().Format(time.RFC3339),
@@ -124,6 +138,8 @@ func userMonitorViewToItem(v *service.UserMonitorView, includeQuota bool) channe
 		Availability7d:       v.Availability7d,
 		ExtraModels:          extras,
 		Timeline:             timeline,
+		IQTimeline:           iqTimeline,
+		CheckMode:            v.CheckMode,
 	}
 	if includeQuota {
 		item.LatestQuota = v.LatestQuota

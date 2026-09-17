@@ -25,6 +25,7 @@ import {
   CHECK_MODE_PROBE,
   CHECK_MODE_QUOTA,
   CHECK_MODE_QUOTA_PROBE,
+  CHECK_MODE_IQ,
 } from '@/constants/channelMonitor'
 
 const NEUTRAL_BADGE = 'bg-gray-100 text-gray-800 dark:bg-dark-700 dark:text-gray-300'
@@ -69,7 +70,7 @@ export function useChannelMonitorFormat() {
   }
 
   function checkModeLabel(m: CheckMode | string): string {
-    if (m === 'probe' || m === 'quota' || m === 'quota_probe') {
+    if (m === 'probe' || m === 'quota' || m === 'quota_probe' || m === 'iq') {
       return t(`monitorCommon.checkMode.${m}`)
     }
     return m || '-'
@@ -115,7 +116,30 @@ export function useChannelMonitorFormat() {
       case CHECK_MODE_QUOTA:
       case CHECK_MODE_QUOTA_PROBE:
         return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+      case CHECK_MODE_IQ:
+        return 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
       case CHECK_MODE_PROBE:
+      default:
+        return NEUTRAL_BADGE
+    }
+  }
+
+  function iqStatusLabel(s: string): string {
+    if (s === 'iq_ok' || s === 'iq_down' || s === 'test_error' || s === 'monitor_network') {
+      return t(`monitorCommon.iqStatus.${s}`)
+    }
+    return statusLabel(s as MonitorStatus | '')
+  }
+
+  function iqStatusBadgeClass(s: string): string {
+    switch (s) {
+      case 'iq_ok':
+        return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+      case 'iq_down':
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+      case 'test_error':
+        return 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+      case 'monitor_network':
       default:
         return NEUTRAL_BADGE
     }
@@ -188,6 +212,8 @@ export function useChannelMonitorFormat() {
     formatMonitorModel,
     providerBadgeClass,
     checkModeBadgeClass,
+    iqStatusLabel,
+    iqStatusBadgeClass,
     providerPickerClass,
     formatLatency,
     formatPercent,

@@ -358,6 +358,60 @@ func (_u *ChannelMonitorUpdate) SetNillableCompatibilityProbeEnabled(v *bool) *C
 	return _u
 }
 
+// SetIqQuestion sets the "iq_question" field.
+func (_u *ChannelMonitorUpdate) SetIqQuestion(v string) *ChannelMonitorUpdate {
+	_u.mutation.SetIqQuestion(v)
+	return _u
+}
+
+// SetNillableIqQuestion sets the "iq_question" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableIqQuestion(v *string) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetIqQuestion(*v)
+	}
+	return _u
+}
+
+// ClearIqQuestion clears the value of the "iq_question" field.
+func (_u *ChannelMonitorUpdate) ClearIqQuestion() *ChannelMonitorUpdate {
+	_u.mutation.ClearIqQuestion()
+	return _u
+}
+
+// SetIqAnswer sets the "iq_answer" field.
+func (_u *ChannelMonitorUpdate) SetIqAnswer(v string) *ChannelMonitorUpdate {
+	_u.mutation.SetIqAnswer(v)
+	return _u
+}
+
+// SetNillableIqAnswer sets the "iq_answer" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableIqAnswer(v *string) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetIqAnswer(*v)
+	}
+	return _u
+}
+
+// ClearIqAnswer clears the value of the "iq_answer" field.
+func (_u *ChannelMonitorUpdate) ClearIqAnswer() *ChannelMonitorUpdate {
+	_u.mutation.ClearIqAnswer()
+	return _u
+}
+
+// SetIqFuzzyMatch sets the "iq_fuzzy_match" field.
+func (_u *ChannelMonitorUpdate) SetIqFuzzyMatch(v bool) *ChannelMonitorUpdate {
+	_u.mutation.SetIqFuzzyMatch(v)
+	return _u
+}
+
+// SetNillableIqFuzzyMatch sets the "iq_fuzzy_match" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableIqFuzzyMatch(v *bool) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetIqFuzzyMatch(*v)
+	}
+	return _u
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by IDs.
 func (_u *ChannelMonitorUpdate) AddHistoryIDs(ids ...int64) *ChannelMonitorUpdate {
 	_u.mutation.AddHistoryIDs(ids...)
@@ -553,6 +607,11 @@ func (_u *ChannelMonitorUpdate) check() error {
 			return &ValidationError{Name: "body_override_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.body_override_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.IqAnswer(); ok {
+		if err := channelmonitor.IqAnswerValidator(v); err != nil {
+			return &ValidationError{Name: "iq_answer", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.iq_answer": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -656,6 +715,21 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.CompatibilityProbeEnabled(); ok {
 		_spec.SetField(channelmonitor.FieldCompatibilityProbeEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IqQuestion(); ok {
+		_spec.SetField(channelmonitor.FieldIqQuestion, field.TypeString, value)
+	}
+	if _u.mutation.IqQuestionCleared() {
+		_spec.ClearField(channelmonitor.FieldIqQuestion, field.TypeString)
+	}
+	if value, ok := _u.mutation.IqAnswer(); ok {
+		_spec.SetField(channelmonitor.FieldIqAnswer, field.TypeString, value)
+	}
+	if _u.mutation.IqAnswerCleared() {
+		_spec.ClearField(channelmonitor.FieldIqAnswer, field.TypeString)
+	}
+	if value, ok := _u.mutation.IqFuzzyMatch(); ok {
+		_spec.SetField(channelmonitor.FieldIqFuzzyMatch, field.TypeBool, value)
 	}
 	if _u.mutation.HistoryCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1122,6 +1196,60 @@ func (_u *ChannelMonitorUpdateOne) SetNillableCompatibilityProbeEnabled(v *bool)
 	return _u
 }
 
+// SetIqQuestion sets the "iq_question" field.
+func (_u *ChannelMonitorUpdateOne) SetIqQuestion(v string) *ChannelMonitorUpdateOne {
+	_u.mutation.SetIqQuestion(v)
+	return _u
+}
+
+// SetNillableIqQuestion sets the "iq_question" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableIqQuestion(v *string) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetIqQuestion(*v)
+	}
+	return _u
+}
+
+// ClearIqQuestion clears the value of the "iq_question" field.
+func (_u *ChannelMonitorUpdateOne) ClearIqQuestion() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearIqQuestion()
+	return _u
+}
+
+// SetIqAnswer sets the "iq_answer" field.
+func (_u *ChannelMonitorUpdateOne) SetIqAnswer(v string) *ChannelMonitorUpdateOne {
+	_u.mutation.SetIqAnswer(v)
+	return _u
+}
+
+// SetNillableIqAnswer sets the "iq_answer" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableIqAnswer(v *string) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetIqAnswer(*v)
+	}
+	return _u
+}
+
+// ClearIqAnswer clears the value of the "iq_answer" field.
+func (_u *ChannelMonitorUpdateOne) ClearIqAnswer() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearIqAnswer()
+	return _u
+}
+
+// SetIqFuzzyMatch sets the "iq_fuzzy_match" field.
+func (_u *ChannelMonitorUpdateOne) SetIqFuzzyMatch(v bool) *ChannelMonitorUpdateOne {
+	_u.mutation.SetIqFuzzyMatch(v)
+	return _u
+}
+
+// SetNillableIqFuzzyMatch sets the "iq_fuzzy_match" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableIqFuzzyMatch(v *bool) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetIqFuzzyMatch(*v)
+	}
+	return _u
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by IDs.
 func (_u *ChannelMonitorUpdateOne) AddHistoryIDs(ids ...int64) *ChannelMonitorUpdateOne {
 	_u.mutation.AddHistoryIDs(ids...)
@@ -1330,6 +1458,11 @@ func (_u *ChannelMonitorUpdateOne) check() error {
 			return &ValidationError{Name: "body_override_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.body_override_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.IqAnswer(); ok {
+		if err := channelmonitor.IqAnswerValidator(v); err != nil {
+			return &ValidationError{Name: "iq_answer", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.iq_answer": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1450,6 +1583,21 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 	}
 	if value, ok := _u.mutation.CompatibilityProbeEnabled(); ok {
 		_spec.SetField(channelmonitor.FieldCompatibilityProbeEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IqQuestion(); ok {
+		_spec.SetField(channelmonitor.FieldIqQuestion, field.TypeString, value)
+	}
+	if _u.mutation.IqQuestionCleared() {
+		_spec.ClearField(channelmonitor.FieldIqQuestion, field.TypeString)
+	}
+	if value, ok := _u.mutation.IqAnswer(); ok {
+		_spec.SetField(channelmonitor.FieldIqAnswer, field.TypeString, value)
+	}
+	if _u.mutation.IqAnswerCleared() {
+		_spec.ClearField(channelmonitor.FieldIqAnswer, field.TypeString)
+	}
+	if value, ok := _u.mutation.IqFuzzyMatch(); ok {
+		_spec.SetField(channelmonitor.FieldIqFuzzyMatch, field.TypeBool, value)
 	}
 	if _u.mutation.HistoryCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -884,6 +884,20 @@ func init() {
 	channelmonitorDescCompatibilityProbeEnabled := channelmonitorFields[19].Descriptor()
 	// channelmonitor.DefaultCompatibilityProbeEnabled holds the default value on creation for the compatibility_probe_enabled field.
 	channelmonitor.DefaultCompatibilityProbeEnabled = channelmonitorDescCompatibilityProbeEnabled.Default.(bool)
+	// channelmonitorDescIqQuestion is the schema descriptor for iq_question field.
+	channelmonitorDescIqQuestion := channelmonitorFields[20].Descriptor()
+	// channelmonitor.DefaultIqQuestion holds the default value on creation for the iq_question field.
+	channelmonitor.DefaultIqQuestion = channelmonitorDescIqQuestion.Default.(string)
+	// channelmonitorDescIqAnswer is the schema descriptor for iq_answer field.
+	channelmonitorDescIqAnswer := channelmonitorFields[21].Descriptor()
+	// channelmonitor.DefaultIqAnswer holds the default value on creation for the iq_answer field.
+	channelmonitor.DefaultIqAnswer = channelmonitorDescIqAnswer.Default.(string)
+	// channelmonitor.IqAnswerValidator is a validator for the "iq_answer" field. It is called by the builders before save.
+	channelmonitor.IqAnswerValidator = channelmonitorDescIqAnswer.Validators[0].(func(string) error)
+	// channelmonitorDescIqFuzzyMatch is the schema descriptor for iq_fuzzy_match field.
+	channelmonitorDescIqFuzzyMatch := channelmonitorFields[22].Descriptor()
+	// channelmonitor.DefaultIqFuzzyMatch holds the default value on creation for the iq_fuzzy_match field.
+	channelmonitor.DefaultIqFuzzyMatch = channelmonitorDescIqFuzzyMatch.Default.(bool)
 	channelmonitordailyrollupFields := schema.ChannelMonitorDailyRollup{}.Fields()
 	_ = channelmonitordailyrollupFields
 	// channelmonitordailyrollupDescModel is the schema descriptor for model field.
@@ -976,8 +990,14 @@ func init() {
 	channelmonitorhistory.DefaultMessage = channelmonitorhistoryDescMessage.Default.(string)
 	// channelmonitorhistory.MessageValidator is a validator for the "message" field. It is called by the builders before save.
 	channelmonitorhistory.MessageValidator = channelmonitorhistoryDescMessage.Validators[0].(func(string) error)
+	// channelmonitorhistoryDescIqStatus is the schema descriptor for iq_status field.
+	channelmonitorhistoryDescIqStatus := channelmonitorhistoryFields[7].Descriptor()
+	// channelmonitorhistory.DefaultIqStatus holds the default value on creation for the iq_status field.
+	channelmonitorhistory.DefaultIqStatus = channelmonitorhistoryDescIqStatus.Default.(string)
+	// channelmonitorhistory.IqStatusValidator is a validator for the "iq_status" field. It is called by the builders before save.
+	channelmonitorhistory.IqStatusValidator = channelmonitorhistoryDescIqStatus.Validators[0].(func(string) error)
 	// channelmonitorhistoryDescCheckedAt is the schema descriptor for checked_at field.
-	channelmonitorhistoryDescCheckedAt := channelmonitorhistoryFields[7].Descriptor()
+	channelmonitorhistoryDescCheckedAt := channelmonitorhistoryFields[8].Descriptor()
 	// channelmonitorhistory.DefaultCheckedAt holds the default value on creation for the checked_at field.
 	channelmonitorhistory.DefaultCheckedAt = channelmonitorhistoryDescCheckedAt.Default.(func() time.Time)
 	channelmonitorrequesttemplateMixin := schema.ChannelMonitorRequestTemplate{}.Mixin()

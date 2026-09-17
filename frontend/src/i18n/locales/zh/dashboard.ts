@@ -423,7 +423,14 @@ export default {
     checkMode: {
       probe: '探活',
       quota: '配额',
-      quota_probe: '探活 + 配额'
+      quota_probe: '探活 + 配额',
+      iq: '状态 + 智商'
+    },
+    iqStatus: {
+      iq_ok: '不降智',
+      iq_down: '降智',
+      test_error: '测试异常',
+      monitor_network: '监控网络异常'
     },
     quota: {
       unavailable: '配额信息不可用',
@@ -453,6 +460,8 @@ export default {
     dialogLatency: '对话延迟',
     endpointPing: '端点 PING',
     history60pts: '近 {n} 次记录',
+    timelineServer: '服务器 · 近 {n} 次',
+    timelineIQ: '智商 · 近 {n} 次',
     nextUpdateIn: '{n}s 后刷新',
     past: 'PAST',
     now: 'NOW',

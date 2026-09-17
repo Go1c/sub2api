@@ -4,9 +4,9 @@
  */
 
 import { apiClient } from './client'
-import type { Provider, MonitorStatus, MonitorQuotaSnapshot } from './admin/channelMonitor'
+import type { Provider, MonitorStatus, MonitorQuotaSnapshot, CheckMode, IqStatus } from './admin/channelMonitor'
 
-export type { Provider, MonitorStatus } from './admin/channelMonitor'
+export type { Provider, MonitorStatus, CheckMode, IqStatus } from './admin/channelMonitor'
 
 export interface UserMonitorExtraModel {
   model: string
@@ -15,7 +15,8 @@ export interface UserMonitorExtraModel {
 }
 
 export interface MonitorTimelinePoint {
-  status: MonitorStatus
+  status: MonitorStatus | IqStatus | string
+  iq_status?: IqStatus | ''
   latency_ms: number | null
   ping_latency_ms: number | null
   checked_at: string
@@ -33,6 +34,8 @@ export interface UserMonitorView {
   availability_7d: number
   extra_models: UserMonitorExtraModel[]
   timeline: MonitorTimelinePoint[]
+  iq_timeline?: MonitorTimelinePoint[]
+  check_mode?: CheckMode
   latest_quota?: MonitorQuotaSnapshot | null
 }
 

@@ -241,6 +241,10 @@ func buildUserViewFromSummary(
 		Availability7d:   summary.Availability7d,
 		ExtraModels:      summary.ExtraModels,
 		Timeline:         buildTimelinePoints(timelineEntries),
+		CheckMode:        defaultCheckMode(m.CheckMode),
+	}
+	if monitorCheckModeUsesIQ(m.CheckMode) {
+		view.IQTimeline = buildIQTimelinePoints(timelineEntries)
 	}
 	if primaryLatest != nil {
 		view.PrimaryPingLatencyMs = primaryLatest.PingLatencyMs
@@ -255,6 +259,25 @@ func buildTimelinePoints(entries []*ChannelMonitorHistoryEntry) []UserMonitorTim
 	for _, e := range entries {
 		out = append(out, UserMonitorTimelinePoint{
 			Status:        e.Status,
+			IqStatus:      e.IqStatus,
+			LatencyMs:     e.LatencyMs,
+			PingLatencyMs: e.PingLatencyMs,
+			CheckedAt:     e.CheckedAt,
+		})
+	}
+	return out
+}
+
+func buildIQTimelinePoints(entries []*ChannelMonitorHistoryEntry) []UserMonitorTimelinePoint {
+	out := make([]UserMonitorTimelinePoint, 0, len(entries))
+	for _, e := range entries {
+		status := e.IqStatus
+		if status == "" {
+			status = MonitorIQStatusTestErr
+		}
+		out = append(out, UserMonitorTimelinePoint{
+			Status:        status,
+			IqStatus:      e.IqStatus,
 			LatencyMs:     e.LatencyMs,
 			PingLatencyMs: e.PingLatencyMs,
 			CheckedAt:     e.CheckedAt,

@@ -145,6 +145,21 @@ func CompatibilityProbeEnabled(v bool) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldCompatibilityProbeEnabled, v))
 }
 
+// IqQuestion applies equality check predicate on the "iq_question" field. It's identical to IqQuestionEQ.
+func IqQuestion(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldIqQuestion, v))
+}
+
+// IqAnswer applies equality check predicate on the "iq_answer" field. It's identical to IqAnswerEQ.
+func IqAnswer(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldIqAnswer, v))
+}
+
+// IqFuzzyMatch applies equality check predicate on the "iq_fuzzy_match" field. It's identical to IqFuzzyMatchEQ.
+func IqFuzzyMatch(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldIqFuzzyMatch, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldCreatedAt, v))
@@ -1053,6 +1068,166 @@ func CompatibilityProbeEnabledEQ(v bool) predicate.ChannelMonitor {
 // CompatibilityProbeEnabledNEQ applies the NEQ predicate on the "compatibility_probe_enabled" field.
 func CompatibilityProbeEnabledNEQ(v bool) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldNEQ(FieldCompatibilityProbeEnabled, v))
+}
+
+// IqQuestionEQ applies the EQ predicate on the "iq_question" field.
+func IqQuestionEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldIqQuestion, v))
+}
+
+// IqQuestionNEQ applies the NEQ predicate on the "iq_question" field.
+func IqQuestionNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldIqQuestion, v))
+}
+
+// IqQuestionIn applies the In predicate on the "iq_question" field.
+func IqQuestionIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldIqQuestion, vs...))
+}
+
+// IqQuestionNotIn applies the NotIn predicate on the "iq_question" field.
+func IqQuestionNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldIqQuestion, vs...))
+}
+
+// IqQuestionGT applies the GT predicate on the "iq_question" field.
+func IqQuestionGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldIqQuestion, v))
+}
+
+// IqQuestionGTE applies the GTE predicate on the "iq_question" field.
+func IqQuestionGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldIqQuestion, v))
+}
+
+// IqQuestionLT applies the LT predicate on the "iq_question" field.
+func IqQuestionLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldIqQuestion, v))
+}
+
+// IqQuestionLTE applies the LTE predicate on the "iq_question" field.
+func IqQuestionLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldIqQuestion, v))
+}
+
+// IqQuestionContains applies the Contains predicate on the "iq_question" field.
+func IqQuestionContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldIqQuestion, v))
+}
+
+// IqQuestionHasPrefix applies the HasPrefix predicate on the "iq_question" field.
+func IqQuestionHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldIqQuestion, v))
+}
+
+// IqQuestionHasSuffix applies the HasSuffix predicate on the "iq_question" field.
+func IqQuestionHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldIqQuestion, v))
+}
+
+// IqQuestionIsNil applies the IsNil predicate on the "iq_question" field.
+func IqQuestionIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldIqQuestion))
+}
+
+// IqQuestionNotNil applies the NotNil predicate on the "iq_question" field.
+func IqQuestionNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldIqQuestion))
+}
+
+// IqQuestionEqualFold applies the EqualFold predicate on the "iq_question" field.
+func IqQuestionEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldIqQuestion, v))
+}
+
+// IqQuestionContainsFold applies the ContainsFold predicate on the "iq_question" field.
+func IqQuestionContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldIqQuestion, v))
+}
+
+// IqAnswerEQ applies the EQ predicate on the "iq_answer" field.
+func IqAnswerEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldIqAnswer, v))
+}
+
+// IqAnswerNEQ applies the NEQ predicate on the "iq_answer" field.
+func IqAnswerNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldIqAnswer, v))
+}
+
+// IqAnswerIn applies the In predicate on the "iq_answer" field.
+func IqAnswerIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldIqAnswer, vs...))
+}
+
+// IqAnswerNotIn applies the NotIn predicate on the "iq_answer" field.
+func IqAnswerNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldIqAnswer, vs...))
+}
+
+// IqAnswerGT applies the GT predicate on the "iq_answer" field.
+func IqAnswerGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldIqAnswer, v))
+}
+
+// IqAnswerGTE applies the GTE predicate on the "iq_answer" field.
+func IqAnswerGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldIqAnswer, v))
+}
+
+// IqAnswerLT applies the LT predicate on the "iq_answer" field.
+func IqAnswerLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldIqAnswer, v))
+}
+
+// IqAnswerLTE applies the LTE predicate on the "iq_answer" field.
+func IqAnswerLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldIqAnswer, v))
+}
+
+// IqAnswerContains applies the Contains predicate on the "iq_answer" field.
+func IqAnswerContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldIqAnswer, v))
+}
+
+// IqAnswerHasPrefix applies the HasPrefix predicate on the "iq_answer" field.
+func IqAnswerHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldIqAnswer, v))
+}
+
+// IqAnswerHasSuffix applies the HasSuffix predicate on the "iq_answer" field.
+func IqAnswerHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldIqAnswer, v))
+}
+
+// IqAnswerIsNil applies the IsNil predicate on the "iq_answer" field.
+func IqAnswerIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldIqAnswer))
+}
+
+// IqAnswerNotNil applies the NotNil predicate on the "iq_answer" field.
+func IqAnswerNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldIqAnswer))
+}
+
+// IqAnswerEqualFold applies the EqualFold predicate on the "iq_answer" field.
+func IqAnswerEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldIqAnswer, v))
+}
+
+// IqAnswerContainsFold applies the ContainsFold predicate on the "iq_answer" field.
+func IqAnswerContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldIqAnswer, v))
+}
+
+// IqFuzzyMatchEQ applies the EQ predicate on the "iq_fuzzy_match" field.
+func IqFuzzyMatchEQ(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldIqFuzzyMatch, v))
+}
+
+// IqFuzzyMatchNEQ applies the NEQ predicate on the "iq_fuzzy_match" field.
+func IqFuzzyMatchNEQ(v bool) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldIqFuzzyMatch, v))
 }
 
 // HasHistory applies the HasEdge predicate on the "history" edge.

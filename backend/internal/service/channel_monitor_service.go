@@ -157,7 +157,14 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		CompatibilityProbeEnabled: p.CompatibilityProbeEnabled,
 		CheckMode:                 checkMode,
 		AccountID:                 cloneInt64Pointer(p.AccountID),
+		IQQuestion:                strings.TrimSpace(p.IQQuestion),
+		IQAnswer:                  strings.TrimSpace(p.IQAnswer),
+		IQFuzzyMatch:              true,
 	}
+	if p.IQFuzzyMatch != nil {
+		m.IQFuzzyMatch = *p.IQFuzzyMatch
+	}
+	applyIQDefaults(m)
 	if err := s.repo.Create(ctx, m); err != nil {
 		return nil, fmt.Errorf("create channel monitor: %w", err)
 	}
@@ -225,6 +232,9 @@ func (s *ChannelMonitorService) Duplicate(
 		CompatibilityProbeEnabled: source.CompatibilityProbeEnabled,
 		CheckMode:                 defaultCheckMode(source.CheckMode),
 		AccountID:                 cloneInt64Pointer(source.AccountID),
+		IQQuestion:                source.IQQuestion,
+		IQAnswer:                  source.IQAnswer,
+		IQFuzzyMatch:              source.IQFuzzyMatch,
 		DuplicateOperationID:      operationID,
 	}
 	if err := s.repo.Create(ctx, duplicate); err != nil {
@@ -637,6 +647,7 @@ func (s *ChannelMonitorService) persistCheckResults(ctx context.Context, m *Chan
 			MonitorID:     m.ID,
 			Model:         r.Model,
 			Status:        r.Status,
+			IqStatus:      r.IqStatus,
 			LatencyMs:     r.LatencyMs,
 			PingLatencyMs: r.PingLatencyMs,
 			Message:       r.Message,
@@ -669,6 +680,9 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 		ExtraHeaders:     m.ExtraHeaders,
 		BodyOverrideMode: m.BodyOverrideMode,
 		BodyOverride:     m.BodyOverride,
+	}
+	if monitorCheckModeUsesIQ(m.CheckMode) {
+		applyIQCheckOptions(opts, m)
 	}
 
 	var eg errgroup.Group
@@ -859,6 +873,16 @@ func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) 
 	if p.CheckMode != nil {
 		existing.CheckMode = defaultCheckMode(*p.CheckMode)
 	}
+	if p.IQQuestion != nil {
+		existing.IQQuestion = strings.TrimSpace(*p.IQQuestion)
+	}
+	if p.IQAnswer != nil {
+		existing.IQAnswer = strings.TrimSpace(*p.IQAnswer)
+	}
+	if p.IQFuzzyMatch != nil {
+		existing.IQFuzzyMatch = *p.IQFuzzyMatch
+	}
+	applyIQDefaults(existing)
 	// provider 与 check_mode 任一变化后统一复核组合矩阵。
 	if p.Provider != nil || p.CheckMode != nil {
 		if err := validateCheckMode(existing.Provider, defaultCheckMode(existing.CheckMode)); err != nil {

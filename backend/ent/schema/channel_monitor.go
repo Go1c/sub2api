@@ -36,14 +36,15 @@ func (ChannelMonitor) Fields() []ent.Field {
 			MaxLen(100),
 		field.Enum("provider").
 			Values("openai", "anthropic", "gemini", "grok"),
-		// check_mode: 'probe' | 'quota' | 'quota_probe'
+		// check_mode: 'probe' | 'quota' | 'quota_probe' | 'iq'
 		//   probe       - LLM 探活（默认，原有行为）
 		//   quota       - 仅查关联账号的用量（零 LLM 成本；endpoint/api_key 可空）
 		//   quota_probe - 探活 + 配额并存（配额快照挂到主模型历史行）
+		//   iq          - 状态 + 智商（一次糖果题同时记下服务器状态与智商四态）
 		field.String("check_mode").
 			Default("probe").
 			MaxLen(32).
-			Comment("probe = LLM probe (default); quota = account usage only; quota_probe = both"),
+			Comment("probe = LLM probe (default); quota = account usage only; quota_probe = both; iq = status + IQ quiz"),
 		// account_id: 配额模式的数据源账号（复用账号侧用量服务，不直接对接上游）。
 		// 普通字段而非 edge（FK 由 SQL 迁移管理）；账号删除时数据库置空，
 		// 监控保留并报「账号未关联」。
@@ -109,6 +110,18 @@ func (ChannelMonitor) Fields() []ent.Field {
 		// 仅在用户明确开启时使用，避免改变普通监控的默认请求形态。
 		field.Bool("compatibility_probe_enabled").
 			Default(false),
+		field.String("iq_question").
+			Optional().
+			Default("").
+			Comment("IQ candy-quiz prompt; empty uses service-layer default when check_mode=iq"),
+		field.String("iq_answer").
+			Optional().
+			Default("").
+			MaxLen(200).
+			Comment("IQ candy-quiz expected answer; empty uses 21 when check_mode=iq"),
+		field.Bool("iq_fuzzy_match").
+			Default(true).
+			Comment("IQ matching: true = contains answer after normalize; false = exact"),
 	}
 }
 

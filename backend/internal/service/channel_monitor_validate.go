@@ -62,7 +62,7 @@ func monitorCheckModeUsesQuota(checkMode string) bool {
 func validateCheckMode(provider, checkMode string) error {
 	checkMode = defaultCheckMode(checkMode)
 	switch checkMode {
-	case MonitorCheckModeProbe, MonitorCheckModeQuota, MonitorCheckModeQuotaProbe:
+	case MonitorCheckModeProbe, MonitorCheckModeQuota, MonitorCheckModeQuotaProbe, MonitorCheckModeIQ:
 	default:
 		return ErrChannelMonitorInvalidCheckMode
 	}

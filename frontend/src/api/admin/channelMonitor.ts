@@ -11,9 +11,11 @@ export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses'
 /**
  * probe = LLM 探活（默认）；quota = 仅查关联账号用量（零 LLM 成本）；
- * quota_probe = 探活 + 配额快照挂主模型行。
+ * quota_probe = 探活 + 配额快照挂主模型行；
+ * iq = 状态 + 智商（一次糖果题填两条时间线）。
  */
-export type CheckMode = 'probe' | 'quota' | 'quota_probe'
+export type CheckMode = 'probe' | 'quota' | 'quota_probe' | 'iq'
+export type IqStatus = 'iq_ok' | 'iq_down' | 'test_error' | 'monitor_network'
 
 /** 配额快照中的单个用量窗口（与后端 domain.MonitorQuotaTier 一致）。 */
 export interface MonitorQuotaTier {
@@ -86,10 +88,13 @@ export interface ChannelMonitor {
   body_override_mode: BodyOverrideMode
   body_override: Record<string, unknown> | null
   compatibility_probe_enabled: boolean
-  /** 检测模式：probe（默认）/ quota / quota_probe */
+  /** 检测模式：probe（默认）/ quota / quota_probe / iq */
   check_mode?: CheckMode
   /** 配额模式关联的账号 ID；探活模式为 null */
   account_id?: number | null
+  iq_question?: string
+  iq_answer?: string
+  iq_fuzzy_match?: boolean
   /** 主模型最近一次配额快照（配额模式；无历史时为 null） */
   latest_quota?: MonitorQuotaSnapshot | null
 }
@@ -139,6 +144,9 @@ export interface CreateParams {
    * update 语义：>0=换绑，0=解绑（切回 probe 模式时前端发 0 清空存量关联）；
    * create 绝不发 0——后端会把 0 存成 &0 触发外键违约。 */
   account_id?: number | null
+  iq_question?: string
+  iq_answer?: string
+  iq_fuzzy_match?: boolean
 }
 
 // Update request: api_key 空串 = 不修改；clear_template=true 时把 template_id 置空；
@@ -150,6 +158,7 @@ export type UpdateParams = Partial<CreateParams> & {
 export interface CheckResult {
   model: string
   status: MonitorStatus
+  iq_status?: IqStatus | ''
   latency_ms: number | null
   ping_latency_ms: number | null
   message: string
@@ -166,6 +175,7 @@ export interface HistoryItem {
   id: number
   model: string
   status: MonitorStatus
+  iq_status?: IqStatus | ''
   latency_ms: number | null
   ping_latency_ms: number | null
   message: string

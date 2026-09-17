@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mock · 渠道监控 · 状态 + 智商</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --sidebar: #0d1524;
+      --panel: #1b2434;
+      --panel-2: #243044;
+      --line: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --teal: #2dd4bf;
+      --teal-dim: rgba(45, 212, 191, .16);
+      --orange: #f59e0b;
+      --ok: #34d399;
+      --rose: #fb7185;
+      --amber: #fbbf24;
+      --violet: #c084fc;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .45);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(900px 420px at 20% -10%, rgba(45,212,191,.08), transparent 50%), var(--bg);
+    }
+    button, input, textarea, select { font: inherit; }
+    .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+    .sidebar {
+      background: var(--sidebar); border-right: 1px solid #1e293b; padding: 18px 12px;
+    }
+    .brand { font-weight: 700; letter-spacing: .04em; padding: 6px 10px 16px; }
+    .nav-item { color: var(--muted); padding: 8px 10px; border-radius: 10px; margin: 2px 0; }
+    .nav-item.active { background: #1e293b; color: #fff; }
+    .nav-item.sub { padding-left: 22px; font-size: 13px; }
+    .main { padding: 18px 22px 60px; }
+    .url {
+      font-size: 12px; color: var(--muted); background: #111827; border: 1px solid #1f2937;
+      border-radius: 10px; padding: 8px 12px; margin-bottom: 14px;
+    }
+    .top {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px;
+    }
+    .brand-title { font-size: 18px; font-weight: 700; }
+    .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+      background: var(--panel); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--muted);
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+    nav.tabs { display: flex; gap: 8px; margin: 0 0 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    nav.tabs button {
+      appearance: none; border: 0; background: transparent; color: var(--muted);
+      padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 650;
+    }
+    nav.tabs button.active { background: var(--panel-2); color: #fff; }
+    .hidden { display: none !important; }
+    .banner {
+      background: rgba(192,132,252,.08); border: 1px solid rgba(192,132,252,.28);
+      color: #e9d5ff; border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 13px;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      appearance: none; border: 0; border-radius: 11px; padding: 8px 12px; cursor: pointer;
+      font-weight: 650; color: #042f2e; background: linear-gradient(135deg, var(--teal), #0d9488);
+    }
+    .btn.secondary { background: #1e293b; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .dialog {
+      background: #1a2433; border: 1px solid #2c3a52; border-radius: 18px; padding: 20px 22px 18px;
+      box-shadow: var(--shadow); max-width: 920px;
+    }
+    .dialog h2 { margin: 0 0 16px; font-size: 16px; }
+    .field { margin: 0 0 14px; }
+    .field span, .input-label { display: block; font-size: 13px; margin-bottom: 6px; color: #cbd5e1; }
+    .req { color: #fb7185; }
+    input[type="text"], input[type="password"], input[type="number"], textarea, select {
+      width: 100%; background: #121a27; color: var(--text); border: 1px solid #334155;
+      border-radius: 10px; padding: 9px 12px;
+    }
+    textarea { min-height: 88px; resize: vertical; }
+    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .mode {
+      text-align: left; background: #121a27; border: 2px solid #2a3b51; border-radius: 12px;
+      padding: 10px 12px; color: var(--muted); cursor: pointer;
+    }
+    .mode b { display: block; color: #e2e8f0; font-size: 13px; margin-bottom: 4px; }
+    .mode small { display: block; font-size: 12px; line-height: 1.35; }
+    .mode.active { border-color: var(--teal); background: rgba(45,212,191,.08); color: #99f6e4; }
+    .mode.active b { color: var(--teal); }
+    .providers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .prov {
+      background: #121a27; border: 2px solid #2a3b51; border-radius: 12px; padding: 10px 8px;
+      color: var(--muted); cursor: pointer;
+    }
+    .prov.active { border-color: var(--orange); color: #fdba74; background: rgba(245,158,11,.12); }
+    .inline { display: flex; gap: 8px; }
+    .inline input { flex: 1; }
+    .iq-box {
+      border: 1px solid rgba(192,132,252,.28); background: rgba(192,132,252,.06);
+      border-radius: 14px; padding: 12px; margin: 4px 0 14px;
+    }
+    .iq-box h3 { margin: 0 0 8px; font-size: 13px; color: #e9d5ff; }
+    .check { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
+    .muted { color: var(--muted); }
+    .ok { color: var(--ok); }
+    .bad { color: var(--rose); }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat { background: #121a27; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+    .stat b { display: block; font-size: 20px; margin-top: 4px; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 420px)); gap: 16px; }
+    .card {
+      background: #151d2e; border: 1px solid #2a364a; border-radius: 22px; padding: 18px 18px 14px;
+      cursor: pointer; text-align: left; color: inherit; width: 100%;
+    }
+    .card:hover { border-color: #3d516c; transform: translateY(-2px); }
+    .card-head { display: flex; align-items: flex-start; gap: 10px; }
+    .logo {
+      width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center;
+      background: #0f172a; border: 1px solid rgba(255,255,255,.08); color: #34d399; flex-shrink: 0;
+    }
+    .logo.ant { color: #fb923c; }
+    .name { font-size: 15px; font-weight: 700; }
+    .meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; min-width: 0; }
+    .tag {
+      font-size: 10px; padding: 2px 6px; border-radius: 6px; background: #1e293b; color: #94a3b8;
+    }
+    .tag.openai { background: rgba(16,185,129,.12); color: #6ee7b7; }
+    .model { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #94a3b8; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+    .metric {
+      background: #101827; border: 1px solid #243044; border-radius: 12px; padding: 10px 12px;
+    }
+    .metric .k { font-size: 10px; letter-spacing: .08em; color: #94a3b8; }
+    .metric .v { margin-top: 6px; font-size: 18px; font-weight: 750; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .metric .v span { font-size: 11px; font-weight: 500; color: #94a3b8; margin-left: 3px; }
+    .avail { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 16px; }
+    .avail .k { font-size: 11px; letter-spacing: .08em; color: #94a3b8; }
+    .avail .pct { font-size: 28px; font-weight: 800; color: #4ade80; letter-spacing: -.03em; }
+    .avail .extra { font-size: 11px; color: #94a3b8; text-align: right; margin-top: 2px; }
+    .tracks { margin-top: 14px; padding-top: 12px; border-top: 1px solid #243044; }
+    .track-head {
+      display: flex; justify-content: space-between; font-size: 10px; letter-spacing: .14em;
+      text-transform: uppercase; color: #94a3b8; margin-bottom: 8px;
+    }
+    .track { margin: 0 0 8px; }
+    .track-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: #cbd5e1; margin-bottom: 5px; }
+    .spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; width: 100%; }
+    .spark i { flex: 1; min-width: 3px; border-radius: 2px; display: block; }
+    .spark i.g { background: #22c55e; }
+    .spark i.a { background: #f59e0b; }
+    .spark i.r { background: #ef4444; }
+    .spark i.e { background: #334155; }
+    .spark i.p { background: #22c55e; }
+    .spark i.d { background: #f97316; }
+    .spark i.x { background: #ef4444; }
+    .spark i.n { background: #64748b; }
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 0 0 14px;
+      font-size: 12px; color: #cbd5e1;
+    }
+    .legend b { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+    .legend .p { background: #22c55e; }
+    .legend .d { background: #f97316; }
+    .legend .x { background: #ef4444; }
+    .legend .n { background: #64748b; }
+    .spark-foot {
+      display: flex; justify-content: space-between; font-size: 9px; letter-spacing: .16em;
+      text-transform: uppercase; color: #64748b; margin-top: 4px;
+    }
+    .chip {
+      display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .chip.ok { background: rgba(52,211,153,.16); color: #6ee7b7; }
+    .chip.bad { background: rgba(251,113,133,.16); color: #fda4af; }
+    .chip.warn { background: rgba(251,191,36,.16); color: #fde68a; }
+    .chip.iq { background: rgba(192,132,252,.16); color: #e9d5ff; }
+    .chip.dim { background: #334155; color: #cbd5e1; }
+    .drawer {
+      position: fixed; inset: 0; background: rgba(2,6,23,.55); display: none;
+      align-items: center; justify-content: center; padding: 24px; z-index: 20;
+    }
+    .drawer.open { display: flex; }
+    .drawer .panel { width: min(560px, 100%); background: #1a2433; border: 1px solid #2c3a52; border-radius: 18px; padding: 18px; }
+    .toast {
+      position: fixed; right: 18px; bottom: 18px; background: #134e4a; color: #ccfbf1;
+      border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); display: none;
+    }
+    .footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #243044; }
+    th { color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .modes, .providers, .cards, .grid-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">LUMIO</div>
+      <div class="nav-item">账号管理</div>
+      <div class="nav-item active">渠道管理</div>
+      <div class="nav-item sub active">渠道监控</div>
+      <div class="nav-item sub">智商检测</div>
+      <div class="nav-item">用户</div>
+    </aside>
+    <main class="main">
+      <div class="url">api.lumio.games/admin/channels/monitor · 设计预览，不连后台</div>
+      <div class="top">
+        <div>
+          <div class="brand-title">状态 + 智商监控</div>
+          <div class="sub">第四种检查方式。题目用 kin 已有的摸糖果题，答案 21，不用鹈鹕成图。</div>
+        </div>
+        <span class="pill"><span class="dot"></span> Mock · 设置 / 状态</span>
+      </div>
+
+      <nav class="tabs" id="tabs">
+        <button data-tab="settings">设置</button>
+        <button class="active" data-tab="status">状态</button>
+      </nav>
+
+      <section id="settings" class="hidden">
+        <div class="banner">
+          与「渠道管理 → 智商检测」看板分开：那页测内部号池 SVG。这里测对外渠道条目。
+          探活仍用算术题；本模式改发摸糖果题。判定复用 kin <code>TurnStateProbeAnswerMatches</code>：模糊匹配时「答案是21颗」算通过。
+        </div>
+        <div class="dialog">
+          <h2>新增渠道监控</h2>
+          <label class="field">
+            <span>名称 <em class="req">*</em></span>
+            <input id="name" type="text" value="满血GPT" />
+          </label>
+
+          <div class="field">
+            <span>检查方式</span>
+            <div class="modes" id="modes">
+              <button type="button" class="mode" data-mode="probe"><b>探活</b><small>向上游发送轻量 LLM 请求，检测可用性与延迟</small></button>
+              <button type="button" class="mode" data-mode="quota"><b>配额</b><small>只查询关联账号的用量滚动窗口，不发送探活请求</small></button>
+              <button type="button" class="mode" data-mode="quota_probe"><b>探活 + 配额</b><small>探活的同时查询配额，用量快照附加在主模型结果上</small></button>
+              <button type="button" class="mode active" data-mode="iq"><b>状态 + 智商</b><small>只打一枪糖果题，同时记下服务器状态和智商，不另发探活</small></button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>平台 <em class="req">*</em></span>
+            <div class="providers" id="providers">
+              <button type="button" class="prov active" data-p="anthropic">Anthropic</button>
+              <button type="button" class="prov" data-p="openai">OpenAI</button>
+              <button type="button" class="prov" data-p="gemini">Gemini</button>
+              <button type="button" class="prov" data-p="grok">Grok</button>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>上游地址 <em class="req">*</em></span>
+            <div class="inline">
+              <input id="endpoint" type="text" value="https://api.example.com" />
+              <button type="button" class="btn secondary">使用当前服务</button>
+            </div>
+          </label>
+
+          <label class="field">
+            <span>API Key <em class="req">*</em></span>
+            <div class="inline">
+              <input type="password" value="sk-mock-key" />
+              <button type="button" class="btn secondary">使用我的 Key</button>
+            </div>
+          </label>
+
+          <label class="field">
+            <span>主模型 <em class="req">*</em></span>
+            <input id="model" type="text" value="claude-sonnet-4-5" />
+          </label>
+
+          <div class="iq-box" id="iqBox">
+            <h3>智商题（kin Turn-State 默认题）</h3>
+            <p class="muted" style="margin:0 0 10px;font-size:12px">少打一个请求：只发这道题。能回完整响应就记下服务器状态（正常 / 慢则降级）；同一份回答再判智商。用户页仍是两条棒，不是两次探测。</p>
+            <label class="field">
+              <span>测试题</span>
+              <textarea id="question">黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?</textarea>
+            </label>
+            <div class="inline" style="margin-bottom:10px">
+              <label class="field" style="flex:1;margin:0">
+                <span>标准答案</span>
+                <input id="answer" type="text" value="21" />
+              </label>
+              <label class="field" style="flex:1;margin:0">
+                <span>检测间隔（秒）</span>
+                <input id="interval" type="number" min="15" max="3600" value="300" />
+              </label>
+            </div>
+            <div class="check">
+              <div>
+                <b>模糊匹配</b>
+                <div class="muted" style="font-size:12px">开启后，回答包含标准答案即通过。kin 默认开。</div>
+              </div>
+              <input id="fuzzy" type="checkbox" checked />
+            </div>
+            <label class="field" style="margin-bottom:0">
+              <span>判定试一下（不发请求）</span>
+              <div class="inline">
+                <input id="sample" type="text" value="最少要取 21 颗。" />
+                <button type="button" class="btn secondary" id="tryMatch">判定</button>
+              </div>
+              <p id="matchOut" class="ok" style="margin:8px 0 0;font-size:12px">模糊匹配：通过</p>
+            </label>
+          </div>
+
+          <div class="footer">
+            <button type="button" class="btn secondary" id="cancel">取消</button>
+            <button type="button" class="btn" id="save">创建</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="status">
+        <div class="banner">
+          状态还是两条：上边服务器、下边智商。只是少打一枪——糖果题这一次请求同时填两条。上游回得正常也可能降智。
+        </div>
+        <div class="legend">
+          <span>服务器：</span>
+          <span><b class="p"></b>正常</span>
+          <span><b class="d"></b>降级</span>
+          <span><b class="x"></b>失败</span>
+          <span><b class="n"></b>未打到上游</span>
+          <span style="opacity:.45">|</span>
+          <span>智商：</span>
+          <span><b class="p"></b>不降智</span>
+          <span><b class="d"></b>降智</span>
+          <span><b class="x"></b>测试异常</span>
+          <span><b class="n"></b>监控网络异常</span>
+        </div>
+        <div class="cards" id="statusCards"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="panel">
+      <h2 id="detailTitle" style="margin:0 0 8px;font-size:16px">详情</h2>
+      <p class="muted" id="detailBody" style="font-size:13px"></p>
+      <div class="footer"><button type="button" class="btn secondary" id="closeDetail">关闭</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast">已保存（Mock，未请求后端）</div>
+
+  <script>
+    const CANDY = "黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?";
+    const DEFAULT_ANSWER = "21";
+
+    function normalize(s) {
+      return String(s || "").toLowerCase().replace(/[\s,，.。:：;；]/g, "");
+    }
+    function matches(got, want, fuzzy) {
+      const g = normalize(got);
+      const w = normalize(want);
+      if (!g || !w) return false;
+      return fuzzy ? g.includes(w) : g === w;
+    }
+
+    const tabs = document.getElementById("tabs");
+    tabs.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-tab]");
+      if (!btn) return;
+      tabs.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn));
+      document.getElementById("settings").classList.toggle("hidden", btn.dataset.tab !== "settings");
+      document.getElementById("status").classList.toggle("hidden", btn.dataset.tab !== "status");
+    });
+
+    const modes = document.getElementById("modes");
+    const iqBox = document.getElementById("iqBox");
+    modes.addEventListener("click", (e) => {
+      const btn = e.target.closest(".mode");
+      if (!btn) return;
+      modes.querySelectorAll(".mode").forEach((b) => b.classList.toggle("active", b === btn));
+      iqBox.style.display = btn.dataset.mode === "iq" ? "block" : "none";
+    });
+
+    const providers = document.getElementById("providers");
+    providers.addEventListener("click", (e) => {
+      const btn = e.target.closest(".prov");
+      if (!btn) return;
+      providers.querySelectorAll(".prov").forEach((b) => b.classList.toggle("active", b === btn));
+    });
+
+    const matchOut = document.getElementById("matchOut");
+    function renderMatch() {
+      const ok = matches(document.getElementById("sample").value, document.getElementById("answer").value, document.getElementById("fuzzy").checked);
+      matchOut.className = ok ? "ok" : "bad";
+      matchOut.textContent = (document.getElementById("fuzzy").checked ? "模糊匹配" : "精确匹配") + "：" + (ok ? "不降智" : "降智");
+    }
+    document.getElementById("tryMatch").addEventListener("click", renderMatch);
+    document.getElementById("fuzzy").addEventListener("change", renderMatch);
+    document.getElementById("sample").addEventListener("input", renderMatch);
+    document.getElementById("answer").addEventListener("input", renderMatch);
+
+    const toast = document.getElementById("toast");
+    document.getElementById("save").addEventListener("click", () => {
+      toast.style.display = "block";
+      setTimeout(() => { toast.style.display = "none"; }, 1600);
+    });
+
+    const IQ_LABEL = {
+      p: { text: "不降智", chip: "ok", height: 100 },
+      d: { text: "降智", chip: "warn", height: 65 },
+      x: { text: "测试异常", chip: "bad", height: 35 },
+      n: { text: "监控网络异常", chip: "dim", height: 15 }
+    };
+    const SERVER_META = {
+      g: { height: 100, title: "正常" },
+      a: { height: 65, title: "降级" },
+      r: { height: 35, title: "失败" },
+      e: { height: 15, title: "未测" }
+    };
+
+    function spark(seq, kind) {
+      const pad = kind === "iq" ? "n" : "e";
+      const padded = String(seq).slice(0, 60).padStart(60, pad);
+      return `<div class="spark">${padded.split("").map((ch) => {
+        if (kind === "iq") {
+          const meta = IQ_LABEL[ch] || IQ_LABEL.n;
+          const cls = IQ_LABEL[ch] ? ch : "n";
+          return `<i class="${cls}" style="height:${meta.height}%" title="${meta.text}"></i>`;
+        }
+        const meta = SERVER_META[ch] || SERVER_META.e;
+        const cls = SERVER_META[ch] ? ch : "e";
+        return `<i class="${cls}" style="height:${meta.height}%" title="${meta.title}"></i>`;
+      }).join("")}</div>`;
+    }
+    function latestIq(seq) {
+      return IQ_LABEL[String(seq).slice(-1)] || IQ_LABEL.n;
+    }
+    function deriveServer(iq, slow) {
+      return String(iq).split("").map((ch) => {
+        if (ch === "n") return "e";
+        if (ch === "x") return "r";
+        if (ch === "p" || ch === "d") return slow ? "a" : "g";
+        return "e";
+      }).join("");
+    }
+    function latestServer(seq) {
+      const ch = String(seq).slice(-1);
+      if (ch === "g") return { chip: "ok", text: "正常" };
+      if (ch === "a") return { chip: "warn", text: "降级" };
+      if (ch === "r") return { chip: "bad", text: "失败" };
+      return { chip: "dim", text: "监控网络异常" };
+    }
+    function tracksHTML(server, iq, slow) {
+      if (!iq) {
+        return `<div class="tracks">
+          <div class="track-head"><span>近 60 次记录</span><span>59S 后刷新</span></div>
+          ${spark(server, "server")}
+          <div class="spark-foot"><span>PAST</span><span>NOW</span></div>
+        </div>`;
+      }
+      const derived = deriveServer(iq, slow);
+      return `<div class="tracks">
+        <div class="track-head"><span>近 60 次记录 · 一次请求</span><span>59S 后刷新</span></div>
+        <div class="track"><div class="track-label">服务器状态</div>${spark(derived, "server")}</div>
+        <div class="track"><div class="track-label">智商状态</div>${spark(iq, "iq")}</div>
+        <div class="spark-foot"><span>PAST</span><span>NOW</span></div>
+      </div>`;
+    }
+
+    const details = {
+      pro: ["GPT-特价Pro分组", "只打了糖果题。上边服务器：23s 记降级，但请求是完整回来的。下边智商：答对是不降智。两条对得上同一秒，没有第二枪探活。"],
+      candy: ["满血GPT", "上边服务器正常（回了完整响应），下边智商降智（答了 12）。这就是两码事：通道通了，题没对。"],
+      probe: ["仅探活渠道", "没开智商，仍只有一条算术探活时间线。"]
+    };
+
+    const SERVER_PRO = "rrrgggaaaaaggggggggrrrrrrrrrrrrrrrrrrrrrrrrrrrrrraaaaaa";
+    const IQ_PRO     = "nnnpppppppppppppdddxxxxppppppddddppppxxxxppppnnnpppddp";
+    const SERVER_OK  = "ggggggggggagggggggggggggggggaggggggggggggggggggggggggggg";
+    const IQ_MIX     = "ppppppddpppppppxxppppppppppddppppppnnnppppppddppppppppd";
+    const SERVER_ONLY= "ggggagggggggggggagggggggggrrggggggggggaggggggggggggggggg";
+
+    const cards = [
+      {
+        id: "pro",
+        logo: "",
+        logoClass: "",
+        name: "GPT-特价Pro分组",
+        provider: "OpenAI",
+        providerClass: "openai",
+        model: "gpt-5.5",
+        group: "GPT",
+        badge: "warn",
+        badgeText: "降级",
+        latency: "23525",
+        ping: "2",
+        pct: "77.52",
+        extra: "+ 1 模型",
+        slow: true,
+        iq: IQ_PRO
+      },
+      {
+        id: "candy",
+        logo: "ant",
+        logoClass: "ant",
+        name: "满血GPT",
+        provider: "Anthropic",
+        providerClass: "",
+        model: "claude-sonnet-4-5",
+        group: "满血",
+        badge: "ok",
+        badgeText: "正常",
+        latency: "1840",
+        ping: "42",
+        pct: "99.20",
+        extra: "",
+        slow: false,
+        iq: IQ_MIX
+      },
+      {
+        id: "probe",
+        logo: "",
+        logoClass: "",
+        name: "普通探活",
+        provider: "OpenAI",
+        providerClass: "openai",
+        model: "gpt-4o-mini",
+        group: "",
+        badge: "ok",
+        badgeText: "正常",
+        latency: "620",
+        ping: "18",
+        pct: "98.10",
+        extra: "",
+        server: SERVER_ONLY,
+        iq: null
+      }
+    ];
+
+    const cardsEl = document.getElementById("statusCards");
+    cardsEl.innerHTML = cards.map((c) => {
+      const derived = c.iq ? deriveServer(c.iq, c.slow) : c.server;
+      const srv = c.iq ? latestServer(derived) : { chip: c.badge, text: c.badgeText };
+      return `
+      <button type="button" class="card" data-detail="${c.id}">
+        <div class="card-head">
+          <span class="logo ${c.logoClass}">${c.logoClass === "ant" ? "A" : "✦"}</span>
+          <div style="flex:1;min-width:0">
+            <div class="name">${c.name}</div>
+            <div class="meta">
+              <span class="tag ${c.providerClass}">${c.provider}</span>
+              <span class="model">${c.model}</span>
+              ${c.group ? `<span class="tag">${c.group}</span>` : ""}
+            </div>
+          </div>
+          <span class="chip ${srv.chip}">${srv.text}</span>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="k">对话延迟</div><div class="v">${c.latency}<span>ms</span></div></div>
+          <div class="metric"><div class="k">端点 PING</div><div class="v">${c.ping}<span>ms</span></div></div>
+        </div>
+        <div class="avail">
+          <div class="k">可用性 · 7 天</div>
+          <div>
+            <div class="pct">${c.pct}%</div>
+            ${c.extra ? `<div class="extra">${c.extra}</div>` : ""}
+          </div>
+        </div>
+        ${tracksHTML(c.server, c.iq, c.slow)}
+      </button>
+    `;
+    }).join("");
+
+    const drawer = document.getElementById("drawer");
+    cardsEl.addEventListener("click", (e) => {
+      const card = e.target.closest("[data-detail]");
+      if (!card) return;
+      const [title, body] = details[card.dataset.detail];
+      document.getElementById("detailTitle").textContent = title;
+      document.getElementById("detailBody").textContent = body;
+      drawer.classList.add("open");
+    });
+    document.getElementById("closeDetail").addEventListener("click", () => drawer.classList.remove("open"));
+    drawer.addEventListener("click", (e) => { if (e.target === drawer) drawer.classList.remove("open"); });
+
+    document.getElementById("question").value = CANDY;
+    document.getElementById("answer").value = DEFAULT_ANSWER;
+    renderMatch();
+  </script>
+</body>
+</html>
