@@ -202,8 +202,9 @@ func TestIPGroupTwoPass429ThenSwitchAccountWithoutRateLimit(t *testing.T) {
 	}
 }
 
-func TestEffectiveSameAccountRetryLimitOverridesPoolDefault(t *testing.T) {
+func TestEffectiveSameAccountRetryLimitCapsDownwardOnly(t *testing.T) {
 	err := &UpstreamFailoverError{SameAccountRetryMax: 5}
-	require.Equal(t, 5, err.EffectiveSameAccountRetryLimit(3))
+	require.Equal(t, 3, err.EffectiveSameAccountRetryLimit(3), "SameAccountRetryMax must not raise the pool limit")
 	require.Equal(t, 3, (&UpstreamFailoverError{}).EffectiveSameAccountRetryLimit(3))
+	require.Equal(t, 1, (&UpstreamFailoverError{SameAccountRetryMax: 1}).EffectiveSameAccountRetryLimit(3))
 }

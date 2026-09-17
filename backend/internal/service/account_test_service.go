@@ -344,6 +344,13 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Account not found")
 	}
+	if err := accountTestCooldown(ctx, account, modelID, time.Now()); err != nil {
+		var wait *TestAdmissionWaitError
+		if errors.As(err, &wait) {
+			return s.sendErrorAndEnd(c, fmt.Sprintf("%s；请在 %s 后重新测试", wait.Reason, wait.Until.Local().Format("2006-01-02 15:04:05")))
+		}
+		return s.sendErrorAndEnd(c, err.Error())
+	}
 
 	// Synthetic UI load-test accounts exercise the real SSE parsing and modal
 	// interactions, but intentionally do not send their placeholder credentials

@@ -714,7 +714,7 @@ func (e *UpstreamFailoverError) ShouldRetryNextAccount() bool {
 }
 
 func (e *UpstreamFailoverError) EffectiveSameAccountRetryLimit(poolLimit int) int {
-	if e != nil && e.SameAccountRetryMax > 0 {
+	if e != nil && e.SameAccountRetryMax > 0 && e.SameAccountRetryMax < poolLimit {
 		return e.SameAccountRetryMax
 	}
 	return poolLimit

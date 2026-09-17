@@ -399,11 +399,12 @@ func TestForwardAlphaSearchSetupToken429CarriesSameAccountRetryWindow(t *testing
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/alpha/search", bytes.NewReader(body))
 
+	// 不带 Retry-After：带 Retry-After 的 429 在 P0 语义下走 openAIOAuth429RetryAfter
+	// 处置（立即熔断）；本用例覆盖的是普通瞬时 429 的同账号重试窗口。
 	upstream := &httpUpstreamRecorder{resp: &http.Response{
 		StatusCode: http.StatusTooManyRequests,
 		Header: http.Header{
 			"Content-Type": []string{"application/json"},
-			"Retry-After":  []string{"1"},
 			"X-Request-Id": []string{"req_alpha_oauth_429"},
 		},
 		Body: io.NopCloser(strings.NewReader(`{"error":{"type":"rate_limit_error","code":"rate_limit_exceeded","message":"rate limited"}}`)),

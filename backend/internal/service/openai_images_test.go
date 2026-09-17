@@ -1201,7 +1201,8 @@ func TestOpenAIGatewayServiceForwardImages_OAuth429CarriesSameAccountRetryWindow
 	c.Request = req
 	svc := &OpenAIGatewayService{httpUpstream: &httpUpstreamRecorder{resp: &http.Response{
 		StatusCode: http.StatusTooManyRequests,
-		Header:     http.Header{"Retry-After": []string{"1"}, "X-Request-Id": []string{"req_img_oauth_429"}},
+		// 不带 Retry-After：带 Retry-After 的 429 走立即熔断处置；本用例覆盖普通瞬时 429 的同账号重试窗口。
+		Header:     http.Header{"X-Request-Id": []string{"req_img_oauth_429"}},
 		Body:       io.NopCloser(strings.NewReader(`{"error":{"type":"rate_limit_error","code":"rate_limit_exceeded","message":"rate limited"}}`)),
 	}}}
 	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
