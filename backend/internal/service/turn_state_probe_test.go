@@ -174,6 +174,10 @@ func (s staticTurnStateLookup) BindCurrent(context.Context, *Account, string, st
 	return string(s), string(s) != ""
 }
 
+func (s staticTurnStateLookup) HasHolding(context.Context, *Account) bool {
+	return string(s) != ""
+}
+
 func stringsRepeat(s string, n int) string {
 	out := make([]byte, 0, n*len(s))
 	for i := 0; i < n; i++ {

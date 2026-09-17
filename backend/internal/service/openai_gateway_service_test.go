@@ -1284,6 +1284,292 @@ func TestOpenAISelectAccountWithLoadAwareness_PrefersLowerLoad(t *testing.T) {
 	}
 }
 
+type holdingTurnStateLookup map[int64]bool
+
+func (m holdingTurnStateLookup) BindCurrent(_ context.Context, account *Account, _, _, _ string) (string, bool) {
+	if account == nil || !m[account.ID] {
+		return "", false
+	}
+	return "holding", true
+}
+
+func (m holdingTurnStateLookup) HasHolding(_ context.Context, account *Account) bool {
+	return account != nil && m[account.ID]
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_PrefersHoldingTurnStateTicket(t *testing.T) {
+	groupID := int64(1)
+	idleHighPriority := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+	}
+	holdingLowPriority := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+	}
+	holdingBetterPriority := Account{
+		ID:          3,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    10,
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{idleHighPriority, holdingLowPriority, holdingBetterPriority}},
+		cache:       &stubGatewayCache{},
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{
+				1: {AccountID: 1, LoadRate: 0},
+				2: {AccountID: 2, LoadRate: 40},
+				3: {AccountID: 3, LoadRate: 50},
+			},
+		}),
+		turnStateTickets: holdingTurnStateLookup{2: true, 3: true},
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, "", "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(3), selection.Account.ID)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_FallsBackWhenHoldingSlotsFull(t *testing.T) {
+	groupID := int64(1)
+	idle := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+	}
+	holding := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{idle, holding}},
+		cache:       &stubGatewayCache{},
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{
+				1: {AccountID: 1, LoadRate: 0},
+				2: {AccountID: 2, LoadRate: 100},
+			},
+			acquireResults: map[int64]bool{1: true, 2: false},
+		}),
+		turnStateTickets: holdingTurnStateLookup{2: true},
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, "", "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, idle.ID, selection.Account.ID)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_SwitchesStickyToHoldingWhenStickyHasNoTicket(t *testing.T) {
+	groupID := int64(1)
+	sessionHash := "holding-first"
+	idleSticky := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		GroupIDs:    []int64{groupID},
+	}
+	holding := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+		GroupIDs:    []int64{groupID},
+	}
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{"openai:" + sessionHash: idleSticky.ID},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{idleSticky, holding}},
+		cache:       cache,
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{
+				1: {AccountID: 1, LoadRate: 0},
+				2: {AccountID: 2, LoadRate: 0},
+			},
+		}),
+		turnStateTickets: holdingTurnStateLookup{2: true},
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, sessionHash, "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, holding.ID, selection.Account.ID)
+	require.Equal(t, holding.ID, cache.sessionBindings["openai:"+sessionHash])
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_KeepsStickyWhenHoldingSlotsUnavailable(t *testing.T) {
+	groupID := int64(1)
+	sessionHash := "holding-full"
+	idleSticky := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		GroupIDs:    []int64{groupID},
+	}
+	holding := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+		GroupIDs:    []int64{groupID},
+	}
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{"openai:" + sessionHash: idleSticky.ID},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{idleSticky, holding}},
+		cache:       cache,
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{
+				1: {AccountID: 1, LoadRate: 0},
+				2: {AccountID: 2, LoadRate: 100},
+			},
+			acquireResults: map[int64]bool{1: true, 2: false},
+		}),
+		turnStateTickets: holdingTurnStateLookup{2: true},
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, sessionHash, "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, idleSticky.ID, selection.Account.ID)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_KeepsStickyWhenStickyAlreadyHolding(t *testing.T) {
+	groupID := int64(1)
+	sessionHash := "already-holding"
+	stickyHolding := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+		GroupIDs:    []int64{groupID},
+	}
+	betterHolding := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		GroupIDs:    []int64{groupID},
+	}
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{"openai:" + sessionHash: stickyHolding.ID},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{stickyHolding, betterHolding}},
+		cache:       cache,
+		concurrencyService: NewConcurrencyService(stubConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{
+				1: {AccountID: 1, LoadRate: 0},
+				2: {AccountID: 2, LoadRate: 0},
+			},
+		}),
+		turnStateTickets: holdingTurnStateLookup{1: true, 2: true},
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, sessionHash, "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, stickyHolding.ID, selection.Account.ID)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_PrefersHoldingWhenNoConcurrencyService(t *testing.T) {
+	groupID := int64(1)
+	idle := Account{
+		ID:          1,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+	}
+	holding := Account{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    50,
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:      stubOpenAIAccountRepo{accounts: []Account{idle, holding}},
+		turnStateTickets: holdingTurnStateLookup{2: true},
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, "", "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, holding.ID, selection.Account.ID)
+}
+
 func TestOpenAISelectAccountForModelWithExclusions_StickyExcludedFallback(t *testing.T) {
 	sessionHash := "excluded"
 	repo := stubOpenAIAccountRepo{

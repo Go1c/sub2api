@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const turnStateProbeRunnerPollInterval = 15 * time.Second
+const turnStateProbeRunnerPollInterval = 1 * time.Second
 const turnStateProbeLeaderLockKey = "turn_state_probe"
 const turnStateProbeLeaderLockTTL = 45 * time.Second
 const turnStateProbeRunnerTickTimeout = 3 * time.Minute

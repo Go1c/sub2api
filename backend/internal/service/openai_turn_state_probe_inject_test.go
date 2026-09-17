@@ -15,6 +15,10 @@ func (s injectTurnStateTicketLookup) BindCurrent(context.Context, *Account, stri
 	return string(s), string(s) != ""
 }
 
+func (s injectTurnStateTicketLookup) HasHolding(context.Context, *Account) bool {
+	return string(s) != ""
+}
+
 func turnStateProbeInjectAccount(enabled bool) *Account {
 	return &Account{
 		ID:       1,

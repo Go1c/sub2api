@@ -893,6 +893,18 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 	// 1. 尝试粘性会话命中
 	// Try sticky session hit
 	if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
+		if !s.accountHasTurnStateHolding(ctx, account) {
+			listed, listErr := s.listSchedulableAccounts(ctx, groupID, platform)
+			if listErr == nil {
+				if switched := s.tryPickTurnStateHoldingInsteadOfSticky(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, requiredCapability, account.ID, listed); switched != nil {
+					hydrated, err := s.hydrateSelectedAccount(ctx, switched)
+					if err != nil {
+						return nil, err
+					}
+					return hydrated, nil
+				}
+			}
+		}
 		return account, nil
 	}
 
@@ -1054,6 +1066,7 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 	if len(eligible) == 0 {
 		return nil, compactBlocked, filterStats
 	}
+	eligible = s.preferTurnStateHoldingAccounts(ctx, eligible)
 	rateOrder := openAILegacyUpstreamRateOrder{}
 	if preferLowUpstreamRate {
 		rateOrder = newOpenAILegacyUpstreamRateOrder(eligible, time.Now(), s.openAIOAuthSchedulingRateMultiplier(ctx))
@@ -1204,6 +1217,15 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 					} else if !parentHealthyForShadow(account, s.parentAccountLookup(ctx)) {
 						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 					} else {
+						if !s.accountHasTurnStateHolding(ctx, account) {
+							switched, switchErr := s.tryAcquireTurnStateHoldingInsteadOfSticky(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, requiredCapability, account.ID, accounts)
+							if switchErr != nil {
+								return nil, switchErr
+							}
+							if switched != nil {
+								return switched, nil
+							}
+						}
 						result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 						if err == nil && result != nil && result.Acquired {
 							selection, selectErr := s.newAcquiredSelectionResult(ctx, account, result.ReleaseFunc)
@@ -1312,90 +1334,103 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			return nil, false, nil
 		}
 
-		sort.SliceStable(available, func(i, j int) bool {
-			a, b := available[i], available[j]
-			if a.account.Priority != b.account.Priority {
-				return a.account.Priority < b.account.Priority
+		acquireSorted := func(pool []accountWithLoad) (*AccountSelectionResult, bool, error) {
+			if len(pool) == 0 {
+				return nil, false, nil
 			}
-			if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
-				return a.loadInfo.LoadRate < b.loadInfo.LoadRate
-			}
-			switch {
-			case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
-				return true
-			case a.account.LastUsedAt != nil && b.account.LastUsedAt == nil:
-				return false
-			case a.account.LastUsedAt == nil && b.account.LastUsedAt == nil:
-				return false
-			default:
-				return a.account.LastUsedAt.Before(*b.account.LastUsedAt)
-			}
-		})
-		shuffleWithinSortGroups(available)
-		if rateOrder.enabled {
-			sort.SliceStable(available, func(i, j int) bool {
-				return rateOrder.compare(available[i].account, available[j].account) < 0
+			sort.SliceStable(pool, func(i, j int) bool {
+				a, b := pool[i], pool[j]
+				if a.account.Priority != b.account.Priority {
+					return a.account.Priority < b.account.Priority
+				}
+				if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
+					return a.loadInfo.LoadRate < b.loadInfo.LoadRate
+				}
+				switch {
+				case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
+					return true
+				case a.account.LastUsedAt != nil && b.account.LastUsedAt == nil:
+					return false
+				case a.account.LastUsedAt == nil && b.account.LastUsedAt == nil:
+					return false
+				default:
+					return a.account.LastUsedAt.Before(*b.account.LastUsedAt)
+				}
 			})
-		}
+			shuffleWithinSortGroups(pool)
+			if rateOrder.enabled {
+				sort.SliceStable(pool, func(i, j int) bool {
+					return rateOrder.compare(pool[i].account, pool[j].account) < 0
+				})
+			}
 
-		selectionOrder := make([]accountWithLoad, 0, len(available))
-		if requireCompact {
-			appendTier := func(out []accountWithLoad, tier int) []accountWithLoad {
-				for _, item := range available {
-					if openAICompactSupportTier(item.account) == tier {
-						out = append(out, item)
+			selectionOrder := make([]accountWithLoad, 0, len(pool))
+			if requireCompact {
+				appendTier := func(out []accountWithLoad, tier int) []accountWithLoad {
+					for _, item := range pool {
+						if openAICompactSupportTier(item.account) == tier {
+							out = append(out, item)
+						}
 					}
+					return out
 				}
-				return out
+				selectionOrder = appendTier(selectionOrder, 2)
+				selectionOrder = appendTier(selectionOrder, 1)
+				// tier 0 候选作为兜底追加：DB recheck 时若发现 cache tier 0 实际
+				// 已升级为 1/2（探测刚跑完，cache 尚未刷新），仍可正常命中。
+				selectionOrder = appendTier(selectionOrder, 0)
+			} else {
+				selectionOrder = append(selectionOrder, pool...)
 			}
-			selectionOrder = appendTier(selectionOrder, 2)
-			selectionOrder = appendTier(selectionOrder, 1)
-			// tier 0 候选作为兜底追加：DB recheck 时若发现 cache tier 0 实际
-			// 已升级为 1/2（探测刚跑完，cache 尚未刷新），仍可正常命中。
-			selectionOrder = appendTier(selectionOrder, 0)
-		} else {
-			selectionOrder = append(selectionOrder, available...)
+
+			for _, item := range selectionOrder {
+				fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, item.account, platform, requestedModel, false, requiredCapability)
+				if fresh == nil {
+					continue
+				}
+				fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
+				if fresh == nil {
+					continue
+				}
+				if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
+					continue
+				}
+				result, err := s.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
+				if err == nil && result != nil && result.Acquired {
+					selection, selectErr := s.newAcquiredSelectionResult(ctx, fresh, result.ReleaseFunc)
+					if selectErr != nil {
+						return nil, true, selectErr
+					}
+					if sessionHash != "" && !stickySpillover && !gatewayProfitControlGateActive(ctx) {
+						_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
+					}
+					return selection, true, nil
+				}
+			}
+			return nil, true, nil
 		}
 
-		for _, item := range selectionOrder {
-			fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, item.account, platform, requestedModel, false, requiredCapability)
-			if fresh == nil {
-				continue
+		holding, rest := s.partitionTurnStateHoldingAccountLoads(ctx, available)
+		if len(holding) > 0 {
+			selection, attempted, err := acquireSorted(holding)
+			if err != nil || selection != nil {
+				return selection, attempted, err
 			}
-			fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
-			if fresh == nil {
-				continue
+			if len(rest) == 0 {
+				return nil, attempted, nil
 			}
-			if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
-				continue
+			restSelection, restAttempted, restErr := acquireSorted(rest)
+			if restErr != nil || restSelection != nil {
+				return restSelection, attempted || restAttempted, restErr
 			}
-			result, err := s.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
-			if err == nil && result != nil && result.Acquired {
-				selection, selectErr := s.newAcquiredSelectionResult(ctx, fresh, result.ReleaseFunc)
-				if selectErr != nil {
-					return nil, true, selectErr
-				}
-				if sessionHash != "" && !stickySpillover && !gatewayProfitControlGateActive(ctx) {
-					_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
-				}
-				return selection, true, nil
-			}
+			return nil, attempted || restAttempted, nil
 		}
-		return nil, true, nil
+		return acquireSorted(available)
 	}
 
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, accountLoads)
 	if err != nil {
-		ordered := append([]*Account(nil), candidates...)
-		sortAccountsByPriorityAndLastUsed(ordered, false)
-		if rateOrder.enabled {
-			sort.SliceStable(ordered, func(i, j int) bool {
-				return rateOrder.compare(ordered[i], ordered[j]) < 0
-			})
-		}
-		if requireCompact {
-			ordered = prioritizeOpenAICompactAccounts(ordered)
-		}
+		ordered := s.orderOpenAIAccountsHoldingFirst(ctx, append([]*Account(nil), candidates...), false, rateOrder, requireCompact)
 		for _, acc := range ordered {
 			fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, platform, requestedModel, false, requiredCapability)
 			if fresh == nil {
@@ -1437,15 +1472,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	// ============ Layer 3: Fallback wait ============
-	sortAccountsByPriorityAndLastUsed(candidates, false)
-	if rateOrder.enabled {
-		sort.SliceStable(candidates, func(i, j int) bool {
-			return rateOrder.compare(candidates[i], candidates[j]) < 0
-		})
-	}
-	if requireCompact {
-		candidates = prioritizeOpenAICompactAccounts(candidates)
-	}
+	candidates = s.orderOpenAIAccountsHoldingFirst(ctx, candidates, false, rateOrder, requireCompact)
 	for _, acc := range candidates {
 		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, platform, requestedModel, false, requiredCapability)
 		if fresh == nil {
@@ -1509,6 +1536,203 @@ func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accoun
 		return &AcquireResult{Acquired: true, ReleaseFunc: func() {}}, nil
 	}
 	return s.concurrencyService.AcquireAccountSlot(ctx, accountID, maxConcurrency)
+}
+
+func (s *OpenAIGatewayService) accountHasTurnStateHolding(ctx context.Context, account *Account) bool {
+	if s == nil || s.turnStateTickets == nil || account == nil {
+		return false
+	}
+	return s.turnStateTickets.HasHolding(ctx, account)
+}
+
+func (s *OpenAIGatewayService) collectTurnStateHoldingSwitchCandidates(
+	ctx context.Context,
+	groupID *int64,
+	platform string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requireCompact bool,
+	requiredCapability OpenAIEndpointCapability,
+	exceptID int64,
+	accounts []Account,
+) []*Account {
+	if s == nil || s.turnStateTickets == nil || len(accounts) == 0 {
+		return nil
+	}
+	platform = NormalizeOpenAICompatiblePlatform(platform)
+	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
+	out := make([]*Account, 0)
+	for i := range accounts {
+		acc := &accounts[i]
+		if acc.ID == exceptID {
+			continue
+		}
+		if excludedIDs != nil {
+			if _, excluded := excludedIDs[acc.ID]; excluded {
+				continue
+			}
+		}
+		if !s.accountHasTurnStateHolding(ctx, acc) {
+			continue
+		}
+		if !isOpenAICompatibleAccountEligibleForRequest(ctx, acc, platform, requestedModel, false, requiredCapability) {
+			continue
+		}
+		if s.isOpenAIAccountRequestRuntimeBlocked(acc, requestedModel) {
+			continue
+		}
+		if !parentHealthyForShadow(acc, s.parentAccountLookup(ctx)) {
+			continue
+		}
+		if !s.openAIAccountMatchesSchedulingGroup(acc, groupID) {
+			continue
+		}
+		if needsUpstreamCheck && groupID != nil && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, acc, requestedModel, requireCompact) {
+			continue
+		}
+		out = append(out, acc)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sortAccountsByPriorityAndLastUsed(out, false)
+	return out
+}
+
+func (s *OpenAIGatewayService) tryPickTurnStateHoldingInsteadOfSticky(
+	ctx context.Context,
+	groupID *int64,
+	platform, sessionHash, requestedModel string,
+	excludedIDs map[int64]struct{},
+	requireCompact bool,
+	requiredCapability OpenAIEndpointCapability,
+	exceptID int64,
+	accounts []Account,
+) *Account {
+	cands := s.collectTurnStateHoldingSwitchCandidates(ctx, groupID, platform, requestedModel, excludedIDs, requireCompact, requiredCapability, exceptID, accounts)
+	for _, acc := range cands {
+		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, platform, requestedModel, false, requiredCapability)
+		if fresh == nil {
+			continue
+		}
+		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
+		if fresh == nil {
+			continue
+		}
+		if sessionHash != "" && !gatewayProfitControlGateActive(ctx) {
+			_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
+		}
+		return fresh
+	}
+	return nil
+}
+
+func (s *OpenAIGatewayService) tryAcquireTurnStateHoldingInsteadOfSticky(
+	ctx context.Context,
+	groupID *int64,
+	platform, sessionHash, requestedModel string,
+	excludedIDs map[int64]struct{},
+	requireCompact bool,
+	requiredCapability OpenAIEndpointCapability,
+	exceptID int64,
+	accounts []Account,
+) (*AccountSelectionResult, error) {
+	cands := s.collectTurnStateHoldingSwitchCandidates(ctx, groupID, platform, requestedModel, excludedIDs, requireCompact, requiredCapability, exceptID, accounts)
+	for _, acc := range cands {
+		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, platform, requestedModel, false, requiredCapability)
+		if fresh == nil {
+			continue
+		}
+		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
+		if fresh == nil {
+			continue
+		}
+		result, err := s.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil || !result.Acquired {
+			continue
+		}
+		selection, selectErr := s.newAcquiredSelectionResult(ctx, fresh, result.ReleaseFunc)
+		if selectErr != nil {
+			return nil, selectErr
+		}
+		if sessionHash != "" && !gatewayProfitControlGateActive(ctx) {
+			_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
+		}
+		return selection, nil
+	}
+	return nil, nil
+}
+
+func (s *OpenAIGatewayService) partitionTurnStateHoldingAccounts(ctx context.Context, accounts []*Account) (holding, rest []*Account) {
+	if s == nil || s.turnStateTickets == nil || len(accounts) == 0 {
+		return nil, accounts
+	}
+	holding = make([]*Account, 0)
+	rest = make([]*Account, 0, len(accounts))
+	for _, account := range accounts {
+		if s.accountHasTurnStateHolding(ctx, account) {
+			holding = append(holding, account)
+			continue
+		}
+		rest = append(rest, account)
+	}
+	if len(holding) == 0 {
+		return nil, accounts
+	}
+	return holding, rest
+}
+
+func (s *OpenAIGatewayService) preferTurnStateHoldingAccounts(ctx context.Context, accounts []*Account) []*Account {
+	holding, _ := s.partitionTurnStateHoldingAccounts(ctx, accounts)
+	if len(holding) == 0 {
+		return accounts
+	}
+	return holding
+}
+
+func (s *OpenAIGatewayService) partitionTurnStateHoldingAccountLoads(ctx context.Context, available []accountWithLoad) (holding, rest []accountWithLoad) {
+	if s == nil || s.turnStateTickets == nil || len(available) == 0 {
+		return nil, available
+	}
+	holding = make([]accountWithLoad, 0)
+	rest = make([]accountWithLoad, 0, len(available))
+	for _, item := range available {
+		if s.accountHasTurnStateHolding(ctx, item.account) {
+			holding = append(holding, item)
+			continue
+		}
+		rest = append(rest, item)
+	}
+	if len(holding) == 0 {
+		return nil, available
+	}
+	return holding, rest
+}
+
+func (s *OpenAIGatewayService) orderOpenAIAccountsHoldingFirst(ctx context.Context, accounts []*Account, preferOAuth bool, rateOrder openAILegacyUpstreamRateOrder, requireCompact bool) []*Account {
+	order := func(pool []*Account) []*Account {
+		if len(pool) == 0 {
+			return pool
+		}
+		sortAccountsByPriorityAndLastUsed(pool, preferOAuth)
+		if rateOrder.enabled {
+			sort.SliceStable(pool, func(i, j int) bool {
+				return rateOrder.compare(pool[i], pool[j]) < 0
+			})
+		}
+		if requireCompact {
+			pool = prioritizeOpenAICompactAccounts(pool)
+		}
+		return pool
+	}
+	holding, rest := s.partitionTurnStateHoldingAccounts(ctx, accounts)
+	if len(holding) == 0 {
+		return order(accounts)
+	}
+	return append(order(holding), order(rest)...)
 }
 
 func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.Context, account *Account, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability) *Account {

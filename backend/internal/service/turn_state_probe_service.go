@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,12 +20,15 @@ import (
 const (
 	turnStateProbeStatusHolding      = "holding"
 	turnStateProbeStatusFailed       = "failed"
+	turnStateProbeStatusRunning      = "running"
+	turnStateProbeStatusSkipped      = "skipped"
+	turnStateProbeStatusCooldown     = "cooldown"
 	turnStateProbeHarvestTimeout     = 45 * time.Second
 	turnStateProbeLockTTL            = 2 * time.Minute
-	turnStateProbeMaxAttempts        = 8
+	turnStateProbeMaxAttempts        = 10
 	turnStateProbeSIDLen             = 8
 	turnStateProbeBindTTL            = 2 * time.Hour
-	turnStateProbeHarvestConcurrency = 2
+	turnStateProbeHarvestConcurrency = 10
 	turnStateProbeSIDAlphabet        = "abcdefghijklmnopqrstuvwxyz0123456789"
 	turnStateProbePolicyCacheTTL     = 2 * time.Second
 )
@@ -46,6 +48,7 @@ type TurnStateProbeService struct {
 	httpUpstream HTTPUpstream
 	tokens       *OpenAITokenProvider
 	policyCache  atomic.Value
+	harvestSlots chan struct{}
 }
 
 func NewTurnStateProbeService(
@@ -63,6 +66,7 @@ func NewTurnStateProbeService(
 		tickets:      tickets,
 		httpUpstream: httpUpstream,
 		tokens:       tokens,
+		harvestSlots: make(chan struct{}, turnStateProbeHarvestConcurrency),
 	}
 }
 
@@ -232,10 +236,223 @@ func (s *TurnStateProbeService) ClearTicket(ctx context.Context, id int64) error
 }
 
 func (s *TurnStateProbeService) RunOne(ctx context.Context, id int64) error {
-	return s.ProbeAccount(ctx, id)
+	return s.probeAccount(ctx, id, true)
 }
 
-func (s *TurnStateProbeService) BindCurrent(ctx context.Context, account *Account, identity, turnKey, model string) (string, bool) {
+func (s *TurnStateProbeService) ProbeAccount(ctx context.Context, accountID int64) error {
+	return s.probeAccount(ctx, accountID, false)
+}
+
+func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int64, resetAttempts bool) error {
+	if s == nil || s.accountRepo == nil || s.tickets == nil || s.httpUpstream == nil {
+		return infraerrors.InternalServer("TURN_STATE_PROBE_UNAVAILABLE", "Turn-State 探测服务未就绪")
+	}
+	account, err := s.accountRepo.GetByID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if account == nil || !account.IsOpenAIOAuth() || !ParseTurnStateProbeAccountSwitch(account.Extra).Enabled {
+		return ErrTurnStateProbeDisabled
+	}
+	if account.Status != "" && account.Status != StatusActive {
+		policy, polErr := s.GetPolicy(ctx)
+		if polErr != nil {
+			return polErr
+		}
+		_ = s.putHarvestTicket(ctx, account, policy, nil, turnStateProbeStatusSkipped, 0, "account_"+account.Status)
+		return nil
+	}
+	policy, err := s.GetPolicy(ctx)
+	if err != nil {
+		return err
+	}
+	if !policy.Enabled {
+		return ErrTurnStateProbeDisabled
+	}
+	if !policy.HasProbeExit() {
+		return ErrTurnStateProbeInvalid
+	}
+	existing, err := s.tickets.Get(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if !resetAttempts && existing != nil && existing.Status == turnStateProbeStatusSkipped {
+		return nil
+	}
+	if !resetAttempts && turnStateProbeExhausted(existing, policy) {
+		return nil
+	}
+	locked, err := s.tickets.TryLock(ctx, accountID, turnStateProbeLockTTL)
+	if err != nil {
+		return err
+	}
+	if !locked {
+		return ErrTurnStateProbeBusy
+	}
+	defer func() {
+		_ = s.tickets.Unlock(context.Background(), accountID)
+	}()
+
+	attempts := 0
+	if existing != nil && !turnStateProbeResetAttempts(existing, policy, resetAttempts) {
+		attempts = existing.Attempts
+	}
+	if err := s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, ""); err != nil {
+		return err
+	}
+
+	useDynamic := turnStateProbeDynamicReady(policy.Dynamic)
+	proxyURLs, err := s.probeProxyURLs(ctx, policy)
+	if err != nil {
+		return err
+	}
+	if !useDynamic && len(proxyURLs) == 0 {
+		return ErrTurnStateProbeInvalid
+	}
+
+	var lastReason string
+	for attempts < turnStateProbeMaxAttempts {
+		ok, err := s.tickets.AllowRPM(ctx, "global", policy.RPM)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrTurnStateProbeRateLimited
+		}
+		acctRPM := policy.RPM / 2
+		if acctRPM < 1 {
+			acctRPM = 1
+		}
+		ok, err = s.tickets.AllowRPM(ctx, "acct:"+strconv.FormatInt(accountID, 10), acctRPM)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrTurnStateProbeRateLimited
+		}
+
+		proxyURL := ""
+		if useDynamic {
+			sid, sidErr := randomTurnStateProbeSID()
+			if sidErr != nil {
+				lastReason = "sid"
+				attempts++
+				_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
+				continue
+			}
+			proxyURL, err = BuildTurnStateProbeDynamicProxyURL(policy.Dynamic, sid)
+			if err != nil {
+				lastReason = "dynamic_exit"
+				attempts++
+				_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
+				continue
+			}
+		} else {
+			proxyURL = proxyURLs[attempts%len(proxyURLs)]
+		}
+
+		result, authErr, harvestErr := s.harvestOnce(ctx, account, policy, proxyURL)
+		attempts++
+		if authErr != nil {
+			_ = s.putHarvestTicket(ctx, account, policy, nil, turnStateProbeStatusSkipped, attempts, authErr.Error())
+			return authErr
+		}
+		if harvestErr != nil {
+			lastReason = harvestErr.Error()
+			_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
+			continue
+		}
+		ok, reason := EvaluateTurnStateProbeAttempt(result, policy)
+		if !ok {
+			lastReason = reason
+			_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
+			continue
+		}
+		now := time.Now()
+		rec := TurnStateTicketRecord{
+			AccountID:      account.ID,
+			Identity:       turnStateProbeTicketIdentity(account),
+			State:          result.State,
+			StateHash:      TurnStateProbeStateHash(result.State),
+			StateLength:    len(strings.TrimSpace(result.State)),
+			Model:          firstNonEmpty(result.ObservedModel, policy.Model),
+			PolicyRevision: policy.Revision,
+			Status:         turnStateProbeStatusHolding,
+			Attempts:       attempts,
+			RecheckAt:      now.Add(policy.RecheckAfter()),
+			UpdatedAt:      now,
+		}
+		logger.LegacyPrintf("service.turn_state_probe", "harvested account_id=%d hash=%s length=%d model=%s attempts=%d", account.ID, rec.StateHash, rec.StateLength, rec.Model, rec.Attempts)
+		return s.tickets.Put(ctx, rec)
+	}
+
+	now := time.Now()
+	fail := TurnStateTicketRecord{
+		AccountID:      accountID,
+		Identity:       turnStateProbeTicketIdentity(account),
+		PolicyRevision: policy.Revision,
+		Status:         turnStateProbeStatusCooldown,
+		Attempts:       attempts,
+		LastError:      lastReason,
+		RecheckAt:      now.Add(policy.RecheckAfter()),
+		UpdatedAt:      now,
+	}
+	_ = s.tickets.Put(ctx, fail)
+	if lastReason == "" {
+		lastReason = "probe_failed"
+	}
+	return infraerrors.BadRequest("TURN_STATE_PROBE_FAILED", lastReason)
+}
+
+func turnStateProbeResetAttempts(existing *TurnStateTicketRecord, policy TurnStateProbePolicy, reset bool) bool {
+	if reset || existing == nil {
+		return true
+	}
+	if existing.PolicyRevision != policy.Revision {
+		return true
+	}
+	if existing.Status == turnStateProbeStatusHolding {
+		return true
+	}
+	if existing.Status == turnStateProbeStatusCooldown && !existing.RecheckAt.IsZero() && !existing.RecheckAt.After(time.Now()) {
+		return true
+	}
+	return false
+}
+
+func turnStateProbeExhausted(existing *TurnStateTicketRecord, policy TurnStateProbePolicy) bool {
+	if existing == nil {
+		return false
+	}
+	return existing.Status == turnStateProbeStatusFailed &&
+		existing.Attempts >= turnStateProbeMaxAttempts &&
+		existing.PolicyRevision == policy.Revision
+}
+
+func (s *TurnStateProbeService) putHarvestTicket(ctx context.Context, account *Account, policy TurnStateProbePolicy, previous *TurnStateTicketRecord, status string, attempts int, lastErr string) error {
+	if s == nil || s.tickets == nil || account == nil {
+		return nil
+	}
+	rec := TurnStateTicketRecord{
+		AccountID:      account.ID,
+		Identity:       turnStateProbeTicketIdentity(account),
+		PolicyRevision: policy.Revision,
+		Status:         status,
+		Attempts:       attempts,
+		LastError:      lastErr,
+		UpdatedAt:      time.Now(),
+	}
+	if previous != nil && status == turnStateProbeStatusRunning {
+		rec.State = previous.State
+		rec.StateHash = previous.StateHash
+		rec.StateLength = previous.StateLength
+		rec.Model = previous.Model
+		rec.RecheckAt = previous.RecheckAt
+	}
+	return s.tickets.Put(ctx, rec)
+}
+
+func (s *TurnStateProbeService) currentHoldingState(ctx context.Context, account *Account) (string, bool) {
 	if s == nil || s.tickets == nil || account == nil || !account.IsOpenAI() {
 		return "", false
 	}
@@ -256,140 +473,32 @@ func (s *TurnStateProbeService) BindCurrent(ctx context.Context, account *Accoun
 	if ticket.PolicyRevision != policy.Revision {
 		return "", false
 	}
+	return ticket.State, true
+}
+
+func (s *TurnStateProbeService) HasHolding(ctx context.Context, account *Account) bool {
+	_, ok := s.currentHoldingState(ctx, account)
+	return ok
+}
+
+func (s *TurnStateProbeService) BindCurrent(ctx context.Context, account *Account, identity, turnKey, model string) (string, bool) {
+	state, ok := s.currentHoldingState(ctx, account)
+	if !ok {
+		return "", false
+	}
 	_ = identity
 	_ = model
 	if strings.TrimSpace(turnKey) == "" {
-		return ticket.State, true
+		return state, true
 	}
-	bound, err := s.tickets.BindTurn(ctx, account.ID, turnKey, ticket.State, turnStateProbeBindTTL)
+	bound, err := s.tickets.BindTurn(ctx, account.ID, turnKey, state, turnStateProbeBindTTL)
 	if err != nil || strings.TrimSpace(bound) == "" {
-		return ticket.State, true
+		return state, true
 	}
 	return bound, true
 }
 
-func (s *TurnStateProbeService) ProbeAccount(ctx context.Context, accountID int64) error {
-	if s == nil || s.accountRepo == nil || s.tickets == nil || s.httpUpstream == nil {
-		return infraerrors.InternalServer("TURN_STATE_PROBE_UNAVAILABLE", "Turn-State 探测服务未就绪")
-	}
-	account, err := s.accountRepo.GetByID(ctx, accountID)
-	if err != nil {
-		return err
-	}
-	if account == nil || !account.IsOpenAIOAuth() || !ParseTurnStateProbeAccountSwitch(account.Extra).Enabled {
-		return ErrTurnStateProbeDisabled
-	}
-	policy, err := s.GetPolicy(ctx)
-	if err != nil {
-		return err
-	}
-	if !policy.Enabled {
-		return ErrTurnStateProbeDisabled
-	}
-	if !policy.HasProbeExit() {
-		return ErrTurnStateProbeInvalid
-	}
-	locked, err := s.tickets.TryLock(ctx, accountID, turnStateProbeLockTTL)
-	if err != nil {
-		return err
-	}
-	if !locked {
-		return ErrTurnStateProbeBusy
-	}
-	defer func() {
-		_ = s.tickets.Unlock(context.Background(), accountID)
-	}()
-
-	ok, err := s.tickets.AllowRPM(ctx, "global", policy.RPM)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return ErrTurnStateProbeRateLimited
-	}
-	acctRPM := policy.RPM / 2
-	if acctRPM < 1 {
-		acctRPM = 1
-	}
-	ok, err = s.tickets.AllowRPM(ctx, "acct:"+strconv.FormatInt(accountID, 10), acctRPM)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return ErrTurnStateProbeRateLimited
-	}
-
-	useDynamic := turnStateProbeDynamicReady(policy.Dynamic)
-	proxyURLs, err := s.probeProxyURLs(ctx, policy)
-	if err != nil {
-		return err
-	}
-	if !useDynamic && len(proxyURLs) == 0 {
-		return ErrTurnStateProbeInvalid
-	}
-
-	var lastReason string
-	for attempt := 0; attempt < turnStateProbeMaxAttempts; attempt++ {
-		proxyURL := ""
-		if useDynamic {
-			sid, sidErr := randomTurnStateProbeSID()
-			if sidErr != nil {
-				lastReason = "sid"
-				continue
-			}
-			proxyURL, err = BuildTurnStateProbeDynamicProxyURL(policy.Dynamic, sid)
-			if err != nil {
-				lastReason = "dynamic_exit"
-				continue
-			}
-		} else {
-			proxyURL = proxyURLs[attempt%len(proxyURLs)]
-		}
-
-		result, authErr, harvestErr := s.harvestOnce(ctx, account, policy, proxyURL)
-		if authErr != nil {
-			return authErr
-		}
-		if harvestErr != nil {
-			lastReason = harvestErr.Error()
-			continue
-		}
-		ok, reason := EvaluateTurnStateProbeAttempt(result, policy)
-		if !ok {
-			lastReason = reason
-			continue
-		}
-		now := time.Now()
-		rec := TurnStateTicketRecord{
-			AccountID:      account.ID,
-			Identity:       turnStateProbeTicketIdentity(account),
-			State:          result.State,
-			StateHash:      TurnStateProbeStateHash(result.State),
-			StateLength:    len(strings.TrimSpace(result.State)),
-			Model:          firstNonEmpty(result.ObservedModel, policy.Model),
-			PolicyRevision: policy.Revision,
-			Status:         turnStateProbeStatusHolding,
-			RecheckAt:      now.Add(policy.RecheckAfter()),
-			UpdatedAt:      now,
-		}
-		logger.LegacyPrintf("service.turn_state_probe", "harvested account_id=%d hash=%s length=%d model=%s", account.ID, rec.StateHash, rec.StateLength, rec.Model)
-		return s.tickets.Put(ctx, rec)
-	}
-
-	fail := TurnStateTicketRecord{
-		AccountID:      accountID,
-		Identity:       turnStateProbeTicketIdentity(account),
-		PolicyRevision: policy.Revision,
-		Status:         turnStateProbeStatusFailed,
-		LastError:      lastReason,
-		UpdatedAt:      time.Now(),
-	}
-	_ = s.tickets.Put(ctx, fail)
-	if lastReason == "" {
-		lastReason = "probe_failed"
-	}
-	return infraerrors.BadRequest("TURN_STATE_PROBE_FAILED", lastReason)
-}
+var _ TurnStateTicketLookup = (*TurnStateProbeService)(nil)
 
 func (s *TurnStateProbeService) HarvestDue(ctx context.Context) error {
 	if s == nil {
@@ -406,26 +515,37 @@ func (s *TurnStateProbeService) HarvestDue(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(ids) == 0 {
-		return nil
-	}
-	sem := make(chan struct{}, turnStateProbeHarvestConcurrency)
-	var wg sync.WaitGroup
 	for _, id := range ids {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(accountID int64) {
-			defer wg.Done()
-			defer func() { <-sem }()
+		if !s.tryStartHarvest(id) {
+			break
+		}
+	}
+	return nil
+}
+
+func (s *TurnStateProbeService) tryStartHarvest(accountID int64) bool {
+	if s == nil {
+		return false
+	}
+	if s.harvestSlots == nil {
+		s.harvestSlots = make(chan struct{}, turnStateProbeHarvestConcurrency)
+	}
+	select {
+	case s.harvestSlots <- struct{}{}:
+		go func() {
+			defer func() { <-s.harvestSlots }()
+			ctx, cancel := context.WithTimeout(context.Background(), turnStateProbeLockTTL)
+			defer cancel()
 			err := s.ProbeAccount(ctx, accountID)
 			if err == nil || errors.Is(err, ErrTurnStateProbeBusy) || errors.Is(err, ErrTurnStateProbeRateLimited) {
 				return
 			}
 			logger.LegacyPrintf("service.turn_state_probe", "harvest account_id=%d: %v", accountID, err)
-		}(id)
+		}()
+		return true
+	default:
+		return false
 	}
-	wg.Wait()
-	return nil
 }
 
 func (s *TurnStateProbeService) listDueAccountIDs(ctx context.Context, policy TurnStateProbePolicy) ([]int64, error) {
@@ -458,16 +578,31 @@ func (s *TurnStateProbeService) ticketDue(ctx context.Context, accountID int64, 
 	if err != nil || ticket == nil {
 		return true
 	}
-	if ticket.Status != turnStateProbeStatusHolding || strings.TrimSpace(ticket.State) == "" {
-		return true
+	if ticket.Status == turnStateProbeStatusSkipped {
+		return false
 	}
 	if ticket.PolicyRevision != policy.Revision {
 		return true
 	}
-	if ticket.RecheckAt.IsZero() || !ticket.RecheckAt.After(now) {
+	if ticket.Status == turnStateProbeStatusHolding && strings.TrimSpace(ticket.State) != "" {
+		if ticket.RecheckAt.IsZero() || !ticket.RecheckAt.After(now) {
+			return true
+		}
+		return false
+	}
+	if ticket.Status == turnStateProbeStatusCooldown {
+		if ticket.RecheckAt.IsZero() || ticket.RecheckAt.After(now) {
+			return false
+		}
 		return true
 	}
-	return false
+	if turnStateProbeExhausted(ticket, policy) {
+		return false
+	}
+	if ticket.Status == turnStateProbeStatusRunning && now.Sub(ticket.UpdatedAt) < turnStateProbeLockTTL {
+		return false
+	}
+	return true
 }
 
 func (s *TurnStateProbeService) probeProxyURLs(ctx context.Context, policy TurnStateProbePolicy) ([]string, error) {

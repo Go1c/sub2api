@@ -81,7 +81,7 @@
               {{ row.recheck_at ? formatDateTime(row.recheck_at) : '—' }}
             </span>
             <p
-              v-if="row.status === 'failed' && row.last_error"
+              v-if="(row.status === 'failed' || row.status === 'skipped' || row.status === 'cooldown') && row.last_error"
               class="mt-1 max-w-xs truncate text-xs text-red-500"
               :title="row.last_error"
             >
@@ -434,7 +434,6 @@ const draft = reactive({
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let loadCtrl: AbortController | null = null
 
-const running = computed(() => accounts.value.some((item) => item.status === 'running'))
 const recheckOptions = computed(() => {
   const current = draft.recheckMinutes
   if (RECHECK_PRESETS.includes(current)) return RECHECK_PRESETS
@@ -462,6 +461,10 @@ function statusClass(status: string) {
       return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
     case 'holding':
       return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
+    case 'cooldown':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+    case 'skipped':
+      return 'bg-gray-100 text-gray-600 dark:bg-dark-600 dark:text-gray-300'
     case 'failed':
       return 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
     default:
@@ -489,7 +492,6 @@ function stopPoll() {
 
 function schedulePoll() {
   stopPoll()
-  if (!running.value) return
   pollTimer = setTimeout(async () => {
     await loadOverview(true)
     schedulePoll()

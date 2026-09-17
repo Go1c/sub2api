@@ -347,6 +347,7 @@ type TurnStateTicketRecord struct {
 	Model          string    `json:"model"`
 	PolicyRevision int64     `json:"policy_revision"`
 	Status         string    `json:"status"`
+	Attempts       int       `json:"attempts,omitempty"`
 	LastError      string    `json:"last_error,omitempty"`
 	RecheckAt      time.Time `json:"recheck_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
@@ -405,6 +406,8 @@ type TurnStateTicketStore interface {
 
 type TurnStateTicketLookup interface {
 	BindCurrent(ctx context.Context, account *Account, identity, turnKey, model string) (state string, ok bool)
+	// HasHolding reports a bindable holding ticket without pinning a turn.
+	HasHolding(ctx context.Context, account *Account) bool
 }
 
 func MergeTurnStateProbePassword(next, prev TurnStateProbePolicy) TurnStateProbePolicy {

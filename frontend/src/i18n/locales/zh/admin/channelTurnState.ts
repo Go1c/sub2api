@@ -61,7 +61,9 @@ export default {
       idle: '空闲',
       running: '探测中',
       holding: '已挂票',
-      failed: '失败'
+      failed: '失败',
+      skipped: '已跳过',
+      cooldown: '冷却中'
     }
   }
 }

@@ -571,6 +571,18 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		)
 		return nil, true, nil
 	}
+	if !req.PreserveStickyBinding && !s.service.accountHasTurnStateHolding(ctx, account) {
+		listed, listErr := s.service.listSchedulableAccounts(ctx, req.GroupID, req.Platform)
+		if listErr == nil {
+			switched, switchErr := s.service.tryAcquireTurnStateHoldingInsteadOfSticky(ctx, req.GroupID, req.Platform, sessionHash, req.RequestedModel, req.ExcludedIDs, req.RequireCompact, req.RequiredCapability, account.ID, listed)
+			if switchErr != nil {
+				return nil, false, switchErr
+			}
+			if switched != nil {
+				return switched, false, nil
+			}
+		}
+	}
 	result, acquireErr := s.service.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 	if acquireErr != nil && req.DisableStickyEscape {
 		return nil, false, acquireErr
@@ -1557,6 +1569,33 @@ func partitionOpenAIChatGPTSubscriptionAccounts(accounts []*Account) ([]*Account
 }
 
 func (s *defaultOpenAIAccountScheduler) trySelectByLoadBalancePool(
+	ctx context.Context,
+	req OpenAIAccountScheduleRequest,
+	filtered []*Account,
+	loadMap map[int64]*AccountLoadInfo,
+	budget *openAISelectionProbeBudget,
+) openAIAccountLoadSelectionAttempt {
+	if s != nil && s.service != nil {
+		holding, rest := s.service.partitionTurnStateHoldingAccounts(ctx, filtered)
+		if len(holding) > 0 && len(rest) > 0 {
+			attempt := s.trySelectByLoadBalancePoolUnpartitioned(ctx, req, holding, loadMap, budget)
+			if attempt.result != nil {
+				return attempt
+			}
+			restAttempt := s.trySelectByLoadBalancePoolUnpartitioned(ctx, req, rest, loadMap, budget)
+			if restAttempt.result != nil {
+				return restAttempt
+			}
+			if restAttempt.err != nil {
+				return restAttempt
+			}
+			return attempt
+		}
+	}
+	return s.trySelectByLoadBalancePoolUnpartitioned(ctx, req, filtered, loadMap, budget)
+}
+
+func (s *defaultOpenAIAccountScheduler) trySelectByLoadBalancePoolUnpartitioned(
 	ctx context.Context,
 	req OpenAIAccountScheduleRequest,
 	filtered []*Account,

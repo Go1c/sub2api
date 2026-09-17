@@ -61,7 +61,9 @@ export default {
       idle: 'Idle',
       running: 'Probing',
       holding: 'Holding',
-      failed: 'Failed'
+      failed: 'Failed',
+      skipped: 'Skipped',
+      cooldown: 'Cooldown'
     }
   }
 }

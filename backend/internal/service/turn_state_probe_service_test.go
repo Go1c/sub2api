@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -357,6 +358,7 @@ func TestTurnStateProbeBindCurrentNoopsIfDisabled(t *testing.T) {
 	state, ok := svc.BindCurrent(context.Background(), account, "", "", "gpt-6-astra")
 	require.False(t, ok)
 	require.Empty(t, state)
+	require.False(t, svc.HasHolding(context.Background(), account))
 
 	account.Extra[TurnStateProbeExtraKey] = map[string]any{"enabled": true}
 	disabled := DefaultTurnStateProbePolicy()
@@ -398,6 +400,7 @@ func TestTurnStateProbeBindCurrentReturnsTicketAndPinsTurn(t *testing.T) {
 	state, ok := svc.BindCurrent(context.Background(), account, "ns", "", "gpt-6-astra")
 	require.True(t, ok)
 	require.Equal(t, first, state)
+	require.True(t, svc.HasHolding(context.Background(), account))
 
 	bound, ok := svc.BindCurrent(context.Background(), account, "ns", "turn-1", "gpt-6-astra")
 	require.True(t, ok)
@@ -468,4 +471,273 @@ func TestTurnStateProbeAccountHarvestStoresHoldingTicket(t *testing.T) {
 	require.False(t, ticket.RecheckAt.IsZero())
 	require.Empty(t, ticket.LastError)
 	require.NotContains(t, ticket.Summary().StateHash, stateBlob)
+}
+
+func enableTurnStateProbePolicy(t *testing.T, svc *TurnStateProbeService) TurnStateProbePolicy {
+	t.Helper()
+	policy := DefaultTurnStateProbePolicy()
+	policy.Enabled = true
+	policy.Dynamic.Host = "us.lajiaohttp.net:2000"
+	policy.Dynamic.Username = "user1"
+	policy.Dynamic.Password = "secret"
+	policy.RPM = 60
+	saved, err := svc.SavePolicy(context.Background(), policy)
+	require.NoError(t, err)
+	return saved
+}
+
+func turnStateProbeSuccessSSE(state string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(openAICodexTurnStateHeader, state)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, strings.Join([]string{
+			`data: {"type":"response.created","response":{"model":"gpt-6-astra"}}`,
+			`data: {"type":"response.output_text.done","text":"21"}`,
+			`data: [DONE]`,
+			"",
+		}, "\n"))
+	}
+}
+
+type concurrentTurnStateHTTPUpstream struct {
+	handler  http.Handler
+	inflight atomic.Int64
+	max      atomic.Int64
+	calls    atomic.Int64
+}
+
+func (u *concurrentTurnStateHTTPUpstream) Do(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+	n := u.inflight.Add(1)
+	u.calls.Add(1)
+	for {
+		old := u.max.Load()
+		if n <= old || u.max.CompareAndSwap(old, n) {
+			break
+		}
+	}
+	defer u.inflight.Add(-1)
+	if u.handler == nil {
+		return &http.Response{StatusCode: http.StatusBadGateway, Body: io.NopCloser(bytes.NewReader(nil)), Header: http.Header{}}, nil
+	}
+	inner := req.Clone(req.Context())
+	rec := httptest.NewRecorder()
+	u.handler.ServeHTTP(rec, inner)
+	return rec.Result(), nil
+}
+
+func (u *concurrentTurnStateHTTPUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, conc int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+	return u.Do(req, proxyURL, accountID, conc)
+}
+
+func TestTurnStateProbeMarksRunningWhileHarvesting(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	upstream := &concurrentTurnStateHTTPUpstream{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-release
+		turnStateProbeSuccessSSE(stringsRepeat("A", 160)).ServeHTTP(w, r)
+	})}
+	tickets := newMemoryTurnStateTicketStore()
+	account := newOAuthProbeAccount(31, true)
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
+	enableTurnStateProbePolicy(t, svc)
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.ProbeAccount(context.Background(), account.ID) }()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("harvest did not start")
+	}
+	out, err := svc.GetOverview(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out.Accounts, 1)
+	require.Equal(t, turnStateProbeStatusRunning, out.Accounts[0].Status)
+
+	close(release)
+	require.NoError(t, <-errCh)
+	ticket, err := tickets.Get(context.Background(), account.ID)
+	require.NoError(t, err)
+	require.Equal(t, turnStateProbeStatusHolding, ticket.Status)
+}
+
+func TestTurnStateProbeGivesEachAccountTenAttemptsThenMovesOn(t *testing.T) {
+	upstream := &concurrentTurnStateHTTPUpstream{handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	})}
+	first := newOAuthProbeAccount(41, true)
+	second := newOAuthProbeAccount(42, true)
+	tickets := newMemoryTurnStateTicketStore()
+	svc := NewTurnStateProbeService(
+		newTurnStateProbeSettingRepo(),
+		newTurnStateProbeAccountRepo(first, second),
+		nil,
+		tickets,
+		upstream,
+		nil,
+	)
+	enableTurnStateProbePolicy(t, svc)
+
+	require.Error(t, svc.ProbeAccount(context.Background(), first.ID))
+	ticket, err := tickets.Get(context.Background(), first.ID)
+	require.NoError(t, err)
+	require.Equal(t, turnStateProbeStatusCooldown, ticket.Status)
+	require.Equal(t, turnStateProbeMaxAttempts, ticket.Attempts)
+	require.False(t, ticket.RecheckAt.IsZero())
+	require.Equal(t, int64(turnStateProbeMaxAttempts), upstream.calls.Load())
+
+	require.NoError(t, svc.HarvestDue(context.Background()))
+	require.Eventually(t, func() bool {
+		secondTicket, getErr := tickets.Get(context.Background(), second.ID)
+		return getErr == nil && secondTicket != nil && secondTicket.Attempts == turnStateProbeMaxAttempts && secondTicket.Status == turnStateProbeStatusCooldown
+	}, 3*time.Second, 20*time.Millisecond)
+	require.Equal(t, int64(turnStateProbeMaxAttempts*2), upstream.calls.Load())
+
+	firstAgain, err := tickets.Get(context.Background(), first.ID)
+	require.NoError(t, err)
+	require.Equal(t, turnStateProbeMaxAttempts, firstAgain.Attempts)
+}
+
+func TestTurnStateProbeHarvestDueRunsTenAccountsInParallel(t *testing.T) {
+	release := make(chan struct{})
+	started := make(chan struct{}, 16)
+	upstream := &concurrentTurnStateHTTPUpstream{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started <- struct{}{}
+		<-release
+		turnStateProbeSuccessSSE(stringsRepeat("A", 160)).ServeHTTP(w, r)
+	})}
+	accounts := make([]*Account, 0, 12)
+	for i := 1; i <= 12; i++ {
+		accounts = append(accounts, newOAuthProbeAccount(int64(50+i), true))
+	}
+	tickets := newMemoryTurnStateTicketStore()
+	svc := NewTurnStateProbeService(
+		newTurnStateProbeSettingRepo(),
+		newTurnStateProbeAccountRepo(accounts...),
+		nil,
+		tickets,
+		upstream,
+		nil,
+	)
+	enableTurnStateProbePolicy(t, svc)
+
+	done := make(chan error, 1)
+	go func() { done <- svc.HarvestDue(context.Background()) }()
+
+	deadline := time.After(2 * time.Second)
+	for i := 0; i < turnStateProbeHarvestConcurrency; i++ {
+		select {
+		case <-started:
+		case <-deadline:
+			t.Fatalf("started %d workers, want %d", i, turnStateProbeHarvestConcurrency)
+		}
+	}
+	select {
+	case <-started:
+		t.Fatal("started more than 10 harvests at once")
+	case <-time.After(150 * time.Millisecond):
+	}
+	require.Equal(t, int64(turnStateProbeHarvestConcurrency), upstream.max.Load())
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("HarvestDue should return after filling 10 slots")
+	}
+
+	close(release)
+}
+
+func TestTurnStateProbeRunOneResetsExhaustedAccount(t *testing.T) {
+	stateBlob := stringsRepeat("A", 160)
+	upstream := &concurrentTurnStateHTTPUpstream{handler: turnStateProbeSuccessSSE(stateBlob)}
+	account := newOAuthProbeAccount(61, true)
+	tickets := newMemoryTurnStateTicketStore()
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
+	saved := enableTurnStateProbePolicy(t, svc)
+	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{
+		AccountID:      account.ID,
+		Status:         turnStateProbeStatusFailed,
+		Attempts:       turnStateProbeMaxAttempts,
+		PolicyRevision: saved.Revision,
+	}))
+
+	require.NoError(t, svc.HarvestDue(context.Background()))
+	require.Equal(t, int64(0), upstream.calls.Load())
+
+	require.NoError(t, svc.RunOne(context.Background(), account.ID))
+	ticket, err := tickets.Get(context.Background(), account.ID)
+	require.NoError(t, err)
+	require.Equal(t, turnStateProbeStatusHolding, ticket.Status)
+	require.Equal(t, 1, ticket.Attempts)
+}
+
+func TestTurnStateProbeSkipsAccountOnUnauthorized(t *testing.T) {
+	upstream := &concurrentTurnStateHTTPUpstream{handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	})}
+	first := newOAuthProbeAccount(71, true)
+	second := newOAuthProbeAccount(72, true)
+	tickets := newMemoryTurnStateTicketStore()
+	svc := NewTurnStateProbeService(
+		newTurnStateProbeSettingRepo(),
+		newTurnStateProbeAccountRepo(first, second),
+		nil,
+		tickets,
+		upstream,
+		nil,
+	)
+	enableTurnStateProbePolicy(t, svc)
+
+	err := svc.ProbeAccount(context.Background(), first.ID)
+	require.Error(t, err)
+	ticket, getErr := tickets.Get(context.Background(), first.ID)
+	require.NoError(t, getErr)
+	require.Equal(t, turnStateProbeStatusSkipped, ticket.Status)
+	require.Equal(t, 1, ticket.Attempts)
+	require.Equal(t, int64(1), upstream.calls.Load())
+
+	require.NoError(t, svc.HarvestDue(context.Background()))
+	require.Eventually(t, func() bool {
+		secondTicket, secondErr := tickets.Get(context.Background(), second.ID)
+		return secondErr == nil && secondTicket != nil && secondTicket.Status == turnStateProbeStatusSkipped
+	}, 3*time.Second, 20*time.Millisecond)
+	require.Equal(t, int64(2), upstream.calls.Load())
+	firstAgain, getErr := tickets.Get(context.Background(), first.ID)
+	require.NoError(t, getErr)
+	require.Equal(t, 1, firstAgain.Attempts)
+	require.Equal(t, turnStateProbeStatusSkipped, firstAgain.Status)
+}
+
+func TestTurnStateProbeCooldownAfterTenFailuresThenRetries(t *testing.T) {
+	stateBlob := stringsRepeat("A", 160)
+	upstream := &concurrentTurnStateHTTPUpstream{handler: turnStateProbeSuccessSSE(stateBlob)}
+	account := newOAuthProbeAccount(81, true)
+	tickets := newMemoryTurnStateTicketStore()
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
+	saved := enableTurnStateProbePolicy(t, svc)
+	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{
+		AccountID:      account.ID,
+		Status:         turnStateProbeStatusCooldown,
+		Attempts:       turnStateProbeMaxAttempts,
+		PolicyRevision: saved.Revision,
+		RecheckAt:      time.Now().Add(time.Hour),
+	}))
+
+	require.NoError(t, svc.HarvestDue(context.Background()))
+	require.Equal(t, int64(0), upstream.calls.Load())
+
+	ticket, err := tickets.Get(context.Background(), account.ID)
+	require.NoError(t, err)
+	ticket.RecheckAt = time.Now().Add(-time.Second)
+	require.NoError(t, tickets.Put(context.Background(), *ticket))
+
+	require.NoError(t, svc.HarvestDue(context.Background()))
+	require.Eventually(t, func() bool {
+		got, getErr := tickets.Get(context.Background(), account.ID)
+		return getErr == nil && got != nil && got.Status == turnStateProbeStatusHolding
+	}, 3*time.Second, 20*time.Millisecond)
+	require.Equal(t, int64(1), upstream.calls.Load())
 }
