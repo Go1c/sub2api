@@ -66,7 +66,8 @@ describe('PoolAutoInspectDialog', () => {
       add_group_ids: [],
       remove_models: [],
       notify_oauth_401: false,
-      oauth_401_cooldown_minutes: 60
+      oauth_401_cooldown_minutes: 60,
+      close_429_exemption_on_degrade: true
     })
     updatePoolAutoInspectConfig.mockReset().mockResolvedValue({
       enabled: true,
@@ -76,7 +77,8 @@ describe('PoolAutoInspectDialog', () => {
       add_group_ids: [1, 7],
       remove_models: ['gpt-6-astra'],
       notify_oauth_401: true,
-      oauth_401_cooldown_minutes: 60
+      oauth_401_cooldown_minutes: 60,
+      close_429_exemption_on_degrade: true
     })
     runPoolAutoInspect.mockReset()
     showSuccess.mockReset()
@@ -129,8 +131,7 @@ describe('PoolAutoInspectDialog', () => {
     const wrapper = mountDialog(true)
     await flushPromises()
 
-    const toggles = wrapper.findAll('button[aria-checked]')
-    await toggles[1].trigger('click')
+    await wrapper.get('[data-testid="pool-auto-inspect-toggle-notify401"]').trigger('click')
     await flushPromises()
     await wrapper.get('[data-testid="pool-auto-inspect-cooldown"]').setValue(90)
     await wrapper.get('[data-testid="pool-auto-inspect-group-7"]').setValue(true)
@@ -143,6 +144,7 @@ describe('PoolAutoInspectDialog', () => {
       expect.objectContaining({
         notify_oauth_401: true,
         oauth_401_cooldown_minutes: 90,
+        close_429_exemption_on_degrade: true,
         add_group_ids: [7],
         remove_models: ['gpt-6-astra']
       })
@@ -150,5 +152,19 @@ describe('PoolAutoInspectDialog', () => {
     expect(runPoolAutoInspect).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-testid="pool-auto-inspect-status"]').text()).toContain('degraded=1')
     expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('defaults close-429-exemption on and can be turned off', async () => {
+    const wrapper = mountDialog(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="pool-auto-inspect-toggle-close429"]').attributes('aria-checked')).toBe('true')
+    await wrapper.get('[data-testid="pool-auto-inspect-toggle-close429"]').trigger('click')
+    await wrapper.get('[data-testid="pool-auto-inspect-save"]').trigger('click')
+    await flushPromises()
+
+    expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ close_429_exemption_on_degrade: false })
+    )
   })
 })

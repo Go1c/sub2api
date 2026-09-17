@@ -555,25 +555,39 @@ func TestOpenAIWSErrorHTTPStatusFromRaw_UsageLimitReachedIs429(t *testing.T) {
 
 func TestOpenAIWSRateLimitFailoverError_OAuthHonorsRetryAfterCooldown(t *testing.T) {
 	svc := &OpenAIGatewayService{}
-	headers := http.Header{"Retry-After": []string{"30"}}
 	body := []byte(`{"error":{"type":"rate_limit_error","message":"limited"}}`)
 
+	// 默认（豁免）账号：Retry-After 归瞬时信号，保留同账号重试，
+	// 并按服务器等待整窗重试。
+	shortHeaders := http.Header{"Retry-After": []string{"30"}}
 	oauthErr := svc.newOpenAIWSRateLimitFailoverError(context.Background(), &Account{
 		ID:       904,
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
-	}, headers, body, "limited")
-	require.False(t, oauthErr.RetryableOnSameAccount)
-	require.True(t, oauthErr.SameAccountRetryDeadline.IsZero())
-	require.Zero(t, oauthErr.SameAccountRetryDelay)
+	}, shortHeaders, body, "limited")
+	require.True(t, oauthErr.RetryableOnSameAccount)
+	require.False(t, oauthErr.SameAccountRetryDeadline.IsZero())
+	require.Equal(t, 30*time.Second, oauthErr.SameAccountRetryDelay)
 	require.Equal(t, body, oauthErr.ResponseBody)
 	require.Equal(t, "30", oauthErr.ResponseHeaders.Get("Retry-After"))
+
+	// 巡检降级后（enforced）的账号：长 Retry-After 升级为账号级拉闸，不再同账号重试。
+	longHeaders := http.Header{"Retry-After": []string{"3600"}}
+	enforcedErr := svc.newOpenAIWSRateLimitFailoverError(context.Background(), &Account{
+		ID:       906,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Extra:    map[string]any{OAuth429CooldownEnforcedExtraKey: true},
+	}, longHeaders, body, "limited")
+	require.False(t, enforcedErr.RetryableOnSameAccount)
+	require.True(t, enforcedErr.SameAccountRetryDeadline.IsZero())
+	require.Zero(t, enforcedErr.SameAccountRetryDelay)
 
 	apiKeyErr := svc.newOpenAIWSRateLimitFailoverError(context.Background(), &Account{
 		ID:       905,
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeAPIKey,
-	}, headers, body, "limited")
+	}, shortHeaders, body, "limited")
 	require.False(t, apiKeyErr.RetryableOnSameAccount)
 	require.True(t, apiKeyErr.SameAccountRetryDeadline.IsZero())
 	require.Zero(t, apiKeyErr.SameAccountRetryDelay)

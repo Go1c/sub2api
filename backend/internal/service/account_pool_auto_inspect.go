@@ -28,13 +28,14 @@ const (
 type AccountPoolAutoInspectConfig struct {
 	Enabled bool `json:"enabled"`
 
-	IntervalMinutes         int      `json:"interval_minutes"`
-	SuccessRateThreshold    int      `json:"success_rate_threshold"`
-	MinSamples              int      `json:"min_samples"`
-	AddGroupIDs             []int64  `json:"add_group_ids"`
-	RemoveModels            []string `json:"remove_models"`
-	NotifyOAuth401          bool     `json:"notify_oauth_401"`
-	OAuth401CooldownMinutes int      `json:"oauth_401_cooldown_minutes"`
+	IntervalMinutes            int      `json:"interval_minutes"`
+	SuccessRateThreshold       int      `json:"success_rate_threshold"`
+	MinSamples                 int      `json:"min_samples"`
+	AddGroupIDs                []int64  `json:"add_group_ids"`
+	RemoveModels               []string `json:"remove_models"`
+	NotifyOAuth401             bool     `json:"notify_oauth_401"`
+	OAuth401CooldownMinutes    int      `json:"oauth_401_cooldown_minutes"`
+	Close429ExemptionOnDegrade bool     `json:"close_429_exemption_on_degrade"`
 
 	TelegramBotToken string `json:"telegram_bot_token"`
 	TelegramChatID   string `json:"telegram_chat_id"`
@@ -63,19 +64,24 @@ type poolAutoInspectRemediation struct {
 	Mapping        map[string]any
 	MappingChanged bool
 	RemovedModels  []string
-	HasWork        bool
+	// Close429Exemption 同时关闭账号的 OAuth 429 拉闸豁免（写
+	// extra.oauth429_cooldown_enforced=true），让真实不健康的账号重新受
+	// Retry-After 冷却控制。与分组/模型降级一样，恢复时不自动回写。
+	Close429Exemption bool
+	HasWork           bool
 }
 
 func defaultAccountPoolAutoInspectConfig() *AccountPoolAutoInspectConfig {
 	return &AccountPoolAutoInspectConfig{
-		Enabled:                 false,
-		IntervalMinutes:         AccountPoolAutoInspectDefaultInterval,
-		SuccessRateThreshold:    AccountPoolAutoInspectDefaultThreshold,
-		MinSamples:              AccountPoolAutoInspectDefaultMinSamples,
-		AddGroupIDs:             []int64{},
-		RemoveModels:            []string{},
-		NotifyOAuth401:          false,
-		OAuth401CooldownMinutes: 60,
+		Enabled:                    false,
+		IntervalMinutes:            AccountPoolAutoInspectDefaultInterval,
+		SuccessRateThreshold:       AccountPoolAutoInspectDefaultThreshold,
+		MinSamples:                 AccountPoolAutoInspectDefaultMinSamples,
+		AddGroupIDs:                []int64{},
+		RemoveModels:               []string{},
+		NotifyOAuth401:             false,
+		OAuth401CooldownMinutes:    60,
+		Close429ExemptionOnDegrade: true,
 	}
 }
 
@@ -260,8 +266,17 @@ func planAccountPoolAutoInspectRemediationWithGroups(account Account, cfg *Accou
 			}
 		}
 	}
-	plan.HasWork = plan.GroupsChanged || plan.MappingChanged
+	if cfg.Close429ExemptionOnDegrade && shouldCloseAccount429Exemption(account) {
+		plan.Close429Exemption = true
+	}
+	plan.HasWork = plan.GroupsChanged || plan.MappingChanged || plan.Close429Exemption
 	return plan
+}
+
+// shouldCloseAccount429Exemption 降级时是否需要关闭 429 豁免：仅 OpenAI
+// OAuth 系账号（豁免键只作用于这条链路），当前仍处于豁免状态才有工作可做。
+func shouldCloseAccount429Exemption(account Account) bool {
+	return !account.IsCredentialShadow() && account.IsOpenAIOAuthLike() && account.OAuth429CooldownExempt()
 }
 
 func accountModelMappingRaw(account Account) (map[string]any, bool) {

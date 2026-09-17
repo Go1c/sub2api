@@ -2459,6 +2459,36 @@
         </div>
       </div>
 
+      <!-- 429 限流豁免（OpenAI OAuth / SetupToken） -->
+      <div
+        v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'setup-token')"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.oauth429Exempt') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.oauth429ExemptDesc') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="oauth429ExemptEnabled = !oauth429ExemptEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              oauth429ExemptEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                oauth429ExemptEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <!-- Codex 指纹收敛模式（仅 OpenAI OAuth） -->
       <div
         v-if="account?.platform === 'openai' && account?.type === 'oauth'"
@@ -3997,6 +4027,9 @@ const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI_WS_MODE)
 const codexCLIOnlyEnabled = ref(KIN_DEFAULT_CODEX_CLI_ONLY)
 const codexCLIOnlyAppServerEnabled = ref(false)
+// 429 限流豁免：缺省开（extra.oauth429_cooldown_enforced !== true），
+// 关闭后账号重新按上游 Retry-After 冷却停调（号池自动巡检降级时会自动关闭）。
+const oauth429ExemptEnabled = ref(true)
 const codexFingerprintMode = ref<CodexFingerprintMode>(KIN_DEFAULT_CODEX_FINGERPRINT_MODE)
 // 账号级出站 User-Agent：留空表示沿用全局设置（后端 GetOpenAIUserAgent 的回落顺序）
 const codexUserAgent = ref('')
@@ -4491,6 +4524,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openaiAPIKeyResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
   codexCLIOnlyEnabled.value = KIN_DEFAULT_CODEX_CLI_ONLY
   codexCLIOnlyAppServerEnabled.value = false
+  oauth429ExemptEnabled.value = true
   codexFingerprintMode.value = KIN_DEFAULT_CODEX_FINGERPRINT_MODE
   codexFingerprintConvergence.value = KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE
   codexUserAgent.value = ''
@@ -4544,6 +4578,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       codexCLIOnlyEnabled.value = resolveCodexCLIOnlyFromExtra(extra)
       codexCLIOnlyAppServerEnabled.value =
         extra?.codex_cli_only_allow_app_server === true
+      oauth429ExemptEnabled.value = extra?.oauth429_cooldown_enforced !== true
     }
     if (newAccount.type === 'oauth') {
       // 缺省按 device 呈现，与后端 GetCodexFingerprintMode 的 main-kin 默认一致
@@ -6082,6 +6117,8 @@ const handleSubmit = async () => {
         } else {
           delete newExtra.codex_cli_only_allow_app_server
         }
+        // 显式落键两种状态，避免依赖缺省语义；自动巡检降级写入的 true 也可在此重新打开。
+        newExtra.oauth429_cooldown_enforced = !oauth429ExemptEnabled.value
       }
 
       // 指纹收敛与实验开关：缺省是开，关闭必须显式落键，否则会被后端当成未设置而回落到默认开。

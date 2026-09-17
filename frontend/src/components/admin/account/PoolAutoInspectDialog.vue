@@ -9,7 +9,7 @@
           <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.enable') }}</div>
           <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.enableHint') }}</p>
         </div>
-        <Toggle v-model="form.enabled" />
+        <Toggle v-model="form.enabled" data-testid="pool-auto-inspect-toggle-enabled" />
       </div>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -113,13 +113,21 @@
         </div>
       </div>
 
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.close429Exemption') }}</div>
+          <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.close429ExemptionHint') }}</p>
+        </div>
+        <Toggle v-model="form.close_429_exemption_on_degrade" data-testid="pool-auto-inspect-toggle-close429" />
+      </div>
+
       <div class="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-dark-600">
         <div class="flex items-center justify-between gap-3">
           <div>
             <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.notify401') }}</div>
             <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.notify401Hint') }}</p>
           </div>
-          <Toggle v-model="form.notify_oauth_401" />
+          <Toggle v-model="form.notify_oauth_401" data-testid="pool-auto-inspect-toggle-notify401" />
         </div>
         <div v-if="form.notify_oauth_401" class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
@@ -218,6 +226,7 @@ const emptyForm = (): PoolAutoInspectConfig => ({
   remove_models: [],
   notify_oauth_401: false,
   oauth_401_cooldown_minutes: 60,
+  close_429_exemption_on_degrade: true,
   telegram_bot_token: '',
   telegram_chat_id: ''
 })
@@ -252,6 +261,7 @@ function applyConfig(cfg: PoolAutoInspectConfig | PoolAutoInspectStatus) {
   form.remove_models = [...(cfg.remove_models || [])]
   form.notify_oauth_401 = !!cfg.notify_oauth_401
   form.oauth_401_cooldown_minutes = cfg.oauth_401_cooldown_minutes || 60
+  form.close_429_exemption_on_degrade = cfg.close_429_exemption_on_degrade !== false
   form.telegram_bot_token = cfg.telegram_bot_token || ''
   form.telegram_chat_id = cfg.telegram_chat_id || ''
 }
