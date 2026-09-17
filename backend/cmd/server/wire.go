@@ -95,6 +95,7 @@ func provideCleanup(
 	opsAggregation *service.OpsAggregationService,
 	opsAlertEvaluator *service.OpsAlertEvaluatorService,
 	opsAccountErrorAlert *service.OpsAccountErrorAlertService,
+	poolAutoInspect *service.AccountPoolAutoInspectService,
 	opsCleanup *service.OpsCleanupService,
 	opsScheduledReport *service.OpsScheduledReportService,
 	opsSystemLogSink *service.OpsSystemLogSink,
@@ -224,6 +225,12 @@ func provideCleanup(
 			{"OpsAccountErrorAlertService", func() error {
 				if opsAccountErrorAlert != nil {
 					opsAccountErrorAlert.Stop()
+				}
+				return nil
+			}},
+			{"AccountPoolAutoInspectService", func() error {
+				if poolAutoInspect != nil {
+					poolAutoInspect.Stop()
 				}
 				return nil
 			}},

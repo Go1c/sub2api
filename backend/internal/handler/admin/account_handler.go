@@ -66,6 +66,7 @@ type AccountHandler struct {
 	upstreamBillingProbe    *service.UpstreamBillingProbeService
 	ollamaCloudUsage        *service.OllamaCloudUsageService
 	requestHealth           *service.AccountRequestHealthService
+	poolAutoInspect         *service.AccountPoolAutoInspectService
 	cfg                     *config.Config
 }
 
@@ -80,6 +81,10 @@ func (h *AccountHandler) SetOllamaCloudUsageService(usage *service.OllamaCloudUs
 
 func (h *AccountHandler) SetRequestHealthService(svc *service.AccountRequestHealthService) {
 	h.requestHealth = svc
+}
+
+func (h *AccountHandler) SetPoolAutoInspectService(svc *service.AccountPoolAutoInspectService) {
+	h.poolAutoInspect = svc
 }
 
 // NewAccountHandler creates a new admin account handler

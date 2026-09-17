@@ -484,6 +484,10 @@ const (
 	// SettingKeyOpsAccountErrorAlertConfig stores JSON config for account error Telegram alerts.
 	SettingKeyOpsAccountErrorAlertConfig = "ops_account_error_alert_config"
 
+	// SettingKeyAccountPoolAutoInspectConfig stores JSON config for pool auto-inspect
+	// (success-rate group join, model strip, and optional OAuth 401 Telegram).
+	SettingKeyAccountPoolAutoInspectConfig = "account_pool_auto_inspect_config"
+
 	// =========================
 	// Channel Monitor (渠道监控)
 	// =========================

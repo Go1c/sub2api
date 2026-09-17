@@ -57,6 +57,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		&service.OpsAggregationService{},
 		&service.OpsAlertEvaluatorService{},
 		nil, // opsAccountErrorAlert
+		nil, // poolAutoInspect
 		&service.OpsCleanupService{},
 		&service.OpsScheduledReportService{},
 		opsSystemLogSinkSvc,

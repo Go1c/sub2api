@@ -16,6 +16,17 @@
             @refresh="handleManualRefresh"
             @create="showCreate = true"
           >
+            <template #before>
+              <button
+                class="btn btn-secondary px-2 md:px-3"
+                :title="t('admin.accounts.poolAutoInspect.button')"
+                data-testid="pool-auto-inspect"
+                @click="showPoolAutoInspect = true"
+              >
+                <Icon name="cog" size="sm" class="md:mr-1.5" />
+                <span class="hidden md:inline">{{ t('admin.accounts.poolAutoInspect.button') }}</span>
+              </button>
+            </template>
             <template #after>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
@@ -507,6 +518,7 @@
     </ConfirmDialog>
     <ErrorPassthroughRulesModal :show="showErrorPassthrough" @close="showErrorPassthrough = false" />
     <TLSFingerprintProfilesModal :show="showTLSFingerprintProfiles" @close="showTLSFingerprintProfiles = false" />
+    <PoolAutoInspectDialog :show="showPoolAutoInspect" :groups="groups" @close="showPoolAutoInspect = false" />
     <TotpStepUpDialog :controller="accountExportStepUp" />
   </AppLayout>
 </template>
@@ -540,6 +552,7 @@ import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountIqTestModal from '@/components/admin/account/AccountIqTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
+import PoolAutoInspectDialog from '@/components/admin/account/PoolAutoInspectDialog.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
@@ -641,6 +654,7 @@ const showIqTest = ref(false)
 const showStats = ref(false)
 const showErrorPassthrough = ref(false)
 const showTLSFingerprintProfiles = ref(false)
+const showPoolAutoInspect = ref(false)
 const edAcc = ref<Account | null>(null)
 const tempUnschedAcc = ref<Account | null>(null)
 const deletingAcc = ref<Account | null>(null)
@@ -1470,7 +1484,8 @@ const isAnyModalOpen = computed(() => {
     showStats.value ||
     showSchedulePanel.value ||
     showErrorPassthrough.value ||
-    showTLSFingerprintProfiles.value
+    showTLSFingerprintProfiles.value ||
+    showPoolAutoInspect.value
   )
 })
 

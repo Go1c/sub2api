@@ -1028,6 +1028,7 @@ var ProviderSet = wire.NewSet(
 	wire.Bind(new(OpsTelegramSender), new(*telegramOpsSender)),
 	ProvideOpsAccountErrorAlertLockStore,
 	ProvideOpsAccountErrorAlertService,
+	ProvideAccountPoolAutoInspectService,
 	ProvideOpsCleanupService,
 	ProvideOpsScheduledReportService,
 	NewEmailService,

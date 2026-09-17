@@ -58,6 +58,7 @@ func ProvideAdminHandlers(
 	gatewayService *service.GatewayService,
 	openaiGatewayService *service.OpenAIGatewayService,
 	opsService *service.OpsService,
+	poolAutoInspect *service.AccountPoolAutoInspectService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
@@ -66,6 +67,7 @@ func ProvideAdminHandlers(
 		adminService,
 	)
 	accountHandler.SetRequestHealthService(health)
+	accountHandler.SetPoolAutoInspectService(poolAutoInspect)
 	if gatewayService != nil {
 		gatewayService.SetRequestHealthService(health)
 	}

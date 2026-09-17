@@ -1044,6 +1044,43 @@ export async function probeUpstreamBillingBatch(accountIds: number[]): Promise<U
   return data.results
 }
 
+export interface PoolAutoInspectConfig {
+  enabled: boolean
+  interval_minutes: number
+  success_rate_threshold: number
+  min_samples: number
+  add_group_ids: number[]
+  remove_models: string[]
+  notify_oauth_401: boolean
+  oauth_401_cooldown_minutes: number
+  telegram_bot_token?: string
+  telegram_chat_id?: string
+}
+
+export interface PoolAutoInspectStatus extends PoolAutoInspectConfig {
+  last_run_at?: string | null
+  last_result?: string
+  last_error?: string
+  telegram_ready?: boolean
+}
+
+export async function getPoolAutoInspectConfig(): Promise<PoolAutoInspectStatus> {
+  const { data } = await apiClient.get<PoolAutoInspectStatus>('/admin/accounts/pool-auto-inspect/config')
+  return data
+}
+
+export async function updatePoolAutoInspectConfig(config: PoolAutoInspectConfig): Promise<PoolAutoInspectConfig> {
+  const { data } = await apiClient.put<PoolAutoInspectConfig>('/admin/accounts/pool-auto-inspect/config', config)
+  return data
+}
+
+export async function runPoolAutoInspect(): Promise<PoolAutoInspectStatus> {
+  const { data } = await apiClient.post<PoolAutoInspectStatus>('/admin/accounts/pool-auto-inspect/run', null, {
+    timeout: 120000
+  })
+  return data
+}
+
 export async function getOllamaCloudUsageSettings(): Promise<OllamaCloudUsageSettings> {
   const { data } = await apiClient.get<OllamaCloudUsageSettings>('/admin/accounts/ollama-cloud-usage/settings')
   return data
@@ -1146,6 +1183,9 @@ export const accountsAPI = {
   setUpstreamBillingProbeEnabled,
   probeUpstreamBilling,
   probeUpstreamBillingBatch,
+  getPoolAutoInspectConfig,
+  updatePoolAutoInspectConfig,
+  runPoolAutoInspect,
   getOllamaCloudUsageSettings,
   updateOllamaCloudUsageSettings,
   getOllamaCloudUsage,
