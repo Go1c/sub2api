@@ -159,6 +159,7 @@ type openAIHTTP2FallbackState struct {
 // 7. 代理变更时清空旧连接池，避免复用错误代理
 // 8. 账号并发数与连接池上限对应（账号隔离策略下）
 type httpUpstreamService struct {
+	traffic *service.AccountTrafficService
 	cfg     *config.Config                  // 全局配置
 	mu      sync.RWMutex                    // 保护 clients map 的读写锁
 	clients map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
@@ -181,6 +182,16 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 	}
 }
 
+func NewControlledHTTPUpstream(cfg *config.Config, traffic *service.AccountTrafficService) service.HTTPUpstream {
+	s := NewHTTPUpstream(cfg).(*httpUpstreamService)
+	s.traffic = traffic
+	return s
+}
+
+func (s *httpUpstreamService) AccountTrafficController() *service.AccountTrafficService {
+	return s.traffic
+}
+
 // Do 执行 HTTP 请求
 // 根据隔离策略获取或创建客户端，并跟踪请求生命周期
 //
@@ -198,6 +209,16 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 //   - 调用方必须关闭 resp.Body，否则会导致 inFlight 计数泄漏
 //   - inFlight > 0 的客户端不会被淘汰，确保活跃请求不被中断
 func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	send := func(controlled *http.Request) (*http.Response, error) {
+		return s.doUncontrolled(controlled, proxyURL, accountID, accountConcurrency)
+	}
+	if s.traffic == nil {
+		return send(req)
+	}
+	return s.traffic.DoHTTP(req, send)
+}
+
+func (s *httpUpstreamService) doUncontrolled(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
 	applyGrokCLIProxyHeaders(req)
 	if err := s.validateRequestHost(req); err != nil {
 		return nil, err
@@ -244,13 +265,23 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 // profile 为 nil 时不启用 TLS 指纹，行为与 Do 方法相同。
 // profile 非 nil 时使用指定的 Profile 进行 TLS 指纹伪装。
 func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	send := func(controlled *http.Request) (*http.Response, error) {
+		return s.doWithTLSUncontrolled(controlled, proxyURL, accountID, accountConcurrency, profile)
+	}
+	if s.traffic == nil {
+		return send(req)
+	}
+	return s.traffic.DoHTTP(req, send)
+}
+
+func (s *httpUpstreamService) doWithTLSUncontrolled(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
 	if profile == nil {
-		return s.Do(req, proxyURL, accountID, accountConcurrency)
+		return s.doUncontrolled(req, proxyURL, accountID, accountConcurrency)
 	}
 	// Plain HTTP has no TLS handshake to fingerprint. Reuse the normal transport
 	// so a configured HTTP or SOCKS proxy is not bypassed.
 	if req != nil && req.URL != nil && strings.EqualFold(req.URL.Scheme, "http") {
-		return s.Do(req, proxyURL, accountID, accountConcurrency)
+		return s.doUncontrolled(req, proxyURL, accountID, accountConcurrency)
 	}
 	applyGrokCLIProxyHeaders(req)
 	upstreamProfile := service.HTTPUpstreamProfileDefault

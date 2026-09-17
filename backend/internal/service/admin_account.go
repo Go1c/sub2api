@@ -495,6 +495,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err := ValidateUpstreamRequestIDHeaderExtra(accountExtra); err != nil {
 		return nil, err
 	}
+	if _, err := ParseAccountTrafficPolicy(accountExtra); err != nil {
+		return nil, err
+	}
 
 	// 绑定分组
 	groupIDs := input.GroupIDs
@@ -602,6 +605,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			return nil, err
 		}
 		if err := ValidateUpstreamRequestIDHeaderExtra(normalizedExtra); err != nil {
+			return nil, err
+		}
+		if _, err := ParseAccountTrafficPolicy(normalizedExtra); err != nil {
 			return nil, err
 		}
 	}
@@ -916,6 +922,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
+	if _, err := ParseAccountTrafficPolicy(updates); err != nil {
+		return err
+	}
 	updates = sanitizedCodexFingerprintExtraUpdates(updates)
 	updates = stripOpenAIAutoResetCreditManagedExtra(updates, true)
 	delete(updates, UpstreamBillingProbeEnabledExtraKey)

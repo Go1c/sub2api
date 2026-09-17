@@ -59,9 +59,11 @@ func ProvideAdminHandlers(
 	openaiGatewayService *service.OpenAIGatewayService,
 	opsService *service.OpsService,
 	poolAutoInspect *service.AccountPoolAutoInspectService,
+	accountTraffic *service.AccountTrafficService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
+	accountHandler.SetAccountTrafficHandler(accountTraffic)
 	health := service.NewAccountRequestHealthService(
 		service.NewAccountRequestHealthStore(redisClient, concurrencyCache),
 		adminService,

@@ -67,6 +67,7 @@ type AccountHandler struct {
 	ollamaCloudUsage        *service.OllamaCloudUsageService
 	requestHealth           *service.AccountRequestHealthService
 	poolAutoInspect         *service.AccountPoolAutoInspectService
+	traffic                 *service.AccountTrafficService
 	cfg                     *config.Config
 }
 
@@ -1024,6 +1025,10 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if _, err := service.ParseAccountTrafficPolicy(req.Extra); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	// 确定是否跳过混合渠道检查
 	skipCheck := req.ConfirmMixedChannelRisk != nil && *req.ConfirmMixedChannelRisk
@@ -1162,6 +1167,10 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if _, err := service.ParseAccountTrafficPolicy(req.Extra); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	// 确定是否跳过混合渠道检查
 	skipCheck := req.ConfirmMixedChannelRisk != nil && *req.ConfirmMixedChannelRisk
@@ -1200,6 +1209,13 @@ func (h *AccountHandler) Update(c *gin.Context) {
 
 		response.ErrorFrom(c, err)
 		return
+	}
+
+	if h.traffic != nil && account.Extra[service.AccountTrafficPolicyKey] != nil {
+		if err := h.traffic.Sync(c.Request.Context(), account); err != nil {
+			slog.Warn("account_traffic_sync_after_edit_failed", "account_id", account.ID, "error", err)
+			c.Header("X-Account-Traffic-State", "unavailable")
+		}
 	}
 
 	// OpenAI APIKey: credentials 修改后重新探测上游能力（base_url/api_key 可能变更）。
@@ -1619,6 +1635,10 @@ func (h *AccountHandler) ApplyOAuthCredentials(c *gin.Context) {
 		return
 	}
 	if err := service.ValidateUpstreamRequestIDHeaderExtra(req.Extra); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if _, err := service.ParseAccountTrafficPolicy(req.Extra); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -2112,6 +2132,15 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 				})
 				continue
 			}
+			if _, err := service.ParseAccountTrafficPolicy(item.Extra); err != nil {
+				failed++
+				results = append(results, gin.H{
+					"name":    item.Name,
+					"success": false,
+					"error":   err.Error(),
+				})
+				continue
+			}
 
 			skipCheck := item.ConfirmMixedChannelRisk != nil && *item.ConfirmMixedChannelRisk
 
@@ -2307,6 +2336,10 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 	// base_rpm 输入校验：负值归零，超过 10000 截断
 	sanitizeExtraBaseRPM(req.Extra)
 	if err := service.ValidateUpstreamRequestIDHeaderExtra(req.Extra); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if _, err := service.ParseAccountTrafficPolicy(req.Extra); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

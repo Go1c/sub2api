@@ -1901,6 +1901,16 @@
           </div>
         </div>
       </div>
+      <AccountTrafficControls
+        ref="trafficControls"
+        v-if="account?.id"
+        :account-id="account.id"
+        :platform="account.platform"
+        embedded
+        v-model="trafficPolicyDraft"
+        :hard-limit="form.concurrency"
+        :disabled="submitting"
+      />
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <label class="input-label">{{ t('admin.accounts.expiresAt') }}</label>
         <input v-model="expiresAtInput" type="datetime-local" class="input" />
@@ -3274,6 +3284,8 @@ import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import OpenCodeGoProtocolRulesEditor from '@/components/account/OpenCodeGoProtocolRulesEditor.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
 import OllamaCloudUsageSettings from '@/components/account/OllamaCloudUsageSettings.vue'
+import AccountTrafficControls from '@/components/account/AccountTrafficControls.vue'
+import { defaultTrafficPolicy, normalizeTrafficDraft, trafficPolicyError, type AccountTrafficPolicy } from '@/api/admin/accountTraffic'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
@@ -3606,6 +3618,11 @@ const errorAlertEnabled = ref(true)
 const errorAlertKeywords = ref<string[]>([])
 const errorAlertKeywordInput = ref('')
 const errorAlertRules = ref<ErrorAlertRuleForm[]>([])
+// 账号级可选流量控制：嵌入组件随账号一起保存，草稿只在切换账号时从 extra 重载。
+const trafficPolicyDraft = ref<AccountTrafficPolicy>(defaultTrafficPolicy())
+const trafficControls = ref<InstanceType<typeof AccountTrafficControls> | null>(null)
+let initialTrafficPolicy = JSON.stringify(defaultTrafficPolicy())
+let trafficDraftAccountID: number | null = null
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
@@ -4404,7 +4421,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	upstreamBillingAutoProbeEnabled.value = extra?.upstream_billing_probe_enabled === true
   upstreamBillingRateSyncEnabled.value =
     upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
-	loadErrorAlertFromExtra(extra)
+  loadErrorAlertFromExtra(extra)
+  if (newAccount.id !== trafficDraftAccountID) {
+    trafficPolicyDraft.value = { ...defaultTrafficPolicy(), ...((extra?.account_traffic_control as Partial<AccountTrafficPolicy>) || {}) }
+    initialTrafficPolicy = JSON.stringify(trafficPolicyDraft.value)
+    trafficDraftAccountID = newAccount.id
+  }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
@@ -5378,6 +5400,14 @@ const handleSubmit = async () => {
 			return
 		}
 	}
+  const traffic = normalizeTrafficDraft(trafficPolicyDraft.value)
+  const trafficError = trafficPolicyError(traffic, form.concurrency)
+  if (trafficError) {
+    trafficControls.value?.prepareForSave?.()
+    appStore.showError(trafficError)
+    return
+  }
+  trafficPolicyDraft.value = traffic
 
   const updatePayload: Record<string, unknown> = { ...form }
   try {
@@ -6094,6 +6124,9 @@ const handleSubmit = async () => {
     }
 
     applyErrorAlertToUpdatePayload(updatePayload)
+    if (JSON.stringify(traffic) !== initialTrafficPolicy) {
+      updatePayload.extra = { ...((updatePayload.extra as Record<string, unknown>) || props.account.extra || {}), account_traffic_control: { ...traffic } }
+    }
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
       await submitUpdateAccount(accountID, updatePayload)

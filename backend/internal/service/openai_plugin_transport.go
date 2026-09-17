@@ -8,14 +8,21 @@ func (s *OpenAIGatewayService) SetPluginManager(manager *PluginManager) {
 
 // doOpenAIUpstream 只在 OpenAI OAuth 能力绑定已启用时把真实请求交给插件。
 // 插件返回标准 http.Response，响应解析、错误映射、SSE 和计费仍由现有核心链处理。
+// 流量控制包在最外层：插件自带的出站通道同样计入账号预算。
 func (s *OpenAIGatewayService) doOpenAIUpstream(request *http.Request, proxyURL string, account *Account) (*http.Response, error) {
+	request = WithAccountTrafficRequest(request, account)
+	return accountTrafficController(s.httpUpstream).DoHTTP(request, func(controlled *http.Request) (*http.Response, error) {
+		return s.doOpenAIUpstreamWithoutTraffic(controlled, proxyURL, account)
+	})
+}
+func (s *OpenAIGatewayService) doOpenAIUpstreamWithoutTraffic(request *http.Request, proxyURL string, account *Account) (*http.Response, error) {
 	if s.pluginManager != nil {
 		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
 			return response, err
 		}
 	}
-	return s.httpUpstream.Do(request, proxyURL, account.ID, account.Concurrency)
+	return s.httpUpstream.Do(WithAccountTrafficRequest(request, account), proxyURL, account.ID, account.Concurrency)
 }
 
 // doOpenAIAccountTestUpstream 让 OpenAI OAuth 账号测试与真实转发使用同一插件路径。
@@ -26,6 +33,12 @@ func (s *AccountTestService) doOpenAIAccountTestUpstream(
 	account *Account,
 	useTLSFallback bool,
 ) (*http.Response, error) {
+	request = WithAccountTrafficRequest(request, account)
+	return accountTrafficController(s.httpUpstream).DoHTTP(request, func(controlled *http.Request) (*http.Response, error) {
+		return s.doOpenAIAccountTestUpstreamWithoutTraffic(controlled, proxyURL, account, useTLSFallback)
+	})
+}
+func (s *AccountTestService) doOpenAIAccountTestUpstreamWithoutTraffic(request *http.Request, proxyURL string, account *Account, useTLSFallback bool) (*http.Response, error) {
 	if s.pluginManager != nil {
 		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
@@ -34,12 +47,12 @@ func (s *AccountTestService) doOpenAIAccountTestUpstream(
 	}
 	if useTLSFallback {
 		return s.httpUpstream.DoWithTLS(
-			request,
+			WithAccountTrafficRequest(request, account),
 			proxyURL,
 			account.ID,
 			account.Concurrency,
 			s.tlsFPProfileService.ResolveTLSProfile(account),
 		)
 	}
-	return s.httpUpstream.Do(request, proxyURL, account.ID, account.Concurrency)
+	return s.httpUpstream.Do(WithAccountTrafficRequest(request, account), proxyURL, account.ID, account.Concurrency)
 }

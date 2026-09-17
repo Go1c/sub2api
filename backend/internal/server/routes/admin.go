@@ -375,6 +375,8 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/ollama-cloud-usage/settings", h.Admin.Account.GetOllamaCloudUsageSettings)
 		accounts.PUT("/ollama-cloud-usage/settings", h.Admin.Account.UpdateOllamaCloudUsageSettings)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
+		accounts.GET("/:id/traffic-control", h.Admin.Account.GetTrafficControl)
+		accounts.PUT("/:id/traffic-control", h.Admin.Account.UpdateTrafficControl)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/:id/duplicate", h.Admin.Account.Duplicate)
 		accounts.POST("/check-mixed-channel", h.Admin.Account.CheckMixedChannel)
