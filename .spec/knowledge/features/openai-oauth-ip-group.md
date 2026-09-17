@@ -11,7 +11,7 @@ metadata:
 
 - 已绑定且仍存活、未在本轮失败的会话继续使用原出口。
 - 新绑定或失败后换出口时，从存活且本轮未尝试的 IP 中随机选择；候选随机排序后逐个检查并发槽位，跳过无法占用的出口，不按 IP ID 顺序请求。
-- 一次请求内的 transient 重试复用现有 `tried` 集合。同一轮不重复已失败出口，整轮尝试完才清空集合进入下一轮；最多两轮，耗尽后切换账号。
+- 一次请求内的 transient 重试复用现有 `tried` 集合。同一轮不重复已失败出口，整轮尝试完才清空集合进入下一轮；最多两轮，耗尽后切换账号。SOCKS / 运输层连不上（`authentication failed`、connection refused 等）同样只跳过该 IP、不把账号临时停调度；单出口账号的持久运输层失败仍停 10 分钟。
 - 保留原有账号配额限流、会话绑定及并发逻辑。已有会话绑定的出口满并发时仍保持绑定；新绑定没有可用槽位时按现有逻辑失败关闭。
 - 此处的轮次作用于单次请求的重试，不在账号所有成功请求之间建立全局轮次。
 
@@ -26,4 +26,4 @@ metadata:
 - OpenAI OAuth JSON 文件导入统一使用并发 `100` 和 `extra.codex_fingerprint_mode: device`（仅设备），覆盖源文件中的这两项值；创建向导默认并发也为 `100`，允许手动调整。
 - 导入请求写入 `extra.error_alert.enabled: false`，默认关闭 Telegram 报错监控。
 
-相关实现：`backend/internal/service/openai_ip_group_proxy.go`；回归测试：`openai_ip_group_proxy_test.go`、`openai_ip_group_rate_limit_test.go`（`unit` build tag）。
+相关实现：`backend/internal/service/openai_ip_group_proxy.go`、`openai_upstream_transport_error.go`；回归测试：`openai_ip_group_proxy_test.go`、`openai_ip_group_rate_limit_test.go`、`openai_upstream_transport_error_handle_test.go`（`unit` build tag）。

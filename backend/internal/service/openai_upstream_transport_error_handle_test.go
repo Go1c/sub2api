@@ -338,6 +338,108 @@ func TestHandleOpenAIUpstreamTransportError_ContextCanceledSkipsOllamaActivity(t
 	require.False(t, ok, "context.Canceled is client disconnect before a fault; do not count as Ollama activity")
 }
 
+func socksAuthFailedErr() error {
+	return errors.New(`Post "https://chatgpt.com/backend-api/codex/responses": socks connect tcp 192.217.228.102:1080->chatgpt.com:443: username/password authentication failed`)
+}
+
+func bindGinRequestToIPGroupCtx(c *gin.Context, ctx context.Context) {
+	if c != nil && c.Request != nil {
+		c.Request = c.Request.WithContext(ctx)
+	}
+}
+
+// A durable SOCKS failure on one IP-group member must skip that IP and retry
+// the same account. It must not temporarily unschedule the whole account.
+func TestHandleOpenAIUpstreamTransportError_IPGroupPersistentSkipsMemberWithoutUnscheduling(t *testing.T) {
+	svc, account, resolver, _, ctx := setupIPGroupRotateTest(t, 228)
+	repo := &openaiTransportAccountRepoStub{}
+	svc.accountRepo = repo
+
+	first, err := resolveOpenAIAccountProxy(ctx, resolver, account, "conv-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(2), first.Proxy.ID)
+
+	c, rec := newOpenAITransportErrTestContext()
+	bindGinRequestToIPGroupCtx(c, ctx)
+
+	retErr := svc.handleOpenAIUpstreamTransportError(ctx, c, account, socksAuthFailedErr(), false)
+
+	var fo *UpstreamFailoverError
+	require.True(t, errors.As(retErr, &fo), "IP-group transport error must return *UpstreamFailoverError")
+	require.Equal(t, http.StatusBadGateway, fo.StatusCode)
+	require.True(t, fo.RetryableOnSameAccount, "must retry the same account on another IP")
+	require.True(t, fo.RequestScopedTransient)
+	require.Equal(t, NextAccountRetry, fo.NextAccountAction)
+	require.Equal(t, OpenAIIPGroupRotateReason, fo.Reason)
+
+	require.Empty(t, repo.tempUnschedCalls, "a dead Socket IP must not unschedule the account")
+	require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+	require.Equal(t, 0, rec.Body.Len())
+
+	again, err := resolveOpenAIAccountProxy(ctx, resolver, account, "conv-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(3), again.Proxy.ID)
+}
+
+func TestHandleOpenAIUpstreamTransportError_IPGroupTwoPassThenSwitchAccountWithoutUnscheduling(t *testing.T) {
+	svc, account, resolver, _, ctx := setupIPGroupRotateTest(t, 229)
+	repo := &openaiTransportAccountRepoStub{}
+	svc.accountRepo = repo
+	wantOrder := []int64{2, 3, 2, 3}
+
+	c, rec := newOpenAITransportErrTestContext()
+	bindGinRequestToIPGroupCtx(c, ctx)
+
+	for i, wantID := range wantOrder {
+		resolved, err := resolveOpenAIAccountProxy(ctx, resolver, account, "conv-1")
+		require.NoError(t, err, "attempt %d", i+1)
+		require.Equal(t, wantID, resolved.Proxy.ID, "attempt %d", i+1)
+		if resolved.Release != nil {
+			resolved.Release()
+		}
+
+		retErr := svc.handleOpenAIUpstreamTransportError(ctx, c, account, socksAuthFailedErr(), false)
+		var fo *UpstreamFailoverError
+		require.True(t, errors.As(retErr, &fo), "attempt %d", i+1)
+		require.True(t, fo.RequestScopedTransient)
+		require.Equal(t, NextAccountRetry, fo.NextAccountAction)
+		require.Empty(t, repo.tempUnschedCalls)
+		require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+		if i < len(wantOrder)-1 {
+			require.True(t, fo.RetryableOnSameAccount, "attempt %d should stay on the account", i+1)
+			continue
+		}
+		require.False(t, fo.RetryableOnSameAccount, "after two full IP passes, switch account")
+	}
+	require.Equal(t, 0, rec.Body.Len())
+}
+
+func TestHandleOpenAIUpstreamTransportError_IPGroupTransientAlsoRotatesWithoutUnscheduling(t *testing.T) {
+	svc, account, resolver, _, ctx := setupIPGroupRotateTest(t, 230)
+	repo := &openaiTransportAccountRepoStub{}
+	svc.accountRepo = repo
+
+	first, err := resolveOpenAIAccountProxy(ctx, resolver, account, "conv-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(2), first.Proxy.ID)
+
+	c, _ := newOpenAITransportErrTestContext()
+	bindGinRequestToIPGroupCtx(c, ctx)
+
+	retErr := svc.handleOpenAIUpstreamTransportError(ctx, c, account,
+		errors.New(`dial tcp 192.217.228.102:1080: i/o timeout`), false)
+
+	var fo *UpstreamFailoverError
+	require.True(t, errors.As(retErr, &fo))
+	require.True(t, fo.RetryableOnSameAccount)
+	require.Empty(t, repo.tempUnschedCalls)
+	require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+
+	again, err := resolveOpenAIAccountProxy(ctx, resolver, account, "conv-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(3), again.Proxy.ID)
+}
+
 func TestHandleOpenAIAccountUpstreamError_RecordsOllamaActivityOnly(t *testing.T) {
 	deferred := NewDeferredService(nil, nil, time.Second)
 	svc := &OpenAIGatewayService{deferredService: deferred}

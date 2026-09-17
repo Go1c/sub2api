@@ -28,10 +28,10 @@ var openAITransportFailoverBody = []byte(`{"error":{"type":"upstream_error","mes
 // failure — i.e. the HTTP round-trip never completed (proxy / DNS / TCP / TLS
 // error, no HTTP status code received).
 type upstreamTransportErrorClass struct {
-	// Persistent marks failures where retrying the same proxy/account is
-	// pointless: expired or rejected proxy credentials, a dead proxy endpoint,
-	// or DNS/routing failure. Such accounts should be temporarily unscheduled
-	// (and alerted on) instead of being repeatedly scheduled into hard failures.
+	// Persistent marks failures where retrying the same proxy is pointless:
+	// expired or rejected proxy credentials, a dead proxy endpoint, or
+	// DNS/routing failure. Single-proxy accounts are temporarily unscheduled
+	// (and alerted on). IP-group accounts skip that member and try the next IP.
 	Persistent bool
 }
 
@@ -50,8 +50,8 @@ var persistentUpstreamTransportErrorMarkers = []string{
 }
 
 // classifyUpstreamTransportError decides whether a transport-level upstream error
-// is durable (Persistent — evict the account + alert) or a transient blip
-// (fail over to a healthy account but keep this one schedulable).
+// is durable (Persistent — skip that proxy; unschedule only single-proxy accounts)
+// or a transient blip (fail over / rotate but keep the account schedulable).
 //
 // Motivating incident: a SOCKS5 proxy whose subscription lapsed returned
 // `username/password authentication failed`; the account was nonetheless
@@ -94,12 +94,16 @@ func classifyUpstreamTransportError(err error) upstreamTransportErrorClass {
 // handleOpenAIUpstreamTransportError handles a transport-level upstream failure
 // (Do/DoWithTLS returned a non-HTTP error: proxy/DNS/TCP/TLS). It:
 //  1. records the failure in Ops error logs (status 0, kind=request_error);
-//  2. for durable faults (expired/rejected proxy creds, dead proxy, DNS/routing)
-//     temporarily unschedules the account (DB + in-memory) and logs a stable
-//     warn event that alert rules can key on;
-//  3. returns an error that is *UpstreamFailoverError (so the handler fails over
-//     to a healthy account) for all non-canceled errors, or a plain error for
-//     context.Canceled (client gone — no failover, no eviction).
+//  2. for IP-group accounts, skips the failed member and retries the same
+//     account on another live IP (same two-pass budget as HTTP 429 rotate).
+//     A dead Socket IP must not unschedule the whole account.
+//  3. for single-proxy durable faults (expired/rejected proxy creds, dead
+//     proxy, DNS/routing) temporarily unschedules the account (DB + in-memory)
+//     and logs a stable warn event that alert rules can key on;
+//  4. returns an error that is *UpstreamFailoverError (so the handler fails over
+//     to a healthy account, or retries the same IP-group account) for all
+//     non-canceled errors, or a plain error for context.Canceled (client gone —
+//     no failover, no eviction).
 //
 // It deliberately does NOT write to the response: the handler owns the response
 // (failover, or a protocol-correct error once failover is exhausted).
@@ -135,6 +139,17 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 	var pluginErr *PluginTransportError
 	if errors.As(err, &pluginErr) && pluginErr.RequestSent {
 		return err
+	}
+
+	errorCtx := openAIErrorContext(ctx, c)
+	if accountUsesOpenAIIPGroup(account) {
+		s.rotateOpenAIIPGroupAfterTransient(errorCtx, account)
+		failoverErr := &UpstreamFailoverError{
+			StatusCode:   http.StatusBadGateway,
+			ResponseBody: openAITransportFailoverBody,
+		}
+		applyOpenAIIPGroupRotateRetry(failoverErr, openAIIPGroupRetryStateFrom(errorCtx))
+		return failoverErr
 	}
 
 	if classifyUpstreamTransportError(err).Persistent {
