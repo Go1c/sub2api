@@ -50,7 +50,7 @@ type CheckOptions struct {
 	// BodyOverride 在 merge 模式下做浅合并（key 命中黑名单时静默丢弃），
 	// 在 replace 模式下直接当作完整 body。
 	BodyOverride map[string]any
-	// IQPrompt 非空时走智商糖果题，不再发算术 challenge。
+	// IQPrompt 非空时由 runIQCheckForModel 发糖果题；算术探活不得带这个字段。
 	IQPrompt     string
 	IQAnswer     string
 	IQFuzzyMatch bool
@@ -63,10 +63,6 @@ type CheckOptions struct {
 //
 // opts 承载模板 / 监控快照带来的自定义配置。nil 等同于 "off + 无 extra headers"。
 func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model string, opts *CheckOptions) *CheckResult {
-	if usesIQ(opts) {
-		return runIQCheckForModel(ctx, provider, endpoint, apiKey, model, opts)
-	}
-
 	res := &CheckResult{
 		Model:     model,
 		Status:    MonitorStatusError,
@@ -133,16 +129,14 @@ func runIQCheckForModel(ctx context.Context, provider, endpoint, apiKey, model s
 	latencyMs := int(latency / time.Millisecond)
 	res.LatencyMs = &latencyMs
 
-	status, iqStatus, message := classifyIQOutcome(iqClassifyInput{
+	iqStatus, message := classifyIQOutcome(iqClassifyInput{
 		err:        err,
 		statusCode: statusCode,
 		respText:   respText,
 		rawBody:    rawBody,
-		latency:    latency,
 		expected:   expected,
 		fuzzy:      fuzzy,
 	})
-	res.Status = status
 	res.IqStatus = iqStatus
 	res.Message = message
 	return res

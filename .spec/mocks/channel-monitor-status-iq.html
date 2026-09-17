@@ -231,7 +231,7 @@
       <section id="settings" class="hidden">
         <div class="banner">
           与「渠道管理 → 智商检测」看板分开：那页测内部号池 SVG。这里测对外渠道条目。
-          探活仍用算术题；本模式改发摸糖果题。判定复用 kin <code>TurnStateProbeAnswerMatches</code>：模糊匹配时「答案是21颗」算通过。
+          探活仍用算术题；智商另打摸糖果题。判定复用 kin <code>TurnStateProbeAnswerMatches</code>：模糊匹配时「答案是21颗」算通过。
         </div>
         <div class="dialog">
           <h2>新增渠道监控</h2>
@@ -246,7 +246,7 @@
               <button type="button" class="mode" data-mode="probe"><b>探活</b><small>向上游发送轻量 LLM 请求，检测可用性与延迟</small></button>
               <button type="button" class="mode" data-mode="quota"><b>配额</b><small>只查询关联账号的用量滚动窗口，不发送探活请求</small></button>
               <button type="button" class="mode" data-mode="quota_probe"><b>探活 + 配额</b><small>探活的同时查询配额，用量快照附加在主模型结果上</small></button>
-              <button type="button" class="mode active" data-mode="iq"><b>状态 + 智商</b><small>只打一枪糖果题，同时记下服务器状态和智商，不另发探活</small></button>
+              <button type="button" class="mode active" data-mode="iq"><b>状态 + 智商</b><small>算术探活记服务器，糖果题另打一枪记智商，不能共用</small></button>
             </div>
           </div>
 
@@ -283,7 +283,7 @@
 
           <div class="iq-box" id="iqBox">
             <h3>智商题（kin Turn-State 默认题）</h3>
-            <p class="muted" style="margin:0 0 10px;font-size:12px">少打一个请求：只发这道题。能回完整响应就记下服务器状态（正常 / 慢则降级）；同一份回答再判智商。用户页仍是两条棒，不是两次探测。</p>
+            <p class="muted" style="margin:0 0 10px;font-size:12px">智商检测单独发这道题。服务器棒仍走原来的算术探活；两条请求不能共用。用户页两条棒，对应两枪。</p>
             <label class="field">
               <span>测试题</span>
               <textarea id="question">黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?</textarea>
@@ -324,7 +324,7 @@
 
       <section id="status">
         <div class="banner">
-          状态还是两条：上边服务器、下边智商。只是少打一枪——糖果题这一次请求同时填两条。上游回得正常也可能降智。
+          状态还是两条：上边服务器、下边智商。每轮两枪：算术探活填上边，糖果题填下边。上游探活正常也可能降智。
         </div>
         <div class="legend">
           <span>服务器：</span>
@@ -436,25 +436,14 @@
         return `<i class="${cls}" style="height:${meta.height}%" title="${meta.title}"></i>`;
       }).join("")}</div>`;
     }
-    function latestIq(seq) {
-      return IQ_LABEL[String(seq).slice(-1)] || IQ_LABEL.n;
-    }
-    function deriveServer(iq, slow) {
-      return String(iq).split("").map((ch) => {
-        if (ch === "n") return "e";
-        if (ch === "x") return "r";
-        if (ch === "p" || ch === "d") return slow ? "a" : "g";
-        return "e";
-      }).join("");
-    }
     function latestServer(seq) {
       const ch = String(seq).slice(-1);
       if (ch === "g") return { chip: "ok", text: "正常" };
       if (ch === "a") return { chip: "warn", text: "降级" };
       if (ch === "r") return { chip: "bad", text: "失败" };
-      return { chip: "dim", text: "监控网络异常" };
+      return { chip: "dim", text: "错误" };
     }
-    function tracksHTML(server, iq, slow) {
+    function tracksHTML(server, iq) {
       if (!iq) {
         return `<div class="tracks">
           <div class="track-head"><span>近 60 次记录</span><span>59S 后刷新</span></div>
@@ -462,18 +451,17 @@
           <div class="spark-foot"><span>PAST</span><span>NOW</span></div>
         </div>`;
       }
-      const derived = deriveServer(iq, slow);
       return `<div class="tracks">
-        <div class="track-head"><span>近 60 次记录 · 一次请求</span><span>59S 后刷新</span></div>
-        <div class="track"><div class="track-label">服务器状态</div>${spark(derived, "server")}</div>
+        <div class="track-head"><span>近 60 次记录 · 两次请求</span><span>59S 后刷新</span></div>
+        <div class="track"><div class="track-label">服务器状态</div>${spark(server, "server")}</div>
         <div class="track"><div class="track-label">智商状态</div>${spark(iq, "iq")}</div>
         <div class="spark-foot"><span>PAST</span><span>NOW</span></div>
       </div>`;
     }
 
     const details = {
-      pro: ["GPT-特价Pro分组", "只打了糖果题。上边服务器：23s 记降级，但请求是完整回来的。下边智商：答对是不降智。两条对得上同一秒，没有第二枪探活。"],
-      candy: ["满血GPT", "上边服务器正常（回了完整响应），下边智商降智（答了 12）。这就是两码事：通道通了，题没对。"],
+      pro: ["GPT-特价Pro分组", "算术探活单独记服务器；糖果题另打一枪记智商。两条请求不能共用。这张卡上边慢是探活本身慢，不是糖果题。"],
+      candy: ["满血GPT", "探活正常（算术题过了），下边智商降智（糖果题答了 12）。两枪分开，通道通了题也可以不对。"],
       probe: ["仅探活渠道", "没开智商，仍只有一条算术探活时间线。"]
     };
 
@@ -493,13 +481,13 @@
         providerClass: "openai",
         model: "gpt-5.5",
         group: "GPT",
-        badge: "warn",
-        badgeText: "降级",
-        latency: "23525",
+        badge: "ok",
+        badgeText: "正常",
+        latency: "1840",
         ping: "2",
         pct: "77.52",
         extra: "+ 1 模型",
-        slow: true,
+        server: SERVER_PRO,
         iq: IQ_PRO
       },
       {
@@ -513,11 +501,11 @@
         group: "满血",
         badge: "ok",
         badgeText: "正常",
-        latency: "1840",
+        latency: "840",
         ping: "42",
         pct: "99.20",
         extra: "",
-        slow: false,
+        server: SERVER_OK,
         iq: IQ_MIX
       },
       {
@@ -542,8 +530,7 @@
 
     const cardsEl = document.getElementById("statusCards");
     cardsEl.innerHTML = cards.map((c) => {
-      const derived = c.iq ? deriveServer(c.iq, c.slow) : c.server;
-      const srv = c.iq ? latestServer(derived) : { chip: c.badge, text: c.badgeText };
+      const srv = c.iq ? latestServer(c.server) : { chip: c.badge, text: c.badgeText };
       return `
       <button type="button" class="card" data-detail="${c.id}">
         <div class="card-head">
@@ -569,7 +556,7 @@
             ${c.extra ? `<div class="extra">${c.extra}</div>` : ""}
           </div>
         </div>
-        ${tracksHTML(c.server, c.iq, c.slow)}
+        ${tracksHTML(c.server, c.iq)}
       </button>
     `;
     }).join("");

@@ -153,8 +153,8 @@ type ChannelMonitorUpdateParams struct {
 // CheckResult 单个模型一次检测的结果。
 type CheckResult struct {
 	Model         string
-	Status        string // operational / degraded / failed / error
-	IqStatus      string // iq_ok / iq_down / test_error / monitor_network；非 iq 为空
+	Status        string // operational / degraded / failed / error；iq 模式取算术探活
+	IqStatus      string // iq_ok / iq_down / test_error / monitor_network；非 iq 为空，来自独立糖果题
 	LatencyMs     *int
 	PingLatencyMs *int
 	Message       string
