@@ -76,8 +76,33 @@ describe('ImportDataModal', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     const account = vi.mocked(adminAPI.accounts.importData).mock.calls[0][0].data.accounts[0]
-    expect(account).toMatchObject({ concurrency: 100, group_ids: [5], proxy_ip_group_id: 91, extra: { keep: true, codex_fingerprint_mode: 'device', error_alert: { enabled: false }, turn_state_probe: { enabled: true } } })
+    expect(account).toMatchObject({ concurrency: 20, group_ids: [5], proxy_ip_group_id: 91, extra: { keep: true, codex_fingerprint_mode: 'device', error_alert: { enabled: false }, turn_state_probe: { enabled: true }, openai_oauth_responses_websockets_v2_mode: 'passthrough', openai_oauth_responses_websockets_v2_enabled: true, account_traffic_control: { strict_rpm_enabled: true, adaptive_enabled: true, rpm: 60, burst: 5, adaptive_mode: 'observe' } } })
     expect(account.credentials.model_mapping).toEqual({ ...Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model])), custom: 'upstream' })
+  })
+
+  it('forces JSON import switches to alerts off and Turn-State on', async () => {
+    const { adminAPI } = await import('@/api/admin')
+    vi.mocked(adminAPI.accounts.importData).mockResolvedValue({ proxy_created: 0, proxy_reused: 0, proxy_failed: 0, account_created: 1, account_failed: 0 })
+    const wrapper = mountModal()
+    const input = wrapper.find('input[type="file"]')
+    setInputFiles(input.element, [makeJsonFile('accounts.json', JSON.stringify({
+      proxies: [],
+      accounts: [{
+        name: 'imported',
+        platform: 'openai',
+        type: 'oauth',
+        credentials: { token: 'test' },
+        extra: { error_alert: { enabled: true }, turn_state_probe: { enabled: false }, openai_oauth_responses_websockets_v2_mode: 'ctx_pool', account_traffic_control: { strict_rpm_enabled: false, adaptive_enabled: false } }
+      }]
+    }))])
+    await input.trigger('change')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    const account = vi.mocked(adminAPI.accounts.importData).mock.calls[0][0].data.accounts[0]
+    expect(account.extra.error_alert).toEqual({ enabled: false })
+    expect(account.extra.turn_state_probe).toEqual({ enabled: true })
+    expect(account.extra.openai_oauth_responses_websockets_v2_mode).toBe('passthrough')
+    expect(account.extra.account_traffic_control).toEqual(expect.objectContaining({ strict_rpm_enabled: true, adaptive_enabled: true }))
   })
 
   it('keeps explicit bindings and leaves other platforms unchanged', async () => {

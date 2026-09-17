@@ -4012,6 +4012,7 @@ import {
   resolveOpenAIWSModeHintKey,
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
+import { defaultImportTrafficPolicy } from '@/api/admin/accountTraffic'
 import {
   KIN_DEFAULT_CODEX_CLI_ONLY,
   KIN_DEFAULT_CODEX_CONCURRENCY,
@@ -5633,10 +5634,12 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     extra.codex_fingerprint_mode = codexFingerprintMode.value
     extra.codex_experimental_fingerprint_convergence = codexFingerprintConvergence.value
     extra.turn_state_probe = { enabled: true }
+    extra.account_traffic_control = defaultImportTrafficPolicy()
   } else {
     delete extra.codex_fingerprint_mode
     delete extra.codex_experimental_fingerprint_convergence
     delete extra.turn_state_probe
+    delete extra.account_traffic_control
   }
   if (openAICompactMode.value !== 'auto') {
     extra.openai_compact_mode = openAICompactMode.value

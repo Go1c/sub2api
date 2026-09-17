@@ -9,7 +9,7 @@ metadata:
 
 # 账号可选流量控制
 
-账号级、默认关闭的两种独立开关：**严格 RPM**（本地滑动 60 秒硬上限 + 瞬时突发额度）与**自适应并发**（按上游 429/5xx 表现给出建议并发，observe 只展示、automatic 自动降速缓慢恢复）。配置存放在 `accounts.extra.account_traffic_control`，缺键 = 两开关都关，存量账号不受影响。
+账号级、默认关闭的两种独立开关：**严格 RPM**（本地滑动 60 秒硬上限 + 瞬时突发额度）与**自适应并发**（按上游 429/5xx 表现给出建议并发，observe 只展示、automatic 自动降速缓慢恢复）。配置存放在 `accounts.extra.account_traffic_control`，缺键 = 两开关都关，存量账号不受影响。JSON 导入和新账号写入两开关开（RPM 60 / 突发 5 / 最低并发 1 / observe），覆盖源文件。编辑页嵌入面板默认折叠。
 
 ## 背景 / 目标
 
@@ -27,7 +27,7 @@ metadata:
 - **WS / 实时语音**：`forwardOpenAIWSV2` 与 ingress `sendAndRelay` 每轮 begin/finish；passthrough 帧连接 `wrapAccountTrafficFrameConn` 只对 `response.create` 计一轮，终端事件释放。Grok 实时语音 Enforces 时拨号前 400 拒绝（不支持逐轮硬限制），observe-only 才 Begin。
 - **失败语义**：`AccountTrafficLimitError.As` 转为 `UpstreamFailoverError`：RequestScopedTransient、`Reason=account_traffic_limit`、`NextAccountStop`、Retry-After 头。`ShouldReportAccountScheduleFailure` 对该 reason 返回 false——限流是本账号固定策略，不进调度健康；failover 耗尽路径透传客户端状态码与文案。
 - **管理面**：`GET/PUT /admin/accounts/:id/traffic-control`（AccountHandler 方法，`SetAccountTrafficHandler` setter 注入）。PUT 走 `UpdateAccountExtra` key 级 merge，随后 `traffic.Sync` 推 revision/signature；遥测失败仍返回可编辑 policy（`state_available: false`）。Create/Update/BatchCreate/BulkUpdate/ApplyOAuth 均校验该 extra 键。
-- **前端**：`AccountTrafficControls.vue` 嵌入 EditAccountModal，随账号一起保存（无独立保存按钮）；草稿按账号 ID 缓存，同账号重开不冲掉未保存编辑；「填入建议参数」只填数字不改开关。`accountTraffic.ts` 提供类型、默认值、校验与 API。
+- **前端**：`AccountTrafficControls.vue` 嵌入 EditAccountModal，随账号一起保存（无独立保存按钮）；草稿按账号 ID 缓存，同账号重开不冲掉未保存编辑；面板默认折叠。「填入建议参数」只填数字不改开关。`accountTraffic.ts` 提供类型、默认值、校验与 API。新建 / JSON 导入用 `defaultImportTrafficPolicy`（两开关开）；编辑存量缺键仍用 `defaultTrafficPolicy`（两开关关）。
 
 ## 已决策
 

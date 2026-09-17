@@ -155,10 +155,13 @@ func applyKinOpenAIAccountDefaults(platform, accountType string, extra map[strin
 	switch accountType {
 	case AccountTypeOAuth, AccountTypeSetupToken:
 		if _, ok := extra["openai_oauth_responses_websockets_v2_mode"]; !ok {
-			extra["openai_oauth_responses_websockets_v2_mode"] = OpenAIWSIngressModeCtxPool
+			extra["openai_oauth_responses_websockets_v2_mode"] = OpenAIWSIngressModePassthrough
 			if _, exists := extra["openai_oauth_responses_websockets_v2_enabled"]; !exists {
 				extra["openai_oauth_responses_websockets_v2_enabled"] = true
 			}
+		}
+		if _, ok := extra[AccountTrafficPolicyKey]; !ok {
+			extra[AccountTrafficPolicyKey] = KinCreateAccountTrafficPolicyMap()
 		}
 		if _, ok := extra[openAILongContextBillingEnabledKey]; !ok {
 			extra[openAILongContextBillingEnabledKey] = true
@@ -176,7 +179,7 @@ func applyKinOpenAIAccountDefaults(platform, accountType string, extra map[strin
 		}
 	case AccountTypeAPIKey:
 		if _, ok := extra["openai_apikey_responses_websockets_v2_mode"]; !ok {
-			extra["openai_apikey_responses_websockets_v2_mode"] = OpenAIWSIngressModeCtxPool
+			extra["openai_apikey_responses_websockets_v2_mode"] = OpenAIWSIngressModePassthrough
 			if _, exists := extra["openai_apikey_responses_websockets_v2_enabled"]; !exists {
 				extra["openai_apikey_responses_websockets_v2_enabled"] = true
 			}

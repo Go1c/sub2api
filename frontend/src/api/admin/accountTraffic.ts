@@ -12,6 +12,7 @@ export interface AccountTrafficState {
 }
 export interface AccountTrafficResponse { policy: AccountTrafficPolicy; state?: AccountTrafficState | null; state_available: boolean; hard_limit: number }
 export const defaultTrafficPolicy = (): AccountTrafficPolicy => ({ strict_rpm_enabled: false, rpm: 60, burst: 5, adaptive_enabled: false, adaptive_mode: 'observe', min_concurrency: 1, failure_threshold: 3, failure_window_seconds: 60, recovery_seconds: 60 })
+export const defaultImportTrafficPolicy = (): AccountTrafficPolicy => ({ ...defaultTrafficPolicy(), strict_rpm_enabled: true, adaptive_enabled: true })
 const integerIn = (value: number, min: number, max: number) => Number.isInteger(value) && value >= min && value <= max
 export function normalizeTrafficDraft(value: AccountTrafficPolicy): AccountTrafficPolicy {
   const policy = { ...value }, defaults = defaultTrafficPolicy()

@@ -698,6 +698,8 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload.proxy_id).toBe(101)
     expect(payload.extra.error_alert).toEqual({ enabled: false })
     expect(payload.extra.turn_state_probe).toEqual({ enabled: true })
+    expect(payload.extra.account_traffic_control).toEqual(expect.objectContaining({ strict_rpm_enabled: true, adaptive_enabled: true }))
+    expect(payload.extra.openai_oauth_responses_websockets_v2_mode).toBe(KIN_DEFAULT_OPENAI_WS_MODE)
     expect(payload.credential_extras.model_mapping).toEqual(Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model])))
   })
 
@@ -803,6 +805,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload?.concurrency).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
     expect(payload?.group_ids).toEqual([6])
     expect(payload?.extra?.openai_oauth_responses_websockets_v2_mode).toBe(KIN_DEFAULT_OPENAI_WS_MODE)
+    expect(payload?.extra?.account_traffic_control).toEqual(expect.objectContaining({ strict_rpm_enabled: true, adaptive_enabled: true }))
     expect(payload?.extra?.codex_fingerprint_mode).toBe(KIN_DEFAULT_CODEX_FINGERPRINT_MODE)
     expect(payload?.extra?.openai_long_context_billing_enabled).toBe(true)
     const mapping = payload?.credential_extras?.model_mapping as Record<string, string>
@@ -826,6 +829,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload?.concurrency).toBe(KIN_DEFAULT_CODEX_CONCURRENCY)
     expect(payload?.group_ids).toEqual([6])
     expect(payload?.extra?.openai_oauth_responses_websockets_v2_mode).toBe(KIN_DEFAULT_OPENAI_WS_MODE)
+    expect(payload?.extra?.account_traffic_control).toEqual(expect.objectContaining({ strict_rpm_enabled: true, adaptive_enabled: true }))
     expect(payload?.extra?.codex_fingerprint_mode).toBe(KIN_DEFAULT_CODEX_FINGERPRINT_MODE)
   })
 

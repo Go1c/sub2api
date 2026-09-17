@@ -473,22 +473,23 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 
 		if item.Platform == service.PlatformOpenAI && item.Type == service.AccountTypeOAuth {
 			// JSON imports use local onboarding settings, not the source instance's limits.
-			item.Concurrency = 100
+			item.Concurrency = 20
 			if len(item.GroupIDs) == 0 && defaultGroupID != nil {
 				item.GroupIDs = []int64{*defaultGroupID}
 			}
 			if item.ProxyIPGroupID == nil && proxyID == nil {
 				item.ProxyIPGroupID = defaultIPGroupID
 			}
-			extra := make(map[string]any, len(item.Extra)+1)
+			extra := make(map[string]any, len(item.Extra)+2)
 			for key, value := range item.Extra {
 				extra[key] = value
 			}
-			if _, exists := extra[service.AccountErrorAlertExtraKey]; !exists {
-				extra[service.AccountErrorAlertExtraKey] = map[string]any{"enabled": false}
-			}
-			extra = service.EnsureTurnStateProbeExtra(item.Platform, item.Type, extra, true)
+			extra[service.AccountErrorAlertExtraKey] = map[string]any{"enabled": false}
+			extra[service.TurnStateProbeExtraKey] = service.TurnStateProbeSwitchMap(true)
 			extra["codex_fingerprint_mode"] = "device"
+			extra[service.AccountTrafficPolicyKey] = service.KinCreateAccountTrafficPolicyMap()
+			extra["openai_oauth_responses_websockets_v2_mode"] = service.OpenAIWSIngressModePassthrough
+			extra["openai_oauth_responses_websockets_v2_enabled"] = true
 			item.Extra = extra
 			credentials := make(map[string]any, len(item.Credentials)+1)
 			for key, value := range item.Credentials {

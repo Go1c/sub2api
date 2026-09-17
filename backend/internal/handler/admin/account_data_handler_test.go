@@ -12,6 +12,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requireKinOpenAIOAuthJSONImportSwitchDefaults(t *testing.T, extra map[string]any) {
+	t.Helper()
+	require.Equal(t, false, extra["error_alert"].(map[string]any)["enabled"])
+	require.Equal(t, true, extra[service.TurnStateProbeExtraKey].(map[string]any)["enabled"])
+	require.Equal(t, service.OpenAIWSIngressModePassthrough, extra["openai_oauth_responses_websockets_v2_mode"])
+	require.Equal(t, true, extra["openai_oauth_responses_websockets_v2_enabled"])
+	policy, err := service.ParseAccountTrafficPolicy(extra)
+	require.NoError(t, err)
+	require.True(t, policy.StrictRPMEnabled)
+	require.True(t, policy.AdaptiveEnabled)
+	require.Equal(t, 60, policy.RPM)
+	require.Equal(t, 5, policy.Burst)
+	require.Equal(t, "observe", policy.AdaptiveMode)
+}
+
 type dataResponse struct {
 	Code int         `json:"code"`
 	Data dataPayload `json:"data"`
@@ -331,8 +346,7 @@ func TestImportDataCarriesJSONDefaultBindings(t *testing.T) {
 	require.Equal(t, []int64{5}, input.GroupIDs)
 	require.NotNil(t, input.ProxyIPGroupID)
 	require.Equal(t, int64(91), *input.ProxyIPGroupID)
-	require.Equal(t, false, input.Extra["error_alert"].(map[string]any)["enabled"])
-	require.Equal(t, true, input.Extra[service.TurnStateProbeExtraKey].(map[string]any)["enabled"])
+	requireKinOpenAIOAuthJSONImportSwitchDefaults(t, input.Extra)
 	require.Equal(t, "gpt-test", input.Credentials["model_mapping"].(map[string]any)["gpt-test"])
 }
 
@@ -347,23 +361,22 @@ func TestImportDataDefaultsWithoutFrontendEnrichment(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Len(t, svc.createdAccounts, 1)
 	input := svc.createdAccounts[0]
-	require.Equal(t, 100, input.Concurrency)
+	require.Equal(t, 20, input.Concurrency)
 	require.Equal(t, "device", input.Extra["codex_fingerprint_mode"])
 	require.Equal(t, []int64{5}, input.GroupIDs)
 	require.NotNil(t, input.ProxyIPGroupID)
 	require.Equal(t, int64(1), *input.ProxyIPGroupID)
-	require.Equal(t, false, input.Extra["error_alert"].(map[string]any)["enabled"])
-	require.Equal(t, true, input.Extra[service.TurnStateProbeExtraKey].(map[string]any)["enabled"])
+	requireKinOpenAIOAuthJSONImportSwitchDefaults(t, input.Extra)
 	mapping := input.Credentials["model_mapping"].(map[string]any)
 	require.Equal(t, "target", mapping["custom"])
 	require.Equal(t, "gpt-5.6", mapping["gpt-5.6"])
 	require.Equal(t, "test", input.Extra["source"])
 }
 
-func TestImportDataPreservesExplicitOAuthSettings(t *testing.T) {
+func TestImportDataKeepsExplicitGroupAndForcesSwitchDefaults(t *testing.T) {
 	router, svc := setupAccountDataRouter()
 	svc.groups = []service.Group{{ID: 5, Platform: service.PlatformOpenAI}}
-	body := []byte(`{"data":{"proxies":[],"accounts":[{"name":"explicit","platform":"openai","type":"oauth","credentials":{"token":"test","model_mapping":{"gpt-5.6":"custom-target"}},"extra":{"error_alert":{"enabled":true}},"group_ids":[9],"proxy_ip_group_id":0,"concurrency":1}]}}`)
+	body := []byte(`{"data":{"proxies":[],"accounts":[{"name":"explicit","platform":"openai","type":"oauth","credentials":{"token":"test","model_mapping":{"gpt-5.6":"custom-target"}},"extra":{"error_alert":{"enabled":true},"turn_state_probe":{"enabled":false},"openai_oauth_responses_websockets_v2_mode":"ctx_pool","account_traffic_control":{"strict_rpm_enabled":false,"adaptive_enabled":false}},"group_ids":[9],"proxy_ip_group_id":0,"concurrency":1}]}}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -374,7 +387,6 @@ func TestImportDataPreservesExplicitOAuthSettings(t *testing.T) {
 	require.Equal(t, []int64{9}, input.GroupIDs)
 	require.NotNil(t, input.ProxyIPGroupID)
 	require.Zero(t, *input.ProxyIPGroupID)
-	require.Equal(t, true, input.Extra["error_alert"].(map[string]any)["enabled"])
-	require.Equal(t, true, input.Extra[service.TurnStateProbeExtraKey].(map[string]any)["enabled"])
+	requireKinOpenAIOAuthJSONImportSwitchDefaults(t, input.Extra)
 	require.Equal(t, "custom-target", input.Credentials["model_mapping"].(map[string]any)["gpt-5.6"])
 }

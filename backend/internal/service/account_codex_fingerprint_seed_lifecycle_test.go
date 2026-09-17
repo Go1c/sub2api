@@ -16,6 +16,17 @@ func requireValidCodexFingerprintSeed(t *testing.T, extra map[string]any) string
 	return seed
 }
 
+func requireKinCreateTrafficEnabled(t *testing.T, extra map[string]any) {
+	t.Helper()
+	policy, err := ParseAccountTrafficPolicy(extra)
+	require.NoError(t, err)
+	require.True(t, policy.StrictRPMEnabled)
+	require.True(t, policy.AdaptiveEnabled)
+	require.Equal(t, 60, policy.RPM)
+	require.Equal(t, 5, policy.Burst)
+	require.Equal(t, "observe", policy.AdaptiveMode)
+}
+
 func TestAdminCreateAccountAppliesKinOpenAIDefaults(t *testing.T) {
 	repo := &upstreamBillingProbeAccountRepo{}
 	svc := &adminServiceImpl{accountRepo: repo}
@@ -29,12 +40,13 @@ func TestAdminCreateAccountAppliesKinOpenAIDefaults(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, DefaultOpenAIAccountConcurrency, created.Concurrency)
-	require.Equal(t, OpenAIWSIngressModeCtxPool, created.Extra["openai_oauth_responses_websockets_v2_mode"])
+	require.Equal(t, OpenAIWSIngressModePassthrough, created.Extra["openai_oauth_responses_websockets_v2_mode"])
 	require.Equal(t, true, created.Extra["openai_oauth_responses_websockets_v2_enabled"])
 	require.Equal(t, true, created.Extra["openai_long_context_billing_enabled"])
 	require.Equal(t, false, created.Extra["codex_cli_only"])
 	require.Equal(t, string(codexFingerprintDevice), created.Extra[codexFingerprintModeExtraKey])
 	require.Equal(t, true, created.Extra[codexFingerprintConvergenceExtraKey])
+	requireKinCreateTrafficEnabled(t, created.Extra)
 	requireValidCodexFingerprintSeed(t, created.Extra)
 }
 
@@ -56,10 +68,11 @@ func TestAdminCreateAccountJSONImportFillsMissingKinDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, false, created.Extra["openai_long_context_billing_enabled"])
 	require.Equal(t, true, created.Extra["session_token_present"])
-	require.Equal(t, OpenAIWSIngressModeCtxPool, created.Extra["openai_oauth_responses_websockets_v2_mode"])
+	require.Equal(t, OpenAIWSIngressModePassthrough, created.Extra["openai_oauth_responses_websockets_v2_mode"])
 	require.Equal(t, false, created.Extra["codex_cli_only"])
 	require.Equal(t, string(codexFingerprintDevice), created.Extra[codexFingerprintModeExtraKey])
 	require.Equal(t, true, created.Extra[codexFingerprintConvergenceExtraKey])
+	requireKinCreateTrafficEnabled(t, created.Extra)
 	requireValidCodexFingerprintSeed(t, created.Extra)
 }
 
@@ -77,6 +90,10 @@ func TestAdminCreateAccountJSONImportPreservesExplicitOff(t *testing.T) {
 			"codex_cli_only":                    false,
 			codexFingerprintModeExtraKey:        "off",
 			codexFingerprintConvergenceExtraKey: false,
+			AccountTrafficPolicyKey: map[string]any{
+				"strict_rpm_enabled": false,
+				"adaptive_enabled":   false,
+			},
 		},
 	})
 
@@ -85,6 +102,10 @@ func TestAdminCreateAccountJSONImportPreservesExplicitOff(t *testing.T) {
 	require.Equal(t, false, created.Extra["codex_cli_only"])
 	require.Equal(t, "off", created.Extra[codexFingerprintModeExtraKey])
 	require.Equal(t, false, created.Extra[codexFingerprintConvergenceExtraKey])
+	policy, err := ParseAccountTrafficPolicy(created.Extra)
+	require.NoError(t, err)
+	require.False(t, policy.StrictRPMEnabled)
+	require.False(t, policy.AdaptiveEnabled)
 }
 
 func TestAdminCreateAccountJSONImportPreservesExplicitOn(t *testing.T) {

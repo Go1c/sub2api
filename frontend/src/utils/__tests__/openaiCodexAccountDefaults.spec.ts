@@ -7,6 +7,7 @@ import {
   KIN_DEFAULT_CODEX_GROUP_NAME,
   KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING,
   KIN_DEFAULT_OPENAI_WS_MODE,
+  KIN_OPENAI_WS_MISSING_EXTRA_MODE,
   resolveCodexCLIOnlyFromExtra,
   resolveCodexDefaultGroupIds,
   resolveCodexFingerprintConvergenceFromExtra,
@@ -14,15 +15,16 @@ import {
   resolveKinCodexImportConcurrency,
   resolveKinCodexImportGroupIds
 } from '@/utils/openaiCodexAccountDefaults'
-import { OPENAI_WS_MODE_CTX_POOL } from '@/utils/openaiWsMode'
+import { OPENAI_WS_MODE_CTX_POOL, OPENAI_WS_MODE_PASSTHROUGH } from '@/utils/openaiWsMode'
 
 describe('openaiCodexAccountDefaults', () => {
   it('uses Kin defaults when extra keys are missing', () => {
-    expect(KIN_DEFAULT_OPENAI_WS_MODE).toBe(OPENAI_WS_MODE_CTX_POOL)
+    expect(KIN_DEFAULT_OPENAI_WS_MODE).toBe(OPENAI_WS_MODE_PASSTHROUGH)
+    expect(KIN_OPENAI_WS_MISSING_EXTRA_MODE).toBe(OPENAI_WS_MODE_CTX_POOL)
     expect(KIN_DEFAULT_CODEX_CLI_ONLY).toBe(false)
     expect(KIN_DEFAULT_CODEX_FINGERPRINT_MODE).toBe('device')
     expect(KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE).toBe(true)
-    expect(KIN_DEFAULT_CODEX_CONCURRENCY).toBe(100)
+    expect(KIN_DEFAULT_CODEX_CONCURRENCY).toBe(20)
     expect(KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING).toBe(true)
     expect(KIN_DEFAULT_CODEX_GROUP_NAME).toBe('Codex')
     expect(resolveCodexCLIOnlyFromExtra(undefined)).toBe(false)

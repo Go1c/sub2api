@@ -30,6 +30,31 @@ func DefaultAccountTrafficPolicy() AccountTrafficPolicy {
 	return AccountTrafficPolicy{RPM: 60, Burst: 5, AdaptiveMode: "observe", MinConcurrency: 1, FailureThreshold: 3, FailureWindowSeconds: 60, RecoverySeconds: 60}
 }
 
+// KinCreateAccountTrafficPolicy is the create/import default: both switches on,
+// suggested numbers. Missing extra still parses as DefaultAccountTrafficPolicy
+// (both off) so existing accounts are unchanged until they are imported or saved.
+func KinCreateAccountTrafficPolicy() AccountTrafficPolicy {
+	p := DefaultAccountTrafficPolicy()
+	p.StrictRPMEnabled = true
+	p.AdaptiveEnabled = true
+	return p
+}
+
+func KinCreateAccountTrafficPolicyMap() map[string]any {
+	p := KinCreateAccountTrafficPolicy()
+	return map[string]any{
+		"strict_rpm_enabled":     p.StrictRPMEnabled,
+		"rpm":                    p.RPM,
+		"burst":                  p.Burst,
+		"adaptive_enabled":       p.AdaptiveEnabled,
+		"adaptive_mode":          p.AdaptiveMode,
+		"min_concurrency":        p.MinConcurrency,
+		"failure_threshold":      p.FailureThreshold,
+		"failure_window_seconds": p.FailureWindowSeconds,
+		"recovery_seconds":       p.RecoverySeconds,
+	}
+}
+
 func ParseAccountTrafficPolicy(extra map[string]any) (AccountTrafficPolicy, error) {
 	p := DefaultAccountTrafficPolicy()
 	value, exists := extra[AccountTrafficPolicyKey]

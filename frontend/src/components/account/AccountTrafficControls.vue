@@ -1,7 +1,7 @@
 <template>
-  <details :open="embedded" class="rounded-xl border border-gray-200 p-4 dark:border-dark-700" data-testid="account-traffic-controls" @toggle="onToggle">
+  <details class="rounded-xl border border-gray-200 p-4 dark:border-dark-700" data-testid="account-traffic-controls" @toggle="onToggle">
     <summary class="cursor-pointer text-sm font-medium">可选流量控制 · 严格 RPM / 自适应并发</summary>
-    <p class="mt-3 text-xs leading-relaxed text-gray-500">两个功能独立开关，默认关闭。启用后在账号固定并发上限内执行，关闭后恢复固定上限；不会改动身份或 TLS 策略。</p>
+    <p class="mt-3 text-xs leading-relaxed text-gray-500">两个功能独立开关。JSON 导入和新账号默认开启；未写入配置的存量账号保持关闭。启用后在账号固定并发上限内执行，关闭后恢复固定上限；不会改动身份或 TLS 策略。</p>
     <p v-if="platform === 'grok'" class="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">Grok 实时语音目前只能按会话观测。开启严格 RPM 或自动并发后，实时语音连接会被明确拒绝；HTTP 语音接口仍支持这些限制。</p>
     <p v-if="loading" class="mt-3 text-sm text-gray-500">正在读取配置…</p>
     <div v-if="error" role="alert" class="mt-3 text-sm text-red-600">{{ error }} <button type="button" class="underline" @click="load">重试</button></div>

@@ -691,8 +691,8 @@ func TestImportCodexSessionsUpdateAppliesKinDefaultsAndFormConcurrency(t *testin
 	if got := update.Extra["session_token_present"]; got != true {
 		t.Fatalf("session_token_present = %v, want true", got)
 	}
-	if got := update.Extra["openai_oauth_responses_websockets_v2_mode"]; got != service.OpenAIWSIngressModeCtxPool {
-		t.Fatalf("ws mode = %v, want %s", got, service.OpenAIWSIngressModeCtxPool)
+	if got := update.Extra["openai_oauth_responses_websockets_v2_mode"]; got != service.OpenAIWSIngressModePassthrough {
+		t.Fatalf("ws mode = %v, want %s", got, service.OpenAIWSIngressModePassthrough)
 	}
 	if got := update.Extra["codex_fingerprint_mode"]; got != "device" {
 		t.Fatalf("fingerprint mode = %v, want device", got)

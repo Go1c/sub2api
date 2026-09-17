@@ -13,6 +13,11 @@ beforeEach(() => {
 async function open(wrapper: ReturnType<typeof mount>) { (wrapper.get('details').element as HTMLDetailsElement).open = true; await wrapper.get('details').trigger('toggle'); await flushPromises() }
 
 describe('optional account traffic controls', () => {
+  it('starts collapsed even when embedded in the account form', () => {
+    const wrapper = mount(AccountTrafficControls, { props: { accountId: 42, embedded: true, modelValue: defaultTrafficPolicy() } })
+    expect((wrapper.get('details').element as HTMLDetailsElement).open).toBe(false)
+    wrapper.unmount()
+  })
   it('can disable a policy after invalid edits without submitting hidden invalid values', async () => {
     const wrapper = mount(AccountTrafficControls, { props: { accountId: 42 } }); await open(wrapper)
     await wrapper.get('[data-testid=strict-rpm-toggle]').setValue(true)

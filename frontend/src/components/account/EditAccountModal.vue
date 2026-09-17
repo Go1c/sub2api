@@ -3388,7 +3388,7 @@ import {
   KIN_DEFAULT_CODEX_CLI_ONLY,
   KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE,
   KIN_DEFAULT_CODEX_FINGERPRINT_MODE,
-  KIN_DEFAULT_OPENAI_WS_MODE,
+  KIN_OPENAI_WS_MISSING_EXTRA_MODE,
   resolveCodexCLIOnlyFromExtra,
   resolveCodexFingerprintConvergenceFromExtra,
   resolveCodexFingerprintModeFromExtra,
@@ -4023,8 +4023,8 @@ const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
-const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI_WS_MODE)
-const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_DEFAULT_OPENAI_WS_MODE)
+const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_OPENAI_WS_MISSING_EXTRA_MODE)
+const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(KIN_OPENAI_WS_MISSING_EXTRA_MODE)
 const codexCLIOnlyEnabled = ref(KIN_DEFAULT_CODEX_CLI_ONLY)
 const codexCLIOnlyAppServerEnabled = ref(false)
 // 429 限流豁免：缺省开（extra.oauth429_cooldown_enforced !== true），
@@ -4520,8 +4520,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
   openAICompactModelMappings.value = []
-  openaiOAuthResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
-  openaiAPIKeyResponsesWebSocketV2Mode.value = KIN_DEFAULT_OPENAI_WS_MODE
+  openaiOAuthResponsesWebSocketV2Mode.value = KIN_OPENAI_WS_MISSING_EXTRA_MODE
+  openaiAPIKeyResponsesWebSocketV2Mode.value = KIN_OPENAI_WS_MISSING_EXTRA_MODE
   codexCLIOnlyEnabled.value = KIN_DEFAULT_CODEX_CLI_ONLY
   codexCLIOnlyAppServerEnabled.value = false
   oauth429ExemptEnabled.value = true
@@ -4566,13 +4566,13 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       modeKey: 'openai_oauth_responses_websockets_v2_mode',
       enabledKey: 'openai_oauth_responses_websockets_v2_enabled',
       fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-      defaultMode: KIN_DEFAULT_OPENAI_WS_MODE
+      defaultMode: KIN_OPENAI_WS_MISSING_EXTRA_MODE
     })
     openaiAPIKeyResponsesWebSocketV2Mode.value = resolveOpenAIWSModeFromExtra(extra, {
       modeKey: 'openai_apikey_responses_websockets_v2_mode',
       enabledKey: 'openai_apikey_responses_websockets_v2_enabled',
       fallbackEnabledKeys: ['responses_websockets_v2_enabled', 'openai_ws_enabled'],
-      defaultMode: KIN_DEFAULT_OPENAI_WS_MODE
+      defaultMode: KIN_OPENAI_WS_MISSING_EXTRA_MODE
     })
     if (newAccount.type === 'oauth' || newAccount.type === 'setup-token') {
       codexCLIOnlyEnabled.value = resolveCodexCLIOnlyFromExtra(extra)
