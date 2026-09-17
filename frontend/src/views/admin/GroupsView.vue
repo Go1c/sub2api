@@ -61,6 +61,14 @@
                 :class="loading ? 'animate-spin' : ''"
               />
             </button>
+            <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <input
+                v-model="detailedStatsEnabled"
+                type="checkbox"
+                data-testid="group-stats-toggle"
+              />
+              完整统计
+            </label>
             <div class="relative" ref="columnDropdownRef">
               <button
                 @click="showColumnDropdown = !showColumnDropdown"
@@ -381,6 +389,15 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
+              <button
+                v-if="detailedStatsEnabled"
+                type="button"
+                class="rounded-lg p-1.5 text-xs text-primary-600"
+                data-testid="group-detailed-stats"
+                @click="statisticsGroupId = row.id"
+              >
+                统计
+              </button>
               <button
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
@@ -4261,11 +4278,16 @@
       @close="showRPMOverridesModal = false"
       @success="loadGroups"
     />
+    <GroupStatisticsDialog
+      :group-id="statisticsGroupId"
+      @close="statisticsGroupId = null"
+    />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
+import GroupStatisticsDialog from "@/components/admin/groups/GroupStatisticsDialog.vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
@@ -4588,6 +4610,23 @@ const columns = computed<Column[]>(() =>
 if (typeof window !== "undefined") {
   loadSavedColumns();
 }
+
+const detailedStatsEnabled = ref(false);
+const statisticsGroupId = ref<number | null>(null);
+try {
+  detailedStatsEnabled.value =
+    localStorage.getItem("admin_groups_detailed_stats") === "true";
+} catch {
+  /* unavailable browser storage */
+}
+watch(detailedStatsEnabled, (value) => {
+  if (!value) statisticsGroupId.value = null;
+  try {
+    localStorage.setItem("admin_groups_detailed_stats", String(value));
+  } catch {
+    /* preference only */
+  }
+});
 
 // Filter options
 const statusOptions = computed(() => [
