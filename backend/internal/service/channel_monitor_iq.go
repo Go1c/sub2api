@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -21,6 +22,7 @@ const (
 	MonitorIQStatusOK      = "iq_ok"
 	MonitorIQStatusDown    = "iq_down"
 	MonitorIQStatusTestErr = "test_error"
+	MonitorIQStatusTimeout = "test_timeout"
 	MonitorIQStatusNetwork = "monitor_network"
 )
 
@@ -115,7 +117,7 @@ func normalizeMonitorIQAnswer(s string) string {
 		if r == ',' || r == '，' || r == '.' || r == '。' || r == ':' || r == '：' || r == ';' || r == '；' {
 			continue
 		}
-		b.WriteRune(r)
+		_, _ = b.WriteRune(r)
 	}
 	return monitorIQSpaceRE.ReplaceAllString(b.String(), "")
 }
@@ -152,7 +154,15 @@ func classifyIQOutcome(in iqClassifyInput) (iqStatus, message string) {
 		if isMonitorNetworkError(in.err) {
 			return MonitorIQStatusNetwork, "monitor-side DNS lookup failed"
 		}
+		var netErr net.Error
+		if errors.Is(in.err, context.DeadlineExceeded) || (errors.As(in.err, &netErr) && netErr.Timeout()) {
+			return MonitorIQStatusTimeout, truncateMessage(sanitizeErrorMessage(in.err.Error()))
+		}
 		return MonitorIQStatusTestErr, truncateMessage(sanitizeErrorMessage(in.err.Error()))
+	}
+	// Include upstream request/gateway timeouts and Cloudflare's origin timeout.
+	if in.statusCode == http.StatusRequestTimeout || in.statusCode == http.StatusGatewayTimeout || in.statusCode == 524 {
+		return MonitorIQStatusTimeout, fmt.Sprintf("iq: upstream HTTP %d timeout", in.statusCode)
 	}
 	if in.statusCode < 200 || in.statusCode >= 300 {
 		bodySnippet := truncateForErrorBody(in.rawBody)

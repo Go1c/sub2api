@@ -20,8 +20,13 @@ import (
 func swapMonitorHTTPClient(t *testing.T) {
 	t.Helper()
 	orig := monitorHTTPClient
+	origIQ := monitorIQHTTPClient
 	monitorHTTPClient = &http.Client{Timeout: 5 * time.Second}
-	t.Cleanup(func() { monitorHTTPClient = orig })
+	monitorIQHTTPClient = &http.Client{Timeout: 5 * time.Second}
+	t.Cleanup(func() {
+		monitorHTTPClient = orig
+		monitorIQHTTPClient = origIQ
+	})
 }
 
 // captureHandler 把每次收到的请求 body 和 headers 存起来，测试断言用。

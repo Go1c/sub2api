@@ -12,6 +12,18 @@ vi.mock('vue-i18n', async () => {
 })
 
 describe('MonitorTimeline IQ vs server', () => {
+  it('shows timeouts in yellow with a timeout label, not IQ down or test error', () => {
+    const wrapper = mount(MonitorTimeline, {
+      props: {
+        kind: 'iq', countdownSeconds: 10, length: 1,
+        buckets: [{ status: 'test_timeout', latency_ms: 180000, checked_at: '2026-09-18T00:00:00Z' }],
+      },
+    })
+    const bar = wrapper.find('.flex-1.min-w-\\[3px\\]')
+    expect(bar.classes()).toContain('bg-amber-500')
+    expect(bar.attributes('title')).toContain('monitorCommon.iqStatus.test_timeout')
+  })
+
   it('server bars follow probe status and ignore iq_status', () => {
     const wrapper = mount(MonitorTimeline, {
       props: {

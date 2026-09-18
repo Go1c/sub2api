@@ -15,7 +15,7 @@ export type APIMode = 'chat_completions' | 'responses'
  * iq = 状态 + 智商（一次糖果题填两条时间线）。
  */
 export type CheckMode = 'probe' | 'quota' | 'quota_probe' | 'iq'
-export type IqStatus = 'iq_ok' | 'iq_down' | 'test_error' | 'monitor_network'
+export type IqStatus = 'iq_ok' | 'iq_down' | 'test_timeout' | 'test_error' | 'monitor_network'
 
 /** 配额快照中的单个用量窗口（与后端 domain.MonitorQuotaTier 一致）。 */
 export interface MonitorQuotaTier {
@@ -326,7 +326,8 @@ export async function del(id: number): Promise<void> {
  * Returns the latest check results for primary + extra models.
  */
 export async function runNow(id: number): Promise<RunNowResponse> {
-  const { data } = await apiClient.post<RunNowResponse>(`/admin/channel-monitors/${id}/run`)
+  // Allow ping + server probe + the three-minute IQ request to finish.
+  const { data } = await apiClient.post<RunNowResponse>(`/admin/channel-monitors/${id}/run`, undefined, { timeout: 300000 })
   return data
 }
 
