@@ -97,12 +97,23 @@ async function loadConfig() {
     return
   }
 
+  // Site copy and contact links must remain available even when the gateway is down.
+  config.value = mergeSupportChatConfig({
+    title: t('supportChat.title'),
+    welcomeMessage: t('supportChat.welcome'),
+    officialContactText: t('supportChat.contactSupport')
+  }, publicSettings)
+
   try {
     const gatewayConfig = await fetchSupportChatConfig({
       locale: gatewayLocale.value,
       gatewayUrl: gatewayUrl.value
     })
-    config.value = mergeSupportChatConfig(gatewayConfig, publicSettings)
+    config.value = mergeSupportChatConfig({
+      ...gatewayConfig,
+      // The welcome message belongs to site settings, never the gateway.
+      welcomeMessage: t('supportChat.welcome')
+    }, publicSettings)
     error.value = ''
   } catch {
     error.value = t('supportChat.configError')

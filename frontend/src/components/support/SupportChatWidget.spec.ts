@@ -79,7 +79,50 @@ describe('SupportChatWidget', () => {
     expect(panel.classes()).toContain('h-[min(620px,calc(100vh-7rem))]')
     expect(panel.classes()).toContain('sm:w-[420px]')
     expect(wrapper.text()).toContain('LumioAPI Support')
-    expect(wrapper.text()).toContain('Ask us anything')
+    expect(wrapper.text()).toContain('supportChat.welcome')
+    expect(wrapper.text()).not.toContain('Ask us anything')
+  })
+
+  it.each([true, false])('uses site copy and contact regardless of gateway failure (%s)', async (gatewayFails) => {
+    vi.mocked(fetchSupportChatPublicSettings).mockResolvedValue({
+      support_chat_enabled: true,
+      support_chat_gateway_url: 'https://gateway.example.com',
+      support_chat_title: 'Lumio客服',
+      support_chat_welcome_message: '你好啊，有什么问题吗？',
+      support_chat_official_contact_text: '加入群组',
+      support_chat_official_contact_url: 'https://t.me/lumiochat'
+    })
+    if (gatewayFails) {
+      vi.mocked(fetchSupportChatConfig).mockRejectedValueOnce(new Error('Gateway unavailable'))
+    }
+
+    const wrapper = mountWidget(createPinia(), createTestI18n('zh'))
+    await flushPromises()
+    await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
+
+    expect(wrapper.text()).toContain('Lumio客服')
+    expect(wrapper.text()).toContain('你好啊，有什么问题吗？')
+    expect(wrapper.text()).not.toContain('supportChat.welcome')
+    expect(wrapper.text()).not.toContain('Ask us anything')
+    expect(wrapper.text().includes('supportChat.configError')).toBe(gatewayFails)
+    expect(wrapper.find('a[href="https://t.me/lumiochat"]').text()).toContain('加入群组')
+
+    wrapper.unmount()
+  })
+
+  it('uses localized defaults when the gateway fails and site copy is blank', async () => {
+    vi.mocked(fetchSupportChatConfig).mockRejectedValue(new Error('Gateway unavailable'))
+    const i18n = createTestI18n('en')
+    const wrapper = mountWidget(createPinia(), i18n)
+    await flushPromises()
+    await wrapper.find('[data-testid="support-chat-toggle"]').trigger('click')
+    expect(wrapper.text()).toContain('supportChat.welcome')
+
+    i18n.global.locale.value = 'zh'
+    await flushPromises()
+    expect(wrapper.text()).toContain('supportChat.welcome')
+    expect(wrapper.text()).toContain('supportChat.configError')
+    wrapper.unmount()
   })
 
   it('sends logged-in user context and hides streamed answer sources', async () => {

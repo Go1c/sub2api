@@ -35,7 +35,7 @@ metadata:
 | [`features/balance-low-websocket-notify.md`](features/balance-low-websocket-notify.md) | （已废弃）用户侧浏览器 WebSocket 通知，已由 Webhook 替代 |
 | [`features/webhook-balance-robot-notify.md`](features/webhook-balance-robot-notify.md) | 个人资料 Webhook 通知：余额/站内信/公告 HTTPS POST（无 WebSocket） |
 | [`features/balance-low-site-message-notify.md`](features/balance-low-site-message-notify.md) | （作废方向）曾误写为站内信通道；以 websocket 文档为准 |
-| [`features/support-chat.md`](features/support-chat.md) | 站内 AI 客服浮窗:外部 gateway 接入、登录态修复、品牌配色、附件上传 |
+| [`features/support-chat.md`](features/support-chat.md) | 站内 AI 客服浮窗:外部 gateway 接入、统一使用站点自定义欢迎语、登录态修复、品牌配色、附件上传 |
 | [`features/user-request-monitoring.md`](features/user-request-monitoring.md) | 管理员定向监控指定用户请求、限时抓取原始请求体(非阻塞网关) |
 | [`features/external-auth-handoff.md`](features/external-auth-handoff.md) | 外部应用带用户来登录、登录后把 access token 回跳的接入协议与实现 |
 | [`features/auth-cross-domain-bridge.md`](features/auth-cross-domain-bridge.md) | 主站 access JWT 经 `/auth/bridge` 换成控制台 localStorage 会话（与 external-auth-handoff 方向相反） |
