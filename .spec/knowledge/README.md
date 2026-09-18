@@ -20,3 +20,4 @@ metadata:
 | [`features/account-pool-auto-inspect.md`](features/account-pool-auto-inspect.md) | 号池自动巡检：成功率过低则加入指定分组、去掉指定模型并关闭 429 豁免，401 停调度可通知 Telegram |
 | [`features/openai-oauth-429-exemption.md`](features/openai-oauth-429-exemption.md) | OpenAI OAuth 429 拉闸豁免：extra 键缺省豁免 Retry-After 冷却，手动或巡检降级时关闭，真实耗尽不受影响 |
 | [`features/openai-oauth-ip-group.md`](features/openai-oauth-ip-group.md) | OpenAI OAuth IP 组选路：会话粘性、随机选择未尝试出口与两轮重试 |
+| [`features/codex-2fa-import-recovery.md`](features/codex-2fa-import-recovery.md) | Codex 2FA JSON 导入、Team 优先授权，以及 sub2api 上游 401 停调度后的后台重新登录恢复 |

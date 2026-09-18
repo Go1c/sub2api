@@ -421,6 +421,9 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		// 账号导出泄露上游凭证原文——要求 step-up 2FA
 		accounts.GET("/data", gin.HandlerFunc(stepUpAuth), h.Admin.Account.ExportData)
 		accounts.POST("/data", h.Admin.Account.ImportData)
+		accounts.POST("/codex-2fa", h.Admin.Account.ImportCodex2FA)
+		accounts.GET("/codex-2fa/jobs", h.Admin.Account.ListCodex2FAJobs)
+		accounts.POST("/codex-2fa/jobs/:job_id/retry", h.Admin.Account.RetryCodex2FA)
 		accounts.POST("/batch-update-credentials", h.Admin.Account.BatchUpdateCredentials)
 		accounts.POST("/batch-refresh-tier", h.Admin.Account.BatchRefreshTier)
 		accounts.POST("/bulk-update", h.Admin.Account.BulkUpdate)

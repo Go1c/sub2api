@@ -20,6 +20,9 @@ import (
 
 // RateLimitService 处理限流和过载状态管理
 type RateLimitService struct {
+	codexLoginRecovery interface {
+		QueueUnauthorized(context.Context, *Account) bool
+	}
 	accountRepo           AccountRepository
 	usageRepo             UsageLogRepository
 	cfg                   *config.Config
@@ -433,6 +436,10 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		}
 		// OpenAI: token_invalidated / token_revoked 表示 token 被永久作废（非过期），直接标记 error
 		openai401Code := extractUpstreamErrorCode(responseBody)
+		if s.codexLoginRecovery != nil && openai401Code != "account_deactivated" && openai401Code != "account_suspended" && s.codexLoginRecovery.QueueUnauthorized(ctx, authAccount) {
+			shouldDisable = true
+			break
+		}
 		if authAccount.Platform == PlatformOpenAI && (openai401Code == "token_invalidated" || openai401Code == "token_revoked") {
 			msg := "Token revoked (401): account authentication permanently revoked"
 			if upstreamMsg != "" {

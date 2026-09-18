@@ -139,8 +139,12 @@ func provideCleanup(
 	openAIAutoReset *service.OpenAIQuotaAutoResetService,
 	promptAudit *securityaudit.PromptService,
 	pluginManager *service.PluginManager,
+	codexLogin *service.CodexLoginService,
 ) func() {
 	return func() {
+		if codexLogin != nil {
+			codexLogin.Stop()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 

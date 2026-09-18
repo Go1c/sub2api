@@ -6,7 +6,10 @@ import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
 
+import codexLogin from './codexLogin'
+
 export default {
+  codexLogin,
   ...landing,
   ...common,
   ...dashboard,

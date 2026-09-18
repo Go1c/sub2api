@@ -1,0 +1,22 @@
+# Overlay on the existing compose file; no host port is exposed for login material.
+services:
+  sub2api:
+    image: ${SUB2API_CODEX_LOGIN_IMAGE:?set an image built from this branch}
+    environment:
+      CODEX_LOGIN_WORKER_URL: http://codex-login-worker:8081
+      CODEX_LOGIN_WORKER_TOKEN: ${CODEX_LOGIN_WORKER_TOKEN:?set a random 32+ character token}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set a stable 64 hex character encryption key}
+    depends_on:
+      codex-login-worker:
+        condition: service_started
+  codex-login-worker:
+    build: ../tools/codex-login-worker
+    environment:
+      WORKER_TOKEN: ${CODEX_LOGIN_WORKER_TOKEN:?set a random 32+ character token}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [sub2api-network]

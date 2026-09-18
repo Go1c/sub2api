@@ -77,6 +77,7 @@ type Config struct {
 	Ops                     OpsConfig                     `mapstructure:"ops"`
 	JWT                     JWTConfig                     `mapstructure:"jwt"`
 	Totp                    TotpConfig                    `mapstructure:"totp"`
+	CodexLogin              CodexLoginConfig              `mapstructure:"codex_login"`
 	WebAuthn                WebAuthnConfig                `mapstructure:"webauthn"`
 	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
 	WeChat                  WeChatConnectConfig           `mapstructure:"wechat_connect"`
@@ -1648,6 +1649,11 @@ type JWTConfig struct {
 }
 
 // TotpConfig TOTP 双因素认证配置
+type CodexLoginConfig struct {
+	WorkerURL   string `mapstructure:"worker_url"`
+	WorkerToken string `mapstructure:"worker_token"`
+}
+
 type TotpConfig struct {
 	// EncryptionKey 用于加密 TOTP 密钥的 AES-256 密钥（32 字节 hex 编码）
 	// 如果为空，将自动生成一个随机密钥（仅适用于开发环境）
@@ -2273,6 +2279,8 @@ func setDefaults() {
 
 	// TOTP
 	viper.SetDefault("totp.encryption_key", "")
+	viper.SetDefault("codex_login.worker_url", "")
+	viper.SetDefault("codex_login.worker_token", "")
 
 	// Default
 	// Admin credentials are created via the setup flow (web wizard / CLI / AUTO_SETUP).
