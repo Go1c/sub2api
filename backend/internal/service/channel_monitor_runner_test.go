@@ -18,6 +18,7 @@ type stubMonitorSvc struct {
 	runErr     error
 	listErr    error
 	runHoldFor time.Duration // RunCheck 内额外阻塞的时长，用来测试 Stop 等待行为
+	onRun      func(context.Context)
 }
 
 func (s *stubMonitorSvc) ListEnabledMonitors(_ context.Context) ([]*ChannelMonitor, error) {
@@ -28,6 +29,9 @@ func (s *stubMonitorSvc) ListEnabledMonitors(_ context.Context) ([]*ChannelMonit
 }
 
 func (s *stubMonitorSvc) RunCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	if s.onRun != nil {
+		s.onRun(ctx)
+	}
 	s.runCount.Add(1)
 	if s.runCalled != nil {
 		select {
@@ -42,6 +46,17 @@ func (s *stubMonitorSvc) RunCheck(ctx context.Context, id int64) ([]*CheckResult
 		}
 	}
 	return nil, s.runErr
+}
+
+func TestRunnerLeavesThreeMinutesForIQAfterProbe(t *testing.T) {
+	svc := &stubMonitorSvc{onRun: func(ctx context.Context) {
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) < 3*time.Minute+monitorRequestTimeout+monitorPingTimeout {
+			t.Errorf("runner deadline does not leave three minutes for IQ after ping and probe: %v", deadline)
+		}
+	}}
+	r := newRunnerForTest(svc)
+	r.runOne(1, "iq")
 }
 
 func newRunnerForTest(svc monitorRunnerSvc) *ChannelMonitorRunner {

@@ -3,13 +3,49 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestClassifyIQOutcome_TimeoutIsDistinctFromWrongAnswer(t *testing.T) {
+	for _, err := range []error{
+		context.DeadlineExceeded,
+		fmt.Errorf("read body: %w", context.DeadlineExceeded),
+		&url.Error{Op: "Post", URL: "https://example.com", Err: os.ErrDeadlineExceeded},
+	} {
+		status, message := classifyIQOutcome(iqClassifyInput{err: err})
+		require.Equal(t, "test_timeout", status)
+		require.NotEmpty(t, message)
+	}
+	for _, code := range []int{http.StatusRequestTimeout, http.StatusGatewayTimeout, 524} {
+		status, _ := classifyIQOutcome(iqClassifyInput{statusCode: code})
+		require.Equal(t, "test_timeout", status)
+	}
+	status, _ := classifyIQOutcome(iqClassifyInput{err: context.Canceled})
+	require.Equal(t, MonitorIQStatusTestErr, status)
+}
+
+func TestRunIQCheck_DoesNotUseShortProbeTimeout(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	monitorHTTPClient.Timeout = 10 * time.Millisecond
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(40 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"21"}}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	result := runIQCheckForModel(context.Background(), MonitorProviderOpenAI, srv.URL, "test", "test", nil)
+	require.Equal(t, MonitorIQStatusOK, result.IqStatus, result.Message)
+}
 
 func TestMonitorIQAnswerMatches_FuzzyContains21(t *testing.T) {
 	require.True(t, monitorIQAnswerMatches("答案是 21。", MonitorIQDefaultAnswer, true))

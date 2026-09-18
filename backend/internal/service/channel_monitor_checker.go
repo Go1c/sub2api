@@ -19,21 +19,23 @@ import (
 
 // monitorHTTPClient 共享一个 http.Client，避免每次检测重建 transport。
 // 自定义 Transport 在 dial 时强制再次校验 IP，防止 DNS rebinding 绕过 validateEndpoint。
-var monitorHTTPClient = newSSRFSafeHTTPClient(monitorRequestTimeout)
+var monitorHTTPClient = newSSRFSafeHTTPClient(monitorRequestTimeout, monitorResponseHeaderTimeout)
+
+var monitorIQHTTPClient = newSSRFSafeHTTPClient(monitorIQRequestTimeout, monitorIQRequestTimeout)
 
 // monitorPingHTTPClient 用于 endpoint origin 的 HEAD ping，超时更短。
-var monitorPingHTTPClient = newSSRFSafeHTTPClient(monitorPingTimeout)
+var monitorPingHTTPClient = newSSRFSafeHTTPClient(monitorPingTimeout, monitorResponseHeaderTimeout)
 
 // newSSRFSafeHTTPClient 返回一个使用 safeDialContext 的 http.Client。
 // 仅供监控模块对外发起请求使用——所有目标都应是公网 endpoint。
-func newSSRFSafeHTTPClient(timeout time.Duration) *http.Client {
+func newSSRFSafeHTTPClient(timeout, headerTimeout time.Duration) *http.Client {
 	tr := &http.Transport{
 		DialContext:           safeDialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       monitorIdleConnTimeout,
 		TLSHandshakeTimeout:   monitorTLSHandshakeTimeout,
-		ResponseHeaderTimeout: monitorResponseHeaderTimeout,
+		ResponseHeaderTimeout: headerTimeout,
 	}
 	return &http.Client{Timeout: timeout, Transport: servertiming.WrapRoundTripper(tr)}
 }
@@ -56,6 +58,8 @@ type CheckOptions struct {
 	IQFuzzyMatch bool
 	// MaxTokens > 0 时覆盖 adapter 默认 max_tokens / max_output_tokens。
 	MaxTokens int
+	// Only the IQ request selects the longer-lived client.
+	httpClient *http.Client
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -122,6 +126,8 @@ func runIQCheckForModel(ctx context.Context, provider, endpoint, apiKey, model s
 		expected = defaultIQAnswer(opts.IQAnswer)
 		fuzzy = opts.IQFuzzyMatch
 	}
+	opts = cloneCheckOptions(opts)
+	opts.httpClient = monitorIQHTTPClient
 
 	start := time.Now()
 	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, prompt, opts)
@@ -315,7 +321,11 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	}
 	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
 	full := joinURL(endpoint, adapter.buildPath(model))
-	respBytes, status, err := postRawJSON(ctx, full, body, headers)
+	client := monitorHTTPClient
+	if opts != nil && opts.httpClient != nil {
+		client = opts.httpClient
+	}
+	respBytes, status, err := postRawJSON(ctx, client, full, body, headers)
 	if err != nil {
 		return "", "", status, err
 	}
@@ -559,7 +569,7 @@ func hasNonEmptyBodyValue(v any) bool {
 
 // postRawJSON 发送 POST + 已序列化好的 JSON 字节，限制响应体大小，返回响应字节、HTTP status、错误。
 // adapter 自行 marshal 是为了精确控制字段顺序与类型，所以这里直接收 []byte 而不是 any。
-func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers map[string]string) ([]byte, int, error) {
+func postRawJSON(ctx context.Context, client *http.Client, fullURL string, payload []byte, headers map[string]string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(payload))
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", err)
@@ -570,7 +580,7 @@ func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers ma
 		req.Header.Set(k, v)
 	}
 
-	resp, err := monitorHTTPClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("do request: %w", err)
 	}

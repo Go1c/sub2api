@@ -1125,6 +1125,7 @@ export default {
     iqStatus: {
       iq_ok: '不降智',
       iq_down: '降智',
+      test_timeout: '测试超时',
       test_error: '测试异常',
       monitor_network: '监控网络异常'
     },

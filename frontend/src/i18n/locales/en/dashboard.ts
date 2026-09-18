@@ -424,6 +424,7 @@ export default {
     iqStatus: {
       iq_ok: 'Not degraded',
       iq_down: 'IQ down',
+      test_timeout: 'Test timed out',
       test_error: 'Test error',
       monitor_network: 'Monitor network error'
     },
