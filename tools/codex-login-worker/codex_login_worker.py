@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / 'third_party/codex_protocol'))
 os.umask(0o077)
 logging.disable(logging.CRITICAL)
 
-from login_core import LoginError, select_workspace, validate_tokens
+from login_core import LoginError, select_workspace, validate_tokens, safe_diagnostics
 diagnostics = {'stage': 'startup'}
 
 
@@ -115,6 +115,7 @@ def authorize(data):
         code = flow._extract_code(callback, state)
         diagnostics['stage'] = 'token_exchange'
         tokens = flow.exchange_codex_token(session, code, verifier)
+        diagnostics['stage'] = 'identity_validation'
         identity = validate_tokens(tokens, data['email'], workspace['id'])
         return {'success': True, 'tokens': tokens, 'account_id': workspace['id'],
                 'workspace_kind': workspace.get('kind'), 'workspace_name': workspace.get('name', ''),
@@ -130,7 +131,8 @@ if __name__ == '__main__':
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             result = authorize(payload)
     except LoginError as exc:
-        result = {'success': False, 'code': exc.code, 'diagnostics': diagnostics}
-    except Exception:
-        result = {'success': False, 'code': 'login_failed', 'diagnostics': diagnostics}
+        result = {'success': False, 'code': exc.code, 'diagnostics': safe_diagnostics(diagnostics)}
+    except Exception as exc:
+        diagnostics['exception_type'] = type(exc).__name__
+        result = {'success': False, 'code': 'login_failed', 'diagnostics': safe_diagnostics(diagnostics)}
     sys.stdout.write(json.dumps(result))

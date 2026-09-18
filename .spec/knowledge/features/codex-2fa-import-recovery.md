@@ -20,3 +20,7 @@ metadata:
 后端：`codex_login*.go`、`account_codex_login.go`、`account_codex_2fa.go`；前端：`Codex2FAImportModal.vue`；迁移：`948_codex_login_jobs.sql`。
 
 验证边界：第一个真实账号完成登录和 Team 凭据查询／刷新；401 恢复走回归测试，任务队列用隔离 PostgreSQL 验证。未部署生产、未制造真实凭据失效，其余四个账号未登录。
+
+## 失败诊断
+
+失败任务展示经白名单筛选的阶段（授权初始化、邮箱、密码、2FA、Team、换码、额度验证）、HTTP 状态码与异常类别。Worker HTTP 层必须保留子进程诊断字段；不得回传上游响应正文、URL、Cookie 或异常消息。重试请求被拒绝时展示后端实际原因，不能把未配置、网络失败等都描述为冷却。历史任务需更新 Worker 与主服务后重试，才会产生新诊断。

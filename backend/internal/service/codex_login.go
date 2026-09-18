@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/mail"
@@ -117,7 +118,15 @@ func ParseCodexLoginMaterials(documents []string) ([]CodexLoginMaterial, []Codex
 	return items, failures
 }
 
+type CodexLoginDiagnostics struct {
+	Stage         string `json:"stage"`
+	HTTPStatus    int    `json:"http_status"`
+	ExceptionType string `json:"exception_type"`
+}
+
 type CodexLoginResult struct {
+	Diagnostics CodexLoginDiagnostics `json:"diagnostics"`
+
 	Success       bool   `json:"success"`
 	Code          string `json:"code"`
 	AccountID     string `json:"account_id"`
@@ -160,16 +169,54 @@ func (r *HTTPCodexLoginRunner) Login(ctx context.Context, material CodexLoginMat
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return nil, errors.New("登录 Worker 拒绝请求")
+		switch response.StatusCode {
+		case http.StatusUnauthorized:
+			return nil, errors.New("登录 Worker 认证失败，请检查共享密钥")
+		case http.StatusServiceUnavailable:
+			return nil, errors.New("登录 Worker 暂时繁忙，请稍后重试")
+		}
+		return nil, fmt.Errorf("登录 Worker 拒绝请求（HTTP %d）", response.StatusCode)
 	}
 	var result CodexLoginResult
 	if json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result) != nil {
 		return nil, errors.New("登录 Worker 响应无效")
 	}
 	if !result.Success {
-		return nil, errors.New(codexLoginErrorMessage(result.Code))
+		return nil, errors.New(formatCodexLoginError(result.Code, result.Diagnostics))
 	}
 	return validateCodexLoginResult(material, &result)
+}
+
+func formatCodexLoginError(code string, diagnostics CodexLoginDiagnostics) string {
+	message := codexLoginErrorMessage(code)
+	stages := map[string]string{
+		"startup": "登录环境初始化", "oauth_bootstrap": "授权初始化", "email": "邮箱确认", "password": "密码验证",
+		"totp": "2FA 验证", "workspace": "Team 选择", "token_exchange": "授权码换取凭据",
+		"identity_validation": "账号身份核对", "credential_probe": "Codex 额度验证",
+	}
+	details := []string{}
+	if label, ok := stages[diagnostics.Stage]; ok {
+		details = append(details, label)
+	}
+	if diagnostics.HTTPStatus >= 100 && diagnostics.HTTPStatus <= 599 {
+		details = append(details, fmt.Sprintf("HTTP %d", diagnostics.HTTPStatus))
+	}
+	switch diagnostics.ExceptionType {
+	case "Timeout", "TimeoutError", "ConnectTimeout", "ReadTimeout":
+		details = append(details, "网络超时")
+	case "ConnectionError", "ProxyError", "SSLError", "RequestsError", "RequestException":
+		details = append(details, "网络、代理或 TLS 错误")
+	case "FileNotFoundError", "ModuleNotFoundError", "ImportError":
+		details = append(details, "Worker 依赖或文件缺失")
+	case "ValueError", "JSONDecodeError":
+		details = append(details, "响应格式异常")
+	case "RuntimeError", "OSError":
+		details = append(details, "Worker 运行异常")
+	}
+	if len(details) > 0 {
+		message += "（" + strings.Join(details, "；") + "）"
+	}
+	return message
 }
 
 func codexLoginErrorMessage(code string) string {
@@ -186,6 +233,22 @@ func codexLoginErrorMessage(code string) string {
 		return "上游要求额外验证，需人工处理"
 	case "rate_limited":
 		return "上游限流，请稍后重试"
+	case "credential_probe_failed":
+		return "授权后的 Codex 额度验证失败"
+	case "totp_factor_missing":
+		return "登录会话未返回 2FA 验证方式"
+	case "unexpected_redirect", "redirect_limit":
+		return "登录重定向异常"
+	case "identity_mismatch", "workspace_mismatch":
+		return "授权后的邮箱或 Team 与预期不符"
+	case "invalid_tokens", "incomplete_tokens":
+		return "返回的授权凭据无效或不完整"
+	case "login_worker_failed":
+		return "登录 Worker 未正常返回，请检查运行依赖"
+	case "upstream_unavailable":
+		return "上游登录服务暂时不可用"
+	case "login_rejected":
+		return "登录请求被上游拒绝"
 	case "login_timeout":
 		return "登录超时"
 	default:

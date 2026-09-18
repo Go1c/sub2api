@@ -10,6 +10,20 @@ vi.mock('@/api/admin/proxyIpGroups', () => ({ list: vi.fn().mockResolvedValue([{
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 describe('Codex2FAImportModal', () => {
+  it('shows the backend retry reason rather than claiming every error is cooldown', async () => {
+    api.jobs.mockResolvedValue({ available: true, jobs: [{ id: 1, email: 'demo@example.com', status: 'failed', error_message: 'login failed', attempts: 1 }] })
+    api.retry.mockRejectedValue({ message: '登录 Worker 未配置' })
+    const wrapper = mount(Codex2FAImportModal, { props: { show: true }, global: { stubs: {
+      BaseDialog: { template: '<div><slot/><slot name="footer"/></div>' }
+    } } })
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'codexLogin.retry')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('登录 Worker 未配置')
+    expect(wrapper.text()).not.toContain('codexLogin.retryFailed')
+    wrapper.unmount()
+  })
+
   it('uploads five files with chosen account configuration and clears inputs', async () => {
     api.jobs.mockResolvedValue({ available: true, jobs: [] })
     api.importAccounts.mockResolvedValue({ job_ids: [1, 2, 3, 4, 5], errors: [] })

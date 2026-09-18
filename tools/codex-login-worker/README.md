@@ -52,3 +52,9 @@ Go 启动时应用迁移 `948_codex_login_jobs.sql`。Worker 或固定密钥未�
 仅对指定文件第一个账号做真实登录、Team 授权、额度查询和 RT 刷新，其余四个未登录。生产服务器出口、线上部署和真实凭据失效的完整恢复尚未线上验收。
 
 Python 测试：`python -m pytest test_login_core.py test_worker_privacy.py`。Go 测试见 `codex_login*_test.go`；数据库测试需显式设置隔离库的 `CODEX_LOGIN_TEST_DSN`，禁止指向生产。
+
+## 部分账号失败时排查
+
+成功账号不需重新导入。更新主服务和 Worker 后，只重试失败项。页面显示失败阶段、HTTP 状态码和安全异常类别；旧失败记录不会自动获得详情，需重新执行任务。
+
+例如“Codex 额度验证；HTTP 403”表示登录之后的额度查询被拒绝，不等于密码错误；“授权初始化；网络超时”应检查 Worker 出口。不要从通用失败提示推断账号已封禁，也不要关闭身份／Team 校验来让任务变成成功。重试的冷却限制仍保留。

@@ -1,7 +1,10 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -47,4 +50,25 @@ func TestCodexLoginParsePartialAndDuplicate(t *testing.T) {
 	require.Len(t, items, 1)
 	require.Len(t, failures, 2)
 	require.NotContains(t, failures[0].Message, "private-value")
+}
+
+func TestCodexLoginSafeDiagnosticMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":false,"code":"credential_probe_failed","diagnostics":{"stage":"credential_probe","http_status":403,"exception_type":"Timeout","body":"PRIVATE-TOKEN"}}`))
+	}))
+	defer server.Close()
+	runner := &HTTPCodexLoginRunner{URL: server.URL, Client: server.Client()}
+	_, err := runner.Login(context.Background(), CodexLoginMaterial{}, "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "额度验证")
+	require.Contains(t, err.Error(), "HTTP 403")
+	require.NotContains(t, err.Error(), "PRIVATE-TOKEN")
+}
+
+func TestCodexLoginDiagnosticsRejectUntrustedText(t *testing.T) {
+	message := formatCodexLoginError("PRIVATE-TOKEN", CodexLoginDiagnostics{Stage: "PRIVATE-TOKEN", HTTPStatus: 9999, ExceptionType: "PRIVATE-TOKEN"})
+	require.NotContains(t, message, "PRIVATE-TOKEN")
+	require.NotContains(t, message, "9999")
+	require.Equal(t, "登录或凭据验证失败", message)
 }

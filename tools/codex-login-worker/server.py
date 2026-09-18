@@ -8,7 +8,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from curl_cffi.requests import AsyncSession
-from login_core import LoginMaterial, LoginError, login
+from login_core import LoginMaterial, LoginError, login, safe_diagnostics
 
 TOKEN = os.environ.get('WORKER_TOKEN', '')
 SLOTS = threading.BoundedSemaphore(2)
@@ -18,14 +18,31 @@ async def run(data):
     material = LoginMaterial(data['email'], data['password'], data['totp_secret'])
     result = await login(material, account_id=data.get('account_id'), proxy=data.get('proxy'))
     proxy = data.get('proxy')
-    async with AsyncSession(proxies={'all': proxy} if proxy else None, timeout=20) as client:
-        response = await client.get('https://chatgpt.com/backend-api/wham/usage', headers={
-            'Authorization': 'Bearer ' + result['tokens']['access_token'],
-            'ChatGPT-Account-Id': result['account_id'], 'Accept': 'application/json',
-        }, allow_redirects=False)
-    if response.status_code != 200 or not isinstance(response.json().get('rate_limit'), dict):
-        raise LoginError('credential_probe_failed')
+    diagnostics = {'stage': 'credential_probe'}
+    try:
+        async with AsyncSession(proxies={'all': proxy} if proxy else None, timeout=20) as client:
+            response = await client.get('https://chatgpt.com/backend-api/wham/usage', headers={
+                'Authorization': 'Bearer ' + result['tokens']['access_token'],
+                'ChatGPT-Account-Id': result['account_id'], 'Accept': 'application/json',
+            }, allow_redirects=False)
+        diagnostics['http_status'] = response.status_code
+        if response.status_code != 200 or not isinstance(response.json().get('rate_limit'), dict):
+            raise LoginError('credential_probe_failed', diagnostics)
+    except LoginError:
+        raise
+    except Exception as exc:
+        diagnostics['exception_type'] = type(exc).__name__
+        raise LoginError('credential_probe_failed', safe_diagnostics(diagnostics)) from None
+
     return result
+
+
+def failure_response(exc):
+    return {
+        'success': False,
+        'code': exc.code if isinstance(exc, LoginError) else 'login_failed',
+        'diagnostics': safe_diagnostics(getattr(exc, 'diagnostics', {})),
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -68,10 +85,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(data.get(key), str) or not data[key]:
                     raise ValueError('invalid input')
             result = asyncio.run(run(data))
-        except LoginError as exc:
-            result = {'success': False, 'code': exc.code}
-        except Exception:
-            result = {'success': False, 'code': 'login_failed'}
+        except Exception as exc:
+            result = failure_response(exc)
         finally:
             SLOTS.release()
         try:

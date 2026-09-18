@@ -118,10 +118,16 @@ async function submit() {
   } catch { message.value = t('codexLogin.submitFailed') }
   finally { submitting.value = false }
 }
+function retryError(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message.trim()) {
+    return error.message
+  }
+  return t('codexLogin.retryFailed')
+}
 async function retry(id: number) {
   retrying.value = id
-  try { await api.retry(id); completed.delete(id); await refresh() }
-  catch { message.value = t('codexLogin.retryFailed') }
+  try { await api.retry(id); message.value = ''; completed.delete(id); await refresh() }
+  catch (error) { message.value = retryError(error) }
   finally { retrying.value = null }
 }
 watch(() => props.show, async open => {

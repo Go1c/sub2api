@@ -16,6 +16,31 @@ CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 MAX_ACCOUNTS = 100
 
 
+DIAGNOSTIC_STAGES = frozenset({
+    'startup', 'oauth_bootstrap', 'email', 'password', 'totp', 'workspace',
+    'token_exchange', 'identity_validation', 'credential_probe',
+})
+DIAGNOSTIC_EXCEPTIONS = frozenset({
+    'Timeout', 'TimeoutError', 'ConnectionError', 'ProxyError', 'SSLError',
+    'ConnectTimeout', 'ReadTimeout', 'RequestsError', 'RequestException',
+    'RuntimeError', 'ValueError', 'JSONDecodeError', 'FileNotFoundError',
+    'ModuleNotFoundError', 'ImportError', 'OSError',
+})
+
+
+def safe_diagnostics(value):
+    if not isinstance(value, dict):
+        return {}
+    result = {}
+    if isinstance(value.get('stage'), str) and value['stage'] in DIAGNOSTIC_STAGES:
+        result['stage'] = value['stage']
+    if type(value.get('http_status')) is int and 100 <= value['http_status'] <= 599:
+        result['http_status'] = value['http_status']
+    if isinstance(value.get('exception_type'), str) and value['exception_type'] in DIAGNOSTIC_EXCEPTIONS:
+        result['exception_type'] = value['exception_type']
+    return result
+
+
 class LoginError(Exception):
     def __init__(self, code, diagnostics=None):
         self.code = code
