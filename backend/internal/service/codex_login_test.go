@@ -59,7 +59,7 @@ func TestCodexLoginSafeDiagnosticMessage(t *testing.T) {
 	}))
 	defer server.Close()
 	runner := &HTTPCodexLoginRunner{URL: server.URL, Client: server.Client()}
-	_, err := runner.Login(context.Background(), CodexLoginMaterial{}, "")
+	_, err := runner.Login(context.Background(), CodexLoginMaterial{}, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "额度验证")
 	require.Contains(t, err.Error(), "HTTP 403")

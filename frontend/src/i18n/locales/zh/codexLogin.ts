@@ -1,4 +1,5 @@
 export default {
+    requireIPGroup: '请选择可用 IP 组，禁止服务器直连',
     title: '2FA JSON 导入',
     hint: '上传邮箱、密码和 2FA 密钥，自动获取 Codex 账号配置。优先选择 Team；401 停调度后重新登录原 Team，验证通过才恢复调度。',
     unavailable: '请先配置内部登录 Worker 与固定加密密钥。',

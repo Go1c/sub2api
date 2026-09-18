@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -87,11 +88,8 @@ func (s *CodexLoginService) Import(ctx context.Context, documents []string, opti
 	if !s.Available() {
 		return nil, nil, errors.New("请配置登录 Worker 与固定 TOTP_ENCRYPTION_KEY")
 	}
-	if options.ProxyID != nil && options.ProxyIPGroupID != nil {
-		return nil, nil, errors.New("单代理与 IP 组不能同时选择")
-	}
-	if options.ProxyID != nil && *options.ProxyID <= 0 || options.ProxyIPGroupID != nil && *options.ProxyIPGroupID <= 0 {
-		return nil, nil, errors.New("代理 ID 无效")
+	if options.ProxyID != nil || options.ProxyIPGroupID == nil || *options.ProxyIPGroupID <= 0 {
+		return nil, nil, errors.New("必须选择 IP 组，2FA 登录不允许服务器直连或单代理")
 	}
 	for _, id := range options.GroupIDs {
 		if id <= 0 {
@@ -180,7 +178,7 @@ func (s *CodexLoginService) tick(parent context.Context) {
 	if job == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(parent, 210*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 240*time.Second)
 	message := s.execute(ctx, job)
 	cancel()
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -236,7 +234,7 @@ func (s *CodexLoginService) execute(ctx context.Context, job *CodexLoginJob) str
 			return "刷新锁不可用"
 		}
 		key := OpenAITokenCacheKey(account)
-		locked, lockErr := s.tokenCache.AcquireRefreshLock(ctx, key, 240*time.Second)
+		locked, lockErr := s.tokenCache.AcquireRefreshLock(ctx, key, 270*time.Second)
 		if lockErr != nil || !locked {
 			return "账号正在刷新，请稍后重试"
 		}
@@ -245,21 +243,13 @@ func (s *CodexLoginService) execute(ctx context.Context, job *CodexLoginJob) str
 			defer cancel()
 			_ = s.tokenCache.ReleaseRefreshLock(cleanup, key)
 		}()
-	} else if target.ProxyID != nil {
-		target.Proxy, err = s.oauth.proxyRepo.GetByID(ctx, *target.ProxyID)
-		if err != nil || target.Proxy == nil {
-			return "代理不可用"
-		}
 	}
-	proxy, release, err := resolveOpenAIProxyURL(ctx, s.oauth.ipGroupResolver, target, "")
+	proxies, err := codexLoginGroupCandidates(ctx, s.oauth.ipGroupResolver, target)
 	if err != nil {
-		return "代理或 IP 组不可用"
+		return err.Error()
 	}
-	defer release()
-	if target.ProxyIPGroupID != nil && proxy == "" {
-		return "IP 组没有可用出口"
-	}
-	token, err := s.runner.Login(ctx, material, proxy)
+	slog.Info("codex_login_proxy_candidates", "job_id", job.ID, "ip_group_id", *target.ProxyIPGroupID, "candidate_count", len(proxies))
+	token, err := s.runner.Login(ctx, material, proxies)
 	if err != nil {
 		return err.Error()
 	} // runner errors are fixed safe messages, never provider bodies.
@@ -284,7 +274,7 @@ func (s *CodexLoginService) execute(ctx context.Context, job *CodexLoginJob) str
 					return "刷新锁不可用"
 				}
 				key := OpenAITokenCacheKey(account)
-				locked, lockErr := s.tokenCache.AcquireRefreshLock(ctx, key, 240*time.Second)
+				locked, lockErr := s.tokenCache.AcquireRefreshLock(ctx, key, 270*time.Second)
 				if lockErr != nil || !locked {
 					return "原账号正在刷新，请稍后重试"
 				}
@@ -372,4 +362,28 @@ func (s *CodexLoginService) execute(ctx context.Context, job *CodexLoginJob) str
 		}
 	}
 	return ""
+}
+
+// Candidate filtering uses configured live group members; Worker probes actual HTTP/SOCKS connectivity.
+func codexLoginGroupCandidates(ctx context.Context, resolver *openAIIPGroupResolver, account *Account) ([]CodexLoginProxy, error) {
+	if account == nil || account.ProxyIPGroupID == nil || *account.ProxyIPGroupID <= 0 || resolver == nil {
+		return nil, errors.New("必须配置有效 IP 组，禁止服务器直连")
+	}
+	group, err := resolver.groups.GetByID(ctx, *account.ProxyIPGroupID)
+	if err != nil || group == nil {
+		return nil, errors.New("IP 组不可用，禁止服务器直连")
+	}
+	members, err := resolver.loadLiveMembers(ctx, group)
+	if err != nil || len(members) == 0 {
+		return nil, errors.New("IP 组没有启用且未过期的代理")
+	}
+	if len(members) > 256 {
+		return nil, errors.New("登录 IP 组最多支持 256 个代理")
+	}
+	result := make([]CodexLoginProxy, 0, len(members))
+	for _, proxy := range members {
+		result = append(result, CodexLoginProxy{ID: proxy.ID, URL: proxy.URL()})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result, nil
 }

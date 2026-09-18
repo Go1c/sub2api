@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -120,12 +121,14 @@ func ParseCodexLoginMaterials(documents []string) ([]CodexLoginMaterial, []Codex
 
 type CodexLoginDiagnostics struct {
 	Stage         string `json:"stage"`
+	ProxyID       int64  `json:"proxy_id"`
 	HTTPStatus    int    `json:"http_status"`
 	ExceptionType string `json:"exception_type"`
 }
 
 type CodexLoginResult struct {
 	Diagnostics CodexLoginDiagnostics `json:"diagnostics"`
+	ProxyID     int64                 `json:"proxy_id"`
 
 	Success       bool   `json:"success"`
 	Code          string `json:"code"`
@@ -139,8 +142,13 @@ type CodexLoginResult struct {
 	} `json:"tokens"`
 }
 
+type CodexLoginProxy struct {
+	ID  int64  `json:"id"`
+	URL string `json:"url"`
+}
+
 type CodexLoginRunner interface {
-	Login(context.Context, CodexLoginMaterial, string) (*OpenAITokenInfo, error)
+	Login(context.Context, CodexLoginMaterial, []CodexLoginProxy) (*OpenAITokenInfo, error)
 }
 
 type HTTPCodexLoginRunner struct {
@@ -148,11 +156,11 @@ type HTTPCodexLoginRunner struct {
 	Client     *http.Client
 }
 
-func (r *HTTPCodexLoginRunner) Login(ctx context.Context, material CodexLoginMaterial, proxy string) (*OpenAITokenInfo, error) {
+func (r *HTTPCodexLoginRunner) Login(ctx context.Context, material CodexLoginMaterial, proxies []CodexLoginProxy) (*OpenAITokenInfo, error) {
 	body, _ := json.Marshal(struct {
 		CodexLoginMaterial
-		Proxy string `json:"proxy"`
-	}{material, proxy})
+		Proxies []CodexLoginProxy `json:"proxy_candidates"`
+	}{material, proxies})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(r.URL, "/")+"/login", bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.New("登录 Worker 地址无效")
@@ -161,7 +169,7 @@ func (r *HTTPCodexLoginRunner) Login(ctx context.Context, material CodexLoginMat
 	req.Header.Set("Content-Type", "application/json")
 	client := r.Client
 	if client == nil {
-		client = &http.Client{Timeout: 190 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		client = &http.Client{Timeout: 210 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	response, err := client.Do(req)
 	if err != nil {
@@ -184,17 +192,31 @@ func (r *HTTPCodexLoginRunner) Login(ctx context.Context, material CodexLoginMat
 	if !result.Success {
 		return nil, errors.New(formatCodexLoginError(result.Code, result.Diagnostics))
 	}
+	validProxy := false
+	for _, candidate := range proxies {
+		if candidate.ID == result.ProxyID && candidate.ID > 0 {
+			validProxy = true
+			break
+		}
+	}
+	if !validProxy {
+		return nil, errors.New("登录 Worker 未确认选中的 IP 组代理，请更新 Worker")
+	}
+	slog.Info("codex_login_proxy_selected", "proxy_id", result.ProxyID)
 	return validateCodexLoginResult(material, &result)
 }
 
 func formatCodexLoginError(code string, diagnostics CodexLoginDiagnostics) string {
 	message := codexLoginErrorMessage(code)
 	stages := map[string]string{
-		"startup": "登录环境初始化", "oauth_bootstrap": "授权初始化", "email": "邮箱确认", "password": "密码验证",
+		"proxy_selection": "IP 组代理连通性检查", "startup": "登录环境初始化", "oauth_bootstrap": "授权初始化", "email": "邮箱确认", "password": "密码验证",
 		"totp": "2FA 验证", "workspace": "Team 选择", "token_exchange": "授权码换取凭据",
 		"identity_validation": "账号身份核对", "credential_probe": "Codex 额度验证",
 	}
 	details := []string{}
+	if diagnostics.ProxyID > 0 {
+		details = append(details, fmt.Sprintf("代理 #%d", diagnostics.ProxyID))
+	}
 	if label, ok := stages[diagnostics.Stage]; ok {
 		details = append(details, label)
 	}
@@ -221,6 +243,12 @@ func formatCodexLoginError(code string, diagnostics CodexLoginDiagnostics) strin
 
 func codexLoginErrorMessage(code string) string {
 	switch code {
+	case "proxy_required":
+		return "必须配置 IP 组代理，禁止服务器直连"
+	case "proxy_unavailable":
+		return "IP 组在探测时限内没有可连通登录服务的代理，未提交账号登录"
+	case "invalid_proxy":
+		return "代理地址格式无效，禁止直连"
 	case "invalid_password":
 		return "账号密码错误"
 	case "invalid_totp":

@@ -1,6 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi } from 'vitest'
 import Codex2FAImportModal from '../Codex2FAImportModal.vue'
+import * as ipGroupsAPI from '@/api/admin/proxyIpGroups'
 
 const api = vi.hoisted(() => ({ jobs: vi.fn(), importAccounts: vi.fn(), retry: vi.fn() }))
 vi.mock('@/api/admin/codexLogin', () => api)
@@ -10,6 +11,22 @@ vi.mock('@/api/admin/proxyIpGroups', () => ({ list: vi.fn().mockResolvedValue([{
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 describe('Codex2FAImportModal', () => {
+  it('requires an IP group and offers no direct or single-proxy option', async () => {
+    api.jobs.mockResolvedValue({ available: true, jobs: [] })
+    api.importAccounts.mockClear()
+    vi.mocked(ipGroupsAPI.list).mockResolvedValueOnce([])
+    const wrapper = mount(Codex2FAImportModal, { props: { show: true }, global: { stubs: {
+      BaseDialog: { template: '<div><slot/><slot name="footer"/></div>' }
+    } } })
+    await flushPromises()
+    await wrapper.find('form').trigger('submit')
+    expect(api.importAccounts).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('codexLogin.requireIPGroup')
+    expect(wrapper.text()).not.toContain('codexLogin.direct')
+    expect(wrapper.find('option[value=""]').attributes()).toHaveProperty('disabled')
+    wrapper.unmount()
+  })
+
   it('shows the backend retry reason rather than claiming every error is cooldown', async () => {
     api.jobs.mockResolvedValue({ available: true, jobs: [{ id: 1, email: 'demo@example.com', status: 'failed', error_message: 'login failed', attempts: 1 }] })
     api.retry.mockRejectedValue({ message: '登录 Worker 未配置' })

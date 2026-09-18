@@ -22,13 +22,11 @@
         <div>
           <label class="input-label" for="codex-2fa-proxy">{{ t('codexLogin.proxy') }}</label>
           <select id="codex-2fa-proxy" v-model="selectedProxy" class="input w-full">
-            <option value="">{{ t('codexLogin.direct') }}</option>
+            <option value="" disabled>{{ t('codexLogin.requireIPGroup') }}</option>
             <optgroup :label="t('codexLogin.ipGroups')">
               <option v-for="group in ipGroups" :key="group.id" :value="`group:${group.id}`">{{ group.name }}</option>
             </optgroup>
-            <optgroup :label="t('codexLogin.proxies')">
-              <option v-for="proxy in proxies" :key="proxy.id" :value="`proxy:${proxy.id}`">{{ proxy.name }}</option>
-            </optgroup>
+
           </select>
         </div>
       </div>
@@ -56,7 +54,6 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import * as api from '@/api/admin/codexLogin'
 import * as groupsAPI from '@/api/admin/groups'
-import * as proxiesAPI from '@/api/admin/proxies'
 import * as ipGroupsAPI from '@/api/admin/proxyIpGroups'
 
 const props = defineProps<{ show: boolean }>()
@@ -67,7 +64,6 @@ const content = ref('')
 const files = ref<File[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const groups = ref<{ id: number; name: string }[]>([])
-const proxies = ref<{ id: number; name: string }[]>([])
 const ipGroups = ref<{ id: number; name: string }[]>([])
 const selectedGroups = ref<number[]>([])
 const selectedProxy = ref('')
@@ -102,15 +98,16 @@ async function refresh() {
 }
 async function submit() {
   if (submitting.value) return
+  if (!selectedProxy.value.startsWith('group:')) { message.value = t('codexLogin.requireIPGroup'); return }
   if (files.value.reduce((n, file) => n + file.size, 0) + new Blob([content.value]).size > 1024 * 1024) { message.value = t('codexLogin.tooLarge'); return }
   submitting.value = true
   try {
     const documents = await Promise.all(files.value.map(file => file.text()))
     if (content.value.trim()) documents.push(content.value)
     if (!documents.length || documents.length > 20) { message.value = t('codexLogin.chooseFile'); return }
-    const [mode, value] = selectedProxy.value.split(':')
+    const [, value] = selectedProxy.value.split(':')
     const result = await api.importAccounts({ documents, group_ids: selectedGroups.value,
-      ...(mode === 'group' ? { proxy_ip_group_id: Number(value) } : mode === 'proxy' ? { proxy_id: Number(value) } : {}) })
+      proxy_ip_group_id: Number(value) })
     clearMaterial()
     message.value = t('codexLogin.accepted', { count: result.job_ids.length }) +
       (result.errors || []).map(error => ` [${error.document}:${error.index}] ${error.message}`).join('; ')
@@ -138,10 +135,9 @@ watch(() => props.show, async open => {
   const current = generation
   await refresh()
   try {
-    const [groupRows, proxyRows, ipRows] = await Promise.all([groupsAPI.getAll('openai'), proxiesAPI.getAll(), ipGroupsAPI.list()])
+    const [groupRows, ipRows] = await Promise.all([groupsAPI.getAll('openai'), ipGroupsAPI.list()])
     if (!props.show || current !== generation) return
     groups.value = groupRows
-    proxies.value = proxyRows
     ipGroups.value = ipRows
     selectedGroups.value = groupRows[0] ? [groupRows[0].id] : []
     selectedProxy.value = ipRows[0] ? `group:${ipRows[0].id}` : ''

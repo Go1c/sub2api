@@ -67,14 +67,14 @@ func (codexRecoveryCache) AcquireRefreshLock(context.Context, string, time.Durat
 }
 func (codexRecoveryCache) ReleaseRefreshLock(context.Context, string) error { return nil }
 
-type codexRecoveryRunner func(context.Context, CodexLoginMaterial, string) (*OpenAITokenInfo, error)
+type codexRecoveryRunner func(context.Context, CodexLoginMaterial, []CodexLoginProxy) (*OpenAITokenInfo, error)
 
-func (f codexRecoveryRunner) Login(ctx context.Context, m CodexLoginMaterial, p string) (*OpenAITokenInfo, error) {
+func (f codexRecoveryRunner) Login(ctx context.Context, m CodexLoginMaterial, p []CodexLoginProxy) (*OpenAITokenInfo, error) {
 	return f(ctx, m, p)
 }
 
 func recoveryAccount() *Account {
-	return &Account{ID: 7, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Credentials: map[string]any{
+	return &Account{ID: 7, ProxyIPGroupID: codexTestGroupID(), Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Credentials: map[string]any{
 		"access_token": "old", "refresh_token": "old-rt", "email": "a@example.com", "chatgpt_account_id": "team-id", "model_mapping": map[string]string{"custom": "model"},
 	}}
 }
@@ -111,15 +111,16 @@ func TestCodexLoginRecoveryPreservesConfigAndOnlyResumesOnSuccess(t *testing.T) 
 			defer func() { _ = db.Close() }()
 			repo := &codexRecoveryRepo{account: recoveryAccount()}
 			_ = repo.SetError(context.Background(), 7, codexRecoveryReason)
-			runner := codexRecoveryRunner(func(_ context.Context, m CodexLoginMaterial, _ string) (*OpenAITokenInfo, error) {
+			runner := codexRecoveryRunner(func(_ context.Context, m CodexLoginMaterial, proxies []CodexLoginProxy) (*OpenAITokenInfo, error) {
 				require.Equal(t, "team-id", m.WorkspaceID)
+				require.Equal(t, []CodexLoginProxy{{ID: 2, URL: "socks5://proxy.example:1080"}}, proxies)
 				require.False(t, repo.account.Schedulable)
 				if fails {
 					return nil, errors.New("验证失败")
 				}
 				return &OpenAITokenInfo{AccessToken: "new", RefreshToken: "new-rt", IDToken: "new-id", Email: m.Email, ChatGPTAccountID: m.WorkspaceID, ExpiresAt: time.Now().Add(time.Hour).Unix()}, nil
 			})
-			s := &CodexLoginService{store: &codexLoginStore{db}, accounts: repo, runner: runner, encryptor: codexRecoveryEncryptor{}, tokenCache: codexRecoveryCache{}, oauth: &OpenAIOAuthService{}}
+			s := &CodexLoginService{store: &codexLoginStore{db}, accounts: repo, runner: runner, encryptor: codexRecoveryEncryptor{}, tokenCache: codexRecoveryCache{}, oauth: &OpenAIOAuthService{ipGroupResolver: codexTestResolver()}}
 			id := int64(7)
 			job := &CodexLoginJob{ID: 1, AccountID: &id, Email: "a@example.com", Lease: "lease", Encrypted: `{"email":"a@example.com","password":"private","totp_secret":"JBSWY3DPEHPK3PXP"}`}
 			if !fails {
@@ -160,4 +161,31 @@ func TestCodexLoginTokenRevoked401UsesRecoveryHook(t *testing.T) {
 	require.True(t, disabled)
 	require.Equal(t, 1, hook.calls)
 	require.Equal(t, int64(7), hook.id)
+}
+
+func codexTestGroupID() *int64 { id := int64(1); return &id }
+
+type codexTestGroups struct{ ProxyIPGroupRepository }
+
+func (codexTestGroups) GetByID(context.Context, int64) (*ProxyIPGroup, error) {
+	return &ProxyIPGroup{ID: 1, ProxyIDs: []int64{2}}, nil
+}
+
+type codexTestProxies struct{}
+
+func (codexTestProxies) ListByIDs(context.Context, []int64) ([]Proxy, error) {
+	return []Proxy{{ID: 2, Protocol: "socks5", Host: "proxy.example", Port: 1080, Status: StatusActive}}, nil
+}
+func codexTestResolver() *openAIIPGroupResolver {
+	return &openAIIPGroupResolver{groups: codexTestGroups{}, proxies: codexTestProxies{}, now: time.Now}
+}
+func TestCodexLoginProxyCandidatesNeverFallBackDirect(t *testing.T) {
+	for _, account := range []*Account{nil, {}, {ProxyID: codexTestGroupID()}} {
+		_, err := codexLoginGroupCandidates(context.Background(), codexTestResolver(), account)
+		require.Error(t, err)
+	}
+	rows, err := codexLoginGroupCandidates(context.Background(), codexTestResolver(), recoveryAccount())
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, int64(2), rows[0].ID)
 }

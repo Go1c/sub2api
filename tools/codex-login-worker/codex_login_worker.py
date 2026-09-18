@@ -15,11 +15,13 @@ sys.path.insert(0, str(ROOT / 'third_party/codex_protocol'))
 os.umask(0o077)
 logging.disable(logging.CRITICAL)
 
-from login_core import LoginError, select_workspace, validate_tokens, safe_diagnostics
+from login_core import LoginError, select_workspace, validate_tokens, safe_diagnostics, required_proxy
 diagnostics = {'stage': 'startup'}
 
 
 def authorize(data):
+    proxy = required_proxy(data.get('proxy'))
+    from curl_cffi import CurlOpt
     import pyotp
     import dotenv
     dotenv.load_dotenv = lambda *args, **kwargs: False
@@ -30,7 +32,9 @@ def authorize(data):
     cfg.CODEX_AUTH_URL_SOURCE = 'local'
     cfg.CODEX_OAUTH_DRIVER = 'protocol'
     flow._NET_MAX_ATTEMPTS = 1
-    session = BrowserSession(proxy=data.get('proxy') or '', detect_exit_geo=False)
+    session = BrowserSession(proxy=proxy, detect_exit_geo=False)
+    session.session.trust_env = False
+    session.session.curl_options[CurlOpt.NOPROXY] = ''
     original_request = session.session.request
     allowed_posts = {
         ('sentinel.openai.com', '/backend-api/sentinel/req'),

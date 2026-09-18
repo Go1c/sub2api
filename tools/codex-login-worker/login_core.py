@@ -17,7 +17,7 @@ MAX_ACCOUNTS = 100
 
 
 DIAGNOSTIC_STAGES = frozenset({
-    'startup', 'oauth_bootstrap', 'email', 'password', 'totp', 'workspace',
+    'proxy_selection', 'startup', 'oauth_bootstrap', 'email', 'password', 'totp', 'workspace',
     'token_exchange', 'identity_validation', 'credential_probe',
 })
 DIAGNOSTIC_EXCEPTIONS = frozenset({
@@ -38,6 +38,8 @@ def safe_diagnostics(value):
         result['http_status'] = value['http_status']
     if isinstance(value.get('exception_type'), str) and value['exception_type'] in DIAGNOSTIC_EXCEPTIONS:
         result['exception_type'] = value['exception_type']
+    if type(value.get('proxy_id')) is int and value['proxy_id'] > 0:
+        result['proxy_id'] = value['proxy_id']
     return result
 
 
@@ -143,8 +145,24 @@ def validate_tokens(tokens, email, account_id):
         raise LoginError('invalid_tokens') from None
 
 
+def required_proxy(value):
+    from urllib.parse import urlsplit, urlunsplit
+    if not isinstance(value, str) or not value:
+        raise LoginError('proxy_required')
+    try:
+        parsed = urlsplit(value)
+        if parsed.scheme not in ('http', 'https', 'socks5', 'socks5h') or not parsed.hostname or not parsed.port:
+            raise ValueError()
+        if parsed.scheme == 'socks5':
+            parsed = parsed._replace(scheme='socks5h')
+        return urlunsplit(parsed)
+    except ValueError:
+        raise LoginError('invalid_proxy') from None
+
+
 async def login(material, *, account_id=None, proxy=None):
     """No credentials in argv, inherited app environment, logs or temporary files."""
+    proxy = required_proxy(proxy)
     worker = Path(__file__).with_name('codex_login_worker.py')
     env = {key: os.environ[key] for key in ('PATH', 'SYSTEMROOT', 'SSL_CERT_FILE', 'SSL_CERT_DIR') if key in os.environ}
     with tempfile.TemporaryDirectory(prefix='codex-login-') as cwd:

@@ -41,10 +41,11 @@ def test_usage_probe_returns_exact_status_without_response_body():
     context.__aenter__.return_value = client
     with patch.object(server, 'login', new=AsyncMock(return_value={
         'tokens': {'access_token': 'PRIVATE-TOKEN'}, 'account_id': 'workspace',
-    })), patch.object(server, 'AsyncSession', return_value=context):
+    })), patch.object(server, 'AsyncSession', return_value=context), \
+         patch.object(server, 'select_proxy', new=AsyncMock(return_value={'id': 2, 'url': 'http://proxy:80'})):
         with pytest.raises(LoginError) as failure:
             asyncio.run(server.run({'email': 'demo@example.com', 'password': 'private', 'totp_secret': 'test'}))
-    assert failure.value.diagnostics == {'stage': 'credential_probe', 'http_status': 401}
+    assert failure.value.diagnostics == {'stage': 'credential_probe', 'http_status': 401, 'proxy_id': 2}
 
 
 def test_http_failure_reply_carries_safe_stage_end_to_end():
