@@ -37,7 +37,7 @@ Go 启动时应用迁移 `948_codex_login_jobs.sql`。Worker 或固定密钥未�
 
 仅占位示例。支持单对象、数组、`accounts`／`data` 数组外壳。密钥别名：`totp_secret`、`2fa_secret`、`2fa_sk`、`2fa`、`otp_secret`、`secret`。兼容 `邮箱----密码----密钥` TXT。
 
-初次授权 Team 优先，无 Team 才选个人；多个 Team 时在 JSON 指定上游 `account_id`。恢复已有账号始终绑定原 Team。相同邮箱＋Team 的已有账号更新绑定，不重复创建；重复配置超过一个时需先整理。新账号默认并发 8、device 指纹、内置模型映射；恢复保留原配置。
+初次授权 Team 优先，无 Team 才选个人；多个 Team 时在 JSON 指定上游 `account_id`。恢复已有账号始终绑定原 Team。相同邮箱＋Team 的已有账号更新绑定，不重复创建；重复配置超过一个时需先整理。新账号默认优先级 1、并发 8、device 指纹、内置模型映射；恢复保留原配置。
 
 ## 401 恢复
 

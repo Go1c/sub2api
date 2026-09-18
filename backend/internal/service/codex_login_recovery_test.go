@@ -189,3 +189,35 @@ func TestCodexLoginProxyCandidatesNeverFallBackDirect(t *testing.T) {
 	require.Len(t, rows, 1)
 	require.Equal(t, int64(2), rows[0].ID)
 }
+
+// New login imports must use the local scheduling priority rather than the old 50 default.
+type codexNewAccountRepo struct{ AccountRepository }
+
+func (codexNewAccountRepo) FindByExtraField(context.Context, string, any) ([]Account, error) {
+	return nil, nil
+}
+
+type codexPriorityAdmin struct {
+	AdminService
+	priority int
+}
+
+func (a *codexPriorityAdmin) CreateAccount(_ context.Context, input *CreateAccountInput) (*Account, error) {
+	a.priority = input.Priority
+	return &Account{ID: 7, Credentials: input.Credentials, Status: StatusActive, Schedulable: true}, nil
+}
+func TestCodexLoginNewAccountPriorityOne(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	admin := &codexPriorityAdmin{}
+	runner := codexRecoveryRunner(func(_ context.Context, m CodexLoginMaterial, _ []CodexLoginProxy) (*OpenAITokenInfo, error) {
+		return &OpenAITokenInfo{AccessToken: "new", RefreshToken: "rt", IDToken: "id", Email: m.Email, ChatGPTAccountID: "team", ExpiresAt: time.Now().Add(time.Hour).Unix()}, nil
+	})
+	s := &CodexLoginService{store: &codexLoginStore{db}, accounts: codexNewAccountRepo{}, admin: admin, runner: runner, encryptor: codexRecoveryEncryptor{}, oauth: &OpenAIOAuthService{ipGroupResolver: codexTestResolver()}}
+	job := &CodexLoginJob{ID: 1, Email: "a@example.com", Lease: "lease", Options: CodexLoginOptions{ProxyIPGroupID: codexTestGroupID()}, Encrypted: `{"email":"a@example.com","password":"private","totp_secret":"JBSWY3DPEHPK3PXP"}`}
+	mock.ExpectExec("UPDATE codex_login_jobs SET account_id").WithArgs(int64(1), "lease", int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
+	require.Empty(t, s.execute(context.Background(), job))
+	require.Equal(t, 1, admin.priority)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

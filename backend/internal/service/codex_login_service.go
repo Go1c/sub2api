@@ -302,7 +302,7 @@ func (s *CodexLoginService) execute(ctx context.Context, job *CodexLoginJob) str
 		credentials["model_mapping"] = models
 		account, err = s.admin.CreateAccount(ctx, &CreateAccountInput{Name: material.Email, Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 			Credentials: credentials, Extra: map[string]any{"codex_login_job_id": job.ID, "codex_fingerprint_mode": "device"},
-			ProxyID: job.Options.ProxyID, ProxyIPGroupID: job.Options.ProxyIPGroupID, GroupIDs: job.Options.GroupIDs, Concurrency: DefaultOpenAIAccountConcurrency, Priority: 50})
+			ProxyID: job.Options.ProxyID, ProxyIPGroupID: job.Options.ProxyIPGroupID, GroupIDs: job.Options.GroupIDs, Concurrency: DefaultOpenAIAccountConcurrency, Priority: 1})
 		if err != nil {
 			return "账号配置创建失败，请检查分组与代理设置"
 		}
