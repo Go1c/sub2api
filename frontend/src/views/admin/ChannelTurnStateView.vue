@@ -324,11 +324,18 @@
             v-model.number="draft.recheckMinutes"
             class="input"
             data-testid="turn-state-recheck"
+            disabled
           >
             <option v-for="option in recheckOptions" :key="option" :value="option">
               {{ t('admin.channelTurnState.recheckMinutes', { n: option }) }}
             </option>
           </select>
+        </div>
+
+        <div>
+          <label class="input-label" for="turn-state-overload-threshold">{{ t('admin.channelTurnState.overloadThreshold') }}</label>
+          <input id="turn-state-overload-threshold" v-model.number="draft.overloadThreshold" type="number" min="0" max="20" step="1" class="input" data-testid="turn-state-overload-threshold" />
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.channelTurnState.overloadThresholdHint') }}</p>
         </div>
 
         <div>
@@ -400,7 +407,7 @@ import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 
 const POLL_MS = 2500
-const RECHECK_PRESETS = [10, 20, 30]
+const RECHECK_PRESETS = [20]
 
 const { t, te } = useI18n()
 const appStore = useAppStore()
@@ -427,7 +434,8 @@ const draft = reactive({
   question: '',
   answer: '21',
   fuzzyMatch: true,
-  recheckMinutes: 10,
+  recheckMinutes: 20,
+  overloadThreshold: 3,
   rpm: 6
 })
 
@@ -538,7 +546,8 @@ function openSettings() {
   draft.question = current.question || ''
   draft.answer = current.answer || '21'
   draft.fuzzyMatch = current.fuzzy_match
-  draft.recheckMinutes = current.recheck_minutes || 10
+  draft.recheckMinutes = 20
+  draft.overloadThreshold = current.overload_threshold ?? 3
   draft.rpm = current.rpm || 6
   showSettings.value = true
 }
@@ -564,7 +573,8 @@ function buildPolicyPayload(): TurnStateProbePolicyPayload {
     question: draft.question.trim(),
     answer: draft.answer.trim() || '21',
     fuzzy_match: draft.fuzzyMatch,
-    recheck_minutes: Number(draft.recheckMinutes) || 10,
+    recheck_minutes: 20,
+    overload_threshold: Number(draft.overloadThreshold),
     rpm: Number(draft.rpm) || 6
   }
 }

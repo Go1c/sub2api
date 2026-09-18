@@ -373,7 +373,7 @@ func TestTurnStateProbeBindCurrentNoopsIfDisabled(t *testing.T) {
 	require.Empty(t, state)
 }
 
-func TestTurnStateProbeBindCurrentReturnsTicketAndPinsTurn(t *testing.T) {
+func TestTurnStateProbeBindCurrentUsesRenewedTicket(t *testing.T) {
 	tickets := newMemoryTurnStateTicketStore()
 	first := stringsRepeat("A", 160)
 	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{
@@ -412,7 +412,7 @@ func TestTurnStateProbeBindCurrentReturnsTicketAndPinsTurn(t *testing.T) {
 	require.NoError(t, tickets.Put(context.Background(), *ticket))
 	pinned, ok := svc.BindCurrent(context.Background(), account, "ns", "turn-1", "gpt-6-astra")
 	require.True(t, ok)
-	require.Equal(t, first, pinned)
+	require.Equal(t, second, pinned)
 }
 
 func TestTurnStateProbeAccountHarvestStoresHoldingTicket(t *testing.T) {
@@ -562,7 +562,7 @@ func TestTurnStateProbeMarksRunningWhileHarvesting(t *testing.T) {
 	require.Equal(t, turnStateProbeStatusHolding, ticket.Status)
 }
 
-func TestTurnStateProbeGivesEachAccountTenAttemptsThenMovesOn(t *testing.T) {
+func TestTurnStateProbeSchedulesOneAttemptPerAccount(t *testing.T) {
 	upstream := &concurrentTurnStateHTTPUpstream{handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 	})}
@@ -583,20 +583,20 @@ func TestTurnStateProbeGivesEachAccountTenAttemptsThenMovesOn(t *testing.T) {
 	ticket, err := tickets.Get(context.Background(), first.ID)
 	require.NoError(t, err)
 	require.Equal(t, turnStateProbeStatusCooldown, ticket.Status)
-	require.Equal(t, turnStateProbeMaxAttempts, ticket.Attempts)
+	require.Equal(t, 1, ticket.Attempts)
 	require.False(t, ticket.RecheckAt.IsZero())
-	require.Equal(t, int64(turnStateProbeMaxAttempts), upstream.calls.Load())
+	require.Equal(t, int64(1), upstream.calls.Load())
 
 	require.NoError(t, svc.HarvestDue(context.Background()))
 	require.Eventually(t, func() bool {
 		secondTicket, getErr := tickets.Get(context.Background(), second.ID)
-		return getErr == nil && secondTicket != nil && secondTicket.Attempts == turnStateProbeMaxAttempts && secondTicket.Status == turnStateProbeStatusCooldown
+		return getErr == nil && secondTicket != nil && secondTicket.Attempts == 1 && secondTicket.Status == turnStateProbeStatusCooldown
 	}, 3*time.Second, 20*time.Millisecond)
-	require.Equal(t, int64(turnStateProbeMaxAttempts*2), upstream.calls.Load())
+	require.Equal(t, int64(1*2), upstream.calls.Load())
 
 	firstAgain, err := tickets.Get(context.Background(), first.ID)
 	require.NoError(t, err)
-	require.Equal(t, turnStateProbeMaxAttempts, firstAgain.Attempts)
+	require.Equal(t, 1, firstAgain.Attempts)
 }
 
 func TestTurnStateProbeHarvestDueRunsTenAccountsInParallel(t *testing.T) {
@@ -650,7 +650,7 @@ func TestTurnStateProbeHarvestDueRunsTenAccountsInParallel(t *testing.T) {
 	close(release)
 }
 
-func TestTurnStateProbeRunOneResetsExhaustedAccount(t *testing.T) {
+func TestTurnStateProbeRunOneBypassesCooldown(t *testing.T) {
 	stateBlob := stringsRepeat("A", 160)
 	upstream := &concurrentTurnStateHTTPUpstream{handler: turnStateProbeSuccessSSE(stateBlob)}
 	account := newOAuthProbeAccount(61, true)
@@ -659,8 +659,9 @@ func TestTurnStateProbeRunOneResetsExhaustedAccount(t *testing.T) {
 	saved := enableTurnStateProbePolicy(t, svc)
 	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{
 		AccountID:      account.ID,
-		Status:         turnStateProbeStatusFailed,
-		Attempts:       turnStateProbeMaxAttempts,
+		Status:         turnStateProbeStatusCooldown,
+		RecheckAt:      time.Now().Add(time.Hour),
+		Attempts:       1,
 		PolicyRevision: saved.Revision,
 	}))
 
@@ -711,7 +712,7 @@ func TestTurnStateProbeSkipsAccountOnUnauthorized(t *testing.T) {
 	require.Equal(t, turnStateProbeStatusSkipped, firstAgain.Status)
 }
 
-func TestTurnStateProbeCooldownAfterTenFailuresThenRetries(t *testing.T) {
+func TestTurnStateProbeCooldownThenRetries(t *testing.T) {
 	stateBlob := stringsRepeat("A", 160)
 	upstream := &concurrentTurnStateHTTPUpstream{handler: turnStateProbeSuccessSSE(stateBlob)}
 	account := newOAuthProbeAccount(81, true)
@@ -721,7 +722,7 @@ func TestTurnStateProbeCooldownAfterTenFailuresThenRetries(t *testing.T) {
 	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{
 		AccountID:      account.ID,
 		Status:         turnStateProbeStatusCooldown,
-		Attempts:       turnStateProbeMaxAttempts,
+		Attempts:       1,
 		PolicyRevision: saved.Revision,
 		RecheckAt:      time.Now().Add(time.Hour),
 	}))
@@ -740,4 +741,171 @@ func TestTurnStateProbeCooldownAfterTenFailuresThenRetries(t *testing.T) {
 		return getErr == nil && got != nil && got.Status == turnStateProbeStatusHolding
 	}, 3*time.Second, 20*time.Millisecond)
 	require.Equal(t, int64(1), upstream.calls.Load())
+}
+
+func TestTurnStateProbeTicketLifetime(t *testing.T) {
+	for _, tc := range []struct {
+		name, status string
+		age          time.Duration
+		usable       bool
+	}{
+		{"valid", "holding", 20 * time.Minute, true},
+		{"expired", "holding", 61 * time.Minute, false},
+		{"refreshing", "running", 20 * time.Minute, true},
+		{"retrying", "cooldown", 20 * time.Minute, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tickets := newMemoryTurnStateTicketStore()
+			account := newOAuthProbeAccount(91, true)
+			svc := newTurnStateProbeServiceForTest(t, account, tickets, nil)
+			policy := enableTurnStateProbePolicy(t, svc)
+			now := time.Now()
+			rec := TurnStateTicketRecord{AccountID: account.ID, State: "old-ticket", Status: tc.status, PolicyRevision: policy.Revision, UpdatedAt: now}
+			raw, err := json.Marshal(map[string]any{"harvested_at": now.Add(-tc.age), "expires_at": now.Add(time.Hour - tc.age)})
+			require.NoError(t, err)
+			require.NoError(t, json.Unmarshal(raw, &rec))
+			require.NoError(t, tickets.Put(context.Background(), rec))
+			require.Equal(t, tc.usable, svc.HasHolding(context.Background(), account))
+		})
+	}
+}
+
+func TestTurnStateProbeRefreshFailurePreservesTicketAndRetriesAfter45Seconds(t *testing.T) {
+	upstream := &recordingTurnStateHTTPUpstream{handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTooManyRequests) })}
+	tickets := newMemoryTurnStateTicketStore()
+	account := newOAuthProbeAccount(92, true)
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
+	policy := enableTurnStateProbePolicy(t, svc)
+	before := time.Now()
+	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{AccountID: account.ID, State: "still-valid", Status: "holding", PolicyRevision: policy.Revision, UpdatedAt: before.Add(-20 * time.Minute)}))
+	require.Error(t, svc.ProbeAccount(context.Background(), account.ID))
+	rec, err := tickets.Get(context.Background(), account.ID)
+	require.NoError(t, err)
+	require.Equal(t, "still-valid", rec.State)
+	require.WithinDuration(t, before.Add(40*time.Minute), rec.ExpiresAt, time.Second)
+	require.WithinDuration(t, before.Add(-20*time.Minute), rec.HarvestedAt, time.Second)
+	require.Equal(t, 1, rec.Attempts)
+	require.WithinDuration(t, before.Add(45*time.Second), rec.RecheckAt, 2*time.Second)
+	require.True(t, svc.HasHolding(context.Background(), account))
+	require.False(t, svc.ticketDue(context.Background(), account.ID, policy, before.Add(44*time.Second)))
+	require.True(t, svc.ticketDue(context.Background(), account.ID, policy, time.Now().Add(46*time.Second)))
+}
+
+func TestTurnStateProbeExistingPolicyRenewsEvery20Minutes(t *testing.T) {
+	tickets := newMemoryTurnStateTicketStore()
+	account := newOAuthProbeAccount(93, true)
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, nil)
+	policy := enableTurnStateProbePolicy(t, svc)
+	policy.RecheckMinutes = 120
+	saved, err := svc.SavePolicy(context.Background(), policy)
+	require.NoError(t, err)
+	require.Equal(t, 20*time.Minute, saved.RecheckAfter())
+	now := time.Now()
+	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{AccountID: account.ID, State: "old-ticket", Status: "holding", PolicyRevision: saved.Revision, UpdatedAt: now.Add(-21 * time.Minute), RecheckAt: now.Add(time.Hour)}))
+	require.True(t, svc.ticketDue(context.Background(), account.ID, saved, now))
+}
+
+func TestTurnStateProbeOverloadTriggersFromAccountHealth(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		threshold int
+		slots     []string
+		wantDue   bool
+	}{
+		{"three_across_ips", 3, []string{"overloaded", "overloaded", "overloaded"}, true},
+		{"below_threshold", 3, []string{"overloaded", "overloaded"}, false},
+		{"success_resets", 3, []string{"overloaded", "ok", "overloaded", "overloaded"}, false},
+		{"other_503_resets", 3, []string{"overloaded", "unavailable", "overloaded", "overloaded"}, false},
+		{"disabled", 0, []string{"overloaded", "overloaded", "overloaded"}, false},
+		{"custom_threshold", 2, []string{"overloaded", "overloaded"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			tickets := newMemoryTurnStateTicketStore()
+			account := newOAuthProbeAccount(101, true)
+			svc := newTurnStateProbeServiceForTest(t, account, tickets, nil)
+			policy := enableTurnStateProbePolicy(t, svc)
+			policy.OverloadThreshold = tc.threshold
+			policy, err := svc.SavePolicy(ctx, policy)
+			require.NoError(t, err)
+			now := time.Now()
+			require.NoError(t, tickets.Put(ctx, TurnStateTicketRecord{AccountID: account.ID, State: "valid", Status: "holding", PolicyRevision: policy.Revision, HarvestedAt: now.Add(-time.Minute), ExpiresAt: now.Add(59 * time.Minute), UpdatedAt: now.Add(-time.Minute), RecheckAt: now.Add(19 * time.Minute)}))
+			health := NewAccountRequestHealthService(newMemoryRequestHealthStore(), nil)
+			health.turnStateProbe = svc
+			for i, slot := range tc.slots {
+				ev := RequestHealthRecordInput{AccountID: account.ID, ProxyID: int64(i + 1), Slot: RequestHealthSlotFail, StatusCode: 503, Message: slot, OccurredAt: now.Add(time.Duration(i) * time.Millisecond)}
+				if slot == "ok" {
+					ev.Slot = RequestHealthSlotOK
+					ev.StatusCode = 200
+				}
+				require.NoError(t, health.recordSync(ctx, ev))
+			}
+			require.Equal(t, tc.wantDue, svc.ticketDue(ctx, account.ID, policy, time.Now()))
+			require.True(t, svc.HasHolding(ctx, account), "trigger retains the usable old ticket")
+		})
+	}
+}
+
+func TestTurnStateProbeLifetimeLegacyAndExpiredBinding(t *testing.T) {
+	ctx := context.Background()
+	tickets := newMemoryTurnStateTicketStore()
+	account := newOAuthProbeAccount(111, true)
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, nil)
+	policy := enableTurnStateProbePolicy(t, svc)
+	for _, tc := range []struct {
+		name, status string
+		age          time.Duration
+		usable       bool
+	}{
+		{"legacy_holding", "holding", 30 * time.Minute, true},
+		{"legacy_expired", "holding", time.Hour, false},
+		{"legacy_running_unknown_age", "running", time.Minute, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := TurnStateTicketRecord{AccountID: account.ID, State: "old", Status: tc.status, UpdatedAt: time.Now().Add(-tc.age), PolicyRevision: policy.Revision}
+			require.NoError(t, tickets.Put(ctx, rec))
+			_, ok := svc.BindCurrent(ctx, account, "", "s:one", "")
+			require.Equal(t, tc.usable, ok)
+		})
+	}
+	// Legacy two-hour session bindings must not pin a newly renewed ticket.
+	tickets.binds["111:s:one"] = "legacy-two-hour-ticket"
+	require.NoError(t, tickets.Put(ctx, TurnStateTicketRecord{AccountID: account.ID, State: "new", Status: "holding", UpdatedAt: time.Now(), PolicyRevision: policy.Revision}))
+	state, ok := svc.BindCurrent(ctx, account, "", "s:one", "")
+	require.True(t, ok)
+	require.Equal(t, "new", state)
+}
+
+func TestTurnStateProbeBudgetFailurePreservesExpiry(t *testing.T) {
+	ctx := context.Background()
+	tickets := newMemoryTurnStateTicketStore()
+	account := newOAuthProbeAccount(112, true)
+	upstream := &recordingTurnStateHTTPUpstream{}
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
+	policy := enableTurnStateProbePolicy(t, svc)
+	now := time.Now()
+	tickets.rpm["global"] = policy.RPM
+	require.NoError(t, tickets.Put(ctx, TurnStateTicketRecord{AccountID: account.ID, State: "valid", Status: "holding", UpdatedAt: now.Add(-21 * time.Minute), PolicyRevision: policy.Revision}))
+	require.ErrorIs(t, svc.ProbeAccount(ctx, account.ID), ErrTurnStateProbeRateLimited)
+	rec, err := tickets.Get(ctx, account.ID)
+	require.NoError(t, err)
+	require.Equal(t, "rpm_budget", rec.LastError)
+	require.WithinDuration(t, now.Add(39*time.Minute), rec.ExpiresAt, time.Second)
+	require.WithinDuration(t, now.Add(45*time.Second), rec.RecheckAt, time.Second)
+	require.True(t, svc.HasHolding(ctx, account))
+	require.Nil(t, upstream.lastReq)
+}
+
+func TestTurnStateProbeOverloadPolicyDefaultsAndBounds(t *testing.T) {
+	legacy, err := DecodeTurnStateProbePolicyJSON(`{"recheck_minutes":120}`)
+	require.NoError(t, err)
+	require.Equal(t, 3, legacy.OverloadThreshold)
+	require.Equal(t, 20, legacy.RecheckMinutes)
+	off, err := DecodeTurnStateProbePolicyJSON(`{"overload_threshold":0}`)
+	require.NoError(t, err)
+	require.Zero(t, off.OverloadThreshold)
+	for _, value := range []int{-1, 21} {
+		_, err := NormalizeTurnStateProbePolicy(TurnStateProbePolicy{OverloadThreshold: value})
+		require.Error(t, err)
+	}
 }

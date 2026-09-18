@@ -71,6 +71,7 @@ func ProvideAdminHandlers(
 		adminService,
 	)
 	accountHandler.SetRequestHealthService(health)
+	health.SetTurnStateProbe(turnStateProbeService)
 	accountHandler.SetPoolAutoInspectService(poolAutoInspect)
 	if gatewayService != nil {
 		gatewayService.SetRequestHealthService(health)

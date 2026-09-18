@@ -30,6 +30,8 @@ export default {
     fuzzyMatch: '模糊匹配',
     fuzzyMatchHint: '开启后，回答包含标准答案即通过。',
     recheck: '复查间隔',
+    overloadThreshold: '连续 overloaded 触发次数',
+    overloadThresholdHint: '默认 3 次；0 表示关闭。按账号合并各出口记录，达到次数后立即续采，普通 503 不计入。',
     recheckMinutes: '{n} 分钟',
     rpm: '每分钟调用预算',
     saveSuccess: '策略已保存',

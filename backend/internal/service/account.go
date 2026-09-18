@@ -91,7 +91,7 @@ const (
 	openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
 	// DefaultOpenAIAccountConcurrency is the Kin create/import default for
 	// OpenAI OAuth and setup-token accounts when the caller omits concurrency.
-	DefaultOpenAIAccountConcurrency = 10
+	DefaultOpenAIAccountConcurrency = 8
 )
 
 const (

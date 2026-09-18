@@ -473,7 +473,7 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 
 		if item.Platform == service.PlatformOpenAI && item.Type == service.AccountTypeOAuth {
 			// JSON imports use local onboarding settings, not the source instance's limits.
-			item.Concurrency = 20
+			item.Concurrency = service.DefaultOpenAIAccountConcurrency
 			if len(item.GroupIDs) == 0 && defaultGroupID != nil {
 				item.GroupIDs = []int64{*defaultGroupID}
 			}

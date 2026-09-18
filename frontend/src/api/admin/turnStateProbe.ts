@@ -21,6 +21,7 @@ export interface TurnStateProbePolicy {
   question: string
   answer: string
   fuzzy_match: boolean
+  overload_threshold: number
   recheck_minutes: number
   rpm: number
   revision?: number
@@ -48,7 +49,7 @@ export interface TurnStateProbeOverview {
 
 export const TURN_STATE_PROBE_DEFAULT_MODEL = 'gpt-6-astra'
 export const TURN_STATE_PROBE_DEFAULT_MIN_LENGTH = 160
-export const TURN_STATE_PROBE_DEFAULT_RECHECK_MINUTES = 10
+export const TURN_STATE_PROBE_DEFAULT_RECHECK_MINUTES = 20
 export const TURN_STATE_PROBE_DEFAULT_RPM = 6
 export const TURN_STATE_PROBE_DEFAULT_SESSION_MINUTES = 5
 export const TURN_STATE_PROBE_DEFAULT_REGION = 'Random'
@@ -74,6 +75,7 @@ export function defaultTurnStateProbePolicy(): TurnStateProbePolicy {
     answer: TURN_STATE_PROBE_DEFAULT_ANSWER,
     fuzzy_match: true,
     recheck_minutes: TURN_STATE_PROBE_DEFAULT_RECHECK_MINUTES,
+    overload_threshold: 3,
     rpm: TURN_STATE_PROBE_DEFAULT_RPM
   }
 }

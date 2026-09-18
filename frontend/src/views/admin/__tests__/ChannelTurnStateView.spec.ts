@@ -191,6 +191,7 @@ describe('ChannelTurnStateView', () => {
     expect(wrapper.get('[data-testid="turn-state-password-set"]').text()).toContain(
       'admin.channelTurnState.passwordSet'
     )
+    await wrapper.get('[data-testid="turn-state-overload-threshold"]').setValue(5)
     const extraProxy = wrapper.get('[data-testid="turn-state-proxy-8"]')
     await extraProxy.setValue(true)
     await wrapper.get('[data-testid="turn-state-save-policy"]').trigger('click')
@@ -204,7 +205,8 @@ describe('ChannelTurnStateView', () => {
         min_state_length: 160,
         answer: '21',
         fuzzy_match: true,
-        recheck_minutes: 10,
+        recheck_minutes: 20,
+        overload_threshold: 5,
         rpm: 6,
         dynamic: expect.objectContaining({
           host: 'us.lajiaohttp.net:2000',

@@ -25,9 +25,9 @@ const (
 	turnStateProbeStatusCooldown     = "cooldown"
 	turnStateProbeHarvestTimeout     = 45 * time.Second
 	turnStateProbeLockTTL            = 2 * time.Minute
-	turnStateProbeMaxAttempts        = 10
 	turnStateProbeSIDLen             = 8
-	turnStateProbeBindTTL            = 2 * time.Hour
+	turnStateProbeTicketTTL          = time.Hour
+	turnStateProbeRetryInterval      = 45 * time.Second
 	turnStateProbeHarvestConcurrency = 10
 	turnStateProbeSIDAlphabet        = "abcdefghijklmnopqrstuvwxyz0123456789"
 	turnStateProbePolicyCacheTTL     = 2 * time.Second
@@ -243,7 +243,7 @@ func (s *TurnStateProbeService) ProbeAccount(ctx context.Context, accountID int6
 	return s.probeAccount(ctx, accountID, false)
 }
 
-func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int64, resetAttempts bool) error {
+func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int64, resetAttempts bool) (probeErr error) {
 	if s == nil || s.accountRepo == nil || s.tickets == nil || s.httpUpstream == nil {
 		return infraerrors.InternalServer("TURN_STATE_PROBE_UNAVAILABLE", "Turn-State 探测服务未就绪")
 	}
@@ -279,7 +279,7 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 	if !resetAttempts && existing != nil && existing.Status == turnStateProbeStatusSkipped {
 		return nil
 	}
-	if !resetAttempts && turnStateProbeExhausted(existing, policy) {
+	if !resetAttempts && existing != nil && existing.Status == turnStateProbeStatusCooldown && existing.RecheckAt.After(time.Now()) {
 		return nil
 	}
 	locked, err := s.tickets.TryLock(ctx, accountID, turnStateProbeLockTTL)
@@ -293,14 +293,43 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 		_ = s.tickets.Unlock(context.Background(), accountID)
 	}()
 
+	// Read under the account lock so a completed renewal cannot be overwritten
+	// with the snapshot read before acquiring the lock.
+	existing, err = s.tickets.Get(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if !resetAttempts && existing != nil {
+		if existing.Status == turnStateProbeStatusSkipped {
+			return nil
+		}
+		if existing.Status == turnStateProbeStatusCooldown && existing.RecheckAt.After(time.Now()) {
+			return nil
+		}
+	}
+	if !resetAttempts && existing != nil && existing.Status == turnStateProbeStatusHolding && !s.ticketDue(ctx, accountID, policy, time.Now()) {
+		return nil
+	}
 	attempts := 0
-	if existing != nil && !turnStateProbeResetAttempts(existing, policy, resetAttempts) {
+	if existing != nil && !resetAttempts {
 		attempts = existing.Attempts
 	}
+	authFailed := false
+	lastReason := "probe_error"
+	defer func() {
+		if probeErr == nil || authFailed {
+			return
+		}
+		// The upstream context may have timed out; still persist the retry time.
+		retryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.putHarvestTicket(retryCtx, account, policy, existing, turnStateProbeStatusCooldown, attempts, lastReason); err != nil {
+			probeErr = errors.Join(probeErr, err)
+		}
+	}()
 	if err := s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, ""); err != nil {
 		return err
 	}
-
 	useDynamic := turnStateProbeDynamicReady(policy.Dynamic)
 	proxyURLs, err := s.probeProxyURLs(ctx, policy)
 	if err != nil {
@@ -309,124 +338,92 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 	if !useDynamic && len(proxyURLs) == 0 {
 		return ErrTurnStateProbeInvalid
 	}
-
-	var lastReason string
-	for attempts < turnStateProbeMaxAttempts {
-		ok, err := s.tickets.AllowRPM(ctx, "global", policy.RPM)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return ErrTurnStateProbeRateLimited
-		}
-		acctRPM := policy.RPM / 2
-		if acctRPM < 1 {
-			acctRPM = 1
-		}
-		ok, err = s.tickets.AllowRPM(ctx, "acct:"+strconv.FormatInt(accountID, 10), acctRPM)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return ErrTurnStateProbeRateLimited
-		}
-
-		proxyURL := ""
-		if useDynamic {
-			sid, sidErr := randomTurnStateProbeSID()
-			if sidErr != nil {
-				lastReason = "sid"
-				attempts++
-				_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
-				continue
-			}
-			proxyURL, err = BuildTurnStateProbeDynamicProxyURL(policy.Dynamic, sid)
-			if err != nil {
-				lastReason = "dynamic_exit"
-				attempts++
-				_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
-				continue
-			}
-		} else {
-			proxyURL = proxyURLs[attempts%len(proxyURLs)]
-		}
-
-		result, authErr, harvestErr := s.harvestOnce(ctx, account, policy, proxyURL)
-		attempts++
-		if authErr != nil {
-			_ = s.putHarvestTicket(ctx, account, policy, nil, turnStateProbeStatusSkipped, attempts, authErr.Error())
-			return authErr
-		}
-		if harvestErr != nil {
-			lastReason = harvestErr.Error()
-			_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
-			continue
-		}
-		ok, reason := EvaluateTurnStateProbeAttempt(result, policy)
-		if !ok {
-			lastReason = reason
-			_ = s.putHarvestTicket(ctx, account, policy, existing, turnStateProbeStatusRunning, attempts, lastReason)
-			continue
-		}
-		now := time.Now()
-		rec := TurnStateTicketRecord{
-			AccountID:      account.ID,
-			Identity:       turnStateProbeTicketIdentity(account),
-			State:          result.State,
-			StateHash:      TurnStateProbeStateHash(result.State),
-			StateLength:    len(strings.TrimSpace(result.State)),
-			Model:          firstNonEmpty(result.ObservedModel, policy.Model),
-			PolicyRevision: policy.Revision,
-			Status:         turnStateProbeStatusHolding,
-			Attempts:       attempts,
-			RecheckAt:      now.Add(policy.RecheckAfter()),
-			UpdatedAt:      now,
-		}
-		logger.LegacyPrintf("service.turn_state_probe", "harvested account_id=%d hash=%s length=%d model=%s attempts=%d", account.ID, rec.StateHash, rec.StateLength, rec.Model, rec.Attempts)
-		return s.tickets.Put(ctx, rec)
+	ok, err := s.tickets.AllowRPM(ctx, "global", policy.RPM)
+	if err != nil {
+		return err
 	}
-
+	if !ok {
+		lastReason = "rpm_budget"
+		return ErrTurnStateProbeRateLimited
+	}
+	acctRPM := policy.RPM / 2
+	if acctRPM < 1 {
+		acctRPM = 1
+	}
+	ok, err = s.tickets.AllowRPM(ctx, "acct:"+strconv.FormatInt(accountID, 10), acctRPM)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		lastReason = "rpm_budget"
+		return ErrTurnStateProbeRateLimited
+	}
+	proxyURL := ""
+	if useDynamic {
+		sid, err := randomTurnStateProbeSID()
+		if err != nil {
+			lastReason = "sid"
+			return err
+		}
+		proxyURL, err = BuildTurnStateProbeDynamicProxyURL(policy.Dynamic, sid)
+		if err != nil {
+			lastReason = "dynamic_exit"
+			return err
+		}
+	} else {
+		proxyURL = proxyURLs[attempts%len(proxyURLs)]
+	}
+	// One attempt per scheduled run; failures are retried after 45 seconds.
+	attempts++
+	harvestStarted := time.Now()
+	result, authErr, harvestErr := s.harvestOnce(ctx, account, policy, proxyURL)
+	if authErr != nil {
+		authFailed = true
+		return errors.Join(authErr, s.putHarvestTicket(ctx, account, policy, nil, turnStateProbeStatusSkipped, attempts, authErr.Error()))
+	}
+	if harvestErr != nil {
+		lastReason = harvestErr.Error()
+		return harvestErr
+	}
+	ok, reason := EvaluateTurnStateProbeAttempt(result, policy)
+	if !ok {
+		lastReason = reason
+		return infraerrors.BadRequest("TURN_STATE_PROBE_FAILED", reason)
+	}
 	now := time.Now()
-	fail := TurnStateTicketRecord{
-		AccountID:      accountID,
-		Identity:       turnStateProbeTicketIdentity(account),
-		PolicyRevision: policy.Revision,
-		Status:         turnStateProbeStatusCooldown,
-		Attempts:       attempts,
-		LastError:      lastReason,
-		RecheckAt:      now.Add(policy.RecheckAfter()),
-		UpdatedAt:      now,
+	rec := TurnStateTicketRecord{
+		AccountID: account.ID, Identity: turnStateProbeTicketIdentity(account),
+		State: result.State, StateHash: TurnStateProbeStateHash(result.State), StateLength: len(strings.TrimSpace(result.State)),
+		Model: firstNonEmpty(result.ObservedModel, policy.Model), PolicyRevision: policy.Revision,
+		Status: turnStateProbeStatusHolding, Attempts: attempts,
+		RecheckAt: harvestStarted.Add(policy.RecheckAfter()), UpdatedAt: now,
+		HarvestedAt: harvestStarted, ExpiresAt: harvestStarted.Add(turnStateProbeTicketTTL),
 	}
-	_ = s.tickets.Put(ctx, fail)
-	if lastReason == "" {
-		lastReason = "probe_failed"
+	if err := s.tickets.Put(ctx, rec); err != nil {
+		return err
 	}
-	return infraerrors.BadRequest("TURN_STATE_PROBE_FAILED", lastReason)
+	logger.LegacyPrintf("service.turn_state_probe", "harvested account_id=%d hash=%s length=%d model=%s attempts=%d", account.ID, rec.StateHash, rec.StateLength, rec.Model, rec.Attempts)
+	return nil
 }
 
-func turnStateProbeResetAttempts(existing *TurnStateTicketRecord, policy TurnStateProbePolicy, reset bool) bool {
-	if reset || existing == nil {
-		return true
+// Old holding records have a trustworthy UpdatedAt (the successful harvest).
+// Old running records do not: their UpdatedAt was rewritten on every attempt.
+func turnStateProbeLifetime(rec *TurnStateTicketRecord) (harvested, expires time.Time) {
+	if rec == nil {
+		return
 	}
-	if existing.PolicyRevision != policy.Revision {
-		return true
+	harvested, expires = rec.HarvestedAt, rec.ExpiresAt
+	if harvested.IsZero() && rec.Status == turnStateProbeStatusHolding {
+		harvested = rec.UpdatedAt
 	}
-	if existing.Status == turnStateProbeStatusHolding {
-		return true
+	if harvested.IsZero() {
+		return harvested, time.Time{}
 	}
-	if existing.Status == turnStateProbeStatusCooldown && !existing.RecheckAt.IsZero() && !existing.RecheckAt.After(time.Now()) {
-		return true
+	limit := harvested.Add(turnStateProbeTicketTTL)
+	if expires.IsZero() || expires.After(limit) {
+		expires = limit
 	}
-	return false
-}
-
-func turnStateProbeExhausted(existing *TurnStateTicketRecord, policy TurnStateProbePolicy) bool {
-	if existing == nil {
-		return false
-	}
-	return existing.Status == turnStateProbeStatusFailed &&
-		existing.Attempts >= turnStateProbeMaxAttempts &&
-		existing.PolicyRevision == policy.Revision
+	return
 }
 
 func (s *TurnStateProbeService) putHarvestTicket(ctx context.Context, account *Account, policy TurnStateProbePolicy, previous *TurnStateTicketRecord, status string, attempts int, lastErr string) error {
@@ -442,58 +439,76 @@ func (s *TurnStateProbeService) putHarvestTicket(ctx context.Context, account *A
 		LastError:      lastErr,
 		UpdatedAt:      time.Now(),
 	}
-	if previous != nil && status == turnStateProbeStatusRunning {
+	if previous != nil && (status == turnStateProbeStatusRunning || status == turnStateProbeStatusCooldown) &&
+		previous.PolicyRevision == policy.Revision && (previous.Identity == "" || previous.Identity == rec.Identity) {
 		rec.State = previous.State
 		rec.StateHash = previous.StateHash
 		rec.StateLength = previous.StateLength
 		rec.Model = previous.Model
 		rec.RecheckAt = previous.RecheckAt
+		rec.HarvestedAt, rec.ExpiresAt = turnStateProbeLifetime(previous)
+	}
+	if status == turnStateProbeStatusCooldown {
+		rec.RecheckAt = time.Now().Add(turnStateProbeRetryInterval)
 	}
 	return s.tickets.Put(ctx, rec)
 }
 
-func (s *TurnStateProbeService) currentHoldingState(ctx context.Context, account *Account) (string, bool) {
+func (s *TurnStateProbeService) currentHoldingTicket(ctx context.Context, account *Account) (*TurnStateTicketRecord, bool) {
 	if s == nil || s.tickets == nil || account == nil || !account.IsOpenAI() {
-		return "", false
+		return nil, false
 	}
 	if !ParseTurnStateProbeAccountSwitch(account.Extra).Enabled {
-		return "", false
+		return nil, false
 	}
 	policy, err := s.GetPolicy(ctx)
 	if err != nil || !policy.Enabled {
-		return "", false
+		return nil, false
 	}
 	ticket, err := s.tickets.Get(ctx, account.ID)
 	if err != nil || ticket == nil {
-		return "", false
+		return nil, false
 	}
-	if strings.TrimSpace(ticket.State) == "" || ticket.Status != turnStateProbeStatusHolding {
-		return "", false
+	if strings.TrimSpace(ticket.State) == "" || (ticket.Status != turnStateProbeStatusHolding && ticket.Status != turnStateProbeStatusRunning && ticket.Status != turnStateProbeStatusCooldown) {
+		return nil, false
 	}
 	if ticket.PolicyRevision != policy.Revision {
-		return "", false
+		return nil, false
 	}
-	return ticket.State, true
+	_, expires := turnStateProbeLifetime(ticket)
+	if !expires.After(time.Now()) || (ticket.Identity != "" && ticket.Identity != turnStateProbeTicketIdentity(account)) {
+		return nil, false
+	}
+	ticket.ExpiresAt = expires
+	return ticket, true
 }
 
 func (s *TurnStateProbeService) HasHolding(ctx context.Context, account *Account) bool {
-	_, ok := s.currentHoldingState(ctx, account)
+	_, ok := s.currentHoldingTicket(ctx, account)
 	return ok
 }
 
 func (s *TurnStateProbeService) BindCurrent(ctx context.Context, account *Account, identity, turnKey, model string) (string, bool) {
-	state, ok := s.currentHoldingState(ctx, account)
+	ticket, ok := s.currentHoldingTicket(ctx, account)
 	if !ok {
 		return "", false
 	}
-	_ = identity
-	_ = model
 	if strings.TrimSpace(turnKey) == "" {
-		return state, true
+		return ticket.State, true
 	}
-	bound, err := s.tickets.BindTurn(ctx, account.ID, turnKey, state, turnStateProbeBindTTL)
+	// Scope bindings to the current ticket generation. Old 2-hour bindings
+	// cannot override a fresh harvest, even in an existing session.
+	key := "v2:" + TurnStateProbeStateHash(ticket.State) + ":" + turnKey
+	ttl := time.Until(ticket.ExpiresAt)
+	if ttl <= 0 {
+		return "", false
+	}
+	bound, err := s.tickets.BindTurn(ctx, account.ID, key, ticket.State, ttl)
+	if !ticket.ExpiresAt.After(time.Now()) {
+		return "", false
+	}
 	if err != nil || strings.TrimSpace(bound) == "" {
-		return state, true
+		return ticket.State, true
 	}
 	return bound, true
 }
@@ -585,19 +600,17 @@ func (s *TurnStateProbeService) ticketDue(ctx context.Context, accountID int64, 
 		return true
 	}
 	if ticket.Status == turnStateProbeStatusHolding && strings.TrimSpace(ticket.State) != "" {
-		if ticket.RecheckAt.IsZero() || !ticket.RecheckAt.After(now) {
+		harvested, expires := turnStateProbeLifetime(ticket)
+		if !expires.After(now) || !harvested.Add(policy.RecheckAfter()).After(now) || ticket.RecheckAt.IsZero() || !ticket.RecheckAt.After(now) {
 			return true
 		}
 		return false
 	}
 	if ticket.Status == turnStateProbeStatusCooldown {
-		if ticket.RecheckAt.IsZero() || ticket.RecheckAt.After(now) {
+		if !ticket.RecheckAt.IsZero() && ticket.RecheckAt.After(now) {
 			return false
 		}
 		return true
-	}
-	if turnStateProbeExhausted(ticket, policy) {
-		return false
 	}
 	if ticket.Status == turnStateProbeStatusRunning && now.Sub(ticket.UpdatedAt) < turnStateProbeLockTTL {
 		return false

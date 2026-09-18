@@ -361,7 +361,7 @@ func TestImportDataDefaultsWithoutFrontendEnrichment(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Len(t, svc.createdAccounts, 1)
 	input := svc.createdAccounts[0]
-	require.Equal(t, 20, input.Concurrency)
+	require.Equal(t, 8, input.Concurrency)
 	require.Equal(t, "device", input.Extra["codex_fingerprint_mode"])
 	require.Equal(t, []int64{5}, input.GroupIDs)
 	require.NotNil(t, input.ProxyIPGroupID)

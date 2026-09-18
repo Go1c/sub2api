@@ -4,11 +4,13 @@ import (
 	"context"
 	"log"
 	"sort"
+	"time"
 )
 
 type AccountRequestHealthService struct {
-	store RequestHealthStore
-	dir   RequestHealthDirectory
+	turnStateProbe *TurnStateProbeService
+	store          RequestHealthStore
+	dir            RequestHealthDirectory
 }
 
 func NewAccountRequestHealthService(store RequestHealthStore, dir RequestHealthDirectory) *AccountRequestHealthService {
@@ -22,9 +24,11 @@ func (s *AccountRequestHealthService) Record(ctx context.Context, in RequestHeal
 	if s == nil || s.store == nil || in.AccountID <= 0 {
 		return
 	}
-	ev := in.toEvent()
+	in.OccurredAt = in.toEvent().OccurredAt
 	go func() {
-		if err := s.store.Append(context.Background(), ev); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.recordSync(ctx, in); err != nil {
 			log.Printf("[request-health] append failed: %v", err)
 		}
 	}()
@@ -34,7 +38,14 @@ func (s *AccountRequestHealthService) recordSync(ctx context.Context, in Request
 	if s == nil || s.store == nil || in.AccountID <= 0 {
 		return nil
 	}
-	return s.store.Append(ctx, in.toEvent())
+	ev := in.toEvent()
+	if err := s.store.Append(ctx, ev); err != nil {
+		return err
+	}
+	if s.turnStateProbe != nil {
+		return s.turnStateProbe.refreshAfterOverload(ctx, ev, s.store)
+	}
+	return nil
 }
 
 func (s *AccountRequestHealthService) ListForAccounts(ctx context.Context, accountIDs []int64, window int) ([]AccountRequestHealthDTO, error) {
@@ -211,4 +222,10 @@ func uniquePositiveIDs(ids []int64, limit int) []int64 {
 		}
 	}
 	return out
+}
+
+func (s *AccountRequestHealthService) SetTurnStateProbe(probe *TurnStateProbeService) {
+	if s != nil {
+		s.turnStateProbe = probe
+	}
 }

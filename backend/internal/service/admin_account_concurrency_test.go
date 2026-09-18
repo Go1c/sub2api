@@ -13,9 +13,9 @@ func TestNormalizeAccountConcurrencyDefaultsInvalidGrokOAuthToOne(t *testing.T) 
 	require.Equal(t, 1, normalizeAccountConcurrency(PlatformGrok, AccountTypeOAuth, -5))
 }
 
-func TestNormalizeAccountConcurrencyDefaultsOpenAIOmittedToTen(t *testing.T) {
-	require.Equal(t, DefaultOpenAIAccountConcurrency, normalizeAccountConcurrency(PlatformOpenAI, AccountTypeOAuth, 0))
-	require.Equal(t, DefaultOpenAIAccountConcurrency, normalizeAccountConcurrency(PlatformOpenAI, AccountTypeSetupToken, -1))
+func TestNormalizeAccountConcurrencyDefaultsOpenAIOmittedToEight(t *testing.T) {
+	require.Equal(t, 8, normalizeAccountConcurrency(PlatformOpenAI, AccountTypeOAuth, 0))
+	require.Equal(t, 8, normalizeAccountConcurrency(PlatformOpenAI, AccountTypeSetupToken, -1))
 	require.Equal(t, 0, normalizeAccountConcurrency(PlatformOpenAI, AccountTypeAPIKey, 0))
 }
 

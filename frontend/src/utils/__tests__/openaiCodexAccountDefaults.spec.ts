@@ -24,7 +24,7 @@ describe('openaiCodexAccountDefaults', () => {
     expect(KIN_DEFAULT_CODEX_CLI_ONLY).toBe(false)
     expect(KIN_DEFAULT_CODEX_FINGERPRINT_MODE).toBe('device')
     expect(KIN_DEFAULT_CODEX_FINGERPRINT_CONVERGENCE).toBe(true)
-    expect(KIN_DEFAULT_CODEX_CONCURRENCY).toBe(20)
+    expect(KIN_DEFAULT_CODEX_CONCURRENCY).toBe(8)
     expect(KIN_DEFAULT_OPENAI_LONG_CONTEXT_BILLING).toBe(true)
     expect(KIN_DEFAULT_CODEX_GROUP_NAME).toBe('Codex')
     expect(resolveCodexCLIOnlyFromExtra(undefined)).toBe(false)

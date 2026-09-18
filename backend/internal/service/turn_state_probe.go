@@ -22,26 +22,26 @@ const (
 
 	turnStateProbeDefaultModel          = "gpt-6-astra"
 	turnStateProbeDefaultMinLength      = 160
-	turnStateProbeDefaultRecheckMinutes = 10
+	turnStateProbeDefaultRecheckMinutes = 20
 	turnStateProbeDefaultRPM            = 6
 	turnStateProbeDefaultSessionMinutes = 5
 	turnStateProbeDefaultRegion         = "Random"
 	turnStateProbeDefaultQuestion       = "黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?"
 	turnStateProbeDefaultAnswer         = "21"
 
-	turnStateProbeMinLength        = 1
-	turnStateProbeMaxLength        = 4096
+	turnStateProbeMinLength         = 1
+	turnStateProbeMaxLength         = 4096
 	turnStateProbeMinRecheckMinutes = 5
 	turnStateProbeMaxRecheckMinutes = 1440
-	turnStateProbeMinRPM           = 1
-	turnStateProbeMaxRPM           = 60
+	turnStateProbeMinRPM            = 1
+	turnStateProbeMaxRPM            = 60
 	turnStateProbeMinSessionMinutes = 1
 	turnStateProbeMaxSessionMinutes = 60
 )
 
 var (
-	ErrTurnStateProbeInvalid = infraerrors.BadRequest("TURN_STATE_PROBE_INVALID", "Turn-State 探测配置无效")
-	ErrTurnStateProbeBusy    = infraerrors.Conflict("TURN_STATE_PROBE_BUSY", "该账号正在探测")
+	ErrTurnStateProbeInvalid  = infraerrors.BadRequest("TURN_STATE_PROBE_INVALID", "Turn-State 探测配置无效")
+	ErrTurnStateProbeBusy     = infraerrors.Conflict("TURN_STATE_PROBE_BUSY", "该账号正在探测")
 	ErrTurnStateProbeDisabled = infraerrors.BadRequest("TURN_STATE_PROBE_DISABLED", "渠道策略或账号开关未开启")
 )
 
@@ -57,25 +57,27 @@ type TurnStateProbeDynamicExit struct {
 }
 
 type TurnStateProbePolicy struct {
-	Enabled              bool                     `json:"enabled"`
-	ProxyIDs             []int64                  `json:"proxy_ids"`
-	Dynamic              TurnStateProbeDynamicExit `json:"dynamic"`
-	Model                string                   `json:"model"`
-	LengthFilterEnabled  bool                     `json:"length_filter_enabled"`
-	MinStateLength       int                      `json:"min_state_length"`
-	Question             string                   `json:"question"`
-	Answer               string                   `json:"answer"`
-	FuzzyMatch           bool                     `json:"fuzzy_match"`
-	RecheckMinutes       int                      `json:"recheck_minutes"`
-	RPM                  int                      `json:"rpm"`
-	Revision             int64                    `json:"revision"`
-	UpdatedAt            time.Time                `json:"updated_at,omitempty"`
+	OverloadThreshold   int                       `json:"overload_threshold"`
+	Enabled             bool                      `json:"enabled"`
+	ProxyIDs            []int64                   `json:"proxy_ids"`
+	Dynamic             TurnStateProbeDynamicExit `json:"dynamic"`
+	Model               string                    `json:"model"`
+	LengthFilterEnabled bool                      `json:"length_filter_enabled"`
+	MinStateLength      int                       `json:"min_state_length"`
+	Question            string                    `json:"question"`
+	Answer              string                    `json:"answer"`
+	FuzzyMatch          bool                      `json:"fuzzy_match"`
+	RecheckMinutes      int                       `json:"recheck_minutes"`
+	RPM                 int                       `json:"rpm"`
+	Revision            int64                     `json:"revision"`
+	UpdatedAt           time.Time                 `json:"updated_at,omitempty"`
 }
 
 func DefaultTurnStateProbePolicy() TurnStateProbePolicy {
 	return TurnStateProbePolicy{
-		Enabled:             false,
-		ProxyIDs:            []int64{},
+		OverloadThreshold: 3,
+		Enabled:           false,
+		ProxyIDs:          []int64{},
 		Dynamic: TurnStateProbeDynamicExit{
 			Region:         turnStateProbeDefaultRegion,
 			SessionMinutes: turnStateProbeDefaultSessionMinutes,
@@ -117,6 +119,11 @@ func NormalizeTurnStateProbePolicy(p TurnStateProbePolicy) (TurnStateProbePolicy
 	if out.RecheckMinutes < turnStateProbeMinRecheckMinutes || out.RecheckMinutes > turnStateProbeMaxRecheckMinutes {
 		return TurnStateProbePolicy{}, infraerrors.BadRequest("TURN_STATE_PROBE_INVALID", "复查间隔须在 5–1440 分钟之间")
 	}
+	if out.OverloadThreshold < 0 || out.OverloadThreshold > RequestHealthMaxEvents {
+		return TurnStateProbePolicy{}, infraerrors.BadRequest("TURN_STATE_PROBE_INVALID", "连续 overloaded 次数须在 0–20 之间（0 为关闭）")
+	}
+	// Renewal is fixed at 20 minutes, including previously saved policies.
+	out.RecheckMinutes = turnStateProbeDefaultRecheckMinutes
 	if out.RPM == 0 {
 		out.RPM = turnStateProbeDefaultRPM
 	}
@@ -177,11 +184,7 @@ func (p TurnStateProbePolicy) Public() TurnStateProbePolicy {
 }
 
 func (p TurnStateProbePolicy) RecheckAfter() time.Duration {
-	minutes := p.RecheckMinutes
-	if minutes < turnStateProbeMinRecheckMinutes {
-		minutes = turnStateProbeDefaultRecheckMinutes
-	}
-	return time.Duration(minutes) * time.Minute
+	return time.Duration(turnStateProbeDefaultRecheckMinutes) * time.Minute
 }
 
 type TurnStateProbeAccountSwitch struct {
@@ -351,6 +354,8 @@ type TurnStateTicketRecord struct {
 	LastError      string    `json:"last_error,omitempty"`
 	RecheckAt      time.Time `json:"recheck_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	HarvestedAt    time.Time `json:"harvested_at,omitempty"`
+	ExpiresAt      time.Time `json:"expires_at,omitempty"`
 }
 
 func (r TurnStateTicketRecord) Summary() TurnStateProbeAccountItem {

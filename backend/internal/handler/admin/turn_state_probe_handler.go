@@ -35,7 +35,7 @@ func (h *TurnStateProbeHandler) UpdatePolicy(c *gin.Context) {
 		response.Error(c, http.StatusServiceUnavailable, "turn-state probe unavailable")
 		return
 	}
-	var req service.TurnStateProbePolicy
+	req := service.TurnStateProbePolicy{OverloadThreshold: service.DefaultTurnStateProbePolicy().OverloadThreshold}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return

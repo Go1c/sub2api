@@ -30,6 +30,8 @@ export default {
     fuzzyMatch: 'Fuzzy match',
     fuzzyMatchHint: 'When on, the reply passes if it contains the expected answer.',
     recheck: 'Recheck interval',
+    overloadThreshold: 'Consecutive overload threshold',
+    overloadThresholdHint: 'Default: 3; 0 disables this trigger. Counts across account exits and renews immediately at the threshold. Generic 503 errors do not count.',
     recheckMinutes: '{n} min',
     rpm: 'Calls per minute',
     saveSuccess: 'Policy saved',
