@@ -342,20 +342,21 @@ func BuildTurnStateProbeDynamicProxyURL(exit TurnStateProbeDynamicExit, sid stri
 }
 
 type TurnStateTicketRecord struct {
-	AccountID      int64     `json:"account_id"`
-	Identity       string    `json:"identity"`
-	State          string    `json:"state"`
-	StateHash      string    `json:"state_hash"`
-	StateLength    int       `json:"state_length"`
-	Model          string    `json:"model"`
-	PolicyRevision int64     `json:"policy_revision"`
-	Status         string    `json:"status"`
-	Attempts       int       `json:"attempts,omitempty"`
-	LastError      string    `json:"last_error,omitempty"`
-	RecheckAt      time.Time `json:"recheck_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	HarvestedAt    time.Time `json:"harvested_at,omitempty"`
-	ExpiresAt      time.Time `json:"expires_at,omitempty"`
+	AccountID        int64     `json:"account_id"`
+	Identity         string    `json:"identity"`
+	State            string    `json:"state"`
+	StateHash        string    `json:"state_hash"`
+	StateLength      int       `json:"state_length"`
+	Model            string    `json:"model"`
+	PolicyRevision   int64     `json:"policy_revision"`
+	Status           string    `json:"status"`
+	Attempts         int       `json:"attempts,omitempty"`
+	ForbiddenRetries int       `json:"forbidden_retries,omitempty"`
+	LastError        string    `json:"last_error,omitempty"`
+	RecheckAt        time.Time `json:"recheck_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	HarvestedAt      time.Time `json:"harvested_at,omitempty"`
+	ExpiresAt        time.Time `json:"expires_at,omitempty"`
 }
 
 func (r TurnStateTicketRecord) Summary() TurnStateProbeAccountItem {

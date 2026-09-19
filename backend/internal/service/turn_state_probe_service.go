@@ -276,7 +276,7 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 	if err != nil {
 		return err
 	}
-	if !resetAttempts && existing != nil && existing.Status == turnStateProbeStatusSkipped {
+	if !resetAttempts && turnStateProbeSkipBlocks(existing, time.Now()) {
 		return nil
 	}
 	if !resetAttempts && existing != nil && existing.Status == turnStateProbeStatusCooldown && existing.RecheckAt.After(time.Now()) {
@@ -300,7 +300,7 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 		return err
 	}
 	if !resetAttempts && existing != nil {
-		if existing.Status == turnStateProbeStatusSkipped {
+		if turnStateProbeSkipBlocks(existing, time.Now()) {
 			return nil
 		}
 		if existing.Status == turnStateProbeStatusCooldown && existing.RecheckAt.After(time.Now()) {
@@ -373,7 +373,7 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 	} else {
 		proxyURL = proxyURLs[attempts%len(proxyURLs)]
 	}
-	// One attempt per scheduled run; failures are retried after 45 seconds.
+	// One attempt per scheduled run; persistence below applies the retry delay.
 	attempts++
 	harvestStarted := time.Now()
 	result, authErr, harvestErr := s.harvestOnce(ctx, account, policy, proxyURL)
@@ -441,6 +441,7 @@ func (s *TurnStateProbeService) putHarvestTicket(ctx context.Context, account *A
 	}
 	if previous != nil && (status == turnStateProbeStatusRunning || status == turnStateProbeStatusCooldown) &&
 		previous.PolicyRevision == policy.Revision && (previous.Identity == "" || previous.Identity == rec.Identity) {
+		rec.ForbiddenRetries = previous.ForbiddenRetries
 		rec.State = previous.State
 		rec.StateHash = previous.StateHash
 		rec.StateLength = previous.StateLength
@@ -449,7 +450,16 @@ func (s *TurnStateProbeService) putHarvestTicket(ctx context.Context, account *A
 		rec.HarvestedAt, rec.ExpiresAt = turnStateProbeLifetime(previous)
 	}
 	if status == turnStateProbeStatusCooldown {
-		rec.RecheckAt = time.Now().Add(turnStateProbeRetryInterval)
+		delay := turnStateProbeRetryInterval
+		if lastErr == "http_403" {
+			// Attempts is lifetime-wide; backoff only counts forbidden responses
+			// since the last success. Keep this counter across RPM deferrals.
+			if rec.ForbiddenRetries < 5 {
+				rec.ForbiddenRetries++
+			}
+			delay = turnStateProbeForbiddenDelay(rec.ForbiddenRetries)
+		}
+		rec.RecheckAt = time.Now().Add(delay)
 	}
 	return s.tickets.Put(ctx, rec)
 }
@@ -594,7 +604,7 @@ func (s *TurnStateProbeService) ticketDue(ctx context.Context, accountID int64, 
 		return true
 	}
 	if ticket.Status == turnStateProbeStatusSkipped {
-		return false
+		return !turnStateProbeSkipBlocks(ticket, now)
 	}
 	if ticket.PolicyRevision != policy.Revision {
 		return true
@@ -700,8 +710,12 @@ func (s *TurnStateProbeService) harvestOnce(ctx context.Context, account *Accoun
 		return attempt, infraerrors.Unauthorized("TURN_STATE_PROBE_UNAUTHORIZED", "探测上游返回 401"), nil
 	}
 	if resp.StatusCode == http.StatusForbidden {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return attempt, infraerrors.Forbidden("TURN_STATE_PROBE_FORBIDDEN", "探测上游返回 403"), nil
+		diagnostic, accountFailure := inspectTurnStateProbeForbidden(resp)
+		logger.LegacyPrintf("service.turn_state_probe", "forbidden account_id=%d %s state_length=%d state_hash=%s", account.ID, diagnostic, len(attempt.State), TurnStateProbeStateHash(attempt.State))
+		if accountFailure {
+			return attempt, infraerrors.Forbidden("TURN_STATE_PROBE_ACCOUNT_FORBIDDEN", "探测上游明确拒绝账号或凭据"), nil
+		}
+		return attempt, nil, errors.New("http_403")
 	}
 	sse := parseTurnStateProbeSSE(resp.Body)
 	attempt.ObservedModel = sse.Model
