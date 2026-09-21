@@ -1737,8 +1737,14 @@ func init() {
 	proxyipgroup.DefaultUpdatedAt = proxyipgroupDescUpdatedAt.Default.(func() time.Time)
 	// proxyipgroup.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	proxyipgroup.UpdateDefaultUpdatedAt = proxyipgroupDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// proxyipgroupDescStickyMinutes is the schema descriptor for sticky_minutes field.
+	proxyipgroupDescStickyMinutes := proxyipgroupFields[0].Descriptor()
+	// proxyipgroup.DefaultStickyMinutes holds the default value on creation for the sticky_minutes field.
+	proxyipgroup.DefaultStickyMinutes = proxyipgroupDescStickyMinutes.Default.(int)
+	// proxyipgroup.StickyMinutesValidator is a validator for the "sticky_minutes" field. It is called by the builders before save.
+	proxyipgroup.StickyMinutesValidator = proxyipgroupDescStickyMinutes.Validators[0].(func(int) error)
 	// proxyipgroupDescName is the schema descriptor for name field.
-	proxyipgroupDescName := proxyipgroupFields[0].Descriptor()
+	proxyipgroupDescName := proxyipgroupFields[1].Descriptor()
 	// proxyipgroup.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	proxyipgroup.NameValidator = func() func(string) error {
 		validators := proxyipgroupDescName.Validators
@@ -1756,7 +1762,7 @@ func init() {
 		}
 	}()
 	// proxyipgroupDescPerIPConcurrency is the schema descriptor for per_ip_concurrency field.
-	proxyipgroupDescPerIPConcurrency := proxyipgroupFields[1].Descriptor()
+	proxyipgroupDescPerIPConcurrency := proxyipgroupFields[2].Descriptor()
 	// proxyipgroup.DefaultPerIPConcurrency holds the default value on creation for the per_ip_concurrency field.
 	proxyipgroup.DefaultPerIPConcurrency = proxyipgroupDescPerIPConcurrency.Default.(int)
 	// proxyipgroup.PerIPConcurrencyValidator is a validator for the "per_ip_concurrency" field. It is called by the builders before save.

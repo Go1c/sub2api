@@ -4,12 +4,14 @@ import type { ProxyIPGroup } from '@/types'
 export interface CreateProxyIPGroupRequest {
   name: string
   per_ip_concurrency?: number
+  sticky_minutes?: number
   proxy_ids?: number[]
 }
 
 export interface UpdateProxyIPGroupRequest {
   name?: string
   per_ip_concurrency?: number
+  sticky_minutes?: number
 }
 
 export async function list(): Promise<ProxyIPGroup[]> {

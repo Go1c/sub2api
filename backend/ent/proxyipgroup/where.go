@@ -70,6 +70,11 @@ func DeletedAt(v time.Time) predicate.ProxyIPGroup {
 	return predicate.ProxyIPGroup(sql.FieldEQ(FieldDeletedAt, v))
 }
 
+// StickyMinutes applies equality check predicate on the "sticky_minutes" field. It's identical to StickyMinutesEQ.
+func StickyMinutes(v int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldEQ(FieldStickyMinutes, v))
+}
+
 // Name applies equality check predicate on the "name" field. It's identical to NameEQ.
 func Name(v string) predicate.ProxyIPGroup {
 	return predicate.ProxyIPGroup(sql.FieldEQ(FieldName, v))
@@ -208,6 +213,46 @@ func DeletedAtIsNil() predicate.ProxyIPGroup {
 // DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
 func DeletedAtNotNil() predicate.ProxyIPGroup {
 	return predicate.ProxyIPGroup(sql.FieldNotNull(FieldDeletedAt))
+}
+
+// StickyMinutesEQ applies the EQ predicate on the "sticky_minutes" field.
+func StickyMinutesEQ(v int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldEQ(FieldStickyMinutes, v))
+}
+
+// StickyMinutesNEQ applies the NEQ predicate on the "sticky_minutes" field.
+func StickyMinutesNEQ(v int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldNEQ(FieldStickyMinutes, v))
+}
+
+// StickyMinutesIn applies the In predicate on the "sticky_minutes" field.
+func StickyMinutesIn(vs ...int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldIn(FieldStickyMinutes, vs...))
+}
+
+// StickyMinutesNotIn applies the NotIn predicate on the "sticky_minutes" field.
+func StickyMinutesNotIn(vs ...int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldNotIn(FieldStickyMinutes, vs...))
+}
+
+// StickyMinutesGT applies the GT predicate on the "sticky_minutes" field.
+func StickyMinutesGT(v int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldGT(FieldStickyMinutes, v))
+}
+
+// StickyMinutesGTE applies the GTE predicate on the "sticky_minutes" field.
+func StickyMinutesGTE(v int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldGTE(FieldStickyMinutes, v))
+}
+
+// StickyMinutesLT applies the LT predicate on the "sticky_minutes" field.
+func StickyMinutesLT(v int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldLT(FieldStickyMinutes, v))
+}
+
+// StickyMinutesLTE applies the LTE predicate on the "sticky_minutes" field.
+func StickyMinutesLTE(v int) predicate.ProxyIPGroup {
+	return predicate.ProxyIPGroup(sql.FieldLTE(FieldStickyMinutes, v))
 }
 
 // NameEQ applies the EQ predicate on the "name" field.

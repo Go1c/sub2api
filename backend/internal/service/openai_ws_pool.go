@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
@@ -85,6 +86,7 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSHandshakeCompatibilityKey struct {
+	proxyFingerprint    [32]byte
 	betaFeatures        string
 	codexInstallationID string
 	sessionIDHyphen     string
@@ -1189,7 +1191,7 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 
 retryAcquire:
 	accountID := req.Account.ID
-	compatibility := normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	compatibility := openAIWSRequestCompatibility(req)
 	routingAffinity := normalizeOpenAIWSRoutingAffinity(req.Headers)
 	effectiveMaxConns := p.effectiveMaxConnsByAccount(req.Account)
 	if effectiveMaxConns <= 0 {
@@ -2196,7 +2198,7 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 	accountID := req.Account.ID
 	evict := func() { p.evictConn(accountID, id) }
 	pooledConn.onPeerClosed.Store(&evict)
-	pooledConn.handshakeCompatibility = normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	pooledConn.handshakeCompatibility = openAIWSRequestCompatibility(req)
 	pooledConn.routingAffinity = normalizeOpenAIWSRoutingAffinity(req.Headers)
 	return pooledConn, nil
 }
@@ -2500,4 +2502,12 @@ func closeOpenAIWSConns(conns []*openAIWSConn) {
 
 func stringsTrim(value string) string {
 	return strings.TrimSpace(value)
+}
+
+func openAIWSRequestCompatibility(req openAIWSAcquireRequest) openAIWSHandshakeCompatibilityKey {
+	key := normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	if proxy := strings.TrimSpace(req.ProxyURL); proxy != "" {
+		key.proxyFingerprint = sha256.Sum256([]byte(proxy))
+	}
+	return key
 }

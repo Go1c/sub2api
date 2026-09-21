@@ -65,6 +65,9 @@ func (s *TurnStateProbeService) refreshAfterOverload(ctx context.Context, ev Req
 	if ticket.Status != turnStateProbeStatusHolding || ticket.PolicyRevision != policy.Revision {
 		return nil
 	}
+	if ticket.StickyGroupID > 0 && ticket.StickyUntil.After(time.Now()) {
+		return nil
+	}
 	harvested, _ := turnStateProbeLifetime(ticket)
 	if ticket.UpdatedAt.After(harvested) {
 		harvested = ticket.UpdatedAt

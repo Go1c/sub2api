@@ -31,7 +31,8 @@ func (ProxyIPGroup) Mixin() []ent.Mixin {
 
 func (ProxyIPGroup) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("name").
+		field.Int("sticky_minutes").Default(0).Range(0, 50),
+ field.String("name").
 			MaxLen(100).
 			NotEmpty(),
 		field.Int("per_ip_concurrency").

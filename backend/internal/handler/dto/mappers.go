@@ -565,6 +565,7 @@ func ProxyIPGroupFromService(g *service.ProxyIPGroup) *AdminProxyIPGroup {
 		proxyIDs = []int64{}
 	}
 	return &AdminProxyIPGroup{
+		StickyMinutes:    g.StickyMinutes,
 		ID:               g.ID,
 		Name:             g.Name,
 		PerIPConcurrency: g.PerIPConcurrency,

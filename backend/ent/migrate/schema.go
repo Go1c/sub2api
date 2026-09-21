@@ -1469,6 +1469,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "sticky_minutes", Type: field.TypeInt, Default: 0},
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "per_ip_concurrency", Type: field.TypeInt, Default: 10},
 	}
@@ -1481,7 +1482,7 @@ var (
 			{
 				Name:    "proxyipgroup_name",
 				Unique:  false,
-				Columns: []*schema.Column{ProxyIPGroupsColumns[4]},
+				Columns: []*schema.Column{ProxyIPGroupsColumns[5]},
 			},
 			{
 				Name:    "proxyipgroup_deleted_at",

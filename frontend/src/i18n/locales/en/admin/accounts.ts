@@ -1065,6 +1065,8 @@ export default {
       proxy: 'Proxy',
       noProxy: 'No Proxy',
       proxyModeSingle: 'Single IP',
+      proxyModeSticky: 'Sticky IP',
+      stickyIpHint: 'Use the same exit as ticket harvesting. Enable account Turn-State probing and the channel policy. Traffic waits for a valid ticket and exit pair.',
       proxyModeGroup: 'IP group',
       selectIpGroup: 'Select IP group',
       noIpGroup: 'No IP group',

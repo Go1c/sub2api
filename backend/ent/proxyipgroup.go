@@ -23,6 +23,8 @@ type ProxyIPGroup struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// DeletedAt holds the value of the "deleted_at" field.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// StickyMinutes holds the value of the "sticky_minutes" field.
+	StickyMinutes int `json:"sticky_minutes,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// PerIPConcurrency holds the value of the "per_ip_concurrency" field.
@@ -56,7 +58,7 @@ func (*ProxyIPGroup) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case proxyipgroup.FieldID, proxyipgroup.FieldPerIPConcurrency:
+		case proxyipgroup.FieldID, proxyipgroup.FieldStickyMinutes, proxyipgroup.FieldPerIPConcurrency:
 			values[i] = new(sql.NullInt64)
 		case proxyipgroup.FieldName:
 			values[i] = new(sql.NullString)
@@ -101,6 +103,12 @@ func (_m *ProxyIPGroup) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.DeletedAt = new(time.Time)
 				*_m.DeletedAt = value.Time
+			}
+		case proxyipgroup.FieldStickyMinutes:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sticky_minutes", values[i])
+			} else if value.Valid {
+				_m.StickyMinutes = int(value.Int64)
 			}
 		case proxyipgroup.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -165,6 +173,9 @@ func (_m *ProxyIPGroup) String() string {
 		builder.WriteString("deleted_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("sticky_minutes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.StickyMinutes))
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)

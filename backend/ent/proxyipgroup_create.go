@@ -65,6 +65,20 @@ func (_c *ProxyIPGroupCreate) SetNillableDeletedAt(v *time.Time) *ProxyIPGroupCr
 	return _c
 }
 
+// SetStickyMinutes sets the "sticky_minutes" field.
+func (_c *ProxyIPGroupCreate) SetStickyMinutes(v int) *ProxyIPGroupCreate {
+	_c.mutation.SetStickyMinutes(v)
+	return _c
+}
+
+// SetNillableStickyMinutes sets the "sticky_minutes" field if the given value is not nil.
+func (_c *ProxyIPGroupCreate) SetNillableStickyMinutes(v *int) *ProxyIPGroupCreate {
+	if v != nil {
+		_c.SetStickyMinutes(*v)
+	}
+	return _c
+}
+
 // SetName sets the "name" field.
 func (_c *ProxyIPGroupCreate) SetName(v string) *ProxyIPGroupCreate {
 	_c.mutation.SetName(v)
@@ -151,6 +165,10 @@ func (_c *ProxyIPGroupCreate) defaults() error {
 		v := proxyipgroup.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.StickyMinutes(); !ok {
+		v := proxyipgroup.DefaultStickyMinutes
+		_c.mutation.SetStickyMinutes(v)
+	}
 	if _, ok := _c.mutation.PerIPConcurrency(); !ok {
 		v := proxyipgroup.DefaultPerIPConcurrency
 		_c.mutation.SetPerIPConcurrency(v)
@@ -165,6 +183,14 @@ func (_c *ProxyIPGroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ProxyIPGroup.updated_at"`)}
+	}
+	if _, ok := _c.mutation.StickyMinutes(); !ok {
+		return &ValidationError{Name: "sticky_minutes", err: errors.New(`ent: missing required field "ProxyIPGroup.sticky_minutes"`)}
+	}
+	if v, ok := _c.mutation.StickyMinutes(); ok {
+		if err := proxyipgroup.StickyMinutesValidator(v); err != nil {
+			return &ValidationError{Name: "sticky_minutes", err: fmt.Errorf(`ent: validator failed for field "ProxyIPGroup.sticky_minutes": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "ProxyIPGroup.name"`)}
@@ -220,6 +246,10 @@ func (_c *ProxyIPGroupCreate) createSpec() (*ProxyIPGroup, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(proxyipgroup.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.StickyMinutes(); ok {
+		_spec.SetField(proxyipgroup.FieldStickyMinutes, field.TypeInt, value)
+		_node.StickyMinutes = value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(proxyipgroup.FieldName, field.TypeString, value)
@@ -324,6 +354,24 @@ func (u *ProxyIPGroupUpsert) UpdateDeletedAt() *ProxyIPGroupUpsert {
 // ClearDeletedAt clears the value of the "deleted_at" field.
 func (u *ProxyIPGroupUpsert) ClearDeletedAt() *ProxyIPGroupUpsert {
 	u.SetNull(proxyipgroup.FieldDeletedAt)
+	return u
+}
+
+// SetStickyMinutes sets the "sticky_minutes" field.
+func (u *ProxyIPGroupUpsert) SetStickyMinutes(v int) *ProxyIPGroupUpsert {
+	u.Set(proxyipgroup.FieldStickyMinutes, v)
+	return u
+}
+
+// UpdateStickyMinutes sets the "sticky_minutes" field to the value that was provided on create.
+func (u *ProxyIPGroupUpsert) UpdateStickyMinutes() *ProxyIPGroupUpsert {
+	u.SetExcluded(proxyipgroup.FieldStickyMinutes)
+	return u
+}
+
+// AddStickyMinutes adds v to the "sticky_minutes" field.
+func (u *ProxyIPGroupUpsert) AddStickyMinutes(v int) *ProxyIPGroupUpsert {
+	u.Add(proxyipgroup.FieldStickyMinutes, v)
 	return u
 }
 
@@ -434,6 +482,27 @@ func (u *ProxyIPGroupUpsertOne) UpdateDeletedAt() *ProxyIPGroupUpsertOne {
 func (u *ProxyIPGroupUpsertOne) ClearDeletedAt() *ProxyIPGroupUpsertOne {
 	return u.Update(func(s *ProxyIPGroupUpsert) {
 		s.ClearDeletedAt()
+	})
+}
+
+// SetStickyMinutes sets the "sticky_minutes" field.
+func (u *ProxyIPGroupUpsertOne) SetStickyMinutes(v int) *ProxyIPGroupUpsertOne {
+	return u.Update(func(s *ProxyIPGroupUpsert) {
+		s.SetStickyMinutes(v)
+	})
+}
+
+// AddStickyMinutes adds v to the "sticky_minutes" field.
+func (u *ProxyIPGroupUpsertOne) AddStickyMinutes(v int) *ProxyIPGroupUpsertOne {
+	return u.Update(func(s *ProxyIPGroupUpsert) {
+		s.AddStickyMinutes(v)
+	})
+}
+
+// UpdateStickyMinutes sets the "sticky_minutes" field to the value that was provided on create.
+func (u *ProxyIPGroupUpsertOne) UpdateStickyMinutes() *ProxyIPGroupUpsertOne {
+	return u.Update(func(s *ProxyIPGroupUpsert) {
+		s.UpdateStickyMinutes()
 	})
 }
 
@@ -715,6 +784,27 @@ func (u *ProxyIPGroupUpsertBulk) UpdateDeletedAt() *ProxyIPGroupUpsertBulk {
 func (u *ProxyIPGroupUpsertBulk) ClearDeletedAt() *ProxyIPGroupUpsertBulk {
 	return u.Update(func(s *ProxyIPGroupUpsert) {
 		s.ClearDeletedAt()
+	})
+}
+
+// SetStickyMinutes sets the "sticky_minutes" field.
+func (u *ProxyIPGroupUpsertBulk) SetStickyMinutes(v int) *ProxyIPGroupUpsertBulk {
+	return u.Update(func(s *ProxyIPGroupUpsert) {
+		s.SetStickyMinutes(v)
+	})
+}
+
+// AddStickyMinutes adds v to the "sticky_minutes" field.
+func (u *ProxyIPGroupUpsertBulk) AddStickyMinutes(v int) *ProxyIPGroupUpsertBulk {
+	return u.Update(func(s *ProxyIPGroupUpsert) {
+		s.AddStickyMinutes(v)
+	})
+}
+
+// UpdateStickyMinutes sets the "sticky_minutes" field to the value that was provided on create.
+func (u *ProxyIPGroupUpsertBulk) UpdateStickyMinutes() *ProxyIPGroupUpsertBulk {
+	return u.Update(func(s *ProxyIPGroupUpsert) {
+		s.UpdateStickyMinutes()
 	})
 }
 

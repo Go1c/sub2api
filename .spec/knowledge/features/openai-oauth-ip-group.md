@@ -15,6 +15,10 @@ metadata:
 - 保留原有账号配额限流、会话绑定及并发逻辑。已有会话绑定的出口满并发时仍保持绑定；新绑定没有可用槽位时按现有逻辑失败关闭。
 - 此处的轮次作用于单次请求的重试，不在账号所有成功请求之间建立全局轮次。
 
+## 粘性 IP 组
+
+`sticky_minutes > 0` 的组通过账号代理区的「粘性 IP」选择。组成员复用已有动态代理记录，采票成功后按账号绑定票与供应商 session，详情见 [粘性 IP 与 Turn-State](sticky-ip-turn-state.md)。上述随机轮转与会话选路规则继续用于 `sticky_minutes = 0` 的普通组。
+
 ## JSON 导入默认值
 
 - 两个入口分别接线：新建账号向导的 Codex auth.json / session JSON 导入，以及账号列表的 JSON 文件「导入数据」（`/admin/accounts/data`）。后者仅对 OpenAI OAuth 账号补齐这些默认值。

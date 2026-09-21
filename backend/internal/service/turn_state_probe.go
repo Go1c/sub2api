@@ -342,6 +342,14 @@ func BuildTurnStateProbeDynamicProxyURL(exit TurnStateProbeDynamicExit, sid stri
 }
 
 type TurnStateTicketRecord struct {
+	StickyGroupID          int64     `json:"sticky_group_id,omitempty"`
+	StickyProxyID          int64     `json:"sticky_proxy_id,omitempty"`
+	StickySession          string    `json:"sticky_session,omitempty"`
+	StickyUntil            time.Time `json:"sticky_until,omitempty"`
+	StickyExitExpiresAt    time.Time `json:"sticky_exit_expires_at,omitempty"`
+	StickyProxyFingerprint string    `json:"sticky_proxy_fingerprint,omitempty"`
+	StickySessionMinutes   int       `json:"sticky_session_minutes,omitempty"`
+
 	AccountID        int64     `json:"account_id"`
 	Identity         string    `json:"identity"`
 	State            string    `json:"state"`
@@ -369,6 +377,11 @@ func (r TurnStateTicketRecord) Summary() TurnStateProbeAccountItem {
 		PolicyRevision: r.PolicyRevision,
 		LastError:      r.LastError,
 	}
+	if r.StickyGroupID > 0 {
+		item.StickyProxyID = r.StickyProxyID
+		t := r.StickyUntil
+		item.StickyUntil = &t
+	}
 	if !r.RecheckAt.IsZero() {
 		t := r.RecheckAt
 		item.RecheckAt = &t
@@ -381,6 +394,9 @@ func (r TurnStateTicketRecord) Summary() TurnStateProbeAccountItem {
 }
 
 type TurnStateProbeAccountItem struct {
+	StickyProxyID int64      `json:"sticky_proxy_id,omitempty"`
+	StickyUntil   *time.Time `json:"sticky_until,omitempty"`
+
 	AccountID      int64      `json:"account_id"`
 	Name           string     `json:"name"`
 	Enabled        bool       `json:"enabled"`

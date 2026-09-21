@@ -1134,6 +1134,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			//     service_tier 时按 default 处理，billing 应如实反映。
 			if policyErr == nil && blocked == nil && isResponseCreate {
 				// 双开：后续帧的发送边界，与首帧同一收口。
+				if err := stickySnapshotError(c, account); err != nil {
+					return nil, nil, err
+				}
 				out = s.applyTurnStateProbeWSFrame(c, account, out, gjson.GetBytes(out, "model").String())
 				out = s.guardOpenAICodexWSFrameTurnState(c, account, out)
 				out = applyCodexWSFrameWireProfile(c, account, out, turnState)
@@ -1164,6 +1167,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	upstreamFirstMessageSent := false
 	firstWriteCtx, cancelFirstWrite := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
 	// 双开：首帧的发送边界——turn-state 走帧内、字段序对齐真客户端（握手上已被投影删掉）。
+	if err := stickySnapshotError(c, account); err != nil {
+		cancelFirstWrite()
+		return err
+	}
 	firstClientMessage = s.applyTurnStateProbeWSFrame(c, account, firstClientMessage, gjson.GetBytes(firstClientMessage, "model").String())
 	firstClientMessage = s.guardOpenAICodexWSFrameTurnState(c, account, firstClientMessage)
 	firstClientMessage = applyCodexWSFrameWireProfile(c, account, firstClientMessage, turnState)

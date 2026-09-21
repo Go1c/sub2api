@@ -1133,6 +1133,8 @@ export default {
       proxy: '代理',
       noProxy: '无代理',
       proxyModeSingle: '单独 IP',
+      proxyModeSticky: '粘性 IP',
+      stickyIpHint: '业务使用采票时的同一出口。需要开启账号 Turn-State 探测与渠道策略；无有效票时暂停该出口，换新成功后一起切换。',
       proxyModeGroup: 'IP 组',
       selectIpGroup: '选择 IP 组',
       noIpGroup: '不使用 IP 组',

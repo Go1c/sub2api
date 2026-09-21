@@ -210,7 +210,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	)
 
 	ctx = withOpenAIIPGroupSession(ctx, sessionHash)
-	proxyURL, releaseProxy, proxyErr := s.mustOpenAIAccountProxyURL(ctx, account, sessionHash)
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIWSProxyURL(ctx, c, account, sessionHash)
 	if proxyErr != nil {
 		return nil, proxyErr
 	}
@@ -358,6 +358,20 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
+	if err := stickySnapshotError(c, account); err != nil {
+		return nil, err
+	}
+	if snapshot := stickySnapshot(c, account); snapshot != nil {
+		raw, err := marshalOpenAIUpstreamJSON(payload)
+		if err != nil {
+			return nil, err
+		}
+		raw = s.applyTurnStateProbeWSFrame(c, account, raw, mappedModel)
+		raw = s.guardOpenAICodexWSFrameTurnState(c, account, raw)
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return nil, err
+		}
+	}
 	var writeErr error
 	if codexDeviceWireProfileEnabled(c, account) {
 		// 双开：map 序列化是字典序且转义 HTML；按真客户端的帧字段序出站，字节原样写出。

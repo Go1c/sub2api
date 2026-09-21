@@ -21,6 +21,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// FieldStickyMinutes holds the string denoting the sticky_minutes field in the database.
+	FieldStickyMinutes = "sticky_minutes"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
 	// FieldPerIPConcurrency holds the string denoting the per_ip_concurrency field in the database.
@@ -44,6 +46,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldDeletedAt,
+	FieldStickyMinutes,
 	FieldName,
 	FieldPerIPConcurrency,
 }
@@ -72,6 +75,10 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultStickyMinutes holds the default value on creation for the "sticky_minutes" field.
+	DefaultStickyMinutes int
+	// StickyMinutesValidator is a validator for the "sticky_minutes" field. It is called by the builders before save.
+	StickyMinutesValidator func(int) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
 	// DefaultPerIPConcurrency holds the default value on creation for the "per_ip_concurrency" field.
@@ -101,6 +108,11 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByDeletedAt orders the results by the deleted_at field.
 func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
+}
+
+// ByStickyMinutes orders the results by the sticky_minutes field.
+func ByStickyMinutes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStickyMinutes, opts...).ToFunc()
 }
 
 // ByName orders the results by the name field.

@@ -22,12 +22,14 @@ func NewProxyIPGroupHandler(adminService service.AdminService) *ProxyIPGroupHand
 }
 
 type CreateProxyIPGroupRequest struct {
+	StickyMinutes    int     `json:"sticky_minutes"`
 	Name             string  `json:"name" binding:"required"`
 	PerIPConcurrency int     `json:"per_ip_concurrency"`
 	ProxyIDs         []int64 `json:"proxy_ids"`
 }
 
 type UpdateProxyIPGroupRequest struct {
+	StickyMinutes    *int   `json:"sticky_minutes"`
 	Name             string `json:"name"`
 	PerIPConcurrency *int   `json:"per_ip_concurrency"`
 }
@@ -77,6 +79,7 @@ func (h *ProxyIPGroupHandler) Create(c *gin.Context) {
 	executeAdminIdempotentJSON(c, "admin.proxy_ip_groups.create", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
 		group, err := h.adminService.CreateProxyIPGroup(ctx, &service.CreateProxyIPGroupInput{
 			Name:             strings.TrimSpace(req.Name),
+			StickyMinutes:    req.StickyMinutes,
 			PerIPConcurrency: req.PerIPConcurrency,
 			ProxyIDs:         req.ProxyIDs,
 		})
@@ -101,6 +104,7 @@ func (h *ProxyIPGroupHandler) Update(c *gin.Context) {
 	}
 	group, err := h.adminService.UpdateProxyIPGroup(c.Request.Context(), id, &service.UpdateProxyIPGroupInput{
 		Name:             strings.TrimSpace(req.Name),
+		StickyMinutes:    req.StickyMinutes,
 		PerIPConcurrency: req.PerIPConcurrency,
 	})
 	if err != nil {

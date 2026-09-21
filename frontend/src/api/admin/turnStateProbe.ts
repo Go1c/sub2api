@@ -29,6 +29,8 @@ export interface TurnStateProbePolicy {
 }
 
 export interface TurnStateProbeAccountItem {
+ sticky_proxy_id?: number
+ sticky_until?: string | null
   account_id: number
   name: string
   enabled: boolean

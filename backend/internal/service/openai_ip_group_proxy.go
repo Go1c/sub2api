@@ -479,6 +479,9 @@ func (s *OpenAIGatewayService) mustOpenAIAccountProxyURL(ctx context.Context, ac
 }
 
 func (s *OpenAIGatewayService) lookupOpenAIProxyURL(ctx context.Context, c *gin.Context, account *Account, body []byte) (string, func(), error) {
+	if url, release, handled, err := s.lookupStickyProxy(ctx, c, account); handled {
+		return url, release, err
+	}
 	// Clear the previous attempt's egress before resolving a new route.
 	RememberEgressProxyID(c, 0)
 	if c != nil && account != nil {

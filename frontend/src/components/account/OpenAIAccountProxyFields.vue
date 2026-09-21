@@ -24,6 +24,11 @@
         />
         {{ t('admin.accounts.proxyModeGroup') }}
       </label>
+      <label class="inline-flex items-center gap-2">
+        <input type="radio" class="h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+          :checked="mode === 'sticky'" @change="setMode('sticky')" />
+        {{ t('admin.accounts.proxyModeSticky') }}
+      </label>
     </div>
 
     <ProxySelector
@@ -40,13 +45,13 @@
         :placeholder="t('admin.accounts.selectIpGroup')"
         @update:model-value="onGroupChange"
       />
-      <p class="input-hint">{{ t('admin.accounts.ipGroupHint') }}</p>
+      <p class="input-hint">{{ t(mode === 'sticky' ? 'admin.accounts.stickyIpHint' : 'admin.accounts.ipGroupHint') }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import Select from '@/components/common/Select.vue'
@@ -70,28 +75,29 @@ const { t } = useI18n()
 
 const isOpenAIOAuth = computed(() => props.platform === 'openai' && props.type === 'oauth')
 
-const mode = computed<'single' | 'group'>(() => {
-  if (!isOpenAIOAuth.value) return 'single'
-  return props.proxyIpGroupId && props.proxyIpGroupId > 0 ? 'group' : 'single'
-})
-
+type ProxyMode = 'single' | 'group' | 'sticky'
+const mode = ref<ProxyMode>('single')
+watch(() => [props.proxyIpGroupId, props.ipGroups, props.proxyId] as const, () => {
+  if (!isOpenAIOAuth.value || props.proxyId) { mode.value = 'single'; return }
+  if (props.proxyIpGroupId) {
+    const group = props.ipGroups.find(g => g.id === props.proxyIpGroupId)
+    mode.value = (group?.sticky_minutes || 0) > 0 ? 'sticky' : 'group'
+  }
+}, { immediate: true })
+const matchingGroups = computed(() => props.ipGroups.filter(g => ((g.sticky_minutes || 0) > 0) === (mode.value === 'sticky')))
 const groupOptions = computed(() => [
   { value: '', label: t('admin.accounts.noIpGroup') },
-  ...props.ipGroups.map((group) => ({
+  ...matchingGroups.value.map(group => ({
     value: String(group.id),
     label: `${group.name} (${t('admin.accounts.ipGroupConcurrency', { count: group.per_ip_concurrency })})`
   }))
 ])
-
-const setMode = (next: 'single' | 'group') => {
-  if (next === 'group') {
-    emit('update:proxyId', null)
-    if (!props.proxyIpGroupId && props.ipGroups[0]) {
-      emit('update:proxyIpGroupId', props.ipGroups[0].id)
-    }
-    return
-  }
-  emit('update:proxyIpGroupId', null)
+const setMode = (next: ProxyMode) => {
+  mode.value = next
+  if (next === 'single') { emit('update:proxyIpGroupId', null); return }
+  emit('update:proxyId', null)
+  const selected = matchingGroups.value.find(g => g.id === props.proxyIpGroupId) || matchingGroups.value[0]
+  emit('update:proxyIpGroupId', selected?.id ?? null)
 }
 
 const onGroupChange = (value: string | number | boolean | null) => {

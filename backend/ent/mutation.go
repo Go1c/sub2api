@@ -38910,6 +38910,8 @@ type ProxyIPGroupMutation struct {
 	created_at            *time.Time
 	updated_at            *time.Time
 	deleted_at            *time.Time
+	sticky_minutes        *int
+	addsticky_minutes     *int
 	name                  *string
 	per_ip_concurrency    *int
 	addper_ip_concurrency *int
@@ -39141,6 +39143,62 @@ func (m *ProxyIPGroupMutation) ResetDeletedAt() {
 	delete(m.clearedFields, proxyipgroup.FieldDeletedAt)
 }
 
+// SetStickyMinutes sets the "sticky_minutes" field.
+func (m *ProxyIPGroupMutation) SetStickyMinutes(i int) {
+	m.sticky_minutes = &i
+	m.addsticky_minutes = nil
+}
+
+// StickyMinutes returns the value of the "sticky_minutes" field in the mutation.
+func (m *ProxyIPGroupMutation) StickyMinutes() (r int, exists bool) {
+	v := m.sticky_minutes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStickyMinutes returns the old "sticky_minutes" field's value of the ProxyIPGroup entity.
+// If the ProxyIPGroup object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProxyIPGroupMutation) OldStickyMinutes(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStickyMinutes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStickyMinutes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStickyMinutes: %w", err)
+	}
+	return oldValue.StickyMinutes, nil
+}
+
+// AddStickyMinutes adds i to the "sticky_minutes" field.
+func (m *ProxyIPGroupMutation) AddStickyMinutes(i int) {
+	if m.addsticky_minutes != nil {
+		*m.addsticky_minutes += i
+	} else {
+		m.addsticky_minutes = &i
+	}
+}
+
+// AddedStickyMinutes returns the value that was added to the "sticky_minutes" field in this mutation.
+func (m *ProxyIPGroupMutation) AddedStickyMinutes() (r int, exists bool) {
+	v := m.addsticky_minutes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetStickyMinutes resets all changes to the "sticky_minutes" field.
+func (m *ProxyIPGroupMutation) ResetStickyMinutes() {
+	m.sticky_minutes = nil
+	m.addsticky_minutes = nil
+}
+
 // SetName sets the "name" field.
 func (m *ProxyIPGroupMutation) SetName(s string) {
 	m.name = &s
@@ -39321,7 +39379,7 @@ func (m *ProxyIPGroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProxyIPGroupMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.created_at != nil {
 		fields = append(fields, proxyipgroup.FieldCreatedAt)
 	}
@@ -39330,6 +39388,9 @@ func (m *ProxyIPGroupMutation) Fields() []string {
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, proxyipgroup.FieldDeletedAt)
+	}
+	if m.sticky_minutes != nil {
+		fields = append(fields, proxyipgroup.FieldStickyMinutes)
 	}
 	if m.name != nil {
 		fields = append(fields, proxyipgroup.FieldName)
@@ -39351,6 +39412,8 @@ func (m *ProxyIPGroupMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case proxyipgroup.FieldDeletedAt:
 		return m.DeletedAt()
+	case proxyipgroup.FieldStickyMinutes:
+		return m.StickyMinutes()
 	case proxyipgroup.FieldName:
 		return m.Name()
 	case proxyipgroup.FieldPerIPConcurrency:
@@ -39370,6 +39433,8 @@ func (m *ProxyIPGroupMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldUpdatedAt(ctx)
 	case proxyipgroup.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case proxyipgroup.FieldStickyMinutes:
+		return m.OldStickyMinutes(ctx)
 	case proxyipgroup.FieldName:
 		return m.OldName(ctx)
 	case proxyipgroup.FieldPerIPConcurrency:
@@ -39404,6 +39469,13 @@ func (m *ProxyIPGroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDeletedAt(v)
 		return nil
+	case proxyipgroup.FieldStickyMinutes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStickyMinutes(v)
+		return nil
 	case proxyipgroup.FieldName:
 		v, ok := value.(string)
 		if !ok {
@@ -39426,6 +39498,9 @@ func (m *ProxyIPGroupMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ProxyIPGroupMutation) AddedFields() []string {
 	var fields []string
+	if m.addsticky_minutes != nil {
+		fields = append(fields, proxyipgroup.FieldStickyMinutes)
+	}
 	if m.addper_ip_concurrency != nil {
 		fields = append(fields, proxyipgroup.FieldPerIPConcurrency)
 	}
@@ -39437,6 +39512,8 @@ func (m *ProxyIPGroupMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ProxyIPGroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case proxyipgroup.FieldStickyMinutes:
+		return m.AddedStickyMinutes()
 	case proxyipgroup.FieldPerIPConcurrency:
 		return m.AddedPerIPConcurrency()
 	}
@@ -39448,6 +39525,13 @@ func (m *ProxyIPGroupMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ProxyIPGroupMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case proxyipgroup.FieldStickyMinutes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddStickyMinutes(v)
+		return nil
 	case proxyipgroup.FieldPerIPConcurrency:
 		v, ok := value.(int)
 		if !ok {
@@ -39499,6 +39583,9 @@ func (m *ProxyIPGroupMutation) ResetField(name string) error {
 		return nil
 	case proxyipgroup.FieldDeletedAt:
 		m.ResetDeletedAt()
+		return nil
+	case proxyipgroup.FieldStickyMinutes:
+		m.ResetStickyMinutes()
 		return nil
 	case proxyipgroup.FieldName:
 		m.ResetName()

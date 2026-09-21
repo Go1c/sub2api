@@ -32,7 +32,7 @@
           </thead>
           <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
             <tr v-for="group in groups" :key="group.id">
-              <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ group.name }}</td>
+              <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ group.name }}<span v-if="group.sticky_minutes" class="ml-2 text-xs text-primary-500">{{ t('admin.accounts.proxyModeSticky') }} · {{ group.sticky_minutes }} min</span></td>
               <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ group.per_ip_concurrency }}</td>
               <td class="px-3 py-2 text-gray-600 dark:text-gray-300">
                 {{ memberLabel(group) }}
@@ -80,6 +80,17 @@
           required
           class="input"
         />
+      </div>
+      <div>
+        <label class="inline-flex items-center gap-2">
+          <input v-model="form.sticky" type="checkbox" />
+          {{ t('admin.accounts.proxyModeSticky') }}
+        </label>
+        <template v-if="form.sticky">
+          <label class="input-label mt-2">{{ t('admin.proxies.stickyMinutes') }}</label>
+          <input v-model.number="form.sticky_minutes" type="number" min="20" max="50" required class="input" />
+          <p class="input-hint">{{ t('admin.proxies.stickyHint') }}</p>
+        </template>
       </div>
       <div>
         <label class="input-label">{{ t('admin.proxies.ipGroupMembers') }}</label>
@@ -166,6 +177,8 @@ const editing = ref<ProxyIPGroup | null>(null)
 const deleting = ref<ProxyIPGroup | null>(null)
 const form = reactive({
   name: '',
+  sticky: false,
+  sticky_minutes: 20,
   per_ip_concurrency: 10,
   proxy_ids: [] as number[]
 })
@@ -208,6 +221,8 @@ watch(
 
 const resetForm = () => {
   form.name = ''
+  form.sticky = false
+  form.sticky_minutes = 20
   form.per_ip_concurrency = 10
   form.proxy_ids = []
   editing.value = null
@@ -221,6 +236,8 @@ const openCreate = () => {
 const openEdit = (group: ProxyIPGroup) => {
   editing.value = group
   form.name = group.name
+  form.sticky = (group.sticky_minutes || 0) > 0
+  form.sticky_minutes = group.sticky_minutes || 20
   form.per_ip_concurrency = group.per_ip_concurrency
   form.proxy_ids = [...(group.proxy_ids || [])]
   showForm.value = true
@@ -250,12 +267,14 @@ const submitForm = async () => {
     if (editing.value) {
       await adminAPI.proxyIpGroups.update(editing.value.id, {
         name,
+        sticky_minutes: form.sticky ? form.sticky_minutes : 0,
         per_ip_concurrency: form.per_ip_concurrency
       })
       await adminAPI.proxyIpGroups.setMembers(editing.value.id, form.proxy_ids)
     } else {
       await adminAPI.proxyIpGroups.create({
         name,
+        sticky_minutes: form.sticky ? form.sticky_minutes : 0,
         per_ip_concurrency: form.per_ip_concurrency,
         proxy_ids: form.proxy_ids
       })

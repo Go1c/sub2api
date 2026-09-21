@@ -55,6 +55,27 @@ func (_u *ProxyIPGroupUpdate) ClearDeletedAt() *ProxyIPGroupUpdate {
 	return _u
 }
 
+// SetStickyMinutes sets the "sticky_minutes" field.
+func (_u *ProxyIPGroupUpdate) SetStickyMinutes(v int) *ProxyIPGroupUpdate {
+	_u.mutation.ResetStickyMinutes()
+	_u.mutation.SetStickyMinutes(v)
+	return _u
+}
+
+// SetNillableStickyMinutes sets the "sticky_minutes" field if the given value is not nil.
+func (_u *ProxyIPGroupUpdate) SetNillableStickyMinutes(v *int) *ProxyIPGroupUpdate {
+	if v != nil {
+		_u.SetStickyMinutes(*v)
+	}
+	return _u
+}
+
+// AddStickyMinutes adds value to the "sticky_minutes" field.
+func (_u *ProxyIPGroupUpdate) AddStickyMinutes(v int) *ProxyIPGroupUpdate {
+	_u.mutation.AddStickyMinutes(v)
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *ProxyIPGroupUpdate) SetName(v string) *ProxyIPGroupUpdate {
 	_u.mutation.SetName(v)
@@ -175,6 +196,11 @@ func (_u *ProxyIPGroupUpdate) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ProxyIPGroupUpdate) check() error {
+	if v, ok := _u.mutation.StickyMinutes(); ok {
+		if err := proxyipgroup.StickyMinutesValidator(v); err != nil {
+			return &ValidationError{Name: "sticky_minutes", err: fmt.Errorf(`ent: validator failed for field "ProxyIPGroup.sticky_minutes": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := proxyipgroup.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "ProxyIPGroup.name": %w`, err)}
@@ -208,6 +234,12 @@ func (_u *ProxyIPGroupUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(proxyipgroup.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.StickyMinutes(); ok {
+		_spec.SetField(proxyipgroup.FieldStickyMinutes, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedStickyMinutes(); ok {
+		_spec.AddField(proxyipgroup.FieldStickyMinutes, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(proxyipgroup.FieldName, field.TypeString, value)
@@ -306,6 +338,27 @@ func (_u *ProxyIPGroupUpdateOne) SetNillableDeletedAt(v *time.Time) *ProxyIPGrou
 // ClearDeletedAt clears the value of the "deleted_at" field.
 func (_u *ProxyIPGroupUpdateOne) ClearDeletedAt() *ProxyIPGroupUpdateOne {
 	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
+// SetStickyMinutes sets the "sticky_minutes" field.
+func (_u *ProxyIPGroupUpdateOne) SetStickyMinutes(v int) *ProxyIPGroupUpdateOne {
+	_u.mutation.ResetStickyMinutes()
+	_u.mutation.SetStickyMinutes(v)
+	return _u
+}
+
+// SetNillableStickyMinutes sets the "sticky_minutes" field if the given value is not nil.
+func (_u *ProxyIPGroupUpdateOne) SetNillableStickyMinutes(v *int) *ProxyIPGroupUpdateOne {
+	if v != nil {
+		_u.SetStickyMinutes(*v)
+	}
+	return _u
+}
+
+// AddStickyMinutes adds value to the "sticky_minutes" field.
+func (_u *ProxyIPGroupUpdateOne) AddStickyMinutes(v int) *ProxyIPGroupUpdateOne {
+	_u.mutation.AddStickyMinutes(v)
 	return _u
 }
 
@@ -442,6 +495,11 @@ func (_u *ProxyIPGroupUpdateOne) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ProxyIPGroupUpdateOne) check() error {
+	if v, ok := _u.mutation.StickyMinutes(); ok {
+		if err := proxyipgroup.StickyMinutesValidator(v); err != nil {
+			return &ValidationError{Name: "sticky_minutes", err: fmt.Errorf(`ent: validator failed for field "ProxyIPGroup.sticky_minutes": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := proxyipgroup.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "ProxyIPGroup.name": %w`, err)}
@@ -492,6 +550,12 @@ func (_u *ProxyIPGroupUpdateOne) sqlSave(ctx context.Context) (_node *ProxyIPGro
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(proxyipgroup.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.StickyMinutes(); ok {
+		_spec.SetField(proxyipgroup.FieldStickyMinutes, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedStickyMinutes(); ok {
+		_spec.AddField(proxyipgroup.FieldStickyMinutes, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(proxyipgroup.FieldName, field.TypeString, value)

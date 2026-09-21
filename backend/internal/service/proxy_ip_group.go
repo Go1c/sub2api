@@ -22,6 +22,7 @@ var (
 
 // ProxyIPGroup is an admin-defined set of proxies with one per-IP concurrency cap.
 type ProxyIPGroup struct {
+	StickyMinutes    int
 	ID               int64
 	Name             string
 	PerIPConcurrency int
@@ -31,12 +32,14 @@ type ProxyIPGroup struct {
 }
 
 type CreateProxyIPGroupInput struct {
+	StickyMinutes    int
 	Name             string
 	PerIPConcurrency int
 	ProxyIDs         []int64
 }
 
 type UpdateProxyIPGroupInput struct {
+	StickyMinutes    *int
 	Name             string
 	PerIPConcurrency *int
 }
@@ -67,4 +70,11 @@ func normalizeProxyIPGroupConcurrency(value int) (int, error) {
 
 func proxyIsLive(p *Proxy, now time.Time) bool {
 	return p != nil && p.IsActive() && !p.IsExpired(now)
+}
+
+func validateStickyMinutes(minutes int) error {
+	if minutes != 0 && (minutes < 20 || minutes > 50) {
+		return infraerrors.BadRequest("PROXY_IP_GROUP_STICKY_INVALID", "sticky_minutes must be 0 or between 20 and 50")
+	}
+	return nil
 }

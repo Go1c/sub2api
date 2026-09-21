@@ -24,6 +24,7 @@ func NewProxyIPGroupRepository(client *dbent.Client, sqlDB *sql.DB) service.Prox
 func (r *proxyIPGroupRepository) Create(ctx context.Context, group *service.ProxyIPGroup) error {
 	created, err := r.client.ProxyIPGroup.Create().
 		SetName(group.Name).
+		SetStickyMinutes(group.StickyMinutes).
 		SetPerIPConcurrency(group.PerIPConcurrency).
 		Save(ctx)
 	if err != nil {
@@ -80,6 +81,7 @@ func (r *proxyIPGroupRepository) List(ctx context.Context) ([]service.ProxyIPGro
 func (r *proxyIPGroupRepository) Update(ctx context.Context, group *service.ProxyIPGroup) error {
 	updated, err := r.client.ProxyIPGroup.UpdateOneID(group.ID).
 		SetName(group.Name).
+		SetStickyMinutes(group.StickyMinutes).
 		SetPerIPConcurrency(group.PerIPConcurrency).
 		Save(ctx)
 	if err != nil {
@@ -169,6 +171,7 @@ func (r *proxyIPGroupRepository) toService(ctx context.Context, m *dbent.ProxyIP
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	return &service.ProxyIPGroup{
+		StickyMinutes:    m.StickyMinutes,
 		ID:               m.ID,
 		Name:             m.Name,
 		PerIPConcurrency: m.PerIPConcurrency,

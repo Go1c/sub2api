@@ -25,6 +25,9 @@ func (s *adminServiceImpl) CreateProxyIPGroup(ctx context.Context, input *Create
 	if s.proxyIPGroupRepo == nil {
 		return nil, ErrProxyIPGroupNotFound
 	}
+	if err := validateStickyMinutes(input.StickyMinutes); err != nil {
+		return nil, err
+	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return nil, infraerrors.BadRequest("PROXY_IP_GROUP_NAME_REQUIRED", "IP group name is required")
@@ -42,6 +45,7 @@ func (s *adminServiceImpl) CreateProxyIPGroup(ctx context.Context, input *Create
 		return nil, err
 	}
 	group := &ProxyIPGroup{
+		StickyMinutes:    input.StickyMinutes,
 		Name:             name,
 		PerIPConcurrency: concurrency,
 		ProxyIDs:         uniqueInt64s(input.ProxyIDs),
@@ -72,6 +76,12 @@ func (s *adminServiceImpl) UpdateProxyIPGroup(ctx context.Context, id int64, inp
 			return nil, ErrProxyIPGroupNameTaken
 		}
 		group.Name = name
+	}
+	if input.StickyMinutes != nil {
+		if err := validateStickyMinutes(*input.StickyMinutes); err != nil {
+			return nil, err
+		}
+		group.StickyMinutes = *input.StickyMinutes
 	}
 	if input.PerIPConcurrency != nil {
 		concurrency, err := normalizeProxyIPGroupConcurrency(*input.PerIPConcurrency)

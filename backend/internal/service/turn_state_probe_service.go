@@ -41,6 +41,7 @@ type cachedTurnStateProbePolicy struct {
 var ErrTurnStateProbeRateLimited = infraerrors.TooManyRequests("TURN_STATE_PROBE_RPM", "探测调用预算已用尽")
 
 type TurnStateProbeService struct {
+	groups       ProxyIPGroupRepository
 	settingRepo  SettingRepository
 	accountRepo  AccountRepository
 	proxyRepo    ProxyRepository
@@ -72,13 +73,16 @@ func NewTurnStateProbeService(
 
 func ProvideTurnStateProbeService(
 	settingRepo SettingRepository,
+	groups ProxyIPGroupRepository,
 	accountRepo AccountRepository,
 	proxyRepo ProxyRepository,
 	tickets TurnStateTicketStore,
 	httpUpstream HTTPUpstream,
 	tokens *OpenAITokenProvider,
 ) *TurnStateProbeService {
-	return NewTurnStateProbeService(settingRepo, accountRepo, proxyRepo, tickets, httpUpstream, tokens)
+	svc := NewTurnStateProbeService(settingRepo, accountRepo, proxyRepo, tickets, httpUpstream, tokens)
+	svc.groups = groups
+	return svc
 }
 
 func (s *TurnStateProbeService) GetPolicy(ctx context.Context) (TurnStateProbePolicy, error) {
@@ -196,6 +200,8 @@ func (s *TurnStateProbeService) GetOverview(ctx context.Context) (*TurnStateProb
 					item.RecheckAt = sum.RecheckAt
 					item.LastError = sum.LastError
 					item.LastProbedAt = sum.LastProbedAt
+					item.StickyProxyID = sum.StickyProxyID
+					item.StickyUntil = sum.StickyUntil
 				}
 			}
 			accounts = append(accounts, item)
@@ -269,12 +275,25 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 	if !policy.Enabled {
 		return ErrTurnStateProbeDisabled
 	}
-	if !policy.HasProbeExit() {
+	stickyGroup, err := s.stickyGroup(ctx, account)
+	if err != nil {
+		return err
+	}
+	if stickyGroup == nil && !policy.HasProbeExit() {
 		return ErrTurnStateProbeInvalid
 	}
 	existing, err := s.tickets.Get(ctx, accountID)
 	if err != nil {
 		return err
+	}
+	if existing != nil && existing.State != "" {
+		matches, configErr := s.stickyConfigurationMatches(ctx, account, existing)
+		if configErr != nil {
+			return configErr
+		}
+		if !matches {
+			existing = nil
+		}
 	}
 	if !resetAttempts && turnStateProbeSkipBlocks(existing, time.Now()) {
 		return nil
@@ -299,6 +318,15 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 	if err != nil {
 		return err
 	}
+	if existing != nil && existing.State != "" {
+		matches, configErr := s.stickyConfigurationMatches(ctx, account, existing)
+		if configErr != nil {
+			return configErr
+		}
+		if !matches {
+			existing = nil
+		}
+	}
 	if !resetAttempts && existing != nil {
 		if turnStateProbeSkipBlocks(existing, time.Now()) {
 			return nil
@@ -308,6 +336,9 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 		}
 	}
 	if !resetAttempts && existing != nil && existing.Status == turnStateProbeStatusHolding && !s.ticketDue(ctx, accountID, policy, time.Now()) {
+		return nil
+	}
+	if existing != nil && existing.StickyGroupID > 0 && stickyGroup != nil && existing.StickyGroupID == stickyGroup.ID && existing.StickyUntil.After(time.Now()) && existing.ExpiresAt.After(time.Now()) && existing.PolicyRevision == policy.Revision && existing.Identity == turnStateProbeTicketIdentity(account) {
 		return nil
 	}
 	attempts := 0
@@ -335,7 +366,7 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 	if err != nil {
 		return err
 	}
-	if !useDynamic && len(proxyURLs) == 0 {
+	if stickyGroup == nil && !useDynamic && len(proxyURLs) == 0 {
 		return ErrTurnStateProbeInvalid
 	}
 	ok, err := s.tickets.AllowRPM(ctx, "global", policy.RPM)
@@ -359,7 +390,14 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 		return ErrTurnStateProbeRateLimited
 	}
 	proxyURL := ""
-	if useDynamic {
+	var stickyRecord TurnStateTicketRecord
+	if stickyGroup != nil {
+		var exitErr error
+		proxyURL, stickyRecord, exitErr = s.newStickyExit(ctx, stickyGroup, attempts)
+		if exitErr != nil {
+			return exitErr
+		}
+	} else if useDynamic {
 		sid, err := randomTurnStateProbeSID()
 		if err != nil {
 			lastReason = "sid"
@@ -398,6 +436,17 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 		Status: turnStateProbeStatusHolding, Attempts: attempts,
 		RecheckAt: harvestStarted.Add(policy.RecheckAfter()), UpdatedAt: now,
 		HarvestedAt: harvestStarted, ExpiresAt: harvestStarted.Add(turnStateProbeTicketTTL),
+	}
+	if stickyGroup != nil {
+		rec.copyStickyFrom(stickyRecord)
+		rec.StickyUntil = now.Add(time.Duration(stickyGroup.StickyMinutes) * time.Minute)
+		rec.RecheckAt = rec.StickyUntil
+		if !rec.StickyExitExpiresAt.After(rec.StickyUntil) {
+			return ErrTurnStateProbeInvalid
+		}
+		if rec.ExpiresAt.After(rec.StickyExitExpiresAt) {
+			rec.ExpiresAt = rec.StickyExitExpiresAt
+		}
 	}
 	if err := s.tickets.Put(ctx, rec); err != nil {
 		return err
@@ -441,6 +490,7 @@ func (s *TurnStateProbeService) putHarvestTicket(ctx context.Context, account *A
 	}
 	if previous != nil && (status == turnStateProbeStatusRunning || status == turnStateProbeStatusCooldown) &&
 		previous.PolicyRevision == policy.Revision && (previous.Identity == "" || previous.Identity == rec.Identity) {
+		rec.copyStickyFrom(*previous)
 		rec.ForbiddenRetries = previous.ForbiddenRetries
 		rec.State = previous.State
 		rec.StateHash = previous.StateHash
@@ -484,6 +534,14 @@ func (s *TurnStateProbeService) currentHoldingTicket(ctx context.Context, accoun
 	}
 	if ticket.PolicyRevision != policy.Revision {
 		return nil, false
+	}
+	if matches, err := s.stickyConfigurationMatches(ctx, account, ticket); err != nil || !matches {
+		return nil, false
+	}
+	if ticket.StickyGroupID > 0 {
+		if account.ProxyIPGroupID == nil || *account.ProxyIPGroupID != ticket.StickyGroupID || !ticket.StickyExitExpiresAt.After(time.Now()) {
+			return nil, false
+		}
 	}
 	_, expires := turnStateProbeLifetime(ticket)
 	if !expires.After(time.Now()) || (ticket.Identity != "" && ticket.Identity != turnStateProbeTicketIdentity(account)) {
@@ -588,7 +646,20 @@ func (s *TurnStateProbeService) listDueAccountIDs(ctx context.Context, policy Tu
 		if !account.IsOpenAIOAuth() || !ParseTurnStateProbeAccountSwitch(account.Extra).Enabled {
 			continue
 		}
-		if s.ticketDue(ctx, account.ID, policy, now) {
+		if s.tickets == nil {
+			ids = append(ids, account.ID)
+			continue
+		}
+		ticket, readErr := s.tickets.Get(ctx, account.ID)
+		configurationChanged := false
+		if readErr == nil && ticket != nil && ticket.State != "" {
+			matches, configErr := s.stickyConfigurationMatches(ctx, &account, ticket)
+			if configErr != nil {
+				continue
+			}
+			configurationChanged = !matches
+		}
+		if configurationChanged || s.ticketDue(ctx, account.ID, policy, now) {
 			ids = append(ids, account.ID)
 		}
 	}
@@ -611,7 +682,12 @@ func (s *TurnStateProbeService) ticketDue(ctx context.Context, accountID int64, 
 	}
 	if ticket.Status == turnStateProbeStatusHolding && strings.TrimSpace(ticket.State) != "" {
 		harvested, expires := turnStateProbeLifetime(ticket)
-		if !expires.After(now) || !harvested.Add(policy.RecheckAfter()).After(now) || ticket.RecheckAt.IsZero() || !ticket.RecheckAt.After(now) {
+		if !expires.After(now) || !(func() time.Time {
+			if ticket.StickyGroupID > 0 {
+				return ticket.StickyUntil
+			}
+			return harvested.Add(policy.RecheckAfter())
+		})().After(now) || ticket.RecheckAt.IsZero() || !ticket.RecheckAt.After(now) {
 			return true
 		}
 		return false

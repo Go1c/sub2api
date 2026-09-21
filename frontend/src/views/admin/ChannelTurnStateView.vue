@@ -76,6 +76,10 @@
             <code class="ui-mono text-xs text-gray-800 dark:text-gray-200">{{ row.model || '—' }}</code>
           </template>
 
+          <template #cell-sticky_proxy_id="{ row }">
+            <span v-if="row.sticky_proxy_id">#{{ row.sticky_proxy_id }}<br />{{ row.sticky_until ? formatDateTime(row.sticky_until) : '—' }}</span>
+            <span v-else>—</span>
+          </template>
           <template #cell-recheck_at="{ row }">
             <span class="text-xs text-gray-600 dark:text-gray-300">
               {{ row.recheck_at ? formatDateTime(row.recheck_at) : '—' }}
@@ -454,6 +458,7 @@ const columns = computed(() => [
   { key: 'state_hash', label: t('admin.channelTurnState.columns.hash'), sortable: false },
   { key: 'state_length', label: t('admin.channelTurnState.columns.length'), sortable: false },
   { key: 'model', label: t('admin.channelTurnState.columns.model'), sortable: false },
+  { key: 'sticky_proxy_id', label: t('admin.accounts.proxyModeSticky'), sortable: false },
   { key: 'recheck_at', label: t('admin.channelTurnState.columns.recheck'), sortable: false },
   { key: 'actions', label: t('admin.channelTurnState.columns.actions'), sortable: false }
 ])

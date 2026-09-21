@@ -932,6 +932,7 @@ export interface ClaudeModel {
 }
 
 export interface ProxyIPGroup {
+  sticky_minutes?: number
   id: number
   name: string
   per_ip_concurrency: number

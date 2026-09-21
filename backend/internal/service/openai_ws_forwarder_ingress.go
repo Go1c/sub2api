@@ -803,7 +803,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
 	ctx = withOpenAIIPGroupSession(ctx, sessionHash)
-	proxyURL, releaseProxy, proxyErr := s.mustOpenAIAccountProxyURL(ctx, account, sessionHash)
+	proxyURL, releaseProxy, proxyErr := s.lookupOpenAIWSProxyURL(ctx, c, account, sessionHash)
 	if proxyErr != nil {
 		return proxyErr
 	}
@@ -993,6 +993,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		// 双开：turn-state 走帧内、顶层字段序对齐真客户端。放在发送边界。HTTP 桥接路径
 		// 不经过这里：桥是网关自造形态（WS 客户端 → HTTP 上游，默认关闭），它出站的
 		// turn-state 头仍是网关持有的值，不套帧内规则。
+		if err := stickySnapshotError(c, account); err != nil {
+			return nil, err
+		}
 		payload = s.applyTurnStateProbeWSFrame(c, account, payload, gjson.GetBytes(payload, "model").String())
 		payload = s.guardOpenAICodexWSFrameTurnState(c, account, payload)
 		payload = applyCodexWSFrameWireProfile(c, account, payload, clientTurnState)

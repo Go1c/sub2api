@@ -46,6 +46,8 @@ export default {
       description: 'Manage proxy servers for accounts',
       createProxy: 'Create Proxy',
       ipGroups: 'IP groups',
+      stickyMinutes: 'Hold after harvesting (minutes)',
+      stickyHint: 'Select dynamic proxies supporting sid / t parameters. Keep the exit after harvesting and switch with the next valid ticket. Sessions reserve 10 extra minutes; provider exits may still change early.',
       ipGroupName: 'Name',
       ipGroupNamePlaceholder: 'e.g. france-pool',
       ipGroupConcurrency: 'Per-IP concurrency',

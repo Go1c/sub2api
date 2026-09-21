@@ -26,7 +26,12 @@ func (s *OpenAIGatewayService) applyTurnStateProbeHTTP(c *gin.Context, account *
 	}
 	identity := openAICodexTurnStateOwner(c, account)
 	turnKey := openAITurnStateProbeTurnKey(h, body)
-	state, ok := s.turnStateTickets.BindCurrent(ctx, account, identity, turnKey, model)
+	state, ok := "", false
+	if snapshot := stickySnapshot(c, account); snapshot != nil {
+		state, ok = snapshot.ticket.State, stickySnapshotError(c, account) == nil
+	} else {
+		state, ok = s.turnStateTickets.BindCurrent(ctx, account, identity, turnKey, model)
+	}
 	if !ok || strings.TrimSpace(state) == "" {
 		return
 	}
@@ -50,7 +55,12 @@ func (s *OpenAIGatewayService) applyTurnStateProbeWSFrame(c *gin.Context, accoun
 	}
 	identity := openAICodexTurnStateOwner(c, account)
 	turnKey := openAITurnStateProbeWSTurnKey(payload)
-	state, ok := s.turnStateTickets.BindCurrent(ctx, account, identity, turnKey, model)
+	state, ok := "", false
+	if snapshot := stickySnapshot(c, account); snapshot != nil {
+		state, ok = snapshot.ticket.State, stickySnapshotError(c, account) == nil
+	} else {
+		state, ok = s.turnStateTickets.BindCurrent(ctx, account, identity, turnKey, model)
+	}
 	if !ok || strings.TrimSpace(state) == "" {
 		return payload
 	}

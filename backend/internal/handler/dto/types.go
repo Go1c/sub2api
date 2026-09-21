@@ -470,6 +470,7 @@ type ProxyWithAccountCount struct {
 
 // AdminProxyIPGroup is the admin DTO for an IP group and its member proxy IDs.
 type AdminProxyIPGroup struct {
+	StickyMinutes    int       `json:"sticky_minutes"`
 	ID               int64     `json:"id"`
 	Name             string    `json:"name"`
 	PerIPConcurrency int       `json:"per_ip_concurrency"`

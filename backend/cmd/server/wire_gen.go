@@ -279,7 +279,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	channelIQService := service.ProvideChannelIQService(channelIQStore, accountRepository, accountTestService)
 	channelIQHandler := admin.NewChannelIQHandler(channelIQService)
 	turnStateTicketStore := repository.NewTurnStateProbeStore(redisClient)
-	turnStateProbeService := service.ProvideTurnStateProbeService(settingRepository, accountRepository, proxyRepository, turnStateTicketStore, httpUpstream, openAITokenProvider)
+	turnStateProbeService := service.ProvideTurnStateProbeService(settingRepository, proxyIPGroupRepository, accountRepository, proxyRepository, turnStateTicketStore, httpUpstream, openAITokenProvider)
 	turnStateProbeHandler := admin.NewTurnStateProbeHandler(turnStateProbeService)
 	contentModerationRepository := repository.NewContentModerationRepository(db)
 	contentModerationHashCache := repository.NewContentModerationHashCache(redisClient)
