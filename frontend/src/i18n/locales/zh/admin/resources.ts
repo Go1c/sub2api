@@ -47,7 +47,7 @@ export default {
       createProxy: '添加代理',
       ipGroups: 'IP 组',
       stickyMinutes: '挂票后保持时间（分钟）',
-      stickyHint: '选择支持 sid / t 参数的动态代理。成功挂票后固定出口，到期采到新票再换新；代理会话额外预留 10 分钟，供应商仍可能提前更换出口。',
+      stickyHint: '选择动态代理。Udeal 使用 session / sessTime，并在换新时调用供应商换 IP 接口；其余供应商使用 sid / t。成功挂票后固定出口，到期采到新票再换新；代理会话额外预留 10 分钟，供应商仍可能提前更换出口。',
       ipGroupName: '名称',
       ipGroupNamePlaceholder: '例如 france-pool',
       ipGroupConcurrency: '每 IP 并发',

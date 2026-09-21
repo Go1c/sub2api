@@ -403,13 +403,17 @@ func codexLoginGroupCandidates(ctx context.Context, resolver *openAIIPGroupResol
 		return nil, errors.New("登录 IP 组最多支持 256 个代理")
 	}
 	result := make([]CodexLoginProxy, 0, len(members))
-	for _, proxy := range members {
+	for _, member := range members {
+		proxy := member
 		if group.StickyMinutes > 0 {
-			sid, err := randomTurnStateProbeSID()
+			session, err := randomTurnStateProbeSID()
 			if err != nil {
 				return nil, err
 			}
-			proxy = stickyProxy(proxy, sid, group.StickyMinutes+10)
+			if err := rotateStickyVendorSession(ctx, proxy, session); err != nil {
+				return nil, errors.New("动态粘性代理换 IP 失败")
+			}
+			proxy = stickyProxy(proxy, session, stickySessionMinutes(group.StickyMinutes))
 		}
 		result = append(result, CodexLoginProxy{ID: proxy.ID, URL: proxy.URL()})
 	}

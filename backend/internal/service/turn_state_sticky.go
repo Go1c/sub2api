@@ -3,20 +3,139 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
-// Only replace supplier session parameters. Credentials stay in proxy records.
-var stickySessionParameter = regexp.MustCompile(`-(?:sid|t)-[^-]+`)
+const stickySessionMinutesReserve = 10
 
-func stickyProxy(p *Proxy, sid string, minutes int) *Proxy {
+// Only replace supplier session parameters. Credentials stay in proxy records.
+var (
+	stickySidTParameter         = regexp.MustCompile(`-(?:sid|t)-[^-]+`)
+	stickyUdealSessionParameter = regexp.MustCompile(`(?i)-(?:session|sesstime)-[^-]+`)
+	stickyUdealCustomID         = regexp.MustCompile(`(?i)(?:^|-)custom-([^-]+)`)
+	errStickyVendorRotate       = errors.New("sticky vendor session rotate failed")
+	stickyUdealUpdatePort       = "7777"
+	stickyVendorHTTPClient      = &http.Client{
+		Timeout: 8 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	rotateStickyVendorSession   = rotateUdealStickySession
+)
+
+func stickySessionMinutes(hold int) int {
+	minutes := hold + stickySessionMinutesReserve
+	if minutes < turnStateProbeMinSessionMinutes {
+		minutes = turnStateProbeMinSessionMinutes
+	}
+	if minutes > turnStateProbeMaxSessionMinutes {
+		minutes = turnStateProbeMaxSessionMinutes
+	}
+	return minutes
+}
+
+func stickyUdealHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = strings.ToLower(h)
+	}
+	return host == "udealproxy.com" || strings.HasSuffix(host, ".udealproxy.com")
+}
+
+func stickyLooksUdeal(p *Proxy) bool {
+	if p == nil {
+		return false
+	}
+	if stickyUdealHost(p.Host) {
+		return true
+	}
+	u := strings.ToLower(strings.TrimSpace(p.Username))
+	return strings.Contains(u, "-session-") && strings.Contains(u, "-sesstime-")
+}
+
+func udealCustomID(username string) string {
+	match := stickyUdealCustomID.FindStringSubmatch(strings.TrimSpace(username))
+	if len(match) != 2 {
+		return ""
+	}
+	return match[1]
+}
+
+func stickyProxy(p *Proxy, session string, minutes int) *Proxy {
 	cp := *p
-	cp.Username = stickySessionParameter.ReplaceAllString(strings.TrimSpace(p.Username), "") + "-sid-" + sid + fmt.Sprintf("-t-%d", minutes)
+	user := strings.TrimSpace(p.Username)
+	session = strings.TrimSpace(session)
+	if stickyLooksUdeal(&cp) {
+		user = stickyUdealSessionParameter.ReplaceAllString(user, "")
+		user = stickySidTParameter.ReplaceAllString(user, "")
+		cp.Username = user + "-session-" + session + fmt.Sprintf("-sessTime-%d", minutes)
+		return &cp
+	}
+	cp.Username = stickySidTParameter.ReplaceAllString(user, "") + "-sid-" + session + fmt.Sprintf("-t-%d", minutes)
 	return &cp
+}
+
+func rotateUdealStickySession(ctx context.Context, proxy *Proxy, session string) error {
+	if !stickyLooksUdeal(proxy) {
+		return nil
+	}
+	custom := udealCustomID(proxy.Username)
+	session = strings.TrimSpace(session)
+	if custom == "" || session == "" || strings.TrimSpace(proxy.Password) == "" {
+		return errStickyVendorRotate
+	}
+	host := strings.TrimSpace(proxy.Host)
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if host == "" {
+		return errStickyVendorRotate
+	}
+	u := &url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, stickyUdealUpdatePort),
+		Path:   "/update",
+	}
+	query := url.Values{}
+	query.Set("custom", custom)
+	query.Set("session", session)
+	query.Set("password", proxy.Password)
+	u.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return errStickyVendorRotate
+	}
+	client := stickyVendorHTTPClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Warn("sticky_vendor_rotate_failed", "proxy_id", proxy.ID, "custom", custom)
+		return errStickyVendorRotate
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		slog.Warn("sticky_vendor_rotate_status", "proxy_id", proxy.ID, "custom", custom, "status", resp.StatusCode)
+		return errStickyVendorRotate
+	}
+	return nil
 }
 
 func stickyProxyFingerprint(p *Proxy) string {
@@ -67,13 +186,16 @@ func (s *TurnStateProbeService) newStickyExit(ctx context.Context, group *ProxyI
 		return "", rec, ErrTurnStateProbeInvalid
 	}
 	p := live[attempt%len(live)]
-	sid, err := randomTurnStateProbeSID()
+	session, err := randomTurnStateProbeSID()
 	if err != nil {
 		return "", rec, err
 	}
-	minutes := group.StickyMinutes + 10
-	rec = TurnStateTicketRecord{StickyGroupID: group.ID, StickyProxyID: p.ID, StickySession: sid, StickySessionMinutes: minutes, StickyExitExpiresAt: time.Now().Add(time.Duration(minutes) * time.Minute), StickyProxyFingerprint: stickyProxyFingerprint(&p)}
-	return stickyProxy(&p, sid, minutes).URL(), rec, nil
+	if err := rotateStickyVendorSession(ctx, &p, session); err != nil {
+		return "", rec, err
+	}
+	minutes := stickySessionMinutes(group.StickyMinutes)
+	rec = TurnStateTicketRecord{StickyGroupID: group.ID, StickyProxyID: p.ID, StickySession: session, StickySessionMinutes: minutes, StickyExitExpiresAt: time.Now().Add(time.Duration(minutes) * time.Minute), StickyProxyFingerprint: stickyProxyFingerprint(&p)}
+	return stickyProxy(&p, session, minutes).URL(), rec, nil
 }
 
 type turnStateStickyLookup interface {
@@ -181,7 +303,7 @@ func (s *TurnStateProbeService) stickyConfigurationMatches(ctx context.Context, 
 	if group == nil {
 		return ticket.StickyGroupID == 0, nil
 	}
-	if ticket.StickyGroupID != group.ID || ticket.StickySessionMinutes != group.StickyMinutes+10 || s.proxyRepo == nil {
+	if ticket.StickyGroupID != group.ID || ticket.StickySessionMinutes != stickySessionMinutes(group.StickyMinutes) || s.proxyRepo == nil {
 		return false, nil
 	}
 	member := false

@@ -9,7 +9,7 @@ metadata:
 
 # 粘性 IP 与 Turn-State
 
-IP 组以 `sticky_minutes` 区分普通组（0）和粘性组（20–50 分钟，界面默认 20）。账号代理区提供单独 IP、普通 IP 组、粘性 IP 三个选项，复用 `proxy_ip_group_id`。粘性组成员使用已有动态代理记录；用户名中的旧 sid / t 参数在每次采票时替换，只保留一个有效 session。代理供应商必须支持当前 sid / t 约定。
+IP 组以 `sticky_minutes` 区分普通组（0）和粘性组（20–50 分钟，界面默认 20）。账号代理区提供单独 IP、普通 IP 组、粘性 IP 三个选项，复用 `proxy_ip_group_id`。粘性组成员使用已有动态代理记录；每次采票只保留一个有效供应商 session。用户名按供应商约定改写：主机为 `udealproxy.com` 或其子域，或用户名同时含 `session` 与 `sessTime` 时按 Udeal 替换这两段（大小写不敏感），并在分配新 session 时请求 `http://<host>:7777/update?custom=&session=&password=`；其余动态代理继续替换 `sid` / `t`。供应商 session 时长比保持时间多 10 分钟，上限 60 分钟。
 
 采票与业务请求使用同一代理 session。账号成功采票后将票、组、代理成员、session、最早换新时间和出口到期时间保存在同一 Redis 记录里；管理接口仅返回代理编号与最早换新时间，不暴露 session、完整票和认证信息。保持时间从采票成功开始计算。供应商 session 时长比保持时间多 10 分钟，为采票耗时与换新重试留余量，最多 60 分钟；这不是供应商固定出口的保证。
 

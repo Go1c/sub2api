@@ -5,6 +5,8 @@ import (
 	"errors"
 	"maps"
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,6 +195,45 @@ func TestCodexLoginProxyCandidatesNeverFallBackDirect(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, int64(2), rows[0].ID)
+}
+
+func TestCodexLoginStickyCandidatesRewriteUdealSession(t *testing.T) {
+	account := &Account{ProxyIPGroupID: codexTestGroupID()}
+	resolver := &openAIIPGroupResolver{
+		groups:  stickyCodexTestGroups{},
+		proxies: stickyCodexTestProxies{},
+		now:     time.Now,
+	}
+	previous := rotateStickyVendorSession
+	rotateStickyVendorSession = func(_ context.Context, _ *Proxy, session string) error {
+		require.NotEmpty(t, session)
+		return nil
+	}
+	defer func() { rotateStickyVendorSession = previous }()
+	rows, err := codexLoginGroupCandidates(context.Background(), resolver, account)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	parsed, err := url.Parse(rows[0].URL)
+	require.NoError(t, err)
+	username := parsed.User.Username()
+	require.True(t, strings.HasPrefix(username, "userId-7155-custom-19653-region-us-session-"))
+	require.True(t, strings.HasSuffix(username, "-sessTime-30"))
+	require.NotContains(t, username, "session-ZHACt")
+	require.False(t, stickySidTParameter.MatchString(username))
+	require.Equal(t, 1, strings.Count(username, "-session-"))
+	require.Equal(t, 1, strings.Count(username, "-sessTime-"))
+}
+
+type stickyCodexTestGroups struct{ ProxyIPGroupRepository }
+
+func (stickyCodexTestGroups) GetByID(context.Context, int64) (*ProxyIPGroup, error) {
+	return &ProxyIPGroup{ID: 1, StickyMinutes: 20, ProxyIDs: []int64{2}}, nil
+}
+
+type stickyCodexTestProxies struct{}
+
+func (stickyCodexTestProxies) ListByIDs(context.Context, []int64) ([]Proxy, error) {
+	return []Proxy{{ID: 2, Protocol: "http", Host: "us.udealproxy.com", Port: 6666, Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20", Password: "secret", Status: StatusActive}}, nil
 }
 
 // New login imports must use the local scheduling priority rather than the old 50 default.

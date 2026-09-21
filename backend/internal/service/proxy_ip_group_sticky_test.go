@@ -9,8 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -116,6 +118,37 @@ func TestStickySnapshotRoutesAndInjectsSameGeneration(t *testing.T) {
 	require.Equal(t, "ticket-A", headers.Get("X-Codex-Turn-State"))
 }
 
+func TestStickyLookupRewritesUdealSessionFromTicket(t *testing.T) {
+	ctx := context.Background()
+	groups := newProxyIPGroupRepoStub()
+	group := &ProxyIPGroup{Name: "udeal", StickyMinutes: 20, PerIPConcurrency: 1, ProxyIDs: []int64{3}}
+	require.NoError(t, groups.Create(ctx, group))
+	account := newOAuthProbeAccount(8, true)
+	account.ProxyIPGroupID = &group.ID
+	proxy := Proxy{ID: 3, Host: "us.udealproxy.com", Port: 6666, Protocol: "http", Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20", Password: "secret", Status: StatusActive}
+	proxies := &proxyListByIDsStub{proxies: map[int64]Proxy{3: proxy}}
+	resolver := newOpenAIIPGroupResolver(groups, proxies, nil, nil, time.Hour)
+	tickets := newMemoryTurnStateTicketStore()
+	svc := newTurnStateProbeServiceForTest(t, account, tickets, nil)
+	svc.groups = groups
+	svc.proxyRepo = proxies
+	policy := DefaultTurnStateProbePolicy()
+	policy.Enabled = true
+	saved, err := svc.SavePolicy(ctx, policy)
+	require.NoError(t, err)
+	rec := TurnStateTicketRecord{AccountID: 8, Identity: turnStateProbeTicketIdentity(account), State: "ticket-A", Status: "holding", PolicyRevision: saved.Revision, HarvestedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour), StickyGroupID: group.ID, StickyProxyID: 3, StickySession: "abc12xyz", StickySessionMinutes: 30, StickyExitExpiresAt: time.Now().Add(30 * time.Minute), StickyProxyFingerprint: stickyProxyFingerprint(&proxy)}
+	require.NoError(t, tickets.Put(ctx, rec))
+	gateway := &OpenAIGatewayService{ipGroupResolver: resolver, turnStateTickets: svc}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	route, release, err := gateway.lookupOpenAIProxyURL(ctx, c, account, []byte(`{"model":"gpt-6-astra"}`))
+	require.NoError(t, err)
+	defer release()
+	username := parsedUsername(t, route)
+	require.Equal(t, "userId-7155-custom-19653-region-us-session-abc12xyz-sessTime-30", username)
+	require.False(t, hasSidTParameters(username))
+}
+
 func TestStickyHarvestUsesGroupMemberAndPreservesPairOnFailure(t *testing.T) {
 	ctx := context.Background()
 	groups := newProxyIPGroupRepoStub()
@@ -208,6 +241,159 @@ func TestStickyWSPoolSeparatesProxySessions(t *testing.T) {
 	b.ProxyURL = "http://user-sid-B-t-30:secret@proxy:2000"
 	require.NotEqual(t, openAIWSRequestCompatibility(a), openAIWSRequestCompatibility(b))
 	require.Equal(t, openAIWSRequestCompatibility(a), openAIWSRequestCompatibility(a))
+}
+
+func TestStickyProxyRewritesUdealSessionWithoutSidT(t *testing.T) {
+	proxy := Proxy{Host: "us.udealproxy.com", Port: 6666, Protocol: "http", Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20", Password: "secret"}
+	rewritten := stickyProxy(&proxy, "abc12xyz", 30)
+	require.Equal(t, "userId-7155-custom-19653-region-us-session-abc12xyz-sessTime-30", rewritten.Username)
+	require.NotContains(t, rewritten.Username, "-sid-")
+	require.False(t, hasSidTParameters(rewritten.Username))
+	require.Equal(t, 1, strings.Count(rewritten.Username, "-session-"))
+	require.Equal(t, 1, strings.Count(rewritten.Username, "-sessTime-"))
+}
+
+func TestStickyProxyKeepsSidTForNonUdealUsernames(t *testing.T) {
+	proxy := Proxy{Username: "user-region-US-sid-old-t-5"}
+	rewritten := stickyProxy(&proxy, "sessionA", 30)
+	require.Equal(t, "user-region-US-sid-sessionA-t-30", rewritten.Username)
+}
+
+func TestStickyLooksUdealRequiresHostOrSessionAndSessTime(t *testing.T) {
+	require.True(t, stickyLooksUdeal(&Proxy{Host: "us.udealproxy.com", Username: "user-region-US"}))
+	require.True(t, stickyLooksUdeal(&Proxy{Host: "UdealProxy.com", Username: "user-region-US"}))
+	require.True(t, stickyLooksUdeal(&Proxy{Host: "proxy.example", Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20"}))
+	require.False(t, stickyLooksUdeal(&Proxy{Host: "proxy.example", Username: "user-region-US-sid-old-t-5"}))
+	require.False(t, stickyLooksUdeal(&Proxy{Host: "proxy.example", Username: "user-session-only"}))
+	require.False(t, stickyLooksUdeal(&Proxy{Host: "udealproxy.com.example", Username: "user-region-US"}))
+}
+
+func TestStickyProxyStripsCaseInsensitiveUdealSession(t *testing.T) {
+	proxy := Proxy{Host: "us.udealproxy.com", Username: "userId-7155-custom-19653-region-us-SESSION-ZHACt-SESSTIME-20"}
+	rewritten := stickyProxy(&proxy, "abc12xyz", 30)
+	require.Equal(t, "userId-7155-custom-19653-region-us-session-abc12xyz-sessTime-30", rewritten.Username)
+}
+
+func TestRotateUdealStickySessionCallsUpdateAPI(t *testing.T) {
+	var gotCustom, gotSession string
+	var hasPassword bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Equal(t, "/update", r.URL.Path)
+		gotCustom = r.URL.Query().Get("custom")
+		gotSession = r.URL.Query().Get("session")
+		hasPassword = r.URL.Query().Get("password") != ""
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	restore := useStickyVendorTestServer(t, server)
+	defer restore()
+	host, _, err := net.SplitHostPort(parsedHostPort(t, server.URL))
+	require.NoError(t, err)
+	proxy := Proxy{Host: host, Port: 6666, Protocol: "http", Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20", Password: "secret"}
+	require.NoError(t, rotateUdealStickySession(context.Background(), &proxy, "abc12xyz"))
+	require.Equal(t, "19653", gotCustom)
+	require.Equal(t, "abc12xyz", gotSession)
+	require.True(t, hasPassword)
+}
+
+func TestRotateUdealStickySessionSkipsNonUdeal(t *testing.T) {
+	proxy := Proxy{Host: "proxy.example", Username: "user-region-US-sid-old-t-5", Password: "secret"}
+	require.NoError(t, rotateUdealStickySession(context.Background(), &proxy, "abc12xyz"))
+}
+
+func TestRotateUdealStickySessionRejectsNon2xx(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+	restore := useStickyVendorTestServer(t, server)
+	defer restore()
+	host, _, err := net.SplitHostPort(parsedHostPort(t, server.URL))
+	require.NoError(t, err)
+	proxy := Proxy{Host: host, Port: 6666, Protocol: "http", Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20", Password: "secret"}
+	require.ErrorIs(t, rotateUdealStickySession(context.Background(), &proxy, "abc12xyz"), errStickyVendorRotate)
+}
+
+func parsedHostPort(t *testing.T, raw string) string {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	require.NoError(t, err)
+	return parsed.Host
+}
+
+func useStickyVendorTestServer(t *testing.T, server *httptest.Server) func() {
+	t.Helper()
+	_, port, err := net.SplitHostPort(parsedHostPort(t, server.URL))
+	require.NoError(t, err)
+	previousPort := stickyUdealUpdatePort
+	previousClient := stickyVendorHTTPClient
+	stickyUdealUpdatePort = port
+	stickyVendorHTTPClient = &http.Client{
+		Timeout: 8 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+		Transport: server.Client().Transport,
+	}
+	return func() {
+		stickyUdealUpdatePort = previousPort
+		stickyVendorHTTPClient = previousClient
+	}
+}
+
+func TestNewStickyExitRotatesUdealThenRewritesUsername(t *testing.T) {
+	ctx := context.Background()
+	groups := newProxyIPGroupRepoStub()
+	group := &ProxyIPGroup{Name: "udeal", StickyMinutes: 20, ProxyIDs: []int64{3}}
+	require.NoError(t, groups.Create(ctx, group))
+	proxy := Proxy{ID: 3, Host: "us.udealproxy.com", Port: 6666, Protocol: "http", Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20", Password: "secret", Status: StatusActive}
+	svc := &TurnStateProbeService{proxyRepo: &proxyListByIDsStub{proxies: map[int64]Proxy{3: proxy}}}
+	previous := rotateStickyVendorSession
+	var rotatedSession string
+	rotateStickyVendorSession = func(_ context.Context, p *Proxy, session string) error {
+		rotatedSession = session
+		require.Equal(t, int64(3), p.ID)
+		require.Contains(t, p.Username, "session-ZHACt")
+		return nil
+	}
+	defer func() { rotateStickyVendorSession = previous }()
+	exitURL, rec, err := svc.newStickyExit(ctx, group, 0)
+	require.NoError(t, err)
+	require.Equal(t, rotatedSession, rec.StickySession)
+	require.Contains(t, exitURL, "session-"+rotatedSession)
+	require.Contains(t, exitURL, "sessTime-30")
+	require.NotContains(t, exitURL, "session-ZHACt")
+	require.False(t, hasSidTParameters(parsedUsername(t, exitURL)))
+	require.Equal(t, 30, rec.StickySessionMinutes)
+}
+
+func TestNewStickyExitStopsWhenVendorRotateFails(t *testing.T) {
+	ctx := context.Background()
+	groups := newProxyIPGroupRepoStub()
+	group := &ProxyIPGroup{Name: "udeal", StickyMinutes: 20, ProxyIDs: []int64{3}}
+	require.NoError(t, groups.Create(ctx, group))
+	proxy := Proxy{ID: 3, Host: "us.udealproxy.com", Port: 6666, Protocol: "http", Username: "userId-7155-custom-19653-region-us-session-ZHACt-sessTime-20", Password: "secret", Status: StatusActive}
+	svc := &TurnStateProbeService{proxyRepo: &proxyListByIDsStub{proxies: map[int64]Proxy{3: proxy}}}
+	previous := rotateStickyVendorSession
+	rotateStickyVendorSession = func(context.Context, *Proxy, string) error {
+		return errStickyVendorRotate
+	}
+	defer func() { rotateStickyVendorSession = previous }()
+	_, rec, err := svc.newStickyExit(ctx, group, 0)
+	require.ErrorIs(t, err, errStickyVendorRotate)
+	require.Empty(t, rec.StickySession)
+}
+
+func parsedUsername(t *testing.T, raw string) string {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	require.NoError(t, err)
+	return parsed.User.Username()
+}
+
+func hasSidTParameters(username string) bool {
+	return stickySidTParameter.MatchString(username)
 }
 
 type stickyFailingProxyRepo struct{ ProxyRepository }
