@@ -20,5 +20,6 @@ metadata:
 | [`features/account-pool-auto-inspect.md`](features/account-pool-auto-inspect.md) | 号池自动巡检：成功率过低则加入指定分组、去掉指定模型并关闭 429 豁免，401 停调度可通知 Telegram |
 | [`features/openai-oauth-429-exemption.md`](features/openai-oauth-429-exemption.md) | OpenAI OAuth 429 拉闸豁免：extra 键缺省豁免 Retry-After 冷却，手动或巡检降级时关闭，真实耗尽不受影响 |
 | [`features/openai-oauth-ip-group.md`](features/openai-oauth-ip-group.md) | OpenAI OAuth IP 组选路：会话粘性、随机选择未尝试出口与两轮重试 |
+| [`features/openai-import-batch-scheduling.md`](features/openai-import-batch-scheduling.md) | OpenAI 账号按首次入库固定时间批次优先调度，粘性会话优先且持续报错账号降级 |
 | [`features/codex-2fa-import-recovery.md`](features/codex-2fa-import-recovery.md) | Codex 2FA JSON 导入、Team 优先授权，以及 sub2api 上游 401 停调度后的后台重新登录恢复 |
 | [`features/sticky-ip-turn-state.md`](features/sticky-ip-turn-state.md) | 粘性 IP 组将账号采票出口与 Turn-State 成对绑定，保持到期后采新票并一起换新 |

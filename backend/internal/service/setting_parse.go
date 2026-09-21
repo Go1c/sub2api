@@ -919,6 +919,14 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.OpenAIAdvancedSchedulerEnabled = settings[openAIAdvancedSchedulerSettingKey] == "true"
 	result.OpenAIAdvancedSchedulerStickyWeightedEnabled = settings[SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled] == "true"
 	result.OpenAIAdvancedSchedulerSubscriptionPriorityEnabled = settings[SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled] == "true"
+	result.OpenAIImportBatchMinutes = strings.TrimSpace(settings[SettingKeyOpenAIImportBatchMinutes])
+	if result.OpenAIImportBatchMinutes == "" {
+		minutes := 30
+		if s.cfg != nil {
+			minutes = s.cfg.Gateway.OpenAIScheduler.ImportBatchMinutes
+		}
+		result.OpenAIImportBatchMinutes = strconv.Itoa(minutes)
+	}
 	result.OpenAIAdvancedSchedulerLBTopK = strings.TrimSpace(settings[SettingKeyOpenAIAdvancedSchedulerLBTopK])
 	result.OpenAIAdvancedSchedulerWeightPriority = strings.TrimSpace(settings[SettingKeyOpenAIAdvancedSchedulerWeightPriority])
 	result.OpenAIAdvancedSchedulerWeightLoad = strings.TrimSpace(settings[SettingKeyOpenAIAdvancedSchedulerWeightLoad])
@@ -1084,6 +1092,11 @@ func (s *SettingService) normalizeOpenAIAdvancedSchedulerOverrides(settings *Sys
 		return infraerrors.BadRequest("INVALID_OPENAI_OAUTH_SCHEDULING_RATE_MULTIPLIER", "OpenAI OAuth scheduling rate multiplier must be a finite non-negative number")
 	}
 
+	batch := strings.TrimSpace(settings.OpenAIImportBatchMinutes)
+	if batch != "" && batch != "0" && batch != "10" && batch != "30" {
+		return infraerrors.BadRequest("INVALID_OPENAI_IMPORT_BATCH_MINUTES", "import batch minutes must be 0, 10, 30 or empty")
+	}
+	settings.OpenAIImportBatchMinutes = batch
 	lbTopK, err := normalizeOptionalPositiveIntString(settings.OpenAIAdvancedSchedulerLBTopK)
 	if err != nil {
 		return infraerrors.BadRequest("INVALID_OPENAI_ADVANCED_SCHEDULER_LB_TOP_K", "openai advanced scheduler TopK must be a positive integer or empty")

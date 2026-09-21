@@ -1121,3 +1121,9 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *tes
 		})
 	}
 }
+
+func TestSchedulerMetadataPreservesImportBatchCreationTime(t *testing.T) {
+	created := time.Date(2026, 9, 21, 10, 29, 0, 0, time.UTC)
+	projected := buildSchedulerMetadataAccount(service.Account{ID: 991, CreatedAt: created})
+	require.Equal(t, created, projected.CreatedAt)
+}

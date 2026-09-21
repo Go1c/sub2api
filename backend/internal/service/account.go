@@ -21,6 +21,8 @@ import (
 )
 
 type Account struct {
+	// Private request-local recovery token; never persisted or exposed in DTOs.
+	importBatchProbeToken   uint64
 	ID                      int64
 	Name                    string
 	Notes                   *string

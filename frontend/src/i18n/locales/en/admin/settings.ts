@@ -1213,6 +1213,13 @@ export default {
         sourceHint: 'Choose an explicit source before enabling the method. Not configured methods are not exposed.',
         sourceRequiredError: 'Select a payment source before enabling {title}.'
       },
+      importBatch: {
+        "title": "Import batch scheduling",
+        "description": "Keep session affinity first. New selections prefer account priority, oldest creation-time batch, then tickets and load within that batch. Repeated failures demote accounts; latency is ignored. Replaces advanced scoring, subscription and cost preferences below. Changing the window regroups accounts without moving existing sessions.",
+        "disabled": "Disabled (original scheduler)",
+        "ten": "10-minute batches",
+        "thirty": "30-minute batches (default)"
+},
       openaiExperimentalScheduler: {
         title: 'OpenAI experimental scheduler policy',
         description: "Disabled by default. When enabled, this only changes the gateway's experimental account-selection policy for OpenAI traffic; it does not indicate an upstream OpenAI capability.",

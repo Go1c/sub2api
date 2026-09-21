@@ -5063,6 +5063,16 @@
                 </div>
               </div>
 
+              <div class="border-t border-gray-100 pt-5 dark:border-dark-700">
+                <label for="openai-import-batch" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.settings.importBatch.title') }}</label>
+                <p class="mt-1 text-xs text-gray-500">{{ t('admin.settings.importBatch.description') }}</p>
+                <select id="openai-import-batch" v-model="form.openai_import_batch_minutes" data-testid="openai-import-batch-minutes" class="input mt-3">
+                  <option value="0">{{ t('admin.settings.importBatch.disabled') }}</option>
+                  <option value="10">{{ t('admin.settings.importBatch.ten') }}</option>
+                  <option value="30">{{ t('admin.settings.importBatch.thirty') }}</option>
+                </select>
+              </div>
+
               <div class="flex items-center justify-between border-t border-gray-100 pt-5 dark:border-dark-700">
                 <div>
                   <label
@@ -9570,6 +9580,7 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_enabled: boolean;
   openai_advanced_scheduler_sticky_weighted_enabled: boolean;
   openai_advanced_scheduler_subscription_priority_enabled: boolean;
+  openai_import_batch_minutes: string;
   openai_advanced_scheduler_lb_top_k: string;
   openai_advanced_scheduler_weight_priority: string;
   openai_advanced_scheduler_weight_load: string;
@@ -9813,6 +9824,7 @@ const form = reactive<SettingsForm>({
   openai_advanced_scheduler_enabled: false,
   openai_advanced_scheduler_sticky_weighted_enabled: false,
   openai_advanced_scheduler_subscription_priority_enabled: false,
+  openai_import_batch_minutes: "30",
   openai_advanced_scheduler_lb_top_k: "",
   openai_advanced_scheduler_weight_priority: "",
   openai_advanced_scheduler_weight_load: "",
@@ -11504,6 +11516,7 @@ async function saveSettings() {
         form.openai_advanced_scheduler_sticky_weighted_enabled,
       openai_advanced_scheduler_subscription_priority_enabled:
         form.openai_advanced_scheduler_subscription_priority_enabled,
+      openai_import_batch_minutes: form.openai_import_batch_minutes,
       openai_advanced_scheduler_lb_top_k:
         form.openai_advanced_scheduler_lb_top_k.trim(),
       openai_advanced_scheduler_weight_priority:

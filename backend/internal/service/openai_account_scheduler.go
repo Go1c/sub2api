@@ -49,6 +49,7 @@ type cachedOpenAIAdvancedSchedulerSetting struct {
 	enabled                        bool
 	stickyWeightedEnabled          bool
 	subscriptionPriorityEnabled    bool
+	batchMinutes                   string
 	lbTopKOverride                 int
 	weightOverrides                map[string]float64
 	expiresAt                      int64
@@ -60,6 +61,7 @@ type openAIAdvancedSchedulerRuntimeSettings struct {
 	enabled                        bool
 	stickyWeightedEnabled          bool
 	subscriptionPriorityEnabled    bool
+	batchMinutes                   string
 	lbTopKOverride                 int
 	weightOverrides                map[string]float64
 }
@@ -68,6 +70,7 @@ var openAIAdvancedSchedulerSettingCache atomic.Value // *cachedOpenAIAdvancedSch
 var openAIAdvancedSchedulerSettingSF singleflight.Group
 
 type OpenAIAccountScheduleRequest struct {
+	ImportBatchMinutes      int
 	GroupID                 *int64
 	Platform                string
 	SessionHash             string
@@ -194,6 +197,7 @@ type openAIAccountRuntimeStats struct {
 }
 
 type openAIAccountRuntimeStat struct {
+	batch             importBatchHealth
 	errorRateEWMABits atomic.Uint64
 	ttftEWMABits      atomic.Uint64
 }
@@ -562,6 +566,13 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, false, nil
 	}
 	escapeCfg := s.service.openAIStickyEscapeConfig()
+	if req.ImportBatchMinutes > 0 {
+		escapeCfg.enabled = false
+		if s.stats.batchDegraded(accountID) && !req.DisableStickyEscape {
+			clearBinding()
+			return nil, false, nil
+		}
+	}
 	if reason, errorRate, ttft, shouldEscape := s.shouldEscapeStickyAccount(accountID, escapeCfg); shouldEscape && !req.DisableStickyEscape {
 		slog.Info("sticky_escape_triggered",
 			"account_id", accountID,
@@ -571,7 +582,7 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		)
 		return nil, true, nil
 	}
-	if !req.PreserveStickyBinding && !s.service.accountHasTurnStateHolding(ctx, account) {
+	if req.ImportBatchMinutes == 0 && !req.PreserveStickyBinding && !s.service.accountHasTurnStateHolding(ctx, account) {
 		listed, listErr := s.service.listSchedulableAccounts(ctx, req.GroupID, req.Platform)
 		if listErr == nil {
 			switched, switchErr := s.service.tryAcquireTurnStateHoldingInsteadOfSticky(ctx, req.GroupID, req.Platform, sessionHash, req.RequestedModel, req.ExcludedIDs, req.RequireCompact, req.RequiredCapability, account.ID, listed)
@@ -601,6 +612,12 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 	cfg := s.service.schedulingConfig()
 	// WaitPlan.MaxConcurrency 使用 Concurrency（非 EffectiveLoadFactor），因为 WaitPlan 控制的是 Redis 实际并发槽位等待。
 	if s.service.concurrencyService != nil {
+		if req.ImportBatchMinutes > 0 && !req.DisableStickyEscape {
+			waiting, err := s.service.concurrencyService.GetAccountWaitingCount(ctx, accountID)
+			if err != nil || waiting >= cfg.StickySessionMaxWaiting {
+				return nil, true, nil
+			}
+		}
 		if escapeCfg.enabled && !req.DisableStickyEscape && acquireErr == nil && result != nil && !result.Acquired {
 			errorRate, ttft, _ := s.stats.snapshot(accountID)
 			slog.Info("sticky_escape_triggered",
@@ -1505,6 +1522,10 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		}
 	}
 
+	if req.ImportBatchMinutes > 0 {
+		return s.selectByImportBatch(ctx, req, filtered, loadMap, filterStats)
+	}
+
 	if req.SubscriptionPriority {
 		subscriptionAccounts, regularAccounts := partitionOpenAIChatGPTSubscriptionAccounts(filtered)
 		if len(subscriptionAccounts) > 0 {
@@ -1926,6 +1947,7 @@ func (s *OpenAIGatewayService) openAIAdvancedSchedulerRuntimeSettings(ctx contex
 				enabled:                        cached.enabled,
 				stickyWeightedEnabled:          cached.stickyWeightedEnabled,
 				subscriptionPriorityEnabled:    cached.subscriptionPriorityEnabled,
+				batchMinutes:                   cached.batchMinutes,
 				lbTopKOverride:                 cached.lbTopKOverride,
 				weightOverrides:                cloneOpenAIAdvancedSchedulerWeightOverrides(cached.weightOverrides),
 			}
@@ -1941,6 +1963,7 @@ func (s *OpenAIGatewayService) openAIAdvancedSchedulerRuntimeSettings(ctx contex
 					enabled:                        cached.enabled,
 					stickyWeightedEnabled:          cached.stickyWeightedEnabled,
 					subscriptionPriorityEnabled:    cached.subscriptionPriorityEnabled,
+					batchMinutes:                   cached.batchMinutes,
 					lbTopKOverride:                 cached.lbTopKOverride,
 					weightOverrides:                cloneOpenAIAdvancedSchedulerWeightOverrides(cached.weightOverrides),
 				}, nil
@@ -1952,6 +1975,7 @@ func (s *OpenAIGatewayService) openAIAdvancedSchedulerRuntimeSettings(ctx contex
 		enabled := false
 		stickyWeightedEnabled := false
 		subscriptionPriorityEnabled := false
+		batchMinutes := ""
 		lbTopKOverride := 0
 		weightOverrides := map[string]float64{}
 		if repo := s.openAIAdvancedSchedulerSettingRepo(); repo != nil {
@@ -1964,6 +1988,7 @@ func (s *OpenAIGatewayService) openAIAdvancedSchedulerRuntimeSettings(ctx contex
 				enabled = strings.EqualFold(strings.TrimSpace(values[openAIAdvancedSchedulerSettingKey]), "true")
 				stickyWeightedEnabled = strings.EqualFold(strings.TrimSpace(values[SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled]), "true")
 				subscriptionPriorityEnabled = strings.EqualFold(strings.TrimSpace(values[SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled]), "true")
+				batchMinutes = values[SettingKeyOpenAIImportBatchMinutes]
 				lbTopKOverride = parsePositiveIntOverride(values[SettingKeyOpenAIAdvancedSchedulerLBTopK])
 				weightOverrides = parseOpenAIAdvancedSchedulerWeightOverrides(values)
 			} else {
@@ -1981,6 +2006,7 @@ func (s *OpenAIGatewayService) openAIAdvancedSchedulerRuntimeSettings(ctx contex
 				enabled = strings.EqualFold(strings.TrimSpace(fallbackValues[openAIAdvancedSchedulerSettingKey]), "true")
 				stickyWeightedEnabled = strings.EqualFold(strings.TrimSpace(fallbackValues[SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled]), "true")
 				subscriptionPriorityEnabled = strings.EqualFold(strings.TrimSpace(fallbackValues[SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled]), "true")
+				batchMinutes = fallbackValues[SettingKeyOpenAIImportBatchMinutes]
 				lbTopKOverride = parsePositiveIntOverride(fallbackValues[SettingKeyOpenAIAdvancedSchedulerLBTopK])
 				weightOverrides = parseOpenAIAdvancedSchedulerWeightOverrides(fallbackValues)
 			}
@@ -1992,6 +2018,7 @@ func (s *OpenAIGatewayService) openAIAdvancedSchedulerRuntimeSettings(ctx contex
 			enabled:                        enabled,
 			stickyWeightedEnabled:          stickyWeightedEnabled,
 			subscriptionPriorityEnabled:    subscriptionPriorityEnabled,
+			batchMinutes:                   batchMinutes,
 			lbTopKOverride:                 lbTopKOverride,
 			weightOverrides:                cloneOpenAIAdvancedSchedulerWeightOverrides(weightOverrides),
 			expiresAt:                      time.Now().Add(openAIAdvancedSchedulerSettingCacheTTL).UnixNano(),
@@ -2002,6 +2029,7 @@ func (s *OpenAIGatewayService) openAIAdvancedSchedulerRuntimeSettings(ctx contex
 			enabled:                        enabled,
 			stickyWeightedEnabled:          stickyWeightedEnabled,
 			subscriptionPriorityEnabled:    subscriptionPriorityEnabled,
+			batchMinutes:                   batchMinutes,
 			lbTopKOverride:                 lbTopKOverride,
 			weightOverrides:                weightOverrides,
 		}, nil
@@ -2039,6 +2067,7 @@ func openAIAdvancedSchedulerRuntimeSettingKeys() []string {
 		SettingKeyOpenAILowUpstreamRatePriorityEnabled,
 		SettingKeyOpenAIOAuthSchedulingRateMultiplier,
 		openAIAdvancedSchedulerSettingKey,
+		SettingKeyOpenAIImportBatchMinutes,
 		SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled,
 		SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled,
 		SettingKeyOpenAIAdvancedSchedulerLBTopK,
@@ -2112,7 +2141,7 @@ func (s *OpenAIGatewayService) getOpenAIAccountScheduler(ctx context.Context) Op
 	if s == nil {
 		return nil
 	}
-	if !s.isOpenAIAdvancedSchedulerEnabled(ctx) {
+	if !s.isOpenAIAdvancedSchedulerEnabled(ctx) && s.openAIImportBatchMinutes(ctx) == 0 {
 		return nil
 	}
 	s.openaiSchedulerOnce.Do(func() {
@@ -2294,6 +2323,12 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 		guardianParentAccountID = s.resolveOpenAIGuardianParentAccountID(ctx, groupID)
 	}
 	scheduler := s.getOpenAIAccountScheduler(ctx)
+	batchMinutes := 0
+	if platform == PlatformOpenAI {
+		batchMinutes = s.openAIImportBatchMinutes(ctx)
+	} else if !s.isOpenAIAdvancedSchedulerEnabled(ctx) {
+		scheduler = nil
+	}
 	if scheduler == nil {
 		decision.Layer = openAIAccountScheduleLayerLoadBalance
 		if guardianParentAccountID > 0 {
@@ -2395,7 +2430,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 			stickyAccountID = accountID
 		}
 	}
-	stickyWeighted := s.isOpenAIAdvancedSchedulerStickyWeightedEnabled(ctx)
+	stickyWeighted := batchMinutes == 0 && s.isOpenAIAdvancedSchedulerStickyWeightedEnabled(ctx)
 	subscriptionPriority := s.isOpenAIAdvancedSchedulerSubscriptionPriorityEnabled(ctx)
 	stickyPreviousAccountID := int64(0)
 	if stickyWeighted && previousResponseCanMove && strings.TrimSpace(previousResponseID) != "" && platform == PlatformOpenAI {
@@ -2403,6 +2438,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 	}
 
 	return scheduler.Select(ctx, OpenAIAccountScheduleRequest{
+		ImportBatchMinutes:      batchMinutes,
 		GroupID:                 groupID,
 		Platform:                platform,
 		SessionHash:             sessionHash,
@@ -2487,6 +2523,7 @@ func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(account *Accoun
 	if scheduler == nil {
 		return healthTripped
 	}
+	s.reportImportBatchOutcome(account, success, observedErr...)
 	scheduler.ReportResult(accountID, success, firstTokenMs)
 	return healthTripped
 }
@@ -2494,7 +2531,11 @@ func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(account *Accoun
 // ObserveOpenAIAccountHealthFailure records failures that cannot reach the
 // scheduler-result path, for example after semantic response bytes were sent.
 func (s *OpenAIGatewayService) ObserveOpenAIAccountHealthFailure(ctx context.Context, account *Account, observedErr error) bool {
-	if s == nil || s.rateLimitService == nil || account == nil || observedErr == nil {
+	if s == nil || account == nil || observedErr == nil {
+		return false
+	}
+	s.reportImportBatchOutcome(account, false, observedErr)
+	if s.rateLimitService == nil {
 		return false
 	}
 	return s.rateLimitService.ObserveOpenAIAPIKeyHealthFailure(ctx, account, observedErr)

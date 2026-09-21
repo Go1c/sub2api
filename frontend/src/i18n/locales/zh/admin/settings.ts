@@ -1207,6 +1207,13 @@ export default {
         sourceHint: '启用后必须明确选择一个来源；未配置状态不会对外展示该支付方式。',
         sourceRequiredError: '{title} 已启用，请先选择支付来源。'
       },
+      importBatch: {
+        "title": "导入批次优先调度",
+        "description": "粘性会话优先；重选时按账号优先级、首次入库时间批次、批内有效票与负载选择。持续报错降级，延迟不参与。开启后替代下方高级评分、订阅优先和低倍率优先；修改窗口会重新归批，不改变已有绑定。",
+        "disabled": "关闭（恢复原调度）",
+        "ten": "每 10 分钟一批",
+        "thirty": "每 30 分钟一批（默认）"
+},
       openaiExperimentalScheduler: {
         title: 'OpenAI 实验调度策略',
         description: '默认关闭。开启后仅影响本网关在 OpenAI 账号间的实验性调度选择逻辑，不代表上游 OpenAI 官方能力。',
