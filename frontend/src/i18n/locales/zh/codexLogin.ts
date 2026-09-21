@@ -1,4 +1,12 @@
 export default {
+    retrySameGroup: '重试仍使用 IP 组 {id}，不切换组；组内代理可能重新选取。',
+    retrySameProxy: '重试仍使用代理 #{id}。',
+    retrySameExit: '重试保留原出口配置，不会自动换组。',
+    retryAccountExit: '恢复仍使用账号当前出口配置；如需换组，请先修改账号出口。',
+    changeGroup: '换 IP 组并重新导入',
+    chooseNewGroup: '请手动选择重新导入使用的 IP 组。',
+    reimportHint: '请重新提供 {email} 的材料并手动选择 IP 组；将更新同邮箱任务，不新增任务。',
+
     requireIPGroup: '请选择可用动态 IP、IP 组或单个 IP，禁止服务器直连',
     title: '2FA JSON 导入',
     hint: '上传邮箱、密码和 2FA 密钥，自动获取 Codex 账号配置。优先选择 Team；401 停调度后重新登录原 Team，验证通过才恢复调度。',

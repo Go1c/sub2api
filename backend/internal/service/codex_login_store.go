@@ -14,15 +14,17 @@ type CodexLoginOptions struct {
 }
 
 type CodexLoginJob struct {
-	ID           int64             `json:"id"`
-	Email        string            `json:"email"`
-	AccountID    *int64            `json:"account_id"`
-	Status       string            `json:"status"`
-	ErrorMessage string            `json:"error_message"`
-	Attempts     int               `json:"attempts"`
-	Encrypted    string            `json:"-"`
-	Options      CodexLoginOptions `json:"-"`
-	Lease        string            `json:"-"`
+	ProxyID        *int64            `json:"proxy_id,omitempty"`
+	ProxyIPGroupID *int64            `json:"proxy_ip_group_id,omitempty"`
+	ID             int64             `json:"id"`
+	Email          string            `json:"email"`
+	AccountID      *int64            `json:"account_id"`
+	Status         string            `json:"status"`
+	ErrorMessage   string            `json:"error_message"`
+	Attempts       int               `json:"attempts"`
+	Encrypted      string            `json:"-"`
+	Options        CodexLoginOptions `json:"-"`
+	Lease          string            `json:"-"`
 }
 
 type codexLoginStore struct{ db *sql.DB }
@@ -43,7 +45,7 @@ func (s *codexLoginStore) Put(ctx context.Context, email, encrypted string, opti
 }
 
 func (s *codexLoginStore) List(ctx context.Context) ([]CodexLoginJob, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,email,account_id,status,error_message,attempts FROM codex_login_jobs ORDER BY id DESC LIMIT 100`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,email,account_id,status,error_message,attempts,options FROM codex_login_jobs ORDER BY id DESC LIMIT 100`)
 	if err != nil {
 		return nil, err
 	}
@@ -51,9 +53,14 @@ func (s *codexLoginStore) List(ctx context.Context) ([]CodexLoginJob, error) {
 	result := []CodexLoginJob{}
 	for rows.Next() {
 		var j CodexLoginJob
-		if err = rows.Scan(&j.ID, &j.Email, &j.AccountID, &j.Status, &j.ErrorMessage, &j.Attempts); err != nil {
+		var raw []byte
+		if err = rows.Scan(&j.ID, &j.Email, &j.AccountID, &j.Status, &j.ErrorMessage, &j.Attempts, &raw); err != nil {
 			return nil, err
 		}
+		if err = json.Unmarshal(raw, &j.Options); err != nil {
+			return nil, err
+		}
+		j.ProxyID, j.ProxyIPGroupID = j.Options.ProxyID, j.Options.ProxyIPGroupID
 		result = append(result, j)
 	}
 	return result, rows.Err()

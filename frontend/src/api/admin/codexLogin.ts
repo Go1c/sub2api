@@ -7,6 +7,8 @@ export interface CodexLoginJob {
   status: 'queued' | 'running' | 'succeeded' | 'failed'
   error_message: string
   attempts: number
+  proxy_id?: number | null
+  proxy_ip_group_id?: number | null
 }
 
 export async function jobs() {

@@ -120,10 +120,12 @@ func ParseCodexLoginMaterials(documents []string) ([]CodexLoginMaterial, []Codex
 }
 
 type CodexLoginDiagnostics struct {
-	Stage         string `json:"stage"`
-	ProxyID       int64  `json:"proxy_id"`
-	HTTPStatus    int    `json:"http_status"`
-	ExceptionType string `json:"exception_type"`
+	CandidateCount int    `json:"candidate_count"`
+	TriedCount     int    `json:"tried_count"`
+	Stage          string `json:"stage"`
+	ProxyID        int64  `json:"proxy_id"`
+	HTTPStatus     int    `json:"http_status"`
+	ExceptionType  string `json:"exception_type"`
 }
 
 type CodexLoginResult struct {
@@ -189,31 +191,43 @@ func (r *HTTPCodexLoginRunner) Login(ctx context.Context, material CodexLoginMat
 	if json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result) != nil {
 		return nil, errors.New("登录 Worker 响应无效")
 	}
+	selectedID := result.ProxyID
 	if !result.Success {
-		return nil, errors.New(formatCodexLoginError(result.Code, result.Diagnostics))
+		selectedID = result.Diagnostics.ProxyID
 	}
 	validProxy := false
 	for _, candidate := range proxies {
-		if candidate.ID == result.ProxyID && candidate.ID > 0 {
+		if candidate.ID == selectedID && candidate.ID > 0 {
 			validProxy = true
 			break
 		}
 	}
+	if validProxy && result.Code != "proxy_unavailable" && result.Code != "proxy_required" && result.Diagnostics.Stage != "proxy_selection" {
+		slog.Info("codex_login_proxy_selected", "proxy_id", selectedID)
+	}
+	if !result.Success {
+		return nil, errors.New(formatCodexLoginError(result.Code, result.Diagnostics))
+	}
 	if !validProxy {
 		return nil, errors.New("登录 Worker 未确认选中的 IP 组代理，请更新 Worker")
 	}
-	slog.Info("codex_login_proxy_selected", "proxy_id", result.ProxyID)
 	return validateCodexLoginResult(material, &result)
 }
 
 func formatCodexLoginError(code string, diagnostics CodexLoginDiagnostics) string {
 	message := codexLoginErrorMessage(code)
+	if code == "additional_verification_required" && diagnostics.Stage == "oauth_bootstrap" {
+		message = "授权初始化被上游拒绝，需人工额外验证"
+	}
 	stages := map[string]string{
 		"proxy_selection": "IP 组代理连通性检查", "startup": "登录环境初始化", "oauth_bootstrap": "授权初始化", "email": "邮箱确认", "password": "密码验证",
 		"totp": "2FA 验证", "workspace": "Team 选择", "token_exchange": "授权码换取凭据",
 		"identity_validation": "账号身份核对", "credential_probe": "Codex 额度验证",
 	}
 	details := []string{}
+	if diagnostics.Stage == "proxy_selection" && diagnostics.CandidateCount > 0 && diagnostics.CandidateCount <= 256 && diagnostics.TriedCount >= 0 && diagnostics.TriedCount <= diagnostics.CandidateCount {
+		details = append(details, fmt.Sprintf("已探测 %d/%d 个候选", diagnostics.TriedCount, diagnostics.CandidateCount))
+	}
 	if diagnostics.ProxyID > 0 {
 		details = append(details, fmt.Sprintf("代理 #%d", diagnostics.ProxyID))
 	}
@@ -251,6 +265,8 @@ func codexLoginErrorMessage(code string) string {
 		return "代理地址格式无效，禁止直连"
 	case "invalid_password":
 		return "账号密码错误"
+	case "mfa_rejected":
+		return "2FA 被上游拒绝，需人工处理额外验证或账号风控"
 	case "invalid_totp":
 		return "2FA 验证失败，请检查密钥与服务器时间"
 	case "workspace_selection_required":

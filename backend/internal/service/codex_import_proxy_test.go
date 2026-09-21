@@ -43,3 +43,9 @@ func TestSelectCodexImportProxyPriority(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectCodexImportProxy916Before921(t *testing.T) {
+	groups := []ProxyIPGroup{{ID: 2, ProxyIDs: []int64{22, 23}}, {ID: 1, ProxyIDs: []int64{3, 7, 8, 13, 14, 18, 19, 20, 22, 23}}}
+	result := SelectCodexImportProxy(groups, []Proxy{{ID: 22, Status: StatusActive}, {ID: 23, Status: StatusActive}}, true, time.Now())
+	require.Equal(t, int64(1), *result.ProxyIPGroupID)
+}

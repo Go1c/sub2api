@@ -29,7 +29,7 @@
             <optgroup :label="t('codexLogin.ipGroups')">
               <option v-for="group in ipGroups.filter(group => !(group.sticky_minutes || 0))" :key="group.id" :value="`group:${group.id}`">{{ group.name }}</option>
             </optgroup>
-            <optgroup :label="t('admin.accounts.proxyModeSingle')">
+            <optgroup v-if="!changingGroup" :label="t('admin.accounts.proxyModeSingle')">
               <option v-for="proxy in proxies" :key="proxy.id" :value="`proxy:${proxy.id}`">{{ proxy.name }}</option>
             </optgroup>
           </select>
@@ -43,6 +43,8 @@
         <div class="break-all font-medium">{{ job.email }}</div>
         <div class="mt-1 text-gray-600 dark:text-dark-300">{{ t(`codexLogin.${job.status}`) }}<span v-if="job.account_id"> · #{{ job.account_id }}</span></div>
         <p v-if="job.error_message" class="mt-1 text-red-600">{{ job.error_message }}</p>
+        <p v-if="job.status === 'failed'" class="mt-2 text-gray-600 dark:text-dark-300">{{ retryHint(job) }}</p>
+        <button v-if="job.status === 'failed' && !job.account_id" class="btn btn-secondary mt-2 mr-2" type="button" @click="changeGroup(job)">{{ t('codexLogin.changeGroup') }}</button>
         <button v-if="job.status === 'failed'" class="btn btn-secondary mt-2" type="button" :disabled="retrying === job.id" @click="retry(job.id)">{{ t('codexLogin.retry') }}</button>
       </div>
     </section>
@@ -71,11 +73,12 @@ const content = ref('')
 const files = ref<File[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const groups = ref<{ id: number; name: string }[]>([])
-const ipGroups = ref<{ id: number; name: string }[]>([])
+const ipGroups = ref<{ id: number; name: string; sticky_minutes?: number }[]>([])
 const proxies = ref<{ id: number; name: string }[]>([])
 const selectedGroups = ref<number[]>([])
 const selectedProxy = ref('')
 const proxyManuallySelected = ref(false)
+const changingGroup = ref(false)
 const jobs = ref<api.CodexLoginJob[]>([])
 const message = ref('')
 const submitting = ref(false)
@@ -107,6 +110,7 @@ async function refresh() {
 }
 async function submit() {
   if (submitting.value) return
+  if (changingGroup.value && (!proxyManuallySelected.value || !selectedProxy.value.startsWith('group:'))) { message.value = t('codexLogin.chooseNewGroup'); return }
   if (!/^(group|proxy):[1-9]\d*$/.test(selectedProxy.value)) { message.value = t('codexLogin.requireProxy'); return }
   if (files.value.reduce((n, file) => n + file.size, 0) + new Blob([content.value]).size > 1024 * 1024) { message.value = t('codexLogin.tooLarge'); return }
   submitting.value = true
@@ -116,13 +120,26 @@ async function submit() {
     if (!documents.length || documents.length > 20) { message.value = t('codexLogin.chooseFile'); return }
     const [kind, value] = selectedProxy.value.split(':')
     const result = await api.importAccounts({ documents, group_ids: selectedGroups.value,
-      ...(proxyManuallySelected.value ? (kind === 'group' ? { proxy_ip_group_id: Number(value) } : { proxy_id: Number(value) }) : {}) })
+      ...(kind === 'group' ? { proxy_ip_group_id: Number(value) } : { proxy_id: Number(value) }) })
     clearMaterial()
     message.value = t('codexLogin.accepted', { count: result.job_ids.length }) +
       (result.errors || []).map(error => ` [${error.document}:${error.index}] ${error.message}`).join('; ')
     await refresh()
   } catch { message.value = t('codexLogin.submitFailed') }
   finally { submitting.value = false }
+}
+function retryHint(job: api.CodexLoginJob): string {
+  if (job.account_id) return t('codexLogin.retryAccountExit')
+  if (job.proxy_ip_group_id) return t('codexLogin.retrySameGroup', { id: job.proxy_ip_group_id })
+  if (job.proxy_id) return t('codexLogin.retrySameProxy', { id: job.proxy_id })
+  return t('codexLogin.retrySameExit')
+}
+function changeGroup(job: api.CodexLoginJob) {
+  changingGroup.value = true
+  proxyManuallySelected.value = false
+  selectedProxy.value = ''
+  clearMaterial()
+  message.value = t('codexLogin.reimportHint', { email: job.email })
 }
 function retryError(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message.trim()) {
@@ -143,6 +160,7 @@ watch(() => props.show, async open => {
   message.value = ''
   selectedProxy.value = ''
   proxyManuallySelected.value = false
+  changingGroup.value = false
   const current = generation
   await refresh()
   try {
@@ -152,7 +170,7 @@ watch(() => props.show, async open => {
     ipGroups.value = ipRows
     proxies.value = proxyRows
     selectedGroups.value = groupRows[0] ? [groupRows[0].id] : []
-    selectedProxy.value = binding.proxy_ip_group_id ? `group:${binding.proxy_ip_group_id}` : binding.proxy_id ? `proxy:${binding.proxy_id}` : ''
+    if (!proxyManuallySelected.value && !changingGroup.value) selectedProxy.value = binding.proxy_ip_group_id ? `group:${binding.proxy_ip_group_id}` : binding.proxy_id ? `proxy:${binding.proxy_id}` : ''
   } catch { message.value = t('codexLogin.loadFailed') }
 }, { immediate: true })
 onBeforeUnmount(() => { generation++; clearTimeout(timer); clearMaterial() })

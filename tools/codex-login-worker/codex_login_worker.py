@@ -61,7 +61,8 @@ def authorize(data):
                 if response.status_code == 429:
                     code = 'rate_limited'
                 elif response.status_code == 403:
-                    code = 'additional_verification_required'
+                    code = ('mfa_rejected' if diagnostics.get('stage') == 'totp'
+                            and parsed.path.endswith('/mfa/verify') else 'additional_verification_required')
                 elif response.status_code >= 500:
                     code = 'upstream_unavailable'
                 elif parsed.path.endswith('/password/verify'):

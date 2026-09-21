@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -71,4 +73,50 @@ func TestCodexLoginDiagnosticsRejectUntrustedText(t *testing.T) {
 	require.NotContains(t, message, "PRIVATE-TOKEN")
 	require.NotContains(t, message, "9999")
 	require.Equal(t, "登录或凭据验证失败", message)
+}
+
+func TestCodexLoginMFARejectedMessage(t *testing.T) {
+	message := formatCodexLoginError("mfa_rejected", CodexLoginDiagnostics{Stage: "totp", HTTPStatus: 403, ProxyID: 22})
+	require.Contains(t, message, "2FA 被上游拒绝")
+	require.NotContains(t, message, "密码错误")
+	require.NotContains(t, message, "未提交账号登录")
+	require.Contains(t, message, "代理 #22")
+}
+
+func TestCodexLoginFailedSelectionIsLogged(t *testing.T) {
+	for _, tc := range []struct {
+		code, stage string
+		proxy       int64
+		selected    bool
+	}{
+		{"mfa_rejected", "totp", 22, true},
+		{"proxy_unavailable", "proxy_selection", 0, false},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			var logs bytes.Buffer
+			old := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+			defer slog.SetDefault(old)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(CodexLoginResult{Code: tc.code, Diagnostics: CodexLoginDiagnostics{Stage: tc.stage, HTTPStatus: 403, ProxyID: tc.proxy}})
+			}))
+			defer server.Close()
+			runner := &HTTPCodexLoginRunner{URL: server.URL, Client: server.Client()}
+			_, err := runner.Login(context.Background(), CodexLoginMaterial{}, []CodexLoginProxy{{ID: 22, URL: "http://SECRET:80"}})
+			require.Error(t, err)
+			require.Equal(t, tc.selected, bytes.Contains(logs.Bytes(), []byte("codex_login_proxy_selected")))
+			require.NotContains(t, logs.String(), "SECRET")
+		})
+	}
+}
+
+func TestCodexLoginRejectionAndProbeMessages(t *testing.T) {
+	require.Contains(t, formatCodexLoginError("additional_verification_required", CodexLoginDiagnostics{Stage: "oauth_bootstrap", HTTPStatus: 403}), "授权初始化被上游拒绝")
+	require.Contains(t, formatCodexLoginError("additional_verification_required", CodexLoginDiagnostics{Stage: "password", HTTPStatus: 403}), "额外验证")
+	require.NotContains(t, formatCodexLoginError("additional_verification_required", CodexLoginDiagnostics{Stage: "password", HTTPStatus: 403}), "密码错误")
+	require.Contains(t, formatCodexLoginError("invalid_totp", CodexLoginDiagnostics{Stage: "totp", HTTPStatus: 401}), "2FA 验证失败")
+	message := formatCodexLoginError("proxy_unavailable", CodexLoginDiagnostics{Stage: "proxy_selection", CandidateCount: 10, TriedCount: 5})
+	require.Contains(t, message, "已探测 5/10 个候选")
+	require.Contains(t, message, "未提交账号登录")
+	require.NotContains(t, message, "代理 #")
 }

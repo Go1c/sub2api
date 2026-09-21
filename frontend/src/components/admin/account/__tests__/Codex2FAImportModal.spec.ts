@@ -1,5 +1,5 @@
 import { mount, flushPromises } from '@vue/test-utils'
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import Codex2FAImportModal from '../Codex2FAImportModal.vue'
 import * as ipGroupsAPI from '@/api/admin/proxyIpGroups'
 import { getImportProxyDefault } from '@/api/admin/importProxy'
@@ -13,6 +13,7 @@ vi.mock('@/api/admin/proxyIpGroups', () => ({ list: vi.fn().mockResolvedValue([{
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 describe('Codex2FAImportModal', () => {
+  beforeEach(() => vi.clearAllMocks())
   it('requires an available configured exit and never offers direct egress', async () => {
     api.jobs.mockResolvedValue({ available: true, jobs: [] })
     api.importAccounts.mockClear()
@@ -84,4 +85,34 @@ describe('Codex2FAImportModal', () => {
     expect(wrapper.text()).not.toContain('JBSWY3DPEHPK3PXP')
     wrapper.unmount()
   })
+  it('explains unchanged retry and requires manual group selection for reimport', async () => {
+    api.jobs.mockResolvedValue({ available: true, jobs: [{ id: 290, email: 'mock@example.com', status: 'failed', proxy_ip_group_id: 2, attempts: 1 }] })
+    api.importAccounts.mockClear()
+    api.importAccounts.mockResolvedValue({job_ids:[290], errors:[]})
+    vi.mocked(ipGroupsAPI.list).mockResolvedValueOnce([{id:1,name:'916'}, {id:2,name:'921'}] as any)
+    const wrapper = mount(Codex2FAImportModal, {props:{show:true},global:{stubs:{BaseDialog:{template:'<div><slot/><slot name="footer"/></div>'}}}})
+    await flushPromises()
+    expect(wrapper.text()).toContain('codexLogin.retrySameGroup')
+    await wrapper.findAll('button').find(b => b.text() === 'codexLogin.changeGroup')!.trigger('click')
+    await wrapper.get('textarea').setValue('mock@example.com----password----secret')
+    await wrapper.get('form').trigger('submit')
+    expect(api.importAccounts).not.toHaveBeenCalled()
+    await wrapper.get('#codex-2fa-proxy').setValue('group:1')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(api.importAccounts).toHaveBeenCalledWith(expect.objectContaining({proxy_ip_group_id:1}))
+    wrapper.unmount()
+  })
+
+  it('sends the displayed default group even without a dropdown change', async () => {
+    api.jobs.mockResolvedValue({available:true,jobs:[]})
+    api.importAccounts.mockClear()
+    api.importAccounts.mockResolvedValue({job_ids:[1],errors:[]})
+    const wrapper = mount(Codex2FAImportModal, {props:{show:true},global:{stubs:{BaseDialog:{template:'<div><slot/><slot name="footer"/></div>'}}}})
+    await flushPromises()
+    await wrapper.get('textarea').setValue('mock@example.com----password----secret')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(api.importAccounts).toHaveBeenCalledWith(expect.objectContaining({proxy_ip_group_id:3}))
+    wrapper.unmount()
+  })
+
 })

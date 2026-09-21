@@ -1,4 +1,12 @@
 export default {
+    retrySameGroup: 'Retry keeps IP group {id}; a member proxy may be selected again.',
+    retrySameProxy: 'Retry keeps proxy #{id}.',
+    retrySameExit: 'Retry keeps the existing exit configuration; it does not switch groups.',
+    retryAccountExit: 'Recovery uses the account’s current exit. Edit the account exit first to switch groups.',
+    changeGroup: 'Change IP group and reimport',
+    chooseNewGroup: 'Manually select an IP group for reimport.',
+    reimportHint: 'Provide the material for {email} again and manually select an IP group. This updates the same email’s job.',
+
     requireIPGroup: 'Select an available dynamic IP, IP group or single proxy; direct server egress is disabled',
     title: 'Import 2FA JSON',
     hint: 'Import email, password and a 2FA secret to authorize Codex. Prefer Team workspaces. After a 401, reauthorize the same Team and resume scheduling only after validation.',

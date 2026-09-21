@@ -1,5 +1,6 @@
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
+from types import SimpleNamespace
 import pytest
 import server
 from login_core import LoginError
@@ -84,3 +85,68 @@ def test_child_login_rejects_empty_proxy_before_spawning():
         with pytest.raises(LoginError):
             asyncio.run(login(LoginMaterial('demo@example.com', 'private', 'private'), proxy=''))
         spawn.assert_not_awaited()
+
+
+def test_mfa_rejection_after_probe_keeps_selected_exit_and_never_rotates():
+    candidates = [{'id': 22, 'url': 'http://mock:80'}, {'id': 23, 'url': 'http://mock2:80'}]
+    with patch.object(server, 'probe_proxy', new=AsyncMock(return_value=True)) as probe, \
+         patch.object(server.random, 'shuffle'), \
+         patch.object(server, 'login', new=AsyncMock(side_effect=LoginError(
+             'mfa_rejected', {'stage': 'totp', 'http_status': 403, 'body': 'SECRET'}))) as login:
+        with pytest.raises(LoginError) as error:
+            asyncio.run(server.run({'proxy_candidates': candidates, 'email': 'mock@example.com',
+                                    'password': 'SECRET', 'totp_secret': 'SECRET'}))
+        result = server.failure_response(error.value)
+        assert result == {'success': False, 'code': 'mfa_rejected',
+                          'diagnostics': {'stage': 'totp', 'http_status': 403, 'proxy_id': 22}}
+        assert probe.await_count == login.await_count == 1
+
+
+def test_probe_budget_reports_tried_count_without_selected_proxy():
+    candidates = [{'id': i, 'url': 'http://mock:80'} for i in range(1, 11)]
+    with patch.object(server, 'probe_proxy', new=AsyncMock(return_value=False)), \
+         patch.object(server, 'time', SimpleNamespace(monotonic=Mock(side_effect=[0, 0, 6, 12, 18, 24, 30]))):
+        with pytest.raises(LoginError) as error:
+            asyncio.run(server.select_proxy(candidates))
+    assert server.failure_response(error.value)['diagnostics'] == {
+        'stage': 'proxy_selection', 'candidate_count': 10, 'tried_count': 5}
+
+
+def test_single_dead_member_reports_one_candidate_without_selection():
+    with patch.object(server, 'probe_proxy', new=AsyncMock(return_value=False)):
+        with pytest.raises(LoginError) as error:
+            asyncio.run(server.select_proxy([{'id': 24, 'url': 'http://mock:80'}]))
+    assert server.failure_response(error.value) == {'success': False, 'code': 'proxy_unavailable',
+        'diagnostics': {'stage': 'proxy_selection', 'candidate_count': 1, 'tried_count': 1}}
+
+
+@pytest.mark.parametrize('status,reachable', [(200, True), (302, False), (403, False)])
+def test_probe_does_not_treat_unvalidated_redirect_as_login_reachability(status, reachable):
+    from types import SimpleNamespace
+    client = AsyncMock()
+    client.get.return_value = SimpleNamespace(status_code=status, headers={'location': '/challenge?SECRET'})
+    context = AsyncMock()
+    context.__aenter__.return_value = client
+    with patch.object(server, 'proxy_session', return_value=context):
+        assert asyncio.run(server.probe_proxy('http://mock:80')) is reachable
+    client.get.assert_awaited_once_with('https://auth.openai.com/log-in', allow_redirects=False)
+
+
+def test_all_invalid_candidates_are_configuration_failure_not_unavailable():
+    with patch.object(server, 'probe_proxy', new=AsyncMock()) as probe:
+        with pytest.raises(LoginError) as error:
+            asyncio.run(server.select_proxy([{'id': 24, 'url': ''}]))
+    assert error.value.code == 'proxy_required'
+    probe.assert_not_awaited()
+
+
+def test_unexpected_failure_after_selection_keeps_proxy_without_secret():
+    import json
+    with patch.object(server, 'select_proxy', new=AsyncMock(return_value={'id': 22, 'url': 'http://mock:80'})), \
+         patch.object(server, 'login', new=AsyncMock(side_effect=RuntimeError('SECRET'))):
+        with pytest.raises(LoginError) as error:
+            asyncio.run(server.run({'email': 'mock@example.com', 'password': 'SECRET', 'totp_secret': 'SECRET'}))
+    result = server.failure_response(error.value)
+    assert result['code'] == 'login_failed'
+    assert result['diagnostics'] == {'proxy_id': 22, 'exception_type': 'RuntimeError'}
+    assert 'SECRET' not in json.dumps(result)

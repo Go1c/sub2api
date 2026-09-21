@@ -76,3 +76,37 @@ def test_http_failure_reply_carries_safe_stage_end_to_end():
             http.shutdown()
             http.server_close()
             thread.join()
+
+
+def test_authorize_http_rejections_keep_mfa_classification():
+    import pytest
+    import codex_login_worker as worker
+    from login_core import LoginError, safe_diagnostics
+    from core import codex_oauth as flow
+    from core.session import BrowserSession
+    from unittest.mock import MagicMock
+    cases = [('totp', '/api/accounts/mfa/verify', 403, 'mfa_rejected'),
+             ('password', '/api/accounts/password/verify', 403, 'additional_verification_required'),
+             ('totp', '/api/accounts/mfa/verify', 401, 'invalid_totp'),
+             ('totp', '/api/accounts/mfa/verify', 400, 'invalid_totp'),
+             ('oauth_bootstrap', '/authorize', 403, 'additional_verification_required')]
+    for stage, path, status, code in cases:
+        session = MagicMock()
+        session.session.request.return_value = SimpleNamespace(status_code=status, text='SECRET')
+        def bootstrap(*args):
+            worker.diagnostics.clear()
+            worker.diagnostics['stage'] = stage
+            session.session.request('GET', 'https://auth.openai.com' + path + '?secret=SECRET')
+        with patch.object(BrowserSession, '__new__', return_value=session), \
+             patch.object(flow, '_bootstrap_authorize', side_effect=bootstrap):
+            with pytest.raises(LoginError) as error:
+                worker.authorize({'proxy': 'http://mock:80'})
+        assert error.value.code == code
+        assert 'SECRET' not in json.dumps(safe_diagnostics(worker.diagnostics))
+
+
+def test_probe_diagnostics_reject_secrets_and_unbounded_counts():
+    from login_core import safe_diagnostics
+    assert safe_diagnostics({'stage': 'proxy_selection', 'candidate_count': 'SECRET',
+                             'tried_count': 257, 'url': 'SECRET', 'cookie': 'SECRET'}) == {'stage': 'proxy_selection'}
+    assert safe_diagnostics({'stage': 'totp', 'candidate_count': 10, 'tried_count': 1}) == {'stage': 'totp'}

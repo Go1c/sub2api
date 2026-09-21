@@ -43,12 +43,16 @@ async def select_proxy(candidates):
             valid.append({'id': item['id'], 'url': required_proxy(item.get('url'))})
         except LoginError:
             continue
+    if not valid:
+        raise LoginError('proxy_required', {'stage': 'proxy_selection'})
     random.shuffle(valid)
     started = time.monotonic()
+    tried_count = 0
     for item in valid:
         remaining = 30 - (time.monotonic() - started)
         if remaining <= 0:
             break
+        tried_count += 1
         try:
             reachable = await asyncio.wait_for(probe_proxy(item['url']), timeout=min(6, remaining))
         except asyncio.TimeoutError:
@@ -56,7 +60,8 @@ async def select_proxy(candidates):
         # Probe carries neither account material nor login cookies. Do not rotate after login starts.
         if reachable:
             return item
-    raise LoginError('proxy_unavailable', {'stage': 'proxy_selection'})
+    raise LoginError('proxy_unavailable', {'stage': 'proxy_selection',
+                                           'candidate_count': len(valid), 'tried_count': tried_count})
 
 
 async def run(data):
@@ -86,6 +91,10 @@ async def run(data):
         details = safe_diagnostics(exc.diagnostics)
         details['proxy_id'] = selected['id']
         raise LoginError(exc.code, details) from None
+    except Exception as exc:
+        raise LoginError('login_failed', safe_diagnostics({
+            'proxy_id': selected['id'], 'exception_type': type(exc).__name__,
+        })) from None
 
 
 def failure_response(exc):

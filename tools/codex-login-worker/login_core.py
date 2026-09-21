@@ -40,6 +40,10 @@ def safe_diagnostics(value):
         result['exception_type'] = value['exception_type']
     if type(value.get('proxy_id')) is int and value['proxy_id'] > 0:
         result['proxy_id'] = value['proxy_id']
+    if result.get('stage') == 'proxy_selection':
+        for key in ('candidate_count', 'tried_count'):
+            if type(value.get(key)) is int and 0 <= value[key] <= 256:
+                result[key] = value[key]
     return result
 
 
