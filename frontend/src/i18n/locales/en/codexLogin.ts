@@ -3,7 +3,7 @@ export default {
     title: 'Import 2FA JSON',
     hint: 'Import email, password and a 2FA secret to authorize Codex. Prefer Team workspaces. After a 401, reauthorize the same Team and resume scheduling only after validation.',
     unavailable: 'Configure the private login worker and a stable encryption key first.',
-    files: 'Account files (multiple JSON/TXT)', content: 'Or paste account data', groups: 'Account groups', proxy: 'Login and account egress',
+    files: 'Account files (multiple JSON/TXT)', content: 'Or paste account data', groups: 'Account groups', proxy: 'Login and account egress', dynamicIpGroups: 'Dynamic sticky IP', requireProxy: 'Select a dynamic IP, IP group, or single proxy; direct egress is disabled',
     direct: 'No proxy', ipGroups: 'IP groups', proxies: 'Single proxy', refresh: 'Refresh jobs',
     queued: 'Queued', running: 'Signing in / recovering', succeeded: 'Account configured', failed: 'Failed; scheduling remains stopped',
     retry: 'Retry', submit: 'Import and authorize', loadFailed: 'Could not load settings or jobs',

@@ -23,8 +23,11 @@
           <label class="input-label" for="codex-2fa-proxy">{{ t('codexLogin.proxy') }}</label>
           <select id="codex-2fa-proxy" v-model="selectedProxy" class="input w-full" @change="proxyManuallySelected = true">
             <option value="" disabled>{{ t('codexLogin.requireIPGroup') }}</option>
+            <optgroup :label="t('codexLogin.dynamicIpGroups')">
+              <option v-for="group in ipGroups.filter(group => (group.sticky_minutes || 0) > 0)" :key="group.id" :value="`group:${group.id}`">{{ group.name }} · {{ group.sticky_minutes }} min</option>
+            </optgroup>
             <optgroup :label="t('codexLogin.ipGroups')">
-              <option v-for="group in ipGroups" :key="group.id" :value="`group:${group.id}`">{{ group.name }}</option>
+              <option v-for="group in ipGroups.filter(group => !(group.sticky_minutes || 0))" :key="group.id" :value="`group:${group.id}`">{{ group.name }}</option>
             </optgroup>
             <optgroup :label="t('admin.accounts.proxyModeSingle')">
               <option v-for="proxy in proxies" :key="proxy.id" :value="`proxy:${proxy.id}`">{{ proxy.name }}</option>
@@ -104,7 +107,7 @@ async function refresh() {
 }
 async function submit() {
   if (submitting.value) return
-  if (!/^(group|proxy):[1-9]\d*$/.test(selectedProxy.value)) { message.value = t('codexLogin.requireIPGroup'); return }
+  if (!/^(group|proxy):[1-9]\d*$/.test(selectedProxy.value)) { message.value = t('codexLogin.requireProxy'); return }
   if (files.value.reduce((n, file) => n + file.size, 0) + new Blob([content.value]).size > 1024 * 1024) { message.value = t('codexLogin.tooLarge'); return }
   submitting.value = true
   try {
