@@ -22,6 +22,9 @@ const {
   authIsSimpleMode: { value: true },
 }))
 
+const { importProxyDefaultMock } = vi.hoisted(() => ({ importProxyDefaultMock: vi.fn() }))
+vi.mock('@/api/admin/importProxy',()=>({getImportProxyDefault:importProxyDefaultMock}))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError: vi.fn(),
@@ -211,6 +214,7 @@ async function openCodexImportStep(toggleClicks = 0) {
 
 describe('CreateAccountModal OpenAI long-context billing', () => {
   beforeEach(() => {
+    importProxyDefaultMock.mockResolvedValue({proxy_id:null,proxy_ip_group_id:null,mode:'none'})
     listIpGroupsMock.mockReset().mockResolvedValue([])
     authIsSimpleMode.value = true
     createAccountMock.mockReset().mockResolvedValue({ id: 42, platform: 'openai', type: 'apikey' })
@@ -679,7 +683,8 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
   })
 
-  it('defaults JSON import to latest models, alerts off, first compatible group and first IP group', async () => {
+  it('defaults JSON import to latest models and server-selected proxy binding', async () => {
+    importProxyDefaultMock.mockResolvedValue({proxy_id:null,proxy_ip_group_id:91,mode:'dynamic'})
     listIpGroupsMock.mockResolvedValue([{ id: 91, name: 'first', proxy_ids: [101] }, { id: 92, name: 'second', proxy_ids: [102] }])
     const wrapper = mountModal([
       { id: 1, name: 'Claude', platform: 'anthropic' },

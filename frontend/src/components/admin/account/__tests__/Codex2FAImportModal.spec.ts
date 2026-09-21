@@ -2,19 +2,22 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi } from 'vitest'
 import Codex2FAImportModal from '../Codex2FAImportModal.vue'
 import * as ipGroupsAPI from '@/api/admin/proxyIpGroups'
+import { getImportProxyDefault } from '@/api/admin/importProxy'
 
 const api = vi.hoisted(() => ({ jobs: vi.fn(), importAccounts: vi.fn(), retry: vi.fn() }))
 vi.mock('@/api/admin/codexLogin', () => api)
+vi.mock('@/api/admin/importProxy', () => ({ getImportProxyDefault: vi.fn().mockResolvedValue({proxy_ip_group_id:3,proxy_id:null,mode:'group'}) }))
 vi.mock('@/api/admin/groups', () => ({ getAll: vi.fn().mockResolvedValue([{ id: 7, name: 'OpenAI' }]) }))
 vi.mock('@/api/admin/proxies', () => ({ getAll: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/api/admin/proxyIpGroups', () => ({ list: vi.fn().mockResolvedValue([{ id: 3, name: '出口组' }]) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 describe('Codex2FAImportModal', () => {
-  it('requires an IP group and offers no direct or single-proxy option', async () => {
+  it('requires an available configured exit and never offers direct egress', async () => {
     api.jobs.mockResolvedValue({ available: true, jobs: [] })
     api.importAccounts.mockClear()
     vi.mocked(ipGroupsAPI.list).mockResolvedValueOnce([])
+    vi.mocked(getImportProxyDefault).mockResolvedValueOnce({proxy_id:null,proxy_ip_group_id:null,mode:'none'})
     const wrapper = mount(Codex2FAImportModal, { props: { show: true }, global: { stubs: {
       BaseDialog: { template: '<div><slot/><slot name="footer"/></div>' }
     } } })
@@ -24,6 +27,22 @@ describe('Codex2FAImportModal', () => {
     expect(wrapper.text()).toContain('codexLogin.requireIPGroup')
     expect(wrapper.text()).not.toContain('codexLogin.direct')
     expect(wrapper.find('option[value=""]').attributes()).toHaveProperty('disabled')
+    wrapper.unmount()
+  })
+
+  it('uses the server-selected single proxy fallback', async () => {
+    api.jobs.mockResolvedValue({ available: true, jobs: [] })
+    api.importAccounts.mockClear()
+    api.importAccounts.mockResolvedValue({job_ids:[1],errors:[]})
+    vi.mocked(getImportProxyDefault).mockResolvedValueOnce({proxy_id:9,proxy_ip_group_id:null,mode:'single'})
+    const proxies = await import('@/api/admin/proxies')
+    vi.mocked(proxies.getAll).mockResolvedValueOnce([{id:9,name:'single'}] as any)
+    const wrapper=mount(Codex2FAImportModal,{props:{show:true},global:{stubs:{BaseDialog:{template:'<div><slot/><slot name="footer"/></div>'}}}})
+    await flushPromises()
+    await wrapper.get('#codex-2fa-proxy').setValue('proxy:9')
+    await wrapper.get('textarea').setValue('sample@example.com----password----secret')
+    await wrapper.get('form').trigger('submit');await flushPromises()
+    expect(api.importAccounts).toHaveBeenCalledWith({documents:['sample@example.com----password----secret'],group_ids:[7],proxy_id:9})
     wrapper.unmount()
   })
 
@@ -59,7 +78,7 @@ describe('Codex2FAImportModal', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(api.importAccounts).toHaveBeenCalledWith(expect.objectContaining({
-      documents: expect.any(Array), group_ids: [7], proxy_ip_group_id: 3
+      documents: expect.any(Array), group_ids: [7]
     }))
     expect(api.importAccounts.mock.calls[0][0].documents).toHaveLength(5)
     expect(wrapper.text()).not.toContain('JBSWY3DPEHPK3PXP')

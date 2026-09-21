@@ -22,10 +22,10 @@ metadata:
 ## JSON 导入默认值
 
 - 两个入口分别接线：新建账号向导的 Codex auth.json / session JSON 导入，以及账号列表的 JSON 文件「导入数据」（`/admin/accounts/data`）。后者仅对 OpenAI OAuth 账号补齐这些默认值。
-- 未手动指定时取列表中第一个 OpenAI / composite 分组和第一个 IP 组；没有可选项时不强制绑定。
+- 未手动指定时取第一个 OpenAI / composite 分组。JSON（含创建向导）与 2FA 的默认代理统一由服务端选择：渠道 Turn-State 策略已启用且成员可用、认证完整的粘性动态 IP 组 → 有可用成员的普通 IP 组 → 启用且未过期的单个代理；同级按 ID 升序。没有可用代理时 JSON 保持未绑定，2FA 拒绝直连。
 - 保留用户手动选择的分组和代理。IP 组握手沿用既有逻辑，使用组内第一个代理。
 - 白名单模式导入时合并最新内置 OpenAI 模型清单，等同「同步最新支持模型」；保留自定义模型与映射模式。
-- `/admin/accounts/data` 在后端补齐 OpenAI OAuth 账号缺失的默认分组、IP 组、模型和监控配置；旧客户端直接提交原始 JSON 也适用，不依赖前端加工。显式配置优先，`proxy_ip_group_id: 0` 保留为不绑定。
+- `/admin/accounts/data` 在后端补齐 OpenAI OAuth 账号缺失的默认分组、代理绑定（动态／普通组／单个 IP）、模型和监控配置；旧客户端直接提交原始 JSON 也适用，不依赖前端加工。显式配置优先，`proxy_ip_group_id: 0` 保留为不绑定。
 - 文件导入通过 `group_ids` / `proxy_ip_group_id` 传递本地绑定；导出不写这些实例内 ID。文件已有代理绑定与自定义模型映射保留；加载默认分组或 IP 组失败时中止并提示错误。
 - OpenAI OAuth JSON 文件导入统一使用并发 `8` 和 `extra.codex_fingerprint_mode: device`（仅设备），覆盖源文件中的这两项值；创建向导默认并发也为 `8`，允许手动调整。
 - 导入请求覆盖写入：`extra.error_alert.enabled: false`（关 Telegram 报错监控）、`extra.turn_state_probe.enabled: true`、`extra.openai_oauth_responses_websockets_v2_mode: passthrough`（WS 透传）、`extra.account_traffic_control` 两开关开（严格 RPM + 自适应并发 observe，建议数字 60/5/1）。存量账号缺这些 extra 键时运行时行为不变。

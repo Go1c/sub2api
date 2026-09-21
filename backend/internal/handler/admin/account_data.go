@@ -278,15 +278,14 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			}
 		}
 	}
+	var defaultProxyID *int64
 	if needIPGroups {
-		groups, err := h.adminService.ListProxyIPGroups(ctx)
+		binding, err := service.ResolveCodexImportProxyDefault(ctx, h.adminService)
 		if err != nil {
 			return result, err
 		}
-		if len(groups) > 0 {
-			id := groups[0].ID
-			defaultIPGroupID = &id
-		}
+		defaultIPGroupID = binding.ProxyIPGroupID
+		defaultProxyID = binding.ProxyID
 	}
 
 	existingProxies, err := h.listAllProxies(ctx)
@@ -479,6 +478,7 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			}
 			if item.ProxyIPGroupID == nil && proxyID == nil {
 				item.ProxyIPGroupID = defaultIPGroupID
+				proxyID = defaultProxyID
 			}
 			extra := make(map[string]any, len(item.Extra)+2)
 			for key, value := range item.Extra {

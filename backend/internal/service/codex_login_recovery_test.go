@@ -184,6 +184,11 @@ func TestCodexLoginProxyCandidatesNeverFallBackDirect(t *testing.T) {
 		_, err := codexLoginGroupCandidates(context.Background(), codexTestResolver(), account)
 		require.Error(t, err)
 	}
+	singleID := int64(2)
+	single, err := codexLoginGroupCandidates(context.Background(), codexTestResolver(), &Account{ProxyID: &singleID})
+	require.NoError(t, err)
+	require.Len(t, single, 1)
+	require.Equal(t, singleID, single[0].ID)
 	rows, err := codexLoginGroupCandidates(context.Background(), codexTestResolver(), recoveryAccount())
 	require.NoError(t, err)
 	require.Len(t, rows, 1)

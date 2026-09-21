@@ -3920,6 +3920,7 @@
 </template>
 
 <script setup lang="ts">
+import { getImportProxyDefault } from '@/api/admin/importProxy'
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -6619,8 +6620,10 @@ const handleOpenAIImportCodexSession = async (content: string) => {
     }
     if (!codexImportProxySelected && !form.proxy_id && !form.proxy_ip_group_id) {
       // Refresh here as well: the modal's initial request may still be in flight.
-      await loadIpGroups()
-      form.proxy_ip_group_id = ipGroups.value[0]?.id ?? null
+      const binding = await getImportProxyDefault()
+      if (binding.proxy_ip_group_id) await loadIpGroups()
+      form.proxy_ip_group_id = binding.proxy_ip_group_id
+      form.proxy_id = binding.proxy_id
     }
     const result = await adminAPI.accounts.importCodexSession({
       content: trimmed,

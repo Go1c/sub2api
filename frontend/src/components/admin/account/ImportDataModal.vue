@@ -299,10 +299,7 @@ const handleImport = async () => {
     if (dataPayload.accounts.some(account => account.platform === 'openai' && account.type === 'oauth')) {
       // Resolve local bindings for the JSON file import path, not the OAuth wizard.
       // Fail visibly if loading defaults fails rather than silently importing unbound accounts.
-      const [groups, ipGroups] = await Promise.all([
-        adminAPI.groups.getAll(),
-        adminAPI.proxyIpGroups.list()
-      ])
+      const groups = await adminAPI.groups.getAll()
       const firstGroup = groups.find(group => group.platform === 'openai' || group.platform === 'composite')
       const latestModels = Object.fromEntries(getModelsByPlatform('openai').map(model => [model, model]))
       dataPayload.accounts = dataPayload.accounts.map(account => {
@@ -325,7 +322,7 @@ const handleImport = async () => {
             openai_oauth_responses_websockets_v2_enabled: isOpenAIWSModeEnabled(KIN_DEFAULT_OPENAI_WS_MODE)
           },
           group_ids: account.group_ids?.length ? account.group_ids : firstGroup ? [firstGroup.id] : [],
-          proxy_ip_group_id: account.proxy_ip_group_id ?? (account.proxy_key ? undefined : ipGroups[0]?.id)
+          proxy_ip_group_id: account.proxy_ip_group_id // Missing binding is resolved by the server at import time.
         }
       })
     }

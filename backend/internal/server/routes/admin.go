@@ -365,6 +365,7 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	accounts := admin.Group("/accounts")
 	{
+		accounts.GET("/import-proxy-default", h.Admin.Account.GetImportProxyDefault)
 		accounts.GET("", h.Admin.Account.List)
 		accounts.GET("/pool-auto-inspect/config", h.Admin.Account.GetPoolAutoInspectConfig)
 		accounts.PUT("/pool-auto-inspect/config", h.Admin.Account.UpdatePoolAutoInspectConfig)

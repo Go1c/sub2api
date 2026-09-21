@@ -88,9 +88,20 @@ func (s *CodexLoginService) Import(ctx context.Context, documents []string, opti
 	if !s.Available() {
 		return nil, nil, errors.New("请配置登录 Worker 与固定 TOTP_ENCRYPTION_KEY")
 	}
-	if options.ProxyID != nil || options.ProxyIPGroupID == nil || *options.ProxyIPGroupID <= 0 {
-		return nil, nil, errors.New("必须选择 IP 组，2FA 登录不允许服务器直连或单代理")
+	if options.ProxyID == nil && options.ProxyIPGroupID == nil {
+		binding, err := ResolveCodexImportProxyDefault(ctx, s.admin)
+		if err != nil {
+			return nil, nil, err
+		}
+		options.ProxyID = binding.ProxyID
+		options.ProxyIPGroupID = binding.ProxyIPGroupID
 	}
+	hasProxy := options.ProxyID != nil && *options.ProxyID > 0
+	hasGroup := options.ProxyIPGroupID != nil && *options.ProxyIPGroupID > 0
+	if hasProxy == hasGroup {
+		return nil, nil, errors.New("必须选择有效代理或 IP 组，禁止服务器直连")
+	}
+
 	for _, id := range options.GroupIDs {
 		if id <= 0 {
 			return nil, nil, errors.New("分组 ID 无效")
@@ -248,7 +259,7 @@ func (s *CodexLoginService) execute(ctx context.Context, job *CodexLoginJob) str
 	if err != nil {
 		return err.Error()
 	}
-	slog.Info("codex_login_proxy_candidates", "job_id", job.ID, "ip_group_id", *target.ProxyIPGroupID, "candidate_count", len(proxies))
+	slog.Info("codex_login_proxy_candidates", "job_id", job.ID, "candidate_count", len(proxies))
 	token, err := s.runner.Login(ctx, material, proxies)
 	if err != nil {
 		return err.Error()
@@ -366,9 +377,20 @@ func (s *CodexLoginService) execute(ctx context.Context, job *CodexLoginJob) str
 
 // Candidate filtering uses configured live group members; Worker probes actual HTTP/SOCKS connectivity.
 func codexLoginGroupCandidates(ctx context.Context, resolver *openAIIPGroupResolver, account *Account) ([]CodexLoginProxy, error) {
-	if account == nil || account.ProxyIPGroupID == nil || *account.ProxyIPGroupID <= 0 || resolver == nil {
-		return nil, errors.New("必须配置有效 IP 组，禁止服务器直连")
+	if account == nil || resolver == nil || resolver.proxies == nil {
+		return nil, errors.New("必须配置有效代理，禁止服务器直连")
 	}
+	if account.ProxyIPGroupID == nil || *account.ProxyIPGroupID <= 0 {
+		if account.ProxyID == nil || *account.ProxyID <= 0 {
+			return nil, errors.New("必须配置有效代理，禁止服务器直连")
+		}
+		proxies, err := resolver.proxies.ListByIDs(ctx, []int64{*account.ProxyID})
+		if err != nil || len(proxies) != 1 || proxies[0].ID != *account.ProxyID || !proxyIsLive(&proxies[0], time.Now()) {
+			return nil, errors.New("代理不可用，禁止服务器直连")
+		}
+		return []CodexLoginProxy{{ID: proxies[0].ID, URL: proxies[0].URL()}}, nil
+	}
+
 	group, err := resolver.groups.GetByID(ctx, *account.ProxyIPGroupID)
 	if err != nil || group == nil {
 		return nil, errors.New("IP 组不可用，禁止服务器直连")
@@ -382,6 +404,13 @@ func codexLoginGroupCandidates(ctx context.Context, resolver *openAIIPGroupResol
 	}
 	result := make([]CodexLoginProxy, 0, len(members))
 	for _, proxy := range members {
+		if group.StickyMinutes > 0 {
+			sid, err := randomTurnStateProbeSID()
+			if err != nil {
+				return nil, err
+			}
+			proxy = stickyProxy(proxy, sid, group.StickyMinutes+10)
+		}
 		result = append(result, CodexLoginProxy{ID: proxy.ID, URL: proxy.URL()})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })

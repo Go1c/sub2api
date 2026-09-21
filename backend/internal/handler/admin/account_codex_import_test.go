@@ -682,6 +682,10 @@ func TestImportCodexSessionsUpdateAppliesKinDefaultsAndFormConcurrency(t *testin
 		t.Fatalf("updated accounts = %d, want 1", len(svc.updatedAccounts))
 	}
 	update := svc.updatedAccounts[0].input
+	if update.ProxyID != nil || update.ProxyIPGroupID != nil {
+		t.Fatal("credential-only update must preserve existing proxy binding")
+	}
+
 	if update.Concurrency == nil || *update.Concurrency != service.DefaultOpenAIAccountConcurrency {
 		t.Fatalf("concurrency = %v, want %d", update.Concurrency, service.DefaultOpenAIAccountConcurrency)
 	}
@@ -1133,4 +1137,8 @@ func buildCodexImportTestJWT(t *testing.T, exp time.Time, extraClaims map[string
 		t.Fatalf("marshal claims: %v", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(headerBytes) + "." + base64.RawURLEncoding.EncodeToString(claimBytes) + "."
+}
+
+func (s *codexImportMemoryAdminService) CodexImportProxyDefault(context.Context) (service.CodexImportProxy, error) {
+	return service.CodexImportProxy{Mode: "none"}, nil
 }

@@ -352,6 +352,7 @@ func TestImportDataCarriesJSONDefaultBindings(t *testing.T) {
 
 func TestImportDataDefaultsWithoutFrontendEnrichment(t *testing.T) {
 	router, svc := setupAccountDataRouter()
+	svc.proxies = []service.Proxy{{ID: 4, Status: service.StatusActive}}
 	svc.groups = []service.Group{{ID: 8, Platform: service.PlatformAnthropic}, {ID: 5, Platform: service.PlatformOpenAI}, {ID: 6, Platform: service.PlatformOpenAI}}
 	body := []byte(`{"data":{"type":"sub2api-data","version":1,"proxies":[],"accounts":[{"name":"imported","platform":"openai","type":"oauth","credentials":{"access_token":"test","model_mapping":{"custom":"target"}},"extra":{"source":"test","codex_fingerprint_mode":"off"},"concurrency":15,"priority":1}]},"skip_default_group_bind":true}`)
 	rec := httptest.NewRecorder()

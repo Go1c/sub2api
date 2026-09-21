@@ -341,6 +341,15 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 			continue
 		}
 
+		proxyID, proxyGroupID := req.ProxyID, req.ProxyIPGroupID
+		if proxyID == nil && proxyGroupID == nil {
+			binding, err := service.ResolveCodexImportProxyDefault(ctx, h.adminService)
+			if err != nil {
+				return result, err
+			}
+			proxyID = binding.ProxyID
+			proxyGroupID = binding.ProxyIPGroupID
+		}
 		account, createErr := h.adminService.CreateAccount(ctx, &service.CreateAccountInput{
 			Name:                  accountName,
 			Notes:                 req.Notes,
@@ -348,8 +357,8 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 			Type:                  service.AccountTypeOAuth,
 			Credentials:           credentials,
 			Extra:                 extra,
-			ProxyID:               req.ProxyID,
-			ProxyIPGroupID:        req.ProxyIPGroupID,
+			ProxyID:               proxyID,
+			ProxyIPGroupID:        proxyGroupID,
 			Concurrency:           concurrency,
 			Priority:              priority,
 			RateMultiplier:        req.RateMultiplier,

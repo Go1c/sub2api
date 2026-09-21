@@ -1,5 +1,5 @@
 export default {
-    requireIPGroup: 'Select an IP group; direct server egress is disabled',
+    requireIPGroup: 'Select an available dynamic IP, IP group or single proxy; direct server egress is disabled',
     title: 'Import 2FA JSON',
     hint: 'Import email, password and a 2FA secret to authorize Codex. Prefer Team workspaces. After a 401, reauthorize the same Team and resume scheduling only after validation.',
     unavailable: 'Configure the private login worker and a stable encryption key first.',
