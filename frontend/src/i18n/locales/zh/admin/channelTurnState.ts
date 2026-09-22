@@ -34,6 +34,8 @@ export default {
     overloadThresholdHint: '默认 3 次；0 表示关闭。按账号合并各出口记录，达到次数后立即续采，普通 503 不计入。',
     recheckMinutes: '{n} 分钟',
     rpm: '每分钟调用预算',
+    importBatchRuntime: '本进程使用导入批次',
+    importBatchRuntimeHint: '关掉后这一进程马上回到旧选路。系统设置里的 0/10/30 分钟仍保存，打开即恢复。重启后默认打开。不随本页策略一起保存。',
     saveSuccess: '策略已保存',
     loadError: '加载 Turn-State 探测失败',
     saveFailed: '保存策略失败',

@@ -1268,6 +1268,22 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.turn_state_probe).toEqual({ enabled: true })
   })
 
+  it('persists enforce only when the missing-ticket checkbox is checked', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="turn-state-probe-enabled"]').trigger('click')
+    await wrapper.get('[data-testid="turn-state-probe-enforce"]').setValue(true)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.turn_state_probe).toEqual({
+      enabled: true,
+      mode: 'enforce'
+    })
+  })
+
   it('disabling probing also disables rate sync and restores manual rate editing', async () => {
     const account = buildAccount()
     account.extra = {

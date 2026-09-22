@@ -13,7 +13,7 @@ metadata:
 
 | 文档 | 一句话 |
 |------|--------|
-| [`features/proxy-probe-quality.md`](features/proxy-probe-quality.md) | 渠道子页集中配置探测出口与 Turn-State 策略，账号只留开关，日常请求替换该账号当前票 |
+| [`features/proxy-probe-quality.md`](features/proxy-probe-quality.md) | 渠道子页集中配置探测出口与 Turn-State 策略；账号开关缺省缺票原样转发，显式 enforce 才换号 |
 | [`features/account-error-alert.md`](features/account-error-alert.md) | 账号异常 Telegram 告警：后台聚合 `ops_error_logs`，按账号 extra 开关/关键字/规则推送 |
 | [`features/account-traffic-control.md`](features/account-traffic-control.md) | 账号可选流量控制：严格 RPM（滑动 60 秒 + 突发）与自适应并发（observe/automatic），extra 键默认关 |
 | [`features/account-request-health.md`](features/account-request-health.md) | 账号列表最近 N 次请求健康条：单 IP 一根、IP 组按出口拆条，Redis 环形缓冲 |

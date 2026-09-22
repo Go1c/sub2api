@@ -189,6 +189,7 @@ func (s *AccountRequestHealthService) buildLine(ctx context.Context, accountID, 
 			OccurredAt: ev.OccurredAt,
 			Model:      ev.Model,
 			Endpoint:   ev.Endpoint,
+			Class:      ev.Class,
 		})
 	}
 	if last := lastOutcome(line.Outcomes); last != nil && last.Slot == RequestHealthSlotFail {

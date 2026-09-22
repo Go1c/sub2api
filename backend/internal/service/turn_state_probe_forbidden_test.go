@@ -23,9 +23,9 @@ func TestTurnStateProbeForbiddenPreservesTicketAndBacksOff(t *testing.T) {
 	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
 	policy := enableTurnStateProbePolicy(t, svc)
 	harvested := time.Now().Add(-2 * time.Minute)
-	expires := harvested.Add(turnStateProbeTicketTTL)
+	expires := harvested.Add(20 * time.Minute)
 	require.NoError(t, tickets.Put(ctx, TurnStateTicketRecord{AccountID: account.ID, State: "valid-old-state", Status: "holding", PolicyRevision: policy.Revision, HarvestedAt: harvested, ExpiresAt: expires, RecheckAt: time.Now().Add(-time.Second)}))
-	for _, delay := range []time.Duration{2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute, 30 * time.Minute, 30 * time.Minute} {
+	for _, delay := range []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second} {
 		// Simulate a fresh RPM window and a due scheduled retry without sleeping.
 		tickets.rpm = map[string]int{}
 		before := time.Now()
@@ -58,7 +58,7 @@ func TestTurnStateProbeForbiddenPreservesTicketAndBacksOff(t *testing.T) {
 	require.Error(t, svc.ProbeAccount(ctx, account.ID))
 	rec, err = tickets.Get(ctx, account.ID)
 	require.NoError(t, err)
-	require.WithinDuration(t, time.Now().Add(2*time.Minute), rec.RecheckAt, 2*time.Second)
+	require.WithinDuration(t, time.Now().Add(2*time.Second), rec.RecheckAt, 2*time.Second)
 	rec.HarvestedAt = time.Now().Add(-2 * time.Hour)
 	rec.ExpiresAt = time.Now().Add(-time.Hour)
 	require.NoError(t, tickets.Put(ctx, *rec))
@@ -181,5 +181,5 @@ func TestTurnStateProbeForbiddenBackoffSurvivesRPMDeferral(t *testing.T) {
 	require.Error(t, svc.ProbeAccount(ctx, account.ID))
 	rec, err = tickets.Get(ctx, account.ID)
 	require.NoError(t, err)
-	require.WithinDuration(t, time.Now().Add(4*time.Minute), rec.RecheckAt, time.Second)
+	require.WithinDuration(t, time.Now().Add(4*time.Second), rec.RecheckAt, time.Second)
 }

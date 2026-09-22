@@ -30,6 +30,24 @@ func (h *TurnStateProbeHandler) Overview(c *gin.Context) {
 	response.Success(c, out)
 }
 
+type turnStateImportBatchRuntimeRequest struct {
+	Suspended *bool `json:"suspended"`
+}
+
+func (h *TurnStateProbeHandler) SetImportBatchRuntime(c *gin.Context) {
+	var req turnStateImportBatchRuntimeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Suspended == nil {
+		response.Error(c, http.StatusBadRequest, "suspended is required")
+		return
+	}
+	service.SetOpenAIImportBatchRuntimeSuspended(*req.Suspended)
+	response.Success(c, gin.H{"import_batch_runtime_suspended": service.OpenAIImportBatchRuntimeSuspended()})
+}
+
 func (h *TurnStateProbeHandler) UpdatePolicy(c *gin.Context) {
 	if h == nil || h.svc == nil {
 		response.Error(c, http.StatusServiceUnavailable, "turn-state probe unavailable")

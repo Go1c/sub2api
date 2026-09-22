@@ -26,10 +26,6 @@ const (
 	turnStateProbeHarvestTimeout     = 45 * time.Second
 	turnStateProbeLockTTL            = 2 * time.Minute
 	turnStateProbeSIDLen             = 8
-	// Upstream Turn-State tickets observed after the 292 change expire after
-	// roughly four minutes. Keep the local lifetime below that boundary so a
-	// stale ticket is never injected after the upstream has stopped accepting it.
-	turnStateProbeTicketTTL          = 4 * time.Minute
 	turnStateProbeRetryInterval      = 45 * time.Second
 	turnStateProbeHarvestConcurrency = 10
 	turnStateProbeSIDAlphabet        = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -210,7 +206,7 @@ func (s *TurnStateProbeService) GetOverview(ctx context.Context) (*TurnStateProb
 			accounts = append(accounts, item)
 		}
 	}
-	return &TurnStateProbeOverview{Policy: policy, Accounts: accounts}, nil
+	return &TurnStateProbeOverview{Policy: policy, Accounts: accounts, ImportBatchRuntimeSuspended: OpenAIImportBatchRuntimeSuspended()}, nil
 }
 
 func (s *TurnStateProbeService) SetAccountEnabled(ctx context.Context, id int64, enabled bool) error {
@@ -432,13 +428,18 @@ func (s *TurnStateProbeService) probeAccount(ctx context.Context, accountID int6
 		return infraerrors.BadRequest("TURN_STATE_PROBE_FAILED", reason)
 	}
 	now := time.Now()
+	generation := int64(1)
+	if existing != nil && existing.Generation >= generation {
+		generation = existing.Generation + 1
+	}
 	rec := TurnStateTicketRecord{
 		AccountID: account.ID, Identity: turnStateProbeTicketIdentity(account),
 		State: result.State, StateHash: TurnStateProbeStateHash(result.State), StateLength: len(strings.TrimSpace(result.State)),
 		Model: firstNonEmpty(result.ObservedModel, policy.Model), PolicyRevision: policy.Revision,
 		Status: turnStateProbeStatusHolding, Attempts: attempts,
 		RecheckAt: harvestStarted.Add(policy.RecheckAfter()), UpdatedAt: now,
-		HarvestedAt: harvestStarted, ExpiresAt: harvestStarted.Add(turnStateProbeTicketTTL),
+		HarvestedAt: harvestStarted, ExpiresAt: harvestStarted.Add(policy.RecheckAfter()),
+		Generation: generation, ExitDigest: turnStateExitDigest(proxyURL),
 	}
 	if stickyGroup != nil {
 		rec.copyStickyFrom(stickyRecord)
@@ -471,9 +472,10 @@ func turnStateProbeLifetime(rec *TurnStateTicketRecord) (harvested, expires time
 	if harvested.IsZero() {
 		return harvested, time.Time{}
 	}
-	limit := harvested.Add(turnStateProbeTicketTTL)
-	if expires.IsZero() || expires.After(limit) {
-		expires = limit
+	// Usable until the same 20-minute recheck that schedules the next harvest.
+	// A sticky hold can be longer and is stored on ExpiresAt at harvest time.
+	if expires.IsZero() || expires.Before(harvested) {
+		expires = harvested.Add(turnStateProbeDefaultRecheckMinutes * time.Minute)
 	}
 	return
 }
@@ -501,6 +503,8 @@ func (s *TurnStateProbeService) putHarvestTicket(ctx context.Context, account *A
 		rec.Model = previous.Model
 		rec.RecheckAt = previous.RecheckAt
 		rec.HarvestedAt, rec.ExpiresAt = turnStateProbeLifetime(previous)
+		rec.Generation = previous.Generation
+		rec.ExitDigest = previous.ExitDigest
 	}
 	if status == turnStateProbeStatusCooldown {
 		delay := turnStateProbeRetryInterval
@@ -557,6 +561,10 @@ func (s *TurnStateProbeService) currentHoldingTicket(ctx context.Context, accoun
 func (s *TurnStateProbeService) HasHolding(ctx context.Context, account *Account) bool {
 	_, ok := s.currentHoldingTicket(ctx, account)
 	return ok
+}
+
+func (s *TurnStateProbeService) CurrentTicket(ctx context.Context, account *Account) (*TurnStateTicketRecord, bool) {
+	return s.currentHoldingTicket(ctx, account)
 }
 
 func (s *TurnStateProbeService) BindCurrent(ctx context.Context, account *Account, identity, turnKey, model string) (string, bool) {

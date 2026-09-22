@@ -180,7 +180,11 @@ func (s *OpenAIGatewayService) reportImportBatchOutcome(account *Account, succes
 		if len(observedErr) == 0 {
 			return
 		}
-		if _, _, eligible := classifyOpenAIAPIKeyHealthFailure(observedErr[0]); !eligible {
+		if class := turnStateRiskClassFromError(observedErr[0]); class != "" {
+			if !TurnStateRiskDegradesScheduler(class) {
+				return
+			}
+		} else if _, _, eligible := classifyOpenAIAPIKeyHealthFailure(observedErr[0]); !eligible {
 			return
 		}
 	}

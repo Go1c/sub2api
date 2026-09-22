@@ -5,12 +5,37 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
+// Process-local AB switch. Zero means follow the stored 0/10/30 setting.
+// 1 suspends batch routing in this process only; the stored minutes stay.
+var openAIImportBatchRuntimeOff atomic.Int32
+
+func SetOpenAIImportBatchRuntimeSuspended(off bool) {
+	if off {
+		openAIImportBatchRuntimeOff.Store(1)
+		return
+	}
+	openAIImportBatchRuntimeOff.Store(0)
+}
+
+func OpenAIImportBatchRuntimeSuspended() bool {
+	return openAIImportBatchRuntimeOff.Load() == 1
+}
+
+func resetOpenAIImportBatchRuntimeForTest() {
+	openAIImportBatchRuntimeOff.Store(0)
+}
+
 // The override is independent of the advanced-score switch. Empty inherits the
 // server setting; zero is an explicit rollback to the previous scheduler.
+// A process-local suspend forces zero without rewriting the stored minutes.
 func (s *OpenAIGatewayService) openAIImportBatchMinutes(ctx context.Context) int {
+	if OpenAIImportBatchRuntimeSuspended() {
+		return 0
+	}
 	raw := strings.TrimSpace(s.openAIAdvancedSchedulerRuntimeSettings(ctx).batchMinutes)
 	if raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && (n == 0 || n == 10 || n == 30) {
@@ -21,6 +46,13 @@ func (s *OpenAIGatewayService) openAIImportBatchMinutes(ctx context.Context) int
 		return s.cfg.Gateway.OpenAIScheduler.ImportBatchMinutes
 	}
 	return 0
+}
+
+func (s *OpenAIGatewayService) storedOpenAIImportBatchMinutes(ctx context.Context) string {
+	if s == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.openAIAdvancedSchedulerRuntimeSettings(ctx).batchMinutes)
 }
 
 func importBatchNumber(createdAt time.Time, minutes int) int64 {

@@ -666,6 +666,9 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	if err := stickySnapshotError(c, account); err != nil {
 		return nil, err
 	}
+	if err := s.enforceTurnStateTicket(c, account); err != nil {
+		return nil, err
+	}
 	s.applyTurnStateProbeHTTP(c, account, req.Header, body, strings.TrimSpace(gjson.GetBytes(body, "model").String()))
 	// 客户端回带的 x-codex-turn-state 若已知由其他账号铸造（failover 换号），
 	// 剥离后再出站（openai_codex_turn_state.go）。
@@ -1912,6 +1915,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	sawBareError := false
 	sawResponseFailed := false
 	terminalEventType := ""
+	var terminalPayload []byte
 	semanticOutputSeen := false
 	capacityFailoverSuppressedLogged := false
 	failedMessage := ""
@@ -2172,6 +2176,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				sawTerminalEvent = true
 				if trimmedData != "[DONE]" {
 					terminalEventType = eventType
+					terminalPayload = append(terminalPayload[:0], dataBytes...)
 				}
 			}
 			if responseID == "" {
@@ -2296,11 +2301,13 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				s.newOpenAIStreamFailoverError(c, account, true, upstreamRequestID, nil, "OpenAI stream ended before a terminal event")
 		}
 		s.recordOpenAIProxyStreamDisconnect(account, errors.New("stream ended before terminal event"), upstreamRequestID)
+		s.noteTurnStateStreamOutcome(c, account, observer, originalModel, "", nil, false, false, true)
 		return resultWithUsage(), errors.New("stream usage incomplete: missing terminal event")
 	}
 	if (sawDone || sawTerminalEvent) && !sawFailedEvent {
 		s.clearOpenAIProxyStreamDisconnect(account)
 	}
+	s.noteTurnStateStreamOutcome(c, account, observer, originalModel, terminalEventType, terminalPayload, sawDone || sawTerminalEvent, sawFailedEvent, false)
 	logOpenAISuccessMissingUsage(ctx, c, account, resp, usage, terminalEventType, clientDisconnected)
 
 	return resultWithUsage(), nil
@@ -2371,6 +2378,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
 	}
+	s.noteTurnStateBusinessPayload(c, account, originalModel, "", body, resp.StatusCode, false)
 	return &openaiNonStreamingResultPassthrough{
 		OpenAIUsage:      usage,
 		usage:            usage,
@@ -2449,6 +2457,7 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
 	}
+	s.noteTurnStateBusinessPayload(c, account, originalModel, terminalType, terminalPayload, resp.StatusCode, !terminalOK)
 
 	return &openaiNonStreamingResultPassthrough{
 		OpenAIUsage:      usage,

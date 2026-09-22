@@ -471,7 +471,7 @@ func TestTurnStateProbeAccountHarvestStoresHoldingTicket(t *testing.T) {
 	require.Equal(t, "gpt-6-astra", ticket.Model)
 	require.Equal(t, saved.Revision, ticket.PolicyRevision)
 	require.False(t, ticket.RecheckAt.IsZero())
-	require.WithinDuration(t, ticket.HarvestedAt.Add(turnStateProbeTicketTTL), ticket.ExpiresAt, time.Second)
+	require.WithinDuration(t, ticket.HarvestedAt.Add(saved.RecheckAfter()), ticket.ExpiresAt, time.Second)
 	require.Empty(t, ticket.LastError)
 	require.NotContains(t, ticket.Summary().StateHash, stateBlob)
 }
@@ -753,7 +753,7 @@ func TestTurnStateProbeTicketLifetime(t *testing.T) {
 		usable       bool
 	}{
 		{"valid", "holding", 2 * time.Minute, true},
-		{"expired", "holding", 5 * time.Minute, false},
+		{"expired", "holding", 21 * time.Minute, false},
 		{"refreshing", "running", 2 * time.Minute, true},
 		{"retrying", "cooldown", 2 * time.Minute, true},
 	} {
@@ -764,7 +764,7 @@ func TestTurnStateProbeTicketLifetime(t *testing.T) {
 			policy := enableTurnStateProbePolicy(t, svc)
 			now := time.Now()
 			rec := TurnStateTicketRecord{AccountID: account.ID, State: "old-ticket", Status: tc.status, PolicyRevision: policy.Revision, UpdatedAt: now}
-			raw, err := json.Marshal(map[string]any{"harvested_at": now.Add(-tc.age), "expires_at": now.Add(time.Hour - tc.age)})
+			raw, err := json.Marshal(map[string]any{"harvested_at": now.Add(-tc.age), "expires_at": now.Add(20*time.Minute - tc.age)})
 			require.NoError(t, err)
 			require.NoError(t, json.Unmarshal(raw, &rec))
 			require.NoError(t, tickets.Put(context.Background(), rec))
@@ -785,7 +785,7 @@ func TestTurnStateProbeRefreshFailurePreservesTicketAndRetriesAfter45Seconds(t *
 	rec, err := tickets.Get(context.Background(), account.ID)
 	require.NoError(t, err)
 	require.Equal(t, "still-valid", rec.State)
-	require.WithinDuration(t, before.Add(2*time.Minute), rec.ExpiresAt, time.Second)
+	require.WithinDuration(t, before.Add(18*time.Minute), rec.ExpiresAt, time.Second)
 	require.WithinDuration(t, before.Add(-2*time.Minute), rec.HarvestedAt, time.Second)
 	require.Equal(t, 1, rec.Attempts)
 	require.WithinDuration(t, before.Add(45*time.Second), rec.RecheckAt, 2*time.Second)
@@ -861,7 +861,7 @@ func TestTurnStateProbeLifetimeLegacyAndExpiredBinding(t *testing.T) {
 		usable       bool
 	}{
 		{"legacy_holding", "holding", 2 * time.Minute, true},
-		{"legacy_expired", "holding", 5 * time.Minute, false},
+		{"legacy_expired", "holding", 21 * time.Minute, false},
 		{"legacy_running_unknown_age", "running", time.Minute, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -893,7 +893,7 @@ func TestTurnStateProbeBudgetFailurePreservesExpiry(t *testing.T) {
 	rec, err := tickets.Get(ctx, account.ID)
 	require.NoError(t, err)
 	require.Equal(t, "rpm_budget", rec.LastError)
-	require.WithinDuration(t, now.Add(2*time.Minute), rec.ExpiresAt, time.Second)
+	require.WithinDuration(t, now.Add(18*time.Minute), rec.ExpiresAt, time.Second)
 	require.WithinDuration(t, now.Add(45*time.Second), rec.RecheckAt, time.Second)
 	require.True(t, svc.HasHolding(ctx, account))
 	require.Nil(t, upstream.lastReq)

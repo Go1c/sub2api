@@ -188,11 +188,12 @@ func (p TurnStateProbePolicy) RecheckAfter() time.Duration {
 }
 
 type TurnStateProbeAccountSwitch struct {
-	Enabled bool `json:"enabled"`
+	Enabled bool   `json:"enabled"`
+	Mode    string `json:"mode,omitempty"`
 }
 
 func ParseTurnStateProbeAccountSwitch(extra map[string]any) TurnStateProbeAccountSwitch {
-	out := TurnStateProbeAccountSwitch{Enabled: false}
+	out := TurnStateProbeAccountSwitch{Enabled: false, Mode: TurnStateMissingModeObserve}
 	if extra == nil {
 		return out
 	}
@@ -205,13 +206,19 @@ func ParseTurnStateProbeAccountSwitch(extra map[string]any) TurnStateProbeAccoun
 		return out
 	}
 	var parsed struct {
-		Enabled *bool `json:"enabled"`
+		Enabled *bool  `json:"enabled"`
+		Mode    string `json:"mode"`
 	}
 	if err := json.Unmarshal(encoded, &parsed); err != nil {
 		return out
 	}
 	if parsed.Enabled != nil {
 		out.Enabled = *parsed.Enabled
+	}
+	if strings.EqualFold(strings.TrimSpace(parsed.Mode), TurnStateMissingModeEnforce) {
+		out.Mode = TurnStateMissingModeEnforce
+	} else {
+		out.Mode = TurnStateMissingModeObserve
 	}
 	return out
 }
@@ -365,6 +372,9 @@ type TurnStateTicketRecord struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 	HarvestedAt      time.Time `json:"harvested_at,omitempty"`
 	ExpiresAt        time.Time `json:"expires_at,omitempty"`
+	Generation       int64     `json:"generation,omitempty"`
+	ExitDigest       string    `json:"exit_digest,omitempty"`
+	UpdatedUnixMs    int64     `json:"updated_unix_ms,omitempty"`
 }
 
 func (r TurnStateTicketRecord) Summary() TurnStateProbeAccountItem {
@@ -411,8 +421,9 @@ type TurnStateProbeAccountItem struct {
 }
 
 type TurnStateProbeOverview struct {
-	Policy   TurnStateProbePolicy        `json:"policy"`
-	Accounts []TurnStateProbeAccountItem `json:"accounts"`
+	Policy                      TurnStateProbePolicy        `json:"policy"`
+	Accounts                    []TurnStateProbeAccountItem `json:"accounts"`
+	ImportBatchRuntimeSuspended bool                        `json:"import_batch_runtime_suspended"`
 }
 
 type TurnStateTicketStore interface {
@@ -430,6 +441,12 @@ type TurnStateTicketLookup interface {
 	BindCurrent(ctx context.Context, account *Account, identity, turnKey, model string) (state string, ok bool)
 	// HasHolding reports a bindable holding ticket without pinning a turn.
 	HasHolding(ctx context.Context, account *Account) bool
+}
+
+// TurnStateTicketReader returns the ticket a request is about to inject.
+// The gateway pins that record for the rest of the request.
+type TurnStateTicketReader interface {
+	CurrentTicket(ctx context.Context, account *Account) (*TurnStateTicketRecord, bool)
 }
 
 func MergeTurnStateProbePassword(next, prev TurnStateProbePolicy) TurnStateProbePolicy {

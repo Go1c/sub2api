@@ -242,6 +242,7 @@ type SystemSettings struct {
 	OpenAIAdvancedSchedulerStickyWeightedEnabled           bool    `json:"openai_advanced_scheduler_sticky_weighted_enabled"`
 	OpenAIAdvancedSchedulerSubscriptionPriorityEnabled     bool    `json:"openai_advanced_scheduler_subscription_priority_enabled"`
 	OpenAIImportBatchMinutes                               string  `json:"openai_import_batch_minutes"`
+	OpenAIImportBatchRuntimeSuspended                      bool    `json:"openai_import_batch_runtime_suspended"`
 	OpenAIAdvancedSchedulerLBTopK                          string  `json:"openai_advanced_scheduler_lb_top_k"`
 	OpenAIAdvancedSchedulerWeightPriority                  string  `json:"openai_advanced_scheduler_weight_priority"`
 	OpenAIAdvancedSchedulerWeightLoad                      string  `json:"openai_advanced_scheduler_weight_load"`

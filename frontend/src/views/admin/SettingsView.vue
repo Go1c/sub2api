@@ -10849,6 +10849,7 @@ async function loadSettings() {
       settings.payment_load_balance_strategy || "round-robin";
     // Only assign non-null values from backend (null means unconfigured, keep defaults)
     for (const [key, value] of Object.entries(settings)) {
+      if (key === "openai_import_batch_runtime_suspended") continue;
       if (value !== null && value !== undefined) {
         (form as Record<string, unknown>)[key] = value;
       }
@@ -11615,7 +11616,7 @@ async function saveSettings() {
       adminAPI.settings.updateSettings(payload),
     );
     for (const [key, value] of Object.entries(updated)) {
-      if (key === "openai_fast_policy_settings") continue;
+      if (key === "openai_fast_policy_settings" || key === "openai_import_batch_runtime_suspended") continue;
       if (value !== null && value !== undefined) {
         (form as Record<string, unknown>)[key] = value;
       }

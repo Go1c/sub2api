@@ -869,7 +869,8 @@ export default {
         '529 already has built-in overload handling. Adding it to custom error codes will disable the account instead of temporary overload marking. Are you sure?',
       turnStateProbe: {
         title: 'Turn-State Probe',
-        hint: 'Switch only. Probe exits, quiz, and recheck interval live on the channel subpage. When on, this account harvests and injects its current ticket from channel policy. Turning it off stops new harvests and new-turn injection. The full state string is never shown.'
+        hint: 'Switch only. Probe exits, quiz, and recheck interval live on the channel subpage. When on, this account harvests and injects its current ticket from channel policy. Turning it off stops new harvests and new-turn injection. The full state string is never shown.',
+        enforce: 'Pause this account and switch when no usable ticket is available. Leave unchecked to forward the request unchanged.'
       },
       errorAlert: {
         title: 'Error monitoring',

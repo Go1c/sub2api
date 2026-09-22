@@ -320,6 +320,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		OpenAIAdvancedSchedulerStickyWeightedEnabled:           settings.OpenAIAdvancedSchedulerStickyWeightedEnabled,
 		OpenAIAdvancedSchedulerSubscriptionPriorityEnabled:     settings.OpenAIAdvancedSchedulerSubscriptionPriorityEnabled,
 		OpenAIImportBatchMinutes:                               settings.OpenAIImportBatchMinutes,
+		OpenAIImportBatchRuntimeSuspended:                      service.OpenAIImportBatchRuntimeSuspended(),
 		OpenAIAdvancedSchedulerLBTopK:                          settings.OpenAIAdvancedSchedulerLBTopK,
 		OpenAIAdvancedSchedulerWeightPriority:                  settings.OpenAIAdvancedSchedulerWeightPriority,
 		OpenAIAdvancedSchedulerWeightLoad:                      settings.OpenAIAdvancedSchedulerWeightLoad,

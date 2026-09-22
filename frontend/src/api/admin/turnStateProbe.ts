@@ -47,6 +47,7 @@ export interface TurnStateProbeAccountItem {
 export interface TurnStateProbeOverview {
   policy: TurnStateProbePolicy
   accounts: TurnStateProbeAccountItem[]
+  import_batch_runtime_suspended?: boolean
 }
 
 export const TURN_STATE_PROBE_DEFAULT_MODEL = 'gpt-6-astra'
@@ -93,8 +94,19 @@ function asOverview(data: TurnStateProbeOverview | undefined): TurnStateProbeOve
   const fallback = defaultTurnStateProbePolicy()
   return {
     policy: data?.policy ? { ...fallback, ...data.policy, dynamic: { ...fallback.dynamic, ...data.policy.dynamic } } : fallback,
-    accounts: data?.accounts || []
+    accounts: data?.accounts || [],
+    import_batch_runtime_suspended: Boolean(data?.import_batch_runtime_suspended)
   }
+}
+
+export async function setImportBatchRuntime(
+  suspended: boolean
+): Promise<{ import_batch_runtime_suspended: boolean }> {
+  const { data } = await apiClient.put<{ import_batch_runtime_suspended: boolean }>(
+    '/admin/channels/turn-state-probe/import-batch-runtime',
+    { suspended }
+  )
+  return { import_batch_runtime_suspended: Boolean(data?.import_batch_runtime_suspended) }
 }
 
 export async function getOverview(options?: { signal?: AbortSignal }): Promise<TurnStateProbeOverview> {
@@ -137,6 +149,7 @@ export async function clearTicket(accountId: number): Promise<{ cleared: boolean
 const turnStateProbeAPI = {
   getOverview,
   updatePolicy,
+  setImportBatchRuntime,
   setAccountEnabled,
   runOne,
   clearTicket

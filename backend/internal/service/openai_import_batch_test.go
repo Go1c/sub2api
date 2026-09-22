@@ -96,6 +96,25 @@ func TestImportBatchRepeatedFailuresDemoteOldAccount(t *testing.T) {
 	require.Equal(t, int64(2), batchSelect(t, svc, "").Account.ID)
 }
 
+func TestImportBatchRuntimeSwitchIgnoresStoredMinutes(t *testing.T) {
+	resetOpenAIImportBatchRuntimeForTest()
+	t.Cleanup(resetOpenAIImportBatchRuntimeForTest)
+	svc := batchTestService(t, "true", batchTestAccounts(), schedulerTestConcurrencyCache{loadMap: map[int64]*AccountLoadInfo{1: {AccountID: 1, LoadRate: 75, CurrentConcurrency: 6}, 2: {AccountID: 2}}})
+	require.Equal(t, 30, svc.openAIImportBatchMinutes(context.Background()))
+	require.Equal(t, int64(1), batchSelect(t, svc, "").Account.ID)
+
+	SetOpenAIImportBatchRuntimeSuspended(true)
+	require.True(t, OpenAIImportBatchRuntimeSuspended())
+	require.Equal(t, 0, svc.openAIImportBatchMinutes(context.Background()))
+	require.Equal(t, "30", svc.storedOpenAIImportBatchMinutes(context.Background()))
+	require.Equal(t, int64(2), batchSelect(t, svc, "").Account.ID)
+
+	SetOpenAIImportBatchRuntimeSuspended(false)
+	require.Equal(t, 30, svc.openAIImportBatchMinutes(context.Background()))
+	require.Equal(t, "30", svc.storedOpenAIImportBatchMinutes(context.Background()))
+	require.Equal(t, int64(1), batchSelect(t, svc, "").Account.ID)
+}
+
 func TestImportBatchClientErrorsDoNotDemote(t *testing.T) {
 	svc := batchTestService(t, "true", batchTestAccounts(), schedulerTestConcurrencyCache{})
 	account := batchTestAccounts()[0]

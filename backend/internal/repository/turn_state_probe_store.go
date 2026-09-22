@@ -66,6 +66,7 @@ func (s *turnStateProbeStore) Put(ctx context.Context, rec service.TurnStateTick
 	if rec.UpdatedAt.IsZero() {
 		rec.UpdatedAt = time.Now()
 	}
+	rec.UpdatedUnixMs = rec.UpdatedAt.UnixMilli()
 	raw, err := json.Marshal(rec)
 	if err != nil {
 		return err
@@ -76,7 +77,31 @@ func (s *turnStateProbeStore) Put(ctx context.Context, rec service.TurnStateTick
 			ttl = wait
 		}
 	}
-	return s.rdb.Set(ctx, turnStateTicketKey(rec.AccountID), raw, ttl).Err()
+	// A newer generation replaces the whole record. An older one is ignored so
+	// a late harvest cannot clobber the ticket and exit written together.
+	const putIfNewer = `
+local cur = redis.call("GET", KEYS[1])
+if cur then
+  local ok, old = pcall(cjson.decode, cur)
+  if ok and type(old) == "table" then
+    local oldGen = tonumber(old["generation"]) or 0
+    local newGen = tonumber(ARGV[2]) or 0
+    if newGen < oldGen then
+      return 0
+    end
+    if newGen == oldGen and newGen > 0 then
+      local oldAt = tonumber(old["updated_unix_ms"]) or 0
+      local newAt = tonumber(ARGV[3]) or 0
+      if oldAt > 0 and newAt > 0 and newAt < oldAt then
+        return 0
+      end
+    end
+  end
+end
+redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[4])
+return 1
+`
+	return s.rdb.Eval(ctx, putIfNewer, []string{turnStateTicketKey(rec.AccountID)}, raw, rec.Generation, rec.UpdatedUnixMs, ttl.Milliseconds()).Err()
 }
 
 func (s *turnStateProbeStore) Delete(ctx context.Context, accountID int64) error {

@@ -859,6 +859,7 @@ func registerTurnStateProbeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		g.GET("", h.Admin.TurnStateProbe.Overview)
 		g.PUT("", h.Admin.TurnStateProbe.UpdatePolicy)
+		g.PUT("/import-batch-runtime", h.Admin.TurnStateProbe.SetImportBatchRuntime)
 		g.GET("/accounts", h.Admin.TurnStateProbe.Overview)
 	}
 	accounts := admin.Group("/accounts")

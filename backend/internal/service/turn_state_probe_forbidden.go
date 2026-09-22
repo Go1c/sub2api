@@ -26,9 +26,9 @@ func turnStateProbeForbiddenDelay(failures int) time.Duration {
 		failures = 1
 	}
 	if failures >= 5 {
-		return 30 * time.Minute
+		return 30 * time.Second
 	}
-	return 2 * time.Minute << (failures - 1)
+	return 2 * time.Second << (failures - 1)
 }
 
 // Inspect a bounded response, never persist or log free-form body text: error

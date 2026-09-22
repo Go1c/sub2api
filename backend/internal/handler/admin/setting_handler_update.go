@@ -279,6 +279,7 @@ type UpdateSettingsRequest struct {
 	OpenAIAdvancedSchedulerStickyWeightedEnabled       *bool    `json:"openai_advanced_scheduler_sticky_weighted_enabled"`
 	OpenAIAdvancedSchedulerSubscriptionPriorityEnabled *bool    `json:"openai_advanced_scheduler_subscription_priority_enabled"`
 	OpenAIImportBatchMinutes                           *string  `json:"openai_import_batch_minutes"`
+	OpenAIImportBatchRuntimeSuspended                  *bool    `json:"openai_import_batch_runtime_suspended"`
 	OpenAIAdvancedSchedulerLBTopK                      *string  `json:"openai_advanced_scheduler_lb_top_k"`
 	OpenAIAdvancedSchedulerWeightPriority              *string  `json:"openai_advanced_scheduler_weight_priority"`
 	OpenAIAdvancedSchedulerWeightLoad                  *string  `json:"openai_advanced_scheduler_weight_load"`
@@ -522,6 +523,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	passkeyEnabled := previousSettings.PasskeyEnabled
 	if req.PasskeyEnabled != nil {
 		passkeyEnabled = *req.PasskeyEnabled
+	}
+	if req.OpenAIImportBatchRuntimeSuspended != nil {
+		service.SetOpenAIImportBatchRuntimeSuspended(*req.OpenAIImportBatchRuntimeSuspended)
 	}
 	registrationEmailDomainQuotaEnabled := previousSettings.RegistrationEmailDomainQuotaEnabled
 	if req.RegistrationEmailDomainQuotaEnabled != nil {
@@ -2328,6 +2332,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		OpenAIAdvancedSchedulerStickyWeightedEnabled:           updatedSettings.OpenAIAdvancedSchedulerStickyWeightedEnabled,
 		OpenAIAdvancedSchedulerSubscriptionPriorityEnabled:     updatedSettings.OpenAIAdvancedSchedulerSubscriptionPriorityEnabled,
 		OpenAIImportBatchMinutes:                               updatedSettings.OpenAIImportBatchMinutes,
+		OpenAIImportBatchRuntimeSuspended:                      service.OpenAIImportBatchRuntimeSuspended(),
 		OpenAIAdvancedSchedulerLBTopK:                          updatedSettings.OpenAIAdvancedSchedulerLBTopK,
 		OpenAIAdvancedSchedulerWeightPriority:                  updatedSettings.OpenAIAdvancedSchedulerWeightPriority,
 		OpenAIAdvancedSchedulerWeightLoad:                      updatedSettings.OpenAIAdvancedSchedulerWeightLoad,

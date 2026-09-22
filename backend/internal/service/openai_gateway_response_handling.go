@@ -249,6 +249,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	sawBareError := false
 	sawResponseFailed := false
 	terminalEventType := ""
+	var terminalPayload []byte
 	responsesSemanticOutputSeen := false
 	capacityFailoverSuppressedLogged := false
 	failedMessage := ""
@@ -387,6 +388,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		if sawTerminalEvent && !sawFailedEvent {
 			s.clearOpenAIProxyStreamDisconnect(account)
 		}
+		s.noteTurnStateStreamOutcome(c, account, observer, originalModel, terminalEventType, terminalPayload, sawTerminalEvent, sawFailedEvent, false)
 		if !sawTerminalEvent && !openAIStreamClientOutputStarted(c, clientOutputStarted) && !eventShouldFlush {
 			return resultWithUsage(), s.newOpenAIStreamFailoverError(
 				c,
@@ -401,6 +403,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		if !sawTerminalEvent {
 			if openAIStreamClientOutputStarted(c, clientOutputStarted) && !clientDisconnected {
 				s.recordOpenAIProxyStreamDisconnect(account, errors.New("stream ended before terminal event"), upstreamRequestID)
+				s.noteTurnStateStreamOutcome(c, account, observer, originalModel, "", nil, false, false, true)
 			}
 			return resultWithUsage(), fmt.Errorf("stream usage incomplete: missing terminal event")
 		}
@@ -501,8 +504,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			if openAIStreamEventIsTerminalWithType(data, eventType) {
 				sawTerminalEvent = true
 				terminalEventType = eventType
+				terminalPayload = append(terminalPayload[:0], dataBytes...)
 				if strings.TrimSpace(data) == "[DONE]" {
 					terminalEventType = "[DONE]"
+					terminalPayload = nil
 				}
 			}
 			if responseID == "" {
@@ -1653,6 +1658,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
 	}
+	s.noteTurnStateBusinessPayload(c, account, originalModel, "", body, resp.StatusCode, false)
 
 	return &openaiNonStreamingResult{
 		OpenAIUsage:      usage,
@@ -1760,6 +1766,7 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
 	}
+	s.noteTurnStateBusinessPayload(c, account, originalModel, terminalType, terminalPayload, resp.StatusCode, !terminalOK)
 
 	return &openaiNonStreamingResult{
 		OpenAIUsage:      usage,

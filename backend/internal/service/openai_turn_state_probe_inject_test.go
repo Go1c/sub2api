@@ -81,6 +81,25 @@ func TestApplyTurnStateProbe_DisabledSwitchNoInject(t *testing.T) {
 	require.Equal(t, "client-blob", gjson.GetBytes(out, "client_metadata."+openAICodexTurnStateHeader).String())
 }
 
+func TestEnforceTurnStateTicket_ObserveForwardsWithoutTicket(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	svc.SetTurnStateTicketLookup(injectTurnStateTicketLookup(""))
+	account := turnStateProbeInjectAccount(true)
+	require.NoError(t, svc.enforceTurnStateTicket(nil, account))
+}
+
+func TestEnforceTurnStateTicket_EnforceSwitchesWithoutTicket(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	svc.SetTurnStateTicketLookup(injectTurnStateTicketLookup(""))
+	account := turnStateProbeInjectAccount(true)
+	account.Extra[TurnStateProbeExtraKey] = map[string]any{"enabled": true, "mode": "enforce"}
+	err := svc.enforceTurnStateTicket(nil, account)
+	var failover *UpstreamFailoverError
+	require.ErrorAs(t, err, &failover)
+	require.Equal(t, GatewayFailureReason("ticket_missing"), failover.Reason)
+	require.Equal(t, NextAccountRetry, failover.NextAccountAction)
+}
+
 func TestApplyTurnStateProbe_NilLookupNoPanicNoInject(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	account := turnStateProbeInjectAccount(true)

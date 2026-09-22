@@ -213,6 +213,14 @@
             :aria-label="t('admin.accounts.turnStateProbe.title')"
           />
         </div>
+        <label v-if="turnStateProbeEnabled" class="mt-3 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+          <input
+            v-model="turnStateProbeEnforce"
+            type="checkbox"
+            data-testid="turn-state-probe-enforce"
+          />
+          {{ t('admin.accounts.turnStateProbe.enforce') }}
+        </label>
       </div>
 
       <!-- API Key fields (only for apikey type) -->
@@ -3665,6 +3673,7 @@ type ErrorAlertRuleForm = {
   max_sends: number | null
 }
 const turnStateProbeEnabled = ref(false)
+const turnStateProbeEnforce = ref(false)
 const errorAlertEnabled = ref(true)
 const errorAlertKeywords = ref<string[]>([])
 const errorAlertKeywordInput = ref('')
@@ -3860,16 +3869,22 @@ function isOpenAIOauthAccount() {
 
 function loadTurnStateProbeFromExtra(extra: Record<string, unknown> | undefined) {
   const raw = extra?.[TURN_STATE_PROBE_EXTRA_KEY]
+  turnStateProbeEnforce.value = false
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     turnStateProbeEnabled.value = false
     return
   }
-  turnStateProbeEnabled.value = (raw as Record<string, unknown>).enabled === true
+  const record = raw as Record<string, unknown>
+  turnStateProbeEnabled.value = record.enabled === true
+  turnStateProbeEnforce.value = record.mode === 'enforce'
 }
 
 function applyTurnStateProbeToUpdatePayload(updatePayload: Record<string, unknown>) {
   if (!isOpenAIOauthAccount()) return
-  const next = { enabled: turnStateProbeEnabled.value }
+  const next: Record<string, unknown> = { enabled: turnStateProbeEnabled.value }
+  if (turnStateProbeEnabled.value && turnStateProbeEnforce.value) {
+    next.mode = 'enforce'
+  }
   if (updatePayload.extra != null) {
     updatePayload.extra = {
       ...(updatePayload.extra as Record<string, unknown>),

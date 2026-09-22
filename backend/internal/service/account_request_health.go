@@ -34,6 +34,7 @@ type RequestHealthEvent struct {
 	Message    string    `json:"message,omitempty"`
 	Model      string    `json:"model,omitempty"`
 	Endpoint   string    `json:"endpoint,omitempty"`
+	Class      string    `json:"class,omitempty"`
 	OccurredAt time.Time `json:"occurred_at"`
 }
 
@@ -45,6 +46,7 @@ type RequestHealthRecordInput struct {
 	Message    string
 	Model      string
 	Endpoint   string
+	Class      string
 	OccurredAt time.Time
 }
 
@@ -55,6 +57,7 @@ type RequestHealthOutcomeDTO struct {
 	OccurredAt time.Time `json:"occurred_at"`
 	Model      string    `json:"model,omitempty"`
 	Endpoint   string    `json:"endpoint,omitempty"`
+	Class      string    `json:"class,omitempty"`
 }
 
 type AccountRequestHealthLineDTO struct {
@@ -196,6 +199,7 @@ func (in RequestHealthRecordInput) toEvent() RequestHealthEvent {
 		Message:    truncateRequestHealthMessage(in.Message),
 		Model:      strings.TrimSpace(in.Model),
 		Endpoint:   strings.TrimSpace(in.Endpoint),
+		Class:      strings.TrimSpace(in.Class),
 		OccurredAt: occurredAt,
 	}
 }

@@ -1,4 +1,4 @@
-import { defineComponent } from 'vue'
+import { defineComponent, h } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,6 +8,7 @@ import ChannelTurnStateView from '@/views/admin/ChannelTurnStateView.vue'
 const {
   getOverview,
   updatePolicy,
+  setImportBatchRuntime,
   runOne,
   clearTicket,
   getAllProxies,
@@ -16,6 +17,7 @@ const {
 } = vi.hoisted(() => ({
   getOverview: vi.fn(),
   updatePolicy: vi.fn(),
+  setImportBatchRuntime: vi.fn(),
   runOne: vi.fn(),
   clearTicket: vi.fn(),
   getAllProxies: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock('@/api/admin', () => ({
     turnStateProbe: {
       getOverview,
       updatePolicy,
+      setImportBatchRuntime,
       runOne,
       clearTicket
     },
@@ -151,7 +154,21 @@ function mountView() {
         BaseDialog: BaseDialogStub,
         ConfirmDialog: ConfirmDialogStub,
         EmptyState: true,
-        Toggle: true,
+        Toggle: defineComponent({
+          props: { modelValue: { type: Boolean, default: false } },
+          emits: ['update:modelValue'],
+          inheritAttrs: false,
+          setup(props, { attrs, emit }) {
+            return () =>
+              h('input', {
+                ...attrs,
+                type: 'checkbox',
+                checked: props.modelValue,
+                onChange: (event: Event) =>
+                  emit('update:modelValue', (event.target as HTMLInputElement).checked)
+              })
+          }
+        }),
         Icon: true
       }
     }
@@ -160,7 +177,7 @@ function mountView() {
 
 describe('ChannelTurnStateView', () => {
   beforeEach(() => {
-    for (const fn of [getOverview, updatePolicy, runOne, clearTicket, getAllProxies, showSuccess, showError]) {
+    for (const fn of [getOverview, updatePolicy, setImportBatchRuntime, runOne, clearTicket, getAllProxies, showSuccess, showError]) {
       fn.mockReset()
     }
     getOverview.mockResolvedValue(makeOverview())
@@ -219,6 +236,21 @@ describe('ChannelTurnStateView', () => {
     const payload = updatePolicy.mock.calls[0]?.[0]
     expect(payload.dynamic.password).toBeUndefined()
     expect(showSuccess).toHaveBeenCalledWith('admin.channelTurnState.saveSuccess')
+    expect(setImportBatchRuntime).not.toHaveBeenCalled()
+  })
+
+  it('toggles import-batch routing without saving probe policy', async () => {
+    getOverview.mockResolvedValue(makeOverview({ import_batch_runtime_suspended: false }))
+    setImportBatchRuntime.mockResolvedValue({ import_batch_runtime_suspended: true })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="turn-state-settings"]').trigger('click')
+    const runtime = wrapper.get('[data-testid="turn-state-import-batch-runtime"]')
+    expect((runtime.element as HTMLInputElement).checked).toBe(true)
+    await runtime.setValue(false)
+    await flushPromises()
+    expect(setImportBatchRuntime).toHaveBeenCalledWith(true)
+    expect(updatePolicy).not.toHaveBeenCalled()
   })
 
   it('starts a probe for one account', async () => {

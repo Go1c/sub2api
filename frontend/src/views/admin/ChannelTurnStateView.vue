@@ -354,6 +354,22 @@
             data-testid="turn-state-rpm"
           />
         </div>
+
+        <div class="flex items-center justify-between gap-4 border-t border-gray-100 pt-5 dark:border-dark-700">
+          <div>
+            <p class="text-sm font-medium text-gray-800 dark:text-gray-200">
+              {{ t('admin.channelTurnState.importBatchRuntime') }}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.channelTurnState.importBatchRuntimeHint') }}
+            </p>
+          </div>
+          <Toggle
+            :model-value="!importBatchRuntimeSuspended"
+            data-testid="turn-state-import-batch-runtime"
+            @update:model-value="setImportBatchRuntime"
+          />
+        </div>
       </div>
 
       <template #footer>
@@ -419,6 +435,8 @@ const appStore = useAppStore()
 const loading = ref(true)
 const starting = ref(false)
 const saving = ref(false)
+const importBatchRuntimeSuspended = ref(false)
+const importBatchRuntimeSaving = ref(false)
 const showSettings = ref(false)
 const accounts = ref<TurnStateProbeAccountItem[]>([])
 const pendingClear = ref<TurnStateProbeAccountItem | null>(null)
@@ -518,6 +536,7 @@ async function loadOverview(quiet = false) {
   if (!quiet) loading.value = true
   try {
     const out = await adminAPI.turnStateProbe.getOverview({ signal: ctrl.signal })
+    importBatchRuntimeSuspended.value = Boolean(out.import_batch_runtime_suspended)
     policy.value = { ...defaultTurnStateProbePolicy(), ...out.policy, dynamic: { ...defaultTurnStateProbePolicy().dynamic, ...out.policy.dynamic } }
     accounts.value = out.accounts || []
   } catch (err) {
@@ -581,6 +600,22 @@ function buildPolicyPayload(): TurnStateProbePolicyPayload {
     recheck_minutes: 20,
     overload_threshold: Number(draft.overloadThreshold),
     rpm: Number(draft.rpm) || 6
+  }
+}
+
+async function setImportBatchRuntime(enabled: boolean) {
+  if (importBatchRuntimeSaving.value) return
+  const previous = importBatchRuntimeSuspended.value
+  importBatchRuntimeSuspended.value = !enabled
+  importBatchRuntimeSaving.value = true
+  try {
+    const updated = await adminAPI.turnStateProbe.setImportBatchRuntime(!enabled)
+    importBatchRuntimeSuspended.value = Boolean(updated.import_batch_runtime_suspended)
+  } catch (err) {
+    importBatchRuntimeSuspended.value = previous
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelTurnState.saveFailed')))
+  } finally {
+    importBatchRuntimeSaving.value = false
   }
 }
 

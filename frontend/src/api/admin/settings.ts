@@ -688,6 +688,7 @@ export interface SystemSettings {
   openai_advanced_scheduler_sticky_weighted_enabled?: boolean;
   openai_advanced_scheduler_subscription_priority_enabled?: boolean;
   openai_import_batch_minutes?: string;
+  openai_import_batch_runtime_suspended?: boolean;
   openai_advanced_scheduler_lb_top_k?: string;
   openai_advanced_scheduler_weight_priority?: string;
   openai_advanced_scheduler_weight_load?: string;
@@ -1006,6 +1007,7 @@ export interface UpdateSettingsRequest {
   openai_advanced_scheduler_sticky_weighted_enabled?: boolean;
   openai_advanced_scheduler_subscription_priority_enabled?: boolean;
   openai_import_batch_minutes?: string;
+  openai_import_batch_runtime_suspended?: boolean;
   openai_advanced_scheduler_lb_top_k?: string;
   openai_advanced_scheduler_weight_priority?: string;
   openai_advanced_scheduler_weight_load?: string;
@@ -1076,6 +1078,19 @@ export async function updateSettings(
     settings,
   );
   return data;
+}
+
+export async function setOpenAIImportBatchRuntimeSuspended(
+  suspended: boolean,
+): Promise<{ openai_import_batch_runtime_suspended: boolean }> {
+  const { data } = await apiClient.put<SystemSettings>("/admin/settings", {
+    openai_import_batch_runtime_suspended: suspended,
+  });
+  return {
+    openai_import_batch_runtime_suspended: Boolean(
+      data.openai_import_batch_runtime_suspended,
+    ),
+  };
 }
 
 /**
@@ -1571,6 +1586,7 @@ export async function resetWebSearchUsage(payload: {
 export const settingsAPI = {
   getSettings,
   updateSettings,
+  setOpenAIImportBatchRuntimeSuspended,
   testSmtpConnection,
   sendTestEmail,
   getEmailTemplates,

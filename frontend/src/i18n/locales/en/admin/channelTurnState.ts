@@ -34,6 +34,8 @@ export default {
     overloadThresholdHint: 'Default: 3; 0 disables this trigger. Counts across account exits and renews immediately at the threshold. Generic 503 errors do not count.',
     recheckMinutes: '{n} min',
     rpm: 'Calls per minute',
+    importBatchRuntime: 'Use import batches in this process',
+    importBatchRuntimeHint: 'Turning this off returns this process to the previous scheduler immediately. The saved 0/10/30 minutes stay in system settings and apply again when this is turned back on. A restart starts with it on. It is not saved with this policy.',
     saveSuccess: 'Policy saved',
     loadError: 'Failed to load Turn-State probe',
     saveFailed: 'Failed to save policy',

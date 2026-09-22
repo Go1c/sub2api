@@ -22,7 +22,7 @@ metadata:
 - **写路径**：成功记在网关 `RecordUsage`，失败记在 `OpsService.RecordError(Batch)`。OpenAI IP 组在解析出口后把 `EgressProxyID` 写入请求上下文，失败/成功都能落到对应 IP。usage worker 显式复制出口 ID；错误队列保留每次尝试的出口快照，并在 JSON 限长后保持索引对应，不改写持久化的运维事件。单 IP 读取账号汇总，避免遗漏无代理快照的失败。
 - **存储**：Redis 环形缓冲，账号 key `reqhealth:acct:{id}`，账号×代理 key `reqhealth:acct:{id}:proxy:{proxyID}`；`LPUSH` + `LTRIM 0 19`，TTL 7 天。列表按最旧在左、最新在右返回。
 - **读路径**：`POST /admin/accounts/request-health/batch`，只查当前页账号。运行态通过 Kin 现有 `ConcurrencyCache` 计数（包含过期槽位清理与 live lease），IP 组复用 `conc:acct-proxy` 和 `openai:ip_group_cooldown`，单 IP 使用账号级并发，不扫 `usage_logs` / `ops_error_logs`。
-- **展示**：绿成功、红失败、灰空槽；状态优先级 冷却中 > 过载 > 限流 > 执行中 > 空闲。窗口 8/12/16/20，默认 12，存在 localStorage。列默认显示。
+- **展示**：绿成功、红失败、灰空槽；状态优先级 冷却中 > 过载 > 限流 > 执行中 > 空闲。窗口 8/12/16/20，默认 12，存在 localStorage。列默认显示。事件可带短分类（身份变化、票据 312、出口变化、模型改写、传输失败、资源限制），红块能看到分类，看不到票文或 Cookie。
 
 ## 已决策
 
