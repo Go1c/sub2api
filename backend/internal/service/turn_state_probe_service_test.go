@@ -438,6 +438,7 @@ func TestTurnStateProbeAccountHarvestStoresHoldingTicket(t *testing.T) {
 	upstream := &recordingTurnStateHTTPUpstream{handler: handler}
 	tickets := newMemoryTurnStateTicketStore()
 	account := newOAuthProbeAccount(11, true)
+	account.Credentials["cookie"] = "__Secure-next-auth.session-token=session-cookie"
 	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
 	policy := DefaultTurnStateProbePolicy()
 	policy.Enabled = true
@@ -453,6 +454,7 @@ func TestTurnStateProbeAccountHarvestStoresHoldingTicket(t *testing.T) {
 	require.NotNil(t, upstream.lastReq)
 	require.Equal(t, http.MethodPost, upstream.lastReq.Method)
 	require.Equal(t, chatgptCodexURL, upstream.lastReq.URL.String())
+	require.Equal(t, "__Secure-next-auth.session-token=session-cookie", upstream.lastReq.Header.Get("Cookie"))
 	require.Empty(t, upstream.lastReq.Header.Get("OpenAI-Beta"))
 	require.NotContains(t, string(upstream.lastBody), "max_output_tokens")
 	require.Contains(t, upstream.lastProxy, "user1-region-")
@@ -469,6 +471,7 @@ func TestTurnStateProbeAccountHarvestStoresHoldingTicket(t *testing.T) {
 	require.Equal(t, "gpt-6-astra", ticket.Model)
 	require.Equal(t, saved.Revision, ticket.PolicyRevision)
 	require.False(t, ticket.RecheckAt.IsZero())
+	require.WithinDuration(t, ticket.HarvestedAt.Add(turnStateProbeTicketTTL), ticket.ExpiresAt, time.Second)
 	require.Empty(t, ticket.LastError)
 	require.NotContains(t, ticket.Summary().StateHash, stateBlob)
 }
@@ -749,10 +752,10 @@ func TestTurnStateProbeTicketLifetime(t *testing.T) {
 		age          time.Duration
 		usable       bool
 	}{
-		{"valid", "holding", 20 * time.Minute, true},
-		{"expired", "holding", 61 * time.Minute, false},
-		{"refreshing", "running", 20 * time.Minute, true},
-		{"retrying", "cooldown", 20 * time.Minute, true},
+		{"valid", "holding", 2 * time.Minute, true},
+		{"expired", "holding", 5 * time.Minute, false},
+		{"refreshing", "running", 2 * time.Minute, true},
+		{"retrying", "cooldown", 2 * time.Minute, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tickets := newMemoryTurnStateTicketStore()
@@ -777,13 +780,13 @@ func TestTurnStateProbeRefreshFailurePreservesTicketAndRetriesAfter45Seconds(t *
 	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
 	policy := enableTurnStateProbePolicy(t, svc)
 	before := time.Now()
-	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{AccountID: account.ID, State: "still-valid", Status: "holding", PolicyRevision: policy.Revision, UpdatedAt: before.Add(-20 * time.Minute)}))
+	require.NoError(t, tickets.Put(context.Background(), TurnStateTicketRecord{AccountID: account.ID, State: "still-valid", Status: "holding", PolicyRevision: policy.Revision, UpdatedAt: before.Add(-2 * time.Minute)}))
 	require.Error(t, svc.ProbeAccount(context.Background(), account.ID))
 	rec, err := tickets.Get(context.Background(), account.ID)
 	require.NoError(t, err)
 	require.Equal(t, "still-valid", rec.State)
-	require.WithinDuration(t, before.Add(40*time.Minute), rec.ExpiresAt, time.Second)
-	require.WithinDuration(t, before.Add(-20*time.Minute), rec.HarvestedAt, time.Second)
+	require.WithinDuration(t, before.Add(2*time.Minute), rec.ExpiresAt, time.Second)
+	require.WithinDuration(t, before.Add(-2*time.Minute), rec.HarvestedAt, time.Second)
 	require.Equal(t, 1, rec.Attempts)
 	require.WithinDuration(t, before.Add(45*time.Second), rec.RecheckAt, 2*time.Second)
 	require.True(t, svc.HasHolding(context.Background(), account))
@@ -857,8 +860,8 @@ func TestTurnStateProbeLifetimeLegacyAndExpiredBinding(t *testing.T) {
 		age          time.Duration
 		usable       bool
 	}{
-		{"legacy_holding", "holding", 30 * time.Minute, true},
-		{"legacy_expired", "holding", time.Hour, false},
+		{"legacy_holding", "holding", 2 * time.Minute, true},
+		{"legacy_expired", "holding", 5 * time.Minute, false},
 		{"legacy_running_unknown_age", "running", time.Minute, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -885,12 +888,12 @@ func TestTurnStateProbeBudgetFailurePreservesExpiry(t *testing.T) {
 	policy := enableTurnStateProbePolicy(t, svc)
 	now := time.Now()
 	tickets.rpm["global"] = policy.RPM
-	require.NoError(t, tickets.Put(ctx, TurnStateTicketRecord{AccountID: account.ID, State: "valid", Status: "holding", UpdatedAt: now.Add(-21 * time.Minute), PolicyRevision: policy.Revision}))
+	require.NoError(t, tickets.Put(ctx, TurnStateTicketRecord{AccountID: account.ID, State: "valid", Status: "holding", UpdatedAt: now.Add(-2 * time.Minute), PolicyRevision: policy.Revision}))
 	require.ErrorIs(t, svc.ProbeAccount(ctx, account.ID), ErrTurnStateProbeRateLimited)
 	rec, err := tickets.Get(ctx, account.ID)
 	require.NoError(t, err)
 	require.Equal(t, "rpm_budget", rec.LastError)
-	require.WithinDuration(t, now.Add(39*time.Minute), rec.ExpiresAt, time.Second)
+	require.WithinDuration(t, now.Add(2*time.Minute), rec.ExpiresAt, time.Second)
 	require.WithinDuration(t, now.Add(45*time.Second), rec.RecheckAt, time.Second)
 	require.True(t, svc.HasHolding(ctx, account))
 	require.Nil(t, upstream.lastReq)

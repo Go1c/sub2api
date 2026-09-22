@@ -26,7 +26,10 @@ const (
 	turnStateProbeHarvestTimeout     = 45 * time.Second
 	turnStateProbeLockTTL            = 2 * time.Minute
 	turnStateProbeSIDLen             = 8
-	turnStateProbeTicketTTL          = time.Hour
+	// Upstream Turn-State tickets observed after the 292 change expire after
+	// roughly four minutes. Keep the local lifetime below that boundary so a
+	// stale ticket is never injected after the upstream has stopped accepting it.
+	turnStateProbeTicketTTL          = 4 * time.Minute
 	turnStateProbeRetryInterval      = 45 * time.Second
 	turnStateProbeHarvestConcurrency = 10
 	turnStateProbeSIDAlphabet        = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -759,6 +762,7 @@ func (s *TurnStateProbeService) harvestOnce(ctx context.Context, account *Accoun
 	req.Host = "chatgpt.com"
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
+	setTurnStateProbeCookie(req.Header, account)
 	req.Header.Set("accept", "text/event-stream")
 	canonical := resolveCodexOutboundIdentity("")
 	req.Header.Set("Originator", canonical.originator)
@@ -797,6 +801,22 @@ func (s *TurnStateProbeService) harvestOnce(ctx context.Context, account *Accoun
 	attempt.ObservedModel = sse.Model
 	attempt.AnswerText = sse.Text
 	return attempt, nil, nil
+}
+
+// setTurnStateProbeCookie forwards the account's explicitly stored browser
+// cookie to the probe. The normal gateway deliberately strips inbound Cookie
+// headers; this is a server-owned probe request and needs the credential that
+// was configured for the account. Accept session_key as a legacy alias.
+func setTurnStateProbeCookie(headers http.Header, account *Account) {
+	if headers == nil || account == nil {
+		return
+	}
+	for _, key := range []string{"cookie", "session_key"} {
+		if value := strings.TrimSpace(account.GetCredential(key)); value != "" {
+			headers.Set("Cookie", value)
+			return
+		}
+	}
 }
 
 func (s *TurnStateProbeService) probeAccessToken(ctx context.Context, account *Account) (string, error) {

@@ -22,8 +22,8 @@ func TestTurnStateProbeForbiddenPreservesTicketAndBacksOff(t *testing.T) {
 	tickets := newMemoryTurnStateTicketStore()
 	svc := newTurnStateProbeServiceForTest(t, account, tickets, upstream)
 	policy := enableTurnStateProbePolicy(t, svc)
-	harvested := time.Now().Add(-20 * time.Minute)
-	expires := harvested.Add(time.Hour)
+	harvested := time.Now().Add(-2 * time.Minute)
+	expires := harvested.Add(turnStateProbeTicketTTL)
 	require.NoError(t, tickets.Put(ctx, TurnStateTicketRecord{AccountID: account.ID, State: "valid-old-state", Status: "holding", PolicyRevision: policy.Revision, HarvestedAt: harvested, ExpiresAt: expires, RecheckAt: time.Now().Add(-time.Second)}))
 	for _, delay := range []time.Duration{2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute, 30 * time.Minute, 30 * time.Minute} {
 		// Simulate a fresh RPM window and a due scheduled retry without sleeping.
