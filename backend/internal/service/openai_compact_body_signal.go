@@ -3,10 +3,31 @@ package service
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
+
+// openAICompactStreamIdleTimeout 是原生 remote compaction v2 的上游读空闲下限。
+// compact 可能连续几分钟没有 SSE；普通文本流空闲（常见 180s）会把流掐掉，
+// 而此时下游往往已经收到过事件。严格 Responses 客户端在缺终态时会报
+// missing_terminal / stream closed before response.completed。
+const openAICompactStreamIdleTimeout = 900 * time.Second
+
+// resolveOpenAITextStreamIdleTimeout 返回非 Grok 文本流的上游读空闲超时。
+// 配置关闭（cfgSec<=0）时保持关闭；原生 compact v2 在配置开启时把窗口抬到
+// 至少 900s，避免压缩回合被普通 180s 闸误杀。
+func resolveOpenAITextStreamIdleTimeout(c *gin.Context, cfgSec int) time.Duration {
+	if cfgSec <= 0 {
+		return 0
+	}
+	d := time.Duration(cfgSec) * time.Second
+	if isOpenAINativeCompactionV2(c) && d < openAICompactStreamIdleTimeout {
+		return openAICompactStreamIdleTimeout
+	}
+	return d
+}
 
 // openAINativeCompactionV2Key 标记本请求是原生 remote compaction v2
 // （裸 /responses + stream:true + compaction_trigger），由 handler 在判定后
