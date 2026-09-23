@@ -19,6 +19,8 @@ type Model struct {
 // DefaultModels OpenAI models list
 var DefaultModels = []Model{
 	{ID: "gpt-5.6", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 (Sol)"},
+	{ID: "gpt-6-sol", Object: "model", Created: 1790035200, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 Sol"},
+	{ID: "gpt-6-luna", Object: "model", Created: 1790035200, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 Luna"},
 	{ID: "gpt-6-astra", Object: "model", Created: 1788480000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 Astra"},
 	{ID: "gpt-6", Object: "model", Created: 1788480000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-6 (Astra)"},
 	{ID: "gpt-5.6-sol", Object: "model", Created: 1780876800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.6 Sol"},
@@ -103,4 +105,41 @@ func CodexBaseInstructionsForModel(model string) string {
 		}
 	}
 	return latestCodexInstructions()
+}
+
+// IsGPT6SolOrLunaModelSpelling recognizes official IDs and existing local effort/compact suffixes.
+func IsGPT6SolOrLunaModelSpelling(model string) bool {
+	canonical := canonicalizeGPT6SolLunaSpelling(model)
+	for _, base := range []string{"gpt-6-sol", "gpt-6-luna"} {
+		if canonical == base {
+			return true
+		}
+		suffix, ok := strings.CutPrefix(canonical, base+"-")
+		if ok {
+			switch suffix {
+			case "none", "low", "medium", "high", "xhigh", "max", "openai-compact":
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func canonicalizeGPT6SolLunaSpelling(model string) string {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if model == "" {
+		return ""
+	}
+	if idx := strings.LastIndex(model, "/"); idx >= 0 {
+		model = model[idx+1:]
+	}
+	model = strings.ReplaceAll(model, "_", "-")
+	model = strings.Join(strings.Fields(model), "-")
+	for strings.Contains(model, "--") {
+		model = strings.ReplaceAll(model, "--", "-")
+	}
+	if strings.HasPrefix(model, "gpt6") {
+		model = "gpt-6" + strings.TrimPrefix(model, "gpt6")
+	}
+	return model
 }

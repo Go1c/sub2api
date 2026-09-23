@@ -19,6 +19,8 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-5.6-terra')
     expect(models).toContain('gpt-6')
     expect(models).toContain('gpt-6-astra')
+    expect(models).toContain('gpt-6-sol')
+    expect(models).toContain('gpt-6-luna')
   })
 
   it('openai 账号映射预设包含 Luna 直通和 Luna→Terra', () => {
@@ -48,6 +50,13 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gemini-2.5-flash-image')
     expect(models).toContain('gemini-3.1-flash-image')
     expect(models).toContain('gemini-3-pro-image')
+  })
+
+  it('Claude 模型列表包含 Opus 5.5', () => {
+    expect(getModelsByPlatform('claude')).toContain('claude-opus-5-5')
+    expect(getModelsByPlatform('antigravity')).not.toContain('claude-opus-5-5')
+    expect(getModelsByPlatform('openai')).toContain('gpt-6-sol')
+    expect(getModelsByPlatform('openai')).toContain('gpt-6-luna')
   })
 
   it('xAI 模型列表包含 Grok 4.5 官方模型和别名', () => {
