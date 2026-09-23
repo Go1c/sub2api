@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,11 +11,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
@@ -22,18 +25,55 @@ import (
 )
 
 var (
-	openAIModelDatePattern     = regexp.MustCompile(`-\d{8}$`)
-	openAIModelBasePattern     = regexp.MustCompile(`^(gpt-\d+(?:\.\d+)?)(?:-|$)`)
+	openAIModelDatePattern = regexp.MustCompile(`-\d{8}$`)
+	openAIModelBasePattern = regexp.MustCompile(`^(gpt-\d+(?:\.\d+)?)(?:-|$)`)
+	// aboveTierPricePattern 匹配 LiteLLM 长上下文绝对价字段名
+	// （input_cost_per_token_above_272k_tokens / output_cost_per_token_above_200k_tokens 等）。
+	// 带 _flex/_priority 服务档后缀的变体与 cache 侧字段不参与阈值/倍率折算。
+	aboveTierPricePattern = regexp.MustCompile(`^(input|output)_cost_per_token_above_(\d+)k_tokens$`)
 	openAIGPT54FallbackPricing = &LiteLLMModelPricing{
-		InputCostPerToken:               2.5e-06, // $2.5 per MTok
-		OutputCostPerToken:              1.5e-05, // $15 per MTok
-		CacheReadInputTokenCost:         2.5e-07, // $0.25 per MTok
-		LongContextInputTokenThreshold:  272000,
-		LongContextInputCostMultiplier:  2.0,
-		LongContextOutputCostMultiplier: 1.5,
-		LiteLLMProvider:                 "openai",
-		Mode:                            "chat",
-		SupportsPromptCaching:           true,
+		InputCostPerToken:       2.5e-06, // $2.5 per MTok
+		OutputCostPerToken:      1.5e-05, // $15 per MTok
+		CacheReadInputTokenCost: 2.5e-07, // $0.25 per MTok
+		LiteLLMProvider:         "openai",
+		Mode:                    "chat",
+		SupportsPromptCaching:   true,
+	}
+	openAIGPT6SolFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   2e-6,
+		InputCostPerTokenPriority:           4e-6,
+		OutputCostPerToken:                  10e-6,
+		OutputCostPerTokenPriority:          20e-6,
+		CacheCreationInputTokenCost:         2.5e-6,
+		CacheCreationInputTokenCostPriority: 5e-6,
+		CacheReadInputTokenCost:             0.2e-6,
+		CacheReadInputTokenCostPriority:     0.4e-6,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
+	openAIGPT6LunaFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   0.1e-6,
+		InputCostPerTokenPriority:           0.2e-6,
+		OutputCostPerToken:                  0.5e-6,
+		OutputCostPerTokenPriority:          1e-6,
+		CacheCreationInputTokenCost:         0.125e-6,
+		CacheCreationInputTokenCostPriority: 0.25e-6,
+		CacheReadInputTokenCost:             0.01e-6,
+		CacheReadInputTokenCostPriority:     0.02e-6,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
+	claudeOpus55FallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken: 4e-6, OutputCostPerToken: 20e-6,
+		CacheCreationInputTokenCost: 5e-6, CacheCreationInputTokenCostAbove1hr: 8e-6,
+		CacheReadInputTokenCost:   0.2e-6,
+		InputCostPerTokenPriority: 8e-6, OutputCostPerTokenPriority: 40e-6,
+		CacheCreationInputTokenCostPriority: 10e-6, CacheReadInputTokenCostPriority: 0.4e-6,
+		SupportsServiceTier: true, LiteLLMProvider: "anthropic", Mode: "chat", SupportsPromptCaching: true,
 	}
 	openAIGPT56SolFallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:                   5e-06,
@@ -44,9 +84,6 @@ var (
 		CacheCreationInputTokenCostPriority: 1.25e-05,
 		CacheReadInputTokenCost:             5e-07,
 		CacheReadInputTokenCostPriority:     1e-06,
-		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
-		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
-		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
 		SupportsServiceTier:                 true,
 		LiteLLMProvider:                     "openai",
 		Mode:                                "chat",
@@ -61,9 +98,6 @@ var (
 		CacheCreationInputTokenCostPriority: 6.25e-06,
 		CacheReadInputTokenCost:             2.5e-07,
 		CacheReadInputTokenCostPriority:     5e-07,
-		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
-		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
-		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
 		SupportsServiceTier:                 true,
 		LiteLLMProvider:                     "openai",
 		Mode:                                "chat",
@@ -78,9 +112,6 @@ var (
 		CacheCreationInputTokenCostPriority: 2.5e-06,
 		CacheReadInputTokenCost:             1e-07,
 		CacheReadInputTokenCostPriority:     2e-07,
-		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
-		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
-		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
 		SupportsServiceTier:                 true,
 		LiteLLMProvider:                     "openai",
 		Mode:                                "chat",
@@ -95,9 +126,6 @@ var (
 		CacheCreationInputTokenCostPriority: 25e-06,
 		CacheReadInputTokenCost:             1e-06,
 		CacheReadInputTokenCostPriority:     2e-06,
-		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
-		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
-		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
 		SupportsServiceTier:                 true,
 		LiteLLMProvider:                     "openai",
 		Mode:                                "chat",
@@ -124,6 +152,7 @@ var (
 // LiteLLMModelPricing LiteLLM价格数据结构
 // 只保留我们需要的字段，使用指针来处理可能缺失的值
 type LiteLLMModelPricing struct {
+	CacheCreationInputTokenCostExplicit bool    `json:"-"`
 	InputCostPerToken                   float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           float64 `json:"input_cost_per_token_priority"`
 	OutputCostPerToken                  float64 `json:"output_cost_per_token"`
@@ -421,6 +450,7 @@ func (s *PricingService) downloadPricingData() error {
 
 	// 更新内存数据
 	s.mu.Lock()
+	warnDroppedLongContextLadders(s.pricingData, data)
 	s.pricingData = data
 	s.lastUpdated = time.Now()
 	s.localHash = syncHash
@@ -481,6 +511,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 		if entry.CacheCreationInputTokenCost != nil {
 			pricing.CacheCreationInputTokenCost = *entry.CacheCreationInputTokenCost
+			pricing.CacheCreationInputTokenCostExplicit = true
 		}
 		if entry.CacheCreationInputTokenCostPriority != nil {
 			pricing.CacheCreationInputTokenCostPriority = *entry.CacheCreationInputTokenCostPriority
@@ -513,6 +544,13 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			pricing.InputCostPerImageToken = *entry.InputCostPerImageToken
 		}
 
+		hasExplicitLongContext := entry.LongContextInputTokenThreshold != nil ||
+			entry.LongContextInputCostMultiplier != nil ||
+			entry.LongContextOutputCostMultiplier != nil
+		if !hasExplicitLongContext {
+			deriveLongContextFromAboveTierFields(rawEntry, pricing)
+		}
+
 		result[modelName] = pricing
 	}
 
@@ -525,6 +563,106 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	}
 
 	return result, nil
+}
+
+// deriveLongContextFromAboveTierFields 把 LiteLLM 目录的 *_above_XXXk_tokens 绝对价字段
+// 折算成 long_context_* 阈值+倍率（sub2api 计费机制的内部表达）：阈值取自字段名，
+// 倍率 = above 价 ÷ 基础价。条目显式携带任一 long_context_* 字段（含显式 0）时由
+// 调用方跳过折算，以显式配置为准——显式写 threshold=0 或 multiplier=1 均可关闭该
+// 模型的阶梯。多个阈值并存时取最小阈值。
+// cache_read/cache_creation 的 above 档在计费中统一跟随输入倍率，不单独折算。
+func deriveLongContextFromAboveTierFields(rawEntry json.RawMessage, pricing *LiteLLMModelPricing) {
+	if pricing == nil ||
+		pricing.LongContextInputTokenThreshold > 0 ||
+		pricing.LongContextInputCostMultiplier > 0 ||
+		pricing.LongContextOutputCostMultiplier > 0 {
+		return
+	}
+	if !bytes.Contains(rawEntry, []byte("_above_")) {
+		return
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(rawEntry, &fields); err != nil {
+		return
+	}
+	type tierPrices struct{ input, output float64 }
+	tiers := make(map[int]*tierPrices)
+	for key, value := range fields {
+		m := aboveTierPricePattern.FindStringSubmatch(key)
+		if m == nil {
+			continue
+		}
+		price, ok := value.(float64)
+		if !ok || price <= 0 {
+			continue
+		}
+		thousands, err := strconv.Atoi(m[2])
+		if err != nil || thousands <= 0 {
+			continue
+		}
+		threshold := thousands * 1000
+		tp := tiers[threshold]
+		if tp == nil {
+			tp = &tierPrices{}
+			tiers[threshold] = tp
+		}
+		if m[1] == "input" {
+			tp.input = price
+		} else {
+			tp.output = price
+		}
+	}
+	if len(tiers) == 0 {
+		return
+	}
+	threshold := 0
+	for t := range tiers {
+		if threshold == 0 || t < threshold {
+			threshold = t
+		}
+	}
+	tp := tiers[threshold]
+	inputMultiplier, outputMultiplier := 1.0, 1.0
+	if tp.input > 0 && pricing.InputCostPerToken > 0 {
+		inputMultiplier = tp.input / pricing.InputCostPerToken
+	}
+	if tp.output > 0 && pricing.OutputCostPerToken > 0 {
+		outputMultiplier = tp.output / pricing.OutputCostPerToken
+	}
+	// above 价不高于基础价时视为无附加费，不生成阶梯。
+	if inputMultiplier <= 1 && outputMultiplier <= 1 {
+		return
+	}
+	pricing.LongContextInputTokenThreshold = threshold
+	pricing.LongContextInputCostMultiplier = inputMultiplier
+	pricing.LongContextOutputCostMultiplier = outputMultiplier
+}
+
+// warnDroppedLongContextLadders 对比新旧目录数据：原本带长上下文阶梯的条目在新数据里
+// 丢失阈值时打 WARN。阶梯由目录数据驱动，数据源一次误提交就会把阶梯静默变成基础价少收。
+// 调用方需持有 s.mu 写锁。
+func warnDroppedLongContextLadders(old, next map[string]*LiteLLMModelPricing) {
+	if len(old) == 0 {
+		return
+	}
+	var dropped []string
+	for name, prev := range old {
+		if prev == nil || prev.LongContextInputTokenThreshold <= 0 {
+			continue
+		}
+		if cur, ok := next[name]; ok && (cur == nil || cur.LongContextInputTokenThreshold <= 0) {
+			dropped = append(dropped, name)
+		}
+	}
+	if len(dropped) == 0 {
+		return
+	}
+	sort.Strings(dropped)
+	total := len(dropped)
+	if total > 20 {
+		dropped = append(dropped[:20], "...")
+	}
+	logger.LegacyPrintf("service.pricing", "[Pricing] Long-context ladder dropped for %d model(s) after reload: %s (verify catalog/override data if unintended)", total, strings.Join(dropped, ", "))
 }
 
 // loadPricingData 从本地文件加载价格数据
@@ -547,6 +685,7 @@ func (s *PricingService) loadPricingData(filePath string) error {
 	hashStr := hex.EncodeToString(hash[:])
 
 	s.mu.Lock()
+	warnDroppedLongContextLadders(s.pricingData, pricingData)
 	s.pricingData = pricingData
 	s.localHash = hashStr
 
@@ -885,6 +1024,12 @@ func (s *PricingService) extractBaseName(model string) string {
 
 // matchByModelFamily 基于模型系列匹配
 func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
+	if claude.IsOpus55(model) {
+		if pricing, ok := s.pricingData["claude-opus-5-5"]; ok {
+			return pricing
+		}
+		return claudeOpus55FallbackPricing
+	}
 	// modelFamily 定义一个模型系列的匹配和定价查找规则。
 	type modelFamily struct {
 		name    string   // 系列名称
@@ -985,6 +1130,9 @@ func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
 	for _, pattern := range lookups {
 		for key, pricing := range s.pricingData {
 			keyLower := strings.ToLower(key)
+			if matched.name == "opus-5" && claude.IsOpus55(keyLower) {
+				continue
+			}
 			if strings.Contains(keyLower, pattern) {
 				logger.LegacyPrintf("service.pricing", "[Pricing] Fuzzy matched %s -> %s", model, key)
 				return pricing
@@ -1011,6 +1159,16 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 				Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.1-codex"))
 			return pricing
 		}
+	}
+
+	if openai.IsGPT6SolOrLunaModelSpelling(model) {
+		if pricing, ok := s.pricingData[normalizeKnownOpenAICodexModel(model)]; ok {
+			return pricing
+		}
+		if strings.HasPrefix(model, "gpt-6-sol") {
+			return openAIGPT6SolFallbackPricing
+		}
+		return openAIGPT6LunaFallbackPricing
 	}
 
 	// 尝试的回退变体
