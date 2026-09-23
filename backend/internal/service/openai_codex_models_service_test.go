@@ -8,16 +8,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"golang.org/x/net/http2"
 )
@@ -1294,19 +1297,37 @@ func TestFetchCodexModelsManifestAPIKeyRejectsOfficialOpenAIBaseURL(t *testing.T
 
 func TestGPT6SolLunaCatalogKeepsAuthoritativeCapabilities(t *testing.T) {
 	for _, id := range []string{"gpt-6-sol", "gpt-6-luna"} {
-		svc := &OpenAIGatewayService{}
-		manifest := &OpenAIModelsResponse{Body: []byte(`{"models":[{"slug":"` + id + `","supported_reasoning_levels":[{"effort":"ultra"}],"default_reasoning_level":"ultra","multi_agent_reasoning_effort":"xhigh","service_tiers":[{"id":"ultrafast"}],"context_window":300000,"max_context_window":900000,"supports_search_tool":false,"apply_patch_tool_type":null}]}`)}
-		account := newCodexModelsAPIKeyTestAccount("https://api.openai.com/v1")
-		require.NoError(t, svc.CompleteAPIKeyCodexModelsManifestForClient(manifest, account))
-		models := decodeCodexManifestModels(t, manifest.Body)
-		require.Len(t, models, 1)
-		require.Equal(t, []string{"ultra"}, effortsFromManifestModel(t, models[0]))
-		require.Equal(t, "ultra", models[0]["default_reasoning_level"])
-		require.Equal(t, "xhigh", models[0]["multi_agent_reasoning_effort"])
-		require.Equal(t, float64(300000), models[0]["context_window"])
-		require.Equal(t, float64(900000), models[0]["max_context_window"])
-		require.Equal(t, []any{map[string]any{"id": "ultrafast"}}, models[0]["service_tiers"])
-		require.Equal(t, false, models[0]["supports_search_tool"])
-		require.Nil(t, models[0]["apply_patch_tool_type"])
+		require.True(t, openai.IsGPT6SolOrLunaModelSpelling(id), id)
+		require.Equal(t, id, normalizeKnownOpenAICodexModel(id), id)
+		require.True(t, isOpenAIGPT6Model(id), id)
+		require.False(t, isOpenAIGPT6AstraModel(id), id)
+		require.Contains(t, openai.DefaultModelIDs(), id)
 	}
+	require.Equal(t, "gpt-6-sol", normalizeKnownOpenAICodexModel("gpt-6-sol-max"))
+	require.Equal(t, "gpt-6-sol", normalizeKnownOpenAICodexModel("openai/gpt-6-sol-high"))
+	require.Equal(t, "gpt-6-luna", normalizeKnownOpenAICodexModel("gpt-6-luna-openai-compact"))
+	require.Empty(t, normalizeKnownOpenAICodexModel("gpt-6-sol-preview"))
+	require.Empty(t, normalizeKnownOpenAICodexModel("gpt-6-luna-preview"))
+	require.Equal(t, "gpt-6-astra", normalizeKnownOpenAICodexModel("gpt-6"), "bare gpt-6 stays Astra, not Sol/Luna")
+
+	body, err := os.ReadFile(filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json"))
+	require.NoError(t, err)
+	pricing, err := (&PricingService{}).parsePricingData(body)
+	require.NoError(t, err)
+
+	sol := pricing["gpt-6-sol"]
+	require.NotNil(t, sol)
+	require.Equal(t, 272000, sol.LongContextInputTokenThreshold, "explicit catalog ladder must not be rewritten")
+	require.InDelta(t, 2.0, sol.LongContextInputCostMultiplier, 1e-12)
+	require.InDelta(t, 1.5, sol.LongContextOutputCostMultiplier, 1e-12)
+	require.InDelta(t, 2e-6, sol.InputCostPerToken, 1e-12)
+	require.InDelta(t, 10e-6, sol.OutputCostPerToken, 1e-12)
+
+	luna := pricing["gpt-6-luna"]
+	require.NotNil(t, luna)
+	require.Equal(t, 272000, luna.LongContextInputTokenThreshold, "explicit catalog ladder must not be rewritten")
+	require.InDelta(t, 2.0, luna.LongContextInputCostMultiplier, 1e-12)
+	require.InDelta(t, 1.5, luna.LongContextOutputCostMultiplier, 1e-12)
+	require.InDelta(t, 0.1e-6, luna.InputCostPerToken, 1e-12)
+	require.InDelta(t, 0.5e-6, luna.OutputCostPerToken, 1e-12)
 }
