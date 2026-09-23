@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -925,6 +927,40 @@ func TestListModelNamesByProvider_EmptyCatalog(t *testing.T) {
 	got := svc.ListModelNamesByProvider("openai")
 	require.NotNil(t, got)
 	require.Empty(t, got)
+}
+
+func TestPricingServiceInitializeLoadsBuiltinCatalog(t *testing.T) {
+	t.Parallel()
+	dataDir := t.TempDir()
+	fallback := filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json")
+	overrides := filepath.Join("..", "..", "resources", "model-pricing", "pricing_overrides.json")
+	cfg := &config.Config{}
+	cfg.Pricing.DataDir = dataDir
+	cfg.Pricing.FallbackFile = fallback
+	cfg.Pricing.OverridesFile = overrides
+	cfg.Pricing.HashCheckIntervalMinutes = 10
+
+	svc := NewPricingService(cfg, failingPricingRemoteClient{})
+	require.NoError(t, svc.Initialize())
+	t.Cleanup(svc.Stop)
+	require.NotEmpty(t, svc.pricingData)
+	require.NotNil(t, svc.GetModelPricing("gpt-6-sol"))
+	require.NotNil(t, svc.GetModelPricing("gpt-6-luna"))
+	require.NotNil(t, svc.GetModelPricing("claude-opus-5-5"))
+	billing := NewBillingService(cfg, svc)
+	sol, err := billing.GetModelPricing("gpt-6-sol")
+	require.NoError(t, err)
+	require.Equal(t, 272000, sol.LongContextInputThreshold)
+}
+
+type failingPricingRemoteClient struct{}
+
+func (failingPricingRemoteClient) FetchPricingJSON(context.Context, string) ([]byte, error) {
+	return nil, fmt.Errorf("remote pricing disabled in test")
+}
+
+func (failingPricingRemoteClient) FetchHashText(context.Context, string) (string, error) {
+	return "", fmt.Errorf("remote hash disabled in test")
 }
 
 // --- above_XXXk 绝对价字段折算为阈值+倍率 ---
