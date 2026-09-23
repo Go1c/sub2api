@@ -267,7 +267,7 @@ func TestGatewayServiceRecordUsageWithLongContext_BillingUsesDetachedContext(t *
 	reqCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := svc.RecordUsageWithLongContext(reqCtx, &RecordUsageLongContextInput{
+	err := svc.RecordUsage(reqCtx, &RecordUsageInput{
 		Result: &ForwardResult{
 			RequestID: "gateway_long_context_detached_ctx",
 			Usage: ClaudeUsage{
@@ -281,11 +281,9 @@ func TestGatewayServiceRecordUsageWithLongContext_BillingUsesDetachedContext(t *
 			ID:    502,
 			Quota: 100,
 		},
-		User:                  &User{ID: 602},
-		Account:               &Account{ID: 702},
-		LongContextThreshold:  200000,
-		LongContextMultiplier: 2,
-		APIKeyService:         quotaSvc,
+		User:          &User{ID: 602},
+		Account:       &Account{ID: 702},
+		APIKeyService: quotaSvc,
 	})
 
 	require.NoError(t, err)

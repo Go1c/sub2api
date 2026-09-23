@@ -445,6 +445,59 @@ func TestGatewayModels_OpenAICustomModelsListKeepsOpenAIResponseShapeForDefaultF
 	require.Empty(t, got.Data[0].CreatedAt)
 }
 
+func TestGatewayModels_GPT6SolLunaDiscoveryRespectsGroupAndAccountRestrictions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name     string
+		mapping  map[string]any
+		selected []string
+		want     []string
+	}{
+		{
+			name:     "selected and ordered",
+			mapping:  map[string]any{"gpt-6-luna": "gpt-6-luna", "gpt-6-sol": "gpt-6-sol", "gpt-5.6-sol": "gpt-5.6-sol"},
+			selected: []string{"gpt-6-luna", "gpt-6-sol"},
+			want:     []string{"gpt-6-luna", "gpt-6-sol"},
+		},
+		{
+			name:     "group excludes new models",
+			mapping:  map[string]any{"gpt-6-luna": "gpt-6-luna", "gpt-6-sol": "gpt-6-sol", "gpt-5.6-sol": "gpt-5.6-sol"},
+			selected: []string{"gpt-5.6-sol"},
+			want:     []string{"gpt-5.6-sol"},
+		},
+		{
+			name:     "account restricts new models",
+			mapping:  map[string]any{"gpt-5.6-sol": "gpt-5.6-sol"},
+			selected: []string{"gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol"},
+			want:     []string{"gpt-5.6-sol"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			groupID := int64(25)
+			account := service.Account{
+				ID:          1,
+				Platform:    service.PlatformOpenAI,
+				Type:        service.AccountTypeAPIKey,
+				Credentials: map[string]any{"model_mapping": tc.mapping},
+			}
+			h := newGatewayModelsHandlerForTest(&gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{groupID: {account}}})
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+			c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{Group: &service.Group{
+				ID:       groupID,
+				Platform: service.PlatformOpenAI,
+				ModelsListConfig: service.GroupModelsListConfig{Enabled: true, Models: tc.selected},
+			}})
+			h.Models(c)
+			require.Equal(t, http.StatusOK, rec.Code)
+			var got gatewayModelsResponseForTest
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+			require.Equal(t, tc.want, modelIDsForTest(got.Data))
+		})
+	}
+}
+
 func modelIDsForTest(models []gatewayModelItemForTest) []string {
 	ids := make([]string, 0, len(models))
 	for _, model := range models {
