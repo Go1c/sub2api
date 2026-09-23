@@ -306,6 +306,13 @@ func ProvideOpenAITokenProvider(
 	return p
 }
 
+// ProvidePluginManager preserves account-directory wiring when regenerating Wire.
+func ProvidePluginManager(repo PluginRepository, encryptor SecretEncryptor, cfg *config.Config, hostInfo PluginHostInfo, kvStore PluginKVStore, gateway *OpenAIGatewayService) *PluginManager {
+	manager := NewPluginManager(repo, encryptor, cfg, hostInfo, kvStore)
+	manager.SetAccountDirectory(gateway)
+	return manager
+}
+
 // ProvideOpenAIQuotaService wires the OpenAI quota query/reset service.
 // It depends on the OpenAI token provider for refreshed access tokens and the
 // privacy client factory for the impersonated upstream HTTP client.
@@ -314,10 +321,11 @@ func ProvideOpenAIQuotaService(
 	proxyRepo ProxyRepository,
 	tokenProvider *OpenAITokenProvider,
 	codexBackendClientFactory CodexBackendClientFactory,
+	referralClient OpenAIReferralClient,
 	openAIGatewayService *OpenAIGatewayService,
 ) *OpenAIQuotaService {
 	// 额度面走不做浏览器伪装的客户端，与推理面自报同一个 Codex 身份。
-	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, PrivacyClientFactory(codexBackendClientFactory))
+	service := NewOpenAIQuotaService(accountRepo, proxyRepo, tokenProvider, PrivacyClientFactory(codexBackendClientFactory), referralClient)
 	service.agentIdentityWS = openAIGatewayService
 	service.SetIPGroupResolver(openAIGatewayService.IPGroupResolver())
 	return service
@@ -1065,7 +1073,7 @@ var ProviderSet = wire.NewSet(
 	NewTotpService,
 	NewErrorPassthroughService,
 	NewTLSFingerprintProfileService,
-	NewPluginManager,
+	ProvidePluginManager,
 	NewDigestSessionStore,
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
