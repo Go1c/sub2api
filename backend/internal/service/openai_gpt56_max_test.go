@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -35,6 +36,15 @@ func TestNormalizeOpenAIReasoningEffortForGPT56(t *testing.T) {
 			require.Equal(t, tt.want, normalizeOpenAIReasoningEffortForModel(tt.raw, tt.model))
 		})
 	}
+}
+
+func TestOpenAICompatAnthropicReasoningEffortKeepsMaxForGPT6(t *testing.T) {
+	req := &apicompat.AnthropicRequest{OutputConfig: &apicompat.AnthropicOutputConfig{Effort: "max"}}
+	require.Equal(t, "max", openAICompatAnthropicReasoningEffort(req, "gpt-6-sol", "xhigh"))
+	require.Equal(t, "max", openAICompatAnthropicReasoningEffort(req, "gpt-6-luna", "xhigh"))
+	require.Equal(t, "max", openAICompatAnthropicReasoningEffort(req, "gpt-5.6-sol", "xhigh"))
+	require.Equal(t, "xhigh", openAICompatAnthropicReasoningEffort(req, "gpt-5.5", "xhigh"))
+	require.Equal(t, "xhigh", openAICompatAnthropicReasoningEffort(&apicompat.AnthropicRequest{}, "gpt-6-sol", "xhigh"))
 }
 
 func TestNormalizeOpenAICodexCompactReasoningEffortDowngradesMax(t *testing.T) {
