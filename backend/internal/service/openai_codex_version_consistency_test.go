@@ -11,8 +11,8 @@ import (
 )
 
 func TestCodexVersionConstants_Consistency(t *testing.T) {
-	const wantVersion = "0.154.0"
-	const wantUserAgent = "codex-tui/0.154.0 (Ubuntu 22.4.0; x86_64) xterm-256color (codex-tui; 0.154.0)"
+	const wantVersion = "0.156.1"
+	const wantUserAgent = "codex-tui/0.156.1 (Ubuntu 22.4.0; x86_64) xterm-256color (codex-tui; 0.156.1)"
 
 	require.Equal(t, wantVersion, codexCLIVersion)
 	require.Equal(t, wantUserAgent, codexCLIUserAgent)

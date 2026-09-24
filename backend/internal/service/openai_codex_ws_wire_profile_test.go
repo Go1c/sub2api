@@ -449,7 +449,7 @@ func TestCodexDeviceWireProfileWSHandshakeBuilder(t *testing.T) {
 			true, "turn-state-1", convTestTurnMetadata(), convTestSession, "", "")
 		require.NoError(t, err)
 		if enabled {
-			require.Empty(t, headers.Get(responsesLiteHeader), "0.154.0 WS 握手不发 lite 头")
+			require.Empty(t, headers.Get(responsesLiteHeader), "0.156.1 WS 握手不发 lite 头")
 		}
 	}
 }

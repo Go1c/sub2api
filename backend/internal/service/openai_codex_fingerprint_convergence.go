@@ -191,7 +191,7 @@ func applyCodexDeviceWireProfile(c *gin.Context, account *Account, headers http.
 			}
 		}
 	} else {
-		// 0.154.0 WS 握手不带 lite；真客户端 HTTP 回落才发。
+		// 0.156.1 WS 握手不带 lite；真客户端 HTTP 回落才发。
 		deleteOpenAIHeaderEqualFold(headers, responsesLiteHeader)
 	}
 	if !websocket && isOpenAIResponsesCompactPath(c) {
