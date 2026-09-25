@@ -248,6 +248,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			reqStream,
 		)
 	}
+	// Basis Points 只走 HTTP。WSv1 在改写前就会 400，先改成 HTTP 再继续。
+	if account.BasisPointsEnabled() && basisPointsRouteEligible(reqModel) &&
+		wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
+		wsDecision.Transport = OpenAIUpstreamTransportHTTPSSE
+	}
 	// 当前仅支持 WSv2；WSv1 命中时直接返回错误，避免出现“配置可开但行为不确定”。
 	if wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
 		if c != nil {
@@ -261,7 +266,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
 	}
-	if passthroughEnabled {
+	if passthroughEnabled && !(account.BasisPointsEnabled() && basisPointsRouteEligible(reqModel)) {
 		attemptImageIntentInvalidated := false
 		if isCodexCLI && codexImageGenerationExplicitToolPolicy == codexImageGenerationExplicitToolPolicyStrip {
 			strippedBody, changed, stripErr := stripOpenAIImageGenerationToolsFromRawPayload(body)
@@ -797,6 +802,18 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		return nil, err
 	}
 	SetOpsUpstreamModel(c, upstreamModel)
+
+	if basisPointsBody, basisErr := s.rewriteBasisPointsRequest(ctx, c, account, body, token); basisErr != nil {
+		return nil, basisErr
+	} else if basisPointsRouted(c) {
+		body = basisPointsBody
+		requestView = newOpenAIRequestView(body)
+		reqBody = nil
+		bodyModified = false
+		upstreamModel = basisPointsPublicModel
+		SetOpsUpstreamModel(c, upstreamModel)
+		wsDecision.Transport = OpenAIUpstreamTransportHTTPSSE
+	}
 
 	// 命中 WS 时仅走 WebSocket Mode；不再自动回退 HTTP。
 	if wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocketV2 {
@@ -1386,9 +1403,17 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	var targetURL string
 	switch account.Type {
 	case AccountTypeOAuth:
+		if basisPointsRouted(c) {
+			targetURL = basisPointsUpstreamURL
+			break
+		}
 		// OAuth accounts use ChatGPT internal API
 		targetURL = chatgptCodexURL
 	case AccountTypeSetupToken:
+		if basisPointsRouted(c) {
+			targetURL = basisPointsUpstreamURL
+			break
+		}
 		if account.IsOpenAIOAuthLike() {
 			targetURL = chatgptCodexURL
 		} else {
@@ -1421,6 +1446,29 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	body, err := filterCodexCompactAccessPrograms(c, account, body)
 	if err != nil {
 		return nil, fmt.Errorf("filter compact access programs: %w", err)
+	}
+
+	// Basis Points 要明文 JSON 和 Excel 身份，不套 Codex 字段序与 zstd。
+	if basisPointsRouted(c) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
+		authHeaders, err := s.buildOpenAIAuthenticationHeaders(ctx, account, token)
+		if err != nil {
+			return nil, fmt.Errorf("build openai authentication headers: %w", err)
+		}
+		for key, values := range authHeaders {
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
+		}
+		if err := resolveAndSetOpenAIChatGPTAccountHeaders(ctx, s.accountRepo, req.Header, account); err != nil {
+			return nil, fmt.Errorf("resolve chatgpt account headers: %w", err)
+		}
+		applyBasisPointsHeaders(req, account)
+		return req, nil
 	}
 
 	// 顶层键序：只重排，不改任何值（下面的时区改写与压缩仍会动体）。

@@ -1268,6 +1268,20 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.turn_state_probe).toEqual({ enabled: true })
   })
 
+  it('persists the basis points switch only when it is turned on', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    expect(wrapper.find('[data-testid="basispoints-enabled"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="basispoints-enabled"]').attributes('aria-checked')).toBe('false')
+    await wrapper.get('[data-testid="basispoints-enabled"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.basispoints).toEqual({ enabled: true })
+  })
+
   it('persists enforce only when the missing-ticket checkbox is checked', async () => {
     const account = buildOpenAIOAuthParentAccount()
     updateAccountMock.mockReset().mockResolvedValue(account)

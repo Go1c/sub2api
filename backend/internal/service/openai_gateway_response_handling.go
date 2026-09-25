@@ -49,6 +49,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 }
 
 func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel, reasoningEffort string) (*openaiStreamingResult, error) {
+	if basisPointsRouted(c) {
+		return s.handleBasisPointsStreamingResponse(ctx, resp, c, account, startTime, originalModel, mappedModel)
+	}
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
 		observer = beginUpstreamResponseModelObservation(c)
@@ -1634,6 +1637,12 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		if err != nil {
 			return nil, fmt.Errorf("convert Grok compact response: %w", err)
 		}
+	}
+
+	if restored, restoreErr := restoreBasisPointsClientTools(c, body); restoreErr != nil {
+		return nil, fmt.Errorf("restore basis points client tools: %w", restoreErr)
+	} else {
+		body = restored
 	}
 
 	usageValue, usageOK := extractOpenAIUsageFromJSONBytes(body)

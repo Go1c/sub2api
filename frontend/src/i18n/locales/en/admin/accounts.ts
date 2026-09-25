@@ -872,6 +872,10 @@ export default {
         hint: 'Switch only. Probe exits, quiz, and recheck interval live on the channel subpage. When on, this account harvests and injects its current ticket from channel policy. Turning it off stops new harvests and new-turn injection. The full state string is never shown.',
         enforce: 'Pause this account and switch when no usable ticket is available. Leave unchecked to forward the request unchanged.'
       },
+      basisPoints: {
+        title: 'Basis Points',
+        hint: 'Send only this account’s gpt-6-astra through Excel Basis Points. Other models stay on Codex. Off by default; import and create do not turn it on.'
+      },
       errorAlert: {
         title: 'Error monitoring',
         hint: 'Included in Telegram account-error alerts by default. Turn this off to exclude the account. Keywords and rules do not affect custom error-code scheduling.',

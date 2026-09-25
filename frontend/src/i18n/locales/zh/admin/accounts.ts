@@ -972,6 +972,10 @@ export default {
         hint: '仅开关。探测出口、题目和复查间隔在渠道管理子页配置。开启后按渠道策略采集并注入该账号当前票；关闭立即停止新采集和新轮注入。完整 state 不会展示。',
         enforce: '没有可用票时暂停该账号并换号。不勾选时仍按原样转发。'
       },
+      basisPoints: {
+        title: 'Basis Points',
+        hint: '仅此账号的 gpt-6-astra 改走 Excel Basis Points。其他模型仍走 Codex。默认关闭，导入和新建不会打开。'
+      },
       errorAlert: {
         title: '报错监控',
         hint: '默认加入 Telegram 账号异常告警。关闭后该账号不再进入监控。关键字和规则不影响自定义错误码调度。',

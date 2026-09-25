@@ -221,6 +221,19 @@
           />
           {{ t('admin.accounts.turnStateProbe.enforce') }}
         </label>
+        <div class="mt-4 flex items-center justify-between gap-4">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.basisPoints.title') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.basisPoints.hint') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="basisPointsEnabled"
+            data-testid="basispoints-enabled"
+            :aria-label="t('admin.accounts.basisPoints.title')"
+          />
+        </div>
       </div>
 
       <!-- API Key fields (only for apikey type) -->
@@ -3660,6 +3673,7 @@ const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
 const TURN_STATE_PROBE_EXTRA_KEY = 'turn_state_probe'
+const BASISPOINTS_EXTRA_KEY = 'basispoints'
 const ERROR_ALERT_EXTRA_KEY = 'error_alert'
 const ERROR_ALERT_MAX_KEYWORDS = 20
 const ERROR_ALERT_MAX_KEYWORD_LEN = 80
@@ -3674,6 +3688,7 @@ type ErrorAlertRuleForm = {
 }
 const turnStateProbeEnabled = ref(false)
 const turnStateProbeEnforce = ref(false)
+const basisPointsEnabled = ref(false)
 const errorAlertEnabled = ref(true)
 const errorAlertKeywords = ref<string[]>([])
 const errorAlertKeywordInput = ref('')
@@ -3894,6 +3909,30 @@ function applyTurnStateProbeToUpdatePayload(updatePayload: Record<string, unknow
   }
   const extra: Record<string, unknown> = { ...((props.account?.extra as Record<string, unknown>) || {}) }
   extra[TURN_STATE_PROBE_EXTRA_KEY] = next
+  updatePayload.extra = extra
+}
+
+function loadBasisPointsFromExtra(extra: Record<string, unknown> | undefined) {
+  const raw = extra?.[BASISPOINTS_EXTRA_KEY]
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    basisPointsEnabled.value = false
+    return
+  }
+  basisPointsEnabled.value = (raw as Record<string, unknown>).enabled === true
+}
+
+function applyBasisPointsToUpdatePayload(updatePayload: Record<string, unknown>) {
+  if (!isOpenAIOauthAccount()) return
+  const next = { enabled: basisPointsEnabled.value }
+  if (updatePayload.extra != null) {
+    updatePayload.extra = {
+      ...(updatePayload.extra as Record<string, unknown>),
+      [BASISPOINTS_EXTRA_KEY]: next
+    }
+    return
+  }
+  const extra: Record<string, unknown> = { ...((props.account?.extra as Record<string, unknown>) || {}) }
+  extra[BASISPOINTS_EXTRA_KEY] = next
   updatePayload.extra = extra
 }
 
@@ -4521,6 +4560,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
   loadErrorAlertFromExtra(extra)
   loadTurnStateProbeFromExtra(extra)
+  loadBasisPointsFromExtra(extra)
   if (newAccount.id !== trafficDraftAccountID) {
     trafficPolicyDraft.value = { ...defaultTrafficPolicy(), ...((extra?.account_traffic_control as Partial<AccountTrafficPolicy>) || {}) }
     initialTrafficPolicy = JSON.stringify(trafficPolicyDraft.value)
@@ -6228,6 +6268,7 @@ const handleSubmit = async () => {
 
     applyErrorAlertToUpdatePayload(updatePayload)
     applyTurnStateProbeToUpdatePayload(updatePayload)
+    applyBasisPointsToUpdatePayload(updatePayload)
     if (JSON.stringify(traffic) !== initialTrafficPolicy) {
       updatePayload.extra = { ...((updatePayload.extra as Record<string, unknown>) || props.account.extra || {}), account_traffic_control: { ...traffic } }
     }
