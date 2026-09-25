@@ -204,6 +204,10 @@ type SystemSettings struct {
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
 	ChannelMonitorHideUserRanking        bool   `json:"channel_monitor_hide_user_ranking"`
 
+	// Basis Points image relay. Default off until an HTTPS public origin is saved.
+	BasisPointsImageRelayEnabled bool   `json:"excel_bps_image_relay_enabled"`
+	BasisPointsImageBaseURL      string `json:"excel_bps_image_base_url"`
+
 	// Grok model mapping policy (admin settings; empty mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`
 	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`

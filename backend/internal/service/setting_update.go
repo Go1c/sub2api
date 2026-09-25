@@ -419,6 +419,13 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyChannelMonitorHideThroughput] = strconv.FormatBool(settings.ChannelMonitorHideThroughput)
 	updates[SettingKeyChannelMonitorShowQuota] = strconv.FormatBool(settings.ChannelMonitorShowQuota)
 	updates[SettingKeyChannelMonitorHideUserRanking] = strconv.FormatBool(settings.ChannelMonitorHideUserRanking)
+	imageRelay, err := normalizeBasisPointsImageRelaySettings(settings.BasisPointsImageRelayEnabled, settings.BasisPointsImageBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	settings.BasisPointsImageBaseURL = imageRelay.BaseURL
+	updates[SettingKeyBasisPointsImageRelayEnabled] = strconv.FormatBool(imageRelay.Enabled)
+	updates[SettingKeyBasisPointsImageBaseURL] = imageRelay.BaseURL
 
 	// Grok model mapping policy
 	if v := strings.TrimSpace(settings.GrokDefaultTextModel); v != "" {

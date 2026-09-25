@@ -874,7 +874,7 @@ export default {
       },
       basisPoints: {
         title: 'Basis Points',
-        hint: 'Send only this account’s gpt-6-astra through Excel Basis Points. Other models stay on Codex. Off by default; import and create do not turn it on.'
+        hint: 'Send only this account’s gpt-6-astra and gpt-6-sol through Excel Basis Points, keeping the requested model name upstream. Other models stay on Codex. Off by default; import and create do not turn it on.'
       },
       errorAlert: {
         title: 'Error monitoring',

@@ -312,6 +312,9 @@ type SystemSettings struct {
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
 	ChannelMonitorHideUserRanking        bool   `json:"channel_monitor_hide_user_ranking"`
 
+	ExcelBPSImageRelayEnabled bool   `json:"excel_bps_image_relay_enabled"`
+	ExcelBPSImageBaseURL      string `json:"excel_bps_image_base_url"`
+
 	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`
 	GrokCrossClientModelMapEnabled bool   `json:"grok_cross_client_model_map_enabled"`

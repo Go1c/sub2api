@@ -720,6 +720,10 @@ export interface SystemSettings {
   account_quota_notify_enabled: boolean;
   account_quota_notify_emails: NotifyEmailEntry[];
 
+  // Excel / Basis Points image relay. Default off.
+  excel_bps_image_relay_enabled: boolean;
+  excel_bps_image_base_url: string;
+
   // Channel Monitor feature switch
   channel_monitor_enabled: boolean;
   channel_monitor_mode?: 'v1' | 'v2';
@@ -1026,6 +1030,10 @@ export interface UpdateSettingsRequest {
   subscription_expiry_notify_enabled?: boolean;
   account_quota_notify_enabled?: boolean;
   account_quota_notify_emails?: NotifyEmailEntry[];
+
+  // Excel / Basis Points image relay. Default off.
+  excel_bps_image_relay_enabled?: boolean;
+  excel_bps_image_base_url?: string;
 
   // Channel Monitor feature switch
   channel_monitor_enabled?: boolean;

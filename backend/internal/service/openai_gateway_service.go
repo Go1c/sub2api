@@ -338,12 +338,16 @@ const openAIResponsesUpstreamEndpoint = "/v1/responses"
 // Responses API. OpenCode Go / CN accounts cannot derive that from inbound
 // path (DeriveUpstreamEndpoint falls back to the client URL).
 func stampOpenAIResponsesUpstreamEndpoint(c *gin.Context, result *OpenAIForwardResult) {
-	SetActualOpenAIUpstreamEndpoint(c, openAIResponsesUpstreamEndpoint)
+	endpoint := openAIResponsesUpstreamEndpoint
+	if basisPointsRouted(c) {
+		endpoint = basisPointsUpstreamPath
+	}
+	SetActualOpenAIUpstreamEndpoint(c, endpoint)
 	if result == nil {
 		return
 	}
-	if strings.TrimSpace(result.UpstreamEndpoint) == "" {
-		result.UpstreamEndpoint = openAIResponsesUpstreamEndpoint
+	if strings.TrimSpace(result.UpstreamEndpoint) == "" || (basisPointsRouted(c) && result.UpstreamEndpoint == openAIResponsesUpstreamEndpoint) {
+		result.UpstreamEndpoint = endpoint
 	}
 }
 
@@ -526,10 +530,12 @@ type OpenAIGatewayService struct {
 	// （铸造者 = 凭证域身份），供出站守卫剥离跨账号回带（设计见 openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+	basisPointsImagesMu         sync.Mutex
+	basisPointsImages           *ImageRelay
 	// codexSideCalls：双开账号侧信道 GET 的去重窗口（openai_codex_side_calls.go）。
 	// 由构造器初始化；裸结构体（单元测试）里为 nil，侧信道整体停用。
-	codexSideCalls *codexSideCallState
-	requestHealth  *AccountRequestHealthService
+	codexSideCalls   *codexSideCallState
+	requestHealth    *AccountRequestHealthService
 	turnStateTickets TurnStateTicketLookup
 }
 

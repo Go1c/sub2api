@@ -974,7 +974,7 @@ export default {
       },
       basisPoints: {
         title: 'Basis Points',
-        hint: '仅此账号的 gpt-6-astra 改走 Excel Basis Points。其他模型仍走 Codex。默认关闭，导入和新建不会打开。'
+        hint: '仅此账号的 gpt-6-astra 和 gpt-6-sol 改走 Excel Basis Points，上游模型保持请求里的名字。其他模型仍走 Codex。默认关闭，导入和新建不会打开。'
       },
       errorAlert: {
         title: '报错监控',

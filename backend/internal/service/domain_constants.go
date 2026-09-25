@@ -496,6 +496,11 @@ const (
 	// When false: runner skips scheduling and user-facing endpoints return an empty list.
 	SettingKeyChannelMonitorEnabled = "channel_monitor_enabled"
 
+	// Basis Points image relay stores inline data: images as short-lived HTTPS URLs.
+	// Default off. The public origin must be HTTPS with no path, query, or credentials.
+	SettingKeyBasisPointsImageRelayEnabled = "excel_bps_image_relay_enabled"
+	SettingKeyBasisPointsImageBaseURL      = "excel_bps_image_base_url"
+
 	// SettingKeyChannelMonitorMode selects exclusive implementation:
 	// "v1" active probes, "v2" passive aggregation. Default "v1" (opt-in to v2).
 	SettingKeyChannelMonitorMode = "channel_monitor_mode"

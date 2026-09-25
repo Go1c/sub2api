@@ -192,6 +192,8 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyChannelMonitorHideThroughput:         "true",
 		SettingKeyChannelMonitorShowQuota:              "false",
 		SettingKeyChannelMonitorHideUserRanking:        "false",
+		SettingKeyBasisPointsImageRelayEnabled:         "false",
+		SettingKeyBasisPointsImageBaseURL:              "",
 
 		// Grok compatibility defaults: cross-client mapping stays enabled unless
 		// operators explicitly disable it.
@@ -809,6 +811,8 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// （与 setting_public.go 公开读取路径保持一致）。
 	result.ChannelMonitorShowQuota = settings[SettingKeyChannelMonitorShowQuota] == "true"
 	result.ChannelMonitorHideUserRanking = isTrueSettingValue(settings[SettingKeyChannelMonitorHideUserRanking])
+	result.BasisPointsImageRelayEnabled = settings[SettingKeyBasisPointsImageRelayEnabled] == "true"
+	result.BasisPointsImageBaseURL = strings.TrimRight(strings.TrimSpace(settings[SettingKeyBasisPointsImageBaseURL]), "/")
 
 	// Grok default mapping policy
 	result.GrokDefaultTextModel = strings.TrimSpace(settings[SettingKeyGrokDefaultTextModel])

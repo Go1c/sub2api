@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func TestBasisPointsSwitchDefaultsOffAndRoutesAstra(t *testing.T) {
@@ -27,11 +28,29 @@ func TestBasisPointsSwitchDefaultsOffAndRoutesAstra(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-	body := []byte(`{"model":"gpt-6-sol","input":"hi","service_tier":"priority"}`)
+	body := []byte(`{"model":"gpt-6-luna","input":"hi","service_tier":"priority"}`)
 	rewritten, err := (&OpenAIGatewayService{}).rewriteBasisPointsRequest(c.Request.Context(), c, enabled, body, "token")
 	require.NoError(t, err)
 	require.Equal(t, string(body), string(rewritten))
 	require.False(t, basisPointsRouted(c))
+
+	sol := []byte(`{"model":"GPT-6-Sol","input":"hi","service_tier":"priority"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	rewritten, err = (&OpenAIGatewayService{}).rewriteBasisPointsRequest(c.Request.Context(), c, enabled, sol, "token")
+	require.NoError(t, err)
+	require.True(t, basisPointsRouted(c))
+	require.Equal(t, "gpt-6-sol", gjson.GetBytes(rewritten, "model").String())
+	require.False(t, gjson.GetBytes(rewritten, "service_tier").Exists())
+
+	mapped := enabled
+	mapped.Credentials = map[string]any{"model_mapping": map[string]any{"client-sol": "gpt-6-sol"}}
+	aliasBody := []byte(`{"model":"client-sol","input":"hi"}`)
+	aliasBody, _ = sjson.SetBytes(aliasBody, "model", mapped.GetMappedModel("client-sol"))
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	rewritten, err = (&OpenAIGatewayService{}).rewriteBasisPointsRequest(c.Request.Context(), c, mapped, aliasBody, "token")
+	require.NoError(t, err)
+	require.True(t, basisPointsRouted(c))
+	require.Equal(t, "gpt-6-sol", gjson.GetBytes(rewritten, "model").String())
 
 	astra := []byte(`{"model":"gpt-6-astra","stream":true,"instructions":"be brief","service_tier":"priority","include":["reasoning.encrypted_content"],"text":{"verbosity":"low"},"max_output_tokens":128,"reasoning":{"effort":"max"},"prompt_cache_key":"thread-1","metadata":{"client":"codex","task_id":"drop-me"},"context_management":[{"type":"compaction","compact_threshold":475000}],"tools":[{"type":"function","name":"exec_command","description":"run","parameters":{"type":"object","properties":{"cmd":{"type":"string"}},"required":["cmd"]}}],"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"pwd"}]},{"type":"compaction_trigger"}]}`)
 	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
@@ -167,4 +186,123 @@ func TestBasisPointsImageDataURLBecomesFileID(t *testing.T) {
 	body := []byte(`{"input":[{"role":"user","content":[{"type":"input_image","image_url":"data:image/png;base64,aGVsbG8=","file_id":"already"}]}]}`)
 	_, err = (&OpenAIGatewayService{}).uploadBasisPointsImages(t.Context(), nil, &Account{}, body, "token")
 	require.Error(t, err)
+}
+
+func TestBasisPointsNativeFallbackKeepsCodexBody(t *testing.T) {
+	enabled := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Extra:    map[string]any{"basispoints": map[string]any{"enabled": true}},
+	}
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		name   string
+		body   string
+		reason string
+	}{
+		{
+			name:   "high web search",
+			body:   `{"model":"gpt-6-astra","tools":[{"type":"web_search","search_context_size":"high"}],"input":"hi"}`,
+			reason: "web_search",
+		},
+		{
+			name:   "external web access",
+			body:   `{"model":"gpt-6-astra","tools":[{"type":"web_search_preview","external_web_access":true}],"input":"hi"}`,
+			reason: "web_search",
+		},
+		{
+			name:   "image generation",
+			body:   `{"model":"gpt-6-astra","tools":[{"type":"image_generation"}],"input":"draw"}`,
+			reason: "image_generation",
+		},
+		{
+			name:   "forced tool",
+			body:   `{"model":"gpt-6-astra","tool_choice":{"type":"function","name":"web_search"},"input":"hi"}`,
+			reason: "tool_choice",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+			body := []byte(tc.body)
+			rewritten, err := (&OpenAIGatewayService{}).rewriteBasisPointsRequest(c.Request.Context(), c, enabled, body, "token")
+			require.NoError(t, err)
+			require.Equal(t, string(body), string(rewritten))
+			require.False(t, basisPointsRouted(c))
+			require.Equal(t, tc.reason, recorder.Header().Get(basisPointsBypassHeader))
+		})
+	}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+	ordinary := []byte(`{"model":"gpt-6-astra","tools":[{"type":"web_search"},{"type":"function","name":"exec_command","parameters":{"type":"object"}}],"input":"hi"}`)
+	rewritten, err := (&OpenAIGatewayService{}).rewriteBasisPointsRequest(c.Request.Context(), c, enabled, ordinary, "token")
+	require.NoError(t, err)
+	require.True(t, basisPointsRouted(c))
+	require.Empty(t, recorder.Header().Get(basisPointsBypassHeader))
+	require.Contains(t, gjson.GetBytes(rewritten, "input.0.content.0.text").String(), "web_search")
+	require.Equal(t, "run_officejs", gjson.GetBytes(rewritten, "tools.0.name").String())
+}
+
+func TestBasisPointsRecoversEmbeddedToolEnvelope(t *testing.T) {
+	source := []byte(`{"tools":[{"type":"function","name":"exec","parameters":{"type":"object"}}]}`)
+	item := gjson.Parse(`{"type":"function_call","id":"fc_1","call_id":"call_1","name":"run_officejs","arguments":"{\"code\":\"functions.exec({\\\"cmd\\\":[\\\"pwd\\\"]})\"}"}`)
+	call, ok := unwrapBasisPointsCall(item, source)
+	require.True(t, ok)
+	require.Equal(t, "exec", call["name"])
+	require.JSONEq(t, `{"cmd":["pwd"]}`, call["arguments"].(string))
+
+	ambiguous := gjson.Parse(`{"type":"function_call","call_id":"call_2","name":"run_officejs","arguments":"{\"code\":\"exec({\"cmd\":[\"pwd\"]}) and exec({\"cmd\":[\"ls\"]})\"}"}`)
+	_, ok = unwrapBasisPointsCall(ambiguous, source)
+	require.False(t, ok)
+}
+
+func TestBasisPointsStructuredOutputBecomesInstructions(t *testing.T) {
+	body := []byte(`{"model":"gpt-6-astra","text":{"format":{"type":"json_schema","name":"answer","strict":true,"schema":{"type":"object","properties":{"answer":{"type":"integer"}},"required":["answer"],"additionalProperties":false}}},"input":"two plus two"}`)
+	format, err := prepareBasisPointsStructuredOutput(body)
+	require.NoError(t, err)
+	require.NotNil(t, format)
+	rewritten, err := prepareBasisPointsBody(body, format)
+	require.NoError(t, err)
+	require.False(t, gjson.GetBytes(rewritten, "text").Exists())
+	instructions := ""
+	for _, message := range gjson.GetBytes(rewritten, "input").Array() {
+		if message.Get("role").String() != "developer" {
+			continue
+		}
+		instructions += message.Get("content.0.text").String()
+	}
+	require.Contains(t, instructions, "exactly one JSON value")
+	require.Contains(t, instructions, `"name":"answer"`)
+	require.Contains(t, instructions, `"type":"integer"`)
+
+	completed := []byte(`{"id":"resp_1","output":[{"type":"message","id":"msg_1","role":"assistant","content":[{"type":"output_text","text":"{\"answer\":4}"}]}]}`)
+	validated, err := applyBasisPointsStructuredResponse(completed, format)
+	require.NoError(t, err)
+	require.Equal(t, "json_schema", gjson.GetBytes(validated, "text.format.type").String())
+
+	invalid := []byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"not json"}]}]}`)
+	_, err = applyBasisPointsStructuredResponse(invalid, format)
+	require.Error(t, err)
+
+	raw := []byte("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"not json\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"{\\\"answer\\\":4}\"}]}]}}\n\n")
+	replay, err := replayBasisPointsSSE(raw, body, format)
+	require.NoError(t, err)
+	require.NotContains(t, string(replay), "not json")
+	require.Contains(t, string(replay), "response.output_text.delta")
+	answer := ""
+	for _, event := range strings.Split(string(replay), "\n\n") {
+		if !strings.Contains(event, "event: response.output_text.done") {
+			continue
+		}
+		data := event
+		if _, payload, found := strings.Cut(event, "data: "); found {
+			data = payload
+		}
+		answer = gjson.Get(data, "text").String()
+	}
+	require.JSONEq(t, `{"answer":4}`, answer)
 }

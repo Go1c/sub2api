@@ -248,8 +248,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			reqStream,
 		)
 	}
-	// Basis Points 只走 HTTP。WSv1 在改写前就会 400，先改成 HTTP 再继续。
-	if account.BasisPointsEnabled() && basisPointsRouteEligible(reqModel) &&
+	// Basis Points 只走 HTTP。明确要网页搜索或生图的请求留在 Codex。
+	// WSv1 在改写前就会 400，先改成 HTTP 再继续。
+	// 这里还没做账号模型映射，只能按客户端模型提前改传输；映射后的最终
+	// 判断在 rewriteBasisPointsRequest。
+	basisPointsNativeBypass := account.BasisPointsEnabled() && basisPointsRouteEligible(reqModel) &&
+		basisPointsNativeFallbackReason(body) != ""
+	if account.BasisPointsEnabled() && basisPointsRouteEligible(reqModel) && !basisPointsNativeBypass &&
 		wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
 		wsDecision.Transport = OpenAIUpstreamTransportHTTPSSE
 	}
@@ -266,7 +271,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
 	}
-	if passthroughEnabled && !(account.BasisPointsEnabled() && basisPointsRouteEligible(reqModel)) {
+	if passthroughEnabled && !(account.BasisPointsEnabled() && basisPointsRouteEligible(reqModel) && !basisPointsNativeBypass) {
 		attemptImageIntentInvalidated := false
 		if isCodexCLI && codexImageGenerationExplicitToolPolicy == codexImageGenerationExplicitToolPolicyStrip {
 			strippedBody, changed, stripErr := stripOpenAIImageGenerationToolsFromRawPayload(body)
@@ -804,14 +809,18 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	SetOpsUpstreamModel(c, upstreamModel)
 
 	if basisPointsBody, basisErr := s.rewriteBasisPointsRequest(ctx, c, account, body, token); basisErr != nil {
-		return nil, basisErr
+		status, code, message := basisPointsRewriteError(basisErr)
+		setOpsUpstreamError(c, status, message, "")
+		c.JSON(status, gin.H{"error": gin.H{"type": "invalid_request_error", "code": code, "message": message}})
+		return nil, nil
 	} else if basisPointsRouted(c) {
 		body = basisPointsBody
 		requestView = newOpenAIRequestView(body)
 		reqBody = nil
 		bodyModified = false
-		upstreamModel = basisPointsPublicModel
+		upstreamModel = basisPointsUpstreamModel(gjson.GetBytes(body, "model").String())
 		SetOpsUpstreamModel(c, upstreamModel)
+		SetActualOpenAIUpstreamEndpoint(c, basisPointsUpstreamPath)
 		wsDecision.Transport = OpenAIUpstreamTransportHTTPSSE
 	}
 

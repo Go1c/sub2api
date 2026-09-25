@@ -8,12 +8,16 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -26,18 +30,23 @@ import (
 )
 
 const (
-	basisPointsExtraKey     = "basispoints"
-	basisPointsUpstreamURL  = "https://bps.openai.com/basispoints/api/responses"
-	basisPointsUpstreamHost = "bps.openai.com"
-	basisPointsPublicModel  = "gpt-6-astra"
-	basisPointsAttachURL    = "https://bps.openai.com/basispoints/api/attachments"
-	basisPointsTransport    = "run_officejs"
-	basisPointsTransportAlt = "functions.run_officejs"
-	basisPointsAuthMode     = "chatgpt"
+	basisPointsExtraKey        = "basispoints"
+	basisPointsUpstreamURL     = "https://bps.openai.com/basispoints/api/responses"
+	basisPointsUpstreamHost    = "bps.openai.com"
+	basisPointsModelAstra      = "gpt-6-astra"
+	basisPointsModelSol        = "gpt-6-sol"
+	basisPointsAttachURL       = "https://bps.openai.com/basispoints/api/attachments"
+	basisPointsTransport       = "run_officejs"
+	basisPointsTransportAlt    = "functions.run_officejs"
+	basisPointsAuthMode        = "chatgpt"
+	basisPointsUpstreamPath    = "/basispoints/api/responses"
+	basisPointsBypassHeader    = "X-Codex2API-Basispoints-Bypass"
+	basisPointsEnvelopeMaxSize = 1 << 20
 )
 
-// BasisPointsEnabled reports whether this OpenAI OAuth account sends gpt-6-astra
-// through the Excel Basis Points upstream. Missing or non-object extra stays off.
+// BasisPointsEnabled reports whether this OpenAI OAuth account sends
+// gpt-6-astra and gpt-6-sol through the Excel Basis Points upstream.
+// Missing or non-object extra stays off.
 func (a *Account) BasisPointsEnabled() bool {
 	if a == nil || !a.IsOpenAIOAuthLike() || a.Extra == nil {
 		return false
@@ -64,10 +73,62 @@ func extraBool(value any) bool {
 	}
 }
 
-// basisPointsRouteEligible is the hardcoded public model that an enabled
-// account redirects onto Basis Points. Other models stay on Codex.
+// basisPointsRouteEligible names the hardcoded public models an enabled
+// account redirects onto Basis Points. The upstream model stays the requested
+// name. Other models stay on Codex.
 func basisPointsRouteEligible(model string) bool {
-	return strings.EqualFold(strings.TrimSpace(model), basisPointsPublicModel)
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case basisPointsModelAstra, basisPointsModelSol:
+		return true
+	default:
+		return false
+	}
+}
+
+func basisPointsUpstreamModel(model string) string {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case basisPointsModelSol:
+		return basisPointsModelSol
+	default:
+		return basisPointsModelAstra
+	}
+}
+
+// basisPointsNativeFallbackReason names a capability Basis Points cannot run.
+// Those requests stay on Codex so the client does not fail at the BPS boundary.
+// An empty result means the request can use the BPS bridge.
+func basisPointsNativeFallbackReason(body []byte) string {
+	if !gjson.ValidBytes(body) {
+		return ""
+	}
+	if tools := gjson.GetBytes(body, "tools"); tools.IsArray() {
+		fallback := ""
+		tools.ForEach(func(_, tool gjson.Result) bool {
+			kind := strings.ToLower(strings.TrimSpace(tool.Get("type").String()))
+			switch kind {
+			case "image_generation":
+				fallback = "image_generation"
+				return false
+			case "web_search", "web_search_preview", "web_search_preview_2025_03_11", "web_search_2025_08_26":
+				if tool.Get("external_web_access").Bool() || tool.Get("search_context_size").String() == "high" {
+					fallback = "web_search"
+					return false
+				}
+			}
+			return true
+		})
+		if fallback != "" {
+			return fallback
+		}
+	}
+	choice := gjson.GetBytes(body, "tool_choice")
+	if choice.Exists() && choice.Type == gjson.JSON {
+		name := strings.ToLower(choice.Get("name").String())
+		if strings.Contains(name, "web_search") || strings.Contains(name, "image_generation") {
+			return "tool_choice"
+		}
+	}
+	return ""
 }
 
 func (s *OpenAIGatewayService) rewriteBasisPointsRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string) ([]byte, error) {
@@ -78,25 +139,47 @@ func (s *OpenAIGatewayService) rewriteBasisPointsRequest(ctx context.Context, c 
 	if !basisPointsRouteEligible(model) {
 		return body, nil
 	}
+	if reason := basisPointsNativeFallbackReason(body); reason != "" {
+		if c != nil {
+			c.Header(basisPointsBypassHeader, reason)
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Basis Points native fallback account_id=%d model=%s reason=%s", account.ID, model, reason)
+		}
+		return body, nil
+	}
+	relayed, err := s.relayBasisPointsImages(ctx, c, account, body)
+	if err != nil {
+		return nil, err
+	}
+	if relayed != nil {
+		body = relayed
+	}
 	uploaded, err := s.uploadBasisPointsImages(ctx, c, account, body, token)
 	if err != nil {
 		return nil, err
 	}
-	rewritten, err := prepareBasisPointsBody(uploaded)
+	structured, err := prepareBasisPointsStructuredOutput(uploaded)
+	if err != nil {
+		return nil, err
+	}
+	rewritten, err := prepareBasisPointsBody(uploaded, structured)
 	if err != nil {
 		return nil, err
 	}
 	if c != nil {
 		c.Set(basisPointsRoutedContextKey, true)
 		c.Set(basisPointsSourceBodyKey, append([]byte(nil), body...))
-		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Basis Points route account_id=%d model=%s", account.ID, basisPointsPublicModel)
+		if structured != nil {
+			c.Set(basisPointsStructuredFormatKey, structured)
+		}
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Basis Points route account_id=%d model=%s", account.ID, model)
 	}
 	return rewritten, nil
 }
 
 const (
-	basisPointsRoutedContextKey = "openai_basispoints_routed"
-	basisPointsSourceBodyKey    = "openai_basispoints_source_body"
+	basisPointsRoutedContextKey    = "openai_basispoints_routed"
+	basisPointsSourceBodyKey       = "openai_basispoints_source_body"
+	basisPointsStructuredFormatKey = "openai_basispoints_structured_format"
 )
 
 func basisPointsRouted(c *gin.Context) bool {
@@ -120,12 +203,24 @@ func basisPointsSourceBody(c *gin.Context) []byte {
 	return body
 }
 
+func basisPointsStructuredFromContext(c *gin.Context) *basisPointsStructuredOutput {
+	if c == nil {
+		return nil
+	}
+	value, ok := c.Get(basisPointsStructuredFormatKey)
+	format, _ := value.(*basisPointsStructuredOutput)
+	if !ok {
+		return nil
+	}
+	return format
+}
+
 func (s *OpenAIGatewayService) handleBasisPointsStreamingResponse(_ context.Context, resp *http.Response, c *gin.Context, _ *Account, startTime time.Time, _, _ string) (*openaiStreamingResult, error) {
 	raw, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
 	}
-	replay, err := replayBasisPointsSSE(raw, basisPointsSourceBody(c))
+	replay, err := replayBasisPointsSSE(raw, basisPointsSourceBody(c), basisPointsStructuredFromContext(c))
 	if err != nil {
 		return nil, fmt.Errorf("restore basis points client tools: %w", err)
 	}
@@ -193,6 +288,19 @@ func basisPointsSSEData(line []byte) []byte {
 	return bytes.TrimSpace(bytes.TrimPrefix(trimmed, []byte("data:")))
 }
 
+func basisPointsRewriteError(err error) (int, string, string) {
+	switch {
+	case err == nil:
+		return http.StatusBadRequest, "basispoints_request_invalid", "Invalid Basis Points request"
+	case errors.Is(err, ErrBasisPointsImageRelayFull):
+		return http.StatusServiceUnavailable, "basispoints_image_relay_full", err.Error()
+	case errors.Is(err, ErrBasisPointsImageRelayStorage):
+		return http.StatusServiceUnavailable, "basispoints_image_relay_unavailable", err.Error()
+	default:
+		return http.StatusBadRequest, "basispoints_request_invalid", err.Error()
+	}
+}
+
 func basisPointsFirstTokenMs(start time.Time) *int {
 	if start.IsZero() {
 		return nil
@@ -225,6 +333,77 @@ func extractOpenAIUsageFromSSE(body []byte) (OpenAIUsage, bool) {
 		}
 	}
 	return usage, found
+}
+
+func (s *OpenAIGatewayService) relayBasisPointsImages(ctx context.Context, c *gin.Context, account *Account, body []byte) ([]byte, error) {
+	if s == nil || !bytes.Contains(body, []byte("data:")) {
+		return nil, nil
+	}
+	relay, err := s.basisPointsImageRelay(ctx)
+	if err != nil || relay == nil {
+		return nil, err
+	}
+	scope := basisPointsImageScope(c, account, body)
+	rewritten, err := relay.Rewrite(body, scope)
+	if err != nil {
+		return nil, err
+	}
+	return rewritten, nil
+}
+
+func basisPointsImageScope(c *gin.Context, account *Account, body []byte) string {
+	accountID := int64(0)
+	if account != nil {
+		accountID = account.ID
+	}
+	threadID := ""
+	if c != nil {
+		_, threadID = resolveOpenAIWSExecutionScope(c, body, getAPIKeyIDFromContext(c))
+	}
+	return fmt.Sprintf("account:%d/key:%d/thread:%s", accountID, getAPIKeyIDFromContext(c), threadID)
+}
+
+func (s *OpenAIGatewayService) basisPointsImageRelay(ctx context.Context) (*ImageRelay, error) {
+	if s == nil || s.settingService == nil {
+		return nil, nil
+	}
+	settings, err := s.settingService.GetBasisPointsImageRelaySettings(ctx)
+	if err != nil || !settings.Enabled {
+		return nil, err
+	}
+	s.basisPointsImagesMu.Lock()
+	defer s.basisPointsImagesMu.Unlock()
+	if s.basisPointsImages == nil {
+		dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
+		if dataDir == "" {
+			dataDir = "./data"
+		}
+		s.basisPointsImages, err = NewImageRelay(settings.BaseURL, filepath.Join(dataDir, "bps-images"))
+	} else {
+		err = s.basisPointsImages.SetPublicOrigin(settings.BaseURL)
+	}
+	return s.basisPointsImages, err
+}
+
+func (s *OpenAIGatewayService) CloseBasisPointsImages() error {
+	if s == nil {
+		return nil
+	}
+	s.basisPointsImagesMu.Lock()
+	defer s.basisPointsImagesMu.Unlock()
+	if s.basisPointsImages == nil {
+		return nil
+	}
+	return s.basisPointsImages.Close()
+}
+
+func (s *OpenAIGatewayService) ServeBasisPointsImage(c *gin.Context) {
+	relay, _ := s.basisPointsImageRelay(c.Request.Context())
+	if relay == nil {
+		http.NotFound(c.Writer, c.Request)
+		return
+	}
+	relay.ServeHTTP(c.Writer, c.Request)
 }
 
 func (s *OpenAIGatewayService) uploadBasisPointsImages(ctx context.Context, c *gin.Context, account *Account, body []byte, token string) ([]byte, error) {
@@ -382,7 +561,11 @@ func restoreBasisPointsClientTools(c *gin.Context, body []byte) ([]byte, error) 
 	if !basisPointsRouted(c) {
 		return body, nil
 	}
-	return unwrapBasisPointsResponseBody(body, basisPointsSourceBody(c))
+	restored, err := unwrapBasisPointsResponseBody(body, basisPointsSourceBody(c))
+	if err != nil {
+		return nil, err
+	}
+	return applyBasisPointsStructuredResponse(restored, basisPointsStructuredFromContext(c))
 }
 
 func applyBasisPointsHeaders(req *http.Request, account *Account) {
@@ -448,7 +631,7 @@ func readRequestBody(req *http.Request) []byte {
 	return body
 }
 
-func prepareBasisPointsBody(body []byte) ([]byte, error) {
+func prepareBasisPointsBody(body []byte, structured ...*basisPointsStructuredOutput) ([]byte, error) {
 	if !gjson.ValidBytes(body) {
 		return nil, fmt.Errorf("basis points request body is not json")
 	}
@@ -458,9 +641,13 @@ func prepareBasisPointsBody(body []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	items = prependBasisPointsPrologue(body, items)
+	var structuredOutput *basisPointsStructuredOutput
+	if len(structured) > 0 {
+		structuredOutput = structured[0]
+	}
+	items = prependBasisPointsPrologue(body, items, structuredOutput)
 	out := []byte(`{}`)
-	out, err = sjson.SetBytes(out, "model", basisPointsPublicModel)
+	out, err = sjson.SetBytes(out, "model", basisPointsUpstreamModel(gjson.GetBytes(body, "model").String()))
 	if err != nil {
 		return nil, err
 	}
@@ -620,6 +807,47 @@ func basisPointsUUIDv5(name string) string {
 
 var basisPointsTransportTool = []byte(`[{"type":"function","name":"run_officejs","description":"Transport for one client tool. code is JSON text {\"tool\":\"name\",\"args\":{...}}, not JavaScript.","parameters":{"type":"object","properties":{"summary":{"type":"string"},"extended_summary":{"type":"string"},"code":{"type":"string"},"destructive":{"type":"boolean"},"references":{"type":"array"}},"required":["code"],"additionalProperties":false}}]`)
 
+func basisPointsOmittedHostedTools(body []byte) string {
+	tools := gjson.GetBytes(body, "tools")
+	if !tools.IsArray() {
+		return ""
+	}
+	seen := map[string]struct{}{}
+	var walk func(items []gjson.Result)
+	walk = func(items []gjson.Result) {
+		for _, tool := range items {
+			toolType := strings.ToLower(strings.TrimSpace(tool.Get("type").String()))
+			if toolType == "namespace" && tool.Get("tools").IsArray() {
+				walk(tool.Get("tools").Array())
+				continue
+			}
+			if basisPointsUnsupportedHostedTool(toolType) {
+				seen[toolType] = struct{}{}
+			}
+		}
+	}
+	walk(tools.Array())
+	if len(seen) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
+
+func basisPointsUnsupportedHostedTool(kind string) bool {
+	switch kind {
+	case "web_search", "web_search_preview", "web_search_preview_2025_03_11", "web_search_2025_08_26",
+		"tool_search", "image_generation", "file_search", "code_interpreter", "computer", "computer_use_preview", "mcp":
+		return true
+	default:
+		return false
+	}
+}
+
 func basisPointsHasClientTools(body []byte) bool {
 	tools := gjson.GetBytes(body, "tools")
 	if !tools.IsArray() {
@@ -644,12 +872,15 @@ func basisPointsHasClientTools(body []byte) bool {
 	return found
 }
 
-func prependBasisPointsPrologue(source []byte, items []any) []any {
+func prependBasisPointsPrologue(source []byte, items []any, structured *basisPointsStructuredOutput) []any {
 	instructions := strings.TrimSpace(gjson.GetBytes(source, "instructions").String())
 	catalog := basisPointsToolCatalog(source)
 	prologue := "This request is relayed by an external Responses API client, not by the live Excel workbook. The native run_officejs function is a transport endpoint owned by this proxy. The proxy intercepts it before execution, so it never runs Office code. Other native Excel, Office, connector, workbook, list_skills, and web-search tools are unavailable."
 	if catalog != "" {
 		prologue += " Call run_officejs once per client tool. Its arguments include summary, extended_summary, destructive=false, references=[], and code. code is JSON text containing exactly one object {\"tool\":\"CLIENT_TOOL\",\"args\":{...}} for a function tool, or {\"tool\":\"CLIENT_TOOL\",\"args\":\"RAW_INPUT\"} for a custom tool. Do not put JavaScript inside code. Available client tools:\n" + catalog
+		if omitted := basisPointsOmittedHostedTools(source); omitted != "" {
+			prologue += "\nHosted tools unavailable through Basis Points: " + omitted + ". These declarations were omitted. Do not claim to have used them."
+		}
 		if choice := gjson.GetBytes(source, "tool_choice"); choice.Exists() && choice.Type != gjson.Null {
 			prologue += "\nClient tool_choice: " + choice.Raw
 		}
@@ -659,11 +890,14 @@ func prependBasisPointsPrologue(source []byte, items []any) []any {
 	} else {
 		prologue += " Do not call tools. Return the answer as assistant text."
 	}
-	prefix := make([]any, 0, 2)
+	prefix := make([]any, 0, 3)
 	if instructions != "" {
 		prefix = append(prefix, basisPointsMessage("developer", instructions))
 	}
 	prefix = append(prefix, basisPointsMessage("developer", prologue))
+	if prompt := structured.instructions(); prompt != "" {
+		prefix = append(prefix, basisPointsMessage("developer", prompt))
+	}
 	return basisPointsPrependBeforeCompaction(items, prefix)
 }
 
@@ -1052,7 +1286,12 @@ func unwrapBasisPointsSSE(body, source []byte) ([]byte, error) {
 
 // replayBasisPointsSSE forwards text deltas as they arrive and rewrites a
 // completed run_officejs call into the client tool once its code is complete.
-func replayBasisPointsSSE(raw, source []byte) ([]byte, error) {
+// Structured answers stay withheld until the terminal response validates.
+func replayBasisPointsSSE(raw, source []byte, structured ...*basisPointsStructuredOutput) ([]byte, error) {
+	var format *basisPointsStructuredOutput
+	if len(structured) > 0 {
+		format = structured[0]
+	}
 	if !isBasisPointsSSE(raw) && !bodyHasSSEFraming(raw) {
 		var response map[string]any
 		if err := json.Unmarshal(raw, &response); err != nil {
@@ -1088,6 +1327,9 @@ func replayBasisPointsSSE(raw, source []byte) ([]byte, error) {
 		eventType := gjson.GetBytes(data, "type").String()
 		if eventType == "" {
 			eventType = pendingEvent
+		}
+		if format != nil && basisPointsStructuredMessageEvent(eventType, gjson.GetBytes(data, "item")) {
+			continue
 		}
 		if strings.Contains(eventType, "function_call_arguments") && isBasisPointsTransportItem(data) {
 			if eventType == "response.function_call_arguments.done" || strings.HasSuffix(eventType, ".done") {
@@ -1133,6 +1375,15 @@ func replayBasisPointsSSE(raw, source []byte) ([]byte, error) {
 				unwrapped, err := unwrapBasisPointsJSON([]byte(response.Raw), source)
 				if err != nil {
 					return nil, err
+				}
+				unwrapped, err = applyBasisPointsStructuredResponse(unwrapped, format)
+				if err != nil {
+					return nil, err
+				}
+				if format != nil {
+					if err := writeBasisPointsStructuredMessages(&builder, unwrapped); err != nil {
+						return nil, err
+					}
 				}
 				rewritten, err := sjson.SetRawBytes(data, "response", unwrapped)
 				if err != nil {
@@ -1244,14 +1495,11 @@ func isBasisPointsTransportName(name string) bool {
 func unwrapBasisPointsCall(item gjson.Result, source []byte) (map[string]any, bool) {
 	arguments := item.Get("arguments").String()
 	code := gjson.Get(arguments, "code").String()
-	if code == "" || !gjson.Valid(code) {
-		return nil, false
+	tool, argsRaw, ok := basisPointsEnvelope(code, source)
+	if !ok {
+		tool, argsRaw, ok = basisPointsRecoveredEnvelope(code, source)
 	}
-	tool := strings.TrimSpace(gjson.Get(code, "tool").String())
-	if tool == "" {
-		tool = strings.TrimSpace(gjson.Get(code, "name").String())
-	}
-	if tool == "" || isBasisPointsTransportName(tool) || !basisPointsCatalogContains(source, tool) {
+	if !ok || tool == "" || isBasisPointsTransportName(tool) || !basisPointsCatalogContains(source, tool) {
 		return nil, false
 	}
 	name, namespace := tool, ""
@@ -1269,20 +1517,159 @@ func unwrapBasisPointsCall(item gjson.Result, source []byte) (map[string]any, bo
 	if namespace != "" {
 		result["namespace"] = namespace
 	}
-	args := gjson.Get(code, "args")
+	args := gjson.Parse(argsRaw)
 	if args.Type == gjson.String {
 		result["type"] = "custom_tool_call"
 		result["input"] = args.String()
 		delete(result, "status")
 		return result, true
 	}
-	if args.Raw == "" {
+	if argsRaw == "" {
 		result["arguments"] = "{}"
 	} else {
-		result["arguments"] = args.Raw
+		result["arguments"] = argsRaw
 	}
 	rememberBasisPointsCall(item)
 	return result, true
+}
+
+func basisPointsEnvelope(code string, source []byte) (string, string, bool) {
+	code = strings.TrimSpace(code)
+	if code == "" || !gjson.Valid(code) {
+		return "", "", false
+	}
+	tool := strings.TrimSpace(gjson.Get(code, "tool").String())
+	if tool == "" {
+		tool = strings.TrimSpace(gjson.Get(code, "name").String())
+	}
+	if tool == "" || !basisPointsCatalogContains(source, tool) {
+		return "", "", false
+	}
+	args := gjson.Get(code, "args")
+	if !args.Exists() {
+		args = gjson.Get(code, "arguments")
+	}
+	return tool, args.Raw, true
+}
+
+var basisPointsEmbeddedCall = regexp.MustCompile(`(?:^|\s)(?:await\s+|return\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*\(`)
+
+// basisPointsRecoveredEnvelope accepts one unambiguous catalog envelope inside
+// a short wrapper such as functions.exec({...}). Multiple candidates, unknown
+// tools, and unparseable code stay rejected. The surrounding text is never run.
+func basisPointsRecoveredEnvelope(code string, source []byte) (string, string, bool) {
+	raw := strings.TrimSpace(code)
+	if raw == "" || len(raw) > basisPointsEnvelopeMaxSize {
+		return "", "", false
+	}
+	matches := basisPointsEmbeddedCall.FindAllStringSubmatchIndex(raw, -1)
+	if len(matches) == 1 {
+		name := raw[matches[0][2]:matches[0][3]]
+		if !basisPointsCatalogContains(source, name) {
+			name = strings.TrimPrefix(name, "functions.")
+		}
+		if basisPointsCatalogContains(source, name) {
+			open := matches[0][1] - 1
+			if open >= 0 && open < len(raw) && raw[open] == '(' {
+				if tool, args, ok := basisPointsLeadingEnvelope(raw[open+1:], source); ok {
+					return tool, args, true
+				}
+				// functions.exec({...}) carries the client arguments directly.
+				if args, end, ok := basisPointsDecodeJSONValue(raw[open+1:]); ok && end > 0 {
+					encoded, err := json.Marshal(args)
+					if err == nil && string(encoded) != "null" {
+						return name, string(encoded), true
+					}
+				}
+			}
+		}
+	}
+	foundTool, foundArgs := "", ""
+	found := false
+	for i := 0; i < len(raw); i++ {
+		if raw[i] != '{' {
+			continue
+		}
+		tool, args, end, ok := basisPointsLeadingEnvelopeSpan(raw[i:], source)
+		if !ok {
+			continue
+		}
+		if found {
+			return "", "", false
+		}
+		foundTool, foundArgs, found = tool, args, true
+		if end > 0 {
+			i += end - 1
+		}
+	}
+	if !found {
+		return "", "", false
+	}
+	return foundTool, foundArgs, true
+}
+
+func basisPointsLeadingEnvelope(raw string, source []byte) (string, string, bool) {
+	tool, args, _, ok := basisPointsLeadingEnvelopeSpan(raw, source)
+	return tool, args, ok
+}
+
+func basisPointsDecodeJSONValue(raw string) (any, int, bool) {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, 0, false
+	}
+	return value, int(decoder.InputOffset()), true
+}
+
+func basisPointsLeadingEnvelopeSpan(raw string, source []byte) (string, string, int, bool) {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return "", "", 0, false
+	}
+	item, ok := value.(map[string]any)
+	if !ok || item == nil {
+		return "", "", 0, false
+	}
+	tool := basisPointsText(item["name"])
+	alias := basisPointsText(item["tool"])
+	if tool != "" && alias != "" && tool != alias {
+		return "", "", 0, false
+	}
+	if tool == "" {
+		tool = alias
+	}
+	if !basisPointsCatalogContains(source, tool) && basisPointsCatalogContains(source, strings.TrimPrefix(tool, "functions.")) {
+		tool = strings.TrimPrefix(tool, "functions.")
+	}
+	if tool == "" || !basisPointsCatalogContains(source, tool) {
+		return "", "", int(decoder.InputOffset()), false
+	}
+	if _, hasArgs := item["arguments"]; hasArgs {
+		if _, hasAlias := item["args"]; hasAlias {
+			return "", "", 0, false
+		}
+	}
+	args, exists := item["arguments"]
+	if !exists {
+		args = item["args"]
+	}
+	encoded, err := json.Marshal(args)
+	if err != nil {
+		return "", "", 0, false
+	}
+	if string(encoded) == "null" {
+		encoded = nil
+	}
+	return tool, string(encoded), int(decoder.InputOffset()), true
+}
+
+func basisPointsText(value any) string {
+	text, _ := value.(string)
+	return strings.TrimSpace(text)
 }
 
 func basisPointsCatalogContains(source []byte, tool string) bool {

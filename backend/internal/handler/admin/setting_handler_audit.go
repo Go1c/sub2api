@@ -576,6 +576,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ChannelMonitorEnabled != after.ChannelMonitorEnabled {
 		changed = append(changed, "channel_monitor_enabled")
 	}
+	if before.BasisPointsImageRelayEnabled != after.BasisPointsImageRelayEnabled {
+		changed = append(changed, "excel_bps_image_relay_enabled")
+	}
+	if before.BasisPointsImageBaseURL != after.BasisPointsImageBaseURL {
+		changed = append(changed, "excel_bps_image_base_url")
+	}
 	if before.ChannelMonitorDefaultIntervalSeconds != after.ChannelMonitorDefaultIntervalSeconds {
 		changed = append(changed, "channel_monitor_default_interval_seconds")
 	}
