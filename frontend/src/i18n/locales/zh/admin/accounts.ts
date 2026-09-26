@@ -745,6 +745,10 @@ export default {
         apiKeyHint: '您的 OpenAI API Key',
         oauthPassthrough: '自动透传（仅替换认证）',
         excelBPS403Badge: 'BPS 403疑似被封excel',
+        excelBPS403BadgeNote: 'Excel / BPS 上游返回 HTTP 403（不代表已确认封禁），已按设置自动处理：',
+        excelBPS403BadgeDisabled: '{time} 关闭 Excel / BPS 协议，重新开启协议后解除',
+        excelBPS403BadgeMoved: '{time} 移入分组「{group}」，调整分组后解除',
+        excelBPS403BadgeLeftGroups: '{time} 退出所有分组，调整分组后解除',
         excelBPS403BadgeTooltip: '{time} Excel / BPS 上游返回 HTTP 403，已按设置自动关闭此账号的 Excel / BPS 协议。403 不代表已确认封禁；重新开启协议后标签自动消失。',
         oauthPassthroughDesc:
           '开启后，该 OpenAI 账号将自动透传请求与响应，仅替换认证并保留计费/并发/审计及必要安全过滤；如遇兼容性问题可随时关闭回滚。',
