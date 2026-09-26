@@ -1280,6 +1280,24 @@ describe('EditAccountModal', () => {
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
 
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.basispoints).toEqual({ enabled: true })
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_excel_bps_ignore_images).toBe(false)
+  })
+
+  it('persists ignore-images only while basis points is on', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    account.extra = { basispoints: { enabled: true }, openai_excel_bps_ignore_images: true }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    expect(wrapper.get('[data-testid="basispoints-ignore-images"]').element).toBeChecked()
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_excel_bps_ignore_images).toBe(true)
+
+    await wrapper.get('[data-testid="basispoints-enabled"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[1]?.[1]?.extra?.openai_excel_bps_ignore_images).toBe(false)
   })
 
   it('keeps openai passthrough when saving the basis points switch', async () => {

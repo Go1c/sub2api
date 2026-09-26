@@ -2131,6 +2131,18 @@ func (a *Account) IsExcelBPSEnabled() bool {
 	return a.BasisPointsEnabled()
 }
 
+const ExcelBPSIgnoreImagesKey = "openai_excel_bps_ignore_images"
+
+// IsExcelBPSIgnoreImagesEnabled opts into text-only forwarding when global BPS
+// image support is disabled. The forwarding path checks that global setting.
+func (a *Account) IsExcelBPSIgnoreImagesEnabled() bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	enabled, _ := a.Extra[ExcelBPSIgnoreImagesKey].(bool)
+	return enabled
+}
+
 func (a *Account) IsExcelBPSMihomoEnabled() bool {
 	if !a.IsExcelBPSEnabled() {
 		return false

@@ -234,6 +234,18 @@
             :aria-label="t('admin.accounts.basisPoints.title')"
           />
         </div>
+        <label v-if="basisPointsEnabled" class="mt-3 flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300">
+          <input
+            v-model="basisPointsIgnoreImages"
+            type="checkbox"
+            class="mt-0.5"
+            data-testid="basispoints-ignore-images"
+          />
+          <span>
+            <span class="block">{{ t('admin.accounts.basisPoints.ignoreImages') }}</span>
+            <span class="mt-1 block text-gray-500 dark:text-gray-400">{{ t('admin.accounts.basisPoints.ignoreImagesHint') }}</span>
+          </span>
+        </label>
       </div>
 
       <!-- API Key fields (only for apikey type) -->
@@ -3689,6 +3701,8 @@ type ErrorAlertRuleForm = {
 const turnStateProbeEnabled = ref(false)
 const turnStateProbeEnforce = ref(false)
 const basisPointsEnabled = ref(false)
+const basisPointsIgnoreImages = ref(false)
+const EXCEL_BPS_IGNORE_IMAGES_KEY = 'openai_excel_bps_ignore_images'
 const errorAlertEnabled = ref(true)
 const errorAlertKeywords = ref<string[]>([])
 const errorAlertKeywordInput = ref('')
@@ -3913,6 +3927,7 @@ function applyTurnStateProbeToUpdatePayload(updatePayload: Record<string, unknow
 }
 
 function loadBasisPointsFromExtra(extra: Record<string, unknown> | undefined) {
+  basisPointsIgnoreImages.value = extra?.[EXCEL_BPS_IGNORE_IMAGES_KEY] === true
   const raw = extra?.[BASISPOINTS_EXTRA_KEY]
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     basisPointsEnabled.value = false
@@ -3928,7 +3943,11 @@ function applyBasisPointsToUpdatePayload(updatePayload: Record<string, unknown>)
   // 不能再拿弹窗打开时的旧 extra 覆盖整份配置。
   const current = (updatePayload.extra as Record<string, unknown>) ||
     ((props.account?.extra as Record<string, unknown>) || {})
-  updatePayload.extra = { ...current, [BASISPOINTS_EXTRA_KEY]: next }
+  updatePayload.extra = {
+    ...current,
+    [BASISPOINTS_EXTRA_KEY]: next,
+    [EXCEL_BPS_IGNORE_IMAGES_KEY]: basisPointsEnabled.value && basisPointsIgnoreImages.value
+  }
 }
 
 const customErrorCodesEnabled = ref(false)
