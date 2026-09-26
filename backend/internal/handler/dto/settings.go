@@ -312,8 +312,18 @@ type SystemSettings struct {
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
 	ChannelMonitorHideUserRanking        bool   `json:"channel_monitor_hide_user_ranking"`
 
-	ExcelBPSImageRelayEnabled bool   `json:"excel_bps_image_relay_enabled"`
-	ExcelBPSImageBaseURL      string `json:"excel_bps_image_base_url"`
+	ExcelBPSImageMode           string `json:"excel_bps_image_mode"`
+	ExcelBPSImageRelayEnabled   bool   `json:"excel_bps_image_relay_enabled"`
+	ExcelBPSImageBaseURL        string `json:"excel_bps_image_base_url"`
+	ExcelBPSImageBodyLimitMiB   int    `json:"excel_bps_image_body_limit_mib"`
+	ExcelBPSImageBudgetMiB      int    `json:"excel_bps_image_budget_mib"`
+	ExcelBPSImageMaxRequests    int    `json:"excel_bps_image_max_requests"`
+	ExcelBPSImageMaxImageMiB    int    `json:"excel_bps_image_max_image_mib"`
+	ExcelBPSImageMaxImages      int    `json:"excel_bps_image_max_images"`
+	ExcelBPSImageMaxTotalMiB    int    `json:"excel_bps_image_max_total_mib"`
+	ExcelBPSImageStorageMiB     int    `json:"excel_bps_image_storage_mib"`
+	ExcelBPSImageStorageEntries int    `json:"excel_bps_image_storage_entries"`
+	ExcelBPSImageTTLMinutes     int    `json:"excel_bps_image_ttl_minutes"`
 
 	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`

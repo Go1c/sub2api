@@ -576,11 +576,41 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ChannelMonitorEnabled != after.ChannelMonitorEnabled {
 		changed = append(changed, "channel_monitor_enabled")
 	}
-	if before.BasisPointsImageRelayEnabled != after.BasisPointsImageRelayEnabled {
+	if before.ExcelBPSImageMode != after.ExcelBPSImageMode {
+		changed = append(changed, "excel_bps_image_mode")
+	}
+	if before.ExcelBPSImageRelayEnabled != after.ExcelBPSImageRelayEnabled {
 		changed = append(changed, "excel_bps_image_relay_enabled")
 	}
-	if before.BasisPointsImageBaseURL != after.BasisPointsImageBaseURL {
+	if before.ExcelBPSImageBaseURL != after.ExcelBPSImageBaseURL {
 		changed = append(changed, "excel_bps_image_base_url")
+	}
+	if before.ExcelBPSImageBodyLimitMiB != after.ExcelBPSImageBodyLimitMiB {
+		changed = append(changed, "excel_bps_image_body_limit_mib")
+	}
+	if before.ExcelBPSImageBudgetMiB != after.ExcelBPSImageBudgetMiB {
+		changed = append(changed, "excel_bps_image_budget_mib")
+	}
+	if before.ExcelBPSImageMaxRequests != after.ExcelBPSImageMaxRequests {
+		changed = append(changed, "excel_bps_image_max_requests")
+	}
+	if before.ExcelBPSImageMaxImageMiB != after.ExcelBPSImageMaxImageMiB {
+		changed = append(changed, "excel_bps_image_max_image_mib")
+	}
+	if before.ExcelBPSImageMaxImages != after.ExcelBPSImageMaxImages {
+		changed = append(changed, "excel_bps_image_max_images")
+	}
+	if before.ExcelBPSImageMaxTotalMiB != after.ExcelBPSImageMaxTotalMiB {
+		changed = append(changed, "excel_bps_image_max_total_mib")
+	}
+	if before.ExcelBPSImageStorageMiB != after.ExcelBPSImageStorageMiB {
+		changed = append(changed, "excel_bps_image_storage_mib")
+	}
+	if before.ExcelBPSImageStorageEntries != after.ExcelBPSImageStorageEntries {
+		changed = append(changed, "excel_bps_image_storage_entries")
+	}
+	if before.ExcelBPSImageTTLMinutes != after.ExcelBPSImageTTLMinutes {
+		changed = append(changed, "excel_bps_image_ttl_minutes")
 	}
 	if before.ChannelMonitorDefaultIntervalSeconds != after.ChannelMonitorDefaultIntervalSeconds {
 		changed = append(changed, "channel_monitor_default_interval_seconds")

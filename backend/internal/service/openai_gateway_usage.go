@@ -178,9 +178,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	// OpenAI input_tokens 是总输入，包含缓存读取和缓存写入明细。
 	// 将三类 token 拆成互斥桶，避免缓存写入同时按普通输入和 cache_write 重复计费。
-	// Basis Points 的缓存创建已经含在总输入里，按普通输入计，不再另记 cache_write。
+	// Excel/BPS 在账号打开「缓存创建按普通输入计」时，把已含在总输入里的
+	// cache creation 留在普通输入桶，不再另记 cache_write。旧版
+	// extra.basispoints.enabled 没有这个子开关，BPS 路径保持同样的记账。
 	cacheCreationTokens := result.Usage.CacheCreationInputTokens
-	if account != nil && account.BasisPointsEnabled() && result.UpstreamEndpoint == basisPointsUpstreamPath {
+	if account != nil && result.UpstreamEndpoint == basisPointsUpstreamPath &&
+		(account.IsExcelBPSCacheCreationAsInputEnabled() || account.BasisPointsEnabled()) {
 		cacheCreationTokens = 0
 	}
 	actualInputTokens := result.Usage.InputTokens - result.Usage.CacheReadInputTokens - cacheCreationTokens

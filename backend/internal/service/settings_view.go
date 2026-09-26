@@ -204,9 +204,22 @@ type SystemSettings struct {
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
 	ChannelMonitorHideUserRanking        bool   `json:"channel_monitor_hide_user_ranking"`
 
-	// Basis Points image relay. Default off until an HTTPS public origin is saved.
-	BasisPointsImageRelayEnabled bool   `json:"excel_bps_image_relay_enabled"`
-	BasisPointsImageBaseURL      string `json:"excel_bps_image_base_url"`
+	// Excel / BPS image support. Default off until an admin enables relay or native upload.
+	ExcelBPSImageMode           string `json:"excel_bps_image_mode"`
+	ExcelBPSImageRelayEnabled   bool   `json:"excel_bps_image_relay_enabled"`
+	ExcelBPSImageBaseURL        string `json:"excel_bps_image_base_url"`
+	ExcelBPSImageBodyLimitMiB   int    `json:"excel_bps_image_body_limit_mib"`
+	ExcelBPSImageBudgetMiB      int    `json:"excel_bps_image_budget_mib"`
+	ExcelBPSImageMaxRequests    int    `json:"excel_bps_image_max_requests"`
+	ExcelBPSImageMaxImageMiB    int    `json:"excel_bps_image_max_image_mib"`
+	ExcelBPSImageMaxImages      int    `json:"excel_bps_image_max_images"`
+	ExcelBPSImageMaxTotalMiB    int    `json:"excel_bps_image_max_total_mib"`
+	ExcelBPSImageStorageMiB     int    `json:"excel_bps_image_storage_mib"`
+	ExcelBPSImageStorageEntries int    `json:"excel_bps_image_storage_entries"`
+	ExcelBPSImageTTLMinutes     int    `json:"excel_bps_image_ttl_minutes"`
+	// Kept so the previous main-kin settings payload still decodes.
+	BasisPointsImageRelayEnabled bool   `json:"basispoints_image_relay_enabled,omitempty"`
+	BasisPointsImageBaseURL      string `json:"basispoints_image_base_url,omitempty"`
 
 	// Grok model mapping policy (admin settings; empty mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`

@@ -1,4 +1,4 @@
-package service
+package basispoints
 
 import (
 	"crypto/hmac"
@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	ErrBasisPointsImageRelayFull    = errors.New("basispoints temporary image storage is full; retry after images expire")
-	ErrBasisPointsImageRelayStorage = errors.New("basispoints temporary image storage is unavailable")
+	ErrImageRelayFull    = errors.New("basispoints temporary image storage is full; retry after images expire")
+	ErrImageRelayStorage = errors.New("basispoints temporary image storage is unavailable")
 )
 
 const (
@@ -48,11 +48,12 @@ const (
 // as a static directory and downloads use bounded streaming buffers.
 type ImageRelay struct {
 	baseURL         string
+	limits          ImageRelayLimits
 	key             [32]byte
 	mu              sync.Mutex
 	entries         map[string]*relayImage
-	bytes           int
-	reservedBytes   int
+	bytes           int64
+	reservedBytes   int64
 	reservedEntries int
 	retiredEntries  int
 	root            string
@@ -66,7 +67,7 @@ type ImageRelay struct {
 type relayImage struct {
 	path        string
 	size        int
-	reserved    int
+	reserved    int64
 	contentType string
 	expires     time.Time
 	readers     int
@@ -86,18 +87,18 @@ func NewImageRelay(baseURL, storageRoot string) (*ImageRelay, error) {
 		return nil, err
 	}
 	if storageRoot == "" {
-		return nil, ErrBasisPointsImageRelayStorage
+		return nil, ErrImageRelayStorage
 	}
-	relay := &ImageRelay{baseURL: strings.TrimRight(baseURL, "/"), entries: make(map[string]*relayImage), root: storageRoot, stop: make(chan struct{}), done: make(chan struct{}), downloads: make(chan struct{}, 32)}
+	relay := &ImageRelay{limits: DefaultImageRelayLimits(), baseURL: strings.TrimRight(baseURL, "/"), entries: make(map[string]*relayImage), root: storageRoot, stop: make(chan struct{}), done: make(chan struct{}), downloads: make(chan struct{}, 32)}
 	if _, err := rand.Read(relay.key[:]); err != nil {
-		return nil, ErrBasisPointsImageRelayStorage
+		return nil, ErrImageRelayStorage
 	}
 	if err := os.MkdirAll(storageRoot, 0700); err != nil {
-		return nil, ErrBasisPointsImageRelayStorage
+		return nil, ErrImageRelayStorage
 	}
 	dir, err := os.MkdirTemp(storageRoot, "session-")
 	if err != nil {
-		return nil, ErrBasisPointsImageRelayStorage
+		return nil, ErrImageRelayStorage
 	}
 	relay.dir = dir
 	relay.cleanupOrphans(time.Now())
@@ -117,7 +118,7 @@ func (r *ImageRelay) Close() error {
 	r.mu.Unlock()
 	<-r.done
 	if err := os.RemoveAll(r.dir); err != nil {
-		return ErrBasisPointsImageRelayStorage
+		return ErrImageRelayStorage
 	}
 	return nil
 }
@@ -141,7 +142,8 @@ func (r *ImageRelay) cleanupLoop() {
 }
 
 // Each live instance refreshes its directory every minute. After an abnormal
-// exit, a later/running instance removes directories idle for more than the TTL.
+// exit, a later/running instance removes directories idle for the fixed grace
+// period. This is independent of configurable link expiry in live instances.
 func (r *ImageRelay) cleanupOrphans(now time.Time) {
 	entries, err := os.ReadDir(r.root)
 	if err != nil {
@@ -167,7 +169,7 @@ func (r *ImageRelay) SetPublicOrigin(baseURL string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
-		return ErrBasisPointsImageRelayStorage
+		return ErrImageRelayStorage
 	}
 	r.baseURL = strings.TrimRight(baseURL, "/")
 	return nil
@@ -178,13 +180,13 @@ func (r *ImageRelay) Rewrite(raw []byte, scope string) ([]byte, error) {
 		return raw, nil
 	}
 	r.mu.Lock()
-	baseURL, closed := r.baseURL, r.closed
+	baseURL, closed, limits := r.baseURL, r.closed, r.limits
 	r.mu.Unlock()
 	if closed {
-		return nil, ErrBasisPointsImageRelayStorage
+		return nil, ErrImageRelayStorage
 	}
-	var source map[string]any
-	if err := json.Unmarshal(raw, &source); err != nil || source == nil {
+	var source object
+	if err := decode(raw, &source); err != nil || source == nil {
 		return nil, fmt.Errorf("invalid Basispoints request JSON")
 	}
 	input, _ := source["input"].([]any)
@@ -202,35 +204,35 @@ func (r *ImageRelay) Rewrite(raw []byte, scope string) ([]byte, error) {
 	}()
 	totalBytes := 0
 	for _, rawItem := range input {
-		item, _ := rawItem.(map[string]any)
+		item, _ := rawItem.(object)
 		for _, field := range []string{"content", "output"} {
-			if field == "output" && basisPointsText(item["type"]) != "function_call_output" && basisPointsText(item["type"]) != "custom_tool_call_output" {
+			if field == "output" && text(item["type"]) != "function_call_output" && text(item["type"]) != "custom_tool_call_output" {
 				continue
 			}
 			parts, _ := item[field].([]any)
 			for _, rawPart := range parts {
-				part, _ := rawPart.(map[string]any)
-				if basisPointsText(part["type"]) != "input_image" {
+				part, _ := rawPart.(object)
+				if text(part["type"]) != "input_image" {
 					continue
 				}
-				rawURL := basisPointsText(part["image_url"])
+				rawURL := text(part["image_url"])
 				if len(rawURL) < len("data:") || !strings.EqualFold(rawURL[:len("data:")], "data:") {
 					continue
 				}
-				if len(staged) >= imageRelayMaxRequestImages {
-					return nil, fmt.Errorf("basispoints accepts at most 20 inline images per request")
+				if len(staged) >= limits.MaxImages {
+					return nil, fmt.Errorf("image relay is configured for at most %d inline images per request", limits.MaxImages)
 				}
-				img, token, err := r.storeImage(rawURL, scope)
+				img, token, err := r.storeImageWithLimit(rawURL, scope, limits.MaxImageMiB)
 				if err != nil {
 					return nil, err
 				}
 				staged = append(staged, img)
 				totalBytes += img.size
-				if totalBytes > imageRelayMaxRequestBytes {
-					return nil, fmt.Errorf("basispoints inline images exceed the 32 MiB request limit")
+				if totalBytes > limits.MaxTotalMiB<<20 {
+					return nil, fmt.Errorf("image relay inline images exceed the configured %d MiB request limit", limits.MaxTotalMiB)
 				}
 				part["image_url"] = baseURL + ImageRelayPath + token
-				if err := validateBasisPointsImage(part); err != nil {
+				if err := validateImage(part); err != nil {
 					return nil, err
 				}
 				images[token] = img
@@ -247,26 +249,26 @@ func (r *ImageRelay) Rewrite(raw []byte, scope string) ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
-		return nil, ErrBasisPointsImageRelayStorage
+		return nil, ErrImageRelayStorage
 	}
 	now := time.Now()
 	r.pruneLocked(now)
 	for token, img := range images {
 		if existing := r.entries[token]; existing != nil {
-			existing.expires = now.Add(imageRelayTTL)
+			existing.expires = now.Add(time.Duration(limits.TTLMinutes) * time.Minute)
 			continue
 		}
 		r.reservedBytes -= img.reserved
 		r.reservedEntries--
 		img.reserved = 0
-		img.expires = now.Add(imageRelayTTL)
+		img.expires = now.Add(time.Duration(limits.TTLMinutes) * time.Minute)
 		r.entries[token] = img
-		r.bytes += img.size
+		r.bytes += int64(img.size)
 	}
 	return out, nil
 }
 
-func relayImagePayload(raw string) (string, string, error) {
+func relayImagePayload(raw string, maxImageMiB int) (string, string, error) {
 	header, payload, ok := strings.Cut(raw[len("data:"):], ",")
 	if !ok || !strings.HasSuffix(strings.ToLower(header), ";base64") {
 		return "", "", fmt.Errorf("basispoints inline image requires a base64 image data URL")
@@ -280,8 +282,8 @@ func relayImagePayload(raw string) (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("basispoints inline images must be PNG, JPEG, GIF or WebP")
 	}
-	if len(payload) > base64.StdEncoding.EncodedLen(imageRelayMaxImageBytes) {
-		return "", "", fmt.Errorf("basispoints inline image exceeds the 20 MiB limit")
+	if len(payload) > base64.StdEncoding.EncodedLen(maxImageMiB<<20) {
+		return "", "", fmt.Errorf("image relay inline image exceeds the configured %d MiB limit", maxImageMiB)
 	}
 	if payload == "" {
 		return "", "", fmt.Errorf("basispoints inline image contains invalid base64 data")
@@ -290,20 +292,27 @@ func relayImagePayload(raw string) (string, string, error) {
 }
 
 func (r *ImageRelay) storeImage(raw, scope string) (*relayImage, string, error) {
-	declared, payload, err := relayImagePayload(raw)
+	r.mu.Lock()
+	maxImageMiB := r.limits.MaxImageMiB
+	r.mu.Unlock()
+	return r.storeImageWithLimit(raw, scope, maxImageMiB)
+}
+
+func (r *ImageRelay) storeImageWithLimit(raw, scope string, maxImageMiB int) (*relayImage, string, error) {
+	declared, payload, err := relayImagePayload(raw, maxImageMiB)
 	if err != nil {
 		return nil, "", err
 	}
-	reservation := base64.StdEncoding.DecodedLen(len(payload)) + 1
+	reservation := int64(base64.StdEncoding.DecodedLen(len(payload))) + 1
 	r.mu.Lock()
 	r.pruneLocked(time.Now())
 	if r.closed {
 		r.mu.Unlock()
-		return nil, "", ErrBasisPointsImageRelayStorage
+		return nil, "", ErrImageRelayStorage
 	}
-	if r.bytes+r.reservedBytes+reservation > imageRelayMaxBytes || len(r.entries)+r.reservedEntries+r.retiredEntries >= imageRelayMaxEntries {
+	if r.bytes+r.reservedBytes+reservation > int64(r.limits.StorageMiB)<<20 || len(r.entries)+r.reservedEntries+r.retiredEntries >= r.limits.StorageEntries {
 		r.mu.Unlock()
-		return nil, "", ErrBasisPointsImageRelayFull
+		return nil, "", ErrImageRelayFull
 	}
 	r.reservedBytes += reservation
 	r.reservedEntries++
@@ -319,7 +328,7 @@ func (r *ImageRelay) storeImage(raw, scope string) (*relayImage, string, error) 
 	}()
 	file, err := os.CreateTemp(r.dir, "image-")
 	if err != nil {
-		return nil, "", ErrBasisPointsImageRelayStorage
+		return nil, "", ErrImageRelayStorage
 	}
 	img.path = file.Name()
 	defer func() { _ = file.Close() }()
@@ -327,22 +336,22 @@ func (r *ImageRelay) storeImage(raw, scope string) (*relayImage, string, error) 
 	_, _ = mac.Write([]byte(scope))
 	_, _ = mac.Write([]byte{0})
 	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(payload))
-	n, err := io.CopyBuffer(io.MultiWriter(file, mac), io.LimitReader(reader, imageRelayMaxImageBytes+1), make([]byte, 32*1024))
+	n, err := io.CopyBuffer(io.MultiWriter(file, mac), io.LimitReader(reader, (int64(maxImageMiB)<<20)+1), make([]byte, 32*1024))
 	if err != nil {
 		var corrupt base64.CorruptInputError
 		if errors.As(err, &corrupt) || errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, "", fmt.Errorf("basispoints inline image contains invalid base64 data")
 		}
-		return nil, "", ErrBasisPointsImageRelayStorage
+		return nil, "", ErrImageRelayStorage
 	}
 	if n == 0 {
 		return nil, "", fmt.Errorf("basispoints inline image contains invalid base64 data")
 	}
-	if n > imageRelayMaxImageBytes {
-		return nil, "", fmt.Errorf("basispoints inline image exceeds the 20 MiB limit")
+	if n > int64(maxImageMiB)<<20 {
+		return nil, "", fmt.Errorf("image relay inline image exceeds the configured %d MiB limit", maxImageMiB)
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return nil, "", ErrBasisPointsImageRelayStorage
+		return nil, "", ErrImageRelayStorage
 	}
 	dimensions, format, err := image.DecodeConfig(file)
 	if err != nil || dimensions.Width <= 0 || dimensions.Height <= 0 || int64(dimensions.Width)*int64(dimensions.Height) > imageRelayMaxPixels {
@@ -352,7 +361,7 @@ func (r *ImageRelay) storeImage(raw, scope string) (*relayImage, string, error) 
 		return nil, "", fmt.Errorf("basispoints inline image media type does not match its contents")
 	}
 	if err := file.Close(); err != nil {
-		return nil, "", ErrBasisPointsImageRelayStorage
+		return nil, "", ErrImageRelayStorage
 	}
 	img.size, img.contentType = int(n), declared
 	success = true
@@ -376,7 +385,7 @@ func (r *ImageRelay) removeLocked(token string, img *relayImage) {
 		return
 	}
 	_ = os.Remove(img.path)
-	r.bytes -= img.size
+	r.bytes -= int64(img.size)
 	delete(r.entries, token)
 }
 
@@ -386,7 +395,7 @@ func (r *ImageRelay) finishRead(img *relayImage) {
 	img.readers--
 	if img.retired && img.readers == 0 {
 		_ = os.Remove(img.path)
-		r.bytes -= img.size
+		r.bytes -= int64(img.size)
 		r.retiredEntries--
 	}
 }

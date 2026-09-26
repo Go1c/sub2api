@@ -192,8 +192,18 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyChannelMonitorHideThroughput:         "true",
 		SettingKeyChannelMonitorShowQuota:              "false",
 		SettingKeyChannelMonitorHideUserRanking:        "false",
-		SettingKeyBasisPointsImageRelayEnabled:         "false",
-		SettingKeyBasisPointsImageBaseURL:              "",
+		SettingKeyExcelBPSImageMode:           ExcelBPSImageModeRelay,
+		SettingKeyExcelBPSImageRelayEnabled:  "false",
+		SettingKeyExcelBPSImageBaseURL:       "",
+		SettingKeyExcelBPSImageBodyLimitMiB:   strconv.Itoa(DefaultExcelBPSImageBodyLimitMiB),
+		SettingKeyExcelBPSImageBudgetMiB:      strconv.Itoa(DefaultExcelBPSImageBudgetMiB),
+		SettingKeyExcelBPSImageMaxRequests:    strconv.Itoa(DefaultExcelBPSImageMaxRequests),
+		SettingKeyExcelBPSImageMaxImageMiB:    "20",
+		SettingKeyExcelBPSImageMaxImages:      "20",
+		SettingKeyExcelBPSImageMaxTotalMiB:    "32",
+		SettingKeyExcelBPSImageStorageMiB:     "1024",
+		SettingKeyExcelBPSImageStorageEntries: "512",
+		SettingKeyExcelBPSImageTTLMinutes:     "30",
 
 		// Grok compatibility defaults: cross-client mapping stays enabled unless
 		// operators explicitly disable it.
@@ -811,8 +821,30 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// （与 setting_public.go 公开读取路径保持一致）。
 	result.ChannelMonitorShowQuota = settings[SettingKeyChannelMonitorShowQuota] == "true"
 	result.ChannelMonitorHideUserRanking = isTrueSettingValue(settings[SettingKeyChannelMonitorHideUserRanking])
-	result.BasisPointsImageRelayEnabled = settings[SettingKeyBasisPointsImageRelayEnabled] == "true"
-	result.BasisPointsImageBaseURL = strings.TrimRight(strings.TrimSpace(settings[SettingKeyBasisPointsImageBaseURL]), "/")
+	result.ExcelBPSImageMode = settings[SettingKeyExcelBPSImageMode]
+	if result.ExcelBPSImageMode == "" {
+		result.ExcelBPSImageMode = ExcelBPSImageModeRelay
+	}
+	result.ExcelBPSImageRelayEnabled = settings[SettingKeyExcelBPSImageRelayEnabled] == "true"
+	result.ExcelBPSImageBaseURL = strings.TrimRight(strings.TrimSpace(settings[SettingKeyExcelBPSImageBaseURL]), "/")
+	result.ExcelBPSImageBodyLimitMiB, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageBodyLimitMiB], DefaultExcelBPSImageBodyLimitMiB)
+	result.ExcelBPSImageBudgetMiB, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageBudgetMiB], DefaultExcelBPSImageBudgetMiB)
+	result.ExcelBPSImageMaxRequests, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageMaxRequests], DefaultExcelBPSImageMaxRequests)
+	if validateExcelBPSImageCapacity(result.ExcelBPSImageBodyLimitMiB, result.ExcelBPSImageBudgetMiB, result.ExcelBPSImageMaxRequests) != nil {
+		result.ExcelBPSImageBodyLimitMiB = DefaultExcelBPSImageBodyLimitMiB
+		result.ExcelBPSImageBudgetMiB = DefaultExcelBPSImageBudgetMiB
+		result.ExcelBPSImageMaxRequests = DefaultExcelBPSImageMaxRequests
+	}
+	if imageLimits, imageLimitsErr := parseExcelBPSImageLimits(settings); imageLimitsErr == nil {
+		result.ExcelBPSImageMaxImageMiB = imageLimits.MaxImageMiB
+		result.ExcelBPSImageMaxImages = imageLimits.MaxImages
+		result.ExcelBPSImageMaxTotalMiB = imageLimits.MaxTotalMiB
+		result.ExcelBPSImageStorageMiB = imageLimits.StorageMiB
+		result.ExcelBPSImageStorageEntries = imageLimits.StorageEntries
+		result.ExcelBPSImageTTLMinutes = imageLimits.TTLMinutes
+	}
+	result.BasisPointsImageRelayEnabled = result.ExcelBPSImageRelayEnabled
+	result.BasisPointsImageBaseURL = result.ExcelBPSImageBaseURL
 
 	// Grok default mapping policy
 	result.GrokDefaultTextModel = strings.TrimSpace(settings[SettingKeyGrokDefaultTextModel])

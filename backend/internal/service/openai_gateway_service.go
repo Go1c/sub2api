@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/platform/liveattestation"
+	"github.com/Wei-Shaw/sub2api/internal/service/basispoints"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
@@ -530,8 +531,9 @@ type OpenAIGatewayService struct {
 	// （铸造者 = 凭证域身份），供出站守卫剥离跨账号回带（设计见 openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
-	basisPointsImagesMu         sync.Mutex
-	basisPointsImages           *ImageRelay
+	excelBPSImagesMu            sync.Mutex
+	excelBPSImages              *basispoints.ImageRelay
+	excelBPSAttachments         basispoints.AttachmentCache
 	// codexSideCalls：双开账号侧信道 GET 的去重窗口（openai_codex_side_calls.go）。
 	// 由构造器初始化；裸结构体（单元测试）里为 nil，侧信道整体停用。
 	codexSideCalls   *codexSideCallState

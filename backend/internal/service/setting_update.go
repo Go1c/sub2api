@@ -419,13 +419,59 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyChannelMonitorHideThroughput] = strconv.FormatBool(settings.ChannelMonitorHideThroughput)
 	updates[SettingKeyChannelMonitorShowQuota] = strconv.FormatBool(settings.ChannelMonitorShowQuota)
 	updates[SettingKeyChannelMonitorHideUserRanking] = strconv.FormatBool(settings.ChannelMonitorHideUserRanking)
-	imageRelay, err := normalizeBasisPointsImageRelaySettings(settings.BasisPointsImageRelayEnabled, settings.BasisPointsImageBaseURL)
+	imageRelay, err := normalizeExcelBPSImageRelaySettings(settings.ExcelBPSImageRelayEnabled, settings.ExcelBPSImageBaseURL, settings.ExcelBPSImageMode)
 	if err != nil {
 		return nil, err
 	}
+	settings.ExcelBPSImageBaseURL = imageRelay.BaseURL
+	settings.ExcelBPSImageMode = imageRelay.Mode
+	if settings.ExcelBPSImageBodyLimitMiB == 0 {
+		settings.ExcelBPSImageBodyLimitMiB = DefaultExcelBPSImageBodyLimitMiB
+	}
+	if settings.ExcelBPSImageBudgetMiB == 0 {
+		settings.ExcelBPSImageBudgetMiB = DefaultExcelBPSImageBudgetMiB
+	}
+	if settings.ExcelBPSImageMaxRequests == 0 {
+		settings.ExcelBPSImageMaxRequests = DefaultExcelBPSImageMaxRequests
+	}
+	if settings.ExcelBPSImageMaxImageMiB == 0 {
+		settings.ExcelBPSImageMaxImageMiB = imageRelay.Limits.MaxImageMiB
+	}
+	if settings.ExcelBPSImageMaxImages == 0 {
+		settings.ExcelBPSImageMaxImages = imageRelay.Limits.MaxImages
+	}
+	if settings.ExcelBPSImageMaxTotalMiB == 0 {
+		settings.ExcelBPSImageMaxTotalMiB = imageRelay.Limits.MaxTotalMiB
+	}
+	if settings.ExcelBPSImageStorageMiB == 0 {
+		settings.ExcelBPSImageStorageMiB = imageRelay.Limits.StorageMiB
+	}
+	if settings.ExcelBPSImageStorageEntries == 0 {
+		settings.ExcelBPSImageStorageEntries = imageRelay.Limits.StorageEntries
+	}
+	if settings.ExcelBPSImageTTLMinutes == 0 {
+		settings.ExcelBPSImageTTLMinutes = imageRelay.Limits.TTLMinutes
+	}
+	if err := settings.imageRelayLimits().Validate(); err != nil {
+		return nil, infraerrors.BadRequest("INVALID_EXCEL_BPS_IMAGE_LIMITS", err.Error())
+	}
+	if err := validateExcelBPSImageCapacity(settings.ExcelBPSImageBodyLimitMiB, settings.ExcelBPSImageBudgetMiB, settings.ExcelBPSImageMaxRequests); err != nil {
+		return nil, err
+	}
+	updates[SettingKeyExcelBPSImageMode] = imageRelay.Mode
+	updates[SettingKeyExcelBPSImageRelayEnabled] = strconv.FormatBool(imageRelay.Enabled)
+	updates[SettingKeyExcelBPSImageBaseURL] = imageRelay.BaseURL
+	updates[SettingKeyExcelBPSImageBodyLimitMiB] = strconv.Itoa(settings.ExcelBPSImageBodyLimitMiB)
+	updates[SettingKeyExcelBPSImageBudgetMiB] = strconv.Itoa(settings.ExcelBPSImageBudgetMiB)
+	updates[SettingKeyExcelBPSImageMaxRequests] = strconv.Itoa(settings.ExcelBPSImageMaxRequests)
+	updates[SettingKeyExcelBPSImageMaxImageMiB] = strconv.Itoa(settings.ExcelBPSImageMaxImageMiB)
+	updates[SettingKeyExcelBPSImageMaxImages] = strconv.Itoa(settings.ExcelBPSImageMaxImages)
+	updates[SettingKeyExcelBPSImageMaxTotalMiB] = strconv.Itoa(settings.ExcelBPSImageMaxTotalMiB)
+	updates[SettingKeyExcelBPSImageStorageMiB] = strconv.Itoa(settings.ExcelBPSImageStorageMiB)
+	updates[SettingKeyExcelBPSImageStorageEntries] = strconv.Itoa(settings.ExcelBPSImageStorageEntries)
+	updates[SettingKeyExcelBPSImageTTLMinutes] = strconv.Itoa(settings.ExcelBPSImageTTLMinutes)
+	settings.BasisPointsImageRelayEnabled = imageRelay.Enabled
 	settings.BasisPointsImageBaseURL = imageRelay.BaseURL
-	updates[SettingKeyBasisPointsImageRelayEnabled] = strconv.FormatBool(imageRelay.Enabled)
-	updates[SettingKeyBasisPointsImageBaseURL] = imageRelay.BaseURL
 
 	// Grok model mapping policy
 	if v := strings.TrimSpace(settings.GrokDefaultTextModel); v != "" {

@@ -15,8 +15,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -24,6 +22,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/service/basispoints"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -292,9 +291,9 @@ func basisPointsRewriteError(err error) (int, string, string) {
 	switch {
 	case err == nil:
 		return http.StatusBadRequest, "basispoints_request_invalid", "Invalid Basis Points request"
-	case errors.Is(err, ErrBasisPointsImageRelayFull):
+	case errors.Is(err, basispoints.ErrImageRelayFull):
 		return http.StatusServiceUnavailable, "basispoints_image_relay_full", err.Error()
-	case errors.Is(err, ErrBasisPointsImageRelayStorage):
+	case errors.Is(err, basispoints.ErrImageRelayStorage):
 		return http.StatusServiceUnavailable, "basispoints_image_relay_unavailable", err.Error()
 	default:
 		return http.StatusBadRequest, "basispoints_request_invalid", err.Error()
@@ -363,47 +362,16 @@ func basisPointsImageScope(c *gin.Context, account *Account, body []byte) string
 	return fmt.Sprintf("account:%d/key:%d/thread:%s", accountID, getAPIKeyIDFromContext(c), threadID)
 }
 
-func (s *OpenAIGatewayService) basisPointsImageRelay(ctx context.Context) (*ImageRelay, error) {
-	if s == nil || s.settingService == nil {
-		return nil, nil
-	}
-	settings, err := s.settingService.GetBasisPointsImageRelaySettings(ctx)
-	if err != nil || !settings.Enabled {
-		return nil, err
-	}
-	s.basisPointsImagesMu.Lock()
-	defer s.basisPointsImagesMu.Unlock()
-	if s.basisPointsImages == nil {
-		dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
-		if dataDir == "" {
-			dataDir = "./data"
-		}
-		s.basisPointsImages, err = NewImageRelay(settings.BaseURL, filepath.Join(dataDir, "bps-images"))
-	} else {
-		err = s.basisPointsImages.SetPublicOrigin(settings.BaseURL)
-	}
-	return s.basisPointsImages, err
+func (s *OpenAIGatewayService) basisPointsImageRelay(ctx context.Context) (*basispoints.ImageRelay, error) {
+	return s.excelBPSImageRelay(ctx)
 }
 
 func (s *OpenAIGatewayService) CloseBasisPointsImages() error {
-	if s == nil {
-		return nil
-	}
-	s.basisPointsImagesMu.Lock()
-	defer s.basisPointsImagesMu.Unlock()
-	if s.basisPointsImages == nil {
-		return nil
-	}
-	return s.basisPointsImages.Close()
+	return s.CloseExcelBPSImages()
 }
 
 func (s *OpenAIGatewayService) ServeBasisPointsImage(c *gin.Context) {
-	relay, _ := s.basisPointsImageRelay(c.Request.Context())
-	if relay == nil {
-		http.NotFound(c.Writer, c.Request)
-		return
-	}
-	relay.ServeHTTP(c.Writer, c.Request)
+	s.ServeExcelBPSImage(c)
 }
 
 func (s *OpenAIGatewayService) uploadBasisPointsImages(ctx context.Context, c *gin.Context, account *Account, body []byte, token string) ([]byte, error) {
