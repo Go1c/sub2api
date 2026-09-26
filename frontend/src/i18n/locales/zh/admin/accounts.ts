@@ -981,6 +981,8 @@ export default {
       basisPoints: {
         title: 'Basis Points',
         hint: '仅此账号的 gpt-6-astra 和 gpt-6-sol 改走 Excel Basis Points，上游模型保持请求里的名字。其他模型仍走 Codex。默认关闭，导入和新建不会打开。',
+        omitUnsupportedTools: '保持 BPS，省略不支持的托管工具',
+        omitUnsupportedToolsHint: '默认关闭。请求里有实时联网搜索、高搜索上下文或图片生成时改走 Codex。打开后仍走 Basis Points，省略适配层不支持的托管工具，并告诉模型这些能力不可用。强制指定工具仍返回 400。',
         ignoreImages: '图片支持关闭时忽略图片输入',
         ignoreImagesHint: '默认关闭。只在系统里的 Excel / BPS 图片支持关闭时生效：转发前去掉当前和历史消息、工具结果里的图片，保留文字和工具调用关系。只剩图片的内容会换成已忽略提示。'
       },

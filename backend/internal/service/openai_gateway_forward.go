@@ -22,6 +22,9 @@ import (
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
 	beginUpstreamResponseModelObservation(c)
 	ClearActualOpenAIUpstreamEndpoint(c)
+	// A failed account attempt must not leave a bypass reason on a later BPS response.
+	c.Writer.Header().Del("X-Codex2API-Basispoints-Bypass")
+	c.Writer.Header().Del("X-Codex2API-Upstream")
 	if shouldForwardOpenAIResponsesViaRawChatCompletions(account) {
 		SetActualOpenAIUpstreamEndpoint(c, "/v1/chat/completions")
 	}
@@ -61,16 +64,17 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	modelForBPS := gjson.GetBytes(body, "model").String()
 	if c.GetBool(bpsAccountProbeRequiredContextKey) &&
-		(!account.IsExcelBPSEnabledForModel(modelForBPS) || basispoints.NativeFallbackReason(body) != "") {
+		(!account.IsExcelBPSEnabledForModel(modelForBPS) || account.excelBPSNativeFallbackReason(body) != "") {
 		return nil, errors.New("bps probe path is unavailable")
 	}
 	if account.IsExcelBPSEnabledForModel(modelForBPS) {
-		reason := basispoints.NativeFallbackReason(body)
+		reason := account.excelBPSNativeFallbackReason(body)
 		if reason == "" {
 			return s.forwardExcelBPS(ctx, c, account, body, startTime)
 		}
 		c.Header("X-Codex2API-Upstream", "codex")
 		c.Header("X-Codex2API-Basispoints-Bypass", reason)
+		recordExcelBPSNativeFallback(ctx, account, reason)
 	}
 
 	normalizedBody, normalized, err := normalizeOpenAICodexCompactReasoningEffortForAccount(c, account, body)

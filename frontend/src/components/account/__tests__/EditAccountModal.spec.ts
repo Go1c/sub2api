@@ -1300,6 +1300,18 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[1]?.[1]?.extra?.openai_excel_bps_ignore_images).toBe(false)
   })
 
+  it('persists omit-unsupported-tools only while basis points is on', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    account.extra = { basispoints: { enabled: true } }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="basispoints-omit-unsupported-tools"]').setValue(true)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_excel_bps_omit_unsupported_tools).toBe(true)
+  })
+
   it('keeps openai passthrough when saving the basis points switch', async () => {
     const account = buildOpenAIOAuthParentAccount()
     account.extra = { openai_passthrough: true, openai_oauth_passthrough: true }

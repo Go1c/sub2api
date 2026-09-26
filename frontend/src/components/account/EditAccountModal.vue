@@ -236,6 +236,18 @@
         </div>
         <label v-if="basisPointsEnabled" class="mt-3 flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300">
           <input
+            v-model="basisPointsOmitUnsupportedTools"
+            type="checkbox"
+            class="mt-0.5"
+            data-testid="basispoints-omit-unsupported-tools"
+          />
+          <span>
+            <span class="block">{{ t('admin.accounts.basisPoints.omitUnsupportedTools') }}</span>
+            <span class="mt-1 block text-gray-500 dark:text-gray-400">{{ t('admin.accounts.basisPoints.omitUnsupportedToolsHint') }}</span>
+          </span>
+        </label>
+        <label v-if="basisPointsEnabled" class="mt-3 flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300">
+          <input
             v-model="basisPointsIgnoreImages"
             type="checkbox"
             class="mt-0.5"
@@ -3702,7 +3714,9 @@ const turnStateProbeEnabled = ref(false)
 const turnStateProbeEnforce = ref(false)
 const basisPointsEnabled = ref(false)
 const basisPointsIgnoreImages = ref(false)
+const basisPointsOmitUnsupportedTools = ref(false)
 const EXCEL_BPS_IGNORE_IMAGES_KEY = 'openai_excel_bps_ignore_images'
+const EXCEL_BPS_OMIT_UNSUPPORTED_TOOLS_KEY = 'openai_excel_bps_omit_unsupported_tools'
 const errorAlertEnabled = ref(true)
 const errorAlertKeywords = ref<string[]>([])
 const errorAlertKeywordInput = ref('')
@@ -3928,6 +3942,7 @@ function applyTurnStateProbeToUpdatePayload(updatePayload: Record<string, unknow
 
 function loadBasisPointsFromExtra(extra: Record<string, unknown> | undefined) {
   basisPointsIgnoreImages.value = extra?.[EXCEL_BPS_IGNORE_IMAGES_KEY] === true
+  basisPointsOmitUnsupportedTools.value = extra?.[EXCEL_BPS_OMIT_UNSUPPORTED_TOOLS_KEY] === true
   const raw = extra?.[BASISPOINTS_EXTRA_KEY]
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     basisPointsEnabled.value = false
@@ -3946,7 +3961,8 @@ function applyBasisPointsToUpdatePayload(updatePayload: Record<string, unknown>)
   updatePayload.extra = {
     ...current,
     [BASISPOINTS_EXTRA_KEY]: next,
-    [EXCEL_BPS_IGNORE_IMAGES_KEY]: basisPointsEnabled.value && basisPointsIgnoreImages.value
+    [EXCEL_BPS_IGNORE_IMAGES_KEY]: basisPointsEnabled.value && basisPointsIgnoreImages.value,
+    [EXCEL_BPS_OMIT_UNSUPPORTED_TOOLS_KEY]: basisPointsEnabled.value && basisPointsOmitUnsupportedTools.value
   }
 }
 
