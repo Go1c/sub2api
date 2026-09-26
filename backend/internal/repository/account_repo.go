@@ -656,7 +656,8 @@ func lockAndMergeAccountProbeExtra(
 			extra -> 'upstream_billing_probe',
 			extra -> 'ollama_cloud_usage_session',
 			extra -> 'ollama_cloud_usage_auto_refresh',
-			extra -> 'ollama_cloud_usage_snapshot'
+			extra -> 'ollama_cloud_usage_snapshot',
+			COALESCE(extra, '{}'::jsonb)
 		FROM accounts
 		WHERE id = $1 AND deleted_at IS NULL
 		FOR NO KEY UPDATE
@@ -682,6 +683,7 @@ func lockAndMergeAccountProbeExtra(
 		currentOllamaSession         []byte
 		currentOllamaAutoRefresh     []byte
 		currentOllamaSnapshot        []byte
+		currentExtraJSON             []byte
 	)
 	if err := rows.Scan(
 		&identityUnchanged,
@@ -693,6 +695,7 @@ func lockAndMergeAccountProbeExtra(
 		&currentOllamaSession,
 		&currentOllamaAutoRefresh,
 		&currentOllamaSnapshot,
+		&currentExtraJSON,
 	); err != nil {
 		return nil, err
 	}
@@ -700,7 +703,19 @@ func lockAndMergeAccountProbeExtra(
 		return nil, err
 	}
 
+	// A non-object extra must not fail every account edit. The 403 marker is
+	// display-only, so a bad payload is treated as having nothing to keep.
+	var currentExtra map[string]any
+	if len(currentExtraJSON) > 0 {
+		if err := json.Unmarshal(currentExtraJSON, &currentExtra); err != nil {
+			logger.LegacyPrintf("repository.account",
+				"[Account] current extra unmarshal failed, BPS 403 marker preservation skipped: id=%d err=%v",
+				account.ID, err)
+			currentExtra = nil
+		}
+	}
 	extra := copyJSONMap(normalizeJSONMap(account.Extra))
+	extra = service.MergeExcelBPS403Marker(extra, currentExtra)
 	for _, key := range []string{
 		service.UpstreamBillingProbeEnabledExtraKey,
 		service.UpstreamBillingRateSyncEnabledExtraKey,
@@ -3019,6 +3034,10 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 			if enabled, exists := updates.Extra["openai_excel_bps"].(bool); exists && !enabled {
 				extraExpression = "(" + extraExpression + ") - 'openai_excel_bps' - 'openai_excel_bps_models' - 'openai_excel_bps_cache_creation_as_input' - 'openai_excel_bps_auto_disable_on_403' - 'openai_excel_bps_auto_move_on_403' - 'openai_excel_bps_403_target_group_id' - 'openai_excel_bps_mihomo'"
 			} else {
+				// Turning the protocol back on acknowledges an automatic 403 shutdown.
+				if enabled {
+					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_403_disabled_at'"
+				}
 				// JSON null is a present scope and would disable every model.
 				// Remove the key to restore the all-models routing contract.
 				if scope, exists := updates.Extra["openai_excel_bps_models"]; exists && scope == nil {

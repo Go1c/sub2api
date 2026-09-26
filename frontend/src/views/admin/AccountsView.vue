@@ -279,6 +279,7 @@
               >
                 {{ accountDisplayEmail(row) }}
               </span>
+              <ExcelBPS403Badge :account="row" />
             </div>
           </template>
           <template #cell-notes="{ value }">
@@ -572,6 +573,7 @@ import {
   toAccountHealthRow,
   type AccountHealthRow
 } from '@/components/account/requestHealth'
+import ExcelBPS403Badge from '@/components/account/ExcelBPS403Badge.vue'
 import UpstreamBillingRateCell from '@/components/account/UpstreamBillingRateCell.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'

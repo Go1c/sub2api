@@ -626,6 +626,8 @@ export default {
         baseUrlHint: 'Leave default for official OpenAI API',
         apiKeyHint: 'Your OpenAI API Key',
         oauthPassthrough: 'Auto passthrough (auth only)',
+        excelBPS403Badge: 'BPS 403: Excel possibly banned',
+        excelBPS403BadgeTooltip: 'At {time}, the Excel / BPS upstream returned HTTP 403 and this account’s Excel / BPS protocol was turned off automatically. A 403 does not confirm a ban; the badge clears when the protocol is turned back on.',
         oauthPassthroughDesc:
           'When enabled, this OpenAI account uses automatic passthrough: the gateway forwards request/response as-is and only swaps auth, while keeping billing/concurrency/audit and necessary safety filtering.',
         flattenNamespaces: 'Flatten Codex namespace tools (compatibility)',
