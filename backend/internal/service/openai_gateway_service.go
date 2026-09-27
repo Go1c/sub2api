@@ -492,6 +492,8 @@ type OpenAIGatewayService struct {
 	liveAttestation       liveattestation.Provider
 	liveAttestationCipher SecretEncryptor
 	ipGroupResolver       *openAIIPGroupResolver
+	// excelBPSCooldownUntil is process-local and only skips BPS-routed models.
+	excelBPSCooldownUntil sync.Map // key: int64(accountID), value: time.Time
 
 	openaiWSPoolOnce               sync.Once
 	openaiWSStateStoreOnce         sync.Once
