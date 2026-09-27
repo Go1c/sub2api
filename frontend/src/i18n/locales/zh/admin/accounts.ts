@@ -984,7 +984,7 @@ export default {
         omitUnsupportedTools: '保持 BPS，省略不支持的托管工具',
         omitUnsupportedToolsHint: '默认关闭。请求里有实时联网搜索、高搜索上下文或图片生成时改走 Codex。打开后仍走 Basis Points，省略适配层不支持的托管工具，并告诉模型这些能力不可用。强制指定工具仍返回 400。',
         ignoreImages: '图片支持关闭时忽略图片输入',
-        ignoreImagesHint: '默认关闭。只在系统里的 Excel / BPS 图片支持关闭时生效：转发前去掉当前和历史消息、工具结果里的图片，保留文字和工具调用关系。只剩图片的内容会换成已忽略提示。'
+        ignoreImagesHint: '默认关闭。只在系统里的 Excel / BPS 图片支持关闭时生效：转发前把当前和历史消息、工具结果里的每张图片换成不可用提示，保留文字和工具调用关系。图片支持关闭期间不要再读图。重新打开图片支持后恢复正常处理。'
       },
       errorAlert: {
         title: '报错监控',

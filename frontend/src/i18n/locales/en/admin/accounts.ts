@@ -884,7 +884,7 @@ export default {
         omitUnsupportedTools: 'Keep BPS and omit unsupported hosted tools',
         omitUnsupportedToolsHint: 'Off by default. Live web search, high search context, or image generation uses Codex. Turn this on to stay on Basis Points, omit hosted tools the bridge cannot carry, and tell the model they are unavailable. A forced tool choice still returns 400.',
         ignoreImages: 'Ignore image inputs when image support is disabled',
-        ignoreImagesHint: 'Off by default. Applies only while Excel / BPS image support is off in system settings. Removes images from current and historical messages and tool results before forwarding, and keeps the text and tool-call pairing. Image-only content becomes an omission notice.'
+        ignoreImagesHint: 'Off by default. Applies only while Excel / BPS image support is off in system settings. Replaces each image in current and historical messages and tool results with an unavailable notice, and keeps the text and tool-call pairing. Do not retry image reads while support is off. Turning image support back on restores normal handling.'
       },
       errorAlert: {
         title: 'Error monitoring',
