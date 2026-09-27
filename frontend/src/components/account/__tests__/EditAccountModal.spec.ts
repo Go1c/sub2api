@@ -1282,6 +1282,21 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.basispoints).toEqual({ enabled: true })
   })
 
+  it('keeps openai passthrough when saving the basis points switch', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    account.extra = { openai_passthrough: true, openai_oauth_passthrough: true }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="basispoints-enabled"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    const extra = updateAccountMock.mock.calls[0]?.[1]?.extra
+    expect(extra?.basispoints).toEqual({ enabled: true })
+    expect(extra?.openai_passthrough).toBe(true)
+  })
+
   it('persists enforce only when the missing-ticket checkbox is checked', async () => {
     const account = buildOpenAIOAuthParentAccount()
     updateAccountMock.mockReset().mockResolvedValue(account)

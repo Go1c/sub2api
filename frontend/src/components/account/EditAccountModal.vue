@@ -3924,16 +3924,11 @@ function loadBasisPointsFromExtra(extra: Record<string, unknown> | undefined) {
 function applyBasisPointsToUpdatePayload(updatePayload: Record<string, unknown>) {
   if (!isOpenAIOauthAccount()) return
   const next = { enabled: basisPointsEnabled.value }
-  if (updatePayload.extra != null) {
-    updatePayload.extra = {
-      ...(updatePayload.extra as Record<string, unknown>),
-      [BASISPOINTS_EXTRA_KEY]: next
-    }
-    return
-  }
-  const extra: Record<string, unknown> = { ...((props.account?.extra as Record<string, unknown>) || {}) }
-  extra[BASISPOINTS_EXTRA_KEY] = next
-  updatePayload.extra = extra
+  // 透传等调度字段已经写进本次表单的 extra。这里只改 basispoints，
+  // 不能再拿弹窗打开时的旧 extra 覆盖整份配置。
+  const current = (updatePayload.extra as Record<string, unknown>) ||
+    ((props.account?.extra as Record<string, unknown>) || {})
+  updatePayload.extra = { ...current, [BASISPOINTS_EXTRA_KEY]: next }
 }
 
 const customErrorCodesEnabled = ref(false)
