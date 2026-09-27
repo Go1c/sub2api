@@ -1312,6 +1312,18 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_excel_bps_omit_unsupported_tools).toBe(true)
   })
 
+  it('persists ignore-encrypted only while basis points is on', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    account.extra = { basispoints: { enabled: true } }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="basispoints-ignore-encrypted"]').setValue(true)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_excel_bps_ignore_encrypted_content).toBe(true)
+  })
+
   it('keeps openai passthrough when saving the basis points switch', async () => {
     const account = buildOpenAIOAuthParentAccount()
     account.extra = { openai_passthrough: true, openai_oauth_passthrough: true }
