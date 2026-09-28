@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './client'
+import type { ModelMarketModel } from './modelMarket'
 import type { Group } from '@/types'
 
 /**
@@ -19,6 +20,15 @@ export async function getAvailable(): Promise<Group[]> {
 }
 
 /**
+ * Models on groups the current user can bind, including enterprise-exclusive groups.
+ * The public model market omits those groups, so key model restriction uses this list.
+ */
+export async function getAvailableModels(): Promise<ModelMarketModel[]> {
+  const { data } = await apiClient.get<ModelMarketModel[]>('/groups/available-models')
+  return data
+}
+
+/**
  * Get current user's custom group rate multipliers
  * @returns Map of group_id to custom rate_multiplier
  */
@@ -29,6 +39,7 @@ export async function getUserGroupRates(): Promise<Record<number, number>> {
 
 export const userGroupsAPI = {
   getAvailable,
+  getAvailableModels,
   getUserGroupRates
 }
 

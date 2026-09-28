@@ -136,6 +136,7 @@ func RegisterUserRoutes(
 		}))
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
+			groups.GET("/available-models", h.APIKey.GetAvailableGroupModels)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
 		}
 

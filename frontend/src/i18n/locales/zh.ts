@@ -917,7 +917,7 @@ export default {
     fallbackKeyNone: '不设置',
     fallbackKeyDanger: '危险操作：当本密钥所在分组的上游账号全部不可用时，系统会自动改用所选兜底密钥转发请求并按其计费。请务必确认两把密钥的平台/类型完全一致（如同为 Claude），否则请求会失败（例如一个是 Claude、一个是 Codex 将无法互转）。',
     modelRestriction: '允许使用模型',
-    modelRestrictionHint: '开启后，此密钥只能请求下方选中的模型。模型来自当前分组在模型广场中的可用模型。',
+    modelRestrictionHint: '开启后，此密钥只能请求下方选中的模型。模型来自当前分组中可调度账号与分组路由的具体模型。',
     modelRestrictionSearch: '搜索模型',
     modelRestrictionNoGroup: '请先选择分组',
     modelRestrictionNoModels: '当前分组暂无可选模型',

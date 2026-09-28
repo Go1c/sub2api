@@ -398,12 +398,26 @@ func (s *ModelMarketService) buildAdminResponse(ctx context.Context, cfg ModelMa
 }
 
 func (s *ModelMarketService) candidates(ctx context.Context, includeWithoutPublicGroups bool) ([]ModelMarketModel, error) {
+	return s.candidatesForGroups(ctx, nil, includeWithoutPublicGroups, false)
+}
+
+// ModelsForGroups returns the concrete models of the supplied groups, including
+// enterprise-exclusive groups. Callers must pass only groups the user may bind.
+// The public model market stays exclusive-free.
+func (s *ModelMarketService) ModelsForGroups(ctx context.Context, groups []Group) ([]ModelMarketModel, error) {
+	return s.candidatesForGroups(ctx, groups, true, true)
+}
+
+func (s *ModelMarketService) candidatesForGroups(ctx context.Context, groups []Group, includeWithoutPublicGroups bool, includeExclusiveGroups bool) ([]ModelMarketModel, error) {
 	if s == nil || s.groupLister == nil {
 		return []ModelMarketModel{}, nil
 	}
-	groups, err := s.groupLister.ListActive(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list model market groups: %w", err)
+	if groups == nil {
+		listed, err := s.groupLister.ListActive(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list model market groups: %w", err)
+		}
+		groups = listed
 	}
 
 	byKey := make(map[string]*ModelMarketModel)
@@ -425,7 +439,7 @@ func (s *ModelMarketService) candidates(ctx context.Context, includeWithoutPubli
 		}
 
 		marketGroups := []ModelMarketGroup{}
-		if !group.IsExclusive {
+		if !group.IsExclusive || includeExclusiveGroups {
 			marketGroups = []ModelMarketGroup{toModelMarketGroup(group)}
 		}
 		if len(marketGroups) == 0 && !includeWithoutPublicGroups {

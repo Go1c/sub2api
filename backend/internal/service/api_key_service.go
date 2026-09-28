@@ -240,6 +240,7 @@ type APIKeyService struct {
 	cache                     APIKeyCache
 	rateLimitCacheInvalid     RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
 	concurrencyService        *ConcurrencyService
+	modelMarketService        *ModelMarketService
 	cfg                       *config.Config
 	authCacheL1               *ristretto.Cache
 	authNegativeCacheL1       *ristretto.Cache
@@ -316,6 +317,10 @@ func (s *APIKeyService) SetRateLimitCacheInvalidator(inv RateLimitCacheInvalidat
 
 func (s *APIKeyService) SetConcurrencyService(concurrencyService *ConcurrencyService) {
 	s.concurrencyService = concurrencyService
+}
+
+func (s *APIKeyService) SetModelMarketService(modelMarketService *ModelMarketService) {
+	s.modelMarketService = modelMarketService
 }
 
 func (s *APIKeyService) compileAPIKeyIPRules(apiKey *APIKey) {
@@ -1044,6 +1049,24 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	}
 
 	return availableGroups, nil
+}
+
+// GetAvailableGroupModels 返回当前用户可绑定分组上的具体模型。
+// 企业专属分组不进公开模型广场，密钥的允许模型列表从这里取。
+func (s *APIKeyService) GetAvailableGroupModels(ctx context.Context, userID int64) ([]ModelMarketModel, error) {
+	if s == nil || s.modelMarketService == nil {
+		return []ModelMarketModel{}, nil
+	}
+	groups, err := s.GetAvailableGroups(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	models, err := s.modelMarketService.ModelsForGroups(ctx, groups)
+	if err != nil {
+		return nil, err
+	}
+	redactPublicModelMarketAccountChannels(models)
+	return models, nil
 }
 
 // canUserBindGroupInternal 内部方法，检查用户是否可以绑定分组（使用预加载的订阅数据）
