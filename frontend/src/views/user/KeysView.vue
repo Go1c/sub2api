@@ -1310,7 +1310,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
-import modelMarketAPI, { type ModelMarketModel } from '@/api/modelMarket'
+import type { ModelMarketModel } from '@/api/modelMarket'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import DataTable from '@/components/common/DataTable.vue'
@@ -1735,11 +1735,11 @@ const loadFallbackCandidates = async () => {
 const loadModelMarketModels = async () => {
   modelMarketLoading.value = true
   try {
-    const response = await modelMarketAPI.getPublicModelMarket()
-    modelMarketModels.value = response.models || []
+    const models = await userGroupsAPI.getAvailableModels()
+    modelMarketModels.value = models || []
     pruneAllowedModelsForSelectedGroup()
   } catch (error) {
-    console.error('Failed to load model market:', error)
+    console.error('Failed to load group models:', error)
     modelMarketModels.value = []
   } finally {
     modelMarketLoading.value = false

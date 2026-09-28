@@ -917,7 +917,7 @@ export default {
     fallbackKeyNone: 'None',
     fallbackKeyDanger: 'Dangerous: when every upstream account in this key\'s group is unavailable, requests are automatically forwarded through the selected fallback key and billed to it. Make sure both keys share the exact same platform/type (e.g. both Claude); otherwise requests will fail (e.g. one Claude and one Codex cannot interoperate).',
     modelRestriction: 'Allowed Models',
-    modelRestrictionHint: 'When enabled, this key can only request the selected models below. Models are loaded from the current group in the model market.',
+    modelRestrictionHint: 'When enabled, this key can only request the selected models below. Models come from schedulable accounts and exact routing rules in the current group.',
     modelRestrictionSearch: 'Search models',
     modelRestrictionNoGroup: 'Please select a group first',
     modelRestrictionNoModels: 'No models are available for the current group',

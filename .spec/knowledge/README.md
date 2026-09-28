@@ -51,7 +51,7 @@ metadata:
 | [`features/grok-x-search.md`](features/grok-x-search.md) | Grok x_search：独立 /v1/x_search、Chat 桥、Responses 嵌入；现网去掉被拒 include；独立搜索按次计费，倍率可独立于 token `rate_multiplier` |
 | [`features/channel-response-model-billing.md`](features/channel-response-model-billing.md) | 渠道计费基准「按上游响应模型计费」：只降不升、仅确定性识别、媒体请求不采纳 |
 | [`features/model-market.md`](features/model-market.md) | 公共模型广场页面与后台配置:按平台 / 分组 / 计费类型展示可用模型,支持 token / per_request / image / video 展示计费覆盖;候选行可「恢复自动价格」去掉 overlay |
-| [`features/api-key-model-restriction.md`](features/api-key-model-restriction.md) | 用户 API 密钥模型允许列表:从模型广场按分组选择模型,网关拦截未授权模型请求 |
+| [`features/api-key-model-restriction.md`](features/api-key-model-restriction.md) | 用户 API 密钥模型允许列表:按当前可绑定分组选择模型,含企业专属分组;网关拦截未授权模型请求 |
 | [`features/user-subscription-purchase-ban.md`](features/user-subscription-purchase-ban.md) | 管理员按用户禁止购买订阅：字段、编辑开关、CreateOrder 硬拦截、「无权限购买」 |
 | [`features/user-access-token.md`](features/user-access-token.md) | 用户长效 opaque Access Token：密钥管理 + 只读用量/余额/订阅；活跃数上限、用户 RPM、usage 查询护栏 |
 | [`features/reseller-usage-correlation.md`](features/reseller-usage-correlation.md) | 下游 sub2API 分销对账：`X-Sub2-Request-ID` → `correlation_id`，专用增量 export；接入说明 `docs/reseller-usage-export.md` |

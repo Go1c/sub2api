@@ -325,6 +325,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentService, registry)
 	availableChannelHandler := handler.NewAvailableChannelHandler(channelService, apiKeyService, settingService)
 	modelMarketService := service.ProvideModelMarketService(settingService, groupRepository, accountRepository, billingService)
+	apiKeyService.SetModelMarketService(modelMarketService)
 	modelMarketHandler := handler.NewModelMarketHandler(modelMarketService)
 	batchImageRepository := repository.NewBatchImageRepository(db)
 	batchImageQueue := repository.NewBatchImageQueue(redisClient, configConfig)
