@@ -182,6 +182,48 @@ func TestModelMarket_DefaultAutoSyncReadsPublicGroupAccountModelsAndRates(t *tes
 	require.False(t, model.Groups[0].IsExclusive)
 }
 
+func TestModelMarket_ModelsForGroupsIncludesExclusiveGroup(t *testing.T) {
+	groups := []Group{
+		{
+			ID:          20,
+			Name:        "openai-vip",
+			Platform:    PlatformOpenAI,
+			Status:      StatusActive,
+			IsExclusive: true,
+		},
+		{
+			ID:       30,
+			Name:     "disabled-public",
+			Platform: PlatformGemini,
+			Status:   StatusDisabled,
+		},
+	}
+	accountsByGroup := map[int64][]Account{
+		20: {{
+			ID:       2,
+			Name:     "OpenAI private account",
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeAPIKey,
+			Status:   StatusActive,
+			Credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gpt-private": "gpt-private",
+				},
+			},
+		}},
+	}
+	svc, _ := newModelMarketTestService(groups, accountsByGroup, nil)
+
+	got, err := svc.ModelsForGroups(context.Background(), groups)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "gpt-private", got[0].Name)
+	require.Equal(t, []int64{20}, []int64{got[0].Groups[0].ID})
+	require.True(t, got[0].Groups[0].IsExclusive)
+	require.Equal(t, []string{"openai-vip"}, got[0].Channels)
+	require.NotContains(t, got[0].Channels, "OpenAI private account")
+}
+
 func TestModelMarket_PublicDoesNotExposeAccountNamesInChannels(t *testing.T) {
 	groups := []Group{
 		{

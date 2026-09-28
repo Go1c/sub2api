@@ -695,7 +695,7 @@ export default {
     failedToChangeGroup: '更換分組失敗',
     groupRequired: '請選擇分組',
     modelRestriction: '允許使用模型',
-    modelRestrictionHint: '開啟後，此密鑰只能請求下方選中的模型。模型來自當前分組在模型廣場中的可用模型。',
+    modelRestrictionHint: '開啟後，此密鑰只能請求下方選中的模型。模型來自當前分組中可調度賬號與分組路由的具體模型。',
     modelRestrictionSearch: '搜索模型',
     modelRestrictionNoGroup: '請先選擇分組',
     modelRestrictionNoModels: '當前分組暫無可選模型',

@@ -300,6 +300,26 @@ func (h *APIKeyHandler) GetAvailableGroups(c *gin.Context) {
 	response.Success(c, out)
 }
 
+// GetAvailableGroupModels 返回当前用户可绑定分组上的具体模型，含企业专属分组。
+// GET /api/v1/groups/available-models
+func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	models, err := h.apiKeyService.GetAvailableGroupModels(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if models == nil {
+		models = []service.ModelMarketModel{}
+	}
+	response.Success(c, models)
+}
+
 // GetUserGroupRates 获取当前用户的专属分组倍率配置
 // GET /api/v1/groups/rates
 func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
