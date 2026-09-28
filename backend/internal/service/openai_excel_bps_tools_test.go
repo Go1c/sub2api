@@ -68,8 +68,20 @@ func TestExcelBPSToolFallbackPolicy(t *testing.T) {
 					c.Header("X-Codex2API-Upstream", "codex")
 					_, err = svc.Forward(ctx, c, account, body)
 					choice, _ := tc.choice.(string)
-					forced := tc.choice != nil && choice != "auto" && choice != "none"
-					if forced {
+					// Default policy leaves BPS for live search, high search context,
+					// and image generation. Opting in stays on BPS and omits those
+					// tools. A forced tool choice is rejected only while staying on
+					// BPS; the default route forwards it to Codex instead.
+					native := !omit && tc.nativeReason != ""
+					if native {
+						require.NoError(t, err)
+						require.Equal(t, http.StatusOK, rec.Code)
+						require.Len(t, upstream.requests, 1)
+						require.Equal(t, "/backend-api/codex/responses", upstream.lastReq.URL.Path)
+						require.Equal(t, tc.nativeReason, rec.Header().Get("X-Codex2API-Basispoints-Bypass"))
+						require.Equal(t, "codex", rec.Header().Get("X-Codex2API-Upstream"))
+						require.NotContains(t, string(upstream.lastBody), "Hosted tools unavailable through Basispoints")
+					} else if tc.choice != nil && choice != "auto" && choice != "none" {
 						require.Error(t, err)
 						require.Equal(t, http.StatusBadRequest, rec.Code)
 						require.Contains(t, rec.Body.String(), "basispoints supports tool_choice auto or none only")
@@ -81,6 +93,10 @@ func TestExcelBPSToolFallbackPolicy(t *testing.T) {
 						require.Len(t, upstream.requests, 1)
 						require.Equal(t, "/basispoints/api/responses", upstream.lastReq.URL.Path)
 						require.Equal(t, "/basispoints/api/responses", GetActualOpenAIUpstreamEndpoint(c))
+						require.Empty(t, rec.Header().Get("X-Codex2API-Basispoints-Bypass"))
+						require.Empty(t, rec.Header().Get("X-Codex2API-Upstream"))
+						// Every hosted web_search / image_generation declaration is
+						// omitted on BPS, including offline and low-context search.
 						if choice != "none" {
 							require.Contains(t, string(upstream.lastBody), "Hosted tools unavailable through Basispoints: "+fmt.Sprint(tc.tool["type"]))
 							require.Contains(t, string(upstream.lastBody), "Do not claim to have used them")
@@ -91,9 +107,13 @@ func TestExcelBPSToolFallbackPolicy(t *testing.T) {
 						}
 					}
 					entries := logs.FilterMessage("excel_bps.native_fallback").All()
-					require.Empty(t, entries)
-					require.Empty(t, rec.Header().Get("X-Codex2API-Basispoints-Bypass"))
-					require.Empty(t, rec.Header().Get("X-Codex2API-Upstream"))
+					if native {
+						require.Len(t, entries, 1)
+						require.Equal(t, account.ID, entries[0].ContextMap()["account_id"])
+						require.Equal(t, tc.nativeReason, entries[0].ContextMap()["reason"])
+					} else {
+						require.Empty(t, entries)
+					}
 				})
 			}
 		}

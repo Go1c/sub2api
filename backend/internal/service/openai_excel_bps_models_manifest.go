@@ -66,17 +66,13 @@ func codexGroupModelUsesExcelBPS(model string, accounts []Account, group *Group)
 	if model == "" {
 		return false
 	}
-	var groupID *int64
-	if group != nil {
-		groupID = &group.ID
-	}
 	routed := codexModelRoutingAccountIDs(group, model)
 	for i := range accounts {
 		account := &accounts[i]
 		if len(routed) > 0 && !containsInt64(routed, account.ID) {
 			continue
 		}
-		if account.IsModelAllowedInGroup(groupID, model) && account.IsModelSupported(model) && account.IsExcelBPSEnabledForModel(model) {
+		if account.IsModelSupported(model) && account.IsExcelBPSEnabledForModel(model) {
 			return true
 		}
 	}
