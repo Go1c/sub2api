@@ -3528,7 +3528,7 @@ func (s *AccountTestService) RunTestBackground(ctx context.Context, accountID in
 
 	w := httptest.NewRecorder()
 	ginCtx, _ := gin.CreateTestContext(w)
-	ginCtx.Request = (&http.Request{}).WithContext(ctx)
+	ginCtx.Request = (&http.Request{Header: make(http.Header)}).WithContext(ctx)
 
 	testErr := s.TestAccountConnection(ginCtx, accountID, modelID, "", AccountTestModeDefault)
 

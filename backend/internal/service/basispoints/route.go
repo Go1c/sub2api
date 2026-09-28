@@ -6,9 +6,9 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// NativeFallbackReason reports declarations requiring the native Codex channel
-// under the default fallback policy. This describes the bridge's capabilities,
-// not whether the BPS upstream could support them through another protocol.
+// NativeFallbackReason reports capabilities that the BPS probe cannot execute.
+// Normal BPS-enabled requests are still forced through the BPS bridge; this
+// helper only rejects unsupported probe payloads before they are dispatched.
 func NativeFallbackReason(body []byte) string {
 	if !gjson.ValidBytes(body) {
 		return ""

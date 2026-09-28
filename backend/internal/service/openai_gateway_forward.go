@@ -67,13 +67,18 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		return nil, errors.New("bps probe path is unavailable")
 	}
 	if account.IsExcelBPSEnabledForModel(modelForBPS) {
-		reason := account.excelBPSNativeFallbackReason(body)
-		if reason == "" {
-			return s.forwardExcelBPS(ctx, c, account, body, startTime)
+		return s.forwardExcelBPS(ctx, c, account, body, startTime)
+	}
+	// ChatGPT/Codex rejects external_web_access on web_search tools. BPS
+	// already returned above, so this only rewrites the native OAuth body.
+	if account.IsOpenAIOAuthLike() {
+		stripped, changed, stripErr := stripOpenAICodexUnsupportedWebSearchFields(body)
+		if stripErr != nil {
+			return nil, fmt.Errorf("strip unsupported Codex web search fields: %w", stripErr)
 		}
-		c.Header("X-Codex2API-Upstream", "codex")
-		c.Header("X-Codex2API-Basispoints-Bypass", reason)
-		recordExcelBPSNativeFallback(ctx, account, reason)
+		if changed {
+			body = stripped
+		}
 	}
 
 	normalizedBody, normalized, err := normalizeOpenAICodexCompactReasoningEffortForAccount(c, account, body)

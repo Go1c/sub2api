@@ -21,27 +21,26 @@ const excelBPSToolPolicyResponse = "event: response.completed\ndata: {\"type\":\
 
 func TestExcelBPSToolFallbackPolicy(t *testing.T) {
 	cases := []struct {
-		name         string
-		tool         map[string]any
-		choice       any
-		nativeReason string
+		name   string
+		tool   map[string]any
+		choice any
 	}{
-		{"desktop search", map[string]any{"type": "web_search", "external_web_access": true}, "auto", "web_search"},
-		{"implicit auto", map[string]any{"type": "web_search", "external_web_access": true}, nil, "web_search"},
-		{"default search", map[string]any{"type": "web_search"}, "auto", ""},
-		{"offline search", map[string]any{"type": "web_search", "external_web_access": false}, "auto", ""},
-		{"high context", map[string]any{"type": "web_search", "external_web_access": false, "search_context_size": "high"}, "auto", "web_search"},
-		{"medium context", map[string]any{"type": "web_search", "search_context_size": "medium"}, "auto", ""},
-		{"low context", map[string]any{"type": "web_search", "search_context_size": "low"}, "auto", ""},
-		{"preview", map[string]any{"type": "web_search_preview", "external_web_access": true}, "auto", "web_search"},
-		{"dated preview", map[string]any{"type": "web_search_preview_2025_03_11", "external_web_access": true}, "auto", "web_search"},
-		{"dated search", map[string]any{"type": "web_search_2025_08_26", "external_web_access": true}, "auto", "web_search"},
-		{"image", map[string]any{"type": "image_generation"}, "auto", "image_generation"},
-		{"disabled search", map[string]any{"type": "web_search", "external_web_access": true}, "none", ""},
-		{"disabled image", map[string]any{"type": "image_generation"}, "none", ""},
-		{"forced search", map[string]any{"type": "web_search"}, map[string]any{"type": "web_search"}, "tool_choice"},
-		{"forced image", map[string]any{"type": "image_generation"}, map[string]any{"type": "image_generation"}, "tool_choice"},
-		{"required search", map[string]any{"type": "web_search", "external_web_access": true}, "required", "web_search"},
+		{"desktop search", map[string]any{"type": "web_search", "external_web_access": true}, "auto"},
+		{"implicit auto", map[string]any{"type": "web_search", "external_web_access": true}, nil},
+		{"default search", map[string]any{"type": "web_search"}, "auto"},
+		{"offline search", map[string]any{"type": "web_search", "external_web_access": false}, "auto"},
+		{"high context", map[string]any{"type": "web_search", "external_web_access": false, "search_context_size": "high"}, "auto"},
+		{"medium context", map[string]any{"type": "web_search", "search_context_size": "medium"}, "auto"},
+		{"low context", map[string]any{"type": "web_search", "search_context_size": "low"}, "auto"},
+		{"preview", map[string]any{"type": "web_search_preview", "external_web_access": true}, "auto"},
+		{"dated preview", map[string]any{"type": "web_search_preview_2025_03_11", "external_web_access": true}, "auto"},
+		{"dated search", map[string]any{"type": "web_search_2025_08_26", "external_web_access": true}, "auto"},
+		{"image", map[string]any{"type": "image_generation"}, "auto"},
+		{"disabled search", map[string]any{"type": "web_search", "external_web_access": true}, "none"},
+		{"disabled image", map[string]any{"type": "image_generation"}, "none"},
+		{"forced search", map[string]any{"type": "web_search"}, map[string]any{"type": "web_search"}},
+		{"forced image", map[string]any{"type": "image_generation"}, map[string]any{"type": "image_generation"}},
+		{"required search", map[string]any{"type": "web_search", "external_web_access": true}, "required"},
 	}
 	for _, tc := range cases {
 		for _, omit := range []bool{false, true} {
@@ -68,20 +67,11 @@ func TestExcelBPSToolFallbackPolicy(t *testing.T) {
 					c.Header("X-Codex2API-Upstream", "codex")
 					_, err = svc.Forward(ctx, c, account, body)
 					choice, _ := tc.choice.(string)
-					// Default policy leaves BPS for live search, high search context,
-					// and image generation. Opting in stays on BPS and omits those
-					// tools. A forced tool choice is rejected only while staying on
-					// BPS; the default route forwards it to Codex instead.
-					native := !omit && tc.nativeReason != ""
-					if native {
-						require.NoError(t, err)
-						require.Equal(t, http.StatusOK, rec.Code)
-						require.Len(t, upstream.requests, 1)
-						require.Equal(t, "/backend-api/codex/responses", upstream.lastReq.URL.Path)
-						require.Equal(t, tc.nativeReason, rec.Header().Get("X-Codex2API-Basispoints-Bypass"))
-						require.Equal(t, "codex", rec.Header().Get("X-Codex2API-Upstream"))
-						require.NotContains(t, string(upstream.lastBody), "Hosted tools unavailable through Basispoints")
-					} else if tc.choice != nil && choice != "auto" && choice != "none" {
+					// A BPS-enabled account always stays on Basis Points. Live
+					// search, high search context, and image generation are omitted
+					// on the bridge. A forced tool choice is rejected there.
+					// The omit switch no longer changes this route.
+					if tc.choice != nil && choice != "auto" && choice != "none" {
 						require.Error(t, err)
 						require.Equal(t, http.StatusBadRequest, rec.Code)
 						require.Contains(t, rec.Body.String(), "basispoints supports tool_choice auto or none only")
@@ -106,14 +96,7 @@ func TestExcelBPSToolFallbackPolicy(t *testing.T) {
 							require.NotContains(t, string(upstream.lastBody), "lookup_client")
 						}
 					}
-					entries := logs.FilterMessage("excel_bps.native_fallback").All()
-					if native {
-						require.Len(t, entries, 1)
-						require.Equal(t, account.ID, entries[0].ContextMap()["account_id"])
-						require.Equal(t, tc.nativeReason, entries[0].ContextMap()["reason"])
-					} else {
-						require.Empty(t, entries)
-					}
+					require.Empty(t, logs.FilterMessage("excel_bps.native_fallback").All())
 				})
 			}
 		}

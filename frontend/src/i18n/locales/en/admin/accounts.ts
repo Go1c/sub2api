@@ -881,8 +881,8 @@ export default {
       basisPoints: {
         title: 'Basis Points',
         hint: 'Send only this account’s gpt-6-astra and gpt-6-sol through Excel Basis Points, keeping the requested model name upstream. Other models stay on Codex. Off by default; import and create do not turn it on.',
-        omitUnsupportedTools: 'Keep BPS and omit unsupported hosted tools',
-        omitUnsupportedToolsHint: 'Off by default. Live web search, high search context, or image generation uses Codex. Turn this on to stay on Basis Points, omit hosted tools the bridge cannot carry, and tell the model they are unavailable. A forced tool choice still returns 400.',
+        omitUnsupportedTools: 'Omit unsupported hosted tools',
+        omitUnsupportedToolsHint: 'This account’s Basis Points models always stay on Basis Points. Live web search, high search context, and image generation are omitted, and the model is told those tools are unavailable. A forced tool choice returns 400.',
         ignoreEncrypted: 'Ignore encrypted content in history',
         ignoreEncryptedHint: 'Off by default. Old Codex multi-agent conversations carry sub-agent messages as ciphertext that only native Codex can read, so Basis Points rejects every turn. Turn this on to replace encrypted parts of messages and tool results with an omission notice before forwarding, keeping the remaining text, order, and tool-call pairing. Reasoning ciphertext is left alone.',
         ignoreImages: 'Ignore image inputs when image support is disabled',

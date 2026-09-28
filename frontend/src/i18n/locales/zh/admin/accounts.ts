@@ -981,8 +981,8 @@ export default {
       basisPoints: {
         title: 'Basis Points',
         hint: '仅此账号的 gpt-6-astra 和 gpt-6-sol 改走 Excel Basis Points，上游模型保持请求里的名字。其他模型仍走 Codex。默认关闭，导入和新建不会打开。',
-        omitUnsupportedTools: '保持 BPS，省略不支持的托管工具',
-        omitUnsupportedToolsHint: '默认关闭。请求里有实时联网搜索、高搜索上下文或图片生成时改走 Codex。打开后仍走 Basis Points，省略适配层不支持的托管工具，并告诉模型这些能力不可用。强制指定工具仍返回 400。',
+        omitUnsupportedTools: '省略不支持的托管工具',
+        omitUnsupportedToolsHint: '这个账号走 Basis Points 的模型始终留在 Basis Points。实时联网搜索、高搜索上下文和图片生成会被省略，并告诉模型这些工具不可用。强制指定工具返回 400。',
         ignoreEncrypted: '忽略历史中的加密消息',
         ignoreEncryptedHint: '默认关闭。旧的 Codex 多智能体会话里，子代理中间消息是只有原生 Codex 能读的密文，Basis Points 每轮都会拒绝。打开后，转发前把消息和工具结果里的密文换成省略提示，保留其余文字、顺序和工具调用关系。推理密文不处理。',
         ignoreImages: '图片支持关闭时忽略图片输入',
