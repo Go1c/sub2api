@@ -191,6 +191,55 @@ func iqInspectConfig(correct, incorrect int64) *AccountPoolAutoInspectConfig {
 	return cfg
 }
 
+func TestAccountPoolAutoInspectAsksCodexAccountWhenGroupPlatformDiffers(t *testing.T) {
+	accounts := &poolInspectAccountStub{accounts: []Account{{
+		ID: 21, Name: "codex-live", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+		Status: StatusActive, Schedulable: true, GroupIDs: []int64{3},
+	}}}
+	quiz := &poolInspectQuizStub{text: "21"}
+	svc := NewAccountPoolAutoInspectService(
+		&poolInspectSettingsStub{},
+		accounts,
+		&poolInspectGroupStub{groups: map[int64]Group{
+			3: {ID: 3, Name: "答对组", Platform: PlatformAnthropic},
+			9: {ID: 9, Name: "答错组", Platform: PlatformAnthropic},
+		}},
+		quiz,
+		nil,
+	)
+	_, err := svc.UpdateConfig(context.Background(), iqInspectConfig(3, 9))
+	require.NoError(t, err)
+
+	status := svc.RunOnce(context.Background(), true)
+	require.Contains(t, status.LastResult, "asked=1")
+	require.Contains(t, status.LastResult, "correct=1")
+	require.Equal(t, 1, quiz.calls)
+}
+
+func TestAccountPoolAutoInspectAsksLegacyOAuthWithEmptyPlatform(t *testing.T) {
+	accounts := &poolInspectAccountStub{accounts: []Account{{
+		ID: 22, Name: "legacy", Type: AccountTypeOAuth,
+		Status: StatusActive, Schedulable: true,
+	}}}
+	quiz := &poolInspectQuizStub{text: "21"}
+	svc := NewAccountPoolAutoInspectService(
+		&poolInspectSettingsStub{},
+		accounts,
+		&poolInspectGroupStub{groups: map[int64]Group{
+			3: {ID: 3, Name: "答对组", Platform: PlatformOpenAI},
+			9: {ID: 9, Name: "答错组", Platform: PlatformOpenAI},
+		}},
+		quiz,
+		nil,
+	)
+	_, err := svc.UpdateConfig(context.Background(), iqInspectConfig(3, 9))
+	require.NoError(t, err)
+
+	status := svc.RunOnce(context.Background(), true)
+	require.Contains(t, status.LastResult, "asked=1")
+	require.Equal(t, 1, quiz.calls)
+}
+
 func TestAccountPoolAutoInspectMovesCorrectAnswerAndPauses(t *testing.T) {
 	accounts := &poolInspectAccountStub{accounts: []Account{{
 		ID: 12, Name: "codex-1", Platform: PlatformOpenAI, Type: AccountTypeOAuth,

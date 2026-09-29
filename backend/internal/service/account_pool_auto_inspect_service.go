@@ -285,7 +285,7 @@ func (s *AccountPoolAutoInspectService) RunOnce(ctx context.Context, force bool)
 			break
 		}
 		account := accounts[i]
-		if !accountEligibleForPoolIQ(account, cfg, groups, now) {
+		if !accountEligibleForPoolIQ(account, now) {
 			continue
 		}
 		if !force && !s.claimDue(runCtx, account.ID, cfg, now) {
@@ -459,7 +459,7 @@ func (s *AccountPoolAutoInspectService) markAccountPoolIQChecked(ctx context.Con
 	account.Extra[accountPoolAutoInspectCheckedAtExtra] = stamp
 }
 
-func accountEligibleForPoolIQ(account Account, cfg *AccountPoolAutoInspectConfig, groups map[int64]Group, now time.Time) bool {
+func accountEligibleForPoolIQ(account Account, now time.Time) bool {
 	if account.ID <= 0 || account.IsCredentialShadow() {
 		return false
 	}
@@ -469,22 +469,14 @@ func accountEligibleForPoolIQ(account Account, cfg *AccountPoolAutoInspectConfig
 	if account.TempUnschedulableUntil != nil && account.TempUnschedulableUntil.After(now) {
 		return false
 	}
-	if !account.IsOpenAIOAuthLike() {
-		return false
-	}
-	if len(groups) == 0 {
+	// Codex OAuth accounts are openai + oauth. Older rows may leave platform
+	// empty while still using the Codex protocol; the gateway treats those the
+	// same way. Group platform is not an eligibility gate: the two configured
+	// groups only decide where a graded account moves.
+	if account.IsOpenAIOAuthLike() || account.UsesOpenAICodexProtocol() {
 		return true
 	}
-	for _, id := range []int64{cfg.CorrectGroupID, cfg.IncorrectGroupID} {
-		group, ok := groups[id]
-		if !ok {
-			return false
-		}
-		if !groupAcceptsAccountPlatform(group.Platform, account.Platform) {
-			return false
-		}
-	}
-	return true
+	return false
 }
 
 func (s *AccountPoolAutoInspectService) loadIQGroups(ctx context.Context, cfg *AccountPoolAutoInspectConfig) map[int64]Group {
