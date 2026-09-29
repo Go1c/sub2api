@@ -4,27 +4,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
 const (
-	accountPoolAutoInspectTimeout         = 2 * time.Minute
-	accountPoolAutoInspectHealthBatch     = 200
-	accountPoolAutoInspectMaxActions      = 50
-	accountPoolAutoInspectMessageMaxBytes = 3900
+	accountPoolAutoInspectTick        = 30 * time.Second
+	accountPoolAutoInspectRunTimeout  = 3 * time.Minute
+	accountPoolAutoInspectAskTimeout  = 180 * time.Second
+	accountPoolAutoInspectMaxPerRun   = 20
+	accountPoolIQPauseReason          = "pool auto inspect: group switch cooldown"
 )
 
 type poolAutoInspectAccounts interface {
 	ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, error)
 	BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error
-	Update(ctx context.Context, account *Account) error
+	SetTempUnschedulable(ctx context.Context, id int64, until time.Time, reason string) error
+	SetError(ctx context.Context, id int64, errorMsg string) error
 	UpdateExtra(ctx context.Context, id int64, updates map[string]any) error
 }
 
@@ -33,27 +35,21 @@ type poolAutoInspectSettings interface {
 	Set(ctx context.Context, key, value string) error
 }
 
-type poolAutoInspectHealthReader interface {
-	ListForAccounts(ctx context.Context, accountIDs []int64, window int) ([]AccountRequestHealthDTO, error)
-}
-
-type poolAutoInspectTelegramFallback interface {
-	GetOpsAccountErrorAlertConfig(ctx context.Context) (*OpsAccountErrorAlertConfig, error)
-}
-
 type poolAutoInspectGroups interface {
 	GetByIDLite(ctx context.Context, id int64) (*Group, error)
+}
+
+// poolAutoInspectQuiz asks one account the configured question on its own exit.
+type poolAutoInspectQuiz interface {
+	Ask(ctx context.Context, account *Account, model, question string) (text string, askErr error)
 }
 
 type AccountPoolAutoInspectService struct {
 	settings   poolAutoInspectSettings
 	accounts   poolAutoInspectAccounts
-	health     poolAutoInspectHealthReader
-	sender     OpsTelegramSender
-	fallback   poolAutoInspectTelegramFallback
-	lockStore  OpsAccountErrorAlertLockStore
 	groups     poolAutoInspectGroups
-	cfg        *config.Config
+	quiz       poolAutoInspectQuiz
+	lockStore  OpsAccountErrorAlertLockStore
 	instanceID string
 
 	stopCh    chan struct{}
@@ -66,52 +62,45 @@ type AccountPoolAutoInspectService struct {
 	lastResult string
 	lastError  string
 
-	cooldownMu sync.Mutex
-	cooldowns  map[string]time.Time
-}
-
-func NewAccountPoolAutoInspectService(
-	settings poolAutoInspectSettings,
-	accounts poolAutoInspectAccounts,
-	health poolAutoInspectHealthReader,
-	sender OpsTelegramSender,
-	fallback poolAutoInspectTelegramFallback,
-	lockStore OpsAccountErrorAlertLockStore,
-	cfg *config.Config,
-) *AccountPoolAutoInspectService {
-	return &AccountPoolAutoInspectService{
-		settings:   settings,
-		accounts:   accounts,
-		health:     health,
-		sender:     sender,
-		fallback:   fallback,
-		lockStore:  lockStore,
-		cfg:        cfg,
-		instanceID: uuid.NewString(),
-		cooldowns:  map[string]time.Time{},
-	}
+	dueMu sync.Mutex
+	dueAt map[int64]time.Time
 }
 
 func ProvideAccountPoolAutoInspectService(
 	settingRepo SettingRepository,
 	accountRepo AccountRepository,
 	groupRepo GroupRepository,
-	adminService AdminService,
-	redisClient *redis.Client,
-	concurrencyCache ConcurrencyCache,
-	sender OpsTelegramSender,
-	opsService *OpsService,
+	upstream HTTPUpstream,
+	tokens *OpenAITokenProvider,
 	lockStore OpsAccountErrorAlertLockStore,
-	cfg *config.Config,
 ) *AccountPoolAutoInspectService {
-	health := NewAccountRequestHealthService(
-		NewAccountRequestHealthStore(redisClient, concurrencyCache),
-		adminService,
+	svc := NewAccountPoolAutoInspectService(
+		settingRepo,
+		accountRepo,
+		groupRepo,
+		&accountPoolAutoInspectHTTPQuiz{upstream: upstream, tokens: tokens},
+		lockStore,
 	)
-	svc := NewAccountPoolAutoInspectService(settingRepo, accountRepo, health, sender, opsService, lockStore, cfg)
-	svc.groups = groupRepo
 	svc.Start()
 	return svc
+}
+
+func NewAccountPoolAutoInspectService(
+	settings poolAutoInspectSettings,
+	accounts poolAutoInspectAccounts,
+	groups poolAutoInspectGroups,
+	quiz poolAutoInspectQuiz,
+	lockStore OpsAccountErrorAlertLockStore,
+) *AccountPoolAutoInspectService {
+	return &AccountPoolAutoInspectService{
+		settings:   settings,
+		accounts:   accounts,
+		groups:     groups,
+		quiz:       quiz,
+		lockStore:  lockStore,
+		instanceID: uuid.NewString(),
+		dueAt:      map[int64]time.Time{},
+	}
 }
 
 func (s *AccountPoolAutoInspectService) Start() {
@@ -141,33 +130,30 @@ func (s *AccountPoolAutoInspectService) Stop() {
 
 func (s *AccountPoolAutoInspectService) run() {
 	defer s.wg.Done()
-
-	timer := time.NewTimer(s.getInterval())
+	timer := time.NewTimer(accountPoolAutoInspectTick)
 	defer timer.Stop()
-
 	for {
 		select {
 		case <-timer.C:
 			s.RunOnce(context.Background(), false)
-			timer.Reset(s.getInterval())
+			timer.Reset(accountPoolAutoInspectTick)
 		case <-s.stopCh:
 			return
 		}
 	}
 }
 
-func (s *AccountPoolAutoInspectService) getInterval() time.Duration {
-	cfg := s.loadConfig(2 * time.Second)
-	if cfg == nil || cfg.IntervalMinutes <= 0 {
-		return time.Duration(AccountPoolAutoInspectDefaultInterval) * time.Minute
-	}
-	return time.Duration(cfg.IntervalMinutes) * time.Minute
-}
-
 func (s *AccountPoolAutoInspectService) GetConfig(ctx context.Context) (*AccountPoolAutoInspectStatus, error) {
 	cfg, err := s.GetStoredConfig(ctx)
 	if err != nil {
 		return nil, err
+	}
+	return s.statusFrom(cfg), nil
+}
+
+func (s *AccountPoolAutoInspectService) statusFrom(cfg *AccountPoolAutoInspectConfig) *AccountPoolAutoInspectStatus {
+	if cfg == nil {
+		cfg = defaultAccountPoolAutoInspectConfig()
 	}
 	status := &AccountPoolAutoInspectStatus{AccountPoolAutoInspectConfig: *cfg}
 	s.mu.Lock()
@@ -178,10 +164,7 @@ func (s *AccountPoolAutoInspectService) GetConfig(ctx context.Context) (*Account
 	status.LastResult = s.lastResult
 	status.LastError = s.lastError
 	s.mu.Unlock()
-	fallback := s.loadTelegramFallback(ctx)
-	token, chatID := resolveAccountPoolAutoInspectTelegram(cfg, fallback)
-	status.TelegramReady = token != "" && chatID != ""
-	return status, nil
+	return status
 }
 
 func (s *AccountPoolAutoInspectService) GetStoredConfig(ctx context.Context) (*AccountPoolAutoInspectConfig, error) {
@@ -202,8 +185,7 @@ func (s *AccountPoolAutoInspectService) GetStoredConfig(ctx context.Context) (*A
 		}
 		return nil, err
 	}
-	cfg := parseAccountPoolAutoInspectConfig(raw)
-	return cfg, nil
+	return parseAccountPoolAutoInspectConfig(raw), nil
 }
 
 func (s *AccountPoolAutoInspectService) UpdateConfig(ctx context.Context, cfg *AccountPoolAutoInspectConfig) (*AccountPoolAutoInspectConfig, error) {
@@ -220,7 +202,7 @@ func (s *AccountPoolAutoInspectService) UpdateConfig(ctx context.Context, cfg *A
 	if err := validateAccountPoolAutoInspectConfig(cfg); err != nil {
 		return nil, err
 	}
-	if err := s.validateAddGroups(ctx, cfg.AddGroupIDs); err != nil {
+	if err := s.validateIQGroups(ctx, cfg); err != nil {
 		return nil, err
 	}
 	raw, err := marshalAccountPoolAutoInspectConfig(cfg)
@@ -233,38 +215,49 @@ func (s *AccountPoolAutoInspectService) UpdateConfig(ctx context.Context, cfg *A
 	return parseAccountPoolAutoInspectConfig(raw), nil
 }
 
+func (s *AccountPoolAutoInspectService) validateIQGroups(ctx context.Context, cfg *AccountPoolAutoInspectConfig) error {
+	if cfg == nil || s == nil || s.groups == nil {
+		return nil
+	}
+	for _, id := range []int64{cfg.CorrectGroupID, cfg.IncorrectGroupID} {
+		if id <= 0 {
+			continue
+		}
+		if _, err := s.groups.GetByIDLite(ctx, id); err != nil {
+			return fmt.Errorf("unknown group id %d", id)
+		}
+	}
+	return nil
+}
+
+// RunOnce asks due accounts. force=true (the manual run) asks every eligible
+// account now; the timer only asks accounts whose jittered due time has passed.
 func (s *AccountPoolAutoInspectService) RunOnce(ctx context.Context, force bool) *AccountPoolAutoInspectStatus {
 	startedAt := time.Now().UTC()
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	runCtx, cancel := context.WithTimeout(ctx, accountPoolAutoInspectTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, accountPoolAutoInspectRunTimeout)
 	defer cancel()
 
 	cfg, err := s.GetStoredConfig(runCtx)
 	if err != nil {
 		s.recordRun(startedAt, "", err)
-		return s.statusSnapshot(cfg, err)
+		return s.statusFrom(cfg)
 	}
 	normalizeAccountPoolAutoInspectConfig(cfg)
-	if err := validateAccountPoolAutoInspectConfig(cfg); err != nil {
-		s.recordRun(startedAt, "", err)
-		return s.statusSnapshot(cfg, err)
+	if !accountPoolAutoInspectReady(cfg) {
+		return s.statusFrom(cfg)
 	}
-	if !force && !cfg.Enabled {
-		return s.statusSnapshot(cfg, nil)
-	}
-	if s.accounts == nil || s.health == nil {
+	if s.accounts == nil || s.quiz == nil {
 		err := errors.New("auto inspect dependencies missing")
 		s.recordRun(startedAt, "", err)
-		return s.statusSnapshot(cfg, err)
+		return s.statusFrom(cfg)
 	}
-
 	if !force {
-		release, ok := s.tryAcquireLeaderLock(runCtx, cfg.IntervalMinutes)
+		release, ok := s.tryAcquireLeaderLock(runCtx)
 		if !ok {
-			s.recordRun(startedAt, "skipped_lock", nil)
-			return s.statusSnapshot(cfg, nil)
+			return s.statusFrom(cfg)
 		}
 		if release != nil {
 			defer release()
@@ -275,127 +268,175 @@ func (s *AccountPoolAutoInspectService) RunOnce(ctx context.Context, force bool)
 	if err != nil {
 		s.recordRun(startedAt, "", err)
 		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] list accounts failed: %v", err)
-		return s.statusSnapshot(cfg, err)
+		return s.statusFrom(cfg)
 	}
 
-	healthByID, err := s.loadHealth(runCtx, accounts)
-	if err != nil {
-		s.recordRun(startedAt, "", err)
-		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] load health failed: %v", err)
-		return s.statusSnapshot(cfg, err)
-	}
-
-	var degraded, oauth401Notified int
-	var degradeLines, oauth401Lines []string
+	groups := s.loadIQGroups(runCtx, cfg)
 	now := time.Now().UTC()
-	addGroups := s.loadAddGroups(runCtx, cfg.AddGroupIDs)
-	haveGroupDirectory := s.groups != nil
+	var asked, correct, incorrect, untestable, moved, disabled int
 	for i := range accounts {
+		if asked >= accountPoolAutoInspectMaxPerRun {
+			break
+		}
 		account := accounts[i]
-		if account.ID <= 0 || account.IsCredentialShadow() {
+		if !accountEligibleForPoolIQ(account, cfg, groups, now) {
 			continue
 		}
-
-		if cfg.NotifyOAuth401 {
-			if stopped, reason := accountStoppedByOAuth401(account, now); stopped {
-				if s.shouldNotifyOAuth401(runCtx, cfg, account.ID) {
-					oauth401Lines = append(oauth401Lines, formatOAuth401Line(account, reason))
-					oauth401Notified++
-					s.markOAuth401Notified(runCtx, cfg, account.ID)
-				}
+		if !force && !s.claimDue(runCtx, account.ID, cfg, now) {
+			continue
+		}
+		asked++
+		result := s.askAndMove(runCtx, &account, cfg, now)
+		switch result {
+		case AccountPoolIQResultCorrect:
+			correct++
+		case AccountPoolIQResultIncorrect:
+			incorrect++
+		default:
+			untestable++
+		}
+		switch {
+		case result == AccountPoolIQResultIncorrect && cfg.DisableFirstImportOnIncorrect && accountPoolIQFirstImport(&account):
+			if s.disableFirstImport(runCtx, &account, now) {
+				disabled++
+			}
+		case result == AccountPoolIQResultCorrect || result == AccountPoolIQResultIncorrect:
+			target := cfg.IncorrectGroupID
+			if result == AccountPoolIQResultCorrect {
+				target = cfg.CorrectGroupID
+			}
+			if s.moveAccountGroup(runCtx, &account, cfg, target, now) {
+				moved++
 			}
 		}
-
-		if degraded >= accountPoolAutoInspectMaxActions {
-			continue
+		if result == AccountPoolIQResultCorrect || result == AccountPoolIQResultIncorrect {
+			s.markAccountPoolIQChecked(runCtx, &account, now)
 		}
-		if !shouldInspectAccountHealth(account, now) {
-			continue
+		if force {
+			s.scheduleNext(runCtx, account.ID, cfg, now)
 		}
-		dto, ok := healthByID[account.ID]
-		if !ok {
-			continue
-		}
-		verdict := evaluateAccountPoolAutoInspectHealth(dto, cfg.SuccessRateThreshold, cfg.MinSamples)
-		if !verdict.Unhealthy {
-			continue
-		}
-		plan := planAccountPoolAutoInspectRemediationWithGroups(account, cfg, addGroups, haveGroupDirectory)
-		if !plan.HasWork {
-			continue
-		}
-		if err := s.applyRemediation(runCtx, account, plan); err != nil {
-			logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] remediate account=%d failed: %v", account.ID, err)
-			continue
-		}
-		degraded++
-		degradeLines = append(degradeLines, formatDegradeLine(account, verdict, plan))
 	}
 
-	s.notifyTelegram(runCtx, cfg, degradeLines, oauth401Lines)
-	result := fmt.Sprintf("accounts=%d degraded=%d oauth401=%d", len(accounts), degraded, oauth401Notified)
+	result := fmt.Sprintf("asked=%d correct=%d incorrect=%d untestable=%d moved=%d disabled=%d", asked, correct, incorrect, untestable, moved, disabled)
 	s.recordRun(startedAt, result, nil)
-	return s.statusSnapshot(cfg, nil)
+	return s.statusFrom(cfg)
 }
 
-func shouldInspectAccountHealth(account Account, now time.Time) bool {
-	if account.IsCredentialShadow() {
+func (s *AccountPoolAutoInspectService) askAndMove(ctx context.Context, account *Account, cfg *AccountPoolAutoInspectConfig, now time.Time) string {
+	askCtx, cancel := context.WithTimeout(ctx, accountPoolAutoInspectAskTimeout)
+	defer cancel()
+	text, err := s.quiz.Ask(askCtx, account, cfg.Model, cfg.Question)
+	if err != nil || strings.TrimSpace(text) == "" {
+		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] account=%d untestable: %v", account.ID, err)
+		return AccountPoolIQResultUntestable
+	}
+	if accountPoolIQAnswerMatches(text, cfg.Answer, cfg.FuzzyMatch) {
+		return AccountPoolIQResultCorrect
+	}
+	return AccountPoolIQResultIncorrect
+}
+
+func (s *AccountPoolAutoInspectService) moveAccountGroup(ctx context.Context, account *Account, cfg *AccountPoolAutoInspectConfig, target int64, now time.Time) bool {
+	next, changed := planAccountPoolIQGroups(account.GroupIDs, cfg.CorrectGroupID, cfg.IncorrectGroupID, target)
+	if !changed {
 		return false
 	}
-	if account.Status != StatusActive {
+	if err := s.accounts.BindGroups(ctx, account.ID, next); err != nil {
+		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] bind account=%d failed: %v", account.ID, err)
 		return false
 	}
-	if !account.Schedulable {
-		return false
-	}
-	if account.TempUnschedulableUntil != nil && account.TempUnschedulableUntil.After(now) && looksLikeOAuth401(account.TempUnschedulableReason) {
-		return false
+	account.GroupIDs = next
+	until := now.Add(time.Duration(cfg.PauseMinutes) * time.Minute)
+	if err := s.accounts.SetTempUnschedulable(ctx, account.ID, until, accountPoolIQPauseReason); err != nil {
+		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] pause account=%d failed: %v", account.ID, err)
 	}
 	return true
 }
 
-func (s *AccountPoolAutoInspectService) loadHealth(ctx context.Context, accounts []Account) (map[int64]AccountRequestHealthDTO, error) {
-	ids := make([]int64, 0, len(accounts))
-	for _, account := range accounts {
-		if account.ID > 0 && account.Status == StatusActive && !account.IsCredentialShadow() {
-			ids = append(ids, account.ID)
-		}
+// accountPoolIQFirstImport is an imported account that has not completed a quiz.
+func accountPoolIQFirstImport(account *Account) bool {
+	if account == nil {
+		return false
 	}
-	out := make(map[int64]AccountRequestHealthDTO, len(ids))
-	for start := 0; start < len(ids); start += accountPoolAutoInspectHealthBatch {
-		end := start + accountPoolAutoInspectHealthBatch
-		if end > len(ids) {
-			end = len(ids)
-		}
-		items, err := s.health.ListForAccounts(ctx, ids[start:end], DefaultRequestHealthWindow)
-		if err != nil {
-			return nil, err
-		}
-		for _, item := range items {
-			out[item.AccountID] = item
-		}
+	if strings.TrimSpace(account.GetExtraString("imported_at")) == "" {
+		return false
 	}
-	return out, nil
+	return strings.TrimSpace(account.GetExtraString(accountPoolAutoInspectCheckedAtExtra)) == ""
 }
 
-func (s *AccountPoolAutoInspectService) validateAddGroups(ctx context.Context, ids []int64) error {
-	if s == nil || s.groups == nil || len(ids) == 0 {
-		return nil
+// disableFirstImport sets status=error and schedulable=false. It does not move groups.
+func (s *AccountPoolAutoInspectService) disableFirstImport(ctx context.Context, account *Account, now time.Time) bool {
+	if s == nil || s.accounts == nil || account == nil {
+		return false
 	}
-	for _, id := range ids {
-		if _, err := s.groups.GetByIDLite(ctx, id); err != nil {
-			return fmt.Errorf("unknown group id %d", id)
-		}
+	if err := s.accounts.SetError(ctx, account.ID, accountPoolIQFirstImportError); err != nil {
+		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] disable account=%d failed: %v", account.ID, err)
+		return false
 	}
-	return nil
+	account.Status = StatusError
+	account.Schedulable = false
+	account.ErrorMessage = accountPoolIQFirstImportError
+	s.markAccountPoolIQChecked(ctx, account, now)
+	return true
 }
 
-func (s *AccountPoolAutoInspectService) loadAddGroups(ctx context.Context, ids []int64) map[int64]Group {
-	out := make(map[int64]Group, len(ids))
-	if s == nil || s.groups == nil {
+func (s *AccountPoolAutoInspectService) markAccountPoolIQChecked(ctx context.Context, account *Account, now time.Time) {
+	if s == nil || s.accounts == nil || account == nil {
+		return
+	}
+	if strings.TrimSpace(account.GetExtraString(accountPoolAutoInspectCheckedAtExtra)) != "" {
+		return
+	}
+	stamp := now.UTC().Format(time.RFC3339)
+	if err := s.accounts.UpdateExtra(ctx, account.ID, map[string]any{
+		accountPoolAutoInspectCheckedAtExtra: stamp,
+	}); err != nil {
+		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] mark checked account=%d failed: %v", account.ID, err)
+		return
+	}
+	if account.Extra == nil {
+		account.Extra = map[string]any{}
+	}
+	account.Extra[accountPoolAutoInspectCheckedAtExtra] = stamp
+}
+
+func accountEligibleForPoolIQ(account Account, cfg *AccountPoolAutoInspectConfig, groups map[int64]Group, now time.Time) bool {
+	if account.ID <= 0 || account.IsCredentialShadow() {
+		return false
+	}
+	if account.Status != StatusActive || !account.Schedulable {
+		return false
+	}
+	if account.TempUnschedulableUntil != nil && account.TempUnschedulableUntil.After(now) {
+		return false
+	}
+	if !account.IsOpenAIOAuthLike() {
+		return false
+	}
+	if len(groups) == 0 {
+		return true
+	}
+	for _, id := range []int64{cfg.CorrectGroupID, cfg.IncorrectGroupID} {
+		group, ok := groups[id]
+		if !ok {
+			return false
+		}
+		if !groupAcceptsAccountPlatform(group.Platform, account.Platform) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *AccountPoolAutoInspectService) loadIQGroups(ctx context.Context, cfg *AccountPoolAutoInspectConfig) map[int64]Group {
+	out := map[int64]Group{}
+	if s == nil || s.groups == nil || cfg == nil {
 		return out
 	}
-	for _, id := range ids {
+	for _, id := range []int64{cfg.CorrectGroupID, cfg.IncorrectGroupID} {
+		if id <= 0 {
+			continue
+		}
 		group, err := s.groups.GetByIDLite(ctx, id)
 		if err != nil || group == nil {
 			continue
@@ -405,164 +446,62 @@ func (s *AccountPoolAutoInspectService) loadAddGroups(ctx context.Context, ids [
 	return out
 }
 
-func (s *AccountPoolAutoInspectService) applyRemediation(ctx context.Context, account Account, plan poolAutoInspectRemediation) error {
-	if plan.GroupsChanged {
-		if err := s.accounts.BindGroups(ctx, account.ID, plan.GroupIDs); err != nil {
-			return err
-		}
-	}
-	if plan.MappingChanged {
-		if account.IsCredentialShadow() {
-			return nil
-		}
-		creds := cloneAccountCredentials(account.Credentials)
-		creds["model_mapping"] = plan.Mapping
-		if updater, ok := any(s.accounts).(accountCredentialsUpdater); ok {
-			if err := updater.UpdateCredentials(ctx, account.ID, creds); err != nil {
-				return err
-			}
-		} else {
-			account.Credentials = creds
-			if err := s.accounts.Update(ctx, &account); err != nil {
-				return err
-			}
-		}
-	}
-	if plan.Close429Exemption {
-		if err := s.accounts.UpdateExtra(ctx, account.ID, map[string]any{OAuth429CooldownEnforcedExtraKey: true}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *AccountPoolAutoInspectService) notifyTelegram(ctx context.Context, cfg *AccountPoolAutoInspectConfig, degradeLines, oauth401Lines []string) {
-	if s == nil || s.sender == nil {
-		return
-	}
-	fallback := s.loadTelegramFallback(ctx)
-	token, chatID := resolveAccountPoolAutoInspectTelegram(cfg, fallback)
-	if token == "" || chatID == "" {
-		return
-	}
-	text := buildPoolAutoInspectTelegram(degradeLines, oauth401Lines)
-	if text == "" {
-		return
-	}
-	if err := s.sender.SendMessage(ctx, token, chatID, text); err != nil {
-		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] telegram send failed: %v", err)
-	}
-}
-
-func buildPoolAutoInspectTelegram(degradeLines, oauth401Lines []string) string {
-	var b strings.Builder
-	if len(degradeLines) > 0 {
-		b.WriteString("号池自动巡检：成功率过低，已降级\n")
-		for _, line := range degradeLines {
-			b.WriteString(line)
-			b.WriteByte('\n')
-		}
-	}
-	if len(oauth401Lines) > 0 {
-		if b.Len() > 0 {
-			b.WriteByte('\n')
-		}
-		b.WriteString("号池自动巡检：401 已停止调度\n")
-		for _, line := range oauth401Lines {
-			b.WriteString(line)
-			b.WriteByte('\n')
-		}
-	}
-	text := strings.TrimSpace(b.String())
-	if len(text) > accountPoolAutoInspectMessageMaxBytes {
-		text = text[:accountPoolAutoInspectMessageMaxBytes]
-	}
-	return text
-}
-
-func formatDegradeLine(account Account, verdict poolAutoInspectHealthVerdict, plan poolAutoInspectRemediation) string {
-	parts := []string{fmt.Sprintf("- %s (#%d) 成功率 %.0f%% (%d/%d)", account.Name, account.ID, verdict.Rate*100, verdict.OK, verdict.Samples)}
-	if len(plan.AddedGroupIDs) > 0 {
-		parts = append(parts, "加入分组 "+joinInt64(plan.AddedGroupIDs))
-	}
-	if len(plan.RemovedModels) > 0 {
-		parts = append(parts, "移除 "+strings.Join(plan.RemovedModels, ","))
-	}
-	if plan.Close429Exemption {
-		parts = append(parts, "关闭 429 豁免")
-	}
-	return strings.Join(parts, "；")
-}
-
-func formatOAuth401Line(account Account, reason string) string {
-	reason = strings.TrimSpace(reason)
-	if len(reason) > 180 {
-		reason = reason[:180]
-	}
-	if reason == "" {
-		reason = "oauth_401"
-	}
-	return fmt.Sprintf("- %s (#%d) %s", account.Name, account.ID, reason)
-}
-
-func joinInt64(ids []int64) string {
-	if len(ids) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(ids))
-	for _, id := range ids {
-		parts = append(parts, fmt.Sprintf("%d", id))
-	}
-	return strings.Join(parts, ",")
-}
-
-func (s *AccountPoolAutoInspectService) shouldNotifyOAuth401(ctx context.Context, cfg *AccountPoolAutoInspectConfig, accountID int64) bool {
-	key := accountPoolAutoInspectOAuth401CooldownKey + fmt.Sprintf("%d", accountID)
+// claimDue reports whether this account should be asked now. A stored cooldown
+// key means the previous jittered interval has not elapsed. Claiming writes the
+// next interval immediately so two instances do not both ask.
+func (s *AccountPoolAutoInspectService) claimDue(ctx context.Context, accountID int64, cfg *AccountPoolAutoInspectConfig, now time.Time) bool {
 	if s.lockStore != nil {
+		key := accountPoolAutoInspectDueKey(accountID)
 		exists, err := s.lockStore.Exists(ctx, key)
-		if err == nil {
-			return !exists
+		if err != nil || exists {
+			return false
 		}
+		return s.storeDue(ctx, accountID, now.Add(accountPoolAutoInspectNextDelay(cfg.IntervalMinutes, cfg.JitterSeconds)))
 	}
-	now := time.Now().UTC()
-	s.cooldownMu.Lock()
-	defer s.cooldownMu.Unlock()
-	until, ok := s.cooldowns[key]
-	return !ok || !now.Before(until)
+	s.dueMu.Lock()
+	defer s.dueMu.Unlock()
+	if due, ok := s.dueAt[accountID]; ok && now.Before(due) {
+		return false
+	}
+	s.dueAt[accountID] = now.Add(accountPoolAutoInspectNextDelay(cfg.IntervalMinutes, cfg.JitterSeconds))
+	return true
 }
 
-func (s *AccountPoolAutoInspectService) markOAuth401Notified(ctx context.Context, cfg *AccountPoolAutoInspectConfig, accountID int64) {
-	if cfg == nil {
-		return
-	}
-	ttl := time.Duration(cfg.OAuth401CooldownMinutes) * time.Minute
-	if ttl <= 0 {
-		ttl = time.Hour
-	}
-	key := accountPoolAutoInspectOAuth401CooldownKey + fmt.Sprintf("%d", accountID)
+func (s *AccountPoolAutoInspectService) scheduleNext(ctx context.Context, accountID int64, cfg *AccountPoolAutoInspectConfig, now time.Time) {
+	next := now.Add(accountPoolAutoInspectNextDelay(cfg.IntervalMinutes, cfg.JitterSeconds))
 	if s.lockStore != nil {
-		_ = s.lockStore.SetCooldown(ctx, key, ttl)
+		_ = s.storeDue(ctx, accountID, next)
 		return
 	}
-	s.cooldownMu.Lock()
-	s.cooldowns[key] = time.Now().UTC().Add(ttl)
-	s.cooldownMu.Unlock()
+	s.dueMu.Lock()
+	s.dueAt[accountID] = next
+	s.dueMu.Unlock()
 }
 
-func (s *AccountPoolAutoInspectService) tryAcquireLeaderLock(ctx context.Context, intervalMinutes int) (func(), bool) {
+func (s *AccountPoolAutoInspectService) storeDue(ctx context.Context, accountID int64, next time.Time) bool {
+	ttl := time.Until(next)
+	if ttl < time.Second {
+		ttl = time.Second
+	}
+	if err := s.lockStore.SetCooldown(ctx, accountPoolAutoInspectDueKey(accountID), ttl); err != nil {
+		return false
+	}
+	return true
+}
+
+func accountPoolAutoInspectDueKey(accountID int64) string {
+	return accountPoolAutoInspectDueKeyPrefix + fmt.Sprintf("%d", accountID)
+}
+
+func (s *AccountPoolAutoInspectService) tryAcquireLeaderLock(ctx context.Context) (func(), bool) {
 	if s == nil || s.lockStore == nil {
 		return nil, true
 	}
-	ttl := time.Duration(intervalMinutes) * time.Minute
-	if ttl < 2*time.Minute {
-		ttl = 2 * time.Minute
-	}
-	ok, err := s.lockStore.Acquire(ctx, accountPoolAutoInspectLeaderLockKey, s.instanceID, ttl)
-	if err != nil {
-		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] leader lock failed: %v", err)
-		return nil, false
-	}
-	if !ok {
+	ok, err := s.lockStore.Acquire(ctx, accountPoolAutoInspectLeaderLockKey, s.instanceID, accountPoolAutoInspectRunTimeout)
+	if err != nil || !ok {
+		if err != nil {
+			logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] leader lock failed: %v", err)
+		}
 		return nil, false
 	}
 	return func() {
@@ -570,27 +509,6 @@ func (s *AccountPoolAutoInspectService) tryAcquireLeaderLock(ctx context.Context
 		defer cancel()
 		_ = s.lockStore.Release(releaseCtx, accountPoolAutoInspectLeaderLockKey, s.instanceID)
 	}, true
-}
-
-func (s *AccountPoolAutoInspectService) loadConfig(timeout time.Duration) *AccountPoolAutoInspectConfig {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	cfg, err := s.GetStoredConfig(ctx)
-	if err != nil || cfg == nil {
-		return defaultAccountPoolAutoInspectConfig()
-	}
-	return cfg
-}
-
-func (s *AccountPoolAutoInspectService) loadTelegramFallback(ctx context.Context) *OpsAccountErrorAlertConfig {
-	if s == nil || s.fallback == nil {
-		return nil
-	}
-	cfg, err := s.fallback.GetOpsAccountErrorAlertConfig(ctx)
-	if err != nil {
-		return nil
-	}
-	return cfg
 }
 
 func (s *AccountPoolAutoInspectService) recordRun(at time.Time, result string, err error) {
@@ -608,24 +526,79 @@ func (s *AccountPoolAutoInspectService) recordRun(at time.Time, result string, e
 	}
 }
 
-func (s *AccountPoolAutoInspectService) statusSnapshot(cfg *AccountPoolAutoInspectConfig, err error) *AccountPoolAutoInspectStatus {
-	if cfg == nil {
-		cfg = defaultAccountPoolAutoInspectConfig()
+// accountPoolAutoInspectHTTPQuiz sends the candy question through the account's
+// Codex responses endpoint and returns the completed answer text.
+type accountPoolAutoInspectHTTPQuiz struct {
+	upstream HTTPUpstream
+	tokens   openAIAccessTokenReader
+}
+
+type openAIAccessTokenReader interface {
+	GetAccessToken(ctx context.Context, account *Account) (string, error)
+}
+
+func (q *accountPoolAutoInspectHTTPQuiz) Ask(ctx context.Context, account *Account, model, question string) (string, error) {
+	if q == nil || q.upstream == nil || account == nil {
+		return "", errors.New("quiz not configured")
 	}
-	status := &AccountPoolAutoInspectStatus{AccountPoolAutoInspectConfig: *cfg}
-	s.mu.Lock()
-	if !s.lastRunAt.IsZero() {
-		runAt := s.lastRunAt
-		status.LastRunAt = &runAt
+	token := ""
+	var err error
+	if q.tokens != nil {
+		token, err = q.tokens.GetAccessToken(ctx, account)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		token = account.GetOpenAIAccessToken()
 	}
-	status.LastResult = s.lastResult
-	status.LastError = s.lastError
-	s.mu.Unlock()
-	if err != nil && status.LastError == "" {
-		status.LastError = err.Error()
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", errors.New("missing access token")
 	}
-	fallback := s.loadTelegramFallback(context.Background())
-	token, chatID := resolveAccountPoolAutoInspectTelegram(cfg, fallback)
-	status.TelegramReady = token != "" && chatID != ""
-	return status
+	payload, err := marshalTurnStateProbePayload(model, question)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, chatgptCodexURL, strings.NewReader(string(payload)))
+	if err != nil {
+		return "", err
+	}
+	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
+	req.Host = "chatgpt.com"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("accept", "text/event-stream")
+	setTurnStateProbeCookie(req.Header, account)
+	canonical := resolveCodexOutboundIdentity("")
+	req.Header.Set("Originator", canonical.originator)
+	if customUA := strings.TrimSpace(account.GetOpenAIUserAgent()); customUA != "" {
+		req.Header.Set("User-Agent", customUA)
+	} else {
+		req.Header.Set("User-Agent", canonical.userAgent)
+	}
+	setOpenAIChatGPTAccountHeaders(req.Header, account)
+	enforceCodexIdentityHeadersWithUA(req.Header, account.GetOpenAIUserAgent())
+	req.Header.Del("OpenAI-Beta")
+
+	proxyURL := ""
+	if account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+	resp, err := q.upstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	if err != nil {
+		return "", err
+	}
+	if resp == nil {
+		return "", errors.New("empty upstream response")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("upstream HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet)))
+	}
+	parsed := parseTurnStateProbeSSE(resp.Body)
+	if strings.TrimSpace(parsed.Text) == "" {
+		return "", errors.New("empty upstream text")
+	}
+	return parsed.Text, nil
 }

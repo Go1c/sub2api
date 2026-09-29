@@ -35,6 +35,26 @@ const groups = [
   { id: 7, name: '降智分组', platform: 'openai', subscription_type: '', rate_multiplier: 1 }
 ]
 
+const defaultQuestion =
+  '黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?'
+
+function storedConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    enabled: false,
+    interval_minutes: 10,
+    jitter_seconds: 60,
+    model: 'gpt-6-astra',
+    question: defaultQuestion,
+    answer: '21',
+    fuzzy_match: true,
+    correct_group_id: 0,
+    incorrect_group_id: 0,
+    pause_minutes: 1,
+    disable_first_import_on_incorrect: false,
+    ...overrides
+  }
+}
+
 function mountDialog(show = true) {
   return mount(PoolAutoInspectDialog, {
     props: { show, groups },
@@ -48,9 +68,7 @@ function mountDialog(show = true) {
           props: ['modelValue'],
           emits: ['update:modelValue'],
           template: '<button type="button" :aria-checked="String(modelValue)" @click="$emit(\'update:modelValue\', !modelValue)" />'
-        }),
-        GroupBadge: true,
-        Icon: true
+        })
       }
     }
   })
@@ -58,28 +76,10 @@ function mountDialog(show = true) {
 
 describe('PoolAutoInspectDialog', () => {
   beforeEach(() => {
-    getPoolAutoInspectConfig.mockReset().mockResolvedValue({
-      enabled: false,
-      interval_minutes: 5,
-      success_rate_threshold: 50,
-      min_samples: 4,
-      add_group_ids: [],
-      remove_models: [],
-      notify_oauth_401: false,
-      oauth_401_cooldown_minutes: 60,
-      close_429_exemption_on_degrade: true
-    })
-    updatePoolAutoInspectConfig.mockReset().mockResolvedValue({
-      enabled: true,
-      interval_minutes: 5,
-      success_rate_threshold: 50,
-      min_samples: 4,
-      add_group_ids: [1, 7],
-      remove_models: ['gpt-6-astra'],
-      notify_oauth_401: true,
-      oauth_401_cooldown_minutes: 60,
-      close_429_exemption_on_degrade: true
-    })
+    getPoolAutoInspectConfig.mockReset().mockResolvedValue(storedConfig())
+    updatePoolAutoInspectConfig.mockReset().mockResolvedValue(
+      storedConfig({ enabled: true, correct_group_id: 1, incorrect_group_id: 7 })
+    )
     runPoolAutoInspect.mockReset()
     showSuccess.mockReset()
     showError.mockReset()
@@ -91,80 +91,91 @@ describe('PoolAutoInspectDialog', () => {
     expect(getPoolAutoInspectConfig).not.toHaveBeenCalled()
   })
 
-  it('saves interval, groups, models and 401 notify', async () => {
+  it('saves interval, jitter, groups and answer', async () => {
     const wrapper = mountDialog(true)
     await flushPromises()
     expect(getPoolAutoInspectConfig).toHaveBeenCalledTimes(1)
 
-    await wrapper.get('[data-testid="pool-auto-inspect-interval"]').setValue(5)
-    await wrapper.get('[data-testid="pool-auto-inspect-group-7"]').setValue(true)
-    await wrapper.get('[data-testid="pool-auto-inspect-group-1"]').setValue(true)
-    await wrapper.get('[data-testid="pool-auto-inspect-model-input"]').setValue('gpt-6-astra')
-    await wrapper.get('[data-testid="pool-auto-inspect-model-input"]').trigger('keydown.enter')
+    await wrapper.get('[data-testid="pool-auto-inspect-interval"]').setValue(10)
+    await wrapper.get('[data-testid="pool-auto-inspect-jitter"]').setValue(60)
+    await wrapper.get('[data-testid="pool-auto-inspect-correct-group"]').setValue('1')
+    await wrapper.get('[data-testid="pool-auto-inspect-incorrect-group"]').setValue('7')
+    await wrapper.get('[data-testid="pool-auto-inspect-answer"]').setValue('21')
     await wrapper.get('[data-testid="pool-auto-inspect-save"]').trigger('click')
     await flushPromises()
 
     expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        interval_minutes: 5,
-        add_group_ids: [7, 1],
-        remove_models: ['gpt-6-astra']
+        interval_minutes: 10,
+        jitter_seconds: 60,
+        model: 'gpt-6-astra',
+        answer: '21',
+        fuzzy_match: true,
+        correct_group_id: 1,
+        incorrect_group_id: 7,
+        pause_minutes: 1
       })
     )
     expect(showSuccess).toHaveBeenCalled()
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
-  it('shows 401 cooldown and runs with the current form', async () => {
-    runPoolAutoInspect.mockResolvedValue({
-      enabled: true,
-      interval_minutes: 5,
-      success_rate_threshold: 50,
-      min_samples: 4,
-      add_group_ids: [7],
-      remove_models: ['gpt-6-astra'],
-      notify_oauth_401: true,
-      oauth_401_cooldown_minutes: 90,
-      last_result: 'accounts=1 degraded=1 oauth401=0'
-    })
+  it('runs with the current form and shows the quiz summary', async () => {
+    runPoolAutoInspect.mockResolvedValue(
+      storedConfig({
+        enabled: true,
+        correct_group_id: 1,
+        incorrect_group_id: 7,
+        pause_minutes: 2,
+        last_result: 'asked=1 correct=1 incorrect=0 untestable=0 moved=1'
+      })
+    )
 
     const wrapper = mountDialog(true)
     await flushPromises()
 
-    await wrapper.get('[data-testid="pool-auto-inspect-toggle-notify401"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('[data-testid="pool-auto-inspect-cooldown"]').setValue(90)
-    await wrapper.get('[data-testid="pool-auto-inspect-group-7"]').setValue(true)
-    await wrapper.get('[data-testid="pool-auto-inspect-model-input"]').setValue('gpt-6-astra')
-    await wrapper.get('[data-testid="pool-auto-inspect-model-input"]').trigger('keydown.enter')
+    await wrapper.get('[data-testid="pool-auto-inspect-correct-group"]').setValue('1')
+    await wrapper.get('[data-testid="pool-auto-inspect-incorrect-group"]').setValue('7')
+    await wrapper.get('[data-testid="pool-auto-inspect-pause"]').setValue(2)
     await wrapper.get('[data-testid="pool-auto-inspect-run"]').trigger('click')
     await flushPromises()
 
     expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        notify_oauth_401: true,
-        oauth_401_cooldown_minutes: 90,
-        close_429_exemption_on_degrade: true,
-        add_group_ids: [7],
-        remove_models: ['gpt-6-astra']
+        correct_group_id: 1,
+        incorrect_group_id: 7,
+        pause_minutes: 2,
+        fuzzy_match: true
       })
     )
     expect(runPoolAutoInspect).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('[data-testid="pool-auto-inspect-status"]').text()).toContain('degraded=1')
+    expect(wrapper.get('[data-testid="pool-auto-inspect-status"]').text()).toContain('moved=1')
     expect(wrapper.emitted('close')).toBeUndefined()
   })
 
-  it('defaults close-429-exemption on and can be turned off', async () => {
+  it('defaults fuzzy match on and can turn it off', async () => {
     const wrapper = mountDialog(true)
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="pool-auto-inspect-toggle-close429"]').attributes('aria-checked')).toBe('true')
-    await wrapper.get('[data-testid="pool-auto-inspect-toggle-close429"]').trigger('click')
+    expect(wrapper.get('[data-testid="pool-auto-inspect-toggle-fuzzy"]').attributes('aria-checked')).toBe('true')
+    await wrapper.get('[data-testid="pool-auto-inspect-toggle-fuzzy"]').trigger('click')
+    await wrapper.get('[data-testid="pool-auto-inspect-save"]').trigger('click')
+    await flushPromises()
+
+    expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(expect.objectContaining({ fuzzy_match: false }))
+  })
+
+  it('can close a first import that answers wrong', async () => {
+    const wrapper = mountDialog(true)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="pool-auto-inspect-toggle-first-import"]').attributes('aria-checked')).toBe('false')
+    await wrapper.get('[data-testid="pool-auto-inspect-toggle-first-import"]').trigger('click')
     await wrapper.get('[data-testid="pool-auto-inspect-save"]').trigger('click')
     await flushPromises()
 
     expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ close_429_exemption_on_degrade: false })
+      expect.objectContaining({ disable_first_import_on_incorrect: true })
     )
   })
 })

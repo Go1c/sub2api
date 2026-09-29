@@ -57,13 +57,5 @@ func (h *AccountHandler) RunPoolAutoInspect(c *gin.Context) {
 }
 
 func defaultPoolAutoInspectConfig() *service.AccountPoolAutoInspectConfig {
-	return &service.AccountPoolAutoInspectConfig{
-		Enabled:                 false,
-		IntervalMinutes:         service.AccountPoolAutoInspectDefaultInterval,
-		SuccessRateThreshold:    service.AccountPoolAutoInspectDefaultThreshold,
-		MinSamples:              service.AccountPoolAutoInspectDefaultMinSamples,
-		AddGroupIDs:             []int64{},
-		RemoveModels:            []string{},
-		OAuth401CooldownMinutes: 60,
-	}
+	return service.DefaultAccountPoolAutoInspectConfig()
 }

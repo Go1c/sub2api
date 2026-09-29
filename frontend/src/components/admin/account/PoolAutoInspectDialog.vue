@@ -27,131 +27,112 @@
           <p class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.intervalHint') }}</p>
         </div>
         <div>
-          <label class="input-label" for="pool-auto-inspect-threshold">{{ t('admin.accounts.poolAutoInspect.threshold') }}</label>
+          <label class="input-label" for="pool-auto-inspect-jitter">{{ t('admin.accounts.poolAutoInspect.jitter') }}</label>
           <input
-            id="pool-auto-inspect-threshold"
-            v-model.number="form.success_rate_threshold"
+            id="pool-auto-inspect-jitter"
+            v-model.number="form.jitter_seconds"
+            type="number"
+            min="0"
+            :max="maxJitterSeconds"
+            class="input"
+            data-testid="pool-auto-inspect-jitter"
+          />
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.jitterHint') }}</p>
+        </div>
+        <div>
+          <label class="input-label" for="pool-auto-inspect-pause">{{ t('admin.accounts.poolAutoInspect.pause') }}</label>
+          <input
+            id="pool-auto-inspect-pause"
+            v-model.number="form.pause_minutes"
             type="number"
             min="1"
-            max="100"
+            max="1440"
             class="input"
-            data-testid="pool-auto-inspect-threshold"
+            data-testid="pool-auto-inspect-pause"
+          />
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.pauseHint') }}</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label class="input-label" for="pool-auto-inspect-model">{{ t('admin.accounts.poolAutoInspect.model') }}</label>
+          <input
+            id="pool-auto-inspect-model"
+            v-model.trim="form.model"
+            type="text"
+            class="input"
+            maxlength="80"
+            data-testid="pool-auto-inspect-model"
           />
         </div>
         <div>
-          <label class="input-label" for="pool-auto-inspect-min-samples">{{ t('admin.accounts.poolAutoInspect.minSamples') }}</label>
+          <label class="input-label" for="pool-auto-inspect-answer">{{ t('admin.accounts.poolAutoInspect.answer') }}</label>
           <input
-            id="pool-auto-inspect-min-samples"
-            v-model.number="form.min_samples"
-            type="number"
-            min="1"
-            max="20"
-            class="input"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label class="input-label">
-          {{ t('admin.accounts.poolAutoInspect.addGroups') }}
-          <span class="font-normal text-gray-400">{{ t('common.selectedCount', { count: form.add_group_ids.length }) }}</span>
-        </label>
-        <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.addGroupsHint') }}</p>
-        <div class="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-dark-600 dark:bg-dark-800 md:grid-cols-2">
-          <label
-            v-for="group in groups"
-            :key="group.id"
-            class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-white dark:hover:bg-dark-700"
-          >
-            <input
-              type="checkbox"
-              class="h-3.5 w-3.5 rounded border-gray-300 text-primary-500"
-              :checked="form.add_group_ids.includes(group.id)"
-              :data-testid="`pool-auto-inspect-group-${group.id}`"
-              @change="toggleGroup(group.id, ($event.target as HTMLInputElement).checked)"
-            />
-            <GroupBadge
-              :name="group.name"
-              :platform="group.platform"
-              :subscription-type="group.subscription_type || undefined"
-              :rate-multiplier="group.rate_multiplier == null ? undefined : group.rate_multiplier"
-              class="min-w-0 flex-1"
-            />
-          </label>
-          <div v-if="groups.length === 0" class="col-span-2 py-2 text-center text-sm text-gray-500">
-            {{ t('common.noGroupsAvailable') }}
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <label class="input-label" for="pool-auto-inspect-models">{{ t('admin.accounts.poolAutoInspect.removeModels') }}</label>
-        <p class="mb-2 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.removeModelsHint') }}</p>
-        <div class="flex gap-2">
-          <input
-            id="pool-auto-inspect-models"
-            v-model="modelInput"
+            id="pool-auto-inspect-answer"
+            v-model.trim="form.answer"
             type="text"
             class="input"
-            :placeholder="t('admin.accounts.poolAutoInspect.removeModelsPlaceholder')"
-            data-testid="pool-auto-inspect-model-input"
-            @keydown.enter.prevent="addModel"
+            maxlength="200"
+            data-testid="pool-auto-inspect-answer"
           />
-          <button type="button" class="btn btn-secondary" @click="addModel">{{ t('common.add') }}</button>
+          <p class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.answerHint') }}</p>
         </div>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <button
-            v-for="model in form.remove_models"
-            :key="model"
-            type="button"
-            class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700 dark:bg-dark-700 dark:text-gray-200"
-            @click="removeModel(model)"
-          >
-            {{ model }}
-            <Icon name="x" size="xs" />
-          </button>
-        </div>
+      </div>
+
+      <div>
+        <label class="input-label" for="pool-auto-inspect-question">{{ t('admin.accounts.poolAutoInspect.question') }}</label>
+        <textarea
+          id="pool-auto-inspect-question"
+          v-model="form.question"
+          rows="4"
+          maxlength="2000"
+          class="input"
+          data-testid="pool-auto-inspect-question"
+        />
+        <p class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.questionHint') }}</p>
       </div>
 
       <div class="flex items-center justify-between gap-3">
         <div>
-          <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.close429Exemption') }}</div>
-          <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.close429ExemptionHint') }}</p>
+          <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.fuzzyMatch') }}</div>
+          <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.fuzzyMatchHint') }}</p>
         </div>
-        <Toggle v-model="form.close_429_exemption_on_degrade" data-testid="pool-auto-inspect-toggle-close429" />
+        <Toggle v-model="form.fuzzy_match" data-testid="pool-auto-inspect-toggle-fuzzy" />
       </div>
 
-      <div class="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-dark-600">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.notify401') }}</div>
-            <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.notify401Hint') }}</p>
-          </div>
-          <Toggle v-model="form.notify_oauth_401" data-testid="pool-auto-inspect-toggle-notify401" />
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.disableFirstImport') }}</div>
+          <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.disableFirstImportHint') }}</p>
         </div>
-        <div v-if="form.notify_oauth_401" class="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label class="input-label">{{ t('admin.accounts.poolAutoInspect.telegramBotToken') }}</label>
-            <input v-model.trim="form.telegram_bot_token" type="password" autocomplete="off" class="input" placeholder="123456:ABC..." />
-          </div>
-          <div>
-            <label class="input-label">{{ t('admin.accounts.poolAutoInspect.telegramChatId') }}</label>
-            <input v-model.trim="form.telegram_chat_id" type="text" class="input" placeholder="-1001234567890" />
-          </div>
-          <div>
-            <label class="input-label" for="pool-auto-inspect-cooldown">{{ t('admin.accounts.poolAutoInspect.cooldown') }}</label>
-            <input
-              id="pool-auto-inspect-cooldown"
-              v-model.number="form.oauth_401_cooldown_minutes"
-              type="number"
-              min="1"
-              max="1440"
-              class="input"
-              data-testid="pool-auto-inspect-cooldown"
-            />
-            <p class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.cooldownHint') }}</p>
-          </div>
-          <p class="text-xs text-gray-500 md:col-span-2">{{ t('admin.accounts.poolAutoInspect.telegramFallbackHint') }}</p>
+        <Toggle v-model="form.disable_first_import_on_incorrect" data-testid="pool-auto-inspect-toggle-first-import" />
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label class="input-label" for="pool-auto-inspect-correct-group">{{ t('admin.accounts.poolAutoInspect.correctGroup') }}</label>
+          <select
+            id="pool-auto-inspect-correct-group"
+            v-model.number="form.correct_group_id"
+            class="input"
+            data-testid="pool-auto-inspect-correct-group"
+          >
+            <option :value="0">{{ t('admin.accounts.poolAutoInspect.groupPlaceholder') }}</option>
+            <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="input-label" for="pool-auto-inspect-incorrect-group">{{ t('admin.accounts.poolAutoInspect.incorrectGroup') }}</label>
+          <select
+            id="pool-auto-inspect-incorrect-group"
+            v-model.number="form.incorrect_group_id"
+            class="input"
+            data-testid="pool-auto-inspect-incorrect-group"
+          >
+            <option :value="0">{{ t('admin.accounts.poolAutoInspect.groupPlaceholder') }}</option>
+            <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+          </select>
         </div>
       </div>
 
@@ -191,8 +172,6 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Toggle from '@/components/common/Toggle.vue'
-import GroupBadge from '@/components/common/GroupBadge.vue'
-import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -214,24 +193,30 @@ const appStore = useAppStore()
 const loading = ref(false)
 const saving = ref(false)
 const running = ref(false)
-const modelInput = ref('')
 const lastStatus = ref<PoolAutoInspectStatus | null>(null)
 
 const emptyForm = (): PoolAutoInspectConfig => ({
   enabled: false,
-  interval_minutes: 5,
-  success_rate_threshold: 50,
-  min_samples: 4,
-  add_group_ids: [],
-  remove_models: [],
-  notify_oauth_401: false,
-  oauth_401_cooldown_minutes: 60,
-  close_429_exemption_on_degrade: true,
-  telegram_bot_token: '',
-  telegram_chat_id: ''
+  interval_minutes: 10,
+  jitter_seconds: 60,
+  model: 'gpt-6-astra',
+  question: '',
+  answer: '21',
+  fuzzy_match: true,
+  correct_group_id: 0,
+  incorrect_group_id: 0,
+  pause_minutes: 1,
+  disable_first_import_on_incorrect: false
 })
 
 const form = reactive<PoolAutoInspectConfig>(emptyForm())
+
+const maxJitterSeconds = computed(() => {
+  const minutes = Number(form.interval_minutes) || 1
+  const half = Math.floor((minutes * 60) / 2)
+  const floor = minutes * 60 - 60
+  return Math.max(0, Math.min(half, floor))
+})
 
 const statusText = computed(() => {
   const status = lastStatus.value
@@ -252,18 +237,22 @@ watch(
   { immediate: true }
 )
 
+function numberOr(value: number | undefined, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 function applyConfig(cfg: PoolAutoInspectConfig | PoolAutoInspectStatus) {
   form.enabled = !!cfg.enabled
-  form.interval_minutes = cfg.interval_minutes || 5
-  form.success_rate_threshold = cfg.success_rate_threshold || 50
-  form.min_samples = cfg.min_samples || 4
-  form.add_group_ids = [...(cfg.add_group_ids || [])]
-  form.remove_models = [...(cfg.remove_models || [])]
-  form.notify_oauth_401 = !!cfg.notify_oauth_401
-  form.oauth_401_cooldown_minutes = cfg.oauth_401_cooldown_minutes || 60
-  form.close_429_exemption_on_degrade = cfg.close_429_exemption_on_degrade !== false
-  form.telegram_bot_token = cfg.telegram_bot_token || ''
-  form.telegram_chat_id = cfg.telegram_chat_id || ''
+  form.interval_minutes = numberOr(cfg.interval_minutes, 10) || 10
+  form.jitter_seconds = numberOr(cfg.jitter_seconds, 60)
+  form.model = cfg.model || 'gpt-6-astra'
+  form.question = cfg.question || ''
+  form.answer = cfg.answer || '21'
+  form.fuzzy_match = cfg.fuzzy_match !== false
+  form.correct_group_id = numberOr(cfg.correct_group_id, 0)
+  form.incorrect_group_id = numberOr(cfg.incorrect_group_id, 0)
+  form.pause_minutes = numberOr(cfg.pause_minutes, 1) || 1
+  form.disable_first_import_on_incorrect = !!cfg.disable_first_import_on_incorrect
 }
 
 async function load() {
@@ -277,27 +266,6 @@ async function load() {
   } finally {
     loading.value = false
   }
-}
-
-function toggleGroup(id: number, checked: boolean) {
-  if (checked && !form.add_group_ids.includes(id)) {
-    form.add_group_ids.push(id)
-    return
-  }
-  form.add_group_ids = form.add_group_ids.filter((groupId) => groupId !== id)
-}
-
-function addModel() {
-  const model = modelInput.value.trim()
-  if (!model) return
-  if (!form.remove_models.includes(model)) {
-    form.remove_models.push(model)
-  }
-  modelInput.value = ''
-}
-
-function removeModel(model: string) {
-  form.remove_models = form.remove_models.filter((item) => item !== model)
 }
 
 async function save() {

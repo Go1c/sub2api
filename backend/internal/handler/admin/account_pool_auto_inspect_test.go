@@ -28,8 +28,11 @@ func TestGetPoolAutoInspectConfigWithoutServiceReturnsDefaults(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &payload))
 	require.False(t, payload.Data.Enabled)
-	require.Equal(t, 5, payload.Data.IntervalMinutes)
-	require.Equal(t, 50, payload.Data.SuccessRateThreshold)
+	require.Equal(t, 10, payload.Data.IntervalMinutes)
+	require.Equal(t, 60, payload.Data.JitterSeconds)
+	require.Equal(t, "21", payload.Data.Answer)
+	require.True(t, payload.Data.FuzzyMatch)
+	require.Equal(t, 1, payload.Data.PauseMinutes)
 }
 
 func TestUpdatePoolAutoInspectConfigWithoutServiceIsUnavailable(t *testing.T) {

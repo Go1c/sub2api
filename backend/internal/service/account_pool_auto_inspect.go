@@ -4,84 +4,83 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
-	AccountPoolAutoInspectMinIntervalMinutes  = 1
-	AccountPoolAutoInspectMaxIntervalMinutes  = 1440
-	AccountPoolAutoInspectDefaultInterval     = 5
-	AccountPoolAutoInspectDefaultThreshold    = 50
-	AccountPoolAutoInspectDefaultMinSamples   = 4
-	AccountPoolAutoInspectMaxGroups           = 20
-	AccountPoolAutoInspectMaxModels           = 50
-	AccountPoolAutoInspectMaxModelLen         = 80
-	accountPoolAutoInspectLeaderLockKey       = "ops:pool_auto_inspect:leader"
-	accountPoolAutoInspectOAuth401CooldownKey = "ops:pool_auto_inspect:oauth401:"
+	AccountPoolAutoInspectMinIntervalMinutes = 1
+	AccountPoolAutoInspectMaxIntervalMinutes = 1440
+	AccountPoolAutoInspectDefaultInterval    = 10
+	AccountPoolAutoInspectDefaultJitter      = 60
+	AccountPoolAutoInspectDefaultPause       = 1
+	AccountPoolAutoInspectMaxModelLen        = 80
+	AccountPoolAutoInspectMaxQuestionLen     = 2000
+	AccountPoolAutoInspectMaxAnswerLen       = 200
+	accountPoolAutoInspectLeaderLockKey      = "ops:pool_auto_inspect:leader"
+	accountPoolAutoInspectDueKeyPrefix       = "ops:pool_auto_inspect:iq_due:"
+
+	accountPoolAutoInspectDefaultModel = "gpt-6-astra"
+	// Same candy quiz as channel-monitor IQ on dev and Turn-State probe.
+	accountPoolAutoInspectDefaultQuestion = "黑色袋子中有苹果味、桃子味、西瓜味糖果;每种分为圆形和五角星形，可用手感区分形状。圆形依次有7、9、8颗;五角星形依次有7、6、4颗。事先决定摸出的数量，最少取多少颗，才能保证拿到不同形状的苹果味和桃子味糖果?"
+	accountPoolAutoInspectDefaultAnswer   = "21"
+	// accountPoolAutoInspectCheckedAtExtra records that this account has
+	// completed one quiz. A first import has no such mark.
+	accountPoolAutoInspectCheckedAtExtra = "pool_auto_inspect_checked_at"
+	accountPoolIQFirstImportError        = "pool auto inspect: first import answered incorrectly"
+
+	AccountPoolIQResultCorrect   = "correct"
+	AccountPoolIQResultIncorrect = "incorrect"
+	AccountPoolIQResultUntestable = "untestable"
 )
 
-// AccountPoolAutoInspectConfig is the admin-facing pool health automation.
-// It scans request-health bars on a timer, joins configured groups and strips
-// configured whitelist models when every sampled IP is below the success-rate
-// threshold, and can Telegram-notify OAuth 401 scheduling stops.
+// AccountPoolAutoInspectConfig is the admin IQ-group strategy.
+// Each due account is asked one question on the configured model. A correct
+// answer moves it onto CorrectGroupID; an incorrect answer moves it onto
+// IncorrectGroupID. A real group change pauses scheduling for PauseMinutes.
 type AccountPoolAutoInspectConfig struct {
 	Enabled bool `json:"enabled"`
 
-	IntervalMinutes            int      `json:"interval_minutes"`
-	SuccessRateThreshold       int      `json:"success_rate_threshold"`
-	MinSamples                 int      `json:"min_samples"`
-	AddGroupIDs                []int64  `json:"add_group_ids"`
-	RemoveModels               []string `json:"remove_models"`
-	NotifyOAuth401             bool     `json:"notify_oauth_401"`
-	OAuth401CooldownMinutes    int      `json:"oauth_401_cooldown_minutes"`
-	Close429ExemptionOnDegrade bool     `json:"close_429_exemption_on_degrade"`
-
-	TelegramBotToken string `json:"telegram_bot_token"`
-	TelegramChatID   string `json:"telegram_chat_id"`
+	IntervalMinutes int    `json:"interval_minutes"`
+	JitterSeconds   int    `json:"jitter_seconds"`
+	Model           string `json:"model"`
+	Question        string `json:"question"`
+	Answer          string `json:"answer"`
+	FuzzyMatch      bool   `json:"fuzzy_match"`
+	CorrectGroupID   int64 `json:"correct_group_id"`
+	IncorrectGroupID int64 `json:"incorrect_group_id"`
+	PauseMinutes     int   `json:"pause_minutes"`
+	// DisableFirstImportOnIncorrect marks a first-import account error and
+	// unschedulable when its first completed quiz is wrong.
+	DisableFirstImportOnIncorrect bool `json:"disable_first_import_on_incorrect"`
 }
 
 type AccountPoolAutoInspectStatus struct {
 	AccountPoolAutoInspectConfig
-	LastRunAt     *time.Time `json:"last_run_at,omitempty"`
-	LastResult    string     `json:"last_result,omitempty"`
-	LastError     string     `json:"last_error,omitempty"`
-	TelegramReady bool       `json:"telegram_ready"`
+	LastRunAt  *time.Time `json:"last_run_at,omitempty"`
+	LastResult string     `json:"last_result,omitempty"`
+	LastError  string     `json:"last_error,omitempty"`
 }
 
-type poolAutoInspectHealthVerdict struct {
-	Unhealthy bool
-	Rate      float64
-	Samples   int
-	OK        int
-	Fail      int
-}
-
-type poolAutoInspectRemediation struct {
-	GroupIDs       []int64
-	GroupsChanged  bool
-	AddedGroupIDs  []int64
-	Mapping        map[string]any
-	MappingChanged bool
-	RemovedModels  []string
-	// Close429Exemption 同时关闭账号的 OAuth 429 拉闸豁免（写
-	// extra.oauth429_cooldown_enforced=true），让真实不健康的账号重新受
-	// Retry-After 冷却控制。与分组/模型降级一样，恢复时不自动回写。
-	Close429Exemption bool
-	HasWork           bool
+// DefaultAccountPoolAutoInspectConfig is the admin form default.
+func DefaultAccountPoolAutoInspectConfig() *AccountPoolAutoInspectConfig {
+	return defaultAccountPoolAutoInspectConfig()
 }
 
 func defaultAccountPoolAutoInspectConfig() *AccountPoolAutoInspectConfig {
 	return &AccountPoolAutoInspectConfig{
-		Enabled:                    false,
-		IntervalMinutes:            AccountPoolAutoInspectDefaultInterval,
-		SuccessRateThreshold:       AccountPoolAutoInspectDefaultThreshold,
-		MinSamples:                 AccountPoolAutoInspectDefaultMinSamples,
-		AddGroupIDs:                []int64{},
-		RemoveModels:               []string{},
-		NotifyOAuth401:             false,
-		OAuth401CooldownMinutes:    60,
-		Close429ExemptionOnDegrade: true,
+		Enabled:          false,
+		IntervalMinutes:  AccountPoolAutoInspectDefaultInterval,
+		JitterSeconds:    AccountPoolAutoInspectDefaultJitter,
+		Model:            accountPoolAutoInspectDefaultModel,
+		Question:         accountPoolAutoInspectDefaultQuestion,
+		Answer:           accountPoolAutoInspectDefaultAnswer,
+		FuzzyMatch:       true,
+		CorrectGroupID:   0,
+		IncorrectGroupID: 0,
+		PauseMinutes:     AccountPoolAutoInspectDefaultPause,
 	}
 }
 
@@ -93,19 +92,43 @@ func normalizeAccountPoolAutoInspectConfig(cfg *AccountPoolAutoInspectConfig) {
 	if cfg.IntervalMinutes < AccountPoolAutoInspectMinIntervalMinutes || cfg.IntervalMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
 		cfg.IntervalMinutes = defaults.IntervalMinutes
 	}
-	if cfg.SuccessRateThreshold < 1 || cfg.SuccessRateThreshold > 100 {
-		cfg.SuccessRateThreshold = defaults.SuccessRateThreshold
+	maxJitter := accountPoolAutoInspectMaxJitterSeconds(cfg.IntervalMinutes)
+	if cfg.JitterSeconds < 0 || cfg.JitterSeconds > maxJitter {
+		cfg.JitterSeconds = defaults.JitterSeconds
+		if cfg.JitterSeconds > maxJitter {
+			cfg.JitterSeconds = maxJitter
+		}
 	}
-	if cfg.MinSamples < 1 || cfg.MinSamples > RequestHealthMaxEvents {
-		cfg.MinSamples = defaults.MinSamples
+	cfg.Model = strings.TrimSpace(cfg.Model)
+	if cfg.Model == "" {
+		cfg.Model = defaults.Model
 	}
-	if cfg.OAuth401CooldownMinutes < 1 || cfg.OAuth401CooldownMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
-		cfg.OAuth401CooldownMinutes = defaults.OAuth401CooldownMinutes
+	if len(cfg.Model) > AccountPoolAutoInspectMaxModelLen {
+		cfg.Model = cfg.Model[:AccountPoolAutoInspectMaxModelLen]
 	}
-	cfg.AddGroupIDs = normalizePositiveIDs(cfg.AddGroupIDs, AccountPoolAutoInspectMaxGroups)
-	cfg.RemoveModels = normalizeAccountPoolAutoInspectModels(cfg.RemoveModels)
-	cfg.TelegramBotToken = strings.TrimSpace(cfg.TelegramBotToken)
-	cfg.TelegramChatID = strings.TrimSpace(cfg.TelegramChatID)
+	cfg.Question = strings.TrimSpace(cfg.Question)
+	if cfg.Question == "" {
+		cfg.Question = defaults.Question
+	}
+	if len(cfg.Question) > AccountPoolAutoInspectMaxQuestionLen {
+		cfg.Question = cfg.Question[:AccountPoolAutoInspectMaxQuestionLen]
+	}
+	cfg.Answer = strings.TrimSpace(cfg.Answer)
+	if cfg.Answer == "" {
+		cfg.Answer = defaults.Answer
+	}
+	if len(cfg.Answer) > AccountPoolAutoInspectMaxAnswerLen {
+		cfg.Answer = cfg.Answer[:AccountPoolAutoInspectMaxAnswerLen]
+	}
+	if cfg.CorrectGroupID < 0 {
+		cfg.CorrectGroupID = 0
+	}
+	if cfg.IncorrectGroupID < 0 {
+		cfg.IncorrectGroupID = 0
+	}
+	if cfg.PauseMinutes < 1 || cfg.PauseMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
+		cfg.PauseMinutes = defaults.PauseMinutes
+	}
 }
 
 func validateAccountPoolAutoInspectConfig(cfg *AccountPoolAutoInspectConfig) error {
@@ -115,345 +138,168 @@ func validateAccountPoolAutoInspectConfig(cfg *AccountPoolAutoInspectConfig) err
 	if cfg.IntervalMinutes < AccountPoolAutoInspectMinIntervalMinutes || cfg.IntervalMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
 		return fmt.Errorf("interval_minutes must be %d-%d", AccountPoolAutoInspectMinIntervalMinutes, AccountPoolAutoInspectMaxIntervalMinutes)
 	}
-	if cfg.SuccessRateThreshold < 1 || cfg.SuccessRateThreshold > 100 {
-		return errors.New("success_rate_threshold must be 1-100")
+	maxJitter := accountPoolAutoInspectMaxJitterSeconds(cfg.IntervalMinutes)
+	if cfg.JitterSeconds < 0 || cfg.JitterSeconds > maxJitter {
+		return fmt.Errorf("jitter_seconds must be 0-%d", maxJitter)
 	}
-	if cfg.MinSamples < 1 || cfg.MinSamples > RequestHealthMaxEvents {
-		return fmt.Errorf("min_samples must be 1-%d", RequestHealthMaxEvents)
+	if strings.TrimSpace(cfg.Model) == "" {
+		return errors.New("model is required")
 	}
-	if cfg.OAuth401CooldownMinutes < 1 || cfg.OAuth401CooldownMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
-		return fmt.Errorf("oauth_401_cooldown_minutes must be 1-%d", AccountPoolAutoInspectMaxIntervalMinutes)
+	if strings.TrimSpace(cfg.Question) == "" || strings.TrimSpace(cfg.Answer) == "" {
+		return errors.New("question and answer are required")
+	}
+	if cfg.Enabled && (cfg.CorrectGroupID <= 0 || cfg.IncorrectGroupID <= 0) {
+		return errors.New("correct_group_id and incorrect_group_id are required when enabled")
+	}
+	if cfg.CorrectGroupID > 0 && cfg.CorrectGroupID == cfg.IncorrectGroupID {
+		return errors.New("correct_group_id and incorrect_group_id must differ")
+	}
+	if cfg.PauseMinutes < 1 || cfg.PauseMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
+		return fmt.Errorf("pause_minutes must be 1-%d", AccountPoolAutoInspectMaxIntervalMinutes)
 	}
 	return nil
 }
 
-func normalizePositiveIDs(ids []int64, limit int) []int64 {
-	if len(ids) == 0 {
-		return []int64{}
+// accountPoolAutoInspectMaxJitterSeconds keeps the realized interval at least
+// one minute: jitter cannot exceed half the base interval.
+func accountPoolAutoInspectMaxJitterSeconds(intervalMinutes int) int {
+	if intervalMinutes < 1 {
+		intervalMinutes = 1
 	}
-	seen := make(map[int64]struct{}, len(ids))
-	out := make([]int64, 0, len(ids))
-	for _, id := range ids {
+	maxJitter := intervalMinutes * 60 / 2
+	floor := intervalMinutes*60 - 60
+	if maxJitter > floor {
+		maxJitter = floor
+	}
+	if maxJitter < 0 {
+		return 0
+	}
+	return maxJitter
+}
+
+// accountPoolAutoInspectNextDelay is base interval ± a uniform jitter in seconds.
+// The result is at least one minute.
+func accountPoolAutoInspectNextDelay(intervalMinutes, jitterSeconds int) time.Duration {
+	base := time.Duration(intervalMinutes) * time.Minute
+	if base < time.Minute {
+		base = time.Minute
+	}
+	jitter := time.Duration(jitterSeconds) * time.Second
+	if jitter <= 0 {
+		return base
+	}
+	offset := time.Duration(rand.Int64N(int64(2*jitter)+1)) - jitter
+	delay := base + offset
+	if delay < time.Minute {
+		return time.Minute
+	}
+	return delay
+}
+
+func accountPoolIQAnswerMatches(got, want string, fuzzy bool) bool {
+	want = normalizeAccountPoolIQAnswer(want)
+	got = normalizeAccountPoolIQAnswer(got)
+	if want == "" || got == "" {
+		return false
+	}
+	if fuzzy {
+		return strings.Contains(got, want)
+	}
+	return got == want
+}
+
+func normalizeAccountPoolIQAnswer(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		if r == ',' || r == '，' || r == '.' || r == '。' || r == ':' || r == '：' || r == ';' || r == '；' {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// planAccountPoolIQGroups replaces one IQ group with the other and keeps every
+// unrelated group. Already being on the target group is not a change.
+func planAccountPoolIQGroups(current []int64, correctGroupID, incorrectGroupID, targetGroupID int64) (next []int64, changed bool) {
+	if targetGroupID <= 0 {
+		return append([]int64(nil), current...), false
+	}
+	seen := map[int64]struct{}{}
+	next = make([]int64, 0, len(current)+1)
+	for _, id := range current {
 		if id <= 0 {
 			continue
 		}
+		if id == correctGroupID || id == incorrectGroupID {
+			continue
+		}
 		if _, ok := seen[id]; ok {
 			continue
 		}
 		seen[id] = struct{}{}
-		out = append(out, id)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
+		next = append(next, id)
 	}
-	if len(out) == 0 {
-		return []int64{}
+	if _, ok := seen[targetGroupID]; !ok {
+		next = append(next, targetGroupID)
 	}
-	return out
+	changed = !sameInt64Set(current, next)
+	return next, changed
 }
 
-func normalizeAccountPoolAutoInspectModels(models []string) []string {
-	if len(models) == 0 {
-		return []string{}
-	}
-	seen := make(map[string]struct{}, len(models))
-	out := make([]string, 0, len(models))
-	for _, raw := range models {
-		model := strings.TrimSpace(raw)
-		if model == "" {
-			continue
-		}
-		if len(model) > AccountPoolAutoInspectMaxModelLen {
-			model = model[:AccountPoolAutoInspectMaxModelLen]
-		}
-		key := strings.ToLower(model)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, model)
-		if len(out) >= AccountPoolAutoInspectMaxModels {
-			break
-		}
-	}
-	if len(out) == 0 {
-		return []string{}
-	}
-	return out
-}
-
-func evaluateAccountPoolAutoInspectHealth(dto AccountRequestHealthDTO, thresholdPercent, minSamples int) poolAutoInspectHealthVerdict {
-	if thresholdPercent < 1 {
-		thresholdPercent = AccountPoolAutoInspectDefaultThreshold
-	}
-	if minSamples < 1 {
-		minSamples = AccountPoolAutoInspectDefaultMinSamples
-	}
-	threshold := float64(thresholdPercent) / 100
-
-	var okCount, failCount int
-	sampledLines := 0
-	healthyLine := false
-	for _, line := range dto.Lines {
-		lineOK, lineFail := countRequestHealthOutcomes(line.Outcomes)
-		lineSamples := lineOK + lineFail
-		if lineSamples == 0 {
-			continue
-		}
-		sampledLines++
-		okCount += lineOK
-		failCount += lineFail
-		if float64(lineOK)/float64(lineSamples) >= threshold {
-			healthyLine = true
-		}
-	}
-
-	verdict := poolAutoInspectHealthVerdict{
-		OK:      okCount,
-		Fail:    failCount,
-		Samples: okCount + failCount,
-	}
-	if verdict.Samples == 0 {
-		return verdict
-	}
-	verdict.Rate = float64(okCount) / float64(verdict.Samples)
-	if verdict.Samples < minSamples || sampledLines == 0 {
-		return verdict
-	}
-	// Account is unhealthy only when overall success is below the threshold
-	// and every sampled IP/line is also below it ("每个 IP 都打不进去").
-	verdict.Unhealthy = verdict.Rate < threshold && !healthyLine
-	return verdict
-}
-
-func countRequestHealthOutcomes(outcomes []RequestHealthOutcomeDTO) (okCount, failCount int) {
-	for _, item := range outcomes {
-		switch item.Slot {
-		case RequestHealthSlotOK:
-			okCount++
-		case RequestHealthSlotFail:
-			failCount++
-		}
-	}
-	return okCount, failCount
-}
-
-func planAccountPoolAutoInspectRemediation(account Account, cfg *AccountPoolAutoInspectConfig) poolAutoInspectRemediation {
-	return planAccountPoolAutoInspectRemediationWithGroups(account, cfg, nil, false)
-}
-
-func planAccountPoolAutoInspectRemediationWithGroups(account Account, cfg *AccountPoolAutoInspectConfig, groups map[int64]Group, haveDirectory bool) poolAutoInspectRemediation {
-	plan := poolAutoInspectRemediation{}
-	if cfg == nil {
-		return plan
-	}
-	addIDs := compatibleAddGroupIDs(account, cfg.AddGroupIDs, groups, haveDirectory)
-	if len(addIDs) > 0 {
-		merged := mergeUniqueInt64(account.GroupIDs, addIDs)
-		added := differenceInt64(merged, account.GroupIDs)
-		plan.GroupIDs = merged
-		plan.AddedGroupIDs = added
-		plan.GroupsChanged = len(added) > 0
-	}
-	if len(cfg.RemoveModels) > 0 {
-		mapping, ok := accountModelMappingRaw(account)
-		if ok {
-			next, removed := removeModelsFromMapping(mapping, cfg.RemoveModels)
-			if len(removed) > 0 {
-				plan.Mapping = next
-				plan.RemovedModels = removed
-				plan.MappingChanged = true
+func sameInt64Set(a, b []int64) bool {
+	if len(a) != len(b) {
+		left := map[int64]int{}
+		for _, id := range a {
+			if id > 0 {
+				left[id]++
 			}
 		}
-	}
-	if cfg.Close429ExemptionOnDegrade && shouldCloseAccount429Exemption(account) {
-		plan.Close429Exemption = true
-	}
-	plan.HasWork = plan.GroupsChanged || plan.MappingChanged || plan.Close429Exemption
-	return plan
-}
-
-// shouldCloseAccount429Exemption 降级时是否需要关闭 429 豁免：仅 OpenAI
-// OAuth 系账号（豁免键只作用于这条链路），当前仍处于豁免状态才有工作可做。
-func shouldCloseAccount429Exemption(account Account) bool {
-	return !account.IsCredentialShadow() && account.IsOpenAIOAuthLike() && account.OAuth429CooldownExempt()
-}
-
-func accountModelMappingRaw(account Account) (map[string]any, bool) {
-	if len(account.Credentials) == 0 {
-		return nil, false
-	}
-	raw, ok := account.Credentials["model_mapping"].(map[string]any)
-	if !ok || len(raw) == 0 {
-		return nil, false
-	}
-	out := make(map[string]any, len(raw))
-	for k, v := range raw {
-		out[k] = v
-	}
-	return out, true
-}
-
-func removeModelsFromMapping(mapping map[string]any, models []string) (map[string]any, []string) {
-	if len(mapping) == 0 || len(models) == 0 {
-		return mapping, nil
-	}
-	drop := make(map[string]string, len(models))
-	for _, model := range models {
-		key := strings.ToLower(strings.TrimSpace(model))
-		if key == "" {
-			continue
-		}
-		drop[key] = strings.TrimSpace(model)
-	}
-	if len(drop) == 0 {
-		return mapping, nil
-	}
-	removedSeen := map[string]struct{}{}
-	removed := make([]string, 0)
-	next := make(map[string]any, len(mapping))
-	for key, value := range mapping {
-		valueText, _ := value.(string)
-		if _, ok := drop[strings.ToLower(strings.TrimSpace(key))]; ok {
-			if _, exists := removedSeen[key]; !exists {
-				removedSeen[key] = struct{}{}
-				removed = append(removed, key)
-			}
-			continue
-		}
-		if valueText != "" {
-			if _, ok := drop[strings.ToLower(strings.TrimSpace(valueText))]; ok {
-				if _, exists := removedSeen[key]; !exists {
-					removedSeen[key] = struct{}{}
-					removed = append(removed, key)
-				}
-				continue
+		right := map[int64]int{}
+		for _, id := range b {
+			if id > 0 {
+				right[id]++
 			}
 		}
-		next[key] = value
-	}
-	return next, removed
-}
-
-func compatibleAddGroupIDs(account Account, ids []int64, groups map[int64]Group, haveDirectory bool) []int64 {
-	if len(ids) == 0 {
-		return nil
-	}
-	if !haveDirectory {
-		return ids
-	}
-	out := make([]int64, 0, len(ids))
-	for _, id := range ids {
-		group, ok := groups[id]
-		if !ok {
-			continue
+		if len(left) != len(right) {
+			return false
 		}
-		if groupAcceptsAccountPlatform(group.Platform, account.Platform) {
-			out = append(out, id)
+		for id, n := range left {
+			if right[id] != n {
+				return false
+			}
 		}
-	}
-	return out
-}
-
-func groupAcceptsAccountPlatform(groupPlatform, accountPlatform string) bool {
-	groupPlatform = strings.ToLower(strings.TrimSpace(groupPlatform))
-	accountPlatform = strings.ToLower(strings.TrimSpace(accountPlatform))
-	if groupPlatform == "" || groupPlatform == PlatformComposite {
 		return true
 	}
-	return groupPlatform == accountPlatform
-}
-
-func mergeUniqueInt64(a, b []int64) []int64 {
-	seen := make(map[int64]struct{}, len(a)+len(b))
-	out := make([]int64, 0, len(a)+len(b))
-	for _, id := range append(append([]int64{}, a...), b...) {
-		if id <= 0 {
-			continue
+	left := map[int64]struct{}{}
+	for _, id := range a {
+		if id > 0 {
+			left[id] = struct{}{}
 		}
-		if _, ok := seen[id]; ok {
-			continue
+	}
+	right := map[int64]struct{}{}
+	for _, id := range b {
+		if id > 0 {
+			right[id] = struct{}{}
 		}
-		seen[id] = struct{}{}
-		out = append(out, id)
 	}
-	return out
-}
-
-func differenceInt64(have, existing []int64) []int64 {
-	seen := make(map[int64]struct{}, len(existing))
-	for _, id := range existing {
-		seen[id] = struct{}{}
-	}
-	out := make([]int64, 0)
-	for _, id := range have {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		out = append(out, id)
-	}
-	return out
-}
-
-func accountStoppedByOAuth401(account Account, now time.Time) (bool, string) {
-	reason := strings.TrimSpace(account.TempUnschedulableReason)
-	if account.TempUnschedulableUntil != nil && account.TempUnschedulableUntil.After(now) && looksLikeOAuth401(reason) {
-		return true, reason
-	}
-	if account.Status == StatusError && looksLikeOAuth401(account.ErrorMessage) {
-		return true, strings.TrimSpace(account.ErrorMessage)
-	}
-	if !account.Schedulable && looksLikeOAuth401(account.ErrorMessage) {
-		return true, strings.TrimSpace(account.ErrorMessage)
-	}
-	return false, ""
-}
-
-func looksLikeOAuth401(text string) bool {
-	text = strings.ToLower(strings.TrimSpace(text))
-	if text == "" {
+	if len(left) != len(right) {
 		return false
 	}
-	if strings.Contains(text, "oauth 401") || strings.Contains(text, "token revoked (401)") {
-		return true
-	}
-	if !strings.Contains(text, "401") {
-		return false
-	}
-	return strings.Contains(text, "authentication failed") ||
-		strings.Contains(text, "unauthorized") ||
-		strings.Contains(text, "invalid or expired credentials") ||
-		strings.Contains(text, "refresh_token")
-}
-
-func resolveAccountPoolAutoInspectTelegram(cfg *AccountPoolAutoInspectConfig, fallback *OpsAccountErrorAlertConfig) (token, chatID string) {
-	if cfg != nil {
-		token = strings.TrimSpace(cfg.TelegramBotToken)
-		chatID = strings.TrimSpace(cfg.TelegramChatID)
-	}
-	if token != "" && chatID != "" {
-		return token, chatID
-	}
-	if fallback != nil {
-		if token == "" {
-			token = strings.TrimSpace(fallback.TelegramBotToken)
-		}
-		if chatID == "" {
-			chatID = strings.TrimSpace(fallback.TelegramChatID)
+	for id := range left {
+		if _, ok := right[id]; !ok {
+			return false
 		}
 	}
-	return token, chatID
-}
-
-func cloneAccountCredentials(credentials map[string]any) map[string]any {
-	if credentials == nil {
-		return map[string]any{}
-	}
-	out := make(map[string]any, len(credentials))
-	for k, v := range credentials {
-		out[k] = v
-	}
-	return out
+	return true
 }
 
 func marshalAccountPoolAutoInspectConfig(cfg *AccountPoolAutoInspectConfig) (string, error) {
@@ -477,4 +323,20 @@ func parseAccountPoolAutoInspectConfig(raw string) *AccountPoolAutoInspectConfig
 	}
 	normalizeAccountPoolAutoInspectConfig(cfg)
 	return cfg
+}
+
+func accountPoolAutoInspectReady(cfg *AccountPoolAutoInspectConfig) bool {
+	if cfg == nil || !cfg.Enabled {
+		return false
+	}
+	return cfg.CorrectGroupID > 0 && cfg.IncorrectGroupID > 0 && cfg.CorrectGroupID != cfg.IncorrectGroupID
+}
+
+func groupAcceptsAccountPlatform(groupPlatform, accountPlatform string) bool {
+	groupPlatform = strings.ToLower(strings.TrimSpace(groupPlatform))
+	accountPlatform = strings.ToLower(strings.TrimSpace(accountPlatform))
+	if groupPlatform == "" || groupPlatform == PlatformComposite {
+		return true
+	}
+	return groupPlatform == accountPlatform
 }

@@ -1073,22 +1073,21 @@ export async function probeUpstreamBillingBatch(accountIds: number[]): Promise<U
 export interface PoolAutoInspectConfig {
   enabled: boolean
   interval_minutes: number
-  success_rate_threshold: number
-  min_samples: number
-  add_group_ids: number[]
-  remove_models: string[]
-  notify_oauth_401: boolean
-  oauth_401_cooldown_minutes: number
-  close_429_exemption_on_degrade: boolean
-  telegram_bot_token?: string
-  telegram_chat_id?: string
+  jitter_seconds: number
+  model: string
+  question: string
+  answer: string
+  fuzzy_match: boolean
+  correct_group_id: number
+  incorrect_group_id: number
+  pause_minutes: number
+  disable_first_import_on_incorrect: boolean
 }
 
 export interface PoolAutoInspectStatus extends PoolAutoInspectConfig {
   last_run_at?: string | null
   last_result?: string
   last_error?: string
-  telegram_ready?: boolean
 }
 
 export async function getPoolAutoInspectConfig(): Promise<PoolAutoInspectStatus> {
