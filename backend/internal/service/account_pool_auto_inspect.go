@@ -31,9 +31,14 @@ const (
 	accountPoolAutoInspectCheckedAtExtra = "pool_auto_inspect_checked_at"
 	accountPoolIQFirstImportError        = "pool auto inspect: first import answered incorrectly"
 
-	AccountPoolIQResultCorrect    = "correct"
-	AccountPoolIQResultIncorrect  = "incorrect"
+	AccountPoolIQResultCorrect   = "correct"
+	AccountPoolIQResultIncorrect = "incorrect"
 	AccountPoolIQResultUntestable = "untestable"
+
+	accountPoolAutoInspectLogLimit = 100
+
+	AccountPoolIQLogMoved    = "moved"
+	AccountPoolIQLogDisabled = "disabled"
 )
 
 // AccountPoolAutoInspectConfig is the admin IQ-group strategy.
@@ -43,15 +48,15 @@ const (
 type AccountPoolAutoInspectConfig struct {
 	Enabled bool `json:"enabled"`
 
-	IntervalMinutes  int    `json:"interval_minutes"`
-	JitterSeconds    int    `json:"jitter_seconds"`
-	Model            string `json:"model"`
-	Question         string `json:"question"`
-	Answer           string `json:"answer"`
-	FuzzyMatch       bool   `json:"fuzzy_match"`
-	CorrectGroupID   int64  `json:"correct_group_id"`
-	IncorrectGroupID int64  `json:"incorrect_group_id"`
-	PauseMinutes     int    `json:"pause_minutes"`
+	IntervalMinutes int    `json:"interval_minutes"`
+	JitterSeconds   int    `json:"jitter_seconds"`
+	Model           string `json:"model"`
+	Question        string `json:"question"`
+	Answer          string `json:"answer"`
+	FuzzyMatch      bool   `json:"fuzzy_match"`
+	CorrectGroupID   int64 `json:"correct_group_id"`
+	IncorrectGroupID int64 `json:"incorrect_group_id"`
+	PauseMinutes     int   `json:"pause_minutes"`
 	// DisableFirstImportOnIncorrect marks a first-import account error and
 	// unschedulable when its first completed quiz is wrong.
 	DisableFirstImportOnIncorrect bool `json:"disable_first_import_on_incorrect"`
@@ -62,6 +67,24 @@ type AccountPoolAutoInspectStatus struct {
 	LastRunAt  *time.Time `json:"last_run_at,omitempty"`
 	LastResult string     `json:"last_result,omitempty"`
 	LastError  string     `json:"last_error,omitempty"`
+}
+
+// AccountPoolAutoInspectLogEntry is one visible change: a group switch or a
+// first-import disable. Newest entries are stored first.
+type AccountPoolAutoInspectLogEntry struct {
+	At             time.Time `json:"at"`
+	AccountID      int64     `json:"account_id"`
+	AccountName    string    `json:"account_name"`
+	Action         string    `json:"action"`
+	FromGroupID    int64     `json:"from_group_id,omitempty"`
+	FromGroupName  string    `json:"from_group_name,omitempty"`
+	ToGroupID      int64     `json:"to_group_id,omitempty"`
+	ToGroupName    string    `json:"to_group_name,omitempty"`
+	Result         string    `json:"result,omitempty"`
+}
+
+type accountPoolAutoInspectLogFile struct {
+	Entries []AccountPoolAutoInspectLogEntry `json:"entries"`
 }
 
 // DefaultAccountPoolAutoInspectConfig is the admin form default.
@@ -309,6 +332,62 @@ func accountPoolAutoInspectReady(cfg *AccountPoolAutoInspectConfig) bool {
 		return false
 	}
 	return cfg.CorrectGroupID > 0 && cfg.IncorrectGroupID > 0 && cfg.CorrectGroupID != cfg.IncorrectGroupID
+}
+
+func accountPoolIQGroupName(groups map[int64]Group, id int64) string {
+	if groups == nil || id <= 0 {
+		return ""
+	}
+	return strings.TrimSpace(groups[id].Name)
+}
+
+// accountPoolIQSourceGroup is the IQ group the account is leaving.
+// An account on neither IQ group has no source name.
+func accountPoolIQSourceGroup(current []int64, correctGroupID, incorrectGroupID, target int64) int64 {
+	other := incorrectGroupID
+	if target == incorrectGroupID {
+		other = correctGroupID
+	}
+	for _, id := range current {
+		if id == other && other > 0 && other != target {
+			return other
+		}
+	}
+	return 0
+}
+
+func trimAccountPoolIQLogName(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) <= 120 {
+		return name
+	}
+	return name[:120]
+}
+
+func parseAccountPoolAutoInspectLog(raw string) []AccountPoolAutoInspectLogEntry {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var file accountPoolAutoInspectLogFile
+	if err := json.Unmarshal([]byte(raw), &file); err != nil {
+		return nil
+	}
+	if len(file.Entries) > accountPoolAutoInspectLogLimit {
+		return file.Entries[:accountPoolAutoInspectLogLimit]
+	}
+	return file.Entries
+}
+
+func marshalAccountPoolAutoInspectLog(entries []AccountPoolAutoInspectLogEntry) (string, error) {
+	if len(entries) > accountPoolAutoInspectLogLimit {
+		entries = entries[:accountPoolAutoInspectLogLimit]
+	}
+	raw, err := json.Marshal(accountPoolAutoInspectLogFile{Entries: entries})
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func groupAcceptsAccountPlatform(groupPlatform, accountPlatform string) bool {

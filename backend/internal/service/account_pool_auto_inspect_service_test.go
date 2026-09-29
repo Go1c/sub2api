@@ -103,18 +103,21 @@ func (s *poolInspectAccountStub) SetTempUnschedulable(_ context.Context, id int6
 }
 
 type poolInspectSettingsStub struct {
-	raw string
+	values map[string]string
 }
 
-func (s *poolInspectSettingsStub) GetValue(context.Context, string) (string, error) {
-	if s.raw == "" {
+func (s *poolInspectSettingsStub) GetValue(_ context.Context, key string) (string, error) {
+	if s.values == nil || s.values[key] == "" {
 		return "", ErrSettingNotFound
 	}
-	return s.raw, nil
+	return s.values[key], nil
 }
 
-func (s *poolInspectSettingsStub) Set(_ context.Context, _ string, value string) error {
-	s.raw = value
+func (s *poolInspectSettingsStub) Set(_ context.Context, key, value string) error {
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	s.values[key] = value
 	return nil
 }
 
@@ -198,8 +201,8 @@ func TestAccountPoolAutoInspectMovesCorrectAnswerAndPauses(t *testing.T) {
 		&poolInspectSettingsStub{},
 		accounts,
 		&poolInspectGroupStub{groups: map[int64]Group{
-			3: {ID: 3, Platform: PlatformOpenAI},
-			9: {ID: 9, Platform: PlatformOpenAI},
+			3: {ID: 3, Name: "答对组", Platform: PlatformOpenAI},
+			9: {ID: 9, Name: "答错组", Platform: PlatformOpenAI},
 		}},
 		quiz,
 		&poolInspectLockStub{},
@@ -214,6 +217,14 @@ func TestAccountPoolAutoInspectMovesCorrectAnswerAndPauses(t *testing.T) {
 	require.Equal(t, []int64{1, 3}, accounts.bound[12])
 	require.WithinDuration(t, time.Now().Add(time.Minute), accounts.paused[12], 5*time.Second)
 	require.Equal(t, 1, quiz.calls)
+	log := svc.ListLog(context.Background())
+	require.Len(t, log, 1)
+	require.Equal(t, "codex-1", log[0].AccountName)
+	require.Equal(t, int64(9), log[0].FromGroupID)
+	require.Equal(t, "答错组", log[0].FromGroupName)
+	require.Equal(t, int64(3), log[0].ToGroupID)
+	require.Equal(t, "答对组", log[0].ToGroupName)
+	require.Equal(t, AccountPoolIQResultCorrect, log[0].Result)
 }
 
 func TestAccountPoolAutoInspectMovesIncorrectAnswer(t *testing.T) {
@@ -225,8 +236,8 @@ func TestAccountPoolAutoInspectMovesIncorrectAnswer(t *testing.T) {
 		&poolInspectSettingsStub{},
 		accounts,
 		&poolInspectGroupStub{groups: map[int64]Group{
-			3: {ID: 3, Platform: PlatformOpenAI},
-			9: {ID: 9, Platform: PlatformOpenAI},
+			3: {ID: 3, Name: "答对组", Platform: PlatformOpenAI},
+			9: {ID: 9, Name: "答错组", Platform: PlatformOpenAI},
 		}},
 		&poolInspectQuizStub{text: "不知道"},
 		nil,
@@ -238,6 +249,15 @@ func TestAccountPoolAutoInspectMovesIncorrectAnswer(t *testing.T) {
 	require.Contains(t, status.LastResult, "incorrect=1")
 	require.Equal(t, []int64{9}, accounts.bound[13])
 	require.NotZero(t, accounts.paused[13])
+	log := svc.ListLog(context.Background())
+	require.Len(t, log, 1)
+	require.Equal(t, AccountPoolIQLogMoved, log[0].Action)
+	require.Equal(t, int64(13), log[0].AccountID)
+	require.Equal(t, "codex-2", log[0].AccountName)
+	require.Equal(t, int64(3), log[0].FromGroupID)
+	require.Equal(t, "答对组", log[0].FromGroupName)
+	require.Equal(t, int64(9), log[0].ToGroupID)
+	require.Equal(t, "答错组", log[0].ToGroupName)
 }
 
 func TestAccountPoolAutoInspectUntestableDoesNotMove(t *testing.T) {
@@ -294,6 +314,11 @@ func TestAccountPoolAutoInspectDisablesFirstImportOnIncorrect(t *testing.T) {
 	require.False(t, accounts.accounts[0].Schedulable)
 	require.Empty(t, accounts.bound)
 	require.NotEmpty(t, accounts.accounts[0].GetExtraString(accountPoolAutoInspectCheckedAtExtra))
+	log := svc.ListLog(context.Background())
+	require.Len(t, log, 1)
+	require.Equal(t, AccountPoolIQLogDisabled, log[0].Action)
+	require.Equal(t, "fresh", log[0].AccountName)
+	require.Zero(t, log[0].ToGroupID)
 
 	status = svc.RunOnce(context.Background(), true)
 	require.Contains(t, status.LastResult, "asked=0")

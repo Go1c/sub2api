@@ -68,6 +68,29 @@ func TestValidateAccountPoolAutoInspectConfigCapsJitter(t *testing.T) {
 	require.Equal(t, 300, accountPoolAutoInspectMaxJitterSeconds(10))
 }
 
+func TestAccountPoolAutoInspectLogKeepsNewestHundred(t *testing.T) {
+	entries := make([]AccountPoolAutoInspectLogEntry, 0, 101)
+	for i := 0; i < 101; i++ {
+		entries = append(entries, AccountPoolAutoInspectLogEntry{
+			AccountID:   int64(i + 1),
+			AccountName: "a",
+			Action:      AccountPoolIQLogMoved,
+			ToGroupID:   9,
+		})
+	}
+	raw, err := marshalAccountPoolAutoInspectLog(entries)
+	require.NoError(t, err)
+	parsed := parseAccountPoolAutoInspectLog(raw)
+	require.Len(t, parsed, 100)
+	require.Equal(t, int64(1), parsed[0].AccountID)
+	require.Equal(t, int64(100), parsed[99].AccountID)
+}
+
+func TestAccountPoolIQSourceGroup(t *testing.T) {
+	require.Equal(t, int64(9), accountPoolIQSourceGroup([]int64{1, 9}, 3, 9, 3))
+	require.Equal(t, int64(0), accountPoolIQSourceGroup([]int64{1}, 3, 9, 3))
+}
+
 func TestParseAccountPoolAutoInspectConfigIgnoresLegacyHealthFields(t *testing.T) {
 	parsed := parseAccountPoolAutoInspectConfig(`{"enabled":true,"interval_minutes":10,"success_rate_threshold":50,"add_group_ids":[7],"remove_models":["gpt-6-astra"]}`)
 	require.True(t, parsed.Enabled)

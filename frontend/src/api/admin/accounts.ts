@@ -1090,6 +1090,18 @@ export interface PoolAutoInspectStatus extends PoolAutoInspectConfig {
   last_error?: string
 }
 
+export interface PoolAutoInspectLogEntry {
+  at: string
+  account_id: number
+  account_name: string
+  action: 'moved' | 'disabled' | string
+  from_group_id?: number
+  from_group_name?: string
+  to_group_id?: number
+  to_group_name?: string
+  result?: string
+}
+
 export async function getPoolAutoInspectConfig(): Promise<PoolAutoInspectStatus> {
   const { data } = await apiClient.get<PoolAutoInspectStatus>('/admin/accounts/pool-auto-inspect/config')
   return data
@@ -1098,6 +1110,13 @@ export async function getPoolAutoInspectConfig(): Promise<PoolAutoInspectStatus>
 export async function updatePoolAutoInspectConfig(config: PoolAutoInspectConfig): Promise<PoolAutoInspectConfig> {
   const { data } = await apiClient.put<PoolAutoInspectConfig>('/admin/accounts/pool-auto-inspect/config', config)
   return data
+}
+
+export async function getPoolAutoInspectLog(): Promise<PoolAutoInspectLogEntry[]> {
+  const { data } = await apiClient.get<{ entries: PoolAutoInspectLogEntry[] | null }>(
+    '/admin/accounts/pool-auto-inspect/log'
+  )
+  return data.entries || []
 }
 
 export async function runPoolAutoInspect(): Promise<PoolAutoInspectStatus> {
@@ -1211,6 +1230,7 @@ export const accountsAPI = {
   probeUpstreamBillingBatch,
   getPoolAutoInspectConfig,
   updatePoolAutoInspectConfig,
+  getPoolAutoInspectLog,
   runPoolAutoInspect,
   getOllamaCloudUsageSettings,
   updateOllamaCloudUsageSettings,

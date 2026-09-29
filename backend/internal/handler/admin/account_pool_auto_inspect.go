@@ -45,6 +45,16 @@ func (h *AccountHandler) UpdatePoolAutoInspectConfig(c *gin.Context) {
 	response.Success(c, updated)
 }
 
+// GetPoolAutoInspectLog returns recent group changes, newest first.
+// GET /api/v1/admin/accounts/pool-auto-inspect/log
+func (h *AccountHandler) GetPoolAutoInspectLog(c *gin.Context) {
+	if h.poolAutoInspect == nil {
+		response.Success(c, gin.H{"entries": []service.AccountPoolAutoInspectLogEntry{}})
+		return
+	}
+	response.Success(c, gin.H{"entries": h.poolAutoInspect.ListLog(c.Request.Context())})
+}
+
 // RunPoolAutoInspect runs one pool auto-inspect cycle immediately.
 // POST /api/v1/admin/accounts/pool-auto-inspect/run
 func (h *AccountHandler) RunPoolAutoInspect(c *gin.Context) {

@@ -141,6 +141,24 @@
         class="whitespace-pre-wrap rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
         data-testid="pool-auto-inspect-status"
       >{{ statusText }}</pre>
+
+      <div>
+        <div class="mb-2 font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.logTitle') }}</div>
+        <p v-if="logEntries.length === 0" class="text-xs text-gray-500" data-testid="pool-auto-inspect-log-empty">
+          {{ t('admin.accounts.poolAutoInspect.logEmpty') }}
+        </p>
+        <ul
+          v-else
+          class="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
+          data-testid="pool-auto-inspect-log"
+        >
+          <li v-for="(entry, index) in logEntries" :key="`${entry.at}-${entry.account_id}-${index}`">
+            <span class="text-gray-400">{{ formatLogTime(entry.at) }}</span>
+            {{ ' ' }}
+            <span>{{ formatLogEntry(entry) }}</span>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <template #footer>
@@ -176,7 +194,7 @@ import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import type { AdminGroup } from '@/types'
-import type { PoolAutoInspectConfig, PoolAutoInspectStatus } from '@/api/admin/accounts'
+import type { PoolAutoInspectConfig, PoolAutoInspectLogEntry, PoolAutoInspectStatus } from '@/api/admin/accounts'
 
 const props = defineProps<{
   show: boolean
@@ -194,6 +212,7 @@ const loading = ref(false)
 const saving = ref(false)
 const running = ref(false)
 const lastStatus = ref<PoolAutoInspectStatus | null>(null)
+const logEntries = ref<PoolAutoInspectLogEntry[]>([])
 
 const emptyForm = (): PoolAutoInspectConfig => ({
   enabled: false,
@@ -255,12 +274,46 @@ function applyConfig(cfg: PoolAutoInspectConfig | PoolAutoInspectStatus) {
   form.disable_first_import_on_incorrect = !!cfg.disable_first_import_on_incorrect
 }
 
+function groupLabel(name: string | undefined, id: number | undefined) {
+  const trimmed = (name || '').trim()
+  if (trimmed) return trimmed
+  if (id && id > 0) return `#${id}`
+  return t('admin.accounts.poolAutoInspect.logUnknownGroup')
+}
+
+function formatLogTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
+}
+
+function formatLogEntry(entry: PoolAutoInspectLogEntry) {
+  const name = entry.account_name || `#${entry.account_id}`
+  if (entry.action === 'disabled') {
+    return t('admin.accounts.poolAutoInspect.logDisabled', { name })
+  }
+  return t('admin.accounts.poolAutoInspect.logMoved', {
+    name,
+    from: groupLabel(entry.from_group_name, entry.from_group_id),
+    to: groupLabel(entry.to_group_name, entry.to_group_id)
+  })
+}
+
+async function loadLog() {
+  try {
+    logEntries.value = await adminAPI.accounts.getPoolAutoInspectLog()
+  } catch {
+    logEntries.value = []
+  }
+}
+
 async function load() {
   loading.value = true
   try {
     const cfg = await adminAPI.accounts.getPoolAutoInspectConfig()
     lastStatus.value = cfg
     applyConfig(cfg)
+    await loadLog()
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('admin.accounts.poolAutoInspect.loadFailed')))
   } finally {
@@ -289,6 +342,7 @@ async function runNow() {
     applyConfig(updated)
     const status = await adminAPI.accounts.runPoolAutoInspect()
     lastStatus.value = status
+    await loadLog()
     appStore.showSuccess(t('admin.accounts.poolAutoInspect.runDone'))
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('admin.accounts.poolAutoInspect.runFailed')))

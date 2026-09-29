@@ -61,6 +61,7 @@ type AccountPoolAutoInspectService struct {
 	lastRunAt  time.Time
 	lastResult string
 	lastError  string
+	logMu      sync.Mutex
 
 	dueMu sync.Mutex
 	dueAt map[int64]time.Time
@@ -149,6 +150,10 @@ func (s *AccountPoolAutoInspectService) GetConfig(ctx context.Context) (*Account
 		return nil, err
 	}
 	return s.statusFrom(cfg), nil
+}
+
+func (s *AccountPoolAutoInspectService) ListLog(ctx context.Context) []AccountPoolAutoInspectLogEntry {
+	return s.loadLog(ctx)
 }
 
 func (s *AccountPoolAutoInspectService) statusFrom(cfg *AccountPoolAutoInspectConfig) *AccountPoolAutoInspectStatus {
@@ -274,6 +279,7 @@ func (s *AccountPoolAutoInspectService) RunOnce(ctx context.Context, force bool)
 	groups := s.loadIQGroups(runCtx, cfg)
 	now := time.Now().UTC()
 	var asked, correct, incorrect, untestable, moved, disabled int
+	var changes []AccountPoolAutoInspectLogEntry
 	for i := range accounts {
 		if asked >= accountPoolAutoInspectMaxPerRun {
 			break
@@ -299,14 +305,22 @@ func (s *AccountPoolAutoInspectService) RunOnce(ctx context.Context, force bool)
 		case result == AccountPoolIQResultIncorrect && cfg.DisableFirstImportOnIncorrect && accountPoolIQFirstImport(&account):
 			if s.disableFirstImport(runCtx, &account, now) {
 				disabled++
+				changes = append(changes, AccountPoolAutoInspectLogEntry{
+					At:          now,
+					AccountID:   account.ID,
+					AccountName: trimAccountPoolIQLogName(account.Name),
+					Action:      AccountPoolIQLogDisabled,
+					Result:      result,
+				})
 			}
 		case result == AccountPoolIQResultCorrect || result == AccountPoolIQResultIncorrect:
 			target := cfg.IncorrectGroupID
 			if result == AccountPoolIQResultCorrect {
 				target = cfg.CorrectGroupID
 			}
-			if s.moveAccountGroup(runCtx, &account, cfg, target, now) {
+			if entry, ok := s.moveAccountGroup(runCtx, &account, cfg, groups, target, result, now); ok {
 				moved++
+				changes = append(changes, entry)
 			}
 		}
 		if result == AccountPoolIQResultCorrect || result == AccountPoolIQResultIncorrect {
@@ -317,6 +331,9 @@ func (s *AccountPoolAutoInspectService) RunOnce(ctx context.Context, force bool)
 		}
 	}
 
+	if len(changes) > 0 {
+		s.appendLog(runCtx, changes)
+	}
 	result := fmt.Sprintf("asked=%d correct=%d incorrect=%d untestable=%d moved=%d disabled=%d", asked, correct, incorrect, untestable, moved, disabled)
 	s.recordRun(startedAt, result, nil)
 	return s.statusFrom(cfg)
@@ -336,21 +353,63 @@ func (s *AccountPoolAutoInspectService) askAndMove(ctx context.Context, account 
 	return AccountPoolIQResultIncorrect
 }
 
-func (s *AccountPoolAutoInspectService) moveAccountGroup(ctx context.Context, account *Account, cfg *AccountPoolAutoInspectConfig, target int64, now time.Time) bool {
+func (s *AccountPoolAutoInspectService) moveAccountGroup(ctx context.Context, account *Account, cfg *AccountPoolAutoInspectConfig, groups map[int64]Group, target int64, result string, now time.Time) (AccountPoolAutoInspectLogEntry, bool) {
 	next, changed := planAccountPoolIQGroups(account.GroupIDs, cfg.CorrectGroupID, cfg.IncorrectGroupID, target)
 	if !changed {
-		return false
+		return AccountPoolAutoInspectLogEntry{}, false
 	}
+	fromID := accountPoolIQSourceGroup(account.GroupIDs, cfg.CorrectGroupID, cfg.IncorrectGroupID, target)
 	if err := s.accounts.BindGroups(ctx, account.ID, next); err != nil {
 		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] bind account=%d failed: %v", account.ID, err)
-		return false
+		return AccountPoolAutoInspectLogEntry{}, false
 	}
 	account.GroupIDs = next
 	until := now.Add(time.Duration(cfg.PauseMinutes) * time.Minute)
 	if err := s.accounts.SetTempUnschedulable(ctx, account.ID, until, accountPoolIQPauseReason); err != nil {
 		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] pause account=%d failed: %v", account.ID, err)
 	}
-	return true
+	return AccountPoolAutoInspectLogEntry{
+		At:            now,
+		AccountID:     account.ID,
+		AccountName:   trimAccountPoolIQLogName(account.Name),
+		Action:        AccountPoolIQLogMoved,
+		FromGroupID:   fromID,
+		FromGroupName: accountPoolIQGroupName(groups, fromID),
+		ToGroupID:     target,
+		ToGroupName:   accountPoolIQGroupName(groups, target),
+		Result:        result,
+	}, true
+}
+
+func (s *AccountPoolAutoInspectService) loadLog(ctx context.Context) []AccountPoolAutoInspectLogEntry {
+	if s == nil || s.settings == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	raw, err := s.settings.GetValue(ctx, SettingKeyAccountPoolAutoInspectLog)
+	if err != nil {
+		return nil
+	}
+	return parseAccountPoolAutoInspectLog(raw)
+}
+
+func (s *AccountPoolAutoInspectService) appendLog(ctx context.Context, fresh []AccountPoolAutoInspectLogEntry) {
+	if s == nil || s.settings == nil || len(fresh) == 0 {
+		return
+	}
+	s.logMu.Lock()
+	defer s.logMu.Unlock()
+	entries := append(append([]AccountPoolAutoInspectLogEntry{}, fresh...), s.loadLog(ctx)...)
+	raw, err := marshalAccountPoolAutoInspectLog(entries)
+	if err != nil {
+		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] marshal log failed: %v", err)
+		return
+	}
+	if err := s.settings.Set(ctx, SettingKeyAccountPoolAutoInspectLog, raw); err != nil {
+		logger.LegacyPrintf("service.pool_auto_inspect", "[PoolAutoInspect] save log failed: %v", err)
+	}
 }
 
 // accountPoolIQFirstImport is an imported account that has not completed a quiz.

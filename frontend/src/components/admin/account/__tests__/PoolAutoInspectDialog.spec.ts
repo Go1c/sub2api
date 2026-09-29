@@ -3,9 +3,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { defineComponent } from 'vue'
 import PoolAutoInspectDialog from '../PoolAutoInspectDialog.vue'
 
-const { getPoolAutoInspectConfig, updatePoolAutoInspectConfig, runPoolAutoInspect, showSuccess, showError } = vi.hoisted(() => ({
+const { getPoolAutoInspectConfig, updatePoolAutoInspectConfig, getPoolAutoInspectLog, runPoolAutoInspect, showSuccess, showError } = vi.hoisted(() => ({
   getPoolAutoInspectConfig: vi.fn(),
   updatePoolAutoInspectConfig: vi.fn(),
+  getPoolAutoInspectLog: vi.fn(),
   runPoolAutoInspect: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn()
@@ -16,6 +17,7 @@ vi.mock('@/api/admin', () => ({
     accounts: {
       getPoolAutoInspectConfig,
       updatePoolAutoInspectConfig,
+      getPoolAutoInspectLog,
       runPoolAutoInspect
     }
   }
@@ -80,6 +82,7 @@ describe('PoolAutoInspectDialog', () => {
     updatePoolAutoInspectConfig.mockReset().mockResolvedValue(
       storedConfig({ enabled: true, correct_group_id: 1, incorrect_group_id: 7 })
     )
+    getPoolAutoInspectLog.mockReset().mockResolvedValue([])
     runPoolAutoInspect.mockReset()
     showSuccess.mockReset()
     showError.mockReset()
@@ -177,5 +180,35 @@ describe('PoolAutoInspectDialog', () => {
     expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(
       expect.objectContaining({ disable_first_import_on_incorrect: true })
     )
+  })
+
+  it('shows each account group change', async () => {
+    getPoolAutoInspectLog.mockResolvedValue([
+      {
+        at: '2026-09-29T02:00:00Z',
+        account_id: 12,
+        account_name: 'A账号',
+        action: 'moved',
+        from_group_name: 'Codex',
+        to_group_name: '降智分组'
+      },
+      {
+        at: '2026-09-29T02:01:00Z',
+        account_id: 13,
+        account_name: 'B账号',
+        action: 'moved',
+        from_group_name: '降智分组',
+        to_group_name: 'Codex'
+      }
+    ])
+
+    const wrapper = mountDialog(true)
+    await flushPromises()
+
+    const log = wrapper.get('[data-testid="pool-auto-inspect-log"]').text()
+    expect(log).toContain('A账号')
+    expect(log).toContain('Codex')
+    expect(log).toContain('降智分组')
+    expect(log).toContain('B账号')
   })
 })

@@ -368,6 +368,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/import-proxy-default", h.Admin.Account.GetImportProxyDefault)
 		accounts.GET("", h.Admin.Account.List)
 		accounts.GET("/pool-auto-inspect/config", h.Admin.Account.GetPoolAutoInspectConfig)
+		accounts.GET("/pool-auto-inspect/log", h.Admin.Account.GetPoolAutoInspectLog)
 		accounts.PUT("/pool-auto-inspect/config", h.Admin.Account.UpdatePoolAutoInspectConfig)
 		accounts.POST("/pool-auto-inspect/run", h.Admin.Account.RunPoolAutoInspect)
 		accounts.GET("/upstream-billing-rates", h.Admin.Account.GetUpstreamBillingRates)
