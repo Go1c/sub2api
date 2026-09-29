@@ -31,8 +31,8 @@ const (
 	accountPoolAutoInspectCheckedAtExtra = "pool_auto_inspect_checked_at"
 	accountPoolIQFirstImportError        = "pool auto inspect: first import answered incorrectly"
 
-	AccountPoolIQResultCorrect   = "correct"
-	AccountPoolIQResultIncorrect = "incorrect"
+	AccountPoolIQResultCorrect    = "correct"
+	AccountPoolIQResultIncorrect  = "incorrect"
 	AccountPoolIQResultUntestable = "untestable"
 )
 
@@ -43,15 +43,15 @@ const (
 type AccountPoolAutoInspectConfig struct {
 	Enabled bool `json:"enabled"`
 
-	IntervalMinutes int    `json:"interval_minutes"`
-	JitterSeconds   int    `json:"jitter_seconds"`
-	Model           string `json:"model"`
-	Question        string `json:"question"`
-	Answer          string `json:"answer"`
-	FuzzyMatch      bool   `json:"fuzzy_match"`
-	CorrectGroupID   int64 `json:"correct_group_id"`
-	IncorrectGroupID int64 `json:"incorrect_group_id"`
-	PauseMinutes     int   `json:"pause_minutes"`
+	IntervalMinutes  int    `json:"interval_minutes"`
+	JitterSeconds    int    `json:"jitter_seconds"`
+	Model            string `json:"model"`
+	Question         string `json:"question"`
+	Answer           string `json:"answer"`
+	FuzzyMatch       bool   `json:"fuzzy_match"`
+	CorrectGroupID   int64  `json:"correct_group_id"`
+	IncorrectGroupID int64  `json:"incorrect_group_id"`
+	PauseMinutes     int    `json:"pause_minutes"`
 	// DisableFirstImportOnIncorrect marks a first-import account error and
 	// unschedulable when its first completed quiz is wrong.
 	DisableFirstImportOnIncorrect bool `json:"disable_first_import_on_incorrect"`
@@ -251,34 +251,13 @@ func planAccountPoolIQGroups(current []int64, correctGroupID, incorrectGroupID, 
 	if _, ok := seen[targetGroupID]; !ok {
 		next = append(next, targetGroupID)
 	}
-	changed = !sameInt64Set(current, next)
+	changed = !samePositiveInt64Set(current, next)
 	return next, changed
 }
 
-func sameInt64Set(a, b []int64) bool {
-	if len(a) != len(b) {
-		left := map[int64]int{}
-		for _, id := range a {
-			if id > 0 {
-				left[id]++
-			}
-		}
-		right := map[int64]int{}
-		for _, id := range b {
-			if id > 0 {
-				right[id]++
-			}
-		}
-		if len(left) != len(right) {
-			return false
-		}
-		for id, n := range left {
-			if right[id] != n {
-				return false
-			}
-		}
-		return true
-	}
+// samePositiveInt64Set ignores non-positive ids. It is separate from
+// sameInt64Set in admin_user.go, which compares every value including zeros.
+func samePositiveInt64Set(a, b []int64) bool {
 	left := map[int64]struct{}{}
 	for _, id := range a {
 		if id > 0 {
