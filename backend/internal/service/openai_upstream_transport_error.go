@@ -91,25 +91,33 @@ func classifyUpstreamTransportError(err error) upstreamTransportErrorClass {
 	return upstreamTransportErrorClass{}
 }
 
+// isClientCanceledTransportError reports whether a transport-level failure was
+// caused by the client disconnecting: the request context itself is canceled
+// and the round-trip aborted with context.Canceled. Such a failure says nothing
+// about the upstream, so it is not recorded as an Ops upstream error event.
+func isClientCanceledTransportError(ctx context.Context, err error) bool {
+	return errors.Is(err, context.Canceled) && ctx != nil && errors.Is(ctx.Err(), context.Canceled)
+}
+
 // handleOpenAIUpstreamTransportError handles a transport-level upstream failure
 // (Do/DoWithTLS returned a non-HTTP error: proxy/DNS/TCP/TLS). It:
-//  1. records the failure in Ops error logs (status 0, kind=request_error);
-//  2. for IP-group accounts, skips the failed member and retries the same
-//     account on another live IP (same two-pass budget as HTTP 429 rotate).
-//     A dead Socket IP must not unschedule the whole account.
-//  3. for single-proxy durable faults (expired/rejected proxy creds, dead
-//     proxy, DNS/routing) temporarily unschedules the account (DB + in-memory)
-//     and logs a stable warn event that alert rules can key on;
-//  4. returns an error that is *UpstreamFailoverError (so the handler fails over
-//     to a healthy account, or retries the same IP-group account) for all
-//     non-canceled errors, or a plain error for context.Canceled (client gone —
-//     no failover, no eviction).
+//  1. records the failure in Ops error logs (status 0, kind=request_error),
+//     except when the client disconnected (see isClientCanceledTransportError);
+//  2. for durable faults (expired/rejected proxy creds, dead proxy, DNS/routing)
+//     temporarily unschedules the account (DB + in-memory) and logs a stable
+//     warn event that alert rules can key on;
+//  3. returns an error that is *UpstreamFailoverError (so the handler fails over
+//     to a healthy account) for all non-canceled errors, or a plain error for
+//     context.Canceled (client gone — no failover, no eviction).
 //
 // It deliberately does NOT write to the response: the handler owns the response
 // (failover, or a protocol-correct error once failover is exhausted).
 //
 // passthrough tags the Ops error event for the OpenAI passthrough forward path.
 func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Context, c *gin.Context, account *Account, err error, passthrough bool) error {
+	if isClientCanceledTransportError(ctx, err) {
+		return err
+	}
 	safeErr := sanitizeUpstreamErrorMessage(err.Error())
 	setOpsUpstreamError(c, 0, safeErr, "")
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -130,9 +138,10 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 		return err
 	}
 
-	// Transport attempt reached the network path; count as Ollama Cloud activity.
+	// Transport attempt reached the network path; count as Ollama Cloud / OpenCode Go activity.
 	if s != nil {
 		scheduleOllamaCloudUsageActivity(s.deferredService, account)
+		scheduleOpenCodeGoUsageActivity(s.deferredService, account)
 	}
 
 	// 插件已把请求交给上游时，自动切换账号可能造成重复扣费或重复执行。
