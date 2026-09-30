@@ -4,6 +4,7 @@ package service
 
 import (
 	"math"
+	"os"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -686,6 +687,26 @@ func TestGetModelPricing_Grok45OfficialFallback(t *testing.T) {
 	}
 }
 
+func TestGetModelPricing_Grok47OfficialFallback(t *testing.T) {
+	svc := newTestBillingService()
+
+	for _, model := range []string{"grok-4.7", "grok-4.7-latest"} {
+		model := model
+		t.Run(model, func(t *testing.T) {
+			pricing, err := svc.GetModelPricing(model)
+			require.NoError(t, err)
+			require.InDelta(t, 2e-6, pricing.InputPricePerToken, 1e-12)
+			require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12)
+			require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerToken, 1e-12)
+			require.Equal(t, 200000, pricing.LongContextInputThreshold)
+			require.True(t, pricing.LongContextThresholdInclusive)
+			require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
+			require.InDelta(t, 2.0, pricing.LongContextOutputMultiplier, 1e-12)
+			require.False(t, pricing.SupportsCacheBreakdown)
+		})
+	}
+}
+
 func TestGetModelPricing_Grok46OfficialFallback(t *testing.T) {
 	svc := newTestBillingService()
 
@@ -1257,21 +1278,28 @@ func TestGetModelPricingWithChannel_UnknownModelReturnsError(t *testing.T) {
 	require.Contains(t, err.Error(), "pricing not found")
 }
 
-func TestGetModelPricingWithChannel_UnspecifiedImageOutputFallsBackToTextOutput(t *testing.T) {
-	svc := newTestBillingService()
+func TestGetModelPricingWithChannel_NilImagePricesInheritCatalog(t *testing.T) {
+	svc := NewBillingService(&config.Config{}, &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gpt-image-2": {
+			Mode:                    "image_generation",
+			InputCostPerToken:       5e-6,
+			OutputCostPerToken:      10e-6,
+			InputCostPerImageToken:  8e-6,
+			OutputCostPerImageToken: 30e-6,
+		},
+	}})
 
-	// Channel overrides only text output price; image output must not be forced to $0.
+	// Channel overrides only text prices; image prices must stay on the catalog.
 	chPricing := &ChannelModelPricing{
-		OutputPrice: testPtrFloat64(20e-6),
+		InputPrice:  testPtrFloat64(6e-6),
+		OutputPrice: testPtrFloat64(12e-6),
 	}
-	pricing, err := svc.GetModelPricingWithChannel("claude-sonnet-4", chPricing)
+	pricing, err := svc.GetModelPricingWithChannel("gpt-image-2", chPricing)
 	require.NoError(t, err)
 	require.False(t, pricing.ImageOutputPriceExplicit, "unset channel image output should not be marked explicit")
-
-	// With no explicit image output rate, computeTokenBreakdown falls back to outputPrice.
-	bd := svc.computeTokenBreakdown(pricing, UsageTokens{OutputTokens: 10, ImageOutputTokens: 10}, 1.0, "", false)
-	require.InDelta(t, 0, bd.OutputCost, 1e-15, "all tokens classified as image output")
-	require.InDelta(t, 10*20e-6, bd.ImageOutputCost, 1e-15, "image output falls back to text output rate")
+	require.InDelta(t, 6e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 30e-6, pricing.ImageOutputPricePerToken, 1e-12)
+	require.InDelta(t, 8e-6, pricing.ImageInputPricePerToken, 1e-12)
 }
 
 func TestGetModelPricingWithChannel_ExplicitZeroImageOutputStaysZero(t *testing.T) {
@@ -1288,4 +1316,75 @@ func TestGetModelPricingWithChannel_ExplicitZeroImageOutputStaysZero(t *testing.
 
 	bd := svc.computeTokenBreakdown(pricing, UsageTokens{OutputTokens: 10, ImageOutputTokens: 10}, 1.0, "", false)
 	require.Zero(t, bd.ImageOutputCost, "explicit zero must not fall back")
+}
+
+func TestGetModelPricingWithChannel_ExplicitImagePricesOverrideCatalog(t *testing.T) {
+	svc := NewBillingService(&config.Config{}, &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gpt-image-2": {
+			Mode:                    "image_generation",
+			InputCostPerToken:       5e-6,
+			InputCostPerImageToken:  8e-6,
+			OutputCostPerImageToken: 30e-6,
+		},
+	}})
+
+	pricing, err := svc.GetModelPricingWithChannel("gpt-image-2", &ChannelModelPricing{
+		ImageInputPrice:  testPtrFloat64(9e-6),
+		ImageOutputPrice: testPtrFloat64(0),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0.0, pricing.ImageOutputPricePerToken)
+	require.True(t, pricing.ImageOutputPriceExplicit, "显式 0 仍表示图片输出免费")
+	require.InDelta(t, 9e-6, pricing.ImageInputPricePerToken, 1e-12)
+}
+
+func TestAstraUltrafastPricingUsesSixTimesStandard(t *testing.T) {
+	data, err := os.ReadFile("../../resources/model-pricing/model_prices_and_context_window.json")
+	require.NoError(t, err)
+	catalog := &PricingService{}
+	catalog.pricingData, err = catalog.parsePricingData(data)
+	require.NoError(t, err)
+	for _, svc := range []*BillingService{newTestBillingService(), NewBillingService(&config.Config{}, &PricingService{}), NewBillingService(&config.Config{}, catalog)} {
+		for _, model := range []string{"gpt-6-astra", "gpt-6", "openai/gpt-6-astra"} {
+			for _, n := range []int{271999, 272000, 272001} {
+				tokens := UsageTokens{InputTokens: n - 3000, CacheReadTokens: 2000, CacheCreationTokens: 1000, OutputTokens: 500}
+				cost, err := svc.CalculateCostWithServiceTier(model, tokens, 1, "ultrafast")
+				require.NoError(t, err)
+				im, om := 1.0, 1.0
+				if n > 272000 {
+					im, om = 2, 1.5
+				}
+				require.InDelta(t, float64(n-3000)*60e-6*im, cost.InputCost, 1e-10)
+				require.InDelta(t, 2000*6e-6*im, cost.CacheReadCost, 1e-10)
+				require.InDelta(t, 1000*75e-6*im, cost.CacheCreationCost, 1e-10)
+				require.InDelta(t, 500*300e-6*om, cost.OutputCost, 1e-10)
+			}
+		}
+	}
+	svc := newTestBillingService()
+	for _, custom := range []float64{0, 1e-6} {
+		fast := 3.0
+		p, err := svc.GetModelPricingWithChannel("gpt-6-astra", &ChannelModelPricing{InputPrice: &custom, OutputPrice: &custom, CacheWritePrice: &custom, CacheReadPrice: &custom, FastMultiplier: &fast})
+		require.NoError(t, err)
+		require.Equal(t, 6.0, configuredServiceTierMultiplier("ultrafast", p))
+		require.Equal(t, 3.0, configuredServiceTierMultiplier("priority", p))
+		cost := svc.computeTokenBreakdown(p, UsageTokens{InputTokens: 1000, OutputTokens: 1000, CacheReadTokens: 1000, CacheCreationTokens: 1000}, 1, "ultrafast", false)
+		require.InDelta(t, custom*24000, cost.TotalCost, 1e-10)
+	}
+	p, err := svc.GetModelPricing("gpt-6-sol")
+	require.NoError(t, err)
+	require.Equal(t, 2.0, configuredServiceTierMultiplier("ultrafast", p))
+}
+
+func TestGPT61SolExplicitZeroCacheWriteAcrossTiers(t *testing.T) {
+	pricing := &PricingService{}
+	var err error
+	pricing.pricingData, err = pricing.parsePricingData([]byte(`{"gpt-6.1-sol":{"litellm_provider":"openai","input_cost_per_token":0.000002,"output_cost_per_token":0.00001,"input_cost_per_token_flex":0.000001,"cache_creation_input_token_cost":0,"cache_creation_input_token_cost_priority":0.000005}}`))
+	require.NoError(t, err)
+	svc := NewBillingService(&config.Config{}, pricing)
+	for _, tier := range []string{"", "fast", "priority", "flex"} {
+		cost, err := svc.CalculateCostWithServiceTier("openai/gpt-6.1-sol-max", UsageTokens{CacheCreationTokens: 300000}, 1, tier)
+		require.NoError(t, err)
+		require.Zero(t, cost.CacheCreationCost)
+	}
 }

@@ -141,7 +141,7 @@ func normalizeObservedOpenAIServiceTier(raw string) string {
 	switch value := strings.ToLower(strings.TrimSpace(raw)); value {
 	case "priority", "fast":
 		return OpenAIFastTierPriority
-	case "default", "flex", "scale":
+	case "default", "flex", "scale", OpenAIFastTierUltrafast:
 		return value
 	default:
 		return ""
@@ -308,6 +308,8 @@ func canonicalGrokBuildRuntimeModel(model string) string {
 		return "grok-4.5-build"
 	case "grok-4.6", "grok-4.6-latest", "grok-4.6-build":
 		return "grok-4.6-build"
+	case "grok-4.7", "grok-4.7-latest", "grok-4.7-build":
+		return "grok-4.7-build"
 	default:
 		return ""
 	}

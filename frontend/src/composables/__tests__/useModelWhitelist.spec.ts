@@ -19,6 +19,7 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-5.6-terra')
     expect(models).toContain('gpt-6')
     expect(models).toContain('gpt-6-astra')
+    expect(models).toContain('gpt-6.1-sol')
     expect(models).toContain('gpt-6-sol')
     expect(models).toContain('gpt-6-luna')
   })
@@ -26,6 +27,7 @@ describe('useModelWhitelist', () => {
   it('openai 账号映射预设包含 Luna 直通和 Luna→Terra', () => {
     const presets = getPresetMappingsByPlatform('openai')
     expect(presets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'GPT-6.1 Sol', from: 'gpt-6.1-sol', to: 'gpt-6.1-sol' }),
       expect.objectContaining({ label: 'Luna', from: 'gpt-5.6-luna', to: 'gpt-5.6-luna' }),
       expect.objectContaining({ label: 'Luna→Terra', from: 'gpt-5.6-luna', to: 'gpt-5.6-terra' }),
       expect.objectContaining({ label: 'GPT-6', from: 'gpt-6', to: 'gpt-6' }),
@@ -53,6 +55,8 @@ describe('useModelWhitelist', () => {
   })
 
   it('Claude 模型列表包含 Opus 5.5', () => {
+    expect(getModelsByPlatform('claude')).toContain('claude-fable-5-1')
+    expect(getModelsByPlatform('antigravity')).toContain('claude-fable-5-1')
     expect(getModelsByPlatform('claude')).toContain('claude-opus-5-5')
     expect(getModelsByPlatform('antigravity')).not.toContain('claude-opus-5-5')
     expect(getModelsByPlatform('openai')).toContain('gpt-6-sol')

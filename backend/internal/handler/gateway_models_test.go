@@ -455,20 +455,20 @@ func TestGatewayModels_GPT6SolLunaDiscoveryRespectsGroupAndAccountRestrictions(t
 	}{
 		{
 			name:     "selected and ordered",
-			mapping:  map[string]any{"gpt-6-luna": "gpt-6-luna", "gpt-6-sol": "gpt-6-sol", "gpt-5.6-sol": "gpt-5.6-sol"},
-			selected: []string{"gpt-6-luna", "gpt-6-sol"},
-			want:     []string{"gpt-6-luna", "gpt-6-sol"},
+			mapping:  map[string]any{"gpt-6.1-sol": "gpt-6.1-sol", "gpt-6-luna": "gpt-6-luna", "gpt-6-sol": "gpt-6-sol", "gpt-5.6-sol": "gpt-5.6-sol"},
+			selected: []string{"gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol"},
+			want:     []string{"gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol"},
 		},
 		{
 			name:     "group excludes new models",
-			mapping:  map[string]any{"gpt-6-luna": "gpt-6-luna", "gpt-6-sol": "gpt-6-sol", "gpt-5.6-sol": "gpt-5.6-sol"},
+			mapping:  map[string]any{"gpt-6.1-sol": "gpt-6.1-sol", "gpt-6-luna": "gpt-6-luna", "gpt-6-sol": "gpt-6-sol", "gpt-5.6-sol": "gpt-5.6-sol"},
 			selected: []string{"gpt-5.6-sol"},
 			want:     []string{"gpt-5.6-sol"},
 		},
 		{
 			name:     "account restricts new models",
 			mapping:  map[string]any{"gpt-5.6-sol": "gpt-5.6-sol"},
-			selected: []string{"gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol"},
+			selected: []string{"gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol"},
 			want:     []string{"gpt-5.6-sol"},
 		},
 	} {
@@ -485,8 +485,8 @@ func TestGatewayModels_GPT6SolLunaDiscoveryRespectsGroupAndAccountRestrictions(t
 			c, _ := gin.CreateTestContext(rec)
 			c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
 			c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{Group: &service.Group{
-				ID:       groupID,
-				Platform: service.PlatformOpenAI,
+				ID:               groupID,
+				Platform:         service.PlatformOpenAI,
 				ModelsListConfig: service.GroupModelsListConfig{Enabled: true, Models: tc.selected},
 			}})
 			h.Models(c)

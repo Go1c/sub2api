@@ -13,6 +13,9 @@ import (
 // Chat Completions intermediary round-trip (e.g. thinking, cache_control,
 // structured system prompts).
 func AnthropicToResponses(req *AnthropicRequest) (*ResponsesRequest, error) {
+	if err := openai.ValidateGPT61SolReasoningEffort(req.Model, anthropicRequestedReasoningEffort(req)); err != nil {
+		return nil, err
+	}
 	input, err := convertAnthropicToResponsesInput(req.System, req.Messages)
 	if err != nil {
 		return nil, err
@@ -65,9 +68,17 @@ func AnthropicToResponses(req *AnthropicRequest) (*ResponsesRequest, error) {
 	if req.OutputConfig != nil && req.OutputConfig.Effort != "" {
 		effort = req.OutputConfig.Effort
 	}
-	out.Reasoning = &ResponsesReasoning{
-		Effort:  mapAnthropicEffortToResponses(effort),
-		Summary: "auto",
+	// GPT-6.1 Sol publishes max as its own effort. Other models still map max to xhigh.
+	if openai.IsGPT61SolModelSpelling(req.Model) && effort == "max" {
+		out.Reasoning = &ResponsesReasoning{
+			Effort:  "max",
+			Summary: "auto",
+		}
+	} else {
+		out.Reasoning = &ResponsesReasoning{
+			Effort:  mapAnthropicEffortToResponses(effort),
+			Summary: "auto",
+		}
 	}
 
 	// Convert tool_choice
@@ -402,6 +413,19 @@ func extractAnthropicTextFromBlocks(blocks []AnthropicContentBlock) string {
 	return strings.Join(parts, "\n\n")
 }
 
+// anthropicRequestedReasoningEffort is the effort the client asked for before
+// the bridge default. Disabled thinking is "none" so GPT-6.1 Sol can reject it;
+// an empty result means the later mapping may still apply its medium default.
+func anthropicRequestedReasoningEffort(req *AnthropicRequest) string {
+	if req != nil && req.Thinking != nil && req.Thinking.Type == "disabled" {
+		return "none"
+	}
+	if req != nil && req.OutputConfig != nil {
+		return req.OutputConfig.Effort
+	}
+	return ""
+}
+
 // mapAnthropicEffortToResponses converts Anthropic reasoning effort levels to
 // OpenAI Responses API effort levels.
 //
@@ -448,10 +472,38 @@ func boolPtr(v bool) *bool {
 
 // isReasoningModel reports whether model is a reasoning model that does not
 // support sampling parameters (temperature, top_p) via the Responses API.
-// All gpt-5.x models are reasoning-only; the Responses API returns
-// "Unsupported parameter: temperature" if these fields are present.
+// GPT-5 and every later generation are reasoning-only; the Responses API
+// returns "Unsupported parameter: temperature" if these fields are present.
+//
+// Keyed on the generation number instead of a "gpt-5" prefix: pinning the
+// prefix meant each new family (gpt-6-astra and whatever follows) silently
+// fell through to the sampling branch and failed upstream on every compat
+// request until someone edited this line.
 func isReasoningModel(model string) bool {
-	return strings.HasPrefix(model, "gpt-5") || openai.IsGPT6SolOrLunaModelSpelling(model)
+	major, ok := openAIModelGeneration(model)
+	return (ok && major >= 5) || openai.IsGPT6SolOrLunaModelSpelling(model)
+}
+
+// openAIModelGeneration extracts N from a "gpt-N[.M][-suffix]" model id.
+// ok is false for non-GPT ids and for GPT families that carry no numeric
+// generation (gpt-image-1, gpt-audio, ...).
+func openAIModelGeneration(model string) (int, bool) {
+	rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(model)), "gpt-")
+	if !ok {
+		return 0, false
+	}
+	major, digits := 0, 0
+	for _, r := range rest {
+		if r < '0' || r > '9' {
+			break
+		}
+		major = major*10 + int(r-'0')
+		digits++
+	}
+	if digits == 0 {
+		return 0, false
+	}
+	return major, true
 }
 
 // normalizeToolParameters ensures the tool parameter schema is valid for

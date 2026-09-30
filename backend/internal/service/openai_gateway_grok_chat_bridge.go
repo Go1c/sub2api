@@ -575,12 +575,8 @@ func grokChatResponsesCacheIntentBody(body []byte) ([]byte, error) {
 }
 
 func grokChatResponsesBridgeModel(model string) bool {
-	model = strings.TrimSpace(strings.ToLower(model))
-	if slash := strings.LastIndex(model, "/"); slash >= 0 {
-		model = strings.TrimSpace(model[slash+1:])
-	}
-	switch model {
-	case "grok-4.5", "grok-4.6", "grok-4.6-latest":
+	switch strings.ToLower(xai.StripGrokProviderPrefix(strings.TrimSpace(model))) {
+	case "grok-4.5", "grok-4.6", "grok-4.6-latest", "grok-4.7", "grok-4.7-latest":
 		return true
 	default:
 		return false

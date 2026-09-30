@@ -2,6 +2,42 @@ package domain
 
 import "testing"
 
+func TestDefaultAntigravityModelMapping_ContainsFable51(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"claude-fable-5-1": "claude-fable-5-1",
+		"claude-fable-5":   "claude-fable-5",
+	}
+	for from, want := range cases {
+		got, ok := DefaultAntigravityModelMapping[from]
+		if !ok {
+			t.Fatalf("expected mapping for %q to exist", from)
+		}
+		if got != want {
+			t.Fatalf("unexpected mapping for %q: got %q want %q", from, got, want)
+		}
+	}
+}
+
+func TestDefaultBedrockModelMapping_ContainsFable51(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"claude-fable-5-1": "anthropic.claude-fable-5-1",
+		"claude-fable-5":   "anthropic.claude-fable-5",
+	}
+	for from, want := range cases {
+		got, ok := DefaultBedrockModelMapping[from]
+		if !ok {
+			t.Fatalf("expected mapping for %q to exist", from)
+		}
+		if got != want {
+			t.Fatalf("unexpected mapping for %q: got %q want %q", from, got, want)
+		}
+	}
+}
+
 func TestDefaultAntigravityModelMapping_ImageCompatibilityAliases(t *testing.T) {
 	t.Parallel()
 

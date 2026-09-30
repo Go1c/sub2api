@@ -593,7 +593,7 @@ func normalizeGrokReasoningEffortValue(raw, model string) (string, bool) {
 func grokSupportsXHighReasoningEffort(model string) bool {
 	model = strings.ToLower(xai.StripGrokProviderPrefix(strings.TrimSpace(model)))
 	switch model {
-	case "grok-4.6", "grok-4.6-latest", "grok-4.6-build":
+	case "grok-4.7", "grok-4.7-latest", "grok-4.6", "grok-4.6-latest", "grok-4.6-build":
 		return true
 	default:
 		return false
