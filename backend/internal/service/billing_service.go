@@ -92,6 +92,8 @@ type BillingCache interface {
 
 // ModelPricing 模型价格配置（per-token价格，与LiteLLM格式一致）
 type ModelPricing struct {
+	// UltrafastMultiplier is model-owned and independent of operator Fast pricing.
+	UltrafastMultiplier                float64
 	InputPricePerToken                 float64  // 每token输入价格 (USD)
 	InputPricePerTokenPriority         float64  // priority service tier 下每token输入价格 (USD)
 	ImageInputPricePerToken            float64  // 图片输入 token 价格 (USD)，用于多模态 embedding 等图文不同价场景；为 0 时回退到 InputPricePerToken
@@ -136,7 +138,7 @@ func usePriorityServiceTierPricing(serviceTier string, pricing *ModelPricing) bo
 
 func serviceTierCostMultiplier(serviceTier string) float64 {
 	switch normalizeBillingServiceTier(serviceTier) {
-	case "priority", "fast":
+	case "priority", "fast", OpenAIFastTierUltrafast:
 		return 2.0
 	case "flex":
 		return 0.5
@@ -147,6 +149,9 @@ func serviceTierCostMultiplier(serviceTier string) float64 {
 
 func configuredServiceTierMultiplier(serviceTier string, pricing *ModelPricing) float64 {
 	if pricing != nil {
+		if normalizeBillingServiceTier(serviceTier) == OpenAIFastTierUltrafast && pricing.UltrafastMultiplier > 0 {
+			return pricing.UltrafastMultiplier
+		}
 		switch normalizeBillingServiceTier(serviceTier) {
 		case "priority", "fast":
 			if pricing.FastMultiplier != nil {
@@ -464,7 +469,7 @@ func (s *BillingService) initFallbackPricing() {
 	// OpenAI GPT-6 Astra 官方价格（USD/token）。
 	// Source: https://developers.openai.com/api/docs/models/gpt-6-astra
 	// Input $10 / Cached $1 / Cache writes $12.50 / Output $50 per 1M.
-	// Fast = 2x。>272K 阶梯由目录数据驱动，静态兜底不携带。
+	// Fast = 2x。>272K 阶梯由目录数据驱动，静态兜底同样带上，供 Ultrafast 6x 使用。
 	s.fallbackPrices["gpt-6-astra"] = &ModelPricing{
 		InputPricePerToken:                 10e-6,
 		InputPricePerTokenPriority:         20e-6,
@@ -474,6 +479,9 @@ func (s *BillingService) initFallbackPricing() {
 		CacheCreationPricePerTokenPriority: 25e-6,
 		CacheReadPricePerToken:             1e-6,
 		CacheReadPricePerTokenPriority:     2e-6,
+		LongContextInputThreshold:          272_000,
+		LongContextInputMultiplier:         2,
+		LongContextOutputMultiplier:        1.5,
 	}
 
 	s.fallbackPrices["gpt-5.4-mini"] = &ModelPricing{
@@ -1197,6 +1205,9 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 		return pricing
 	}
 	cloned := *pricing
+	if isOpenAIGPT6AstraModel(normalized) {
+		cloned.UltrafastMultiplier = 6
+	}
 	if needsOpus55FastMultiplier {
 		multiplier := 2.0
 		cloned.FastMultiplier = &multiplier

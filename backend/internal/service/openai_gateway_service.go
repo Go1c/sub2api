@@ -235,6 +235,9 @@ type OpenAIForwardResult struct {
 	// response before any client-facing rewrite or protocol conversion.
 	UpstreamResponseModel         string
 	UpstreamResponseModelConflict bool
+	// UpstreamResponseServiceTier is the tier the upstream reports having used
+	// (response service_tier: "priority" / "default" / "flex" / ...); "" when not declared.
+	UpstreamResponseServiceTier string
 	// UpstreamEndpoint is the actual upstream API path used for this request.
 	// It avoids guessing when one downstream protocol can use multiple upstream endpoints.
 	UpstreamEndpoint string
