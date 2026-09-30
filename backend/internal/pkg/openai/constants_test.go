@@ -45,3 +45,8 @@ func TestGPT6SolLunaModelIdentity(t *testing.T) {
 	require.False(t, IsGPT6SolOrLunaModelSpelling("gpt-6-solitude"))
 	require.False(t, IsGPT6SolOrLunaModelSpelling("gpt-6-luna-preview"))
 }
+
+func TestDefaultModelsIncludeGPTImage25(t *testing.T) {
+	require.Contains(t, DefaultModelIDs(), "gpt-image-2.5-flare")
+	require.Contains(t, DefaultModelIDs(), "gpt-image-2.5-sunburst")
+}

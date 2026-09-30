@@ -30,7 +30,18 @@ var (
 	// aboveTierPricePattern 匹配 LiteLLM 长上下文绝对价字段名
 	// （input_cost_per_token_above_272k_tokens / output_cost_per_token_above_200k_tokens 等）。
 	// 带 _flex/_priority 服务档后缀的变体与 cache 侧字段不参与阈值/倍率折算。
-	aboveTierPricePattern      = regexp.MustCompile(`^(input|output)_cost_per_token_above_(\d+)k_tokens$`)
+	aboveTierPricePattern = regexp.MustCompile(`^(input|output)_cost_per_token_above_(\d+)k_tokens$`)
+	// Official GPT Image 2.5 token rates (2026-09-08):
+	// https://developers.openai.com/api/docs/pricing#image-generation-models
+	openAIGPTImage25FallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:       5e-06,
+		CacheReadInputTokenCost: 1.25e-06,
+		InputCostPerImageToken:  8e-06,
+		OutputCostPerImageToken: 3e-05,
+		LiteLLMProvider:         "openai",
+		Mode:                    "image_generation",
+		SupportsPromptCaching:   true,
+	}
 	openAIGPT54FallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:       2.5e-06, // $2.5 per MTok
 		OutputCostPerToken:      1.5e-05, // $15 per MTok
@@ -1249,6 +1260,13 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		return openAIGPT54FallbackPricing
 	}
 
+	// Remote price mirrors can lag new releases. Never bill GPT Image 2.5
+	// using the older image model's rates when its entry is absent.
+	for _, imageModel := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		if model == imageModel || model == imageModel+"-2026-09-08" {
+			return openAIGPTImage25FallbackPricing
+		}
+	}
 	if isOpenAIImageGenerationModel(model) {
 		for _, candidate := range []string{"gpt-image-2", "gpt-image-1.5", "gpt-image-1"} {
 			if pricing, ok := s.pricingData[candidate]; ok {
