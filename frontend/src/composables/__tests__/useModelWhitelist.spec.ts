@@ -53,6 +53,8 @@ describe('useModelWhitelist', () => {
   })
 
   it('Claude 模型列表包含 Opus 5.5', () => {
+    expect(getModelsByPlatform('claude')).toContain('claude-fable-5-1')
+    expect(getModelsByPlatform('antigravity')).toContain('claude-fable-5-1')
     expect(getModelsByPlatform('claude')).toContain('claude-opus-5-5')
     expect(getModelsByPlatform('antigravity')).not.toContain('claude-opus-5-5')
     expect(getModelsByPlatform('openai')).toContain('gpt-6-sol')
