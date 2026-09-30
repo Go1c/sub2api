@@ -469,7 +469,7 @@ func (s *BillingService) initFallbackPricing() {
 	// OpenAI GPT-6 Astra 官方价格（USD/token）。
 	// Source: https://developers.openai.com/api/docs/models/gpt-6-astra
 	// Input $10 / Cached $1 / Cache writes $12.50 / Output $50 per 1M.
-	// Fast = 2x。>272K 阶梯由目录数据驱动，静态兜底同样带上，供 Ultrafast 6x 使用。
+	// Fast = 2x。>272K 阶梯由目录数据驱动，静态兜底不携带。
 	s.fallbackPrices["gpt-6-astra"] = &ModelPricing{
 		InputPricePerToken:                 10e-6,
 		InputPricePerTokenPriority:         20e-6,
@@ -479,9 +479,6 @@ func (s *BillingService) initFallbackPricing() {
 		CacheCreationPricePerTokenPriority: 25e-6,
 		CacheReadPricePerToken:             1e-6,
 		CacheReadPricePerTokenPriority:     2e-6,
-		LongContextInputThreshold:          272_000,
-		LongContextInputMultiplier:         2,
-		LongContextOutputMultiplier:        1.5,
 	}
 
 	s.fallbackPrices["gpt-5.4-mini"] = &ModelPricing{
