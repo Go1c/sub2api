@@ -175,6 +175,12 @@ var DefaultModels = []Model{
 		CreatedAt:   "2026-07-25T00:00:00Z",
 	},
 	{
+		ID:          "claude-sonnet-5-5",
+		Type:        "model",
+		DisplayName: "Claude Sonnet 5.5",
+		CreatedAt:   "2026-09-28T00:00:00Z",
+	},
+	{
 		ID:          "claude-sonnet-5",
 		Type:        "model",
 		DisplayName: "Claude Sonnet 5",
@@ -251,10 +257,33 @@ func DenormalizeModelID(id string) string {
 // IsOpus55 reports Claude Opus 5.5 identities, including provider-qualified
 // names and local effort suffixes. It must be checked before the opus-5 family.
 func IsOpus55(model string) bool {
+	model = normalizeClaude55ModelID(model)
+	return model == "claude-opus-5-5" || strings.HasPrefix(model, "claude-opus-5-5-")
+}
+
+// IsSonnet55 reports Claude Sonnet 5.5 identities, including the dotted
+// OpenRouter spelling and provider-qualified names. claude-sonnet-5 stays out.
+func IsSonnet55(model string) bool {
+	model = normalizeClaude55ModelID(model)
+	return model == "claude-sonnet-5-5" || strings.HasPrefix(model, "claude-sonnet-5-5-")
+}
+
+func normalizeClaude55ModelID(model string) string {
 	model = strings.ToLower(strings.TrimSpace(model))
 	if i := strings.LastIndex(model, "/"); i >= 0 {
 		model = model[i+1:]
 	}
 	model = strings.TrimPrefix(model, "models/")
-	return model == "claude-opus-5-5" || strings.HasPrefix(model, "claude-opus-5-5-")
+	for _, prefix := range []string{"us.", "eu.", "apac.", "jp.", "au.", "us-gov.", "global."} {
+		model = strings.TrimPrefix(model, prefix)
+	}
+	model = strings.TrimPrefix(model, "anthropic.")
+	model = strings.TrimSuffix(model, "-thinking")
+	if model == "claude-opus-5.5" {
+		model = "claude-opus-5-5"
+	}
+	if model == "claude-sonnet-5.5" {
+		model = "claude-sonnet-5-5"
+	}
+	return model
 }
