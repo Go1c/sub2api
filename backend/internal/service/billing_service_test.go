@@ -1257,21 +1257,28 @@ func TestGetModelPricingWithChannel_UnknownModelReturnsError(t *testing.T) {
 	require.Contains(t, err.Error(), "pricing not found")
 }
 
-func TestGetModelPricingWithChannel_UnspecifiedImageOutputFallsBackToTextOutput(t *testing.T) {
-	svc := newTestBillingService()
+func TestGetModelPricingWithChannel_NilImagePricesInheritCatalog(t *testing.T) {
+	svc := NewBillingService(&config.Config{}, &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gpt-image-2": {
+			Mode:                    "image_generation",
+			InputCostPerToken:       5e-6,
+			OutputCostPerToken:      10e-6,
+			InputCostPerImageToken:  8e-6,
+			OutputCostPerImageToken: 30e-6,
+		},
+	}})
 
-	// Channel overrides only text output price; image output must not be forced to $0.
+	// Channel overrides only text prices; image prices must stay on the catalog.
 	chPricing := &ChannelModelPricing{
-		OutputPrice: testPtrFloat64(20e-6),
+		InputPrice:  testPtrFloat64(6e-6),
+		OutputPrice: testPtrFloat64(12e-6),
 	}
-	pricing, err := svc.GetModelPricingWithChannel("claude-sonnet-4", chPricing)
+	pricing, err := svc.GetModelPricingWithChannel("gpt-image-2", chPricing)
 	require.NoError(t, err)
 	require.False(t, pricing.ImageOutputPriceExplicit, "unset channel image output should not be marked explicit")
-
-	// With no explicit image output rate, computeTokenBreakdown falls back to outputPrice.
-	bd := svc.computeTokenBreakdown(pricing, UsageTokens{OutputTokens: 10, ImageOutputTokens: 10}, 1.0, "", false)
-	require.InDelta(t, 0, bd.OutputCost, 1e-15, "all tokens classified as image output")
-	require.InDelta(t, 10*20e-6, bd.ImageOutputCost, 1e-15, "image output falls back to text output rate")
+	require.InDelta(t, 6e-6, pricing.InputPricePerToken, 1e-12)
+	require.InDelta(t, 30e-6, pricing.ImageOutputPricePerToken, 1e-12)
+	require.InDelta(t, 8e-6, pricing.ImageInputPricePerToken, 1e-12)
 }
 
 func TestGetModelPricingWithChannel_ExplicitZeroImageOutputStaysZero(t *testing.T) {
@@ -1288,4 +1295,24 @@ func TestGetModelPricingWithChannel_ExplicitZeroImageOutputStaysZero(t *testing.
 
 	bd := svc.computeTokenBreakdown(pricing, UsageTokens{OutputTokens: 10, ImageOutputTokens: 10}, 1.0, "", false)
 	require.Zero(t, bd.ImageOutputCost, "explicit zero must not fall back")
+}
+
+func TestGetModelPricingWithChannel_ExplicitImagePricesOverrideCatalog(t *testing.T) {
+	svc := NewBillingService(&config.Config{}, &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gpt-image-2": {
+			Mode:                    "image_generation",
+			InputCostPerToken:       5e-6,
+			InputCostPerImageToken:  8e-6,
+			OutputCostPerImageToken: 30e-6,
+		},
+	}})
+
+	pricing, err := svc.GetModelPricingWithChannel("gpt-image-2", &ChannelModelPricing{
+		ImageInputPrice:  testPtrFloat64(9e-6),
+		ImageOutputPrice: testPtrFloat64(0),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0.0, pricing.ImageOutputPricePerToken)
+	require.True(t, pricing.ImageOutputPriceExplicit, "显式 0 仍表示图片输出免费")
+	require.InDelta(t, 9e-6, pricing.ImageInputPricePerToken, 1e-12)
 }
