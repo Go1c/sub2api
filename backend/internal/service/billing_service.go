@@ -393,6 +393,20 @@ func (s *BillingService) initFallbackPricing() {
 	}
 
 	// GPT-6 Sol/Luna official rates, 2026-09-22.
+	s.fallbackPrices["gpt-6.1-sol"] = &ModelPricing{
+		InputPricePerToken:                 2e-6,
+		InputPricePerTokenPriority:         4e-6,
+		OutputPricePerToken:                10e-6,
+		OutputPricePerTokenPriority:        20e-6,
+		CacheCreationPricePerToken:         2.5e-6,
+		CacheCreationPricePerTokenPriority: 5e-6,
+		CacheReadPricePerToken:             0.1e-6,
+		CacheReadPricePerTokenPriority:     0.2e-6,
+		CacheCreationPriceExplicit:         true,
+		LongContextInputThreshold:          272_000,
+		LongContextInputMultiplier:         2,
+		LongContextOutputMultiplier:        1.5,
+	}
 	s.fallbackPrices["gpt-6-sol"] = &ModelPricing{
 		InputPricePerToken:                 2e-6,
 		InputPricePerTokenPriority:         4e-6,
@@ -624,7 +638,7 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	// OpenAI 仅匹配已知 GPT-5/Codex 族，避免未知 OpenAI 型号误计价。
 	if normalized := normalizeKnownOpenAICodexModel(modelLower); normalized != "" {
 		switch normalized {
-		case "gpt-6-sol", "gpt-6-luna":
+		case "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna":
 			return s.fallbackPrices[normalized]
 		case "gpt-6-astra":
 			return s.fallbackPrices["gpt-6-astra"]
@@ -777,7 +791,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 				InputPricePerTokenPriority:         litellmPricing.InputCostPerTokenPriority,
 				OutputPricePerToken:                litellmPricing.OutputCostPerToken,
 				OutputPricePerTokenPriority:        litellmPricing.OutputCostPerTokenPriority,
-				CacheCreationPriceExplicit:         openai.IsGPT6SolOrLunaModelSpelling(model) && litellmPricing.CacheCreationInputTokenCostExplicit,
+				CacheCreationPriceExplicit:         (openai.IsGPT6SolOrLunaModelSpelling(model) || openai.IsGPT61SolModelSpelling(model)) && litellmPricing.CacheCreationInputTokenCostExplicit,
 				CacheCreationPricePerToken:         litellmPricing.CacheCreationInputTokenCost,
 				CacheCreationPricePerTokenPriority: litellmPricing.CacheCreationInputTokenCostPriority,
 				CacheReadPricePerToken:             litellmPricing.CacheReadInputTokenCost,
@@ -1175,10 +1189,11 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 	isGPT56 := isOpenAIGPT56Model(normalized)
 	isGPT6Astra := isOpenAIGPT6AstraModel(normalized)
 	isGPT6SolOrLuna := openai.IsGPT6SolOrLunaModelSpelling(normalized)
+	isGPT61Sol := openai.IsGPT61SolModelSpelling(normalized)
 	needsOpus55FastMultiplier := claude.IsOpus55(model) && pricing.FastMultiplier == nil
-	needsCacheCreationPolicy := (isGPT56 || isGPT6Astra || isGPT6SolOrLuna) && !pricing.CacheCreationPriceExplicit && (pricing.CacheCreationPricePerToken <= 0 ||
+	needsCacheCreationPolicy := (isGPT56 || isGPT6Astra || isGPT6SolOrLuna || isGPT61Sol) && !pricing.CacheCreationPriceExplicit && (pricing.CacheCreationPricePerToken <= 0 ||
 		(pricing.InputPricePerTokenPriority > 0 && pricing.CacheCreationPricePerTokenPriority <= 0))
-	if !needsCacheCreationPolicy && !needsOpus55FastMultiplier && !isGPT6SolOrLuna {
+	if !needsCacheCreationPolicy && !needsOpus55FastMultiplier && !isGPT6SolOrLuna && !isGPT61Sol {
 		return pricing
 	}
 	cloned := *pricing
@@ -1186,7 +1201,7 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 		multiplier := 2.0
 		cloned.FastMultiplier = &multiplier
 	}
-	if (isGPT56 || isGPT6Astra || isGPT6SolOrLuna) && !cloned.CacheCreationPriceExplicit {
+	if (isGPT56 || isGPT6Astra || isGPT6SolOrLuna || isGPT61Sol) && !cloned.CacheCreationPriceExplicit {
 		if cloned.CacheCreationPricePerToken <= 0 {
 			cloned.CacheCreationPricePerToken = cloned.InputPricePerToken * 1.25
 		}
@@ -1194,7 +1209,7 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 			cloned.CacheCreationPricePerTokenPriority = cloned.InputPricePerTokenPriority * 1.25
 		}
 	}
-	if isGPT6SolOrLuna && cloned.CacheCreationPriceExplicit && cloned.InputPricePerTokenPriority > 0 && cloned.InputPricePerToken > 0 {
+	if (isGPT6SolOrLuna || isGPT61Sol) && cloned.CacheCreationPriceExplicit && cloned.InputPricePerTokenPriority > 0 && cloned.InputPricePerToken > 0 {
 		cloned.CacheCreationPricePerTokenPriority = cloned.CacheCreationPricePerToken * (cloned.InputPricePerTokenPriority / cloned.InputPricePerToken)
 	}
 	return &cloned

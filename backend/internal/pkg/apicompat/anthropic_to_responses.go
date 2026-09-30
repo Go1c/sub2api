@@ -13,6 +13,9 @@ import (
 // Chat Completions intermediary round-trip (e.g. thinking, cache_control,
 // structured system prompts).
 func AnthropicToResponses(req *AnthropicRequest) (*ResponsesRequest, error) {
+	if err := openai.ValidateGPT61SolReasoningEffort(req.Model, anthropicRequestedReasoningEffort(req)); err != nil {
+		return nil, err
+	}
 	input, err := convertAnthropicToResponsesInput(req.System, req.Messages)
 	if err != nil {
 		return nil, err
@@ -65,9 +68,17 @@ func AnthropicToResponses(req *AnthropicRequest) (*ResponsesRequest, error) {
 	if req.OutputConfig != nil && req.OutputConfig.Effort != "" {
 		effort = req.OutputConfig.Effort
 	}
-	out.Reasoning = &ResponsesReasoning{
-		Effort:  mapAnthropicEffortToResponses(effort),
-		Summary: "auto",
+	// GPT-6.1 Sol publishes max as its own effort. Other models still map max to xhigh.
+	if openai.IsGPT61SolModelSpelling(req.Model) && effort == "max" {
+		out.Reasoning = &ResponsesReasoning{
+			Effort:  "max",
+			Summary: "auto",
+		}
+	} else {
+		out.Reasoning = &ResponsesReasoning{
+			Effort:  mapAnthropicEffortToResponses(effort),
+			Summary: "auto",
+		}
 	}
 
 	// Convert tool_choice
@@ -400,6 +411,19 @@ func extractAnthropicTextFromBlocks(blocks []AnthropicContentBlock) string {
 		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// anthropicRequestedReasoningEffort is the effort the client asked for before
+// the bridge default. Disabled thinking is "none" so GPT-6.1 Sol can reject it;
+// an empty result means the later mapping may still apply its medium default.
+func anthropicRequestedReasoningEffort(req *AnthropicRequest) string {
+	if req != nil && req.Thinking != nil && req.Thinking.Type == "disabled" {
+		return "none"
+	}
+	if req != nil && req.OutputConfig != nil {
+		return req.OutputConfig.Effort
+	}
+	return ""
 }
 
 // mapAnthropicEffortToResponses converts Anthropic reasoning effort levels to

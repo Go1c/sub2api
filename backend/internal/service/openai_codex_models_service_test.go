@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -1303,12 +1304,20 @@ func TestGPT6SolLunaCatalogKeepsAuthoritativeCapabilities(t *testing.T) {
 		require.False(t, isOpenAIGPT6AstraModel(id), id)
 		require.Contains(t, openai.DefaultModelIDs(), id)
 	}
+	require.True(t, openai.IsGPT61SolModelSpelling("gpt-6.1-sol"))
+	require.Equal(t, "gpt-6.1-sol", normalizeKnownOpenAICodexModel("gpt-6.1-sol"))
+	require.True(t, isOpenAIGPT6Model("gpt-6.1-sol"))
+	require.False(t, isOpenAIGPT6AstraModel("gpt-6.1-sol"))
+	require.False(t, openai.IsGPT6SolOrLunaModelSpelling("gpt-6.1-sol"))
+	require.Contains(t, openai.DefaultModelIDs(), "gpt-6.1-sol")
 	require.Equal(t, "gpt-6-sol", normalizeKnownOpenAICodexModel("gpt-6-sol-max"))
 	require.Equal(t, "gpt-6-sol", normalizeKnownOpenAICodexModel("openai/gpt-6-sol-high"))
 	require.Equal(t, "gpt-6-luna", normalizeKnownOpenAICodexModel("gpt-6-luna-openai-compact"))
 	require.Empty(t, normalizeKnownOpenAICodexModel("gpt-6-sol-preview"))
 	require.Empty(t, normalizeKnownOpenAICodexModel("gpt-6-luna-preview"))
 	require.Equal(t, "gpt-6-astra", normalizeKnownOpenAICodexModel("gpt-6"), "bare gpt-6 stays Astra, not Sol/Luna")
+	require.Equal(t, "gpt-6-astra", normalizeKnownOpenAICodexModel("gpt-6-max"))
+	require.Equal(t, "gpt-6-astra", normalizeKnownOpenAICodexModel("gpt-6-astra-max"))
 
 	body, err := os.ReadFile(filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json"))
 	require.NoError(t, err)
@@ -1330,4 +1339,35 @@ func TestGPT6SolLunaCatalogKeepsAuthoritativeCapabilities(t *testing.T) {
 	require.InDelta(t, 1.5, luna.LongContextOutputCostMultiplier, 1e-12)
 	require.InDelta(t, 0.1e-6, luna.InputCostPerToken, 1e-12)
 	require.InDelta(t, 0.5e-6, luna.OutputCostPerToken, 1e-12)
+}
+
+func TestGPT61SolEmbeddedMetadata(t *testing.T) {
+	var metadata struct {
+		Slug                      string `json:"slug"`
+		DefaultReasoningLevel     string `json:"default_reasoning_level"`
+		ContextWindow             int    `json:"context_window"`
+		MaxContextWindow          int    `json:"max_context_window"`
+		MultiAgentReasoningEffort string `json:"multi_agent_reasoning_effort"`
+		MultiAgentVersion         string `json:"multi_agent_version"`
+		DefaultServiceTier        any    `json:"default_service_tier"`
+		SupportedReasoningLevels  []struct {
+			Effort string `json:"effort"`
+		} `json:"supported_reasoning_levels"`
+		ServiceTiers []struct {
+			ID string `json:"id"`
+		} `json:"service_tiers"`
+	}
+	require.NoError(t, json.Unmarshal(openai.CodexGPT61SolMetadata, &metadata))
+	require.Equal(t, "gpt-6.1-sol", metadata.Slug)
+	require.Equal(t, "low", metadata.DefaultReasoningLevel)
+	require.Equal(t, 272000, metadata.ContextWindow)
+	require.Equal(t, 872000, metadata.MaxContextWindow)
+	require.Equal(t, "xhigh", metadata.MultiAgentReasoningEffort)
+	require.Equal(t, "v2", metadata.MultiAgentVersion)
+	require.Nil(t, metadata.DefaultServiceTier)
+	require.NotEmpty(t, metadata.SupportedReasoningLevels)
+	require.Equal(t, "ultra", metadata.SupportedReasoningLevels[len(metadata.SupportedReasoningLevels)-1].Effort)
+	for _, tier := range metadata.ServiceTiers {
+		require.NotEqual(t, "ultrafast", tier.ID)
+	}
 }
