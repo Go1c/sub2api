@@ -62,6 +62,15 @@ func concatArgumentDeltas(events []ResponsesStreamEvent) string {
 	return out
 }
 
+func findEvent(events []ResponsesStreamEvent, eventType string) *ResponsesStreamEvent {
+	for i := range events {
+		if events[i].Type == eventType {
+			return &events[i]
+		}
+	}
+	return nil
+}
+
 func findFunctionCallOutput(events []ResponsesStreamEvent) *ResponsesOutput {
 	for i := range events {
 		if events[i].Type != "response.output_item.done" || events[i].Item == nil {
