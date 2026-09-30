@@ -36,6 +36,8 @@ const (
 	AccountPoolIQResultUntestable = "untestable"
 
 	accountPoolAutoInspectLogLimit = 100
+	// Cap the stored exclusion list so a huge payload cannot bloat the setting.
+	accountPoolAutoInspectMaxExcluded = 5000
 
 	AccountPoolIQLogMoved    = "moved"
 	AccountPoolIQLogDisabled = "disabled"
@@ -60,6 +62,9 @@ type AccountPoolAutoInspectConfig struct {
 	// DisableFirstImportOnIncorrect marks a first-import account error and
 	// unschedulable when its first completed quiz is wrong.
 	DisableFirstImportOnIncorrect bool `json:"disable_first_import_on_incorrect"`
+	// ExcludedAccountIDs are accounts the admin unchecked. An empty list means
+	// every otherwise eligible account is inspected. Missing on old JSON is empty.
+	ExcludedAccountIDs []int64 `json:"excluded_account_ids"`
 }
 
 type AccountPoolAutoInspectStatus struct {
@@ -152,6 +157,7 @@ func normalizeAccountPoolAutoInspectConfig(cfg *AccountPoolAutoInspectConfig) {
 	if cfg.PauseMinutes < 1 || cfg.PauseMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
 		cfg.PauseMinutes = defaults.PauseMinutes
 	}
+	cfg.ExcludedAccountIDs = normalizeAccountPoolAutoInspectExcludedIDs(cfg.ExcludedAccountIDs)
 }
 
 func validateAccountPoolAutoInspectConfig(cfg *AccountPoolAutoInspectConfig) error {
@@ -180,7 +186,43 @@ func validateAccountPoolAutoInspectConfig(cfg *AccountPoolAutoInspectConfig) err
 	if cfg.PauseMinutes < 1 || cfg.PauseMinutes > AccountPoolAutoInspectMaxIntervalMinutes {
 		return fmt.Errorf("pause_minutes must be 1-%d", AccountPoolAutoInspectMaxIntervalMinutes)
 	}
+	if len(cfg.ExcludedAccountIDs) > accountPoolAutoInspectMaxExcluded {
+		return fmt.Errorf("excluded_account_ids must contain at most %d ids", accountPoolAutoInspectMaxExcluded)
+	}
 	return nil
+}
+
+// normalizeAccountPoolAutoInspectExcludedIDs drops non-positive and duplicate
+// ids and keeps the first-seen order. nil and empty both mean inspect everyone.
+func normalizeAccountPoolAutoInspectExcludedIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return []int64{}
+	}
+	seen := make(map[int64]struct{}, len(ids))
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func accountPoolAutoInspectExcluded(cfg *AccountPoolAutoInspectConfig, accountID int64) bool {
+	if cfg == nil || accountID <= 0 {
+		return false
+	}
+	for _, id := range cfg.ExcludedAccountIDs {
+		if id == accountID {
+			return true
+		}
+	}
+	return false
 }
 
 // accountPoolAutoInspectMaxJitterSeconds keeps the realized interval at least

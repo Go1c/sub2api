@@ -109,6 +109,57 @@
         <Toggle v-model="form.disable_first_import_on_incorrect" data-testid="pool-auto-inspect-toggle-first-import" />
       </div>
 
+      <div>
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.poolAutoInspect.accounts') }}</div>
+            <p class="text-xs text-gray-500">{{ t('admin.accounts.poolAutoInspect.accountsHint') }}</p>
+          </div>
+          <span class="shrink-0 text-xs text-gray-500" data-testid="pool-auto-inspect-account-count">
+            {{ t('admin.accounts.poolAutoInspect.accountsCount', { selected: selectedAccountCount, total: inspectableAccounts.length }) }}
+          </span>
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            v-model.trim="accountSearch"
+            type="search"
+            class="input min-w-0 flex-1"
+            :placeholder="t('admin.accounts.poolAutoInspect.accountsSearch')"
+            data-testid="pool-auto-inspect-account-search"
+          />
+          <button type="button" class="btn btn-secondary btn-sm" data-testid="pool-auto-inspect-select-all" @click="selectAllAccounts">
+            {{ t('admin.accounts.poolAutoInspect.selectAll') }}
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" data-testid="pool-auto-inspect-clear-all" @click="clearAllAccounts">
+            {{ t('admin.accounts.poolAutoInspect.clearAll') }}
+          </button>
+        </div>
+        <div
+          class="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-xl border border-gray-200 p-3 text-left dark:border-dark-600"
+          data-testid="pool-auto-inspect-accounts"
+        >
+          <p v-if="accountsLoading" class="text-sm text-gray-500">{{ t('common.loading') }}</p>
+          <p v-else-if="inspectableAccounts.length === 0" class="text-sm text-gray-500">
+            {{ t('admin.accounts.poolAutoInspect.accountsEmpty') }}
+          </p>
+          <p v-else-if="filteredAccounts.length === 0" class="text-sm text-gray-500">{{ t('common.noData') }}</p>
+          <label
+            v-for="account in filteredAccounts"
+            :key="account.id"
+            class="flex w-full cursor-pointer items-center justify-start gap-2.5 text-left text-sm text-gray-800 dark:text-gray-200"
+          >
+            <input
+              type="checkbox"
+              class="h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :checked="isAccountIncluded(account.id)"
+              :data-testid="`pool-auto-inspect-account-${account.id}`"
+              @change="toggleAccount(account.id, ($event.target as HTMLInputElement).checked)"
+            />
+            <span class="min-w-0 truncate">{{ account.name || `#${account.id}` }}</span>
+          </label>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
           <label class="input-label" for="pool-auto-inspect-correct-group">{{ t('admin.accounts.poolAutoInspect.correctGroup') }}</label>
@@ -193,7 +244,7 @@ import Toggle from '@/components/common/Toggle.vue'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import type { AdminGroup } from '@/types'
+import type { AccountListItem, AdminGroup } from '@/types'
 import type { PoolAutoInspectConfig, PoolAutoInspectLogEntry, PoolAutoInspectStatus } from '@/api/admin/accounts'
 
 const props = defineProps<{
@@ -209,10 +260,14 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const loading = ref(false)
+const accountsLoading = ref(false)
 const saving = ref(false)
 const running = ref(false)
 const lastStatus = ref<PoolAutoInspectStatus | null>(null)
 const logEntries = ref<PoolAutoInspectLogEntry[]>([])
+const inspectableAccounts = ref<AccountListItem[]>([])
+const accountSearch = ref('')
+const excludedAccountIds = ref<number[]>([])
 
 const emptyForm = (): PoolAutoInspectConfig => ({
   enabled: false,
@@ -225,10 +280,24 @@ const emptyForm = (): PoolAutoInspectConfig => ({
   correct_group_id: 0,
   incorrect_group_id: 0,
   pause_minutes: 1,
-  disable_first_import_on_incorrect: false
+  disable_first_import_on_incorrect: false,
+  excluded_account_ids: []
 })
 
 const form = reactive<PoolAutoInspectConfig>(emptyForm())
+
+const filteredAccounts = computed(() => {
+  const query = accountSearch.value.trim().toLowerCase()
+  if (!query) return inspectableAccounts.value
+  return inspectableAccounts.value.filter((account) => {
+    const name = (account.name || '').toLowerCase()
+    return name.includes(query) || String(account.id).includes(query)
+  })
+})
+
+const selectedAccountCount = computed(
+  () => inspectableAccounts.value.filter((account) => isAccountIncluded(account.id)).length
+)
 
 const maxJitterSeconds = computed(() => {
   const minutes = Number(form.interval_minutes) || 1
@@ -260,6 +329,55 @@ function numberOr(value: number | undefined, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+function isInspectableAccount(account: AccountListItem) {
+  if (!account?.id || account.parent_account_id) return false
+  if (account.platform !== 'openai') return false
+  return account.type === 'oauth' || account.type === 'setup-token'
+}
+
+function excludedIdsFrom(ids: number[] | undefined) {
+  const seen = new Set<number>()
+  const out: number[] = []
+  for (const id of ids || []) {
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out
+}
+
+function isAccountIncluded(id: number) {
+  return !excludedAccountIds.value.includes(id)
+}
+
+function toggleAccount(id: number, included: boolean) {
+  if (included) {
+    excludedAccountIds.value = excludedAccountIds.value.filter((item) => item !== id)
+    return
+  }
+  if (!excludedAccountIds.value.includes(id)) {
+    excludedAccountIds.value = [...excludedAccountIds.value, id]
+  }
+}
+
+function selectAllAccounts() {
+  const visible = new Set(filteredAccounts.value.map((account) => account.id))
+  excludedAccountIds.value = excludedAccountIds.value.filter((id) => !visible.has(id))
+}
+
+function clearAllAccounts() {
+  const next = new Set(excludedAccountIds.value)
+  for (const account of filteredAccounts.value) next.add(account.id)
+  excludedAccountIds.value = [...next]
+}
+
+function payload(): PoolAutoInspectConfig {
+  return {
+    ...form,
+    excluded_account_ids: excludedIdsFrom(excludedAccountIds.value)
+  }
+}
+
 function applyConfig(cfg: PoolAutoInspectConfig | PoolAutoInspectStatus) {
   form.enabled = !!cfg.enabled
   form.interval_minutes = numberOr(cfg.interval_minutes, 10) || 10
@@ -272,6 +390,8 @@ function applyConfig(cfg: PoolAutoInspectConfig | PoolAutoInspectStatus) {
   form.incorrect_group_id = numberOr(cfg.incorrect_group_id, 0)
   form.pause_minutes = numberOr(cfg.pause_minutes, 1) || 1
   form.disable_first_import_on_incorrect = !!cfg.disable_first_import_on_incorrect
+  excludedAccountIds.value = excludedIdsFrom(cfg.excluded_account_ids)
+  form.excluded_account_ids = excludedAccountIds.value
 }
 
 function groupLabel(name: string | undefined, id: number | undefined) {
@@ -307,13 +427,36 @@ async function loadLog() {
   }
 }
 
+async function loadAccounts() {
+  accountsLoading.value = true
+  try {
+    const pageSize = 100
+    const collected: AccountListItem[] = []
+    let page = 1
+    let pages = 1
+    do {
+      const result = await adminAPI.accounts.list(page, pageSize, { platform: 'openai' })
+      collected.push(...(result.items || []).filter(isInspectableAccount))
+      pages = result.pages || 1
+      page += 1
+    } while (page <= pages && page <= 20)
+    inspectableAccounts.value = collected
+  } catch (error) {
+    inspectableAccounts.value = []
+    appStore.showError(extractApiErrorMessage(error, t('admin.accounts.poolAutoInspect.loadFailed')))
+  } finally {
+    accountsLoading.value = false
+  }
+}
+
 async function load() {
   loading.value = true
+  accountSearch.value = ''
   try {
     const cfg = await adminAPI.accounts.getPoolAutoInspectConfig()
     lastStatus.value = cfg
     applyConfig(cfg)
-    await loadLog()
+    await Promise.all([loadLog(), loadAccounts()])
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('admin.accounts.poolAutoInspect.loadFailed')))
   } finally {
@@ -324,7 +467,7 @@ async function load() {
 async function save() {
   saving.value = true
   try {
-    const updated = await adminAPI.accounts.updatePoolAutoInspectConfig({ ...form })
+    const updated = await adminAPI.accounts.updatePoolAutoInspectConfig(payload())
     applyConfig(updated)
     appStore.showSuccess(t('admin.accounts.poolAutoInspect.saved'))
     emit('close')
@@ -338,7 +481,7 @@ async function save() {
 async function runNow() {
   running.value = true
   try {
-    const updated = await adminAPI.accounts.updatePoolAutoInspectConfig({ ...form })
+    const updated = await adminAPI.accounts.updatePoolAutoInspectConfig(payload())
     applyConfig(updated)
     const status = await adminAPI.accounts.runPoolAutoInspect()
     lastStatus.value = status

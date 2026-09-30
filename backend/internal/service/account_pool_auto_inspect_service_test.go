@@ -216,6 +216,39 @@ func TestAccountPoolAutoInspectAsksCodexAccountWhenGroupPlatformDiffers(t *testi
 	require.Equal(t, 1, quiz.calls)
 }
 
+func TestAccountPoolAutoInspectSkipsUncheckedAccounts(t *testing.T) {
+	accounts := &poolInspectAccountStub{accounts: []Account{
+		{
+			ID: 21, Name: "kept", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+			Status: StatusActive, Schedulable: true,
+		},
+		{
+			ID: 22, Name: "unchecked", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+			Status: StatusActive, Schedulable: true,
+		},
+	}}
+	quiz := &poolInspectQuizStub{text: "21"}
+	svc := NewAccountPoolAutoInspectService(
+		&poolInspectSettingsStub{},
+		accounts,
+		&poolInspectGroupStub{groups: map[int64]Group{
+			3: {ID: 3, Name: "答对组", Platform: PlatformOpenAI},
+			9: {ID: 9, Name: "答错组", Platform: PlatformOpenAI},
+		}},
+		quiz,
+		nil,
+	)
+	cfg := iqInspectConfig(3, 9)
+	cfg.ExcludedAccountIDs = []int64{22}
+	_, err := svc.UpdateConfig(context.Background(), cfg)
+	require.NoError(t, err)
+
+	status := svc.RunOnce(context.Background(), true)
+	require.Contains(t, status.LastResult, "asked=1")
+	require.Equal(t, 1, quiz.calls)
+	require.Equal(t, []int64{22}, status.ExcludedAccountIDs)
+}
+
 func TestAccountPoolAutoInspectAsksLegacyOAuthWithEmptyPlatform(t *testing.T) {
 	accounts := &poolInspectAccountStub{accounts: []Account{{
 		ID: 22, Name: "legacy", Type: AccountTypeOAuth,

@@ -285,7 +285,7 @@ func (s *AccountPoolAutoInspectService) RunOnce(ctx context.Context, force bool)
 			break
 		}
 		account := accounts[i]
-		if !accountEligibleForPoolIQ(account, now) {
+		if accountPoolAutoInspectExcluded(cfg, account.ID) || !accountEligibleForPoolIQ(account, now) {
 			continue
 		}
 		if !force && !s.claimDue(runCtx, account.ID, cfg, now) {

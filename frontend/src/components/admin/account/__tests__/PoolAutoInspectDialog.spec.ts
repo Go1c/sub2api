@@ -3,11 +3,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { defineComponent } from 'vue'
 import PoolAutoInspectDialog from '../PoolAutoInspectDialog.vue'
 
-const { getPoolAutoInspectConfig, updatePoolAutoInspectConfig, getPoolAutoInspectLog, runPoolAutoInspect, showSuccess, showError } = vi.hoisted(() => ({
+const { getPoolAutoInspectConfig, updatePoolAutoInspectConfig, getPoolAutoInspectLog, runPoolAutoInspect, listAccounts, showSuccess, showError } = vi.hoisted(() => ({
   getPoolAutoInspectConfig: vi.fn(),
   updatePoolAutoInspectConfig: vi.fn(),
   getPoolAutoInspectLog: vi.fn(),
   runPoolAutoInspect: vi.fn(),
+  listAccounts: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn()
 }))
@@ -18,7 +19,8 @@ vi.mock('@/api/admin', () => ({
       getPoolAutoInspectConfig,
       updatePoolAutoInspectConfig,
       getPoolAutoInspectLog,
-      runPoolAutoInspect
+      runPoolAutoInspect,
+      list: listAccounts
     }
   }
 }))
@@ -29,7 +31,13 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
-  return { ...actual, useI18n: () => ({ t: (key: string) => key }) }
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string, params?: Record<string, unknown>) =>
+        params ? `${key} ${Object.values(params).join(' ')}` : key
+    })
+  }
 })
 
 const groups = [
@@ -54,6 +62,19 @@ function storedConfig(overrides: Record<string, unknown> = {}) {
     pause_minutes: 1,
     disable_first_import_on_incorrect: false,
     ...overrides
+  }
+}
+
+function accountList() {
+  return {
+    items: [
+      { id: 11, name: 'kept@example.com', platform: 'openai', type: 'oauth' },
+      { id: 12, name: 'skip@example.com', platform: 'openai', type: 'oauth' },
+      { id: 13, name: 'claude', platform: 'anthropic', type: 'oauth' },
+      { id: 14, name: 'shadow', platform: 'openai', type: 'oauth', parent_account_id: 11 }
+    ],
+    total: 4,
+    pages: 1
   }
 }
 
@@ -84,6 +105,7 @@ describe('PoolAutoInspectDialog', () => {
     )
     getPoolAutoInspectLog.mockReset().mockResolvedValue([])
     runPoolAutoInspect.mockReset()
+    listAccounts.mockReset().mockResolvedValue(accountList())
     showSuccess.mockReset()
     showError.mockReset()
   })
@@ -180,6 +202,34 @@ describe('PoolAutoInspectDialog', () => {
     expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(
       expect.objectContaining({ disable_first_import_on_incorrect: true })
     )
+  })
+
+  it('checks every inspectable account until one is unchecked', async () => {
+    const wrapper = mountDialog(true)
+    await flushPromises()
+
+    expect(listAccounts).toHaveBeenCalledWith(1, 100, { platform: 'openai' })
+    expect((wrapper.get('[data-testid="pool-auto-inspect-account-11"]').element as HTMLInputElement).checked).toBe(true)
+    expect((wrapper.get('[data-testid="pool-auto-inspect-account-12"]').element as HTMLInputElement).checked).toBe(true)
+    expect(wrapper.find('[data-testid="pool-auto-inspect-account-13"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="pool-auto-inspect-account-14"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="pool-auto-inspect-account-12"]').setValue(false)
+    await wrapper.get('[data-testid="pool-auto-inspect-save"]').trigger('click')
+    await flushPromises()
+
+    expect(updatePoolAutoInspectConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ excluded_account_ids: [12] })
+    )
+  })
+
+  it('keeps a stored exclusion unchecked', async () => {
+    getPoolAutoInspectConfig.mockResolvedValue(storedConfig({ excluded_account_ids: [12] }))
+    const wrapper = mountDialog(true)
+    await flushPromises()
+
+    expect((wrapper.get('[data-testid="pool-auto-inspect-account-11"]').element as HTMLInputElement).checked).toBe(true)
+    expect((wrapper.get('[data-testid="pool-auto-inspect-account-12"]').element as HTMLInputElement).checked).toBe(false)
   })
 
   it('shows each account group change', async () => {

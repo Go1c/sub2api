@@ -1082,6 +1082,8 @@ export interface PoolAutoInspectConfig {
   incorrect_group_id: number
   pause_minutes: number
   disable_first_import_on_incorrect: boolean
+  /** Unchecked accounts. Empty or omitted means every listed account is inspected. */
+  excluded_account_ids?: number[]
 }
 
 export interface PoolAutoInspectStatus extends PoolAutoInspectConfig {

@@ -91,6 +91,21 @@ func TestAccountPoolIQSourceGroup(t *testing.T) {
 	require.Equal(t, int64(0), accountPoolIQSourceGroup([]int64{1}, 3, 9, 3))
 }
 
+func TestParseAccountPoolAutoInspectConfigTreatsMissingExclusionsAsNone(t *testing.T) {
+	cfg := parseAccountPoolAutoInspectConfig(`{"interval_minutes":10}`)
+	require.Empty(t, cfg.ExcludedAccountIDs)
+	require.False(t, accountPoolAutoInspectExcluded(cfg, 12))
+}
+
+func TestNormalizeAccountPoolAutoInspectExcludedIDsDropsInvalidDuplicates(t *testing.T) {
+	cfg := defaultAccountPoolAutoInspectConfig()
+	cfg.ExcludedAccountIDs = []int64{0, 12, -1, 12, 7}
+	normalizeAccountPoolAutoInspectConfig(cfg)
+	require.Equal(t, []int64{12, 7}, cfg.ExcludedAccountIDs)
+	require.True(t, accountPoolAutoInspectExcluded(cfg, 12))
+	require.False(t, accountPoolAutoInspectExcluded(cfg, 9))
+}
+
 func TestParseAccountPoolAutoInspectConfigIgnoresLegacyHealthFields(t *testing.T) {
 	parsed := parseAccountPoolAutoInspectConfig(`{"enabled":true,"interval_minutes":10,"success_rate_threshold":50,"add_group_ids":[7],"remove_models":["gpt-6-astra"]}`)
 	require.True(t, parsed.Enabled)
