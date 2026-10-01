@@ -18,18 +18,22 @@ const (
 	// CLIClientVersion is the one place the pinned Grok CLI version lives. The
 	// repository and service layers build their own client identity from it, so
 	// one bump here covers OAuth traffic and billing probes together.
-	// Keep in sync with https://x.ai/cli/stable.
-	CLIClientVersion = "0.2.120"
-	// billingCLIUserAgent is the legacy pager/shell UA used by billing probes.
-	// Distinct from CLIUserAgent() in cli_identity.go (workspace-style UA).
-	billingCLIUserAgent = "grok-pager/" + CLIClientVersion + " grok-shell/" + CLIClientVersion + " (macos; aarch64)"
-
+	// Keep in sync with https://x.ai/cli/stable. cli-chat-proxy currently
+	// rejects anything below 1.0.13 with HTTP 426 (issue #7778).
+	CLIClientVersion = "1.0.44"
 	BillingWeeklyPath  = "/billing?format=credits"
 	BillingMonthlyPath = "/billing"
 
 	SuperGrokLimitCents      = 15_000  // $150.00
 	SuperGrokHeavyLimitCents = 150_000 // $1,500.00
 )
+
+// billingCLIUserAgent builds the legacy pager/shell UA used by billing probes
+// from the resolved version so operator overrides apply here too. Distinct
+// from CLIUserAgent() in cli_identity.go (workspace-style UA).
+func billingCLIUserAgent(version string) string {
+	return "grok-pager/" + version + " grok-shell/" + version + " (macos; aarch64)"
+}
 
 // BillingPeriod describes the current weekly/monthly window.
 type BillingPeriod struct {
@@ -147,8 +151,9 @@ func ApplyCLIBillingHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(CLITokenAuthHeader, CLITokenAuthValue)
-	req.Header.Set(CLIClientVersionHeader, CLIClientVersion)
-	req.Header.Set("User-Agent", billingCLIUserAgent)
+	version := ResolveCLIVersion()
+	req.Header.Set(CLIClientVersionHeader, version)
+	req.Header.Set("User-Agent", billingCLIUserAgent(version))
 }
 
 // ParseBillingPayload unmarshals a billing API response body.

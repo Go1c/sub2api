@@ -41,6 +41,17 @@ func TestApplyCLIBillingHeaders(t *testing.T) {
 	require.Equal(t, "grok-pager/"+CLIClientVersion+" grok-shell/"+CLIClientVersion+" (macos; aarch64)", req.UserAgent())
 }
 
+func TestApplyCLIBillingHeadersHonorsVersionOverride(t *testing.T) {
+	t.Setenv(CLIVersionEnv, "1.0.45")
+	req, err := http.NewRequest(http.MethodGet, BuildBillingURL(true), nil)
+	require.NoError(t, err)
+
+	ApplyCLIBillingHeaders(req, "token")
+
+	require.Equal(t, "1.0.45", req.Header.Get(CLIClientVersionHeader))
+	require.Equal(t, "grok-pager/1.0.45 grok-shell/1.0.45 (macos; aarch64)", req.UserAgent())
+}
+
 func TestBuildBillingSummaryWeeklyAndMonthly(t *testing.T) {
 	t.Parallel()
 
