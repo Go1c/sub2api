@@ -17,7 +17,7 @@ const (
 	grokClientModeHeader       = xai.CLIClientMode
 )
 
-// defaultGrokUpstreamUserAgent is the pinned Grok CLI / workspace UA.
+// defaultGrokUpstreamUserAgent is the pinned local Grok CLI UA.
 // Grok upstream must not forward Claude Code / Codex / browser client UAs.
 func defaultGrokUpstreamUserAgent() string {
 	return xai.CLIUserAgent(xai.ResolveCLIVersion())
@@ -32,6 +32,7 @@ func applyDefaultGrokUpstreamHeaders(req *http.Request) {
 	req.Header.Set("User-Agent", defaultGrokUpstreamUserAgent())
 	req.Header.Set("x-grok-client-version", xai.ResolveCLIVersion())
 	req.Header.Set("x-grok-client-identifier", grokClientIdentifierHeader)
+	req.Header.Set("x-grok-client-mode", grokClientModeHeader)
 }
 
 func applyGrokTLSProfileHeaders(req *http.Request, profile *tlsfingerprint.Profile) {

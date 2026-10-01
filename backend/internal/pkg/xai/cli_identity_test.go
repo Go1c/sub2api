@@ -47,8 +47,10 @@ func TestApplyCLIProxyHeaders(t *testing.T) {
 
 	require.Equal(t, CLIClientVersion, req.Header.Get("x-grok-client-version"))
 	require.Equal(t, CLIClientIdentifier, req.Header.Get("x-grok-client-identifier"))
+	require.Equal(t, CLIClientMode, req.Header.Get("x-grok-client-mode"))
+	require.Equal(t, CLIAuthenticateResponseValue, req.Header.Get(CLIAuthenticateResponseHeader))
 	require.Equal(t, CLITokenAuth, req.Header.Get("X-XAI-Token-Auth"))
-	require.Equal(t, CLIUserAgent(CLIClientVersion), req.Header.Get("User-Agent"))
+	require.Equal(t, "grok-shell/"+CLIClientVersion+" (macos; aarch64)", req.Header.Get("User-Agent"))
 }
 
 func TestApplyCLIProxyHeadersLeavesAPIHostUnchanged(t *testing.T) {

@@ -1279,6 +1279,7 @@ func (s *AccountTestService) testGrokResponsesConnection(c *gin.Context, ctx con
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create Grok request")
 	}
+	applyGrokModelOverrideHeader(req.Header, payloadBytes)
 	s.applyGrokTestRequestHeaders(req, account, authToken, "application/json, text/event-stream")
 
 	resp, err := s.httpUpstream.Do(req, s.grokTestProxyURL(account), account.ID, account.Concurrency)

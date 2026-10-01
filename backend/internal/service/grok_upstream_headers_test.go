@@ -25,6 +25,7 @@ func TestApplyDefaultGrokUpstreamHeadersUsesCLIUserAgent(t *testing.T) {
 	require.Equal(t, xai.CLIUserAgent(xai.CLIClientVersion), req.Header.Get("User-Agent"))
 	require.Equal(t, xai.CLIClientVersion, req.Header.Get("x-grok-client-version"))
 	require.Equal(t, xai.CLIClientIdentifier, req.Header.Get("x-grok-client-identifier"))
+	require.Equal(t, xai.CLIClientMode, req.Header.Get("x-grok-client-mode"))
 }
 
 func TestApplyDefaultGrokUpstreamHeadersHonorsCLIVersionOverride(t *testing.T) {

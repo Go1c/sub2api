@@ -562,6 +562,8 @@ func applyGrokCLIProxyHeaders(req *http.Request) {
 	req.Header.Set("X-XAI-Token-Auth", xai.CLITokenAuth)
 	req.Header.Set("x-grok-client-version", version)
 	req.Header.Set("x-grok-client-identifier", xai.CLIClientIdentifier)
+	req.Header.Set("x-grok-client-mode", xai.CLIClientMode)
+	req.Header.Set(xai.CLIAuthenticateResponseHeader, xai.CLIAuthenticateResponseValue)
 	req.Header.Set("User-Agent", xai.CLIUserAgent(version))
 }
 

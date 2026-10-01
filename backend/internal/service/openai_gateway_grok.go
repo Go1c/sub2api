@@ -1587,6 +1587,7 @@ func buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Acc
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	if account.IsGrokOAuth() {
 		applyGrokCLIHeaders(req.Header)
+		applyGrokModelOverrideHeader(req.Header, body)
 	}
 	applyGrokCacheHeaders(req.Header, cacheIdentity)
 	if c != nil {
@@ -1613,8 +1614,21 @@ func applyGrokCLIHeaders(headers http.Header) {
 	headers.Set("X-Grok-Client-Version", version)
 	headers.Set("x-grok-client-version", version)
 	headers.Set("x-grok-client-identifier", xai.CLIClientIdentifier)
-	// Historical mode value expected by some unit tests / older CLI probes.
-	headers.Set("X-Grok-Client-Mode", "interactive")
+	headers.Set("X-Grok-Client-Mode", xai.CLIClientMode)
+	headers.Set(xai.CLIAuthenticateResponseHeader, xai.CLIAuthenticateResponseValue)
+}
+
+// applyGrokModelOverrideHeader copies the Responses model into the header
+// grok 1.0.46 sends as x-grok-model-override.
+func applyGrokModelOverrideHeader(headers http.Header, body []byte) {
+	if headers == nil || len(body) == 0 {
+		return
+	}
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if model == "" {
+		return
+	}
+	headers.Set("x-grok-model-override", model)
 }
 
 func (s *OpenAIGatewayService) updateGrokUsageSnapshot(ctx context.Context, account *Account, snapshot *xai.QuotaSnapshot) {
