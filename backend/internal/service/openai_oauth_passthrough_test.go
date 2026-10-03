@@ -587,7 +587,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_NamespaceNonStreamingResponse(t *
 	setOpenAIResponsesNamespaceNames(c, names)
 
 	result, err := (&OpenAIGatewayService{cfg: &config.Config{}}).handleNonStreamingResponsePassthrough(
-		context.Background(), resp, c, "gpt-5.5", "",
+		context.Background(), resp, c, nil, "gpt-5.5", "",
 	)
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -2134,6 +2134,8 @@ func TestOpenAIGatewayService_OAuthPassthrough_InfoWhenStreamEndsWithoutDone(t *
 
 	_, err := svc.Forward(context.Background(), c, account, originalBody)
 	require.EqualError(t, err, "stream usage incomplete: missing terminal event")
+	require.Contains(t, rec.Body.String(), "event: response.failed")
+	require.Contains(t, rec.Body.String(), "missing_terminal")
 	require.True(t, logSink.ContainsMessage("上游流在未收到 [DONE] 时结束，疑似断流"))
 	require.True(t, logSink.ContainsMessageAtLevel("上游流在未收到 [DONE] 时结束，疑似断流", "info"))
 	require.True(t, logSink.ContainsFieldValue("upstream_request_id", "rid-truncate"))
