@@ -118,6 +118,19 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		})
 		return fmt.Errorf("amount mismatch: expected %.2f, got %.2f", o.PayAmount, paid)
 	}
+	if isEasyPayFamilyProviderKey(pk) || isEasyPayFamilyProviderKey(expectedProviderKey) {
+		// Completed/refund-state callbacks are acknowledgements only. They must
+		// neither re-credit the user nor depend on a still-available provider.
+		if o.Status == OrderStatusCompleted || psIsRefundStatus(o.Status) {
+			return nil
+		}
+		if err := s.verifyEasyPaySettlement(ctx, o, tradeNo, paid); err != nil {
+			s.writeAuditLog(ctx, o.ID, "PAYMENT_UPSTREAM_VERIFY_FAILED", pk, map[string]any{
+				"reason": err.Error(),
+			})
+			return err
+		}
+	}
 	return s.toPaid(ctx, o, tradeNo, confirmedPayAmount, pk)
 }
 
