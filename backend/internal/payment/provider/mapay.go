@@ -220,26 +220,64 @@ func (m *Mapay) QueryOrder(ctx context.Context, tradeNo string) (*payment.QueryO
 		"key":          m.config["pkey"],
 		"out_trade_no": tradeNo,
 	}
-	body, err := m.post(ctx, m.apiBase()+"/api.php", params)
+	body, httpStatus, err := m.postRaw(ctx, m.apiBase()+"/api.php", params)
 	if err != nil {
 		return nil, fmt.Errorf("mapay query: %w", err)
 	}
+	if httpStatus < http.StatusOK || httpStatus >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("mapay query failed (HTTP %d)", httpStatus)
+	}
+	type mapayQueryData struct {
+		OutTradeNo *string `json:"out_trade_no"`
+		TradeNo    *string `json:"trade_no"`
+		Status     *int    `json:"status"`
+		Money      *string `json:"money"`
+	}
 	var resp struct {
-		Code   int    `json:"code"`
-		Msg    string `json:"msg"`
-		Status int    `json:"status"`
-		Money  string `json:"money"`
+		Code       int            `json:"code"`
+		Msg        string         `json:"msg"`
+		OutTradeNo *string        `json:"out_trade_no"`
+		TradeNo    *string        `json:"trade_no"`
+		Status     *int           `json:"status"`
+		Money      *string        `json:"money"`
+		Data       mapayQueryData `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("mapay parse query: %w", err)
 	}
+	if resp.Code != mapayCodeSuccess {
+		return nil, fmt.Errorf("mapay query was not successful")
+	}
+	for _, upstreamOrder := range []*string{resp.OutTradeNo, resp.Data.OutTradeNo} {
+		if upstreamOrder != nil && strings.TrimSpace(*upstreamOrder) != "" && strings.TrimSpace(*upstreamOrder) != strings.TrimSpace(tradeNo) {
+			return nil, fmt.Errorf("mapay query returned a different out_trade_no")
+		}
+	}
 	status := payment.ProviderStatusPending
-	if resp.Status == mapayStatusPaid {
+	if resp.Status != nil {
+		if *resp.Status == mapayStatusPaid {
+			status = payment.ProviderStatusPaid
+		}
+	} else if resp.Data.Status != nil && *resp.Data.Status == mapayStatusPaid {
 		status = payment.ProviderStatusPaid
 	}
-	amount, _ := strconv.ParseFloat(resp.Money, 64)
+	money := ""
+	if resp.Money != nil {
+		money = *resp.Money
+	} else if resp.Data.Money != nil {
+		money = *resp.Data.Money
+	}
+	amount, _ := strconv.ParseFloat(money, 64)
+	// Do not substitute out_trade_no for an absent gateway trade_no. Callers
+	// must be able to distinguish a real upstream transaction identifier.
+	responseTradeNo := ""
+	if resp.TradeNo != nil && strings.TrimSpace(*resp.TradeNo) != "" {
+		responseTradeNo = strings.TrimSpace(*resp.TradeNo)
+	} else if resp.Data.TradeNo != nil && strings.TrimSpace(*resp.Data.TradeNo) != "" {
+		responseTradeNo = strings.TrimSpace(*resp.Data.TradeNo)
+	}
 	return &payment.QueryOrderResponse{
-		TradeNo:  tradeNo,
+		TradeNo:  responseTradeNo,
 		Status:   status,
 		Amount:   amount,
 		Metadata: m.MerchantIdentityMetadata(),
@@ -250,6 +288,11 @@ func (m *Mapay) VerifyNotification(_ context.Context, rawBody string, _ map[stri
 	values, err := url.ParseQuery(rawBody)
 	if err != nil {
 		return nil, fmt.Errorf("parse notify: %w", err)
+	}
+	for key, entries := range values {
+		if len(entries) != 1 {
+			return nil, fmt.Errorf("duplicate notify parameter %q", key)
+		}
 	}
 	params := make(map[string]string)
 	for k := range values {
@@ -303,13 +346,18 @@ func (m *Mapay) resolveChannelID(paymentType string) string {
 }
 
 func (m *Mapay) post(ctx context.Context, endpoint string, params map[string]string) ([]byte, error) {
+	body, _, err := m.postRaw(ctx, endpoint, params)
+	return body, err
+}
+
+func (m *Mapay) postRaw(ctx context.Context, endpoint string, params map[string]string) ([]byte, int, error) {
 	form := url.Values{}
 	for k, v := range params {
 		form.Set(k, v)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	client := m.httpClient
@@ -318,14 +366,14 @@ func (m *Mapay) post(ctx context.Context, endpoint string, params map[string]str
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxMapayResponseSize))
 	if err != nil {
-		return nil, err
+		return nil, resp.StatusCode, err
 	}
-	return body, nil
+	return body, resp.StatusCode, nil
 }
 
 func mapaySign(params map[string]string, pkey string) string {
