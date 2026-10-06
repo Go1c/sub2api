@@ -1289,6 +1289,21 @@
           <p v-if="apiKeyHint" class="input-hint">{{ apiKeyHint }}</p>
         </div>
 
+        <!-- 上游倍率自动探测：全部 API-key 平台可用（所在区块已限定 apikey 类型） -->
+        <div class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.upstreamBilling.autoProbe') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.upstreamBilling.autoProbeHint') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="upstreamBillingAutoProbeEnabled"
+            data-testid="upstream-billing-auto-probe"
+            :aria-label="t('admin.accounts.upstreamBilling.autoProbe')"
+          />
+        </div>
+
         <div
           v-if="form.platform === 'grok'"
           class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
@@ -4228,6 +4243,7 @@ adminAPI.settings.getWebSearchEmulationConfig().then(cfg => {
 loadQuotaNotifyGlobal()
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
+const upstreamBillingAutoProbeEnabled = ref(true)
 const grokVideoCompatModeEnabled = ref(false)
 const antigravityAccountType = ref<'oauth' | 'upstream'>('oauth') // For antigravity: oauth or upstream
 const antigravityProjectId = ref('')
@@ -4994,7 +5010,18 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
   submitting.value = true
   try {
-    await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    const account = await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    if (
+      payload.type === 'apikey' &&
+      payload.upstream_billing_probe_enabled === true
+    ) {
+      // 创建即探测：失败不阻断创建流程（快照会在下一周期由 runner 补齐）。
+      try {
+        await adminAPI.accounts.probeUpstreamBilling(account.id)
+      } catch {
+        // ignore probe failure after successful create
+      }
+    }
     appStore.showSuccess(t('admin.accounts.accountCreated'))
     emit('created')
     handleClose()
@@ -5018,6 +5045,7 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
 // Methods
 const resetForm = () => {
   step.value = 1
+  upstreamBillingAutoProbeEnabled.value = true
   form.name = ''
   form.notes = ''
   form.platform = 'anthropic'
@@ -5700,6 +5728,8 @@ const createAccountAndFinish = async (
     rate_multiplier: form.rate_multiplier,
     group_ids: form.group_ids,
     expires_at: form.expires_at,
+    // 上游倍率探测对全部 API-key 平台开放；非 apikey 类型（bedrock/oauth）不传。
+    upstream_billing_probe_enabled: type === 'apikey' ? upstreamBillingAutoProbeEnabled.value : undefined,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
 }
