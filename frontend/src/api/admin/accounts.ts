@@ -19,7 +19,8 @@ import type {
   CheckMixedChannelRequest,
   CheckMixedChannelResponse,
   UpstreamBillingProbeResult,
-  UpstreamBillingProbeSettings
+  UpstreamBillingProbeSettings,
+  UpstreamBillingRatesResponse
 } from '@/types'
 
 /**
@@ -62,6 +63,45 @@ export interface AccountListWithEtagResult {
   notModified: boolean
   etag: string | null
   data: PaginatedResponse<Account> | null
+}
+
+export interface AccountUpstreamBillingRatesWithEtagResult {
+  notModified: boolean
+  etag: string | null
+  data: UpstreamBillingRatesResponse | null
+}
+
+export async function getUpstreamBillingRatesWithEtag(
+  page: number = 1,
+  pageSize: number = 20,
+  filters?: {
+    platform?: string
+    type?: string
+    status?: string
+    group?: string
+    search?: string
+    privacy_mode?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
+  },
+  options?: {
+    signal?: AbortSignal
+    etag?: string | null
+  }
+): Promise<AccountUpstreamBillingRatesWithEtagResult> {
+  const headers: Record<string, string> = {}
+  if (options?.etag) headers['If-None-Match'] = options.etag
+
+  const response = await apiClient.get<UpstreamBillingRatesResponse>('/admin/accounts/upstream-billing-rates', {
+    params: { page, page_size: pageSize, ...filters },
+    headers,
+    signal: options?.signal,
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 304
+  })
+
+  const etagHeader = typeof response.headers?.etag === 'string' ? response.headers.etag : null
+  if (response.status === 304) return { notModified: true, etag: etagHeader, data: null }
+  return { notModified: false, etag: etagHeader, data: response.data }
 }
 
 export async function listWithEtag(
@@ -1029,6 +1069,7 @@ export async function probeUpstreamBillingBatch(accountIds: number[]): Promise<U
 export const accountsAPI = {
   list,
   listWithEtag,
+  getUpstreamBillingRatesWithEtag,
   getById,
   create,
   duplicate,

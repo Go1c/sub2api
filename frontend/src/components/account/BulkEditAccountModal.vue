@@ -696,6 +696,14 @@
             aria-labelledby="bulk-edit-rate-multiplier-label"
           />
           <p class="input-hint">{{ t('admin.accounts.billingRateMultiplierHint') }}</p>
+          <p
+            v-if="enableRateMultiplier"
+            class="mt-2 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-300"
+            data-testid="bulk-rate-sync-warning"
+          >
+            <Icon name="exclamationTriangle" size="xs" class="mt-0.5 flex-shrink-0" />
+            <span>{{ t('admin.accounts.bulkEdit.rateSyncWarning') }}</span>
+          </p>
         </div>
       </div>
 
@@ -822,6 +830,45 @@
             {{ t('admin.accounts.openai.codexFingerprintModeDesc') }}
           </p>
           <Select v-model="codexFingerprintMode" data-testid="bulk-codex-fingerprint-mode-select" :options="codexFingerprintModeOptions" />
+        </div>
+      </div>
+
+      <!-- Upstream billing auto probe (any API-key platform) -->
+      <div v-if="allBillingProbeCapable" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="mb-3 flex items-center justify-between">
+          <div class="flex-1 pr-4">
+            <label
+              id="bulk-edit-upstream-billing-auto-probe-label"
+              class="input-label mb-0"
+              for="bulk-edit-upstream-billing-auto-probe-enabled"
+            >
+              {{ t('admin.accounts.upstreamBilling.autoProbe') }}
+            </label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.upstreamBilling.autoProbeHint') }}
+            </p>
+          </div>
+          <input
+            v-model="enableUpstreamBillingAutoProbe"
+            id="bulk-edit-upstream-billing-auto-probe-enabled"
+            type="checkbox"
+            aria-controls="bulk-edit-upstream-billing-auto-probe"
+            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+        <div
+          id="bulk-edit-upstream-billing-auto-probe"
+          :class="!enableUpstreamBillingAutoProbe && 'pointer-events-none opacity-50'"
+          role="group"
+          aria-labelledby="bulk-edit-upstream-billing-auto-probe-label"
+        >
+          <Select
+            v-model="upstreamBillingAutoProbeMode"
+            :disabled="!enableUpstreamBillingAutoProbe"
+            data-testid="bulk-edit-upstream-billing-auto-probe-select"
+            :options="upstreamBillingAutoProbeOptions"
+            aria-labelledby="bulk-edit-upstream-billing-auto-probe-label"
+          />
         </div>
       </div>
 
@@ -1365,6 +1412,15 @@ const allOpenAIAPIKey = computed(() => {
   )
 })
 
+// 上游倍率自动探测已放宽到全部 API-key 平台：只要求所选类型全为 apikey，
+// 平台不限（sub2api 上游即可应答 /v1/sub2api/billing）。
+const allBillingProbeCapable = computed(() => {
+  return (
+    targetSelectedTypes.value.length > 0 &&
+    targetSelectedTypes.value.every(t => t === 'apikey')
+  )
+})
+
 const allOpenAILongContextCapable = computed(() => {
   return (
     targetSelectedPlatforms.value.length === 1 &&
@@ -1446,6 +1502,8 @@ const concurrency = ref(1)
 const loadFactor = ref<number | null>(null)
 const priority = ref(1)
 const rateMultiplier = ref(1)
+const enableUpstreamBillingAutoProbe = ref(false)
+const upstreamBillingAutoProbeMode = ref<'enabled' | 'disabled'>('enabled')
 const status = ref<'active' | 'inactive'>('active')
 const groupIds = ref<number[]>([])
 const openaiPassthroughEnabled = ref(false)
@@ -1493,6 +1551,10 @@ const commonErrorCodes = [
 const statusOptions = computed(() => [
   { value: 'active', label: t('common.active') },
   { value: 'inactive', label: t('common.inactive') }
+])
+const upstreamBillingAutoProbeOptions = computed(() => [
+  { value: 'enabled', label: t('common.enabled') },
+  { value: 'disabled', label: t('common.disabled') }
 ])
 const isOpenAIModelRestrictionDisabled = computed(
   () =>
@@ -1703,6 +1765,10 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
 
   if (enableRateMultiplier.value) {
     updates.rate_multiplier = rateMultiplier.value
+  }
+
+  if (enableUpstreamBillingAutoProbe.value) {
+    updates.upstream_billing_probe_enabled = upstreamBillingAutoProbeMode.value === 'enabled'
   }
 
   if (enableStatus.value) {
@@ -1917,6 +1983,7 @@ const handleSubmit = async () => {
     enableLoadFactor.value ||
     enablePriority.value ||
     enableRateMultiplier.value ||
+    enableUpstreamBillingAutoProbe.value ||
     enableStatus.value ||
     enableGroups.value ||
     enableOpenAIWSMode.value ||
@@ -1993,6 +2060,10 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
       pendingUpdatesForConfirm.value = baseUpdates
       mixedChannelWarningMessage.value = error.message
       showMixedChannelWarning.value = true
+    } else if (error.reason === 'UPSTREAM_BILLING_RATE_SYNC_BULK_CONFLICT') {
+      appStore.showError(t('admin.accounts.bulkEdit.rateSyncConflict', {
+        count: error.metadata?.count ?? 1
+      }))
     } else if (error.reason === 'OPENAI_LONG_CONTEXT_PARENT_REQUIRED') {
       appStore.showError(t('admin.accounts.bulkEdit.longContextParentRequired'))
     } else {
@@ -2032,6 +2103,8 @@ watch(
       enableLoadFactor.value = false
       enablePriority.value = false
       enableRateMultiplier.value = false
+    enableUpstreamBillingAutoProbe.value = false
+    upstreamBillingAutoProbeMode.value = 'enabled'
       enableStatus.value = false
       enableGroups.value = false
       enableOpenAIPassthrough.value = false
