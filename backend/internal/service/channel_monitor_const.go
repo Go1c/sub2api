@@ -122,8 +122,9 @@ const (
 	monitorAnthropicAPIVersion = "2023-06-01"
 	// monitorChallengeMaxTokens 单次 challenge 请求的 max_tokens（足够回答个位数算术）。
 	monitorChallengeMaxTokens = 50
-	// monitorIQMaxTokens 智商糖果题需要更长输出（模型常先解释再给数字）。
-	monitorIQMaxTokens = 512
+	// monitorIQMaxTokens 智商糖果题的输出预算：推理模型（如 gpt-6-astra）的 reasoning
+	// 峰值可超 500 token，预算过低会在推理阶段截断、正文为空，被误判为测试异常。
+	monitorIQMaxTokens = 2048
 
 	// monitorRunOneBuffer runOne 的总超时缓冲（除请求超时与 ping 超时外的额外裕量）。
 	monitorRunOneBuffer = 10 * time.Second

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -538,6 +539,84 @@ func ensurePaymentAuditOrderActionUniqueIndex(t *testing.T, ctx context.Context,
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_audit_logs_order_action_uniq
 ON payment_audit_logs(order_id, action)`)
 	require.NoError(t, err)
+}
+
+// paymentFulfillmentRedeemRepo / paymentFulfillmentRedeemCacheStub /
+// createPaymentFulfillmentSubscriptionOrder 供 payment_easypay_replay_test.go 共用，
+// 移植自上游 v2.0.58；Create/Use 直接复用内嵌 lifecycle stub 的实现。
+
+type paymentFulfillmentRedeemCacheStub struct {
+	count          int
+	getCalls       int
+	incrementCalls int
+	acquireCalls   int
+	releaseCalls   int
+}
+
+type paymentFulfillmentRedeemRepo struct {
+	paymentOrderLifecycleRedeemRepo
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) GetRedeemAttemptCount(context.Context, int64) (int, error) {
+	c.getCalls++
+	return c.count, nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) IncrementRedeemAttemptCount(context.Context, int64) error {
+	c.incrementCalls++
+	c.count++
+	return nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) AcquireRedeemLock(context.Context, string, time.Duration) (bool, error) {
+	c.acquireCalls++
+	return true, nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) ReleaseRedeemLock(context.Context, string) error {
+	c.releaseCalls++
+	return nil
+}
+
+func createPaymentFulfillmentSubscriptionOrder(
+	t *testing.T,
+	ctx context.Context,
+	client *dbent.Client,
+	status string,
+	updatedAt time.Time,
+) *dbent.PaymentOrder {
+	t.Helper()
+	user, err := client.User.Create().
+		SetEmail("fulfillment-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "@example.com").
+		SetPasswordHash("hash").
+		SetUsername("payment-fulfillment-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(80).
+		SetPayAmount(80).
+		SetFeeRate(0).
+		SetRechargeCode("PAY-SUB-" + strconv.FormatInt(time.Now().UnixNano(), 10)).
+		SetOutTradeNo("sub2_fulfillment_" + strconv.FormatInt(time.Now().UnixNano(), 10)).
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("trade-fulfillment").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetPlanID(100).
+		SetSubscriptionGroupID(7).
+		SetSubscriptionDays(30).
+		SetStatus(status).
+		SetPaidAt(time.Now().Add(-time.Hour)).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		SetUpdatedAt(updatedAt).
+		Save(ctx)
+	require.NoError(t, err)
+	return order
 }
 
 func TestExecuteSubscriptionFulfillmentUsesCreditPurchaseSnapshot(t *testing.T) {

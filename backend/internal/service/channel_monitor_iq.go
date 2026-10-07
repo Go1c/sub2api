@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/tidwall/gjson"
 )
 
 // kin Turn-State 默认糖果题（与 origin/main-kin TurnStateProbe 一致）。
@@ -149,6 +151,41 @@ type iqClassifyInput struct {
 	fuzzy      bool
 }
 
+// iqEmptyTextMessage 组装 2xx 空正文分支的诊断消息：
+// 从 rawBody 提取 finish_reason / status 与 usage token 计数（推理截断的定位线索），
+// 再附 body 片段；rawBody 为空时保持原文案。
+func iqEmptyTextMessage(rawBody string) string {
+	const prefix = "iq: empty upstream text"
+	if strings.TrimSpace(rawBody) == "" {
+		return prefix
+	}
+	var parts []string
+	if finish := gjson.Get(rawBody, "choices.0.finish_reason").String(); finish != "" {
+		parts = append(parts, "finish="+finish)
+	} else if status := gjson.Get(rawBody, "status").String(); status != "" {
+		parts = append(parts, "status="+status)
+	}
+	if usage := gjson.Get(rawBody, "usage"); usage.IsObject() {
+		if v := usage.Get("completion_tokens"); v.Exists() {
+			parts = append(parts, "completion="+v.String())
+		}
+		if v := usage.Get("completion_tokens_details.reasoning_tokens"); v.Exists() {
+			parts = append(parts, "reasoning="+v.String())
+		}
+		if v := usage.Get("output_tokens"); v.Exists() {
+			parts = append(parts, "output_tokens="+v.String())
+		}
+		if v := usage.Get("output_tokens_details.reasoning_tokens"); v.Exists() {
+			parts = append(parts, "reasoning="+v.String())
+		}
+	}
+	body := truncateForErrorBody(rawBody)
+	if len(parts) == 0 {
+		return fmt.Sprintf("%s (body: %s)", prefix, body)
+	}
+	return fmt.Sprintf("%s (%s body: %s)", prefix, strings.Join(parts, " "), body)
+}
+
 func classifyIQOutcome(in iqClassifyInput) (iqStatus, message string) {
 	if in.err != nil {
 		if isMonitorNetworkError(in.err) {
@@ -170,7 +207,7 @@ func classifyIQOutcome(in iqClassifyInput) (iqStatus, message string) {
 			truncateMessage(sanitizeErrorMessage(fmt.Sprintf("upstream HTTP %d: %s", in.statusCode, bodySnippet)))
 	}
 	if strings.TrimSpace(in.respText) == "" {
-		return MonitorIQStatusTestErr, "iq: empty upstream text"
+		return MonitorIQStatusTestErr, truncateMessage(sanitizeErrorMessage(iqEmptyTextMessage(in.rawBody)))
 	}
 	if monitorIQAnswerMatches(in.respText, in.expected, in.fuzzy) {
 		return MonitorIQStatusOK, ""

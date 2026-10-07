@@ -62,6 +62,7 @@ metadata:
   - 不抽 SVG。
   - 附加模型：每个附加模型也是两枪（探活 + 糖果题）。
   - 智商请求独立使用 180 秒总超时与响应头等待上限；普通探活仍为总计 45 秒、响应头 30 秒。
+  - 糖果题 max_tokens 预算为 `monitorIQMaxTokens = 2048`：推理模型（gpt-6-astra）reasoning 峰值可超 500 token，512 会在推理阶段被截断成 2xx 空正文、误判「测试异常」；且 `applyMaxTokensOverride` 会在 body_override merge 后强制覆写回该常量，调预算只能改代码，不能走 body_override。2xx 空正文时错误消息由 `iqEmptyTextMessage` 携带 finish/status 与 usage token 计数及 body 片段，便于定位截断。
   - 后台单轮预算为 243 秒，覆盖 ping、算术探活、完整智商请求与缓冲；手动检测前端等待 300 秒。
   - 超时保存为 `test_timeout`，不当作答错；DNS 失败仍为监控网络异常。新增迁移 `947_channel_monitor_iq_timeout.sql` 放宽历史表状态约束；既有历史不重判。
   - 检测间隔仍为 15–3600 秒，抖动/启用/分组/高级设置保留。
