@@ -119,6 +119,60 @@ func TestClassifyIQOutcome_FourStates(t *testing.T) {
 	require.Equal(t, MonitorIQStatusTestErr, iq)
 }
 
+func TestClassifyIQOutcome_EmptyTextCarriesTruncationDiagnostics(t *testing.T) {
+	// 生产复现：推理模型 2xx + finish_reason=length，reasoning 吃满 max_tokens，
+	// 正文只剩空白 → test_error，消息必须带 finish / usage 计数与 body 片段。
+	iq, msg := classifyIQOutcome(iqClassifyInput{
+		statusCode: 200,
+		respText:   " ",
+		rawBody:    `{"choices":[{"finish_reason":"length","message":{"content":" "}}],"usage":{"completion_tokens":512,"completion_tokens_details":{"reasoning_tokens":512}}}`,
+		expected:   "21",
+		fuzzy:      true,
+	})
+	require.Equal(t, MonitorIQStatusTestErr, iq)
+	require.Contains(t, msg, "finish=length")
+	require.Contains(t, msg, "completion=512")
+	require.Contains(t, msg, "reasoning=512")
+	require.Contains(t, msg, "body:")
+	require.LessOrEqual(t, len(msg), monitorMessageMaxBytes)
+
+	// responses 形态：status + output_tokens。
+	iq, msg = classifyIQOutcome(iqClassifyInput{
+		statusCode: 200,
+		respText:   " ",
+		rawBody:    `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"usage":{"output_tokens":512,"output_tokens_details":{"reasoning_tokens":480}}}`,
+		expected:   "21",
+		fuzzy:      true,
+	})
+	require.Equal(t, MonitorIQStatusTestErr, iq)
+	require.Contains(t, msg, "status=incomplete")
+	require.Contains(t, msg, "output_tokens=512")
+	require.Contains(t, msg, "reasoning=480")
+	require.LessOrEqual(t, len(msg), monitorMessageMaxBytes)
+
+	// body 里混入 key 片段时仍走脱敏。
+	iq, msg = classifyIQOutcome(iqClassifyInput{
+		statusCode: 200,
+		respText:   " ",
+		rawBody:    `{"choices":[{"finish_reason":"length","message":{"content":"sk-abcdefghijklmnopqrst123456"}}],"usage":{"completion_tokens":512}}`,
+		expected:   "21",
+		fuzzy:      true,
+	})
+	require.Equal(t, MonitorIQStatusTestErr, iq)
+	require.NotContains(t, msg, "sk-abcdefghijklmnopqrst123456")
+	require.Contains(t, msg, "sk-***REDACTED***")
+
+	// 无 body 时保持原消息。
+	iq, msg = classifyIQOutcome(iqClassifyInput{
+		statusCode: 200,
+		respText:   "   ",
+		expected:   "21",
+		fuzzy:      true,
+	})
+	require.Equal(t, MonitorIQStatusTestErr, iq)
+	require.Equal(t, "iq: empty upstream text", msg)
+}
+
 func TestValidateCreateParams_IQKeepsOriginalInterval(t *testing.T) {
 	err := validateCreateParams(ChannelMonitorCreateParams{
 		Name:            "iq",

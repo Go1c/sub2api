@@ -43,6 +43,8 @@ func TestRunCheck_IQSendsArithmeticThenCandyQuiz(t *testing.T) {
 	require.Contains(t, fmtAny(h.bodies[1]["messages"]), "苹果味")
 	require.NotContains(t, fmtAny(h.bodies[1]["messages"]), "Calculate and respond")
 	require.EqualValues(t, monitorIQMaxTokens, h.bodies[1]["max_tokens"])
+	// 防回归：512 会把推理模型（如 gpt-6-astra）截断在推理阶段，正文为空 → 误判测试异常。
+	require.EqualValues(t, 2048, h.bodies[1]["max_tokens"])
 
 	require.Len(t, repo.history, 1)
 	require.Equal(t, MonitorIQStatusOK, repo.history[0].IqStatus)
