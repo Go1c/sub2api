@@ -23,6 +23,7 @@ metadata:
 | 文档 | 一句话 |
 |------|--------|
 | [`features/payment.md`](features/payment.md) | 内置支付系统:服务商接入、Webhook、订单状态、可信余额履约限流边界、管理端集成 Admin API |
+| [`features/recharge-bonus.md`](features/recharge-bonus.md) | 充值满赠:档位配置、订单快照、-B 锚定码幂等发放赠送余额并流水溯源、全额退款回收赠送 |
 | [`features/subscription-pricing.md`](features/subscription-pricing.md) | 订阅套餐计价口径与计算器工具——定价 / 折扣 / 日周上限怎么算 |
 | [`features/subscription-credit-pool.md`](features/subscription-credit-pool.md) | 用户级订阅额度池:多订阅按时间扣费、额度优先消费、不足拆分扣余额、ledger 审计；用户自助重置周限（每订阅周期一次） |
 | [`features/subscription-admin.md`](features/subscription-admin.md) | issue #47 订阅管理三项修复:撤销不计浪费、限额刷新时间可配、套餐入口迁移 |

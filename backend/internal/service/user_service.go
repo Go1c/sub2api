@@ -106,6 +106,8 @@ type UserRepository interface {
 	UpdateUserLastActiveAt(ctx context.Context, userID int64, activeAt time.Time) error
 
 	UpdateBalance(ctx context.Context, id int64, amount float64) error
+	// UpdateBalanceNoStat 只加 balance 不累计 total_recharged（赠送性入账专用）。
+	UpdateBalanceNoStat(ctx context.Context, id int64, amount float64) error
 	DeductBalance(ctx context.Context, id int64, amount float64) error
 	UpdateConcurrency(ctx context.Context, id int64, amount int) error
 	BatchSetConcurrency(ctx context.Context, userIDs []int64, value int) (int, error)

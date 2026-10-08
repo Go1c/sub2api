@@ -470,6 +470,12 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, e
 			return nil, fmt.Errorf("update user balance: %w", err)
 		}
 
+	case RedeemTypeRechargeBonus:
+		// 赠送余额只加 balance，不计入 total_recharged（避免污染累计充值统计/门槛）
+		if err := s.userRepo.UpdateBalanceNoStat(txCtx, userID, redeemCode.Value); err != nil {
+			return nil, fmt.Errorf("update user bonus balance: %w", err)
+		}
+
 	case RedeemTypeConcurrency:
 		delta := int(redeemCode.Value)
 		if delta < 0 {
@@ -535,7 +541,7 @@ func redeemCodeHashForLog(code string) string {
 // invalidateRedeemCaches 失效兑换相关的缓存
 func (s *RedeemService) invalidateRedeemCaches(ctx context.Context, userID int64, redeemCode *RedeemCode) {
 	switch redeemCode.Type {
-	case RedeemTypeBalance, RedeemTypeBalancePayment:
+	case RedeemTypeBalance, RedeemTypeBalancePayment, RedeemTypeRechargeBonus:
 		if s.authCacheInvalidator != nil {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 		}

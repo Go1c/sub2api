@@ -472,6 +472,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		selectedInstanceID = strings.TrimSpace(sel.InstanceID)
 		selectedProviderKey = strings.TrimSpace(sel.ProviderKey)
 	}
+	// 充值满赠快照：创建订单时按当前配置计算并落库，履约与展示均用此快照而非当前配置
+	bonusAmount := 0.0
+	if req.OrderType == payment.OrderTypeBalance {
+		bonusAmount = computeRechargeBonusAmount(orderAmount, cfg)
+	}
 	b := tx.PaymentOrder.Create().
 		SetUserID(req.UserID).
 		SetUserEmail(user.Email).
@@ -480,6 +485,7 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		SetAmount(orderAmount).
 		SetPayAmount(payAmount).
 		SetFeeRate(feeRate).
+		SetBonusAmount(bonusAmount).
 		SetRechargeCode("").
 		SetOutTradeNo(outTradeNo).
 		SetPaymentType(req.PaymentType).

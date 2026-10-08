@@ -205,6 +205,7 @@ const typeOptions = computed(() => [
   { value: 'affiliate_balance', label: t('admin.users.typeAffiliateBalance') },
   { value: 'checkin_balance', label: t('admin.users.typeCheckinBalance') },
   { value: 'checkin_milestone', label: t('admin.users.typeCheckinMilestone') },
+  { value: 'recharge_bonus', label: t('admin.users.typeRechargeBonus') },
   { value: 'admin_balance', label: t('admin.users.typeAdminBalance') },
   { value: 'concurrency', label: t('admin.users.typeConcurrency') },
   { value: 'admin_concurrency', label: t('admin.users.typeAdminConcurrency') },
@@ -248,7 +249,7 @@ const isAdminType = (type: string) => type === 'admin_balance' || type === 'admi
 // Helper: check if balance type (includes admin_balance)
 const CHECKIN_MILESTONE_DAY = /^daily_checkin_milestone:\d+:(\d+)$/
 
-const isBalanceType = (type: string) => type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'affiliate_balance' || type === 'promo_balance' || type === 'wallet_debit' || type === 'checkin_balance' || type === 'checkin_milestone'
+const isBalanceType = (type: string) => type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'affiliate_balance' || type === 'promo_balance' || type === 'wallet_debit' || type === 'checkin_balance' || type === 'checkin_milestone' || type === 'recharge_bonus'
 
 // Helper: check if subscription type
 const isSubscriptionType = (type: string) => type === 'subscription'
@@ -321,6 +322,8 @@ const getItemTitle = (item: BalanceHistoryItem) => {
         : t('redeem.balanceAddedAffiliate')
     case 'checkin_balance':
       return t('redeem.balanceAddedCheckin')
+    case 'recharge_bonus':
+      return t('admin.users.typeRechargeBonus')
     case 'checkin_milestone': {
       const day = item.notes?.match(CHECKIN_MILESTONE_DAY)?.[1] ?? ''
       return t('redeem.balanceAddedCheckinMilestone', { day })

@@ -629,6 +629,7 @@ export default {
     balanceAddedAdmin: 'Balance Added (Admin)',
     balanceAddedCheckin: 'Balance Added (Check-in)',
     balanceAddedCheckinMilestone: 'Check-in Milestone Day {day}',
+    balanceAddedRechargeBonus: 'Balance Added (Recharge Bonus)',
     balanceDeductedAdmin: 'Balance Deducted (Admin)',
     concurrencyAddedRedeem: 'Concurrency Added (Redeem)',
     concurrencyAddedAdmin: 'Concurrency Added (Admin)',

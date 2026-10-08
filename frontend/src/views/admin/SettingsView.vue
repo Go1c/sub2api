@@ -6759,6 +6759,106 @@
                   </div>
                   <Toggle v-model="form.payment_alipay_force_qrcode" />
                 </div>
+                <!-- 充值满赠 (Recharge bonus tiers) -->
+                <div
+                  class="rounded-lg border border-gray-100 px-4 py-3 dark:border-dark-700"
+                >
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <label
+                        class="font-medium text-gray-900 dark:text-white"
+                        >{{
+                          t("admin.settings.payment.rechargeBonusEnabled")
+                        }}</label
+                      >
+                      <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {{
+                          t("admin.settings.payment.rechargeBonusEnabledHint")
+                        }}
+                      </p>
+                    </div>
+                    <Toggle v-model="form.payment_recharge_bonus_enabled" />
+                  </div>
+                  <div
+                    v-if="form.payment_recharge_bonus_enabled"
+                    class="mt-3 space-y-2 border-t border-gray-100 pt-3 dark:border-dark-700"
+                  >
+                    <div
+                      v-for="(tier, index) in form.payment_recharge_bonus_tiers"
+                      :key="index"
+                      class="flex items-center gap-2"
+                    >
+                      <div class="flex items-center gap-1.5">
+                        <span
+                          class="whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
+                          >{{
+                            t("admin.settings.payment.rechargeBonusThreshold")
+                          }}</span
+                        >
+                        <input
+                          v-model.number="tier.threshold"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          class="input input-sm w-32"
+                        />
+                      </div>
+                      <div class="flex items-center gap-1.5">
+                        <span
+                          class="whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
+                          >{{
+                            t("admin.settings.payment.rechargeBonusAmount")
+                          }}</span
+                        >
+                        <input
+                          v-model.number="tier.bonus"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          class="input input-sm w-32"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-secondary px-2"
+                        :title="t('admin.settings.payment.rechargeBonusRemoveTier')"
+                        @click="removeRechargeBonusTier(index)"
+                      >
+                        <Icon name="x" size="xs" class="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        :disabled="
+                          form.payment_recharge_bonus_tiers.length >=
+                          RECHARGE_BONUS_MAX_TIERS
+                        "
+                        @click="addRechargeBonusTier"
+                      >
+                        {{ t("admin.settings.payment.rechargeBonusAddTier") }}
+                      </button>
+                      <span
+                        v-if="form.payment_recharge_bonus_tiers.length === 0"
+                        class="text-xs text-gray-400"
+                        >{{
+                          t("admin.settings.payment.rechargeBonusEmptyHint")
+                        }}</span
+                      >
+                      <span v-else class="text-xs text-gray-400">
+                        {{
+                          t("admin.settings.payment.rechargeBonusMaxTiers", {
+                            max: RECHARGE_BONUS_MAX_TIERS,
+                          })
+                        }}
+                      </span>
+                    </div>
+                    <p class="text-xs text-gray-400">
+                      {{ t("admin.settings.payment.rechargeBonusHint") }}
+                    </p>
+                  </div>
+                </div>
                 <!-- Row 3: Pending orders + load balance + cancel rate limit (all in one row) -->
                 <div class="flex flex-wrap items-end gap-4">
                   <div class="w-28">
@@ -8116,6 +8216,7 @@ import type {
   AuthSourceDefaultsState,
   AuthSourceType,
   AffiliateRebateTier,
+  RechargeBonusTierInput,
   SystemSettings,
   UpdateSettingsRequest,
   DefaultSubscriptionSetting,
@@ -8441,6 +8542,38 @@ function updateAffiliateTierRate(tier: AffiliateRebateTier, event: Event): void 
     : null;
 }
 
+// ── 充值满赠档位编辑器 ─────────────────────────────────────────────
+const RECHARGE_BONUS_MAX_TIERS = 20;
+
+function addRechargeBonusTier(): void {
+  if (form.payment_recharge_bonus_tiers.length >= RECHARGE_BONUS_MAX_TIERS) {
+    return;
+  }
+  form.payment_recharge_bonus_tiers.push({ threshold: 0, bonus: 0 });
+}
+
+function removeRechargeBonusTier(index: number): void {
+  form.payment_recharge_bonus_tiers.splice(index, 1);
+}
+
+/** 保存前序列化：剔除 threshold/bonus 任一为空或 <=0 的行，金额保留 2 位小数 */
+function normalizeRechargeBonusTiersForSave(
+  tiers: RechargeBonusTierInput[],
+): RechargeBonusTierInput[] {
+  return tiers
+    .map((tier) => ({
+      threshold: Math.round(Number(tier.threshold) * 100) / 100,
+      bonus: Math.round(Number(tier.bonus) * 100) / 100,
+    }))
+    .filter(
+      (tier) =>
+        Number.isFinite(tier.threshold) &&
+        Number.isFinite(tier.bonus) &&
+        tier.threshold > 0 &&
+        tier.bonus > 0,
+    );
+}
+
 function defaultLoginAgreementDocuments(): LoginAgreementDocument[] {
   return [
     {
@@ -8533,6 +8666,9 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_weight_session_sticky: string;
   // Optional on SystemSettings API payload; form always holds a concrete boolean for Toggle v-model.
   payment_alipay_force_qrcode: boolean;
+  // 充值满赠：API payload 可选；form 内始终持有具体值（Toggle / 档位编辑器绑定依赖）
+  payment_recharge_bonus_enabled: boolean;
+  payment_recharge_bonus_tiers: RechargeBonusTierInput[];
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
 };
@@ -8625,6 +8761,8 @@ const form = reactive<SettingsForm>({
   payment_balance_disabled: false,
   payment_subscription_balance_enabled: false,
   payment_balance_recharge_multiplier: 1,
+  payment_recharge_bonus_enabled: false,
+  payment_recharge_bonus_tiers: [] as RechargeBonusTierInput[],
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
   payment_help_image_url: "",
@@ -11055,6 +11193,10 @@ async function saveSettings() {
       payment_balance_disabled: form.payment_balance_disabled,
       payment_balance_recharge_multiplier:
         Number(form.payment_balance_recharge_multiplier) || 1,
+      payment_recharge_bonus_enabled: form.payment_recharge_bonus_enabled,
+      payment_recharge_bonus_tiers: normalizeRechargeBonusTiersForSave(
+        form.payment_recharge_bonus_tiers,
+      ),
       payment_subscription_usd_to_cny_rate:
         Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,

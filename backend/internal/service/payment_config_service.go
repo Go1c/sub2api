@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -39,6 +41,9 @@ const (
 	// 0/未配置 = 关闭换算（订阅按 price 数值直付），显式配置后 CNY 通道订阅按 price × rate 收款。
 	SettingSubscriptionUSDToCNYRate = "SUBSCRIPTION_USD_TO_CNY_RATE"
 	SettingAlipayForceQRCode        = "ALIPAY_FORCE_QRCODE"
+	// 充值满赠：总开关 + 档位列表（JSON 数组，到账余额 >= threshold 时赠 bonus）。
+	SettingRechargeBonusEnabled = "RECHARGE_BONUS_ENABLED"
+	SettingRechargeBonusTiers   = "RECHARGE_BONUS_TIERS"
 )
 
 // Default values for payment configuration settings.
@@ -46,6 +51,15 @@ const (
 	defaultOrderTimeoutMin  = 30
 	defaultMaxPendingOrders = 3
 )
+
+// maxRechargeBonusTiers 充值满赠允许配置的最大档位数。
+const maxRechargeBonusTiers = 20
+
+// RechargeBonusTier 单档充值满赠：到账余额 >= Threshold 时赠送 Bonus。
+type RechargeBonusTier struct {
+	Threshold float64 `json:"threshold"`
+	Bonus     float64 `json:"bonus"`
+}
 
 // PaymentConfig holds the payment system configuration.
 type PaymentConfig struct {
@@ -78,6 +92,10 @@ type PaymentConfig struct {
 
 	// Force Alipay mobile users to use QR code instead of mobile redirect
 	AlipayForceQRCode bool `json:"alipay_force_qrcode"`
+
+	// 充值满赠：仅 order_type=balance 订单参与，履约时按订单创建时的快照发放
+	RechargeBonusEnabled bool                `json:"recharge_bonus_enabled"`
+	RechargeBonusTiers   []RechargeBonusTier `json:"recharge_bonus_tiers"`
 }
 
 // UpdatePaymentConfigRequest contains fields to update payment configuration.
@@ -109,6 +127,10 @@ type UpdatePaymentConfigRequest struct {
 
 	// Force Alipay mobile users to use QR code instead of mobile redirect
 	AlipayForceQRCode *bool `json:"alipay_force_qrcode"`
+
+	// 充值满赠（tiers 非 nil 才写，与 EnabledTypes 同语义）
+	RechargeBonusEnabled *bool               `json:"recharge_bonus_enabled"`
+	RechargeBonusTiers   []RechargeBonusTier `json:"recharge_bonus_tiers"`
 
 	VisibleMethodAlipaySource  *string `json:"payment_visible_method_alipay_source"`
 	VisibleMethodWxpaySource   *string `json:"payment_visible_method_wxpay_source"`
@@ -237,6 +259,7 @@ func (s *PaymentConfigService) GetPaymentConfig(ctx context.Context) (*PaymentCo
 		SettingCancelRateLimitOn, SettingCancelRateLimitMax,
 		SettingCancelWindowSize, SettingCancelWindowUnit, SettingCancelWindowMode,
 		SettingAlipayForceQRCode,
+		SettingRechargeBonusEnabled, SettingRechargeBonusTiers,
 		SettingPaymentVisibleMethodAlipayEnabled, SettingPaymentVisibleMethodAlipaySource,
 		SettingPaymentVisibleMethodWxpayEnabled, SettingPaymentVisibleMethodWxpaySource,
 	}
@@ -276,6 +299,9 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		CancelRateLimitMode:    vals[SettingCancelWindowMode],
 
 		AlipayForceQRCode: vals[SettingAlipayForceQRCode] == "true",
+
+		RechargeBonusEnabled: vals[SettingRechargeBonusEnabled] == "true",
+		RechargeBonusTiers:   parseRechargeBonusTiers(vals[SettingRechargeBonusTiers]),
 	}
 	if cfg.LoadBalanceStrategy == "" {
 		cfg.LoadBalanceStrategy = payment.DefaultLoadBalanceStrategy
@@ -339,6 +365,11 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 			return infraerrors.BadRequest("INVALID_RECHARGE_FEE_RATE", "recharge fee rate allows at most 2 decimal places")
 		}
 	}
+	if req.RechargeBonusTiers != nil {
+		if err := validateRechargeBonusTiers(req.RechargeBonusTiers); err != nil {
+			return err
+		}
+	}
 	// Patch-style update: only persist fields that were explicitly provided.
 	// Nil pointers must not overwrite existing settings with empty strings.
 	m := make(map[string]string)
@@ -376,6 +407,14 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 	if req.EnabledTypes != nil {
 		m[SettingEnabledPaymentTypes] = strings.Join(req.EnabledTypes, ",")
 	}
+	if req.RechargeBonusTiers != nil {
+		tiersJSON, err := json.Marshal(req.RechargeBonusTiers)
+		if err != nil {
+			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus tiers serialization failed")
+		}
+		m[SettingRechargeBonusTiers] = string(tiersJSON)
+	}
+	setIfPresent(SettingRechargeBonusEnabled, formatBoolOrEmpty(req.RechargeBonusEnabled), req.RechargeBonusEnabled != nil)
 	if len(m) == 0 {
 		return nil
 	}
@@ -409,6 +448,80 @@ func normalizeSubscriptionUSDToCNYRate(v float64) float64 {
 		return 0
 	}
 	return v
+}
+
+// parseRechargeBonusTiers 解析充值满赠档位 JSON；空串/解析失败返回空 slice（禁 panic）。
+func parseRechargeBonusTiers(raw string) []RechargeBonusTier {
+	if raw == "" {
+		return []RechargeBonusTier{}
+	}
+	var tiers []RechargeBonusTier
+	if err := json.Unmarshal([]byte(raw), &tiers); err != nil {
+		return []RechargeBonusTier{}
+	}
+	return normalizeRechargeBonusTiers(tiers)
+}
+
+// normalizeRechargeBonusTiers 丢弃非法档（threshold/bonus <= 0 或 NaN/Inf），
+// 同 threshold 保留首个，按 Threshold 降序排序，始终返回非 nil slice。
+func normalizeRechargeBonusTiers(tiers []RechargeBonusTier) []RechargeBonusTier {
+	out := make([]RechargeBonusTier, 0, len(tiers))
+	seen := make(map[float64]struct{}, len(tiers))
+	for _, tier := range tiers {
+		if tier.Threshold <= 0 || tier.Bonus <= 0 ||
+			math.IsNaN(tier.Threshold) || math.IsInf(tier.Threshold, 0) ||
+			math.IsNaN(tier.Bonus) || math.IsInf(tier.Bonus, 0) {
+			continue
+		}
+		if _, ok := seen[tier.Threshold]; ok {
+			continue
+		}
+		seen[tier.Threshold] = struct{}{}
+		out = append(out, tier)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Threshold > out[j].Threshold })
+	return out
+}
+
+// computeRechargeBonusAmount 返回到账金额命中的最高档赠送额（未命中返回 0）。
+// tiers 已按 Threshold 降序，取第一个 threshold <= creditedAmount 的档；
+// creditedAmount 与 threshold 均为 2 位小数内的金额，直接浮点 >= 比较即可。
+func computeRechargeBonusAmount(creditedAmount float64, cfg *PaymentConfig) float64 {
+	if cfg == nil || !cfg.RechargeBonusEnabled || len(cfg.RechargeBonusTiers) == 0 {
+		return 0
+	}
+	for _, tier := range cfg.RechargeBonusTiers {
+		if tier.Threshold <= creditedAmount {
+			return math.Round(tier.Bonus*100) / 100
+		}
+	}
+	return 0
+}
+
+// validateRechargeBonusTiers 校验管理员提交的充值满赠档位。
+func validateRechargeBonusTiers(tiers []RechargeBonusTier) error {
+	if len(tiers) > maxRechargeBonusTiers {
+		return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS",
+			fmt.Sprintf("recharge bonus allows at most %d tiers", maxRechargeBonusTiers))
+	}
+	seen := make(map[float64]struct{}, len(tiers))
+	for _, tier := range tiers {
+		if math.IsNaN(tier.Threshold) || math.IsInf(tier.Threshold, 0) || tier.Threshold <= 0 {
+			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus threshold must be a positive number")
+		}
+		if math.IsNaN(tier.Bonus) || math.IsInf(tier.Bonus, 0) || tier.Bonus <= 0 {
+			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus bonus must be a positive number")
+		}
+		// 金额只允许 2 位小数
+		if math.Round(tier.Threshold*100) != tier.Threshold*100 || math.Round(tier.Bonus*100) != tier.Bonus*100 {
+			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus tiers allow at most 2 decimal places")
+		}
+		if _, ok := seen[tier.Threshold]; ok {
+			return infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", "recharge bonus thresholds must be unique")
+		}
+		seen[tier.Threshold] = struct{}{}
+	}
+	return nil
 }
 
 func formatNonNegativeFloat(v *float64) string {

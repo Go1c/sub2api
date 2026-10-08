@@ -372,24 +372,58 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 	existing, lookupErr := s.redeemService.GetByCode(ctx, o.RechargeCode)
 	action := resolveRedeemAction(existing, lookupErr)
 
-	switch action {
-	case redeemActionSkipCompleted:
-		s.applyAffiliateRebateBestEffort(ctx, o)
-		// Code already created and redeemed — just mark completed
-		return s.markCompleted(ctx, o, lease, "RECHARGE_SUCCESS")
-	case redeemActionCreate:
+	if action == redeemActionCreate {
 		rc := &RedeemCode{Code: o.RechargeCode, Type: RedeemTypeBalance, Value: o.Amount, Status: StatusUnused}
 		if err := s.redeemService.CreateCode(ctx, rc); err != nil {
 			return fmt.Errorf("create redeem code: %w", err)
 		}
-	case redeemActionRedeem:
-		// Code exists but unused — skip creation, proceed to redeem
 	}
-	if _, err := s.redeemService.redeemForPaymentFulfillment(ctx, o.UserID, o.RechargeCode); err != nil {
-		return fmt.Errorf("redeem balance: %w", err)
+	// redeemActionRedeem: code exists but unused — skip creation, proceed to redeem
+	if action != redeemActionSkipCompleted {
+		if _, err := s.redeemService.redeemForPaymentFulfillment(ctx, o.UserID, o.RechargeCode); err != nil {
+			return fmt.Errorf("redeem balance: %w", err)
+		}
+	}
+	// 赠送发放放在两个分支的汇合处：主码已入账（SkipCompleted）但赠送上次失败的重试
+	// 也能在此补发，且由 "-B" 锚定码保证不重复。
+	if o.BonusAmount > 0 {
+		if err := s.fulfillRechargeBonus(ctx, o); err != nil {
+			// 失败走 markFailed → 既有重试链路
+			return fmt.Errorf("recharge bonus: %w", err)
+		}
 	}
 	s.applyAffiliateRebateBestEffort(ctx, o)
 	return s.markCompleted(ctx, o, lease, "RECHARGE_SUCCESS")
+}
+
+// fulfillRechargeBonus 发放充值满赠赠送余额。
+// 与主码同构：幂等锚定为 "{recharge_code}-B"（远小于 recharge_code 的 64 上限），
+// GetByCode 不存在则创建 type=recharge_bonus 的兑换码后走可信兑换入账。
+func (s *PaymentService) fulfillRechargeBonus(ctx context.Context, o *dbent.PaymentOrder) error {
+	bonusCode := o.RechargeCode + "-B"
+	existing, lookupErr := s.redeemService.GetByCode(ctx, bonusCode)
+	switch resolveRedeemAction(existing, lookupErr) {
+	case redeemActionSkipCompleted:
+		// 已发放
+		return nil
+	case redeemActionCreate:
+		rc := &RedeemCode{
+			Code:   bonusCode,
+			Type:   RedeemTypeRechargeBonus,
+			Value:  o.BonusAmount,
+			Status: StatusUnused,
+			Notes:  "payment_bonus:" + o.RechargeCode,
+		}
+		if err := s.redeemService.CreateCode(ctx, rc); err != nil {
+			return fmt.Errorf("create bonus redeem code: %w", err)
+		}
+	case redeemActionRedeem:
+		// 码已创建但未使用，直接兑换
+	}
+	if _, err := s.redeemService.redeemForPaymentFulfillment(ctx, o.UserID, bonusCode); err != nil {
+		return fmt.Errorf("redeem bonus: %w", err)
+	}
+	return nil
 }
 
 func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrder, lease *paymentFulfillmentLease, auditAction string) error {
@@ -417,6 +451,7 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 			"rechargeCode":   o.RechargeCode,
 			"creditedAmount": o.Amount,
 			"payAmount":      o.PayAmount,
+			"bonusAmount":    o.BonusAmount,
 		})
 	}
 	return nil

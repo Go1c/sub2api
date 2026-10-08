@@ -859,6 +859,20 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 	return nil
 }
 
+// UpdateBalanceNoStat 与 UpdateBalance 相同，但不累计 total_recharged
+// （用于充值满赠等赠送性入账，避免污染累计充值统计/门槛）。
+func (r *userRepository) UpdateBalanceNoStat(ctx context.Context, id int64, amount float64) error {
+	client := clientFromContext(ctx, r.client)
+	n, err := client.User.Update().Where(dbuser.IDEQ(id)).AddBalance(amount).Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if n == 0 {
+		return service.ErrUserNotFound
+	}
+	return nil
+}
+
 func (r *userRepository) ApplyRedeemBalanceAdjustment(ctx context.Context, id int64, delta float64) error {
 	const updateSQL = `
 		UPDATE users

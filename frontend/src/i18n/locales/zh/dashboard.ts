@@ -634,6 +634,7 @@ export default {
     balanceAddedAdmin: '余额充值（管理员）',
     balanceAddedCheckin: '余额充值（签到）',
     balanceAddedCheckinMilestone: '签到里程碑{day}天',
+    balanceAddedRechargeBonus: '充值赠送',
     balanceDeductedAdmin: '余额扣除（管理员）',
     concurrencyAddedRedeem: '并发增加（兑换）',
     concurrencyAddedAdmin: '并发增加（管理员）',

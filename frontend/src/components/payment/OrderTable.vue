@@ -21,6 +21,9 @@
         <div v-if="row.amount !== row.pay_amount" class="text-xs text-gray-500">
           {{ t('payment.orders.creditedAmount') }}: {{ row.order_type === 'balance' ? `$${row.amount.toFixed(2)}` : `${row.amount.toFixed(2)} ${t('payment.creditUnit')}` }}
         </div>
+        <div v-if="(row.bonus_amount ?? 0) > 0" class="mt-0.5">
+          <span class="badge badge-success text-[10px]">{{ t('payment.orders.bonusGiftShort') }} ${{ (row.bonus_amount ?? 0).toFixed(2) }}</span>
+        </div>
       </div>
     </template>
     <template #cell-payment_type="{ value }">
