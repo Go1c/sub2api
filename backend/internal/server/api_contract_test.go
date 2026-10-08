@@ -992,6 +992,8 @@ func TestAPIContracts(t *testing.T) {
 					"payment_cancel_rate_limit_unit": "",
 					"payment_cancel_rate_limit_window_mode": "",
 					"payment_alipay_force_qrcode": false,
+					"payment_recharge_bonus_enabled": false,
+					"payment_recharge_bonus_tiers": [],
 					"balance_low_notify_enabled": false,
 					"account_quota_notify_enabled": false,
 					"subscription_expiry_notify_enabled": true,
@@ -1321,6 +1323,8 @@ func TestAPIContracts(t *testing.T) {
 					"payment_cancel_rate_limit_unit": "",
 					"payment_cancel_rate_limit_window_mode": "",
 					"payment_alipay_force_qrcode": false,
+					"payment_recharge_bonus_enabled": false,
+					"payment_recharge_bonus_tiers": [],
 					"balance_low_notify_enabled": false,
 					"account_quota_notify_enabled": false,
 					"subscription_expiry_notify_enabled": true,
@@ -1681,6 +1685,10 @@ func (r *stubUserRepo) ListWithFilters(ctx context.Context, params pagination.Pa
 }
 
 func (r *stubUserRepo) UpdateBalance(ctx context.Context, id int64, amount float64) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) UpdateBalanceNoStat(ctx context.Context, id int64, amount float64) error {
 	return errors.New("not implemented")
 }
 

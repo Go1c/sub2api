@@ -29,6 +29,12 @@ export interface AffiliateRebateTier {
   rebate_rate_percent: number | null;
 }
 
+/** 充值满赠档位：到账余额 >= threshold 赠送 bonus（PUT 整组替换，[] 清空） */
+export interface RechargeBonusTierInput {
+  threshold: number;
+  bonus: number;
+}
+
 export type FrontendLocaleCode = "en" | "zh" | "zh-Hant";
 
 export interface FrontendLocaleOption {
@@ -667,6 +673,8 @@ contact_channels: ContactChannel[];
   payment_cancel_rate_limit_unit: string;
   payment_cancel_rate_limit_window_mode: string;
   payment_alipay_force_qrcode?: boolean;
+  payment_recharge_bonus_enabled?: boolean;
+  payment_recharge_bonus_tiers?: RechargeBonusTierInput[];
   payment_visible_method_alipay_source?: string;
   payment_visible_method_wxpay_source?: string;
   payment_visible_method_alipay_enabled?: boolean;
@@ -983,6 +991,8 @@ contact_channels?: ContactChannel[];
   payment_cancel_rate_limit_unit?: string;
   payment_cancel_rate_limit_window_mode?: string;
   payment_alipay_force_qrcode?: boolean;
+  payment_recharge_bonus_enabled?: boolean;
+  payment_recharge_bonus_tiers?: RechargeBonusTierInput[];
   payment_visible_method_alipay_source?: string;
   payment_visible_method_wxpay_source?: string;
   payment_visible_method_alipay_enabled?: boolean;

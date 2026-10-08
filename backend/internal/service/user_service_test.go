@@ -188,6 +188,9 @@ func (m *mockUserRepo) UpdateBalance(ctx context.Context, id int64, amount float
 	}
 	return m.updateBalanceErr
 }
+func (m *mockUserRepo) UpdateBalanceNoStat(ctx context.Context, id int64, amount float64) error {
+	return m.UpdateBalance(ctx, id, amount)
+}
 func (m *mockUserRepo) UpdateUserLastActiveAt(_ context.Context, userID int64, activeAt time.Time) error {
 	m.updateLastActiveUserIDs = append(m.updateLastActiveUserIDs, userID)
 	m.updateLastActiveAt = append(m.updateLastActiveAt, activeAt)

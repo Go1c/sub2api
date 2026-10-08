@@ -398,7 +398,7 @@ func (r *redeemCodeRepository) SumPositiveBalanceByUser(ctx context.Context, use
 		Where(
 			redeemcode.UsedByEQ(userID),
 			redeemcode.ValueGT(0),
-			redeemcode.TypeIn("balance", "admin_balance", "checkin_balance", "checkin_milestone"),
+			redeemcode.TypeIn("balance", "admin_balance", "checkin_balance", "checkin_milestone", "recharge_bonus"),
 		).
 		Aggregate(dbent.As(dbent.Sum(redeemcode.FieldValue), "sum")).
 		Scan(ctx, &result)

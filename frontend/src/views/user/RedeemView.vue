@@ -381,7 +381,7 @@ const contactInfo = ref('')
 const CHECKIN_MILESTONE_DAY = /^daily_checkin_milestone:\d+:(\d+)$/
 
 const isBalanceType = (type: string) => {
-  return type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'promo' || type === 'promo_balance' || type === 'checkin_balance' || type === 'checkin_milestone'
+  return type === 'balance' || type === 'balance_payment' || type === 'admin_balance' || type === 'promo' || type === 'promo_balance' || type === 'checkin_balance' || type === 'checkin_milestone' || type === 'recharge_bonus'
 }
 
 const isSubscriptionType = (type: string) => {
@@ -399,6 +399,8 @@ const getHistoryItemTitle = (item: RedeemHistoryItem) => {
     return t('redeem.balanceAddedPromo')
   } else if (item.type === 'checkin_balance') {
     return t('redeem.balanceAddedCheckin')
+  } else if (item.type === 'recharge_bonus') {
+    return t('redeem.balanceAddedRechargeBonus')
   } else if (item.type === 'checkin_milestone') {
     const day = item.notes?.match(CHECKIN_MILESTONE_DAY)?.[1] ?? ''
     return t('redeem.balanceAddedCheckinMilestone', { day })

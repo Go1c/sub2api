@@ -350,3 +350,86 @@ func TestGwRefundRejectsAlipayMerchantIdentitySnapshotMismatch(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "alipay app_id mismatch")
 }
+
+func createBonusRefundFixture(t *testing.T, ctx context.Context, client *dbent.Client, amount, bonus float64) *dbent.PaymentOrder {
+	t.Helper()
+
+	user := client.User.Create().
+		SetEmail("bonus-refund@example.com").
+		SetPasswordHash("hash").
+		SetUsername("bonus-refund-user").
+		SaveX(ctx)
+
+	return client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(amount).
+		SetPayAmount(amount).
+		SetFeeRate(0).
+		SetBonusAmount(bonus).
+		SetRechargeCode("REFUND-BONUS-ORDER").
+		SetOutTradeNo("sub2_refund_bonus_order").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("trade-bonus-refund").
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusCompleted).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetPaidAt(time.Now()).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		SaveX(ctx)
+}
+
+func TestPrepDeductFullRefundRecoversRechargeBonus(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createBonusRefundFixture(t, ctx, client, 100, 25)
+
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 150}}
+	svc := &PaymentService{entClient: client, userRepo: userRepo}
+
+	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 100}
+	require.Nil(t, svc.prepDeduct(ctx, order, plan, false))
+	require.InDelta(t, 125.0, plan.BalanceToDeduct, 1e-9, "full refund must deduct principal plus bonus")
+}
+
+func TestPrepDeductFullRefundBonusCappedByBalance(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createBonusRefundFixture(t, ctx, client, 100, 25)
+
+	// 余额不足以覆盖本金+赠送时按余额封顶
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 80}}
+	svc := &PaymentService{entClient: client, userRepo: userRepo}
+
+	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 100}
+	require.Nil(t, svc.prepDeduct(ctx, order, plan, false))
+	require.InDelta(t, 80.0, plan.BalanceToDeduct, 1e-9)
+}
+
+func TestPrepDeductPartialRefundKeepsRechargeBonus(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createBonusRefundFixture(t, ctx, client, 100, 25)
+
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 150}}
+	svc := &PaymentService{entClient: client, userRepo: userRepo}
+
+	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 50}
+	require.Nil(t, svc.prepDeduct(ctx, order, plan, false))
+	require.InDelta(t, 50.0, plan.BalanceToDeduct, 1e-9, "partial refund must not recover the bonus")
+}
+
+func TestPrepDeductFullRefundWithoutBonus(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	order := createBonusRefundFixture(t, ctx, client, 100, 0)
+
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: order.UserID, Balance: 100}}
+	svc := &PaymentService{entClient: client, userRepo: userRepo}
+
+	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 100}
+	require.Nil(t, svc.prepDeduct(ctx, order, plan, false))
+	require.InDelta(t, 100.0, plan.BalanceToDeduct, 1e-9)
+}

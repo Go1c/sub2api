@@ -156,7 +156,8 @@ func (s *PaymentService) RequestRefund(ctx context.Context, oid, uid int64, reas
 	if err != nil {
 		return fmt.Errorf("get user: %w", err)
 	}
-	if u.Balance < o.Amount {
+	// 全额退款会一并回收赠送额，余额不足以覆盖本金+赠送时拒绝申请（防套利）
+	if u.Balance < o.Amount+o.BonusAmount {
 		return infraerrors.BadRequest("BALANCE_NOT_ENOUGH", "refund amount exceeds balance")
 	}
 	nr := strings.TrimSpace(reason)
@@ -281,7 +282,13 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 		return nil
 	}
 	p.DeductionType = payment.DeductionTypeBalance
-	p.BalanceToDeduct = math.Min(p.RefundAmount, u.Balance)
+	deductTarget := p.RefundAmount
+	if p.Order.BonusAmount > 0 && p.RefundAmount >= p.Order.Amount {
+		// 全额退款时一并回收充值满赠赠送额，防止「充值-退款」循环套取赠送；
+		// 部分退款不回收赠送。RollbackRefund 用同一 BalanceToDeduct 回滚，天然一致。
+		deductTarget += p.Order.BonusAmount
+	}
+	p.BalanceToDeduct = math.Min(deductTarget, u.Balance)
 	return nil
 }
 

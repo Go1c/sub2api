@@ -50,6 +50,10 @@ func (PaymentOrder) Fields() []ent.Field {
 		field.Float("fee_rate").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(0),
+		// 充值满赠赠送额快照（创建订单时计算；履约与展示均用此快照而非当前配置）
+		field.Float("bonus_amount").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}).
+			Default(0),
 		field.String("recharge_code").
 			MaxLen(64),
 

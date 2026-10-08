@@ -629,6 +629,7 @@ export default {
       typeAffiliateBalance: 'Balance (Affiliate Transfer)',
       typeCheckinBalance: 'Balance (Check-in)',
       typeCheckinMilestone: 'Balance (Check-in Milestone)',
+      typeRechargeBonus: 'Balance (Recharge Bonus)',
       typeAdminBalance: 'Balance (Admin)',
       typeConcurrency: 'Concurrency (Redeem)',
       typeAdminConcurrency: 'Concurrency (Admin)',

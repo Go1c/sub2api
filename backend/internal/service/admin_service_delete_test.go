@@ -123,6 +123,10 @@ func (s *userRepoStub) UpdateBalance(ctx context.Context, id int64, amount float
 	panic("unexpected UpdateBalance call")
 }
 
+func (s *userRepoStub) UpdateBalanceNoStat(ctx context.Context, id int64, amount float64) error {
+	panic("unexpected UpdateBalanceNoStat call")
+}
+
 func (s *userRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
 	panic("unexpected DeductBalance call")
 }

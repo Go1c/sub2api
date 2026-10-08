@@ -8,6 +8,7 @@ import type {
   DashboardStats,
   PaymentOrder,
   PaymentChannel,
+  RechargeBonusTier,
   SubscriptionPlan,
   ProviderInstance
 } from '@/types/payment'
@@ -24,6 +25,8 @@ export interface AdminPaymentConfig {
   enabled_payment_types: string[]
   balance_disabled: boolean
   balance_recharge_multiplier: number
+  recharge_bonus_enabled?: boolean
+  recharge_bonus_tiers?: RechargeBonusTier[]
   load_balance_strategy: string
   product_name_prefix: string
   product_name_suffix: string
@@ -42,6 +45,8 @@ export interface UpdatePaymentConfigRequest {
   enabled_payment_types?: string[]
   balance_disabled?: boolean
   balance_recharge_multiplier?: number
+  recharge_bonus_enabled?: boolean
+  recharge_bonus_tiers?: RechargeBonusTier[]
   load_balance_strategy?: string
   product_name_prefix?: string
   product_name_suffix?: string

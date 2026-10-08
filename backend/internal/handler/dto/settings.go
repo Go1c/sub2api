@@ -318,6 +318,10 @@ type SystemSettings struct {
 	PaymentCancelRateLimitUnit    string `json:"payment_cancel_rate_limit_unit"`
 	PaymentCancelRateLimitMode    string `json:"payment_cancel_rate_limit_window_mode"`
 
+	// 充值满赠（到账余额 >= threshold 时赠 bonus，单档取满足条件的最高档）
+	PaymentRechargeBonusEnabled bool                        `json:"payment_recharge_bonus_enabled"`
+	PaymentRechargeBonusTiers   []service.RechargeBonusTier `json:"payment_recharge_bonus_tiers"`
+
 	// Force Alipay mobile clients to use QR code payment instead of mobile redirect
 	PaymentAlipayForceQRCode bool `json:"payment_alipay_force_qrcode"`
 

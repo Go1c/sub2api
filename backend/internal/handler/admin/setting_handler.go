@@ -130,7 +130,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		paymentCfg, _ = h.paymentConfigService.GetPaymentConfig(c.Request.Context())
 	}
 	if paymentCfg == nil {
-		paymentCfg = &service.PaymentConfig{}
+		paymentCfg = &service.PaymentConfig{RechargeBonusTiers: []service.RechargeBonusTier{}}
 	}
 
 	payload := dto.SystemSettings{
@@ -382,6 +382,8 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PaymentCancelRateLimitUnit:                             paymentCfg.CancelRateLimitUnit,
 		PaymentCancelRateLimitMode:                             paymentCfg.CancelRateLimitMode,
 		PaymentAlipayForceQRCode:                               paymentCfg.AlipayForceQRCode,
+		PaymentRechargeBonusEnabled:                            paymentCfg.RechargeBonusEnabled,
+		PaymentRechargeBonusTiers:                              paymentCfg.RechargeBonusTiers,
 
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,

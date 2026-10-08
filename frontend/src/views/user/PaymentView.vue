@@ -57,6 +57,16 @@
             <template v-else>
               <div class="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)] lg:items-start">
                 <div class="card p-5">
+                  <div v-if="rechargeBonusTiers.length > 0" class="mb-3 flex flex-wrap items-center gap-1.5">
+                    <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">🎁 {{ t('payment.rechargeBonusLabel') }}</span>
+                    <span
+                      v-for="tier in rechargeBonusTiers"
+                      :key="`${tier.threshold}-${tier.bonus}`"
+                      class="badge badge-success text-[10px]"
+                    >
+                      {{ t('payment.rechargeBonusTier', { threshold: formatBonusAmount(tier.threshold), bonus: formatBonusAmount(tier.bonus) }) }}
+                    </span>
+                  </div>
                   <AmountInput
                     v-model="amount"
                     :amounts="[10, 20, 50, 100, 200, 500, 1000, 2000, 5000]"
@@ -88,9 +98,16 @@
                           <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
                           <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ totalAmount.toFixed(2) }} {{ t('payment.creditUnit') }}</span>
                         </div>
-                        <div v-if="balanceRechargeMultiplier !== 1" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
+                        <div v-if="balanceRechargeMultiplier !== 1 || rechargeBonus > 0" class="flex items-center justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
                           <span class="text-gray-500 dark:text-gray-400">{{ t('payment.creditedBalance') }}</span>
-                          <span class="text-gray-900 dark:text-white">${{ creditedAmount.toFixed(2) }}</span>
+                          <span class="flex items-center gap-1.5">
+                            <span class="text-gray-900 dark:text-white">${{ creditedAmount.toFixed(2) }}</span>
+                            <span v-if="rechargeBonus > 0" class="badge badge-success text-[10px]">+ {{ t('payment.rechargeBonusGift') }} ${{ rechargeBonus.toFixed(2) }}</span>
+                          </span>
+                        </div>
+                        <div v-if="rechargeBonus > 0" class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
+                          <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.creditedTotal') }}</span>
+                          <span class="text-lg font-bold text-emerald-600 dark:text-emerald-400">${{ creditedTotal.toFixed(2) }}</span>
                         </div>
                         <p v-if="balanceRechargeMultiplier !== 1" class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
                           {{ t('payment.rechargeRatePreview', { usd: balanceRechargeMultiplier.toFixed(2) }) }}
@@ -359,6 +376,11 @@ function formatUsd(value: number): string {
   return Number(value.toFixed(4)).toString()
 }
 
+/** 满赠档位金额展示：去掉多余小数（1000.00 → 1000，99.50 → 99.5） */
+function formatBonusAmount(value: number): string {
+  return Number(value.toFixed(2)).toString()
+}
+
 function planCreditDisplay(plan: SubscriptionPlan): string {
   return plan.quota_usd != null && plan.quota_usd > 0
     ? `$${formatUsd(plan.quota_usd)}`
@@ -603,6 +625,16 @@ const balanceRechargeMultiplier = computed(() => {
   return multiplier > 0 ? multiplier : 1
 })
 const creditedAmount = computed(() => Math.round((validAmount.value * balanceRechargeMultiplier.value) * 100) / 100)
+
+// 充值满赠：tiers 由后端按 threshold 降序返回，取第一个 creditedAmount >= threshold 的档位（即满足的最高档）
+const rechargeBonusTiers = computed(() =>
+  checkout.value.recharge_bonus_enabled ? (checkout.value.recharge_bonus_tiers ?? []) : [],
+)
+const rechargeBonus = computed(() => {
+  const hit = rechargeBonusTiers.value.find(tier => creditedAmount.value >= tier.threshold)
+  return hit ? hit.bonus : 0
+})
+const creditedTotal = computed(() => Math.round((creditedAmount.value + rechargeBonus.value) * 100) / 100)
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
 const planGridClass = computed(() => {

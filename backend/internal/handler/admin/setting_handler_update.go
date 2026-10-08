@@ -424,6 +424,10 @@ type UpdateSettingsRequest struct {
 	// Force Alipay mobile clients to use QR code payment instead of mobile redirect
 	PaymentAlipayForceQRCode *bool `json:"payment_alipay_force_qrcode"`
 
+	// 充值满赠（tiers 非 nil 才写，与 PaymentEnabledTypes 同语义）
+	PaymentRechargeBonusEnabled *bool                       `json:"payment_recharge_bonus_enabled"`
+	PaymentRechargeBonusTiers   []service.RechargeBonusTier `json:"payment_recharge_bonus_tiers"`
+
 	// Channel Monitor feature switch
 	ChannelMonitorEnabled                *bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds *int    `json:"channel_monitor_default_interval_seconds"`
@@ -2308,6 +2312,8 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 			CancelRateLimitUnit:               req.PaymentCancelRateLimitUnit,
 			CancelRateLimitMode:               req.PaymentCancelRateLimitMode,
 			AlipayForceQRCode:                 req.PaymentAlipayForceQRCode,
+			RechargeBonusEnabled:              req.PaymentRechargeBonusEnabled,
+			RechargeBonusTiers:                req.PaymentRechargeBonusTiers,
 		}
 		if err := h.paymentConfigService.UpdatePaymentConfig(c.Request.Context(), paymentReq); err != nil {
 			response.ErrorFrom(c, err)
@@ -2347,7 +2353,7 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		updatedPaymentCfg, _ = h.paymentConfigService.GetPaymentConfig(c.Request.Context())
 	}
 	if updatedPaymentCfg == nil {
-		updatedPaymentCfg = &service.PaymentConfig{}
+		updatedPaymentCfg = &service.PaymentConfig{RechargeBonusTiers: []service.RechargeBonusTier{}}
 	}
 
 	payload := dto.SystemSettings{
@@ -2584,6 +2590,8 @@ func (h *SettingHandler) updateSettings(c *gin.Context, req UpdateSettingsReques
 		PaymentCancelRateLimitUnit:                             updatedPaymentCfg.CancelRateLimitUnit,
 		PaymentCancelRateLimitMode:                             updatedPaymentCfg.CancelRateLimitMode,
 		PaymentAlipayForceQRCode:                               updatedPaymentCfg.AlipayForceQRCode,
+		PaymentRechargeBonusEnabled:                            updatedPaymentCfg.RechargeBonusEnabled,
+		PaymentRechargeBonusTiers:                              updatedPaymentCfg.RechargeBonusTiers,
 
 		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
@@ -2650,7 +2658,8 @@ func hasPaymentFields(req UpdateSettingsRequest) bool {
 		req.PaymentHelpText != nil || req.PaymentCancelRateLimitEnabled != nil ||
 		req.PaymentCancelRateLimitMax != nil || req.PaymentCancelRateLimitWindow != nil ||
 		req.PaymentCancelRateLimitUnit != nil || req.PaymentCancelRateLimitMode != nil ||
-		req.PaymentAlipayForceQRCode != nil
+		req.PaymentAlipayForceQRCode != nil ||
+		req.PaymentRechargeBonusEnabled != nil || req.PaymentRechargeBonusTiers != nil
 }
 
 // ensureDingTalkSyncAttributes 在保存 settings 后，按 admin 配置的 (attr key, attr name)

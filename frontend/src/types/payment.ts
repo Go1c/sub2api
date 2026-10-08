@@ -64,6 +64,12 @@ export interface MethodLimitsResponse {
   global_max: number  // widest max across all methods; 0 = no maximum
 }
 
+/** Recharge bonus tier: credited balance >= threshold grants bonus (backend returns tiers sorted by threshold desc) */
+export interface RechargeBonusTier {
+  threshold: number
+  bonus: number
+}
+
 /** Response from /payment/checkout-info API — single call for the payment page */
 export interface CheckoutInfoResponse {
   methods: Record<string, MethodLimit>
@@ -81,6 +87,10 @@ export interface CheckoutInfoResponse {
   stripe_publishable_key: string
   /** When true, mobile Alipay always uses QR instead of mobile redirect */
   alipay_force_qrcode?: boolean
+  /** Recharge bonus (充值满赠): highest matched tier bonus is granted on top of credited balance */
+  recharge_bonus_enabled?: boolean
+  /** Sorted by threshold desc; empty array = no tiers */
+  recharge_bonus_tiers?: RechargeBonusTier[]
 }
 
 // ==================== Orders ====================
@@ -114,6 +124,8 @@ export interface PaymentOrder {
   subscription_scope_config?: Record<string, unknown> | null
   provider_instance_id?: string
   provider_key?: string
+  /** Recharge bonus credited on top of amount (充值满赠); 0/omitted = none */
+  bonus_amount?: number
 }
 
 // ==================== Plans & Channels ====================
