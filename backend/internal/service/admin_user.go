@@ -288,7 +288,21 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		user.AllowedGroups = *input.AllowedGroups
 	}
 
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	fields := UserUpdateFields{
+		Email:         input.Email != "",
+		PasswordHash:  input.Password != "",
+		Username:      input.Username != nil,
+		Notes:         input.Notes != nil,
+		Status:        input.Status != "",
+		Role:          input.Role != "",
+		Concurrency:   input.Concurrency != nil,
+		RPMLimit:      input.RPMLimit != nil,
+		AllowedGroups: input.AllowedGroups != nil,
+	}
+	if (input.InvoiceEnabled != nil || input.SubscriptionPurchaseDisabled != nil) && fields.IsEmpty() {
+		fields.Notes = true
+	}
+	if err := s.userRepo.Update(ctx, user, fields); err != nil {
 		return nil, err
 	}
 
@@ -535,7 +549,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, user.Balance)
 	}
 
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	if _, err := s.userRepo.SetBalance(ctx, userID, user.Balance); err != nil {
 		return nil, err
 	}
 	balanceDiff := user.Balance - oldBalance

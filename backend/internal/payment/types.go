@@ -197,10 +197,11 @@ type RefundRequest struct {
 // RefundQueryRequest contains identifiers needed to query a previously
 // requested refund.
 type RefundQueryRequest struct {
-	TradeNo  string
-	OrderID  string
-	RefundID string
-	Amount   string
+	TradeNo     string
+	OrderID     string
+	RefundID    string
+	Amount      string
+	RequestedAt time.Time
 }
 
 // RefundResponse is returned after a refund request.

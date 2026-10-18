@@ -208,63 +208,6 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 		return nil, nil, err
 	}
 
-	existsEmail, err := s.userRepo.ExistsByEmail(ctx, email)
-	if err != nil {
-		return nil, nil, ErrServiceUnavailable
-	}
-	if existsEmail {
-		return nil, nil, ErrEmailExists
-	}
-
-	hashedPassword, err := s.HashPassword(password)
-	if err != nil {
-		return nil, nil, fmt.Errorf("hash password: %w", err)
-	}
-
-	signupSource = normalizeOAuthSignupSource(signupSource)
-	grantPlan := s.resolveSignupGrantPlan(ctx, signupSource)
-	var defaultRPMLimit int
-	if s.settingService != nil {
-		defaultRPMLimit = s.settingService.GetDefaultUserRPMLimit(ctx)
-	}
-	user := &User{
-		Email:        email,
-		PasswordHash: hashedPassword,
-		Role:         RoleUser,
-		Balance:      grantPlan.Balance,
-		Concurrency:  grantPlan.Concurrency,
-		RPMLimit:     defaultRPMLimit,
-		Status:       StatusActive,
-		SignupSource: signupSource,
-	}
-
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		if errors.Is(err, ErrEmailExists) {
-			return nil, nil, ErrEmailExists
-		}
-		return nil, nil, ErrServiceUnavailable
-	}
-	if s.settingService == nil || (!s.settingService.IsRegistrationEnabled(ctx) && !s.canBypassRegistrationDisabledForOAuth(ctx, signupSource)) {
-		return nil, nil, ErrRegDisabled
-	}
-
-	email = strings.TrimSpace(strings.ToLower(email))
-	if email == "" || len(email) > 255 {
-		return nil, nil, ErrEmailVerifyRequired
-	}
-	if _, err := mail.ParseAddress(email); err != nil {
-		return nil, nil, ErrEmailVerifyRequired
-	}
-	if isReservedEmail(email) {
-		return nil, nil, ErrEmailReserved
-	}
-	if strings.TrimSpace(password) == "" {
-		return nil, nil, infraerrors.BadRequest("PASSWORD_REQUIRED", "password is required")
-	}
-	if _, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode); err != nil {
-		return nil, nil, err
-	}
-
 	// 与本地注册同口径：同一收件箱的别名变体不能各自建号（该路径也发放注册赠额）。
 	existsEmail, err := s.existsByEmailOrAlias(ctx, email)
 	if err != nil {

@@ -460,12 +460,6 @@ func formatPositiveFloatExact(v *float64) string {
 	return strconv.FormatFloat(*v, 'f', -1, 64)
 }
 
-func normalizeSubscriptionUSDToCNYRate(v float64) float64 {
-	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
-		return 0
-	}
-	return v
-}
 
 // parseRechargeBonusTiers 解析充值满赠档位 JSON；空串/解析失败返回空 slice（禁 panic）。
 func parseRechargeBonusTiers(raw string) []RechargeBonusTier {

@@ -188,10 +188,20 @@ type ResponsesEventToAnthropicState struct {
 	CurrentToolName     string
 	CurrentToolArgs     string
 	CurrentToolHadDelta bool
-	HasToolCall         bool
+	// PendingThinkingSignature is filled from reasoning.encrypted_content and
+	// emitted as signature_delta before the thinking block is closed.
+	PendingThinkingSignature string
+	HasToolCall              bool
 
 	// OutputIndexToBlockIdx maps Responses output_index → Anthropic content block index.
 	OutputIndexToBlockIdx map[int]int
+
+	// textByPart records the text already delivered for each output_text part
+	// so that a done payload can be reconciled against it. It outlives the
+	// content block; closeCurrentBlock must not reset it.
+	textByPart map[responsesTextPart]*strings.Builder
+	// textDelivered records whether any assistant text reached the client.
+	textDelivered bool
 
 	InputTokens              int
 	OutputTokens             int
@@ -793,7 +803,7 @@ func closeCurrentBlock(state *ResponsesEventToAnthropicState) []AnthropicStreamE
 	state.CurrentToolName = ""
 	state.CurrentToolArgs = ""
 	state.CurrentToolHadDelta = false
-	return []AnthropicStreamEvent{{
+	events = append(events, AnthropicStreamEvent{
 		Type:  "content_block_stop",
 		Index: &idx,
 	})

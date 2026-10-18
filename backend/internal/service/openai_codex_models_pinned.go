@@ -153,6 +153,17 @@ func (s *OpenAIGatewayService) FetchPinnedCodexModelsManifest(ctx context.Contex
 	return &OpenAIModelsResponse{Body: merged, ETag: codexModelsManifestBodyETag(merged)}, results[0].account, nil
 }
 
+// OpenAIModelsResponse carries an OpenAI model list or a Codex manifest
+// together with upstream and client caching metadata.
+type OpenAIModelsResponse struct {
+	Body                         []byte
+	ETag                         string
+	upstreamETag                 string
+	upstreamSourceBody           []byte
+	convertedFromOpenAIModelList bool
+	NotModified                  bool
+}
+
 type pinnedOpenAIModelsResult struct {
 	account  *Account
 	response *OpenAIModelsResponse

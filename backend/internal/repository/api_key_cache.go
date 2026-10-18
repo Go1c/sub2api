@@ -51,6 +51,10 @@ func (c *apiKeyCache) GetCreateAttemptCount(ctx context.Context, userID int64) (
 	return count, err
 }
 
+func (c *apiKeyCache) DeleteCreateAttemptCount(ctx context.Context, userID int64) error {
+	return c.rdb.Del(ctx, apiKeyRateLimitKey(userID)).Err()
+}
+
 func (c *apiKeyCache) IncrementCreateAttemptCount(ctx context.Context, userID int64) error {
 	key := apiKeyRateLimitKey(userID)
 	pipe := c.rdb.Pipeline()

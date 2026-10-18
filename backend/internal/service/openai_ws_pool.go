@@ -1450,6 +1450,7 @@ retryAcquire:
 		return nil, errOpenAIWSConnQueueFull
 	}
 
+acquireAtCapacity:
 	target := p.pickLeastBusyConnLocked(ap, req.PreferredConnID, betaFeatures)
 	connPick := time.Since(pickStartedAt)
 	p.recordConnPickDuration(connPick)

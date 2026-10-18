@@ -28,6 +28,10 @@ type GroupAccountCapacityRow struct {
 	SessionWindowStatus string
 }
 
+type groupCapacityAccountLister interface {
+	ListSchedulableCapacityByGroupIDs(ctx context.Context, groupIDs []int64) ([]GroupAccountCapacityRow, error)
+}
+
 // GroupCapacityService aggregates per-group capacity from runtime data.
 type GroupCapacityService struct {
 	accountRepo        AccountRepository

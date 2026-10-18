@@ -282,6 +282,13 @@ func ProvideOpenAITokenProvider(
 	return p
 }
 
+// ProvidePluginManager preserves account-directory wiring when regenerating Wire.
+func ProvidePluginManager(repo PluginRepository, encryptor SecretEncryptor, cfg *config.Config, hostInfo PluginHostInfo, kvStore PluginKVStore, gateway *OpenAIGatewayService) *PluginManager {
+	manager := NewPluginManager(repo, encryptor, cfg, hostInfo, kvStore)
+	manager.SetAccountDirectory(gateway)
+	return manager
+}
+
 // ProvideOpenAIQuotaService wires the OpenAI quota query/reset service.
 // It depends on the OpenAI token provider for refreshed access tokens and the
 // privacy client factory for the impersonated upstream HTTP client.
@@ -351,6 +358,7 @@ func ProvideAccountTestService(
 		tlsFPProfileService,
 	)
 	service.agentIdentityWS = openAIGatewayService
+	service.openaiGatewayService = openAIGatewayService
 	return service
 }
 
@@ -781,14 +789,6 @@ func ProvideImageStorageSettingService(
 	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
 }
 
-// ProvideImageTaskService 构造异步图片任务服务。
-//
-// 对象存储是异步图片任务的启用前提：仅当开关打开且凭证齐全时功能才可用，否则整体禁用
-// （handler 返回 404，不创建任务、不写 Redis），从而避免大 base64 结果撑爆 Redis。
-// 启用状态由 settings 服务在运行时解析，因此后台改开关后无需重启即可生效。
-func ProvideImageTaskService(store ImageTaskStore, settings *ImageStorageSettingService) *ImageTaskService {
-	return NewImageTaskServiceWithResolver(store, settings.Resolver(), defaultImageTaskTTL, defaultImageTaskExecutionTimeout)
-}
 
 // ProvideBackupService creates and starts BackupService
 func ProvideBackupService(
@@ -891,7 +891,9 @@ func ProvideDesktopPaymentHandoffService(
 	return NewDesktopPaymentHandoffService(store, userRepo, authService, settingService)
 }
 
-// ProvideBillingCacheService wires BillingCacheService with its RPM dependencies.
+// ProvideBillingCacheService wires BillingCacheService with its RPM dependencies
+// and the balance usage gate settings. SettingService must be passed here:
+// checkBalanceEligibility skips the recharge gate when it is nil.
 func ProvideBillingCacheService(
 	cache BillingCache,
 	userRepo UserRepository,
@@ -901,8 +903,9 @@ func ProvideBillingCacheService(
 	rateRepo UserGroupRateRepository,
 	cfg *config.Config,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	settingService *SettingService,
 ) *BillingCacheService {
-	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
+	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo, settingService)
 }
 
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
@@ -1070,6 +1073,8 @@ var ProviderSet = wire.NewSet(
 	ProvideWebhookBalanceNotifyWiring,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
+	ProvideChannelMonitorV2Service,
+	ProvideChannelMonitorV2Aggregator,
 	NewChannelMonitorQuotaFetcher,
 	NewChannelMonitorRequestTemplateService,
 	ProvideChannelIQService,

@@ -24,6 +24,12 @@ type openAIRateLimitResetCreditDetailsPayload struct {
 	Data                  json.RawMessage `json:"data,omitempty"`
 }
 
+// openAIAutoResetCreditCandidate 仅在服务内部流转。上游卡 ID 不进入 API DTO。
+type openAIAutoResetCreditCandidate struct {
+	ID        string
+	ExpiresAt string
+}
+
 type openAIRateLimitResetCreditDetails struct {
 	AvailableCount       *int
 	AvailableCreditCount int

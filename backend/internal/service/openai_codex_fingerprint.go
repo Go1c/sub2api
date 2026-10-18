@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -69,6 +70,7 @@ const (
 
 const (
 	codexFingerprintModeExtraKey = "codex_fingerprint_mode"
+	codexFingerprintSeedExtraKey = "codex_fingerprint_seed"
 	// boundCodexInstallationID 是本机 ~/.codex/installation_id。
 	boundCodexInstallationID = "12b0b072-d79b-45f9-98af-8fafbe3ef9f5"
 	// boundCodexSessionID 是本机 Codex CLI 0.153.4 TUI user 会话（seq 67），
@@ -96,6 +98,72 @@ func codexFingerprintModeRequiresSeed(mode codexFingerprintMode) bool {
 	default:
 		return false
 	}
+}
+
+func canonicalCodexFingerprintSeed(value any) (string, bool) {
+	raw, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(raw)
+	parsed, err := uuid.Parse(trimmed)
+	if err != nil || parsed == uuid.Nil || trimmed != parsed.String() {
+		return "", false
+	}
+	return trimmed, true
+}
+
+func newCodexFingerprintSeed() string {
+	return uuid.NewString()
+}
+
+func stripCodexFingerprintSeed(extra map[string]any) map[string]any {
+	if extra == nil {
+		return nil
+	}
+	stripped := maps.Clone(extra)
+	delete(stripped, codexFingerprintSeedExtraKey)
+	return stripped
+}
+
+func codexFingerprintSeed(extra map[string]any) (string, bool) {
+	if extra == nil {
+		return "", false
+	}
+	return canonicalCodexFingerprintSeed(extra[codexFingerprintSeedExtraKey])
+}
+
+func prepareCodexFingerprintExtraForCreate(platform, accountType string, extra map[string]any) map[string]any {
+	prepared := stripCodexFingerprintSeed(extra)
+	if platform != PlatformOpenAI || (accountType != AccountTypeOAuth && accountType != AccountTypeSetupToken) || !codexFingerprintModeRequiresSeed(codexFingerprintModeFromExtra(prepared)) {
+		return prepared
+	}
+	if prepared == nil {
+		prepared = make(map[string]any, 1)
+	}
+	prepared[codexFingerprintSeedExtraKey] = newCodexFingerprintSeed()
+	return prepared
+}
+
+func prepareCodexFingerprintExtraForUpdate(account *Account, extra map[string]any) map[string]any {
+	prepared := stripCodexFingerprintSeed(extra)
+	if account == nil || !account.IsOpenAIOAuthLike() {
+		return prepared
+	}
+	if seed, ok := codexFingerprintSeed(account.Extra); ok {
+		if prepared == nil {
+			prepared = make(map[string]any, 1)
+		}
+		prepared[codexFingerprintSeedExtraKey] = seed
+		return prepared
+	}
+	if codexFingerprintModeRequiresSeed(codexFingerprintModeFromExtra(prepared)) {
+		if prepared == nil {
+			prepared = make(map[string]any, 1)
+		}
+		prepared[codexFingerprintSeedExtraKey] = newCodexFingerprintSeed()
+	}
+	return prepared
 }
 
 // ShouldEnsureCodexFingerprintSeedForExtraUpdates reports whether a JSONB key-level

@@ -714,11 +714,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	}
 
 	var resp *http.Response
-	// checkedPolicy 是循环内对当前 resp 的错误策略检查结果，未检查时为 nil。
-	var checkedPolicy *ErrorPolicyResult
 	signatureRetryStage := 0
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
-		checkedPolicy = nil
 		upstreamReq, idHeader, err := buildReq(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -776,8 +773,6 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 				var strippedClaudeBody []byte
 				stageName := ""
-				// 降级函数会把思考块改写成正文，Gemini 侧先删掉历史思考块再降级。
-				retrySourceBody := dropClaudeHistoryThinkingBlocks(originalClaudeBody)
 				// 路径说明：本处上游是 Gemini，但被剥离的 body 是 Anthropic 格式。传 originalModel
 				// （客户端原 Anthropic model）而非 mappedModel（上游 Gemini model），让剥离逻辑按
 				// 客户端请求的 Anthropic 子协议族判定（详见 ResolveThinkingProtocol 文档）。
@@ -1034,7 +1029,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			}
 			collectedBytes, _ := json.Marshal(collected)
 			ensureUpstreamResponseModelObserver(c).ObserveGemini(collectedBytes)
-			claudeResp, usageObj2 := convertGeminiToClaudeMessage(collected, originalModel, collectedBytes)
+			claudeResp, usageObj2 := convertGeminiToClaudeMessage(collected, originalModel, collectedBytes, false)
 			c.JSON(http.StatusOK, claudeResp)
 			usage = usageObj2
 			if usageObj != nil && (usageObj.InputTokens > 0 || usageObj.OutputTokens > 0) {
@@ -1250,10 +1245,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	}
 
 	var resp *http.Response
-	// checkedPolicy 是循环内对当前 resp 的错误策略检查结果，未检查时为 nil。
-	var checkedPolicy *ErrorPolicyResult
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
-		checkedPolicy = nil
 		upstreamReq, idHeader, err := buildReq(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -1297,14 +1289,6 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			break
 		} else {
 			resp = rebuilt
-		}
-
-		// 错误策略优先：匹配则跳过重试直接处理。
-		checked, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mappedModel)
-		resp = rebuilt
-		checkedPolicy = checked
-		if checked != nil && *checked != ErrorPolicyNone {
-			break
 		}
 
 		if resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
@@ -3663,40 +3647,6 @@ func normalizeGeminiRequestForAIStudio(body []byte) []byte {
 	return normalized
 }
 
-// enableMixedGeminiToolInvocations 在内置工具（googleSearch）与函数调用混用时
-// 打开 includeServerSideToolInvocations，否则 Gemini 3 返回 400。
-// 与 upstream main 的 antigravity_gateway_compat.go 保持同一语义。
-func enableMixedGeminiToolInvocations(body []byte) ([]byte, error) {
-	var request map[string]any
-	if err := json.Unmarshal(body, &request); err != nil {
-		return nil, err
-	}
-
-	var hasGoogleSearch, hasFunctionDeclarations bool
-	if tools, ok := request["tools"].([]any); ok {
-		for _, rawTool := range tools {
-			tool, ok := rawTool.(map[string]any)
-			if !ok {
-				continue
-			}
-			_, hasSearch := tool["googleSearch"]
-			declarations, hasFunctions := tool["functionDeclarations"].([]any)
-			hasGoogleSearch = hasGoogleSearch || hasSearch
-			hasFunctionDeclarations = hasFunctionDeclarations || hasFunctions && len(declarations) > 0
-		}
-	}
-	if !hasGoogleSearch || !hasFunctionDeclarations {
-		return body, nil
-	}
-
-	toolConfig, _ := request["toolConfig"].(map[string]any)
-	if toolConfig == nil {
-		toolConfig = make(map[string]any)
-		request["toolConfig"] = toolConfig
-	}
-	toolConfig["includeServerSideToolInvocations"] = true
-	return json.Marshal(request)
-}
 
 func isClaudeWebSearchToolMap(tool map[string]any) bool {
 	toolType, _ := tool["type"].(string)
@@ -3881,21 +3831,3 @@ func (s *GeminiMessagesCompatService) extractImageInputSize(body []byte) string 
 	return ""
 }
 
-func (s *GeminiMessagesCompatService) extractImageInputSize(body []byte) string {
-	var req struct {
-		GenerationConfig *struct {
-			ImageConfig *struct {
-				ImageSize string `json:"imageSize"`
-			} `json:"imageConfig"`
-		} `json:"generationConfig"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		return ""
-	}
-
-	if req.GenerationConfig != nil && req.GenerationConfig.ImageConfig != nil {
-		return strings.TrimSpace(req.GenerationConfig.ImageConfig.ImageSize)
-	}
-
-	return ""
-}

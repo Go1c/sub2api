@@ -3,9 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 )
 
@@ -53,6 +56,29 @@ func typeSafeText(input any) (string, int) {
 		}
 	}
 	return strings.Join(texts, "\n"), skipped
+}
+
+// moderationHTTPClient 返回本次审计调用应使用的 HTTP 客户端。
+// 配置了代理但代理解析能力尚未接上时直接失败，不回退直连。
+func (s *ContentModerationService) moderationHTTPClient(ctx context.Context, cfg *ContentModerationConfig) (*http.Client, error) {
+	if cfg != nil && cfg.ProxyID != nil {
+		if s == nil || s.proxyRepo == nil {
+			return nil, errors.New("moderation proxy repository unavailable")
+		}
+		px, err := s.proxyRepo.GetByID(ctx, *cfg.ProxyID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve moderation proxy %d: %w", *cfg.ProxyID, err)
+		}
+		client, err := httpclient.GetClient(httpclient.Options{ProxyURL: px.URL()})
+		if err != nil {
+			return nil, fmt.Errorf("build moderation proxy client: %w", err)
+		}
+		return client, nil
+	}
+	if s != nil && s.httpClient != nil {
+		return s.httpClient, nil
+	}
+	return http.DefaultClient, nil
 }
 
 func (s *ContentModerationService) callTypeSafeModeration(ctx context.Context, cfg *ContentModerationConfig, key string, input any, httpStatus *int) (*moderationAPIResult, error) {

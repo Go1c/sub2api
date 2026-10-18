@@ -319,6 +319,18 @@ type AffiliateTransferRecord struct {
 	CreatedAt           time.Time `json:"created_at"`
 }
 
+// AffiliateWithdrawResult 是线下提现登记完成后的流水 ID 与额度快照。
+// Replayed 表示本次请求命中了同一幂等标识的已有登记，返回的是首次登记的结果。
+type AffiliateWithdrawResult struct {
+	LedgerID            int64   `json:"ledger_id"`
+	UserID              int64   `json:"user_id"`
+	Amount              float64 `json:"amount"`
+	AvailableQuotaAfter float64 `json:"available_quota_after"`
+	FrozenQuotaAfter    float64 `json:"frozen_quota_after"`
+	HistoryQuotaAfter   float64 `json:"history_quota_after"`
+	Replayed            bool    `json:"-"`
+}
+
 type AffiliateUserOverview struct {
 	UserID              int64   `json:"user_id"`
 	Email               string  `json:"email"`

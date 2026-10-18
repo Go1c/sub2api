@@ -339,6 +339,7 @@ var ProviderSet = wire.NewSet(
 	NewLotteryHandler,
 	NewInvoiceHandler,
 	NewChannelMonitorUserHandler,
+	NewChannelMonitorV2Handler,
 	ProvideGatewayHandler,
 	ProvideOpenAIGatewayHandler,
 	NewTotpHandler,

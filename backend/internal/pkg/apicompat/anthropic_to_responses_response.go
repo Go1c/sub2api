@@ -28,19 +28,6 @@ func encodeAnthropicThinking(block AnthropicContentBlock) string {
 // Non-streaming: AnthropicResponse → ResponsesResponse
 // ---------------------------------------------------------------------------
 
-const anthropicThinkingEnvelopePrefix = "anthropic-thinking-v1:"
-
-func encodeAnthropicThinking(block AnthropicContentBlock) string {
-	// Only fields belonging to the signed thinking block are retained.
-	payload, _ := json.Marshal(struct {
-		Type      string `json:"type"`
-		Thinking  string `json:"thinking"`
-		Signature string `json:"signature,omitempty"`
-		Data      string `json:"data,omitempty"`
-	}{block.Type, block.Thinking, block.Signature, block.Data})
-	return anthropicThinkingEnvelopePrefix + base64.RawStdEncoding.EncodeToString(payload)
-}
-
 // AnthropicToResponsesResponse converts an Anthropic Messages response into a
 // Responses API response. This is the reverse of ResponsesToAnthropic and
 // enables Anthropic upstream responses to be returned in OpenAI Responses format.
@@ -521,7 +508,12 @@ func anthToResHandleContentBlockStop(evt *AnthropicStreamEvent, state *Anthropic
 		// item itself stays open since more blocks may follow.
 		text := state.TextAccum
 		state.TextAccum = ""
+		contentIndex := state.ContentIndex
 		state.CurrentContent = append(state.CurrentContent, ResponsesContentPart{Type: "output_text", Text: text})
+		// 关掉一个 part 就推进 content_index。同一 item 里第二个 text 块如果仍发
+		// content_index=0，会和第一个 part 撞在同一下标上，后一段覆盖前一段。
+		// 新 item 的 content_index 由 closeCurrentResponsesItem 归 0。
+		state.ContentIndex++
 		return []ResponsesStreamEvent{
 			makeResponsesEvent(state, "response.output_text.done", &ResponsesStreamEvent{
 				OutputIndex:  state.OutputIndex,
@@ -531,7 +523,7 @@ func anthToResHandleContentBlockStop(evt *AnthropicStreamEvent, state *Anthropic
 			}),
 			makeResponsesEvent(state, "response.content_part.done", &ResponsesStreamEvent{
 				OutputIndex:  state.OutputIndex,
-				ContentIndex: state.ContentIndex,
+				ContentIndex: contentIndex,
 				ItemID:       state.CurrentItemID,
 				Part:         &ResponsesContentPart{Type: "output_text", Text: text},
 			}),

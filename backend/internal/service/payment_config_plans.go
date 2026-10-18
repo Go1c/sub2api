@@ -150,6 +150,7 @@ type PlanGroupInfo struct {
 	WeeklyLimitUSD     *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD    *float64 `json:"monthly_limit_usd"`
 	ModelScopes        []string `json:"supported_model_scopes"`
+}
 
 // PlanLimitSyncPreview describes how many existing subscriptions would receive
 // the current daily/weekly limits from a plan.

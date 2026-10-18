@@ -8,7 +8,6 @@ import (
 
 const subscriptionDayDuration = 24 * time.Hour
 
-const subscriptionDayDuration = 24 * time.Hour
 
 // UserSubscription 表示用户订阅。
 //

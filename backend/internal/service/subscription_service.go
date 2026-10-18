@@ -233,10 +233,6 @@ func (s *SubscriptionService) InvalidateSubCacheSync(userID, groupID int64) {
 	}
 }
 
-// InvalidateSubCacheSync 失效订阅 L1 缓存并等待 Ristretto 删除操作生效。
-func (s *SubscriptionService) InvalidateSubCacheSync(userID, groupID int64) {
-	s.invalidateSubCacheKeySync(subCacheKey(userID, groupID))
-}
 
 func (s *SubscriptionService) invalidateSubCacheKeySync(key string) {
 	if s.subCacheL1 == nil {

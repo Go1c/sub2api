@@ -99,6 +99,11 @@ type apiKeyRateLimitLoader interface {
 	GetRateLimitData(ctx context.Context, keyID int64) (*APIKeyRateLimitData, error)
 }
 
+type subscriptionCacheInvalidationPubSub interface {
+	PublishSubscriptionCacheInvalidation(ctx context.Context, cacheKey string) error
+	SubscribeSubscriptionCacheInvalidation(ctx context.Context, handler func(cacheKey string)) error
+}
+
 // BalanceUsageGateRechargeReader returns paid external subscription amounts that
 // should count toward the balance usage gate's historical recharge threshold.
 type BalanceUsageGateRechargeReader interface {
@@ -1119,21 +1124,6 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, user 
 	}
 
 	return nil
-}
-
-func (s *BillingCacheService) minimumBalanceReserve() float64 {
-	if s == nil || s.cfg == nil || s.cfg.Billing.MinimumBalanceReserve <= 0 {
-		return 0
-	}
-	return s.cfg.Billing.MinimumBalanceReserve
-}
-
-func (s *BillingCacheService) balanceBelowEligibilityThreshold(balance float64) bool {
-	if balance <= 0 {
-		return true
-	}
-	minimumReserve := s.minimumBalanceReserve()
-	return minimumReserve > 0 && balance < minimumReserve
 }
 
 func (s *BillingCacheService) balanceUsageGateRechargeTotal(ctx context.Context, user *User) (float64, error) {

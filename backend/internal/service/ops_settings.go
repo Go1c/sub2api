@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"strings"
 	"time"
 
@@ -571,16 +570,6 @@ func normalizeOpsAdvancedSettings(cfg *OpsAdvancedSettings) {
 	if cfg.AutoRefreshIntervalSec <= 0 {
 		cfg.AutoRefreshIntervalSec = 30
 	}
-}
-
-func clampOpsQuotaAutoPauseThreshold(value float64) float64 {
-	if value <= 0 {
-		return 0
-	}
-	if value > 1 {
-		return 1
-	}
-	return value
 }
 
 func validateOpsAdvancedSettings(cfg *OpsAdvancedSettings) error {

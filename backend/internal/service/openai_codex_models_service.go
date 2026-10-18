@@ -362,6 +362,83 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 	return s.fetchCodexModelsManifestUpstream(ctx, request, ifNoneMatch)
 }
 
+type configuredCodexReasoningLevel struct {
+	Effort      string `json:"effort"`
+	Description string `json:"description"`
+}
+
+type configuredCodexTruncationPolicy struct {
+	Mode  string `json:"mode"`
+	Limit int64  `json:"limit"`
+}
+
+type configuredCodexServiceTier struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type configuredCodexModelMessages struct {
+	InstructionsTemplate  string `json:"instructions_template"`
+	InstructionsVariables any    `json:"instructions_variables"`
+	Approvals             any    `json:"approvals"`
+	CollaborationModes    any    `json:"collaboration_modes"`
+	AutoReview            any    `json:"auto_review"`
+	Permissions           any    `json:"permissions"`
+	MultiAgent            any    `json:"multi_agent"`
+	TokenBudget           any    `json:"token_budget"`
+	GuardianV2            any    `json:"guardian_v2"`
+}
+
+// configuredCodexModelDescriptor is the minimum complete ModelInfo contract
+// understood by current Codex clients.
+type configuredCodexModelDescriptor struct {
+	officialMetadata                  json.RawMessage
+	Slug                              string                          `json:"slug"`
+	DisplayName                       string                          `json:"display_name"`
+	Description                       string                          `json:"description"`
+	DefaultReasoningLevel             *string                         `json:"default_reasoning_level,omitempty"`
+	SupportedReasoningLevels          []configuredCodexReasoningLevel `json:"supported_reasoning_levels"`
+	MultiAgentReasoningEffort         *string                         `json:"multi_agent_reasoning_effort,omitempty"`
+	ShellType                         string                          `json:"shell_type"`
+	Visibility                        string                          `json:"visibility"`
+	SupportedInAPI                    bool                            `json:"supported_in_api"`
+	Priority                          int                             `json:"priority"`
+	AdditionalSpeedTiers              []string                        `json:"additional_speed_tiers"`
+	ServiceTiers                      []configuredCodexServiceTier    `json:"service_tiers"`
+	DefaultServiceTier                any                             `json:"default_service_tier"`
+	AvailabilityNUX                   any                             `json:"availability_nux"`
+	Upgrade                           any                             `json:"upgrade"`
+	ModelMessages                     configuredCodexModelMessages    `json:"model_messages"`
+	IncludeSkillsUsageInstructions    bool                            `json:"include_skills_usage_instructions"`
+	IncludePluginUsageInstructions    bool                            `json:"include_plugin_usage_instructions"`
+	IncludeAppsUsageInstructions      bool                            `json:"include_apps_usage_instructions"`
+	SupportsReasoningSummaryParameter bool                            `json:"supports_reasoning_summary_parameter"`
+	DefaultReasoningSummary           string                          `json:"default_reasoning_summary"`
+	SupportVerbosity                  bool                            `json:"support_verbosity"`
+	DefaultVerbosity                  *string                         `json:"default_verbosity"`
+	ApplyPatchToolType                *string                         `json:"apply_patch_tool_type"`
+	WebSearchToolType                 string                          `json:"web_search_tool_type"`
+	TruncationPolicy                  configuredCodexTruncationPolicy `json:"truncation_policy"`
+	SupportsImageDetailOriginal       bool                            `json:"supports_image_detail_original"`
+	SupportsParallelToolCalls         bool                            `json:"supports_parallel_tool_calls"`
+	ContextWindow                     int64                           `json:"context_window"`
+	MaxContextWindow                  int64                           `json:"max_context_window"`
+	AutoCompactTokenLimit             any                             `json:"auto_compact_token_limit"`
+	CompHash                          any                             `json:"comp_hash"`
+	EffectiveContextWindowPercent     int64                           `json:"effective_context_window_percent"`
+	ExperimentalSupportedTools        []string                        `json:"experimental_supported_tools"`
+	InputModalities                   []string                        `json:"input_modalities"`
+	SupportsSearchTool                bool                            `json:"supports_search_tool"`
+	UseResponsesLite                  bool                            `json:"use_responses_lite"`
+	NodeREPLAutoReviewRequired        bool                            `json:"node_repl_auto_review_required"`
+	NodeREPLDisabled                  bool                            `json:"node_repl_disabled"`
+	AutoReviewModelOverride           any                             `json:"auto_review_model_override"`
+	ModelSpecialty                    any                             `json:"model_specialty"`
+	ToolMode                          any                             `json:"tool_mode"`
+	MultiAgentVersion                 any                             `json:"multi_agent_version"`
+}
+
 func isAgentIdentityTaskInvalidCodexModelsError(err error) bool {
 	var upstreamErr *codexModelsManifestUpstreamError
 	return errors.As(err, &upstreamErr) &&

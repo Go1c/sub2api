@@ -140,20 +140,13 @@ func (r *RateLimiter) LimitWithOptions(key string, limit int, window time.Durati
 	}
 
 	return func(c *gin.Context) {
-		identity := c.ClientIP()
+		identity := clientIPForRateLimit(c)
 		if opts.KeyFunc != nil {
 			if custom := strings.TrimSpace(opts.KeyFunc(c)); custom != "" {
 				identity = custom
 			}
 		}
-		redisKey := r.prefix + key + ":" + identity
-
-		ctx := c.Request.Context()
-
-		windowMillis := windowTTLMillis(window)
-
-		// 使用 Lua 脚本原子操作增加计数并设置过期
-		count, repaired, err := rateLimitRun(ctx, r.redis, redisKey, windowMillis)
+		result, err := r.Allow(c.Request.Context(), key+":"+identity, limit, window)
 		if err != nil {
 			log.Printf("[RateLimit] redis error: key=%s mode=%s err=%v", r.prefix+key, failureModeLabel(failureMode), err)
 			if failureMode == RateLimitFailClose {

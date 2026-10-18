@@ -299,11 +299,6 @@ type OpsInsertErrorLogInput struct {
 	APIKeyPrefix string
 }
 
-	// 有效(未删除)key 报错时快照的 key 脱敏前缀(前 8 位)。
-	// 落库快照而非读时 JOIN:key 之后被删(key 列被 tombstone 覆盖)仍保留当时前缀。
-	APIKeyPrefix string
-}
-
 type OpsInsertSystemMetricsInput struct {
 	CreatedAt     time.Time
 	WindowMinutes int

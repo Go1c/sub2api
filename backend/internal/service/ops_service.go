@@ -42,17 +42,6 @@ type OpsRuntimeSettingsRefreshHealth struct {
 	FailureTotal uint64 `json:"failure_total"`
 }
 
-type opsRuntimeSettingsSnapshot struct {
-	monitoringEnabled bool
-	advanced          OpsAdvancedSettings
-}
-
-type OpsRuntimeSettingsRefreshHealth struct {
-	Running      bool   `json:"running"`
-	SuccessTotal uint64 `json:"success_total"`
-	FailureTotal uint64 `json:"failure_total"`
-}
-
 // OpsService provides ingestion and query APIs for the Ops monitoring module.
 type OpsService struct {
 	opsRepo     OpsRepository
@@ -850,80 +839,6 @@ func (s *OpsService) UpdateErrorResolution(ctx context.Context, errorID int64, r
 		return infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
 	}
 	return s.opsRepo.UpdateErrorResolution(ctx, errorID, resolved, resolvedByUserID, nil, nil)
-}
-
-func sanitizeAndTrimJSONPayload(raw []byte, maxBytes int) (jsonString string, truncated bool, bytesLen int) {
-	bytesLen = len(raw)
-	if len(raw) == 0 {
-		return "", false, 0
-	}
-
-	var decoded any
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		// If it is not valid JSON, fall back to the caller's non-JSON handling.
-		return "", false, bytesLen
-	}
-
-	decoded = redactSensitiveJSON(decoded)
-
-	encoded, err := json.Marshal(decoded)
-	if err != nil {
-		return "", false, bytesLen
-	}
-	if len(encoded) <= maxBytes {
-		return string(encoded), false, bytesLen
-	}
-
-	// Trim conversation history to keep the most recent context.
-	if root, ok := decoded.(map[string]any); ok {
-		if trimmed, ok := trimConversationArrays(root, maxBytes); ok {
-			encoded2, err2 := json.Marshal(trimmed)
-			if err2 == nil && len(encoded2) <= maxBytes {
-				return string(encoded2), true, bytesLen
-			}
-			// Fallthrough: keep shrinking.
-			decoded = trimmed
-		}
-
-		essential := shrinkToEssentials(root)
-		encoded3, err3 := json.Marshal(essential)
-		if err3 == nil && len(encoded3) <= maxBytes {
-			return string(encoded3), true, bytesLen
-		}
-	}
-
-	// Last resort: keep JSON shape but drop big fields.
-	// This avoids downstream code that expects certain top-level keys from crashing.
-	if root, ok := decoded.(map[string]any); ok {
-		placeholder := shallowCopyMap(root)
-		placeholder["payload_truncated"] = true
-
-		// Replace potentially huge arrays/strings, but keep the keys present.
-		for _, k := range []string{"messages", "contents", "input", "prompt"} {
-			if _, exists := placeholder[k]; exists {
-				placeholder[k] = []any{}
-			}
-		}
-		for _, k := range []string{"text"} {
-			if _, exists := placeholder[k]; exists {
-				placeholder[k] = ""
-			}
-		}
-
-		encoded4, err4 := json.Marshal(placeholder)
-		if err4 == nil {
-			if len(encoded4) <= maxBytes {
-				return string(encoded4), true, bytesLen
-			}
-		}
-	}
-
-	// Final fallback: minimal valid JSON.
-	encoded4, err4 := json.Marshal(map[string]any{"payload_truncated": true})
-	if err4 != nil {
-		return "", true, bytesLen
-	}
-	return string(encoded4), true, bytesLen
 }
 
 func sanitizeAndTrimJSONPayload(raw []byte, maxBytes int) (jsonString string, truncated bool, bytesLen int) {

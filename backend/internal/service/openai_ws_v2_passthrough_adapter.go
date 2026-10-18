@@ -253,72 +253,7 @@ func openAIWSPassthroughRequestModelFromSessionFrame(payload []byte) string {
 	return strings.TrimSpace(gjson.GetBytes(payload, "session.model").String())
 }
 
-type openAIWSPassthroughUsageMeta struct {
-	serviceTier     atomic.Pointer[string]
-	reasoningEffort atomic.Pointer[string]
 
-	// 仅在 client->upstream filter goroutine 中读写；Load 侧通过上方原子指针同步。
-	sessionRequestModel string
-}
-
-func newOpenAIWSPassthroughUsageMeta(initialRequestModel string, firstFrame []byte) *openAIWSPassthroughUsageMeta {
-	meta := &openAIWSPassthroughUsageMeta{
-		sessionRequestModel: strings.TrimSpace(initialRequestModel),
-	}
-	if meta.sessionRequestModel == "" {
-		meta.sessionRequestModel = openAIWSPassthroughRequestModelForFrame(firstFrame)
-	}
-	return meta
-}
-
-func (m *openAIWSPassthroughUsageMeta) initFromFirstFrame(policyOutput []byte, mappedModel string) {
-	if m == nil {
-		return
-	}
-	m.serviceTier.Store(extractOpenAIServiceTierFromBody(policyOutput))
-	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, mappedModel, m.sessionRequestModel))
-}
-
-func (m *openAIWSPassthroughUsageMeta) updateSessionRequestModel(payload []byte) {
-	if m == nil {
-		return
-	}
-	if model := openAIWSPassthroughRequestModelFromSessionFrame(payload); model != "" {
-		m.sessionRequestModel = model
-	}
-}
-
-func (m *openAIWSPassthroughUsageMeta) requestModelForFrame(payload []byte) string {
-	if m == nil {
-		return openAIWSPassthroughRequestModelForFrame(payload)
-	}
-	if model := openAIWSPassthroughRequestModelForFrame(payload); model != "" {
-		return model
-	}
-	return m.sessionRequestModel
-}
-
-func (m *openAIWSPassthroughUsageMeta) updateFromResponseCreate(policyOutput []byte, mappedModel string, requestModelForFrame string) {
-	if m == nil {
-		return
-	}
-	m.serviceTier.Store(extractOpenAIServiceTierFromBody(policyOutput))
-	m.reasoningEffort.Store(extractOpenAIReasoningEffortFromBody(policyOutput, mappedModel, requestModelForFrame))
-}
-
-func openAIWSPassthroughRequestModelForFrame(payload []byte) string {
-	if len(payload) == 0 || strings.TrimSpace(gjson.GetBytes(payload, "type").String()) != "response.create" {
-		return ""
-	}
-	return strings.TrimSpace(gjson.GetBytes(payload, "model").String())
-}
-
-func openAIWSPassthroughRequestModelFromSessionFrame(payload []byte) string {
-	if len(payload) == 0 || strings.TrimSpace(gjson.GetBytes(payload, "type").String()) != "session.update" {
-		return ""
-	}
-	return strings.TrimSpace(gjson.GetBytes(payload, "session.model").String())
-}
 
 const openaiWSV2PassthroughModeFields = "ws_mode=passthrough ws_router=v2"
 

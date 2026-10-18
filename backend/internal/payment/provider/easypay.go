@@ -371,7 +371,7 @@ func (e *EasyPay) queryOrder(ctx context.Context, outTradeNo string) (*easyPayQu
 		return nil, fmt.Errorf("easypay query was not successful")
 	}
 	for _, upstreamOrder := range []*string{resp.OutTradeNo, resp.Data.OutTradeNo} {
-		if upstreamOrder != nil && strings.TrimSpace(*upstreamOrder) != "" && strings.TrimSpace(*upstreamOrder) != strings.TrimSpace(tradeNo) {
+		if upstreamOrder != nil && strings.TrimSpace(*upstreamOrder) != "" && strings.TrimSpace(*upstreamOrder) != strings.TrimSpace(outTradeNo) {
 			return nil, fmt.Errorf("easypay query returned a different out_trade_no")
 		}
 	}
@@ -407,12 +407,10 @@ func (e *EasyPay) queryOrder(ctx context.Context, outTradeNo string) (*easyPayQu
 		responseTradeNo = *resp.Data.TradeNo
 	}
 
-	amount, _ := strconv.ParseFloat(money, 64)
-	return &payment.QueryOrderResponse{
-		TradeNo:  responseTradeNo,
-		Status:   status,
-		Amount:   amount,
-		Metadata: e.MerchantIdentityMetadata(),
+	return &easyPayQueryResult{
+		status:  status,
+		money:   money,
+		tradeNo: responseTradeNo,
 	}, nil
 }
 
