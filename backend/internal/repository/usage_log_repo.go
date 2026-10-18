@@ -1,16 +1,10 @@
 package repository
 
 import (
-	"context"
 	"database/sql"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -25,7 +19,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/lib/pq"
 	gocache "github.com/patrickmn/go-cache"
 	"golang.org/x/sync/errgroup"
 )
@@ -109,6 +102,24 @@ const rawUsageLogModelColumn = "model"
 // Historical rows may contain upstream/billing model values, while newer rows store requested_model.
 // Requested/upstream/mapping analytics must use resolveModelDimensionExpression instead.
 
+// usageLogSuccessFilterUL 用于把"失败请求 usage log"（tokens=0、cost=0、不计费的占位记录）
+// 从统计性聚合中排除，避免污染 Dashboard / 用量拆分等指标。
+//
+// schema 中没有 success bool 列；新增列要做迁移，风险大；这里用 actual_cost > 0 作为代理：
+// 任何成功落账的请求都会产生 actual_cost（包括 token 计费、纯图片 token 计费、按次/按图计费），
+// 反之 failed-request usage log 的 actual_cost 为 0。
+// 早期版本用 4 项 token 和 > 0 判定会把"按次/按图计费"与"image_output_tokens 独立计费"的纯图片
+// 请求误判为失败，导致这部分请求从用量统计里消失，故改用 actual_cost。
+// 配合 `FROM usage_logs ul` JOIN 查询使用。
+const usageLogSuccessFilterUL = "ul.actual_cost > 0"
+
+// usageLogEffectivePlatformExpr 用于按"有效平台"维度聚合 usage_logs：
+// 优先取请求实际走的分组 platform，若分组未设置 platform 再 fallback 到 account.platform。
+// Composite groups are a routing layer, so platform analytics must use the
+// resolved concrete account platform instead of grouping spend under "composite".
+// 配套要求查询里 LEFT JOIN groups g ON g.id = ul.group_id 与 LEFT JOIN accounts a ON a.id = ul.account_id。
+const usageLogEffectivePlatformExpr = "CASE WHEN g.platform = 'composite' THEN a.platform ELSE COALESCE(NULLIF(g.platform,''), a.platform) END"
+
 // dateFormatWhitelist 将 granularity 参数映射为 PostgreSQL TO_CHAR 格式字符串，防止外部输入直接拼入 SQL
 var dateFormatWhitelist = map[string]string{
 	"hour":  "YYYY-MM-DD HH24:00",
@@ -133,6 +144,56 @@ func appendRawUsageLogModelWhereCondition(conditions []string, args []any, model
 		return conditions, args
 	}
 	conditions = append(conditions, fmt.Sprintf("%s = $%d", rawUsageLogModelColumn, len(args)+1))
+	args = append(args, model)
+	return conditions, args
+}
+
+func appendUsageLogBillingModeWhereCondition(conditions []string, args []any, billingMode string) ([]string, []any) {
+	return appendUsageLogBillingModeWhereConditionWithAlias(conditions, args, billingMode, "")
+}
+
+func appendUsageLogBillingModeWhereConditionWithAlias(conditions []string, args []any, billingMode string, alias string) ([]string, []any) {
+	mode := strings.TrimSpace(billingMode)
+	if mode == "" {
+		return conditions, args
+	}
+	column := func(name string) string {
+		if alias == "" {
+			return name
+		}
+		return alias + "." + name
+	}
+	placeholder := fmt.Sprintf("$%d", len(args)+1)
+	switch service.BillingMode(mode) {
+	case service.BillingModeImage:
+		conditions = append(conditions, fmt.Sprintf("(%s = %s OR ((%s IS NULL OR %s = '') AND COALESCE(%s, 0) > 0))", column("billing_mode"), placeholder, column("billing_mode"), column("billing_mode"), column("image_count")))
+	case service.BillingModeVideo:
+		conditions = append(conditions, fmt.Sprintf("%s = %s", column("billing_mode"), placeholder))
+	case service.BillingModeToken:
+		conditions = append(conditions, fmt.Sprintf("(%s = %s OR ((%s IS NULL OR %s = '') AND COALESCE(%s, 0) <= 0))", column("billing_mode"), placeholder, column("billing_mode"), column("billing_mode"), column("image_count")))
+	default:
+		conditions = append(conditions, fmt.Sprintf("%s = %s", column("billing_mode"), placeholder))
+	}
+	args = append(args, mode)
+	return conditions, args
+}
+
+func appendUsageLogBillingModeQueryFilter(query string, args []any, billingMode string, alias string) (string, []any) {
+	conditions, args := appendUsageLogBillingModeWhereConditionWithAlias(nil, args, billingMode, alias)
+	if len(conditions) == 0 {
+		return query, args
+	}
+	return query + " AND " + conditions[0], args
+}
+
+func appendUsageLogModelWhereCondition(conditions []string, args []any, model string, source string) ([]string, []any) {
+	if strings.TrimSpace(source) == "" {
+		return appendRawUsageLogModelWhereCondition(conditions, args, model)
+	}
+	if strings.TrimSpace(model) == "" {
+		return conditions, args
+	}
+	conditions = append(conditions, fmt.Sprintf("%s = $%d", resolveModelDimensionExpression(source), len(args)+1))
 	args = append(args, model)
 	return conditions, args
 }
@@ -222,68 +283,6 @@ type usageLogRepository struct {
 	bestEffortBatchCh   chan usageLogBestEffortRequest
 	bestEffortRecent    *gocache.Cache
 }
-
-const (
-	usageLogCreateBatchMaxSize  = 64
-	usageLogCreateBatchWindow   = 3 * time.Millisecond
-	usageLogCreateBatchQueueCap = 4096
-	usageLogCreateCancelWait    = 2 * time.Second
-
-	usageLogBestEffortBatchMaxSize  = 256
-	usageLogBestEffortBatchWindow   = 20 * time.Millisecond
-	usageLogBestEffortBatchQueueCap = 32768
-	usageLogBestEffortRecentTTL     = 30 * time.Second
-)
-
-type usageLogCreateRequest struct {
-	log      *service.UsageLog
-	prepared usageLogInsertPrepared
-	shared   *usageLogCreateShared
-	resultCh chan usageLogCreateResult
-}
-
-type usageLogCreateResult struct {
-	inserted bool
-	err      error
-}
-
-type usageLogBestEffortRequest struct {
-	prepared usageLogInsertPrepared
-	apiKeyID int64
-	resultCh chan error
-}
-
-type usageLogInsertPrepared struct {
-	createdAt      time.Time
-	requestID      string
-	rateMultiplier float64
-	requestType    int16
-	args           []any
-}
-
-type usageLogBatchState struct {
-	ID        int64
-	CreatedAt time.Time
-}
-
-type usageLogBatchRow struct {
-	RequestID string    `json:"request_id"`
-	APIKeyID  int64     `json:"api_key_id"`
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Inserted  bool      `json:"inserted"`
-}
-
-type usageLogCreateShared struct {
-	state atomic.Int32
-}
-
-const (
-	usageLogCreateStateQueued int32 = iota
-	usageLogCreateStateProcessing
-	usageLogCreateStateCompleted
-	usageLogCreateStateCanceled
-)
 
 func NewUsageLogRepository(client *dbent.Client, sqlDB *sql.DB) service.UsageLogRepository {
 	return newUsageLogRepositoryWithSQL(client, sqlDB)
@@ -4794,6 +4793,27 @@ func appendRequestTypeOrStreamQueryFilter(query string, args []any, requestType 
 		args = append(args, *stream)
 	}
 	return query, args
+}
+
+func appendNativeCompactionV2WhereCondition(conditions []string, args []any, nativeCompactionV2 *bool, alias string) ([]string, []any) {
+	if nativeCompactionV2 == nil {
+		return conditions, args
+	}
+	column := "native_compaction_v2"
+	if alias != "" {
+		column = alias + "." + column
+	}
+	conditions = append(conditions, fmt.Sprintf("%s = $%d", column, len(args)+1))
+	args = append(args, *nativeCompactionV2)
+	return conditions, args
+}
+
+func appendNativeCompactionV2QueryFilter(query string, args []any, nativeCompactionV2 *bool, alias string) (string, []any) {
+	conditions, args := appendNativeCompactionV2WhereCondition(nil, args, nativeCompactionV2, alias)
+	if len(conditions) == 0 {
+		return query, args
+	}
+	return query + " AND " + conditions[0], args
 }
 
 // buildRequestTypeFilterCondition 在 request_type 过滤时兼容 legacy 字段，避免历史数据漏查。

@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -204,9 +205,10 @@ func (p *ChannelModelPricing) GetTierByLabel(label string) *PricingInterval {
 	return nil
 }
 
-// Clone 返回 ChannelModelPricing 的拷贝（切片独立，指针字段共享，调用方只读安全）
+// Clone 返回 ChannelModelPricing 的拷贝（切片和映射独立，价格指针字段共享，调用方只读安全）
 func (p ChannelModelPricing) Clone() ChannelModelPricing {
 	cp := p
+	cp.ReasoningEffortMultipliers = maps.Clone(p.ReasoningEffortMultipliers)
 	if p.Models != nil {
 		cp.Models = make([]string, len(p.Models))
 		copy(cp.Models, p.Models)
@@ -313,10 +315,17 @@ func deepCopyFeaturesConfig(src map[string]any) map[string]any {
 }
 
 // ValidateIntervals 校验区间列表的合法性。
-// 规则：MinTokens >= 0；MaxTokens 若非 nil 则 > 0 且 > MinTokens；
-// 所有价格字段 >= 0；区间按 MinTokens 排序后无重叠（(min, max] 语义）；
-// 无界区间（MaxTokens=nil）必须是最后一个。间隙允许（回退默认价格）。
-func ValidateIntervals(intervals []PricingInterval) error {
+//
+// mode 决定区间语义：
+//   - BillingModeToken（含空值）：区间是上下文 token 数分段 (min, max]，
+//     按 MinTokens 排序后无重叠，无界区间（MaxTokens=nil）必须是最后一个。
+//   - BillingModePerRequest / BillingModeImage：区间是按 tier_label
+//     (1K/2K/4K 等) 分层，匹配走 label 不依赖 min/max，因此跳过区间重叠
+//     与 last-unlimited 校验，仅做单条字段自洽（min/max/价格非负）检查。
+//
+// 通用规则：MinTokens >= 0；MaxTokens 若非 nil 则 > 0 且 > MinTokens；
+// 所有价格字段 >= 0。
+func ValidateIntervals(intervals []PricingInterval, mode BillingMode) error {
 	if len(intervals) == 0 {
 		return nil
 	}
@@ -330,6 +339,11 @@ func ValidateIntervals(intervals []PricingInterval) error {
 		if err := validateSingleInterval(&sorted[i], i); err != nil {
 			return err
 		}
+	}
+
+	// per_request / image 模式按 tier_label 匹配，不做 token 区间重叠校验
+	if mode == BillingModePerRequest || mode == BillingModeImage || mode == BillingModeVideo {
+		return nil
 	}
 	return validateIntervalOverlap(sorted)
 }
@@ -360,6 +374,7 @@ func validateIntervalPrices(iv *PricingInterval, idx int) error {
 		{"input_price", iv.InputPrice},
 		{"output_price", iv.OutputPrice},
 		{"cache_write_price", iv.CacheWritePrice},
+		{"cache_write_1h_price", iv.CacheWrite1hPrice},
 		{"cache_read_price", iv.CacheReadPrice},
 		{"per_request_price", iv.PerRequestPrice},
 	}

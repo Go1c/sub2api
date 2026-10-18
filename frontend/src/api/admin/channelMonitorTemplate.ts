@@ -12,6 +12,7 @@ export interface ChannelMonitorTemplate {
   id: number
   name: string
   provider: Provider
+  api_mode: APIMode
   description: string
   api_mode?: APIMode
   extra_headers: Record<string, string>
@@ -25,6 +26,7 @@ export interface ChannelMonitorTemplate {
 
 export interface ListParams {
   provider?: Provider
+  api_mode?: APIMode
 }
 
 export interface ListResponse {
@@ -34,6 +36,7 @@ export interface ListResponse {
 export interface CreateParams {
   name: string
   provider: Provider
+  api_mode?: APIMode
   description?: string
   api_mode?: APIMode
   extra_headers?: Record<string, string>
@@ -43,6 +46,7 @@ export interface CreateParams {
 
 export interface UpdateParams {
   name?: string
+  api_mode?: APIMode
   description?: string
   api_mode?: APIMode
   extra_headers?: Record<string, string>
@@ -58,6 +62,7 @@ export interface AssociatedMonitorBrief {
   id: number
   name: string
   provider: Provider
+  api_mode: APIMode
   enabled: boolean
 }
 

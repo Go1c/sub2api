@@ -161,18 +161,60 @@ func sanitizeAdminPaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*dben
 	}
 	out := make([]*dbent.PaymentOrder, 0, len(orders))
 	for _, order := range orders {
-		out = append(out, sanitizeAdminPaymentOrderForResponse(order))
+		if item := sanitizeAdminPaymentOrderForResponse(order); item != nil {
+			out = append(out, item)
+		}
 	}
 	return out
 }
 
-func sanitizeAdminPaymentOrderForResponse(order *dbent.PaymentOrder) *dbent.PaymentOrder {
+func sanitizeAdminPaymentOrderForResponse(order *dbent.PaymentOrder) *AdminPaymentOrderResult {
 	if order == nil {
 		return nil
 	}
-	cloned := *order
-	cloned.ProviderSnapshot = nil
-	return &cloned
+	return &AdminPaymentOrderResult{
+		ID:                  order.ID,
+		UserID:              order.UserID,
+		UserEmail:           order.UserEmail,
+		UserName:            order.UserName,
+		UserNotes:           order.UserNotes,
+		Amount:              order.Amount,
+		PayAmount:           order.PayAmount,
+		FeeRate:             order.FeeRate,
+		BonusAmount:         order.BonusAmount,
+		Currency:            service.PaymentOrderCurrency(order),
+		RechargeCode:        order.RechargeCode,
+		OutTradeNo:          order.OutTradeNo,
+		PaymentType:         order.PaymentType,
+		PaymentTradeNo:      order.PaymentTradeNo,
+		PayURL:              order.PayURL,
+		QRCode:              order.QrCode,
+		QRCodeImg:           order.QrCodeImg,
+		OrderType:           order.OrderType,
+		PlanID:              order.PlanID,
+		SubscriptionGroupID: order.SubscriptionGroupID,
+		SubscriptionDays:    order.SubscriptionDays,
+		ProviderInstanceID:  order.ProviderInstanceID,
+		ProviderKey:         order.ProviderKey,
+		Status:              order.Status,
+		RefundAmount:        order.RefundAmount,
+		RefundReason:        order.RefundReason,
+		RefundAt:            order.RefundAt,
+		ForceRefund:         order.ForceRefund,
+		RefundRequestedAt:   order.RefundRequestedAt,
+		RefundRequestReason: order.RefundRequestReason,
+		RefundRequestedBy:   order.RefundRequestedBy,
+		ExpiresAt:           order.ExpiresAt,
+		PaidAt:              order.PaidAt,
+		CompletedAt:         order.CompletedAt,
+		FailedAt:            order.FailedAt,
+		FailedReason:        order.FailedReason,
+		ClientIP:            order.ClientIP,
+		SrcHost:             order.SrcHost,
+		SrcURL:              order.SrcURL,
+		CreatedAt:           order.CreatedAt,
+		UpdatedAt:           order.UpdatedAt,
+	}
 }
 
 // AdminProcessRefundRequest is the request body for admin refund processing.
@@ -215,6 +257,22 @@ func (h *PaymentHandler) ProcessRefund(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// QueryAndFinalizeRefund queries the provider refund status and finalizes a pending refund.
+// POST /api/v1/admin/payment/orders/:id/refund/query
+func (h *PaymentHandler) QueryAndFinalizeRefund(c *gin.Context) {
+	orderID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+
+	result, err := h.paymentService.QueryAndFinalizeRefund(c.Request.Context(), orderID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 // --- Subscription Plans ---
 
 // ListPlans returns all subscription plans.
@@ -225,7 +283,68 @@ func (h *PaymentHandler) ListPlans(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, plans)
+	groupInfo := h.configService.GetGroupInfoMap(c.Request.Context(), plans)
+	response.Success(c, adminSubscriptionPlansForResponse(plans, groupInfo))
+}
+
+type AdminSubscriptionPlanResult struct {
+	ID              int64     `json:"id"`
+	GroupID         int64     `json:"group_id"`
+	GroupPlatform   string    `json:"group_platform,omitempty"`
+	GroupName       string    `json:"group_name,omitempty"`
+	RateMultiplier  float64   `json:"rate_multiplier,omitempty"`
+	DailyLimitUSD   *float64  `json:"daily_limit_usd,omitempty"`
+	WeeklyLimitUSD  *float64  `json:"weekly_limit_usd,omitempty"`
+	MonthlyLimitUSD *float64  `json:"monthly_limit_usd,omitempty"`
+	ModelScopes     []string  `json:"supported_model_scopes,omitempty"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Price           float64   `json:"price"`
+	OriginalPrice   *float64  `json:"original_price,omitempty"`
+	Currency        string    `json:"currency,omitempty"`
+	ValidityDays    int       `json:"validity_days"`
+	ValidityUnit    string    `json:"validity_unit"`
+	Features        string    `json:"features"`
+	ProductName     string    `json:"product_name"`
+	ForSale         bool      `json:"for_sale"`
+	SortOrder       int       `json:"sort_order"`
+	CreatedAt       time.Time `json:"created_at,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at,omitempty"`
+}
+
+func adminSubscriptionPlansForResponse(plans []*dbent.SubscriptionPlan, groupInfo map[int64]service.PlanGroupInfo) []AdminSubscriptionPlanResult {
+	result := make([]AdminSubscriptionPlanResult, 0, len(plans))
+	for _, p := range plans {
+		if p == nil {
+			continue
+		}
+		gi := groupInfo[p.GroupID]
+		result = append(result, AdminSubscriptionPlanResult{
+			ID:              int64(p.ID),
+			GroupID:         p.GroupID,
+			GroupPlatform:   gi.Platform,
+			GroupName:       gi.Name,
+			RateMultiplier:  gi.RateMultiplier,
+			DailyLimitUSD:   gi.DailyLimitUSD,
+			WeeklyLimitUSD:  gi.WeeklyLimitUSD,
+			MonthlyLimitUSD: gi.MonthlyLimitUSD,
+			ModelScopes:     gi.ModelScopes,
+			Name:            p.Name,
+			Description:     p.Description,
+			Price:           p.Price,
+			OriginalPrice:   p.OriginalPrice,
+			Currency:        p.Currency,
+			ValidityDays:    p.ValidityDays,
+			ValidityUnit:    p.ValidityUnit,
+			Features:        p.Features,
+			ProductName:     p.ProductName,
+			ForSale:         p.ForSale,
+			SortOrder:       p.SortOrder,
+			CreatedAt:       p.CreatedAt,
+			UpdatedAt:       p.UpdatedAt,
+		})
+	}
+	return result
 }
 
 // CreatePlan creates a new subscription plan.

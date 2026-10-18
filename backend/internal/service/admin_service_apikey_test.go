@@ -33,6 +33,9 @@ func (s *userRepoStubForGroupUpdate) AddGroupToAllowedGroups(_ context.Context, 
 }
 
 func (s *userRepoStubForGroupUpdate) Create(context.Context, *User) error { panic("unexpected") }
+func (s *userRepoStubForGroupUpdate) CreateWithEmailAliasGuard(context.Context, *User) error {
+	panic("unexpected")
+}
 func (s *userRepoStubForGroupUpdate) GetByID(context.Context, int64) (*User, error) {
 	panic("unexpected")
 }
@@ -42,7 +45,9 @@ func (s *userRepoStubForGroupUpdate) GetByEmail(context.Context, string) (*User,
 func (s *userRepoStubForGroupUpdate) GetFirstAdmin(context.Context) (*User, error) {
 	panic("unexpected")
 }
-func (s *userRepoStubForGroupUpdate) Update(context.Context, *User) error { panic("unexpected") }
+func (s *userRepoStubForGroupUpdate) Update(context.Context, *User, UserUpdateFields) error {
+	panic("unexpected")
+}
 func (s *userRepoStubForGroupUpdate) Delete(context.Context, int64) error { panic("unexpected") }
 func (s *userRepoStubForGroupUpdate) GetUserAvatar(context.Context, int64) (*UserAvatar, error) {
 	panic("unexpected")
@@ -68,6 +73,14 @@ func (s *userRepoStubForGroupUpdate) UpdateBalanceNoStat(context.Context, int64,
 func (s *userRepoStubForGroupUpdate) DeductBalance(context.Context, int64, float64) error {
 	panic("unexpected")
 }
+
+func (s *userRepoStubForGroupUpdate) AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error) {
+	panic("unexpected AdjustBalance call")
+}
+
+func (s *userRepoStubForGroupUpdate) SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error) {
+	panic("unexpected SetBalance call")
+}
 func (s *userRepoStubForGroupUpdate) UpdateConcurrency(context.Context, int64, int) error {
 	panic("unexpected")
 }
@@ -83,6 +96,9 @@ func (s *userRepoStubForGroupUpdate) BatchUpdateLimits(context.Context, []int64,
 	return 0, nil
 }
 func (s *userRepoStubForGroupUpdate) ExistsByEmail(context.Context, string) (bool, error) {
+	panic("unexpected")
+}
+func (s *userRepoStubForGroupUpdate) ExistsByEmailAlias(context.Context, string) (bool, error) {
 	panic("unexpected")
 }
 func (s *userRepoStubForGroupUpdate) RemoveGroupFromAllowedGroups(context.Context, int64) (int64, error) {

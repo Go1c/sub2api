@@ -31,9 +31,12 @@ const (
 	EndpointGeminiModels         = "/v1beta/models"
 )
 
+const EndpointAntigravityGenerateContent = "/v1internal:streamGenerateContent"
+
 // gin.Context keys used by the middleware and helpers below.
 const (
-	ctxKeyInboundEndpoint = "_gateway_inbound_endpoint"
+	ctxKeyInboundEndpoint        = "_gateway_inbound_endpoint"
+	ctxKeyActualUpstreamEndpoint = "_gateway_actual_upstream_endpoint"
 )
 
 // ──────────────────────────────────────────────────────────
@@ -89,6 +92,8 @@ func NormalizeInboundEndpoint(path string) string {
 		return EndpointChatCompletions
 	case strings.Contains(path, EndpointMessages):
 		return EndpointMessages
+	case strings.Contains(path, EndpointSystemOne):
+		return EndpointSystemOne
 	case strings.Contains(path, EndpointImagesGenerations) || strings.Contains(path, "/images/generations"):
 		return EndpointImagesGenerations
 	case strings.Contains(path, EndpointImagesEdits) || strings.Contains(path, "/images/edits"):
@@ -105,6 +110,8 @@ func NormalizeInboundEndpoint(path string) string {
 		return EndpointResponses
 	case strings.Contains(path, EndpointGeminiModels):
 		return EndpointGeminiModels
+	case strings.Contains(path, EndpointGeminiCachedContents):
+		return EndpointGeminiCachedContents
 	default:
 		return path
 	}
@@ -182,7 +189,7 @@ func isBareOrSubpathOf(path, root string) bool {
 //     retain their paths. Grok raw Chat requests override this through the
 //     forwarding result consumed by resolveOpenAIUpstreamEndpoint.
 //   - Anthropic  → /v1/messages
-//   - Gemini     → /v1beta/models
+//   - Gemini     → /v1beta/models（显式缓存管理接口保留 /v1beta/cachedContents）
 //   - Antigravity → /v1/messages (Claude) or gemini (Gemini)
 //   - Antigravity routes may target either Claude or Gemini, so the
 //     inbound endpoint is used to distinguish.
@@ -214,7 +221,13 @@ func DeriveUpstreamEndpoint(inbound, rawRequestPath, platform string) string {
 	case service.PlatformAnthropic:
 		return EndpointMessages
 
+	case service.PlatformTypeSafe:
+		return EndpointSystemOne
+
 	case service.PlatformGemini:
+		if inbound == EndpointGeminiCachedContents {
+			return EndpointGeminiCachedContents
+		}
 		return EndpointGeminiModels
 
 	case service.PlatformAntigravity:
@@ -306,10 +319,37 @@ func GetInboundEndpoint(c *gin.Context) string {
 // and the account platform. Handlers call this after scheduling an
 // account, passing account.Platform.
 func GetUpstreamEndpoint(c *gin.Context, platform string) string {
+	// OpenAI 转发服务维护独立的运行时端点上下文，覆盖普通入站推导。
+	// 这对 force_chat_completions 的错误路径尤为重要：此时可能没有
+	// ForwardResult，不能把入站 /v1/responses 误报成上游端点。
+	if platform == service.PlatformOpenAI || platform == service.PlatformGrok || service.IsMultiProtocolAPIKeyProvider(platform) {
+		if endpoint := service.GetActualOpenAIUpstreamEndpoint(c); endpoint != "" {
+			return endpoint
+		}
+	}
+	if c != nil {
+		if value, ok := c.Get(ctxKeyActualUpstreamEndpoint); ok {
+			if endpoint, ok := value.(string); ok && endpoint != "" {
+				return endpoint
+			}
+		}
+	}
 	inbound := GetInboundEndpoint(c)
 	rawPath := ""
 	if c != nil && c.Request != nil && c.Request.URL != nil {
 		rawPath = c.Request.URL.Path
 	}
 	return DeriveUpstreamEndpoint(inbound, rawPath, platform)
+}
+
+func setActualUpstreamEndpoint(c *gin.Context, endpoint string) {
+	if c != nil {
+		c.Set(ctxKeyActualUpstreamEndpoint, strings.TrimSpace(endpoint))
+	}
+}
+
+func shouldUseAntigravityCompat(account *service.Account) bool {
+	return account != nil &&
+		account.Platform == service.PlatformAntigravity &&
+		account.Type == service.AccountTypeOAuth
 }

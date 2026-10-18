@@ -69,17 +69,17 @@
           type="text" class="input mt-0.5 text-xs" :placeholder="mode === 'image' ? '1K / 2K / 4K' : mode === 'video' ? '480p / 720p / 1080p' : ''" />
       </div>
       <div class="w-20">
-        <label class="text-xs text-gray-400">Min</label>
+        <label class="text-xs text-gray-400">{{ t('admin.channels.form.minTokens') }}</label>
         <input :value="interval.min_tokens" @input="emitField('min_tokens', toInt(($event.target as HTMLInputElement).value))"
           type="number" min="0" class="input mt-0.5 text-xs" />
       </div>
       <div class="w-20">
-        <label class="text-xs text-gray-400">Max <span class="text-gray-300">(含)</span></label>
+        <label class="text-xs text-gray-400">{{ t('admin.channels.form.maxTokens') }} <span class="text-gray-300">{{ t('admin.channels.form.inclusive') }}</span></label>
         <input :value="interval.max_tokens ?? ''" @input="emitField('max_tokens', toIntOrNull(($event.target as HTMLInputElement).value))"
           type="number" min="0" class="input mt-0.5 text-xs" :placeholder="'∞'" />
       </div>
       <div class="flex-1">
-        <label class="text-xs text-gray-400">{{ t('admin.channels.form.perRequestPrice', '单次价格') }} <span v-if="isEmpty" class="text-red-500">*</span> <span class="text-gray-300">$</span></label>
+        <label class="text-xs text-gray-400">{{ t('admin.channels.form.perRequestPrice') }} <span v-if="isEmpty" class="text-red-500">*</span> <span class="text-gray-300">$</span></label>
         <input :value="interval.per_request_price" @input="emitField('per_request_price', ($event.target as HTMLInputElement).value)"
           type="number" step="any" min="0" class="input mt-0.5 text-xs" />
       </div>
@@ -117,6 +117,7 @@ const isEmpty = computed(() => {
   return (iv.input_price == null || iv.input_price === '') &&
     (iv.output_price == null || iv.output_price === '') &&
     (iv.cache_write_price == null || iv.cache_write_price === '') &&
+    (iv.cache_write_1h_price == null || iv.cache_write_1h_price === '') &&
     (iv.cache_read_price == null || iv.cache_read_price === '') &&
     (iv.input_multiplier == null || iv.input_multiplier === '') &&
     (iv.output_multiplier == null || iv.output_multiplier === '') &&
@@ -130,13 +131,19 @@ function emitField(field: keyof IntervalFormEntry, value: string | number | null
 }
 
 function toInt(val: string): number {
-  const n = parseInt(val, 10)
+  const n = Math.trunc(Number(val))
   return isNaN(n) ? 0 : n
 }
 
 function toIntOrNull(val: string): number | null {
   if (val === '') return null
-  const n = parseInt(val, 10)
+  const n = Math.trunc(Number(val))
   return isNaN(n) ? null : n
 }
 </script>
+
+<style scoped>
+.pricing-interval-grid {
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+}
+</style>

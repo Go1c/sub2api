@@ -32,6 +32,7 @@ func (r *channelMonitorRequestTemplateRepository) Create(ctx context.Context, t 
 	builder := client.ChannelMonitorRequestTemplate.Create().
 		SetName(t.Name).
 		SetProvider(channelmonitorrequesttemplate.Provider(t.Provider)).
+		SetAPIMode(defaultAPIModeRepo(t.APIMode)).
 		SetDescription(t.Description).
 		SetExtraHeaders(emptyHeadersIfNilRepo(t.ExtraHeaders)).
 		SetBodyOverrideMode(defaultBodyModeRepo(t.BodyOverrideMode))
@@ -63,6 +64,7 @@ func (r *channelMonitorRequestTemplateRepository) Update(ctx context.Context, t 
 	client := clientFromContext(ctx, r.client)
 	updater := client.ChannelMonitorRequestTemplate.UpdateOneID(t.ID).
 		SetName(t.Name).
+		SetAPIMode(defaultAPIModeRepo(t.APIMode)).
 		SetDescription(t.Description).
 		SetExtraHeaders(emptyHeadersIfNilRepo(t.ExtraHeaders)).
 		SetBodyOverrideMode(defaultBodyModeRepo(t.BodyOverrideMode))
@@ -92,8 +94,11 @@ func (r *channelMonitorRequestTemplateRepository) List(ctx context.Context, para
 	if params.Provider != "" {
 		q = q.Where(channelmonitorrequesttemplate.ProviderEQ(channelmonitorrequesttemplate.Provider(params.Provider)))
 	}
+	if params.APIMode != "" {
+		q = q.Where(channelmonitorrequesttemplate.APIModeEQ(defaultAPIModeRepo(params.APIMode)))
+	}
 	rows, err := q.
-		Order(dbent.Asc(channelmonitorrequesttemplate.FieldProvider), dbent.Asc(channelmonitorrequesttemplate.FieldName)).
+		Order(dbent.Asc(channelmonitorrequesttemplate.FieldProvider), dbent.Asc(channelmonitorrequesttemplate.FieldAPIMode), dbent.Asc(channelmonitorrequesttemplate.FieldName)).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list monitor templates: %w", err)
@@ -150,6 +155,8 @@ func (r *channelMonitorRequestTemplateRepository) applyToMonitorsWithClient(
 		Where(
 			channelmonitor.TemplateIDEQ(id),
 			channelmonitor.IDIn(monitorIDs...),
+			channelmonitor.ProviderEQ(channelmonitor.Provider(tpl.Provider)),
+			channelmonitor.APIModeEQ(defaultAPIModeRepo(tpl.APIMode)),
 		).
 		SetBodyOverrideMode(defaultBodyModeRepo(tpl.BodyOverrideMode))
 	if tpl.BodyOverride != nil {
@@ -224,6 +231,7 @@ func (r *channelMonitorRequestTemplateRepository) ListAssociatedMonitors(ctx con
 			ID:       row.ID,
 			Name:     row.Name,
 			Provider: string(row.Provider),
+			APIMode:  defaultAPIModeRepo(row.APIMode),
 			Enabled:  row.Enabled,
 		})
 	}
@@ -244,6 +252,7 @@ func entToServiceTemplate(row *dbent.ChannelMonitorRequestTemplate) *service.Cha
 		ID:               row.ID,
 		Name:             row.Name,
 		Provider:         string(row.Provider),
+		APIMode:          defaultAPIModeRepo(row.APIMode),
 		Description:      row.Description,
 		ExtraHeaders:     headers,
 		BodyOverrideMode: row.BodyOverrideMode,

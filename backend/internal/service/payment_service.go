@@ -31,6 +31,7 @@ const (
 	OrderStatusFulfillmentFailed = payment.OrderStatusFulfillmentFailed
 	OrderStatusRefundRequested   = payment.OrderStatusRefundRequested
 	OrderStatusRefunding         = payment.OrderStatusRefunding
+	OrderStatusRefundPending     = payment.OrderStatusRefundPending
 	OrderStatusPartiallyRefunded = payment.OrderStatusPartiallyRefunded
 	OrderStatusRefunded          = payment.OrderStatusRefunded
 	OrderStatusRefundFailed      = payment.OrderStatusRefundFailed
@@ -154,28 +155,32 @@ type RefundResult struct {
 }
 
 type DashboardStats struct {
-	TodayAmount   float64 `json:"today_amount"`
-	TotalAmount   float64 `json:"total_amount"`
-	TodayCount    int     `json:"today_count"`
-	TotalCount    int     `json:"total_count"`
-	AvgAmount     float64 `json:"avg_amount"`
-	PendingOrders int     `json:"pending_orders"`
+	TodayAmount   CurrencyAmounts `json:"today_amount"`
+	TotalAmount   CurrencyAmounts `json:"total_amount"`
+	TodayCount    int             `json:"today_count"`
+	TotalCount    int             `json:"total_count"`
+	AvgAmount     CurrencyAmounts `json:"avg_amount"`
+	PendingOrders int             `json:"pending_orders"`
 
 	DailySeries    []DailyStats        `json:"daily_series"`
 	PaymentMethods []PaymentMethodStat `json:"payment_methods"`
-	TopUsers       []TopUserStat       `json:"top_users"`
+	TopUsers       TopUsersByCurrency  `json:"top_users"`
 }
 
+// CurrencyAmounts holds payment amounts keyed by their ISO 4217 currency.
+// Amounts in different currencies must never be added together.
+type CurrencyAmounts map[string]float64
+
 type DailyStats struct {
-	Date   string  `json:"date"`
-	Amount float64 `json:"amount"`
-	Count  int     `json:"count"`
+	Date   string          `json:"date"`
+	Amount CurrencyAmounts `json:"amount"`
+	Count  int             `json:"count"`
 }
 
 type PaymentMethodStat struct {
-	Type   string  `json:"type"`
-	Amount float64 `json:"amount"`
-	Count  int     `json:"count"`
+	Type   string          `json:"type"`
+	Amount CurrencyAmounts `json:"amount"`
+	Count  int             `json:"count"`
 }
 
 type TopUserStat struct {
@@ -183,6 +188,10 @@ type TopUserStat struct {
 	Email  string  `json:"email"`
 	Amount float64 `json:"amount"`
 }
+
+// TopUsersByCurrency contains an independent ranked user list for each
+// currency. A single cross-currency leaderboard would be misleading.
+type TopUsersByCurrency map[string][]TopUserStat
 
 // --- Service ---
 
@@ -281,7 +290,7 @@ func (s *PaymentService) loadProviders(ctx context.Context) {
 
 func psIsRefundStatus(s string) bool {
 	switch s {
-	case OrderStatusRefundRequested, OrderStatusRefunding, OrderStatusPartiallyRefunded, OrderStatusRefunded, OrderStatusRefundFailed:
+	case OrderStatusRefundRequested, OrderStatusRefunding, OrderStatusRefundPending, OrderStatusPartiallyRefunded, OrderStatusRefunded, OrderStatusRefundFailed:
 		return true
 	}
 	return false
@@ -366,15 +375,17 @@ func psSliceContains(sl []string, s string) bool {
 
 // Subscription validity period unit constants.
 const (
-	validityUnitWeek  = "week"
-	validityUnitMonth = "month"
+	validityUnitWeek   = "week"
+	validityUnitWeeks  = "weeks"
+	validityUnitMonth  = "month"
+	validityUnitMonths = "months"
 )
 
 func psComputeValidityDays(days int, unit string) int {
 	switch unit {
-	case validityUnitWeek:
+	case validityUnitWeek, validityUnitWeeks:
 		return days * 7
-	case validityUnitMonth:
+	case validityUnitMonth, validityUnitMonths:
 		return days * 30
 	default:
 		return days

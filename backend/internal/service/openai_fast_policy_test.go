@@ -36,7 +36,13 @@ func (s *openAIFastPolicyRepoStub) Set(ctx context.Context, key, value string) e
 }
 
 func (s *openAIFastPolicyRepoStub) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
-	panic("unexpected GetMultiple call")
+	result := make(map[string]string, len(keys))
+	for _, key := range keys {
+		if value, ok := s.values[key]; ok {
+			result[key] = value
+		}
+	}
+	return result, nil
 }
 
 func (s *openAIFastPolicyRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
@@ -92,6 +98,9 @@ func TestEvaluateOpenAIFastPolicy_DefaultPassesKnownTiers(t *testing.T) {
 	require.Equal(t, BetaPolicyActionPass, action)
 
 	action, _ = svc.evaluateOpenAIFastPolicy(context.Background(), account, "gpt-5.5", OpenAIFastTierFlex)
+	require.Equal(t, BetaPolicyActionPass, action)
+
+	action, _ = svc.evaluateOpenAIFastPolicy(context.Background(), account, "gpt-5.6-sol", OpenAIFastTierUltrafast)
 	require.Equal(t, BetaPolicyActionPass, action)
 
 	// empty tier → pass
@@ -402,11 +411,44 @@ func TestSetOpenAIFastPolicySettings_Validation(t *testing.T) {
 			UserIDs:     []int64{42, 43},
 		}},
 	})
+	require.Error(t, err)
+
+	err = svc.SetOpenAIFastPolicySettings(context.Background(), &OpenAIFastPolicySettings{
+		Rules: []OpenAIFastPolicyRule{{
+			ServiceTier: OpenAIFastTierPriority,
+			Action:      BetaPolicyActionPass,
+			Scope:       BetaPolicyScopeAll,
+			UserIDs:     []int64{42, 42},
+		}},
+	})
+	require.Error(t, err)
+
+	// Valid settings persisted
+	err = svc.SetOpenAIFastPolicySettings(context.Background(), &OpenAIFastPolicySettings{
+		Rules: []OpenAIFastPolicyRule{
+			{
+				ServiceTier: OpenAIFastTierPriority,
+				Action:      OpenAIFastPolicyActionForcePriority,
+				Scope:       BetaPolicyScopeAll,
+				UserIDs:     []int64{42, 43},
+			},
+			{
+				ServiceTier: OpenAIFastTierUltrafast,
+				Action:      BetaPolicyActionPass,
+				Scope:       BetaPolicyScopeAll,
+			},
+			{
+				ServiceTier: OpenAIFastTierMissing,
+				Action:      OpenAIFastPolicyActionForcePriority,
+				Scope:       BetaPolicyScopeAll,
+			},
+		},
+	})
 	require.NoError(t, err)
 
 	got, err := svc.GetOpenAIFastPolicySettings(context.Background())
 	require.NoError(t, err)
-	require.Len(t, got.Rules, 1)
+	require.Len(t, got.Rules, 3)
 	require.Equal(t, OpenAIFastTierPriority, got.Rules[0].ServiceTier)
 	require.Equal(t, OpenAIFastPolicyActionForcePriority, got.Rules[0].Action)
 	require.Equal(t, []int64{42, 43}, got.Rules[0].UserIDs)

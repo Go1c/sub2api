@@ -10,6 +10,7 @@ import (
 
 func TestAPIKeyFromService_MapsLastUsedAt(t *testing.T) {
 	lastUsed := time.Now().UTC().Truncate(time.Second)
+	lastUsedIP := "203.0.113.10"
 	src := &service.APIKey{
 		ID:                 1,
 		UserID:             2,
@@ -39,4 +40,5 @@ func TestAPIKeyFromService_MapsNilLastUsedAt(t *testing.T) {
 	out := APIKeyFromService(src)
 	require.NotNil(t, out)
 	require.Nil(t, out.LastUsedAt)
+	require.Nil(t, out.LastUsedIP)
 }

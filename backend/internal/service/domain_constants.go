@@ -262,7 +262,20 @@ const (
 	SettingKeyAPIKeyACLTrustForwardedIP = "api_key_acl_trust_forwarded_ip" // API Key IP 白/黑名单是否信任转发 IP
 
 	// TOTP 双因素认证设置
-	SettingKeyTotpEnabled = "totp_enabled" // 是否启用 TOTP 2FA 功能
+	SettingKeyTotpEnabled    = "totp_enabled"    // 是否启用 TOTP 2FA 功能
+	SettingKeyPasskeyEnabled = "passkey_enabled" // 是否启用 Passkey 登录（仍要求有效的 WebAuthn 部署配置）
+
+	// 会话安全设置
+	SettingKeySessionBindingEnabled = "session_binding_enabled" // 会话 IP/UA 绑定（变更即失效），默认关闭
+
+	// 敏感操作 step-up 2FA 设置
+	SettingKeyStepUpEnabled = "step_up_enabled" // 敏感操作（导出/备份/S3配置/提升管理员等）要求 step-up 2FA，默认关闭
+
+	// 面板 API 限流设置（JSON：PanelRateLimitSettings）
+	SettingKeyPanelRateLimitSettings = "panel_rate_limit_settings"
+
+	// 操作审计日志设置
+	SettingKeyAuditLogRetentionDays = "audit_log_retention_days" // 审计日志保留天数（<=0 永久保留），默认 180
 
 	// 会话安全设置
 	SettingKeySessionBindingEnabled = "session_binding_enabled" // 会话 IP/UA 绑定（变更即失效），默认关闭
@@ -489,6 +502,14 @@ const (
 	// When false: runner skips scheduling and user-facing endpoints return an empty list.
 	SettingKeyChannelMonitorEnabled = "channel_monitor_enabled"
 
+	// SettingKeyChannelMonitorMode selects exclusive implementation:
+	// "v1" active probes, "v2" passive aggregation. Default "v1" (opt-in to v2).
+	SettingKeyChannelMonitorMode = "channel_monitor_mode"
+
+	// ChannelMonitorModeV1/V2 are the only accepted mode values.
+	ChannelMonitorModeV1 = "v1"
+	ChannelMonitorModeV2 = "v2"
+
 	// SettingKeyChannelMonitorDefaultIntervalSeconds controls the default interval (seconds)
 	// pre-filled when creating a new channel monitor from the admin UI. Range: [15, 3600].
 	SettingKeyChannelMonitorDefaultIntervalSeconds = "channel_monitor_default_interval_seconds"
@@ -636,6 +657,10 @@ const (
 	SettingKeyBackendModeEnabled = "backend_mode_enabled"
 
 	// Gateway Forwarding Behavior
+	// SettingKeyOpenAITTFTMode 控制 first_token_ms 的统计口径。
+	SettingKeyOpenAITTFTMode = "openai_ttft_mode"
+	OpenAITTFTModeSemantic   = "semantic"
+	OpenAITTFTModeVisible    = "visible"
 	// SettingKeyEnableFingerprintUnification 是否统一 OAuth 账号的 X-Stainless-* 指纹头（默认 true）
 	SettingKeyEnableFingerprintUnification = "enable_fingerprint_unification"
 	// SettingKeyEnableMetadataPassthrough 是否透传客户端原始 metadata.user_id（默认 false）

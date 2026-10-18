@@ -2,7 +2,10 @@
 // registry, load balancing, and shared utilities for the payment subsystem.
 package payment
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // PaymentType represents a supported payment method.
 type PaymentType = string
@@ -34,6 +37,7 @@ const (
 	OrderStatusFulfillmentFailed = "FULFILLMENT_FAILED"
 	OrderStatusRefundRequested   = "REFUND_REQUESTED"
 	OrderStatusRefunding         = "REFUNDING"
+	OrderStatusRefundPending     = "REFUND_PENDING"
 	OrderStatusPartiallyRefunded = "PARTIALLY_REFUNDED"
 	OrderStatusRefunded          = "REFUNDED"
 	OrderStatusRefundFailed      = "REFUND_FAILED"
@@ -103,16 +107,19 @@ func GetBasePaymentType(t string) string {
 
 // CreatePaymentRequest holds the parameters for creating a new payment.
 type CreatePaymentRequest struct {
-	OrderID            string // Internal order ID
-	Amount             string // Pay amount in CNY (formatted to 2 decimal places)
-	PaymentType        string // e.g. "alipay", "wxpay", "stripe"
-	Subject            string // Product description
-	NotifyURL          string // Webhook callback URL
-	ReturnURL          string // Browser redirect URL after payment
-	OpenID             string // WeChat JSAPI payer OpenID when available
-	ClientIP           string // Payer's IP address
-	IsMobile           bool   // Whether the request comes from a mobile device
-	InstanceSubMethods string // Comma-separated sub-methods from instance supported_types (for Stripe)
+	OrderID     string // Internal order ID
+	Amount      string // 支付金额，按服务商实例配置的币种解释
+	PaymentType string // e.g. "alipay", "wxpay", "stripe"
+	Subject     string // Product description
+	NotifyURL   string // Webhook callback URL
+	ReturnURL   string // Browser redirect URL after payment
+	OpenID      string // WeChat JSAPI payer OpenID when available
+	ClientIP    string // Payer's IP address
+	IsMobile    bool   // Whether the request comes from a mobile device
+	// AlipayMobilePrecreate routes a mobile Alipay request through
+	// alipay.trade.precreate instead of alipay.trade.wap.pay.
+	AlipayMobilePrecreate bool
+	InstanceSubMethods    string // Comma-separated sub-methods from instance supported_types (for Stripe)
 }
 
 // CreatePaymentResultType describes the shape of the create-payment result.
@@ -164,7 +171,7 @@ type CreatePaymentResponse struct {
 type QueryOrderResponse struct {
 	TradeNo  string
 	Status   string  // "pending", "paid", "failed", "refunded"
-	Amount   float64 // Amount in CNY
+	Amount   float64 // 按服务商返回币种解释的金额
 	PaidAt   string  // RFC3339 timestamp or empty
 	Metadata map[string]string
 }

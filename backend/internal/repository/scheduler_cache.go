@@ -29,6 +29,7 @@ const (
 
 	defaultSchedulerSnapshotMGetChunkSize  = 128
 	defaultSchedulerSnapshotWriteChunkSize = 256
+	schedulerLastUsedUpdateChunkSize       = 256
 
 	// snapshotGraceTTLSeconds 旧快照过期的宽限期（秒）。
 	// 替代立即 DEL，让正在读取旧版本的 reader 有足够时间完成 ZRANGE。
@@ -256,21 +257,30 @@ func (c *schedulerCache) GetSnapshot(ctx context.Context, bucket service.Schedul
 	}
 
 	keys := make([]string, 0, len(ids))
+	lastUsedKeys := make([]string, 0, len(ids))
 	for _, id := range ids {
 		keys = append(keys, schedulerAccountMetaKey(id))
+		lastUsedKeys = append(lastUsedKeys, schedulerLastUsedKey(id))
 	}
 	values, err := c.mgetChunked(ctx, keys)
 	if err != nil {
 		return nil, false, err
 	}
+	lastUsedValues, err := c.mgetChunked(ctx, lastUsedKeys)
+	if err != nil {
+		return nil, false, err
+	}
 
 	accounts := make([]*service.Account, 0, len(values))
-	for _, val := range values {
+	for i, val := range values {
 		if val == nil {
 			return nil, false, nil
 		}
 		account, err := decodeCachedAccount(val)
 		if err != nil {
+			return nil, false, err
+		}
+		if err := applySchedulerLastUsed(account, lastUsedValues[i]); err != nil {
 			return nil, false, err
 		}
 		accounts = append(accounts, account)
@@ -557,15 +567,22 @@ func schedulerBucketWriteResultError(result int64, bucket service.SchedulerBucke
 }
 
 func (c *schedulerCache) GetAccount(ctx context.Context, accountID int64) (*service.Account, error) {
-	key := schedulerAccountKey(strconv.FormatInt(accountID, 10))
-	val, err := c.rdb.Get(ctx, key).Result()
-	if err == redis.Nil {
-		return nil, nil
-	}
+	id := strconv.FormatInt(accountID, 10)
+	values, err := c.rdb.MGet(ctx, schedulerAccountKey(id), schedulerLastUsedKey(id)).Result()
 	if err != nil {
 		return nil, err
 	}
-	return decodeCachedAccount(val)
+	if len(values) != 2 || values[0] == nil {
+		return nil, nil
+	}
+	account, err := decodeCachedAccount(values[0])
+	if err != nil {
+		return nil, err
+	}
+	if err := applySchedulerLastUsed(account, values[1]); err != nil {
+		return nil, err
+	}
+	return account, nil
 }
 
 func (c *schedulerCache) SetAccount(ctx context.Context, account *service.Account) error {
@@ -587,7 +604,7 @@ func (c *schedulerCache) DeleteAccount(ctx context.Context, accountID int64) err
 		return nil
 	}
 	id := strconv.FormatInt(accountID, 10)
-	return c.rdb.Del(ctx, schedulerAccountKey(id), schedulerAccountMetaKey(id)).Err()
+	return c.rdb.Del(ctx, schedulerAccountKey(id), schedulerAccountMetaKey(id), schedulerLastUsedKey(id)).Err()
 }
 
 func (c *schedulerCache) UpdateLastUsed(ctx context.Context, updates map[int64]time.Time) error {
@@ -595,26 +612,33 @@ func (c *schedulerCache) UpdateLastUsed(ctx context.Context, updates map[int64]t
 		return nil
 	}
 
-	keys := make([]string, 0, len(updates))
-	ids := make([]int64, 0, len(updates))
-	for id := range updates {
-		keys = append(keys, schedulerAccountKey(strconv.FormatInt(id, 10)))
-		ids = append(ids, id)
-	}
-
-	values, err := c.mgetChunked(ctx, keys)
-	if err != nil {
-		return err
-	}
-
 	pipe := c.rdb.Pipeline()
-	for i, val := range values {
-		if val == nil {
+	queued := 0
+	keys := make([]string, 0, schedulerLastUsedUpdateChunkSize*2)
+	args := make([]any, 0, schedulerLastUsedUpdateChunkSize)
+	queueBatch := func() {
+		if len(args) == 0 {
+			return
+		}
+		updateSchedulerLastUsedScript.Eval(ctx, pipe, keys, args...)
+		queued++
+		keys = make([]string, 0, schedulerLastUsedUpdateChunkSize*2)
+		args = make([]any, 0, schedulerLastUsedUpdateChunkSize)
+	}
+	for id, usedAt := range updates {
+		if id <= 0 {
 			continue
 		}
-		account, err := decodeCachedAccount(val)
+		millis, err := schedulerLastUsedMillis(usedAt)
 		if err != nil {
-			return err
+			slog.Warn("scheduler cache removes account with unencodable payload",
+				"account_id", id,
+				"error", err,
+			)
+			idText := strconv.FormatInt(id, 10)
+			pipe.Del(ctx, schedulerAccountKey(idText), schedulerAccountMetaKey(idText), schedulerLastUsedKey(idText))
+			queued++
+			continue
 		}
 		account.LastUsedAt = ptrTime(updates[ids[i]])
 		updated, metaPayload, err := marshalSchedulerCacheAccount(*account)
@@ -629,7 +653,11 @@ func (c *schedulerCache) UpdateLastUsed(ctx context.Context, updates map[int64]t
 		pipe.Set(ctx, keys[i], updated, 0)
 		pipe.Set(ctx, schedulerAccountMetaKey(strconv.FormatInt(ids[i], 10)), metaPayload, 0)
 	}
-	_, err = pipe.Exec(ctx)
+	queueBatch()
+	if queued == 0 {
+		return nil
+	}
+	_, err := pipe.Exec(ctx)
 	return err
 }
 
@@ -698,8 +726,43 @@ func schedulerAccountMetaKey(id string) string {
 	return schedulerAccountMetaPrefix + id
 }
 
+func schedulerLastUsedKey(id string) string {
+	return schedulerAccountLastUsedPrefix + id
+}
+
 func ptrTime(t time.Time) *time.Time {
 	return &t
+}
+
+func schedulerLastUsedMillis(value time.Time) (int64, error) {
+	if _, err := value.MarshalJSON(); err != nil {
+		return 0, err
+	}
+	return value.UTC().UnixMilli(), nil
+}
+
+func applySchedulerLastUsed(account *service.Account, value any) error {
+	if account == nil || value == nil {
+		return nil
+	}
+	var raw string
+	switch typed := value.(type) {
+	case string:
+		raw = typed
+	case []byte:
+		raw = string(typed)
+	default:
+		return fmt.Errorf("unexpected last_used cache type: %T", value)
+	}
+	millis, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid last_used cache value %q: %w", raw, err)
+	}
+	lastUsedAt := time.UnixMilli(millis).UTC()
+	if account.LastUsedAt == nil || lastUsedAt.After(*account.LastUsedAt) {
+		account.LastUsedAt = ptrTime(lastUsedAt)
+	}
+	return nil
 }
 
 func decodeCachedAccount(val any) (*service.Account, error) {
@@ -937,9 +1000,35 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		return nil
 	}
 	keys := []string{
+		// Anthropic shared-window and Fable-only threshold checks run on this
+		// projection. UpdateExtra refreshes both payloads without a bucket rebuild.
+		"session_window_utilization",
+		"passive_usage_7d_utilization",
+		"passive_usage_7d_reset",
+		"passive_usage_7d_oi_utilization",
+		"passive_usage_7d_oi_reset",
+		"quota_limit",
+		"quota_used",
+		"quota_daily_limit",
+		"quota_daily_used",
+		"quota_daily_start",
+		"quota_daily_reset_mode",
+		"quota_daily_reset_hour",
+		"quota_weekly_limit",
+		"quota_weekly_used",
+		"quota_weekly_start",
+		"quota_weekly_reset_mode",
+		"quota_weekly_reset_day",
+		"quota_weekly_reset_hour",
+		"quota_reset_timezone",
 		"mixed_scheduling",
 		"window_cost_limit",
 		"window_cost_sticky_reserve",
+		// RPM 门与窗口费用门一样跑在本投影上：isAccountSchedulableForRPM 读 base_rpm，
+		// 缺失时 GetBaseRPM() 返回 0 并直接放行，已配置限流的账号会被超额调度。
+		"base_rpm",
+		"rpm_strategy",
+		"rpm_sticky_buffer",
 		"max_sessions",
 		"session_idle_timeout_minutes",
 		"openai_oauth_responses_websockets_v2_enabled",

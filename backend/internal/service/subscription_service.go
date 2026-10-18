@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/dgraph-io/ristretto"
 	"golang.org/x/sync/singleflight"
 )
@@ -68,6 +69,7 @@ type SubscriptionService struct {
 	creditSubMiss  sync.Map
 
 	maintenanceQueue *SubscriptionMaintenanceQueue
+	now              func() time.Time
 }
 
 func (s *SubscriptionService) SetSubscriptionCreditLedgerRepository(repo SubscriptionCreditLedgerRepository) *SubscriptionService {
@@ -93,9 +95,11 @@ func NewSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscript
 		userSubRepo:         userSubRepo,
 		billingCacheService: billingCacheService,
 		entClient:           entClient,
+		now:                 time.Now,
 	}
 	svc.initSubCache(cfg)
 	svc.initMaintenanceQueue(cfg)
+	svc.StartSubCacheInvalidationSubscriber(context.Background())
 	return svc
 }
 
@@ -227,6 +231,48 @@ func (s *SubscriptionService) InvalidateSubCacheSync(userID, groupID int64) {
 	if s.subCacheL1 != nil {
 		s.subCacheL1.Wait()
 	}
+}
+
+// InvalidateSubCacheSync 失效订阅 L1 缓存并等待 Ristretto 删除操作生效。
+func (s *SubscriptionService) InvalidateSubCacheSync(userID, groupID int64) {
+	s.invalidateSubCacheKeySync(subCacheKey(userID, groupID))
+}
+
+func (s *SubscriptionService) invalidateSubCacheKeySync(key string) {
+	if s.subCacheL1 == nil {
+		return
+	}
+	s.subCacheL1.Del(key)
+	s.subCacheL1.Wait()
+}
+
+// StartSubCacheInvalidationSubscriber 启动跨实例订阅 L1 缓存失效订阅。
+func (s *SubscriptionService) StartSubCacheInvalidationSubscriber(ctx context.Context) {
+	if s.billingCacheService == nil || s.subCacheL1 == nil {
+		return
+	}
+	if err := s.billingCacheService.SubscribeSubscriptionCacheInvalidation(ctx, func(cacheKey string) {
+		s.invalidateSubCacheKeySync(cacheKey)
+	}); err != nil {
+		log.Printf("Warning: failed to start subscription cache invalidation subscriber: %v", err)
+	}
+}
+
+func (s *SubscriptionService) invalidateSubscriptionCaches(userID, groupID int64) error {
+	s.InvalidateSubCacheSync(userID, groupID)
+	if s.billingCacheService == nil {
+		return nil
+	}
+
+	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID); err != nil {
+		return fmt.Errorf("invalidate billing subscription cache: %w", err)
+	}
+	if err := s.billingCacheService.PublishSubscriptionCacheInvalidation(cacheCtx, subCacheKey(userID, groupID)); err != nil {
+		return fmt.Errorf("publish subscription cache invalidation: %w", err)
+	}
+	return nil
 }
 
 // AssignSubscriptionInput 分配订阅输入
@@ -692,57 +738,109 @@ func (s *SubscriptionService) RevokeSubscription(ctx context.Context, subscripti
 	return nil
 }
 
-// ExtendSubscription 调整订阅时长（正数延长，负数缩短）
-func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscriptionID int64, days int) (*UserSubscription, error) {
-	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
+// RestoreSubscription 恢复已撤销订阅
+func (s *SubscriptionService) RestoreSubscription(ctx context.Context, subscriptionID int64) (*UserSubscription, error) {
+	sub, err := s.userSubRepo.GetByIDIncludeDeleted(ctx, subscriptionID)
 	if err != nil {
-		return nil, ErrSubscriptionNotFound
+		return nil, err
+	}
+	if sub.DeletedAt == nil {
+		return nil, ErrSubscriptionNotRevoked
 	}
 
-	// 限制调整天数范围
-	if days > MaxValidityDays {
-		days = MaxValidityDays
+	exists, err := s.userSubRepo.ExistsActiveByUserIDAndGroupID(ctx, sub.UserID, sub.GroupID)
+	if err != nil {
+		return nil, err
 	}
-	if days < -MaxValidityDays {
-		days = -MaxValidityDays
+	if exists {
+		return nil, ErrSubscriptionRestoreConflict
 	}
 
+	restoredStatus := sub.Status
 	now := time.Now()
-	isExpired := !sub.ExpiresAt.After(now)
-
-	// 如果订阅已过期，不允许负向调整
-	if isExpired && days < 0 {
-		return nil, infraerrors.BadRequest("CANNOT_SHORTEN_EXPIRED", "cannot shorten an expired subscription")
+	if restoredStatus == SubscriptionStatusActive && !sub.ExpiresAt.After(now) {
+		restoredStatus = SubscriptionStatusExpired
 	}
 
-	// 计算新的过期时间
-	var newExpiresAt time.Time
-	if isExpired {
-		// 已过期：从当前时间开始增加天数
-		newExpiresAt = now.AddDate(0, 0, days)
-	} else {
-		// 未过期：从原过期时间增加/减少天数
-		newExpiresAt = sub.ExpiresAt.AddDate(0, 0, days)
-	}
-
-	if newExpiresAt.After(MaxExpiresAt) {
-		newExpiresAt = MaxExpiresAt
-	}
-
-	// 检查新的过期时间必须大于当前时间
-	if !newExpiresAt.After(now) {
-		return nil, ErrAdjustWouldExpire
-	}
-
-	if err := s.userSubRepo.ExtendExpiry(ctx, subscriptionID, newExpiresAt); err != nil {
+	restored, err := s.userSubRepo.Restore(ctx, subscriptionID, restoredStatus)
+	if err != nil {
 		return nil, err
 	}
 
-	// 如果订阅已过期，恢复为active状态
-	if sub.Status == SubscriptionStatusExpired {
-		if err := s.userSubRepo.UpdateStatus(ctx, subscriptionID, SubscriptionStatusActive); err != nil {
-			return nil, err
+	if err := s.invalidateSubscriptionCaches(restored.UserID, restored.GroupID); err != nil {
+		return nil, err
+	}
+	return restored, nil
+}
+
+// ExtendSubscription 调整订阅时长（正数延长，负数缩短）
+func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscriptionID int64, days int) (*UserSubscription, error) {
+	err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+		// Lock the row before reading its expiry. Without this lock, concurrent
+		// adjustments can both calculate from the same stale expiry and lose one
+		// of the updates when they write the absolute timestamp.
+		sub, err := s.userSubRepo.GetByIDForUpdate(txCtx, subscriptionID)
+		if err != nil {
+			return ErrSubscriptionNotFound
 		}
+
+		// 限制调整天数范围
+		if days > MaxValidityDays {
+			days = MaxValidityDays
+		}
+		if days < -MaxValidityDays {
+			days = -MaxValidityDays
+		}
+
+		now := time.Now()
+		if s.now != nil {
+			now = s.now()
+		}
+		isExpired := !sub.ExpiresAt.After(now)
+
+		// 如果订阅已过期，不允许负向调整
+		if isExpired && days < 0 {
+			return infraerrors.BadRequest("CANNOT_SHORTEN_EXPIRED", "cannot shorten an expired subscription")
+		}
+
+		// 计算新的过期时间
+		var newExpiresAt time.Time
+		if isExpired {
+			// 已过期：从当前时间开始增加天数
+			newExpiresAt = now.AddDate(0, 0, days)
+		} else {
+			// 未过期：从原过期时间增加/减少天数
+			newExpiresAt = sub.ExpiresAt.AddDate(0, 0, days)
+		}
+
+		if newExpiresAt.After(MaxExpiresAt) {
+			newExpiresAt = MaxExpiresAt
+		}
+
+		// 检查新的过期时间必须大于当前时间
+		if !newExpiresAt.After(now) {
+			return ErrAdjustWouldExpire
+		}
+
+		if err := s.userSubRepo.ExtendExpiry(txCtx, subscriptionID, newExpiresAt); err != nil {
+			return err
+		}
+
+		// 如果订阅已过期，恢复为active状态
+		if sub.Status == SubscriptionStatusExpired {
+			if err := s.userSubRepo.UpdateStatus(txCtx, subscriptionID, SubscriptionStatusActive); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
 	}
 
 	// 失效订阅缓存（额度池订阅 group_id 可为 nil，传 0 表示无分组）
@@ -757,7 +855,7 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 		}()
 	}
 
-	return s.userSubRepo.GetByID(ctx, subscriptionID)
+	return sub, nil
 }
 
 // GetByID 根据ID获取订阅
@@ -1140,20 +1238,24 @@ func (s *SubscriptionService) ListSubscriptionLedger(ctx context.Context, subscr
 // normalizeExpiredWindows 将已过期窗口的数据清零（仅影响返回数据，不影响数据库）
 // 这确保前端显示正确的当前窗口状态，而不是过期窗口的历史数据
 func normalizeExpiredWindows(subs []UserSubscription) {
+	normalizeExpiredWindowsAt(subs, time.Now())
+}
+
+func normalizeExpiredWindowsAt(subs []UserSubscription, now time.Time) {
 	for i := range subs {
 		sub := &subs[i]
 		// 日窗口过期：清零展示数据
-		if sub.NeedsDailyReset() {
+		if sub.canAutomaticallyResetDailyAt(now) {
 			sub.DailyWindowStart = nil
 			sub.DailyUsageUSD = 0
 		}
 		// 周窗口过期：清零展示数据
-		if sub.NeedsWeeklyReset() {
+		if sub.canAutomaticallyResetWeeklyAt(now) {
 			sub.WeeklyWindowStart = nil
 			sub.WeeklyUsageUSD = 0
 		}
 		// 月窗口过期：清零展示数据
-		if sub.NeedsMonthlyReset() {
+		if sub.canAutomaticallyResetMonthlyAt(now) {
 			sub.MonthlyWindowStart = nil
 			sub.MonthlyUsageUSD = 0
 		}
@@ -1179,13 +1281,17 @@ func startOfDay(t time.Time) time.Time {
 
 // CheckAndActivateWindow 检查并激活窗口（首次使用时）
 func (s *SubscriptionService) CheckAndActivateWindow(ctx context.Context, sub *UserSubscription) error {
+	return s.checkAndActivateWindowAt(ctx, sub, s.now())
+}
+
+func (s *SubscriptionService) checkAndActivateWindowAt(ctx context.Context, sub *UserSubscription, now time.Time) error {
 	if sub.IsWindowActivated() {
 		return nil
 	}
 
-	// 使用当天零点作为窗口起始时间
-	windowStart := startOfDay(time.Now())
-	return s.userSubRepo.ActivateWindows(ctx, sub.ID, windowStart)
+	// 日窗口锚定当天 0 点（日历日语义）；周/月窗口锚定首次使用时刻（期限对齐语义，
+	// 锚点不得早于 StartsAt，否则最后一个不完整周期会重复发放额度，见 issue #5051）。
+	return s.userSubRepo.ActivateWindows(ctx, sub.ID, timezone.StartOfDay(now), now)
 }
 
 // AdminResetQuota manually resets the daily, weekly, and/or monthly usage windows.
@@ -1262,8 +1368,7 @@ func (s *SubscriptionService) UserResetWeeklyLimit(ctx context.Context, userID, 
 
 // CheckAndResetWindows 检查并重置过期的窗口
 func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *UserSubscription) error {
-	// 使用当天零点作为新窗口起始时间
-	windowStart := startOfDay(time.Now())
+	now := s.now()
 	needsInvalidateCache := false
 
 	// 日窗口重置（24小时）
@@ -1357,6 +1462,7 @@ func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSub
 // 重新读取数据库快照，避免 CAS 失败者基于本地清零值误判限额；全 nil 窗口
 // 仍留给扣费事务首次激活。
 func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, group *Group) (needsMaintenance bool, err error) {
+	now := s.now()
 	// 1. 验证订阅状态
 	if sub.Status == SubscriptionStatusExpired {
 		return false, ErrSubscriptionExpired
@@ -1364,7 +1470,7 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	if sub.Status == SubscriptionStatusSuspended {
 		return false, ErrSubscriptionSuspended
 	}
-	if sub.IsExpired() {
+	if !sub.ExpiresAt.After(now) {
 		return false, ErrSubscriptionExpired
 	}
 	// 总额度池耗尽：订阅作废，回落到余额闸门（ErrSubscriptionInvalid 属于可回落错误）。
@@ -1380,11 +1486,11 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 		sub.DailyUsageUSD = 0
 		needsMaintenance = true
 	}
-	if sub.NeedsWeeklyReset() {
+	if sub.canAutomaticallyResetWeeklyAt(now) {
 		sub.WeeklyUsageUSD = 0
 		needsMaintenance = true
 	}
-	if sub.NeedsMonthlyReset() {
+	if sub.canAutomaticallyResetMonthlyAt(now) {
 		sub.MonthlyUsageUSD = 0
 		needsMaintenance = true
 	}
@@ -1468,6 +1574,9 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	if limitPtr := sub.dailyLimitUSD(group); limitPtr != nil && sub.DailyWindowStart != nil {
 		limit := *limitPtr
 		resetsAt := sub.DailyWindowStart.Add(24 * time.Hour)
+		if dailyResetTime := sub.DailyResetTime(); dailyResetTime != nil {
+			resetsAt = *dailyResetTime
+		}
 		progress.Daily = &UsageWindowProgress{
 			LimitUSD:        limit,
 			UsedUSD:         sub.DailyUsageUSD,
@@ -1492,6 +1601,9 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	if limitPtr := sub.weeklyLimitUSD(group); limitPtr != nil && sub.WeeklyWindowStart != nil {
 		limit := *limitPtr
 		resetsAt := sub.WeeklyWindowStart.Add(7 * 24 * time.Hour)
+		if weeklyResetTime := sub.WeeklyResetTime(); weeklyResetTime != nil {
+			resetsAt = *weeklyResetTime
+		}
 		progress.Weekly = &UsageWindowProgress{
 			LimitUSD:        limit,
 			UsedUSD:         sub.WeeklyUsageUSD,
@@ -1516,6 +1628,9 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	if group != nil && group.HasMonthlyLimit() && sub.MonthlyWindowStart != nil {
 		limit := *group.MonthlyLimitUSD
 		resetsAt := sub.MonthlyWindowStart.Add(30 * 24 * time.Hour)
+		if monthlyResetTime := sub.MonthlyResetTime(); monthlyResetTime != nil {
+			resetsAt = *monthlyResetTime
+		}
 		progress.Monthly = &UsageWindowProgress{
 			LimitUSD:        limit,
 			UsedUSD:         sub.MonthlyUsageUSD,

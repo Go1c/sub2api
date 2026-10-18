@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+
+const { copyToClipboardMock, saveAsMock } = vi.hoisted(() => ({
+  copyToClipboardMock: vi.fn().mockResolvedValue(true),
+  saveAsMock: vi.fn()
+}))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -16,7 +21,20 @@ vi.mock('@/composables/useClipboard', () => ({
   })
 }))
 
+vi.mock('file-saver', () => ({
+  saveAs: saveAsMock
+}))
+
 import UseKeyModal from '../UseKeyModal.vue'
+
+function readBlobAsText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => resolve(String(reader.result || '')))
+    reader.addEventListener('error', () => reject(reader.error))
+    reader.readAsText(blob)
+  })
+}
 
 describe('UseKeyModal', () => {
   it('renders Grok Build and OpenCode setup for Grok groups', async () => {

@@ -482,6 +482,37 @@ func TestBedrockCrossRegionPrefix(t *testing.T) {
 }
 
 func TestResolveBedrockModelID(t *testing.T) {
+	t.Run("sonnet 5.5 uses the global inference profile in every region", func(t *testing.T) {
+		for _, region := range []string{"us-east-1", "eu-west-1", "ap-southeast-2"} {
+			account := &Account{
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeBedrock,
+				Credentials: map[string]any{
+					"aws_region": region,
+				},
+			}
+			modelID, ok := ResolveBedrockModelID(account, "claude-sonnet-5-5")
+			require.True(t, ok, region)
+			assert.Equal(t, "global.anthropic.claude-sonnet-5-5", modelID, region)
+		}
+	})
+
+	t.Run("explicit global sonnet 5.5 profile is not rewritten", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeBedrock,
+			Credentials: map[string]any{
+				"aws_region": "eu-west-1",
+				"model_mapping": map[string]any{
+					"public-sonnet": "global.anthropic.claude-sonnet-5-5",
+				},
+			},
+		}
+		modelID, ok := ResolveBedrockModelID(account, "public-sonnet")
+		require.True(t, ok)
+		assert.Equal(t, "global.anthropic.claude-sonnet-5-5", modelID)
+	})
+
 	t.Run("default alias resolves and adjusts region", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformAnthropic,

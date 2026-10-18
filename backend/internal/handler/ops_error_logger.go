@@ -1262,6 +1262,9 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		if shouldSkipOpsErrorLog(c.Request.Context(), ops, parsed.Message, string(body), c.Request.URL.Path) {
 			return
 		}
+		if shouldSkipOpsClientClosed(c, ops, status) {
+			return
+		}
 
 		apiKey := getOpsAPIKey(c)
 
@@ -1296,6 +1299,14 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			}
 		}
 
+		// Google 格式错误体没有 type 字段：按网关回写时登记的错误类型补齐。
+		if errType, code := service.OpsLocalErrorType(c); errType != "" && !parsed.StreamFailure &&
+			(parsed.ErrorType == "" || parsed.ErrorType == "api_error") {
+			parsed.ErrorType = errType
+			if code != "" {
+				parsed.Code = code
+			}
+		}
 		normalizedType := normalizeOpsErrorType(parsed.ErrorType, parsed.Code)
 
 		phase, isBusinessLimited, errorOwner, errorSource := classifyOpsErrorLog(c, normalizedType, parsed.Message, parsed.Code, status)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,11 +89,14 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 	// 用于存储 tool_use id -> name 映射
 	toolIDToName := make(map[string]string)
 
-	// 检测是否有 web_search 工具
-	hasWebSearchTool := hasWebSearchTool(claudeReq.Tools)
+	// 仅在「只有内置 web_search、没有客户端 function tools」时走 web_search 降级模型。
+	// Antigravity v1internal 不支持内置工具与 functionDeclarations 混用（即使设置
+	// includeServerSideToolInvocations 仍会 400，见 issue #6464），混用时会丢弃内置搜索，
+	// 因此不能再强制切到 gemini-2.5-flash，否则 Codex 等带 shell 工具的请求会整单失败。
+	useWebSearchRequest := hasWebSearchTool(claudeReq.Tools) && !hasClientFunctionTools(claudeReq.Tools)
 	requestType := "agent"
 	targetModel := mappedModel
-	if hasWebSearchTool {
+	if useWebSearchRequest {
 		requestType = "web_search"
 		if targetModel != webSearchFallbackModel {
 			targetModel = webSearchFallbackModel
@@ -107,13 +111,19 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 	allowDummyThought := strings.HasPrefix(targetModel, "gemini-")
 
 	// 1. 构建 contents
-	contents, strippedThinking, err := buildContents(claudeReq.Messages, toolIDToName, isThinkingEnabled, allowDummyThought)
+	contents, messageSystemParts, strippedThinking, err := buildContents(claudeReq.Messages, toolIDToName, isThinkingEnabled, allowDummyThought)
 	if err != nil {
 		return nil, fmt.Errorf("build contents: %w", err)
 	}
 
 	// 2. 构建 systemInstruction（使用 targetModel 而非原始请求模型，确保身份注入基于最终模型）
 	systemInstruction := buildSystemInstruction(claudeReq.System, targetModel, opts, claudeReq.Tools)
+	if len(messageSystemParts) > 0 {
+		if systemInstruction == nil {
+			systemInstruction = &GeminiContent{Role: "user"}
+		}
+		systemInstruction.Parts = append(systemInstruction.Parts, messageSystemParts...)
+	}
 
 	// 3. 构建 generationConfig
 	reqForConfig := claudeReq
@@ -137,14 +147,19 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 	// 5. 构建内部请求
 	innerRequest := GeminiRequest{
 		Contents: contents,
-		// 总是设置 toolConfig，与官方客户端一致
-		ToolConfig: &GeminiToolConfig{
-			FunctionCallingConfig: &GeminiFunctionCallingConfig{
-				Mode: "VALIDATED",
-			},
-		},
 		// 总是生成 sessionId，基于用户消息内容
 		SessionID: generateStableSessionID(contents),
+	}
+
+	// toolConfig must always be present: upstream rejects requests without it,
+	// including reasoning models called without any tools.
+	// 总是设置 toolConfig，与官方客户端一致。
+	// 注意：buildTools 会在客户端 function tools 存在时丢弃 googleSearch/codeExecution
+	// （issue #6464），因此这里不再注入 includeServerSideToolInvocations。
+	innerRequest.ToolConfig = &GeminiToolConfig{
+		FunctionCallingConfig: &GeminiFunctionCallingConfig{
+			Mode: "VALIDATED",
+		},
 	}
 
 	if systemInstruction != nil {
@@ -285,6 +300,49 @@ func filterOpenCodePrompt(text string) string {
 	return ""
 }
 
+// stripClaudeAttribution removes the leading Claude Code attribution metadata line
+// from Antigravity system text. This is prompt metadata, not an HTTP header; it
+// can trigger RESOURCE_EXHAUSTED on the Google upstream. Keep this scoped to the
+// Antigravity transformer: native Anthropic OAuth may require the attribution.
+// claudeIdentityOpeners 是部分 Anthropic 客户端放在系统块开头的 Claude Agent SDK 身份语句。
+// 仅移除 x-anthropic-billing-header 行还不够：如果系统文本仍以这些语句开头，
+// Google 上游仍会返回 429 RESOURCE_EXHAUSTED。
+//
+// The patterns are anchored at the start of a system block on purpose, so user
+// instructions that merely mention Claude or Anthropic are left untouched.
+var claudeIdentityOpeners = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)^[ \t\r\n]*You are a Claude agent, built on Anthropic'?s Claude Agent SDK\.?`),
+	regexp.MustCompile(`(?i)^[ \t\r\n]*You are Claude Code, Anthropic'?s official CLI for Claude\.?`),
+}
+
+// neutralizeClaudeIdentity rewrites a leading vendor identity sentence into a
+// vendor-neutral one. It keeps the rest of the block, including any user
+// instructions that follow.
+func neutralizeClaudeIdentity(text string) string {
+	for _, re := range claudeIdentityOpeners {
+		if loc := re.FindStringIndex(text); loc != nil {
+			return "You are an AI agent." + text[loc[1]:]
+		}
+	}
+	return text
+}
+
+func stripClaudeAttribution(text string) string {
+	trimmed := strings.TrimLeft(text, " \t\r\n")
+	if !strings.HasPrefix(trimmed, "x-anthropic-billing-header:") {
+		return text
+	}
+	end := strings.IndexAny(trimmed, "\r\n")
+	if end < 0 {
+		return ""
+	}
+	rest := trimmed[end+1:]
+	if trimmed[end] == '\r' {
+		rest = strings.TrimPrefix(rest, "\n")
+	}
+	return rest
+}
+
 // buildSystemInstruction 构建 systemInstruction（与 Antigravity-Manager 保持一致）
 func buildSystemInstruction(system json.RawMessage, modelName string, opts TransformOptions, tools []ClaudeTool) *GeminiContent {
 	var parts []GeminiPart
@@ -297,6 +355,7 @@ func buildSystemInstruction(system json.RawMessage, modelName string, opts Trans
 		// 尝试解析为字符串
 		var sysStr string
 		if err := json.Unmarshal(system, &sysStr); err == nil {
+			sysStr = neutralizeClaudeIdentity(stripClaudeAttribution(sysStr))
 			if strings.TrimSpace(sysStr) != "" {
 				if strings.Contains(sysStr, "You are Antigravity") {
 					userHasAntigravityIdentity = true
@@ -312,6 +371,7 @@ func buildSystemInstruction(system json.RawMessage, modelName string, opts Trans
 			var sysBlocks []SystemBlock
 			if err := json.Unmarshal(system, &sysBlocks); err == nil {
 				for _, block := range sysBlocks {
+					block.Text = neutralizeClaudeIdentity(stripClaudeAttribution(block.Text))
 					if block.Type == "text" && strings.TrimSpace(block.Text) != "" {
 						if strings.Contains(block.Text, "You are Antigravity") {
 							userHasAntigravityIdentity = true
@@ -364,8 +424,9 @@ func buildSystemInstruction(system json.RawMessage, modelName string, opts Trans
 }
 
 // buildContents 构建 contents
-func buildContents(messages []ClaudeMessage, toolIDToName map[string]string, isThinkingEnabled, allowDummyThought bool) ([]GeminiContent, bool, error) {
+func buildContents(messages []ClaudeMessage, toolIDToName map[string]string, isThinkingEnabled, allowDummyThought bool) ([]GeminiContent, []GeminiPart, bool, error) {
 	var contents []GeminiContent
+	var systemParts []GeminiPart
 	strippedThinking := false
 
 	for i, msg := range messages {
@@ -376,10 +437,15 @@ func buildContents(messages []ClaudeMessage, toolIDToName map[string]string, isT
 
 		parts, strippedThisMsg, err := buildParts(msg.Content, toolIDToName, allowDummyThought)
 		if err != nil {
-			return nil, false, fmt.Errorf("build parts for message %d: %w", i, err)
+			return nil, nil, false, fmt.Errorf("build parts for message %d: %w", i, err)
 		}
 		if strippedThisMsg {
 			strippedThinking = true
+		}
+
+		if role == "system" {
+			systemParts = append(systemParts, parts...)
+			continue
 		}
 
 		// 只有 Gemini 模型支持 dummy thinking block workaround
@@ -413,7 +479,7 @@ func buildContents(messages []ClaudeMessage, toolIDToName map[string]string, isT
 		})
 	}
 
-	return contents, strippedThinking, nil
+	return contents, systemParts, strippedThinking, nil
 }
 
 // DummyThoughtSignature 用于跳过 Gemini 3 thought_signature 验证
@@ -472,8 +538,8 @@ func buildParts(content json.RawMessage, toolIDToName map[string]string, allowDu
 			}
 			parts = append(parts, part)
 
-		case "image":
-			if block.Source != nil && block.Source.Type == "base64" {
+		case "image", "document":
+			if block.Source != nil && block.Source.Type == "base64" && strings.TrimSpace(block.Source.Data) != "" {
 				parts = append(parts, GeminiPart{
 					InlineData: &GeminiInlineData{
 						MimeType: block.Source.MediaType,
@@ -528,6 +594,7 @@ func buildParts(content json.RawMessage, toolIDToName map[string]string, allowDu
 					ID: block.ToolUseID,
 				},
 			})
+			parts = append(parts, extractToolResultInlineParts(block.Content)...)
 		}
 	}
 
@@ -578,6 +645,31 @@ func parseToolResultContent(content json.RawMessage, isError bool) string {
 	return string(content)
 }
 
+func extractToolResultInlineParts(content json.RawMessage) []GeminiPart {
+	if len(content) == 0 {
+		return nil
+	}
+	var innerBlocks []ContentBlock
+	if err := json.Unmarshal(content, &innerBlocks); err != nil {
+		return nil
+	}
+	var inlineParts []GeminiPart
+	for _, item := range innerBlocks {
+		if (item.Type == "image" || item.Type == "document") &&
+			item.Source != nil &&
+			item.Source.Type == "base64" &&
+			strings.TrimSpace(item.Source.Data) != "" {
+			inlineParts = append(inlineParts, GeminiPart{
+				InlineData: &GeminiInlineData{
+					MimeType: item.Source.MediaType,
+					Data:     item.Source.Data,
+				},
+			})
+		}
+	}
+	return inlineParts
+}
+
 // buildGenerationConfig 构建 generationConfig
 const (
 	defaultMaxOutputTokens    = 64000
@@ -605,7 +697,11 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 	maxLimit := maxOutputTokensLimit(req.Model)
 	config := &GeminiGenerationConfig{
 		MaxOutputTokens: defaultMaxOutputTokens, // 默认最大输出
-		StopSequences:   DefaultStopSequences,
+	}
+
+	isReasoning := IsGeminiReasoningModel(req.Model)
+	if !isReasoning {
+		config.StopSequences = DefaultStopSequences
 	}
 
 	// 如果请求中指定了 MaxTokens，使用请求值
@@ -651,14 +747,16 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 	}
 
 	// 其他参数
-	if req.Temperature != nil {
-		config.Temperature = req.Temperature
-	}
-	if req.TopP != nil {
-		config.TopP = req.TopP
-	}
-	if req.TopK != nil {
-		config.TopK = req.TopK
+	if !isReasoning {
+		if req.Temperature != nil {
+			config.Temperature = req.Temperature
+		}
+		if req.TopP != nil {
+			config.TopP = req.TopP
+		}
+		if req.TopK != nil {
+			config.TopK = req.TopK
+		}
 	}
 
 	return config
@@ -702,6 +800,10 @@ func isWebSearchTool(tool ClaudeTool) bool {
 	}
 }
 
+func isCodeExecutionTool(tool ClaudeTool) bool {
+	return strings.TrimSpace(tool.Type) == "code_execution"
+}
+
 // buildTools 构建 tools
 func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 	if len(tools) == 0 {
@@ -709,11 +811,18 @@ func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 	}
 
 	hasWebSearch := hasWebSearchTool(tools)
+	hasCodeExecution := false
+	for _, tool := range tools {
+		if isCodeExecutionTool(tool) {
+			hasCodeExecution = true
+			break
+		}
+	}
 
 	// 普通工具
 	var funcDecls []GeminiFunctionDecl
 	for _, tool := range tools {
-		if isWebSearchTool(tool) {
+		if isWebSearchTool(tool) || isCodeExecutionTool(tool) {
 			continue
 		}
 		// 跳过无效工具名称
@@ -760,6 +869,18 @@ func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 		})
 	}
 
+	// Antigravity v1internal 协议不支持内置工具与 functionDeclarations 混用：
+	// 即便带上 includeServerSideToolInvocations 仍返回 400（issue #6464）。
+	// Codex 默认同时带 web_search 与 shell 等客户端工具，优先保留客户端工具，
+	// 使代理会话可继续，而不是整单 upstream_error。
+	if len(funcDecls) > 0 {
+		if hasWebSearch || hasCodeExecution {
+			log.Printf("[antigravity] dropping built-in tools (web_search/code_execution) because client function tools are present; Antigravity v1internal rejects the mix")
+		}
+		hasWebSearch = false
+		hasCodeExecution = false
+	}
+
 	var declarations []GeminiToolDeclaration
 	if len(funcDecls) > 0 {
 		declarations = append(declarations, GeminiToolDeclaration{
@@ -775,6 +896,11 @@ func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 					},
 				},
 			},
+		})
+	}
+	if hasCodeExecution {
+		declarations = append(declarations, GeminiToolDeclaration{
+			CodeExecution: &GeminiCodeExecution{},
 		})
 	}
 	if len(declarations) == 0 {

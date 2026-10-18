@@ -11,12 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect"
+
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptioncreditledger"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 )
 
 // ErrOrderNotFound is returned by HandlePaymentNotification when the webhook
@@ -53,6 +56,33 @@ func (s *PaymentService) HandlePaymentNotification(ctx context.Context, n *payme
 		return fmt.Errorf("lookup order failed for out_trade_no %s: %w", n.OrderID, err)
 	}
 	return s.confirmPayment(ctx, order.ID, n.TradeNo, n.Amount, pk, n.Metadata)
+}
+
+// ConfirmNotificationUpstream asks providers that implement
+// payment.NotificationConfirmer to confirm a verified success notification
+// against the upstream order, using the same instance that verified it.
+// Failures are recorded on the order's audit trail and returned so the webhook
+// answers non-success and the gateway retries.
+func (s *PaymentService) ConfirmNotificationUpstream(ctx context.Context, prov payment.Provider, n *payment.PaymentNotification) error {
+	confirmer, ok := prov.(payment.NotificationConfirmer)
+	if !ok || n == nil || n.Status != payment.NotificationStatusSuccess {
+		return nil
+	}
+	notifiedTradeNo := n.TradeNo
+	finishProviderCall := servertiming.ObserveDependency(ctx, "payment")
+	err := confirmer.ConfirmNotification(ctx, n)
+	finishProviderCall()
+	if err == nil {
+		return nil
+	}
+	if order, lookupErr := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(n.OrderID)).Only(ctx); lookupErr == nil {
+		s.writeAuditLog(ctx, order.ID, "PAYMENT_UPSTREAM_UNCONFIRMED", prov.ProviderKey(), map[string]any{
+			"detail":  err.Error(),
+			"tradeNo": notifiedTradeNo,
+			"amount":  n.Amount,
+		})
+	}
+	return err
 }
 
 func parseLegacyPaymentOrderID(orderID string, lookupErr error) (int64, bool) {
@@ -132,6 +162,14 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		}
 	}
 	return s.toPaid(ctx, o, tradeNo, confirmedPayAmount, pk)
+}
+
+func paymentAmountToleranceForCurrency(currency string) float64 {
+	minorUnit := payment.CurrencyMinorUnit(currency)
+	if minorUnit <= 2 {
+		return amountToleranceCNY
+	}
+	return math.Pow10(-minorUnit) / 2
 }
 
 func isValidProviderAmount(amount float64) bool {
@@ -258,16 +296,47 @@ func (s *PaymentService) executeFulfillment(ctx context.Context, oid int64) erro
 	if err != nil {
 		return fmt.Errorf("get order: %w", err)
 	}
-	if o.OrderType == payment.OrderTypeSubscription {
+	switch o.OrderType {
+	case payment.OrderTypeSubscription:
 		return s.ExecuteSubscriptionFulfillment(ctx, oid)
+	case payment.OrderTypeBalance:
+		return s.ExecuteBalanceFulfillment(ctx, oid)
+	default:
+		// 不支持的订单类型不履约：标记 FAILED 后正常返回，避免支付回调持续 500 重试。
+		s.rejectUnsupportedOrderType(ctx, o)
+		return nil
 	}
-	return s.ExecuteBalanceFulfillment(ctx, oid)
+}
+
+func isSupportedPaymentOrderType(orderType string) bool {
+	return orderType == payment.OrderTypeBalance || orderType == payment.OrderTypeSubscription
+}
+
+func (s *PaymentService) rejectUnsupportedOrderType(ctx context.Context, o *dbent.PaymentOrder) {
+	reason := "unsupported order type: " + o.OrderType
+	c, err := s.entClient.PaymentOrder.Update().
+		Where(
+			paymentorder.IDEQ(o.ID),
+			paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging),
+		).
+		SetStatus(OrderStatusFailed).SetFailedAt(time.Now()).SetFailedReason(reason).Save(ctx)
+	if err != nil {
+		slog.Error("mark unsupported order type FAILED", "orderID", o.ID, "error", err)
+		return
+	}
+	if c > 0 {
+		slog.Warn("payment order with unsupported order type not fulfilled", "orderID", o.ID, "orderType", o.OrderType)
+		s.writeAuditLog(ctx, o.ID, "FULFILLMENT_FAILED", "system", map[string]any{"reason": reason})
+	}
 }
 
 func (s *PaymentService) ExecuteBalanceFulfillment(ctx context.Context, oid int64) error {
 	o, err := s.entClient.PaymentOrder.Get(ctx, oid)
 	if err != nil {
 		return infraerrors.NotFound("NOT_FOUND", "order not found")
+	}
+	if o.OrderType != payment.OrderTypeBalance {
+		return infraerrors.BadRequest("INVALID_ORDER_TYPE", "order is not a balance order")
 	}
 	if o.Status == OrderStatusCompleted {
 		return nil
@@ -357,20 +426,34 @@ const (
 
 // resolveRedeemAction decides the idempotency action based on an existing redeem code lookup.
 // existing is the result of GetByCode; lookupErr is the error from that call.
-func resolveRedeemAction(existing *RedeemCode, lookupErr error) redeemAction {
-	if existing == nil || lookupErr != nil {
-		return redeemActionCreate
+func resolveRedeemAction(existing *RedeemCode, lookupErr error) (redeemAction, error) {
+	if lookupErr != nil {
+		if errors.Is(lookupErr, ErrRedeemCodeNotFound) {
+			return redeemActionCreate, nil
+		}
+		return redeemActionCreate, fmt.Errorf("lookup payment redeem code: %w", lookupErr)
+	}
+	if existing == nil {
+		return redeemActionCreate, nil
 	}
 	if existing.IsUsed() {
-		return redeemActionSkipCompleted
+		return redeemActionSkipCompleted, nil
 	}
-	return redeemActionRedeem
+	return redeemActionRedeem, nil
 }
 
 func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, lease *paymentFulfillmentLease) error {
 	// Idempotency: check if redeem code already exists (from a previous partial run)
 	existing, lookupErr := s.redeemService.GetByCode(ctx, o.RechargeCode)
-	action := resolveRedeemAction(existing, lookupErr)
+	action, err := resolveRedeemAction(existing, lookupErr)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		if err := validatePaymentRedeemCode(o, existing); err != nil {
+			return err
+		}
+	}
 
 	if action == redeemActionCreate {
 		rc := &RedeemCode{Code: o.RechargeCode, Type: RedeemTypeBalance, Value: o.Amount, Status: StatusUnused}
@@ -455,6 +538,83 @@ func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrde
 		})
 	}
 	return nil
+}
+
+func (s *PaymentService) dispatchPaymentFulfillmentNotification(o *dbent.PaymentOrder, auditAction string) {
+	if s == nil || s.notificationEmailService == nil || o == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), emailSendTimeout)
+		defer cancel()
+		var err error
+		switch auditAction {
+		case "RECHARGE_SUCCESS":
+			err = s.sendBalanceRechargeSuccessNotification(ctx, o)
+		case "SUBSCRIPTION_SUCCESS":
+			err = s.sendSubscriptionPurchaseSuccessNotification(ctx, o)
+		default:
+			return
+		}
+		if err != nil {
+			slog.Warn("payment fulfillment notification email failed", "order_id", o.ID, "action", auditAction, "err", err.Error())
+		}
+	}()
+}
+
+func (s *PaymentService) sendBalanceRechargeSuccessNotification(ctx context.Context, o *dbent.PaymentOrder) error {
+	currentBalance := ""
+	if s.userRepo != nil {
+		if user, err := s.userRepo.GetByID(ctx, o.UserID); err == nil && user != nil {
+			currentBalance = fmt.Sprintf("%.2f", user.Balance)
+		}
+	}
+	return s.notificationEmailService.Send(ctx, NotificationEmailSendInput{
+		Event:          NotificationEmailEventBalanceRechargeSuccess,
+		RecipientEmail: o.UserEmail,
+		RecipientName:  firstNonEmpty(o.UserName, o.UserEmail),
+		UserID:         o.UserID,
+		SourceType:     "payment_order",
+		SourceID:       strconv.FormatInt(o.ID, 10),
+		Variables: map[string]string{
+			"recharge_amount": fmt.Sprintf("%.2f", o.Amount),
+			"current_balance": currentBalance,
+			"order_id":        strconv.FormatInt(o.ID, 10),
+		},
+	})
+}
+
+func (s *PaymentService) sendSubscriptionPurchaseSuccessNotification(ctx context.Context, o *dbent.PaymentOrder) error {
+	variables := map[string]string{
+		"subscription_group": "Subscription",
+		"subscription_days":  "",
+		"expiry_time":        "",
+		"order_id":           strconv.FormatInt(o.ID, 10),
+	}
+	if o.SubscriptionDays != nil {
+		variables["subscription_days"] = strconv.Itoa(*o.SubscriptionDays)
+	}
+	if o.SubscriptionGroupID != nil {
+		if s.groupRepo != nil {
+			if group, err := s.groupRepo.GetByID(ctx, *o.SubscriptionGroupID); err == nil && group != nil && strings.TrimSpace(group.Name) != "" {
+				variables["subscription_group"] = group.Name
+			}
+		}
+		if s.subscriptionSvc != nil {
+			if sub, err := s.subscriptionSvc.GetActiveSubscription(ctx, o.UserID, *o.SubscriptionGroupID); err == nil && sub != nil {
+				variables["expiry_time"] = sub.ExpiresAt.Format("2006-01-02 15:04")
+			}
+		}
+	}
+	return s.notificationEmailService.Send(ctx, NotificationEmailSendInput{
+		Event:          NotificationEmailEventSubscriptionPurchaseSuccess,
+		RecipientEmail: o.UserEmail,
+		RecipientName:  firstNonEmpty(o.UserName, o.UserEmail),
+		UserID:         o.UserID,
+		SourceType:     "payment_order",
+		SourceID:       strconv.FormatInt(o.ID, 10),
+		Variables:      variables,
+	})
 }
 
 func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid int64) error {
@@ -584,10 +744,20 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder, lease
 		slog.Info("subscription already assigned for order, skipping", "orderID", o.ID, "groupID", gid)
 		return s.markCompleted(ctx, o, lease, "SUBSCRIPTION_SUCCESS")
 	}
-	orderNote := fmt.Sprintf("payment order %d", o.ID)
-	_, _, err = s.subscriptionSvc.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{UserID: o.UserID, GroupID: gid, ValidityDays: days, AssignedBy: 0, Notes: orderNote})
+	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
+		return err
+	}
+	return s.markCompleted(ctx, o, lease, "SUBSCRIPTION_SUCCESS")
+}
+
+func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, o *dbent.PaymentOrder, groupID int64, days int) error {
+	if s.subscriptionSvc == nil {
+		return errors.New("subscription service is unavailable")
+	}
+
+	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
-		return fmt.Errorf("assign subscription: %w", err)
+		return fmt.Errorf("begin subscription fulfillment tx: %w", err)
 	}
 	return s.completeSubscriptionOrder(ctx, o, lease)
 }
@@ -650,7 +820,7 @@ func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *db
 	defer func() { _ = tx.Rollback() }()
 
 	txCtx := dbent.NewTxContext(ctx, tx)
-	claimed, err := s.tryClaimAffiliateRebateAudit(txCtx, tx.Client(), o.ID, o.Amount)
+	claimed, err := s.tryClaimAffiliateRebateAudit(txCtx, tx.Client(), o.ID, baseAmount)
 	if err != nil {
 		_ = tx.Rollback()
 		s.writeAuditLog(ctx, o.ID, "AFFILIATE_REBATE_FAILED", "system", map[string]any{
@@ -674,7 +844,7 @@ func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *db
 
 	if rebateAmount <= 0 {
 		if err := s.updateClaimedAffiliateRebateAudit(txCtx, tx.Client(), o.ID, "AFFILIATE_REBATE_SKIPPED", map[string]any{
-			"baseAmount": o.Amount,
+			"baseAmount": baseAmount,
 			"reason":     "no inviter bound or rebate amount <= 0",
 		}); err != nil {
 			_ = tx.Rollback()
@@ -693,7 +863,7 @@ func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *db
 	}
 
 	if err := s.updateClaimedAffiliateRebateAudit(txCtx, tx.Client(), o.ID, "AFFILIATE_REBATE_APPLIED", map[string]any{
-		"baseAmount":   o.Amount,
+		"baseAmount":   baseAmount,
 		"rebateAmount": rebateAmount,
 	}); err != nil {
 		_ = tx.Rollback()
@@ -710,6 +880,21 @@ func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *db
 		return fmt.Errorf("commit affiliate rebate tx: %w", err)
 	}
 	return nil
+}
+
+func affiliateRebateBaseAmount(o *dbent.PaymentOrder) float64 {
+	if o == nil {
+		return 0
+	}
+	switch o.OrderType {
+	case payment.OrderTypeBalance:
+		// 返利只按实充部分计算，赠送额度不参与
+		return paymentOrderAmountWithoutBonus(o)
+	case payment.OrderTypeSubscription:
+		return o.Amount
+	default:
+		return 0
+	}
 }
 
 func (s *PaymentService) tryClaimAffiliateRebateAudit(ctx context.Context, client *dbent.Client, orderID int64, baseAmount float64) (bool, error) {

@@ -7,6 +7,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
+import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
@@ -65,7 +66,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       title: 'Login',
-      titleKey: 'common.login'
+      titleKey: 'home.login'
     }
   },
   {
@@ -639,6 +640,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/plugins',
+    name: 'AdminPlugins',
+    component: () => import('@/views/admin/PluginsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Plugin Management',
+      titleKey: 'admin.plugins.title',
+      descriptionKey: 'admin.plugins.description'
+    }
+  },
+  {
     path: '/admin/announcements',
     name: 'AdminAnnouncements',
     component: () => import('@/views/admin/AnnouncementsView.vue'),
@@ -959,21 +972,23 @@ router.beforeEach(async (to, _from, next) => {
 
   // Set page title
   const appStore = useAppStore()
-  // For custom pages, use menu item label as document title
-  if (to.name === 'CustomPage') {
-    const id = to.params.id as string
-    const publicItems = appStore.cachedPublicSettings?.custom_menu_items ?? []
-    const adminSettingsStore = useAdminSettingsStore()
-    const menuItem = publicItems.find((item) => item.id === id)
-      ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
-    if (menuItem?.label) {
-      const siteName = appStore.siteName || 'Sub2API'
-      document.title = `${menuItem.label} - ${siteName}`
-    } else {
-      document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)
+  const adminSettingsStore = useAdminSettingsStore()
+  const customMenuItems = [
+    ...(appStore.cachedPublicSettings?.custom_menu_items ?? []),
+    ...(authStore.isAdmin ? adminSettingsStore.customMenuItems : []),
+  ]
+  document.title = resolveRouteDocumentTitle(to, appStore.siteName, customMenuItems)
+
+  if (to.path === '/setup') {
+    try {
+      const status = await getSetupStatus()
+      if (!status.needs_setup) {
+        next(resolveCompletedSetupRedirectPath(authStore.isAuthenticated, authStore.isAdmin))
+        return
+      }
+    } catch {
+      // If setup status cannot be determined, keep the setup page reachable.
     }
-  } else {
-    document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)
   }
 
   if (to.path === '/setup') {
@@ -1010,6 +1025,37 @@ router.beforeEach(async (to, _from, next) => {
       // Admin users go to admin dashboard, regular users go to user dashboard
       next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
       return
+    }
+    // Model Plaza:公开路由但受「启用开关 + 可选强制登录」双重控制(后端同口径 fail-closed)
+    if (to.path === '/model-plaza') {
+      if (!appStore.publicSettingsLoaded) {
+        try {
+          await appStore.fetchPublicSettings()
+        } catch (error) {
+          console.warn('Failed to load public settings in route guard', error)
+        }
+      }
+      const plazaSettings = appStore.cachedPublicSettings
+      // 仅在设置成功加载且明确为 false 时拦截(瞬时加载失败视为未知,由后端 404 兜底)
+      if (appStore.publicSettingsLoaded && plazaSettings?.model_plaza_enabled === false) {
+        next(
+          authStore.isAuthenticated
+            ? authStore.isAdmin
+              ? '/admin/dashboard'
+              : '/dashboard'
+            : '/home'
+        )
+        return
+      }
+      if (plazaSettings?.model_plaza_require_auth === true && !authStore.isAuthenticated) {
+        next({ path: '/login', query: { redirect: to.fullPath } })
+        return
+      }
+      // Backend mode:登录的非管理员也不可见(匿名由下方公共拦截处理,广场不在白名单)
+      if (appStore.backendModeEnabled && authStore.isAuthenticated && !authStore.isAdmin) {
+        next('/login')
+        return
+      }
     }
     // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)
     if (appStore.backendModeEnabled && !authStore.isAuthenticated) {
@@ -1115,7 +1161,6 @@ router.beforeEach(async (to, _from, next) => {
   // 简易模式下限制访问某些页面
   if (authStore.isSimpleMode) {
     const restrictedPaths = [
-      '/admin/groups',
       '/admin/subscriptions',
       '/admin/redeem',
       '/subscriptions',

@@ -170,3 +170,36 @@ func (a *Account) modelRateLimitResetAt(scope string) *time.Time {
 	}
 	return &resetAt
 }
+
+// modelRateLimitReason 返回指定 scope 冷却记录中的原因；没有记录时为空。
+func (a *Account) modelRateLimitReason(scope string) string {
+	if a == nil || a.Extra == nil {
+		return ""
+	}
+	rawLimits, _ := a.Extra[modelRateLimitsKey].(map[string]any)
+	rawLimit, _ := rawLimits[scope].(map[string]any)
+	reason, _ := rawLimit["reason"].(string)
+	return reason
+}
+
+func setAccountModelRateLimitSnapshot(account *Account, scope string, resetAt time.Time, reason string, now time.Time) {
+	if account == nil || strings.TrimSpace(scope) == "" {
+		return
+	}
+	if account.Extra == nil {
+		account.Extra = make(map[string]any)
+	}
+	limits, ok := account.Extra[modelRateLimitsKey].(map[string]any)
+	if !ok {
+		limits = make(map[string]any)
+		account.Extra[modelRateLimitsKey] = limits
+	}
+	payload := map[string]any{
+		"rate_limited_at":     now.UTC().Format(time.RFC3339),
+		"rate_limit_reset_at": resetAt.UTC().Format(time.RFC3339),
+	}
+	if reason = strings.TrimSpace(reason); reason != "" {
+		payload["reason"] = reason
+	}
+	limits[scope] = payload
+}

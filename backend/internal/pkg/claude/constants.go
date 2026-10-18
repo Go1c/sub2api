@@ -78,7 +78,7 @@ const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 // 客户端缺省时统一使用 5m"，这样既不浪费 1h 缓存额度，也保留客户端自定义能力。
 const DefaultCacheControlTTL = "5m"
 
-// CLICurrentVersion 是 sub2api 当前对外伪装的 Claude Code CLI 版本号（三段 semver）。
+// CLICurrentVersion 是内置的 Claude Code CLI 伪装版本号基线（三段 semver）。
 // 用于 billing attribution block 中的 cc_version=X.Y.Z.{fp} 前缀以及 fingerprint 计算。
 // 必须与 DefaultHeaders["User-Agent"] 中的版本号严格一致；不一致会被 Anthropic 判第三方。
 const CLICurrentVersion = "2.1.161"
@@ -100,6 +100,8 @@ func FullClaudeCodeMimicryBetas() []string {
 		BetaPromptCachingScope,
 		BetaEffort,
 		BetaContextManagement,
+		BetaThinkingBindingControls,
+		BetaMidConversationOutputConfig,
 		BetaExtendedCacheTTL,
 	}
 }
@@ -209,6 +211,12 @@ var DefaultModels = []Model{
 		Type:        "model",
 		DisplayName: "Claude Haiku 4.5",
 		CreatedAt:   "2025-10-01T00:00:00Z",
+	},
+	{
+		ID:          "claude-haiku-5-5",
+		Type:        "model",
+		DisplayName: "Claude Haiku 5.5",
+		CreatedAt:   "2026-10-07T00:00:00Z",
 	},
 }
 

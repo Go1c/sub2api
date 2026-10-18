@@ -363,7 +363,7 @@ func TestEmitTurnCompleteCoverage(t *testing.T) {
 	})
 	require.Equal(t, 0, called)
 
-	// 缺少 response_id 时不应触发。
+	// 非 error 终态缺少 response_id 时不应触发。
 	emitTurnComplete(func(turn RelayTurnResult) {
 		called++
 	}, &relayState{requestModel: "gpt-5"}, observedUpstreamEvent{
@@ -371,6 +371,22 @@ func TestEmitTurnCompleteCoverage(t *testing.T) {
 		eventType: "response.completed",
 	})
 	require.Equal(t, 0, called)
+
+	// Bare error legitimately has no response_id; it must still settle the turn
+	// or a later completed turn would suppress the adapter's aggregate fallback.
+	var bareError RelayTurnResult
+	emitTurnComplete(func(turn RelayTurnResult) {
+		called++
+		bareError = turn
+	}, &relayState{requestModel: "gpt-5"}, observedUpstreamEvent{
+		terminal:  true,
+		eventType: "error",
+		usage:     Usage{InputTokens: 4, OutputTokens: 1},
+	})
+	require.Equal(t, 1, called)
+	require.Empty(t, bareError.RequestID)
+	require.Equal(t, "error", bareError.TerminalEventType)
+	require.Equal(t, Usage{InputTokens: 4, OutputTokens: 1}, bareError.Usage)
 
 	// terminal 且 response_id 存在，应该触发；state=nil 时 model 为空串。
 	var got RelayTurnResult
@@ -383,7 +399,7 @@ func TestEmitTurnCompleteCoverage(t *testing.T) {
 		responseID: "resp_emit",
 		usage:      Usage{InputTokens: 2, OutputTokens: 3},
 	})
-	require.Equal(t, 1, called)
+	require.Equal(t, 2, called)
 	require.Equal(t, "resp_emit", got.RequestID)
 	require.Equal(t, "response.completed", got.TerminalEventType)
 	require.Equal(t, 2, got.Usage.InputTokens)
@@ -481,6 +497,60 @@ func TestRelayTurnTimingHelpersCoverage(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestObserveUpstreamMessage_ResponseModelIsTurnLocalAndTerminalWins(t *testing.T) {
+	t.Parallel()
+
+	state := &relayState{requestModel: "gpt-5.6-sol"}
+	startAt := time.Unix(0, 0)
+	now := startAt
+	nowFn := func() time.Time {
+		now = now.Add(5 * time.Millisecond)
+		return now
+	}
+
+	created := observeUpstreamMessage(
+		state,
+		[]byte(`{"type":"response.created","response":{"id":"resp_1","model":"gpt-5.5"}}`),
+		startAt,
+		nowFn,
+		nil,
+	)
+	require.False(t, created.terminal)
+
+	completed := observeUpstreamMessage(
+		state,
+		[]byte(`{"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.4","usage":{"input_tokens":1,"output_tokens":2}}}`),
+		startAt,
+		nowFn,
+		nil,
+	)
+	require.True(t, completed.terminal)
+	require.Equal(t, "gpt-5.4", completed.responseModel)
+	require.True(t, completed.responseConflict)
+
+	var firstTurn RelayTurnResult
+	emitTurnComplete(func(turn RelayTurnResult) { firstTurn = turn }, state, completed)
+	require.Equal(t, "gpt-5.4", firstTurn.ResponseModel)
+	require.True(t, firstTurn.ResponseModelConflict)
+
+	observeUpstreamMessage(
+		state,
+		[]byte(`{"type":"response.created","response":{"id":"resp_2","model":"gpt-5.3"}}`),
+		startAt,
+		nowFn,
+		nil,
+	)
+	second := observeUpstreamMessage(
+		state,
+		[]byte(`{"type":"response.completed","response":{"id":"resp_2","model":"GPT-5.3","usage":{"input_tokens":3,"output_tokens":4}}}`),
+		startAt,
+		nowFn,
+		nil,
+	)
+	require.Equal(t, "GPT-5.3", second.responseModel)
+	require.False(t, second.responseConflict, "the previous turn must not contaminate this turn")
+}
+
 func TestObserveUpstreamMessage_ResponseIDFallbackPolicy(t *testing.T) {
 	t.Parallel()
 
@@ -513,4 +583,55 @@ func TestObserveUpstreamMessage_ResponseIDFallbackPolicy(t *testing.T) {
 	)
 	require.True(t, observed.terminal)
 	require.Equal(t, "resp_fallback", observed.responseID)
+}
+
+func TestObserveUpstreamMessage_ResponseServiceTierOnlyFromTerminalEvents(t *testing.T) {
+	t.Parallel()
+
+	state := &relayState{requestModel: "gpt-5.6-sol"}
+	startAt := time.Unix(0, 0)
+	now := startAt
+	nowFn := func() time.Time {
+		now = now.Add(5 * time.Millisecond)
+		return now
+	}
+
+	created := observeUpstreamMessage(
+		state,
+		[]byte(`{"type":"response.created","response":{"id":"resp_1","model":"gpt-5.6-sol","service_tier":"priority"}}`),
+		startAt,
+		nowFn,
+		nil,
+	)
+	require.False(t, created.terminal)
+	require.Equal(t, "", created.responseServiceTier)
+
+	completed := observeUpstreamMessage(
+		state,
+		[]byte(`{"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-sol","service_tier":"default","usage":{"input_tokens":1,"output_tokens":2}}}`),
+		startAt,
+		nowFn,
+		nil,
+	)
+	require.True(t, completed.terminal)
+	require.Equal(t, "default", completed.responseServiceTier, "the echoed priority tier must lose to the terminal declaration")
+
+	var turn RelayTurnResult
+	emitTurnComplete(func(result RelayTurnResult) { turn = result }, state, completed)
+	require.Equal(t, "default", turn.ResponseServiceTier)
+
+	var result RelayResult
+	enrichResult(&result, state, now.Sub(startAt))
+	require.Equal(t, "default", result.ResponseServiceTier)
+
+	// A later turn without any declaration must not inherit the previous one.
+	observeUpstreamMessage(state, []byte(`{"type":"response.created","response":{"id":"resp_2","model":"gpt-5.6-sol"}}`), startAt, nowFn, nil)
+	second := observeUpstreamMessage(
+		state,
+		[]byte(`{"type":"response.completed","response":{"id":"resp_2","model":"gpt-5.6-sol","usage":{"input_tokens":3,"output_tokens":4}}}`),
+		startAt,
+		nowFn,
+		nil,
+	)
+	require.Equal(t, "", second.responseServiceTier)
 }

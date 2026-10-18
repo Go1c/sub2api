@@ -29,6 +29,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"golang.org/x/mod/semver"
@@ -283,8 +284,6 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 		slog.Debug("tls_fingerprint_request_failed", "account_id", accountID, "error", err)
 		return nil, err
 	}
-
-	decompressResponseBody(resp)
 
 	resp.Body = wrapTrackedBody(resp.Body, func() {
 		atomic.AddInt64(&entry.inFlight, -1)
@@ -562,8 +561,11 @@ func (s *httpUpstreamService) shouldValidateResolvedIP() bool {
 	return !s.cfg.Security.URLAllowlist.AllowPrivateHosts
 }
 
+// validateRequestHost 校验请求主机的解析结果不落在回环、私网、链路本地或未指定地址。
+// 是否全局启用由 security.url_allowlist 决定；带 WithHTTPUpstreamPublicHostsOnly 标记的请求无论配置如何都校验。
 func (s *httpUpstreamService) validateRequestHost(req *http.Request) error {
-	if !s.shouldValidateResolvedIP() {
+	publicHostsOnly := req != nil && service.HTTPUpstreamPublicHostsOnly(req.Context())
+	if !s.shouldValidateResolvedIP() && !publicHostsOnly {
 		return nil
 	}
 	if req == nil || req.URL == nil {

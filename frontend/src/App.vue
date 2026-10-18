@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
@@ -29,6 +29,22 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  [
+    () => route.fullPath,
+    () => route.meta.title,
+    () => route.meta.titleKey,
+    () => appStore.siteName,
+    () => appStore.cachedPublicSettings?.custom_menu_items,
+    () => appStore.cachedPublicSettings?.subscription_enabled,
+    () => appStore.cachedPublicSettings?.payment_balance_disabled,
+    () => authStore.isAdmin,
+    () => adminSettingsStore.customMenuItems,
+  ],
+  updateDocumentTitle,
+  { deep: true }
 )
 
 // Watch for authentication state and manage subscription data + announcements
@@ -115,8 +131,8 @@ onMounted(async () => {
   // Load public settings into appStore (will be cached for other components)
   await appStore.fetchPublicSettings()
 
-  // Re-resolve document title now that siteName is available
-  document.title = resolveDocumentTitle(route.meta.title, appStore.siteName, route.meta.titleKey as string)
+  // Re-resolve document title now that site settings are available
+  updateDocumentTitle()
 })
 </script>
 

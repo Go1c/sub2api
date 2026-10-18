@@ -188,7 +188,7 @@
                       </button>
                     </div>
                   </div>
-                </div>
+                </Teleport>
               </div>
             </template>
           </AccountTableActions>
@@ -209,6 +209,9 @@
       <template #table>
         <AccountBulkActionsBar
           :selected-ids="selIds"
+          :total-results="pagination.total"
+          :selecting-all="selectingAllResults"
+          :all-results-selected="allResultsSelected"
           @delete="handleBulkDelete"
           @reset-status="handleBulkResetStatus"
           @refresh-token="handleBulkRefreshToken"
@@ -217,6 +220,7 @@
           @edit-filtered="openBulkEditFiltered"
           @clear="clearSelection"
           @select-page="selectPage"
+          @select-all-results="handleSelectAllResults"
           @toggle-schedulable="handleBulkToggleSchedulable"
         />
         <div ref="accountTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -332,7 +336,13 @@
             />
           </template>
           <template #cell-groups="{ row }">
-            <AccountGroupsCell :groups="row.groups" :max-display="4" />
+            <AccountGroupsCell :groups="accountGroupsForRow(row)" :max-display="4" />
+          </template>
+          <template #header-usage="{ column }">
+            <div class="flex items-center">
+              <span>{{ column.label }}</span>
+              <HelpTooltip :content="t('admin.accounts.usageWindowsHint')" width-class="w-72" />
+            </div>
           </template>
           <template #header-usage="{ column }">
             <div class="flex items-center">
@@ -552,6 +562,12 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
+const groupsByID = computed(() => new Map(groups.value.map(group => [group.id, group])))
+const accountGroupsForRow = (account: Pick<AccountListItem, 'group_ids'>): AdminGroup[] => {
+  const groupIDs = account.group_ids ?? []
+  if (groupIDs.length === 0) return []
+  return groupIDs.map(id => groupsByID.value.get(id)).filter((group): group is AdminGroup => Boolean(group))
+}
 const accountTableRef = ref<HTMLElement | null>(null)
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null)
 type AccountBulkEditTarget =
@@ -622,7 +638,7 @@ const showSchedulePanel = ref(false)
 const scheduleAcc = ref<Account | null>(null)
 const scheduleModelOptions = ref<SelectOption[]>([])
 const togglingSchedulable = ref<number | null>(null)
-const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
+const menu = reactive<{show:boolean, acc:Account|null, anchorRect:DOMRect|null}>({ show: false, acc: null, anchorRect: null })
 const exportingData = ref(false)
 const upstreamBillingProbeSettings = reactive<UpstreamBillingProbeSettings>({
   enabled: true,
@@ -662,6 +678,7 @@ const ACCOUNT_SORTABLE_KEYS = new Set([
   'schedulable',
   'priority',
   'rate_multiplier',
+  'upstream_billing_rate',
   'last_used_at',
   'created_at',
   'expires_at',
@@ -705,6 +722,24 @@ const todayStatsReqSeq = ref(0)
 const pendingTodayStatsRefresh = ref(false)
 const usageManualRefreshToken = ref(0)
 
+const desktopViewportQuery = '(min-width: 768px)'
+const isDesktopViewport = ref(
+  typeof window === 'undefined' ? true : window.matchMedia(desktopViewportQuery).matches
+)
+let desktopViewportMediaQuery: MediaQueryList | null = null
+let desktopViewportListener: ((event: MediaQueryListEvent) => void) | null = null
+
+const usageBatchByAccountId = ref<Record<string, AccountUsageInfo | null>>({})
+const usageBatchErrorByAccountId = ref<Record<string, string | null>>({})
+const usageBatchLoadingByAccountId = ref<Record<string, boolean>>({})
+const usageBatchRequestTokenByAccountId = ref<Record<string, number>>({})
+const usageBatchCache = new Map<number, { data: AccountUsageInfo; ts: number }>()
+const USAGE_BATCH_CACHE_TTL = 5 * 60 * 1000
+const pendingUsageBatchIds = new Set<number>()
+let usageBatchFlushTimer: ReturnType<typeof setTimeout> | null = null
+let queuedUsageBatchForce = false
+let usageBatchRequestToken = 0
+
 const buildDefaultTodayStats = (): WindowStats => ({
   requests: 0,
   tokens: 0,
@@ -712,6 +747,138 @@ const buildDefaultTodayStats = (): WindowStats => ({
   standard_cost: 0,
   user_cost: 0
 })
+
+const accountSupportsBatchUsage = (account: Account) => {
+  if (account.platform === 'anthropic') {
+    return account.type === 'oauth' || account.type === 'setup-token'
+  }
+  if (account.platform === 'gemini') return true
+  if (account.platform === 'antigravity') return account.type === 'oauth'
+  if (account.platform === 'openai') return account.type === 'oauth'
+  if (account.platform === 'grok') return account.type === 'oauth'
+  return false
+}
+
+const setUsageBatchLoading = (accountID: number, loadingState: boolean) => {
+  usageBatchLoadingByAccountId.value = {
+    ...usageBatchLoadingByAccountId.value,
+    [String(accountID)]: loadingState
+  }
+}
+
+const setUsageBatchState = (accountID: number, usage: AccountUsageInfo | null, error: string | null) => {
+  const key = String(accountID)
+  usageBatchByAccountId.value = {
+    ...usageBatchByAccountId.value,
+    [key]: usage
+  }
+  usageBatchErrorByAccountId.value = {
+    ...usageBatchErrorByAccountId.value,
+    [key]: error
+  }
+}
+
+const handleAccountUsageLoaded = (accountID: number, usage: AccountUsageInfo) => {
+  if (usageBatchByAccountId.value[String(accountID)] === usage) return
+  setUsageBatchState(accountID, usage, null)
+}
+
+const flushQueuedUsageBatch = async () => {
+  usageBatchFlushTimer = null
+  const accountIDs = Array.from(pendingUsageBatchIds)
+  const force = queuedUsageBatchForce
+  pendingUsageBatchIds.clear()
+  queuedUsageBatchForce = false
+
+  if (accountIDs.length === 0) return
+
+  const requestTokensByAccount = accountIDs.reduce<Record<string, number>>((acc, accountID) => {
+    acc[String(accountID)] = usageBatchRequestTokenByAccountId.value[String(accountID)] ?? 0
+    return acc
+  }, {})
+
+  try {
+    const result = await adminAPI.accounts.getBatchUsage(accountIDs, force)
+
+    const usageMap = result.usage ?? {}
+    const errorMap = result.errors ?? {}
+    const now = Date.now()
+    const nextUsage = { ...usageBatchByAccountId.value }
+    const nextErrors = { ...usageBatchErrorByAccountId.value }
+    const nextLoading = { ...usageBatchLoadingByAccountId.value }
+
+    for (const accountID of accountIDs) {
+      const key = String(accountID)
+      if ((usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
+        continue
+      }
+      const usage = usageMap[key] ?? null
+      nextUsage[key] = usage
+      nextErrors[key] = errorMap[key] ?? null
+      nextLoading[key] = false
+      if (usage) {
+        usageBatchCache.set(accountID, { data: usage, ts: now })
+      } else {
+        usageBatchCache.delete(accountID)
+      }
+    }
+
+    usageBatchByAccountId.value = nextUsage
+    usageBatchErrorByAccountId.value = nextErrors
+    usageBatchLoadingByAccountId.value = nextLoading
+  } catch (error) {
+    const nextErrors = { ...usageBatchErrorByAccountId.value }
+    const nextLoading = { ...usageBatchLoadingByAccountId.value }
+    for (const accountID of accountIDs) {
+      const key = String(accountID)
+      if ((usageBatchRequestTokenByAccountId.value[key] ?? 0) !== requestTokensByAccount[key]) {
+        continue
+      }
+      nextErrors[key] = 'Failed'
+      nextLoading[key] = false
+    }
+    usageBatchErrorByAccountId.value = nextErrors
+    usageBatchLoadingByAccountId.value = nextLoading
+    console.error('Failed to load account usage batch:', error)
+  }
+}
+
+const queueBatchedUsage = (account: Account, options?: { force?: boolean }) => {
+  if (!isDesktopViewport.value) return
+  if (!accountSupportsBatchUsage(account)) return
+
+  const force = options?.force === true
+  const cacheKey = account.id
+  const key = String(cacheKey)
+
+  if (force) {
+    usageBatchCache.delete(cacheKey)
+  } else {
+    const cached = usageBatchCache.get(cacheKey)
+    if (cached && Date.now() - cached.ts < USAGE_BATCH_CACHE_TTL) {
+      setUsageBatchState(cacheKey, cached.data, null)
+      setUsageBatchLoading(cacheKey, false)
+      return
+    }
+  }
+
+  usageBatchErrorByAccountId.value = {
+    ...usageBatchErrorByAccountId.value,
+    [key]: null
+  }
+  usageBatchRequestTokenByAccountId.value = {
+    ...usageBatchRequestTokenByAccountId.value,
+    [key]: ++usageBatchRequestToken
+  }
+  setUsageBatchLoading(cacheKey, true)
+  pendingUsageBatchIds.add(cacheKey)
+  queuedUsageBatchForce = queuedUsageBatchForce || force
+
+  if (usageBatchFlushTimer !== null) return
+  usageBatchFlushTimer = setTimeout(() => {
+    void flushQueuedUsageBatch()
+  }, 0)
+}
 
 const refreshTodayStatsBatch = async () => {
   // Why this checks both columns:
@@ -926,7 +1093,7 @@ const {
   debouncedReload: baseDebouncedReload,
   handlePageChange: baseHandlePageChange,
   handlePageSizeChange: baseHandlePageSizeChange
-} = useTableLoader<Account, any>({
+} = useTableLoader<AccountListItem, any>({
   fetchFn: adminAPI.accounts.list,
   initialParams: {
     platform: '',
@@ -942,6 +1109,7 @@ const {
 })
 
 const {
+  selectedSet,
   selectedIds: selIds,
   allVisibleSelected,
   isSelected,
@@ -949,15 +1117,35 @@ const {
   select,
   deselect,
   toggle: toggleSel,
-  clear: clearSelection,
+  clear: clearSelectedIds,
   removeMany: removeSelectedAccounts,
   toggleVisible,
-  selectVisible: selectPage,
+  selectVisible: selectCurrentPage,
   batchUpdate
-} = useTableSelection<Account>({
+} = useTableSelection<AccountListItem>({
   rows: accounts,
   getId: (account) => account.id
 })
+
+const selectingAllResults = ref(false)
+const selectedAllResultIDs = ref<Set<number> | null>(null)
+const selectionRequestVersion = ref(0)
+const allResultsSelected = computed(() => {
+  const snapshot = selectedAllResultIDs.value
+  if (!snapshot || snapshot.size === 0 || snapshot.size !== selectedSet.value.size) return false
+  return Array.from(snapshot).every(id => selectedSet.value.has(id))
+})
+
+const clearSelection = () => {
+  selectionRequestVersion.value++
+  selectingAllResults.value = false
+  selectedAllResultIDs.value = null
+  clearSelectedIds()
+}
+
+const selectPage = () => {
+  selectCurrentPage()
+}
 
 const swipeVirtualContext: SwipeSelectVirtualContext = {
   getVirtualizer: () => dataTableRef.value?.virtualizer ?? null,
@@ -977,7 +1165,9 @@ const resetAutoRefreshCache = () => {
   upstreamBillingRateETag.value = null
 }
 
-const isFirstLoad = ref(true)
+type AccountLoadOptions = {
+  refreshTodayStats?: boolean
+}
 
 type AccountLoadOptions = {
   refreshTodayStats?: boolean
@@ -989,9 +1179,7 @@ const load = async (options: AccountLoadOptions = {}) => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
-  if (isFirstLoad.value) {
-    requestParams.lite = '1'
-  }
+  requestParams.lite = '1'
   await baseLoad()
   if (isFirstLoad.value) {
     isFirstLoad.value = false
@@ -1162,12 +1350,31 @@ const handleSort = (key: string, order: AccountSortOrder) => {
 }
 
 watch(loading, (isLoading, wasLoading) => {
+  if (wasLoading && !isLoading) {
+    upstreamBillingNow.value = Date.now()
+  }
   if (wasLoading && !isLoading && pendingTodayStatsRefresh.value) {
     pendingTodayStatsRefresh.value = false
     refreshTodayStatsBatch().catch((error) => {
       console.error('Failed to refresh account today stats after table load:', error)
     })
   }
+})
+
+watch(accounts, (rows) => {
+  const visibleIDs = new Set(rows.map((row) => String(row.id)))
+  usageBatchByAccountId.value = Object.fromEntries(
+    Object.entries(usageBatchByAccountId.value).filter(([key]) => visibleIDs.has(key))
+  )
+  usageBatchErrorByAccountId.value = Object.fromEntries(
+    Object.entries(usageBatchErrorByAccountId.value).filter(([key]) => visibleIDs.has(key))
+  )
+  usageBatchLoadingByAccountId.value = Object.fromEntries(
+    Object.entries(usageBatchLoadingByAccountId.value).filter(([key]) => visibleIDs.has(key))
+  )
+  usageBatchRequestTokenByAccountId.value = Object.fromEntries(
+    Object.entries(usageBatchRequestTokenByAccountId.value).filter(([key]) => visibleIDs.has(key))
+  )
 })
 
 const isAnyModalOpen = computed(() => {
@@ -1284,6 +1491,7 @@ const refreshAccountsIncrementally = async () => {
       mergeAccountsIncrementally(result.data.items || [])
       hasPendingListSync.value = false
     }
+    upstreamBillingNow.value = Date.now()
 
     await refreshTodayStatsBatch()
   } catch (error) {
@@ -1294,7 +1502,7 @@ const refreshAccountsIncrementally = async () => {
 }
 
 const handleManualRefresh = async () => {
-  await load()
+  await Promise.all([load(), loadUpstreamBillingProbeGlobalState()])
   // Force usage cells to refetch /usage on explicit user refresh.
   usageManualRefreshToken.value += 1
 }
@@ -1608,8 +1816,8 @@ const allColumns = computed(() => {
   if (!authStore.isSimpleMode) {
     c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
   }
+  c.push({ key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false })
   c.push(
-    { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
     { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false },
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
     { key: 'scheduler_score', label: t('admin.accounts.columns.schedulerScore'), sortable: false },
@@ -1636,63 +1844,58 @@ const cols = computed(() =>
   )
 )
 
-const handleEdit = (a: Account) => { edAcc.value = a; showEdit.value = true }
+const accountDetailLoading = new Set<number>()
+const loadAccountDetails = async (account: Pick<AccountListItem, 'id'>): Promise<Account | null> => {
+  if (accountDetailLoading.has(account.id)) return null
+  accountDetailLoading.add(account.id)
+  try {
+    return await adminAPI.accounts.getById(account.id)
+  } catch (error) {
+    console.error('Failed to load account details:', error)
+    appStore.showError(extractApiErrorMessage(error, t('common.error')))
+    return null
+  } finally {
+    accountDetailLoading.delete(account.id)
+  }
+}
+
+const handleEdit = async (a: AccountListItem) => {
+  const account = await loadAccountDetails(a)
+  if (!account) return
+  edAcc.value = account
+  showEdit.value = true
+}
 const openMenu = (a: Account, e: MouseEvent) => {
   menu.acc = a
-
   const target = e.currentTarget as HTMLElement
-  if (target) {
-    const rect = target.getBoundingClientRect()
-    const menuWidth = 200
-    const menuHeight = 240
-    const padding = 8
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-
-    let left: number
-    let top: number
-
-    if (viewportWidth < 768) {
-      // 居中显示,水平位置
-      left = Math.max(padding, Math.min(
-        rect.left + rect.width / 2 - menuWidth / 2,
-        viewportWidth - menuWidth - padding
-      ))
-
-      // 优先显示在按钮下方
-      top = rect.bottom + 4
-
-      // 如果下方空间不够,显示在上方
-      if (top + menuHeight > viewportHeight - padding) {
-        top = rect.top - menuHeight - 4
-        // 如果上方也不够,就贴在视口顶部
-        if (top < padding) {
-          top = padding
-        }
-      }
-    } else {
-      left = Math.max(padding, Math.min(
-        e.clientX - menuWidth,
-        viewportWidth - menuWidth - padding
-      ))
-      top = e.clientY
-      if (top + menuHeight > viewportHeight - padding) {
-        top = viewportHeight - menuHeight - padding
-      }
-    }
-
-    menu.pos = { top, left }
-  } else {
-    menu.pos = { top: e.clientY, left: e.clientX - 200 }
-  }
-
+  menu.anchorRect = target.getBoundingClientRect()
   menu.show = true
 }
 const toggleSelectAllVisible = (event: Event) => {
   const target = event.target as HTMLInputElement
   toggleVisible(target.checked)
 }
-const handleBulkDelete = async () => { if(!confirm(t('common.confirm'))) return; try { await Promise.all(selIds.value.map(id => adminAPI.accounts.delete(id))); clearSelection(); reload() } catch (error) { console.error('Failed to bulk delete accounts:', error) } }
+const handleBulkDelete = async () => {
+  const accountIds = [...selIds.value]
+  if (!confirm(t('admin.accounts.bulkActions.confirmDelete', { count: accountIds.length }))) return
+  try {
+    const result = await adminAPI.accounts.batchDelete(accountIds)
+    if (result.failed > 0) {
+      appStore.showError(t('admin.accounts.bulkActions.partialSuccess', {
+        success: result.success,
+        failed: result.failed
+      }))
+      setSelectedIds(result.failed_ids?.length ? result.failed_ids : accountIds)
+    } else {
+      appStore.showSuccess(t('admin.accounts.bulkActions.deleteSuccess', { count: result.success }))
+      clearSelection()
+    }
+    await reload()
+  } catch (error) {
+    console.error('Failed to bulk delete accounts:', error)
+    appStore.showError(String(error))
+  }
+}
 const handleBulkResetStatus = async () => {
   if (!confirm(t('common.confirm'))) return
   try {
@@ -1711,10 +1914,13 @@ const handleBulkResetStatus = async () => {
 }
 const handleBulkRefreshToken = async () => {
   if (!confirm(t('common.confirm'))) return
+  const accountIds = [...selIds.value]
   try {
-    const result = await adminAPI.accounts.batchRefresh(selIds.value)
+    const result = await adminAPI.accounts.batchRefresh(accountIds)
     if (result.failed > 0) {
       appStore.showError(t('admin.accounts.bulkActions.partialSuccess', { success: result.success, failed: result.failed }))
+      const failedIds = result.errors?.map(error => error.account_id) ?? []
+      setSelectedIds(failedIds.length > 0 ? failedIds : accountIds)
     } else {
       appStore.showSuccess(t('admin.accounts.bulkActions.refreshTokenSuccess', { count: result.success }))
       clearSelection()
@@ -1870,6 +2076,32 @@ const buildBulkEditFilterSnapshot = () => {
     privacy_mode: typeof rawParams.privacy_mode === 'string' ? rawParams.privacy_mode : '',
     sort_by: typeof rawParams.sort_by === 'string' ? rawParams.sort_by : '',
     sort_order: sortOrder
+  }
+}
+
+const handleSelectAllResults = async () => {
+  if (selectingAllResults.value || pagination.total === 0) return
+
+  const requestVersion = ++selectionRequestVersion.value
+  const filters = buildBulkEditFilterSnapshot()
+  selectingAllResults.value = true
+  try {
+    const ids = await fetchAllAccountIds(
+      (page, pageSize, requestFilters) => adminAPI.accounts.list(page, pageSize, requestFilters),
+      filters
+    )
+    if (requestVersion !== selectionRequestVersion.value) return
+
+    setSelectedIds(ids)
+    selectedAllResultIDs.value = new Set(ids)
+  } catch (error) {
+    if (requestVersion !== selectionRequestVersion.value) return
+    console.error('Failed to select all account results:', error)
+    appStore.showError(t('admin.accounts.bulkActions.selectAllFailed'))
+  } finally {
+    if (requestVersion === selectionRequestVersion.value) {
+      selectingAllResults.value = false
+    }
   }
 }
 
@@ -2125,9 +2357,10 @@ const handleDuplicateAccount = async (a: Account) => {
 }
 const handleRefresh = async (a: Account) => {
   try {
-    const updated = await adminAPI.accounts.refreshCredentials(a.id)
-    patchAccountInList(updated)
+    const result = await adminAPI.accounts.refreshCredentials(a.id)
+    patchAccountInList(result.account)
     enterAutoRefreshSilentWindow()
+    if (result.warning) appStore.showWarning(result.message)
   } catch (error) {
     console.error('Failed to refresh credentials:', error)
   }
@@ -2285,6 +2518,19 @@ const handleClickOutside = (event: MouseEvent) => {
 }
 
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    desktopViewportMediaQuery = window.matchMedia(desktopViewportQuery)
+    isDesktopViewport.value = desktopViewportMediaQuery.matches
+    desktopViewportListener = (event: MediaQueryListEvent) => {
+      isDesktopViewport.value = event.matches
+    }
+    if (typeof desktopViewportMediaQuery.addEventListener === 'function') {
+      desktopViewportMediaQuery.addEventListener('change', desktopViewportListener)
+    } else {
+      desktopViewportMediaQuery.addListener(desktopViewportListener)
+    }
+  }
+
   load()
   loadUpstreamBillingProbeSettings()
   const [proxiesResult, groupsResult] = await Promise.allSettled([
@@ -2302,6 +2548,7 @@ onMounted(async () => {
     console.error('Failed to load groups:', groupsResult.reason)
   }
   window.addEventListener('scroll', handleScroll, true)
+  window.addEventListener('resize', handleViewportResize)
   document.addEventListener('click', handleClickOutside)
 
   if (autoRefreshEnabled.value) {
@@ -2315,7 +2562,17 @@ onMounted(async () => {
 onUnmounted(() => {
   upstreamBillingRateAbortController?.abort()
   window.removeEventListener('scroll', handleScroll, true)
+  window.removeEventListener('resize', handleViewportResize)
   document.removeEventListener('click', handleClickOutside)
+  if (desktopViewportMediaQuery && desktopViewportListener) {
+    if (typeof desktopViewportMediaQuery.removeEventListener === 'function') {
+      desktopViewportMediaQuery.removeEventListener('change', desktopViewportListener)
+    } else {
+      desktopViewportMediaQuery.removeListener(desktopViewportListener)
+    }
+  }
+  desktopViewportListener = null
+  desktopViewportMediaQuery = null
 })
 </script>
 

@@ -36,6 +36,7 @@
               @change="loadGroups"
             />
             <Select
+              v-if="!authStore.isSimpleMode"
               v-model="filters.is_exclusive"
               :options="exclusiveOptions"
               :placeholder="t('admin.groups.allGroups')"
@@ -93,6 +94,7 @@
               </div>
             </div>
             <button
+              v-if="!authStore.isSimpleMode"
               @click="openSortModal"
               class="btn btn-secondary"
               :title="t('admin.groups.sortOrder')"
@@ -156,7 +158,7 @@
               ]"
             >
               <PlatformIcon :platform="value" size="xs" />
-              {{ t("admin.groups.platforms." + value) }}
+              {{ t("admin.groups.platforms." + value, platformLabel(value)) }}
             </span>
           </template>
 
@@ -422,6 +424,8 @@
                 }}</span>
               </button>
               <button
+                v-if="!authStore.isSimpleMode"
+                data-testid="group-rpm-overrides"
                 @click="handleRPMOverrides(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-orange-600 dark:hover:bg-dark-700 dark:hover:text-orange-400"
               >
@@ -467,7 +471,7 @@
     <BaseDialog
       :show="showCreateModal"
       :title="t('admin.groups.createGroup')"
-      width="normal"
+      width="wide"
       @close="closeCreateModal"
     >
       <form
@@ -476,26 +480,26 @@
         class="space-y-5"
       >
         <div>
-          <label class="input-label">{{ t("admin.groups.form.name") }}</label>
-          <input
+          <GroupI18nField
             v-model="createForm.name"
-            type="text"
+            v-model:i18n="createForm.i18n"
+            :label="t('admin.groups.form.name')"
+            field="name"
             required
-            class="input"
             :placeholder="t('admin.groups.enterGroupName')"
             data-tour="group-form-name"
           />
         </div>
         <div>
-          <label class="input-label">{{
-            t("admin.groups.form.description")
-          }}</label>
-          <textarea
+          <GroupI18nField
             v-model="createForm.description"
+            v-model:i18n="createForm.i18n"
+            :label="t('admin.groups.form.description')"
+            field="description"
+            multiline
             rows="3"
-            class="input"
             :placeholder="t('admin.groups.optionalDescription')"
-          ></textarea>
+          />
         </div>
         <div>
           <label class="input-label">{{
@@ -510,7 +514,7 @@
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
         </div>
         <!-- 从分组复制账号 -->
-        <div v-if="copyAccountsGroupOptions.length > 0">
+        <div v-if="!authStore.isSimpleMode && copyAccountsGroupOptions.length > 0">
           <div class="mb-1.5 flex items-center gap-1">
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t("admin.groups.copyAccounts.title") }}
@@ -598,6 +602,7 @@
           </select>
           <p class="input-hint">{{ t("admin.groups.copyAccounts.hint") }}</p>
         </div>
+        <template v-if="!authStore.isSimpleMode">
         <div>
           <label class="input-label">{{
             t("admin.groups.form.rateMultiplier")
@@ -625,6 +630,15 @@
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
         </div>
+        <ReasoningEffortPolicyFields
+          v-if="supportsReasoningEffortPolicyPlatform(createForm.platform)"
+          ref="createReasoningEffortPolicyRef"
+          id-prefix="create-group-reasoning"
+          :platform="createForm.platform"
+          v-model:max-effort="createForm.max_reasoning_effort"
+          v-model:over-limit="createForm.max_reasoning_effort_over_limit"
+          v-model:mappings="createForm.reasoning_effort_mappings"
+        />
         <div
           v-if="createForm.subscription_type !== 'subscription'"
           data-tour="group-form-exclusive"
@@ -673,23 +687,7 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              @click="createForm.is_exclusive = !createForm.is_exclusive"
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                createForm.is_exclusive
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  createForm.is_exclusive ? 'translate-x-6' : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="createForm.is_exclusive" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 createForm.is_exclusive
@@ -1264,23 +1262,7 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              @click="createForm.mcp_xml_inject = !createForm.mcp_xml_inject"
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                createForm.mcp_xml_inject
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  createForm.mcp_xml_inject ? 'translate-x-6' : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="createForm.mcp_xml_inject" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 createForm.mcp_xml_inject
@@ -1322,27 +1304,7 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              @click="
-                createForm.claude_code_only = !createForm.claude_code_only
-              "
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                createForm.claude_code_only
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  createForm.claude_code_only
-                    ? 'translate-x-6'
-                    : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="createForm.claude_code_only" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 createForm.claude_code_only
@@ -1465,6 +1427,181 @@
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            {{ t("admin.groups.webSearchPricing.title") }}
+          </h4>
+          <div>
+            <label class="input-label">{{
+              t("admin.groups.webSearchPricing.pricePerCall")
+            }}</label>
+            <input
+              v-model.number="createForm.web_search_price_per_call"
+              type="number"
+              step="0.001"
+              min="0"
+              placeholder="0.01"
+              class="input"
+            />
+            <p class="input-hint">
+              {{ t("admin.groups.webSearchPricing.pricePerCallHint") }}
+            </p>
+            <div
+              class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+            >
+              {{
+                t("admin.groups.webSearchPricing.finalPricePreview", {
+                  price: createWebSearchFinalPricePreview,
+                })
+              }}
+            </div>
+          </div>
+        </div>
+
+
+        <div class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.title") }}</h4>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPricing.description") }}</p>
+            </div>
+            <button type="button" class="btn btn-secondary shrink-0 whitespace-nowrap" @click="addGroupPricing(createForm.model_pricing)">
+              <Icon name="plus" size="sm" class="mr-1" />{{ t("admin.groups.modelPricing.add") }}
+            </button>
+          </div>
+          <label class="mt-3 flex items-start gap-2">
+            <input v-model="createForm.long_context_pricing_enabled" type="checkbox" class="mt-0.5" />
+            <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
+          </label>
+          <div class="mt-3 space-y-2">
+            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
+          </div>
+        </div>
+
+        <!-- Grok Voice 显式定价（仅 grok 平台） -->
+        <div
+          v-if="createForm.platform === 'grok'"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ t("admin.groups.explicitPricing.title") }}
+          </h4>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            {{ t("admin.groups.explicitPricing.description") }}
+          </p>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div>
+              <label class="input-label">{{ t("admin.groups.explicitPricing.searchPricePer1k") }}</label>
+              <input
+                v-model.number="createForm.search_price_per_1k"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.explicitPricing.pricePlaceholder')"
+                data-testid="create-search-price"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.voicePricing.audioRealtimePerMin") }}</label>
+              <input
+                v-model.number="createForm.audio_realtime_price_per_min"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.voicePricing.pricePlaceholder')"
+                data-testid="create-audio-realtime-price"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.voicePricing.audioTtsPerMillionChars") }}</label>
+              <input
+                v-model.number="createForm.audio_tts_price_per_million_chars"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.voicePricing.pricePlaceholder')"
+                data-testid="create-audio-tts-price"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.voicePricing.audioSttPerHour") }}</label>
+              <input
+                v-model.number="createForm.audio_stt_price_per_hour"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.voicePricing.pricePlaceholder')"
+                data-testid="create-audio-stt-price"
+              />
+            </div>
+          </div>
+        </div>
+        <!-- OpenAI Fast 开关（OpenAI 与 Composite 平台） -->
+        <div
+          v-if="supportsGroupOpenAIFast(createForm.platform)"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            {{ t("admin.groups.openaiFast.title") }}
+          </h4>
+          <div class="flex items-center justify-between gap-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.force") }}
+            </label>
+            <Toggle
+              data-testid="create-force-openai-fast"
+              :aria-label="t('admin.groups.openaiFast.force')"
+              v-model="createForm.force_openai_fast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.hint") }}
+          </p>
+          <div class="flex items-center justify-between gap-4 mt-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.free") }}
+            </label>
+            <Toggle
+              data-testid="create-free-openai-fast"
+              :aria-label="t('admin.groups.openaiFast.free')"
+              v-model="createForm.free_openai_fast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.freeHint") }}
+          </p>
+        </div>
+
+        <!-- Codex Live 开关（OpenAI 与 Composite 平台） -->
+        <div
+          v-if="supportsLivePlatform(createForm.platform)"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            {{ t("admin.groups.openaiLive.title") }}
+          </h4>
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600 dark:text-gray-400">{{
+              t("admin.groups.openaiLive.allow")
+            }}</label>
+            <Toggle
+              :model-value="createForm.allow_live"
+              @update:model-value="toggleLive('create')"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiLive.hint") }}
+          </p>
+        </div>
+
+        <!-- OpenAI Messages 调度配置（OpenAI 与 Composite 平台） -->
+        <div
+          v-if="supportsMessagesDispatchPlatform(createForm.platform)"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {{ t("admin.groups.openaiMessages.title") }}
           </h4>
 
@@ -1473,34 +1610,19 @@
             <label class="text-sm text-gray-600 dark:text-gray-400">{{
               t("admin.groups.openaiMessages.allowDispatch")
             }}</label>
-            <button
-              type="button"
-              @click="
-                createForm.allow_messages_dispatch =
-                  !createForm.allow_messages_dispatch
-              "
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                createForm.allow_messages_dispatch
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  createForm.allow_messages_dispatch
-                    ? 'translate-x-6'
-                    : 'translate-x-1'
-                "
-              />
-            </button>
+            <Toggle v-model="createForm.allow_messages_dispatch" />
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {{ t("admin.groups.openaiMessages.allowDispatchHint") }}
           </p>
 
-          <div v-if="createForm.allow_messages_dispatch" class="mt-3">
+          <div
+            v-if="
+              createForm.platform === 'openai' &&
+              createForm.allow_messages_dispatch
+            "
+            class="mt-3"
+          >
             <div
               class="relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
             >
@@ -1713,27 +1835,7 @@
                 }}
               </p>
             </div>
-            <button
-              type="button"
-              @click="
-                createForm.require_oauth_only = !createForm.require_oauth_only
-              "
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                createForm.require_oauth_only
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  createForm.require_oauth_only
-                    ? 'translate-x-6'
-                    : 'translate-x-1'
-                "
-              />
-            </button>
+            <Toggle v-model="createForm.require_oauth_only" />
           </div>
 
           <!-- require_privacy_set toggle -->
@@ -1750,27 +1852,7 @@
                 }}
               </p>
             </div>
-            <button
-              type="button"
-              @click="
-                createForm.require_privacy_set = !createForm.require_privacy_set
-              "
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                createForm.require_privacy_set
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  createForm.require_privacy_set
-                    ? 'translate-x-6'
-                    : 'translate-x-1'
-                "
-              />
-            </button>
+            <Toggle v-model="createForm.require_privacy_set" />
           </div>
         </div>
 
@@ -1857,28 +1939,7 @@
           </div>
           <!-- 启用开关 -->
           <div class="flex items-center gap-3 mb-3">
-            <button
-              type="button"
-              @click="
-                createForm.model_routing_enabled =
-                  !createForm.model_routing_enabled
-              "
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                createForm.model_routing_enabled
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  createForm.model_routing_enabled
-                    ? 'translate-x-6'
-                    : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="createForm.model_routing_enabled" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 createForm.model_routing_enabled
@@ -2018,6 +2079,7 @@
             {{ t("admin.groups.modelRouting.addRule") }}
           </button>
         </div>
+        </template>
       </form>
 
       <template #footer>
@@ -2066,7 +2128,7 @@
     <BaseDialog
       :show="showEditModal"
       :title="t('admin.groups.editGroup')"
-      width="normal"
+      width="wide"
       @close="closeEditModal"
     >
       <form
@@ -2076,24 +2138,24 @@
         class="space-y-5"
       >
         <div>
-          <label class="input-label">{{ t("admin.groups.form.name") }}</label>
-          <input
+          <GroupI18nField
             v-model="editForm.name"
-            type="text"
+            v-model:i18n="editForm.i18n"
+            :label="t('admin.groups.form.name')"
+            field="name"
             required
-            class="input"
             data-tour="edit-group-form-name"
           />
         </div>
         <div>
-          <label class="input-label">{{
-            t("admin.groups.form.description")
-          }}</label>
-          <textarea
+          <GroupI18nField
             v-model="editForm.description"
+            v-model:i18n="editForm.i18n"
+            :label="t('admin.groups.form.description')"
+            field="description"
+            multiline
             rows="3"
-            class="input"
-          ></textarea>
+          />
         </div>
         <div>
           <label class="input-label">{{
@@ -2107,6 +2169,7 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
         </div>
+        <template v-if="!authStore.isSimpleMode">
         <!-- 从分组复制账号（编辑时） -->
         <div v-if="copyAccountsGroupOptionsForEdit.length > 0">
           <div class="mb-1.5 flex items-center gap-1">
@@ -2224,6 +2287,15 @@
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
         </div>
+        <ReasoningEffortPolicyFields
+          v-if="supportsReasoningEffortPolicyPlatform(editForm.platform)"
+          ref="editReasoningEffortPolicyRef"
+          id-prefix="edit-group-reasoning"
+          :platform="editForm.platform"
+          v-model:max-effort="editForm.max_reasoning_effort"
+          v-model:over-limit="editForm.max_reasoning_effort_over_limit"
+          v-model:mappings="editForm.reasoning_effort_mappings"
+        />
         <div v-if="editForm.subscription_type !== 'subscription'">
           <div class="mb-1.5 flex items-center gap-1">
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2269,23 +2341,7 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              @click="editForm.is_exclusive = !editForm.is_exclusive"
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                editForm.is_exclusive
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  editForm.is_exclusive ? 'translate-x-6' : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="editForm.is_exclusive" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 editForm.is_exclusive
@@ -2865,23 +2921,7 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              @click="editForm.mcp_xml_inject = !editForm.mcp_xml_inject"
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                editForm.mcp_xml_inject
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  editForm.mcp_xml_inject ? 'translate-x-6' : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="editForm.mcp_xml_inject" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 editForm.mcp_xml_inject
@@ -2923,23 +2963,7 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <button
-              type="button"
-              @click="editForm.claude_code_only = !editForm.claude_code_only"
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                editForm.claude_code_only
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  editForm.claude_code_only ? 'translate-x-6' : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="editForm.claude_code_only" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 editForm.claude_code_only
@@ -3062,6 +3086,191 @@
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            {{ t("admin.groups.webSearchPricing.title") }}
+          </h4>
+          <div>
+            <label class="input-label">{{
+              t("admin.groups.webSearchPricing.pricePerCall")
+            }}</label>
+            <input
+              v-model.number="editForm.web_search_price_per_call"
+              type="number"
+              step="0.001"
+              min="0"
+              placeholder="0.01"
+              class="input"
+            />
+            <p class="input-hint">
+              {{ t("admin.groups.webSearchPricing.pricePerCallHint") }}
+            </p>
+            <div
+              class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+            >
+              {{
+                t("admin.groups.webSearchPricing.finalPricePreview", {
+                  price: editWebSearchFinalPricePreview,
+                })
+              }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 固定账号获取 Codex Model Manifest（仅 openai 平台，仅编辑对话框） -->
+        <CodexManifestAccountsField
+          v-if="editForm.platform === 'openai' && editingGroup"
+          ref="editCodexManifestRef"
+          :group-id="editingGroup.id"
+          :model-value="editCodexManifestConfig"
+          @update:model-value="Object.assign(editCodexManifestConfig, $event)"
+          :account-names="editCodexManifestAccountNames"
+        />
+
+
+        <div class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.title") }}</h4>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPricing.description") }}</p>
+            </div>
+            <button type="button" class="btn btn-secondary shrink-0 whitespace-nowrap" @click="addGroupPricing(editForm.model_pricing)">
+              <Icon name="plus" size="sm" class="mr-1" />{{ t("admin.groups.modelPricing.add") }}
+            </button>
+          </div>
+          <label class="mt-3 flex items-start gap-2">
+            <input v-model="editForm.long_context_pricing_enabled" type="checkbox" class="mt-0.5" />
+            <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
+          </label>
+          <div class="mt-3 space-y-2">
+            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
+          </div>
+        </div>
+
+        <!-- Grok Voice 显式定价（仅 grok 平台） -->
+        <div
+          v-if="editForm.platform === 'grok'"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ t("admin.groups.explicitPricing.title") }}
+          </h4>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            {{ t("admin.groups.explicitPricing.description") }}
+          </p>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div>
+              <label class="input-label">{{ t("admin.groups.explicitPricing.searchPricePer1k") }}</label>
+              <input
+                v-model.number="editForm.search_price_per_1k"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.explicitPricing.pricePlaceholder')"
+                data-testid="edit-search-price"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.voicePricing.audioRealtimePerMin") }}</label>
+              <input
+                v-model.number="editForm.audio_realtime_price_per_min"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.voicePricing.pricePlaceholder')"
+                data-testid="edit-audio-realtime-price"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.voicePricing.audioTtsPerMillionChars") }}</label>
+              <input
+                v-model.number="editForm.audio_tts_price_per_million_chars"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.voicePricing.pricePlaceholder')"
+                data-testid="edit-audio-tts-price"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t("admin.groups.voicePricing.audioSttPerHour") }}</label>
+              <input
+                v-model.number="editForm.audio_stt_price_per_hour"
+                type="number"
+                step="0.000001"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.voicePricing.pricePlaceholder')"
+                data-testid="edit-audio-stt-price"
+              />
+            </div>
+          </div>
+        </div>
+        <!-- OpenAI Fast 开关（OpenAI 与 Composite 平台） -->
+        <div
+          v-if="supportsGroupOpenAIFast(editForm.platform)"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            {{ t("admin.groups.openaiFast.title") }}
+          </h4>
+          <div class="flex items-center justify-between gap-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.force") }}
+            </label>
+            <Toggle
+              data-testid="edit-force-openai-fast"
+              :aria-label="t('admin.groups.openaiFast.force')"
+              v-model="editForm.force_openai_fast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.hint") }}
+          </p>
+          <div class="flex items-center justify-between gap-4 mt-4">
+            <label class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t("admin.groups.openaiFast.free") }}
+            </label>
+            <Toggle
+              data-testid="edit-free-openai-fast"
+              :aria-label="t('admin.groups.openaiFast.free')"
+              v-model="editForm.free_openai_fast"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiFast.freeHint") }}
+          </p>
+        </div>
+
+        <!-- Codex Live 开关（OpenAI 与 Composite 平台） -->
+        <div
+          v-if="supportsLivePlatform(editForm.platform)"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            {{ t("admin.groups.openaiLive.title") }}
+          </h4>
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600 dark:text-gray-400">{{
+              t("admin.groups.openaiLive.allow")
+            }}</label>
+            <Toggle
+              :model-value="editForm.allow_live"
+              @update:model-value="toggleLive('edit')"
+            />
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {{ t("admin.groups.openaiLive.hint") }}
+          </p>
+        </div>
+
+        <!-- OpenAI Messages 调度配置（OpenAI 与 Composite 平台） -->
+        <div
+          v-if="supportsMessagesDispatchPlatform(editForm.platform)"
+          class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
+        >
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {{ t("admin.groups.openaiMessages.title") }}
           </h4>
 
@@ -3070,34 +3279,18 @@
             <label class="text-sm text-gray-600 dark:text-gray-400">{{
               t("admin.groups.openaiMessages.allowDispatch")
             }}</label>
-            <button
-              type="button"
-              @click="
-                editForm.allow_messages_dispatch =
-                  !editForm.allow_messages_dispatch
-              "
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                editForm.allow_messages_dispatch
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  editForm.allow_messages_dispatch
-                    ? 'translate-x-6'
-                    : 'translate-x-1'
-                "
-              />
-            </button>
+            <Toggle v-model="editForm.allow_messages_dispatch" />
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {{ t("admin.groups.openaiMessages.allowDispatchHint") }}
           </p>
 
-          <div v-if="editForm.allow_messages_dispatch" class="mt-3">
+          <div
+            v-if="
+              editForm.platform === 'openai' && editForm.allow_messages_dispatch
+            "
+            class="mt-3"
+          >
             <div
               class="relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800"
             >
@@ -3310,27 +3503,7 @@
                 }}
               </p>
             </div>
-            <button
-              type="button"
-              @click="
-                editForm.require_oauth_only = !editForm.require_oauth_only
-              "
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                editForm.require_oauth_only
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  editForm.require_oauth_only
-                    ? 'translate-x-6'
-                    : 'translate-x-1'
-                "
-              />
-            </button>
+            <Toggle v-model="editForm.require_oauth_only" />
           </div>
 
           <!-- require_privacy_set toggle -->
@@ -3347,27 +3520,7 @@
                 }}
               </p>
             </div>
-            <button
-              type="button"
-              @click="
-                editForm.require_privacy_set = !editForm.require_privacy_set
-              "
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                editForm.require_privacy_set
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  editForm.require_privacy_set
-                    ? 'translate-x-6'
-                    : 'translate-x-1'
-                "
-              />
-            </button>
+            <Toggle v-model="editForm.require_privacy_set" />
           </div>
         </div>
 
@@ -3424,27 +3577,7 @@
           </div>
           <!-- 启用开关 -->
           <div class="flex items-center gap-3 mb-3">
-            <button
-              type="button"
-              @click="
-                editForm.model_routing_enabled = !editForm.model_routing_enabled
-              "
-              :class="[
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                editForm.model_routing_enabled
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-dark-600',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                  editForm.model_routing_enabled
-                    ? 'translate-x-6'
-                    : 'translate-x-1',
-                ]"
-              />
-            </button>
+            <Toggle v-model="editForm.model_routing_enabled" />
             <span class="text-sm text-gray-500 dark:text-gray-400">
               {{
                 editForm.model_routing_enabled
@@ -3584,6 +3717,7 @@
             {{ t("admin.groups.modelRouting.addRule") }}
           </button>
         </div>
+        </template>
       </form>
 
       <template #footer>
@@ -3640,6 +3774,17 @@
       @cancel="showDeleteDialog = false"
     />
 
+    <ConfirmDialog
+      :show="showUnsupportedLiveConfirm"
+      :title="t('admin.groups.openaiLive.unsupportedTitle')"
+      :message="t('admin.groups.openaiLive.unsupportedMessage')"
+      :confirm-text="t('admin.groups.openaiLive.enableAnyway')"
+      :cancel-text="t('common.cancel')"
+      :danger="true"
+      @confirm="confirmUnsupportedLive"
+      @cancel="cancelUnsupportedLive"
+    />
+
     <!-- Sort Order Modal -->
     <BaseDialog
       :show="showSortModal"
@@ -3689,7 +3834,7 @@
                                   : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
                   ]"
                 >
-                  {{ t("admin.groups.platforms." + group.platform) }}
+                  {{ t("admin.groups.platforms." + group.platform, platformLabel(group.platform)) }}
                 </span>
               </div>
             </div>
@@ -3733,6 +3878,365 @@
               ></path>
             </svg>
             {{ sortSubmitting ? t("common.saving") : t("common.save") }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
+
+    <!-- Composite Routes Modal -->
+    <BaseDialog
+      :show="showCompositeRoutesModal"
+      :title="
+        compositeRoutesGroup
+          ? t('admin.groups.compositeRoutes.titleWithGroup', {
+              name: compositeRoutesGroup.name,
+            })
+          : t('admin.groups.compositeRoutes.title')
+      "
+      width="wide"
+      @close="closeCompositeRoutesModal"
+    >
+      <div class="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <section class="min-w-0">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{ t("admin.groups.compositeRoutes.routes") }}
+            </h3>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="compositeRoutesLoading"
+              @click="loadCompositeRoutes"
+            >
+              <Icon
+                name="refresh"
+                size="sm"
+                :class="compositeRoutesLoading ? 'animate-spin' : ''"
+              />
+            </button>
+          </div>
+
+          <div
+            class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600"
+          >
+            <div
+              v-if="compositeRoutesLoading"
+              class="flex h-36 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+            >
+              {{ t("common.loading") }}
+            </div>
+            <div
+              v-else-if="compositeRoutes.length === 0"
+              class="flex h-36 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+            >
+              {{ t("admin.groups.compositeRoutes.empty") }}
+            </div>
+            <div v-else class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-600">
+                <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-dark-800 dark:text-gray-400">
+                  <tr>
+                    <th class="px-3 py-2">
+                      {{ t("admin.groups.compositeRoutes.publicModel") }}
+                    </th>
+                    <th class="px-3 py-2">
+                      {{ t("admin.groups.compositeRoutes.target") }}
+                    </th>
+                    <th class="px-3 py-2">
+                      {{ t("admin.groups.compositeRoutes.scope") }}
+                    </th>
+                    <th class="px-3 py-2 text-right">
+                      {{ t("admin.groups.columns.actions") }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                  <tr
+                    v-for="route in compositeRoutes"
+                    :key="route.id"
+                    :class="!route.enabled && 'opacity-60'"
+                  >
+                    <td class="max-w-[15rem] px-3 py-2">
+                      <div class="break-all font-medium text-gray-900 dark:text-white">
+                        {{ route.public_model }}
+                      </div>
+                      <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span class="badge badge-gray">{{
+                          compositeRouteMatchLabel(route.match_type)
+                        }}</span>
+                        <span
+                          v-if="!route.enabled"
+                          class="badge badge-danger"
+                        >
+                          {{ t("admin.accounts.status.inactive") }}
+                        </span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-1.5 text-gray-900 dark:text-white">
+                        <PlatformIcon :platform="route.target_platform" size="xs" />
+                        <span>{{ formatCompositePlatform(route.target_platform) }}</span>
+                      </div>
+                      <div class="mt-1 break-all text-xs text-gray-500 dark:text-gray-400">
+                        {{ route.upstream_model || route.public_model }}
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="text-gray-700 dark:text-gray-300">
+                        {{ formatCompositeEndpoint(route.endpoint) }}
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ t("admin.groups.compositeRoutes.priority") }}:
+                        {{ route.priority }}
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          class="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                          :title="t('common.edit')"
+                          @click="editCompositeRoute(route)"
+                        >
+                          <Icon name="edit" size="sm" />
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                          :title="t('common.delete')"
+                          @click="deleteCompositeRoute(route)"
+                        >
+                          <Icon name="trash" size="sm" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="space-y-5">
+          <form class="space-y-3" @submit.prevent="saveCompositeRoute">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{
+                  compositeRouteEditingId
+                    ? t("admin.groups.compositeRoutes.editRoute")
+                    : t("admin.groups.compositeRoutes.addRoute")
+                }}
+              </h3>
+              <button
+                v-if="compositeRouteEditingId"
+                type="button"
+                class="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                @click="resetCompositeRouteForm"
+              >
+                {{ t("common.cancel") }}
+              </button>
+            </div>
+
+            <div>
+              <label class="input-label">{{
+                t("admin.groups.compositeRoutes.publicModel")
+              }}</label>
+              <input
+                v-model.trim="compositeRouteForm.public_model"
+                type="text"
+                class="input"
+                required
+                placeholder="openrouter/gpt-5"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label class="input-label">{{
+                  t("admin.groups.compositeRoutes.matchType")
+                }}</label>
+                <Select
+                  v-model="compositeRouteForm.match_type"
+                  :options="compositeRouteMatchOptions"
+                />
+              </div>
+              <div>
+                <label class="input-label">{{
+                  t("admin.groups.compositeRoutes.endpoint")
+                }}</label>
+                <Select
+                  v-model="compositeRouteForm.endpoint"
+                  :options="compositeRouteEndpointOptions"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label class="input-label">{{
+                  t("admin.groups.compositeRoutes.targetPlatform")
+                }}</label>
+                <Select
+                  v-model="compositeRouteForm.target_platform"
+                  :options="compositeRoutePlatformOptions"
+                />
+              </div>
+              <div>
+                <label class="input-label">{{
+                  t("admin.groups.compositeRoutes.priority")
+                }}</label>
+                <input
+                  v-model.number="compositeRouteForm.priority"
+                  type="number"
+                  min="1"
+                  step="1"
+                  class="input"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="input-label">{{
+                t("admin.groups.compositeRoutes.upstreamModel")
+              }}</label>
+              <input
+                v-model.trim="compositeRouteForm.upstream_model"
+                type="text"
+                class="input"
+                placeholder="gpt-5"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t("admin.groups.compositeRoutes.upstreamModelHint") }}
+              </p>
+            </div>
+
+            <div>
+              <label class="input-label">{{
+                t("admin.groups.compositeRoutes.notes")
+              }}</label>
+              <textarea
+                v-model.trim="compositeRouteForm.notes"
+                rows="2"
+                class="input"
+              ></textarea>
+            </div>
+
+            <div class="flex items-center justify-between gap-3">
+              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  v-model="compositeRouteForm.enabled"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700"
+                />
+                {{ t("admin.groups.compositeRoutes.enabled") }}
+              </label>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                :disabled="compositeRouteSaving"
+              >
+                <Icon
+                  v-if="!compositeRouteSaving"
+                  name="check"
+                  size="sm"
+                  class="mr-2"
+                />
+                {{ compositeRouteEditingId ? t("common.update") : t("common.create") }}
+              </button>
+            </div>
+          </form>
+
+          <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+            <h3 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+              {{ t("admin.groups.compositeRoutes.preview") }}
+            </h3>
+            <div class="space-y-3">
+              <input
+                v-model.trim="compositePreviewModel"
+                type="text"
+                class="input"
+                placeholder="openrouter/gpt-5"
+                @keyup.enter="previewCompositeRoute"
+              />
+              <div class="flex gap-2">
+                <Select
+                  v-model="compositePreviewEndpoint"
+                  :options="compositeRouteEndpointOptions"
+                  class="min-w-0 flex-1"
+                />
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  :disabled="compositePreviewLoading || !compositePreviewModel"
+                  @click="previewCompositeRoute"
+                >
+                  <Icon name="play" size="sm" />
+                </button>
+              </div>
+
+              <div
+                v-if="compositePreviewDecision"
+                class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-dark-600 dark:bg-dark-800"
+              >
+                <div class="mb-2 flex items-center gap-2">
+                  <span
+                    :class="[
+                      'badge',
+                      compositePreviewDecision.matched
+                        ? 'badge-success'
+                        : 'badge-danger',
+                    ]"
+                  >
+                    {{
+                      compositePreviewDecision.matched
+                        ? t("admin.groups.compositeRoutes.matched")
+                        : t("admin.groups.compositeRoutes.notMatched")
+                    }}
+                  </span>
+                  <span class="badge badge-gray">
+                    {{
+                      compositeRouteSourceLabel(
+                        compositePreviewDecision.source,
+                      )
+                    }}
+                  </span>
+                </div>
+                <div
+                  v-if="compositePreviewDecision.matched"
+                  class="space-y-1 text-gray-700 dark:text-gray-300"
+                >
+                  <div>
+                    {{ t("admin.groups.compositeRoutes.targetPlatform") }}:
+                    {{
+                      formatCompositePlatform(
+                        compositePreviewDecision.target_platform,
+                      )
+                    }}
+                  </div>
+                  <div class="break-all">
+                    {{ t("admin.groups.compositeRoutes.upstreamModel") }}:
+                    {{ compositePreviewDecision.upstream_model }}
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="text-gray-500 dark:text-gray-400"
+                >
+                  {{ compositePreviewDecision.reason }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <template #footer>
+        <div class="flex justify-end pt-4">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            @click="closeCompositeRoutesModal"
+          >
+            {{ t("common.close") }}
           </button>
         </div>
       </template>
@@ -3900,6 +4404,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
+import { useAuthStore } from "@/stores/auth";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { adminAPI } from "@/api/admin";
 import type {
@@ -3929,15 +4434,33 @@ import AppLayout from "@/components/layout/AppLayout.vue";
 import TablePageLayout from "@/components/layout/TablePageLayout.vue";
 import DataTable from "@/components/common/DataTable.vue";
 import Pagination from "@/components/common/Pagination.vue";
+import Toggle from "@/components/common/Toggle.vue";
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import EmptyState from "@/components/common/EmptyState.vue";
 import Select from "@/components/common/Select.vue";
 import PlatformIcon from "@/components/common/PlatformIcon.vue";
+import { platformLabel } from "@/utils/platformColors";
 import Icon from "@/components/icons/Icon.vue";
+import GroupI18nField from "@/components/admin/group/GroupI18nField.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
+import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
+import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
+import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
+import type { PricingFormEntry } from "@/components/admin/channel/types";
+import {
+  apiIntervalsToForm,
+  createDefaultTimePricingForm,
+  formIntervalsToAPI,
+  formReasoningEffortMultipliersToAPI,
+  mTokToPerToken,
+  perTokenToMTok,
+  toNullableNumber,
+  validateReasoningEffortMultipliers,
+} from "@/components/admin/channel/types";
+import type { ChannelModelPricing } from "@/api/admin/channels";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
@@ -4043,6 +4566,7 @@ const groupPricingToAPI = (
 
 const { t } = useI18n();
 const appStore = useAppStore();
+const authStore = useAuthStore();
 const onboardingStore = useOnboardingStore();
 
 const ALWAYS_VISIBLE_COLUMNS = new Set(["name", "actions"]);
@@ -4410,6 +4934,15 @@ let abortController: AbortController | null = null;
 const showCreateModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteDialog = ref(false);
+const pendingLiveForm = ref<"create" | "edit" | null>(null);
+const showUnsupportedLiveConfirm = computed(
+  () => pendingLiveForm.value !== null,
+);
+const liveCapability = ref<{ supported: boolean; reason?: string } | null>(null);
+let liveCapabilityRequest: Promise<{
+  supported: boolean;
+  reason?: string;
+}> | null = null;
 const showSortModal = ref(false);
 const submitting = ref(false);
 const sortSubmitting = ref(false);
@@ -4441,6 +4974,38 @@ const compositeRouteForm = reactive({
   notes: "",
 });
 const sortableGroups = ref<AdminGroup[]>([]);
+type ConcreteGroupPlatform = Exclude<GroupPlatform, "composite">;
+type CompositeRouteFormState = {
+  public_model: string;
+  match_type: CompositeRouteMatchType;
+  target_platform: ConcreteGroupPlatform;
+  upstream_model: string;
+  endpoint: CompositeRouteEndpoint;
+  priority: number;
+  enabled: boolean;
+  notes: string;
+};
+
+const showCompositeRoutesModal = ref(false);
+const compositeRoutesGroup = ref<AdminGroup | null>(null);
+const compositeRoutes = ref<CompositeModelRoute[]>([]);
+const compositeRoutesLoading = ref(false);
+const compositeRouteSaving = ref(false);
+const compositeRouteEditingId = ref<number | null>(null);
+const compositePreviewModel = ref("");
+const compositePreviewEndpoint = ref<CompositeRouteEndpoint>("any");
+const compositePreviewLoading = ref(false);
+const compositePreviewDecision = ref<CompositeRouteDecision | null>(null);
+const compositeRouteForm = reactive<CompositeRouteFormState>({
+  public_model: "",
+  match_type: "exact",
+  target_platform: "openai",
+  upstream_model: "",
+  endpoint: "any",
+  priority: 100,
+  enabled: true,
+  notes: "",
+});
 const createMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
 const editMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
 const createModelsListState = reactive(createInitialModelsListState());
@@ -4479,6 +5044,7 @@ const exhaustedAccountsFallbackOptions = computed(() => {
 const createForm = reactive({
   name: "",
   description: "",
+  i18n: {} as GroupI18n,
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   is_exclusive: false,
@@ -4520,6 +5086,7 @@ const createForm = reactive({
   fallback_group_id_on_exhausted: null as number | null,
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
+  allow_live: false,
   opus_mapped_model: createMessagesDispatchDefaults.opus_mapped_model,
   sonnet_mapped_model: createMessagesDispatchDefaults.sonnet_mapped_model,
   haiku_mapped_model: createMessagesDispatchDefaults.haiku_mapped_model,
@@ -4537,6 +5104,9 @@ const createForm = reactive({
   copy_accounts_from_group_ids: [] as number[],
   // 分组级 RPM 限制（每用户每分钟最大请求数；0 = 不限制）
   rpm_limit: 0 as number,
+  max_reasoning_effort: "",
+  max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
+  reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
 });
 
 // 简单账号类型（用于模型路由选择）
@@ -4830,6 +5400,7 @@ const convertApiFormatToRoutingRules = async (
 const editForm = reactive({
   name: "",
   description: "",
+  i18n: {} as GroupI18n,
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   is_exclusive: false,
@@ -4872,6 +5443,7 @@ const editForm = reactive({
   fallback_group_id_on_exhausted: null as number | null,
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
+  allow_live: false,
   default_mapped_model: '',
   opus_mapped_model: editMessagesDispatchDefaults.opus_mapped_model,
   sonnet_mapped_model: editMessagesDispatchDefaults.sonnet_mapped_model,
@@ -4890,6 +5462,9 @@ const editForm = reactive({
   copy_accounts_from_group_ids: [] as number[],
   // 分组级 RPM 限制（每用户每分钟最大请求数；0 = 不限制）
   rpm_limit: 0 as number,
+  max_reasoning_effort: "",
+  max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
+  reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
 });
 
 type ImagePricingFormState = {
@@ -5070,6 +5645,44 @@ const deleteConfirmMessage = computed(() => {
   return t("admin.groups.deleteConfirm", { name: deletingGroup.value.name });
 });
 
+const loadLiveCapability = async () => {
+  if (liveCapability.value) return liveCapability.value;
+  if (!liveCapabilityRequest) {
+    liveCapabilityRequest = adminAPI.groups
+      .getLiveCapability()
+      .catch(() => ({ supported: false }))
+      .finally(() => {
+        liveCapabilityRequest = null;
+      });
+  }
+  liveCapability.value = await liveCapabilityRequest;
+  return liveCapability.value ?? { supported: false };
+};
+
+const toggleLive = async (target: "create" | "edit") => {
+  const form = target === "create" ? createForm : editForm;
+  if (form.allow_live) {
+    form.allow_live = false;
+    return;
+  }
+  const capability = await loadLiveCapability();
+  if (capability.supported) {
+    form.allow_live = true;
+    return;
+  }
+  pendingLiveForm.value = target;
+};
+
+const confirmUnsupportedLive = () => {
+  if (pendingLiveForm.value === "create") createForm.allow_live = true;
+  if (pendingLiveForm.value === "edit") editForm.allow_live = true;
+  pendingLiveForm.value = null;
+};
+
+const cancelUnsupportedLive = () => {
+  pendingLiveForm.value = null;
+};
+
 const loadGroups = async () => {
   if (abortController) {
     abortController.abort();
@@ -5085,7 +5698,7 @@ const loadGroups = async () => {
       {
         platform: (filters.platform as GroupPlatform) || undefined,
         status: filters.status as any,
-        is_exclusive: filters.is_exclusive
+        is_exclusive: !authStore.isSimpleMode && filters.is_exclusive
           ? filters.is_exclusive === "true"
           : undefined,
         search: searchQuery.value.trim() || undefined,
@@ -5246,6 +5859,7 @@ const closeCreateModal = () => {
   clearAllAccountSearchState();
   createForm.name = "";
   createForm.description = "";
+  createForm.i18n = {};
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
   createForm.is_exclusive = false;
@@ -5281,6 +5895,7 @@ const closeCreateModal = () => {
   createForm.fallback_group_id_on_invalid_request = null;
   createForm.fallback_group_id_on_exhausted = null;
   resetMessagesDispatchFormState(createForm);
+  createForm.allow_live = false;
   createForm.require_oauth_only = false;
   createForm.require_privacy_set = false;
   createForm.supported_model_scopes = ["claude", "gemini_text", "gemini_image"];
@@ -5325,8 +5940,34 @@ const handleCreateGroup = async () => {
     appStore.showError(t("admin.groups.nameRequired"));
     return;
   }
+  if (
+    supportsReasoningEffortPolicyPlatform(createForm.platform) &&
+    createReasoningEffortPolicyRef.value &&
+    !createReasoningEffortPolicyRef.value.validate()
+  ) {
+    return;
+  }
+  if (!validateProfitControlForm(createForm)) {
+    return;
+  }
+  if (!validateGroupReasoningMultipliers(createForm.model_pricing)) return;
+  // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
+  if (
+    createModelAllowlistState.enabled &&
+    createModelAllowlistSelectedCount.value === 0
+  ) {
+    appStore.showError(t("admin.groups.modelAllowlist.emptySelectionError"));
+    return;
+  }
   submitting.value = true;
   try {
+    const {
+      video_model_prices: _createFormVideoModelPrices,
+      ...createGroupForm
+    } = createForm;
+    const videoModelPrices = serializeVideoModelPrices(
+      createForm.video_model_prices,
+    );
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createForm,
@@ -5343,6 +5984,9 @@ const handleCreateGroup = async () => {
       monthly_limit_usd: normalizeOptionalLimit(
         createForm.monthly_limit_usd as number | string | null,
       ),
+      ...(Object.keys(videoModelPrices).length > 0
+        ? { video_model_prices: videoModelPrices }
+        : {}),
       model_routing: convertRoutingRulesToApiFormat(
         createModelRoutingRules.value,
       ),
@@ -5361,7 +6005,20 @@ const handleCreateGroup = async () => {
               exact_model_mappings: createForm.exact_model_mappings,
             })
           : undefined,
+      reasoning_effort_mappings: reasoningEffortMappingsToAPI(
+        createForm.reasoning_effort_mappings,
+      ),
+      // 利润控制：界面百分比转小数提交；仅五个 token 平台可启用
+      profit_control_enabled:
+        isProfitControlPlatform(createForm.platform) &&
+        createForm.profit_control_enabled,
+      profit_min_margin: percentToDecimal(createForm.profit_min_margin_percent),
+      profit_safety_buffer: percentToDecimal(
+        createForm.profit_safety_buffer_percent,
+      ),
     };
+    delete (requestData as Record<string, unknown>).profit_min_margin_percent;
+    delete (requestData as Record<string, unknown>).profit_safety_buffer_percent;
     // v-model.number 清空输入框时产生 ""，转为 null 让后端设为无限制
     const emptyToNull = (v: any) => (v === "" ? null : v);
     requestData.daily_limit_usd = emptyToNull(requestData.daily_limit_usd);
@@ -5410,7 +6067,7 @@ const handleCreateGroup = async () => {
     }
   } catch (error: any) {
     appStore.showError(
-      error.response?.data?.detail || t("admin.groups.failedToCreate"),
+      extractApiErrorMessage(error, t("admin.groups.failedToCreate")),
     );
     console.error("Error creating group:", error);
     // Don't advance tour on error
@@ -5423,6 +6080,12 @@ const handleEdit = async (group: AdminGroup) => {
   editingGroup.value = group;
   editForm.name = group.name;
   editForm.description = group.description || "";
+  editForm.i18n = Object.fromEntries(
+    Object.entries(group.i18n ?? {}).map(([locale, text]) => [
+      locale,
+      { ...text },
+    ]),
+  );
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.is_exclusive = group.is_exclusive;
@@ -5468,6 +6131,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.allow_messages_dispatch =
     group.allow_messages_dispatch ||
     messagesDispatchFormState.allow_messages_dispatch;
+  editForm.allow_live = group.allow_live ?? false;
   editForm.opus_mapped_model = messagesDispatchFormState.opus_mapped_model;
   editForm.sonnet_mapped_model = messagesDispatchFormState.sonnet_mapped_model;
   editForm.haiku_mapped_model = messagesDispatchFormState.haiku_mapped_model;
@@ -5500,6 +6164,10 @@ const closeEditModal = () => {
   clearAllAccountSearchState();
   showEditModal.value = false;
   editingGroup.value = null;
+  editForm.max_reasoning_effort = "";
+  editForm.max_reasoning_effort_over_limit = reasoningEffortOverLimitDowngrade;
+  editForm.reasoning_effort_mappings = [];
+  editReasoningEffortPolicyRef.value?.resetValidation();
   editModelRoutingRules.value = [];
   editForm.copy_accounts_from_group_ids = [];
   editForm.peak_rate_enabled = false;
@@ -5526,6 +6194,35 @@ const handleUpdateGroup = async () => {
     appStore.showError(t("admin.groups.nameRequired"));
     return;
   }
+  if (
+    supportsReasoningEffortPolicyPlatform(editForm.platform) &&
+    editReasoningEffortPolicyRef.value &&
+    !editReasoningEffortPolicyRef.value.validate()
+  ) {
+    return;
+  }
+  if (!validateProfitControlForm(editForm)) {
+    return;
+  }
+  if (!validateGroupReasoningMultipliers(editForm.model_pricing)) return;
+  // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
+  if (
+    editModelAllowlistState.enabled &&
+    editModelAllowlistSelectedCount.value === 0
+  ) {
+    appStore.showError(t("admin.groups.modelAllowlist.emptySelectionError"));
+    return;
+  }
+  // 固定账号 manifest：开启后至少一个账号，前端阻止提交并提示。
+  if (
+    editForm.platform === "openai" &&
+    editCodexManifestConfig.value.enabled &&
+    editCodexManifestConfig.value.account_ids.length === 0
+  ) {
+    appStore.showError(t("admin.groups.codexModelsManifest.selectAtLeastOne"));
+    editCodexManifestRef.value?.validate();
+    return;
+  }
 
   submitting.value = true;
   try {
@@ -5544,6 +6241,9 @@ const handleUpdateGroup = async () => {
       ),
       monthly_limit_usd: normalizeOptionalLimit(
         editForm.monthly_limit_usd as number | string | null,
+      ),
+      video_model_prices: serializeVideoModelPrices(
+        editForm.video_model_prices,
       ),
       fallback_group_id:
         editForm.fallback_group_id === null ? 0 : editForm.fallback_group_id,
@@ -5573,7 +6273,20 @@ const handleUpdateGroup = async () => {
               exact_model_mappings: editForm.exact_model_mappings,
             })
           : undefined,
+      reasoning_effort_mappings: reasoningEffortMappingsToAPI(
+        editForm.reasoning_effort_mappings,
+      ),
+      // 利润控制：界面百分比转小数提交；仅五个 token 平台可启用
+      profit_control_enabled:
+        isProfitControlPlatform(editForm.platform) &&
+        editForm.profit_control_enabled,
+      profit_min_margin: percentToDecimal(editForm.profit_min_margin_percent),
+      profit_safety_buffer: percentToDecimal(
+        editForm.profit_safety_buffer_percent,
+      ),
     };
+    delete (payload as Record<string, unknown>).profit_min_margin_percent;
+    delete (payload as Record<string, unknown>).profit_safety_buffer_percent;
     // v-model.number 清空输入框时产生 ""，转为 null 让后端设为无限制
     const emptyToNull = (v: any) => (v === "" ? null : v);
     payload.daily_limit_usd = emptyToNull(payload.daily_limit_usd);
@@ -5620,7 +6333,7 @@ const handleUpdateGroup = async () => {
     loadGroups();
   } catch (error: any) {
     appStore.showError(
-      error.response?.data?.detail || t("admin.groups.failedToUpdate"),
+      extractApiErrorMessage(error, t("admin.groups.failedToUpdate")),
     );
     console.error("Error updating group:", error);
   } finally {
@@ -5904,9 +6617,33 @@ watch(
     if (!["anthropic", "antigravity"].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null;
     }
-    if (newVal !== "openai") {
+    if (!supportsMessagesDispatchPlatform(newVal)) {
       resetMessagesDispatchFormState(createForm);
     }
+    if (!supportsLivePlatform(newVal)) {
+      createForm.allow_live = false;
+    }
+    if (!isProfitControlPlatform(newVal)) {
+      createForm.profit_control_enabled = false;
+      createForm.profit_min_margin_percent = 0;
+      createForm.profit_safety_buffer_percent = 0;
+    }
+    createForm.max_reasoning_effort = normalizeReasoningEffortForPlatform(
+      newVal,
+      createForm.max_reasoning_effort,
+    );
+    createForm.max_reasoning_effort_over_limit = supportsReasoningEffortPolicyPlatform(
+      newVal,
+    )
+      ? normalizeReasoningEffortOverLimit(
+          createForm.max_reasoning_effort_over_limit,
+        )
+      : reasoningEffortOverLimitDowngrade;
+    createForm.reasoning_effort_mappings = reasoningEffortMappingsToRows(
+      reasoningEffortMappingsToAPI(createForm.reasoning_effort_mappings),
+      newVal,
+    );
+    createReasoningEffortPolicyRef.value?.resetValidation();
     if (!["openai", "antigravity", "anthropic", "gemini"].includes(newVal)) {
       createForm.require_oauth_only = false;
       createForm.require_privacy_set = false;
@@ -5937,9 +6674,33 @@ watch(
     if (!["anthropic", "antigravity"].includes(newVal)) {
       editForm.fallback_group_id_on_invalid_request = null;
     }
-    if (newVal !== "openai") {
+    if (!supportsMessagesDispatchPlatform(newVal)) {
       resetMessagesDispatchFormState(editForm);
     }
+    if (!supportsLivePlatform(newVal)) {
+      editForm.allow_live = false;
+    }
+    if (!isProfitControlPlatform(newVal)) {
+      editForm.profit_control_enabled = false;
+      editForm.profit_min_margin_percent = 0;
+      editForm.profit_safety_buffer_percent = 0;
+    }
+    editForm.max_reasoning_effort = normalizeReasoningEffortForPlatform(
+      newVal,
+      editForm.max_reasoning_effort,
+    );
+    editForm.max_reasoning_effort_over_limit = supportsReasoningEffortPolicyPlatform(
+      newVal,
+    )
+      ? normalizeReasoningEffortOverLimit(
+          editForm.max_reasoning_effort_over_limit,
+        )
+      : reasoningEffortOverLimitDowngrade;
+    editForm.reasoning_effort_mappings = reasoningEffortMappingsToRows(
+      reasoningEffortMappingsToAPI(editForm.reasoning_effort_mappings),
+      newVal,
+    );
+    editReasoningEffortPolicyRef.value?.resetValidation();
     if (!["openai", "antigravity", "anthropic", "gemini"].includes(newVal)) {
       editForm.require_oauth_only = false;
       editForm.require_privacy_set = false;
@@ -5975,6 +6736,9 @@ watch(
     if (!supportsMessagesDispatchPlatform(newVal)) {
       editForm.allow_messages_dispatch = false
       editForm.default_mapped_model = ''
+    }
+    if (!supportsLivePlatform(newVal)) {
+      editForm.allow_live = false
     }
   }
 )

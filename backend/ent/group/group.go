@@ -26,6 +26,8 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldI18n holds the string denoting the i18n field in the database.
+	FieldI18n = "i18n"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
@@ -112,6 +114,12 @@ const (
 	FieldSortOrder = "sort_order"
 	// FieldAllowMessagesDispatch holds the string denoting the allow_messages_dispatch field in the database.
 	FieldAllowMessagesDispatch = "allow_messages_dispatch"
+	// FieldAllowLive holds the string denoting the allow_live field in the database.
+	FieldAllowLive = "allow_live"
+	// FieldForceOpenaiFast holds the string denoting the force_openai_fast field in the database.
+	FieldForceOpenaiFast = "force_openai_fast"
+	// FieldFreeOpenaiFast holds the string denoting the free_openai_fast field in the database.
+	FieldFreeOpenaiFast = "free_openai_fast"
 	// FieldRequireOauthOnly holds the string denoting the require_oauth_only field in the database.
 	FieldRequireOauthOnly = "require_oauth_only"
 	// FieldRequirePrivacySet holds the string denoting the require_privacy_set field in the database.
@@ -215,6 +223,7 @@ var Columns = []string{
 	FieldDeletedAt,
 	FieldName,
 	FieldDescription,
+	FieldI18n,
 	FieldRateMultiplier,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
@@ -258,6 +267,9 @@ var Columns = []string{
 	FieldSupportedModelScopes,
 	FieldSortOrder,
 	FieldAllowMessagesDispatch,
+	FieldAllowLive,
+	FieldForceOpenaiFast,
+	FieldFreeOpenaiFast,
 	FieldRequireOauthOnly,
 	FieldRequirePrivacySet,
 	FieldDefaultMappedModel,
@@ -302,6 +314,8 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultI18n holds the default value on creation for the "i18n" field.
+	DefaultI18n domain.GroupI18n
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
@@ -368,6 +382,12 @@ var (
 	DefaultSortOrder int
 	// DefaultAllowMessagesDispatch holds the default value on creation for the "allow_messages_dispatch" field.
 	DefaultAllowMessagesDispatch bool
+	// DefaultAllowLive holds the default value on creation for the "allow_live" field.
+	DefaultAllowLive bool
+	// DefaultForceOpenaiFast holds the default value on creation for the "force_openai_fast" field.
+	DefaultForceOpenaiFast bool
+	// DefaultFreeOpenaiFast holds the default value on creation for the "free_openai_fast" field.
+	DefaultFreeOpenaiFast bool
 	// DefaultRequireOauthOnly holds the default value on creation for the "require_oauth_only" field.
 	DefaultRequireOauthOnly bool
 	// DefaultRequirePrivacySet holds the default value on creation for the "require_privacy_set" field.
@@ -617,6 +637,21 @@ func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
 // ByAllowMessagesDispatch orders the results by the allow_messages_dispatch field.
 func ByAllowMessagesDispatch(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAllowMessagesDispatch, opts...).ToFunc()
+}
+
+// ByAllowLive orders the results by the allow_live field.
+func ByAllowLive(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllowLive, opts...).ToFunc()
+}
+
+// ByForceOpenaiFast orders the results by the force_openai_fast field.
+func ByForceOpenaiFast(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldForceOpenaiFast, opts...).ToFunc()
+}
+
+// ByFreeOpenaiFast orders the results by the free_openai_fast field.
+func ByFreeOpenaiFast(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFreeOpenaiFast, opts...).ToFunc()
 }
 
 // ByRequireOauthOnly orders the results by the require_oauth_only field.

@@ -68,9 +68,9 @@
  * `makeSidebarFlag(flag)` returns a `() => boolean | undefined` compatible with
  * `AppSidebar.NavItem.featureFlag`, where `false` hides the menu entry.
  */
-
 import { useAppStore } from '@/stores/app'
 import type { PublicSettings } from '@/types'
+import { DEFAULT_INTERVAL_SECONDS } from '@/constants/channelMonitor'
 
 export type FeatureFlagMode = 'opt-in' | 'opt-out'
 
@@ -103,6 +103,21 @@ export const FeatureFlags = {
     key: 'available_channels_enabled',
     mode: 'opt-in',
     label: 'Available Channels',
+  }),
+  subscription: defineFlag({
+    key: 'subscription_enabled',
+    mode: 'opt-out',
+    label: 'Subscription',
+  }),
+  modelPlaza: defineFlag({
+    key: 'model_plaza_enabled',
+    mode: 'opt-in',
+    label: 'Model Plaza',
+  }),
+  pluginManagement: defineFlag({
+    key: 'plugin_management_enabled',
+    mode: 'opt-in',
+    label: 'Plugin Management',
   }),
   payment: defineFlag({
     key: 'payment_enabled',
@@ -140,9 +155,19 @@ export type RegisteredFeatureFlag = keyof typeof FeatureFlags
  */
 export function isFeatureFlagEnabled(flag: FeatureFlagDefinition): boolean {
   const appStore = useAppStore()
-  const raw = appStore.cachedPublicSettings?.[flag.key] as
-    | boolean
-    | undefined
+  return resolveFeatureFlag(appStore.cachedPublicSettings, flag)
+}
+
+/**
+ * Pure resolver behind `isFeatureFlagEnabled`. Use it when the caller already
+ * holds a settings object (e.g. a store instance from `@/stores`) and should
+ * not reach for `useAppStore` itself — keeps views testable without Pinia.
+ */
+export function resolveFeatureFlag(
+  settings: Partial<PublicSettings> | null | undefined,
+  flag: FeatureFlagDefinition,
+): boolean {
+  const raw = settings?.[flag.key] as boolean | undefined
   if (typeof raw === 'boolean') return raw
   // Settings not yet loaded → fall back to the flag's declared mode:
   //   opt-out → visible by default, opt-in → hidden by default.

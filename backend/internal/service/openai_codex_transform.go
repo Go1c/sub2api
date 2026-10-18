@@ -136,11 +136,14 @@ const (
 )
 
 var openAIChatGPTInternalUnsupportedFields = []string{
+	"chat_template_kwargs",
 	"user",
 	"metadata",
 	"prompt_cache_retention",
 	"safety_identifier",
 	"stream_options",
+	"truncation",
+	"stop_sequences",
 }
 
 var openAICodexOAuthUnsupportedFields = append([]string{
@@ -161,6 +164,9 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 
 func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuthTransformOptions) codexTransformResult {
 	result := codexTransformResult{}
+	if normalizeOpenAIOAuthResponsesCompatibilityFields(reqBody) {
+		result.Modified = true
+	}
 	// 工具续链需求会影响存储策略与 input 过滤逻辑。
 	needsToolContinuation := NeedsToolContinuation(reqBody)
 
@@ -329,6 +335,12 @@ func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuth
 		result.Modified = true
 	}
 
+	// Runs after input filtering so it sees the final replayed history. The
+	// compact endpoint has its own wire shape and is left untouched.
+	if !opts.IsCompact && ensureOpenAIOAuthWebSearchToolForHistory(reqBody, opts.ResponsesLite) {
+		result.Modified = true
+	}
+
 	return result
 }
 
@@ -343,6 +355,12 @@ func normalizeCodexToolChoice(reqBody map[string]any) bool {
 	}
 	choiceType := strings.TrimSpace(firstNonEmptyString(choiceMap["type"]))
 	if choiceType == "" {
+		return false
+	}
+	if choiceType == "allowed_tools" {
+		// This is a selection policy, not a declared tool type. Preserve it for
+		// upstream validation (including references to input.additional_tools);
+		// falling back to auto would silently discard the caller's restriction.
 		return false
 	}
 	modified := false
@@ -908,6 +926,124 @@ func normalizeOpenAIResponsesImageGenerationTools(reqBody map[string]any) bool {
 			delete(toolMap, "compression")
 			modified = true
 		}
+		imageModel := strings.ToLower(strings.TrimSpace(firstNonEmptyString(toolMap["model"])))
+		if strings.HasPrefix(imageModel, "gpt-image-2") {
+			if _, ok := toolMap["input_fidelity"]; ok {
+				delete(toolMap, "input_fidelity")
+				modified = true
+			}
+		}
+	}
+	return modified
+}
+
+func normalizeOpenAIResponseFormatSchemas(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+	modified := false
+	normalizeFormat := func(format map[string]any) {
+		if format == nil || strings.TrimSpace(firstNonEmptyString(format["type"])) != "json_schema" {
+			return
+		}
+		if schema, ok := format["schema"].(map[string]any); ok && normalizeOpenAIResponseJSONSchema(schema) {
+			modified = true
+		}
+		if jsonSchema, ok := format["json_schema"].(map[string]any); ok {
+			if schema, ok := jsonSchema["schema"].(map[string]any); ok && normalizeOpenAIResponseJSONSchema(schema) {
+				modified = true
+			}
+		}
+	}
+	if text, ok := reqBody["text"].(map[string]any); ok {
+		if format, ok := text["format"].(map[string]any); ok {
+			normalizeFormat(format)
+		}
+	}
+	if responseFormat, ok := reqBody["response_format"].(map[string]any); ok {
+		normalizeFormat(responseFormat)
+	}
+	return modified
+}
+
+func normalizeOpenAIResponseJSONSchema(schema map[string]any) bool {
+	if schema == nil {
+		return false
+	}
+	modified := false
+	for _, key := range []string{"uniqueItems", "minProperties"} {
+		if _, exists := schema[key]; exists {
+			delete(schema, key)
+			modified = true
+		}
+	}
+	if rawType, exists := schema["type"]; !exists || rawType == nil {
+		switch {
+		case schema["properties"] != nil:
+			schema["type"] = "object"
+			modified = true
+		case schema["items"] != nil:
+			schema["type"] = "array"
+			modified = true
+		}
+	}
+	if properties, ok := schema["properties"].(map[string]any); ok {
+		for _, raw := range properties {
+			if child, ok := raw.(map[string]any); ok && normalizeOpenAIResponseJSONSchema(child) {
+				modified = true
+			}
+		}
+	}
+	switch items := schema["items"].(type) {
+	case map[string]any:
+		if normalizeOpenAIResponseJSONSchema(items) {
+			modified = true
+		}
+	case []any:
+		for _, raw := range items {
+			if child, ok := raw.(map[string]any); ok && normalizeOpenAIResponseJSONSchema(child) {
+				modified = true
+			}
+		}
+	}
+	for _, key := range []string{
+		"additionalProperties",
+		"additionalItems",
+		"contains",
+		"not",
+		"if",
+		"then",
+		"else",
+		"propertyNames",
+		"unevaluatedProperties",
+		"unevaluatedItems",
+	} {
+		if child, ok := schema[key].(map[string]any); ok && normalizeOpenAIResponseJSONSchema(child) {
+			modified = true
+		}
+	}
+	for _, key := range []string{"anyOf", "oneOf", "allOf", "prefixItems"} {
+		children, _ := schema[key].([]any)
+		for _, raw := range children {
+			if child, ok := raw.(map[string]any); ok && normalizeOpenAIResponseJSONSchema(child) {
+				modified = true
+			}
+		}
+	}
+	for _, key := range []string{"$defs", "definitions", "patternProperties", "dependentSchemas"} {
+		children, _ := schema[key].(map[string]any)
+		for _, raw := range children {
+			if child, ok := raw.(map[string]any); ok && normalizeOpenAIResponseJSONSchema(child) {
+				modified = true
+			}
+		}
+	}
+	if dependencies, ok := schema["dependencies"].(map[string]any); ok {
+		for _, raw := range dependencies {
+			if child, ok := raw.(map[string]any); ok && normalizeOpenAIResponseJSONSchema(child) {
+				modified = true
+			}
+		}
 	}
 	return modified
 }
@@ -1097,7 +1233,15 @@ func normalizeOpenAIModelForUpstream(account *Account, model string) string {
 	if account == nil || account.Type == AccountTypeOAuth {
 		return normalizeCodexModel(model)
 	}
-	return strings.TrimSpace(model)
+	model = strings.TrimSpace(model)
+	if account.Platform == PlatformDeepseek {
+		// DeepSeek 走 OpenAI 兼容入口，不经 Anthropic 入站的 [1m] 后缀归一
+		// （parseGatewayRequestCurrentBody 仅处理 PlatformAnthropic 协议）。
+		// 官方 Claude Code 接入要求 ANTHROPIC_MODEL=deepseek-flash[1m] 写法，
+		// 出站前剥离泄漏的客户端上下文后缀，转发规范名给上游。
+		return normalizeClaudeCodeLongContextModel(model)
+	}
+	return model
 }
 
 func SupportsVerbosity(model string) bool {
@@ -1389,6 +1533,9 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 
 func filterCodexInputWithOptions(input []any, opts codexInputFilterOptions) []any {
 	filtered := make([]any, 0, len(input))
+	referenceIDMappings := codexItemReferenceIDMappings(input, opts.PreserveCallIDs)
+	inputItemIDs := codexInputItemIDs(input)
+	inputCallIDs := codexInputCallIDs(input)
 	for _, item := range input {
 		m, ok := item.(map[string]any)
 		if !ok {
@@ -1452,8 +1599,18 @@ func filterCodexInputWithOptions(input []any, opts codexInputFilterOptions) []an
 			for key, value := range m {
 				newItem[key] = value
 			}
-			if id, ok := newItem["id"].(string); ok && strings.HasPrefix(id, "call_") {
-				newItem["id"] = fixCallIDPrefix(id)
+			if id, ok := newItem["id"].(string); ok && strings.HasPrefix(strings.TrimSpace(id), "call_") {
+				trimmedID := strings.TrimSpace(id)
+				_, referencesExistingItem := inputItemIDs[trimmedID]
+				if !referencesExistingItem {
+					if normalizedID, mapped := referenceIDMappings[trimmedID]; mapped {
+						newItem["id"] = normalizedID
+					} else if _, hasSameTurnCall := inputCallIDs[trimmedID]; !hasSameTurnCall {
+						// A bare call_* reference is a legacy function-call identifier.
+						// Normalize it even when its call item lives in an earlier turn.
+						newItem["id"] = normalizeCodexCallID(trimmedID)
+					}
+				}
 			}
 			filtered = append(filtered, newItem)
 			continue

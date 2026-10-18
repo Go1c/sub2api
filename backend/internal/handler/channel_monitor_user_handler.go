@@ -36,7 +36,17 @@ func (h *ChannelMonitorUserHandler) featureEnabled(c *gin.Context) bool {
 	if h.settingService == nil {
 		return true
 	}
-	return h.settingService.GetChannelMonitorRuntime(c.Request.Context()).Enabled
+	runtime := h.settingService.GetChannelMonitorRuntime(c.Request.Context())
+	return runtime.Enabled && runtime.Mode == service.ChannelMonitorModeV1
+}
+
+// quotaVisible 返回用户端是否展示配额/余额快照（channel_monitor_show_quota，
+// fail-closed：未配置/非 "true" 一律视为关闭）。settingService 为 nil 时 fail-closed。
+func (h *ChannelMonitorUserHandler) quotaVisible(c *gin.Context) bool {
+	if h.settingService == nil {
+		return false
+	}
+	return h.settingService.GetChannelMonitorRuntime(c.Request.Context()).ShowQuota
 }
 
 // quotaVisible 返回用户端是否展示配额/余额快照（channel_monitor_show_quota，

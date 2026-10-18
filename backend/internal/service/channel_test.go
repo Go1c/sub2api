@@ -193,7 +193,8 @@ func TestChannelClone_Nil(t *testing.T) {
 
 func TestChannelModelPricingClone(t *testing.T) {
 	original := ChannelModelPricing{
-		Models: []string{"a", "b"},
+		ReasoningEffortMultipliers: map[string]float64{"high": 1.5},
+		Models:                     []string{"a", "b"},
 		Intervals: []PricingInterval{
 			{MinTokens: 0, TierLabel: "tier1"},
 		},
@@ -208,6 +209,8 @@ func TestChannelModelPricingClone(t *testing.T) {
 	}
 
 	cloned := original.Clone()
+	cloned.ReasoningEffortMultipliers["high"] = 2
+	require.Equal(t, 1.5, original.ReasoningEffortMultipliers["high"])
 
 	// Modify clone slices — original unchanged
 	cloned.Models[0] = "hacked"
@@ -326,8 +329,8 @@ func TestChannelClone_EdgeCases(t *testing.T) {
 // --- ValidateIntervals ---
 
 func TestValidateIntervals_Empty(t *testing.T) {
-	require.NoError(t, ValidateIntervals(nil))
-	require.NoError(t, ValidateIntervals([]PricingInterval{}))
+	require.NoError(t, ValidateIntervals(nil, BillingModeToken))
+	require.NoError(t, ValidateIntervals([]PricingInterval{}, BillingModeToken))
 }
 
 func TestValidateIntervals_ValidIntervals(t *testing.T) {
@@ -372,7 +375,7 @@ func TestValidateIntervals_ValidIntervals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.NoError(t, ValidateIntervals(tt.intervals))
+			require.NoError(t, ValidateIntervals(tt.intervals, BillingModeToken))
 		})
 	}
 }
@@ -381,7 +384,7 @@ func TestValidateIntervals_NegativeMinTokens(t *testing.T) {
 	intervals := []PricingInterval{
 		{MinTokens: -1, MaxTokens: testPtrInt(100), InputPrice: testPtrFloat64(1e-6)},
 	}
-	err := ValidateIntervals(intervals)
+	err := ValidateIntervals(intervals, BillingModeToken)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "min_tokens")
 	require.Contains(t, err.Error(), ">= 0")
@@ -391,7 +394,7 @@ func TestValidateIntervals_MaxTokensZero(t *testing.T) {
 	intervals := []PricingInterval{
 		{MinTokens: 0, MaxTokens: testPtrInt(0), InputPrice: testPtrFloat64(1e-6)},
 	}
-	err := ValidateIntervals(intervals)
+	err := ValidateIntervals(intervals, BillingModeToken)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "max_tokens")
 	require.Contains(t, err.Error(), "> 0")
@@ -401,7 +404,7 @@ func TestValidateIntervals_MaxLessThanMin(t *testing.T) {
 	intervals := []PricingInterval{
 		{MinTokens: 100, MaxTokens: testPtrInt(50), InputPrice: testPtrFloat64(1e-6)},
 	}
-	err := ValidateIntervals(intervals)
+	err := ValidateIntervals(intervals, BillingModeToken)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "max_tokens")
 	require.Contains(t, err.Error(), "> min_tokens")
@@ -411,7 +414,7 @@ func TestValidateIntervals_MaxEqualsMin(t *testing.T) {
 	intervals := []PricingInterval{
 		{MinTokens: 100, MaxTokens: testPtrInt(100), InputPrice: testPtrFloat64(1e-6)},
 	}
-	err := ValidateIntervals(intervals)
+	err := ValidateIntervals(intervals, BillingModeToken)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "max_tokens")
 	require.Contains(t, err.Error(), "> min_tokens")
@@ -422,7 +425,7 @@ func TestValidateIntervals_NegativePrice(t *testing.T) {
 	intervals := []PricingInterval{
 		{MinTokens: 0, MaxTokens: testPtrInt(100), InputPrice: &negPrice},
 	}
-	err := ValidateIntervals(intervals)
+	err := ValidateIntervals(intervals, BillingModeToken)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "input_price")
 	require.Contains(t, err.Error(), ">= 0")
@@ -433,7 +436,7 @@ func TestValidateIntervals_OverlappingIntervals(t *testing.T) {
 		{MinTokens: 0, MaxTokens: testPtrInt(200), InputPrice: testPtrFloat64(1e-6)},
 		{MinTokens: 100, MaxTokens: testPtrInt(300), InputPrice: testPtrFloat64(2e-6)},
 	}
-	err := ValidateIntervals(intervals)
+	err := ValidateIntervals(intervals, BillingModeToken)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "overlap")
 }
@@ -443,10 +446,41 @@ func TestValidateIntervals_UnboundedNotLast(t *testing.T) {
 		{MinTokens: 0, MaxTokens: nil, InputPrice: testPtrFloat64(1e-6)},
 		{MinTokens: 128000, MaxTokens: testPtrInt(256000), InputPrice: testPtrFloat64(2e-6)},
 	}
-	err := ValidateIntervals(intervals)
+	err := ValidateIntervals(intervals, BillingModeToken)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unbounded")
 	require.Contains(t, err.Error(), "last")
+}
+
+func TestValidateIntervals_ImageModeAllowsMultipleUnboundedTiers(t *testing.T) {
+	// image / per_request 按 tier_label 匹配，多条 min=0/max=nil 是合法形态。
+	intervals := []PricingInterval{
+		{MinTokens: 0, MaxTokens: nil, TierLabel: "1K", PerRequestPrice: testPtrFloat64(0.04)},
+		{MinTokens: 0, MaxTokens: nil, TierLabel: "2K", PerRequestPrice: testPtrFloat64(0.06)},
+		{MinTokens: 0, MaxTokens: nil, TierLabel: "4K", PerRequestPrice: testPtrFloat64(0.08)},
+	}
+	require.NoError(t, ValidateIntervals(intervals, BillingModeImage))
+	require.NoError(t, ValidateIntervals(intervals, BillingModePerRequest))
+}
+
+func TestValidateIntervals_ImageModeStillRejectsNegativePrice(t *testing.T) {
+	// image 模式只跳过区间重叠校验，单条字段自洽（价格非负）仍要校验。
+	intervals := []PricingInterval{
+		{MinTokens: 0, MaxTokens: nil, TierLabel: "1K", PerRequestPrice: testPtrFloat64(-1)},
+	}
+	err := ValidateIntervals(intervals, BillingModeImage)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be >= 0")
+}
+
+func TestValidateIntervals_ImageModeStillRejectsBadMaxTokens(t *testing.T) {
+	// image 模式仍校验 max <= min 这种单条不合法。
+	intervals := []PricingInterval{
+		{MinTokens: 100, MaxTokens: testPtrInt(50), TierLabel: "1K", PerRequestPrice: testPtrFloat64(0.04)},
+	}
+	err := ValidateIntervals(intervals, BillingModeImage)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be > min_tokens")
 }
 
 func TestSupportedModels_ExactKeysAndPricing(t *testing.T) {

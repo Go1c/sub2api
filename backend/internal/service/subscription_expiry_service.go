@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -96,5 +97,102 @@ func (s *SubscriptionExpiryService) runOnce() {
 	}
 	if updated > 0 {
 		log.Printf("[SubscriptionExpiry] Updated %d expired subscriptions", updated)
+	}
+	s.sendExpiryReminders(ctx)
+}
+
+func (s *SubscriptionExpiryService) sendExpiryReminders(ctx context.Context) {
+	if s == nil || s.userSubRepo == nil || s.notificationEmailService == nil {
+		return
+	}
+	if !s.expiryReminderEnabled(ctx) {
+		return
+	}
+	if !s.smtpConfigured(ctx) {
+		return
+	}
+
+	// Multi-instance guard: only the leader walks every active subscription and
+	// sends reminders, avoiding N× full scans and duplicate reminder emails.
+	release, ok := tryAcquireSingletonLeaderLock(ctx, s.lockCache, s.db, subscriptionExpiryReminderLeaderLockKey, s.instanceID, subscriptionExpiryReminderLeaderLockTTL)
+	if !ok {
+		return
+	}
+	defer release()
+	for page := 1; ; page++ {
+		subs, pag, err := s.userSubRepo.List(ctx, pagination.PaginationParams{Page: page, PageSize: 200}, nil, nil, SubscriptionStatusActive, "", "expires_at", "asc")
+		if err != nil {
+			log.Printf("[SubscriptionExpiry] List active subscriptions for reminder failed: %v", err)
+			return
+		}
+		for i := range subs {
+			s.sendExpiryReminderIfDue(ctx, &subs[i])
+		}
+		if pag == nil || page >= pag.Pages || len(subs) == 0 {
+			return
+		}
+	}
+}
+
+func (s *SubscriptionExpiryService) expiryReminderEnabled(ctx context.Context) bool {
+	if s == nil || s.settingRepo == nil {
+		return true
+	}
+	value, err := s.settingRepo.GetValue(ctx, SettingKeySubscriptionExpiryNotifyEnabled)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			return true
+		}
+		log.Printf("[SubscriptionExpiry] Read expiry reminder switch failed: %v", err)
+		return false
+	}
+	return !isFalseSettingValue(value)
+}
+
+func (s *SubscriptionExpiryService) smtpConfigured(ctx context.Context) bool {
+	if s == nil || s.notificationEmailService == nil || s.notificationEmailService.emailService == nil {
+		return false
+	}
+	_, err := s.notificationEmailService.emailService.GetSMTPConfig(ctx)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, ErrEmailNotConfigured) {
+		s.smtpWarningMu.Lock()
+		defer s.smtpWarningMu.Unlock()
+		now := time.Now()
+		if s.lastSMTPWarning.IsZero() || now.Sub(s.lastSMTPWarning) >= subscriptionExpiryReminderSMTPWarningInterval {
+			log.Printf("[SubscriptionExpiry] SMTP is not configured; skipping expiry reminders")
+			s.lastSMTPWarning = now
+		}
+		return false
+	}
+	log.Printf("[SubscriptionExpiry] Read SMTP configuration failed; skipping expiry reminders: %v", err)
+	return false
+}
+
+func (s *SubscriptionExpiryService) sendExpiryReminderIfDue(ctx context.Context, sub *UserSubscription) {
+	if sub == nil || sub.User == nil || sub.Group == nil || sub.User.Email == "" {
+		return
+	}
+	daysRemaining := sub.DaysRemaining()
+	if daysRemaining != 7 && daysRemaining != 3 && daysRemaining != 1 {
+		return
+	}
+	if err := s.notificationEmailService.Send(ctx, NotificationEmailSendInput{
+		Event:          NotificationEmailEventSubscriptionExpiryReminder,
+		RecipientEmail: sub.User.Email,
+		RecipientName:  firstNonEmpty(sub.User.Username, sub.User.Email),
+		UserID:         sub.UserID,
+		SourceType:     "user_subscription",
+		SourceID:       strconv.FormatInt(sub.ID, 10),
+		ReminderKey:    fmt.Sprintf("%dd", daysRemaining),
+		Variables: map[string]string{
+			"subscription_group": sub.Group.Name,
+			"expiry_time":        sub.ExpiresAt.Format("2006-01-02 15:04"),
+			"days_remaining":     strconv.Itoa(daysRemaining),
+		},
+	}); err != nil {
+		log.Printf("[SubscriptionExpiry] Send expiry reminder failed: subscription=%d user=%d err=%v", sub.ID, sub.UserID, err)
 	}
 }

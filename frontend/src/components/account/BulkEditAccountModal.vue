@@ -292,6 +292,7 @@
 
               <ModelWhitelistSelector
                 v-model="allowedModels"
+                :model-mappings="modelMappings"
                 :platforms="targetSelectedPlatforms"
               />
 
@@ -551,6 +552,69 @@
         </div>
       </div>
 
+      <!-- Header Override (eligible API-key platforms + grok OAuth) -->
+      <div v-if="allHeaderOverrideCapable" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="flex items-center justify-between">
+          <div class="flex-1 pr-4">
+            <label
+              id="bulk-edit-header-override-label"
+              class="input-label mb-0"
+              for="bulk-edit-header-override-enabled"
+            >
+              {{ t('admin.accounts.headerOverride.title') }}
+            </label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.headerOverride.hint') }}
+            </p>
+          </div>
+          <input
+            v-model="enableHeaderOverride"
+            id="bulk-edit-header-override-enabled"
+            type="checkbox"
+            aria-controls="bulk-edit-header-override-body"
+            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+        <div v-if="enableHeaderOverride" id="bulk-edit-header-override-body" class="mt-3 space-y-3">
+          <button
+            type="button"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              headerOverrideEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+            @click="headerOverrideEnabled = !headerOverrideEnabled"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                headerOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+
+          <div v-if="headerOverrideEnabled" class="space-y-3">
+            <div class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+              <p class="text-xs text-blue-700 dark:text-blue-400">
+                <Icon name="exclamationCircle" size="sm" class="mr-1 inline" :stroke-width="2" />
+                {{ t('admin.accounts.headerOverride.info') }}
+              </p>
+            </div>
+
+            <p class="text-xs text-amber-600 dark:text-amber-400">
+              {{ t('admin.accounts.headerOverride.bulkReplaceHint') }}
+            </p>
+
+            <HeaderOverrideEditor
+              :rows="headerOverrideRows"
+              @update:rows="headerOverrideRows = $event"
+            />
+          </div>
+          <p v-else class="text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.headerOverride.bulkDisableHint') }}
+          </p>
+        </div>
+      </div>
+
       <!-- Proxy -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -759,8 +823,8 @@
           <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
             {{ t('admin.accounts.openai.wsModeDesc') }}
           </p>
-          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
-            {{ t(openAIWSModeConcurrencyHintKey) }}
+          <p v-if="openAIWSModeHintKey" class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            {{ t(openAIWSModeHintKey) }}
           </p>
           <Select
             v-model="openaiOAuthResponsesWebSocketV2Mode"
@@ -992,8 +1056,8 @@
           <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
             {{ t('admin.accounts.openai.wsModeDesc') }}
           </p>
-          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
-            {{ t(openAIAPIKeyWSModeConcurrencyHintKey) }}
+          <p v-if="openAIAPIKeyWSModeHintKey" class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            {{ t(openAIAPIKeyWSModeHintKey) }}
           </p>
           <Select
             v-model="openaiAPIKeyResponsesWebSocketV2Mode"
@@ -1343,8 +1407,9 @@ import {
   OPENAI_WS_MODE_CTX_POOL,
   OPENAI_WS_MODE_OFF,
   OPENAI_WS_MODE_PASSTHROUGH,
+  OPENAI_WS_MODE_HTTP_BRIDGE,
   isOpenAIWSModeEnabled,
-  resolveOpenAIWSModeConcurrencyHintKey
+  resolveOpenAIWSModeHintKey
 } from '@/utils/openaiWsMode'
 import type { OpenAIWSMode } from '@/utils/openaiWsMode'
 interface Props {
@@ -1390,11 +1455,21 @@ const allOpenAIPassthroughCapable = computed(() => {
     targetSelectedPlatforms.value.length === 1 &&
     targetSelectedPlatforms.value[0] === 'openai' &&
     targetSelectedTypes.value.length > 0 &&
-    targetSelectedTypes.value.every(t => t === 'oauth' || t === 'apikey')
+    targetSelectedTypes.value.every(t => t === 'oauth' || t === 'setup-token' || t === 'apikey')
   )
 })
 
 const allOpenAIOAuth = computed(() => {
+  return (
+    targetSelectedPlatforms.value.length === 1 &&
+    targetSelectedPlatforms.value[0] === 'openai' &&
+    targetSelectedTypes.value.length > 0 &&
+    targetSelectedTypes.value.every(t => t === 'oauth' || t === 'setup-token')
+  )
+})
+
+// 严格 OAuth（不含 setup-token）：namespace 摊平兼容开关只对 OAuth 账号生效
+const allOpenAIOAuthOnly = computed(() => {
   return (
     targetSelectedPlatforms.value.length === 1 &&
     targetSelectedPlatforms.value[0] === 'openai' &&
@@ -1466,6 +1541,7 @@ const enableBaseUrl = ref(false)
 const enableModelRestriction = ref(false)
 const enableCustomErrorCodes = ref(false)
 const enableInterceptWarmup = ref(false)
+const enableHeaderOverride = ref(false)
 const enableProxy = ref(false)
 const enableConcurrency = ref(false)
 const enableLoadFactor = ref(false)
@@ -1479,6 +1555,7 @@ const enableOpenAIEndpointCapabilities = ref(false)
 const enableOpenAIResponsesMode = ref(false)
 const enableOpenAIWSMode = ref(false)
 const enableOpenAIAPIKeyWSMode = ref(false)
+const enableUpstreamBillingAutoProbe = ref(false)
 const enableCodexCLIOnly = ref(false)
 const enableCodexFingerprintMode = ref(false)
 const enableOpenAICompactMode = ref(false)
@@ -1497,6 +1574,8 @@ const modelMappings = ref<ModelMapping[]>([])
 const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
 const interceptWarmupRequests = ref(false)
+const headerOverrideEnabled = ref(false)
+const headerOverrideRows = ref<HeaderOverrideRow[]>([])
 const proxyId = ref<number | null>(null)
 const concurrency = ref(1)
 const loadFactor = ref<number | null>(null)
@@ -1515,6 +1594,7 @@ const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>([
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
+const upstreamBillingAutoProbeMode = ref<'enabled' | 'disabled'>('enabled')
 const codexCLIOnlyEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
 const codexFingerprintMode = ref<CodexFingerprintMode>('session')
@@ -1566,7 +1646,8 @@ const isOpenAIModelRestrictionDisabled = computed(
 const openAIWSModeOptions = computed(() => [
   { value: OPENAI_WS_MODE_OFF, label: t('admin.accounts.openai.wsModeOff') },
   { value: OPENAI_WS_MODE_CTX_POOL, label: t('admin.accounts.openai.wsModeCtxPool') },
-  { value: OPENAI_WS_MODE_PASSTHROUGH, label: t('admin.accounts.openai.wsModePassthrough') }
+  { value: OPENAI_WS_MODE_PASSTHROUGH, label: t('admin.accounts.openai.wsModePassthrough') },
+  { value: OPENAI_WS_MODE_HTTP_BRIDGE, label: t('admin.accounts.openai.wsModeHttpBridge') }
 ])
 const openAICompactModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.compactModeAuto') },
@@ -1635,8 +1716,44 @@ const toggleOpenAIEndpointCapability = (
 const openAIWSModeConcurrencyHintKey = computed(() =>
   resolveOpenAIWSModeConcurrencyHintKey(openaiOAuthResponsesWebSocketV2Mode.value)
 )
-const openAIAPIKeyWSModeConcurrencyHintKey = computed(() =>
-  resolveOpenAIWSModeConcurrencyHintKey(openaiAPIKeyResponsesWebSocketV2Mode.value)
+const openAIResponsesModeApplicable = computed(
+  () => !enableOpenAIEndpointCapabilities.value || openAITextGenerationCapabilityEnabled.value
+)
+
+const normalizeOpenAIEndpointCapabilities = (values: OpenAIEndpointCapability[]) => {
+  const allowed: OpenAIEndpointCapability[] = ['chat_completions', 'embeddings', 'seedance']
+  const selected = allowed.filter((value) => values.includes(value))
+  return selected.length > 0 ? selected : ['chat_completions', 'embeddings'] as OpenAIEndpointCapability[]
+}
+
+const toggleOpenAIEndpointCapability = (
+  capability: OpenAIEndpointCapability,
+  event?: Event
+) => {
+  if (openAIEndpointCapabilities.value.includes(capability)) {
+    if (openAIEndpointCapabilities.value.length <= 1) {
+      const input = event?.target as HTMLInputElement | null
+      if (input) input.checked = true
+      return
+    }
+    openAIEndpointCapabilities.value = openAIEndpointCapabilities.value.filter(
+      (value) => value !== capability
+    )
+    if (!openAITextGenerationCapabilityEnabled.value) {
+      openAIResponsesMode.value = 'auto'
+    }
+    return
+  }
+  openAIEndpointCapabilities.value = normalizeOpenAIEndpointCapabilities([
+    ...openAIEndpointCapabilities.value,
+    capability
+  ])
+}
+const openAIWSModeHintKey = computed(() =>
+  resolveOpenAIWSModeHintKey(openaiOAuthResponsesWebSocketV2Mode.value)
+)
+const openAIAPIKeyWSModeHintKey = computed(() =>
+  resolveOpenAIWSModeHintKey(openaiAPIKeyResponsesWebSocketV2Mode.value)
 )
 
 // Model mapping helpers
@@ -1865,6 +1982,10 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     )
   }
 
+  if (enableUpstreamBillingAutoProbe.value) {
+    updates.upstream_billing_probe_enabled = upstreamBillingAutoProbeMode.value === 'enabled'
+  }
+
   if (enableCodexCLIOnly.value) {
     const extra = ensureExtra()
     extra.codex_cli_only = codexCLIOnlyEnabled.value
@@ -1978,6 +2099,7 @@ const handleSubmit = async () => {
     enableModelRestriction.value ||
     enableCustomErrorCodes.value ||
     enableInterceptWarmup.value ||
+    enableHeaderOverride.value ||
     enableProxy.value ||
     enableConcurrency.value ||
     enableLoadFactor.value ||
@@ -1988,6 +2110,7 @@ const handleSubmit = async () => {
     enableGroups.value ||
     enableOpenAIWSMode.value ||
     enableOpenAIAPIKeyWSMode.value ||
+    enableUpstreamBillingAutoProbe.value ||
     enableCodexCLIOnly.value ||
     enableCodexFingerprintMode.value ||
     enableOpenAICompactMode.value ||
@@ -1998,6 +2121,30 @@ const handleSubmit = async () => {
   if (!hasAnyFieldEnabled) {
     appStore.showError(t('admin.accounts.bulkEdit.noFieldsSelected'))
     return
+  }
+
+  // base_url 现在也会作用于 Grok OAuth 订阅账号的转发端点；坏值会让请求期
+  // 校验失败、账号请求全挂，因此保存前强制格式校验（与单账号编辑一致）。
+  if (enableBaseUrl.value) {
+    const trimmedBaseUrl = baseUrl.value.trim()
+    if (trimmedBaseUrl && !/^https?:\/\//i.test(trimmedBaseUrl)) {
+      appStore.showError(t('admin.accounts.grokCustomBaseUrl.invalid'))
+      return
+    }
+  }
+
+  if (enableHeaderOverride.value && headerOverrideEnabled.value) {
+    // 批量保存对 header_overrides 是整键替换：开启但没有任何有效行会把所选账号的
+    // 既有覆写配置静默清空，必须显式拦截（清空请走关闭开关的路径，有专门提示）
+    if (!headerOverrideRows.value.some((row) => row.name.trim())) {
+      appStore.showError(t('admin.accounts.headerOverride.bulkEmptyRows'))
+      return
+    }
+    const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
+    if (headerError) {
+      appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
+      return
+    }
   }
 
   const built = buildUpdatePayload()
@@ -2098,6 +2245,7 @@ watch(
       enableModelRestriction.value = false
       enableCustomErrorCodes.value = false
       enableInterceptWarmup.value = false
+      enableHeaderOverride.value = false
       enableProxy.value = false
       enableConcurrency.value = false
       enableLoadFactor.value = false
@@ -2113,6 +2261,7 @@ watch(
       enableOpenAIResponsesMode.value = false
       enableOpenAIWSMode.value = false
       enableOpenAIAPIKeyWSMode.value = false
+      enableUpstreamBillingAutoProbe.value = false
       enableCodexCLIOnly.value = false
       enableCodexFingerprintMode.value = false
       enableOpenAICompactMode.value = false
@@ -2131,6 +2280,8 @@ watch(
       selectedErrorCodes.value = []
       customErrorCodeInput.value = null
       interceptWarmupRequests.value = false
+      headerOverrideEnabled.value = false
+      headerOverrideRows.value = []
       proxyId.value = null
       concurrency.value = 1
       loadFactor.value = null
@@ -2140,6 +2291,7 @@ watch(
       groupIds.value = []
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
+      upstreamBillingAutoProbeMode.value = 'enabled'
       codexCLIOnlyEnabled.value = false
       codexFingerprintMode.value = 'session'
       openAICompactMode.value = 'auto'

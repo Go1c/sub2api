@@ -31,20 +31,15 @@ const (
 	opsRuntimeSettingsFailureLogEvery = time.Minute
 )
 
-// PrepareOpsRequestBodyForQueue 在入队前对请求体执行脱敏与裁剪，返回可直接写入 OpsInsertErrorLogInput 的字段。
-// 该方法用于避免异步队列持有大块原始请求体，减少错误风暴下的内存放大风险。
-func PrepareOpsRequestBodyForQueue(raw []byte) (requestBodyJSON *string, truncated bool, requestBodyBytes *int) {
-	if len(raw) == 0 {
-		return nil, false, nil
-	}
-	sanitized, truncated, bytesLen := sanitizeAndTrimRequestBody(raw, opsMaxStoredRequestBodyBytes)
-	if sanitized != "" {
-		out := sanitized
-		requestBodyJSON = &out
-	}
-	n := bytesLen
-	requestBodyBytes = &n
-	return requestBodyJSON, truncated, requestBodyBytes
+type opsRuntimeSettingsSnapshot struct {
+	monitoringEnabled bool
+	advanced          OpsAdvancedSettings
+}
+
+type OpsRuntimeSettingsRefreshHealth struct {
+	Running      bool   `json:"running"`
+	SuccessTotal uint64 `json:"success_total"`
+	FailureTotal uint64 `json:"failure_total"`
 }
 
 type opsRuntimeSettingsSnapshot struct {
@@ -556,6 +551,20 @@ func (s *OpsService) prepareErrorLogInput(ctx context.Context, entry *OpsInsertE
 	return entry, true, nil
 }
 
+const (
+	// opsUpstreamErrorsBodyWindow is how many of the newest attempts keep their
+	// larger detail / upstream_response_body payloads while queued.
+	opsUpstreamErrorsBodyWindow = 16
+	// Attempts older than the body window keep scalar metadata only, with URL
+	// and message trimmed harder than the newest attempts (2048).
+	opsUpstreamErrorsOlderURLMaxLen     = 512
+	opsUpstreamErrorsOlderMessageMaxLen = 512
+	// Hard bounds for the upstream_errors array of one queued entry. Newest
+	// attempts win; the oldest retained attempt records the dropped count.
+	opsUpstreamErrorsMaxEvents     = 256
+	opsUpstreamErrorsQueueMaxBytes = 512 * 1024
+)
+
 func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 	if entry == nil || len(entry.UpstreamErrors) == 0 {
 		return nil
@@ -568,11 +577,16 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 	}
 
 	sanitized := make([]*OpsUpstreamErrorEvent, 0, len(events))
-	for _, ev := range events {
-		if ev == nil {
-			continue
-		}
+	for i, ev := range events {
 		out := *ev
+		normalizeOpsUpstreamProxyAttribution(&out)
+		// Only boundOpsUpstreamErrors may stamp this; never trust caller input.
+		out.DroppedEarlierAttempts = 0
+		keepBody := i >= firstEventWithBody
+		urlMaxLen, messageMaxLen := 2048, 2048
+		if !keepBody {
+			urlMaxLen, messageMaxLen = opsUpstreamErrorsOlderURLMaxLen, opsUpstreamErrorsOlderMessageMaxLen
+		}
 
 		out.Platform = truncateString(strings.TrimSpace(out.Platform), 32)
 		out.AccountName = truncateString(strings.TrimSpace(out.AccountName), 128)
@@ -599,7 +613,7 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 		}
 
 		msg := sanitizeUpstreamErrorMessage(strings.TrimSpace(out.Message))
-		msg = truncateString(msg, 2048)
+		msg = truncateString(msg, messageMaxLen)
 		out.Message = msg
 
 		detail := strings.TrimSpace(out.Detail)
@@ -639,9 +653,45 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 		sanitized = append(sanitized, &evCopy)
 	}
 
+	sanitized, _ = boundOpsUpstreamErrors(sanitized)
 	entry.UpstreamErrorsJSON = marshalOpsUpstreamErrors(sanitized)
 	entry.UpstreamErrors = nil
 	return nil
+}
+
+// boundOpsUpstreamErrors enforces the per-entry event count and serialized
+// byte budget. It walks from the newest attempt backwards so the final,
+// outcome-deciding attempts are always retained (the newest event is kept even
+// if it alone exceeds the budget), and stamps the oldest retained event with
+// the number of dropped earlier attempts. Events must already be sanitized
+// copies owned by the caller.
+func boundOpsUpstreamErrors(events []*OpsUpstreamErrorEvent) ([]*OpsUpstreamErrorEvent, int) {
+	if len(events) == 0 {
+		return events, 0
+	}
+	keepFrom := len(events)
+	budget := opsUpstreamErrorsQueueMaxBytes
+	for i := len(events) - 1; i >= 0; i-- {
+		if len(events)-i > opsUpstreamErrorsMaxEvents {
+			break
+		}
+		raw, err := json.Marshal(events[i])
+		size := 0
+		if err == nil {
+			size = len(raw) + 1 // trailing comma / bracket share
+		}
+		if i != len(events)-1 && size > budget {
+			break
+		}
+		budget -= size
+		keepFrom = i
+	}
+	kept := events[keepFrom:]
+	dropped := keepFrom
+	if dropped > 0 {
+		kept[0].DroppedEarlierAttempts = dropped
+	}
+	return kept, dropped
 }
 
 func (s *OpsService) GetErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error) {
@@ -718,6 +768,11 @@ func (s *OpsService) GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLo
 		}
 		return nil, infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
 	}
+	if detail != nil && strings.TrimSpace(detail.UpstreamErrors) != "" {
+		if normalized, normalizeErr := normalizeOpsUpstreamErrorsJSON(detail.UpstreamErrors); normalizeErr == nil {
+			detail.UpstreamErrors = normalized
+		}
+	}
 	return detail, nil
 }
 
@@ -758,19 +813,24 @@ func (s *OpsService) ListRetryAttemptsByErrorID(ctx context.Context, errorID int
 		return nil, err
 	}
 	if s.opsRepo == nil {
-		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
+		return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
 	}
-	if errorID <= 0 {
+	if id <= 0 {
 		return nil, infraerrors.BadRequest("OPS_ERROR_INVALID_ID", "invalid error id")
 	}
-	items, err := s.opsRepo.ListRetryAttemptsByErrorID(ctx, errorID, limit)
+	detail, err := s.opsRepo.GetErrorLogByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return []*OpsRetryAttempt{}, nil
+			return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
 		}
-		return nil, infraerrors.InternalServer("OPS_RETRY_LIST_FAILED", "Failed to list retry attempts").WithCause(err)
+		return nil, infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
 	}
-	return items, nil
+	// 归属只能由通过鉴权时写入的 user_id 确定。
+	ownedDirectly := detail.UserID != nil && *detail.UserID == userID
+	if !ownedDirectly {
+		return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
+	}
+	return ToUserErrorRequestDetail(detail), nil
 }
 func (s *OpsService) UpdateErrorResolution(ctx context.Context, errorID int64, resolved bool, resolvedByUserID *int64) error {
 	if err := s.RequireMonitoringEnabled(ctx); err != nil {
@@ -792,7 +852,7 @@ func (s *OpsService) UpdateErrorResolution(ctx context.Context, errorID int64, r
 	return s.opsRepo.UpdateErrorResolution(ctx, errorID, resolved, resolvedByUserID, nil, nil)
 }
 
-func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (jsonString string, truncated bool, bytesLen int) {
+func sanitizeAndTrimJSONPayload(raw []byte, maxBytes int) (jsonString string, truncated bool, bytesLen int) {
 	bytesLen = len(raw)
 	if len(raw) == 0 {
 		return "", false, 0
@@ -800,7 +860,7 @@ func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (jsonString string, tr
 
 	var decoded any
 	if err := json.Unmarshal(raw, &decoded); err != nil {
-		// If it's not valid JSON, don't store (retry would not be reliable anyway).
+		// If it is not valid JSON, fall back to the caller's non-JSON handling.
 		return "", false, bytesLen
 	}
 
@@ -836,7 +896,7 @@ func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (jsonString string, tr
 	// This avoids downstream code that expects certain top-level keys from crashing.
 	if root, ok := decoded.(map[string]any); ok {
 		placeholder := shallowCopyMap(root)
-		placeholder["request_body_truncated"] = true
+		placeholder["payload_truncated"] = true
 
 		// Replace potentially huge arrays/strings, but keep the keys present.
 		for _, k := range []string{"messages", "contents", "input", "prompt"} {
@@ -859,7 +919,7 @@ func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (jsonString string, tr
 	}
 
 	// Final fallback: minimal valid JSON.
-	encoded4, err4 := json.Marshal(map[string]any{"request_body_truncated": true})
+	encoded4, err4 := json.Marshal(map[string]any{"payload_truncated": true})
 	if err4 != nil {
 		return "", true, bytesLen
 	}

@@ -97,6 +97,12 @@ func (v *ClaudeCodeValidator) Validate(r *http.Request, body map[string]any) boo
 	if isMaxTokensOneHaiku, ok := IsMaxTokensOneHaikuRequestFromContext(r.Context()); ok && isMaxTokensOneHaiku {
 		return true // 绕过 system prompt 检查，UA 已在 Step 1 验证
 	}
+	// 探测请求并不总是打到 haiku：CLI 切换模型、刷新上下文用量时会向当前模型发
+	// max_tokens=1 的轻量请求，同样不携带 system。UA 已过 Step 1，且 1 个输出 token
+	// 对滥用者没有价值，故按请求体放行，不再限定模型名。
+	if isMaxTokensOneBody(body) {
+		return true
+	}
 
 	// Step 4: messages 路径，进行严格验证
 
@@ -165,6 +171,10 @@ func (v *ClaudeCodeValidator) hasClaudeCodeSystemPrompt(body map[string]any) boo
 		return false
 	}
 
+	if isClaudeCodeSecurityMonitorPrompt(systemEntries) {
+		return true
+	}
+
 	// 检查每个 system entry
 	for _, entry := range systemEntries {
 		entryMap, ok := entry.(map[string]any)
@@ -192,6 +202,57 @@ func (v *ClaudeCodeValidator) hasClaudeCodeSystemPrompt(body map[string]any) boo
 	}
 
 	return false
+}
+
+// claudeCodeSecurityMonitorMarkers 与固定前缀、长度下限共同构成分类器提示词的
+// 判别条件，须全部命中。
+var claudeCodeSecurityMonitorMarkers = []string{
+	"## Threat Model",
+	"- `<transcript>`:",
+	"## HARD BLOCK",
+	"## SOFT BLOCK",
+	"## Classification Process",
+	"## Output Format",
+	"<block>yes</block>",
+	"<block>no</block>",
+}
+
+// isClaudeCodeSecurityMonitorPrompt 识别 Claude Code auto 模式安全监视器分类器请求。
+// 真实 CLI（实测 2.1.220）会在监视器提示词之外追加独立的会话上下文 system 块，
+// entry 数量不受服务端控制，故逐 entry 查找匹配项而非限定恰好一个 entry。
+func isClaudeCodeSecurityMonitorPrompt(systemEntries []any) bool {
+	for _, raw := range systemEntries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		entryType, ok := entry["type"].(string)
+		if !ok || entryType != "text" {
+			continue
+		}
+
+		text, ok := entry["text"].(string)
+		if !ok || len(text) < claudeCodeSecurityMonitorPromptMinLen ||
+			!strings.HasPrefix(text, claudeCodeSecurityMonitorPromptPrefix) {
+			continue
+		}
+
+		if hasAllClaudeCodeSecurityMonitorMarkers(text) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasAllClaudeCodeSecurityMonitorMarkers(text string) bool {
+	for _, marker := range claudeCodeSecurityMonitorMarkers {
+		if !strings.Contains(text, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 // bestSimilarityScore 计算文本与所有 Claude Code 模板的最佳相似度

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
+	"math"
 	"strings"
 	"time"
 
@@ -234,6 +236,11 @@ type BillingService struct {
 	cfg            *config.Config
 	pricingService *PricingService
 	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
+
+	// fallbackWarnSeen 记录已打过 fallback 警告日志的(已小写化)模型名,
+	// 让 "[Billing] Using fallback pricing" 每个模型每进程最多打一条,
+	// 避免热路径上每请求刷屏(issue #3394)。零值即可用,无需在构造函数初始化。
+	fallbackWarnSeen sync.Map
 }
 
 // NewBillingService 创建计费服务实例
@@ -606,7 +613,10 @@ func (s *BillingService) initFallbackPricing() {
 
 // getFallbackPricing 根据模型系列获取回退价格
 func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
-	modelLower := strings.ToLower(model)
+	modelLower := normalizeAntigravityClaudeTierAlias(strings.ToLower(model))
+	if modelLower == "jev-latest" {
+		return s.fallbackPrices["jev-latest"]
+	}
 
 	// 按模型系列匹配。Fable 必须先于通用 Claude→Sonnet 回退；5.1 必须先于 5。
 	if strings.Contains(modelLower, "fable-5-1") || strings.Contains(modelLower, "fable-5.1") ||
@@ -798,6 +808,26 @@ func (s *BillingService) HasIdentifiedTokenPricing(model string) bool {
 
 // GetModelPricing 获取模型价格配置
 func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
+	// 无显式计费时点，DeepSeek pro→Flash 切换按当前时刻判定。
+	return s.getModelPricingAt(model, timezone.Now())
+}
+
+// CacheStoragePricePerTokenHour 返回模型的显式上下文缓存存储单价（每 token 每小时，USD）。
+// 优先级：价格表（override_file 等）按确定性识别配置的值 > 内置型号价 > 内置 Pro/Flash 系列兜底价；
+// 均未命中返回 0。
+func (s *BillingService) CacheStoragePricePerTokenHour(model string) float64 {
+	if s != nil && s.pricingService != nil {
+		if pricing := s.pricingService.GetIdentifiedModelPricing(model); pricing != nil && pricing.CacheStorageCostPerTokenPerHour > 0 {
+			return pricing.CacheStorageCostPerTokenPerHour
+		}
+	}
+	return builtinGeminiCacheStoragePrice(model)
+}
+
+// getModelPricingAt 是 GetModelPricing 的带计费时点内部变体：pricingAt 显式
+// 驱动 DeepSeek pro→Flash 切换判定（切换点前 Pro 价、之后 Flash 价），使
+// 展示/估算路径可与历史补账同刻复算，测试也能用固定时点钉住断言。
+func (s *BillingService) getModelPricingAt(model string, pricingAt time.Time) (*ModelPricing, error) {
 	// 标准化模型名称（转小写）
 	model = strings.ToLower(model)
 
@@ -846,8 +876,12 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	// 2. 使用硬编码回退价格
 	fallback := s.getFallbackPricing(model)
 	if fallback != nil {
-		log.Printf("[Billing] Using fallback pricing for model: %s", model)
-		return s.applyModelSpecificPricingPolicy(model, fallback), nil
+		// 按模型名去重:每个模型每进程最多打一条 warn,避免热路径每请求刷屏（issue #3394）。
+		// model 在函数入口已 ToLower,故 GLM-5.2 / glm-5.2 视为同一条目。
+		if _, seen := s.fallbackWarnSeen.LoadOrStore(model, struct{}{}); !seen {
+			log.Printf("[Billing] Using fallback pricing for model: %s", model)
+		}
+		return s.applyModelSpecificPricingPolicyEx(model, fallback, true, pricingAt), nil
 	}
 
 	return nil, fmt.Errorf("%w for model: %s", ErrModelPricingUnavailable, model)
@@ -903,7 +937,15 @@ func applyChannelTokenPriceOverrides(pricing *ModelPricing, channelPricing *Chan
 		pricing.CacheCreationPricePerTokenPriority = priority
 		pricing.CacheCreationPriceExplicit = true
 		pricing.CacheCreation5mPrice = *channelPricing.CacheWritePrice
-		pricing.CacheCreation1hPrice = *channelPricing.CacheWritePrice
+		if channelPricing.CacheWrite1hPrice == nil {
+			// Preserve the pre-split behavior for existing configurations: a lone
+			// cache_write_price continues to override both TTL tiers.
+			pricing.CacheCreation1hPrice = *channelPricing.CacheWritePrice
+		}
+	}
+	if channelPricing.CacheWrite1hPrice != nil {
+		pricing.CacheCreation1hPrice = *channelPricing.CacheWrite1hPrice
+		pricing.SupportsCacheBreakdown = true
 	}
 	if channelPricing.CacheReadPrice != nil {
 		priority := channelTierOverridePrice(pricing.CacheReadPricePerToken, pricing.CacheReadPricePerTokenPriority, *channelPricing.CacheReadPrice)
@@ -971,6 +1013,9 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 	switch resolved.Mode {
 	case BillingModePerRequest, BillingModeImage, BillingModeVideo:
 		breakdown, err = s.calculatePerRequestCost(resolved, input)
+		if err == nil && resolved.channelPricing != nil {
+			applyCostBreakdownMultiplier(breakdown, reasoningEffortBillingMultiplier(input.ReasoningEffort, resolved.channelPricing.ReasoningEffortMultipliers))
+		}
 	default: // BillingModeToken
 		breakdown, err = s.calculateTokenCost(resolved, input)
 	}
@@ -992,7 +1037,16 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 		return nil, fmt.Errorf("no pricing available for model: %s: %w", input.Model, ErrModelPricingUnavailable)
 	}
 
-	pricing = s.applyModelSpecificPricingPolicy(input.Model, pricing)
+	pricingContext := totalContext
+	if !contextTierPricingEnabled {
+		// 渠道可能显式配置了第一档，也可能只配置高上下文档。用 1 token
+		// 选择最低档；未命中时自然回退到渠道基础价。
+		pricingContext = 1
+	}
+	pricing := input.Resolver.GetIntervalPricing(resolved, pricingContext)
+	if pricing == nil {
+		return nil, fmt.Errorf("no pricing available for model: %s: %w", input.Model, ErrModelPricingUnavailable)
+	}
 
 	// 官方长上下文阶梯仅在无区间定价时应用（区间定价已包含上下文分层）。
 	// 分组关则 Resolve 已把渠道区间压成第一档；账号 false 仍否决官方阶梯。
@@ -1101,6 +1155,9 @@ func (s *BillingService) computeTokenBreakdown(
 	bd.CacheCreationCost = s.computeCacheCreationCost(pricing, tokens, cacheCreationPrice, cacheCreationMultiplier)
 
 	bd.CacheReadCost = float64(tokens.CacheReadTokens) * cacheReadPrice
+	if imageCached := min(max(tokens.ImageCacheReadTokens, 0), max(tokens.CacheReadTokens, 0)); imageCached > 0 && pricing.ImageCacheReadPricePerToken > 0 {
+		bd.CacheReadCost = float64(tokens.CacheReadTokens-imageCached)*cacheReadPrice + float64(imageCached)*pricing.ImageCacheReadPricePerToken
+	}
 
 	if tierMultiplier != 1.0 {
 		bd.InputCost *= tierMultiplier
@@ -1123,7 +1180,8 @@ func (s *BillingService) computeTokenBreakdown(
 // multiplier 用于长上下文等场景下的整体价格缩放（普通调用传 1.0 即可）。
 func (s *BillingService) computeCacheCreationCost(pricing *ModelPricing, tokens UsageTokens, price, multiplier float64) float64 {
 	if pricing.SupportsCacheBreakdown && (pricing.CacheCreation5mPrice > 0 || pricing.CacheCreation1hPrice > 0) {
-		if tokens.CacheCreation5mTokens == 0 && tokens.CacheCreation1hTokens == 0 && tokens.CacheCreationTokens > 0 {
+		cacheCreation5mTokens, cacheCreation1hTokens := normalizeCacheCreationBreakdown(tokens)
+		if cacheCreation5mTokens == 0 && cacheCreation1hTokens == 0 && tokens.CacheCreationTokens > 0 {
 			// API 未返回 ephemeral 明细，回退到全部按 5m 单价计费
 			return float64(tokens.CacheCreationTokens) * pricing.CacheCreation5mPrice * multiplier
 		}
@@ -1214,7 +1272,24 @@ func (s *BillingService) calculateCostInternalWithPolicy(
 	return s.computeTokenBreakdown(pricing, tokens, rateMultiplier, serviceTier, longContextBillingEnabled), nil
 }
 
+// applyModelSpecificPricingPolicy 对目录数据做模型特定修正：DeepSeek 官方价
+// 强制覆盖；GPT-5.6 缺 cache_write 价时按官方规则补 1.25 倍输入价；Fast/priority
+// 档按业务倍率改写（本地/远程目录的 priority 价可能沿用官方旧口径）。长上下文
+// 阶梯不在此处补齐：一律由目录数据（above_XXXk 折算或显式 long_context_* 字段）
+// 驱动。强制 DeepSeek 官方价且无显式计费时点（pro→Flash 切换按当前时刻判定），
+// 供无既有时点的策略修正场景与测试使用；计费/展示主路径分别经
+// calculateTokenCost 与 getModelPricingAt 显式传时点，分组/渠道自定义定价
+// 用 applyModelSpecificPricingPolicyEx 关闭强制，保留运营者配置。
 func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *ModelPricing) *ModelPricing {
+	return s.applyModelSpecificPricingPolicyEx(model, pricing, true, time.Time{})
+}
+
+// applyModelSpecificPricingPolicyEx 与 applyModelSpecificPricingPolicy 相同，
+// 但由调用方控制是否强制 DeepSeek 官方价（forceDeepSeekRates），并显式传入
+// 计费时点 pricingAt（零值表示按当前时刻判定）。
+// calculateTokenCost 对分组/渠道自定义定价（Source 非 LiteLLM）传 false：
+// 强制覆盖会把运营者配置的售价盖回官方价，违反自定义定价语义。
+func (s *BillingService) applyModelSpecificPricingPolicyEx(model string, pricing *ModelPricing, forceDeepSeekRates bool, pricingAt time.Time) *ModelPricing {
 	if pricing == nil {
 		return nil
 	}
@@ -1414,6 +1489,7 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	if imageCount <= 0 {
 		return &CostBreakdown{}
 	}
+	imageSize = NormalizeImageBillingTierOrDefault(imageSize)
 
 	// 获取单价
 	unitPrice := s.getImageUnitPrice(model, imageSize, groupConfig)

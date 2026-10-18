@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"os"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -10,9 +11,20 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
+
+func ProvideGrokOAuthService(proxyRepo ProxyRepository, oauthClient GrokOAuthClient, cfg *config.Config, redisClient *redis.Client) *GrokOAuthService {
+	svc := NewGrokOAuthService(proxyRepo, oauthClient, cfg)
+	// wire.go is depguard-exempt for redis; construct the Redis session store here.
+	if redisClient != nil {
+		svc = svc.WithSessionStore(xai.NewRedisSessionStore(redisClient))
+	}
+	return svc
+}
 
 // BuildInfo contains build information
 type BuildInfo struct {
@@ -73,6 +85,45 @@ func ProvideUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, b
 // ProvideEmailQueueService creates EmailQueueService with default worker count
 func ProvideEmailQueueService(emailService *EmailService) *EmailQueueService {
 	return NewEmailQueueService(emailService, 3)
+}
+
+// ProvideAuthService wires the optional captcha providers into AuthService while
+// keeping NewAuthService's public constructor compatible with existing tests.
+func ProvideAuthService(
+	entClient *dbent.Client,
+	userRepo UserRepository,
+	redeemRepo RedeemCodeRepository,
+	refreshTokenCache RefreshTokenCache,
+	cfg *config.Config,
+	settingService *SettingService,
+	emailService *EmailService,
+	turnstileService *TurnstileService,
+	tencentCaptchaService *TencentCaptchaService,
+	aliyunCaptchaService *AliyunCaptchaService,
+	emailQueueService *EmailQueueService,
+	promoService *PromoService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	affiliateService *AffiliateService,
+	userPlatformQuotaRepo UserPlatformQuotaRepository,
+) *AuthService {
+	svc := NewAuthService(
+		entClient,
+		userRepo,
+		redeemRepo,
+		refreshTokenCache,
+		cfg,
+		settingService,
+		emailService,
+		turnstileService,
+		emailQueueService,
+		promoService,
+		defaultSubAssigner,
+		affiliateService,
+		userPlatformQuotaRepo,
+	)
+	svc.SetTencentCaptchaService(tencentCaptchaService)
+	svc.SetAliyunCaptchaService(aliyunCaptchaService)
+	return svc
 }
 
 // ProvideOAuthRefreshAPI creates OAuthRefreshAPI with the default lock TTL.
@@ -521,8 +572,12 @@ func ProvideRateLimitService(
 	openAI403CounterCache OpenAI403CounterCache,
 	settingService *SettingService,
 	tokenCacheInvalidator TokenCacheInvalidator,
+	ollamaCloudUsage *OllamaCloudUsageService,
 ) *RateLimitService {
 	svc := NewRateLimitService(accountRepo, usageRepo, cfg, geminiQuotaService, tempUnschedCache)
+	if healthCache, ok := tempUnschedCache.(OpenAIAPIKeyHealthCache); ok {
+		svc.SetOpenAIAPIKeyHealthCache(healthCache)
+	}
 	svc.SetTimeoutCounterCache(timeoutCounterCache)
 	svc.SetOpenAI403CounterCache(openAI403CounterCache)
 	if health, ok := any(tempUnschedCache).(OpenAIAPIKeyHealthCache); ok {
@@ -530,6 +585,7 @@ func ProvideRateLimitService(
 	}
 	svc.SetSettingService(settingService)
 	svc.SetTokenCacheInvalidator(tokenCacheInvalidator)
+	svc.SetOllamaCloudUsageProbeScheduler(ollamaCloudUsage)
 	return svc
 }
 
@@ -657,6 +713,13 @@ func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Co
 	return svc
 }
 
+// ProvideGeminiCachedContentService creates GeminiCachedContentService and starts its mutation recovery loop.
+func ProvideGeminiCachedContentService(repo GeminiCachedContentRepository, compat *GeminiMessagesCompatService, cfg *config.Config) *GeminiCachedContentService {
+	svc := NewGeminiCachedContentService(repo, compat, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideScheduledTestService creates ScheduledTestService.
 func ProvideScheduledTestService(
 	planRepo ScheduledTestPlanRepository,
@@ -698,6 +761,35 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthC
 	return apiKeyService
 }
 
+// ProvideImageStorageSettingService 构造异步生图对象存储的后台设置服务。
+//
+// config.yaml 里的 image_storage 作为回落：后台从未保存过设置时沿用它，
+// 使升级前已通过配置文件开启该功能的部署不被打断。
+func ProvideImageStorageSettingService(
+	settingRepo SettingRepository,
+	encryptor SecretEncryptor,
+	backup *BackupService,
+	factory ImageStorageFactory,
+	cfg *config.Config,
+) *ImageStorageSettingService {
+	if cfg.ImageStorage.Enabled && !cfg.ImageStorage.Active() {
+		// 列出具体缺失的键。若这些键其实已在环境变量里设过，说明它们没被读进来，
+		// 请确认 setDefaults 中已为其注册默认值（见 config.setEnvReachableDefaults）。
+		logger.L().Warn("image_storage.enabled is true in config but object storage is not fully configured; configure it in the admin UI or complete the config file",
+			zap.Strings("missing_keys", cfg.ImageStorage.MissingCredentialKeys()))
+	}
+	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
+}
+
+// ProvideImageTaskService 构造异步图片任务服务。
+//
+// 对象存储是异步图片任务的启用前提：仅当开关打开且凭证齐全时功能才可用，否则整体禁用
+// （handler 返回 404，不创建任务、不写 Redis），从而避免大 base64 结果撑爆 Redis。
+// 启用状态由 settings 服务在运行时解析，因此后台改开关后无需重启即可生效。
+func ProvideImageTaskService(store ImageTaskStore, settings *ImageStorageSettingService) *ImageTaskService {
+	return NewImageTaskServiceWithResolver(store, settings.Resolver(), defaultImageTaskTTL, defaultImageTaskExecutionTimeout)
+}
+
 // ProvideBackupService creates and starts BackupService
 func ProvideBackupService(
 	settingRepo SettingRepository,
@@ -705,8 +797,11 @@ func ProvideBackupService(
 	encryptor SecretEncryptor,
 	storeFactory BackupObjectStoreFactory,
 	dumper DBDumper,
+	lockCache LeaderLockCache,
+	db *sql.DB,
 ) *BackupService {
 	svc := NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
+	svc.SetLeaderLock(lockCache, db)
 	svc.Start()
 	return svc
 }
@@ -831,7 +926,8 @@ func ProvideAPIKeyService(
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
-	NewAuthService,
+	ProvideAuthService,
+	NewPasskeyService,
 	NewUserService,
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
@@ -839,6 +935,7 @@ var ProviderSet = wire.NewSet(
 	NewBalanceWalletService,
 	ProvideBalanceCacheInvalidationWorker,
 	NewGroupService,
+	NewCompositeRouteResolver,
 	NewAccountService,
 	NewProxyService,
 	NewRedeemService,
@@ -878,6 +975,7 @@ var ProviderSet = wire.NewSet(
 	NewGrokOAuthService,
 	wire.Bind(new(GrokOAuthTokenService), new(*GrokOAuthService)),
 	NewGeminiOAuthService,
+	ProvideGeminiCachedContentService,
 	NewGeminiQuotaService,
 	NewCompositeTokenCacheInvalidator,
 	wire.Bind(new(TokenCacheInvalidator), new(*CompositeTokenCacheInvalidator)),
@@ -949,6 +1047,7 @@ var ProviderSet = wire.NewSet(
 	NewUserAccessTokenService,
 	NewErrorPassthroughService,
 	NewTLSFingerprintProfileService,
+	ProvidePluginManager,
 	NewDigestSessionStore,
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
@@ -1151,6 +1250,7 @@ func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache Lead
 
 // ProvideChannelMonitorService 创建渠道监控服务（CRUD + RunCheck + 用户视图聚合）。
 // 加密器复用 wire 中已注入的 SecretEncryptor（AES-256-GCM）。
+// settingService gates RunCheck via channel_monitor_enabled + channel_monitor_mode.
 func ProvideChannelMonitorService(
 	repo ChannelMonitorRepository,
 	encryptor SecretEncryptor,
@@ -1165,9 +1265,49 @@ func ProvideChannelMonitorService(
 // 通过 SetScheduler 注入回 service 后再 Start，确保启动时加载所有 enabled monitor，
 // 后续 CRUD 也能即时同步任务表。Runner.Stop 由 cleanup function 调用。
 // settingService 用于 runner 每次 fire 读取功能开关。
-func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *SettingService) *ChannelMonitorRunner {
+// quotaFetcher（账号侧用量聚合）也在此注入：accountUsage/CN 服务在 wire 图中
+// 晚于 channelMonitorService 构造，走 setter 注入避免调整既有构造顺序。
+func ProvideChannelMonitorRunner(
+	svc *ChannelMonitorService,
+	settingService *SettingService,
+	quotaFetcher *ChannelMonitorQuotaFetcher,
+) *ChannelMonitorRunner {
 	r := NewChannelMonitorRunner(svc, settingService)
-	svc.SetScheduler(r)
+	if svc != nil {
+		// Ensure runtime reader is set even if ProvideChannelMonitorService
+		// was constructed without settings (tests / alternate providers).
+		svc.SetRuntimeReader(settingService)
+		svc.SetScheduler(r)
+		svc.SetQuotaFetcher(quotaFetcher)
+	}
 	r.Start()
 	return r
+}
+
+// ProvideChannelMonitorV2Service wires settings for user-facing privacy flags
+// (e.g. hide RPM/TPM throughput).
+func ProvideChannelMonitorV2Service(repo ChannelMonitorV2Repository, settingService *SettingService) *ChannelMonitorV2Service {
+	svc := NewChannelMonitorV2Service(repo)
+	svc.SetRuntimeReader(settingService)
+	return svc
+}
+
+// ProvideChannelMonitorV2Aggregator starts the passive minute-rollup worker.
+// Aggregation only runs when channel_monitor_enabled=true and mode=v2 (and V2 config enabled).
+// Set CHANNEL_MONITOR_V2_DISABLE_AGGREGATOR=1 to skip Start (local demo with seeded facts).
+func ProvideChannelMonitorV2Aggregator(repo ChannelMonitorV2Repository, db *sql.DB, settingService *SettingService) *ChannelMonitorV2Aggregator {
+	aggregator := NewChannelMonitorV2Aggregator(repo, db, settingService)
+	if os.Getenv("CHANNEL_MONITOR_V2_DISABLE_AGGREGATOR") == "1" {
+		return aggregator
+	}
+	aggregator.Start()
+	return aggregator
+}
+
+// ProvideClaudeResetCreditService wires the Claude reset query and, with the
+// idempotency store and Redis leases, manual redemption.
+func ProvideClaudeResetCreditService(accounts AccountRepository, tokens *ClaudeTokenProvider, proxies ProxyRepository, settings *SettingService, idem *IdempotencyCoordinator, locks LeaderLockCache) *ClaudeResetCreditService {
+	s := NewClaudeResetCreditService(accounts, tokens, proxies, settings)
+	s.ConfigureRedemption(idem, locks)
+	return s
 }

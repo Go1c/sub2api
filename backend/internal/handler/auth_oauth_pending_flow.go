@@ -77,10 +77,12 @@ type createPendingOAuthAccountRequest struct {
 }
 
 type sendPendingOAuthVerifyCodeRequest struct {
-	Email             string `json:"email" binding:"required,email"`
-	TurnstileToken    string `json:"turnstile_token,omitempty"`
-	PendingAuthToken  string `json:"pending_auth_token,omitempty"`
-	PendingOAuthToken string `json:"pending_oauth_token,omitempty"`
+	Email                 string `json:"email" binding:"required,email"`
+	TurnstileToken        string `json:"turnstile_token,omitempty"`
+	TencentCaptchaTicket  string `json:"tencent_captcha_ticket,omitempty"`
+	TencentCaptchaRandstr string `json:"tencent_captcha_randstr,omitempty"`
+	PendingAuthToken      string `json:"pending_auth_token,omitempty"`
+	PendingOAuthToken     string `json:"pending_oauth_token,omitempty"`
 }
 
 func (r bindPendingOAuthLoginRequest) adoptionDecision() oauthAdoptionDecisionRequest {
@@ -565,7 +567,8 @@ func (h *AuthHandler) SendPendingOAuthVerifyCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.authService.VerifyTurnstile(c.Request.Context(), req.TurnstileToken, ip.GetClientIP(c)); err != nil {
+	proof := captchaProof(req.TurnstileToken, req.TencentCaptchaTicket, req.TencentCaptchaRandstr)
+	if err := h.authService.VerifyCaptcha(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -600,7 +603,7 @@ func (h *AuthHandler) SendPendingOAuthVerifyCode(c *gin.Context) {
 		return
 	}
 
-	result, err := h.authService.SendPendingOAuthVerifyCode(c.Request.Context(), req.Email)
+	result, err := h.authService.SendPendingOAuthVerifyCode(c.Request.Context(), req.Email, c.GetHeader("Accept-Language"))
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -1755,6 +1758,11 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		response.ErrorFrom(c, err)
 		return
 	}
+	proof := captchaProof(req.TurnstileToken, req.TencentCaptchaTicket, req.TencentCaptchaRandstr)
+	if err := h.authService.VerifyCaptcha(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	tokenPair, user, err := h.authService.RegisterOAuthEmailAccount(
 		c.Request.Context(),
@@ -1880,6 +1888,7 @@ func (h *AuthHandler) createPendingOAuthAccount(c *gin.Context, provider string)
 		return
 	}
 
+	h.authService.ApplyOAuthSignupPromoCode(c.Request.Context(), user.ID, pendingOAuthPromoCode(session))
 	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
 	// createPendingOAuthAccount = 注册新账户，需要把钉钉昵称同步到 users.username 作为初始值
 	h.maybeSyncDingTalkAfterRegistration(c.Request.Context(), session, user.ID)

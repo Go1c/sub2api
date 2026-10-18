@@ -48,6 +48,13 @@ func TestWriteSuccessResponse(t *testing.T) {
 			wantBody:        "",
 		},
 		{
+			name:            "airwallex returns empty 200",
+			providerKey:     payment.TypeAirwallex,
+			wantCode:        http.StatusOK,
+			wantContentType: "text/plain",
+			wantBody:        "",
+		},
+		{
 			name:            "easypay returns plain text success",
 			providerKey:     "easypay",
 			wantCode:        http.StatusOK,
@@ -210,9 +217,9 @@ func TestVerifyNotificationWithProvidersReturnsMatchedProvider(t *testing.T) {
 		},
 	}
 
-	providerKey, notification, err := verifyNotificationWithProviders(context.Background(), providers, "{}", map[string]string{"wechatpay-signature": "sig"})
+	provider, notification, err := verifyNotificationWithProviders(context.Background(), providers, "{}", map[string]string{"wechatpay-signature": "sig"})
 	require.NoError(t, err)
-	require.Equal(t, payment.TypeWxpay, providerKey)
+	require.Equal(t, payment.TypeWxpay, provider.ProviderKey())
 	require.NotNil(t, notification)
 	require.Equal(t, "sub2_42", notification.OrderID)
 }

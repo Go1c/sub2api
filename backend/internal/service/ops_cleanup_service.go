@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
+	"go.uber.org/zap"
 )
 
 const (
@@ -61,6 +62,11 @@ type OpsCleanupService struct {
 	effective config.OpsCleanupConfig
 
 	warnNoRedisOnce sync.Once
+}
+
+type opsCleanupEffectiveConfig struct {
+	config.OpsCleanupConfig
+	SystemLogRetentionDays int
 }
 
 func NewOpsCleanupService(

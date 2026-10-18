@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -586,6 +587,14 @@ func (h *ChannelHandler) GetModelDefaultPricing(c *gin.Context) {
 		// 模型不在定价列表中
 		response.Success(c, gin.H{"found": false})
 		return
+	}
+	cacheWritePrice := pricing.CacheCreationPricePerToken
+	var cacheWrite1hPrice *float64
+	if pricing.SupportsCacheBreakdown {
+		if pricing.CacheCreation5mPrice > 0 {
+			cacheWritePrice = pricing.CacheCreation5mPrice
+		}
+		cacheWrite1hPrice = &pricing.CacheCreation1hPrice
 	}
 
 	response.Success(c, gin.H{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -148,7 +149,14 @@ const (
 	channelCacheTTL       = 10 * time.Minute
 	channelErrorTTL       = 5 * time.Second // DB 错误时的短缓存
 	channelCacheDBTimeout = 10 * time.Second
+	channelCacheNotifyTTL = 3 * time.Second
 )
+
+// ChannelCachePubSub broadcasts channel cache invalidations between instances.
+type ChannelCachePubSub interface {
+	NotifyUpdate(ctx context.Context) error
+	SubscribeUpdates(ctx context.Context, handler func())
+}
 
 // ChannelService 渠道管理服务
 type ChannelService struct {
@@ -156,6 +164,7 @@ type ChannelService struct {
 	groupRepo            GroupRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	pricingService       *PricingService // 用于「可用渠道」展示时回落到全局定价；可为 nil（测试场景）
+	cachePubSub          ChannelCachePubSub
 
 	cache   atomic.Value // *channelCache
 	cacheSF singleflight.Group
@@ -164,13 +173,15 @@ type ChannelService struct {
 // NewChannelService 创建渠道服务实例。
 // pricingService 仅供 ListAvailable 在渠道未配置定价时回落到全局 LiteLLM 数据；
 // 计费热路径走独立的 ModelPricingResolver，与此参数无关。可传 nil。
-func NewChannelService(repo ChannelRepository, groupRepo GroupRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, pricingService *PricingService) *ChannelService {
+func NewChannelService(repo ChannelRepository, groupRepo GroupRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, pricingService *PricingService, cachePubSub ChannelCachePubSub) *ChannelService {
 	s := &ChannelService{
 		repo:                 repo,
 		groupRepo:            groupRepo,
 		authCacheInvalidator: authCacheInvalidator,
 		pricingService:       pricingService,
+		cachePubSub:          cachePubSub,
 	}
+	s.subscribeCacheUpdates(context.Background())
 	return s
 }
 
@@ -344,7 +355,8 @@ func populateChannelCache(channels []Channel, groupPlatforms map[int64]string) *
 // invalidateCache 使缓存失效，让下次读取时自然重建
 
 // isPlatformPricingMatch 判断定价条目的平台是否匹配分组平台。
-// 各平台（antigravity / anthropic / gemini / openai）严格独立，不跨平台匹配。
+// Concrete platforms stay isolated; composite groups may carry concrete-provider
+// pricing rows that are selected by the request's resolved target platform.
 func isPlatformPricingMatch(groupPlatform, pricingPlatform string) bool {
 	if groupPlatform == PlatformComposite {
 		return isConcreteRequestPlatform(pricingPlatform)
@@ -361,14 +373,63 @@ func matchingPlatforms(groupPlatform string) []string {
 	}
 	return []string{groupPlatform}
 }
+
+func channelLookupPlatform(ctx context.Context, groupPlatform string) string {
+	if ctx != nil {
+		if forcePlatform, ok := ctx.Value(ctxkey.ForcePlatform).(string); ok && strings.TrimSpace(forcePlatform) != "" {
+			return strings.TrimSpace(forcePlatform)
+		}
+		if groupPlatform == PlatformComposite {
+			if platform, ok := ResolvedTargetPlatformFromContext(ctx); ok {
+				return platform
+			}
+		}
+	}
+	return groupPlatform
+}
+
+// InvalidateCache 失效并重建渠道缓存。
+// 供渠道以外、但会影响渠道缓存内容的变更调用（如分组平台变更）。
+func (s *ChannelService) InvalidateCache() {
+	s.invalidateCache()
+}
+
 func (s *ChannelService) invalidateCache() {
-	s.cache.Store((*channelCache)(nil))
-	s.cacheSF.Forget("channel_cache")
+	s.clearCache()
 
 	// 主动重建缓存，确保 CRUD 后立即生效
 	if _, err := s.buildCache(context.Background()); err != nil {
 		slog.Warn("failed to rebuild channel cache after invalidation", "error", err)
 	}
+
+	s.notifyCacheUpdate()
+}
+
+// clearCache clears only the in-process snapshot. Keeping this separate from
+// invalidateCache prevents notifications received from Redis from being
+// published again in a loop.
+func (s *ChannelService) clearCache() {
+	s.cache.Store((*channelCache)(nil))
+	s.cacheSF.Forget("channel_cache")
+}
+
+func (s *ChannelService) notifyCacheUpdate() {
+	if s.cachePubSub == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), channelCacheNotifyTTL)
+	defer cancel()
+	if err := s.cachePubSub.NotifyUpdate(ctx); err != nil {
+		slog.Warn("failed to publish channel cache invalidation", "error", err)
+	}
+}
+
+func (s *ChannelService) subscribeCacheUpdates(ctx context.Context) {
+	if s.cachePubSub == nil {
+		return
+	}
+	s.cachePubSub.SubscribeUpdates(ctx, s.clearCache)
 }
 
 // matchWildcard 在通配符定价中查找匹配项（最先匹配到优先）
@@ -622,6 +683,21 @@ func ReplaceModelInBody(body []byte, newModel string) []byte {
 	return newBody
 }
 
+// RemovePreviousResponseIDFromBody 删除请求体中的 previous_response_id，用于会话失配时改用完整 input 重建上下文。
+func RemovePreviousResponseIDFromBody(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+	if !gjson.GetBytes(body, "previous_response_id").Exists() {
+		return body
+	}
+	newBody, err := sjson.DeleteBytes(body, "previous_response_id")
+	if err != nil {
+		return body
+	}
+	return newBody
+}
+
 // validateChannelConfig 校验渠道的定价和映射配置（冲突检测 + 区间校验 + 计费模式校验）。
 // Create 和 Update 共用此函数，避免重复。
 func validateChannelConfig(pricing []ChannelModelPricing, mapping map[string]map[string]string) error {
@@ -719,6 +795,7 @@ func checkPricesNotNegative(p ChannelModelPricing) error {
 		{"input_price", p.InputPrice},
 		{"output_price", p.OutputPrice},
 		{"cache_write_price", p.CacheWritePrice},
+		{"cache_write_1h_price", p.CacheWrite1hPrice},
 		{"cache_read_price", p.CacheReadPrice},
 		{"image_input_price", p.ImageInputPrice},
 		{"image_output_price", p.ImageOutputPrice},
@@ -1067,7 +1144,7 @@ func validateNoConflictingMappings(mapping map[string]map[string]string) error {
 
 func validatePricingIntervals(pricingList []ChannelModelPricing) error {
 	for _, pricing := range pricingList {
-		if err := ValidateIntervals(pricing.Intervals); err != nil {
+		if err := ValidateIntervals(pricing.Intervals, pricing.BillingMode); err != nil {
 			return infraerrors.BadRequest(
 				"INVALID_PRICING_INTERVALS",
 				fmt.Sprintf("invalid pricing intervals for platform '%s' models %v: %v",
@@ -1084,7 +1161,8 @@ func detectConflicts(entries []modelEntry, platform, errCode, label string) erro
 		for j := i + 1; j < len(entries); j++ {
 			if conflictsBetween(entries[i], entries[j]) {
 				return infraerrors.BadRequest(errCode,
-					fmt.Sprintf("%s '%s' and '%s' conflict in platform '%s': overlapping match range",
+					fmt.Sprintf("%s '%s' and '%s' conflict in platform '%s': overlapping match range "+
+						"(model names are matched case-insensitively, so an existing entry already covers all case variants)",
 						label, entries[i].pattern, entries[j].pattern, platform))
 			}
 		}

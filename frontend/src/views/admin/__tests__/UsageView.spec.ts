@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent, ref } from 'vue'
 
 import UsageView from '../UsageView.vue'
 
@@ -12,6 +13,7 @@ const { list, getStats, getSnapshotV2, getById, getModelStats } = vi.hoisted(() 
 
   return {
     list: vi.fn(),
+		exportList: vi.fn(),
     getStats: vi.fn(),
     getSnapshotV2: vi.fn(),
     getById: vi.fn(),
@@ -24,6 +26,14 @@ const messages: Record<string, string> = {
   'admin.dashboard.day': 'Day',
   'admin.dashboard.hour': 'Hour',
   'admin.usage.failedToLoadUser': 'Failed to load user',
+	'admin.usage.requestId': 'Request ID',
+	'admin.usage.upstreamRequestId': 'Upstream ID',
+	'usage.requestedModel': 'Requested model',
+	'usage.sentUpstreamModel': 'Sent upstream model',
+	'usage.upstreamResponseModel': 'Upstream response model',
+	'usage.upstreamModelMismatch': 'Upstream model mismatch',
+	'common.yes': 'Yes',
+	'common.no': 'No',
 }
 
 const formatLocalDate = (date: Date): string => {
@@ -51,7 +61,7 @@ vi.mock('@/api/admin', () => ({
 
 vi.mock('@/api/admin/usage', () => ({
   adminUsageAPI: {
-    list: vi.fn(),
+		list: exportList,
   },
 }))
 
@@ -84,7 +94,7 @@ vi.mock('vue-i18n', async () => {
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({
-    query: {}
+    query: routeQuery
   })
 }))
 
@@ -114,6 +124,179 @@ const GroupDistributionChartStub = {
     </div>
   `,
 }
+
+const mountRouteFilteredUsageView = () => mount(UsageView, {
+  global: { stubs: {
+    AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+    UsageTable: true, UsageExportProgress: true, UsageCleanupDialog: true,
+    UserBalanceHistoryModal: true, Pagination: true, Select: true,
+    DateRangePicker: true, Icon: true, TokenUsageTrend: true,
+    ModelDistributionChart: true, GroupDistributionChart: true,
+    EndpointDistributionChart: true, UserTokenRanking: true,
+  } },
+})
+
+describe('admin UsageView route filters', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    Object.keys(routeQuery).forEach((key) => delete routeQuery[key])
+    list.mockReset().mockResolvedValue({ items: [], total: 0, pages: 0 })
+    getStats.mockReset().mockResolvedValue({
+      total_requests: 0,
+      total_input_tokens: 0,
+      total_output_tokens: 0,
+      total_cache_tokens: 0,
+      total_tokens: 0,
+      total_cost: 0,
+      total_actual_cost: 0,
+      average_duration_ms: 0,
+    })
+    getSnapshotV2.mockReset().mockResolvedValue({ trend: [], models: [], groups: [] })
+    getModelStats.mockReset().mockResolvedValue({ models: [] })
+    getById.mockReset()
+  })
+
+  afterEach(() => {
+    Object.keys(routeQuery).forEach((key) => delete routeQuery[key])
+    vi.useRealTimers()
+  })
+
+  it('shows the routed user while applying user_id to usage requests', async () => {
+    routeQuery.user_id = '42'
+    getById.mockResolvedValue({ id: 42, email: 'route-user@test.com' })
+
+    const wrapper = mountRouteFilteredUsageView()
+    await flushPromises()
+
+    expect(getById).toHaveBeenCalledWith(42, true)
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ user_id: 42 }), expect.anything())
+    expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('route-user@test.com')
+  })
+
+  it('does not apply a stale routed user label after user_id changes', async () => {
+    routeQuery.user_id = '42'
+    let resolveLookup!: (user: { id: number; email: string }) => void
+    getById.mockReturnValue(new Promise((resolve) => { resolveLookup = resolve }))
+
+    const wrapper = mountRouteFilteredUsageView()
+    await wrapper.vm.$nextTick()
+    ;(wrapper.vm as any).filters.user_id = 84
+    ;(wrapper.findComponent(UsageFiltersStub).vm as any).setUserKeyword('current-user@test.com')
+
+    resolveLookup({ id: 42, email: 'stale-user@test.com' })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('current-user@test.com')
+  })
+
+  it('does not overwrite newer user input when the routed user lookup succeeds', async () => {
+    routeQuery.user_id = '42'
+    let resolveLookup!: (user: { id: number; email: string }) => void
+    getById.mockReturnValue(new Promise((resolve) => { resolveLookup = resolve }))
+
+    const wrapper = mountRouteFilteredUsageView()
+    await wrapper.vm.$nextTick()
+    ;(wrapper.findComponent(UsageFiltersStub).vm as any).simulateUserInput('new-search@test.com')
+
+    resolveLookup({ id: 42, email: 'route-user@test.com' })
+    await flushPromises()
+
+    expect((wrapper.vm as any).filters.user_id).toBe(42)
+    expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('new-search@test.com')
+  })
+
+  it('does not overwrite newer user input when the routed user lookup fails', async () => {
+    routeQuery.user_id = '42'
+    let rejectLookup!: (error: Error) => void
+    getById.mockReturnValue(new Promise((_, reject) => { rejectLookup = reject }))
+
+    const wrapper = mountRouteFilteredUsageView()
+    await wrapper.vm.$nextTick()
+    ;(wrapper.findComponent(UsageFiltersStub).vm as any).simulateUserInput('new-search@test.com')
+
+    rejectLookup(new Error('lookup failed'))
+    await flushPromises()
+
+    expect((wrapper.vm as any).filters.user_id).toBe(42)
+    expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('new-search@test.com')
+  })
+
+  it('shows the routed user ID when its label lookup fails', async () => {
+    routeQuery.user_id = '42'
+    getById.mockRejectedValue(new Error('lookup failed'))
+
+    const wrapper = mountRouteFilteredUsageView()
+    await flushPromises()
+
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ user_id: 42 }), expect.anything())
+    expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('42')
+  })
+})
+
+describe('admin UsageView native compaction filter', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    list.mockReset().mockResolvedValue({ items: [], total: 0, pages: 0 })
+    getStats.mockReset().mockResolvedValue({
+      total_requests: 0,
+      total_input_tokens: 0,
+      total_output_tokens: 0,
+      total_cache_tokens: 0,
+      total_tokens: 0,
+      total_cost: 0,
+      total_actual_cost: 0,
+      average_duration_ms: 0,
+    })
+    getSnapshotV2.mockReset().mockResolvedValue({ trend: [], models: [], groups: [] })
+    getModelStats.mockReset().mockResolvedValue({ models: [] })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('propagates the filter to list/stats/model/snapshot requests and clears it on reset', async () => {
+    const wrapper = mountRouteFilteredUsageView()
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+
+    list.mockClear()
+    getStats.mockClear()
+    getModelStats.mockClear()
+    getSnapshotV2.mockClear()
+
+    ;(wrapper.vm as any).filters.native_compaction_v2 = true
+    ;(wrapper.vm as any).applyFilters()
+    await flushPromises()
+
+    expect((wrapper.vm as any).breakdownFilters.native_compaction_v2).toBe(true)
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({ native_compaction_v2: true }),
+      expect.anything()
+    )
+    expect(getStats).toHaveBeenCalledWith(expect.objectContaining({ native_compaction_v2: true }))
+    expect(getModelStats).toHaveBeenCalledWith(expect.objectContaining({ native_compaction_v2: true }))
+    expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({ native_compaction_v2: true }))
+
+    list.mockClear()
+    getStats.mockClear()
+    getModelStats.mockClear()
+    getSnapshotV2.mockClear()
+
+    ;(wrapper.vm as any).resetFilters()
+    await flushPromises()
+
+    expect((wrapper.vm as any).filters.native_compaction_v2).toBeNull()
+    expect((wrapper.vm as any).breakdownFilters).not.toHaveProperty('native_compaction_v2')
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({ native_compaction_v2: null }),
+      expect.anything()
+    )
+    expect(getStats).toHaveBeenCalledWith(expect.objectContaining({ native_compaction_v2: null }))
+    expect(getModelStats).toHaveBeenCalledWith(expect.objectContaining({ native_compaction_v2: null }))
+    expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({ native_compaction_v2: null }))
+  })
+})
 
 describe('admin UsageView distribution metric toggles', () => {
   beforeEach(() => {

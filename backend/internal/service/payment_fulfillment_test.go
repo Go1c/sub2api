@@ -11,6 +11,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -20,6 +21,52 @@ import (
 type paymentFulfillmentTestProvider struct {
 	key            string
 	supportedTypes []payment.PaymentType
+}
+
+type paymentFulfillmentRedeemCacheStub struct {
+	count          int
+	getCalls       int
+	incrementCalls int
+	acquireCalls   int
+	releaseCalls   int
+}
+
+type paymentFulfillmentRedeemRepo struct {
+	paymentOrderLifecycleRedeemRepo
+	createCalls int
+}
+
+func (r *paymentFulfillmentRedeemRepo) Create(_ context.Context, code *RedeemCode) error {
+	r.createCalls++
+	if r.codesByCode == nil {
+		r.codesByCode = make(map[string]*RedeemCode)
+	}
+	cloned := *code
+	cloned.ID = int64(100 + r.createCalls)
+	code.ID = cloned.ID
+	r.codesByCode[cloned.Code] = &cloned
+	return nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) GetRedeemAttemptCount(context.Context, int64) (int, error) {
+	c.getCalls++
+	return c.count, nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) IncrementRedeemAttemptCount(context.Context, int64) error {
+	c.incrementCalls++
+	c.count++
+	return nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) AcquireRedeemLock(context.Context, string, time.Duration) (bool, error) {
+	c.acquireCalls++
+	return true, nil
+}
+
+func (c *paymentFulfillmentRedeemCacheStub) ReleaseRedeemLock(context.Context, string) error {
+	c.releaseCalls++
+	return nil
 }
 
 func (p paymentFulfillmentTestProvider) Name() string        { return p.key }
@@ -40,20 +87,188 @@ func (p paymentFulfillmentTestProvider) Refund(ctx context.Context, req payment.
 	panic("unexpected call")
 }
 
+type paymentFulfillmentAffiliateAccrueCall struct {
+	inviterID     int64
+	inviteeUserID int64
+	amount        float64
+	freezeHours   int
+	sourceOrderID *int64
+}
+
+type paymentFulfillmentAffiliateRepoStub struct {
+	inviteeSummary *AffiliateSummary
+	inviterSummary *AffiliateSummary
+	accrueCalls    []paymentFulfillmentAffiliateAccrueCall
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
+	switch {
+	case r.inviteeSummary != nil && r.inviteeSummary.UserID == userID:
+		cp := *r.inviteeSummary
+		return &cp, nil
+	case r.inviterSummary != nil && r.inviterSummary.UserID == userID:
+		cp := *r.inviterSummary
+		return &cp, nil
+	default:
+		return &AffiliateSummary{UserID: userID, AffCode: "AFFTEST", CreatedAt: time.Now().Add(-time.Hour)}, nil
+	}
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateByCode(context.Context, string) (*AffiliateSummary, error) {
+	panic("unexpected GetAffiliateByCode call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) BindInviter(context.Context, int64, int64) (bool, error) {
+	panic("unexpected BindInviter call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64) (bool, error) {
+	var sourceCopy *int64
+	if sourceOrderID != nil {
+		v := *sourceOrderID
+		sourceCopy = &v
+	}
+	r.accrueCalls = append(r.accrueCalls, paymentFulfillmentAffiliateAccrueCall{
+		inviterID:     inviterID,
+		inviteeUserID: inviteeUserID,
+		amount:        amount,
+		freezeHours:   freezeHours,
+		sourceOrderID: sourceCopy,
+	})
+	return true, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+	return 0, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
+	panic("unexpected ThawFrozenQuota call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
+	panic("unexpected TransferQuotaToBalance call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) WithdrawQuota(context.Context, int64, float64, string) (*AffiliateWithdrawResult, error) {
+	panic("unexpected WithdrawQuota call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
+	panic("unexpected ListInvitees call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
+	panic("unexpected UpdateUserAffCode call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ResetUserAffCode(context.Context, int64) (string, error) {
+	panic("unexpected ResetUserAffCode call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) SetUserRebateRate(context.Context, int64, *float64) error {
+	panic("unexpected SetUserRebateRate call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) BatchSetUserRebateRate(context.Context, []int64, *float64) error {
+	panic("unexpected BatchSetUserRebateRate call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListUsersWithCustomSettings(context.Context, AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error) {
+	panic("unexpected ListUsersWithCustomSettings call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateInviteRecords(context.Context, AffiliateRecordFilter) ([]AffiliateInviteRecord, int64, error) {
+	panic("unexpected ListAffiliateInviteRecords call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateRebateRecords(context.Context, AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error) {
+	panic("unexpected ListAffiliateRebateRecords call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateTransferRecords(context.Context, AffiliateRecordFilter) ([]AffiliateTransferRecord, int64, error) {
+	panic("unexpected ListAffiliateTransferRecords call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateUserOverview(context.Context, int64) (*AffiliateUserOverview, error) {
+	panic("unexpected GetAffiliateUserOverview call")
+}
+
+type paymentFulfillmentSettingRepoStub struct {
+	values map[string]string
+}
+
+func (s *paymentFulfillmentSettingRepoStub) Get(context.Context, string) (*Setting, error) {
+	return nil, ErrSettingNotFound
+}
+
+func (s *paymentFulfillmentSettingRepoStub) GetValue(_ context.Context, key string) (string, error) {
+	if s.values == nil {
+		return "", ErrSettingNotFound
+	}
+	value, ok := s.values[key]
+	if !ok {
+		return "", ErrSettingNotFound
+	}
+	return value, nil
+}
+
+func (s *paymentFulfillmentSettingRepoStub) Set(_ context.Context, key, value string) error {
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	s.values[key] = value
+	return nil
+}
+
+func (s *paymentFulfillmentSettingRepoStub) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	out := make(map[string]string, len(keys))
+	for _, key := range keys {
+		out[key] = s.values[key]
+	}
+	return out, nil
+}
+
+func (s *paymentFulfillmentSettingRepoStub) SetMultiple(_ context.Context, values map[string]string) error {
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	for key, value := range values {
+		s.values[key] = value
+	}
+	return nil
+}
+
+func (s *paymentFulfillmentSettingRepoStub) GetAll(context.Context) (map[string]string, error) {
+	return s.values, nil
+}
+
+func (s *paymentFulfillmentSettingRepoStub) Delete(_ context.Context, key string) error {
+	delete(s.values, key)
+	return nil
+}
+
+func ensurePaymentAuditOrderActionUniqueIndex(t *testing.T, ctx context.Context, client *dbent.Client) {
+	t.Helper()
+	_, err := client.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_audit_logs_order_action_uniq ON payment_audit_logs(order_id, action)")
+	require.NoError(t, err)
+}
+
 // ---------------------------------------------------------------------------
 // resolveRedeemAction — pure idempotency decision logic
 // ---------------------------------------------------------------------------
 
 func TestResolveRedeemAction_CodeNotFound(t *testing.T) {
 	t.Parallel()
-	action := resolveRedeemAction(nil, nil)
-	assert.Equal(t, redeemActionCreate, action, "nil code with nil error should create")
+	action, err := resolveRedeemAction(nil, ErrRedeemCodeNotFound)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionCreate, action, "a missing code should be created")
 }
 
 func TestResolveRedeemAction_LookupError(t *testing.T) {
 	t.Parallel()
-	action := resolveRedeemAction(nil, errors.New("db connection lost"))
-	assert.Equal(t, redeemActionCreate, action, "lookup error should fall back to create")
+	_, err := resolveRedeemAction(nil, errors.New("db connection lost"))
+	require.ErrorContains(t, err, "lookup payment redeem code")
 }
 
 func TestResolveRedeemAction_LookupErrorWithNonNilCode(t *testing.T) {
@@ -61,8 +276,8 @@ func TestResolveRedeemAction_LookupErrorWithNonNilCode(t *testing.T) {
 	// Edge case: both code and error are non-nil (shouldn't happen in practice,
 	// but the function should still treat error as authoritative)
 	code := &RedeemCode{Status: StatusUnused}
-	action := resolveRedeemAction(code, errors.New("partial error"))
-	assert.Equal(t, redeemActionCreate, action, "non-nil error should always result in create regardless of code")
+	_, err := resolveRedeemAction(code, errors.New("partial error"))
+	require.ErrorContains(t, err, "lookup payment redeem code")
 }
 
 func TestResolveRedeemAction_CodeExistsAndUsed(t *testing.T) {
@@ -73,7 +288,8 @@ func TestResolveRedeemAction_CodeExistsAndUsed(t *testing.T) {
 		Type:   RedeemTypeBalance,
 		Value:  10.0,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionSkipCompleted, action, "used code should skip to completed")
 }
 
@@ -85,7 +301,8 @@ func TestResolveRedeemAction_CodeExistsAndUnused(t *testing.T) {
 		Type:   RedeemTypeBalance,
 		Value:  25.0,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionRedeem, action, "unused code should skip creation and proceed to redeem")
 }
 
@@ -97,7 +314,8 @@ func TestResolveRedeemAction_CodeExistsWithExpiredStatus(t *testing.T) {
 		Code:   "expired-code",
 		Status: StatusExpired,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionRedeem, action, "expired-status code is not IsUsed(), should redeem")
 }
 
@@ -113,6 +331,7 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 		code     *RedeemCode
 		err      error
 		expected redeemAction
+		wantErr  bool
 	}{
 		{
 			name:     "nil code, nil error — first run",
@@ -127,10 +346,11 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 			expected: redeemActionCreate,
 		},
 		{
-			name:     "nil code, generic DB error — treat as not found",
+			name:     "nil code, generic DB error — fail closed",
 			code:     nil,
 			err:      errors.New("connection refused"),
 			expected: redeemActionCreate,
+			wantErr:  true,
 		},
 		{
 			name:     "code exists, used — previous run completed redeem",
@@ -145,17 +365,23 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 			expected: redeemActionRedeem,
 		},
 		{
-			name:     "code exists but error also set — error takes precedence",
+			name:     "code exists but error also set — fail closed",
 			code:     &RedeemCode{Status: StatusUsed},
 			err:      errors.New("unexpected"),
 			expected: redeemActionCreate,
+			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := resolveRedeemAction(tt.code, tt.err)
+			got, err := resolveRedeemAction(tt.code, tt.err)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, got)
 		})
 	}
@@ -186,11 +412,48 @@ func TestResolveRedeemAction_IsUsedCanUseConsistency(t *testing.T) {
 	// Verify our decision function is consistent with the domain model methods
 	assert.True(t, usedCode.IsUsed())
 	assert.False(t, usedCode.CanUse())
-	assert.Equal(t, redeemActionSkipCompleted, resolveRedeemAction(usedCode, nil))
+	usedAction, err := resolveRedeemAction(usedCode, nil)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionSkipCompleted, usedAction)
 
 	assert.False(t, unusedCode.IsUsed())
 	assert.True(t, unusedCode.CanUse())
-	assert.Equal(t, redeemActionRedeem, resolveRedeemAction(unusedCode, nil))
+	unusedAction, err := resolveRedeemAction(unusedCode, nil)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionRedeem, unusedAction)
+}
+
+func TestValidatePaymentRedeemCode(t *testing.T) {
+	t.Parallel()
+	userID := int64(42)
+	otherUserID := int64(43)
+	order := &dbent.PaymentOrder{ID: 7, UserID: userID, RechargeCode: "PAY-7-12345", Amount: 80}
+
+	tests := []struct {
+		name    string
+		code    *RedeemCode
+		wantErr string
+	}{
+		{name: "unused code", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUnused}},
+		{name: "used by order user", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUsed, UsedBy: &userID}},
+		{name: "used without user", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUsed}, wantErr: "user mismatch"},
+		{name: "used by another user", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusUsed, UsedBy: &otherUserID}, wantErr: "user mismatch"},
+		{name: "wrong code", code: &RedeemCode{Code: "OTHER", Type: RedeemTypeBalance, Value: 80, Status: StatusUnused}, wantErr: "code mismatch"},
+		{name: "wrong type", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeConcurrency, Value: 80, Status: StatusUnused}, wantErr: "type mismatch"},
+		{name: "wrong amount", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 79, Status: StatusUnused}, wantErr: "amount mismatch"},
+		{name: "invalid status", code: &RedeemCode{Code: order.RechargeCode, Type: RedeemTypeBalance, Value: 80, Status: StatusDisabled}, wantErr: "invalid status"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePaymentRedeemCode(order, tt.code)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }
 
 func TestExpectedNotificationProviderKeyPrefersOrderInstanceProvider(t *testing.T) {

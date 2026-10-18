@@ -95,8 +95,104 @@
 
     <!-- ═══ Active States: QR or Popup waiting ═══ -->
 
+    <!-- Mobile Alipay app handoff. The QR fallback stays hidden until launch timeout. -->
+    <template v-else-if="isMobileAlipayDeepLink">
+      <template v-if="!deepLinkFallbackVisible">
+        <div class="card p-6">
+          <div class="flex flex-col items-center space-y-4 py-4 text-center">
+            <div
+              v-if="deepLinkState === 'launching'"
+              class="h-10 w-10 animate-spin rounded-full border-4 border-[#00AEEF] border-t-transparent"
+            ></div>
+            <div
+              v-else
+              class="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/30"
+            >
+              <Icon name="checkCircle" size="lg" class="text-[#00AEEF]" />
+            </div>
+            <p class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ deepLinkState === 'backgrounded' ? t('payment.qr.alipayContinueInApp') : t('payment.qr.alipayOpening') }}
+            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.alipayWaitingHint') }}</p>
+            <button
+              v-if="deepLinkState === 'backgrounded'"
+              data-test="reopen-alipay"
+              class="btn btn-alipay inline-flex items-center gap-2 text-sm"
+              @click="reopenAlipay"
+            >
+              <Icon name="externalLink" size="sm" />
+              {{ t('payment.qr.reopenAlipay') }}
+            </button>
+          </div>
+        </div>
+        <div class="card p-4 text-center">
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiresIn') }}</p>
+          <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
+          <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t('payment.qr.waitingPayment') }}</p>
+        </div>
+      </template>
+      <template v-else>
+        <div data-test="alipay-qr-fallback" class="card p-6">
+          <div class="flex flex-col items-center space-y-4">
+            <div class="text-center">
+              <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.qr.alipayFallbackTitle') }}</p>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.alipayFallbackHint') }}</p>
+            </div>
+            <div class="w-full space-y-2 border-y border-gray-100 py-3 text-sm dark:border-dark-600">
+              <div class="flex items-start justify-between gap-4">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
+                <span class="font-semibold text-gray-900 dark:text-white">{{ displayPaymentAmount }}</span>
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderNo') }}</span>
+                <span class="max-w-[70%] break-all text-right font-mono text-xs text-gray-900 dark:text-white">
+                  {{ displayOrderNumber }}
+                </span>
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('payment.qr.expiresIn') }}</span>
+                <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</span>
+              </div>
+            </div>
+            <div :class="['relative rounded-lg border-2 p-4', qrBorderClass]">
+              <canvas ref="qrCanvas" class="mx-auto"></canvas>
+              <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span :class="['rounded-full p-2 shadow ring-2 ring-white', qrLogoBgClass]">
+                  <img :src="qrLogoIcon" alt="" class="h-5 w-5 brightness-0 invert" />
+                </span>
+              </div>
+            </div>
+            <p class="text-center text-sm leading-6 text-gray-600 dark:text-gray-300">
+              {{ t('payment.qr.alipaySaveAndScanHint') }}
+            </p>
+            <div class="grid w-full gap-2 sm:grid-cols-2">
+              <button
+                data-test="reopen-alipay"
+                class="btn btn-alipay inline-flex items-center justify-center gap-2"
+                @click="reopenAlipay"
+              >
+                <Icon name="externalLink" size="sm" />
+                {{ t('payment.qr.reopenAlipay') }}
+              </button>
+              <button
+                data-test="save-alipay-qr"
+                class="btn btn-secondary inline-flex items-center justify-center gap-2"
+                @click="saveQRCode"
+              >
+                <Icon name="download" size="sm" />
+                {{ t('payment.qr.saveQRCode') }}
+              </button>
+            </div>
+            <button class="btn btn-secondary w-full" @click="handleDone">
+              {{ t('payment.result.backToRecharge') }}
+            </button>
+          </div>
+        </div>
+      </template>
+    </template>
+
     <!-- QR Code Mode -->
-    <template v-else-if="qrUrl">
+    <template v-else-if="showQRCode">
       <div class="card p-6">
         <div class="flex flex-col items-center space-y-4">
           <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ scanTitle }}</p>
@@ -105,7 +201,7 @@
             <!-- Brand logo overlay -->
             <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span :class="['rounded-full p-2 shadow ring-2 ring-white', qrLogoBgClass]">
-                <img :src="isAlipay ? alipayIcon : wxpayIcon" alt="" class="h-5 w-5 brightness-0 invert" />
+                <img :src="qrLogoIcon" alt="" class="h-5 w-5 brightness-0 invert" />
               </span>
             </div>
           </div>
@@ -165,7 +261,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePaymentStore } from '@/stores/payment'
 import { useAppStore } from '@/stores'
@@ -177,9 +273,17 @@ import Icon from '@/components/icons/Icon.vue'
 import QRCode from 'qrcode'
 import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
+import paymentIcon from '@/assets/icons/payment.svg'
+import {
+  createAlipayDeepLinkLauncher,
+  type AlipayDeepLinkLauncher,
+  type AlipayDeepLinkState,
+} from './alipayDeepLink'
 
 const props = defineProps<{
   orderId: number
+  amount?: number
+  payAmount?: number
   qrCode: string
   expiresAt: string
   paymentType: string
@@ -194,7 +298,8 @@ type PaymentOutcome = 'success' | 'cancelled' | 'expired' | 'fulfillment_failed'
 
 const emit = defineEmits<{ done: []; success: []; settled: [outcome: PaymentOutcome] }>()
 
-const { t } = useI18n()
+const i18n = useI18n()
+const { t } = i18n
 const paymentStore = usePaymentStore()
 const appStore = useAppStore()
 
@@ -245,6 +350,12 @@ const qrLogoBgClass = computed(() => {
   return 'bg-gray-400'
 })
 
+const qrLogoIcon = computed(() => {
+  if (isAlipay.value) return alipayIcon
+  if (isWxpay.value) return wxpayIcon
+  return paymentIcon
+})
+
 const scanTitle = computed(() => {
   if (isAlipay.value) return t('payment.qr.scanAlipay')
   if (isWxpay.value) return t('payment.qr.scanWxpay')
@@ -262,6 +373,13 @@ const countdownDisplay = computed(() => {
   const s = remainingSeconds.value % 60
   return m.toString().padStart(2, '0') + ':' + s.toString().padStart(2, '0')
 })
+
+const displayPaymentAmount = computed(() => formatGatewayAmount(props.payAmount || props.amount || 0))
+const displayOrderNumber = computed(() => props.outTradeNo || `#${props.orderId}`)
+
+function formatGatewayAmount(value: number, currency?: string | null): string {
+  return formatPaymentAmount(value, currency || paymentCurrency.value, localeCode.value)
+}
 
 function isSuccessStatus(status: string | null | undefined): boolean {
   return status === 'COMPLETED' || status === 'PAID' || status === 'RECHARGING'
@@ -284,7 +402,7 @@ function setOutcome(next: PaymentOutcome) {
 
 async function renderQR() {
   await nextTick()
-  if (!qrCanvas.value || !qrUrl.value) return
+  if (!showQRCode.value || !qrCanvas.value || !qrUrl.value) return
   await QRCode.toCanvas(qrCanvas.value, qrUrl.value, {
     width: 220, margin: 2,
     errorCorrectionLevel: 'M',
@@ -354,9 +472,10 @@ async function pollStatus() {
 
 function startCountdown(seconds: number) {
   remainingSeconds.value = Math.max(0, seconds)
+  const deadline = Date.now() + remainingSeconds.value * 1000
   if (remainingSeconds.value <= 0) { setOutcome('expired'); return }
   countdownTimer = setInterval(() => {
-    remainingSeconds.value--
+    remainingSeconds.value = Math.max(0, Math.floor((deadline - Date.now()) / 1000))
     if (remainingSeconds.value <= 0) { setOutcome('expired'); cleanup() }
   }, 1000)
 }
@@ -388,6 +507,8 @@ function cleanup() {
 
 // Initialize on mount
 qrUrl.value = props.qrCode
+verifyAttempts = 0
+lastVerifyAt = 0
 let seconds = 30 * 60
 if (props.expiresAt) {
   seconds = Math.floor((new Date(props.expiresAt).getTime() - Date.now()) / 1000)

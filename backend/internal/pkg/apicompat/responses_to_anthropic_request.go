@@ -160,7 +160,11 @@ func convertResponsesInputToAnthropic(inputRaw json.RawMessage, preserveThinking
 	var inputStr string
 	if err := json.Unmarshal(inputRaw, &inputStr); err == nil {
 		content, _ := json.Marshal(inputStr)
-		return nil, []AnthropicMessage{{Role: "user", Content: content}}, nil
+		var system json.RawMessage
+		if len(systemParts) > 0 {
+			system, _ = json.Marshal(strings.Join(systemParts, "\n\n"))
+		}
+		return system, []AnthropicMessage{{Role: "user", Content: content}}, nil
 	}
 
 	var items []ResponsesInputItem
@@ -168,16 +172,14 @@ func convertResponsesInputToAnthropic(inputRaw json.RawMessage, preserveThinking
 		return nil, nil, fmt.Errorf("parse responses input: %w", err)
 	}
 
-	var system json.RawMessage
 	var messages []AnthropicMessage
 
 	for _, item := range items {
 		switch {
-		case item.Role == "system":
-			// System prompt → Anthropic system field
+		case item.Role == "system" || item.Role == "developer":
 			text := extractTextFromContent(item.Content)
 			if text != "" {
-				system, _ = json.Marshal(text)
+				systemParts = append(systemParts, text)
 			}
 
 		case item.Type == "function_call":
@@ -200,11 +202,7 @@ func convertResponsesInputToAnthropic(inputRaw json.RawMessage, preserveThinking
 
 		case item.Type == "function_call_output":
 			// function_call_output → user message with tool_result block
-			outputContent := item.Output
-			if outputContent == "" {
-				outputContent = "(empty)"
-			}
-			contentJSON, _ := json.Marshal(outputContent)
+			contentJSON := responsesFunctionOutputToAnthropicContent(item)
 			block := AnthropicContentBlock{
 				Type:      "tool_result",
 				ToolUseID: fromResponsesCallIDToAnthropic(item.CallID),
@@ -507,6 +505,14 @@ func convertResponsesUserToAnthropicContent(raw json.RawMessage) (json.RawMessag
 					Source: src,
 				})
 			}
+		case "input_file":
+			src := dataURIToAnthropicFileSource(p.FileData)
+			if src != nil {
+				blocks = append(blocks, AnthropicContentBlock{
+					Type:   "document",
+					Source: src,
+				})
+			}
 		}
 	}
 
@@ -594,6 +600,12 @@ func dataURIToAnthropicImageSource(dataURI string) *AnthropicImageSource {
 	}
 }
 
+// dataURIToAnthropicFileSource parses a data URI into a document source.
+// file_id-only parts are not convertible here and stay dropped.
+func dataURIToAnthropicFileSource(fileData string) *AnthropicImageSource {
+	return dataURIToAnthropicImageSource(fileData)
+}
+
 // mergeConsecutiveMessages merges consecutive messages with the same role
 // because Anthropic requires alternating user/assistant turns.
 func mergeConsecutiveMessages(messages []AnthropicMessage) []AnthropicMessage {
@@ -649,25 +661,63 @@ func convertResponsesToAnthropicTools(tools []ResponsesTool) []AnthropicTool {
 				Description: t.Description,
 				InputSchema: normalizeAnthropicInputSchema(t.Parameters),
 			})
+		case "custom":
+			out = append(out, AnthropicTool{
+				Name:        t.Name,
+				Description: t.Description,
+				InputSchema: normalizeAnthropicInputSchema(t.Parameters),
+			})
 		default:
 			// Pass through unknown tool types
 			out = append(out, AnthropicTool{
 				Type:        t.Type,
 				Name:        t.Name,
 				Description: t.Description,
-				InputSchema: t.Parameters,
+				InputSchema: normalizeAnthropicInputSchema(t.Parameters),
 			})
 		}
 	}
 	return out
 }
 
-// normalizeAnthropicInputSchema ensures the input_schema has a "type" field.
+// normalizeAnthropicInputSchema ensures input_schema is a valid object schema.
+// Codex 会把部分内置工具（例如 codex_app 的 automation_update）的 parameters
+// 根节点声明成对象分支的 oneOf/anyOf，Anthropic 只接受 object 根节点，这里把
+// 顶层联合摊平成单个 object schema。
 func normalizeAnthropicInputSchema(schema json.RawMessage) json.RawMessage {
-	if len(schema) == 0 || string(schema) == "null" {
+	const emptyObjectSchema = `{"type":"object","properties":{}}`
+
+	trimmed := strings.TrimSpace(string(schema))
+	if trimmed == "" || trimmed == "null" {
+		return json.RawMessage(emptyObjectSchema)
+	}
+
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(schema, &m); err != nil {
 		return json.RawMessage(`{"type":"object","properties":{}}`)
 	}
-	return schema
+
+	flattenAnthropicRootUnions(m)
+
+	typeRaw, ok := m["type"]
+	if !ok || strings.TrimSpace(string(typeRaw)) == "" || string(typeRaw) == "null" {
+		m["type"] = json.RawMessage(`"object"`)
+	} else {
+		var typ string
+		if err := json.Unmarshal(typeRaw, &typ); err != nil || typ != "object" {
+			return json.RawMessage(emptyObjectSchema)
+		}
+	}
+
+	if _, ok := m["properties"]; !ok {
+		m["properties"] = json.RawMessage(`{}`)
+	}
+
+	out, err := json.Marshal(m)
+	if err != nil {
+		return json.RawMessage(emptyObjectSchema)
+	}
+	return out
 }
 
 // convertResponsesToAnthropicToolChoice maps Responses tool_choice to Anthropic format.

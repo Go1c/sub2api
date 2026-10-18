@@ -7,6 +7,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
 const (
@@ -516,6 +519,7 @@ func defaultOpsAdvancedSettings() *OpsAdvancedSettings {
 		Aggregation: OpsAggregationSettings{
 			AggregationEnabled: false,
 		},
+		OpenAIAccountQuotaAutoPause:     OpsOpenAIAccountQuotaAutoPauseSettings{},
 		IgnoreCountTokensErrors:         true,  // count_tokens 404 是预期行为，默认忽略
 		IgnoreContextCanceled:           true,  // Default to true - client disconnects are not errors
 		IgnoreNoAvailableAccounts:       false, // Default to false - this is a real routing issue
@@ -567,6 +571,16 @@ func normalizeOpsAdvancedSettings(cfg *OpsAdvancedSettings) {
 	if cfg.AutoRefreshIntervalSec <= 0 {
 		cfg.AutoRefreshIntervalSec = 30
 	}
+}
+
+func clampOpsQuotaAutoPauseThreshold(value float64) float64 {
+	if value <= 0 {
+		return 0
+	}
+	if value > 1 {
+		return 1
+	}
+	return value
 }
 
 func validateOpsAdvancedSettings(cfg *OpsAdvancedSettings) error {

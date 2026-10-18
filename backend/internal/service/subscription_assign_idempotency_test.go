@@ -115,6 +115,12 @@ func (userSubRepoNoop) Create(context.Context, *UserSubscription) error {
 func (userSubRepoNoop) GetByID(context.Context, int64) (*UserSubscription, error) {
 	panic("unexpected GetByID call")
 }
+func (userSubRepoNoop) GetByIDForUpdate(context.Context, int64) (*UserSubscription, error) {
+	panic("unexpected GetByIDForUpdate call")
+}
+func (userSubRepoNoop) GetByIDIncludeDeleted(context.Context, int64) (*UserSubscription, error) {
+	panic("unexpected GetByIDIncludeDeleted call")
+}
 func (userSubRepoNoop) GetByUserIDAndGroupID(context.Context, int64, int64) (*UserSubscription, error) {
 	panic("unexpected GetByUserIDAndGroupID call")
 }
@@ -125,6 +131,9 @@ func (userSubRepoNoop) Update(context.Context, *UserSubscription) error {
 	panic("unexpected Update call")
 }
 func (userSubRepoNoop) Delete(context.Context, int64) error { panic("unexpected Delete call") }
+func (userSubRepoNoop) Restore(context.Context, int64, string) (*UserSubscription, error) {
+	panic("unexpected Restore call")
+}
 func (userSubRepoNoop) ListByUserID(context.Context, int64) ([]UserSubscription, error) {
 	panic("unexpected ListByUserID call")
 }
@@ -140,6 +149,9 @@ func (userSubRepoNoop) List(context.Context, pagination.PaginationParams, UserSu
 func (userSubRepoNoop) ExistsByUserIDAndGroupID(context.Context, int64, int64) (bool, error) {
 	panic("unexpected ExistsByUserIDAndGroupID call")
 }
+func (userSubRepoNoop) ExistsActiveByUserIDAndGroupID(context.Context, int64, int64) (bool, error) {
+	panic("unexpected ExistsActiveByUserIDAndGroupID call")
+}
 func (userSubRepoNoop) ExtendExpiry(context.Context, int64, time.Time) error {
 	panic("unexpected ExtendExpiry call")
 }
@@ -149,7 +161,7 @@ func (userSubRepoNoop) UpdateStatus(context.Context, int64, string) error {
 func (userSubRepoNoop) UpdateNotes(context.Context, int64, string) error {
 	panic("unexpected UpdateNotes call")
 }
-func (userSubRepoNoop) ActivateWindows(context.Context, int64, time.Time) error {
+func (userSubRepoNoop) ActivateWindows(context.Context, int64, time.Time, time.Time) error {
 	panic("unexpected ActivateWindows call")
 }
 func (userSubRepoNoop) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time) error {

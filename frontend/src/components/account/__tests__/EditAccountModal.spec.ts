@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { mount } from '@vue/test-utils'
+import {
+  BUILTIN_PLATFORM_CATALOG,
+  resetPlatformCatalog,
+  setPlatformCatalog
+} from '@/constants/platformCatalog'
 
 const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
@@ -70,6 +75,7 @@ const BaseDialogStub = defineComponent({
 const ModelWhitelistSelectorStub = defineComponent({
   name: 'ModelWhitelistSelector',
   props: {
+    modelMappings: { type: Array, default: () => [] },
     modelValue: {
       type: Array,
       default: () => []
