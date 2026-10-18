@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -453,7 +452,7 @@ func (s *PricingService) hasCustomPricingFiles() bool {
 	if s == nil || s.cfg == nil {
 		return false
 	}
-	return strings.TrimSpace(s.cfg.Pricing.FallbackFile) != "" || strings.TrimSpace(s.cfg.Pricing.OverrideFile) != ""
+	return strings.TrimSpace(s.cfg.Pricing.FallbackFile) != "" || strings.TrimSpace(s.cfg.Pricing.OverridesFile) != ""
 }
 
 // customPricingFilesFingerprint 返回 fallback、override 两个文件当前内容的联合 sha256。
@@ -463,7 +462,7 @@ func (s *PricingService) customPricingFilesFingerprint() string {
 		return ""
 	}
 	h := sha256.New()
-	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverrideFile} {
+	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverridesFile} {
 		var body []byte
 		if p := strings.TrimSpace(path); p != "" {
 			body, _ = os.ReadFile(p)
@@ -479,7 +478,7 @@ func (s *PricingService) customPricingFilesFingerprint() string {
 // validateCustomPricingFiles 要求每个已配置且存在的 fallback/override 文件可读且为 JSON
 // 对象，任一不满足即返回带路径的错误；文件不存在视为该层为空，属合法状态。
 func (s *PricingService) validateCustomPricingFiles() error {
-	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverrideFile} {
+	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverridesFile} {
 		p := strings.TrimSpace(path)
 		if p == "" {
 			continue
@@ -630,6 +629,22 @@ func (s *PricingService) downloadPricingData() error {
 	logger.LegacyPrintf("service.pricing", "[Pricing] Downloaded %d models successfully", len(data))
 	return nil
 }
+
+func (s *PricingService) buildPricingData(body []byte) (map[string]*LiteLLMModelPricing, string, error) {
+	data, err := s.parsePricingData(body)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, s.customPricingFilesFingerprint(), nil
+}
+
+func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessage) map[string]json.RawMessage {
+	return rawData
+}
+
+func warnOrphanCacheTierFields([]string) {}
+
+func warnLopsidedLongContextLadders([]string) {}
 
 // parsePricingData 解析价格数据（处理各种格式）
 func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModelPricing, error) {

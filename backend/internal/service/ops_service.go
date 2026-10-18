@@ -566,6 +566,10 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 	}
 
 	sanitized := make([]*OpsUpstreamErrorEvent, 0, len(events))
+	firstEventWithBody := len(events) - opsUpstreamErrorsBodyWindow
+	if firstEventWithBody < 0 {
+		firstEventWithBody = 0
+	}
 	for i, ev := range events {
 		out := *ev
 		normalizeOpsUpstreamProxyAttribution(&out)
@@ -580,7 +584,7 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 		out.Platform = truncateString(strings.TrimSpace(out.Platform), 32)
 		out.AccountName = truncateString(strings.TrimSpace(out.AccountName), 128)
 		out.UpstreamRequestID = truncateString(strings.TrimSpace(out.UpstreamRequestID), 128)
-		out.UpstreamURL = truncateString(strings.TrimSpace(out.UpstreamURL), 2048)
+		out.UpstreamURL = truncateString(strings.TrimSpace(out.UpstreamURL), urlMaxLen)
 		if body := strings.TrimSpace(out.UpstreamResponseBody); body != "" {
 			out.UpstreamResponseBody, _ = sanitizeErrorBodyForStorage(body, OpsErrorLogQueueBodyMaxBytes)
 		} else {
@@ -802,24 +806,12 @@ func (s *OpsService) ListRetryAttemptsByErrorID(ctx context.Context, errorID int
 		return nil, err
 	}
 	if s.opsRepo == nil {
-		return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
+		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
 	}
-	if id <= 0 {
+	if errorID <= 0 {
 		return nil, infraerrors.BadRequest("OPS_ERROR_INVALID_ID", "invalid error id")
 	}
-	detail, err := s.opsRepo.GetErrorLogByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
-		}
-		return nil, infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
-	}
-	// 归属只能由通过鉴权时写入的 user_id 确定。
-	ownedDirectly := detail.UserID != nil && *detail.UserID == userID
-	if !ownedDirectly {
-		return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
-	}
-	return ToUserErrorRequestDetail(detail), nil
+	return s.opsRepo.ListRetryAttemptsByErrorID(ctx, errorID, limit)
 }
 func (s *OpsService) UpdateErrorResolution(ctx context.Context, errorID int64, resolved bool, resolvedByUserID *int64) error {
 	if err := s.RequireMonitoringEnabled(ctx); err != nil {
@@ -1143,6 +1135,21 @@ func shallowCopyMap(m map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (sanitized string, truncated bool, bytesLen int) {
+	bytesLen = len(raw)
+	rawText := strings.TrimSpace(string(raw))
+	if rawText == "" {
+		return "", false, bytesLen
+	}
+	if out, trunc, n := sanitizeAndTrimJSONPayload([]byte(rawText), maxBytes); out != "" {
+		return out, trunc, n
+	}
+	if maxBytes > 0 && len(rawText) > maxBytes {
+		return truncateString(rawText, maxBytes), true, bytesLen
+	}
+	return rawText, false, bytesLen
 }
 
 func sanitizeErrorBodyForStorage(raw string, maxBytes int) (sanitized string, truncated bool) {

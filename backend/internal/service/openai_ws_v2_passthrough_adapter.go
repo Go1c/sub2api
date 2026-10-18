@@ -769,7 +769,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	// goroutine）和 OnTurnComplete / final result（runUpstreamToClient
 	// goroutine）之间同步当前 turn 的 usage metadata。
 	usageMeta.initFromFirstFrame(firstClientMessage, capturedSessionModel)
-	promptCacheKey := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "prompt_cache_key").String())
+	promptCacheKey = strings.TrimSpace(gjson.GetBytes(firstClientMessage, "prompt_cache_key").String())
 
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
 	if err != nil {
@@ -1128,8 +1128,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					turnNo,
 					truncateOpenAIWSLogValue(turnResult.RequestID, openAIWSIDValueMaxLen),
 					truncateOpenAIWSLogValue(turn.TerminalEventType, openAIWSLogValueMaxLen),
-					truncateOpenAIWSLogValue(turnRequestModel, openAIWSLogValueMaxLen),
-					truncateOpenAIWSLogValue(turnUpstreamModel, openAIWSLogValueMaxLen),
+					truncateOpenAIWSLogValue(turn.RequestModel, openAIWSLogValueMaxLen),
+					truncateOpenAIWSLogValue(turn.RequestModel, openAIWSLogValueMaxLen),
 					turnResult.Duration.Milliseconds(),
 					openAIWSFirstTokenMsForLog(turnResult.FirstTokenMs),
 					turnResult.Usage.InputTokens,
@@ -1221,6 +1221,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	}
 
 	resultRequestModel, resultUpstreamModel := usageMeta.turnModels(relayResult.RequestModel)
+	resultModel := relayResult.RequestModel
+	if model := strings.TrimSpace(resultUpstreamModel); model != "" {
+		resultModel = model
+	} else if model := strings.TrimSpace(resultRequestModel); model != "" {
+		resultModel = model
+	}
 	result := &OpenAIForwardResult{
 		RequestID: relayResult.RequestID,
 		Usage: OpenAIUsage{
@@ -1231,7 +1237,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			CacheReadInputTokens:     relayResult.Usage.CacheReadInputTokens,
 			ImageOutputTokens:        relayResult.Usage.ImageOutputTokens,
 		},
-		Model:                 relayResult.RequestModel,
+		Model:                 resultModel,
 		ServiceTier:           usageMeta.serviceTier.Load(),
 		ReasoningEffort:       usageMeta.reasoningEffort.Load(),
 		Stream:                true,

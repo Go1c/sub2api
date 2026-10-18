@@ -18,6 +18,20 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+func (s *OpenAIGatewayService) validateOutboundURL(raw string) (string, error) {
+	if s == nil || s.cfg == nil {
+		return urlvalidator.ValidateURLFormat(raw, false)
+	}
+	if !s.cfg.Security.URLAllowlist.Enabled {
+		return urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
+	}
+	return urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
+		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
+		RequireAllowlist: true,
+		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+	})
+}
+
 func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, error) {
 	if s.cfg != nil && !s.cfg.Security.URLAllowlist.Enabled {
 		normalized, err := urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
@@ -1544,4 +1558,61 @@ func validateGPT61SolCompatRequest(body []byte, model string) error {
 		}
 	}
 	return nil
+}
+
+func explicitRequestedReasoningEffortFromBody(body []byte) string {
+	raw := strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String())
+	if raw == "" {
+		raw = strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String())
+	}
+	if raw == "" {
+		raw = strings.TrimSpace(gjson.GetBytes(body, "output_config.effort").String())
+	}
+	return raw
+}
+
+// CanonicalRequestedReasoningEffort extracts the client-requested effort before
+// group policy rewriting. Empty or unknown values return nil.
+func CanonicalRequestedReasoningEffort(body []byte, modelCandidates ...string) *string {
+	if raw := explicitRequestedReasoningEffortFromBody(body); raw != "" {
+		canonical := NormalizeMaxReasoningEffort(raw)
+		if canonical == "" {
+			return nil
+		}
+		return &canonical
+	}
+	for _, model := range modelCandidates {
+		if value := canonicalReasoningEffortFromModelSuffix(model); value != "" {
+			return &value
+		}
+	}
+	if model := strings.TrimSpace(gjson.GetBytes(body, "model").String()); model != "" {
+		if value := canonicalReasoningEffortFromModelSuffix(model); value != "" {
+			return &value
+		}
+	}
+	return nil
+}
+
+func canonicalReasoningEffortFromModelSuffix(model string) string {
+	modelID := strings.TrimSpace(model)
+	if modelID == "" {
+		return ""
+	}
+	if strings.Contains(modelID, "/") {
+		parts := strings.Split(modelID, "/")
+		modelID = parts[len(parts)-1]
+	}
+	parts := strings.FieldsFunc(strings.ToLower(modelID), func(r rune) bool {
+		switch r {
+		case '-', '_', ' ':
+			return true
+		default:
+			return false
+		}
+	})
+	if len(parts) == 0 {
+		return ""
+	}
+	return NormalizeMaxReasoningEffort(parts[len(parts)-1])
 }

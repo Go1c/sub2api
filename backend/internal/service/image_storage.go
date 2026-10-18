@@ -168,6 +168,14 @@ func (u *ImageResultUploader) buildKey(taskID string, index int, contentType str
 	return u.prefix + taskID + "-" + strconv.Itoa(index) + extensionForContentType(contentType)
 }
 
+func detectedImageContentType(data []byte) string {
+	ct := strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0])
+	if strings.HasPrefix(ct, "image/") {
+		return ct
+	}
+	return ""
+}
+
 func detectImageContentType(data []byte) string {
 	ct := strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0])
 	if strings.HasPrefix(ct, "image/") {

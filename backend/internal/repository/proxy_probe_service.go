@@ -71,11 +71,6 @@ type configuredProbeTarget struct {
 	parser string
 }
 
-type configuredProbeTarget struct {
-	url    string
-	parser string
-}
-
 type proxyProbeService struct {
 	insecureSkipVerify  bool
 	allowPrivateHosts   bool
@@ -218,19 +213,18 @@ func (s *proxyProbeService) parseIPify(body []byte, latencyMs int64) (*service.P
 	}, latencyMs, nil
 }
 
-func (s *proxyProbeService) parseIPify(body []byte, latencyMs int64) (*service.ProxyExitInfo, int64, error) {
+func (s *proxyProbeService) parseHTTPBin(body []byte, latencyMs int64) (*service.ProxyExitInfo, int64, error) {
 	var result struct {
-		IP string `json:"ip"`
+		Origin string `json:"origin"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, latencyMs, fmt.Errorf("failed to parse ipify response: %w", err)
+		return nil, latencyMs, fmt.Errorf("failed to parse httpbin response: %w", err)
 	}
-	if result.IP == "" {
-		return nil, latencyMs, fmt.Errorf("ipify: no IP found in response")
+	ip := strings.TrimSpace(strings.Split(result.Origin, ",")[0])
+	if ip == "" {
+		return nil, latencyMs, fmt.Errorf("httpbin: no IP found in response")
 	}
-	return &service.ProxyExitInfo{
-		IP: result.IP,
-	}, latencyMs, nil
+	return &service.ProxyExitInfo{IP: ip}, latencyMs, nil
 }
 
 // parseChatGPTTrace 解析 Cloudflare trace 端点（如 chatgpt.com/cdn-cgi/trace）的纯文本响应。

@@ -87,6 +87,7 @@ type OpenAIQuotaUsage struct {
 	AdditionalRateLimits  []OpenAIAdditionalRateLimit  `json:"additional_rate_limits,omitempty"`
 	RateLimitResetCredits *OpenAIRateLimitResetCredits `json:"rate_limit_reset_credits,omitempty"`
 	FetchedAt             int64                        `json:"fetched_at"`
+	autoResetCandidates   []openAIAutoResetCreditCandidate `json:"-"`
 }
 
 // OpenAIQuotaResetCredit captures the redeemed credit metadata returned by the
@@ -121,6 +122,7 @@ type OpenAIQuotaService struct {
 	agentIdentityTaskMu  sync.Mutex
 	agentIdentityWS      agentIdentityWSConnectionInvalidator
 	ipGroupResolver      *openAIIPGroupResolver
+	referralClient       OpenAIReferralClient
 }
 
 // NewOpenAIQuotaService constructs a quota service. token provider is required —

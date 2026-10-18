@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -307,6 +308,45 @@ type openAIWSConn struct {
 	createdAtNano atomic.Int64
 	lastUsedNano  atomic.Int64
 	prewarmed     atomic.Bool
+}
+
+type openAIWSReaderLoopCapable interface {
+	RequiresReaderLoop() bool
+}
+
+type openAIWSUpstreamPingCounter interface {
+	UpstreamPingCount() int64
+}
+
+type openAIWSForceCloser interface {
+	CloseNow() error
+}
+
+func effectiveOpenAISSEEventType(payload []byte, fallback string) string {
+	var doc struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(payload, &doc); err != nil || strings.TrimSpace(doc.Type) == "" {
+		return fallback
+	}
+	return doc.Type
+}
+
+func (p *openAIWSConnPool) dropDeadConnLocked(ap *openAIWSAccountPool, conn *openAIWSConn, evicted *[]*openAIWSConn) bool {
+	if ap == nil || conn == nil || (!conn.isClosed() && !conn.isUnusable()) {
+		return false
+	}
+	if existing, ok := ap.conns[conn.id]; ok && existing == conn {
+		delete(ap.conns, conn.id)
+		if len(ap.pinnedConns) > 0 {
+			delete(ap.pinnedConns, conn.id)
+		}
+		ap.signalChangedLocked()
+		if evicted != nil {
+			*evicted = append(*evicted, conn)
+		}
+	}
+	return true
 }
 
 func newOpenAIWSConn(id string, _ int64, ws openAIWSClientConn, handshakeHeaders http.Header) *openAIWSConn {
@@ -1314,43 +1354,6 @@ retryAcquire:
 	}
 
 	if !req.ForceNewConn && len(ap.conns)+ap.creating >= effectiveMaxConns {
-		affine := p.pickLeastBusyConnWithRoutingAffinityLocked(ap, compatibility, routingAffinity)
-		if idle := p.pickOldestIdleConnWithoutHandshakeCompatibilityLocked(ap, compatibility); idle != nil {
-			delete(ap.conns, idle.id)
-			evicted = append(evicted, idle)
-			p.metrics.scaleDownTotal.Add(1)
-		} else if affine == nil {
-			compatible := p.pickLeastBusyConnLocked(ap, "", compatibility)
-			if compatible != nil {
-				// Capacity is full and every compatible connection is busy. The
-				// hint remains soft here: queue on a compatible connection below.
-				goto acquireAtCapacity
-			}
-			hasConnection := false
-			for _, conn := range ap.conns {
-				if conn != nil {
-					hasConnection = true
-					break
-				}
-			}
-			if !hasConnection && ap.creating == 0 {
-				ap.mu.Unlock()
-				closeOpenAIWSConns(evicted)
-				return nil, errOpenAIWSConnClosed
-			}
-			changedCh := ap.changeChannelLocked()
-			ap.mu.Unlock()
-			closeOpenAIWSConns(evicted)
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-changedCh:
-				goto retryAcquire
-			}
-		}
-	}
-
-	if !req.ForceNewConn && len(ap.conns)+ap.creating >= effectiveMaxConns {
 		compatible := p.pickLeastBusyConnLocked(ap, "", betaFeatures)
 		if idle := p.pickOldestIdleConnWithDifferentBetaFeaturesLocked(ap, betaFeatures); idle != nil {
 			delete(ap.conns, idle.id)
@@ -1450,7 +1453,6 @@ retryAcquire:
 		return nil, errOpenAIWSConnQueueFull
 	}
 
-acquireAtCapacity:
 	target := p.pickLeastBusyConnLocked(ap, req.PreferredConnID, betaFeatures)
 	connPick := time.Since(pickStartedAt)
 	p.recordConnPickDuration(connPick)
@@ -1883,6 +1885,7 @@ func (p *openAIWSConnPool) prewarmConns(accountID int64, req openAIWSAcquireRequ
 	if len(generations) > 0 {
 		generation = generations[0]
 	}
+	staleTarget := false
 	defer func() {
 		if ap, ok := p.getAccountPool(accountID); ok && ap != nil {
 			ap.mu.Lock()
@@ -1922,6 +1925,7 @@ func (p *openAIWSConnPool) prewarmConns(accountID int64, req openAIWSAcquireRequ
 			continue
 		}
 		if ap.generation != generation || ap.lastAcquire == nil {
+			staleTarget = staleTarget || ap.generation != generation
 			ap.mu.Unlock()
 			conn.close()
 			continue

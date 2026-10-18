@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/shopspring/decimal"
 )
 
@@ -827,6 +828,10 @@ func providerRequiredPayAmount(defaultAmount float64, pr *payment.CreatePaymentR
 		return defaultAmount
 	}
 	return amount
+}
+
+func shouldUseAlipayMobilePrecreate(req CreateOrderRequest, cfg *PaymentConfig, sel *payment.InstanceSelection) bool {
+	return req.IsMobile && cfg != nil && cfg.AlipayMobilePrecreateDeepLink && sel != nil && sel.ProviderKey == payment.TypeAlipay
 }
 
 func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.InstanceSelection, orderID, amount, subject string) payment.CreatePaymentRequest {

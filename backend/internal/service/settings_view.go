@@ -210,6 +210,7 @@ type SystemSettings struct {
 
 	// Channel Monitor feature
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
@@ -394,6 +395,7 @@ type PublicSettings struct {
 
 	// Channel Monitor feature
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`

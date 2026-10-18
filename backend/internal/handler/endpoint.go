@@ -29,6 +29,9 @@ const (
 	EndpointVideosGenerations    = "/v1/videos/generations"
 	EndpointVideos               = "/v1/videos"
 	EndpointGeminiModels         = "/v1beta/models"
+	EndpointSystemOne            = "/v1/systemone"
+	EndpointGeminiCachedContents = "/v1beta/cachedContents"
+	EndpointSeedanceTasks        = "/api/v3/contents/generations/tasks"
 )
 
 const EndpointAntigravityGenerateContent = "/v1internal:streamGenerateContent"

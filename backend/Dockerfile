@@ -14,7 +14,8 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-# 构建应用
+# 构建应用。Go 1.26 里 encoding/json/jsontext 仍在 jsonv2 实验开关后。
+ENV GOEXPERIMENT=jsonv2
 RUN VERSION_VALUE="$(./scripts/resolve-version.sh)" && \
     go build -ldflags="-s -w -X main.Version=${VERSION_VALUE}" -o main ./cmd/server/
 

@@ -27,6 +27,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -65,6 +66,10 @@ type AccountHandler struct {
 	grokImportProber           grokImportProber
 	accountErrorHistoryService *service.AccountErrorHistoryService
 	upstreamBillingProbe       *service.UpstreamBillingProbeService
+	ollamaCloudUsage           *service.OllamaCloudUsageService
+	opencodeGoUsage            *service.OpenCodeGoUsageService
+	claudeResetCredits         *service.ClaudeResetCreditService
+	cfg                        *config.Config
 }
 
 // SetUpstreamBillingProbeService attaches the optional remote billing probe service.
@@ -205,6 +210,7 @@ type AccountWithConcurrency struct {
 	CurrentWindowCost *float64 `json:"current_window_cost,omitempty"` // 当前窗口费用
 	ActiveSessions    *int     `json:"active_sessions,omitempty"`     // 当前活跃会话数
 	CurrentRPM        *int     `json:"current_rpm,omitempty"`         // 当前分钟 RPM 计数
+	simpleMode        bool     `json:"-"`
 }
 
 type AccountSchedulerScore struct {
@@ -244,6 +250,79 @@ func (h *AccountHandler) accountListResponseFromService(account *service.Account
 
 func (h *AccountHandler) isSimpleMode() bool {
 	return h != nil && h.cfg != nil && h.cfg.RunMode == config.RunModeSimple
+}
+
+func simpleModeCompositeServiceGroupIDs(account *service.Account) []int64 {
+	if account == nil {
+		return nil
+	}
+	seen := map[int64]struct{}{}
+	var ids []int64
+	add := func(group *service.Group) {
+		if group == nil || group.Platform != service.PlatformComposite {
+			return
+		}
+		if _, ok := seen[group.ID]; ok {
+			return
+		}
+		seen[group.ID] = struct{}{}
+		ids = append(ids, group.ID)
+	}
+	for _, group := range account.Groups {
+		add(group)
+	}
+	for i := range account.AccountGroups {
+		add(account.AccountGroups[i].Group)
+	}
+	return ids
+}
+
+func filterSimpleModeGroupIDs(ids []int64, exclude []int64) []int64 {
+	if len(ids) == 0 || len(exclude) == 0 {
+		return ids
+	}
+	skip := make(map[int64]struct{}, len(exclude))
+	for _, id := range exclude {
+		skip[id] = struct{}{}
+	}
+	filtered := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := skip[id]; ok {
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+	return filtered
+}
+
+func antigravityAccountTestModels(raw any) []antigravity.ClaudeModel {
+	models := antigravity.DefaultModels()
+	seen := make(map[string]struct{}, len(models))
+	for _, model := range models {
+		seen[model.ID] = struct{}{}
+	}
+	add := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		models = append(models, antigravity.ClaudeModel{ID: id, Type: "model", DisplayName: id})
+	}
+	switch mapping := raw.(type) {
+	case map[string]any:
+		for key := range mapping {
+			add(key)
+		}
+	case map[string]string:
+		for key := range mapping {
+			add(key)
+		}
+	}
+	return models
 }
 
 func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, account *service.Account) AccountWithConcurrency {
@@ -1101,6 +1180,139 @@ func (h *AccountHandler) scheduleOpenAIResponsesProbe(account *service.Account) 
 
 // Delete handles deleting an account
 // DELETE /api/v1/admin/accounts/:id
+func (h *AccountHandler) BatchDelete(c *gin.Context) {
+	var req struct {
+		AccountIDs []int64 `json:"account_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	accountIDs := normalizeInt64IDList(req.AccountIDs)
+	if len(accountIDs) == 0 {
+		response.BadRequest(c, "account_ids is required")
+		return
+	}
+
+	accounts, err := h.adminService.GetAccountsByIDs(c.Request.Context(), accountIDs)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	type deleteError struct {
+		AccountID int64  `json:"account_id"`
+		Error     string `json:"error"`
+	}
+
+	requestedIDs := make(map[int64]struct{}, len(accountIDs))
+	for _, accountID := range accountIDs {
+		requestedIDs[accountID] = struct{}{}
+	}
+	accountsByID := make(map[int64]*service.Account, len(accounts))
+	for _, account := range accounts {
+		if account != nil {
+			accountsByID[account.ID] = account
+		}
+	}
+
+	rootIDs := make([]int64, 0, len(accountIDs))
+	dependentIDs := make(map[int64][]int64)
+	failedIDs := make([]int64, 0)
+	errorsByAccount := make([]deleteError, 0)
+	for _, accountID := range accountIDs {
+		account := accountsByID[accountID]
+		if account == nil {
+			failedIDs = append(failedIDs, accountID)
+			errorsByAccount = append(errorsByAccount, deleteError{
+				AccountID: accountID,
+				Error:     "account not found",
+			})
+			continue
+		}
+
+		rootID := accountID
+		visited := map[int64]struct{}{accountID: {}}
+		for {
+			current := accountsByID[rootID]
+			if current == nil || current.ParentAccountID == nil {
+				break
+			}
+			parentID := *current.ParentAccountID
+			if _, selected := requestedIDs[parentID]; !selected {
+				break
+			}
+			if _, exists := accountsByID[parentID]; !exists {
+				break
+			}
+			if _, cyclic := visited[parentID]; cyclic {
+				rootID = accountID
+				break
+			}
+			visited[parentID] = struct{}{}
+			rootID = parentID
+		}
+
+		if rootID != accountID {
+			dependentIDs[rootID] = append(dependentIDs[rootID], accountID)
+			continue
+		}
+		rootIDs = append(rootIDs, accountID)
+	}
+
+	const maxConcurrency = 5
+	g, gctx := errgroup.WithContext(c.Request.Context())
+	g.SetLimit(maxConcurrency)
+
+	var mu sync.Mutex
+	successIDs := make([]int64, 0, len(accountIDs))
+
+	// Every worker returns nil so one account failure does not cancel the remaining deletions.
+	for _, id := range rootIDs {
+		accountID := id
+		g.Go(func() error {
+			err := h.adminService.DeleteAccount(gctx, accountID)
+
+			mu.Lock()
+			defer mu.Unlock()
+			affectedIDs := append([]int64{accountID}, dependentIDs[accountID]...)
+			if err != nil {
+				for _, affectedID := range affectedIDs {
+					failedIDs = append(failedIDs, affectedID)
+					errorsByAccount = append(errorsByAccount, deleteError{
+						AccountID: affectedID,
+						Error:     err.Error(),
+					})
+				}
+				return nil
+			}
+			successIDs = append(successIDs, affectedIDs...)
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	sort.Slice(successIDs, func(i, j int) bool { return successIDs[i] < successIDs[j] })
+	sort.Slice(failedIDs, func(i, j int) bool { return failedIDs[i] < failedIDs[j] })
+	sort.Slice(errorsByAccount, func(i, j int) bool {
+		return errorsByAccount[i].AccountID < errorsByAccount[j].AccountID
+	})
+
+	response.Success(c, gin.H{
+		"total":       len(accountIDs),
+		"success":     len(successIDs),
+		"failed":      len(failedIDs),
+		"success_ids": successIDs,
+		"failed_ids":  failedIDs,
+		"errors":      errorsByAccount,
+	})
+}
+
 func (h *AccountHandler) Delete(c *gin.Context) {
 	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -1155,13 +1367,8 @@ func (h *AccountHandler) Test(c *gin.Context) {
 	// Allow empty body, model_id is optional
 	_ = c.ShouldBindJSON(&req)
 
-	opts := service.AccountTestOptions{
-		ImageDataURL: req.ImageDataURL,
-		AudioDataURL: req.AudioDataURL,
-	}
-
 	// Use AccountTestService to test the account with SSE streaming
-	if err := h.accountTestService.TestAccountConnection(c, accountID, req.ModelID, req.Prompt, req.Mode, opts); err != nil {
+	if err := h.accountTestService.TestAccountConnection(c, accountID, req.ModelID, req.Prompt, req.Mode); err != nil {
 		// Error already sent via SSE, just log
 		return
 	}

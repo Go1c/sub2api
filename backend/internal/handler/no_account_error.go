@@ -4,12 +4,35 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
+
+var selectionModelRateLimitedPattern = regexp.MustCompile(`(?:model_rate_limited|rate_limited)=(\d+)`)
+
+func classifySelectionFailureError(err error, fallback noAccountErrorClassification) noAccountErrorClassification {
+	if err == nil || fallback.ModelNotFound {
+		return fallback
+	}
+	match := selectionModelRateLimitedPattern.FindStringSubmatch(strings.ToLower(err.Error()))
+	if len(match) != 2 {
+		return fallback
+	}
+	count, parseErr := strconv.Atoi(match[1])
+	if parseErr != nil || count <= 0 {
+		return fallback
+	}
+	return noAccountErrorClassification{
+		Status:  http.StatusTooManyRequests,
+		ErrType: "rate_limit_error",
+		Message: "All available accounts are currently rate-limited. Please retry later.",
+	}
+}
 
 // noAccountErrorClassification describes the HTTP response to emit when
 // account selection failed with ErrNoAvailableAccounts. Handlers obtain it

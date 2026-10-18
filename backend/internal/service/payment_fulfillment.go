@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"entgo.io/ent/dialect"
-
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
@@ -442,6 +440,34 @@ func resolveRedeemAction(existing *RedeemCode, lookupErr error) (redeemAction, e
 	return redeemActionRedeem, nil
 }
 
+func validatePaymentRedeemCode(o *dbent.PaymentOrder, code *RedeemCode) error {
+	if o == nil || code == nil {
+		return errors.New("payment redeem code validation requires an order and code")
+	}
+	if code.Code != o.RechargeCode {
+		return fmt.Errorf("payment redeem code mismatch for order %d", o.ID)
+	}
+	if code.Type != RedeemTypeBalance {
+		return fmt.Errorf("payment redeem code type mismatch for order %d: got %s", o.ID, code.Type)
+	}
+	if math.IsNaN(code.Value) || math.IsInf(code.Value, 0) || math.Abs(code.Value-o.Amount) > 1e-8 {
+		return fmt.Errorf("payment redeem code amount mismatch for order %d: expected %.8f, got %.8f", o.ID, o.Amount, code.Value)
+	}
+	switch code.Status {
+	case StatusUnused:
+		if code.UsedBy != nil {
+			return fmt.Errorf("unused payment redeem code has a user for order %d", o.ID)
+		}
+	case StatusUsed:
+		if code.UsedBy == nil || *code.UsedBy != o.UserID {
+			return fmt.Errorf("payment redeem code user mismatch for order %d", o.ID)
+		}
+	default:
+		return fmt.Errorf("payment redeem code has invalid status for order %d: %s", o.ID, code.Status)
+	}
+	return nil
+}
+
 func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, lease *paymentFulfillmentLease) error {
 	// Idempotency: check if redeem code already exists (from a previous partial run)
 	existing, lookupErr := s.redeemService.GetByCode(ctx, o.RechargeCode)
@@ -485,7 +511,11 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 func (s *PaymentService) fulfillRechargeBonus(ctx context.Context, o *dbent.PaymentOrder) error {
 	bonusCode := o.RechargeCode + "-B"
 	existing, lookupErr := s.redeemService.GetByCode(ctx, bonusCode)
-	switch resolveRedeemAction(existing, lookupErr) {
+	action, err := resolveRedeemAction(existing, lookupErr)
+	if err != nil {
+		return err
+	}
+	switch action {
 	case redeemActionSkipCompleted:
 		// 已发放
 		return nil
@@ -744,20 +774,10 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder, lease
 		slog.Info("subscription already assigned for order, skipping", "orderID", o.ID, "groupID", gid)
 		return s.markCompleted(ctx, o, lease, "SUBSCRIPTION_SUCCESS")
 	}
-	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
-		return err
-	}
-	return s.markCompleted(ctx, o, lease, "SUBSCRIPTION_SUCCESS")
-}
-
-func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, o *dbent.PaymentOrder, groupID int64, days int) error {
-	if s.subscriptionSvc == nil {
-		return errors.New("subscription service is unavailable")
-	}
-
-	tx, err := s.entClient.Tx(ctx)
+	orderNote := fmt.Sprintf("payment order %d", o.ID)
+	_, _, err = s.subscriptionSvc.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{UserID: o.UserID, GroupID: gid, ValidityDays: days, AssignedBy: 0, Notes: orderNote})
 	if err != nil {
-		return fmt.Errorf("begin subscription fulfillment tx: %w", err)
+		return fmt.Errorf("assign subscription: %w", err)
 	}
 	return s.completeSubscriptionOrder(ctx, o, lease)
 }
@@ -803,7 +823,8 @@ func (s *PaymentService) hasAuditLog(ctx context.Context, orderID int64, action 
 }
 
 func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *dbent.PaymentOrder) error {
-	if o == nil || !isAffiliateRebateEligibleOrder(o) || o.Amount <= 0 {
+	baseAmount := affiliateRebateBaseAmount(o)
+	if o == nil || !isAffiliateRebateEligibleOrder(o) || baseAmount <= 0 {
 		return nil
 	}
 	if s.affiliateService == nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math"
 	"sort"
 	"strings"
@@ -147,7 +146,7 @@ func (s *PaymentConfigService) resolveRechargeBonusUpdate(ctx context.Context, r
 
 	var tiers []RechargeBonusTier
 	if req.RechargeBonusTiers != nil {
-		tiers, err = NormalizeRechargeBonusTiers(*req.RechargeBonusTiers)
+		tiers, err = NormalizeRechargeBonusTiers(req.RechargeBonusTiers)
 		if err != nil {
 			return "", "", infraerrors.BadRequest("INVALID_RECHARGE_BONUS_TIERS", err.Error())
 		}

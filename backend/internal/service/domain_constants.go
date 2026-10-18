@@ -92,7 +92,7 @@ const (
 	DefaultKimiCodingBaseURL  = "https://api.kimi.com/coding/v1"
 	DefaultZhipuPayGBaseURL   = "https://open.bigmodel.cn/api/paas/v4"
 	DefaultZhipuCodingBaseURL = "https://open.bigmodel.cn/api/coding/paas/v4"
-	DefaultDeepseekBaseURL = "https://api.deepseek.com"
+	DefaultDeepseekBaseURL    = "https://api.deepseek.com"
 	// MiniMax 按量付费与 Coding/Token Plan 共用推理域名，靠 API Key 区分套餐。
 	DefaultMiniMaxBaseURL = "https://api.minimaxi.com/v1"
 	// OpenCode Go：Chat Completions / Responses / models 共用 /v1 基址。
@@ -108,9 +108,9 @@ const (
 // 国产供应商 Anthropic 协议端点的默认 base_url（上游路径为 {base}/v1/messages）。
 // 与前端 credentialsBuilder.ts 中的预设保持一致。
 const (
-	DefaultKimiPayGAnthropicBaseURL   = "https://api.moonshot.cn/anthropic"
-	DefaultKimiCodingAnthropicBaseURL = "https://api.kimi.com/coding"
-	DefaultZhipuAnthropicBaseURL      = "https://open.bigmodel.cn/api/anthropic"
+	DefaultKimiPayGAnthropicBaseURL    = "https://api.moonshot.cn/anthropic"
+	DefaultKimiCodingAnthropicBaseURL  = "https://api.kimi.com/coding"
+	DefaultZhipuAnthropicBaseURL       = "https://open.bigmodel.cn/api/anthropic"
 	DefaultDeepseekAnthropicBaseURL    = "https://api.deepseek.com/anthropic"
 	DefaultMiniMaxAnthropicBaseURL     = "https://api.minimaxi.com/anthropic"
 	DefaultOpenCodeGoAnthropicBaseURL  = "https://opencode.ai/zen/go"
@@ -236,40 +236,40 @@ const DingTalkConnectSyntheticEmailDomain = "@dingtalk-connect.invalid"
 // Setting keys
 const (
 	// 注册设置
-	SettingKeyRegistrationEnabled               = "registration_enabled"                  // 是否开放注册
-	SettingKeyEmailVerifyEnabled                = "email_verify_enabled"                  // 是否开启邮件验证
+	SettingKeyRegistrationEnabled                 = "registration_enabled"                    // 是否开放注册
+	SettingKeyEmailVerifyEnabled                  = "email_verify_enabled"                    // 是否开启邮件验证
 	SettingKeyRegistrationEmailSuffixWhitelist    = "registration_email_suffix_whitelist"     // 注册邮箱后缀白名单（JSON 数组）
 	SettingKeyRegistrationEmailDomainQuotaEnabled = "registration_email_domain_quota_enabled" // 白名单非空时，非白名单域名是否允许限量注册
-	SettingKeyPromoCodeEnabled                  = "promo_code_enabled"                    // 是否启用优惠码功能
-	SettingKeyPasswordResetEnabled              = "password_reset_enabled"                // 是否启用忘记密码功能（需要先开启邮件验证）
-	SettingKeyFrontendURL                       = "frontend_url"                          // 前端基础URL，用于生成邮件中的重置密码链接
-	SettingKeyInvitationCodeEnabled             = "invitation_code_enabled"               // 是否启用邀请码注册
-	SettingKeyInvitationRegistrationMode        = "invitation_registration_mode"          // 邀请注册校验方式：redeem_code / affiliate_link / both
-	SettingKeyAffiliateEnabled                  = "affiliate_enabled"                     // 邀请返利功能总开关
-	SettingKeyAffiliateRebateRate               = "affiliate_rebate_rate"                 // 邀请返利比例（百分比，0-100）
-	SettingKeyAffiliateRebateTiers              = "affiliate_rebate_tiers"                // 阶梯式邀请返利配置（L1-L4）
-	SettingKeyAffiliateRebateFreezeHours        = "affiliate_rebate_freeze_hours"         // 返利冻结期（小时，0=不冻结）
-	SettingKeyAffiliateRebateDurationDays       = "affiliate_rebate_duration_days"        // 返利有效期（天，0=永久）
-	SettingKeyAffiliateRebatePerInviteeCap      = "affiliate_rebate_per_invitee_cap"      // 单人返利上限（0=无上限）
-	SettingKeyAffiliateSignupBonusEnabled       = "affiliate_signup_bonus_enabled"        // 注册就送开关
-	SettingKeyAffiliateSignupBonusAmount        = "affiliate_signup_bonus_amount"         // 注册就送固定额度
-	SettingKeyAffiliateSignupBonusTotalCap      = "affiliate_signup_bonus_total_cap"      // 单个邀请人累计注册赠送上限（0=无上限）
-	SettingKeyAffiliateSignupBonusDailyCap      = "affiliate_signup_bonus_daily_cap"      // 全站每日注册赠送上限（0=无上限）
-	SettingKeyBalanceUsageGateEnabled           = "balance_usage_gate_enabled"            // 余额使用门槛开关
-	SettingKeyBalanceUsageGateMinBalance        = "balance_usage_gate_min_balance"        // 使用余额服务前需大于的当前余额
-	SettingKeyBalanceUsageGateMinRecharge       = "balance_usage_gate_min_recharge"       // 使用余额服务前需大于的历史充值
-	SettingKeyRiskControlEnabled                = "risk_control_enabled"                  // 是否启用风控中心入口与审计链路
-	SettingKeySiteMessagesEnabled               = "site_messages_enabled"                 // 是否启用站内信功能
-	SettingKeySiteMessagesDailySendLimit        = "site_messages_daily_send_limit"        // 非管理员每日站内信发送上限（0=不限制）
-	SettingKeySiteMessagesRetentionDays         = "site_messages_retention_days"          // 站内信保留天数
-	SettingKeySiteMessagesDefaultRecipientEmail = "site_messages_default_recipient_email" // 用户写信时默认填入的收件邮箱
-	SettingKeyContentModerationConfig           = "content_moderation_config"             // 内容审计配置（JSON）
-	SettingKeyCyberSessionBlockEnabled          = "cyber_session_block_enabled"           // cyber 命中后会话级自动屏蔽总开关(默认关)
-	SettingKeyCyberSessionBlockTTLSeconds       = "cyber_session_block_ttl_seconds"       // 会话屏蔽 TTL 秒数(默认 3600)
-	SettingKeyLoginAgreementEnabled             = "login_agreement_enabled"               // 登录前是否要求同意条款
-	SettingKeyLoginAgreementMode                = "login_agreement_mode"                  // 条款确认展示模式：modal / checkbox
-	SettingKeyLoginAgreementUpdatedAt           = "login_agreement_updated_at"            // 条款更新日期（展示用）
-	SettingKeyLoginAgreementDocuments           = "login_agreement_documents"             // 条款文档列表（JSON，Markdown 内容）
+	SettingKeyPromoCodeEnabled                    = "promo_code_enabled"                      // 是否启用优惠码功能
+	SettingKeyPasswordResetEnabled                = "password_reset_enabled"                  // 是否启用忘记密码功能（需要先开启邮件验证）
+	SettingKeyFrontendURL                         = "frontend_url"                            // 前端基础URL，用于生成邮件中的重置密码链接
+	SettingKeyInvitationCodeEnabled               = "invitation_code_enabled"                 // 是否启用邀请码注册
+	SettingKeyInvitationRegistrationMode          = "invitation_registration_mode"            // 邀请注册校验方式：redeem_code / affiliate_link / both
+	SettingKeyAffiliateEnabled                    = "affiliate_enabled"                       // 邀请返利功能总开关
+	SettingKeyAffiliateRebateRate                 = "affiliate_rebate_rate"                   // 邀请返利比例（百分比，0-100）
+	SettingKeyAffiliateRebateTiers                = "affiliate_rebate_tiers"                  // 阶梯式邀请返利配置（L1-L4）
+	SettingKeyAffiliateRebateFreezeHours          = "affiliate_rebate_freeze_hours"           // 返利冻结期（小时，0=不冻结）
+	SettingKeyAffiliateRebateDurationDays         = "affiliate_rebate_duration_days"          // 返利有效期（天，0=永久）
+	SettingKeyAffiliateRebatePerInviteeCap        = "affiliate_rebate_per_invitee_cap"        // 单人返利上限（0=无上限）
+	SettingKeyAffiliateSignupBonusEnabled         = "affiliate_signup_bonus_enabled"          // 注册就送开关
+	SettingKeyAffiliateSignupBonusAmount          = "affiliate_signup_bonus_amount"           // 注册就送固定额度
+	SettingKeyAffiliateSignupBonusTotalCap        = "affiliate_signup_bonus_total_cap"        // 单个邀请人累计注册赠送上限（0=无上限）
+	SettingKeyAffiliateSignupBonusDailyCap        = "affiliate_signup_bonus_daily_cap"        // 全站每日注册赠送上限（0=无上限）
+	SettingKeyBalanceUsageGateEnabled             = "balance_usage_gate_enabled"              // 余额使用门槛开关
+	SettingKeyBalanceUsageGateMinBalance          = "balance_usage_gate_min_balance"          // 使用余额服务前需大于的当前余额
+	SettingKeyBalanceUsageGateMinRecharge         = "balance_usage_gate_min_recharge"         // 使用余额服务前需大于的历史充值
+	SettingKeyRiskControlEnabled                  = "risk_control_enabled"                    // 是否启用风控中心入口与审计链路
+	SettingKeySiteMessagesEnabled                 = "site_messages_enabled"                   // 是否启用站内信功能
+	SettingKeySiteMessagesDailySendLimit          = "site_messages_daily_send_limit"          // 非管理员每日站内信发送上限（0=不限制）
+	SettingKeySiteMessagesRetentionDays           = "site_messages_retention_days"            // 站内信保留天数
+	SettingKeySiteMessagesDefaultRecipientEmail   = "site_messages_default_recipient_email"   // 用户写信时默认填入的收件邮箱
+	SettingKeyContentModerationConfig             = "content_moderation_config"               // 内容审计配置（JSON）
+	SettingKeyCyberSessionBlockEnabled            = "cyber_session_block_enabled"             // cyber 命中后会话级自动屏蔽总开关(默认关)
+	SettingKeyCyberSessionBlockTTLSeconds         = "cyber_session_block_ttl_seconds"         // 会话屏蔽 TTL 秒数(默认 3600)
+	SettingKeyLoginAgreementEnabled               = "login_agreement_enabled"                 // 登录前是否要求同意条款
+	SettingKeyLoginAgreementMode                  = "login_agreement_mode"                    // 条款确认展示模式：modal / checkbox
+	SettingKeyLoginAgreementUpdatedAt             = "login_agreement_updated_at"              // 条款更新日期（展示用）
+	SettingKeyLoginAgreementDocuments             = "login_agreement_documents"               // 条款文档列表（JSON，Markdown 内容）
 
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址
@@ -546,6 +546,10 @@ const (
 	// "v1" active probes, "v2" passive aggregation. Default "v1" (opt-in to v2).
 	SettingKeyChannelMonitorMode = "channel_monitor_mode"
 
+	SettingKeyModelPlazaEnabled     = "model_plaza_enabled"
+	SettingKeyModelPlazaRequireAuth = "model_plaza_require_auth"
+	SettingKeyModelPlazaDescription = "model_plaza_description"
+
 	// ChannelMonitorModeV1/V2 are the only accepted mode values.
 	ChannelMonitorModeV1 = "v1"
 	ChannelMonitorModeV2 = "v2"
@@ -560,6 +564,10 @@ const (
 	// SettingKeyChannelMonitorHideUserRanking hides the user ranking tab from non-admin viewers.
 	SettingKeyChannelMonitorHideUserRanking = "channel_monitor_hide_user_ranking"
 
+	// SettingKeyOllamaCloudUsageSettings stores the opt-in global runner switch and interval.
+	SettingKeyOllamaCloudUsageSettings = "ollama_cloud_usage_settings"
+	SettingKeyOpenCodeGoUsageSettings  = "opencode_go_usage_settings"
+
 	// SettingKeyChannelMonitorStatusBanner is the optional highlight banner text shown at the
 	// top of the user-facing channel status page. Empty string hides the banner.
 	SettingKeyChannelMonitorStatusBanner = "channel_monitor_status_banner"
@@ -573,7 +581,8 @@ const (
 
 	// SettingKeyGrokDefaultTextModel is the fallback Grok text model for empty
 	// request models and built-in Grok aliases (e.g. "grok" → this id). Default grok-4.6.
-	SettingKeyGrokDefaultTextModel = "grok_default_text_model"
+	SettingKeyGrokDefaultTextModel   = "grok_default_text_model"
+	SettingKeyGrokDefaultBaseURLMode = "grok_default_base_url_mode"
 
 	// SettingKeyGrokCrossClientModelMapEnabled, when true, includes gpt-*/codex-*/o*/claude-*
 	// wildcards in the default Grok account model_mapping so foreign client model names
@@ -681,6 +690,12 @@ const (
 	SettingKeyClaudeCodeClientVersion = "claude_code_client_version"
 	// SettingKeyClaudeCodeClientVersionSynced 自动同步任务写入的官方 Claude Code CLI 最新版本号。
 	SettingKeyClaudeCodeClientVersionSynced = "claude_code_client_version_synced"
+	// SettingKeyOpenAICodexClientVersion 管理员覆写的 Codex CLI 客户端版本号。
+	SettingKeyOpenAICodexClientVersion = "openai_codex_client_version"
+	// SettingKeyOpenAICodexClientVersionSynced 自动同步任务写入的官方 Codex CLI 最新版本号。
+	SettingKeyOpenAICodexClientVersionSynced = "openai_codex_client_version_synced"
+	// SettingKeyOpenAICodexVersionAutoSyncEnabled 是否启用 Codex 客户端版本号自动同步。
+	SettingKeyOpenAICodexVersionAutoSyncEnabled = "openai_codex_version_auto_sync_enabled"
 	// SettingKeyClaudeCodeVersionAutoSyncEnabled 是否启用 Claude Code 客户端版本号自动同步（默认 true）。
 	SettingKeyClaudeCodeVersionAutoSyncEnabled = "claude_code_version_auto_sync_enabled"
 

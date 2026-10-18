@@ -48,20 +48,6 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		return
 	}
 
-	// 分组级模型白名单开启时过滤 models[].name（名字形如 models/xxx）。
-	filterGeminiModels := func(models []gemini.Model) []gemini.Model {
-		if apiKey.Group == nil || !apiKey.Group.ModelAllowlistEnabled() {
-			return models
-		}
-		filtered := make([]gemini.Model, 0, len(models))
-		for _, model := range models {
-			if apiKey.Group.ModelAllowlist.Allows(model.Name) {
-				filtered = append(filtered, model)
-			}
-		}
-		return filtered
-	}
-
 	agModelIDs, err := h.geminiCompatService.AntigravityGeminiModelIDs(c.Request.Context(), apiKey.GroupID, forcePlatform != service.PlatformAntigravity)
 	if err != nil {
 		googleError(c, http.StatusServiceUnavailable, "Unable to list Antigravity models")

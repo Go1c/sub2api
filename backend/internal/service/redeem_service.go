@@ -31,7 +31,8 @@ var (
 const RedeemRateLimitWindow = time.Hour
 
 const (
-	redeemMaxErrorsPerHour = 20
+	redeemMaxErrorsPerHour  = 20
+	redeemMaxFailedAttempts = 20
 	redeemLockDuration     = 10 * time.Second // 锁超时时间，防止死锁
 )
 
@@ -395,6 +396,10 @@ func unsupportedRedeemTypeError(codeType string) error {
 }
 
 // Redeem 使用兑换码
+func (s *RedeemService) RedeemForAdminFulfillment(ctx context.Context, userID int64, code string) (*RedeemCode, error) {
+	return s.Redeem(ctx, userID, code)
+}
+
 func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (*RedeemCode, error) {
 	return s.redeem(ctx, userID, code, true)
 }

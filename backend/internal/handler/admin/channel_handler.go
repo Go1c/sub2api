@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -601,7 +600,8 @@ func (h *ChannelHandler) GetModelDefaultPricing(c *gin.Context) {
 		"found":              true,
 		"input_price":        pricing.InputPricePerToken,
 		"output_price":       pricing.OutputPricePerToken,
-		"cache_write_price":  pricing.CacheCreationPricePerToken,
+		"cache_write_price":    cacheWritePrice,
+		"cache_write_1h_price": cacheWrite1hPrice,
 		"cache_read_price":   pricing.CacheReadPricePerToken,
 		"image_input_price":  pricing.ImageInputPricePerToken,
 		"image_output_price": pricing.ImageOutputPricePerToken,

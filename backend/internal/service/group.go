@@ -166,6 +166,43 @@ func (g *Group) HasMonthlyLimit() bool {
 	return g.MonthlyLimitUSD != nil && *g.MonthlyLimitUSD > 0
 }
 
+func NormalizeGroupPlatform(platform string) string {
+	platform = strings.TrimSpace(platform)
+	if platform == "" {
+		return PlatformAnthropic
+	}
+	return platform
+}
+
+func ValidateProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) error {
+	if !enabled {
+		return nil
+	}
+	if !profitControlPlatformSupported(platform) {
+		return fmt.Errorf("profit control is not supported for platform %s", platform)
+	}
+	if minMargin < 0 || minMargin >= 1 || safetyBuffer < 0 || safetyBuffer >= 1 || minMargin+safetyBuffer >= 1 {
+		return fmt.Errorf("invalid profit control thresholds")
+	}
+	return nil
+}
+
+func NormalizeProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) (bool, float64, float64) {
+	if !profitControlPlatformSupported(platform) {
+		return false, 0, 0
+	}
+	if minMargin < 0 || minMargin >= 1 {
+		minMargin = 0
+	}
+	if safetyBuffer < 0 || safetyBuffer >= 1 {
+		safetyBuffer = 0
+	}
+	if minMargin+safetyBuffer >= 1 {
+		minMargin, safetyBuffer = 0, 0
+	}
+	return enabled, minMargin, safetyBuffer
+}
+
 func profitControlPlatformSupported(platform string) bool {
 	switch platform {
 	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformGrok, PlatformAntigravity:

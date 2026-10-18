@@ -1,11 +1,19 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/lib/pq"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	dbaccount "github.com/Wei-Shaw/sub2api/ent/account"
@@ -210,56 +218,6 @@ func appendRawUsageLogModelQueryFilter(query string, args []any, model string) (
 	return query, args
 }
 
-func appendUsageLogBillingModeWhereCondition(conditions []string, args []any, billingMode string) ([]string, []any) {
-	return appendUsageLogBillingModeWhereConditionWithAlias(conditions, args, billingMode, "")
-}
-
-func appendUsageLogBillingModeWhereConditionWithAlias(conditions []string, args []any, billingMode string, alias string) ([]string, []any) {
-	mode := strings.TrimSpace(billingMode)
-	if mode == "" {
-		return conditions, args
-	}
-	column := func(name string) string {
-		if alias == "" {
-			return name
-		}
-		return alias + "." + name
-	}
-	placeholder := fmt.Sprintf("$%d", len(args)+1)
-	switch service.BillingMode(mode) {
-	case service.BillingModeImage:
-		conditions = append(conditions, fmt.Sprintf("(%s = %s OR ((%s IS NULL OR %s = '') AND COALESCE(%s, 0) > 0))", column("billing_mode"), placeholder, column("billing_mode"), column("billing_mode"), column("image_count")))
-	case service.BillingModeVideo:
-		conditions = append(conditions, fmt.Sprintf("%s = %s", column("billing_mode"), placeholder))
-	case service.BillingModeToken:
-		conditions = append(conditions, fmt.Sprintf("(%s = %s OR ((%s IS NULL OR %s = '') AND COALESCE(%s, 0) <= 0))", column("billing_mode"), placeholder, column("billing_mode"), column("billing_mode"), column("image_count")))
-	default:
-		conditions = append(conditions, fmt.Sprintf("%s = %s", column("billing_mode"), placeholder))
-	}
-	args = append(args, mode)
-	return conditions, args
-}
-
-func appendUsageLogBillingModeQueryFilter(query string, args []any, billingMode string, alias string) (string, []any) {
-	conditions, args := appendUsageLogBillingModeWhereConditionWithAlias(nil, args, billingMode, alias)
-	if len(conditions) == 0 {
-		return query, args
-	}
-	return query + " AND " + conditions[0], args
-}
-
-func appendUsageLogModelWhereCondition(conditions []string, args []any, model string, source string) ([]string, []any) {
-	if strings.TrimSpace(source) == "" {
-		return appendRawUsageLogModelWhereCondition(conditions, args, model)
-	}
-	if strings.TrimSpace(model) == "" {
-		return conditions, args
-	}
-	conditions = append(conditions, fmt.Sprintf("%s = $%d", resolveModelDimensionExpression(source), len(args)+1))
-	args = append(args, model)
-	return conditions, args
-}
-
 func appendUsageLogModelQueryFilter(query string, args []any, model string, source string) (string, []any) {
 	if strings.TrimSpace(source) == "" {
 		return appendRawUsageLogModelQueryFilter(query, args, model)
@@ -271,6 +229,68 @@ func appendUsageLogModelQueryFilter(query string, args []any, model string, sour
 	args = append(args, model)
 	return query, args
 }
+
+const (
+	usageLogCreateBatchMaxSize  = 64
+	usageLogCreateBatchWindow   = 3 * time.Millisecond
+	usageLogCreateBatchQueueCap = 4096
+	usageLogCreateCancelWait    = 2 * time.Second
+
+	usageLogBestEffortBatchMaxSize  = 256
+	usageLogBestEffortBatchWindow   = 20 * time.Millisecond
+	usageLogBestEffortBatchQueueCap = 32768
+	usageLogBestEffortRecentTTL     = 30 * time.Second
+)
+
+type usageLogCreateRequest struct {
+	log      *service.UsageLog
+	prepared usageLogInsertPrepared
+	shared   *usageLogCreateShared
+	resultCh chan usageLogCreateResult
+}
+
+type usageLogCreateResult struct {
+	inserted bool
+	err      error
+}
+
+type usageLogBestEffortRequest struct {
+	prepared usageLogInsertPrepared
+	apiKeyID int64
+	resultCh chan error
+}
+
+type usageLogInsertPrepared struct {
+	createdAt      time.Time
+	requestID      string
+	rateMultiplier float64
+	requestType    int16
+	args           []any
+}
+
+type usageLogBatchState struct {
+	ID        int64
+	CreatedAt time.Time
+}
+
+type usageLogBatchRow struct {
+	RequestID string    `json:"request_id"`
+	APIKeyID  int64     `json:"api_key_id"`
+	ID        int64     `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	Inserted  bool      `json:"inserted"`
+}
+
+type usageLogCreateShared struct {
+	state atomic.Int32
+}
+
+const (
+	usageLogCreateStateQueued int32 = iota
+	usageLogCreateStateProcessing
+	usageLogCreateStateCompleted
+	usageLogCreateStateCanceled
+)
 
 type usageLogRepository struct {
 	client *dbent.Client
@@ -2447,8 +2467,12 @@ func (r *usageLogRepository) GetAPIKeyUsageTrend(ctx context.Context, startTime,
 }
 
 // GetUserUsageTrend returns usage trend data grouped by user and date
-func (r *usageLogRepository) GetUserUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int) (results []UserUsageTrendPoint, err error) {
+func (r *usageLogRepository) GetUserUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int, metric string) (results []UserUsageTrendPoint, err error) {
 	dateFormat := safeDateFormat(granularity)
+	rankExpr := "SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens)"
+	if metric == "actual_cost" {
+		rankExpr = "SUM(actual_cost)"
+	}
 
 	query := fmt.Sprintf(`
 		WITH top_users AS (
@@ -2456,7 +2480,7 @@ func (r *usageLogRepository) GetUserUsageTrend(ctx context.Context, startTime, e
 			FROM usage_logs
 			WHERE created_at >= $1 AND created_at < $2
 			GROUP BY user_id
-			ORDER BY SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens) DESC
+			ORDER BY %s DESC, user_id ASC
 			LIMIT $3
 		)
 		SELECT
@@ -2474,7 +2498,7 @@ func (r *usageLogRepository) GetUserUsageTrend(ctx context.Context, startTime, e
 		  AND u.created_at >= $4 AND u.created_at < $5
 		GROUP BY date, u.user_id, us.email, us.username
 		ORDER BY date ASC, tokens DESC
-	`, dateFormat)
+	`, rankExpr, dateFormat)
 
 	rows, err := r.sql.QueryContext(ctx, query, startTime, endTime, limit, startTime, endTime)
 	if err != nil {

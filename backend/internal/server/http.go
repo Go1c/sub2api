@@ -93,7 +93,18 @@ func ProvideRouter(
 		service.SetWebSearchManager(websearch.NewManager(configs, redisClient))
 	})
 
-	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, checkInModule, compositeResolver, telemetryModule)
+	return SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, checkInModule, compositeResolver, telemetryModule)
+}
+
+func configureTrustedProxies(r *gin.Engine, cfg config.ServerConfig) {
+	proxies := cfg.TrustedProxies
+	if len(proxies) == 0 {
+		proxies = nil
+	}
+	if err := r.SetTrustedProxies(proxies); err != nil {
+		log.Printf("Failed to set trusted proxies: %v", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器

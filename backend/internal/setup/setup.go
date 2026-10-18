@@ -192,13 +192,6 @@ func buildDatabaseConnectionDSNs(cfg *DatabaseConfig) (bootstrapDSN, targetDSN s
 	return buildPostgresDSN(cfg, "postgres"), buildPostgresDSN(cfg, cfg.DBName)
 }
 
-// TestDatabaseConnection tests the database connection and creates database if not exists
-func TestDatabaseConnection(cfg *DatabaseConfig) error {
-	// First, connect to the default 'postgres' database to check/create target database.
-	// Connecting to cfg.DBName here fails when the target database has not been
-	// created yet, so the bootstrap connection must use PostgreSQL's maintenance DB.
-	defaultDSN, targetDSN := buildDatabaseConnectionDSNs(cfg)
-
 func isDatabaseNotFoundError(err error) bool {
 	var pqErr *pq.Error
 	return errors.As(err, &pqErr) && pqErr.Code == "3D000"
@@ -274,13 +267,14 @@ func testDatabaseConnection(cfg *DatabaseConfig, openDatabase postgresDatabaseOp
 		logger.LegacyPrintf("setup", "Database '%s' created successfully", cfg.DBName)
 	}
 
+	targetDSN := buildPostgresDSN(cfg, cfg.DBName)
 	// Now connect to the target database to verify
 	if err := db.Close(); err != nil {
 		logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
 	}
 	db = nil
 
-	targetDB, err := sql.Open("postgres", targetDSN)
+	targetDB, err = sql.Open("postgres", targetDSN)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database '%s': %w", cfg.DBName, err)
 	}

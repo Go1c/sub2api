@@ -108,6 +108,7 @@ type ChatGPTAccountInfo struct {
 
 var (
 	chatGPTAccountsCheckURL = "https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27"
+	chatGPTSubscriptionsURL = "https://chatgpt.com/backend-api/subscriptions"
 )
 
 // fetchChatGPTAccountInfo calls ChatGPT backend-api to get account info (plan_type, etc.).
@@ -161,7 +162,7 @@ func fetchChatGPTAccountInfo(ctx context.Context, clientFactory PrivacyClientFac
 		if acctRaw, ok := accounts[orgID]; ok {
 			if acct, ok := acctRaw.(map[string]any); ok {
 				if isUsableChatGPTAccountCandidate(acct, time.Now()) {
-					fillAccountInfo(info, acct)
+					fillAccountInfo(info, acct, "")
 				}
 			}
 		}

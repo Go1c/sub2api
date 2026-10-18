@@ -1572,11 +1572,33 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 // checkErrorPolicyInLoop 在重试循环内对上游错误响应检查错误策略，resp 已重建可直接使用。
 // checked 为 nil 表示未检查（非错误响应或未配置限流服务）；否则指向检查结果，
 // 非 ErrorPolicyNone 时调用者应 break 并由循环外的错误处理复用该结果。
+func (s *GeminiMessagesCompatService) writeGeminiCachedContentNotFound(c *gin.Context, account *Account, resp *http.Response, respBody []byte, requestID string, isOAuth bool) error {
+	respBody = unwrapIfNeeded(isOAuth, respBody)
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, s.upstreamErrorDetail(respBody))
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		ProxyID:            opsUpstreamProxyID(account),
+		ProxyName:          opsUpstreamProxyName(account),
+		Platform:           account.Platform,
+		AccountID:          account.ID,
+		AccountName:        account.Name,
+		UpstreamStatusCode: resp.StatusCode,
+		UpstreamRequestID:  requestID,
+		Kind:               "http_error",
+		Message:            upstreamMsg,
+	})
+	MarkOpsRequestScopedError(c, "permission_error")
+	MarkResponseCommitted(c)
+	c.Data(http.StatusForbidden, "application/json", []byte(GeminiCachedContentNotFoundResponse))
+	return fmt.Errorf("gemini upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+}
+
 func (s *GeminiMessagesCompatService) checkErrorPolicyInLoop(
 	ctx context.Context, account *Account, resp *http.Response, mappedModel string,
 ) (matched bool, rebuilt *http.Response) {
 	if resp.StatusCode < 400 || s.rateLimitService == nil {
-		return nil, resp
+		return false, resp
 	}
 	body := s.readUpstreamErrorBody(resp)
 	_ = resp.Body.Close()
@@ -3647,7 +3669,6 @@ func normalizeGeminiRequestForAIStudio(body []byte) []byte {
 	return normalized
 }
 
-
 func isClaudeWebSearchToolMap(tool map[string]any) bool {
 	toolType, _ := tool["type"].(string)
 	// A function named web_search is still a client-side function. This is
@@ -3830,4 +3851,3 @@ func (s *GeminiMessagesCompatService) extractImageInputSize(body []byte) string 
 
 	return ""
 }
-

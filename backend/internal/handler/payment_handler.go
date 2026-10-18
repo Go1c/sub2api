@@ -80,7 +80,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 			gid = *p.GroupID
 		}
 		result = append(result, planWithPlatform{
-			ID: int64(p.ID), GroupID: gid, GroupPlatform: platformMap[gid],
+			ID: int64(p.ID), GroupID: gid, GroupPlatform: groupInfo[gid].Platform,
 			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice, Currency: p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit,
 			QuotaUSD: p.QuotaUsd, DailyLimitUSD: p.DailyLimitUsd, WeeklyLimitUSD: p.WeeklyLimitUsd,

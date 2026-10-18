@@ -28,6 +28,10 @@ type GroupAccountCapacityRow struct {
 	SessionWindowStatus string
 }
 
+type groupCapacityActiveGroupIDLister interface {
+	ListActiveIDs(ctx context.Context) ([]int64, error)
+}
+
 type groupCapacityAccountLister interface {
 	ListSchedulableCapacityByGroupIDs(ctx context.Context, groupIDs []int64) ([]GroupAccountCapacityRow, error)
 }

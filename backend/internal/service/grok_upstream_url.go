@@ -3,6 +3,8 @@ package service
 import (
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
@@ -124,4 +126,35 @@ func buildGrokMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaE
 	default:
 		return "", fmt.Errorf("unsupported grok media endpoint: %s", endpoint)
 	}
+}
+
+func buildGrokVoiceURL(account *Account, cfg *config.Config, endpoint string) (string, error) {
+	validator, err := grokBaseURLValidator(account, cfg)
+	if err != nil {
+		return "", err
+	}
+	base := ""
+	if account != nil {
+		base = account.GetGrokMediaBaseURL()
+	}
+	if strings.TrimSpace(base) == "" || isGrokCLIProxyTarget(base) {
+		base = xai.DefaultBaseURL
+	}
+	validated, err := validator(base)
+	if err != nil {
+		return "", err
+	}
+	ep := strings.Trim(strings.TrimSpace(endpoint), "/")
+	if ep == "" {
+		return "", fmt.Errorf("voice endpoint is required")
+	}
+	parts := strings.Split(ep, "/")
+	encoded := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" || part == "." || part == ".." {
+			return "", fmt.Errorf("invalid voice endpoint path")
+		}
+		encoded = append(encoded, url.PathEscape(part))
+	}
+	return strings.TrimRight(validated, "/") + "/" + strings.Join(encoded, "/"), nil
 }

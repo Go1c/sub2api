@@ -48,13 +48,14 @@ type GrokQuotaResetResult struct {
 }
 
 type GrokQuotaService struct {
-	accountRepo   AccountRepository
-	proxyRepo     ProxyRepository
-	tokenProvider *GrokTokenProvider
-	httpUpstream  HTTPUpstream
-	usageLogRepo  UsageLogRepository
-	cfg           *config.Config
-	probeFlight   singleflight.Group
+	accountRepo    AccountRepository
+	proxyRepo      ProxyRepository
+	tokenProvider  *GrokTokenProvider
+	httpUpstream   HTTPUpstream
+	usageLogRepo   UsageLogRepository
+	settingService *SettingService
+	cfg            *config.Config
+	probeFlight    singleflight.Group
 }
 
 func NewGrokQuotaService(
@@ -76,6 +77,12 @@ func NewGrokQuotaService(
 		httpUpstream:  httpUpstream,
 		usageLogRepo:  usageLogRepo,
 		cfg:           cfg,
+	}
+}
+
+func (s *GrokQuotaService) SetSettingService(settingService *SettingService) {
+	if s != nil {
+		s.settingService = settingService
 	}
 }
 

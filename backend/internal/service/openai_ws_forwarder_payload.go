@@ -9,11 +9,19 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
+
+func openAIWSPayloadStringView(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	return unsafe.String(unsafe.SliceData(payload), len(payload))
+}
 
 func validateOpenAIWSBearerToken(account *Account, token string) error {
 	if account == nil {

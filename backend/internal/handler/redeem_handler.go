@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -24,6 +25,7 @@ type RedeemHandler struct {
 type redeemCodeRedeemer interface {
 	Redeem(ctx context.Context, userID int64, code string) (*service.RedeemCode, error)
 	GetUserHistory(ctx context.Context, userID int64, limit int) ([]service.RedeemCode, error)
+	GetUserHistoryPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.RedeemCode, *pagination.PaginationResult, error)
 }
 
 type promoCodeRedeemer interface {

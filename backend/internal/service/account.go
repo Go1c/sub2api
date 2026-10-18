@@ -920,6 +920,13 @@ func resolveRequestedModelInMapping(mapping map[string]string, requestedModel st
 // 会把未知模型原样透传，Codex 上游对这类模型必然返回不可重试的 400，导致
 // 请求卡死在该账号上、无法 failover 到真正支持该模型的 API Key 账号（#3662）。
 // 未知/自定义别名仍保持允许（兼容渠道级映射），见 isOpenAIOAuthServableModel。
+func (a *Account) isModelMappingSupported(requestedModel string) bool {
+	if a == nil {
+		return false
+	}
+	return a.IsModelSupported(requestedModel)
+}
+
 func (a *Account) IsModelSupported(requestedModel string) bool {
 	// 透传模式仅替换认证、模型语义完全交由上游决定，因此放行所有模型。
 	// 必须在 model_mapping 判定之前短路：账号从白名单切到透传后常残留旧映射，
@@ -1409,6 +1416,10 @@ func (a *Account) IsOpenAIOAuthLike() bool {
 	return a != nil && a.IsOpenAI() && (a.Type == AccountTypeOAuth || a.Type == AccountTypeSetupToken)
 }
 
+func (a *Account) UsesOpenAICodexProtocol() bool {
+	return a != nil && (a.Type == AccountTypeOAuth || a.IsOpenAIOAuthLike())
+}
+
 func (a *Account) IsOpenAIChatGPTSubscription() bool {
 	if !a.IsOpenAIOAuth() {
 		return false
@@ -1743,6 +1754,23 @@ func (a *Account) GetGrokBaseURL() string {
 		return baseURL
 	}
 	return xai.DefaultBaseURL
+}
+
+func (a *Account) GetGrokBaseURLOr(fallback string) string {
+	if a == nil || !a.IsGrok() {
+		if fallback = strings.TrimSpace(fallback); fallback != "" {
+			return fallback
+		}
+		return xai.DefaultCLIBaseURL
+	}
+	baseURL := strings.TrimSpace(a.GetCredential("base_url"))
+	if baseURL != "" && xai.IsParseableBaseURL(baseURL) {
+		return baseURL
+	}
+	if fallback = strings.TrimSpace(fallback); fallback != "" {
+		return fallback
+	}
+	return a.GetGrokBaseURL()
 }
 
 // GetGrokMediaBaseURL selects the upstream used by Grok Imagine APIs.

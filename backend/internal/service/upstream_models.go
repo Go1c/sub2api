@@ -6,15 +6,23 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
-const upstreamModelsBodyLimit int64 = 8 << 20
+const (
+	upstreamModelsBodyLimit          int64 = 8 << 20
+	vertexPublisherModelsPageSize          = 300
+	vertexPublisherModelsMaxPages          = 20
+	vertexGooglePublisherModelPrefix       = "publishers/google/models/"
+)
 
 type UpstreamModelMetadata struct {
 	ID                       string                     `json:"id"`
@@ -28,6 +36,42 @@ type UpstreamModelMetadata struct {
 	MaxContextWindow         int64                      `json:"max_context_window,omitempty"`
 	MaxOutputTokens          int64                      `json:"max_output_tokens,omitempty"`
 	CodexToolCapabilities    map[string]json.RawMessage `json:"codex_tool_capabilities,omitempty"`
+}
+
+const UpstreamModelMetadataExtraKey = "upstream_model_metadata"
+
+type UpstreamModelMetadataSnapshot struct {
+	Source   string                           `json:"source"`
+	SyncedAt string                           `json:"synced_at"`
+	Models   map[string]UpstreamModelMetadata `json:"models"`
+}
+
+func (a *Account) GetUpstreamModelMetadataSnapshot() *UpstreamModelMetadataSnapshot {
+	if a == nil || a.Extra == nil {
+		return nil
+	}
+	raw, ok := a.Extra[UpstreamModelMetadataExtraKey]
+	if !ok || raw == nil {
+		return nil
+	}
+	body, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var snapshot UpstreamModelMetadataSnapshot
+	if err := json.Unmarshal(body, &snapshot); err != nil || len(snapshot.Models) == 0 {
+		return nil
+	}
+	return &snapshot
+}
+
+func (a *Account) GetUpstreamModelMetadata(modelID string) (UpstreamModelMetadata, bool) {
+	snapshot := a.GetUpstreamModelMetadataSnapshot()
+	if snapshot == nil {
+		return UpstreamModelMetadata{}, false
+	}
+	metadata, ok := snapshot.Models[strings.TrimSpace(modelID)]
+	return metadata, ok
 }
 
 type codexModelMetadataOverride struct {
@@ -90,6 +134,18 @@ func newUpstreamModelSyncUnsupportedError(message string, err error) error {
 
 func newUpstreamModelSyncUpstreamError(message string, err error) error {
 	return &UpstreamModelSyncError{Kind: UpstreamModelSyncErrorUpstream, Message: message, Err: err}
+}
+
+func (s *AccountTestService) FetchOpenAIAccountModels(ctx context.Context, account *Account) ([]openai.Model, error) {
+	ids, err := s.FetchUpstreamSupportedModels(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]openai.Model, 0, len(ids))
+	for _, id := range ids {
+		models = append(models, openai.Model{ID: id, Object: "model", OwnedBy: "openai", Type: "model", DisplayName: id})
+	}
+	return models, nil
 }
 
 // FetchUpstreamSupportedModels fetches the live model list from the account's upstream API format.
@@ -519,4 +575,186 @@ func dedupeAndSortModelIDs(models []string) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+func buildOpenAIAPIKeyModelsRequest(ctx context.Context, account *Account, validateBaseURL func(string) (string, error)) (*http.Request, error) {
+	if account == nil || account.Type != AccountTypeAPIKey {
+		accountType := ""
+		if account != nil {
+			accountType = account.Type
+		}
+		return nil, newUpstreamModelSyncUnsupportedError(
+			fmt.Sprintf("Unsupported OpenAI account type for upstream model sync: %s", accountType), nil,
+		)
+	}
+	apiKey := strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
+	if apiKey == "" {
+		return nil, newUpstreamModelSyncConfigError("No OpenAI API key is available", nil)
+	}
+	baseURL := account.GetOpenAIFormatBaseURL()
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = "https://api.openai.com"
+	}
+	normalizedBaseURL, err := validateBaseURL(baseURL)
+	if err != nil {
+		return nil, newUpstreamModelSyncConfigError("Invalid OpenAI base URL", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, buildOpenAIModelsURL(normalizedBaseURL), nil)
+	if err != nil {
+		return nil, newUpstreamModelSyncConfigError("Invalid OpenAI model list URL", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	account.ApplyHeaderOverrides(req.Header)
+	return req, nil
+}
+
+func listVertexGeminiPublisherModels(location string, fetchPage func(page int, listURL string) ([]byte, error)) ([]string, error) {
+	models := make([]string, 0)
+	pageToken := ""
+	for page := 0; page < vertexPublisherModelsMaxPages; page++ {
+		listURL, err := buildVertexPublisherModelsURL(location, pageToken)
+		if err != nil {
+			return nil, newUpstreamModelSyncConfigError("Invalid Vertex location", err)
+		}
+		body, err := fetchPage(page, listURL)
+		if err != nil {
+			return nil, err
+		}
+		var response struct {
+			PublisherModels []struct {
+				Name string `json:"name"`
+			} `json:"publisherModels"`
+			NextPageToken string `json:"nextPageToken"`
+		}
+		if err := json.Unmarshal(body, &response); err != nil {
+			return nil, newUpstreamModelSyncUpstreamError("Upstream model list response was not valid JSON", err)
+		}
+		for _, entry := range response.PublisherModels {
+			name := strings.TrimSpace(entry.Name)
+			if !strings.HasPrefix(name, vertexGooglePublisherModelPrefix) {
+				continue
+			}
+			modelID := strings.TrimPrefix(name, vertexGooglePublisherModelPrefix)
+			if strings.HasPrefix(modelID, "gemini-") && len(modelID) > len("gemini-") {
+				models = append(models, modelID)
+			}
+		}
+		pageToken = strings.TrimSpace(response.NextPageToken)
+		if pageToken == "" {
+			if len(models) == 0 {
+				return nil, newUpstreamModelSyncUpstreamError("Upstream returned no supported models", nil)
+			}
+			return dedupeAndSortModelIDs(models), nil
+		}
+	}
+	return nil, newUpstreamModelSyncUpstreamError(
+		"Upstream model list pagination did not finish",
+		fmt.Errorf("more than %d pages", vertexPublisherModelsMaxPages),
+	)
+}
+
+func buildVertexPublisherModelsURL(location, pageToken string) (string, error) {
+	location = strings.TrimSpace(location)
+	if location == "" {
+		location = vertexDefaultLocation
+	}
+	if !vertexLocationPattern.MatchString(location) {
+		return "", fmt.Errorf("invalid vertex location: %s", location)
+	}
+	host := location + "-aiplatform.googleapis.com"
+	if location == "global" {
+		host = vertexGlobalHost
+	}
+	query := url.Values{"pageSize": []string{strconv.Itoa(vertexPublisherModelsPageSize)}}
+	if pageToken != "" {
+		query.Set("pageToken", pageToken)
+	}
+	return fmt.Sprintf("https://%s/v1beta1/publishers/google/models?%s", host, query.Encode()), nil
+}
+
+func extractUpstreamModelRawEntries(body []byte) ([]json.RawMessage, error) {
+	var response struct {
+		Data   []json.RawMessage `json:"data"`
+		Models json.RawMessage   `json:"models"`
+	}
+	if err := json.Unmarshal(body, &response); err == nil && (response.Data != nil || response.Models != nil) {
+		entries := append([]json.RawMessage{}, response.Data...)
+		if len(response.Models) > 0 && string(response.Models) != "null" {
+			var list []json.RawMessage
+			if err := json.Unmarshal(response.Models, &list); err == nil {
+				entries = append(entries, list...)
+			} else {
+				var models map[string]map[string]json.RawMessage
+				if err := json.Unmarshal(response.Models, &models); err != nil {
+					return nil, fmt.Errorf("parse upstream model catalog: %w", err)
+				}
+				for modelID, fields := range models {
+					if fields == nil {
+						fields = make(map[string]json.RawMessage)
+					}
+					fields["id"], _ = json.Marshal(modelID)
+					raw, err := json.Marshal(fields)
+					if err != nil {
+						return nil, fmt.Errorf("parse upstream model metadata: %w", err)
+					}
+					entries = append(entries, raw)
+				}
+			}
+		}
+		return entries, nil
+	}
+	var entries []json.RawMessage
+	if err := json.Unmarshal(body, &entries); err != nil {
+		return nil, fmt.Errorf("parse upstream model catalog: %w", err)
+	}
+	return entries, nil
+}
+
+func normalizeReasoningLevels(levels []string) []string {
+	seen := make(map[string]struct{}, len(levels))
+	normalized := make([]string, 0, len(levels))
+	for _, level := range levels {
+		level = normalizeReasoningLevel(level)
+		if level == "" {
+			continue
+		}
+		if _, exists := seen[level]; exists {
+			continue
+		}
+		seen[level] = struct{}{}
+		normalized = append(normalized, level)
+	}
+	return normalized
+}
+
+func normalizeReasoningLevel(level string) string {
+	level = strings.ToLower(strings.TrimSpace(level))
+	switch level {
+	case "off", "disabled":
+		return "none"
+	case "extra-high", "extra_high":
+		return "xhigh"
+	case "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
+		return level
+	default:
+		return ""
+	}
+}
+
+func normalizeCodexInputModalities(modalities []string) []string {
+	seen := make(map[string]struct{}, len(modalities))
+	normalized := make([]string, 0, len(modalities))
+	for _, modality := range modalities {
+		modality = strings.ToLower(strings.TrimSpace(modality))
+		if modality != "text" && modality != "image" {
+			continue
+		}
+		if _, exists := seen[modality]; exists {
+			continue
+		}
+		seen[modality] = struct{}{}
+		normalized = append(normalized, modality)
+	}
+	return normalized
 }

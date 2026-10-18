@@ -608,7 +608,7 @@ type ForwardResult struct {
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
 	UpstreamHeaders http.Header
 	Usage           ClaudeUsage
-	Model     string
+	Model           string
 	// UpstreamModel is the actual upstream model after mapping.
 	// Prefer empty when it is identical to Model; persistence normalizes equal values away as no-op mappings.
 	UpstreamModel string
@@ -624,6 +624,8 @@ type ForwardResult struct {
 	FirstTokenMs                *int // 首字时间（流式请求）
 	ClientDisconnect            bool // 客户端是否在流式传输过程中断开
 	ReasoningEffort             *string
+	// RequestedReasoningEffort is the client-requested effort before mapping.
+	RequestedReasoningEffort *string
 	// ServiceTier records the billable request tier. OpenAI uses service_tier;
 	// Anthropic speed=fast is normalized to "fast".
 	ServiceTier *string
@@ -636,6 +638,8 @@ type ForwardResult struct {
 	ImageOutputSizes   []string
 	ImageSizeSource    string
 	ImageSizeBreakdown map[string]int
+	// SearchCount is a per-request web search surcharge count.
+	SearchCount int
 	// CacheStorageTokenHours 显式上下文缓存的存储量（缓存 token 数 × 存储小时数），按计费模型的
 	// 存储单价折算为费用后叠加在 token 费用之上。
 	CacheStorageTokenHours float64
@@ -686,6 +690,7 @@ type UpstreamFailoverError struct {
 	SameAccountRetryDeadline time.Time     // 错误级同账号重试窗口；零值不限制
 	SameAccountRetryMax      int           // 错误级同账号重试上限；<=0 表示沿用账号 pool_mode 配置
 	SafeToFailoverAfterWrite bool          // 仅写出 SSE 注释等非语义字节时，仍可在同一客户端流中切换账号
+	BoundUpstreamPassthrough bool          // 绑定缓存请求收到的上游 429/5xx：原样回写，不改本账号状态
 	Stage                    GatewayFailureStage
 	Scope                    GatewayFailureScope
 	Reason                   GatewayFailureReason

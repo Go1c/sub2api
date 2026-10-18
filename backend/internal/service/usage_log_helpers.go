@@ -21,10 +21,11 @@ func optionalStringValue(value *string) string {
 // differs from compare; otherwise nil. Used to store upstream_model only when
 // it differs from the requested model.
 func optionalNonEqualStringPtr(value, compare string) *string {
-	if value == "" || value == compare {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || trimmed == strings.TrimSpace(compare) {
 		return nil
 	}
-	return strings.TrimSpace(*value)
+	return &trimmed
 }
 
 // coalesceRequestedReasoningEffort prefers the client-requested value and falls

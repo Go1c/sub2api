@@ -3,12 +3,21 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/google/uuid"
+)
+
+const (
+	subscriptionExpiryReminderLeaderLockKey         = "subscription:expiry:reminder:leader"
+	subscriptionExpiryReminderLeaderLockTTL         = 3 * time.Minute
+	subscriptionExpiryReminderSMTPWarningInterval   = time.Hour
 )
 
 // SubscriptionExpiryService periodically expires subscriptions and records credit-pool expiry audit events.
@@ -24,6 +33,9 @@ type SubscriptionExpiryService struct {
 	lockCache  LeaderLockCache
 	db         *sql.DB
 	instanceID string
+
+	smtpWarningMu    sync.Mutex
+	lastSMTPWarning  time.Time
 }
 
 func NewSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, interval time.Duration) *SubscriptionExpiryService {
@@ -120,7 +132,11 @@ func (s *SubscriptionExpiryService) sendExpiryReminders(ctx context.Context) {
 	}
 	defer release()
 	for page := 1; ; page++ {
-		subs, pag, err := s.userSubRepo.List(ctx, pagination.PaginationParams{Page: page, PageSize: 200}, nil, nil, SubscriptionStatusActive, "", "expires_at", "asc")
+		subs, pag, err := s.userSubRepo.List(ctx, pagination.PaginationParams{Page: page, PageSize: 200}, UserSubscriptionListFilters{
+			Status:    SubscriptionStatusActive,
+			SortBy:    "expires_at",
+			SortOrder: "asc",
+		})
 		if err != nil {
 			log.Printf("[SubscriptionExpiry] List active subscriptions for reminder failed: %v", err)
 			return

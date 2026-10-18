@@ -112,68 +112,6 @@ func ProvideAdminHandlers(
 	}
 }
 
-func ProvideGatewayHandler(
-	gatewayService *service.GatewayService,
-	openAIGatewayService *service.OpenAIGatewayService,
-	geminiCompatService *service.GeminiMessagesCompatService,
-	antigravityGatewayService *service.AntigravityGatewayService,
-	userService *service.UserService,
-	concurrencyService *service.ConcurrencyService,
-	billingCacheService *service.BillingCacheService,
-	usageService *service.UsageService,
-	apiKeyService *service.APIKeyService,
-	usageRecordWorkerPool *service.UsageRecordWorkerPool,
-	errorPassthroughService *service.ErrorPassthroughService,
-	contentModerationService *service.ContentModerationService,
-	userMsgQueueService *service.UserMessageQueueService,
-	cfg *config.Config,
-	settingService *service.SettingService,
-	coordinator *securityaudit.Coordinator,
-	geminiCachedContentService *service.GeminiCachedContentService,
-) *GatewayHandler {
-	h := NewGatewayHandler(gatewayService, openAIGatewayService, geminiCompatService, antigravityGatewayService,
-		userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool,
-		errorPassthroughService, contentModerationService, userMsgQueueService, cfg, settingService)
-	h.securityAuditCoordinator = coordinator
-	h.geminiCachedContentService = geminiCachedContentService
-	return h
-}
-
-func ProvideOpenAIGatewayHandler(
-	gatewayService *service.OpenAIGatewayService,
-	pluginManager *service.PluginManager,
-	concurrencyService *service.ConcurrencyService,
-	billingCacheService *service.BillingCacheService,
-	apiKeyService *service.APIKeyService,
-	usageRecordWorkerPool *service.UsageRecordWorkerPool,
-	errorPassthroughService *service.ErrorPassthroughService,
-	contentModerationService *service.ContentModerationService,
-	opsService *service.OpsService,
-	grokQuotaService *service.GrokQuotaService,
-	cfg *config.Config,
-	coordinator *securityaudit.Coordinator,
-	compositeResolver *service.CompositeRouteResolver,
-) *OpenAIGatewayHandler {
-	gatewayService.SetPluginManager(pluginManager)
-	h := NewOpenAIGatewayHandler(gatewayService, concurrencyService, billingCacheService, apiKeyService,
-		usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, cfg)
-	h.compositeResolver = compositeResolver
-	h.securityAuditCoordinator = coordinator
-	h.grokMediaEligibilityProber = grokQuotaService
-	return h
-}
-
-func ProvideBatchImageHandler(
-	batchService *service.BatchImagePublicService,
-	download *service.BatchImageDownloadService,
-	cleanup *service.BatchImageCleanupService,
-	openAI *OpenAIGatewayHandler,
-) *BatchImageHandler {
-	h := NewBatchImageHandler(batchService, download, cleanup)
-	h.openAI = openAI
-	return h
-}
-
 // ProvideSystemHandler creates admin.SystemHandler with UpdateService
 func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
 	return admin.NewSystemHandler(updateService, lockService)
@@ -285,10 +223,9 @@ func ProvideGatewayHandler(
 	settingService *service.SettingService,
 	coordinator *securityaudit.Coordinator,
 ) *GatewayHandler {
-	h := NewGatewayHandler(gatewayService, geminiCompatService, antigravityGatewayService,
+	h := NewGatewayHandler(gatewayService, openAIGatewayService, geminiCompatService, antigravityGatewayService,
 		userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool,
 		errorPassthroughService, contentModerationService, userMsgQueueService, cfg, settingService)
-	h.SetOpenAIGatewayService(openAIGatewayService)
 	h.securityAuditCoordinator = coordinator
 	return h
 }
@@ -305,9 +242,11 @@ func ProvideOpenAIGatewayHandler(
 	grokQuotaService *service.GrokQuotaService,
 	cfg *config.Config,
 	coordinator *securityaudit.Coordinator,
+	compositeResolver *service.CompositeRouteResolver,
 ) *OpenAIGatewayHandler {
 	h := NewOpenAIGatewayHandler(gatewayService, concurrencyService, billingCacheService, apiKeyService,
 		usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, cfg)
+	h.compositeResolver = compositeResolver
 	h.securityAuditCoordinator = coordinator
 	h.grokMediaEligibilityProber = grokQuotaService
 	return h

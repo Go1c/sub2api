@@ -26,6 +26,10 @@ const (
 	// 并发槽位键前缀（有序集合）
 	// 格式: concurrency:account:{accountID}
 	accountSlotKeyPrefix = "concurrency:account:"
+	// Live API leases are counted separately from ordinary request slots.
+	liveAccountSlotKeyPrefix = "concurrency:live:account:"
+	liveUserSlotKeyPrefix    = "concurrency:live:user:"
+	liveLeaseTTLSeconds      = 60
 	// 格式: concurrency:user:{userID}
 	userSlotKeyPrefix = "concurrency:user:"
 	// 格式: concurrency:api_key:{apiKeyID}
@@ -241,71 +245,6 @@ var (
 		return 1
 	`)
 
-	// trackSlotScript 记录 stats-only 槽位，不做并发上限判断。
-	// KEYS[1] = 有序集合键
-	// ARGV[1] = TTL（秒）
-	// ARGV[2] = requestID
-	trackSlotScript = redis.NewScript(`
-		-- Redis 3.2-4.x compat: opt into effects replication so redis.call('TIME')
-		-- replicates correctly. No-op on Redis 5.0+ (effects replication is default).
-		redis.replicate_commands()
-		local key = KEYS[1]
-		local ttl = tonumber(ARGV[1])
-		local requestID = ARGV[2]
-
-		local timeResult = redis.call('TIME')
-		local now = tonumber(timeResult[1])
-		local expireBefore = now - ttl
-
-		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
-		redis.call('ZADD', key, now, requestID)
-		redis.call('EXPIRE', key, ttl)
-		return 1
-	`)
-
-	// acquireOpenAIWSIngressLeaseScript atomically reaps crashed members and
-	// acquires or refreshes one API-key-scoped ingress lease using Redis TIME.
-	acquireOpenAIWSIngressLeaseScript = redis.NewScript(`
-		redis.replicate_commands()
-		local key = KEYS[1]
-		local maxConnections = tonumber(ARGV[1])
-		local ttl = tonumber(ARGV[2])
-		local leaseID = ARGV[3]
-		local now = tonumber(redis.call('TIME')[1])
-		local expireBefore = now - ttl
-		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
-		if redis.call('ZSCORE', key, leaseID) ~= false then
-			redis.call('ZADD', key, now, leaseID)
-			redis.call('EXPIRE', key, ttl)
-			return 1
-		end
-		if redis.call('ZCARD', key) < maxConnections then
-			redis.call('ZADD', key, now, leaseID)
-			redis.call('EXPIRE', key, ttl)
-			return 1
-		end
-		return 0
-	`)
-
-	// refreshOpenAIWSIngressLeaseScript does not recreate a missing member: a
-	// process that lost its lease must terminate its local WebSocket instead of
-	// silently continuing beyond the distributed cap.
-	refreshOpenAIWSIngressLeaseScript = redis.NewScript(`
-		redis.replicate_commands()
-		local key = KEYS[1]
-		local ttl = tonumber(ARGV[1])
-		local leaseID = ARGV[2]
-		local now = tonumber(redis.call('TIME')[1])
-		local expireBefore = now - ttl
-		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
-		if redis.call('ZSCORE', key, leaseID) == false then
-			return 0
-		end
-		redis.call('ZADD', key, now, leaseID)
-		redis.call('EXPIRE', key, ttl)
-		return 1
-	`)
-
 	// incrementWaitScript - refreshes TTL on each increment to keep queue depth accurate
 	// KEYS[1] = wait queue key
 	// ARGV[1] = maxWait
@@ -443,8 +382,16 @@ func accountSlotKey(accountID int64) string {
 	return fmt.Sprintf("%s%d", accountSlotKeyPrefix, accountID)
 }
 
+func liveAccountSlotKey(accountID int64) string {
+	return fmt.Sprintf("%s%d", liveAccountSlotKeyPrefix, accountID)
+}
+
 func userSlotKey(userID int64) string {
 	return fmt.Sprintf("%s%d", userSlotKeyPrefix, userID)
+}
+
+func liveUserSlotKey(userID int64) string {
+	return fmt.Sprintf("%s%d", liveUserSlotKeyPrefix, userID)
 }
 
 func apiKeySlotKey(apiKeyID int64) string {

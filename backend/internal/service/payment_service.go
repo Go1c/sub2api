@@ -101,6 +101,8 @@ type CreateOrderResponse struct {
 	Amount       float64                         `json:"amount"`
 	PayAmount    float64                         `json:"pay_amount"`
 	FeeRate      float64                         `json:"fee_rate"`
+	BonusAmount  float64                         `json:"bonus_amount,omitempty"`
+	AlipayMobilePrecreateDeepLink bool           `json:"alipay_mobile_precreate_deep_link,omitempty"`
 	Status       string                          `json:"status"`
 	ResultType   payment.CreatePaymentResultType `json:"result_type,omitempty"`
 	PaymentType  string                          `json:"payment_type"`

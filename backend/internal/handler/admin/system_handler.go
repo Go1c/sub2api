@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +14,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+type systemUpdateService interface {
+	CheckUpdate(ctx context.Context, force bool) (*service.UpdateInfo, error)
+	PerformUpdate(ctx context.Context) error
+	ListRollbackVersions(ctx context.Context) ([]service.RollbackVersion, error)
+	Rollback() error
+}
 
 // SystemHandler handles system-related operations
 type SystemHandler struct {

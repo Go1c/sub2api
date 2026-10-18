@@ -852,6 +852,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	observer := upstreamResponseModelObserverFromContext(c)
 	writeStreamHeaders := s.newStreamHeaderWriter(c, resp.Header)
 
 	state := apicompat.NewResponsesEventToAnthropicState()
@@ -881,9 +882,13 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		intervalCh = intervalTicker.C
 	}
 
+	searchCount := 0
+	countSearch := account != nil && account.IsGrok()
+	streamSearchSeen := map[string]struct{}{}
+	terminalEventType := ""
 	// resultWithUsage builds the final result snapshot.
 	resultWithUsage := func() *OpenAIForwardResult {
-		return &OpenAIForwardResult{
+		out := &OpenAIForwardResult{
 			RequestID:        requestID,
 			ResponseID:       responseID,
 			Usage:            usage,
@@ -929,6 +934,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		isBareErrorEvent := eventType == "error"
 		isTerminalEvent := isOpenAICompatResponsesTerminalEvent(eventType) || isBareErrorEvent
 		if isTerminalEvent {
+			terminalEventType = eventType
 			if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(payloadBytes); ok {
 				usage = parsedUsage
 			}

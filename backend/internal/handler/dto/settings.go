@@ -335,9 +335,16 @@ type SystemSettings struct {
 
 	// Channel Monitor feature switch
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`
+
+	SubscriptionEnabled     bool   `json:"subscription_enabled"`
+	ModelPlazaEnabled       bool   `json:"model_plaza_enabled"`
+	ModelPlazaRequireAuth   bool   `json:"model_plaza_require_auth"`
+	ModelPlazaDescription   string `json:"model_plaza_description"`
+	PluginManagementEnabled bool   `json:"plugin_management_enabled"`
 
 	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`
@@ -446,6 +453,7 @@ type PublicSettings struct {
 	BalanceLowNotifyRechargeURL string  `json:"balance_low_notify_recharge_url"`
 
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorStatusBanner           string `json:"channel_monitor_status_banner"`
 	ChannelMonitorShowQuota              bool   `json:"channel_monitor_show_quota"`

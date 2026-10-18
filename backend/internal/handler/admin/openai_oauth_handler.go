@@ -22,6 +22,7 @@ type OpenAIOAuthHandler struct {
 	adminService       service.AdminService
 	quotaService       openAIQuotaService
 	rateLimitService   openAIAccountStateRecoverer
+	referralService    openAIReferralService
 }
 
 type openAIQuotaService interface {

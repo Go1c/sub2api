@@ -374,6 +374,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		return nil, proxyErr
 	}
 	defer releaseProxy()
+	cancelUpstream := func() {}
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
@@ -850,8 +851,11 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		intervalCh = intervalTicker.C
 	}
 
+	searchCount := 0
+	countSearch := account != nil && account.IsGrok()
+	streamSearchSeen := map[string]struct{}{}
 	resultWithUsage := func() *OpenAIForwardResult {
-		return &OpenAIForwardResult{
+		out := &OpenAIForwardResult{
 			RequestID:        requestID,
 			Usage:            usage,
 			Model:            originalModel,
