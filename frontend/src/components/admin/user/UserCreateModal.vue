@@ -25,6 +25,13 @@
         <label class="input-label">{{ t('admin.users.username') }}</label>
         <input v-model="form.username" type="text" class="input" :placeholder="t('admin.users.enterUsername')" />
       </div>
+      <div>
+        <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
+        <select v-model="form.role" class="input">
+          <option value="user">{{ t('admin.users.roles.user') }}</option>
+          <option value="admin">{{ t('admin.users.roles.admin') }}</option>
+        </select>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="input-label">{{ t('admin.users.columns.balance') }}</label>

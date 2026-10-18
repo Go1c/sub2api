@@ -32,8 +32,10 @@ func (r *runtimeBlockRecorder) ClearAccountSchedulingBlock(accountID int64) {
 func TestRateLimitService_HandleUpstreamError_OpenAI403FirstHitTempUnschedulable(t *testing.T) {
 	repo := &rateLimitAccountRepoStub{}
 	counter := &openAI403CounterCacheStub{counts: []int64{1}}
+	blocker := &runtimeBlockRecorder{}
 	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
 	service.SetOpenAI403CounterCache(counter)
+	service.SetAccountRuntimeBlocker(blocker)
 	account := &Account{
 		ID:       301,
 		Platform: PlatformOpenAI,
@@ -53,6 +55,10 @@ func TestRateLimitService_HandleUpstreamError_OpenAI403FirstHitTempUnschedulable
 	require.Equal(t, 1, repo.tempCalls)
 	require.Contains(t, repo.lastTempReason, "temporary edge rejection")
 	require.Contains(t, repo.lastTempReason, "(1/3)")
+	require.Len(t, blocker.accounts, 1)
+	require.Equal(t, account.ID, blocker.accounts[0].ID)
+	require.Equal(t, "openai_403_temp", blocker.reasons[0])
+	require.True(t, blocker.until[0].After(time.Now()))
 }
 
 func TestRateLimitService_HandleUpstreamError_OpenAI403ThresholdDisables(t *testing.T) {

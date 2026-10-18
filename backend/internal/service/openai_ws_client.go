@@ -107,9 +107,14 @@ func (d *coderOpenAIWSClientDialer) Dial(
 		return nil, 0, nil, errors.New("ws url is empty")
 	}
 
+	wrapped := &coderOpenAIWSClientConn{}
 	opts := &coderws.DialOptions{
 		HTTPHeader:      cloneHeader(headers),
 		CompressionMode: coderws.CompressionContextTakeover,
+		OnPingReceived: func(context.Context, []byte) bool {
+			wrapped.upstreamPings.Add(1)
+			return true
+		},
 	}
 	if proxy := strings.TrimSpace(proxyURL); proxy != "" {
 		proxyClient, err := d.proxyHTTPClient(proxy)
@@ -141,7 +146,8 @@ func (d *coderOpenAIWSClientDialer) Dial(
 	if resp != nil {
 		respHeaders = cloneHeader(resp.Header)
 	}
-	return &coderOpenAIWSClientConn{conn: conn}, 0, respHeaders, nil
+	wrapped.conn = conn
+	return wrapped, 0, respHeaders, nil
 }
 
 func (d *coderOpenAIWSClientDialer) proxyHTTPClient(proxy string) (*http.Client, error) {
@@ -267,7 +273,15 @@ func (d *coderOpenAIWSClientDialer) SnapshotTransportMetrics() OpenAIWSTransport
 }
 
 type coderOpenAIWSClientConn struct {
-	conn *coderws.Conn
+	conn          *coderws.Conn
+	upstreamPings atomic.Int64
+}
+
+func (c *coderOpenAIWSClientConn) UpstreamPingCount() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.upstreamPings.Load()
 }
 
 var _ openaiwsv2.FrameConn = (*coderOpenAIWSClientConn)(nil)
@@ -350,6 +364,14 @@ func (c *coderOpenAIWSClientConn) Close() error {
 	}
 	// Close 为幂等，忽略重复关闭错误。
 	_ = c.conn.Close(coderws.StatusNormalClosure, "")
+	_ = c.conn.CloseNow()
+	return nil
+}
+
+func (c *coderOpenAIWSClientConn) CloseNow() error {
+	if c == nil || c.conn == nil {
+		return nil
+	}
 	_ = c.conn.CloseNow()
 	return nil
 }

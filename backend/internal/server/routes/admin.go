@@ -3,7 +3,9 @@ package routes
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,11 +18,17 @@ func RegisterAdminRoutes(
 	auditLog middleware.AuditLogMiddleware,
 	stepUpAuth middleware.StepUpAuthMiddleware,
 ) {
+	// 插件 UI 使用短时能力 URL，仅提供经过安装校验的静态资源。
+	v1.GET("/plugin-ui/:token/*path", h.Admin.Plugin.ServeUIAsset)
+
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
 	admin.Use(gin.HandlerFunc(auditLog))
 	{
+		// 部署与运营合规确认
+		registerAdminComplianceRoutes(admin, h)
+
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
 
@@ -99,6 +107,9 @@ func RegisterAdminRoutes(
 		// TLS 指纹模板管理
 		registerTLSFingerprintProfileRoutes(admin, h)
 
+		// 本地进程插件管理
+		registerPluginRoutes(admin, h, stepUpAuth)
+
 		// API Key 管理
 		registerAdminAPIKeyRoutes(admin, h)
 
@@ -112,7 +123,14 @@ func RegisterAdminRoutes(
 		registerChannelRoutes(admin, h)
 
 		// 渠道监控
-		registerChannelMonitorRoutes(admin, h)
+		registerChannelMonitorRoutes(admin, h, settingService)
+		registerChannelMonitorV2Routes(admin, h, settingService)
+
+		// 风控中心
+		registerContentModerationRoutes(admin, h)
+
+		// 独立提示词输入审计
+		registerPromptAuditRoutes(admin, h)
 
 		// 渠道智商检测
 		registerChannelIQRoutes(admin, h)
@@ -231,16 +249,12 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Error logs (legacy)
 		ops.GET("/errors", h.Admin.Ops.GetErrorLogs)
 		ops.GET("/errors/:id", h.Admin.Ops.GetErrorLogByID)
-		ops.GET("/errors/:id/retries", h.Admin.Ops.ListRetryAttempts)
-		ops.POST("/errors/:id/retry", h.Admin.Ops.RetryErrorRequest)
 		ops.PUT("/errors/:id/resolve", h.Admin.Ops.UpdateErrorResolution)
 
 		// Request errors (client-visible failures)
 		ops.GET("/request-errors", h.Admin.Ops.ListRequestErrors)
 		ops.GET("/request-errors/:id", h.Admin.Ops.GetRequestError)
 		ops.GET("/request-errors/:id/upstream-errors", h.Admin.Ops.ListRequestErrorUpstreamErrors)
-		ops.POST("/request-errors/:id/retry-client", h.Admin.Ops.RetryRequestErrorClient)
-		ops.POST("/request-errors/:id/upstream-errors/:idx/retry", h.Admin.Ops.RetryRequestErrorUpstreamEvent)
 		ops.PUT("/request-errors/:id/resolve", h.Admin.Ops.ResolveRequestError)
 
 		// Bounded ingress-admission rejection aggregates.
@@ -251,7 +265,6 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Upstream errors (independent upstream failures)
 		ops.GET("/upstream-errors", h.Admin.Ops.ListUpstreamErrors)
 		ops.GET("/upstream-errors/:id", h.Admin.Ops.GetUpstreamError)
-		ops.POST("/upstream-errors/:id/retry", h.Admin.Ops.RetryUpstreamError)
 		ops.PUT("/upstream-errors/:id/resolve", h.Admin.Ops.ResolveUpstreamError)
 
 		// Request drilldown (success + error)
@@ -371,6 +384,7 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		groups.GET("/all", h.Admin.Group.GetAll)
 		groups.GET("/usage-summary", h.Admin.Group.GetUsageSummary)
 		groups.GET("/capacity-summary", h.Admin.Group.GetCapacitySummary)
+		groups.GET("/live-capability", h.Admin.Group.GetLiveCapability)
 		groups.PUT("/sort-order", h.Admin.Group.UpdateSortOrder)
 		groups.GET("/:id/models-list-candidates", h.Admin.Group.GetModelsListCandidates)
 		groups.GET("/:id/composite-routes", h.Admin.Group.ListCompositeRoutes)
@@ -402,6 +416,9 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)
 		accounts.POST("/upstream-billing-probe/batch", h.Admin.Account.ProbeUpstreamBillingBatch)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
+		accounts.GET("/:id/claude/reset-credits", h.Admin.Account.ClaudeResetCredits)
+		// Same protection as the Codex reset-quota route (admin auth, audit, compliance guard).
+		accounts.POST("/:id/claude/reset-credits/redeem", h.Admin.Account.RedeemClaudeResetCredit)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/:id/duplicate", h.Admin.Account.Duplicate)
 		accounts.POST("/check-mixed-channel", h.Admin.Account.CheckMixedChannel)
@@ -421,14 +438,17 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/:id/stats", h.Admin.Account.GetStats)
 		accounts.GET("/:id/error-history", h.Admin.Account.ErrorHistory)
 		accounts.POST("/:id/clear-error", h.Admin.Account.ClearError)
+		accounts.POST("/:id/revert-proxy-fallback", h.Admin.Account.RevertProxyFallback)
 		accounts.GET("/:id/usage", h.Admin.Account.GetUsage)
 		accounts.GET("/:id/today-stats", h.Admin.Account.GetTodayStats)
+		accounts.POST("/usage/batch", h.Admin.Account.GetBatchUsage)
 		accounts.POST("/today-stats/batch", h.Admin.Account.GetBatchTodayStats)
 		accounts.POST("/:id/clear-rate-limit", h.Admin.Account.ClearRateLimit)
 		accounts.POST("/:id/reset-quota", h.Admin.Account.ResetQuota)
 		accounts.GET("/:id/temp-unschedulable", h.Admin.Account.GetTempUnschedulable)
 		accounts.DELETE("/:id/temp-unschedulable", h.Admin.Account.ClearTempUnschedulable)
 		accounts.POST("/:id/schedulable", h.Admin.Account.SetSchedulable)
+		accounts.POST("/models/sync-upstream-preview", h.Admin.Account.SyncUpstreamModelsPreview)
 		accounts.GET("/:id/models", h.Admin.Account.GetAvailableModels)
 		accounts.POST("/:id/models/sync-upstream", h.Admin.Account.SyncUpstreamModels)
 		accounts.POST("/batch", h.Admin.Account.BatchCreate)
@@ -438,11 +458,15 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/batch-update-credentials", h.Admin.Account.BatchUpdateCredentials)
 		accounts.POST("/batch-refresh-tier", h.Admin.Account.BatchRefreshTier)
 		accounts.POST("/bulk-update", h.Admin.Account.BulkUpdate)
+		accounts.POST("/batch-delete", h.Admin.Account.BatchDelete)
 		accounts.POST("/batch-clear-error", h.Admin.Account.BatchClearError)
 		accounts.POST("/batch-refresh", h.Admin.Account.BatchRefresh)
 
 		// Antigravity 默认模型映射
 		accounts.GET("/antigravity/default-model-mapping", h.Admin.Account.GetAntigravityDefaultModelMapping)
+
+		// Spark 影子账号
+		accounts.POST("/:id/shadow", h.Admin.OpenAIOAuth.CreateShadow)
 
 		// Claude OAuth routes
 		accounts.POST("/generate-auth-url", h.Admin.OAuth.GenerateAuthURL)
@@ -570,6 +594,7 @@ func registerRedeemCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		codes.POST("/generate", h.Admin.Redeem.Generate)
 		codes.DELETE("/:id", h.Admin.Redeem.Delete)
 		codes.POST("/batch-delete", h.Admin.Redeem.BatchDelete)
+		codes.POST("/batch-update", h.Admin.Redeem.BatchUpdate)
 		codes.POST("/:id/expire", h.Admin.Redeem.Expire)
 	}
 }
@@ -593,6 +618,11 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
+		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)
+		adminSettings.POST("/email-template-preview", h.Admin.Setting.PreviewEmailTemplate)
+		adminSettings.GET("/email-templates/:event/:locale", h.Admin.Setting.GetEmailTemplate)
+		adminSettings.PUT("/email-templates/:event/:locale", h.Admin.Setting.UpdateEmailTemplate)
+		adminSettings.POST("/email-templates/:event/:locale/restore-official", h.Admin.Setting.RestoreOfficialEmailTemplate)
 		// Admin API Key 管理
 		adminSettings.GET("/admin-api-key", h.Admin.Setting.GetAdminAPIKey)
 		adminSettings.POST("/admin-api-key/regenerate", h.Admin.Setting.RegenerateAdminAPIKey)
@@ -661,6 +691,12 @@ func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 		backup.PUT("/s3-config", gin.HandlerFunc(stepUpAuth), h.Admin.Backup.UpdateS3Config)
 		backup.POST("/s3-config/test", h.Admin.Backup.TestS3Connection)
 
+		// 异步生图对象存储配置（与备份共用 S3 客户端，可直接复用备份凭证）
+		backup.GET("/image-storage", h.Admin.Backup.GetImageStorageConfig)
+		// 同 S3 配置：改写对象存储目标可将生成内容导向外部账号——要求 step-up 2FA
+		backup.PUT("/image-storage", gin.HandlerFunc(stepUpAuth), h.Admin.Backup.UpdateImageStorageConfig)
+		backup.POST("/image-storage/test", h.Admin.Backup.TestImageStorageConnection)
+
 		// 定时备份配置
 		backup.GET("/schedule", h.Admin.Backup.GetSchedule)
 		backup.PUT("/schedule", h.Admin.Backup.UpdateSchedule)
@@ -683,6 +719,7 @@ func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		system.GET("/version", h.Admin.System.GetVersion)
 		system.GET("/check-updates", h.Admin.System.CheckUpdates)
+		system.GET("/rollback-versions", h.Admin.System.GetRollbackVersions)
 		system.POST("/update", h.Admin.System.PerformUpdate)
 		system.POST("/rollback", h.Admin.System.Rollback)
 		system.POST("/restart", h.Admin.System.RestartService)
@@ -702,8 +739,11 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		subscriptions.PATCH("/:id", h.Admin.Subscription.Update)
 		subscriptions.POST("/assign", h.Admin.Subscription.Assign)
 		subscriptions.POST("/bulk-assign", h.Admin.Subscription.BulkAssign)
+		subscriptions.POST("/bulk-action", h.Admin.Subscription.BulkAction)
 		subscriptions.POST("/:id/extend", h.Admin.Subscription.Extend)
 		subscriptions.POST("/:id/reset-quota", h.Admin.Subscription.ResetQuota)
+		subscriptions.POST("/:id/revoke", h.Admin.Subscription.Revoke)
+		subscriptions.POST("/:id/restore", h.Admin.Subscription.Restore)
 		subscriptions.DELETE("/:id", h.Admin.Subscription.Revoke)
 	}
 
@@ -773,6 +813,23 @@ func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Hand
 	}
 }
 
+func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	plugins := admin.Group("/plugins")
+	{
+		plugins.GET("", h.Admin.Plugin.List)
+		plugins.GET("/:id", h.Admin.Plugin.Get)
+		plugins.POST("/upload", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Upload)
+		plugins.POST("/:id/enable", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Enable)
+		plugins.POST("/:id/disable", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Disable)
+		plugins.DELETE("/:id", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Delete)
+		plugins.GET("/:id/config", h.Admin.Plugin.GetConfig)
+		plugins.GET("/:id/status", h.Admin.Plugin.Status)
+		plugins.PUT("/:id/config", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.SaveConfig)
+		plugins.POST("/:id/test", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Test)
+		plugins.POST("/:id/ui-session", h.Admin.Plugin.CreateUISession)
+	}
+}
+
 func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	channels := admin.Group("/channels")
 	{
@@ -786,12 +843,15 @@ func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, settingService *service.SettingService) {
+	guard := channelMonitorAdminFeatureGuard(settingService)
 	monitors := admin.Group("/channel-monitors")
+	monitors.Use(guard)
 	{
 		monitors.GET("", h.Admin.ChannelMonitor.List)
 		monitors.POST("", h.Admin.ChannelMonitor.Create)
 		monitors.GET("/:id", h.Admin.ChannelMonitor.Get)
+		monitors.POST("/:id/duplicate", h.Admin.ChannelMonitor.Duplicate)
 		monitors.PUT("/:id", h.Admin.ChannelMonitor.Update)
 		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
 		monitors.POST("/:id/duplicate", h.Admin.ChannelMonitor.Duplicate)
@@ -800,6 +860,7 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 
 	templates := admin.Group("/channel-monitor-templates")
+	templates.Use(guard)
 	{
 		templates.GET("", h.Admin.ChannelMonitorTemplate.List)
 		templates.POST("", h.Admin.ChannelMonitorTemplate.Create)

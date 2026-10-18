@@ -63,7 +63,12 @@ var probeURLs = []struct {
 	parser string
 }{
 	{"http://ip-api.com/json/?lang=zh-CN", "ip-api"},
-	{"http://httpbin.org/ip", "httpbin"},
+	{"http://api64.ipify.org?format=json", "ipify"},
+}
+
+type configuredProbeTarget struct {
+	url    string
+	parser string
 }
 
 type configuredProbeTarget struct {
@@ -198,19 +203,18 @@ func (s *proxyProbeService) parseIPAPI(body []byte, latencyMs int64) (*service.P
 	}, latencyMs, nil
 }
 
-func (s *proxyProbeService) parseHTTPBin(body []byte, latencyMs int64) (*service.ProxyExitInfo, int64, error) {
-	// httpbin.org/ip 返回格式: {"origin": "1.2.3.4"}
+func (s *proxyProbeService) parseIPify(body []byte, latencyMs int64) (*service.ProxyExitInfo, int64, error) {
 	var result struct {
-		Origin string `json:"origin"`
+		IP string `json:"ip"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, latencyMs, fmt.Errorf("failed to parse httpbin response: %w", err)
+		return nil, latencyMs, fmt.Errorf("failed to parse ipify response: %w", err)
 	}
-	if result.Origin == "" {
-		return nil, latencyMs, fmt.Errorf("httpbin: no IP found in response")
+	if result.IP == "" {
+		return nil, latencyMs, fmt.Errorf("ipify: no IP found in response")
 	}
 	return &service.ProxyExitInfo{
-		IP: result.Origin,
+		IP: result.IP,
 	}, latencyMs, nil
 }
 

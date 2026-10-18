@@ -1,29 +1,9 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
-      <template #actions>
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <!-- Total Requests -->
-          <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
-              <Icon name="document" size="md" class="text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalRequests') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ usageStats?.total_requests?.toLocaleString() || '0' }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.inSelectedRange') }}
-              </p>
-            </div>
-          </div>
-        </div>
+    <div class="space-y-6">
+      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
-        <!-- Total Tokens -->
+      <div class="space-y-4">
         <div class="card p-4">
           <div class="flex items-center gap-3">
             <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
@@ -225,8 +205,6 @@
             </div>
           </div>
         </div>
-        </div>
-      </template>
 
       <template #table>
         <div
@@ -274,18 +252,15 @@
           :columns="columns"
           :data="usageLogs"
           :loading="loading"
+          :columns="visibleColumns"
           :server-side-sort="true"
           :estimate-row-height="88"
           :overscan="12"
           default-sort-key="created_at"
           default-sort-order="desc"
           @sort="handleSort"
-        >
-          <template #cell-api_key="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">{{
-              row.api_key?.name || '-'
-            }}</span>
-          </template>
+          @ipGeoBatchFailed="handleIpGeoBatchFailed"
+        />
 
           <template #cell-model="{ row, value }">
             <div
@@ -514,7 +489,21 @@
           @update:pageSize="handlePageSizeChange"
         />
       </template>
-    </TablePageLayout>
+
+      <UserErrorRequestsTable
+        v-else-if="errorViewEnabled"
+        :rows="errorRows"
+        :total="errorTotal"
+        :loading="errorLoading"
+        :page="errorPage"
+        :page-size="errorPageSize"
+        :visible-column-keys="errVisibleColumnKeys"
+        @sort="onErrorSort"
+        @update:page="onErrorPage"
+        @update:pageSize="onErrorPageSize"
+        @ipGeoBatchFailed="handleIpGeoBatchFailed"
+      />
+    </div>
   </AppLayout>
 
   <!-- Token Tooltip Portal -->
@@ -691,15 +680,20 @@
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { usageAPI, keysAPI } from '@/api'
+import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
+import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import TablePageLayout from '@/components/layout/TablePageLayout.vue'
-import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
+import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'
+import UsageTable from '@/components/admin/usage/UsageTable.vue'
+import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
+import GroupDistributionChart from '@/components/charts/GroupDistributionChart.vue'
+import EndpointDistributionChart from '@/components/charts/EndpointDistributionChart.vue'
+import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse, UserErrorRequest } from '@/types'
@@ -855,18 +849,14 @@ const handleErrorColumnClickOutside = (event: MouseEvent) => {
   }
 }
 
-// Tooltip state
-const tooltipVisible = ref(false)
-const tooltipPosition = ref({ x: 0, y: 0 })
-const tooltipData = ref<UsageLog | null>(null)
-
-// Token tooltip state
-const tokenTooltipVisible = ref(false)
-const tokenTooltipPosition = ref({ x: 0, y: 0 })
-const tokenTooltipData = ref<UsageLog | null>(null)
-
-// Usage stats from API
 const usageStats = ref<UsageStatsResponse | null>(null)
+const usageLogs = ref<UsageLog[]>([])
+const trendData = ref<TrendDataPoint[]>([])
+const requestedModelStats = ref<ModelStat[]>([])
+const groupStats = ref<GroupStat[]>([])
+const inboundEndpointStats = ref<EndpointStat[]>([])
+const upstreamEndpointStats = ref<EndpointStat[]>([])
+const endpointPathStats = ref<EndpointStat[]>([])
 
 const columns = computed<Column[]>(() => [
   { key: 'api_key', label: t('usage.apiKeyFilter'), sortable: false },
@@ -883,65 +873,87 @@ const columns = computed<Column[]>(() => [
   { key: 'user_agent', label: t('usage.userAgent'), sortable: false }
 ])
 
-const usageLogs = ref<UsageLog[]>([])
-const apiKeys = ref<ApiKey[]>([])
-const loading = ref(false)
-const exporting = ref(false)
-
-const apiKeyOptions = computed(() => {
-  return [
-    { value: null, label: t('usage.allApiKeys') },
-    ...apiKeys.value.map((key) => ({
-      value: key.id,
-      label: key.name
-    }))
-  ]
+// 模型候选取自当前已加载错误中出现过的模型；creatable 允许输入任意片段做后端模糊。
+const errorModelOptions = computed<SelectOption[]>(() => {
+  const seen = new Set<string>()
+  const opts: SelectOption[] = []
+  for (const r of errorRows.value) {
+    if (r.model && !seen.has(r.model)) {
+      seen.add(r.model)
+      opts.push({ value: r.model, label: r.model })
+    }
+  }
+  return opts
 })
 
-// Helper function to format date in local timezone
-const formatLocalDate = (date: Date): string => {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const errorCategoryCodes = ['auth', 'rate_limit', 'quota', 'invalid_request', 'service_unavailable', 'upstream', 'internal', 'cyber']
+
+const errorCategoryOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('usage.errors.allCategories') },
+  ...errorCategoryCodes.map((c) => ({ value: c, label: t('usage.errors.categories.' + c) })),
+])
+
+// 状态码候选用固定常用列表(与管理端 UsageFilters 共用常量),不受当前页数据限制:
+// 后端 status_code 过滤对全量生效,若只列当前页出现过的码,用户就选不到仅在后续页的码。
+const errorStatusOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('usage.errors.allStatuses') },
+  ...COMMON_ERROR_STATUS_CODES.map((c) => ({ value: c, label: String(c) })),
+])
+
+const applyErrorFilters = () => {
+  errorPage.value = 1
+  void loadErrors()
 }
 
-// Initialize date range immediately
-const now = new Date()
-const weekAgo = new Date(now)
-weekAgo.setDate(weekAgo.getDate() - 6)
+let abortController: AbortController | null = null
+let chartReqSeq = 0
+let statsReqSeq = 0
+let modelStatsReqSeq = 0
 
-// Date range state
-const startDate = ref(formatLocalDate(weekAgo))
-const endDate = ref(formatLocalDate(now))
+const formatLocalDate = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const getLast24HoursRangeDates = () => {
+  const end = new Date()
+  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+  return { start: formatLocalDate(start), end: formatLocalDate(end) }
+}
+
+const getGranularityForRange = (start: string, end: string): 'day' | 'hour' => {
+  const startTime = new Date(`${start}T00:00:00`).getTime()
+  const endTime = new Date(`${end}T00:00:00`).getTime()
+  return Math.ceil((endTime - startTime) / (1000 * 60 * 60 * 24)) <= 1 ? 'hour' : 'day'
+}
+
+const defaultRange = getLast24HoursRangeDates()
+const startDate = ref(defaultRange.start)
+const endDate = ref(defaultRange.end)
+const granularity = ref<'day' | 'hour'>(getGranularityForRange(startDate.value, endDate.value))
+
+const modelDistributionMetric = ref<DistributionMetric>('tokens')
+const groupDistributionMetric = ref<DistributionMetric>('tokens')
+const endpointDistributionMetric = ref<DistributionMetric>('tokens')
+const endpointDistributionSource = ref<EndpointSource>('inbound')
+const activeTab = ref<'usage' | 'errors'>('usage')
+const errorViewEnabled = computed(() => appStore.cachedPublicSettings?.allow_user_view_error_requests ?? false)
 
 const filters = ref<UsageQueryParams>({
-  api_key_id: undefined,
-  start_date: undefined,
-  end_date: undefined
+  start_date: startDate.value,
+  end_date: endDate.value,
+  request_type: undefined,
+  native_compaction_v2: null,
+  billing_type: null,
+  billing_mode: null,
 })
-
-// Initialize filters with date range
-filters.value.start_date = startDate.value
-filters.value.end_date = endDate.value
-
-// Handle date range change from DateRangePicker
-const onDateRangeChange = (range: {
-  startDate: string
-  endDate: string
-  preset: string | null
-}) => {
-  filters.value.start_date = range.startDate
-  filters.value.end_date = range.endDate
-  applyFilters()
-}
 
 const pagination = reactive({
   page: 1,
   page_size: getPersistedPageSize(),
   total: 0,
-  pages: 0
 })
 const sortState = reactive({
   sort_by: 'created_at',
-  sort_order: 'desc' as 'asc' | 'desc'
+  sort_order: 'desc' as 'asc' | 'desc',
 })
 
 // 超过 1 分钟简化为 "Xm Ys"，免去人工换算（超过 1 小时再进位为 "Xh Ym"）
@@ -961,9 +973,9 @@ const imageUnitPrice = (row: UsageLog | null): number => {
   return Number.isFinite(price) ? price : 0
 }
 
-const formatUserAgent = (ua: string): string => {
-  return ua
-}
+const apiKeys = ref<ApiKey[]>([])
+const groups = ref<Group[]>([])
+const modelOptionValues = ref<string[]>([])
 
 const getRequestTypeLabel = (log: UsageLog): string => {
   const requestType = resolveUsageRequestType(log)
@@ -1036,78 +1048,111 @@ const formatTokens = (value: number): string => {
   } else if (value >= 1_000) {
     return `${(value / 1_000).toFixed(2)}K`
   }
-  return value.toLocaleString()
-}
-
-type UsageTableQueryParams = UsageQueryParams & {
-  sort_by?: string
-  sort_order?: 'asc' | 'desc'
-}
-
-const buildUsageQueryParams = (page: number, pageSize: number): UsageTableQueryParams => ({
-  page,
-  page_size: pageSize,
-  ...filters.value,
-  sort_by: sortState.sort_by,
-  sort_order: sortState.sort_order
 })
 
-const loadUsageLogs = async () => {
-  if (abortController) {
-    abortController.abort()
-  }
-  const currentAbortController = new AbortController()
-  abortController = currentAbortController
-  const { signal } = currentAbortController
+const buildUsageListParams = (page: number, pageSize: number): UsageQueryParams => ({
+  page,
+  page_size: pageSize,
+  ...normalizedFilters.value,
+  sort_by: sortState.sort_by,
+  sort_order: sortState.sort_order,
+})
+
+const loadLogs = async () => {
+  abortController?.abort()
+  const controller = new AbortController()
+  abortController = controller
   loading.value = true
   try {
-    const response = await usageAPI.query(
-      buildUsageQueryParams(pagination.page, pagination.page_size),
-      { signal }
-    )
-    if (signal.aborted) {
-      return
+    const res = await usageAPI.query(buildUsageListParams(pagination.page, pagination.page_size), {
+      signal: controller.signal,
+    })
+    if (!controller.signal.aborted) {
+      usageLogs.value = res.items
+      pagination.total = res.total
     }
-    usageLogs.value = response.items
-    pagination.total = response.total
-    pagination.pages = response.pages
-  } catch (error) {
-    if (signal.aborted) {
-      return
+  } catch (error: any) {
+    if (error?.name !== 'AbortError' && error?.code !== 'ERR_CANCELED') {
+      appStore.showError(t('usage.failedToLoad'))
     }
-    const abortError = error as { name?: string; code?: string }
-    if (abortError?.name === 'AbortError' || abortError?.code === 'ERR_CANCELED') {
-      return
-    }
-    appStore.showError(t('usage.failedToLoad'))
   } finally {
-    if (abortController === currentAbortController) {
-      loading.value = false
-    }
+    if (abortController === controller) loading.value = false
   }
 }
 
-const loadApiKeys = async () => {
+const loadStats = async () => {
+  const seq = ++statsReqSeq
+  endpointStatsLoading.value = true
   try {
-    const response = await keysAPI.list(1, 100)
-    apiKeys.value = response.items
-  } catch (error) {
-    console.error('Failed to load API keys:', error)
-  }
-}
-
-const loadUsageStats = async () => {
-  try {
-    const apiKeyId = filters.value.api_key_id ? Number(filters.value.api_key_id) : undefined
-    const stats = await usageAPI.getStatsByDateRange(
-      filters.value.start_date || startDate.value,
-      filters.value.end_date || endDate.value,
-      apiKeyId
-    )
+    const stats = await usageAPI.getStats(normalizedFilters.value)
+    if (seq !== statsReqSeq) return
     usageStats.value = stats
+    inboundEndpointStats.value = stats.endpoints || []
+    upstreamEndpointStats.value = []
+    endpointPathStats.value = []
   } catch (error) {
+    if (seq !== statsReqSeq) return
     console.error('Failed to load usage stats:', error)
+    inboundEndpointStats.value = []
+    upstreamEndpointStats.value = []
+    endpointPathStats.value = []
+  } finally {
+    if (seq === statsReqSeq) endpointStatsLoading.value = false
   }
+}
+
+const loadModelStats = async () => {
+  const seq = ++modelStatsReqSeq
+  modelStatsLoading.value = true
+  try {
+    const response = await usageAPI.getDashboardModels({
+      ...normalizedFilters.value,
+      model_source: 'requested',
+    })
+    if (seq !== modelStatsReqSeq) return
+    requestedModelStats.value = response.models || []
+    refreshModelOptions(response.models || [])
+  } catch (error) {
+    if (seq !== modelStatsReqSeq) return
+    console.error('Failed to load model stats:', error)
+    requestedModelStats.value = []
+  } finally {
+    if (seq === modelStatsReqSeq) modelStatsLoading.value = false
+  }
+}
+
+const loadChartData = async () => {
+  const seq = ++chartReqSeq
+  chartsLoading.value = true
+  try {
+    const snapshot = await usageAPI.getDashboardSnapshotV2({
+      ...normalizedFilters.value,
+      granularity: granularity.value,
+      include_trend: true,
+      include_model_stats: false,
+      include_group_stats: true,
+    })
+    if (seq !== chartReqSeq) return
+    trendData.value = snapshot.trend || []
+    groupStats.value = snapshot.groups || []
+  } catch (error) {
+    if (seq !== chartReqSeq) return
+    console.error('Failed to load chart data:', error)
+    trendData.value = []
+    groupStats.value = []
+  } finally {
+    if (seq === chartReqSeq) chartsLoading.value = false
+  }
+}
+
+const refreshModelOptions = (models: ModelStat[]) => {
+  const current = filters.value.model
+  const set = new Set(modelOptionValues.value)
+  models.forEach((item) => {
+    if (item.model) set.add(item.model)
+  })
+  if (current) set.add(current)
+  modelOptionValues.value = Array.from(set).sort()
 }
 
 const applyFilters = () => {
@@ -1131,10 +1176,16 @@ const refreshData = () => {
 }
 
 const resetFilters = () => {
+  const range = getLast24HoursRangeDates()
+  startDate.value = range.start
+  endDate.value = range.end
   filters.value = {
-    api_key_id: undefined,
-    start_date: undefined,
-    end_date: undefined
+    start_date: range.start,
+    end_date: range.end,
+    request_type: undefined,
+    native_compaction_v2: null,
+    billing_type: null,
+    billing_mode: null,
   }
   // Reset date range to default (last 7 days)
   const now = new Date()
@@ -1229,41 +1280,47 @@ const switchToErrors = () => {
 
 const handlePageChange = (page: number) => {
   pagination.page = page
-  loadUsageLogs()
+  void loadLogs()
 }
 
 const handlePageSizeChange = (pageSize: number) => {
   pagination.page_size = pageSize
   pagination.page = 1
-  loadUsageLogs()
+  void loadLogs()
 }
 
 const handleSort = (key: string, order: 'asc' | 'desc') => {
   sortState.sort_by = key
   sortState.sort_order = order
   pagination.page = 1
-  loadUsageLogs()
+  void loadLogs()
 }
 
-/**
- * Escape CSV value to prevent injection and handle special characters
- */
+const handleIpGeoBatchFailed = () => {
+  appStore.showError(t('usage.ipGeo.batchFailed'))
+}
+
+const getRequestTypeExportText = (log: UsageLog): string => {
+  const requestType = resolveUsageRequestType(log)
+  if (requestType === 'cyber') return 'Cyber'
+  if (requestType === 'live') return 'Live'
+  if (requestType === 'ws_v2') return 'WS'
+  if (requestType === 'stream') return 'Stream'
+  if (requestType === 'sync') return 'Sync'
+  return 'Unknown'
+}
+
+const getDisplayBillingMode = (
+  row: Pick<UsageLog, 'billing_mode' | 'image_count'> | null | undefined
+): string | null | undefined => resolveDisplayBillingMode(row)
+
 const escapeCSVValue = (value: unknown): string => {
   if (value == null) return ''
-
   const str = String(value)
   const escaped = str.replace(/"/g, '""')
-
-  // Prevent formula injection by prefixing dangerous characters with single quote
-  if (/^[=+\-@\t\r]/.test(str)) {
-    return `"\'${escaped}"`
-  }
-
-  // Escape values containing comma, quote, or newline
-  if (/[,"\n\r]/.test(str)) {
-    return `"${escaped}"`
-  }
-
+  if (str === '-') return str
+  if (/^[=+\-@\t\r]/.test(str)) return `"\'${escaped}"`
+  if (/[,"\n\r]/.test(str)) return `"${escaped}"`
   return str
 }
 
@@ -1272,31 +1329,28 @@ const exportToCSV = async () => {
     appStore.showWarning(t('usage.noDataToExport'))
     return
   }
-
   exporting.value = true
   appStore.showInfo(t('usage.preparingExport'))
-
   try {
     const allLogs: UsageLog[] = []
-    const pageSize = 100 // Use a larger page size for export to reduce requests
-    const totalRequests = Math.ceil(pagination.total / pageSize)
-
-    for (let page = 1; page <= totalRequests; page++) {
-      const response = await usageAPI.query(buildUsageQueryParams(page, pageSize))
+    const pageSize = 100
+    const exportParams = buildUsageListParams(1, pageSize)
+    const totalPages = Math.ceil(pagination.total / pageSize)
+    for (let page = 1; page <= totalPages; page++) {
+      const response = await usageAPI.query({ ...exportParams, page })
       allLogs.push(...response.items)
     }
-
     if (allLogs.length === 0) {
       appStore.showWarning(t('usage.noDataToExport'))
       return
     }
-
     const headers = [
       'Time',
       'API Key Name',
       'Model',
       'Reasoning Effort',
       'Inbound Endpoint',
+      'IP Address',
       'Type',
       'Billing Mode',
       'Deduction Mode',
@@ -1337,57 +1391,210 @@ const exportToCSV = async () => {
 
     const csvContent = [
       headers.map(escapeCSVValue).join(','),
-      ...rows.map((row) => row.join(','))
+      ...rows.map((row) => row.join(',')),
     ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `usage_${filters.value.start_date}_to_${filters.value.end_date}.csv`
+    link.download = `usage_${exportParams.start_date}_to_${exportParams.end_date}.csv`
     link.click()
     window.URL.revokeObjectURL(url)
-
     appStore.showSuccess(t('usage.exportSuccess'))
   } catch (error) {
-    appStore.showError(t('usage.exportFailed'))
     console.error('CSV Export failed:', error)
+    appStore.showError(t('usage.exportFailed'))
   } finally {
     exporting.value = false
   }
 }
 
-// Tooltip functions
-const showTooltip = (event: MouseEvent, row: UsageLog) => {
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
+const ALWAYS_VISIBLE = ['created_at']
+const DEFAULT_HIDDEN_COLUMNS = ['user_agent']
+const HIDDEN_COLUMNS_KEY = 'user-usage-hidden-columns'
 
-  tooltipData.value = row
-  // Position to the right of the icon, vertically centered
-  tooltipPosition.value.x = rect.right + 8
-  tooltipPosition.value.y = rect.top + rect.height / 2
-  tooltipVisible.value = true
+const allColumns = computed<Column[]>(() => [
+  { key: 'api_key', label: t('usage.apiKeyFilter'), sortable: false },
+  { key: 'model', label: t('usage.model'), sortable: true },
+  { key: 'reasoning_effort', label: t('usage.reasoningEffort'), sortable: false },
+  { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
+  { key: 'ip_address', label: 'IP', sortable: false },
+  { key: 'group', label: t('admin.usage.group'), sortable: false },
+  { key: 'stream', label: t('usage.type'), sortable: false },
+  { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
+  { key: 'tokens', label: t('usage.tokens'), sortable: false },
+  { key: 'cost', label: t('usage.cost'), sortable: false },
+  { key: 'latency', label: t('usage.latency'), sortable: false },
+  { key: 'created_at', label: t('usage.time'), sortable: true },
+  { key: 'user_agent', label: t('usage.userAgent'), sortable: false },
+])
+
+const hiddenColumns = reactive<Set<string>>(new Set())
+const toggleableColumns = computed(() => allColumns.value.filter((col) => !ALWAYS_VISIBLE.includes(col.key)))
+const visibleColumns = computed(() =>
+  allColumns.value.filter((col) => ALWAYS_VISIBLE.includes(col.key) || !hiddenColumns.has(col.key))
+)
+const isColumnVisible = (key: string) => !hiddenColumns.has(key)
+const toggleColumn = (key: string) => {
+  if (hiddenColumns.has(key)) hiddenColumns.delete(key)
+  else hiddenColumns.add(key)
+  localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify([...hiddenColumns]))
+}
+const loadSavedColumns = () => {
+  try {
+    const saved = localStorage.getItem(HIDDEN_COLUMNS_KEY)
+    const values = saved ? JSON.parse(saved) as string[] : DEFAULT_HIDDEN_COLUMNS
+    values.forEach((key) => hiddenColumns.add(key))
+  } catch {
+    DEFAULT_HIDDEN_COLUMNS.forEach((key) => hiddenColumns.add(key))
+  }
 }
 
-const hideTooltip = () => {
-  tooltipVisible.value = false
-  tooltipData.value = null
+// 错误请求 tab 独立列设置(机制同用量列设置,存储互不影响)
+const ERR_ALWAYS_VISIBLE = ['status', 'created_at']
+const ERR_DEFAULT_HIDDEN_COLUMNS = ['user_agent']
+const ERR_HIDDEN_COLUMNS_KEY = 'user-usage-error-hidden-columns'
+
+// key 须与 UserErrorRequestsTable 的 allColumns 一致
+const errAllColumns = computed<Column[]>(() => [
+  { key: 'key_name', label: t('usage.errors.keyName') },
+  { key: 'model', label: t('usage.errors.model') },
+  { key: 'endpoint', label: t('usage.errors.endpoint') },
+  { key: 'client_ip', label: 'IP' },
+  { key: 'group', label: t('admin.usage.group') },
+  { key: 'type', label: t('usage.type') },
+  { key: 'platform', label: t('usage.errors.platform') },
+  { key: 'category', label: t('usage.errors.category') },
+  { key: 'status', label: t('usage.errors.status') },
+  { key: 'message', label: t('usage.errors.message') },
+  { key: 'created_at', label: t('usage.errors.time') },
+  { key: 'user_agent', label: t('usage.userAgent') },
+])
+
+const errHiddenColumns = reactive<Set<string>>(new Set())
+const errToggleableColumns = computed(() =>
+  errAllColumns.value.filter((col) => !ERR_ALWAYS_VISIBLE.includes(col.key))
+)
+const errVisibleColumnKeys = computed(() =>
+  errAllColumns.value
+    .filter((col) => ERR_ALWAYS_VISIBLE.includes(col.key) || !errHiddenColumns.has(col.key))
+    .map((col) => col.key)
+)
+const isErrColumnVisible = (key: string) => !errHiddenColumns.has(key)
+const toggleErrColumn = (key: string) => {
+  if (errHiddenColumns.has(key)) errHiddenColumns.delete(key)
+  else errHiddenColumns.add(key)
+  localStorage.setItem(ERR_HIDDEN_COLUMNS_KEY, JSON.stringify([...errHiddenColumns]))
+}
+const loadSavedErrColumns = () => {
+  try {
+    const saved = localStorage.getItem(ERR_HIDDEN_COLUMNS_KEY)
+    const values = saved ? (JSON.parse(saved) as string[]) : ERR_DEFAULT_HIDDEN_COLUMNS
+    values.forEach((key) => errHiddenColumns.add(key))
+  } catch {
+    ERR_DEFAULT_HIDDEN_COLUMNS.forEach((key) => errHiddenColumns.add(key))
+  }
 }
 
-// Token tooltip functions
-const showTokenTooltip = (event: MouseEvent, row: UsageLog) => {
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-
-  tokenTooltipData.value = row
-  tokenTooltipPosition.value.x = rect.right + 8
-  tokenTooltipPosition.value.y = rect.top + rect.height / 2
-  tokenTooltipVisible.value = true
+// 列设置下拉按当前 tab 分发
+const currentToggleableColumns = computed(() =>
+  activeTab.value === 'errors' ? errToggleableColumns.value : toggleableColumns.value
+)
+const isCurrentColumnVisible = (key: string) =>
+  activeTab.value === 'errors' ? isErrColumnVisible(key) : isColumnVisible(key)
+const toggleCurrentColumn = (key: string) => {
+  if (activeTab.value === 'errors') toggleErrColumn(key)
+  else toggleColumn(key)
 }
 
-const hideTokenTooltip = () => {
-  tokenTooltipVisible.value = false
-  tokenTooltipData.value = null
+const showColumnDropdown = ref(false)
+const columnDropdownRef = ref<HTMLElement | null>(null)
+const handleColumnClickOutside = (event: MouseEvent) => {
+  if (columnDropdownRef.value && !columnDropdownRef.value.contains(event.target as HTMLElement)) {
+    showColumnDropdown.value = false
+  }
+}
+
+const loadApiKeys = async () => {
+  const firstPage = await keysAPI.list(1, 100)
+  const keys = [...firstPage.items]
+  for (let page = 2; page <= firstPage.pages && keys.length > 0; page++) {
+    const response = await keysAPI.list(page, 100)
+    if (response.items.length === 0) break
+    keys.push(...response.items)
+  }
+  return keys
+}
+
+const loadFilterOptions = async () => {
+  try {
+    const [keys, availableGroups] = await Promise.all([
+      loadApiKeys(),
+      userGroupsAPI.getAvailable(),
+    ])
+    apiKeys.value = keys
+    groups.value = availableGroups
+  } catch (error) {
+    console.error('Failed to load usage filter options:', error)
+  }
+}
+
+const resetErrorRows = () => {
+  errorPage.value = 1
+  if (activeTab.value === 'errors') {
+    void loadErrors()
+  } else {
+    errorRows.value = []
+    errorTotal.value = 0
+  }
+}
+
+const loadErrors = async () => {
+  errorLoading.value = true
+  try {
+    const resp = await usageAPI.listMyErrorRequests({
+      page: errorPage.value,
+      page_size: errorPageSize.value,
+      start_date: startDate.value,
+      end_date: endDate.value,
+      model: (errorFilter.value.model ?? '').trim() || undefined,
+      category: errorFilter.value.category || undefined,
+      api_key_id: errorFilter.value.api_key_id ?? undefined,
+      status_code: errorFilter.value.status_code ?? undefined,
+      sort_by: errorSortBy.value,
+      sort_order: errorSortOrder.value,
+    })
+    errorRows.value = resp.items
+    errorTotal.value = resp.total
+  } catch (error) {
+    console.error('[UsageView] loadErrors failed:', error)
+    appStore.showError(t('usage.errors.failedToLoad'))
+  } finally {
+    errorLoading.value = false
+  }
+}
+
+const onErrorSort = (sortBy: string, sortOrder: 'asc' | 'desc') => {
+  errorSortBy.value = sortBy
+  errorSortOrder.value = sortOrder
+  errorPage.value = 1
+  void loadErrors()
+}
+
+const onErrorPage = (page: number) => {
+  errorPage.value = page
+  void loadErrors()
+}
+
+const onErrorPageSize = (pageSize: number) => {
+  errorPageSize.value = pageSize
+  errorPage.value = 1
+  void loadErrors()
+}
+
+const switchToErrors = () => {
+  activeTab.value = 'errors'
+  if (errorRows.value.length === 0) void loadErrors()
 }
 
 onMounted(() => {

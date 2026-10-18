@@ -221,6 +221,18 @@ type SystemSettings struct {
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
+	// Subscription feature switch: gates the whole user-facing subscription surface
+	// (sidebar entries, purchase-page subscription tab, header progress badge,
+	// usage billing-type filter, /subscriptions route). Pairs with PaymentBalanceDisabled
+	// to form the admin-facing "site billing mode" selector.
+	SubscriptionEnabled bool `json:"subscription_enabled"`
+
+	// Model Plaza feature (public group/model pricing showcase)
+	ModelPlazaEnabled       bool   `json:"model_plaza_enabled"`
+	ModelPlazaRequireAuth   bool   `json:"model_plaza_require_auth"`
+	ModelPlazaDescription   string `json:"model_plaza_description"`
+	PluginManagementEnabled bool   `json:"plugin_management_enabled"`
+
 	// Claude Code version check
 	MinClaudeCodeVersion string
 	MaxClaudeCodeVersion string
@@ -368,6 +380,7 @@ type PublicSettings struct {
 	WeChatOAuthMobileEnabled bool
 	BackendModeEnabled       bool
 	PaymentEnabled           bool
+	PaymentBalanceDisabled   bool
 	OIDCOAuthEnabled         bool
 	OIDCOAuthProviderName    string
 	GitHubOAuthEnabled       bool
@@ -387,6 +400,14 @@ type PublicSettings struct {
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+
+	// Subscription feature switch (see SystemSettings.SubscriptionEnabled)
+	SubscriptionEnabled bool `json:"subscription_enabled"`
+
+	// Model Plaza feature (public group/model pricing showcase)
+	ModelPlazaEnabled       bool `json:"model_plaza_enabled"`
+	ModelPlazaRequireAuth   bool `json:"model_plaza_require_auth"`
+	PluginManagementEnabled bool `json:"plugin_management_enabled"`
 
 	// Affiliate (邀请返利) feature toggle
 	AffiliateEnabled bool `json:"affiliate_enabled"`
@@ -651,8 +672,9 @@ func DefaultBetaPolicySettings() *BetaPolicySettings {
 // OpenAI Fast Policy 策略常量
 // OpenAI 的 "fast 模式" 通过请求体中的 service_tier 字段识别：
 //   - "priority"（客户端可传 "fast"，归一化为 "priority"）：fast 模式
+//   - "ultrafast"：Codex/API 的 Ultrafast 档位
 //   - "flex"：低优先级模式
-//   - 省略：normal 默认
+//   - 省略：normal 默认；策略中可用专用 "missing" 条件显式匹配
 //
 // 本策略复用 BetaPolicyAction*/BetaPolicyScope* 常量语义，只是匹配键从
 // anthropic-beta header 换成 body 的 service_tier 字段。

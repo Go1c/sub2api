@@ -31,6 +31,18 @@ type stubOpenAIAccountRepo struct {
 	accounts []Account
 }
 
+type tempUnschedulableOpenAIAccountRepo struct {
+	stubOpenAIAccountRepo
+	modelRateLimitAccountID int64
+	modelRateLimitKey       string
+}
+
+func (r *tempUnschedulableOpenAIAccountRepo) SetModelRateLimit(_ context.Context, accountID int64, modelKey string, _ time.Time, _ ...string) error {
+	r.modelRateLimitAccountID = accountID
+	r.modelRateLimitKey = modelKey
+	return nil
+}
+
 type snapshotUpdateAccountRepo struct {
 	stubOpenAIAccountRepo
 	updateExtraCalls chan map[string]any
@@ -54,6 +66,29 @@ func (r stubOpenAIAccountRepo) GetByID(ctx context.Context, id int64) (*Account,
 		}
 	}
 	return nil, errors.New("account not found")
+}
+
+func (r stubOpenAIAccountRepo) GetByIDs(ctx context.Context, ids []int64) ([]*Account, error) {
+	if len(ids) == 0 {
+		return []*Account{}, nil
+	}
+	index := make(map[int64]*Account, len(r.accounts))
+	for i := range r.accounts {
+		account := &r.accounts[i]
+		index[account.ID] = account
+	}
+	out := make([]*Account, 0, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		if account, ok := index[id]; ok {
+			out = append(out, account)
+		}
+	}
+	return out, nil
 }
 
 func (r stubOpenAIAccountRepo) ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error) {
@@ -124,6 +159,20 @@ type errReadCloser struct {
 
 func (r errReadCloser) Read([]byte) (int, error) { return 0, r.err }
 func (r errReadCloser) Close() error             { return nil }
+
+type openAIStreamReadThenErrorCloser struct {
+	reader *strings.Reader
+	err    error
+}
+
+func (r *openAIStreamReadThenErrorCloser) Read(p []byte) (int, error) {
+	if r.reader != nil && r.reader.Len() > 0 {
+		return r.reader.Read(p)
+	}
+	return 0, r.err
+}
+
+func (r *openAIStreamReadThenErrorCloser) Close() error { return nil }
 
 type failingGinWriter struct {
 	gin.ResponseWriter
@@ -220,6 +269,87 @@ func TestOpenAIGatewayService_GenerateSessionHash_Priority(t *testing.T) {
 	if h4 != "" {
 		t.Fatalf("expected empty hash when no signals")
 	}
+}
+
+func TestOpenAIGatewayService_ClientSessionHeaderPriority(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	c.Set("api_key", &APIKey{ID: 901, Group: &Group{Platform: PlatformGrok}})
+
+	headers := []struct {
+		name  string
+		value string
+	}{
+		{name: "session-id", value: "codex-session"},
+		{name: "session_id", value: "generic-session"},
+		{name: "conversation_id", value: "generic-conversation"},
+		{name: openCodeSessionAffinityHeader, value: "opencode-affinity"},
+		{name: openCodeSessionIDHeader, value: "opencode-session-id"},
+		{name: openCodeNativeSessionHeader, value: "opencode-native-session"},
+		{name: codeBuddyConversationHeader, value: "codebuddy-conversation"},
+		{name: grokConversationIDHeader, value: "grok-conversation"},
+	}
+	for _, header := range headers {
+		c.Request.Header.Set(header.name, header.value)
+	}
+
+	svc := &OpenAIGatewayService{}
+	body := []byte(`{"prompt_cache_key":"body-session"}`)
+	for _, header := range headers {
+		require.Equal(t, header.value, svc.ExtractSessionID(c, body), header.name)
+		require.Equal(t, fmt.Sprintf("%016x", xxhash.Sum64String(header.value)), svc.GenerateExplicitSessionHash(c, body), header.name)
+		if header.name != grokConversationIDHeader {
+			require.Equal(t, header.value, explicitOpenAISessionID(c, body), header.name)
+		}
+		c.Request.Header.Del(header.name)
+	}
+	require.Equal(t, "body-session", svc.ExtractSessionID(c, body))
+}
+
+func TestOpenAIGatewayService_CodexSessionIDKeepsReconnectHashStable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	c.Request.Header.Set("session-id", "codex-reconnect-session")
+
+	svc := &OpenAIGatewayService{}
+	warmup := []byte(`{
+		"type":"response.create",
+		"model":"gpt-5.6-sol",
+		"generate":false,
+		"tools":[{"type":"custom","name":"exec"}],
+		"input":[{"role":"user","content":"warmup"}]
+	}`)
+	business := []byte(`{
+		"type":"response.create",
+		"model":"gpt-5.6-sol",
+		"input":[{"role":"user","content":"install codex"}]
+	}`)
+
+	require.Equal(t, svc.GenerateSessionHash(c, warmup), svc.GenerateSessionHash(c, business))
+	require.Equal(t, "codex-reconnect-session", svc.ExtractSessionID(c, business))
+}
+
+func TestOpenAIGatewayService_ClientSessionHeadersIgnorePerRequestIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	for name, value := range map[string]string{
+		"X-Conversation-Request-ID": "request-rotates-every-turn",
+		"X-Conversation-Message-ID": "message-rotates-every-turn",
+		"X-Request-ID":              "generic-request-id",
+	} {
+		c.Request.Header.Set(name, value)
+	}
+
+	svc := &OpenAIGatewayService{}
+	require.Empty(t, explicitOpenAIHeaderSessionID(c))
+	require.Empty(t, svc.ExtractSessionID(c, nil))
+	require.Empty(t, svc.GenerateExplicitSessionHash(c, nil))
 }
 
 func TestOpenAIGatewayService_GenerateSessionHash_UsesXXHash64(t *testing.T) {
@@ -420,6 +550,23 @@ func (c stubConcurrencyCache) GetAccountWaitingCount(ctx context.Context, accoun
 type stubGatewayCache struct {
 	sessionBindings map[string]int64
 	deletedSessions map[string]int
+}
+
+type responseBindContextProbeCache struct {
+	stubGatewayCache
+	setContextErrors []error
+	setDeadlines     []time.Time
+}
+
+func (c *responseBindContextProbeCache) SetSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64, ttl time.Duration) error {
+	c.setContextErrors = append(c.setContextErrors, ctx.Err())
+	if deadline, ok := ctx.Deadline(); ok {
+		c.setDeadlines = append(c.setDeadlines, deadline)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.stubGatewayCache.SetSessionAccountID(ctx, groupID, sessionHash, accountID, ttl)
 }
 
 func (c *stubGatewayCache) GetSessionAccountID(ctx context.Context, groupID int64, sessionHash string) (int64, error) {
@@ -905,6 +1052,49 @@ func TestOpenAISelectAccountWithLoadAwareness_StickyWaitPlan(t *testing.T) {
 	}
 }
 
+func TestOpenAISelectAccountWithLoadAwareness_StickyCapacitySpilloverKeepsBinding(t *testing.T) {
+	sessionHash := "sticky-spillover"
+	groupID := int64(1)
+	repo := stubOpenAIAccountRepo{
+		accounts: []Account{
+			{ID: 1, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Concurrency: 6, Priority: 1, GroupIDs: []int64{groupID}},
+			{ID: 2, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, Concurrency: 6, Priority: 1, GroupIDs: []int64{groupID}},
+		},
+	}
+	cache := &stubGatewayCache{
+		sessionBindings: map[string]int64{"openai:" + sessionHash: 1},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		acquireResults: map[int64]bool{1: false, 2: true},
+		waitCounts:     map[int64]int{1: 1},
+		loadMap: map[int64]*AccountLoadInfo{
+			1: {AccountID: 1, LoadRate: 100},
+			2: {AccountID: 2, LoadRate: 10},
+		},
+	}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	cfg.Gateway.Scheduling.LoadBatchEnabled = true
+	cfg.Gateway.Scheduling.StickySessionMaxWaiting = 1
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        repo,
+		cache:              cache,
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(context.Background(), &groupID, sessionHash, "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(2), selection.Account.ID, "capacity spillover should use the other account for this request")
+	require.True(t, selection.Acquired)
+	require.Equal(t, int64(1), cache.sessionBindings["openai:"+sessionHash], "capacity spillover must not migrate the durable sticky binding")
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
 func TestOpenAISelectAccountWithLoadAwareness_PrefersLowerLoad(t *testing.T) {
 	groupID := int64(1)
 	repo := stubOpenAIAccountRepo{
@@ -1217,6 +1407,10 @@ func TestOpenAIStreamingTimeout(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "stream_timeout") {
 		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
 	}
+	payload := strings.TrimSpace(strings.TrimPrefix(rec.Body.String(), "event: error\ndata: "))
+	require.Equal(t, "stream_timeout", gjson.Get(payload, "code").String())
+	require.False(t, gjson.Get(payload, "error").Exists())
+	require.True(t, IsResponseCommitted(c))
 }
 
 func TestOpenAIStreamingContextCanceledReturnsIncompleteErrorWithoutInjectingErrorEvent(t *testing.T) {
@@ -1281,6 +1475,156 @@ func TestOpenAIStreamingReadErrorBeforeOutputReturnsFailover(t *testing.T) {
 	require.Empty(t, rec.Body.String())
 }
 
+func TestOpenAIStreamingReadErrorAfterOutputUsesResponsesErrorSchema(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name  string
+		cause error
+		code  string
+	}{
+		{"reset", errors.New("read tcp 192.0.2.1:1234->192.0.2.2:443: connection reset by peer"), OpenAIUpstreamStreamReadErrorCode},
+		{"http2", errors.New("stream error: stream ID 3; INTERNAL_ERROR; received from peer"), OpenAIUpstreamHTTP2StreamErrorCode},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}}
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: &openAIStreamReadThenErrorCloser{
+				reader: strings.NewReader("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"),
+				err:    tc.cause,
+			}}
+			_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI}, time.Now(), "model", "model")
+			require.ErrorIs(t, err, tc.cause)
+			body := rec.Body.String()
+			require.Contains(t, body, "partial")
+			require.NotContains(t, body, "192.0.2.")
+			require.NotContains(t, body, "stream ID")
+			require.NotContains(t, body, "response.completed")
+			require.NotContains(t, body, "[DONE]")
+			require.Equal(t, 1, strings.Count(body, "event: error\n"))
+			require.True(t, IsResponseCommitted(c), "the handler must not append another failure")
+			var events []gjson.Result
+			for _, line := range strings.Split(body, "\n") {
+				if strings.HasPrefix(line, "data: ") {
+					event := gjson.Parse(strings.TrimPrefix(line, "data: "))
+					if event.Get("type").String() == "error" {
+						events = append(events, event)
+					}
+				}
+			}
+			require.Len(t, events, 1)
+			require.Equal(t, tc.code, events[0].Get("code").String())
+			require.NotEmpty(t, events[0].Get("message").String())
+			require.False(t, events[0].Get("error").Exists(), "Responses errors have top-level fields")
+			require.True(t, events[0].Get("param").Exists())
+		})
+	}
+}
+
+func TestOpenAIStreamingPostOutputDisconnectQuarantinesSharedProxyWithoutSameStreamFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	proxyID := int64(4698)
+	account := &Account{
+		ID:       469801,
+		Name:     "oauth-on-shared-proxy",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		ProxyID:  &proxyID,
+	}
+	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
+		MaxLineSize: defaultMaxLineSize,
+	}}}
+	// collapseInterval 0: the two loop iterations below record within the
+	// production collapse window and must count as distinct failure events here.
+	svc.openaiProxyStreamCircuit = newOpenAIProxyStreamCircuit(openAIProxyStreamCircuitSettings{
+		failureThreshold: 2,
+		failureWindow:    time.Minute,
+		quarantineTTL:    10 * time.Minute,
+		maxEntries:       16,
+	})
+
+	for _, readErr := range []error{
+		io.ErrUnexpectedEOF,
+		errors.New("http2: client connection lost"),
+	} {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body: &openAIStreamReadThenErrorCloser{
+				reader: strings.NewReader(strings.Join([]string{
+					"event: response.output_text.delta",
+					`data: {"type":"response.output_text.delta","delta":"partial"}`,
+					"",
+				}, "\n")),
+				err: readErr,
+			},
+			Header: http.Header{"X-Request-Id": []string{"rid-proxy-disconnect"}},
+		}
+
+		_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, account, time.Now(), "gpt-5.6-sol", "gpt-5.6-sol")
+		require.Error(t, err)
+		var failoverErr *UpstreamFailoverError
+		require.False(t, errors.As(err, &failoverErr), "post-output disconnect must not fail over inside the same stream")
+		require.Contains(t, rec.Body.String(), "partial")
+	}
+
+	scheduler := &defaultOpenAIAccountScheduler{service: svc}
+	compatible, reason := scheduler.isAccountRequestCompatibleReason(context.Background(), account, OpenAIAccountScheduleRequest{})
+	require.False(t, compatible, "the next request must exclude accounts sharing the quarantined proxy")
+	require.Equal(t, "proxy_stream_quarantined", reason)
+}
+
+func TestOpenAIStreamingTerminalAndClientCancellationDoNotQuarantineProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	proxyID := int64(4699)
+	account := &Account{ID: 469901, Name: "oauth", Platform: PlatformOpenAI, Type: AccountTypeOAuth, ProxyID: &proxyID}
+	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}}
+
+	terminalRecorder := httptest.NewRecorder()
+	terminalCtx, _ := gin.CreateTestContext(terminalRecorder)
+	terminalCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	terminalResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: &openAIStreamReadThenErrorCloser{
+			reader: strings.NewReader(strings.Join([]string{
+				"event: response.completed",
+				`data: {"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":5,"output_tokens":3,"total_tokens":8}}}`,
+				"",
+			}, "\n")),
+			err: io.ErrUnexpectedEOF,
+		},
+		Header: http.Header{},
+	}
+	_, err := svc.handleStreamingResponse(terminalCtx.Request.Context(), terminalResp, terminalCtx, account, time.Now(), "model", "model")
+	require.NoError(t, err)
+
+	for range 2 {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil).WithContext(ctx)
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body: &openAIStreamReadThenErrorCloser{
+				reader: strings.NewReader("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"),
+				err:    context.Canceled,
+			},
+			Header: http.Header{},
+		}
+		_, err = svc.handleStreamingResponse(c.Request.Context(), resp, c, account, time.Now(), "model", "model")
+		require.Error(t, err)
+	}
+
+	scheduler := &defaultOpenAIAccountScheduler{service: svc}
+	compatible, reason := scheduler.isAccountRequestCompatibleReason(context.Background(), account, OpenAIAccountScheduleRequest{})
+	require.True(t, compatible)
+	require.Empty(t, reason)
+}
+
 func TestOpenAIStreamingResponseFailedBeforeOutputReturnsFailover(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
@@ -1317,6 +1661,7 @@ func TestOpenAIStreamingResponseFailedBeforeOutputReturnsFailover(t *testing.T) 
 	var failoverErr *UpstreamFailoverError
 	require.ErrorAs(t, err, &failoverErr)
 	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.False(t, failoverErr.RetryableOnSameAccount)
 	require.Contains(t, string(failoverErr.ResponseBody), "An error occurred while processing your request")
 	require.False(t, c.Writer.Written())
 	require.Empty(t, rec.Body.String())
@@ -1588,8 +1933,10 @@ func TestOpenAIStreamingPreambleKeepaliveUsesDownstreamIdle(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			StreamDataIntervalTimeout: 0,
-			StreamKeepaliveInterval:   1,
-			MaxLineSize:               defaultMaxLineSize,
+			// Keepalive is based on *downstream* idle time (last flush to client),
+			// not upstream event cadence. Interval is seconds (config unit).
+			StreamKeepaliveInterval: 1,
+			MaxLineSize:             defaultMaxLineSize,
 		},
 	}
 	svc := &OpenAIGatewayService{cfg: cfg}
@@ -1607,11 +1954,14 @@ func TestOpenAIStreamingPreambleKeepaliveUsesDownstreamIdle(t *testing.T) {
 
 	go func() {
 		defer func() { _ = pw.Close() }()
+		// Emit preamble/progress quickly so clientOutputStarted is true, then
+		// leave a real downstream idle gap longer than keepaliveInterval so the
+		// ticker can write ":\n\n". Frequent upstream ticks used to refresh
+		// lastDownstreamWriteAt and flake on loaded CI runners.
 		_, _ = pw.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
-		for i := 0; i < 6; i++ {
-			time.Sleep(250 * time.Millisecond)
-			_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
-		}
+		time.Sleep(50 * time.Millisecond)
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
+		time.Sleep(1300 * time.Millisecond)
 		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}}\n\n"))
 	}()
 
@@ -1848,6 +2198,43 @@ func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t 
 	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
 		t.Fatalf("expected missing terminal event error, got %v", err)
 	}
+}
+
+func TestOpenAIStreamingPassthroughPostOutputDisconnectQuarantinesSharedProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	proxyID := int64(4698)
+	account := &Account{ID: 469804, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, ProxyID: &proxyID}
+	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}}
+	// collapseInterval 0: the loop below records within the production collapse
+	// window and must count as distinct failure events here.
+	svc.openaiProxyStreamCircuit = newOpenAIProxyStreamCircuit(openAIProxyStreamCircuitSettings{
+		failureThreshold: 2,
+		failureWindow:    time.Minute,
+		quarantineTTL:    10 * time.Minute,
+		maxEntries:       16,
+	})
+
+	for _, readErr := range []error{io.ErrUnexpectedEOF, errors.New("http2: client connection lost")} {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body: &openAIStreamReadThenErrorCloser{
+				reader: strings.NewReader("data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"),
+				err:    readErr,
+			},
+			Header: http.Header{"X-Request-Id": []string{"rid-passthrough-proxy-disconnect"}},
+		}
+
+		_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, account, time.Now(), "model", "model")
+		require.Error(t, err)
+		var failoverErr *UpstreamFailoverError
+		require.False(t, errors.As(err, &failoverErr), "post-output disconnect must not fail over inside the same stream")
+		require.Contains(t, rec.Body.String(), "partial")
+	}
+
+	require.True(t, svc.isOpenAIProxyStreamQuarantined(context.Background(), account))
 }
 
 func TestOpenAIStreamingPassthroughResponseFailedBeforeOutputReturnsFailover(t *testing.T) {
@@ -2130,6 +2517,10 @@ func TestOpenAIStreamingTooLong(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "response_too_large") {
 		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
 	}
+	payload := strings.TrimSpace(strings.TrimPrefix(rec.Body.String(), "event: error\ndata: "))
+	require.Equal(t, "response_too_large", gjson.Get(payload, "code").String())
+	require.False(t, gjson.Get(payload, "error").Exists())
+	require.True(t, IsResponseCommitted(c))
 }
 
 func TestOpenAINonStreamingContentTypePassThrough(t *testing.T) {
@@ -2431,6 +2822,26 @@ func TestNormalizeOpenAICompactRequestBodyPreservesCurrentCodexPayloadFields(t *
 	require.False(t, gjson.GetBytes(normalized, "prompt_cache_key").Exists())
 }
 
+func TestNormalizeOpenAICompactRequestBodyDropsParallelToolCallsWithoutUsableTools(t *testing.T) {
+	for _, body := range []string{
+		`{"model":"gpt-5.5","input":[],"parallel_tool_calls":true}`,
+		`{"model":"gpt-5.5","input":[],"tools":[],"parallel_tool_calls":false}`,
+		`{"model":"gpt-5.5","input":[],"tools":null,"parallel_tool_calls":true}`,
+		`{"model":"gpt-5.5","input":[],"tools":{},"parallel_tool_calls":true}`,
+	} {
+		normalized, changed, err := normalizeOpenAICompactRequestBody([]byte(body))
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.False(t, gjson.GetBytes(normalized, "parallel_tool_calls").Exists(), string(normalized))
+	}
+
+	withTools := []byte(`{"model":"gpt-5.5","tools":[{"type":"function","name":"lookup"}],"parallel_tool_calls":false}`)
+	normalized, _, err := normalizeOpenAICompactRequestBody(withTools)
+	require.NoError(t, err)
+	require.True(t, gjson.GetBytes(normalized, "parallel_tool_calls").Exists())
+	require.False(t, gjson.GetBytes(normalized, "parallel_tool_calls").Bool())
+}
+
 func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesCompactPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -2445,6 +2856,7 @@ func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesCompactPath(t *test
 	require.Equal(t, chatgptCodexURL+"/compact", req.URL.String())
 	require.Equal(t, "application/json", req.Header.Get("Accept"))
 	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
+	require.Empty(t, req.Header.Get("OpenAI-Beta"), "Codex OAuth HTTP must not synthesize the legacy responses beta header")
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
 	require.Equal(t, HTTPUpstreamProfileOpenAI, HTTPUpstreamProfileFromContext(req.Context()))
 }
@@ -2466,6 +2878,7 @@ func TestOpenAIBuildUpstreamRequestCompactForcesJSONAcceptForOAuth(t *testing.T)
 	require.Equal(t, chatgptCodexURL+"/compact", req.URL.String())
 	require.Equal(t, "application/json", req.Header.Get("Accept"))
 	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
+	require.Empty(t, req.Header.Get("OpenAI-Beta"), "Codex OAuth HTTP must not synthesize the legacy responses beta header")
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
 	require.Equal(t, HTTPUpstreamProfileOpenAI, HTTPUpstreamProfileFromContext(req.Context()))
 }
@@ -2513,6 +2926,32 @@ func TestOpenAIBuildUpstreamRequestPreservesCompactPathForAPIKeyBaseURL(t *testi
 	req, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "token", false, "", false)
 	require.NoError(t, err)
 	require.Equal(t, "https://example.com/v1/responses/compact", req.URL.String())
+}
+
+func TestOpenAIBuildUpstreamRequestPreservesCodexIdentityHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.144.1")
+	c.Request.Header.Set("X-Codex-Window-ID", "window-http")
+	c.Request.Header.Set("X-Codex-Installation-ID", "installation-http")
+	c.Request.Header.Set("X-Test", "blocked")
+
+	body := []byte(`{"model":"gpt-5","input":"hello"}`)
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+		},
+	}}
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+
+	req, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, body, "token", false, "", true)
+	require.NoError(t, err)
+	require.Equal(t, "window-http", req.Header.Get("X-Codex-Window-ID"))
+	require.Equal(t, "installation-http", req.Header.Get("X-Codex-Installation-ID"))
+	require.Empty(t, req.Header.Get("X-Test"))
+	require.True(t, openai.EvaluateEngineFingerprint(req.Header, body, openai.DefaultEngineFingerprintSignals))
 }
 
 func TestOpenAIBuildUpstreamRequestOAuthOfficialClientOriginatorCompatibility(t *testing.T) {
@@ -2602,11 +3041,11 @@ func TestReplaceModelInSSELine(t *testing.T) {
 			expected: `data: {"type":"response","response":{"id":"resp-1","model":"my-model","output":[]}}`,
 		},
 		{
-			name:     "model 不匹配时不替换",
+			name:     "上游别名仍替换",
 			line:     `data: {"id":"chatcmpl-123","model":"gpt-3.5-turbo","choices":[]}`,
 			from:     "gpt-4o",
 			to:       "my-model",
-			expected: `data: {"id":"chatcmpl-123","model":"gpt-3.5-turbo","choices":[]}`,
+			expected: `data: {"id":"chatcmpl-123","model":"my-model","choices":[]}`,
 		},
 		{
 			name:     "无 model 字段时不替换",
@@ -2672,11 +3111,11 @@ func TestReplaceModelInSSELine(t *testing.T) {
 			expected: `data: {"id":"abc","object":"chat.completion.chunk","model":"alias","created":1234567890,"choices":[{"index":0,"delta":{"content":"hi"}}]}`,
 		},
 		{
-			name:     "顶层优先于嵌套：同时存在两个 model",
+			name:     "同时替换两个 model",
 			line:     `data: {"model":"gpt-4o","response":{"model":"gpt-4o"}}`,
 			from:     "gpt-4o",
 			to:       "replaced",
-			expected: `data: {"model":"replaced","response":{"model":"gpt-4o"}}`,
+			expected: `data: {"model":"replaced","response":{"model":"replaced"}}`,
 		},
 	}
 
@@ -2706,11 +3145,11 @@ func TestReplaceModelInSSEBody(t *testing.T) {
 			expected: "data: {\"model\":\"alias\",\"choices\":[]}\n\ndata: {\"model\":\"alias\",\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n",
 		},
 		{
-			name:     "无需替换的 body",
+			name:     "上游别名 body",
 			body:     "data: {\"model\":\"gpt-3.5-turbo\"}\n\ndata: [DONE]\n",
 			from:     "gpt-4o",
 			to:       "alias",
-			expected: "data: {\"model\":\"gpt-3.5-turbo\"}\n\ndata: [DONE]\n",
+			expected: "data: {\"model\":\"alias\"}\n\ndata: [DONE]\n",
 		},
 		{
 			name:     "混合 event 和 data 行",
@@ -2754,11 +3193,11 @@ func TestReplaceModelInResponseBody(t *testing.T) {
 			expected: `{"id":"chatcmpl-123","model":"alias","choices":[]}`,
 		},
 		{
-			name:     "model 不匹配不替换",
+			name:     "上游别名仍替换",
 			body:     `{"id":"chatcmpl-123","model":"gpt-3.5-turbo","choices":[]}`,
 			from:     "gpt-4o",
 			to:       "alias",
-			expected: `{"id":"chatcmpl-123","model":"gpt-3.5-turbo","choices":[]}`,
+			expected: `{"id":"chatcmpl-123","model":"alias","choices":[]}`,
 		},
 		{
 			name:     "无 model 字段不替换",
@@ -2824,10 +3263,10 @@ func TestParseSSEUsage_SelectiveParsing(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	usage := &OpenAIUsage{InputTokens: 9, OutputTokens: 8, CacheReadInputTokens: 7}
 
-	// 非 completed 事件，不应覆盖 usage
+	// 非终态事件中的显式 usage 作为兼容 fallback，非零字段会被合并。
 	svc.parseSSEUsage(`{"type":"response.in_progress","response":{"usage":{"input_tokens":1,"output_tokens":2}}}`, usage)
-	require.Equal(t, 9, usage.InputTokens)
-	require.Equal(t, 8, usage.OutputTokens)
+	require.Equal(t, 1, usage.InputTokens)
+	require.Equal(t, 2, usage.OutputTokens)
 	require.Equal(t, 7, usage.CacheReadInputTokens)
 
 	// completed 事件，应提取 usage
@@ -3045,7 +3484,10 @@ func TestHandleSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
 	require.Contains(t, rec.Body.String(), `data: {"type":"response.in_progress"`)
 }
 
-func TestHandleSSEToJSON_ResponseFailedReturnsProtocolError(t *testing.T) {
+// 无账号时没有可换的对象：newOpenAIStreamFailoverError 要拿 account 记录 ops 归属与
+// 账号健康，故这一支保持原有的协议错误行为。带真实账号的同一报文改为换号，
+// 由 TestNonStreamingSSEToJSON_UnclassifiedFailedEventFailsOver 钉死（issue #5281）。
+func TestHandleSSEToJSON_ResponseFailedWithoutAccountReturnsProtocolError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

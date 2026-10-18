@@ -21,6 +21,7 @@ export const useAppStore = defineStore('app', () => {
   /** Persist sidebar nav scroll position across route remounts */
   const sidebarScrollTop = ref<number>(0)
   const mobileOpen = ref<boolean>(false)
+  const sidebarScrollTop = ref<number>(0)
   const loading = ref<boolean>(false)
   const toasts = ref<Toast[]>([])
 
@@ -337,6 +338,10 @@ export const useAppStore = defineStore('app', () => {
         invitation_code_enabled: false,
         turnstile_enabled: false,
         turnstile_site_key: '',
+        aliyun_captcha_enabled: false,
+        aliyun_captcha_scene_id: '',
+        aliyun_captcha_prefix: '',
+        aliyun_captcha_region: 'cn',
         site_name: siteName.value,
         site_logo: siteLogo.value,
         site_subtitle: '',
@@ -352,6 +357,7 @@ export const useAppStore = defineStore('app', () => {
         doc_url: docUrl.value,
         site_pages: [],
         home_content: '',
+        compact_home_enabled: false,
         hide_ccs_import_button: false,
         user_subscriptions_visible: true,
         payment_enabled: false,
@@ -370,6 +376,7 @@ export const useAppStore = defineStore('app', () => {
         github_oauth_enabled: false,
         google_oauth_enabled: false,
         backend_mode_enabled: false,
+        passkey_enabled: false,
         version: siteVersion.value,
         balance_low_notify_enabled: false,
         account_quota_notify_enabled: false,
@@ -445,6 +452,7 @@ export const useAppStore = defineStore('app', () => {
     sidebarCollapsed,
     sidebarScrollTop,
     mobileOpen,
+    sidebarScrollTop,
     loading,
     toasts,
 

@@ -68,8 +68,9 @@ const (
 )
 
 const (
-	cacheTTLTarget5m = "5m"
-	cacheTTLTarget1h = "1h"
+	cacheTTLTarget5m                   = "5m"
+	cacheTTLTarget1h                   = "1h"
+	compositeModelOwnershipCachePrefix = "composite-owner|"
 )
 
 // ForceCacheBillingContextKey 强制缓存计费上下文键
@@ -448,14 +449,28 @@ var allowedHeaders = map[string]bool{
 	"x-client-request-id":                       true,
 }
 
+// ErrStickySessionNotFound is returned by GatewayCache.GetSessionAccountID
+// when no binding exists for the session. It abstracts away the underlying
+// cache implementation (e.g. redis.Nil), mirroring ErrRefreshTokenNotFound.
+var ErrStickySessionNotFound = errors.New("sticky session not found")
+
+// ErrReasoningContentNotFound is returned by GatewayCache.GetReasoningContent
+// when no cached reasoning content exists for the reasoning item ID.
+var ErrReasoningContentNotFound = errors.New("reasoning content not found")
+
 // GatewayCache 定义网关服务的缓存操作接口。
 // 提供粘性会话（Sticky Session）的存储、查询、刷新和删除功能。
 //
 // GatewayCache defines cache operations for gateway service.
 // Provides sticky session storage, retrieval, refresh and deletion capabilities.
 type GatewayCache interface {
-	// GetSessionAccountID 获取粘性会话绑定的账号 ID
-	// Get the account ID bound to a sticky session
+	// GetSessionAccountID 获取粘性会话绑定的账号 ID；无绑定时返回
+	// ErrStickySessionNotFound，使 service 层无需依赖具体缓存实现即可
+	// 区分"未绑定"与真实读取失败。
+	// Get the account ID bound to a sticky session. Returns
+	// ErrStickySessionNotFound when no binding exists so service code can
+	// distinguish a miss from a real read failure without importing the
+	// cache driver.
 	GetSessionAccountID(ctx context.Context, groupID int64, sessionHash string) (int64, error)
 	// SetSessionAccountID 设置粘性会话与账号的绑定关系
 	// Set the binding between sticky session and account
@@ -501,6 +516,10 @@ func resolveModelsListCacheTTL(cfg *config.Config) time.Duration {
 
 func modelsListCacheKey(groupID *int64, platform string) string {
 	return fmt.Sprintf("%d|%s", derefGroupID(groupID), strings.TrimSpace(platform))
+}
+
+func compositeModelOwnershipCacheKey(groupID int64, model string) string {
+	return fmt.Sprintf("%s%d|%s", compositeModelOwnershipCachePrefix, groupID, strings.TrimSpace(model))
 }
 
 func prefetchedStickyGroupIDFromContext(ctx context.Context) (int64, bool) {
@@ -550,6 +569,17 @@ type AccountSelectionResult struct {
 	Acquired    bool
 	ReleaseFunc func()
 	WaitPlan    *AccountWaitPlan // nil means no wait allowed
+	// stickySessionHit 标记账号来自会话粘性绑定命中，供非高级调度路径回填决策标签。
+	stickySessionHit bool
+	// profitGate 携带本次选号真实生效的利润门（无门为 nil）。门安装在调度栈的
+	// 局部 ctx 上，handler 必须经 ContextWithSelectionProfitGate 重放后才能在
+	// 调度栈之外做抢槽后终检与准入后粘性绑定。
+	profitGate *openAIProfitControlGate
+}
+
+// ProfitGateActive 报告本次选号是否处于利润门之下。
+func (r *AccountSelectionResult) ProfitGateActive() bool {
+	return r != nil && r.profitGate != nil
 }
 
 // ClaudeUsage 表示Claude API返回的usage信息
@@ -926,6 +956,42 @@ func (s *GatewayService) BindStickySession(ctx context.Context, groupID *int64, 
 	return s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, accountID, stickySessionTTL)
 }
 
+// bindGatewayStickySessionDuringSelection preserves the normal eager sticky
+// behavior unless a profit gate is installed. Profit-controlled requests bind
+// only after the terminal post-slot check, otherwise a rejected candidate could
+// overwrite a healthy pre-existing sticky binding.
+func (s *GatewayService) bindGatewayStickySessionDuringSelection(ctx context.Context, groupID *int64, sessionHash string, accountID int64) error {
+	if gatewayProfitControlGateActive(ctx) {
+		return nil
+	}
+	return s.BindStickySession(ctx, groupID, sessionHash, accountID)
+}
+
+// BindStickySessionAfterProfitAdmission records a terminally admitted
+// account. Without a profit gate it preserves the pre-existing eager binding
+// behavior at the handler bind points. With a gate it never replaces a
+// different binding that already exists: a temporarily ineligible sticky
+// account remains bound and automatically becomes eligible again if its
+// account rate recovers.
+func (s *GatewayService) BindStickySessionAfterProfitAdmission(ctx context.Context, groupID *int64, sessionHash string, accountID int64) error {
+	if sessionHash == "" || accountID <= 0 || s.cache == nil {
+		return nil
+	}
+	if !gatewayProfitControlGateActive(ctx) {
+		return s.BindStickySession(ctx, groupID, sessionHash, accountID)
+	}
+	existingAccountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
+	if err != nil && !errors.Is(err, ErrStickySessionNotFound) {
+		// 读失败时无法判断既有绑定，保守跳过而不是冒着覆盖健康绑定的风险写入。
+		slog.Warn("profit_control_sticky_binding_read_failed", "group_id", derefGroupID(groupID), "account_id", accountID, "error", err)
+		return nil
+	}
+	if existingAccountID > 0 && existingAccountID != accountID {
+		return nil
+	}
+	return s.BindStickySession(ctx, groupID, sessionHash, accountID)
+}
+
 // GetCachedSessionAccountID retrieves the account ID bound to a sticky session.
 // Returns 0 if no binding exists or on error.
 func (s *GatewayService) GetCachedSessionAccountID(ctx context.Context, groupID *int64, sessionHash string) (int64, error) {
@@ -1213,6 +1279,15 @@ func (s *GatewayService) getOAuthToken(ctx context.Context, account *Account) (s
 		return accessToken, "oauth", nil
 	}
 
+	// Grok OAuth: prefer access_token from credentials (background refresher keeps it warm).
+	if account.Platform == PlatformGrok && account.Type == AccountTypeOAuth {
+		accessToken := account.GetGrokAccessToken()
+		if accessToken == "" {
+			return "", "", errors.New("grok access_token not found in credentials")
+		}
+		return accessToken, "oauth", nil
+	}
+
 	// 其他情况（Gemini 有自己的 TokenProvider，setup-token 类型等）直接从账号读取
 	accessToken := account.GetCredential("access_token")
 	if accessToken == "" {
@@ -1224,6 +1299,91 @@ func (s *GatewayService) getOAuthToken(ctx context.Context, account *Account) (s
 
 // GetAvailableModels returns the list of models available for a group
 // It aggregates model_mapping keys from all schedulable accounts in the group
+
+// DoGrokNativeResponsesJSON POSTs a non-streaming Responses body to the account's
+// Grok upstream and returns the raw JSON body. Used by /v1/web_search.
+// Gin-free: UA is always the pinned Grok CLI identity (resolveGrokUpstreamUserAgent ignores inbound).
+func (s *GatewayService) DoGrokNativeResponsesJSON(ctx context.Context, account *Account, body []byte) ([]byte, error) {
+	if s == nil || s.httpUpstream == nil {
+		return nil, errors.New("http upstream not configured")
+	}
+	if account == nil {
+		return nil, errors.New("account is required")
+	}
+	if !account.IsGrok() {
+		return nil, errors.New("grok account required")
+	}
+	token, _, err := s.GetAccessToken(ctx, account)
+	if err != nil {
+		// Credential/token failures should try the next Grok account in the pool.
+		return nil, &UpstreamFailoverError{
+			StatusCode: http.StatusUnauthorized,
+			Reason:     GatewayFailureReason("grok_search_token"),
+		}
+	}
+	targetURL, err := buildGrokResponsesURL(account, nil, s.settingService)
+	if err != nil {
+		return nil, err
+	}
+	if json.Valid(body) {
+		if model := strings.TrimSpace(gjson.GetBytes(body, "model").String()); model == "" {
+			if patched, patchErr := sjson.SetBytes(body, "model", xai.DefaultTextModel); patchErr == nil {
+				body = patched
+			}
+		}
+	}
+	upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build grok responses request: %w", err)
+	}
+	upstreamReq.Header.Set("Authorization", "Bearer "+token)
+	upstreamReq.Header.Set("Content-Type", "application/json")
+	upstreamReq.Header.Set("Accept", "application/json")
+	upstreamReq.Header.Set("User-Agent", defaultGrokUpstreamUserAgent())
+	applyGrokCLIHeaders(upstreamReq.Header)
+	account.ApplyHeaderOverrides(upstreamReq.Header)
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	if err != nil {
+		return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway, Reason: GatewayFailureReason("grok_search_transport")}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if readErr != nil {
+		return nil, &UpstreamFailoverError{
+			StatusCode: http.StatusBadGateway,
+			Reason:     GatewayFailureReason("grok_search_read"),
+		}
+	}
+	if resp.StatusCode >= 400 {
+		msg := string(respBytes)
+		if len(msg) > 200 {
+			msg = msg[:200]
+		}
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusPaymentRequired || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBytes}
+		}
+		return nil, fmt.Errorf("grok upstream %d: %s", resp.StatusCode, msg)
+	}
+	return respBytes, nil
+}
+
+// mixedListingAccountAllowed mirrors the mixed-scheduling rule in
+// GeminiMessagesCompatService.listSchedulableAccountsOnce: a gemini group may be
+// served by antigravity accounts, so model listing must consider them too.
+func mixedListingAccountAllowed(groupPlatform string, account *Account) bool {
+	return groupPlatform == PlatformGemini && account.IsMixedSchedulingEnabled()
+}
+
+// mixedListingModelAllowed limits what a mixed-scheduling account may advertise
+// on the group's platform: only gemini-* wire IDs are meaningful on a gemini group.
+func mixedListingModelAllowed(groupPlatform, model string) bool {
+	return groupPlatform == PlatformGemini && isAntigravityGeminiModel(model)
+}
+
 func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64, platform string) []string {
 	cacheKey := modelsListCacheKey(groupID, platform)
 	if s.modelsListCache != nil {
@@ -1249,11 +1409,13 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		return nil
 	}
 
-	// Filter by platform if specified
+	// Filter by platform if specified. Mixed scheduling (a gemini group routing
+	// to antigravity accounts) is honoured here as well, so the advertised list
+	// stays in sync with what the request path can actually serve.
 	if platform != "" {
 		filtered := make([]Account, 0)
 		for _, acc := range accounts {
-			if acc.Platform == platform {
+			if acc.Platform == platform || mixedListingAccountAllowed(platform, &acc) {
 				filtered = append(filtered, acc)
 			}
 		}
@@ -1277,15 +1439,25 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		}
 
 		mapping := acc.GetModelMapping()
-		if len(mapping) > 0 {
-			hasAnyMapping = true
-			for model := range mapping {
-				modelSet[model] = struct{}{}
+		for model := range mapping {
+			// Accounts pulled in through mixed scheduling only contribute the
+			// models that belong to the listing platform (e.g. an antigravity
+			// account's claude-* mappings must not surface on a gemini group).
+			if platform != "" && acc.Platform != platform && !mixedListingModelAllowed(platform, model) {
+				continue
 			}
+			modelSet[model] = struct{}{}
+			hasAnyMapping = true
 		}
 	}
 
 	// If no account has model_mapping, return nil (use default)
+	if !hasAnyMapping && platform == PlatformOpenAI {
+		models := filterRetiredOpenAIModelIDs(accounts, openai.DefaultModelIDs())
+		if len(models) != len(openai.DefaultModels) {
+			return models
+		}
+	}
 	if !hasAnyMapping {
 		if s.modelsListCache != nil {
 			s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
@@ -1300,6 +1472,16 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		models = append(models, model)
 	}
 	sort.Strings(models)
+
+	if platform == PlatformOpenAI {
+		models = supplementUnmappedOpenAIModels(accounts, models)
+		models = filterRetiredOpenAIModelIDs(accounts, models)
+		// nil means "use defaults" to listing callers; an empty filtered catalog
+		// must remain authoritative instead of resurrecting retired defaults.
+		if len(models) == 0 {
+			return models
+		}
+	}
 
 	if s.modelsListCache != nil {
 		s.modelsListCache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
@@ -1338,6 +1520,7 @@ func (s *GatewayService) InvalidateAvailableModelsCache(groupID *int64, platform
 	if s == nil || s.modelsListCache == nil {
 		return
 	}
+	s.invalidateCompositeModelOwnershipCache(groupID)
 
 	normalizedPlatform := strings.TrimSpace(platform)
 	// 完整匹配时精准失效；否则按维度批量失效。
@@ -1379,19 +1562,19 @@ func (s *GatewayService) initDebugGatewayBodyFile(path string) {
 	}
 
 	// 如果 path 指向一个已存在的目录，自动追加默认文件名
-	if info, err := os.Stat(path); err == nil && info.IsDir() {
+	if info, err := os.Stat(path); err == nil && info.IsDir() { //nolint:gosec // G703: path 仅来自启动环境变量 SUB2API_DEBUG_GATEWAY_BODY（运维配置），非请求输入
 		path = filepath.Join(path, debugGatewayBodyDefaultFilename)
 	}
 
 	// 确保父目录存在
 	if dir := filepath.Dir(path); dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0755); err != nil { //nolint:gosec // G703: 同上
 			slog.Error("failed to create gateway debug log directory", "dir", dir, "error", err)
 			return
 		}
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644) //nolint:gosec // G703: 同上
 	if err != nil {
 		slog.Error("failed to open gateway debug log file", "path", path, "error", err)
 		return

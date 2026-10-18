@@ -7,6 +7,34 @@ vi.mock('@/api/admin/accounts', () => ({
 import { buildModelMappingObject, getModelsByPlatform, getPresetMappingsByPlatform } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
+  it('平台清单中没有内置模型列表的多协议供应商不预填白名单', () => {
+    setPlatformCatalog({
+      ...BUILTIN_PLATFORM_CATALOG,
+      platforms: [
+        ...BUILTIN_PLATFORM_CATALOG.platforms,
+        {
+          id: 'acme_router',
+          display_name: 'Acme Router',
+          gateway: 'openai',
+          cn_provider: false,
+          multi_protocol: {
+            default_mode: 'standard',
+            routing: 'by_model',
+            modes: [{ mode: 'standard', base_urls: { chat_completions: 'https://api.acme-router.example/v1' } }]
+          }
+        }
+      ]
+    })
+    try {
+      expect(getModelsByPlatform('acme_router')).toEqual([])
+      expect(getModelsByPlatform('kimi').length).toBeGreaterThan(0)
+      // 非多协议供应商的未知平台维持原有回退。
+      expect(getModelsByPlatform('bedrock')).toEqual(getModelsByPlatform('anthropic'))
+    } finally {
+      resetPlatformCatalog()
+    }
+  })
+
   it('openai 模型列表包含 GPT-5.4 官方快照', () => {
     const models = getModelsByPlatform('openai')
 
@@ -117,6 +145,27 @@ describe('useModelWhitelist', () => {
     expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash-lite'))
   })
 
+  it('antigravity 模型列表包含 Gemini 3.1 Pro 通用别名', () => {
+    const models = getModelsByPlatform('antigravity')
+
+    expect(models).toContain('gemini-3.1-pro')
+  })
+
+  it('Gemini 4 Argon 在 gemini 与 antigravity 平台使用对应真实模型 ID 与预设映射', () => {
+    expect(getModelsByPlatform('gemini')).toContain('gemini-4-argon')
+    const agModels = getModelsByPlatform('antigravity')
+    expect(agModels).not.toContain('gemini-4-argon')
+    expect(agModels).toContain('gemini-4-argon-high')
+    expect(agModels).toContain('gemini-4-argon-medium')
+    expect(agModels).toContain('gemini-4-argon-low')
+    expect(getPresetMappingsByPlatform('antigravity')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'gemini-4-argon', to: 'gemini-4-argon-high' }),
+      expect.objectContaining({ from: 'gemini-4-argon-high', to: 'gemini-4-argon-high' }),
+      expect.objectContaining({ from: 'gemini-4-argon-medium', to: 'gemini-4-argon-medium' }),
+      expect.objectContaining({ from: 'gemini-4-argon-low', to: 'gemini-4-argon-low' })
+    ]))
+  })
+
   it('whitelist 模式会忽略通配符条目', () => {
     const mapping = buildModelMappingObject('whitelist', ['claude-*', 'gemini-3.1-flash-image'], [])
     expect(mapping).toEqual({
@@ -137,6 +186,49 @@ describe('useModelWhitelist', () => {
 
     expect(mapping).toEqual({
       'gpt-5.4-mini': 'gpt-5.4-mini'
+    })
+  })
+
+  it('combined 模式会同时保留白名单身份映射和模型映射', () => {
+    const mapping = buildModelMappingObject(
+      'combined',
+      ['gpt-5.4', 'claude-*'],
+      [
+        { from: 'gpt-latest', to: 'gpt-5.4' },
+        { from: 'gpt-5.4', to: 'gpt-5.4-mini' }
+      ]
+    )
+
+    expect(mapping).toEqual({
+      'gpt-5.4': 'gpt-5.4-mini',
+      'gpt-latest': 'gpt-5.4'
+    })
+  })
+
+  it('combined mode retains a mapping when a whitelist entry has the same source', () => {
+    expect(buildModelMappingObject('combined', ['gpt-latest'], [{ from: 'gpt-latest', to: 'deepseek-chat' }])).toEqual({
+      'gpt-latest': 'deepseek-chat'
+    })
+  })
+
+  it('split mapping keeps only identity entries in the whitelist after reopening', () => {
+    expect(splitModelMappingObject({ 'gpt-latest': 'deepseek-chat', 'gpt-5.4': 'gpt-5.4' })).toEqual({
+      allowedModels: ['gpt-5.4'],
+      modelMappings: [{ from: 'gpt-latest', to: 'deepseek-chat' }]
+    })
+  })
+
+  it('splitModelMappingObject 会把身份映射还原成白名单，其余保留为映射', () => {
+    const parsed = splitModelMappingObject({
+      'gpt-5.4': 'gpt-5.4',
+      'gpt-latest': 'gpt-5.4',
+      ' ': 'gpt-empty',
+      broken: 123
+    })
+
+    expect(parsed).toEqual({
+      allowedModels: ['gpt-5.4'],
+      modelMappings: [{ from: 'gpt-latest', to: 'gpt-5.4' }]
     })
   })
 })

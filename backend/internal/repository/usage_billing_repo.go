@@ -196,16 +196,17 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		cmd.BalanceCost = deducted
 	}
 
+	// Key 已不存在时跳过其自身的额度/限速计数，其余结算项不受影响。
 	if cmd.APIKeyQuotaCost > 0 {
 		exhausted, err := incrementUsageBillingAPIKeyQuota(ctx, tx, cmd.APIKeyID, cmd.APIKeyQuotaCost)
-		if err != nil {
+		if err != nil && !errors.Is(err, service.ErrAPIKeyNotFound) {
 			return err
 		}
 		result.APIKeyQuotaExhausted = exhausted
 	}
 
 	if cmd.APIKeyRateLimitCost > 0 {
-		if err := incrementUsageBillingAPIKeyRateLimit(ctx, tx, cmd.APIKeyID, cmd.APIKeyRateLimitCost); err != nil {
+		if err := incrementUsageBillingAPIKeyRateLimit(ctx, tx, cmd.APIKeyID, cmd.APIKeyRateLimitCost); err != nil && !errors.Is(err, service.ErrAPIKeyNotFound) {
 			return err
 		}
 	}
@@ -850,6 +851,20 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 		UPDATE users
 		SET balance = balance - $1,
 			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
+		RETURNING balance
+	`, amount, userID).Scan(&newBalance)
+	if err == nil {
+		return newBalance, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, false, err
+	}
+
+	err = tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET balance = balance - $1,
+			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
 		RETURNING balance
 	`, deducted, userID).Scan(&newBalance)
@@ -872,10 +887,10 @@ func lockUserBalanceForUpdate(ctx context.Context, tx *sql.Tx, userID int64) (fl
 		FOR UPDATE
 	`, userID).Scan(&balance)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, service.ErrUserNotFound
+		return 0, false, service.ErrUserNotFound
 	}
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	return balance, nil
 }

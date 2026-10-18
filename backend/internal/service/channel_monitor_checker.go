@@ -234,7 +234,7 @@ var providerAdapters = map[string]providerAdapter{
 		buildBody: func(_, prompt string) ([]byte, error) {
 			return json.Marshal(map[string]any{
 				"contents": []map[string]any{
-					{"parts": []map[string]any{{"text": prompt}}},
+					{"role": "user", "parts": []map[string]any{{"text": prompt}}},
 				},
 				"generationConfig": map[string]any{"maxOutputTokens": monitorChallengeMaxTokens},
 			})
@@ -512,6 +512,76 @@ var bodyMergeKeyDenyList = map[string]map[string]bool{
 	MonitorProviderGrok:      {"model": true, "messages": true, "stream": true},
 	MonitorProviderAnthropic: {"model": true, "messages": true},
 	MonitorProviderGemini:    {"contents": true},
+	// 国产 3 家与 OpenAI Chat Completions 同构。
+	MonitorProviderKimi:     {"model": true, "messages": true, "stream": true},
+	MonitorProviderZhipu:    {"model": true, "messages": true, "stream": true},
+	MonitorProviderDeepseek: {"model": true, "messages": true, "stream": true},
+	MonitorProviderMiniMax:  {"model": true, "messages": true, "stream": true},
+}
+
+func checkAPIMode(opts *CheckOptions) string {
+	if opts == nil {
+		return MonitorAPIModeChatCompletions
+	}
+	return defaultAPIMode(opts.APIMode)
+}
+
+func bodyMergeDenyKey(provider, apiMode string) string {
+	if provider == MonitorProviderOpenAI {
+		return provider + ":" + defaultAPIMode(apiMode)
+	}
+	return provider
+}
+
+// isOpenAICompatibleChatProvider 该 provider 的探活请求是否为 OpenAI Chat
+// Completions 同构（replace 模式的 body 校验按 messages 必填处理）。
+func isOpenAICompatibleChatProvider(provider string) bool {
+	switch provider {
+	case MonitorProviderOpenAI, MonitorProviderGrok,
+		MonitorProviderKimi, MonitorProviderZhipu, MonitorProviderDeepseek, MonitorProviderMiniMax:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateReplaceRequestBody(provider, apiMode string, body map[string]any) error {
+	if !isOpenAICompatibleChatProvider(provider) {
+		return nil
+	}
+	switch defaultAPIMode(apiMode) {
+	case MonitorAPIModeResponses:
+		if strings.TrimSpace(stringFromAny(body["instructions"])) == "" || !hasNonEmptyBodyValue(body["input"]) {
+			return fmt.Errorf("replace mode responses body: instructions and input are required")
+		}
+	case MonitorAPIModeChatCompletions:
+		if !hasNonEmptyBodyValue(body["messages"]) {
+			return fmt.Errorf("replace mode chat_completions body: messages are required")
+		}
+	}
+	return nil
+}
+
+func stringFromAny(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+func hasNonEmptyBodyValue(v any) bool {
+	switch val := v.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(val) != ""
+	case []any:
+		return len(val) > 0
+	case []map[string]any:
+		return len(val) > 0
+	case []map[string]string:
+		return len(val) > 0
+	default:
+		return true
+	}
 }
 
 func checkAPIMode(opts *CheckOptions) string {
@@ -593,12 +663,51 @@ func postRawJSON(ctx context.Context, client *http.Client, fullURL string, paylo
 	return respBody, resp.StatusCode, nil
 }
 
-// joinURL 把 base origin 与 path 拼成完整 URL。
-// 容忍 base 末尾有/无斜杠，path 必带前导斜杠。
+// monitorRequestPath 返回探测请求路径。智谱按 endpoint 区分：
+//   - 已带 /paas/v4（含 Coding Plan 的 /api/coding/paas/v4）：只追加 /chat/completions
+//   - 官方域名根地址：/api/paas/v4/chat/completions
+//   - 中转站 / 本站网关：只暴露 OpenAI 兼容的 /v1/chat/completions，与 Kimi / DeepSeek 一致
+func monitorRequestPath(provider, endpoint string, adapter providerAdapter, model string) string {
+	if provider != MonitorProviderZhipu {
+		return adapter.buildPath(model)
+	}
+	u, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil {
+		return providerOpenAIPath
+	}
+	if strings.Contains(u.EscapedPath(), "/paas/v4") {
+		return "/chat/completions"
+	}
+	if isZhipuOfficialHost(u) {
+		return adapter.buildPath(model)
+	}
+	return providerOpenAIPath
+}
+
+func isZhipuOfficialHost(u *url.URL) bool {
+	host := strings.ToLower(u.Hostname())
+	for _, official := range []string{"bigmodel.cn", "z.ai"} {
+		if host == official || strings.HasSuffix(host, "."+official) {
+			return true
+		}
+	}
+	return false
+}
+
+// joinURL 保留 base 的上游路径前缀，并避免重复追加已有的 API 路径前缀。
+// 使用 EscapedPath 匹配完整路径段，避免把 hostname 或编码斜杠当作路径。
 func joinURL(base, path string) string {
 	base = strings.TrimRight(base, "/")
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
+	}
+	if u, err := url.Parse(base); err == nil {
+		basePath := u.EscapedPath()
+		for end := strings.LastIndex(path, "/"); end > 0; end = strings.LastIndex(path[:end], "/") {
+			if strings.HasSuffix(basePath, path[:end]) {
+				return base + path[end:]
+			}
+		}
 	}
 	return base + path
 }
@@ -634,6 +743,8 @@ var monitorAPIKeyPatterns = []struct {
 	{regexp.MustCompile(`xai-[A-Za-z0-9_-]{6,}`), "xai-***REDACTED***"},
 	// Gemini / Google API Key：固定前缀 + 35 位
 	{regexp.MustCompile(`AIza[A-Za-z0-9_-]{35}`), "AIza***REDACTED***"},
+	// Gemini auth key：AQ.Ab 前缀 + 48 位，长度放宽以覆盖格式变体
+	{regexp.MustCompile(`AQ\.Ab[A-Za-z0-9_-]{40,}`), "AQ.***REDACTED***"},
 	// JWT 三段式（Bearer 后常出现）：eyJxxx.eyJxxx.signature
 	{regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}`), "eyJ***REDACTED.JWT***"},
 }

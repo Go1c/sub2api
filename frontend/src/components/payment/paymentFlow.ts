@@ -22,6 +22,7 @@ export type VisiblePaymentMethod = 'alipay' | 'wxpay' | 'stripe' | 'airwallex'
 export type StripeVisibleMethod = 'alipay' | 'wechat_pay'
 export type PaymentLaunchKind =
   | 'qr_waiting'
+  | 'alipay_deep_link'
   | 'redirect_waiting'
   | 'stripe_popup'
   | 'stripe_route'
@@ -49,6 +50,7 @@ export interface PaymentRecoverySnapshot {
   paymentMode: string
   providerKey: string
   resumeToken: string
+  alipayMobilePrecreateDeepLink?: boolean
   createdAt: number
 }
 
@@ -166,6 +168,7 @@ export function decidePaymentLaunch(
     paymentMode: (result.payment_mode || '').trim(),
     providerKey: (result.provider_key || '').trim().toLowerCase(),
     resumeToken: result.resume_token || '',
+    alipayMobilePrecreateDeepLink: result.alipay_mobile_precreate_deep_link === true,
   }, context.now)
 
   if (visibleMethod === 'airwallex' && baseState.clientSecret && baseState.intentId) {
@@ -200,6 +203,15 @@ export function decidePaymentLaunch(
   const jsapiPayload = result.jsapi ?? result.jsapi_payload
   if (result.result_type === 'jsapi_ready' && jsapiPayload) {
     return { kind: 'wechat_jsapi', paymentState: baseState, recovery: baseState, jsapi: jsapiPayload }
+  }
+
+  if (
+    visibleMethod === 'alipay'
+    && context.isMobile
+    && baseState.alipayMobilePrecreateDeepLink
+    && baseState.qrCode
+  ) {
+    return { kind: 'alipay_deep_link', paymentState: baseState, recovery: baseState }
   }
 
   const normalizedPaymentMode = baseState.paymentMode.trim().toLowerCase()
@@ -279,10 +291,15 @@ export function readPaymentRecoverySnapshot(
       || typeof parsed.payUrl !== 'string'
       || (parsed.outTradeNo != null && typeof parsed.outTradeNo !== 'string')
       || typeof parsed.clientSecret !== 'string'
+      || (parsed.intentId != null && typeof parsed.intentId !== 'string')
+      || (parsed.currency != null && typeof parsed.currency !== 'string')
+      || (parsed.countryCode != null && typeof parsed.countryCode !== 'string')
+      || (parsed.paymentEnv != null && typeof parsed.paymentEnv !== 'string')
       || typeof parsed.payAmount !== 'number'
       || typeof parsed.paymentMode !== 'string'
       || (parsed.providerKey != null && typeof parsed.providerKey !== 'string')
       || typeof parsed.resumeToken !== 'string'
+      || (parsed.alipayMobilePrecreateDeepLink != null && typeof parsed.alipayMobilePrecreateDeepLink !== 'boolean')
       || typeof parsed.createdAt !== 'number'
     ) {
       return null
@@ -319,6 +336,7 @@ export function readPaymentRecoverySnapshot(
       paymentMode: parsed.paymentMode,
       providerKey: parsed.providerKey || '',
       resumeToken: parsed.resumeToken,
+      alipayMobilePrecreateDeepLink: parsed.alipayMobilePrecreateDeepLink === true,
       createdAt: parsed.createdAt,
     }
   } catch {

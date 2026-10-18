@@ -42,10 +42,11 @@ type OpsSystemLogSink struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	droppedCount uint64
-	writeFailed  uint64
-	writtenCount uint64
-	totalDelayNs uint64
+	droppedCount      uint64
+	writeFailed       uint64
+	writtenCount      uint64
+	totalDelayNs      uint64
+	persistAccessLogs atomic.Bool
 
 	lastError atomic.Value
 }
@@ -147,6 +148,15 @@ func (s *OpsSystemLogSink) WriteLogEvent(event *logger.LogEvent) {
 	}
 }
 
+// SetPersistAccessLogs controls whether high-volume request access logs are
+// copied into PostgreSQL. Warning/error and audit events are always retained.
+func (s *OpsSystemLogSink) SetPersistAccessLogs(enabled bool) {
+	if s == nil {
+		return
+	}
+	s.persistAccessLogs.Store(enabled)
+}
+
 func (s *OpsSystemLogSink) shouldIndex(event *logger.LogEvent) bool {
 	if event != nil && event.Fields != nil {
 		if skip, _ := event.Fields[logger.OpsSystemLogSkipField].(bool); skip {
@@ -167,7 +177,7 @@ func (s *OpsSystemLogSink) shouldIndex(event *logger.LogEvent) bool {
 		}
 	}
 	if strings.Contains(component, "http.access") {
-		return true
+		return s.persistAccessLogs.Load()
 	}
 	if strings.Contains(component, "audit") {
 		return true
@@ -281,6 +291,7 @@ func (s *OpsSystemLogSink) flushBatch(baseCtx context.Context, batch []*logger.L
 		}
 
 		userID := asInt64Ptr(fields["user_id"])
+		apiKeyID := asInt64Ptr(fields["api_key_id"])
 		accountID := asInt64Ptr(fields["account_id"])
 
 		// 统一脱敏后写入索引。
@@ -301,6 +312,7 @@ func (s *OpsSystemLogSink) flushBatch(baseCtx context.Context, batch []*logger.L
 			RequestID:       requestID,
 			ClientRequestID: clientRequestID,
 			UserID:          userID,
+			APIKeyID:        apiKeyID,
 			AccountID:       accountID,
 			Platform:        platform,
 			Model:           model,

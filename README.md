@@ -1,8 +1,10 @@
-# Sub2API
-
 <div align="center">
 
-[![Go](https://img.shields.io/badge/Go-1.25.7-00ADD8.svg)](https://golang.org/)
+<img src="assets/logo.svg" alt="Sub2API Logo" width="128" />
+
+# Sub2API
+
+[![Go](https://img.shields.io/badge/Go-1.27.0-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
@@ -179,6 +181,7 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 - **Rate Limiting** - Configurable request and token rate limits
 - **Built-in Payment System** - Supports EasyPay, Alipay, WeChat Pay, and Stripe for user self-service top-up, no separate payment service needed ([Configuration Guide](docs/PAYMENT.md))
 - **Admin Dashboard** - Web interface for monitoring and management
+- **Composite Groups** - Admin routing layer that resolves requested models to concrete providers for multi-provider groups ([Operator Guide](docs/COMPOSITE_GROUPS.md))
 - **External System Integration** - Embed external systems (e.g. ticketing) via iframe to extend the admin dashboard
 
 ## Ecosystem
@@ -194,7 +197,7 @@ Community projects that extend or integrate with Sub2API:
 
 | Component | Technology |
 |-----------|------------|
-| Backend | Go 1.25.7, Gin, Ent |
+| Backend | Go 1.27.0, Gin, Ent |
 | Frontend | Vue 3.4+, Vite 5+, TailwindCSS |
 | Database | PostgreSQL 15+ |
 | Cache/Queue | Redis 7+ |
@@ -329,6 +332,7 @@ cd sub2api/deploy
 
 # 2. Copy environment configuration
 cp .env.example .env
+chmod 600 .env
 
 # 3. Edit configuration (generate secure passwords)
 nano .env
@@ -347,8 +351,10 @@ JWT_SECRET=your_jwt_secret_here
 TOTP_ENCRYPTION_KEY=your_totp_key_here
 
 # Optional: Admin account
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=your_admin_password
+# Leave empty to auto-generate a random email (login username) and password, shown in logs on first startup.
+# Avoid guessable values such as admin@example.com: they are brute-force targets.
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
 
 # Optional: Custom port
 SERVER_PORT=8080
@@ -397,9 +403,9 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 
 Open `http://YOUR_SERVER_IP:8080` in your browser.
 
-If admin password was auto-generated, find it in logs:
+If the admin email (login username) or password was auto-generated, find them in logs:
 ```bash
-docker compose -f docker-compose.local.yml logs sub2api | grep "admin password"
+docker compose -f docker-compose.local.yml logs sub2api | grep "Generated admin"
 ```
 
 #### Upgrade
@@ -448,7 +454,23 @@ rm -rf data/ postgres_data/ redis_data/
 
 ---
 
-### Method 3: Build from Source
+### Method 3: Apple container (macOS)
+
+Apple-silicon Macs running macOS 26 can run the full Sub2API, PostgreSQL, and Redis stack with Apple `container` 1.1.0 or newer:
+
+```bash
+git clone https://github.com/Wei-Shaw/sub2api.git
+cd sub2api/deploy
+./apple-container.sh init
+./apple-container.sh up
+./apple-container.sh status
+```
+
+This is an operator-managed local workflow; Docker Compose remains the recommended production path. See [deploy/APPLE_CONTAINER.md](deploy/APPLE_CONTAINER.md) for lifecycle commands, persistence, upgrades, and runtime limitations.
+
+---
+
+### Method 4: Build from Source
 
 Build and run from source code for development or customization.
 
@@ -507,6 +529,7 @@ database:
 redis:
   host: "localhost"
   port: 6379
+  username: ""
   password: ""
 
 jwt:
@@ -530,8 +553,17 @@ Additional security-related options are available in `config.yaml`:
 - `security.response_headers.enabled` to enable configurable response header filtering (disabled uses default allowlist)
 - `security.csp` to control Content-Security-Policy headers
 - `billing.circuit_breaker` to fail closed on billing errors
-- `server.trusted_proxies` to enable X-Forwarded-For parsing
+- `security.trust_forwarded_ip_for_api_key_acl` enables legacy raw forwarded-header takeover (enabled by default for upgrade compatibility); disable it to enforce `server.trusted_proxies`, which should contain only the exact proxy CIDRs that connect directly to Sub2API
+- `security.forwarded_client_ip_headers` configures up to 16 third-party CDN client-IP header names; they are checked in order before the built-in headers only while legacy takeover is enabled
 - `turnstile.required` to require Turnstile in release mode
+
+Custom client-IP headers can be set in YAML or as a comma-separated environment variable:
+
+```bash
+SECURITY_FORWARDED_CLIENT_IP_HEADERS=True-Client-IP,X-CDN-Client-IP
+```
+
+Header names are validated, canonicalized, and de-duplicated. The admin security settings can update the list without a restart; new installations persist YAML/environment defaults and existing installations backfill a missing database value. When legacy takeover is disabled, all custom and built-in raw forwarding headers are ignored and Gin uses only `server.trusted_proxies`. While takeover is enabled, firewall the origin to CDN/proxy addresses and make the edge overwrite every trusted client-IP header. See [`deploy/EDGE_SECURITY.md`](deploy/EDGE_SECURITY.md) for the complete migration and trust-boundary rules.
 
 **⚠️ Security Warning: HTTP URL Configuration**
 
@@ -666,7 +698,10 @@ go generate ./cmd/server
 Simple Mode is designed for individual developers or internal teams who want quick access without full SaaS features.
 
 - Enable: Set environment variable `RUN_MODE=simple`
+- Default groups are seeded on each startup. Set `SIMPLE_MODE_AUTO_CREATE_DEFAULT_GROUPS=false` (or YAML `simple_mode.auto_create_default_groups: false`) to manage groups yourself. The default is `true`; disabling it does not delete existing groups or change runtime auto-binding or admin concurrency setup.
 - Difference: Hides SaaS-related features and skips billing process
+- Optional key windows: Set `SIMPLE_MODE_KEY_RATE_LIMIT_ENABLED=true` to enforce each API key's configured 5-hour, daily, and 7-day spending windows. The default is `false`; balance and subscription debit remain bypassed when enabled.
+- Window enforcement uses the database as its source of truth and records only API-key window usage. It is a post-request soft cap, so concurrent in-flight requests can overshoot by their final costs. Historical simple-mode usage is not backfilled.
 - Security note: In production, you must also set `SIMPLE_MODE_CONFIRM=true` to allow startup
 
 ---

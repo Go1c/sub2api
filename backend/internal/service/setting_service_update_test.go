@@ -16,7 +16,8 @@ import (
 )
 
 type settingUpdateRepoStub struct {
-	updates map[string]string
+	updates        map[string]string
+	setMultipleErr error
 }
 
 func (s *settingUpdateRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
@@ -40,7 +41,7 @@ func (s *settingUpdateRepoStub) SetMultiple(ctx context.Context, settings map[st
 	for k, v := range settings {
 		s.updates[k] = v
 	}
-	return nil
+	return s.setMultipleErr
 }
 
 func (s *settingUpdateRepoStub) GetAll(ctx context.Context) (map[string]string, error) {
@@ -134,6 +135,37 @@ type defaultSubGroupReaderStub struct {
 	calls []int64
 }
 
+func TestSettingService_AffiliateAdminRechargeSetting(t *testing.T) {
+	t.Run("missing value defaults to disabled", func(t *testing.T) {
+		svc := NewSettingService(&settingGetAllRepoStub{values: map[string]string{}}, &config.Config{})
+
+		settings, err := svc.GetAllSettings(context.Background())
+		require.NoError(t, err)
+		require.False(t, settings.AdminRechargeRebateEnabled)
+	})
+
+	t.Run("explicit value is parsed", func(t *testing.T) {
+		svc := NewSettingService(&settingGetAllRepoStub{values: map[string]string{
+			SettingKeyAffiliateAdminRechargeEnabled: "true",
+		}}, &config.Config{})
+
+		settings, err := svc.GetAllSettings(context.Background())
+		require.NoError(t, err)
+		require.True(t, settings.AdminRechargeRebateEnabled)
+	})
+
+	t.Run("value is persisted", func(t *testing.T) {
+		repo := &settingUpdateRepoStub{}
+		svc := NewSettingService(repo, &config.Config{})
+
+		err := svc.UpdateSettings(context.Background(), &SystemSettings{
+			AdminRechargeRebateEnabled: true,
+		})
+		require.NoError(t, err)
+		require.Equal(t, "true", repo.updates[SettingKeyAffiliateAdminRechargeEnabled])
+	})
+}
+
 func (s *defaultSubGroupReaderStub) GetByID(ctx context.Context, id int64) (*Group, error) {
 	s.calls = append(s.calls, id)
 	if err, ok := s.errBy[id]; ok {
@@ -143,6 +175,16 @@ func (s *defaultSubGroupReaderStub) GetByID(ctx context.Context, id int64) (*Gro
 		return g, nil
 	}
 	return nil, ErrGroupNotFound
+}
+
+func TestSettingService_UpdateSettings_PersistsCompactHomeEnabled(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{CompactHomeEnabled: true})
+
+	require.NoError(t, err)
+	require.Equal(t, "true", repo.updates[SettingKeyCompactHomeEnabled])
 }
 
 func TestSettingService_UpdateSettings_DefaultSubscriptions_ValidGroup(t *testing.T) {
@@ -257,10 +299,10 @@ func TestSettingService_UpdateSettings_RegistrationEmailSuffixWhitelist_Normaliz
 	svc := NewSettingService(repo, &config.Config{})
 
 	err := svc.UpdateSettings(context.Background(), &SystemSettings{
-		RegistrationEmailSuffixWhitelist: []string{"example.com", "@EXAMPLE.com", " @foo.bar "},
+		RegistrationEmailSuffixWhitelist: []string{"example.com", "@EXAMPLE.com", " @foo.bar ", "*.EDU.CN"},
 	})
 	require.NoError(t, err)
-	require.Equal(t, `["@example.com","@foo.bar"]`, repo.updates[SettingKeyRegistrationEmailSuffixWhitelist])
+	require.Equal(t, `["@example.com","@foo.bar","*.edu.cn"]`, repo.updates[SettingKeyRegistrationEmailSuffixWhitelist])
 }
 
 func TestSettingService_UpdateSettings_RegistrationEmailSuffixWhitelist_Invalid(t *testing.T) {
@@ -596,4 +638,47 @@ func TestSettingService_UpdateSettings_RejectsInvalidPaymentVisibleMethodSource(
 	require.Error(t, err)
 	require.Equal(t, "INVALID_PAYMENT_VISIBLE_METHOD_SOURCE", infraerrors.Reason(err))
 	require.Nil(t, repo.updates)
+}
+
+func TestSettingService_PasskeySwitchPersistsAndDefaultsToConfigured(t *testing.T) {
+	cfg := &config.Config{WebAuthn: config.WebAuthnConfig{
+		Enabled:   true,
+		RPID:      "sub3.nebula-spaces.com",
+		RPOrigins: []string{"https://sub3.nebula-spaces.com"},
+	}}
+	runtimeRepo := &forwardedIPMigrationRepoStub{values: map[string]string{}}
+	runtimeService := NewSettingService(runtimeRepo, cfg)
+
+	enabled, err := runtimeService.PasskeyEnabled(context.Background())
+	require.NoError(t, err)
+	require.True(t, enabled)
+
+	updateRepo := &settingUpdateRepoStub{}
+	updateService := NewSettingService(updateRepo, cfg)
+	require.NoError(t, updateService.UpdateSettings(context.Background(), &SystemSettings{
+		PasskeyEnabled: false,
+	}))
+	require.Equal(t, "false", updateRepo.updates[SettingKeyPasskeyEnabled])
+
+	runtimeRepo.values[SettingKeyPasskeyEnabled] = "false"
+	enabled, err = runtimeService.PasskeyEnabled(context.Background())
+	require.NoError(t, err)
+	require.False(t, enabled)
+	publicSettings, err := runtimeService.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.False(t, publicSettings.PasskeyEnabled)
+}
+
+// 移除 WebAuthn 配置后，残留的 passkey_enabled="true" 不得再让 GetAllSettings
+// 报告开关开启：admin 更新门控以此为准，一旦误报为 true 会拒绝所有设置保存，
+// 而此时前端开关处于禁用态，管理员无法在 UI 里自救。
+func TestSettingService_StalePasskeyTrueWithoutConfigReportsDisabled(t *testing.T) {
+	repo := &settingGetAllRepoStub{values: map[string]string{
+		SettingKeyPasskeyEnabled: "true",
+	}}
+	service := NewSettingService(repo, &config.Config{})
+
+	settings, err := service.GetAllSettings(context.Background())
+	require.NoError(t, err)
+	require.False(t, settings.PasskeyEnabled)
 }

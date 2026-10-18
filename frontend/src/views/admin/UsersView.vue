@@ -562,6 +562,30 @@
             </div>
           </template>
 
+          <template #cell-usage="{ row }">
+            <PlatformUsageBreakdown
+              :today="usageStats[row.id]?.today_actual_cost ?? 0"
+              :total="usageStats[row.id]?.total_actual_cost ?? 0"
+              :by-platform="usageStats[row.id]?.by_platform"
+            />
+          </template>
+
+          <template #cell-usage_anthropic="{ row }">
+            <PlatformCostCell :usage="getPlatformUsage(row.id, 'anthropic')" />
+          </template>
+
+          <template #cell-usage_openai="{ row }">
+            <PlatformCostCell :usage="getPlatformUsage(row.id, 'openai')" />
+          </template>
+
+          <template #cell-usage_gemini="{ row }">
+            <PlatformCostCell :usage="getPlatformUsage(row.id, 'gemini')" />
+          </template>
+
+          <template #cell-usage_antigravity="{ row }">
+            <PlatformCostCell :usage="getPlatformUsage(row.id, 'antigravity')" />
+          </template>
+
           <template #cell-concurrency="{ row }">
             <UserConcurrencyCell
               :current="row.current_concurrency ?? 0"
@@ -758,6 +782,15 @@
     </Teleport>
 
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
+    <ConfirmDialog
+      :show="bulkDeleteIds.length > 0"
+      :title="t('admin.users.bulkDelete.title')"
+      :message="t('admin.users.bulkDelete.confirm', { count: bulkDeleteIds.length })"
+      :confirm-text="t('common.delete')"
+      danger
+      @confirm="confirmBulkDelete"
+      @cancel="bulkDeleteIds = []"
+    />
     <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />
     <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
     <BulkEditUserModal
@@ -1341,6 +1374,8 @@ const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showBulkEditModal = ref(false)
 const showDeleteDialog = ref(false)
+const bulkDeleteIds = ref<number[]>([])
+const bulkDeleting = ref(false)
 const showApiKeysModal = ref(false)
 const showAttributesModal = ref(false)
 const showPlatformQuotaModal = ref(false)
@@ -1521,6 +1556,10 @@ const handleClickOutside = (event: MouseEvent) => {
   if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
     showColumnDropdown.value = false
   }
+  // Close usage sort dropdown when clicking outside any usage-sort-trigger
+  if (openUsageSortMenu.value !== null && !target.closest('.usage-sort-trigger')) {
+    openUsageSortMenu.value = null
+  }
   // Close expanded group dropdown when clicking outside
   if (expandedGroupUserId.value !== null) {
     expandedGroupUserId.value = null
@@ -1642,6 +1681,11 @@ const loadUsers = async () => {
   }
 }
 
+const handleBulkLimitsSuccess = async () => {
+  clearSelection()
+  await loadUsers()
+}
+
 let searchTimeout: ReturnType<typeof setTimeout>
 const handleSearch = () => {
   clearTimeout(searchTimeout)
@@ -1734,11 +1778,21 @@ const closeEditModal = () => {
 const handleToggleStatus = async (user: AdminUser) => {
   const newStatus = user.status === 'active' ? 'disabled' : 'active'
   try {
-    await adminAPI.users.toggleStatus(user.id, newStatus)
+    const updated = await adminAPI.users.toggleStatus(user.id, newStatus)
     appStore.showSuccess(
       newStatus === 'active' ? t('admin.users.userEnabled') : t('admin.users.userDisabled')
     )
-    loadUsers()
+    if (loading.value) {
+      // 与本次更新并发的列表请求可能读到更新前的状态，重新拉取保证一致。
+      loadUsers()
+      return
+    }
+    // 更新接口的响应不含 current_concurrency、subscriptions 等列表专属字段，只回写状态相关字段。
+    const row = users.value.find((u) => u.id === user.id)
+    if (row) {
+      row.status = updated.status
+      row.updated_at = updated.updated_at
+    }
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.users.failedToToggle'))
     console.error('Error toggling user status:', error)
@@ -1795,6 +1849,30 @@ const confirmDelete = async () => {
     appStore.showError(error.response?.data?.detail || t('admin.users.failedToDelete'))
     console.error('Error deleting user:', error)
   }
+}
+
+const confirmBulkDelete = async () => {
+  const ids = bulkDeleteIds.value
+  bulkDeleteIds.value = []
+  bulkDeleting.value = true
+  const deletedIds: number[] = []
+  for (const id of ids) {
+    try {
+      await adminAPI.users.delete(id)
+      deletedIds.push(id)
+    } catch (error) {
+      console.error('Error deleting user:', error)
+    }
+  }
+  removeSelectedIds(deletedIds)
+  if (deletedIds.length > 0) {
+    appStore.showSuccess(t('admin.users.bulkDelete.success', { count: deletedIds.length }))
+    pagination.page = 1
+  }
+  const failed = ids.length - deletedIds.length
+  if (failed > 0) appStore.showError(t('admin.users.bulkDelete.failed', { count: failed }))
+  await loadUsers()
+  bulkDeleting.value = false
 }
 
 const handleDeposit = (user: AdminUser) => {

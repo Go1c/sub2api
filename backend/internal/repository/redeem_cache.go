@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	redeemRateLimitKeyPrefix = "redeem:ratelimit:"
+	redeemRateLimitKeyPrefix = "redeem:ratelimit:v2:"
 	redeemLockKeyPrefix      = "redeem:lock:"
 	redeemRateLimitDuration  = service.RedeemRateLimitWindow
 )

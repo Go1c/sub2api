@@ -22,7 +22,7 @@ describe('UsageProgressBar', () => {
     vi.useRealTimers()
   })
 
-  it('showNowWhenIdle=true 且利用率为 0 时显示“现在”', () => {
+  it('showNowWhenIdle=true 且利用率为 0 但有未来 resetsAt 时显示倒计时', () => {
     const wrapper = mount(UsageProgressBar, {
       props: {
         label: '5h',

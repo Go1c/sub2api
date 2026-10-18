@@ -219,6 +219,11 @@ type opsScheduledReport struct {
 	NextRunAt time.Time
 }
 
+type opsScheduledReportContent struct {
+	html     string
+	overview *OpsDashboardOverview
+}
+
 func (s *OpsScheduledReportService) listScheduledReports(ctx context.Context, now time.Time) []*opsScheduledReport {
 	if s == nil || s.opsService == nil {
 		return nil
@@ -316,11 +321,11 @@ func (s *OpsScheduledReportService) runReport(ctx context.Context, report *opsSc
 	// Mark as "run" up-front so a broken SMTP config doesn't spam retries every minute.
 	s.setLastRunAt(ctx, report.ReportType, now)
 
-	content, err := s.generateReportHTML(ctx, report, now)
+	content, err := s.generateReportContent(ctx, report, now)
 	if err != nil {
 		return 0, err
 	}
-	if strings.TrimSpace(content) == "" {
+	if strings.TrimSpace(content.html) == "" {
 		// Skip sending when the report decides not to emit content (e.g., digest below min count).
 		return 0, nil
 	}
@@ -336,8 +341,6 @@ func (s *OpsScheduledReportService) runReport(ctx context.Context, report *opsSc
 		return 0, nil
 	}
 
-	subject := fmt.Sprintf("[Ops Report] %s", strings.TrimSpace(report.Name))
-
 	attempts := 0
 	for _, to := range recipients {
 		addr := strings.TrimSpace(to)
@@ -345,7 +348,40 @@ func (s *OpsScheduledReportService) runReport(ctx context.Context, report *opsSc
 			continue
 		}
 		attempts++
-		if err := s.emailService.SendEmail(ctx, addr, subject, content); err != nil {
+		locale := ""
+		if s.emailService.notificationEmailService != nil {
+			locale = s.emailService.notificationEmailService.ResolveRecipientLocale(ctx, 0, addr)
+			templateVariables := opsScheduledReportLocalizedEmailVariables(report, now, locale)
+			rawHTMLVariables := map[string]string{"report_html": content.html}
+			if isOpsSummaryReport(report) {
+				templateVariables = opsSummaryReportEmailVariables(report, now, content.overview, locale)
+			}
+			if err := s.emailService.notificationEmailService.Send(ctx, NotificationEmailSendInput{
+				Event:            NotificationEmailEventOpsScheduledReport,
+				Locale:           locale,
+				RecipientEmail:   addr,
+				RecipientName:    emailRecipientName(addr),
+				SourceType:       "ops_scheduled_report",
+				SourceID:         opsScheduledReportDeliverySourceID(report),
+				ReminderKey:      now.UTC().Format("2006-01-02T15:04"),
+				Variables:        templateVariables,
+				RawHTMLVariables: rawHTMLVariables,
+			}); err == nil {
+				continue
+			} else if !shouldFallbackNotificationEmail(err) {
+				continue
+			}
+		}
+		subjectName := strings.TrimSpace(report.Name)
+		if locale != "" {
+			subjectName = opsScheduledReportLocalizedName(report, locale)
+		}
+		subjectPrefix := "[Ops Report]"
+		if strings.HasPrefix(strings.ToLower(locale), "zh") {
+			subjectPrefix = "[运维报表]"
+		}
+		subject := fmt.Sprintf("%s %s", subjectPrefix, subjectName)
+		if err := s.emailService.SendEmail(ctx, addr, subject, content.html); err != nil {
 			// Ignore per-recipient failures; continue best-effort.
 			continue
 		}
@@ -371,10 +407,10 @@ func opsScheduledReportDeliverySourceID(report *opsScheduledReport) string {
 
 func (s *OpsScheduledReportService) generateReportHTML(ctx context.Context, report *opsScheduledReport, now time.Time) (string, error) {
 	if s == nil || s.opsService == nil || report == nil {
-		return "", fmt.Errorf("service not initialized")
+		return opsScheduledReportContent{}, fmt.Errorf("service not initialized")
 	}
 	if report.TimeRange <= 0 {
-		return "", fmt.Errorf("invalid time range")
+		return opsScheduledReportContent{}, fmt.Errorf("invalid time range")
 	}
 
 	end := now.UTC()
@@ -401,10 +437,13 @@ func (s *OpsScheduledReportService) generateReportHTML(ctx context.Context, repo
 				})
 			}
 			if err != nil {
-				return "", err
+				return opsScheduledReportContent{}, err
 			}
 		}
-		return buildOpsSummaryEmailHTML(report.Name, start, end, overview), nil
+		return opsScheduledReportContent{
+			html:     buildOpsSummaryEmailHTML(report.Name, start, end, overview),
+			overview: overview,
+		}, nil
 	case "error_digest":
 		// Lightweight digest: list recent errors (status>=400) and breakdown by type.
 		startTime := start
@@ -417,22 +456,22 @@ func (s *OpsScheduledReportService) generateReportHTML(ctx context.Context, repo
 		}
 		out, err := s.opsService.GetErrorLogs(ctx, filter)
 		if err != nil {
-			return "", err
+			return opsScheduledReportContent{}, err
 		}
 		if report.ErrorDigestMinCount > 0 && out != nil && out.Total < report.ErrorDigestMinCount {
-			return "", nil
+			return opsScheduledReportContent{}, nil
 		}
-		return buildOpsErrorDigestEmailHTML(report.Name, start, end, out), nil
+		return opsScheduledReportContent{html: buildOpsErrorDigestEmailHTML(report.Name, start, end, out)}, nil
 	case "account_health":
 		// Best-effort: use account availability (not error rate yet).
 		avail, err := s.opsService.GetAccountAvailability(ctx, "", nil)
 		if err != nil {
-			return "", err
+			return opsScheduledReportContent{}, err
 		}
 		_ = report.AccountHealthErrorRateThreshold // reserved for future per-account error rate report
-		return buildOpsAccountHealthEmailHTML(report.Name, start, end, avail), nil
+		return opsScheduledReportContent{html: buildOpsAccountHealthEmailHTML(report.Name, start, end, avail)}, nil
 	default:
-		return "", fmt.Errorf("unknown report type: %s", report.ReportType)
+		return opsScheduledReportContent{}, fmt.Errorf("unknown report type: %s", report.ReportType)
 	}
 }
 

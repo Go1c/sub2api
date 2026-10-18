@@ -36,6 +36,7 @@ type AdminHandlers struct {
 	UserAttribute          *admin.UserAttributeHandler
 	ErrorPassthrough       *admin.ErrorPassthroughHandler
 	TLSFingerprintProfile  *admin.TLSFingerprintProfileHandler
+	Plugin                 *admin.PluginHandler
 	APIKey                 *admin.AdminAPIKeyHandler
 	ScheduledTest          *admin.ScheduledTestHandler
 	Channel                *admin.ChannelHandler
@@ -64,6 +65,7 @@ type Handlers struct {
 	Lottery          *LotteryHandler
 	Invoice          *InvoiceHandler
 	ChannelMonitor   *ChannelMonitorUserHandler
+	ChannelMonitorV2 *ChannelMonitorV2Handler
 	Admin            *AdminHandlers
 	Gateway          *GatewayHandler
 	OpenAIGateway    *OpenAIGatewayHandler

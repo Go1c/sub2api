@@ -205,6 +205,17 @@ describe('useAppStore', () => {
       expect(store.sidebarCollapsed).toBe(false)
     })
 
+    it('sidebarScrollTop 默认为 0 且可读写', () => {
+      const store = useAppStore()
+      expect(store.sidebarScrollTop).toBe(0)
+
+      store.sidebarScrollTop = 256
+      expect(store.sidebarScrollTop).toBe(256)
+
+      store.sidebarScrollTop = 0
+      expect(store.sidebarScrollTop).toBe(0)
+    })
+
     it('toggleMobileSidebar 切换移动端状态', () => {
       const store = useAppStore()
       expect(store.mobileOpen).toBe(false)
@@ -439,6 +450,7 @@ describe('useAppStore', () => {
         contact_info: '',
         doc_url: '',
         home_content: '',
+        compact_home_enabled: false,
         hide_ccs_import_button: false,
         purchase_subscription_enabled: false,
         purchase_subscription_url: '',

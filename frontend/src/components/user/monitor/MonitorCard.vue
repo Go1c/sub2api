@@ -23,6 +23,7 @@
           >
             {{ providerLabel(item.provider) }}
           </span>
+          <!-- 纯配额模式主模型是占位符 "quota"，展示层替换为本地化「配额」标签 -->
           <span class="font-mono text-xs truncate text-gray-500 dark:text-gray-400">
             {{ formatMonitorModel(item.primary_model) }}
           </span>
@@ -55,6 +56,9 @@
       :secondary-value="formatLatency(item.primary_ping_latency_ms)"
       secondary-unit="ms"
     />
+
+    <!-- 配额模式：最新用量/余额快照（服务端已按系统开关剥离，此处 flag 为纵深防御） -->
+    <MonitorQuotaView v-if="quotaVisible" :snapshot="item.latest_quota" class="mt-2" />
 
     <!-- Divider -->
     <div class="mt-4 border-t border-gray-100 dark:border-dark-700/60"></div>
@@ -99,7 +103,9 @@ import ProviderIcon from './ProviderIcon.vue'
 import MonitorMetricPair from './MonitorMetricPair.vue'
 import MonitorAvailabilityRow from './MonitorAvailabilityRow.vue'
 import MonitorTimeline from './MonitorTimeline.vue'
+import MonitorQuotaView from '@/components/common/MonitorQuotaView.vue'
 
+// 图标配色与 utils/platformColors.ts 的平台色对齐（新 4 家）。
 const PROVIDER_TINT: Record<string, string> = {
   openai: 'text-emerald-600 dark:text-emerald-300',
   anthropic: 'text-orange-600 dark:text-orange-300',
@@ -134,6 +140,10 @@ const quotaVisible = computed(
 
 const providerTintClass = computed(() =>
   PROVIDER_TINT[props.item.provider] ?? 'text-gray-500 dark:text-gray-300'
+)
+
+const quotaVisible = computed(
+  () => isChannelMonitorQuotaVisible() && !!props.item.latest_quota
 )
 
 const availabilityLabel = computed(() => {

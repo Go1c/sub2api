@@ -217,12 +217,12 @@ export async function assign(request: AssignSubscriptionRequest): Promise<UserSu
 /**
  * Bulk assign subscriptions to multiple users
  * @param request - Bulk assignment request
- * @returns Created subscriptions
+ * @returns Per-user assignment outcomes and created or reused subscriptions
  */
 export async function bulkAssign(
   request: BulkAssignSubscriptionRequest
-): Promise<UserSubscription[]> {
-  const { data } = await apiClient.post<UserSubscription[]>(
+): Promise<BulkAssignSubscriptionResult> {
+  const { data } = await apiClient.post<BulkAssignSubscriptionResult>(
     '/admin/subscriptions/bulk-assign',
     request
   )
@@ -252,7 +252,17 @@ export async function extend(
  * @returns Success confirmation
  */
 export async function revoke(id: number): Promise<{ message: string }> {
-  const { data } = await apiClient.delete<{ message: string }>(`/admin/subscriptions/${id}`)
+  const { data } = await apiClient.post<{ message: string }>(`/admin/subscriptions/${id}/revoke`)
+  return data
+}
+
+/**
+ * Restore revoked subscription
+ * @param id - Subscription ID
+ * @returns Restored subscription
+ */
+export async function restore(id: number): Promise<UserSubscription> {
+  const { data } = await apiClient.post<UserSubscription>(`/admin/subscriptions/${id}/restore`)
   return data
 }
 
@@ -337,8 +347,10 @@ export const subscriptionsAPI = {
   getWasteStats,
   assign,
   bulkAssign,
+  bulkAction,
   extend,
   revoke,
+  restore,
   resetQuota,
   resetWeeklyLimit,
   listByGroup,

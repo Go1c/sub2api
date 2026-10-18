@@ -21,10 +21,13 @@ import (
 )
 
 type paymentOrderLifecycleQueryProvider struct {
-	lastQueryTradeNo string
-	queryCalls       int
-	responses        []*payment.QueryOrderResponse
-	resp             *payment.QueryOrderResponse
+	key               string
+	lastQueryTradeNo  string
+	lastCancelTradeNo string
+	queryCalls        int
+	cancelCalls       int
+	responses         []*payment.QueryOrderResponse
+	resp              *payment.QueryOrderResponse
 }
 
 type paymentOrderLifecycleRedeemRepo struct {
@@ -42,10 +45,15 @@ func (p *paymentOrderLifecycleQueryProvider) Name() string {
 	return "payment-order-lifecycle-query-provider"
 }
 
-func (p *paymentOrderLifecycleQueryProvider) ProviderKey() string { return payment.TypeAlipay }
+func (p *paymentOrderLifecycleQueryProvider) ProviderKey() string {
+	if p.key != "" {
+		return p.key
+	}
+	return payment.TypeAlipay
+}
 
 func (p *paymentOrderLifecycleQueryProvider) SupportedTypes() []payment.PaymentType {
-	return []payment.PaymentType{payment.TypeAlipay}
+	return []payment.PaymentType{p.ProviderKey()}
 }
 
 func (p *paymentOrderLifecycleQueryProvider) CreatePayment(context.Context, payment.CreatePaymentRequest) (*payment.CreatePaymentResponse, error) {
@@ -112,6 +120,10 @@ func (r *paymentOrderLifecycleRedeemRepo) GetByCode(_ context.Context, code stri
 }
 
 func (r *paymentOrderLifecycleRedeemRepo) Update(context.Context, *RedeemCode) error {
+	panic("unexpected call")
+}
+
+func (r *paymentOrderLifecycleRedeemRepo) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) {
 	panic("unexpected call")
 }
 

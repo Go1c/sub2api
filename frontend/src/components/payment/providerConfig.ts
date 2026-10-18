@@ -119,7 +119,8 @@ export const PROVIDER_CALLBACK_PATHS: Record<string, CallbackPaths> = {
   mapay: { notifyUrl: WEBHOOK_PATHS.mapay, returnUrl: RETURN_PATH },
   alipay: { notifyUrl: WEBHOOK_PATHS.alipay, returnUrl: RETURN_PATH },
   wxpay: { notifyUrl: WEBHOOK_PATHS.wxpay },
-  // stripe: no callback URL config needed (webhook is separate)
+  // stripe: 不需要回调 URL 配置，Webhook 单独配置。
+  // airwallex: 不需要回调 URL 配置，Webhook 在空中云汇后台配置。
 }
 
 /** Per-provider config fields (excludes notifyUrl/returnUrl which are handled separately). */

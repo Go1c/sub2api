@@ -118,6 +118,9 @@ export interface AdminUser extends User {
   last_used_at?: string | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier)
   group_rates?: Record<number, number>
+  // 为 true 时该用户仅可使用 allowed_groups 中列出的公开分组。
+  // 管理侧权限开关，普通用户接口不返回。
+  restrict_public_groups?: boolean
   // 当前并发数（仅管理员列表接口返回）
   current_concurrency?: number
 }
@@ -126,6 +129,19 @@ export interface LoginRequest {
   email: string
   password: string
   turnstile_token?: string
+  tencent_captcha_ticket?: string
+  tencent_captcha_randstr?: string
+}
+
+export interface TencentCaptchaRequestProof {
+  tencent_captcha_ticket: string
+  tencent_captcha_randstr: string
+}
+
+// 动作触发式验证码（OAuth 启动、passkey 等入口）的请求凭据：
+// 腾讯填 tencent_captcha_*，阿里云的 captchaVerifyParam 复用 turnstile_token 字段
+export interface ActionCaptchaRequestProof extends Partial<TencentCaptchaRequestProof> {
+  turnstile_token?: string
 }
 
 export interface RegisterRequest {
@@ -133,6 +149,8 @@ export interface RegisterRequest {
   password: string
   verify_code?: string
   turnstile_token?: string
+  tencent_captcha_ticket?: string
+  tencent_captcha_randstr?: string
   promo_code?: string
   invitation_code?: string
   aff_code?: string
@@ -171,6 +189,8 @@ export interface AffiliateTransferResponse {
 export interface SendVerifyCodeRequest {
   email: string
   turnstile_token?: string
+  tencent_captcha_ticket?: string
+  tencent_captcha_randstr?: string
   pending_auth_token?: string
   pending_oauth_token?: string
 }
@@ -207,6 +227,7 @@ export interface PublicSettings {
   email_verify_enabled: boolean
   force_email_on_third_party_signup: boolean
   registration_email_suffix_whitelist: string[]
+  registration_email_domain_quota_enabled?: boolean
   promo_code_enabled: boolean
   password_reset_enabled: boolean
   invitation_code_enabled: boolean
@@ -216,7 +237,15 @@ export interface PublicSettings {
   login_agreement_revision?: string
   login_agreement_documents?: LoginAgreementDocument[]
   turnstile_enabled: boolean
+  tencent_captcha_enabled?: boolean
+  tencent_captcha_app_id?: string
+  tencent_captcha_region?: string
+  passkey_enabled?: boolean
   turnstile_site_key: string
+  aliyun_captcha_enabled?: boolean
+  aliyun_captcha_scene_id?: string
+  aliyun_captcha_prefix?: string
+  aliyun_captcha_region?: string
   site_name: string
   site_logo: string
   site_subtitle: string
@@ -224,6 +253,7 @@ export interface PublicSettings {
   contact_info: string
   doc_url: string
   home_content: string
+  compact_home_enabled: boolean
   hide_ccs_import_button: boolean
   payment_enabled: boolean
   risk_control_enabled: boolean
@@ -251,6 +281,8 @@ export interface PublicSettings {
   account_quota_notify_enabled: boolean
   balance_low_notify_threshold: number
   channel_monitor_enabled: boolean
+  /** Exclusive mode: v1 active probes or v2 passive aggregation. Default v2. */
+  channel_monitor_mode?: 'v1' | 'v2'
   channel_monitor_default_interval_seconds: number
   channel_monitor_status_banner?: string
   /** When true, user monitor shows account quota/balance snapshots (default off). */
@@ -594,6 +626,25 @@ export interface OpenAIMessagesDispatchModelConfig {
   exact_model_mappings?: Record<string, string>
 }
 
+export type ReasoningEffortMatchType = 'exact' | 'prefix' | 'suffix'
+
+export interface ReasoningEffortMapping {
+  from: string
+  to: string
+  match_type?: ReasoningEffortMatchType
+  model?: string
+}
+
+/** 分组名称与描述在某个语言下的译文；字段为空表示沿用分组自身的 name/description。 */
+export interface GroupLocaleText {
+  name?: string
+  description?: string
+}
+
+/** 以语言代码（en、zh…）为键的分组文案译文。 */
+export type GroupI18n = Record<string, GroupLocaleText>
+
+// 用户侧接口返回的 name / description 已由后端按请求语言（Accept-Language）选好
 export interface Group {
   id: number
   name: string
@@ -601,6 +652,9 @@ export interface Group {
   platform: GroupPlatform
   rate_multiplier: number
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
+  max_reasoning_effort?: string // Anthropic/OpenAI reasoning ceiling; empty means unlimited
+  max_reasoning_effort_over_limit?: string // downgrade (default) or deny when over the ceiling
+  reasoning_effort_mappings?: ReasoningEffortMapping[]
   is_exclusive: boolean
   status: 'active' | 'inactive'
   subscription_type: SubscriptionType
@@ -639,6 +693,8 @@ export interface Group {
   fallback_group_id_on_invalid_request: number | null
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
+  // OpenAI Live 接口开关
+  allow_live: boolean
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   require_oauth_only: boolean
@@ -747,6 +803,7 @@ export interface UpdateApiKeyRequest {
 export interface CreateGroupRequest {
   name: string
   description?: string | null
+  i18n?: GroupI18n
   platform?: GroupPlatform
   rate_multiplier?: number
   is_exclusive?: boolean
@@ -799,6 +856,7 @@ export interface CreateGroupRequest {
 export interface UpdateGroupRequest {
   name?: string
   description?: string | null
+  i18n?: GroupI18n
   platform?: GroupPlatform
   rate_multiplier?: number
   is_exclusive?: boolean
@@ -941,6 +999,7 @@ export interface ProxyIPGroup {
 export interface GeminiCredentials {
   // API Key authentication
   api_key?: string
+  base_url?: string
 
   // OAuth authentication
   access_token?: string
@@ -965,11 +1024,15 @@ export interface GeminiCredentials {
   model_mapping?: Record<string, string>
 }
 
+export type TempUnschedulableScope = 'account' | 'model'
+
 export interface TempUnschedulableRule {
   error_code: number
   keywords: string[]
   duration_minutes: number
   description: string
+  // 作用范围：account 暂停整个账号，model 只冷却本次请求的模型；缺省时 401 按 account、其余按 model 处理。
+  scope?: TempUnschedulableScope
 }
 
 export interface TempUnschedulableState {
@@ -977,8 +1040,13 @@ export interface TempUnschedulableState {
   triggered_at_unix: number
   status_code: number
   matched_keyword: string
+  scope?: TempUnschedulableScope
+  model?: string
   rule_index: number
   error_message: string
+  trigger_count?: number
+  trigger_threshold?: number
+  trigger_window_minutes?: number
 }
 
 export interface TempUnschedulableStatus {
@@ -1384,6 +1452,15 @@ export interface UpdateAccountRequest {
   confirm_mixed_channel_risk?: boolean
 }
 
+export type GrokMediaEligibilityMode = 'auto' | 'enabled' | 'disabled'
+
+export interface GrokMediaEligibilityState {
+  account_id: number
+  mode: GrokMediaEligibilityMode
+  eligible: boolean
+  reason: string
+}
+
 export interface CheckMixedChannelRequest {
   platform: AccountPlatform
   group_ids: number[]
@@ -1633,7 +1710,11 @@ export interface UsageLogAccountSummary {
 
 export interface AdminUsageLog extends UsageLog {
   upstream_model?: string | null
+  upstream_reasoning_effort?: string | null
+  upstream_response_model?: string | null
+  upstream_model_mismatch?: boolean | null
   model_mapping_chain?: string | null
+  upstream_request_id?: string | null
 
   // 账号计费倍率（仅管理员可见）
   account_rate_multiplier?: number | null
@@ -1863,6 +1944,7 @@ export interface UserUsageTrendPoint {
 export interface UserSpendingRankingItem {
   user_id: number
   email: string
+  username: string
   actual_cost: number
   requests: number
   tokens: number
@@ -1895,8 +1977,10 @@ export interface UpdateUserRequest {
   role?: 'admin' | 'user'
   balance?: number
   concurrency?: number
+  rpm_limit?: number
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
+  restrict_public_groups?: boolean
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
   // null 表示删除该分组的专属倍率
   group_rates?: Record<number, number | null>
@@ -2037,6 +2121,7 @@ export interface UsageQueryParams {
   model?: string
   request_type?: UsageRequestType
   stream?: boolean
+  native_compaction_v2?: boolean | null
   billing_type?: number | null
   billing_mode?: string | null
   start_date?: string

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -221,6 +222,9 @@ func NewAccountService(accountRepo AccountRepository, groupRepo GroupRepository)
 
 // Create 创建账号
 func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (*Account, error) {
+	if req.Platform == PlatformTypeSafe && req.Type != AccountTypeAPIKey {
+		return nil, errors.New("typesafe accounts only support apikey credentials")
+	}
 	// 验证分组是否存在（如果指定了分组）
 	if len(req.GroupIDs) > 0 {
 		if err := s.validateGroupIDsExist(ctx, req.GroupIDs); err != nil {
@@ -234,8 +238,8 @@ func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (
 		Notes:       normalizeAccountNotes(req.Notes),
 		Platform:    req.Platform,
 		Type:        req.Type,
-		Credentials: req.Credentials,
-		Extra:       req.Extra,
+		Credentials: SanitizeStoredCredentials(req.Platform, req.Credentials),
+		Extra:       prepareCodexFingerprintExtraForCreate(req.Platform, req.Type, req.Extra),
 		ProxyID:     req.ProxyID,
 		Concurrency: req.Concurrency,
 		Priority:    req.Priority,
@@ -327,11 +331,20 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 	}
 
 	if req.Credentials != nil {
-		account.Credentials = *req.Credentials
+		account.Credentials = SanitizeStoredCredentials(account.Platform, *req.Credentials)
 	}
 
 	if req.Extra != nil {
-		account.Extra = *req.Extra
+		extra := make(map[string]any, len(*req.Extra))
+		for key, value := range *req.Extra {
+			extra[key] = value
+		}
+		delete(extra, OllamaCloudUsageSessionExtraKey)
+		delete(extra, OllamaCloudUsageAutoRefreshExtraKey)
+		delete(extra, OllamaCloudUsageSnapshotExtraKey)
+		account.Extra = prepareCodexFingerprintExtraForUpdate(account, extra)
+	} else {
+		account.Extra = prepareCodexFingerprintExtraForUpdate(account, account.Extra)
 	}
 
 	if req.ProxyID != nil {
@@ -405,6 +418,9 @@ func (s *AccountService) Delete(ctx context.Context, id int64) error {
 		return ErrAccountNotFound
 	}
 
+	// 注意:此处不级联删除 spark 影子账号。当前唯一的后台删除入口走 AdminService.DeleteAccount
+	// (已 ListShadowsByParent 先删影子再删母)。本方法目前无删除调用方;若未来有调用方经此
+	// 删除母账号,需在此补级联,否则会留下孤儿影子(外审第6轮 P3:当前不可达,记为残留)。
 	if err := s.accountRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("delete account: %w", err)
 	}
@@ -505,6 +521,11 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 		// 国产 OpenAI 兼容供应商：凭证为 API Key，实际可用性经余额/额度探测与转发路径验证。
 		return nil
 	default:
+		if IsMultiProtocolAPIKeyProvider(account.Platform) {
+			// 多协议 API Key 供应商（国产厂商与聚合平台）：凭证为 API Key，实际可用性
+			// 经余额/额度探测与转发路径验证。
+			return nil
+		}
 		return fmt.Errorf("unsupported platform: %s", account.Platform)
 	}
 }

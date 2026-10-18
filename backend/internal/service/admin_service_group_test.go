@@ -19,10 +19,17 @@ func ptrString[T ~string](v T) *string {
 
 // groupRepoStubForAdmin 用于测试 AdminService 的 GroupRepository Stub
 type groupRepoStubForAdmin struct {
-	created *Group // 记录 Create 调用的参数
-	updated *Group // 记录 Update 调用的参数
-	getByID *Group // GetByID 返回值
-	getErr  error  // GetByID 返回的错误
+	created  *Group // 记录 Create 调用的参数
+	updated  *Group // 记录 Update 调用的参数
+	getByID  *Group // GetByID 返回值
+	getErr   error  // GetByID 返回的错误
+	createID int64
+
+	getByIDByID map[int64]*Group
+
+	deleteAccountGroupsByGroupIDFn func(groupID int64) (int64, error)
+	bindAccountsToGroupFn          func(groupID int64, accountIDs []int64) error
+	getAccountIDsByGroupIDsFn      func(groupIDs []int64) ([]int64, error)
 
 	createID int64
 
@@ -90,6 +97,10 @@ func (s *groupRepoStubForAdmin) DeleteCascade(_ context.Context, _ int64) ([]int
 	panic("unexpected DeleteCascade call")
 }
 
+func (s *groupRepoStubForAdmin) DeleteCascadeIfEmpty(_ context.Context, _ int64) ([]int64, error) {
+	panic("unexpected DeleteCascadeIfEmpty call")
+}
+
 func (s *groupRepoStubForAdmin) List(_ context.Context, _ pagination.PaginationParams) ([]Group, *pagination.PaginationResult, error) {
 	panic("unexpected List call")
 }
@@ -116,6 +127,178 @@ func (s *groupRepoStubForAdmin) ListWithFilters(_ context.Context, params pagina
 	}
 
 	return s.listWithFiltersGroups, result, nil
+}
+
+func (s *groupRepoStubForAdmin) ListBindableWithFilters(ctx context.Context, params pagination.PaginationParams, platform, status, search string, isExclusive *bool) ([]Group, *pagination.PaginationResult, error) {
+	return s.ListWithFilters(ctx, params, platform, status, search, isExclusive)
+}
+
+func TestAdminServiceSimpleModeValidatesRequestedGroupIDsDirectly(t *testing.T) {
+	groups := make(map[int64]*Group, 1002)
+	for id := int64(1); id <= 1001; id++ {
+		groups[id] = &Group{ID: id, Platform: PlatformAnthropic}
+	}
+	groups[1002] = &Group{ID: 1002, Platform: PlatformComposite}
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}, groupRepo: &groupRepoStubForAdmin{getByIDByID: groups}}
+
+	require.Error(t, svc.ValidateAccountGroupBindings(context.Background(), []int64{1, 1002}))
+	require.ErrorIs(t, svc.ValidateAccountGroupBindings(context.Background(), []int64{1, 2000}), ErrGroupNotFound)
+	require.NoError(t, svc.ValidateAccountGroupBindings(context.Background(), []int64{1, 1001}))
+}
+
+func TestAdminServiceSimpleModeRejectsDirectCompositeGroupAccess(t *testing.T) {
+	repo := &groupRepoStubForAdmin{getByID: &Group{ID: 9, Platform: PlatformComposite}}
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}, groupRepo: repo, emptyGroupDeleteRepo: repo}
+
+	_, err := svc.GetGroup(context.Background(), 9)
+	require.Error(t, err)
+	_, err = svc.UpdateGroup(context.Background(), 9, &UpdateGroupInput{})
+	require.Error(t, err)
+	require.Nil(t, repo.updated)
+	require.Error(t, svc.DeleteGroupIfEmpty(context.Background(), 9))
+}
+
+func TestAdminServiceSimpleModeRejectsAccountListCompositeFilter(t *testing.T) {
+	repo := &groupRepoStubForAdmin{getByID: &Group{ID: 9, Platform: PlatformComposite}}
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}, groupRepo: repo}
+	_, _, err := svc.ListAccounts(context.Background(), 1, 20, "", "", "", "", 9, "", "", "")
+	require.Error(t, err)
+}
+
+func TestAdminServiceSimpleModeRejectsAdvancedGroupOperationsDirectly(t *testing.T) {
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}}
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{"duplicate", func() error { _, err := svc.DuplicateGroup(context.Background(), 1, "admin:1", "key"); return err }},
+		{"recover duplicate", func() error {
+			_, err := svc.RecoverDuplicateGroup(context.Background(), 1, "admin:1", "key")
+			return err
+		}},
+		{"list composite routes", func() error { _, err := svc.ListCompositeRoutes(context.Background(), 1); return err }},
+		{"create composite route", func() error {
+			_, err := svc.CreateCompositeRoute(context.Background(), 1, CompositeRouteInput{})
+			return err
+		}},
+		{"update composite route", func() error {
+			_, err := svc.UpdateCompositeRoute(context.Background(), 1, 2, CompositeRouteInput{})
+			return err
+		}},
+		{"delete composite route", func() error { return svc.DeleteCompositeRoute(context.Background(), 1, 2) }},
+		{"preview composite route", func() error {
+			_, err := svc.PreviewCompositeRoute(context.Background(), 1, CompositeRoutePreviewRequest{})
+			return err
+		}},
+		{"get multipliers", func() error { _, err := svc.GetGroupRateMultipliers(context.Background(), 1); return err }},
+		{"clear multipliers", func() error { return svc.ClearGroupRateMultipliers(context.Background(), 1) }},
+		{"set multipliers", func() error { return svc.BatchSetGroupRateMultipliers(context.Background(), 1, nil) }},
+		{"clear rpm overrides", func() error { return svc.ClearGroupRPMOverrides(context.Background(), 1) }},
+		{"set rpm overrides", func() error { return svc.BatchSetGroupRPMOverrides(context.Background(), 1, nil) }},
+		{"sort", func() error { return svc.UpdateGroupSortOrders(context.Background(), nil) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call()
+			require.Error(t, err)
+			require.Equal(t, "SIMPLE_MODE_OPERATION_UNSUPPORTED", infraerrors.Reason(err))
+		})
+	}
+}
+
+func TestAdminServiceSimpleModeRejectsCompositeCreateAndConversionDirectly(t *testing.T) {
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}}
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{Platform: PlatformComposite, RateMultiplier: 1})
+	require.Error(t, err)
+
+	repo := &groupRepoStubForAdmin{getByID: &Group{ID: 1, Platform: PlatformAnthropic}}
+	svc.groupRepo = repo
+	_, err = svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{Platform: PlatformComposite})
+	require.Error(t, err)
+	require.Nil(t, repo.updated)
+}
+
+func TestAdminServiceSimpleModeNormalizesAllUnsupportedCreateFieldsDirectly(t *testing.T) {
+	one := 1.0
+	fallbackID := int64(44)
+	input := &CreateGroupInput{
+		Name: "simple", Description: "allowed", Platform: PlatformAnthropic,
+		RateMultiplier: 9, IsExclusive: true, SubscriptionType: SubscriptionTypeSubscription,
+		DailyLimitUSD: &one, LongContextPricingEnabled: true,
+		ModelPricing:    []ChannelModelPricing{{Models: []string{"claude"}}},
+		PeakRateEnabled: true, PeakStart: "00:00", PeakEnd: "01:00", PeakRateMultiplier: &one,
+		ImageRateIndependent: true, ImageRateMultiplier: &one, VideoRateIndependent: true, VideoRateMultiplier: &one,
+		ImagePrice1K: &one, VideoPrice720P: &one, WebSearchPricePerCall: &one, SearchPricePer1k: &one,
+		AudioRealtimePricePerMin: &one, ClaudeCodeOnly: true, FallbackGroupID: &fallbackID,
+		ModelRouting: map[string][]int64{"claude": {1}}, ModelRoutingEnabled: true,
+		AllowMessagesDispatch: true, AllowLive: true, ForceOpenAIFast: true, RequireOAuthOnly: true,
+		RPMLimit: 99, MaxReasoningEffort: "high", ProfitControlEnabled: true, ProfitMinMargin: &one,
+		CopyAccountsFromGroupIDs: []int64{2},
+	}
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}, groupRepo: repo}
+
+	created, err := svc.CreateGroup(context.Background(), input)
+	require.NoError(t, err)
+	require.Same(t, repo.created, created)
+	require.Equal(t, CreateGroupInput{
+		Name: "simple", Description: "allowed", Platform: PlatformAnthropic,
+		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
+	}, *input)
+	require.Equal(t, 1.0, created.RateMultiplier)
+	require.Equal(t, SubscriptionTypeStandard, created.SubscriptionType)
+	require.False(t, created.IsExclusive)
+	require.Nil(t, created.FallbackGroupID)
+	require.Empty(t, created.ModelPricing)
+	require.Zero(t, created.RPMLimit)
+}
+
+func TestAdminServiceSimpleModeNormalizesAllUnsupportedUpdateFieldsDirectly(t *testing.T) {
+	one := 1.0
+	truth := true
+	status := "inactive"
+	description := "allowed"
+	fallbackID := int64(44)
+	pricing := []ChannelModelPricing{{Models: []string{"claude"}}}
+	input := &UpdateGroupInput{
+		Name: "renamed", Description: &description, Platform: PlatformOpenAI, Status: status,
+		RateMultiplier: &one, IsExclusive: &truth, SubscriptionType: SubscriptionTypeSubscription,
+		DailyLimitUSD: &one, LongContextPricingEnabled: &truth, ModelPricing: &pricing,
+		PeakRateEnabled: &truth, PeakRateMultiplier: &one, ImageRateIndependent: &truth,
+		ImageRateMultiplier: &one, VideoRateIndependent: &truth, VideoRateMultiplier: &one,
+		ImagePrice1K: &one, VideoPrice720P: &one, WebSearchPricePerCall: &one, SearchPricePer1k: &one,
+		AudioRealtimePricePerMin: &one, ClaudeCodeOnly: &truth, FallbackGroupID: &fallbackID,
+		ModelRouting: map[string][]int64{"claude": {1}}, ModelRoutingEnabled: &truth,
+		AllowMessagesDispatch: &truth, AllowLive: &truth, ForceOpenAIFast: &truth, RequireOAuthOnly: &truth,
+		RPMLimit: new(int), MaxReasoningEffort: ptrString("high"), ProfitControlEnabled: &truth,
+		ProfitMinMargin: &one, CopyAccountsFromGroupIDs: []int64{2},
+	}
+	existing := &Group{ID: 1, Name: "old", Description: "old description", Platform: PlatformAnthropic, Status: StatusActive, RateMultiplier: 3, RPMLimit: 8, FallbackGroupID: &fallbackID}
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}, groupRepo: repo}
+
+	updated, err := svc.UpdateGroup(context.Background(), 1, input)
+	require.NoError(t, err)
+	require.Equal(t, UpdateGroupInput{Name: "renamed", Description: &description}, *input)
+	require.Equal(t, "renamed", updated.Name)
+	require.Equal(t, description, updated.Description)
+	require.Equal(t, PlatformAnthropic, updated.Platform)
+	require.Equal(t, StatusActive, updated.Status)
+	require.Equal(t, 3.0, updated.RateMultiplier)
+	require.Equal(t, 8, updated.RPMLimit)
+	require.Equal(t, &fallbackID, updated.FallbackGroupID)
+}
+
+func TestAdminServiceSimpleModeListUsesRepositoryFilteredTotal(t *testing.T) {
+	repo := &groupRepoStubForAdmin{
+		listWithFiltersGroups: []Group{{ID: 2, Platform: PlatformAnthropic}},
+		listWithFiltersResult: &pagination.PaginationResult{Total: 11, Page: 2, PageSize: 1},
+	}
+	svc := &adminServiceImpl{cfg: &config.Config{RunMode: config.RunModeSimple}, groupRepo: repo}
+	groups, total, err := svc.ListGroups(context.Background(), 2, 1, "", "", "", nil, "id", "asc")
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.EqualValues(t, 11, total)
 }
 
 func (s *groupRepoStubForAdmin) ListActive(_ context.Context) ([]Group, error) {
@@ -267,6 +450,42 @@ func TestAdminService_CreateGroup_WithImagePricing(t *testing.T) {
 	require.InDelta(t, 0.30, *repo.created.ImagePrice4K, 0.0001)
 }
 
+func TestAdminService_CreateGroup_WithVideoPricing(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	price480P := 0.08
+	price720P := 0.12
+	price1080P := 0.18
+	videoMultiplier := 0.75
+
+	input := &CreateGroupInput{
+		Name:                 "grok-video",
+		Description:          "Grok video group",
+		Platform:             PlatformGrok,
+		RateMultiplier:       1.0,
+		VideoRateIndependent: true,
+		VideoRateMultiplier:  &videoMultiplier,
+		VideoPrice480P:       &price480P,
+		VideoPrice720P:       &price720P,
+		VideoPrice1080P:      &price1080P,
+	}
+
+	group, err := svc.CreateGroup(context.Background(), input)
+	require.NoError(t, err)
+	require.NotNil(t, group)
+
+	require.NotNil(t, repo.created)
+	require.True(t, repo.created.VideoRateIndependent)
+	require.InDelta(t, 0.75, repo.created.VideoRateMultiplier, 1e-12)
+	require.NotNil(t, repo.created.VideoPrice480P)
+	require.NotNil(t, repo.created.VideoPrice720P)
+	require.NotNil(t, repo.created.VideoPrice1080P)
+	require.InDelta(t, 0.08, *repo.created.VideoPrice480P, 0.0001)
+	require.InDelta(t, 0.12, *repo.created.VideoPrice720P, 0.0001)
+	require.InDelta(t, 0.18, *repo.created.VideoPrice1080P, 0.0001)
+}
+
 // TestAdminService_CreateGroup_NilImagePricing 测试 ImagePrice 为 nil 时正常创建
 func TestAdminService_CreateGroup_NilImagePricing(t *testing.T) {
 	repo := &groupRepoStubForAdmin{}
@@ -398,6 +617,42 @@ func TestAdminService_UpdateGroup_WithImagePricing(t *testing.T) {
 	require.InDelta(t, 0.12, *repo.updated.ImagePrice1K, 0.0001)
 	require.InDelta(t, 0.18, *repo.updated.ImagePrice2K, 0.0001)
 	require.InDelta(t, 0.36, *repo.updated.ImagePrice4K, 0.0001)
+}
+
+func TestAdminService_UpdateGroup_WithVideoPricing(t *testing.T) {
+	existingGroup := &Group{
+		ID:       1,
+		Name:     "existing-grok",
+		Platform: PlatformGrok,
+		Status:   StatusActive,
+	}
+	repo := &groupRepoStubForAdmin{getByID: existingGroup}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	price480P := 0.09
+	price720P := 0.13
+	price1080P := 0.19
+	videoMultiplier := 0.6
+	independent := true
+
+	input := &UpdateGroupInput{
+		VideoRateIndependent: &independent,
+		VideoRateMultiplier:  &videoMultiplier,
+		VideoPrice480P:       &price480P,
+		VideoPrice720P:       &price720P,
+		VideoPrice1080P:      &price1080P,
+	}
+
+	group, err := svc.UpdateGroup(context.Background(), 1, input)
+	require.NoError(t, err)
+	require.NotNil(t, group)
+
+	require.NotNil(t, repo.updated)
+	require.True(t, repo.updated.VideoRateIndependent)
+	require.InDelta(t, 0.6, repo.updated.VideoRateMultiplier, 1e-12)
+	require.InDelta(t, 0.09, *repo.updated.VideoPrice480P, 0.0001)
+	require.InDelta(t, 0.13, *repo.updated.VideoPrice720P, 0.0001)
+	require.InDelta(t, 0.19, *repo.updated.VideoPrice1080P, 0.0001)
 }
 
 // TestAdminService_UpdateGroup_PartialImagePricing 测试仅更新部分 ImagePrice 字段
@@ -660,6 +915,204 @@ func TestAdminService_UpdateGroup_InvalidatesAuthCacheOnRPMLimitChange(t *testin
 	require.Equal(t, []int64{1}, invalidator.groupIDs, "分组 RPMLimit 写入 auth snapshot，变更后必须失效 API Key 认证缓存")
 }
 
+func TestAdminService_UpdateGroup_ReasoningEffortMappingsTriState(t *testing.T) {
+	tests := []struct {
+		name  string
+		input *UpdateGroupInput
+		want  []ReasoningEffortMapping
+	}{
+		{
+			name:  "nil preserves existing mappings",
+			input: &UpdateGroupInput{},
+			want:  []ReasoningEffortMapping{{From: "max", To: "xhigh"}},
+		},
+		{
+			name: "empty array clears mappings",
+			input: func() *UpdateGroupInput {
+				empty := []ReasoningEffortMapping{}
+				return &UpdateGroupInput{ReasoningEffortMappings: &empty}
+			}(),
+			want: []ReasoningEffortMapping{},
+		},
+		{
+			name: "non empty array replaces and canonicalizes mappings",
+			input: func() *UpdateGroupInput {
+				replacement := []ReasoningEffortMapping{{From: " X-HIGH ", To: " high "}}
+				return &UpdateGroupInput{ReasoningEffortMappings: &replacement}
+			}(),
+			want: []ReasoningEffortMapping{{From: "xhigh", To: "high"}},
+		},
+		{
+			name: "model scoped mappings are canonicalized independently",
+			input: func() *UpdateGroupInput {
+				replacement := []ReasoningEffortMapping{
+					{From: " MAX ", To: " low ", MatchType: "PREFIX", Model: " gpt "},
+					{From: "max", To: "medium", Model: "gpt-5.4"},
+				}
+				return &UpdateGroupInput{ReasoningEffortMappings: &replacement}
+			}(),
+			want: []ReasoningEffortMapping{
+				{From: "max", To: "low", MatchType: "prefix", Model: "gpt"},
+				{From: "max", To: "medium", MatchType: "exact", Model: "gpt-5.4"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			existing := &Group{
+				ID:                      1,
+				Name:                    "openai-group",
+				Platform:                PlatformOpenAI,
+				Status:                  StatusActive,
+				ReasoningEffortMappings: []ReasoningEffortMapping{{From: "max", To: "xhigh"}},
+			}
+			repo := &groupRepoStubForAdmin{getByID: existing}
+			svc := &adminServiceImpl{groupRepo: repo}
+
+			_, err := svc.UpdateGroup(context.Background(), existing.ID, tt.input)
+
+			require.NoError(t, err)
+			require.Equal(t, tt.want, repo.updated.ReasoningEffortMappings)
+		})
+	}
+}
+
+func TestAdminService_UpdateGroup_RejectsInvalidReasoningEffortMappings(t *testing.T) {
+	existing := &Group{
+		ID:               1,
+		Name:             "openai",
+		Platform:         PlatformOpenAI,
+		SubscriptionType: SubscriptionTypeStandard,
+		RateMultiplier:   1,
+		Status:           StatusActive,
+	}
+	repo := &groupRepoStubForInvalidRequestFallback{groups: map[int64]*Group{existing.ID: existing}}
+	svc := &adminServiceImpl{groupRepo: repo}
+	invalid := []ReasoningEffortMapping{
+		{From: "max", To: "xhigh"},
+		{From: " MAX ", To: "high"},
+	}
+
+	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{
+		ReasoningEffortMappings: &invalid,
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate reasoning effort mapping source")
+	require.Nil(t, repo.updated)
+}
+
+func TestAdminService_UpdateGroup_ClearsReasoningPolicyForUnsupportedPlatform(t *testing.T) {
+	existing := &Group{
+		ID:                          1,
+		Name:                        "openai-group",
+		Platform:                    PlatformOpenAI,
+		Status:                      StatusActive,
+		MaxReasoningEffort:          "medium",
+		MaxReasoningEffortOverLimit: ReasoningEffortOverLimitDeny,
+		ReasoningEffortMappings:     []ReasoningEffortMapping{{From: "max", To: "xhigh"}},
+	}
+	repo := &groupRepoStubForAdmin{getByID: existing}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	_, err := svc.UpdateGroup(context.Background(), existing.ID, &UpdateGroupInput{Platform: PlatformGemini})
+
+	require.NoError(t, err)
+	require.Empty(t, repo.updated.MaxReasoningEffort)
+	require.Equal(t, ReasoningEffortOverLimitDowngrade, repo.updated.MaxReasoningEffortOverLimit)
+	require.Empty(t, repo.updated.ReasoningEffortMappings)
+}
+
+func TestAdminService_CreateGroup_InvalidPeakRateReturnsBadRequest(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name:             "subscription-group",
+		RateMultiplier:   1,
+		Platform:         PlatformOpenAI,
+		SubscriptionType: SubscriptionTypeSubscription,
+		PeakRateEnabled:  true,
+		PeakStart:        "20:00",
+		PeakEnd:          "08:30",
+	})
+
+	require.ErrorContains(t, err, "peak_end")
+	require.Equal(t, http.StatusBadRequest, infraerrors.Code(err))
+	require.Equal(t, "INVALID_PEAK_RATE_CONFIG", infraerrors.Reason(err))
+	require.Nil(t, repo.created)
+}
+
+func TestAdminService_UpdateGroup_PeakRateValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   UpdateGroupInput
+		wantErr bool
+	}{
+		{"cross-day window", UpdateGroupInput{PeakStart: ptrString("20:00"), PeakEnd: ptrString("08:30")}, true},
+		{"partial update invalidates window", UpdateGroupInput{PeakEnd: ptrString("08:30")}, true},
+		{"partial update keeps valid window", UpdateGroupInput{PeakEnd: ptrString("19:00")}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &groupRepoStubForAdmin{getByID: &Group{
+				ID:                 1,
+				Name:               "subscription-group",
+				Platform:           PlatformOpenAI,
+				Status:             StatusActive,
+				SubscriptionType:   SubscriptionTypeSubscription,
+				PeakRateEnabled:    true,
+				PeakStart:          "14:00",
+				PeakEnd:            "18:00",
+				PeakRateMultiplier: 3,
+			}}
+			svc := &adminServiceImpl{groupRepo: repo}
+
+			_, err := svc.UpdateGroup(context.Background(), 1, &tt.input)
+
+			if tt.wantErr {
+				require.ErrorContains(t, err, "peak_end")
+				require.Equal(t, http.StatusBadRequest, infraerrors.Code(err))
+				require.Equal(t, "INVALID_PEAK_RATE_CONFIG", infraerrors.Reason(err))
+				require.Nil(t, repo.updated)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, repo.updated)
+				require.Equal(t, "19:00", repo.updated.PeakEnd)
+			}
+		})
+	}
+}
+
+func TestAdminService_UpdateGroup_ClearsPeakRateWhenChangingToStandard(t *testing.T) {
+	existingGroup := &Group{
+		ID:                 1,
+		Name:               "existing-group",
+		Platform:           PlatformOpenAI,
+		Status:             StatusActive,
+		SubscriptionType:   SubscriptionTypeSubscription,
+		PeakRateEnabled:    true,
+		PeakStart:          "14:00",
+		PeakEnd:            "18:00",
+		PeakRateMultiplier: 3,
+	}
+	repo := &groupRepoStubForAdmin{getByID: existingGroup}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	group, err := svc.UpdateGroup(context.Background(), 1, &UpdateGroupInput{
+		SubscriptionType: SubscriptionTypeStandard,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.NotNil(t, repo.updated)
+	require.Equal(t, SubscriptionTypeStandard, repo.updated.SubscriptionType)
+	require.False(t, repo.updated.PeakRateEnabled)
+	require.Equal(t, "", repo.updated.PeakStart)
+	require.Equal(t, "", repo.updated.PeakEnd)
+	require.Equal(t, 1.0, repo.updated.PeakRateMultiplier)
+}
+
 func TestAdminService_CreateGroup_NormalizesMessagesDispatchModelConfig(t *testing.T) {
 	repo := &groupRepoStubForAdmin{}
 	svc := &adminServiceImpl{groupRepo: repo}
@@ -730,6 +1183,7 @@ func TestAdminService_CreateGroup_ClearsMessagesDispatchFieldsForNonOpenAIPlatfo
 		Platform:              PlatformAnthropic,
 		RateMultiplier:        1.0,
 		AllowMessagesDispatch: true,
+		AllowLive:             true,
 		DefaultMappedModel:    "gpt-5.4",
 		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
 			OpusMappedModel: "gpt-5.4",
@@ -739,8 +1193,111 @@ func TestAdminService_CreateGroup_ClearsMessagesDispatchFieldsForNonOpenAIPlatfo
 	require.NotNil(t, group)
 	require.NotNil(t, repo.created)
 	require.False(t, repo.created.AllowMessagesDispatch)
+	require.False(t, repo.created.AllowLive)
 	require.Empty(t, repo.created.DefaultMappedModel)
 	require.Equal(t, OpenAIMessagesDispatchModelConfig{}, repo.created.MessagesDispatchModelConfig)
+}
+
+func TestAdminService_CreateCompositeGroupPreservesLive(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name:           "composite-group",
+		Platform:       PlatformComposite,
+		RateMultiplier: 1.0,
+		AllowLive:      true,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.NotNil(t, repo.created)
+	require.True(t, repo.created.AllowLive)
+}
+
+func TestAdminService_CreateGroup_NormalizesForceOpenAIFastByPlatform(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		platform string
+		want     bool
+	}{
+		{name: "openai", platform: PlatformOpenAI, want: true},
+		{name: "composite", platform: PlatformComposite, want: true},
+		{name: "anthropic", platform: PlatformAnthropic, want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &groupRepoStubForAdmin{}
+			svc := &adminServiceImpl{groupRepo: repo}
+
+			group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+				Name: "fast-" + tt.name, Platform: tt.platform, RateMultiplier: 1, ForceOpenAIFast: true, FreeOpenAIFast: true,
+			})
+
+			require.NoError(t, err)
+			require.NotNil(t, group)
+			require.Equal(t, tt.want, repo.created.ForceOpenAIFast)
+			require.Equal(t, tt.want, repo.created.FreeOpenAIFast)
+		})
+	}
+}
+
+func TestAdminService_UpdateGroup_ClearsForceOpenAIFastWhenPlatformChanges(t *testing.T) {
+	existingGroup := &Group{
+		ID: 1, Name: "existing-fast", Platform: PlatformOpenAI, Status: StatusActive, ForceOpenAIFast: true, FreeOpenAIFast: true,
+	}
+	repo := &groupRepoStubForAdmin{getByID: existingGroup}
+	svc := &adminServiceImpl{groupRepo: repo}
+
+	group, err := svc.UpdateGroup(context.Background(), existingGroup.ID, &UpdateGroupInput{
+		Platform: PlatformAnthropic,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.False(t, repo.updated.ForceOpenAIFast)
+	require.False(t, repo.updated.FreeOpenAIFast)
+}
+
+func TestAdminService_UpdateGroup_ForceOpenAIFastInvalidatesAuthCache(t *testing.T) {
+	existingGroup := &Group{
+		ID: 1, Name: "existing-fast", Platform: PlatformOpenAI, Status: StatusActive,
+	}
+	repo := &groupRepoStubForAdmin{getByID: existingGroup}
+	invalidator := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{groupRepo: repo, authCacheInvalidator: invalidator}
+	enabled := true
+
+	group, err := svc.UpdateGroup(context.Background(), existingGroup.ID, &UpdateGroupInput{
+		ForceOpenAIFast: &enabled,
+		FreeOpenAIFast:  &enabled,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.True(t, repo.updated.ForceOpenAIFast)
+	require.True(t, repo.updated.FreeOpenAIFast)
+	require.Equal(t, []int64{existingGroup.ID}, invalidator.groupIDs)
+}
+
+func TestAdminService_UpdateCompositeGroupPreservesLive(t *testing.T) {
+	existingGroup := &Group{
+		ID:       1,
+		Name:     "composite-group",
+		Platform: PlatformComposite,
+		Status:   StatusActive,
+	}
+	repo := &groupRepoStubForAdmin{getByID: existingGroup}
+	svc := &adminServiceImpl{groupRepo: repo}
+	allowLive := true
+
+	group, err := svc.UpdateGroup(context.Background(), existingGroup.ID, &UpdateGroupInput{
+		AllowLive: &allowLive,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.NotNil(t, repo.updated)
+	require.True(t, repo.updated.AllowLive)
 }
 
 func TestAdminService_UpdateGroup_ClearsMessagesDispatchFieldsWhenPlatformChangesAwayFromOpenAI(t *testing.T) {
@@ -750,6 +1307,7 @@ func TestAdminService_UpdateGroup_ClearsMessagesDispatchFieldsWhenPlatformChange
 		Platform:              PlatformOpenAI,
 		Status:                StatusActive,
 		AllowMessagesDispatch: true,
+		AllowLive:             true,
 		DefaultMappedModel:    "gpt-5.4",
 		MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
 			SonnetMappedModel: "gpt-5.3-codex",
@@ -766,6 +1324,7 @@ func TestAdminService_UpdateGroup_ClearsMessagesDispatchFieldsWhenPlatformChange
 	require.NotNil(t, repo.updated)
 	require.Equal(t, PlatformAnthropic, repo.updated.Platform)
 	require.False(t, repo.updated.AllowMessagesDispatch)
+	require.False(t, repo.updated.AllowLive)
 	require.Empty(t, repo.updated.DefaultMappedModel)
 	require.Equal(t, OpenAIMessagesDispatchModelConfig{}, repo.updated.MessagesDispatchModelConfig)
 }

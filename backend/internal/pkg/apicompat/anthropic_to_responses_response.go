@@ -28,6 +28,19 @@ func encodeAnthropicThinking(block AnthropicContentBlock) string {
 // Non-streaming: AnthropicResponse → ResponsesResponse
 // ---------------------------------------------------------------------------
 
+const anthropicThinkingEnvelopePrefix = "anthropic-thinking-v1:"
+
+func encodeAnthropicThinking(block AnthropicContentBlock) string {
+	// Only fields belonging to the signed thinking block are retained.
+	payload, _ := json.Marshal(struct {
+		Type      string `json:"type"`
+		Thinking  string `json:"thinking"`
+		Signature string `json:"signature,omitempty"`
+		Data      string `json:"data,omitempty"`
+	}{block.Type, block.Thinking, block.Signature, block.Data})
+	return anthropicThinkingEnvelopePrefix + base64.RawStdEncoding.EncodeToString(payload)
+}
+
 // AnthropicToResponsesResponse converts an Anthropic Messages response into a
 // Responses API response. This is the reverse of ResponsesToAnthropic and
 // enables Anthropic upstream responses to be returned in OpenAI Responses format.
@@ -37,10 +50,13 @@ func AnthropicToResponsesResponse(resp *AnthropicResponse) *ResponsesResponse {
 		id = generateResponsesID()
 	}
 
+	// Anthropic responses carry no creation timestamp, so stamp now — the same
+	// synthesize-what-the-client-requires rule the generated id above follows.
 	out := &ResponsesResponse{
-		ID:     id,
-		Object: "response",
-		Model:  resp.Model,
+		ID:        id,
+		Object:    "response",
+		CreatedAt: time.Now().Unix(),
+		Model:     resp.Model,
 	}
 
 	var outputs []ResponsesOutput
@@ -330,6 +346,11 @@ func anthToResHandleContentBlockStart(evt *AnthropicStreamEvent, state *Anthropi
 	case "text":
 		// If we don't have an open message item, open one
 		if state.CurrentItemType != "message" {
+			// 走到这里时 CurrentItemType 只可能是 ""（前一个 reasoning/function_call
+			// 已在自己的 content_block_stop 里关闭）；保留这次关闭是为了让三个分支
+			// 的「开新 item 前先关旧的」保持同一条不变式，而不是留一个仅 text 例外。
+			events = append(events, closeCurrentResponsesItem(state)...)
+
 			state.CurrentItemID = generateItemID()
 			state.CurrentItemType = "message"
 			state.ContentIndex = 0
@@ -504,7 +525,7 @@ func anthToResHandleContentBlockStop(evt *AnthropicStreamEvent, state *Anthropic
 		return []ResponsesStreamEvent{
 			makeResponsesEvent(state, "response.output_text.done", &ResponsesStreamEvent{
 				OutputIndex:  state.OutputIndex,
-				ContentIndex: state.ContentIndex,
+				ContentIndex: contentIndex,
 				ItemID:       state.CurrentItemID,
 				Text:         text,
 			}),
@@ -639,11 +660,12 @@ func makeResponsesCreatedEvent(state *AnthropicEventToResponsesState) ResponsesS
 		Type:           "response.created",
 		SequenceNumber: seq,
 		Response: &ResponsesResponse{
-			ID:     state.ResponseID,
-			Object: "response",
-			Model:  state.Model,
-			Status: "in_progress",
-			Output: []ResponsesOutput{},
+			ID:        state.ResponseID,
+			Object:    "response",
+			CreatedAt: state.Created,
+			Model:     state.Model,
+			Status:    "in_progress",
+			Output:    []ResponsesOutput{},
 		},
 	}
 }
@@ -688,6 +710,7 @@ func makeResponsesCompletedEvent(
 		Response: &ResponsesResponse{
 			ID:                state.ResponseID,
 			Object:            "response",
+			CreatedAt:         state.Created,
 			Model:             state.Model,
 			Status:            status,
 			Output:            outputs,

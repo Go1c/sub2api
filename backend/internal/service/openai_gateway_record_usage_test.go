@@ -154,6 +154,14 @@ func (s *openAIRecordUsageUserRepoStub) DeductBalance(ctx context.Context, id in
 	return s.deductErr
 }
 
+func (s *openAIRecordUsageUserRepoStub) AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error) {
+	panic("unexpected AdjustBalance call")
+}
+
+func (s *openAIRecordUsageUserRepoStub) SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error) {
+	panic("unexpected SetBalance call")
+}
+
 type openAIRecordUsageSubRepoStub struct {
 	UserSubscriptionRepository
 
@@ -246,6 +254,17 @@ func newOpenAIRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo U
 		"service.openai_gateway.test",
 	)
 	return svc
+}
+
+func openAIRecordUsageAPIKeyWithGroup(svc *OpenAIGatewayService, id int64, groupLongContext bool) *APIKey {
+	svc.resolver = NewModelPricingResolver(nil, svc.billingService)
+	return &APIKey{
+		ID: id,
+		Group: &Group{
+			ID:                        1,
+			LongContextPricingEnabled: groupLongContext,
+		},
+	}
 }
 
 func newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo UsageLogRepository, billingRepo UsageBillingRepository, userRepo UserRepository, subRepo UserSubscriptionRepository, rateRepo UserGroupRateRepository) *OpenAIGatewayService {
@@ -1166,7 +1185,7 @@ func TestOpenAIGatewayServiceRecordUsage_Gpt54LongContextBillingDisabledByDefaul
 			Model:    "gpt-5.4-2026-03-05",
 			Duration: time.Second,
 		},
-		APIKey:  &APIKey{ID: 1014},
+		APIKey:  openAIRecordUsageAPIKeyWithGroup(svc, 1014, false),
 		User:    &User{ID: 2014},
 		Account: &Account{ID: 3014, Platform: PlatformOpenAI},
 	})
@@ -1538,6 +1557,8 @@ func TestOpenAIGatewayServiceRecordUsage_UsesRequestedModelAndUpstreamModelMetad
 	require.Equal(t, serviceTier, *usageRepo.lastLog.ServiceTier)
 	require.NotNil(t, usageRepo.lastLog.ReasoningEffort)
 	require.Equal(t, reasoning, *usageRepo.lastLog.ReasoningEffort)
+	require.NotNil(t, usageRepo.lastLog.RequestedReasoningEffort)
+	require.Equal(t, reasoning, *usageRepo.lastLog.RequestedReasoningEffort)
 	require.NotNil(t, usageRepo.lastLog.UserAgent)
 	require.Equal(t, "codex-cli/1.0", *usageRepo.lastLog.UserAgent)
 	require.NotNil(t, usageRepo.lastLog.IPAddress)
@@ -1545,6 +1566,104 @@ func TestOpenAIGatewayServiceRecordUsage_UsesRequestedModelAndUpstreamModelMetad
 	require.NotNil(t, usageRepo.lastLog.GroupID)
 	require.Equal(t, int64(11), *usageRepo.lastLog.GroupID)
 	require.Equal(t, 1, userRepo.deductCalls)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_PersistsRequestedReasoningEffort(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+	requested := "max"
+	forwarded := "xhigh"
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:                "resp_requested_effort",
+			Model:                    "gpt-5.4",
+			ReasoningEffort:          &forwarded,
+			RequestedReasoningEffort: &requested,
+			Usage: OpenAIUsage{
+				InputTokens:  20,
+				OutputTokens: 10,
+			},
+			Duration: time.Second,
+		},
+		APIKey:  &APIKey{ID: 10},
+		User:    &User{ID: 20},
+		Account: &Account{ID: 30},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.ReasoningEffort)
+	require.Equal(t, forwarded, *usageRepo.lastLog.ReasoningEffort)
+	require.NotNil(t, usageRepo.lastLog.RequestedReasoningEffort)
+	require.Equal(t, requested, *usageRepo.lastLog.RequestedReasoningEffort)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_PreservesChannelMappedUpstreamModel(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "openai_channel_mapping_models",
+			Model:         "gpt-5.6-terra",
+			UpstreamModel: "gpt-5.6-terra",
+			Usage: OpenAIUsage{
+				InputTokens:  20,
+				OutputTokens: 10,
+			},
+			Duration: time.Second,
+		},
+		APIKey:  &APIKey{ID: 10},
+		User:    &User{ID: 20},
+		Account: &Account{ID: 30},
+		ChannelUsageFields: ChannelUsageFields{
+			OriginalModel:      "gpt-5.6-sol",
+			ChannelMappedModel: "gpt-5.6-terra",
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, "gpt-5.6-sol", usageRepo.lastLog.RequestedModel)
+	require.Equal(t, "gpt-5.6-terra", usageRepo.lastLog.Model)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModel)
+	require.Equal(t, "gpt-5.6-terra", *usageRepo.lastLog.UpstreamModel)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_PreservesLoopedChannelAndAccountUpstreamModel(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "openai_looped_mapping_models",
+			Model:         "gpt-5.6-terra",
+			UpstreamModel: "gpt-5.6-sol",
+			Usage:         OpenAIUsage{InputTokens: 20, OutputTokens: 10},
+			Duration:      time.Second,
+		},
+		APIKey:  &APIKey{ID: 10},
+		User:    &User{ID: 20},
+		Account: &Account{ID: 30},
+		ChannelUsageFields: ChannelUsageFields{
+			OriginalModel:      "gpt-5.6-sol",
+			ChannelMappedModel: "gpt-5.6-terra",
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, "gpt-5.6-sol", usageRepo.lastLog.RequestedModel)
+	require.Equal(t, "gpt-5.6-terra", usageRepo.lastLog.Model)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModel)
+	require.Equal(t, "gpt-5.6-sol", *usageRepo.lastLog.UpstreamModel)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_BillsMappedRequestsUsingRequestedModel(t *testing.T) {

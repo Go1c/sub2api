@@ -17,6 +17,7 @@ type Group struct {
 	ID             int64
 	Name           string
 	Description    string
+	I18n           GroupI18n // 名称与描述的界面语言译文；缺失的语言沿用 Name/Description
 	Platform       string
 	RateMultiplier float64
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
@@ -91,6 +92,9 @@ type Group struct {
 
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	AllowMessagesDispatch       bool
+	AllowLive                   bool
+	ForceOpenAIFast             bool // 强制 OpenAI 网关请求使用 service_tier=priority
+	FreeOpenAIFast              bool // OpenAI Fast 请求按 Standard 价格向用户计费
 	RequireOAuthOnly            bool // 仅允许非 apikey 类型账号关联（OpenAI/Antigravity/Anthropic/Gemini）
 	RequirePrivacySet           bool // 调度时仅允许 privacy 已成功设置的账号（OpenAI/Antigravity/Anthropic/Gemini）
 	DefaultMappedModel          string
@@ -112,6 +116,12 @@ type Group struct {
 	AccountCount            int64
 	ActiveAccountCount      int64
 	RateLimitedAccountCount int64
+}
+
+// IsGroupBindableInSimpleMode is the shared policy for groups that may be
+// surfaced and bound to accounts while running in simple mode.
+func IsGroupBindableInSimpleMode(group *Group) bool {
+	return group != nil && group.Platform != PlatformComposite
 }
 
 func (g *Group) IsActive() bool {

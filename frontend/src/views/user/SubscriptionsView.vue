@@ -197,6 +197,14 @@ const resetWeeklyLimitConfirmMessage = computed(() => {
   return t('userSubscriptions.resetWeeklyLimitConfirm', { remaining })
 })
 
+function subscriptionHasPeakRate(subscription: UserSubscription): boolean {
+  return hasPeakRate(subscription.group)
+}
+
+function subscriptionPeakRateLabel(subscription: UserSubscription): string {
+  return formatPeakRateWindow(subscription.group, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
+}
+
 async function loadSubscriptions() {
   try {
     loading.value = true

@@ -9,6 +9,7 @@ export interface IntervalFormEntry {
   input_price: number | string | null
   output_price: number | string | null
   cache_write_price: number | string | null
+  cache_write_1h_price?: number | string | null
   cache_read_price: number | string | null
   input_multiplier?: number | string | null
   output_multiplier?: number | string | null
@@ -24,6 +25,7 @@ export interface PricingFormEntry {
   input_price: number | string | null
   output_price: number | string | null
   cache_write_price: number | string | null
+  cache_write_1h_price?: number | string | null
   cache_read_price: number | string | null
   fast_multiplier?: number | string | null
   flex_multiplier?: number | string | null
@@ -197,6 +199,7 @@ export function apiIntervalsToForm(intervals: PricingInterval[]): IntervalFormEn
     input_price: perTokenToMTok(iv.input_price),
     output_price: perTokenToMTok(iv.output_price),
     cache_write_price: perTokenToMTok(iv.cache_write_price),
+    cache_write_1h_price: perTokenToMTok(iv.cache_write_1h_price),
     cache_read_price: perTokenToMTok(iv.cache_read_price),
     input_multiplier: iv.input_multiplier,
     output_multiplier: iv.output_multiplier,
@@ -215,6 +218,7 @@ export function formIntervalsToAPI(intervals: IntervalFormEntry[]): PricingInter
     input_price: mTokToPerToken(iv.input_price),
     output_price: mTokToPerToken(iv.output_price),
     cache_write_price: mTokToPerToken(iv.cache_write_price),
+    cache_write_1h_price: mTokToPerToken(iv.cache_write_1h_price),
     cache_read_price: mTokToPerToken(iv.cache_read_price),
     input_multiplier: toNullableNumber(iv.input_multiplier),
     output_multiplier: toNullableNumber(iv.output_multiplier),
@@ -266,46 +270,105 @@ export function findModelConflict(models: string[]): [string, string] | null {
 
 // ── 区间校验 ──────────────────────────────────────────────
 
-/** 校验区间列表的合法性，返回错误消息；通过则返回 null */
-export function validateIntervals(intervals: IntervalFormEntry[]): string | null {
+/** 校验区间列表的合法性，返回错误消息；通过则返回 null
+ *
+ * mode 决定区间语义：
+ * - token：区间是上下文 token 数分段 (min, max]，不能重叠，无上限段必须放最后
+ * - per_request / image：区间是按 tier_label 分层（1K/2K/4K 等），后端按 label
+ *   匹配，不依赖 min/max，因此跳过重叠 / last-unlimited 校验
+ */
+export function validateIntervals(
+  intervals: IntervalFormEntry[],
+  mode: BillingMode,
+  t: TranslateFn,
+): string | null {
   if (!intervals || intervals.length === 0) return null
 
   // 按 min_tokens 排序（不修改原数组）
   const sorted = [...intervals].sort((a, b) => a.min_tokens - b.min_tokens)
 
   for (let i = 0; i < sorted.length; i++) {
-    const err = validateSingleInterval(sorted[i], i)
+    const err = validateSingleInterval(sorted[i], i, t)
     if (err) return err
   }
-  return checkIntervalOverlap(sorted)
+
+  // per_request / image 模式按 tier_label 匹配，不做 token 区间重叠校验
+  if (mode !== 'token') return null
+  return checkIntervalOverlap(sorted, t)
 }
 
-function validateSingleInterval(iv: IntervalFormEntry, idx: number): string | null {
+function intervalValidationMessage(
+  t: TranslateFn,
+  key: string,
+  params: Record<string, unknown>,
+): string {
+  return t(`admin.channels.intervalValidation.${key}`, params)
+}
+
+function intervalPriceLabel(t: TranslateFn, key: string): string {
+  return t(`admin.channels.intervalValidation.price.${key}`)
+}
+
+function validateSingleInterval(iv: IntervalFormEntry, idx: number, t: TranslateFn): string | null {
+  const index = idx + 1
   if (iv.min_tokens < 0) {
-    return `区间 #${idx + 1}: 最小 token 数 (${iv.min_tokens}) 不能为负数`
+    return intervalValidationMessage(
+      t,
+      'negativeMin',
+      { index, value: iv.min_tokens },
+    )
   }
   if (iv.max_tokens != null) {
     if (iv.max_tokens <= 0) {
-      return `区间 #${idx + 1}: 最大 token 数 (${iv.max_tokens}) 必须大于 0`
+      return intervalValidationMessage(
+        t,
+        'maxPositive',
+        { index, value: iv.max_tokens },
+      )
     }
     if (iv.max_tokens <= iv.min_tokens) {
-      return `区间 #${idx + 1}: 最大 token 数 (${iv.max_tokens}) 必须大于最小 token 数 (${iv.min_tokens})`
+      return intervalValidationMessage(
+        t,
+        'maxGreaterThanMin',
+        { index, max: iv.max_tokens, min: iv.min_tokens },
+      )
     }
   }
-  return validateIntervalPrices(iv, idx)
+  return validateIntervalPrices(iv, idx, t)
 }
 
-function validateIntervalPrices(iv: IntervalFormEntry, idx: number): string | null {
+function validateIntervalPrices(iv: IntervalFormEntry, idx: number, t: TranslateFn): string | null {
+  const index = idx + 1
   const prices: [string, number | string | null][] = [
-    ['输入价格', iv.input_price],
-    ['输出价格', iv.output_price],
-    ['缓存写入价格', iv.cache_write_price],
-    ['缓存读取价格', iv.cache_read_price],
-    ['单次价格', iv.per_request_price],
+    ['inputPrice', iv.input_price],
+    ['outputPrice', iv.output_price],
+    ['cacheWritePrice', iv.cache_write_price],
+    ['cacheWrite1hPrice', iv.cache_write_1h_price ?? null],
+    ['cacheReadPrice', iv.cache_read_price],
+    ['perRequestPrice', iv.per_request_price],
   ]
-  for (const [name, val] of prices) {
+  for (const [key, val] of prices) {
     if (val != null && val !== '' && Number(val) < 0) {
-      return `区间 #${idx + 1}: ${name}不能为负数`
+      const field = intervalPriceLabel(t, key)
+      return intervalValidationMessage(
+        t,
+        'negativePrice',
+        { index, field },
+      )
+    }
+  }
+  const multipliers: [string, number | string | null][] = [
+    ['inputMultiplier', iv.input_multiplier],
+    ['outputMultiplier', iv.output_multiplier],
+    ['cacheWriteMultiplier', iv.cache_write_multiplier],
+    ['cacheReadMultiplier', iv.cache_read_multiplier],
+  ]
+  for (const [key, val] of multipliers) {
+    if (!isValidPositiveMultiplier(val)) {
+      return intervalValidationMessage(t, 'multiplierPositive', {
+        index,
+        field: intervalPriceLabel(t, key),
+      })
     }
   }
   const multipliers: [string, number | string | null | undefined][] = [
@@ -322,18 +385,26 @@ function validateIntervalPrices(iv: IntervalFormEntry, idx: number): string | nu
   return null
 }
 
-function checkIntervalOverlap(sorted: IntervalFormEntry[]): string | null {
+function checkIntervalOverlap(sorted: IntervalFormEntry[], t: TranslateFn): string | null {
   for (let i = 0; i < sorted.length; i++) {
     // 无上限区间必须是最后一个
     if (sorted[i].max_tokens == null && i < sorted.length - 1) {
-      return `区间 #${i + 1}: 无上限区间（最大 token 数为空）只能是最后一个`
+      return intervalValidationMessage(
+        t,
+        'unboundedLast',
+        { index: i + 1 },
+      )
     }
     if (i === 0) continue
     const prev = sorted[i - 1]
     // (min, max] 语义：前一个区间上界 > 当前区间下界则重叠
     if (prev.max_tokens == null || prev.max_tokens > sorted[i].min_tokens) {
       const prevMax = prev.max_tokens == null ? '∞' : String(prev.max_tokens)
-      return `区间 #${i} 和 #${i + 1} 重叠：前一个区间上界 (${prevMax}) 大于当前区间下界 (${sorted[i].min_tokens})`
+      return intervalValidationMessage(
+        t,
+        'overlap',
+        { previousIndex: i, currentIndex: i + 1, previousMax: prevMax, currentMin: sorted[i].min_tokens },
+      )
     }
   }
   return null

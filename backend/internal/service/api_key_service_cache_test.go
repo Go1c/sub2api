@@ -50,7 +50,7 @@ func (s *authRepoStub) GetByKeyForAuth(ctx context.Context, key string) (*APIKey
 	return s.getByKeyForAuth(ctx, key)
 }
 
-func (s *authRepoStub) Update(ctx context.Context, key *APIKey) error {
+func (s *authRepoStub) Update(ctx context.Context, key *APIKey, _ APIKeyUpdateFields) error {
 	panic("unexpected Update call")
 }
 
@@ -59,6 +59,10 @@ func (s *authRepoStub) Delete(ctx context.Context, id int64) error {
 }
 func (s *authRepoStub) DeleteWithAudit(context.Context, int64) error {
 	panic("unexpected")
+}
+
+func (s *authRepoStub) DeleteWithAudit(ctx context.Context, id int64) error {
+	panic("unexpected DeleteWithAudit call")
 }
 
 func (s *authRepoStub) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
@@ -141,8 +145,8 @@ func (s *authCacheStub) IncrementCreateAttemptCount(ctx context.Context, userID 
 	return nil
 }
 
-func (s *authCacheStub) DeleteCreateAttemptCount(ctx context.Context, userID int64) error {
-	return nil
+func (s *authCacheStub) IncrementCreateCount(ctx context.Context, userID int64, window time.Duration) (int64, error) {
+	return 0, nil
 }
 
 func (s *authCacheStub) IncrementDailyUsage(ctx context.Context, apiKey string) error {
@@ -279,6 +283,48 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesMessagesDispatchModelConfig(t 
 	require.Equal(t, apiKey.Name, roundTrip.Name)
 	require.NotNil(t, roundTrip.Group)
 	require.Equal(t, apiKey.Group.MessagesDispatchModelConfig, roundTrip.Group.MessagesDispatchModelConfig)
+}
+
+func TestAPIKeyService_SnapshotRoundTrip_PreservesReasoningEffortPolicy(t *testing.T) {
+	svc := NewAPIKeyService(nil, nil, nil, nil, nil, nil, &config.Config{})
+	groupID := int64(9)
+	apiKey := &APIKey{
+		ID:      1,
+		UserID:  2,
+		GroupID: &groupID,
+		Key:     "k-reasoning-policy",
+		Status:  StatusActive,
+		User: &User{
+			ID:          2,
+			Status:      StatusActive,
+			Role:        RoleUser,
+			Balance:     10,
+			Concurrency: 3,
+		},
+		Group: &Group{
+			ID:                          groupID,
+			Name:                        "composite",
+			Platform:                    PlatformComposite,
+			Status:                      StatusActive,
+			SubscriptionType:            SubscriptionTypeStandard,
+			RateMultiplier:              1,
+			MaxReasoningEffort:          "medium",
+			MaxReasoningEffortOverLimit: ReasoningEffortOverLimitDeny,
+			ReasoningEffortMappings: []ReasoningEffortMapping{
+				{From: "max", To: "xhigh"},
+			},
+		},
+	}
+
+	snapshot := svc.snapshotFromAPIKey(context.Background(), apiKey)
+	roundTrip := svc.snapshotToAPIKey(apiKey.Key, snapshot)
+
+	require.NotNil(t, roundTrip)
+	require.NotNil(t, roundTrip.Group)
+	require.Equal(t, PlatformComposite, roundTrip.Group.Platform)
+	require.Equal(t, "medium", roundTrip.Group.MaxReasoningEffort)
+	require.Equal(t, ReasoningEffortOverLimitDeny, roundTrip.Group.MaxReasoningEffortOverLimit)
+	require.Equal(t, apiKey.Group.ReasoningEffortMappings, roundTrip.Group.ReasoningEffortMappings)
 }
 
 func TestAPIKeyService_GetByKey_IgnoresLegacyAuthCacheSnapshotWithoutMessagesDispatchConfig(t *testing.T) {

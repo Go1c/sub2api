@@ -1,50 +1,16 @@
 /**
  * Admin Ops API endpoints (vNext)
- * - Error logs list/detail + retry (client/upstream)
+ * - Error logs list/detail
  * - Dashboard overview (raw path)
  */
 
-import { apiClient } from '../client'
+import { apiClient, buildGatewayUrl } from '../client'
 import type { PaginatedResponse } from '@/types'
 
-export type OpsRetryMode = 'client' | 'upstream'
 export type OpsQueryMode = 'auto' | 'raw' | 'preagg'
 
 export interface OpsRequestOptions {
   signal?: AbortSignal
-}
-
-export interface OpsRetryRequest {
-  mode: OpsRetryMode
-  pinned_account_id?: number
-  force?: boolean
-}
-
-export interface OpsRetryAttempt {
-  id: number
-  created_at: string
-  requested_by_user_id: number
-  source_error_id: number
-  mode: string
-  pinned_account_id?: number | null
-  pinned_account_name?: string
-
-  status: string
-  started_at?: string | null
-  finished_at?: string | null
-  duration_ms?: number | null
-
-  success?: boolean | null
-  http_status_code?: number | null
-  upstream_request_id?: string | null
-  used_account_id?: number | null
-  used_account_name?: string
-  response_preview?: string | null
-  response_truncated?: boolean | null
-
-  result_request_id?: string | null
-  result_error_id?: number | null
-  error_message?: string | null
 }
 
 export type OpsUpstreamErrorEvent = {
@@ -54,31 +20,9 @@ export type OpsUpstreamErrorEvent = {
   account_name?: string
   upstream_status_code?: number
   upstream_request_id?: string
-  upstream_request_body?: string
   kind?: string
   message?: string
   detail?: string
-}
-
-export interface OpsRetryResult {
-  attempt_id: number
-  mode: OpsRetryMode
-  status: 'running' | 'succeeded' | 'failed' | string
-
-  pinned_account_id?: number | null
-  used_account_id?: number | null
-
-  http_status_code: number
-  upstream_request_id: string
-
-  response_preview: string
-  response_truncated: boolean
-
-  error_message: string
-
-  started_at: string
-  finished_at: string
-  duration_ms: number
 }
 
 export interface OpsDashboardOverview {
@@ -118,6 +62,14 @@ export interface OpsDashboardOverview {
     peak: number
     avg: number
   }
+
+  output_tps?: {
+    p5: number | null
+    p10: number | null
+    p50: number | null
+    avg: number | null
+    sample_count: number
+  } | null
 
   duration: OpsPercentiles
   ttft: OpsPercentiles
@@ -163,7 +115,7 @@ export interface OpsThroughputTrendResponse {
 
 export type OpsRequestKind = 'success' | 'error'
 export type OpsRequestDetailsKind = OpsRequestKind | 'all'
-export type OpsRequestDetailsSort = 'created_at_desc' | 'duration_desc'
+export type OpsRequestDetailsSort = 'created_at_desc' | 'duration_desc' | 'ttft_desc'
 
 export interface OpsRequestDetail {
   kind: OpsRequestKind
@@ -173,6 +125,7 @@ export interface OpsRequestDetail {
   platform?: string
   model?: string
   duration_ms?: number | null
+  first_token_ms?: number | null
   status_code?: number | null
 
   error_id?: number | null
@@ -649,9 +602,10 @@ export function subscribeQPS(onMessage: (data: any) => void, options: SubscribeQ
 
     isConnecting = true
     setStatus(hasConnectedOnce ? 'reconnecting' : 'connecting')
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsBaseUrl = options.wsBaseUrl || import.meta.env.VITE_WS_BASE_URL || window.location.host
-    const wsURL = new URL(`${protocol}//${wsBaseUrl}/api/v1/admin/ops/ws/qps`)
+    const wsBaseUrl = options.wsBaseUrl || import.meta.env.VITE_WS_BASE_URL
+    const wsURL = wsBaseUrl
+      ? new URL(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${wsBaseUrl}/api/v1/admin/ops/ws/qps`)
+      : new URL(buildGatewayUrl('/api/v1/admin/ops/ws/qps').replace(/^http/, 'ws'))
 
     // Do NOT put admin JWT in the URL query string (it can leak via access logs, proxies, etc).
     // Browsers cannot set Authorization headers for WebSockets, so we pass the token via
@@ -851,6 +805,7 @@ export interface OpsAccountErrorAlertConfig {
 export interface OpsAdvancedSettings {
   data_retention: OpsDataRetentionSettings
   aggregation: OpsAggregationSettings
+  openai_account_quota_auto_pause: OpsOpenAIAccountQuotaAutoPauseSettings
   ignore_count_tokens_errors: boolean
   ignore_context_canceled: boolean
   ignore_no_available_accounts: boolean
@@ -876,12 +831,14 @@ export interface OpsAggregationSettings {
 
 export interface OpsRuntimeLogConfig {
   level: 'debug' | 'info' | 'warn' | 'error'
+  persist_access_logs: boolean
   enable_sampling: boolean
   sampling_initial: number
   sampling_thereafter: number
   caller: boolean
   stacktrace_level: 'none' | 'error' | 'fatal'
   retention_days: number
+  request_retention_days: number
   source?: string
   updated_at?: string
   updated_by_user_id?: number
@@ -918,6 +875,7 @@ export interface OpsSystemLogQuery {
   request_id?: string
   client_request_id?: string
   user_id?: number | null
+  api_key_id?: number | null
   account_id?: number | null
   platform?: string
   model?: string
@@ -933,6 +891,7 @@ export interface OpsSystemLogCleanupRequest {
   request_id?: string
   client_request_id?: string
   user_id?: number | null
+  api_key_id?: number | null
   account_id?: number | null
   platform?: string
   model?: string
@@ -964,13 +923,9 @@ export interface OpsErrorLog {
   platform: string
   model: string
 
-  is_retryable: boolean
-  retry_count: number
-
   resolved: boolean
   resolved_at?: string | null
   resolved_by_user_id?: number | null
-  resolved_retry_id?: number | null
 
   client_request_id: string
   request_id: string
@@ -1019,10 +974,6 @@ export interface OpsErrorDetail extends OpsErrorLog {
   upstream_latency_ms?: number | null
   response_latency_ms?: number | null
   time_to_first_token_ms?: number | null
-
-  request_body: string
-  request_body_truncated: boolean
-  request_body_bytes?: number | null
 
   is_business_limited: boolean
 
@@ -1200,16 +1151,6 @@ export async function getErrorLogDetail(id: number): Promise<OpsErrorDetail> {
   return data
 }
 
-export async function retryErrorRequest(id: number, req: OpsRetryRequest): Promise<OpsRetryResult> {
-  const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/errors/${id}/retry`, req)
-  return data
-}
-
-export async function listRetryAttempts(errorId: number, limit = 50): Promise<OpsRetryAttempt[]> {
-  const { data } = await apiClient.get<OpsRetryAttempt[]>(`/admin/ops/errors/${errorId}/retries`, { params: { limit } })
-  return data
-}
-
 export async function updateErrorResolved(errorId: number, resolved: boolean): Promise<void> {
   await apiClient.put(`/admin/ops/errors/${errorId}/resolve`, { resolved })
 }
@@ -1232,21 +1173,6 @@ export async function getRequestErrorDetail(id: number): Promise<OpsErrorDetail>
 
 export async function getUpstreamErrorDetail(id: number): Promise<OpsErrorDetail> {
   const { data } = await apiClient.get<OpsErrorDetail>(`/admin/ops/upstream-errors/${id}`)
-  return data
-}
-
-export async function retryRequestErrorClient(id: number): Promise<OpsRetryResult> {
-  const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/request-errors/${id}/retry-client`, {})
-  return data
-}
-
-export async function retryRequestErrorUpstreamEvent(id: number, idx: number): Promise<OpsRetryResult> {
-  const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/request-errors/${id}/upstream-errors/${idx}/retry`, {})
-  return data
-}
-
-export async function retryUpstreamError(id: number): Promise<OpsRetryResult> {
-  const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/upstream-errors/${id}/retry`, {})
   return data
 }
 
@@ -1536,8 +1462,6 @@ export const opsAPI = {
   // Legacy unified endpoints
   listErrorLogs,
   getErrorLogDetail,
-  retryErrorRequest,
-  listRetryAttempts,
   updateErrorResolved,
 
   // New split endpoints
@@ -1545,9 +1469,6 @@ export const opsAPI = {
   listUpstreamErrors,
   getRequestErrorDetail,
   getUpstreamErrorDetail,
-  retryRequestErrorClient,
-  retryRequestErrorUpstreamEvent,
-  retryUpstreamError,
   updateRequestErrorResolved,
   updateUpstreamErrorResolved,
   listRequestErrorUpstreamErrors,

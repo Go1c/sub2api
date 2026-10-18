@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -181,6 +182,8 @@ func RegisterGatewayRoutes(
 		// Codex manifest format; other clients keep the OpenAI-style list.
 		gateway.GET("/models", modelsHandler)
 		gateway.GET("/usage", h.Gateway.Usage)
+		gateway.POST("/live", h.OpenAIGateway.Live)
+		gateway.GET("/live/:call_id", h.OpenAIGateway.LiveSideband)
 		// OpenAI Responses API: auto-route based on group platform
 		gateway.POST("/responses", func(c *gin.Context) {
 			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
@@ -199,6 +202,10 @@ func RegisterGatewayRoutes(
 				return
 			}
 			h.Gateway.Responses(c)
+		}))
+		gateway.POST("/alpha/search", textBodyLimit, h.OpenAIGateway.AlphaSearch)
+		gateway.GET("/responses", func(c *gin.Context) {
+			h.OpenAIGateway.ResponsesWebSocket(c)
 		})
 		gateway.POST("/alpha/search", textBodyLimit, h.OpenAIGateway.AlphaSearch)
 		gateway.POST("/x_search", textBodyLimit, func(c *gin.Context) {
@@ -274,6 +281,12 @@ func RegisterGatewayRoutes(
 		gemini.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)
 		// Gin treats ":" as a param marker, but Gemini uses "{model}:{action}" in the same segment.
 		gemini.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
+		// 显式上下文缓存：网关自管资源 ID 与账号绑定，list/get 只读本地记录。
+		gemini.POST("/cachedContents", h.Gateway.GeminiCachedContentsCreate)
+		gemini.GET("/cachedContents", h.Gateway.GeminiCachedContentsList)
+		gemini.GET("/cachedContents/:cacheID", h.Gateway.GeminiCachedContentsGet)
+		gemini.PATCH("/cachedContents/:cacheID", h.Gateway.GeminiCachedContentsPatch)
+		gemini.DELETE("/cachedContents/:cacheID", h.Gateway.GeminiCachedContentsDelete)
 	}
 
 	// OpenAI Responses API（不带v1前缀的别名）— auto-route based on group platform
@@ -313,6 +326,8 @@ func RegisterGatewayRoutes(
 	codexDirect := r.Group("/backend-api/codex")
 	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic)
 	{
+		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
+		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
 		codexDirect.POST("/responses", responsesHandler)
 		codexDirect.POST("/responses/*subpath", responsesHandler)
 		codexDirect.POST("/alpha/search", textBodyLimit, h.OpenAIGateway.AlphaSearch)
@@ -364,6 +379,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(endpointNorm)
 	antigravityV1.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
+	antigravityV1.Use(groupModelAllowlist)
 	antigravityV1.Use(requireGroupAnthropic)
 	{
 		antigravityV1.POST("/messages", h.Gateway.Messages)
@@ -379,6 +395,7 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(endpointNorm)
 	antigravityV1Beta.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1Beta.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	antigravityV1Beta.Use(groupModelAllowlist)
 	antigravityV1Beta.Use(requireGroupGoogle)
 	{
 		antigravityV1Beta.GET("/models", h.Gateway.GeminiV1BetaListModels)
@@ -386,6 +403,14 @@ func RegisterGatewayRoutes(
 		antigravityV1Beta.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
 	}
 
+}
+
+func dispatchCodexModelsGateway(c *gin.Context, openAIHandler, generatedHandler gin.HandlerFunc) {
+	if getGroupPlatform(c) == service.PlatformOpenAI {
+		openAIHandler(c)
+		return
+	}
+	generatedHandler(c)
 }
 
 // getGroupPlatform extracts the group platform from the API Key stored in context.

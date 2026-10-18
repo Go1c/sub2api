@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,14 +11,20 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 )
 
 // --- Refund Flow ---
+
+var createPaymentProviderFromInstance = provider.CreateProvider
 
 // getOrderProviderInstance looks up the provider instance that processed this order.
 // For legacy orders without provider_instance_id, it resolves only when the
@@ -204,6 +211,7 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	if err != nil {
 		return nil, nil, infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
+	// REFUND_PENDING 只能通过 QueryAndFinalizeRefund 收敛：重新发起会重复扣减并向网关重复退款。
 	ok := []string{OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundFailed}
 	if !psSliceContains(ok, o.Status) {
 		return nil, nil, infraerrors.BadRequest("INVALID_STATUS", "order status does not allow refund")
@@ -227,7 +235,8 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	if amt <= 0 {
 		amt = o.Amount
 	}
-	if amt-o.Amount > amountToleranceCNY {
+	orderCurrency := PaymentOrderCurrency(o)
+	if amt-o.Amount > paymentAmountToleranceForCurrency(orderCurrency) {
 		return nil, nil, infraerrors.BadRequest("REFUND_AMOUNT_EXCEEDED", "refund amount exceeds recharge")
 	}
 	currency := paymentOrderSettlementCurrency(o)
@@ -333,6 +342,26 @@ func (s *PaymentService) restoreCreditSubscriptionAfterFailedRefund(ctx context.
 	return nil
 }
 
+type availableBalanceDeductor interface {
+	DeductAvailableBalance(ctx context.Context, id int64, amount float64) (float64, error)
+}
+
+func (s *PaymentService) deductAvailableBalance(ctx context.Context, userID int64, amount float64) (float64, error) {
+	repo, ok := s.userRepo.(availableBalanceDeductor)
+	if !ok {
+		return 0, errors.New("user repository does not support available balance deduction")
+	}
+	return repo.DeductAvailableBalance(ctx, userID, amount)
+}
+
+// invalidateRefundBalanceCache 退款扣减或归还余额后失效计费缓存，否则网关在缓存 TTL 内仍按旧余额放行。
+func (s *PaymentService) invalidateRefundBalanceCache(ctx context.Context, userID int64) {
+	if s.redeemService == nil {
+		return
+	}
+	s.redeemService.invalidateRedeemCaches(ctx, userID, &RedeemCode{Type: RedeemTypeBalance})
+}
+
 func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
 	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(p.OrderID), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundFailed)).SetStatus(OrderStatusRefunding).Save(ctx)
 	if err != nil {
@@ -345,10 +374,13 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 		// Skip balance deduction on retry if previous attempt already deducted
 		// but failed to roll back (REFUND_ROLLBACK_FAILED in audit log).
 		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
-			if err := s.userRepo.DeductBalance(ctx, p.Order.UserID, p.BalanceToDeduct); err != nil {
+			deducted, err := s.deductAvailableBalance(ctx, p.Order.UserID, p.BalanceToDeduct)
+			if err != nil {
 				s.restoreStatus(ctx, p)
 				return nil, fmt.Errorf("deduction: %w", err)
 			}
+			p.BalanceToDeduct = deducted
+			s.invalidateRefundBalanceCache(ctx, p.Order.UserID)
 		} else {
 			slog.Warn("skipping balance deduction on retry (previous rollback failed)", "orderID", p.OrderID)
 			p.BalanceToDeduct = 0
@@ -528,6 +560,7 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "balanceDeducted": p.BalanceToDeduct})
 			return false
 		}
+		s.invalidateRefundBalanceCache(ctx, p.Order.UserID)
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubscriptionID > 0 {
 		if p.CreditSubscription {

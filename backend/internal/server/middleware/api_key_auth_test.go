@@ -202,6 +202,53 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		require.Contains(t, w.Body.String(), "SUBSCRIPTION_INVALID")
 	})
 
+	t.Run("standard_mode_revalidates_cas_loser_from_database", func(t *testing.T) {
+		cfg := &config.Config{RunMode: config.RunModeStandard}
+		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+
+		past := time.Now().Add(-48 * time.Hour)
+		current := time.Now()
+		stale := &service.UserSubscription{
+			ID:                 56,
+			UserID:             user.ID,
+			GroupID:            group.ID,
+			Status:             service.SubscriptionStatusActive,
+			ExpiresAt:          current.Add(24 * time.Hour),
+			DailyWindowStart:   &past,
+			WeeklyWindowStart:  &past,
+			MonthlyWindowStart: &past,
+			DailyUsageUSD:      10,
+		}
+		fresh := *stale
+		fresh.DailyWindowStart = &current
+		fresh.WeeklyWindowStart = &current
+		fresh.MonthlyWindowStart = &current
+		fresh.DailyUsageUSD = 2
+
+		subscriptionRepo := &stubUserSubscriptionRepo{
+			getActive: func(context.Context, int64, int64) (*service.UserSubscription, error) {
+				clone := *stale
+				return &clone, nil
+			},
+			getByID: func(context.Context, int64) (*service.UserSubscription, error) {
+				clone := fresh
+				return &clone, nil
+			},
+			resetDaily:   func(context.Context, int64, time.Time) error { return nil },
+			resetWeekly:  func(context.Context, int64, time.Time) error { return nil },
+			resetMonthly: func(context.Context, int64, time.Time) error { return nil },
+		}
+		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
+		router := newAuthTestRouter(apiKeyService, subscriptionService, cfg)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/t", nil)
+		req.Header.Set("x-api-key", apiKey.Key)
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusTooManyRequests, w.Code)
+	})
+
 	t.Run("simple_mode_bypasses_quota_check", func(t *testing.T) {
 		cfg := &config.Config{RunMode: config.RunModeSimple}
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
@@ -275,7 +322,7 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 				return &clone, nil
 			},
 			updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
-			activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
+			activateWindow: func(ctx context.Context, id int64, dailyStart, periodicStart time.Time) error { return nil },
 			resetDaily:     func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetWeekly:    func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetMonthly:   func(ctx context.Context, id int64, start time.Time) error { return nil },
@@ -916,6 +963,7 @@ func TestAPIKeyAuthIPRestrictionDoesNotTrustForwardedClientIPByDefault(t *testin
 	}
 
 	cfg := &config.Config{RunMode: config.RunModeSimple}
+	cfg.SetTrustForwardedIPForAPIKeyACL(false)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 	router := gin.New()
 	require.NoError(t, router.SetTrustedProxies(nil))
@@ -1565,7 +1613,7 @@ func (r *stubApiKeyRepo) GetByKeyForAuth(ctx context.Context, key string) (*serv
 	return r.GetByKey(ctx, key)
 }
 
-func (r *stubApiKeyRepo) Update(ctx context.Context, key *service.APIKey) error {
+func (r *stubApiKeyRepo) Update(ctx context.Context, key *service.APIKey, _ service.APIKeyUpdateFields) error {
 	return errors.New("not implemented")
 }
 
@@ -1648,7 +1696,7 @@ type stubUserSubscriptionRepo struct {
 	getUsable      func(ctx context.Context, userID int64) (*service.UserSubscription, error)
 	listUsable     func(ctx context.Context, userID int64) ([]service.UserSubscription, error)
 	updateStatus   func(ctx context.Context, subscriptionID int64, status string) error
-	activateWindow func(ctx context.Context, id int64, start time.Time) error
+	activateWindow func(ctx context.Context, id int64, dailyStart, periodicStart time.Time) error
 	resetDaily     func(ctx context.Context, id int64, start time.Time) error
 	resetWeekly    func(ctx context.Context, id int64, start time.Time) error
 	resetMonthly   func(ctx context.Context, id int64, start time.Time) error
@@ -1766,9 +1814,9 @@ func (r *stubUserSubscriptionRepo) UpdateNotes(ctx context.Context, subscription
 	return errors.New("not implemented")
 }
 
-func (r *stubUserSubscriptionRepo) ActivateWindows(ctx context.Context, id int64, start time.Time) error {
+func (r *stubUserSubscriptionRepo) ActivateWindows(ctx context.Context, id int64, dailyStart, periodicStart time.Time) error {
 	if r.activateWindow != nil {
-		return r.activateWindow(ctx, id, start)
+		return r.activateWindow(ctx, id, dailyStart, periodicStart)
 	}
 	return errors.New("not implemented")
 }

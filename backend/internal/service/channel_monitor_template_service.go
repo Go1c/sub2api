@@ -14,14 +14,14 @@ type ChannelMonitorRequestTemplateRepository interface {
 	Update(ctx context.Context, t *ChannelMonitorRequestTemplate) error
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, params ChannelMonitorRequestTemplateListParams) ([]*ChannelMonitorRequestTemplate, error)
-	// ApplyToMonitors 把模板当前的 extra_headers / body_override_mode / body_override
+	// ApplyToMonitors 把模板当前的 api_mode / extra_headers / body_override_mode / body_override
 	// 批量覆盖到指定 monitorIDs 的监控上（同时还要求这些监控当前 template_id = id，
 	// 防止误覆盖未关联的监控）。monitorIDs 必须非空；空列表直接返回 0 不写库。
 	// 返回被覆盖的监控数量。
 	ApplyToMonitors(ctx context.Context, id int64, monitorIDs []int64) (int64, error)
 	// CountAssociatedMonitors 统计 template_id = id 的监控数（用于 UI 展示「应用到 N 个配置」）。
 	CountAssociatedMonitors(ctx context.Context, id int64) (int64, error)
-	// ListAssociatedMonitors 列出所有 template_id = id 的监控简略信息（id/name/provider/enabled）
+	// ListAssociatedMonitors 列出所有 template_id = id 的监控简略信息（id/name/provider/api_mode/enabled）
 	// 给 apply picker UI 用，避免前端再做一次 list+filter。
 	ListAssociatedMonitors(ctx context.Context, id int64) ([]*AssociatedMonitorBrief, error)
 }
@@ -54,6 +54,15 @@ func (s *ChannelMonitorRequestTemplateService) List(ctx context.Context, params 
 			return nil, err
 		}
 	}
+	if params.APIMode != "" {
+		if params.Provider == "" {
+			if err := validateAPIMode(MonitorProviderOpenAI, params.APIMode); err != nil {
+				return nil, err
+			}
+		} else if err := validateAPIMode(params.Provider, params.APIMode); err != nil {
+			return nil, err
+		}
+	}
 	return s.repo.List(ctx, params)
 }
 
@@ -70,6 +79,7 @@ func (s *ChannelMonitorRequestTemplateService) Create(ctx context.Context, p Cha
 	t := &ChannelMonitorRequestTemplate{
 		Name:             strings.TrimSpace(p.Name),
 		Provider:         p.Provider,
+		APIMode:          defaultAPIMode(p.APIMode),
 		Description:      strings.TrimSpace(p.Description),
 		ExtraHeaders:     emptyHeadersIfNil(p.ExtraHeaders),
 		BodyOverrideMode: defaultBodyMode(p.BodyOverrideMode),
@@ -166,6 +176,13 @@ func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonit
 	if p.Description != nil {
 		existing.Description = strings.TrimSpace(*p.Description)
 	}
+	newAPIMode := defaultAPIMode(existing.APIMode)
+	if p.APIMode != nil {
+		newAPIMode = defaultAPIMode(*p.APIMode)
+	}
+	if err := validateAPIMode(existing.Provider, newAPIMode); err != nil {
+		return ErrChannelMonitorTemplateInvalidAPIMode
+	}
 	if p.ExtraHeaders != nil {
 		if err := validateExtraHeaders(*p.ExtraHeaders); err != nil {
 			return err
@@ -184,6 +201,7 @@ func applyTemplateUpdate(existing *ChannelMonitorRequestTemplate, p ChannelMonit
 	if err := validateBodyModeForProtocol(existing.Provider, "", newMode, newBody); err != nil {
 		return err
 	}
+	existing.APIMode = newAPIMode
 	existing.BodyOverrideMode = defaultBodyMode(newMode)
 	existing.BodyOverride = newBody
 	return nil

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -31,6 +30,7 @@ import (
 var (
 	ErrUserNotFound             = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
 	ErrPasswordIncorrect        = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")
+	ErrBalanceNegative          = infraerrors.BadRequest("BALANCE_NEGATIVE", "balance cannot be negative")
 	ErrInsufficientPerms        = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
 	ErrNotifyCodeUserRateLimit  = infraerrors.TooManyRequests("NOTIFY_CODE_USER_RATE_LIMIT", "too many verification codes requested, please try again later")
 	ErrAvatarInvalid            = infraerrors.BadRequest("AVATAR_INVALID", "avatar must be a valid image data URL or http(s) URL")
@@ -88,12 +88,18 @@ type UserListFilters struct {
 
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
+	// CreateWithEmailAliasGuard 创建用户，并在邮箱唯一性锁内复查"收件箱身份"是否已被占用
+	// （+别名 / Gmail 点号 / FQDN 根点变体，见 NormalizeEmailForAliasDedup），
+	// 冲突时返回 ErrEmailExists。仅注册路径使用：同一收件箱的多个别名变体并发注册时，
+	// 服务层的前置查重会同时通过，必须由这里串行化兜底。管理员建号仍走 Create，不受限制。
+	CreateWithEmailAliasGuard(ctx context.Context, user *User) error
 	GetByID(ctx context.Context, id int64) (*User, error)
 	// GetByIDIncludeDeleted 绕过软删除过滤按 ID 取用户（含已删）。仅供管理员审计/usage 点击使用。
 	GetByIDIncludeDeleted(ctx context.Context, id int64) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
 	GetFirstAdmin(ctx context.Context) (*User, error)
-	Update(ctx context.Context, user *User) error
+	// Update 只写 fields 中显式声明的列，其余列保持库中当前值。
+	Update(ctx context.Context, user *User, fields UserUpdateFields) error
 	Delete(ctx context.Context, id int64) error
 	GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error)
 	UpsertUserAvatar(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error)
@@ -109,11 +115,20 @@ type UserRepository interface {
 	// UpdateBalanceNoStat 只加 balance 不累计 total_recharged（赠送性入账专用）。
 	UpdateBalanceNoStat(ctx context.Context, id int64, amount float64) error
 	DeductBalance(ctx context.Context, id int64, amount float64) error
+	// AdjustBalance 原子地把 delta 累加到余额上，并返回变更前后的值。结果为负时
+	// 拒绝写入并返回 ErrBalanceNegative。管理员的加/扣款必须走这里而不是
+	// "读余额→算新值→整行写回"，否则并发的计费扣款会被旧快照抹掉。
+	AdjustBalance(ctx context.Context, id int64, delta float64) (BalanceChange, error)
+	// SetBalance 原子地把余额置为 value（value 必须 >= 0），返回变更前后的值。
+	SetBalance(ctx context.Context, id int64, value float64) (BalanceChange, error)
 	UpdateConcurrency(ctx context.Context, id int64, amount int) error
 	BatchSetConcurrency(ctx context.Context, userIDs []int64, value int) (int, error)
 	BatchAddConcurrency(ctx context.Context, userIDs []int64, delta int) (int, error)
 	BatchUpdateLimits(ctx context.Context, userIDs []int64, concurrency, rpmLimit *int) (int, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
+	// ExistsByEmailAlias 判断是否已有账号与该邮箱指向同一收件箱（+别名 / Gmail 点号 /
+	// FQDN 根点变体，见 NormalizeEmailForAliasDedup）。用于注册与发送验证码前的查重。
+	ExistsByEmailAlias(ctx context.Context, email string) (bool, error)
 	RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error)
 	// AddGroupToAllowedGroups 将指定分组增量添加到用户的 allowed_groups（幂等，冲突忽略）
 	AddGroupToAllowedGroups(ctx context.Context, userID int64, groupID int64) error
@@ -445,6 +460,10 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 	}
 	oldConcurrency := user.Concurrency
 
+	// fields 只登记本次请求真正带上的字段。余额、状态等列不由这里回写，
+	// 否则并发的扣费与状态变更会被这份快照回滚。
+	var fields UserUpdateFields
+
 	// 更新字段
 	if req.Email != nil {
 		// 检查新邮箱是否已被使用
@@ -456,10 +475,12 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 			return nil, oldConcurrency, ErrEmailExists
 		}
 		user.Email = *req.Email
+		fields.Email = true
 	}
 
 	if req.Username != nil {
 		user.Username = *req.Username
+		fields.Username = true
 	}
 
 	if req.AvatarURL != nil {
@@ -472,10 +493,12 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 
 	if req.Concurrency != nil {
 		user.Concurrency = *req.Concurrency
+		fields.Concurrency = true
 	}
 
 	if req.BalanceNotifyEnabled != nil {
 		user.BalanceNotifyEnabled = *req.BalanceNotifyEnabled
+		fields.BalanceNotifySettings = true
 	}
 	if req.BalanceNotifyThreshold != nil {
 		if *req.BalanceNotifyThreshold <= 0 {
@@ -483,6 +506,7 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 		} else {
 			user.BalanceNotifyThreshold = req.BalanceNotifyThreshold
 		}
+		fields.BalanceNotifySettings = true
 	}
 	if req.WebhookBalanceNotifyEnabled != nil {
 		user.WebhookBalanceNotifyEnabled = *req.WebhookBalanceNotifyEnabled
@@ -504,7 +528,7 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 		user.WebhookAnnouncementNotifyEnabled = *req.WebhookAnnouncementNotifyEnabled
 	}
 
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	if err := s.userRepo.Update(ctx, user, fields); err != nil {
 		return nil, oldConcurrency, fmt.Errorf("update user: %w", err)
 	}
 
@@ -991,7 +1015,9 @@ func (s *UserService) ChangePassword(ctx context.Context, userID int64, req Chan
 	// This ensures that any tokens issued before the password change become invalid
 	user.TokenVersion++
 
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	// TokenVersion 没有对应的数据库列（见 resolvedTokenVersion：它由 email+password_hash
+	// 指纹推导），改密写回 password_hash 即可让旧 token 失效。
+	if err := s.userRepo.Update(ctx, user, UserUpdateFields{PasswordHash: true}); err != nil {
 		return fmt.Errorf("update user: %w", err)
 	}
 
@@ -1146,7 +1172,7 @@ func (s *UserService) UpdateStatus(ctx context.Context, userID int64, status str
 
 	user.Status = status
 
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	if err := s.userRepo.Update(ctx, user, UserUpdateFields{Status: true}); err != nil {
 		return fmt.Errorf("update user: %w", err)
 	}
 	if s.authCacheInvalidator != nil {
@@ -1168,7 +1194,7 @@ func (s *UserService) Delete(ctx context.Context, userID int64) error {
 }
 
 // SendNotifyEmailCode sends a verification code to the extra notification email.
-func (s *UserService) SendNotifyEmailCode(ctx context.Context, userID int64, email string, emailService *EmailService, cache EmailCache) error {
+func (s *UserService) SendNotifyEmailCode(ctx context.Context, userID int64, email string, emailService *EmailService, cache EmailCache, locale ...string) error {
 	if err := checkNotifyCodeRateLimit(ctx, cache, userID, email); err != nil {
 		return err
 	}
@@ -1180,7 +1206,7 @@ func (s *UserService) SendNotifyEmailCode(ctx context.Context, userID int64, ema
 
 	// Send email first — if SMTP fails, don't write cache or increment counters,
 	// so the user is not locked out by cooldown/rate-limit for a code they never received.
-	if err := s.sendNotifyVerifyEmail(ctx, emailService, email, code); err != nil {
+	if err := s.sendNotifyVerifyEmail(ctx, emailService, userID, email, code, firstEmailLocale(locale)); err != nil {
 		return err
 	}
 
@@ -1226,11 +1252,31 @@ func saveNotifyVerifyCode(ctx context.Context, cache EmailCache, email, code str
 }
 
 // sendNotifyVerifyEmail builds and sends the verification email.
-func (s *UserService) sendNotifyVerifyEmail(ctx context.Context, emailService *EmailService, email, code string) error {
+func (s *UserService) sendNotifyVerifyEmail(ctx context.Context, emailService *EmailService, userID int64, email, code, locale string) error {
 	siteName := "Sub2API"
 	if s.settingRepo != nil {
 		if name, err := s.settingRepo.GetValue(ctx, SettingKeySiteName); err == nil && name != "" {
 			siteName = name
+		}
+	}
+	if emailService.notificationEmailService != nil {
+		if err := emailService.notificationEmailService.Send(ctx, NotificationEmailSendInput{
+			Event:          NotificationEmailEventNotificationEmailVerifyCode,
+			Locale:         locale,
+			RecipientEmail: email,
+			RecipientName:  emailRecipientName(email),
+			UserID:         userID,
+			Variables: map[string]string{
+				"verification_code":  code,
+				"expires_in_minutes": strconv.Itoa(int(verifyCodeTTL / time.Minute)),
+			},
+		}); err == nil {
+			return nil
+		} else {
+			if !shouldFallbackNotificationEmail(err) {
+				return err
+			}
+			slog.Warn("template notification email verification failed; falling back to built-in body", "recipient_hash", notificationEmailHash(email), "err", err.Error())
 		}
 	}
 	subject := fmt.Sprintf("[%s] 通知邮箱验证码 / Notification Email Verification", siteName)
@@ -1249,28 +1295,7 @@ func (s *UserService) VerifyAndAddNotifyEmail(ctx context.Context, userID int64,
 
 // verifyNotifyCode validates the verification code against the cached data.
 func verifyNotifyCode(ctx context.Context, cache EmailCache, email, code string) error {
-	data, err := cache.GetNotifyVerifyCode(ctx, email)
-	if err != nil || data == nil {
-		return ErrInvalidVerifyCode
-	}
-	if data.Attempts >= maxVerifyCodeAttempts {
-		return ErrVerifyCodeMaxAttempts
-	}
-	if subtle.ConstantTimeCompare([]byte(data.Code), []byte(code)) != 1 {
-		data.Attempts++
-		remaining := time.Until(data.ExpiresAt)
-		if remaining <= 0 {
-			return ErrInvalidVerifyCode
-		}
-		if err := cache.SetNotifyVerifyCode(ctx, email, data, remaining); err != nil {
-			slog.Error("failed to update notify verify code attempts", "email", email, "error", err)
-		}
-		if data.Attempts >= maxVerifyCodeAttempts {
-			return ErrVerifyCodeMaxAttempts
-		}
-		return ErrInvalidVerifyCode
-	}
-	return nil
+	return verifyCodeWithAttempts(ctx, email, code, cache.GetNotifyVerifyCode, cache.IncrNotifyVerifyCodeAttempts, nil)
 }
 
 // addOrVerifyNotifyEmail adds the email to user's extra notification emails or marks it as verified.
@@ -1286,7 +1311,7 @@ func (s *UserService) addOrVerifyNotifyEmail(ctx context.Context, userID int64, 
 		if strings.EqualFold(e.Email, email) {
 			if !e.Verified {
 				user.BalanceNotifyExtraEmails[i].Verified = true
-				return s.userRepo.Update(ctx, user)
+				return s.userRepo.Update(ctx, user, UserUpdateFields{BalanceNotifyExtraEmails: true})
 			}
 			return nil // Already verified
 		}
@@ -1299,7 +1324,7 @@ func (s *UserService) addOrVerifyNotifyEmail(ctx context.Context, userID int64, 
 		Disabled: false,
 		Verified: true,
 	})
-	return s.userRepo.Update(ctx, user)
+	return s.userRepo.Update(ctx, user, UserUpdateFields{BalanceNotifyExtraEmails: true})
 }
 
 // RemoveNotifyEmail removes an email from user's extra notification emails.
@@ -1322,7 +1347,7 @@ func (s *UserService) RemoveNotifyEmail(ctx context.Context, userID int64, email
 		return infraerrors.BadRequest("EMAIL_NOT_FOUND", "notification email not found")
 	}
 	user.BalanceNotifyExtraEmails = filtered
-	return s.userRepo.Update(ctx, user)
+	return s.userRepo.Update(ctx, user, UserUpdateFields{BalanceNotifyExtraEmails: true})
 }
 
 // ToggleNotifyEmail toggles the disabled state of a notification email entry.
@@ -1344,7 +1369,7 @@ func (s *UserService) ToggleNotifyEmail(ctx context.Context, userID int64, email
 		return infraerrors.BadRequest("EMAIL_NOT_FOUND", "notification email not found")
 	}
 
-	return s.userRepo.Update(ctx, user)
+	return s.userRepo.Update(ctx, user, UserUpdateFields{BalanceNotifyExtraEmails: true})
 }
 
 // notifyVerifyEmailTemplate is the HTML template for notify email verification.

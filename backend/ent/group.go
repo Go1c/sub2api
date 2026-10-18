@@ -4,6 +4,7 @@ package ent
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ type Group struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description *string `json:"description,omitempty"`
+	// 名称与描述的界面语言译文：语言代码 -> {name, description}；缺失的语言沿用 name/description
+	I18n domain.GroupI18n `json:"i18n,omitempty"`
 	// RateMultiplier holds the value of the "rate_multiplier" field.
 	RateMultiplier float64 `json:"rate_multiplier,omitempty"`
 	// 是否启用高峰时段倍率
@@ -115,6 +118,12 @@ type Group struct {
 	SortOrder int `json:"sort_order,omitempty"`
 	// 是否允许 /v1/messages 调度到此 OpenAI 分组
 	AllowMessagesDispatch bool `json:"allow_messages_dispatch,omitempty"`
+	// 是否允许此 OpenAI 分组访问 Live 接口
+	AllowLive bool `json:"allow_live,omitempty"`
+	// 是否强制此 OpenAI/Composite 分组请求使用 service_tier=priority
+	ForceOpenaiFast bool `json:"force_openai_fast,omitempty"`
+	// 是否让此 OpenAI/Composite 分组的 Fast 请求按 Standard 价格计费
+	FreeOpenaiFast bool `json:"free_openai_fast,omitempty"`
 	// 仅允许非 apikey 类型账号关联到此分组
 	RequireOauthOnly bool `json:"require_oauth_only,omitempty"`
 	// 调度时仅允许 privacy 已成功设置的账号
@@ -310,6 +319,14 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Description = new(string)
 				*_m.Description = value.String
+			}
+		case group.FieldI18n:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field i18n", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.I18n); err != nil {
+					return fmt.Errorf("unmarshal field i18n: %w", err)
+				}
 			}
 		case group.FieldRateMultiplier:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -589,6 +606,24 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AllowMessagesDispatch = value.Bool
 			}
+		case group.FieldAllowLive:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_live", values[i])
+			} else if value.Valid {
+				_m.AllowLive = value.Bool
+			}
+		case group.FieldForceOpenaiFast:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field force_openai_fast", values[i])
+			} else if value.Valid {
+				_m.ForceOpenaiFast = value.Bool
+			}
+		case group.FieldFreeOpenaiFast:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field free_openai_fast", values[i])
+			} else if value.Valid {
+				_m.FreeOpenaiFast = value.Bool
+			}
 		case group.FieldRequireOauthOnly:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field require_oauth_only", values[i])
@@ -734,6 +769,9 @@ func (_m *Group) String() string {
 		builder.WriteString("description=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("i18n=")
+	builder.WriteString(fmt.Sprintf("%v", _m.I18n))
 	builder.WriteString(", ")
 	builder.WriteString("rate_multiplier=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RateMultiplier))
@@ -891,6 +929,15 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("allow_messages_dispatch=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowMessagesDispatch))
+	builder.WriteString(", ")
+	builder.WriteString("allow_live=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowLive))
+	builder.WriteString(", ")
+	builder.WriteString("force_openai_fast=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ForceOpenaiFast))
+	builder.WriteString(", ")
+	builder.WriteString("free_openai_fast=")
+	builder.WriteString(fmt.Sprintf("%v", _m.FreeOpenaiFast))
 	builder.WriteString(", ")
 	builder.WriteString("require_oauth_only=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RequireOauthOnly))

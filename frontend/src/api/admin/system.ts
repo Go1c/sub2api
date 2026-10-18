@@ -45,6 +45,30 @@ export interface UpdateResult {
   need_restart: boolean
 }
 
+export interface RollbackVersionInfo {
+  version: string
+  published_at: string
+  html_url: string
+}
+
+/**
+ * Get versions available for rollback (up to 3 versions older than current)
+ */
+export async function getRollbackVersions(): Promise<{ versions: RollbackVersionInfo[] }> {
+  const { data } = await apiClient.get<{ versions: RollbackVersionInfo[] }>(
+    '/admin/system/rollback-versions'
+  )
+  return data
+}
+
+/**
+ * In-place update/rollback downloads a full release binary from GitHub, which
+ * can take several minutes on slow links. The global 30s axios timeout would
+ * abort the request mid-download (#4504), so these calls wait as long as the
+ * backend allows (15 minutes server-side).
+ */
+const UPDATE_REQUEST_TIMEOUT_MS = 15 * 60 * 1000
+
 /**
  * In-place update downloads a full release binary from GitHub, which can take
  * several minutes on slow links. The global 30s axios timeout would abort the
@@ -67,8 +91,12 @@ export async function performUpdate(): Promise<UpdateResult> {
 /**
  * Rollback to previous version (local .backup swap; no long download)
  */
-export async function rollback(): Promise<UpdateResult> {
-  const { data } = await apiClient.post<UpdateResult>('/admin/system/rollback')
+export async function rollback(version?: string): Promise<UpdateResult> {
+  const { data } = await apiClient.post<UpdateResult>(
+    '/admin/system/rollback',
+    version ? { version } : undefined,
+    { timeout: UPDATE_REQUEST_TIMEOUT_MS }
+  )
   return data
 }
 
@@ -84,6 +112,7 @@ export const systemAPI = {
   getVersion,
   checkUpdates,
   performUpdate,
+  getRollbackVersions,
   rollback,
   restartService
 }

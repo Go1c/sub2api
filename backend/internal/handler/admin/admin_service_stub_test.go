@@ -286,6 +286,7 @@ func (s *stubAdminService) BindUserAuthIdentity(ctx context.Context, userID int6
 }
 
 func (s *stubAdminService) ListGroups(ctx context.Context, page, pageSize int, platform, status, search string, isExclusive *bool, sortBy, sortOrder string) ([]service.Group, int64, error) {
+	s.lastListGroupsIsExclusive = isExclusive
 	return s.groups, int64(len(s.groups)), nil
 }
 
@@ -322,17 +323,35 @@ func (s *stubAdminService) RecoverDuplicateGroup(ctx context.Context, id int64, 
 }
 
 func (s *stubAdminService) CreateGroup(ctx context.Context, input *service.CreateGroupInput) (*service.Group, error) {
+	s.createdGroups = append(s.createdGroups, input)
 	group := service.Group{ID: 200, Name: input.Name, Status: service.StatusActive}
 	return &group, nil
 }
 
+func (s *stubAdminService) DuplicateGroup(ctx context.Context, id int64, actorScope, operationKey string) (*service.Group, error) {
+	s.advancedGroupOperationCalls++
+	group := service.Group{ID: 201, Name: "group (Copy)", Status: "inactive"}
+	return &group, nil
+}
+
+func (s *stubAdminService) RecoverDuplicateGroup(ctx context.Context, id int64, actorScope, operationKey string) (*service.Group, error) {
+	return nil, nil
+}
+
 func (s *stubAdminService) UpdateGroup(ctx context.Context, id int64, input *service.UpdateGroupInput) (*service.Group, error) {
+	s.updatedGroups = append(s.updatedGroups, input)
 	group := service.Group{ID: id, Name: input.Name, Status: service.StatusActive}
 	return &group, nil
 }
 
 func (s *stubAdminService) DeleteGroup(ctx context.Context, id int64) error {
+	s.deletedGroupIDs = append(s.deletedGroupIDs, id)
 	return nil
+}
+
+func (s *stubAdminService) DeleteGroupIfEmpty(ctx context.Context, id int64) error {
+	s.guardedDeletedGroupIDs = append(s.guardedDeletedGroupIDs, id)
+	return s.deleteGroupIfEmptyErr
 }
 
 func (s *stubAdminService) GetGroupAPIKeys(ctx context.Context, groupID int64, page, pageSize int) ([]service.APIKey, int64, error) {
@@ -344,10 +363,12 @@ func (s *stubAdminService) GetGroupRateMultipliers(_ context.Context, _ int64) (
 }
 
 func (s *stubAdminService) ClearGroupRateMultipliers(_ context.Context, _ int64) error {
+	s.advancedGroupOperationCalls++
 	return nil
 }
 
 func (s *stubAdminService) BatchSetGroupRateMultipliers(_ context.Context, _ int64, _ []service.GroupRateMultiplierInput) error {
+	s.advancedGroupOperationCalls++
 	return nil
 }
 
@@ -356,6 +377,7 @@ func (s *stubAdminService) ClearGroupRPMOverrides(_ context.Context, _ int64) er
 }
 
 func (s *stubAdminService) BatchSetGroupRPMOverrides(_ context.Context, _ int64, _ []service.GroupRPMOverrideInput) error {
+	s.advancedGroupOperationCalls++
 	return nil
 }
 
@@ -498,6 +520,7 @@ func (s *stubAdminService) SetAccountSchedulable(ctx context.Context, id int64, 
 }
 
 func (s *stubAdminService) BulkUpdateAccounts(ctx context.Context, input *service.BulkUpdateAccountsInput) (*service.BulkUpdateAccountsResult, error) {
+	s.lastBulkUpdateAccountInput = input
 	if s.bulkUpdateAccountErr != nil {
 		return nil, s.bulkUpdateAccountErr
 	}

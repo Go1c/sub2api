@@ -60,6 +60,12 @@ type AdminService interface {
 	RecoverDuplicateGroup(ctx context.Context, id int64, actorScope, operationKey string) (*Group, error)
 	UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error)
 	DeleteGroup(ctx context.Context, id int64) error
+	DeleteGroupIfEmpty(ctx context.Context, id int64) error
+	ListCompositeRoutes(ctx context.Context, groupID int64) ([]CompositeModelRoute, error)
+	CreateCompositeRoute(ctx context.Context, groupID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
+	UpdateCompositeRoute(ctx context.Context, groupID, routeID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
+	DeleteCompositeRoute(ctx context.Context, groupID, routeID int64) error
+	PreviewCompositeRoute(ctx context.Context, groupID int64, input CompositeRoutePreviewRequest) (*CompositeRouteDecision, error)
 	GetGroupAPIKeys(ctx context.Context, groupID int64, page, pageSize int) ([]APIKey, int64, error)
 	GetGroupRateMultipliers(ctx context.Context, groupID int64) ([]UserGroupRateEntry, error)
 	ClearGroupRateMultipliers(ctx context.Context, groupID int64) error
@@ -152,6 +158,24 @@ type AdminService interface {
 	ResetAccountQuota(ctx context.Context, id int64) error
 }
 
+type AdminGroupOperation string
+
+const (
+	AdminGroupOperationBasic          AdminGroupOperation = "basic"
+	AdminGroupOperationDuplicate      AdminGroupOperation = "duplicate"
+	AdminGroupOperationCompositeRoute AdminGroupOperation = "composite_route"
+	AdminGroupOperationMultiplier     AdminGroupOperation = "multiplier"
+	AdminGroupOperationRPMOverride    AdminGroupOperation = "rpm_override"
+	AdminGroupOperationSort           AdminGroupOperation = "sort"
+)
+
+func ValidateSimpleModeGroupOperation(cfg *config.Config, operation AdminGroupOperation) error {
+	if cfg != nil && cfg.RunMode == config.RunModeSimple && operation != AdminGroupOperationBasic {
+		return infraerrors.New(http.StatusForbidden, "SIMPLE_MODE_OPERATION_UNSUPPORTED", "This operation is not supported in simple mode")
+	}
+	return nil
+}
+
 // CreateUserInput represents input for creating a new user via admin operations.
 type CreateUserInput struct {
 	Email         string
@@ -227,15 +251,18 @@ type AdminBoundAuthIdentityChannel struct {
 }
 
 type CreateGroupInput struct {
-	Name             string
-	Description      string
-	Platform         string
-	RateMultiplier   float64
-	IsExclusive      bool
-	SubscriptionType string   // standard/subscription
-	DailyLimitUSD    *float64 // 日限额 (USD)
-	WeeklyLimitUSD   *float64 // 周限额 (USD)
-	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	Name                      string
+	Description               string
+	I18n                      GroupI18n // 名称与描述的界面语言译文
+	Platform                  string
+	RateMultiplier            float64
+	IsExclusive               bool
+	SubscriptionType          string   // standard/subscription
+	DailyLimitUSD             *float64 // 日限额 (USD)
+	WeeklyLimitUSD            *float64 // 周限额 (USD)
+	MonthlyLimitUSD           *float64 // 月限额 (USD)
+	LongContextPricingEnabled bool
+	ModelPricing              []ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool
 	AllowBatchImageGeneration    bool
@@ -274,6 +301,9 @@ type CreateGroupInput struct {
 	SupportedModelScopes []string
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	AllowMessagesDispatch       bool
+	AllowLive                   bool
+	ForceOpenAIFast             bool
+	FreeOpenAIFast              bool
 	DefaultMappedModel          string
 	RequireOAuthOnly            bool
 	RequirePrivacySet           bool
@@ -281,6 +311,16 @@ type CreateGroupInput struct {
 	ModelsListConfig            GroupModelsListConfig
 	// RPMLimit 分组 RPM 上限（0 = 不限制）
 	RPMLimit int
+	// MaxReasoningEffort Anthropic/OpenAI 请求的推理强度上限，空字符串表示不限制。
+	MaxReasoningEffort string
+	// MaxReasoningEffortOverLimit 超过上限时的访问控制：downgrade（默认）或 deny。
+	MaxReasoningEffortOverLimit string
+	// ReasoningEffortMappings Anthropic/OpenAI 推理强度映射，可按模型精确名、前缀或后缀限定。
+	ReasoningEffortMappings []ReasoningEffortMapping
+	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数，nil 按 0 处理）
+	ProfitControlEnabled bool
+	ProfitMinMargin      *float64
+	ProfitSafetyBuffer   *float64
 	// 从指定分组复制账号（创建分组后在同一事务内绑定）
 	CopyAccountsFromGroupIDs []int64
 }
@@ -334,6 +374,9 @@ type UpdateGroupInput struct {
 	SupportedModelScopes *[]string
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	AllowMessagesDispatch       *bool
+	AllowLive                   *bool
+	ForceOpenAIFast             *bool
+	FreeOpenAIFast              *bool
 	DefaultMappedModel          *string
 	RequireOAuthOnly            *bool
 	RequirePrivacySet           *bool
@@ -341,6 +384,16 @@ type UpdateGroupInput struct {
 	ModelsListConfig            *GroupModelsListConfig
 	// RPMLimit 分组 RPM 上限（0 = 不限制），nil 表示未提供不改动。
 	RPMLimit *int
+	// MaxReasoningEffort 空字符串表示清除上限；nil 表示未提供不改动。
+	MaxReasoningEffort *string
+	// MaxReasoningEffortOverLimit 空字符串视为 downgrade；nil 表示未提供不改动。
+	MaxReasoningEffortOverLimit *string
+	// ReasoningEffortMappings nil 表示不修改，空数组表示清空，非空数组表示替换。
+	ReasoningEffortMappings *[]ReasoningEffortMapping
+	// 分组利润控制（nil 表示不修改；margin/buffer 为小数）
+	ProfitControlEnabled *bool
+	ProfitMinMargin      *float64
+	ProfitSafetyBuffer   *float64
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64
 }
@@ -488,6 +541,8 @@ type CreateProxyInput struct {
 	ExpiryWarnDays int
 }
 
+// UpdateProxyInput preserves omitted expiry/backup values; Clear flags explicitly
+// remove them. A nil ExpiryWarnDays preserves the current warning period.
 type UpdateProxyInput struct {
 	Name           string
 	Protocol       string
@@ -612,6 +667,14 @@ var proxyQualityTargets = []proxyQualityTarget{
 			http.StatusOK: {},
 		},
 	},
+	{
+		Target: "grok",
+		URL:    "https://api.x.ai/v1/models",
+		Method: http.MethodGet,
+		AllowedStatuses: map[int]struct{}{
+			http.StatusUnauthorized: {},
+		},
+	},
 }
 
 const (
@@ -625,6 +688,7 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
+	cfg                  *config.Config
 	userRepo             UserRepository
 	groupRepo            GroupRepository
 	groupDuplicateRepo   GroupDuplicateRepository
@@ -663,6 +727,7 @@ type userGroupRateBatchReader interface {
 
 // NewAdminService creates a new AdminService
 func NewAdminService(
+	cfg *config.Config,
 	userRepo UserRepository,
 	groupRepo AdminGroupRepository,
 	accountRepo AdminAccountRepository,
@@ -686,6 +751,7 @@ func NewAdminService(
 	compositeResolver *CompositeRouteResolver,
 ) AdminService {
 	return &adminServiceImpl{
+		cfg:                  cfg,
 		userRepo:             userRepo,
 		groupRepo:            groupRepo,
 		groupDuplicateRepo:   groupRepo,

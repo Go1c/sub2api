@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
@@ -15,6 +17,9 @@ import (
 func resetViperWithJWTSecret(t *testing.T) {
 	t.Helper()
 	viper.Reset()
+	t.Cleanup(viper.Reset)
+	t.Setenv("CONFIG_FILE", "")
+	t.Setenv("DATA_DIR", "")
 	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
 }
 
@@ -74,6 +79,9 @@ func TestLoadHTTPIngressSafetyDefaults(t *testing.T) {
 
 func TestLoadForBootstrapAllowsMissingJWTSecret(t *testing.T) {
 	viper.Reset()
+	t.Cleanup(viper.Reset)
+	t.Setenv("CONFIG_FILE", "")
+	t.Setenv("DATA_DIR", "")
 	t.Setenv("JWT_SECRET", "")
 
 	cfg, err := LoadForBootstrap()
@@ -184,11 +192,11 @@ func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
 	if !cfg.Gateway.OpenAIWS.DynamicMaxConnsByAccountConcurrencyEnabled {
 		t.Fatalf("Gateway.OpenAIWS.DynamicMaxConnsByAccountConcurrencyEnabled = false, want true")
 	}
-	if cfg.Gateway.OpenAIWS.OAuthMaxConnsFactor != 1.0 {
-		t.Fatalf("Gateway.OpenAIWS.OAuthMaxConnsFactor = %v, want 1.0", cfg.Gateway.OpenAIWS.OAuthMaxConnsFactor)
+	if cfg.Gateway.OpenAIWS.OAuthMaxConnsFactor != 5.0 {
+		t.Fatalf("Gateway.OpenAIWS.OAuthMaxConnsFactor = %v, want 5.0", cfg.Gateway.OpenAIWS.OAuthMaxConnsFactor)
 	}
-	if cfg.Gateway.OpenAIWS.APIKeyMaxConnsFactor != 1.0 {
-		t.Fatalf("Gateway.OpenAIWS.APIKeyMaxConnsFactor = %v, want 1.0", cfg.Gateway.OpenAIWS.APIKeyMaxConnsFactor)
+	if cfg.Gateway.OpenAIWS.APIKeyMaxConnsFactor != 5.0 {
+		t.Fatalf("Gateway.OpenAIWS.APIKeyMaxConnsFactor = %v, want 5.0", cfg.Gateway.OpenAIWS.APIKeyMaxConnsFactor)
 	}
 	if cfg.Gateway.OpenAIWS.StickySessionTTLSeconds != 3600 {
 		t.Fatalf("Gateway.OpenAIWS.StickySessionTTLSeconds = %d, want 3600", cfg.Gateway.OpenAIWS.StickySessionTTLSeconds)
@@ -906,6 +914,21 @@ func TestLoadDefaultUsageCleanupConfig(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultOpsCleanupConfig(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if !cfg.Ops.Cleanup.Enabled {
+		t.Fatal("Ops.Cleanup.Enabled = false, want true")
+	}
+	if cfg.Ops.Cleanup.SystemLogRetentionDays != 30 {
+		t.Fatalf("Ops.Cleanup.SystemLogRetentionDays = %d, want 30", cfg.Ops.Cleanup.SystemLogRetentionDays)
+	}
+}
+
 func TestValidateUsageCleanupConfigEnabled(t *testing.T) {
 	resetViperWithJWTSecret(t)
 
@@ -997,6 +1020,8 @@ func TestNormalizeStringSlice(t *testing.T) {
 }
 
 func TestGetServerAddressFromEnv(t *testing.T) {
+	t.Setenv("CONFIG_FILE", "")
+	t.Setenv("DATA_DIR", "")
 	t.Setenv("SERVER_HOST", "127.0.0.1")
 	t.Setenv("SERVER_PORT", "9090")
 
@@ -1004,6 +1029,17 @@ func TestGetServerAddressFromEnv(t *testing.T) {
 	if address != "127.0.0.1:9090" {
 		t.Fatalf("GetServerAddress() = %q", address)
 	}
+}
+
+func TestGetServerAddressFromConfigFile(t *testing.T) {
+	configFile := filepath.Join(t.TempDir(), "setup.yaml")
+	require.NoError(t, os.WriteFile(configFile, []byte("server:\n  host: 192.0.2.40\n  port: 9191\n"), 0o600))
+	t.Setenv("CONFIG_FILE", configFile)
+	t.Setenv("DATA_DIR", "")
+	t.Setenv("SERVER_HOST", "")
+	t.Setenv("SERVER_PORT", "")
+
+	require.Equal(t, "192.0.2.40:9191", GetServerAddress())
 }
 
 func TestValidateAbsoluteHTTPURL(t *testing.T) {
@@ -1818,6 +1854,11 @@ func TestValidateConfigErrors(t *testing.T) {
 			name:    "ops cleanup retention",
 			mutate:  func(c *Config) { c.Ops.Cleanup.ErrorLogRetentionDays = -1 },
 			wantErr: "ops.cleanup.error_log_retention_days",
+		},
+		{
+			name:    "ops cleanup system log retention",
+			mutate:  func(c *Config) { c.Ops.Cleanup.SystemLogRetentionDays = 0 },
+			wantErr: "ops.cleanup.system_log_retention_days",
 		},
 		{
 			name:    "ops cleanup minute retention",
