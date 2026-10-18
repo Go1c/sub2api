@@ -523,7 +523,69 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ModelMappingPreservesOtherFie
 	require.Equal(t, "hello world", gjson.GetBytes(sentBody, "messages.0.content.0.text").String(), "messages 字段不应被修改")
 	require.Equal(t, "enabled", gjson.GetBytes(sentBody, "thinking.type").String(), "thinking 字段不应被修改")
 	require.Equal(t, int64(5000), gjson.GetBytes(sentBody, "thinking.budget_tokens").Int(), "thinking.budget_tokens 不应被修改")
-	require.Equal(t, int64(1024), gjson.GetBytes(sentBody, "max_tokens").Int(), "max_tokens 不应被修改")
+	require.False(t, gjson.GetBytes(sentBody, "max_tokens").Exists(),
+		"max_tokens 作为生成参数应被 count_tokens 过滤剥离")
+}
+
+func TestGatewayService_AnthropicAPIKeyPassthrough_CountTokensFiltersGenerationFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", nil)
+
+	body := []byte(`{"model":"claude-sonnet-4-20250514","system":[{"type":"text","text":"sys"}],"messages":[{"role":"user","content":"hello"}],"tools":[{"name":"tool","input_schema":{"type":"object"}}],"temperature":0.7,"top_p":0.9,"top_k":40,"stream":true,"stop_sequences":["END"],"max_tokens":1024,"thinking":{"type":"enabled","budget_tokens":5000}}`)
+	parsed := &ParsedRequest{
+		Body:  NewRequestBodyRef(body),
+		Model: "claude-sonnet-4-20250514",
+	}
+
+	upstreamRespBody := `{"input_tokens":42}`
+	upstream := &anthropicHTTPUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(upstreamRespBody)),
+		},
+	}
+
+	svc := &GatewayService{
+		cfg:              &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}},
+		httpUpstream:     upstream,
+		rateLimitService: &RateLimitService{},
+	}
+
+	account := &Account{
+		ID:          302,
+		Name:        "count-token-filter-test",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "upstream-key",
+			"base_url": "https://api.anthropic.com",
+		},
+		Extra:       map[string]any{"anthropic_passthrough": true},
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+
+	err := svc.ForwardCountTokens(context.Background(), c, account, parsed)
+	require.NoError(t, err)
+
+	sentBody := upstream.lastBody
+	require.False(t, gjson.GetBytes(sentBody, "temperature").Exists())
+	require.False(t, gjson.GetBytes(sentBody, "top_p").Exists())
+	require.False(t, gjson.GetBytes(sentBody, "top_k").Exists())
+	require.False(t, gjson.GetBytes(sentBody, "stream").Exists())
+	require.False(t, gjson.GetBytes(sentBody, "stop_sequences").Exists())
+	require.Equal(t, "claude-sonnet-4-20250514", gjson.GetBytes(sentBody, "model").String())
+	require.Equal(t, "sys", gjson.GetBytes(sentBody, "system.0.text").String())
+	require.Equal(t, "hello", gjson.GetBytes(sentBody, "messages.0.content").String())
+	require.Equal(t, "tool", gjson.GetBytes(sentBody, "tools.0.name").String())
+	require.False(t, gjson.GetBytes(sentBody, "max_tokens").Exists(),
+		"count_tokens 请求不得携带生成参数 max_tokens")
+	require.Equal(t, "enabled", gjson.GetBytes(sentBody, "thinking.type").String())
 }
 
 func TestGatewayService_AnthropicAPIKeyPassthrough_CountTokensFiltersGenerationFields(t *testing.T) {
@@ -1272,11 +1334,10 @@ func TestExtractAnthropicSSEDataLine(t *testing.T) {
 }
 
 func TestGatewayService_ParseSSEUsagePassthrough_MessageStartFallbacks(t *testing.T) {
-	svc := &GatewayService{}
 	usage := &ClaudeUsage{}
 	data := `{"type":"message_start","message":{"usage":{"input_tokens":12,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cached_tokens":9,"cache_creation":{"ephemeral_5m_input_tokens":3,"ephemeral_1h_input_tokens":4}}}}`
 
-	svc.parseSSEUsagePassthrough(data, usage)
+	parseSSEUsagePassthrough(data, usage)
 
 	require.Equal(t, 12, usage.InputTokens)
 	require.Equal(t, 9, usage.CacheReadInputTokens, "应兼容 cached_tokens 字段")
@@ -1286,47 +1347,43 @@ func TestGatewayService_ParseSSEUsagePassthrough_MessageStartFallbacks(t *testin
 }
 
 func TestGatewayService_ParseSSEUsagePassthrough_MessageDeltaSelectiveOverwrite(t *testing.T) {
-	svc := &GatewayService{}
-	usage := &ClaudeUsage{
-		InputTokens:           10,
-		CacheCreation5mTokens: 2,
-		CacheCreation1hTokens: 6,
-	}
-	data := `{"type":"message_delta","usage":{"input_tokens":0,"output_tokens":5,"cache_creation_input_tokens":8,"cache_read_input_tokens":0,"cached_tokens":11,"cache_creation":{"ephemeral_5m_input_tokens":1,"ephemeral_1h_input_tokens":0}}}`
+	usage := &ClaudeUsage{}
+	start := `{"type":"message_start","message":{"usage":{"input_tokens":10,"cache_creation_input_tokens":463184,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":463184}}}}`
+	parseSSEUsagePassthrough(start, usage)
 
-	svc.parseSSEUsagePassthrough(data, usage)
+	data := `{"type":"message_delta","usage":{"input_tokens":0,"output_tokens":5,"cache_creation_input_tokens":463184,"cache_read_input_tokens":0,"cached_tokens":11,"cache_creation":{"ephemeral_5m_input_tokens":463184,"ephemeral_1h_input_tokens":0}}}`
+
+	parseSSEUsagePassthrough(data, usage)
 
 	require.Equal(t, 10, usage.InputTokens, "message_delta 中 0 值不应覆盖已有 input_tokens")
 	require.Equal(t, 5, usage.OutputTokens)
-	require.Equal(t, 8, usage.CacheCreationInputTokens)
+	require.Equal(t, 463184, usage.CacheCreationInputTokens)
 	require.Equal(t, 11, usage.CacheReadInputTokens, "cache_read_input_tokens 为空时应回退到 cached_tokens")
-	require.Equal(t, 1, usage.CacheCreation5mTokens)
-	require.Equal(t, 6, usage.CacheCreation1hTokens, "message_delta 中 0 值不应覆盖已有 1h 明细")
+	require.Equal(t, 463184, usage.CacheCreation5mTokens)
+	require.Equal(t, 0, usage.CacheCreation1hTokens)
 }
 
 func TestGatewayService_ParseSSEUsagePassthrough_NoopCases(t *testing.T) {
-	svc := &GatewayService{}
 
 	usage := &ClaudeUsage{InputTokens: 3}
-	svc.parseSSEUsagePassthrough("", usage)
+	parseSSEUsagePassthrough("", usage)
 	require.Equal(t, 3, usage.InputTokens)
 
-	svc.parseSSEUsagePassthrough("[DONE]", usage)
+	parseSSEUsagePassthrough("[DONE]", usage)
 	require.Equal(t, 3, usage.InputTokens)
 
-	svc.parseSSEUsagePassthrough("not-json", usage)
+	parseSSEUsagePassthrough("not-json", usage)
 	require.Equal(t, 3, usage.InputTokens)
 
 	// nil usage 不应 panic
-	svc.parseSSEUsagePassthrough(`{"type":"message_start"}`, nil)
+	parseSSEUsagePassthrough(`{"type":"message_start"}`, nil)
 }
 
 func TestGatewayService_ParseSSEUsagePassthrough_FallbackFromUsageNode(t *testing.T) {
-	svc := &GatewayService{}
 	usage := &ClaudeUsage{}
 	data := `{"type":"content_block_delta","usage":{"cached_tokens":6,"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":1}}}`
 
-	svc.parseSSEUsagePassthrough(data, usage)
+	parseSSEUsagePassthrough(data, usage)
 
 	require.Equal(t, 6, usage.CacheReadInputTokens)
 	require.Equal(t, 3, usage.CacheCreationInputTokens)

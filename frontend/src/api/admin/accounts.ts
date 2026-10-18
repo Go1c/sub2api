@@ -4,8 +4,10 @@
  */
 
 import { apiClient } from '../client'
+import type { OpenAIReferralRefreshResult, OpenAIReferralSendResult } from '@/types/openaiReferrals'
 import type {
   Account,
+  AccountListItem,
   CreateAccountRequest,
   UpdateAccountRequest,
   PaginatedResponse,
@@ -16,6 +18,9 @@ import type {
   TempUnschedulableStatus,
   AdminDataPayload,
   AdminDataImportResult,
+  CodexSessionImportRequest,
+  CodexSessionImportResult,
+  OpenAICodexPATCreateRequest,
   CheckMixedChannelRequest,
   CheckMixedChannelResponse,
   UpstreamBillingProbeResult,
@@ -41,14 +46,15 @@ export async function list(
     search?: string
     privacy_mode?: string
     lite?: string
+    include_scheduler_score?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
   },
   options?: {
     signal?: AbortSignal
   }
-): Promise<PaginatedResponse<Account>> {
-  const { data } = await apiClient.get<PaginatedResponse<Account>>('/admin/accounts', {
+): Promise<PaginatedResponse<AccountListItem>> {
+  const { data } = await apiClient.get<PaginatedResponse<AccountListItem>>('/admin/accounts', {
     params: {
       page,
       page_size: pageSize,
@@ -62,7 +68,46 @@ export async function list(
 export interface AccountListWithEtagResult {
   notModified: boolean
   etag: string | null
-  data: PaginatedResponse<Account> | null
+  data: PaginatedResponse<AccountListItem> | null
+}
+
+export interface AccountUpstreamBillingRatesWithEtagResult {
+  notModified: boolean
+  etag: string | null
+  data: UpstreamBillingRatesResponse | null
+}
+
+export async function getUpstreamBillingRatesWithEtag(
+  page: number = 1,
+  pageSize: number = 20,
+  filters?: {
+    platform?: string
+    type?: string
+    status?: string
+    group?: string
+    search?: string
+    privacy_mode?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
+  },
+  options?: {
+    signal?: AbortSignal
+    etag?: string | null
+  }
+): Promise<AccountUpstreamBillingRatesWithEtagResult> {
+  const headers: Record<string, string> = {}
+  if (options?.etag) headers['If-None-Match'] = options.etag
+
+  const response = await apiClient.get<UpstreamBillingRatesResponse>('/admin/accounts/upstream-billing-rates', {
+    params: { page, page_size: pageSize, ...filters },
+    headers,
+    signal: options?.signal,
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 304
+  })
+
+  const etagHeader = typeof response.headers?.etag === 'string' ? response.headers.etag : null
+  if (response.status === 304) return { notModified: true, etag: etagHeader, data: null }
+  return { notModified: false, etag: etagHeader, data: response.data }
 }
 
 export interface AccountUpstreamBillingRatesWithEtagResult {
@@ -115,6 +160,7 @@ export async function listWithEtag(
     search?: string
     privacy_mode?: string
     lite?: string
+    include_scheduler_score?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
   },
@@ -128,7 +174,7 @@ export async function listWithEtag(
     headers['If-None-Match'] = options.etag
   }
 
-  const response = await apiClient.get<PaginatedResponse<Account>>('/admin/accounts', {
+  const response = await apiClient.get<PaginatedResponse<AccountListItem>>('/admin/accounts', {
     params: {
       page,
       page_size: pageSize,
@@ -230,6 +276,24 @@ export async function update(id: number, updates: UpdateAccountRequest): Promise
   return data
 }
 
+export async function getGrokMediaEligibility(id: number): Promise<GrokMediaEligibilityState> {
+  const { data } = await apiClient.get<GrokMediaEligibilityState>(
+    `/admin/accounts/${id}/grok-media-eligibility`
+  )
+  return data
+}
+
+export async function updateGrokMediaEligibility(
+  id: number,
+  mode: GrokMediaEligibilityMode
+): Promise<GrokMediaEligibilityState> {
+  const { data } = await apiClient.put<GrokMediaEligibilityState>(
+    `/admin/accounts/${id}/grok-media-eligibility`,
+    { mode }
+  )
+  return data
+}
+
 /**
  * Check mixed-channel risk for account-group binding.
  */
@@ -308,8 +372,36 @@ export async function testAccount(id: number): Promise<{
  * @param id - Account ID
  * @returns Updated account
  */
-export async function refreshCredentials(id: number): Promise<Account> {
-  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/refresh`)
+export type RefreshCredentialsResult =
+  | { account: Account; message: string; warning: 'missing_project_id_temporary' }
+  | { account: Account; message?: never; warning?: never }
+
+export async function refreshCredentials(id: number): Promise<RefreshCredentialsResult> {
+  const { data } = await apiClient.post<Account | RefreshCredentialsResult>(`/admin/accounts/${id}/refresh`)
+  return 'account' in data ? data : { account: data }
+}
+
+/**
+ * Apply OAuth credentials after re-authorization.
+ *
+ * Unlike `update()`, this endpoint:
+ * - never overwrites the whole `extra` JSONB (merges incrementally instead),
+ *   so persistent settings like `base_rpm`, `window_cost_limit`, `max_sessions`,
+ *   `quota_*` and `privacy_mode` are preserved
+ * - clears the account error and invalidates the token cache server-side
+ */
+export async function applyOAuthCredentials(
+  id: number,
+  payload: {
+    type: 'oauth' | 'setup-token'
+    credentials: Record<string, unknown>
+    extra?: Record<string, unknown>
+  }
+): Promise<Account> {
+  const { data } = await apiClient.post<Account>(
+    `/admin/accounts/${id}/apply-oauth-credentials`,
+    payload
+  )
   return data
 }
 
@@ -399,9 +491,25 @@ export async function clearError(id: number): Promise<Account> {
  * @param id - Account ID
  * @returns Account usage info
  */
-export async function getUsage(id: number, source?: 'passive' | 'active'): Promise<AccountUsageInfo> {
+export async function getUsage(id: number, source?: 'passive' | 'active', force?: boolean): Promise<AccountUsageInfo> {
+  const params: Record<string, string> = {}
+  if (source) params.source = source
+  if (force) params.force = 'true'
   const { data } = await apiClient.get<AccountUsageInfo>(`/admin/accounts/${id}/usage`, {
-    params: source ? { source } : undefined
+    params: Object.keys(params).length > 0 ? params : undefined
+  })
+  return data
+}
+
+export interface BatchAccountUsageResponse {
+  usage: Record<string, AccountUsageInfo>
+  errors: Record<string, string>
+}
+
+export async function getBatchUsage(accountIds: number[], force?: boolean): Promise<BatchAccountUsageResponse> {
+  const { data } = await apiClient.post<BatchAccountUsageResponse>('/admin/accounts/usage/batch', {
+    account_ids: accountIds,
+    force: force === true
   })
   return data
 }
@@ -682,7 +790,9 @@ export async function syncFromCrs(params: {
       action: string
       error?: string
     }>
-  }>('/admin/accounts/sync/crs', params)
+  }>('/admin/accounts/sync/crs', params, {
+    timeout: 180000 // 180s timeout: sync refreshes each existing account's OAuth token serially
+  })
   return data
 }
 
@@ -732,6 +842,18 @@ export async function importData(payload: {
   return data
 }
 
+export async function importCodexSession(payload: CodexSessionImportRequest): Promise<CodexSessionImportResult> {
+  const { data } = await apiClient.post<CodexSessionImportResult>('/admin/accounts/import/codex-session', payload, {
+    timeout: 120000 // 120s timeout for large session imports
+  })
+  return data
+}
+
+export async function createOpenAICodexPAT(payload: OpenAICodexPATCreateRequest): Promise<Account> {
+  const { data } = await apiClient.post<Account>('/admin/openai/create-from-codex-pat', payload)
+  return data
+}
+
 /**
  * Get Antigravity default model mapping from backend
  * @returns Default model mapping (from -> to)
@@ -775,8 +897,30 @@ export interface BatchOperationResult {
   total: number
   success: number
   failed: number
+  success_ids?: number[]
+  failed_ids?: number[]
   errors?: Array<{ account_id: number; error: string }>
   warnings?: Array<{ account_id: number; warning: string }>
+}
+
+/**
+ * Revert account proxy to original before fallback
+ * @param id - Account ID
+ * @returns Success confirmation
+ */
+export async function revertProxyFallback(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>(`/admin/accounts/${id}/revert-proxy-fallback`)
+  return data
+}
+
+/**
+ * Delete multiple accounts with bounded server-side concurrency.
+ */
+export async function batchDelete(accountIds: number[]): Promise<BatchOperationResult> {
+  const { data } = await apiClient.post<BatchOperationResult>('/admin/accounts/batch-delete', {
+    account_ids: accountIds
+  })
+  return data
 }
 
 /**
@@ -1074,6 +1218,8 @@ export const accountsAPI = {
   create,
   duplicate,
   update,
+  getGrokMediaEligibility,
+  updateGrokMediaEligibility,
   checkMixedChannelRisk,
   loginUpstreamBalanceCredentials,
   delete: deleteAccount,
@@ -1085,6 +1231,7 @@ export const accountsAPI = {
   getErrorHistory,
   clearError,
   getUsage,
+  getBatchUsage,
   getTodayStats,
   getBatchTodayStats,
   clearRateLimit,
@@ -1105,7 +1252,10 @@ export const accountsAPI = {
   syncFromCrs,
   exportData,
   importData,
+  importCodexSession,
+  createOpenAICodexPAT,
   getAntigravityDefaultModelMapping,
+  batchDelete,
   batchClearError,
   batchRefresh,
   setPrivacy,

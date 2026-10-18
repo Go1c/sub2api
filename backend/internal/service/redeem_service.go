@@ -13,6 +13,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
@@ -33,6 +34,22 @@ const (
 	redeemMaxErrorsPerHour = 20
 	redeemLockDuration     = 10 * time.Second // 锁超时时间，防止死锁
 )
+
+type redeemRateLimitPolicy uint8
+
+const (
+	enforceRedeemRateLimit redeemRateLimitPolicy = iota
+	bypassRedeemRateLimit
+)
+
+type ctxKeySkipRedeemAffiliate struct{}
+
+// ContextSkipRedeemAffiliate returns a context that suppresses the redeem-level
+// affiliate rebate. Used by payment fulfillment which handles rebate separately
+// via applyAffiliateRebateForOrder (with audit-log deduplication).
+func ContextSkipRedeemAffiliate(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeySkipRedeemAffiliate{}, true)
+}
 
 // RedeemCache defines cache operations for redeem service
 type RedeemCache interface {
@@ -330,7 +347,7 @@ func (s *RedeemService) checkRedeemRateLimit(ctx context.Context, userID int64) 
 		return nil
 	}
 
-	if count >= redeemMaxErrorsPerHour {
+	if count >= redeemMaxFailedAttempts {
 		return ErrRedeemRateLimited
 	}
 
@@ -368,6 +385,13 @@ func (s *RedeemService) releaseRedeemLock(ctx context.Context, code string) {
 	}
 
 	_ = s.cache.ReleaseRedeemLock(ctx, code)
+}
+
+func unsupportedRedeemTypeError(codeType string) error {
+	if codeType == RedeemTypeInvitation {
+		return infraerrors.BadRequest("REDEEM_CODE_UNSUPPORTED_TYPE", "invitation codes can only be used during registration")
+	}
+	return infraerrors.BadRequest("REDEEM_CODE_UNSUPPORTED_TYPE", fmt.Sprintf("unsupported redeem type: %s", codeType))
 }
 
 // Redeem 使用兑换码
@@ -425,9 +449,15 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, e
 		return nil, ErrRedeemCodeUsed
 	}
 
-	// 验证兑换码类型的前置条件
-	if redeemCode.Type == RedeemTypeSubscription && redeemCode.GroupID == nil {
-		return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
+	// 验证兑换码类型的前置条件。邀请码属于注册流程，不能通过普通兑换接口使用。
+	switch redeemCode.Type {
+	case RedeemTypeBalance, RedeemTypeConcurrency:
+	case RedeemTypeSubscription:
+		if redeemCode.GroupID == nil {
+			return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
+		}
+	default:
+		return nil, unsupportedRedeemTypeError(redeemCode.Type)
 	}
 
 	// 获取用户信息
@@ -513,7 +543,7 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, e
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported redeem type: %s", redeemCode.Type)
+		return nil, unsupportedRedeemTypeError(redeemCode.Type)
 	}
 
 	// 提交事务
@@ -523,6 +553,11 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, e
 
 	// 事务提交成功后失效缓存
 	s.invalidateRedeemCaches(ctx, userID, redeemCode)
+
+	// 余额类正数兑换码触发邀请返利（best-effort，失败不影响兑换结果）
+	if redeemCode.Type == RedeemTypeBalance && redeemCode.Value > 0 {
+		s.tryAccrueAffiliateRebateForRedeem(ctx, userID, redeemCode.Value)
+	}
 
 	// 重新获取更新后的兑换码
 	redeemCode, err = s.redeemRepo.GetByID(ctx, redeemCode.ID)
@@ -575,6 +610,26 @@ func (s *RedeemService) invalidateRedeemCaches(ctx context.Context, userID int64
 				_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
 			}()
 		}
+	}
+}
+
+func (s *RedeemService) tryAccrueAffiliateRebateForRedeem(ctx context.Context, userID int64, amount float64) {
+	if ctx.Value(ctxKeySkipRedeemAffiliate{}) != nil {
+		return
+	}
+	if s.affiliateService == nil {
+		return
+	}
+	if !s.affiliateService.IsEnabled(ctx) {
+		return
+	}
+	rebate, err := s.affiliateService.AccrueInviteRebate(ctx, userID, amount)
+	if err != nil {
+		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate rebate failed for user %d amount %.2f: %v", userID, amount, err)
+		return
+	}
+	if rebate > 0 {
+		logger.LegacyPrintf("service.redeem", "[Redeem] affiliate rebate accrued %.8f for inviter of user %d", rebate, userID)
 	}
 }
 
@@ -657,15 +712,24 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 		return ErrSubscriptionNotFound
 	}
 
-	now := time.Now()
-	remaining := int(sub.ExpiresAt.Sub(now).Hours() / 24)
-	if remaining < 0 {
-		remaining = 0
+	// Redemption already owns a transaction. Lock and reread the subscription
+	// before computing changes: the redeem-code lock cannot serialize different
+	// codes (or an administrator renewal) targeting the same subscription.
+	sub, err = s.subscriptionService.userSubRepo.GetByIDForUpdate(ctx, sub.ID)
+	if err != nil {
+		return fmt.Errorf("lock subscription for reduction: %w", err)
 	}
+
+	now := time.Now()
+	if s.subscriptionService.now != nil {
+		now = s.subscriptionService.now()
+	}
+	// Preserve calendar-day semantics without rounding away the remaining hours.
+	newExpiresAt := sub.ExpiresAt.AddDate(0, 0, -reduceDays)
 
 	notes := fmt.Sprintf("通过兑换码 %s 退款扣减 %d 天", code, reduceDays)
 
-	if remaining <= reduceDays {
+	if !newExpiresAt.After(now) {
 		// 剩余天数不足，直接取消订阅
 		if err := s.subscriptionService.userSubRepo.UpdateStatus(ctx, sub.ID, SubscriptionStatusExpired); err != nil {
 			return fmt.Errorf("cancel subscription: %w", err)
@@ -676,7 +740,6 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 		}
 	} else {
 		// 缩短天数
-		newExpiresAt := sub.ExpiresAt.AddDate(0, 0, -reduceDays)
 		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, newExpiresAt); err != nil {
 			return fmt.Errorf("reduce subscription: %w", err)
 		}
@@ -696,4 +759,9 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 	s.subscriptionService.InvalidateSubCache(userID, groupID)
 
 	return nil
+}
+
+// GetUserHistoryPaginated returns all redemption types for the authenticated user.
+func (s *RedeemService) GetUserHistoryPaginated(ctx context.Context, userID int64, params pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error) {
+	return s.redeemRepo.ListByUserPaginated(ctx, userID, params, "")
 }

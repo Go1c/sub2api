@@ -1,7 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import PaymentView from '../PaymentView.vue'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
+import { formatPaymentAmount } from '@/components/payment/currency'
+import AmountInput from '@/components/payment/AmountInput.vue'
+import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
+import en from '@/i18n/locales/en'
+import zh from '@/i18n/locales/zh'
+import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
 
 const routeState = vi.hoisted(() => ({
   path: '/purchase',
@@ -41,7 +47,7 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key,
+      t: translate,
     }),
   }
 })
@@ -114,34 +120,61 @@ function checkoutInfoFixture() {
       help_image_url: '',
       stripe_publishable_key: '',
     },
+    global_min: 0,
+    global_max: 0,
+    plans: [],
+    balance_disabled: false,
+    balance_recharge_multiplier: 1,
+    subscription_usd_to_cny_rate: 0,
+    recharge_fee_rate: 0,
+    help_text: '',
+    help_image_url: '',
+    stripe_publishable_key: '',
+  }
+
+  return {
+    data: { ...data, ...overrides },
   }
 }
 
-function checkoutInfoWithPlansFixture() {
+function checkoutInfoWithPlansFixture(options: {
+  checkout?: Partial<CheckoutInfoResponse>
+  method?: Partial<MethodLimit>
+  plan?: Partial<SubscriptionPlan>
+} = {}) {
+  const base = checkoutInfoFixture(options.checkout).data
+  const plan: SubscriptionPlan = {
+    id: 7,
+    group_id: 3,
+    name: 'Starter',
+    description: '',
+    price: 128,
+    original_price: 0,
+    validity_days: 30,
+    validity_unit: 'day',
+    rate_multiplier: 1,
+    daily_limit_usd: null,
+    weekly_limit_usd: null,
+    monthly_limit_usd: null,
+    features: [],
+    group_platform: 'openai',
+    sort_order: 1,
+    for_sale: true,
+    group_name: 'OpenAI',
+    ...options.plan,
+  }
+
   return {
     data: {
-      ...checkoutInfoFixture().data,
-      plans: [
-        {
-          id: 7,
-          group_id: 3,
-          name: 'Starter',
-          description: '',
-          price: 128,
-          original_price: 0,
-          validity_days: 30,
-          validity_unit: 'day',
-          rate_multiplier: 1,
-          daily_limit_usd: null,
-          weekly_limit_usd: null,
-          monthly_limit_usd: null,
-          features: [],
-          group_platform: 'openai',
-          sort_order: 1,
-          for_sale: true,
-          group_name: 'OpenAI',
+      ...base,
+      methods: {
+        ...base.methods,
+        wxpay: {
+          ...base.methods.wxpay,
+          ...options.method,
         },
-      ],
+      },
+      plans: [plan],
     },
   }
 }
@@ -440,6 +473,10 @@ describe('PaymentView WeChat JSAPI flow', () => {
       payUrl: 'https://pay.example.com/stale',
       outTradeNo: 'stale-out-trade-no',
       clientSecret: '',
+      intentId: '',
+      currency: '',
+      countryCode: '',
+      paymentEnv: '',
       payAmount: 66,
       orderType: 'balance',
       paymentMode: 'popup',
@@ -557,5 +594,73 @@ describe('PaymentView WeChat JSAPI flow', () => {
     expect(showWarning).toHaveBeenCalledWith('payment.errors.mobilePaymentFallbackToQr')
     expect(showError).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
+  })
+})
+
+describe('PaymentView subscription feature flag', () => {
+  afterEach(() => {
+    appStoreState.setPublicSettings(undefined)
+  })
+
+  function tabLabels(wrapper: Awaited<ReturnType<typeof mountSubscriptionPlanList>>) {
+    return wrapper
+      .findAll('button')
+      .map((button) => button.text())
+      .filter((text) => text === 'payment.tabTopUp' || text === 'payment.tabSubscribe')
+  }
+
+  it('keeps the top-up / subscribe switcher when subscription_enabled is absent (opt-out default)', async () => {
+    const wrapper = await mountSubscriptionPlanList(2)
+
+    expect(tabLabels(wrapper)).toEqual(['payment.tabTopUp', 'payment.tabSubscribe'])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(2)
+  })
+
+  it('drops the subscribe tab, hides the switcher and ignores ?tab=subscription when subscriptions are disabled', async () => {
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    const wrapper = await mountSubscriptionPlanList(2)
+
+    expect(tabLabels(wrapper)).toEqual([])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
+    expect(wrapper.text()).toContain('payment.rechargeAccount')
+  })
+
+  it('shows an unavailable notice instead of a doomed top-up form when balance recharge is disabled too', async () => {
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    const wrapper = await mountSubscriptionConfirm({ checkout: { balance_disabled: true } })
+
+    expect(tabLabels(wrapper)).toEqual([])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('payment.confirmSubscription')
+    expect(wrapper.text()).not.toContain('payment.rechargeAccount')
+    expect(wrapper.text()).toContain('payment.billingUnavailable')
+    wrapper.unmount()
+  })
+
+  it('falls back from the subscribe tab to top-up when the flag flips off after mount', async () => {
+    const wrapper = await mountSubscriptionPlanList(2)
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(2)
+
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    await flushPromises()
+
+    expect(tabLabels(wrapper)).toEqual([])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
+    expect(wrapper.text()).toContain('payment.rechargeAccount')
+    wrapper.unmount()
+  })
+
+  it('enters the subscribe tab when a subscription-only site turns subscriptions back on', async () => {
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    const wrapper = await mountSubscriptionConfirm({ checkout: { balance_disabled: true } })
+    expect(wrapper.text()).toContain('payment.billingUnavailable')
+
+    appStoreState.setPublicSettings({ subscription_enabled: true })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('payment.billingUnavailable')
+    expect(wrapper.text()).not.toContain('payment.rechargeAccount')
+    expect(wrapper.findAllComponents(SubscriptionPlanCard).length).toBeGreaterThan(0)
+    wrapper.unmount()
   })
 })

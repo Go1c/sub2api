@@ -59,7 +59,7 @@ const (
 var (
 	// acquireScript 使用有序集合计数并在未达上限时添加槽位
 	// 使用 Redis TIME 命令获取服务器时间，避免多实例时钟不同步问题
-	// KEYS[1] = 有序集合键 (concurrency:account:{id} / concurrency:user:{id})
+	// KEYS[1] = 普通槽位键，KEYS[2] = 对应 Live 槽位键
 	// ARGV[1] = maxConcurrency
 	// ARGV[2] = TTL（秒）
 	// ARGV[3] = requestID
@@ -69,6 +69,7 @@ var (
 		-- replicates correctly. No-op on Redis 5.0+ (effects replication is default).
 		redis.replicate_commands()
 		local key = KEYS[1]
+		local liveKey = KEYS[2]
 		local maxConcurrency = tonumber(ARGV[1])
 		local ttl = tonumber(ARGV[2])
 		local requestID = ARGV[3]
@@ -80,6 +81,7 @@ var (
 
 		-- 清理过期槽位
 		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
+		redis.call('ZREMRANGEBYSCORE', liveKey, '-inf', now - 60)
 
 		-- 检查是否已存在（支持重试场景刷新时间戳）
 		local exists = redis.call('ZSCORE', key, requestID)
@@ -90,7 +92,7 @@ var (
 		end
 
 		-- 检查是否达到并发上限
-		local count = redis.call('ZCARD', key)
+		local count = redis.call('ZCARD', key) + redis.call('ZCARD', liveKey)
 		if count < maxConcurrency then
 			redis.call('ZADD', key, now, requestID)
 			redis.call('EXPIRE', key, ttl)
@@ -102,13 +104,14 @@ var (
 
 	// getCountScript 统计有序集合中的槽位数量并清理过期条目
 	// 使用 Redis TIME 命令获取服务器时间
-	// KEYS[1] = 有序集合键
+	// KEYS[1] = 普通槽位键，KEYS[2] = 对应 Live 槽位键
 	// ARGV[1] = TTL（秒）
 	getCountScript = redis.NewScript(`
 		-- Redis 3.2-4.x compat: opt into effects replication so redis.call('TIME')
 		-- replicates correctly. No-op on Redis 5.0+ (effects replication is default).
 		redis.replicate_commands()
 		local key = KEYS[1]
+		local liveKey = KEYS[2]
 		local ttl = tonumber(ARGV[1])
 
 		-- 使用 Redis 服务器时间
@@ -117,7 +120,125 @@ var (
 		local expireBefore = now - ttl
 
 		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
-		return redis.call('ZCARD', key)
+		redis.call('ZREMRANGEBYSCORE', liveKey, '-inf', now - 60)
+		return redis.call('ZCARD', key) + redis.call('ZCARD', liveKey)
+	`)
+
+	acquireLiveLeaseScript = redis.NewScript(`
+		redis.replicate_commands()
+		local accountRegular = KEYS[1]
+		local accountLive = KEYS[2]
+		local userRegular = KEYS[3]
+		local userLive = KEYS[4]
+		local apiLive = KEYS[5]
+		local accountMax = tonumber(ARGV[1])
+		local userMax = tonumber(ARGV[2])
+		local ttl = tonumber(ARGV[3])
+		local leaseID = ARGV[4]
+		local replacing = tonumber(ARGV[5])
+		local now = tonumber(redis.call('TIME')[1])
+		local liveExpireBefore = now - ttl
+		redis.call('ZREMRANGEBYSCORE', accountLive, '-inf', liveExpireBefore)
+		redis.call('ZREMRANGEBYSCORE', userLive, '-inf', liveExpireBefore)
+		redis.call('ZREMRANGEBYSCORE', apiLive, '-inf', liveExpireBefore)
+		if redis.call('ZSCORE', accountLive, leaseID) ~= false then
+			return 1
+		end
+		local accountCount = redis.call('ZCARD', accountRegular) + redis.call('ZCARD', accountLive)
+		local userCount = redis.call('ZCARD', userRegular) + redis.call('ZCARD', userLive)
+		local allowance = 0
+		if replacing == 1 then allowance = 1 end
+		if accountMax > 0 and accountCount >= accountMax + allowance then return 0 end
+		if userMax > 0 and userCount >= userMax + allowance then return 0 end
+		redis.call('ZADD', accountLive, now, leaseID)
+		redis.call('ZADD', userLive, now, leaseID)
+		redis.call('ZADD', apiLive, now, leaseID)
+		redis.call('EXPIRE', accountLive, ttl)
+		redis.call('EXPIRE', userLive, ttl)
+		redis.call('EXPIRE', apiLive, ttl)
+		return 1
+	`)
+
+	refreshLiveLeaseScript = redis.NewScript(`
+		redis.replicate_commands()
+		local ttl = tonumber(ARGV[1])
+		local leaseID = ARGV[2]
+		local now = tonumber(redis.call('TIME')[1])
+		local expireBefore = now - ttl
+		for _, key in ipairs(KEYS) do
+			redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
+			if redis.call('ZSCORE', key, leaseID) == false then return 0 end
+		end
+		for _, key in ipairs(KEYS) do
+			redis.call('ZADD', key, now, leaseID)
+			redis.call('EXPIRE', key, ttl)
+		end
+		return 1
+	`)
+
+	// trackSlotScript 记录 stats-only 槽位，不做并发上限判断。
+	// KEYS[1] = 有序集合键
+	// ARGV[1] = TTL（秒）
+	// ARGV[2] = requestID
+	trackSlotScript = redis.NewScript(`
+		-- Redis 3.2-4.x compat: opt into effects replication so redis.call('TIME')
+		-- replicates correctly. No-op on Redis 5.0+ (effects replication is default).
+		redis.replicate_commands()
+		local key = KEYS[1]
+		local ttl = tonumber(ARGV[1])
+		local requestID = ARGV[2]
+
+		local timeResult = redis.call('TIME')
+		local now = tonumber(timeResult[1])
+		local expireBefore = now - ttl
+
+		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
+		redis.call('ZADD', key, now, requestID)
+		redis.call('EXPIRE', key, ttl)
+		return 1
+	`)
+
+	// acquireOpenAIWSIngressLeaseScript atomically reaps crashed members and
+	// acquires or refreshes one API-key-scoped ingress lease using Redis TIME.
+	acquireOpenAIWSIngressLeaseScript = redis.NewScript(`
+		redis.replicate_commands()
+		local key = KEYS[1]
+		local maxConnections = tonumber(ARGV[1])
+		local ttl = tonumber(ARGV[2])
+		local leaseID = ARGV[3]
+		local now = tonumber(redis.call('TIME')[1])
+		local expireBefore = now - ttl
+		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
+		if redis.call('ZSCORE', key, leaseID) ~= false then
+			redis.call('ZADD', key, now, leaseID)
+			redis.call('EXPIRE', key, ttl)
+			return 1
+		end
+		if redis.call('ZCARD', key) < maxConnections then
+			redis.call('ZADD', key, now, leaseID)
+			redis.call('EXPIRE', key, ttl)
+			return 1
+		end
+		return 0
+	`)
+
+	// refreshOpenAIWSIngressLeaseScript does not recreate a missing member: a
+	// process that lost its lease must terminate its local WebSocket instead of
+	// silently continuing beyond the distributed cap.
+	refreshOpenAIWSIngressLeaseScript = redis.NewScript(`
+		redis.replicate_commands()
+		local key = KEYS[1]
+		local ttl = tonumber(ARGV[1])
+		local leaseID = ARGV[2]
+		local now = tonumber(redis.call('TIME')[1])
+		local expireBefore = now - ttl
+		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
+		if redis.call('ZSCORE', key, leaseID) == false then
+			return 0
+		end
+		redis.call('ZADD', key, now, leaseID)
+		redis.call('EXPIRE', key, ttl)
+		return 1
 	`)
 
 	// trackSlotScript 记录 stats-only 槽位，不做并发上限判断。
@@ -583,7 +704,7 @@ func (c *concurrencyCache) ReleaseAccountSlot(ctx context.Context, accountID int
 func (c *concurrencyCache) GetAccountConcurrency(ctx context.Context, accountID int64) (int, error) {
 	key := accountSlotKey(accountID)
 	// 时间戳在 Lua 脚本内使用 Redis TIME 命令获取
-	result, err := getCountScript.Run(ctx, c.rdb, []string{key}, c.slotTTLSeconds).Int()
+	result, err := getCountScript.Run(ctx, c.rdb, []string{key, liveAccountSlotKey(accountID)}, c.slotTTLSeconds).Int()
 	if err != nil {
 		return 0, err
 	}
@@ -631,14 +752,18 @@ func (c *concurrencyCache) GetAccountConcurrencyBatch(ctx context.Context, accou
 	type accountCmd struct {
 		accountID int64
 		zcardCmd  *redis.IntCmd
+		liveCmd   *redis.IntCmd
 	}
 	cmds := make([]accountCmd, 0, len(accountIDs))
 	for _, accountID := range accountIDs {
 		slotKey := accountSlotKeyPrefix + strconv.FormatInt(accountID, 10)
+		liveKey := liveAccountSlotKeyPrefix + strconv.FormatInt(accountID, 10)
 		pipe.ZRemRangeByScore(ctx, slotKey, "-inf", strconv.FormatInt(cutoffTime, 10))
+		pipe.ZRemRangeByScore(ctx, liveKey, "-inf", strconv.FormatInt(now.Unix()-liveLeaseTTLSeconds, 10))
 		cmds = append(cmds, accountCmd{
 			accountID: accountID,
 			zcardCmd:  pipe.ZCard(ctx, slotKey),
+			liveCmd:   pipe.ZCard(ctx, liveKey),
 		})
 	}
 
@@ -648,7 +773,7 @@ func (c *concurrencyCache) GetAccountConcurrencyBatch(ctx context.Context, accou
 
 	result := make(map[int64]int, len(accountIDs))
 	for _, cmd := range cmds {
-		result[cmd.accountID] = int(cmd.zcardCmd.Val())
+		result[cmd.accountID] = int(cmd.zcardCmd.Val() + cmd.liveCmd.Val())
 	}
 	return result, nil
 }
@@ -682,7 +807,7 @@ func (c *concurrencyCache) ReleaseUserSlot(ctx context.Context, userID int64, re
 func (c *concurrencyCache) GetUserConcurrency(ctx context.Context, userID int64) (int, error) {
 	key := userSlotKey(userID)
 	// 时间戳在 Lua 脚本内使用 Redis TIME 命令获取
-	result, err := getCountScript.Run(ctx, c.rdb, []string{key}, c.slotTTLSeconds).Int()
+	result, err := getCountScript.Run(ctx, c.rdb, []string{key, liveUserSlotKey(userID)}, c.slotTTLSeconds).Int()
 	if err != nil {
 		return 0, err
 	}
@@ -860,17 +985,21 @@ func (c *concurrencyCache) GetAccountsLoadBatch(ctx context.Context, accounts []
 		id             int64
 		maxConcurrency int
 		zcardCmd       *redis.IntCmd
+		liveCmd        *redis.IntCmd
 		getCmd         *redis.StringCmd
 	}
 	cmds := make([]accountCmds, 0, len(accounts))
 	for _, acc := range accounts {
 		slotKey := accountSlotKeyPrefix + strconv.FormatInt(acc.ID, 10)
+		liveKey := liveAccountSlotKeyPrefix + strconv.FormatInt(acc.ID, 10)
 		waitKey := accountWaitKeyPrefix + strconv.FormatInt(acc.ID, 10)
 		pipe.ZRemRangeByScore(ctx, slotKey, "-inf", strconv.FormatInt(cutoffTime, 10))
+		pipe.ZRemRangeByScore(ctx, liveKey, "-inf", strconv.FormatInt(now.Unix()-liveLeaseTTLSeconds, 10))
 		ac := accountCmds{
 			id:             acc.ID,
 			maxConcurrency: acc.MaxConcurrency,
 			zcardCmd:       pipe.ZCard(ctx, slotKey),
+			liveCmd:        pipe.ZCard(ctx, liveKey),
 			getCmd:         pipe.Get(ctx, waitKey),
 		}
 		cmds = append(cmds, ac)
@@ -882,7 +1011,7 @@ func (c *concurrencyCache) GetAccountsLoadBatch(ctx context.Context, accounts []
 
 	loadMap := make(map[int64]*service.AccountLoadInfo, len(accounts))
 	for _, ac := range cmds {
-		currentConcurrency := int(ac.zcardCmd.Val())
+		currentConcurrency := int(ac.zcardCmd.Val() + ac.liveCmd.Val())
 		waitingCount := 0
 		if v, err := ac.getCmd.Int(); err == nil {
 			waitingCount = v
@@ -920,17 +1049,21 @@ func (c *concurrencyCache) GetUsersLoadBatch(ctx context.Context, users []servic
 		id             int64
 		maxConcurrency int
 		zcardCmd       *redis.IntCmd
+		liveCmd        *redis.IntCmd
 		getCmd         *redis.StringCmd
 	}
 	cmds := make([]userCmds, 0, len(users))
 	for _, u := range users {
 		slotKey := userSlotKeyPrefix + strconv.FormatInt(u.ID, 10)
+		liveKey := liveUserSlotKeyPrefix + strconv.FormatInt(u.ID, 10)
 		waitKey := waitQueueKeyPrefix + strconv.FormatInt(u.ID, 10)
 		pipe.ZRemRangeByScore(ctx, slotKey, "-inf", strconv.FormatInt(cutoffTime, 10))
+		pipe.ZRemRangeByScore(ctx, liveKey, "-inf", strconv.FormatInt(now.Unix()-liveLeaseTTLSeconds, 10))
 		uc := userCmds{
 			id:             u.ID,
 			maxConcurrency: u.MaxConcurrency,
 			zcardCmd:       pipe.ZCard(ctx, slotKey),
+			liveCmd:        pipe.ZCard(ctx, liveKey),
 			getCmd:         pipe.Get(ctx, waitKey),
 		}
 		cmds = append(cmds, uc)
@@ -942,7 +1075,7 @@ func (c *concurrencyCache) GetUsersLoadBatch(ctx context.Context, users []servic
 
 	loadMap := make(map[int64]*service.UserLoadInfo, len(users))
 	for _, uc := range cmds {
-		currentConcurrency := int(uc.zcardCmd.Val())
+		currentConcurrency := int(uc.zcardCmd.Val() + uc.liveCmd.Val())
 		waitingCount := 0
 		if v, err := uc.getCmd.Int(); err == nil {
 			waitingCount = v

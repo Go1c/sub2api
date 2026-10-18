@@ -2,7 +2,8 @@
  * Centralized platform color definitions.
  *
  * All components that need platform-specific styling should import from here
- * instead of defining their own color mappings.
+ * instead of defining their own color mappings. Platforms registered only on
+ * the server (see constants/platformCatalog) use the neutral *_DEFAULT styles.
  */
 
 export type Platform =
@@ -56,6 +57,45 @@ const BORDER: Record<Platform, string> = {
   composite: 'border-cyan-500/20 dark:border-cyan-500/20',
 }
 const BORDER_DEFAULT = 'border-gray-200 dark:border-dark-700'
+
+// ── Border strong (higher-contrast platform tint, e.g. plaza group cards) ──
+const BORDER_STRONG: Record<Platform, string> = {
+  anthropic: 'border-orange-500/35 dark:border-orange-500/30',
+  openai: 'border-green-500/35 dark:border-green-500/30',
+  antigravity: 'border-purple-500/35 dark:border-purple-500/30',
+  gemini: 'border-blue-500/35 dark:border-blue-500/30',
+  grok: 'border-zinc-800/35 dark:border-zinc-500/35',
+  kimi: 'border-pink-500/35 dark:border-pink-500/30',
+  zhipu: 'border-indigo-500/35 dark:border-indigo-500/30',
+  deepseek: 'border-teal-500/35 dark:border-teal-500/30',
+  minimax: 'border-rose-500/35 dark:border-rose-500/30',
+  opencode_go: 'border-amber-500/35 dark:border-amber-500/30',
+  typesafe: 'border-sky-500/35 dark:border-sky-500/30',
+  command_code: 'border-neutral-500/35 dark:border-neutral-500/30',
+  cline: 'border-violet-500/35 dark:border-violet-500/30',
+  composite: 'border-cyan-500/35 dark:border-cyan-500/30',
+}
+const BORDER_STRONG_DEFAULT = 'border-gray-300 dark:border-dark-600'
+
+// ── Accent (single raw color per platform; consumers derive washes/tints
+//    from it via CSS color-mix, e.g. plaza paid-price zone) ──
+const ACCENT: Record<Platform, string> = {
+  anthropic: '#f97316', // orange-500
+  openai: '#22c55e', // green-500
+  antigravity: '#a855f7', // purple-500
+  gemini: '#3b82f6', // blue-500
+  grok: '#71717a', // zinc-500
+  kimi: '#ec4899', // pink-500
+  zhipu: '#6366f1', // indigo-500
+  deepseek: '#14b8a6', // teal-500
+  minimax: '#f43f5e', // rose-500
+  opencode_go: '#f59e0b', // amber-500
+  typesafe: '#0ea5e9', // sky-500
+  command_code: '#737373', // neutral-500
+  cline: '#8b5cf6', // violet-500（Cline 品牌紫 #9F58FA）
+  composite: '#06b6d4', // cyan-500
+}
+const ACCENT_DEFAULT = '#14b8a6' // primary-500 (teal)
 
 // ── Accent bar (gradient) ───────────────────────────────────────────
 const ACCENT_BAR: Record<Platform, string> = {
@@ -196,6 +236,14 @@ export function platformBorderClass(p: string): string {
   return isPlatform(p) ? BORDER[p] : BORDER_DEFAULT
 }
 
+export function platformBorderStrongClass(p: string): string {
+  return isPlatform(p) ? BORDER_STRONG[p] : BORDER_STRONG_DEFAULT
+}
+
+export function platformAccentColor(p: string): string {
+  return isPlatform(p) ? ACCENT[p] : ACCENT_DEFAULT
+}
+
 export function platformAccentBarClass(p: string): string {
   return isPlatform(p) ? ACCENT_BAR[p] : ACCENT_BAR_DEFAULT
 }
@@ -228,6 +276,7 @@ export function platformGradientSubtextClass(p: string): string {
   return isPlatform(p) ? GRADIENT_SUBTEXT[p] : GRADIENT_SUBTEXT_DEFAULT
 }
 
+/** 平台展示名：来自平台清单（后端 domain/platforms.go），新登记的平台同样适用。 */
 export function platformLabel(p: string): string {
   switch (p) {
     case 'anthropic': return 'Anthropic'

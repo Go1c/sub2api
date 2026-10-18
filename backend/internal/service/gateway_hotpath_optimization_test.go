@@ -10,6 +10,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
@@ -165,6 +166,10 @@ func (s *modelsListAccountRepoStub) ListSchedulableByGroupID(ctx context.Context
 	return out, nil
 }
 
+func (s *modelsListAccountRepoStub) ListModelAvailabilityCandidates(ctx context.Context, groupID *int64, _ []string, _ bool) ([]Account, error) {
+	return s.ListSchedulableByGroupID(ctx, *groupID)
+}
+
 func (s *modelsListAccountRepoStub) ListSchedulable(ctx context.Context) ([]Account, error) {
 	s.listAllCalls.Add(1)
 	if s.err != nil {
@@ -226,7 +231,15 @@ func TestGetUserGroupRateMultiplier_UsesCacheAndSingleflight(t *testing.T) {
 	}
 
 	close(start)
-	time.Sleep(20 * time.Millisecond)
+	// Wait for every caller to have recorded its cache miss before releasing the
+	// loader. A fixed sleep raced here: a goroutine that reached the cache after
+	// the singleflight load had already finished got a hit instead of a miss, and
+	// the miss assertion below saw 11 of 12. The miss counter is the observable
+	// that says "all callers are now inside the singleflight group".
+	require.Eventually(t, func() bool {
+		_, miss, _, _, _ := GatewayUserGroupRateCacheStats()
+		return miss == int64(concurrent)
+	}, 5*time.Second, time.Millisecond, "all callers must miss the cache before the loader is released")
 	close(unblock)
 	wg.Wait()
 
@@ -540,6 +553,46 @@ func TestGetAvailableModels_UsesShortCacheAndSupportsInvalidation(t *testing.T) 
 	require.Equal(t, int64(2), hit)
 	require.Equal(t, int64(2), miss)
 	require.Equal(t, int64(2), store)
+}
+
+// Scenario: 账号模型变更会失效所属平台缓存
+func TestResolveCompositeModelOwnershipUsesModelsCacheInvalidation(t *testing.T) {
+	groupID := int64(9)
+	repo := &modelsListAccountRepoStub{
+		byGroup: map[int64][]Account{
+			groupID: {{
+				ID:          1,
+				Platform:    PlatformDeepseek,
+				Credentials: map[string]any{"model_mapping": map[string]any{"company-model": "deepseek-v4-pro"}},
+			}},
+		},
+	}
+	svc := &GatewayService{
+		accountRepo:        repo,
+		modelsListCache:    gocache.New(time.Minute, time.Minute),
+		modelsListCacheTTL: time.Minute,
+	}
+
+	first, err := svc.resolveCompositeModelOwnership(context.Background(), groupID, "company-model")
+	require.NoError(t, err)
+	require.Equal(t, CompositeModelOwnership{TargetPlatform: PlatformDeepseek, Matched: true}, first)
+	require.Equal(t, int64(1), repo.listByGroupCalls.Load())
+
+	repo.byGroup[groupID] = []Account{{
+		ID:          2,
+		Platform:    PlatformOpenAI,
+		Credentials: map[string]any{"model_mapping": map[string]any{"company-model": "gpt-5"}},
+	}}
+	cached, err := svc.resolveCompositeModelOwnership(context.Background(), groupID, "company-model")
+	require.NoError(t, err)
+	require.Equal(t, first, cached)
+	require.Equal(t, int64(1), repo.listByGroupCalls.Load())
+
+	svc.InvalidateAvailableModelsCache(&groupID, PlatformDeepseek)
+	refreshed, err := svc.resolveCompositeModelOwnership(context.Background(), groupID, "company-model")
+	require.NoError(t, err)
+	require.Equal(t, CompositeModelOwnership{TargetPlatform: PlatformOpenAI, Matched: true}, refreshed)
+	require.Equal(t, int64(2), repo.listByGroupCalls.Load())
 }
 
 func TestGetAvailableModels_ErrorAndGlobalListBranches(t *testing.T) {

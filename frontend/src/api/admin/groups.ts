@@ -7,6 +7,10 @@ import { apiClient } from '../client'
 import type {
   AdminGroup,
   GroupPlatform,
+  CompositeModelRoute,
+  CompositeModelRouteInput,
+  CompositeRoutePreviewRequest,
+  CompositeRouteDecision,
   CreateGroupRequest,
   UpdateGroupRequest,
   PaginatedResponse,
@@ -15,6 +19,11 @@ import type {
   CompositeRoutePreviewRequest,
   CompositeRouteDecision
 } from '@/types'
+
+export interface LiveCapability {
+  supported: boolean
+  reason?: string
+}
 
 /**
  * List all groups with pagination
@@ -79,6 +88,12 @@ export async function getAllIncludingInactive(): Promise<AdminGroup[]> {
  */
 export async function getByPlatform(platform: GroupPlatform): Promise<AdminGroup[]> {
   return getAll(platform)
+}
+
+/** 获取当前 Sub2API 服务端的 Live 运行环境能力。 */
+export async function getLiveCapability(): Promise<LiveCapability> {
+  const { data } = await apiClient.get<LiveCapability>('/admin/groups/live-capability')
+  return data
 }
 
 /**

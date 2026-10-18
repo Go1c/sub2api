@@ -1692,13 +1692,30 @@ func (r *accountRepository) ClearError(ctx context.Context, id int64) error {
 }
 
 func (r *accountRepository) AddToGroup(ctx context.Context, accountID, groupID int64, priority int) error {
-	_, err := r.client.AccountGroup.Create().
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+		return err
+	}
+	client := r.client
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+		client = tx.Client()
+	}
+	if err := lockLiveGroups(ctx, client, []int64{groupID}); err != nil {
+		return err
+	}
+	_, err = client.AccountGroup.Create().
 		SetAccountID(accountID).
 		SetGroupID(groupID).
 		SetPriority(priority).
 		Save(ctx)
 	if err != nil {
 		return err
+	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return err
+		}
 	}
 	payload := buildSchedulerGroupPayload([]int64{groupID})
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
@@ -1759,6 +1776,9 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 	} else {
 		// 已处于外部事务中（ErrTxStarted），复用当前 client
 		txClient = r.client
+	}
+	if err := lockLiveGroups(ctx, txClient, groupIDs); err != nil {
+		return err
 	}
 
 	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
@@ -2758,11 +2778,13 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 	if len(ids) == 0 {
 		return 0, nil
 	}
+	updates.Extra = stripCodexFingerprintSeedFromExtraUpdate(updates.Extra)
 
 	setClauses := make([]string, 0, 8)
 	args := make([]any, 0, 8)
 
 	idx := 1
+	ollamaProxyIdentityChanged := ""
 	if updates.Name != nil {
 		setClauses = append(setClauses, "name = $"+itoa(idx))
 		args = append(args, *updates.Name)
@@ -2772,8 +2794,11 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		// 0 表示清除代理（前端发送 0 而不是 null 来表达清除意图）
 		if *updates.ProxyID == 0 {
 			setClauses = append(setClauses, "proxy_id = NULL")
+			ollamaProxyIdentityChanged = "proxy_id IS NOT NULL"
 		} else {
-			setClauses = append(setClauses, "proxy_id = $"+itoa(idx))
+			proxyPlaceholder := "$" + itoa(idx)
+			setClauses = append(setClauses, "proxy_id = "+proxyPlaceholder)
+			ollamaProxyIdentityChanged = "proxy_id IS DISTINCT FROM " + proxyPlaceholder
 			args = append(args, *updates.ProxyID)
 			idx++
 		}
@@ -2819,19 +2844,76 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		updates.Extra[service.UpstreamBillingProbeEnabledExtraKey] = *updates.ProbeEnabled
 	}
 	// JSONB 需要合并而非覆盖，使用 raw SQL 保持旧行为。
+	credentialPlaceholder := ""
 	if len(updates.Credentials) > 0 {
 		payload, err := json.Marshal(updates.Credentials)
 		if err != nil {
 			return 0, err
 		}
-		setClauses = append(setClauses, "credentials = COALESCE(credentials, '{}'::jsonb) || $"+itoa(idx)+"::jsonb")
+		credentialPlaceholder = "$" + itoa(idx)
+		setClauses = append(setClauses, "credentials = COALESCE(credentials, '{}'::jsonb) || "+credentialPlaceholder+"::jsonb")
 		args = append(args, payload)
 		idx++
 	}
-	if len(updates.Extra) > 0 {
-		payload, err := json.Marshal(updates.Extra)
-		if err != nil {
-			return 0, err
+
+	ollamaGroupIdentityChanges := make([]string, 0, 2)
+	if _, ok := updates.Credentials["api_key"]; ok {
+		ollamaGroupIdentityChanges = append(ollamaGroupIdentityChanges, "credentials -> 'api_key' IS DISTINCT FROM "+credentialPlaceholder+"::jsonb -> 'api_key'")
+	}
+	if _, ok := updates.Credentials["base_url"]; ok {
+		ollamaGroupIdentityChanges = append(ollamaGroupIdentityChanges,
+			"NOT ("+ollamaCloudBaseURLMatchesSQL("credentials ->> 'base_url'")+
+				" AND "+ollamaCloudBaseURLMatchesSQL(credentialPlaceholder+"::jsonb ->> 'base_url'")+")")
+	}
+
+	// OpenCode Go 身份清理与 Ollama 同范式但更精确：仅当旧行按新谓词属于 OpenCode
+	// 用量身份（opencode_go Go 订阅，或挂载白名单平台 + 官方 OpenCode Go 基址）时
+	// 才可能持有受管键，且只在该组身份（api_key / normalized base URL /
+	// account_mode）真正变化或不再 eligible 时清除，避免与 Ollama 分支交叉误清。
+	opencodeGroupIdentityChanges := make([]string, 0, 3)
+	opencodeOldBaseURL := opencodeGoBaseURLMatchSQLPrefix + "credentials ->> 'base_url'" + opencodeGoBaseURLMatchSQLSuffix
+	// 旧行 OpenCode 用量身份谓词（与 opencodeGoUsageEligibleSQL 的行侧条件镜像；
+	// type 由 opencodeEligibleAccount 统一携带）。account_mode 未设置/为 null/非
+	// zen 均视为 Go 订阅，与 GetOpenCodeAccountMode 默认兼容一致。
+	opencodeOldUsageIdentity := "((platform = 'opencode_go' AND COALESCE(btrim(credentials ->> 'account_mode') <> 'zen', true))" +
+		" OR (platform IN (" + opencodeGoUsageMountPlatformsSQL + ") AND " + opencodeOldBaseURL + "))"
+	if _, ok := updates.Credentials["api_key"]; ok {
+		opencodeGroupIdentityChanges = append(opencodeGroupIdentityChanges,
+			opencodeOldUsageIdentity+" AND credentials -> 'api_key' IS DISTINCT FROM "+credentialPlaceholder+"::jsonb -> 'api_key'")
+	}
+	if _, ok := updates.Credentials["base_url"]; ok {
+		// 仅挂载行身份钉在官方基址上（opencode_go 行的 base_url 不参与资格，两个
+		// 官方变体都合法，不由此子句清理）。NULL-safe：新 base_url 缺失/为 null 时
+		// regex(NULL) 为 NULL，NOT NULL 仍为 NULL 会令 WHEN 不命中而残留 OpenCode
+		// 状态；IS NOT TRUE 把 NULL 视为不匹配。
+		opencodeGroupIdentityChanges = append(opencodeGroupIdentityChanges,
+			"platform IN ("+opencodeGoUsageMountPlatformsSQL+") AND "+opencodeOldBaseURL+
+				" AND ("+opencodeGoBaseURLMatchSQLPrefix+credentialPlaceholder+"::jsonb ->> 'base_url'"+opencodeGoBaseURLMatchSQLSuffix+") IS NOT TRUE")
+	}
+	if _, ok := updates.Credentials["account_mode"]; ok {
+		// 仅 opencode_go 行身份钉在 Go 订阅上（挂载行的 account_mode 与 OpenCode
+		// 资格无关，不由此子句清理）。模式转 Zen 即不再 eligible。
+		opencodeGroupIdentityChanges = append(opencodeGroupIdentityChanges,
+			"platform = 'opencode_go' AND COALESCE(btrim(credentials ->> 'account_mode') <> 'zen', true)"+
+				" AND COALESCE(btrim("+credentialPlaceholder+"::jsonb ->> 'account_mode') <> 'zen', true) IS NOT TRUE")
+	}
+
+	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed {
+		extraExpression := "COALESCE(extra, '{}'::jsonb)"
+		if len(updates.Extra) > 0 {
+			payload, err := json.Marshal(updates.Extra)
+			if err != nil {
+				return 0, err
+			}
+			extraExpression += " || $" + itoa(idx) + "::jsonb"
+			args = append(args, payload)
+			idx++
+			if upstreamBillingProbeExplicitlyDisabled(updates.Extra) || upstreamBillingProbeSnapshotClearRequested(updates.Extra) {
+				extraExpression = "(" + extraExpression + ") - 'upstream_billing_probe'"
+			}
+			if ollamaCloudUsageSnapshotClearRequested(updates.Extra) {
+				extraExpression = "(" + extraExpression + ") - 'ollama_cloud_usage_snapshot'"
+			}
 		}
 		extraExpression := "COALESCE(extra, '{}'::jsonb) || $" + itoa(idx) + "::jsonb"
 		if upstreamBillingProbeExplicitlyDisabled(updates.Extra) || upstreamBillingProbeSnapshotClearRequested(updates.Extra) {
@@ -3642,23 +3724,32 @@ func (r *accountRepository) IncrementQuotaUsed(ctx context.Context, id int64, am
 	return nil
 }
 
-// ResetQuotaUsed 重置账号所有维度的配额用量为 0
-// 保留固定重置模式的配置字段（quota_daily_reset_mode 等），仅清零用量和窗口起始时间
-func (r *accountRepository) ResetQuotaUsed(ctx context.Context, id int64) error {
-	_, err := r.sql.ExecContext(ctx,
+// ResetQuotaUsedAndClearRateLimitCooldown resets all quota dimensions and the
+// account-level cooldown in one statement. Other scheduler blocking state is preserved.
+func (r *accountRepository) ResetQuotaUsedAndClearRateLimitCooldown(ctx context.Context, id int64) error {
+	result, err := r.sql.ExecContext(ctx,
 		`UPDATE accounts SET extra = (
 			COALESCE(extra, '{}'::jsonb)
 			|| '{"quota_used": 0, "quota_daily_used": 0, "quota_weekly_used": 0}'::jsonb
-		) - 'quota_daily_start' - 'quota_weekly_start' - 'quota_daily_reset_at' - 'quota_weekly_reset_at', updated_at = NOW()
+		) - 'quota_daily_start' - 'quota_weekly_start' - 'quota_daily_reset_at' - 'quota_weekly_reset_at',
+		rate_limited_at = NULL, rate_limit_reset_at = NULL, updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL`,
 		id)
 	if err != nil {
 		return err
 	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAccountNotFound
+	}
 	// 重置配额后触发调度快照刷新，使账号重新参与调度
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
 		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue quota reset failed: account=%d err=%v", id, err)
 	}
+	r.syncSchedulerAccountSnapshot(ctx, id)
 	return nil
 }
 

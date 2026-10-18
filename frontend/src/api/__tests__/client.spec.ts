@@ -21,11 +21,24 @@ describe('API Client', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   // --- 请求拦截器 ---
 
   describe('请求拦截器', () => {
+    it('规范化相对 API base，避免在回调页拼出相对 v1 路径', async () => {
+      vi.resetModules()
+      vi.stubEnv('VITE_API_BASE_URL', 'api/v1')
+
+      const mod = await import('@/api/client')
+
+      expect(mod.apiClient.defaults.baseURL).toBe('/api/v1')
+      expect(mod.buildApiUrl('/auth/oauth/github/callback?code=abc')).toBe(
+        '/api/v1/auth/oauth/github/callback?code=abc'
+      )
+    })
+
     it('自动附加 Authorization 头', async () => {
       localStorage.setItem('auth_token', 'my-jwt-token')
 
@@ -245,6 +258,53 @@ describe('API Client', () => {
         })
       )
     })
+
+    it('部署与运营合规未确认时广播事件且保留登录态', async () => {
+      localStorage.setItem('auth_token', 'admin-token')
+      const listener = vi.fn()
+      window.addEventListener('admin-compliance-required', listener)
+
+      const adapter = vi.fn().mockRejectedValue({
+        response: {
+          status: 423,
+          data: {
+            code: 'ADMIN_COMPLIANCE_ACK_REQUIRED',
+            message: 'administrator compliance acknowledgement is required',
+            metadata: {
+              version: 'v2026.06.10',
+              document_path_zh: 'docs/legal/admin-compliance.zh.md',
+              document_path_en: 'docs/legal/admin-compliance.en.md',
+            },
+          },
+        },
+        config: {
+          url: '/admin/users',
+          headers: { Authorization: 'Bearer admin-token' },
+        },
+        code: 'ERR_BAD_REQUEST',
+      })
+      apiClient.defaults.adapter = adapter
+
+      await expect(apiClient.get('/admin/users')).rejects.toEqual(
+        expect.objectContaining({
+          status: 423,
+          code: 'ADMIN_COMPLIANCE_ACK_REQUIRED',
+          metadata: expect.objectContaining({
+            version: 'v2026.06.10',
+          }),
+        })
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual(
+        expect.objectContaining({
+          version: 'v2026.06.10',
+        })
+      )
+      expect(localStorage.getItem('auth_token')).toBe('admin-token')
+
+      window.removeEventListener('admin-compliance-required', listener)
+    })
   })
 
   // --- 401 Token 刷新 ---
@@ -377,9 +437,9 @@ describe('API Client', () => {
   // --- 网络错误 ---
 
   describe('网络错误', () => {
-    it('网络错误返回 status 0 的错误', async () => {
+    it.each(['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', undefined])('网络错误保留错误码 %s', async (code) => {
       const adapter = vi.fn().mockRejectedValue({
-        code: 'ERR_NETWORK',
+        code,
         message: 'Network Error',
         config: { url: '/test' },
         // 没有 response
@@ -389,6 +449,7 @@ describe('API Client', () => {
       await expect(apiClient.get('/test')).rejects.toEqual(
         expect.objectContaining({
           status: 0,
+          code: code || 'ERR_NETWORK',
           message: 'Network error. Please check your connection.',
         })
       )

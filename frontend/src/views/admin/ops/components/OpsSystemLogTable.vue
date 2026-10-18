@@ -5,6 +5,7 @@ import { opsAPI, type OpsRuntimeLogConfig, type OpsSystemLog, type OpsSystemLogS
 import Pagination from '@/components/common/Pagination.vue'
 import Select from '@/components/common/Select.vue'
 import { useAppStore } from '@/stores'
+import { extractApiErrorMessage } from '@/utils/apiError'
 
 const appStore = useAppStore()
 const { t } = useI18n()
@@ -33,15 +34,18 @@ const health = ref<OpsSystemLogSinkHealth>({
 })
 
 const runtimeLoading = ref(false)
+const runtimeConfigLoaded = ref(false)
 const runtimeSaving = ref(false)
 const runtimeConfig = reactive<OpsRuntimeLogConfig>({
   level: 'info',
+  persist_access_logs: false,
   enable_sampling: false,
   sampling_initial: 100,
   sampling_thereafter: 100,
   caller: true,
   stacktrace_level: 'error',
-  retention_days: 30
+  retention_days: 30,
+  request_retention_days: 90
 })
 
 const filters = reactive({
@@ -223,27 +227,39 @@ const fetchHealth = async () => {
 
 const loadRuntimeConfig = async () => {
   runtimeLoading.value = true
+  runtimeConfigLoaded.value = false
   try {
     const cfg = await opsAPI.getRuntimeLogConfig()
     runtimeConfig.level = cfg.level
+    runtimeConfig.persist_access_logs = cfg.persist_access_logs
     runtimeConfig.enable_sampling = cfg.enable_sampling
     runtimeConfig.sampling_initial = cfg.sampling_initial
     runtimeConfig.sampling_thereafter = cfg.sampling_thereafter
     runtimeConfig.caller = cfg.caller
     runtimeConfig.stacktrace_level = cfg.stacktrace_level
     runtimeConfig.retention_days = cfg.retention_days
+    runtimeConfig.request_retention_days = cfg.request_retention_days ?? 90
+    runtimeConfigLoaded.value = true
   } catch (err: any) {
     console.error('[OpsSystemLogTable] Failed to load runtime log config', err)
+    appStore.showError(t('admin.ops.systemLogs.runtimeConfigLoadFailed'))
   } finally {
     runtimeLoading.value = false
   }
 }
 
 const saveRuntimeConfig = async () => {
+  if (!runtimeConfigLoaded.value || runtimeLoading.value) return
+  if (!Number.isInteger(runtimeConfig.retention_days) || runtimeConfig.retention_days < 1 || runtimeConfig.retention_days > 3650 ||
+      !Number.isInteger(runtimeConfig.request_retention_days) || runtimeConfig.request_retention_days < 0 || runtimeConfig.request_retention_days > 3650) {
+    appStore.showError(t('admin.ops.systemLogs.retentionDaysInvalid'))
+    return
+  }
   runtimeSaving.value = true
   try {
     const saved = await opsAPI.updateRuntimeLogConfig({ ...runtimeConfig })
     runtimeConfig.level = saved.level
+    runtimeConfig.persist_access_logs = saved.persist_access_logs
     runtimeConfig.enable_sampling = saved.enable_sampling
     runtimeConfig.sampling_initial = saved.sampling_initial
     runtimeConfig.sampling_thereafter = saved.sampling_thereafter
@@ -267,6 +283,7 @@ const resetRuntimeConfig = async () => {
   try {
     const saved = await opsAPI.resetRuntimeLogConfig()
     runtimeConfig.level = saved.level
+    runtimeConfig.persist_access_logs = saved.persist_access_logs
     runtimeConfig.enable_sampling = saved.enable_sampling
     runtimeConfig.sampling_initial = saved.sampling_initial
     runtimeConfig.sampling_thereafter = saved.sampling_thereafter

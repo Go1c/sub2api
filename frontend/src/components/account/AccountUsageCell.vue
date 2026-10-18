@@ -68,8 +68,28 @@
           color="purple"
         />
 
-        <!-- Passive sampling label + active query button -->
-        <div class="flex items-center gap-1.5 mt-0.5">
+        <!-- 7d Fable Window (7d_oi) -->
+        <UsageProgressBar
+          v-if="usageInfo.seven_day_fable"
+          label="7d F"
+          :utilization="usageInfo.seven_day_fable.utilization"
+          :resets-at="usageInfo.seven_day_fable.resets_at"
+          color="amber"
+        />
+
+      </div>
+
+      <!-- No data yet -->
+      <div v-else class="space-y-1">
+        <div class="text-xs text-gray-400">-</div>
+      </div>
+      <!--
+        One stable instance for every usage state, so a reset-credit query started
+        while usage is still loading survives the usage response. The local query
+        button shares its row once usage data exists.
+      -->
+      <ClaudeResetCreditsCell :account="account" class="mt-1" @redeemed="loadActiveUsage">
+        <template v-if="usageInfo" #pre-actions>
           <span
             v-if="usageInfo.source === 'passive'"
             class="text-[9px] text-gray-400 dark:text-gray-500 italic"
@@ -78,7 +98,7 @@
           </span>
           <button
             type="button"
-            class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors"
+            class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="activeQueryLoading"
             @click="loadActiveUsage"
           >
@@ -127,6 +147,7 @@
           :utilization="usageInfo.seven_day.utilization"
           :resets-at="usageInfo.seven_day.resets_at"
           :window-stats="usageInfo.seven_day.window_stats"
+          :estimated-total-cost="openAISevenDayEstimatedTotalCost"
           :show-now-when-idle="true"
           color="emerald"
         />
@@ -454,6 +475,7 @@
         </span>
         <!-- Help icon -->
         <span
+          v-if="showGeminiQuotaPolicy"
           class="group relative cursor-help"
         >
           <svg
@@ -544,7 +566,7 @@
           </p>
         </div>
         <!-- AI Studio Client OAuth: show unlimited flow (no usage tracking) -->
-        <div v-else class="text-xs text-gray-400">
+        <div v-else-if="!showGeminiTodayStats" class="text-xs text-gray-400">
           {{ t('admin.accounts.gemini.rateLimit.unlimited') }}
         </div>
       </div>
@@ -559,9 +581,21 @@
   <!-- Non-OAuth/Setup-Token accounts -->
   <div ref="rootRef" v-else>
     <!-- Gemini API Key accounts: show quota info -->
-    <AccountQuotaInfo v-if="account.platform === 'gemini'" :account="account" />
+    <AccountQuotaInfo v-if="account.platform === 'gemini' && !isGeminiThirdPartyApiKey" :account="account" />
     <!-- Key/Bedrock accounts: show today stats + optional quota bars -->
     <div v-else class="space-y-1">
+      <OllamaCloudUsageCell
+        v-if="account.ollama_cloud_usage?.eligible"
+        :account="account"
+        @updated="handleOllamaCloudUsageUpdated"
+      />
+      <!-- 与上方 CN 分支结构对齐：Ollama 与 OpenCode 用量身份互斥（基址 host 不同），
+           v-else-if 提供结构性互斥保证，不改变实际渲染结果。 -->
+      <OpenCodeGoUsageCell
+        v-else-if="account.opencode_go_usage?.eligible"
+        :account="account"
+        @updated="handleOpenCodeGoUsageUpdated"
+      />
       <!-- Today stats row (requests, tokens, cost, user_cost) -->
       <div
         v-if="todayStats"
@@ -676,11 +710,19 @@ const props = withDefaults(
     todayStats?: WindowStats | null
     todayStatsLoading?: boolean
     manualRefreshToken?: number
+    batchedUsage?: AccountUsageInfo | null
+    batchedUsageError?: string | null
+    batchedUsageLoading?: boolean
+    requestBatchedUsage?: ((account: Account, options?: { force?: boolean }) => void) | null
   }>(),
   {
     todayStats: null,
     todayStatsLoading: false,
-    manualRefreshToken: 0
+    manualRefreshToken: 0,
+    batchedUsage: null,
+    batchedUsageError: null,
+    batchedUsageLoading: false,
+    requestBatchedUsage: null
   }
 )
 
@@ -740,7 +782,7 @@ const shouldFetchUsage = computed(() => {
     return props.account.type === 'oauth' || props.account.type === 'setup-token'
   }
   if (props.account.platform === 'gemini') {
-    return true
+    return !isGeminiThirdPartyApiKey.value && !isGeminiVertex.value
   }
   if (props.account.platform === 'antigravity') {
     return props.account.type === 'oauth'
@@ -754,8 +796,16 @@ const shouldFetchUsage = computed(() => {
   return false
 })
 
+// CN 供应商子单元格可见性（与 CNProviderQuotaCell / CNProviderBalanceCell 共用
+// credentialsBuilder 的单一实现）：都不可见时显示 `-` 占位符。
+const cnQuotaCellVisible = computed(() => cnQuotaCellVisibleFn(props.account))
+const cnBalanceCellVisible = computed(() => cnBalanceCellVisibleFn(props.account))
+
+const isBatchManaged = computed(() => typeof props.requestBatchedUsage === 'function')
+
+// Vertex 没有本地模拟配额，用量窗口展示今日统计
 const showGeminiTodayStats = computed(() => {
-  return props.account.platform === 'gemini' && props.account.type === 'service_account'
+  return isGeminiVertex.value
 })
 
 const geminiUsageAvailable = computed(() => {
@@ -905,8 +955,11 @@ const antigravity3ImageUsageFromAPI = computed(() =>
 // Claude from API (all Claude model variants)
 const antigravityClaudeUsageFromAPI = computed(() =>
   getAntigravityUsageFromAPI([
+    'claude-fable-5-1',
+    'claude-fable-5',
     'claude-sonnet-4-5', 'claude-opus-4-5-thinking',
     'claude-sonnet-4-6', 'claude-opus-4-6', 'claude-opus-4-6-thinking',
+    'claude-opus-4-7', 'claude-opus-4-8',
   ])
 )
 
@@ -953,6 +1006,10 @@ const geminiOAuthType = computed(() => {
   return (creds?.oauth_type || '').trim() || null
 })
 
+const showGeminiQuotaPolicy = computed(() => {
+  return !isGeminiVertex.value
+})
+
 // Gemini 是否为 Code Assist OAuth
 const isGeminiCodeAssist = computed(() => {
   if (props.account.platform !== 'gemini') return false
@@ -960,9 +1017,10 @@ const isGeminiCodeAssist = computed(() => {
   return creds?.oauth_type === 'code_assist' || (!creds?.oauth_type && !!creds?.project_id)
 })
 
-const geminiChannelShort = computed((): 'ai studio' | 'gcp' | 'google one' | 'client' | null => {
+const geminiChannelShort = computed((): 'ai studio' | 'vertex' | 'gcp' | 'google one' | 'client' | null => {
   if (props.account.platform !== 'gemini') return null
 
+  if (isGeminiVertex.value) return 'vertex'
   // API Key accounts are AI Studio.
   if (props.account.type === 'apikey') return 'ai studio'
 
@@ -976,6 +1034,7 @@ const geminiChannelShort = computed((): 'ai studio' | 'gcp' | 'google one' | 'cl
 
 const geminiUserLevel = computed((): string | null => {
   if (props.account.platform !== 'gemini') return null
+  if (isGeminiVertex.value) return null
 
   const tier = (geminiTier.value || '').toString().trim()
   const tierLower = tier.toLowerCase()
@@ -1033,7 +1092,7 @@ const geminiTierClass = computed(() => {
   const channel = geminiChannelShort.value
   const level = geminiUserLevel.value
 
-  if (channel === 'client' || channel === 'ai studio') {
+  if (channel === 'client' || channel === 'ai studio' || channel === 'vertex') {
     return 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
   }
 
@@ -1374,8 +1433,24 @@ const isAnthropicOAuthOrSetupToken = computed(() => {
   return props.account.platform === 'anthropic' && (props.account.type === 'oauth' || props.account.type === 'setup-token')
 })
 
+const requestParentBatchUsage = (options?: { force?: boolean }) => {
+  if (!isBatchManaged.value || !shouldFetchUsage.value) return
+  props.requestBatchedUsage?.(props.account, options)
+}
+
+const syncManagedUsageState = () => {
+  if (!isBatchManaged.value) return
+  usageInfo.value = props.batchedUsage ?? null
+  error.value = props.batchedUsageError ?? null
+  loading.value = props.batchedUsageLoading === true
+}
+
 const loadUsage = async (options?: { source?: 'passive' | 'active'; bypassCache?: boolean }) => {
   if (!shouldFetchUsage.value) return
+  if (isBatchManaged.value) {
+    requestParentBatchUsage({ force: options?.bypassCache === true })
+    return
+  }
 
   // Check cache
   if (!options?.bypassCache) {
@@ -1471,7 +1546,7 @@ const handleQuotaResetAccountUpdated = (account: Account) => {
 const loadActiveUsage = async () => {
   activeQueryLoading.value = true
   try {
-    usageInfo.value = await adminAPI.accounts.getUsage(props.account.id, 'active')
+    usageInfo.value = await adminAPI.accounts.getUsage(props.account.id, 'active', true)
   } catch (e: any) {
     console.error('Failed to load active usage:', e)
   } finally {
@@ -1594,6 +1669,18 @@ const quotaTotalBar = computed((): QuotaBarInfo | null => {
   return makeQuotaBar(props.account.quota_used ?? 0, limit)
 })
 
+const handleQuotaResetAccountUpdated = (account: Account) => {
+  emit('account-updated', account)
+}
+
+const handleOllamaCloudUsageUpdated = (state: NonNullable<Account['ollama_cloud_usage']>) => {
+  emit('account-updated', { ...props.account, ollama_cloud_usage: state })
+}
+
+const handleOpenCodeGoUsageUpdated = (state: NonNullable<Account['opencode_go_usage']>) => {
+  emit('account-updated', { ...props.account, opencode_go_usage: state })
+}
+
 // ===== Key account today stats formatters =====
 
 const formatKeyRequests = computed(() => {
@@ -1630,10 +1717,48 @@ onMounted(() => {
     }
   }
 
+  if (isBatchManaged.value) {
+    syncManagedUsageState()
+    requestParentBatchUsage()
+    return
+  }
+
   if (!shouldAutoLoadUsageOnMount.value) return
   const source = isAnthropicOAuthOrSetupToken.value ? 'passive' : undefined
   requestAutoLoad(source)
 })
+
+watch(
+  () => [props.batchedUsage, props.batchedUsageError, props.batchedUsageLoading, isBatchManaged.value] as const,
+  () => {
+    syncManagedUsageState()
+  },
+  { immediate: true, deep: true }
+)
+
+watch(isBatchManaged, (managed, wasManaged) => {
+  if (managed && !wasManaged) {
+    syncManagedUsageState()
+    requestParentBatchUsage()
+  }
+})
+
+watch(
+  () => [props.account.id, props.account.platform, props.account.type, isBatchManaged.value] as const,
+  ([accountID, platform, accountType, managed], [previousAccountID, previousPlatform, previousAccountType]) => {
+    if (
+      accountID === previousAccountID &&
+      platform === previousPlatform &&
+      accountType === previousAccountType
+    ) {
+      return
+    }
+    if (!managed || !shouldFetchUsage.value) return
+    syncManagedUsageState()
+    requestParentBatchUsage()
+  },
+  { flush: 'post' }
+)
 
 watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
   if (!prevKey || nextKey === prevKey) return
@@ -1652,6 +1777,11 @@ watch(
   (nextToken, prevToken) => {
     if (nextToken === prevToken) return
     if (!shouldFetchUsage.value) return
+
+    if (isBatchManaged.value) {
+      requestParentBatchUsage({ force: true })
+      return
+    }
 
     const source = isAnthropicOAuthOrSetupToken.value ? 'passive' : undefined
     _usageCache.delete(props.account.id)

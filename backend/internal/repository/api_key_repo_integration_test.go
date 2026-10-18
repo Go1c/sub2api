@@ -206,7 +206,7 @@ func (s *APIKeyRepoSuite) TestUpdate() {
 
 	key.Name = "Renamed"
 	key.Status = service.StatusDisabled
-	err := s.repo.Update(s.ctx, key)
+	err := s.repo.Update(s.ctx, key, service.APIKeyUpdateFields{Name: true, Status: true})
 	s.Require().NoError(err, "Update")
 
 	got, err := s.repo.GetByID(s.ctx, key.ID)
@@ -230,7 +230,7 @@ func (s *APIKeyRepoSuite) TestUpdate_ClearGroupID() {
 	s.Require().NoError(s.repo.Create(s.ctx, key))
 
 	key.GroupID = nil
-	err := s.repo.Update(s.ctx, key)
+	err := s.repo.Update(s.ctx, key, service.APIKeyUpdateFields{GroupID: true})
 	s.Require().NoError(err, "Update")
 
 	got, err := s.repo.GetByID(s.ctx, key.ID)
@@ -435,7 +435,7 @@ func (s *APIKeyRepoSuite) TestCRUD_Search_ClearGroupID() {
 	key.Name = "Renamed"
 	key.Status = service.StatusDisabled
 	key.GroupID = nil
-	s.Require().NoError(s.repo.Update(s.ctx, key), "Update")
+	s.Require().NoError(s.repo.Update(s.ctx, key, service.APIKeyUpdateFields{Name: true, Status: true, GroupID: true}), "Update")
 
 	got2, err := s.repo.GetByID(s.ctx, key.ID)
 	s.Require().NoError(err, "GetByID")
@@ -531,6 +531,10 @@ func (s *APIKeyRepoSuite) TestIncrementQuotaUsed_Basic() {
 	newQuota, err = s.repo.IncrementQuotaUsed(s.ctx, key.ID, 2.5)
 	s.Require().NoError(err, "IncrementQuotaUsed second")
 	s.Require().Equal(4.0, newQuota, "第二次递增后应为 4.0")
+
+	data, err := s.repo.GetRateLimitData(s.ctx, key.ID)
+	s.Require().NoError(err, "GetRateLimitData")
+	s.Require().Equal(4.0, data.QuotaUsed, "用量读取带回总额度已用量")
 }
 
 func (s *APIKeyRepoSuite) TestIncrementQuotaUsed_NotFound() {
@@ -553,7 +557,7 @@ func (s *APIKeyRepoSuite) TestIncrementQuotaUsedAndGetState() {
 	key := s.mustCreateApiKey(user.ID, "sk-quota-state", "QuotaState", nil)
 	key.Quota = 3
 	key.QuotaUsed = 1
-	s.Require().NoError(s.repo.Update(s.ctx, key), "Update quota")
+	s.Require().NoError(s.repo.Update(s.ctx, key, service.APIKeyUpdateFields{Quota: true, QuotaUsed: true}), "Update quota")
 
 	state, err := s.repo.IncrementQuotaUsedAndGetState(s.ctx, key.ID, 2.5)
 	s.Require().NoError(err, "IncrementQuotaUsedAndGetState")

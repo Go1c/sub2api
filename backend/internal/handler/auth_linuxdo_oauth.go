@@ -82,6 +82,9 @@ func (e *linuxDoTokenExchangeError) Error() string {
 // LinuxDoOAuthStart 启动 LinuxDo Connect OAuth 登录流程。
 // GET /api/v1/auth/oauth/linuxdo/start?redirect=/dashboard
 func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
+	if !h.requireActionCaptchaForOAuthLoginStart(c) {
+		return
+	}
 	cfg, err := h.getLinuxDoOAuthConfig(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -147,7 +150,7 @@ func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusFound, authURL)
+	respondOAuthStart(c, authURL)
 }
 
 // LinuxDoOAuthCallback 处理 OAuth 回调：创建/登录用户，然后重定向到前端。
@@ -765,6 +768,35 @@ func redirectOAuthError(c *gin.Context, frontendCallback string, code string, me
 	}
 	if strings.TrimSpace(description) != "" {
 		fragment.Set("error_description", truncateFragmentValue(description))
+	}
+	redirectWithFragment(c, frontendCallback, fragment)
+}
+
+func redirectOAuthTokenPair(c *gin.Context, frontendCallback string, tokenPair *service.TokenPair, redirectTo string) {
+	fragment := url.Values{}
+	if tokenPair != nil {
+		fragment.Set("access_token", truncateFragmentValue(tokenPair.AccessToken))
+		fragment.Set("refresh_token", truncateFragmentValue(tokenPair.RefreshToken))
+		fragment.Set("expires_in", strconv.Itoa(tokenPair.ExpiresIn))
+		fragment.Set("token_type", "Bearer")
+	}
+	if redirect := strings.TrimSpace(redirectTo); redirect != "" {
+		originalRedirect := redirect
+		for range 2 {
+			decoded, err := url.QueryUnescape(redirect)
+			if err != nil || decoded == redirect {
+				break
+			}
+			redirect = decoded
+		}
+		if redirect != originalRedirect {
+			if sanitized := sanitizeFrontendRedirectPath(redirect); sanitized != "" {
+				redirect = sanitized
+			} else {
+				redirect = originalRedirect
+			}
+		}
+		fragment.Set("redirect", truncateFragmentValue(redirect))
 	}
 	redirectWithFragment(c, frontendCallback, fragment)
 }

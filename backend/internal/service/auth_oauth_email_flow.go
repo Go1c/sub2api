@@ -42,6 +42,9 @@ func (s *AuthService) SendPendingOAuthVerifyCode(ctx context.Context, email stri
 	if s == nil || s.emailService == nil {
 		return nil, ErrServiceUnavailable
 	}
+	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
+		return nil, err
+	}
 
 	siteName := "Sub2API"
 	if s.settingService != nil {
@@ -114,13 +117,18 @@ func (s *AuthService) RegisterOAuthEmailAccount(
 		return nil, nil, err
 	}
 
-	existsEmail, err := s.userRepo.ExistsByEmail(ctx, email)
+	// 含 +别名 / Gmail 点号 / FQDN 根点变体归一化：该路径同样发放注册赠额，不能被单个收件箱刷号。
+	existsEmail, err := s.existsByEmailOrAlias(ctx, email)
 	if err != nil {
 		slog.Error("oauth email register: ExistsByEmail failed", "email", email, "error", err.Error())
 		return nil, nil, ErrServiceUnavailable
 	}
 	if existsEmail {
 		return nil, nil, ErrEmailExists
+	}
+	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
+		slog.Error("oauth email register: policy rejected", "email", email, "error", err.Error())
+		return nil, nil, err
 	}
 
 	hashedPassword, err := s.HashPassword(password)
@@ -141,9 +149,15 @@ func (s *AuthService) RegisterOAuthEmailAccount(
 		SignupSource: signupSource,
 	}
 
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		if errors.Is(err, ErrEmailExists) {
+	if err := s.createUserWithRegistrationEmailGuard(ctx, user); err != nil {
+		switch {
+		case errors.Is(err, ErrEmailExists):
 			return nil, nil, ErrEmailExists
+		case errors.Is(err, ErrEmailDomainRegistrationLimit):
+			return nil, nil, ErrEmailDomainRegistrationLimit
+		default:
+			slog.Error("oauth email register: userRepo.Create failed", "email", email, "signup_source", signupSource, "error", err.Error())
+			return nil, nil, ErrServiceUnavailable
 		}
 		slog.Error("oauth email register: userRepo.Create failed", "email", email, "signup_source", signupSource, "error", err.Error())
 		return nil, nil, ErrServiceUnavailable
@@ -229,6 +243,71 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 			return nil, nil, ErrEmailExists
 		}
 		return nil, nil, ErrServiceUnavailable
+	}
+	if s.settingService == nil || (!s.settingService.IsRegistrationEnabled(ctx) && !s.canBypassRegistrationDisabledForOAuth(ctx, signupSource)) {
+		return nil, nil, ErrRegDisabled
+	}
+
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" || len(email) > 255 {
+		return nil, nil, ErrEmailVerifyRequired
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return nil, nil, ErrEmailVerifyRequired
+	}
+	if isReservedEmail(email) {
+		return nil, nil, ErrEmailReserved
+	}
+	if strings.TrimSpace(password) == "" {
+		return nil, nil, infraerrors.BadRequest("PASSWORD_REQUIRED", "password is required")
+	}
+	if _, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode); err != nil {
+		return nil, nil, err
+	}
+
+	// 与本地注册同口径：同一收件箱的别名变体不能各自建号（该路径也发放注册赠额）。
+	existsEmail, err := s.existsByEmailOrAlias(ctx, email)
+	if err != nil {
+		return nil, nil, ErrServiceUnavailable
+	}
+	if existsEmail {
+		return nil, nil, ErrEmailExists
+	}
+	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
+		return nil, nil, err
+	}
+
+	hashedPassword, err := s.HashPassword(password)
+	if err != nil {
+		return nil, nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	signupSource = normalizeOAuthSignupSource(signupSource)
+	grantPlan := s.resolveSignupGrantPlan(ctx, signupSource)
+	var defaultRPMLimit int
+	if s.settingService != nil {
+		defaultRPMLimit = s.settingService.GetDefaultUserRPMLimit(ctx)
+	}
+	user := &User{
+		Email:        email,
+		PasswordHash: hashedPassword,
+		Role:         RoleUser,
+		Balance:      grantPlan.Balance,
+		Concurrency:  grantPlan.Concurrency,
+		RPMLimit:     defaultRPMLimit,
+		Status:       StatusActive,
+		SignupSource: signupSource,
+	}
+
+	if err := s.createUserWithRegistrationEmailGuard(ctx, user); err != nil {
+		switch {
+		case errors.Is(err, ErrEmailExists):
+			return nil, nil, ErrEmailExists
+		case errors.Is(err, ErrEmailDomainRegistrationLimit):
+			return nil, nil, ErrEmailDomainRegistrationLimit
+		default:
+			return nil, nil, ErrServiceUnavailable
+		}
 	}
 
 	tokenPair, err := s.GenerateTokenPair(ctx, user, "")

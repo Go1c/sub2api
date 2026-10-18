@@ -93,6 +93,12 @@ func (_c *GroupCreate) SetNillableDescription(v *string) *GroupCreate {
 	return _c
 }
 
+// SetI18n sets the "i18n" field.
+func (_c *GroupCreate) SetI18n(v domain.GroupI18n) *GroupCreate {
+	_c.mutation.SetI18n(v)
+	return _c
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_c *GroupCreate) SetRateMultiplier(v float64) *GroupCreate {
 	_c.mutation.SetRateMultiplier(v)
@@ -671,6 +677,48 @@ func (_c *GroupCreate) SetNillableAllowMessagesDispatch(v *bool) *GroupCreate {
 	return _c
 }
 
+// SetAllowLive sets the "allow_live" field.
+func (_c *GroupCreate) SetAllowLive(v bool) *GroupCreate {
+	_c.mutation.SetAllowLive(v)
+	return _c
+}
+
+// SetNillableAllowLive sets the "allow_live" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableAllowLive(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetAllowLive(*v)
+	}
+	return _c
+}
+
+// SetForceOpenaiFast sets the "force_openai_fast" field.
+func (_c *GroupCreate) SetForceOpenaiFast(v bool) *GroupCreate {
+	_c.mutation.SetForceOpenaiFast(v)
+	return _c
+}
+
+// SetNillableForceOpenaiFast sets the "force_openai_fast" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableForceOpenaiFast(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetForceOpenaiFast(*v)
+	}
+	return _c
+}
+
+// SetFreeOpenaiFast sets the "free_openai_fast" field.
+func (_c *GroupCreate) SetFreeOpenaiFast(v bool) *GroupCreate {
+	_c.mutation.SetFreeOpenaiFast(v)
+	return _c
+}
+
+// SetNillableFreeOpenaiFast sets the "free_openai_fast" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableFreeOpenaiFast(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetFreeOpenaiFast(*v)
+	}
+	return _c
+}
+
 // SetRequireOauthOnly sets the "require_oauth_only" field.
 func (_c *GroupCreate) SetRequireOauthOnly(v bool) *GroupCreate {
 	_c.mutation.SetRequireOauthOnly(v)
@@ -925,6 +973,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.I18n(); !ok {
+		v := group.DefaultI18n
+		_c.mutation.SetI18n(v)
+	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
@@ -1033,6 +1085,18 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultAllowMessagesDispatch
 		_c.mutation.SetAllowMessagesDispatch(v)
 	}
+	if _, ok := _c.mutation.AllowLive(); !ok {
+		v := group.DefaultAllowLive
+		_c.mutation.SetAllowLive(v)
+	}
+	if _, ok := _c.mutation.ForceOpenaiFast(); !ok {
+		v := group.DefaultForceOpenaiFast
+		_c.mutation.SetForceOpenaiFast(v)
+	}
+	if _, ok := _c.mutation.FreeOpenaiFast(); !ok {
+		v := group.DefaultFreeOpenaiFast
+		_c.mutation.SetFreeOpenaiFast(v)
+	}
 	if _, ok := _c.mutation.RequireOauthOnly(); !ok {
 		v := group.DefaultRequireOauthOnly
 		_c.mutation.SetRequireOauthOnly(v)
@@ -1079,6 +1143,9 @@ func (_c *GroupCreate) check() error {
 		if err := group.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.I18n(); !ok {
+		return &ValidationError{Name: "i18n", err: errors.New(`ent: missing required field "Group.i18n"`)}
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
@@ -1191,6 +1258,15 @@ func (_c *GroupCreate) check() error {
 	if _, ok := _c.mutation.AllowMessagesDispatch(); !ok {
 		return &ValidationError{Name: "allow_messages_dispatch", err: errors.New(`ent: missing required field "Group.allow_messages_dispatch"`)}
 	}
+	if _, ok := _c.mutation.AllowLive(); !ok {
+		return &ValidationError{Name: "allow_live", err: errors.New(`ent: missing required field "Group.allow_live"`)}
+	}
+	if _, ok := _c.mutation.ForceOpenaiFast(); !ok {
+		return &ValidationError{Name: "force_openai_fast", err: errors.New(`ent: missing required field "Group.force_openai_fast"`)}
+	}
+	if _, ok := _c.mutation.FreeOpenaiFast(); !ok {
+		return &ValidationError{Name: "free_openai_fast", err: errors.New(`ent: missing required field "Group.free_openai_fast"`)}
+	}
 	if _, ok := _c.mutation.RequireOauthOnly(); !ok {
 		return &ValidationError{Name: "require_oauth_only", err: errors.New(`ent: missing required field "Group.require_oauth_only"`)}
 	}
@@ -1263,6 +1339,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(group.FieldDescription, field.TypeString, value)
 		_node.Description = &value
+	}
+	if value, ok := _c.mutation.I18n(); ok {
+		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
+		_node.I18n = value
 	}
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
@@ -1435,6 +1515,18 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AllowMessagesDispatch(); ok {
 		_spec.SetField(group.FieldAllowMessagesDispatch, field.TypeBool, value)
 		_node.AllowMessagesDispatch = value
+	}
+	if value, ok := _c.mutation.AllowLive(); ok {
+		_spec.SetField(group.FieldAllowLive, field.TypeBool, value)
+		_node.AllowLive = value
+	}
+	if value, ok := _c.mutation.ForceOpenaiFast(); ok {
+		_spec.SetField(group.FieldForceOpenaiFast, field.TypeBool, value)
+		_node.ForceOpenaiFast = value
+	}
+	if value, ok := _c.mutation.FreeOpenaiFast(); ok {
+		_spec.SetField(group.FieldFreeOpenaiFast, field.TypeBool, value)
+		_node.FreeOpenaiFast = value
 	}
 	if value, ok := _c.mutation.RequireOauthOnly(); ok {
 		_spec.SetField(group.FieldRequireOauthOnly, field.TypeBool, value)
@@ -1693,6 +1785,18 @@ func (u *GroupUpsert) UpdateDescription() *GroupUpsert {
 // ClearDescription clears the value of the "description" field.
 func (u *GroupUpsert) ClearDescription() *GroupUpsert {
 	u.SetNull(group.FieldDescription)
+	return u
+}
+
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsert) SetI18n(v domain.GroupI18n) *GroupUpsert {
+	u.Set(group.FieldI18n, v)
+	return u
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateI18n() *GroupUpsert {
+	u.SetExcluded(group.FieldI18n)
 	return u
 }
 
@@ -2422,6 +2526,42 @@ func (u *GroupUpsert) UpdateAllowMessagesDispatch() *GroupUpsert {
 	return u
 }
 
+// SetAllowLive sets the "allow_live" field.
+func (u *GroupUpsert) SetAllowLive(v bool) *GroupUpsert {
+	u.Set(group.FieldAllowLive, v)
+	return u
+}
+
+// UpdateAllowLive sets the "allow_live" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateAllowLive() *GroupUpsert {
+	u.SetExcluded(group.FieldAllowLive)
+	return u
+}
+
+// SetForceOpenaiFast sets the "force_openai_fast" field.
+func (u *GroupUpsert) SetForceOpenaiFast(v bool) *GroupUpsert {
+	u.Set(group.FieldForceOpenaiFast, v)
+	return u
+}
+
+// UpdateForceOpenaiFast sets the "force_openai_fast" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateForceOpenaiFast() *GroupUpsert {
+	u.SetExcluded(group.FieldForceOpenaiFast)
+	return u
+}
+
+// SetFreeOpenaiFast sets the "free_openai_fast" field.
+func (u *GroupUpsert) SetFreeOpenaiFast(v bool) *GroupUpsert {
+	u.Set(group.FieldFreeOpenaiFast, v)
+	return u
+}
+
+// UpdateFreeOpenaiFast sets the "free_openai_fast" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateFreeOpenaiFast() *GroupUpsert {
+	u.SetExcluded(group.FieldFreeOpenaiFast)
+	return u
+}
+
 // SetRequireOauthOnly sets the "require_oauth_only" field.
 func (u *GroupUpsert) SetRequireOauthOnly(v bool) *GroupUpsert {
 	u.Set(group.FieldRequireOauthOnly, v)
@@ -2627,6 +2767,20 @@ func (u *GroupUpsertOne) UpdateDescription() *GroupUpsertOne {
 func (u *GroupUpsertOne) ClearDescription() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearDescription()
+	})
+}
+
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsertOne) SetI18n(v domain.GroupI18n) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetI18n(v)
+	})
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateI18n() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateI18n()
 	})
 }
 
@@ -3477,6 +3631,48 @@ func (u *GroupUpsertOne) UpdateAllowMessagesDispatch() *GroupUpsertOne {
 	})
 }
 
+// SetAllowLive sets the "allow_live" field.
+func (u *GroupUpsertOne) SetAllowLive(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAllowLive(v)
+	})
+}
+
+// UpdateAllowLive sets the "allow_live" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateAllowLive() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAllowLive()
+	})
+}
+
+// SetForceOpenaiFast sets the "force_openai_fast" field.
+func (u *GroupUpsertOne) SetForceOpenaiFast(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetForceOpenaiFast(v)
+	})
+}
+
+// UpdateForceOpenaiFast sets the "force_openai_fast" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateForceOpenaiFast() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateForceOpenaiFast()
+	})
+}
+
+// SetFreeOpenaiFast sets the "free_openai_fast" field.
+func (u *GroupUpsertOne) SetFreeOpenaiFast(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetFreeOpenaiFast(v)
+	})
+}
+
+// UpdateFreeOpenaiFast sets the "free_openai_fast" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateFreeOpenaiFast() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateFreeOpenaiFast()
+	})
+}
+
 // SetRequireOauthOnly sets the "require_oauth_only" field.
 func (u *GroupUpsertOne) SetRequireOauthOnly(v bool) *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
@@ -3863,6 +4059,20 @@ func (u *GroupUpsertBulk) UpdateDescription() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearDescription() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearDescription()
+	})
+}
+
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsertBulk) SetI18n(v domain.GroupI18n) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetI18n(v)
+	})
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateI18n() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateI18n()
 	})
 }
 
@@ -4710,6 +4920,48 @@ func (u *GroupUpsertBulk) SetAllowMessagesDispatch(v bool) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateAllowMessagesDispatch() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateAllowMessagesDispatch()
+	})
+}
+
+// SetAllowLive sets the "allow_live" field.
+func (u *GroupUpsertBulk) SetAllowLive(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAllowLive(v)
+	})
+}
+
+// UpdateAllowLive sets the "allow_live" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateAllowLive() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAllowLive()
+	})
+}
+
+// SetForceOpenaiFast sets the "force_openai_fast" field.
+func (u *GroupUpsertBulk) SetForceOpenaiFast(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetForceOpenaiFast(v)
+	})
+}
+
+// UpdateForceOpenaiFast sets the "force_openai_fast" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateForceOpenaiFast() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateForceOpenaiFast()
+	})
+}
+
+// SetFreeOpenaiFast sets the "free_openai_fast" field.
+func (u *GroupUpsertBulk) SetFreeOpenaiFast(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetFreeOpenaiFast(v)
+	})
+}
+
+// UpdateFreeOpenaiFast sets the "free_openai_fast" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateFreeOpenaiFast() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateFreeOpenaiFast()
 	})
 }
 

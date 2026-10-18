@@ -11,6 +11,27 @@
         <input v-model="form.name" type="text" required class="input" :placeholder="t('admin.channelMonitor.form.namePlaceholder')" />
       </div>
 
+      <!-- 检测模式：probe（探活）/ quota（仅配额）/ quota_probe（探活+配额） -->
+      <div>
+        <label class="input-label">{{ t('admin.channelMonitor.form.checkMode') }}</label>
+        <div class="grid gap-3 sm:grid-cols-3" data-testid="monitor-check-mode">
+          <button
+            v-for="opt in checkModeOptions"
+            :key="opt.value"
+            type="button"
+            :data-testid="`monitor-check-mode-${opt.value}`"
+            :aria-pressed="form.check_mode === opt.value"
+            :disabled="opt.disabled"
+            class="rounded-lg border-2 px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            :class="checkModeButtonClass(opt.value)"
+            @click="selectCheckMode(opt.value)"
+          >
+            <span class="block text-sm font-semibold">{{ opt.label }}</span>
+            <span class="mt-0.5 block text-xs opacity-80">{{ opt.hint }}</span>
+          </button>
+        </div>
+      </div>
+
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.checkMode') }}</label>
         <div class="grid grid-cols-2 gap-3" data-testid="monitor-check-mode">

@@ -230,7 +230,7 @@ func newResolverWithChannel(t *testing.T, pricing []ChannelModelPricing) *ModelP
 			return map[int64]string{groupID: "anthropic"}, nil
 		},
 	}
-	cs := NewChannelService(repo, nil, nil, nil)
+	cs := NewChannelService(repo, nil, nil, nil, nil)
 	bs := newTestBillingServiceForResolver()
 	return NewModelPricingResolver(cs, bs)
 }
@@ -304,10 +304,12 @@ func TestResolve_WithChannelOverride_TokenWithIntervals(t *testing.T) {
 	resolved := r.Resolve(context.Background(), PricingInput{
 		Model:   "claude-sonnet-4",
 		GroupID: groupIDPtr(),
+		Group:   &Group{LongContextPricingEnabled: false},
 	})
 
 	require.NotNil(t, resolved)
 	require.Equal(t, "channel", resolved.Source)
+	require.False(t, resolved.longContextPricingEnabled)
 	require.Len(t, resolved.Intervals, 2)
 
 	// GetIntervalPricing should use channel intervals
@@ -589,7 +591,7 @@ func TestResolve_WithChannelOverride_CacheError(t *testing.T) {
 			return nil, errors.New("database unavailable")
 		},
 	}
-	cs := NewChannelService(repo, nil, nil, nil)
+	cs := NewChannelService(repo, nil, nil, nil, nil)
 	bs := newTestBillingServiceForResolver()
 	r := NewModelPricingResolver(cs, bs)
 

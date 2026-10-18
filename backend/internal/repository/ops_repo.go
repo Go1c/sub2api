@@ -1023,8 +1023,7 @@ UPDATE ops_error_logs
 SET
   resolved = $2,
   resolved_at = $3,
-  resolved_by_user_id = $4,
-  resolved_retry_id = $5
+  resolved_by_user_id = $4
 WHERE id = $1`
 
 	at := sql.NullTime{}
@@ -1042,7 +1041,6 @@ WHERE id = $1`
 		resolved,
 		at,
 		nullInt64(resolvedByUserID),
-		nullInt64(resolvedRetryID),
 	)
 	return err
 }

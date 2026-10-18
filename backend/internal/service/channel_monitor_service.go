@@ -62,10 +62,19 @@ type ChannelMonitorRepository interface {
 	UpdateAggregationWatermark(ctx context.Context, date time.Time) error
 }
 
+// channelMonitorRuntimeReader is the optional settings view used to gate V1
+// active probes by channel_monitor_enabled + channel_monitor_mode.
+type channelMonitorRuntimeReader interface {
+	GetChannelMonitorRuntime(ctx context.Context) ChannelMonitorRuntime
+}
+
 // ChannelMonitorService 渠道监控管理服务。
 type ChannelMonitorService struct {
 	repo      ChannelMonitorRepository
 	encryptor SecretEncryptor
+	// settings is optional; when nil, RunCheck fails closed for active probes
+	// (mode defaults to v2 / retired) so tests without settings never hit upstream.
+	settings channelMonitorRuntimeReader
 	// scheduler 由 wire 通过 SetScheduler 注入；CRUD 后调用对应钩子即时同步任务。
 	// 测试或未注入场景下保持 nil，所有钩子调用变为 no-op。
 	scheduler MonitorScheduler
@@ -73,6 +82,14 @@ type ChannelMonitorService struct {
 	// 配额模式的检测产出「未配置」错误快照，Create/Update 关联账号直接报错。
 	quotaFetcher *ChannelMonitorQuotaFetcher
 }
+
+const maxChannelMonitorNameRunes = 100
+
+// ChannelMonitorDuplicateOperationIDMetadataKey is stored in the existing
+// extra_headers JSON column to avoid a schema migration. The colon makes it an
+// invalid HTTP header name, and repository adapters remove it before exposing
+// ExtraHeaders to the service layer.
+const ChannelMonitorDuplicateOperationIDMetadataKey = "sub2api:duplicate_operation_id"
 
 // NewChannelMonitorService 创建渠道监控服务实例。
 func NewChannelMonitorService(repo ChannelMonitorRepository, encryptor SecretEncryptor) *ChannelMonitorService {
@@ -580,7 +597,19 @@ func (s *ChannelMonitorService) ListHistory(ctx context.Context, id int64, model
 
 // RunCheck 同步触发对一个监控的检测：并发跑 primary + extra 模型，
 // 写历史记录并更新 last_checked_at。返回每个模型的检测结果。
+// 仅当 channel_monitor_enabled=true 且 channel_monitor_mode=v1 时真正探测；
+// mode=v2 时返回 ErrChannelMonitorActiveProbesRetired，不产生上游流量。
+//
+// 按 check_mode 分派：probe（默认，现状探活）/ quota（仅查关联账号配额，
+// 零 LLM 成本）/ quota_probe（探活 + 配额快照挂主模型行）。
 func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	rt := s.probeRuntime(ctx)
+	if !rt.Enabled {
+		return nil, ErrChannelMonitorDisabled
+	}
+	if !rt.ActiveProbesAllowed() {
+		return nil, ErrChannelMonitorActiveProbesRetired
+	}
 	m, err := s.Get(ctx, id) // 已解密 APIKey
 	if err != nil {
 		return nil, err

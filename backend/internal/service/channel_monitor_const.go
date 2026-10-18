@@ -47,7 +47,7 @@ const (
 	monitorChallengeMin = 1
 	monitorChallengeMax = 50
 
-	// providerOpenAIPath OpenAI Chat Completions 路径。
+	// providerOpenAIPath OpenAI Chat Completions 路径（Kimi / DeepSeek 同为 OpenAI 兼容）。
 	providerOpenAIPath = "/v1/chat/completions"
 	// providerGrokPath Grok OpenAI-compatible Chat Completions 路径。
 	providerGrokPath = "/v1/chat/completions"
@@ -183,7 +183,7 @@ var (
 		"CHANNEL_MONITOR_ENDPOINT_SCHEME", "endpoint must use https scheme",
 	)
 	ErrChannelMonitorEndpointPath = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_ENDPOINT_PATH", "endpoint must be base origin only (no path/query/fragment)",
+		"CHANNEL_MONITOR_ENDPOINT_PATH", "endpoint must not contain query parameters or a fragment",
 	)
 	ErrChannelMonitorEndpointPrivate = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_ENDPOINT_PRIVATE", "endpoint must be a public host",
@@ -199,5 +199,20 @@ var (
 	)
 	ErrChannelMonitorAPIKeyDecryptFailed = infraerrors.InternalServer(
 		"CHANNEL_MONITOR_KEY_DECRYPT_FAILED", "api key decryption failed; please re-edit the monitor with a fresh key",
+	)
+)
+
+var (
+	ErrChannelMonitorDisabled = infraerrors.Forbidden(
+		"CHANNEL_MONITOR_DISABLED",
+		"channel monitor feature is disabled",
+	)
+	ErrChannelMonitorActiveProbesRetired = infraerrors.Forbidden(
+		"CHANNEL_MONITOR_ACTIVE_PROBES_RETIRED",
+		"channel monitor active probes are retired in v2 mode",
+	)
+	ErrChannelMonitorModeMismatch = infraerrors.Forbidden(
+		"CHANNEL_MONITOR_MODE_MISMATCH",
+		"channel monitor mode does not allow this operation",
 	)
 )

@@ -32,9 +32,9 @@ func TestOpsSystemLogSink_ShouldIndex(t *testing.T) {
 			want:  true,
 		},
 		{
-			name:  "access component",
+			name:  "access component disabled by default",
 			event: &logger.LogEvent{Level: "info", Component: "http.access"},
-			want:  true,
+			want:  false,
 		},
 		{
 			name: "rejected access excluded from database sink",
@@ -52,7 +52,7 @@ func TestOpsSystemLogSink_ShouldIndex(t *testing.T) {
 				Component: "",
 				Fields:    map[string]any{"component": "http.access"},
 			},
-			want: true,
+			want: false,
 		},
 		{
 			name:  "audit component",
@@ -79,6 +79,28 @@ func TestOpsSystemLogSink_ShouldIndex(t *testing.T) {
 		if got := sink.shouldIndex(tc.event); got != tc.want {
 			t.Fatalf("%s: shouldIndex()=%v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestOpsSystemLogSink_ShouldIndexAccessLogsOnlyWhenEnabled(t *testing.T) {
+	sink := &OpsSystemLogSink{}
+	sink.SetPersistAccessLogs(true)
+
+	if !sink.shouldIndex(&logger.LogEvent{Level: "info", Component: "http.access"}) {
+		t.Fatal("access log should be indexed after explicit opt-in")
+	}
+	if !sink.shouldIndex(&logger.LogEvent{
+		Level:  "info",
+		Fields: map[string]any{"component": "http.access"},
+	}) {
+		t.Fatal("field-based access log should be indexed after explicit opt-in")
+	}
+	if sink.shouldIndex(&logger.LogEvent{
+		Level:     "info",
+		Component: "http.access",
+		Fields:    map[string]any{logger.OpsSystemLogSkipField: true},
+	}) {
+		t.Fatal("explicit skip marker must override access-log persistence")
 	}
 }
 
@@ -165,6 +187,7 @@ func TestOpsSystemLogSink_StartStopAndFlushSuccess(t *testing.T) {
 			"request_id":        "req-1",
 			"client_request_id": "creq-1",
 			"user_id":           "12",
+			"api_key_id":        int64(56),
 			"account_id":        json.Number("34"),
 			"platform":          "openai",
 			"model":             "gpt-5",
@@ -189,6 +212,9 @@ func TestOpsSystemLogSink_StartStopAndFlushSuccess(t *testing.T) {
 	}
 	if item.UserID == nil || *item.UserID != 12 {
 		t.Fatalf("unexpected user_id: %+v", item.UserID)
+	}
+	if item.APIKeyID == nil || *item.APIKeyID != 56 {
+		t.Fatalf("unexpected api_key_id: %+v", item.APIKeyID)
 	}
 	if item.AccountID == nil || *item.AccountID != 34 {
 		t.Fatalf("unexpected account_id: %+v", item.AccountID)

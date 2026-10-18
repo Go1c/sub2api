@@ -73,6 +73,20 @@ func TestPcParseInt(t *testing.T) {
 	}
 }
 
+func TestAlipayMobilePrecreateEnvironmentOverride(t *testing.T) {
+	svc := &PaymentConfigService{}
+
+	t.Setenv(SettingAlipayMobilePrecreateDeepLink, "true")
+	if !svc.parsePaymentConfig(map[string]string{SettingAlipayMobilePrecreateDeepLink: "false"}).AlipayMobilePrecreateDeepLink {
+		t.Fatal("expected environment variable to enable mobile Alipay precreate")
+	}
+
+	t.Setenv(SettingAlipayMobilePrecreateDeepLink, "false")
+	if svc.parsePaymentConfig(map[string]string{SettingAlipayMobilePrecreateDeepLink: "true"}).AlipayMobilePrecreateDeepLink {
+		t.Fatal("expected environment variable to disable mobile Alipay precreate")
+	}
+}
+
 func TestParsePaymentConfig(t *testing.T) {
 	t.Parallel()
 
@@ -164,6 +178,9 @@ func TestParsePaymentConfig(t *testing.T) {
 		if cfg.ProductNameSuffix != "SUF" {
 			t.Fatalf("ProductNameSuffix = %q, want %q", cfg.ProductNameSuffix, "SUF")
 		}
+		if !cfg.AlipayMobilePrecreateDeepLink {
+			t.Fatal("expected AlipayMobilePrecreateDeepLink=true")
+		}
 	})
 
 	t.Run("enabled types with spaces are trimmed", func(t *testing.T) {
@@ -191,6 +208,23 @@ func TestParsePaymentConfig(t *testing.T) {
 		}
 		if cfg.EnabledTypes[0] != "alipay" || cfg.EnabledTypes[1] != "wxpay" {
 			t.Fatalf("EnabledTypes = %v, want [alipay wxpay]", cfg.EnabledTypes)
+		}
+	})
+
+	t.Run("custom enabled types are preserved", func(t *testing.T) {
+		t.Parallel()
+		vals := map[string]string{
+			SettingEnabledPaymentTypes: "alipay,ldc,usdt_trc20",
+		}
+		cfg := svc.parsePaymentConfig(vals)
+		want := []string{"alipay", "ldc", "usdt_trc20"}
+		if len(cfg.EnabledTypes) != len(want) {
+			t.Fatalf("EnabledTypes len = %d, want %d (%v)", len(cfg.EnabledTypes), len(want), cfg.EnabledTypes)
+		}
+		for i := range want {
+			if cfg.EnabledTypes[i] != want[i] {
+				t.Fatalf("EnabledTypes[%d] = %q, want %q (full=%v)", i, cfg.EnabledTypes[i], want[i], cfg.EnabledTypes)
+			}
 		}
 	})
 
@@ -417,7 +451,12 @@ func (s *paymentConfigSettingRepoStub) GetAll(context.Context) (map[string]strin
 func (s *paymentConfigSettingRepoStub) Delete(context.Context, string) error { return nil }
 
 func TestUpdatePaymentConfig_PersistsVisibleMethodRouting(t *testing.T) {
-	repo := &paymentConfigSettingRepoStub{values: map[string]string{}}
+	repo := &paymentConfigSettingRepoStub{values: map[string]string{
+		SettingPaymentVisibleMethodAlipayEnabled: "false",
+		SettingPaymentVisibleMethodAlipaySource:  VisibleMethodSourceOfficialAlipay,
+		SettingPaymentVisibleMethodWxpayEnabled:  "true",
+		SettingPaymentVisibleMethodWxpaySource:   VisibleMethodSourceEasyPayWechat,
+	}}
 	svc := &PaymentConfigService{settingRepo: repo}
 
 	alipayEnabled := true

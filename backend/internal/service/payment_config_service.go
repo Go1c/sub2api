@@ -303,6 +303,11 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		RechargeBonusEnabled: vals[SettingRechargeBonusEnabled] == "true",
 		RechargeBonusTiers:   parseRechargeBonusTiers(vals[SettingRechargeBonusTiers]),
 	}
+	cfg.RechargeBonusMode, _ = NormalizeRechargeBonusMode(vals[SettingRechargeBonusMode])
+	cfg.AlipayMobilePrecreateDeepLink = pcEnvBoolOverride(
+		SettingAlipayMobilePrecreateDeepLink,
+		cfg.AlipayMobilePrecreateDeepLink,
+	)
 	if cfg.LoadBalanceStrategy == "" {
 		cfg.LoadBalanceStrategy = payment.DefaultLoadBalanceStrategy
 	}
@@ -317,6 +322,18 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		cfg.EnabledTypes = NormalizeVisibleMethods(types)
 	}
 	return cfg
+}
+
+func pcEnvBoolOverride(key string, fallback bool) bool {
+	raw, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+	value, err := strconv.ParseBool(strings.TrimSpace(raw))
+	if err != nil {
+		return fallback
+	}
+	return value
 }
 
 // getStripePublishableKey finds the publishable key from the first enabled Stripe provider instance.

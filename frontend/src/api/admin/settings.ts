@@ -393,6 +393,7 @@ export interface SystemSettings {
   registration_enabled: boolean;
   email_verify_enabled: boolean;
   registration_email_suffix_whitelist: string[];
+  registration_email_domain_quota_enabled: boolean;
   promo_code_enabled: boolean;
   password_reset_enabled: boolean;
   frontend_url: string;
@@ -415,6 +416,7 @@ export interface SystemSettings {
   affiliate_rebate_freeze_hours: number;
   affiliate_rebate_duration_days: number;
   affiliate_rebate_per_invitee_cap: number;
+  affiliate_admin_recharge_enabled: boolean;
   default_concurrency: number;
   default_user_rpm_limit: number;
   default_subscriptions: DefaultSubscriptionSetting[];
@@ -501,6 +503,7 @@ contact_channels: ContactChannel[];
   site_messages_default_recipient_email: string;
   doc_url: string;
   home_content: string;
+  compact_home_enabled: boolean;
   hide_ccs_import_button: boolean;
   table_default_page_size: number;
   table_page_size_options: number[];
@@ -624,6 +627,7 @@ contact_channels: ContactChannel[];
   allow_ungrouped_key_scheduling: boolean;
 
   // Gateway forwarding behavior
+  openai_ttft_mode: string;
   enable_fingerprint_unification: boolean;
   enable_metadata_passthrough: boolean;
   enable_cch_signing: boolean;
@@ -662,6 +666,9 @@ contact_channels: ContactChannel[];
   payment_balance_recharge_multiplier: number;
   payment_subscription_usd_to_cny_rate: number;
   payment_recharge_fee_rate: number;
+  payment_recharge_bonus_tiers?: RechargeBonusTier[];
+  payment_recharge_bonus_mode?: string;
+  payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy: string;
   payment_product_name_prefix: string;
   payment_product_name_suffix: string;
@@ -717,12 +724,22 @@ contact_channels: ContactChannel[];
 
   // Channel Monitor feature switch
   channel_monitor_enabled: boolean;
+  channel_monitor_mode?: 'v1' | 'v2';
   channel_monitor_default_interval_seconds: number;
   channel_monitor_status_banner: string;
   channel_monitor_show_quota: boolean;
 
   // Available Channels feature switch
   available_channels_enabled: boolean;
+
+  // Subscription feature switch (user sidebar "My Subscriptions" entry)
+  subscription_enabled: boolean;
+
+  // Model Plaza feature switches + description
+  model_plaza_enabled: boolean;
+  model_plaza_require_auth: boolean;
+  model_plaza_description: string;
+  plugin_management_enabled: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: boolean;
@@ -738,6 +755,7 @@ export interface UpdateSettingsRequest {
   registration_enabled?: boolean;
   email_verify_enabled?: boolean;
   registration_email_suffix_whitelist?: string[];
+  registration_email_domain_quota_enabled?: boolean;
   promo_code_enabled?: boolean;
   password_reset_enabled?: boolean;
   frontend_url?: string;
@@ -758,6 +776,7 @@ export interface UpdateSettingsRequest {
   affiliate_rebate_freeze_hours?: number;
   affiliate_rebate_duration_days?: number;
   affiliate_rebate_per_invitee_cap?: number;
+  affiliate_admin_recharge_enabled?: boolean;
   default_concurrency?: number;
   default_user_rpm_limit?: number;
   default_subscriptions?: DefaultSubscriptionSetting[];
@@ -843,6 +862,7 @@ contact_channels?: ContactChannel[];
   site_messages_default_recipient_email?: string;
   doc_url?: string;
   home_content?: string;
+  compact_home_enabled?: boolean;
   hide_ccs_import_button?: boolean;
   table_default_page_size?: number;
   table_page_size_options?: number[];
@@ -944,6 +964,7 @@ contact_channels?: ContactChannel[];
   min_claude_code_version?: string;
   max_claude_code_version?: string;
   allow_ungrouped_key_scheduling?: boolean;
+  openai_ttft_mode?: string;
   enable_fingerprint_unification?: boolean;
   enable_metadata_passthrough?: boolean;
   enable_cch_signing?: boolean;
@@ -980,6 +1001,9 @@ contact_channels?: ContactChannel[];
   payment_balance_recharge_multiplier?: number;
   payment_subscription_usd_to_cny_rate?: number;
   payment_recharge_fee_rate?: number;
+  payment_recharge_bonus_tiers?: RechargeBonusTier[];
+  payment_recharge_bonus_mode?: string;
+  payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy?: string;
   payment_product_name_prefix?: string;
   payment_product_name_suffix?: string;
@@ -1023,12 +1047,22 @@ contact_channels?: ContactChannel[];
 
   // Channel Monitor feature switch
   channel_monitor_enabled?: boolean;
+  channel_monitor_mode?: 'v1' | 'v2';
   channel_monitor_default_interval_seconds?: number;
   channel_monitor_status_banner?: string;
   channel_monitor_show_quota?: boolean;
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;
+
+  // Subscription feature switch
+  subscription_enabled?: boolean;
+
+  // Model Plaza feature switches + description
+  model_plaza_enabled?: boolean;
+  model_plaza_require_auth?: boolean;
+  model_plaza_description?: string;
+  plugin_management_enabled?: boolean;
 
   // Affiliate (邀请返利) feature switch
   affiliate_enabled?: boolean;

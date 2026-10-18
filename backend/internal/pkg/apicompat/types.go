@@ -4,7 +4,10 @@
 // formats can be served through a unified gateway.
 package apicompat
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 // ---------------------------------------------------------------------------
 // Anthropic Messages API types
@@ -111,7 +114,7 @@ type AnthropicTool struct {
 	Type         string                 `json:"type,omitempty"` // e.g. "web_search_20250305" for server tools
 	Name         string                 `json:"name"`
 	Description  string                 `json:"description,omitempty"`
-	InputSchema  json.RawMessage        `json:"input_schema"` // JSON Schema object
+	InputSchema  json.RawMessage        `json:"input_schema,omitempty"` // JSON Schema object
 	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
 }
 
@@ -157,6 +160,14 @@ type AnthropicUsage struct {
 	OutputTokens             int `json:"output_tokens"`
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	// Anthropic-compatible providers can also expose their native OpenAI-style
+	// total/cache fields. Preserve them so callers can normalize provider totals
+	// into Anthropic's mutually-exclusive billing buckets.
+	PromptTokens          int                           `json:"prompt_tokens,omitempty"`
+	CachedTokens          int                           `json:"cached_tokens,omitempty"`
+	PromptTokensDetails   *AnthropicPromptTokensDetails `json:"prompt_tokens_details,omitempty"`
+	PromptCacheHitTokens  *int                          `json:"prompt_cache_hit_tokens,omitempty"`
+	PromptCacheMissTokens *int                          `json:"prompt_cache_miss_tokens,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -244,11 +255,14 @@ type ResponsesText struct {
 // The Type field determines which other fields are populated.
 type ResponsesInputItem struct {
 	// Common
-	Type string `json:"type,omitempty"` // "" for role-based messages
+	Type string `json:"type,omitempty"` // "message" for role-based messages
 
 	// Role-based messages (developer/system/user/assistant)
 	Role    string          `json:"role,omitempty"`
 	Content json.RawMessage `json:"content,omitempty"` // string or []ResponsesContentPart
+
+	// type=reasoning (multi-turn replay of encrypted reasoning)
+	EncryptedContent string `json:"encrypted_content,omitempty"`
 
 	// type=function_call
 	CallID    string `json:"call_id,omitempty"`
@@ -310,12 +324,18 @@ func (t *ResponsesTool) UnmarshalJSON(data []byte) error {
 
 // ResponsesResponse is the non-streaming response from POST /v1/responses.
 type ResponsesResponse struct {
-	ID     string            `json:"id"`
-	Object string            `json:"object"` // "response"
-	Model  string            `json:"model"`
-	Status string            `json:"status"` // "completed" | "incomplete" | "failed"
-	Output []ResponsesOutput `json:"output"`
-	Usage  *ResponsesUsage   `json:"usage,omitempty"`
+	ID     string `json:"id"`
+	Object string `json:"object"` // "response"
+	// CreatedAt is the unix creation timestamp. Strict Responses clients declare
+	// it non-optional and abort with `missing field 'created_at'` when it is
+	// absent, so it is always emitted — no omitempty. Same rule as ID (see the
+	// "clients treat it as required" fallback in ChatCompletionsResponseToAnthropic).
+	CreatedAt   int64             `json:"created_at"`
+	Model       string            `json:"model"`
+	Status      string            `json:"status"` // "completed" | "incomplete" | "failed"
+	Output      []ResponsesOutput `json:"output"`
+	Usage       *ResponsesUsage   `json:"usage,omitempty"`
+	ServiceTier string            `json:"service_tier,omitempty"` // upstream tier, echoed back verbatim
 
 	// incomplete_details is present when status="incomplete"
 	IncompleteDetails *ResponsesIncompleteDetails `json:"incomplete_details,omitempty"`
@@ -589,8 +609,11 @@ type ResponsesStreamEvent struct {
 	Code  string `json:"code,omitempty"`
 	Param string `json:"param,omitempty"`
 
-	// Sequence number for ordering events
-	SequenceNumber int `json:"sequence_number,omitempty"`
+	// SequenceNumber orders streamed events. Strict Responses clients (Grok Build,
+	// Codex CLI) declare it required and abort with `missing field 'sequence_number'`
+	// when it is absent, so it is always emitted — no omitempty. Same rule as
+	// ResponsesResponse.CreatedAt. Zero is a valid first-event value.
+	SequenceNumber int `json:"sequence_number"`
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +622,7 @@ type ResponsesStreamEvent struct {
 
 // ChatCompletionsRequest is the request body for POST /v1/chat/completions.
 type ChatCompletionsRequest struct {
+	PromptCacheOptions  json.RawMessage    `json:"prompt_cache_options,omitempty"`
 	Model               string             `json:"model"`
 	Messages            []ChatMessage      `json:"messages"`
 	Instructions        string             `json:"instructions,omitempty"` // OpenAI Responses API compat
@@ -631,6 +655,7 @@ type ChatStreamOptions struct {
 type ChatMessage struct {
 	Role             string          `json:"role"` // "system" | "user" | "assistant" | "tool" | "function"
 	Content          json.RawMessage `json:"content,omitempty"`
+	Refusal          string          `json:"refusal,omitempty"`
 	ReasoningContent string          `json:"reasoning_content,omitempty"`
 	Reasoning        string          `json:"reasoning,omitempty"`
 	Name             string          `json:"name,omitempty"`
@@ -653,6 +678,13 @@ type ChatContentPart struct {
 type ChatImageURL struct {
 	URL    string `json:"url"`
 	Detail string `json:"detail,omitempty"` // "auto" | "low" | "high"
+}
+
+// ChatFile contains the payload of a "file" content part (e.g. PDF input).
+type ChatFile struct {
+	Filename string `json:"filename,omitempty"`
+	FileData string `json:"file_data,omitempty"` // data URI
+	FileID   string `json:"file_id,omitempty"`
 }
 
 // ChatTool describes a tool available to the model.
@@ -722,7 +754,14 @@ type ChatUsage struct {
 	CompletionTokensDetails *ChatTokenDetails `json:"completion_tokens_details,omitempty"`
 }
 
-// ChatTokenDetails provides a breakdown of token usage.
+// ChatTokenDetails provides a breakdown of token usage. The same type is
+// reused for both prompt_tokens_details and completion_tokens_details;
+// unset fields are omitted so each side only emits the fields that apply.
+//
+// Field set mirrors OpenAI's official CompletionUsage schema:
+//   - prompt_tokens_details: cached_tokens, audio_tokens
+//   - completion_tokens_details: reasoning_tokens, audio_tokens,
+//     accepted_prediction_tokens, rejected_prediction_tokens
 type ChatTokenDetails struct {
 	CachedTokens             int `json:"cached_tokens,omitempty"`
 	AudioTokens              int `json:"audio_tokens,omitempty"`
@@ -756,6 +795,7 @@ type ChatChunkChoice struct {
 type ChatDelta struct {
 	Role             string         `json:"role,omitempty"`
 	Content          *string        `json:"content,omitempty"` // pointer: omit when not present, null vs "" matters
+	Refusal          *string        `json:"refusal,omitempty"`
 	ReasoningContent *string        `json:"reasoning_content,omitempty"`
 	Reasoning        *string        `json:"reasoning,omitempty"`
 	ToolCalls        []ChatToolCall `json:"tool_calls,omitempty"`
@@ -779,6 +819,9 @@ func (d ChatDelta) reasoningText() *string {
 // Shared constants
 // ---------------------------------------------------------------------------
 
-// minMaxOutputTokens is the floor for max_output_tokens in a Responses request.
-// Very small values may cause upstream API errors, so we enforce a minimum.
-const minMaxOutputTokens = 128
+// DefaultMinMaxOutputTokens is the default floor for max_output_tokens in a
+// Responses request. Very small values may cause upstream API errors, so we
+// enforce a minimum.
+const DefaultMinMaxOutputTokens = 128
+
+const minMaxOutputTokens = DefaultMinMaxOutputTokens

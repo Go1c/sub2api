@@ -76,7 +76,7 @@
     </div>
 
     <!-- Plan Edit Dialog -->
-    <PlanEditDialog :show="showPlanDialog" :plan="editingPlan" :groups="groups" @close="showPlanDialog = false" @saved="loadPlans" />
+    <PlanEditDialog :show="showPlanDialog" :plan="editingPlan" :groups="groups" :payment-config="paymentConfig" @close="showPlanDialog = false" @saved="loadPlans" />
 
     <ConfirmDialog
       :show="showSyncPlanDialog"
@@ -107,19 +107,32 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlanEditDialog from './PlanEditDialog.vue'
+import { currencySymbol } from '@/components/payment/currency'
 import { platformTextClass } from '@/utils/platformColors'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 
+function planCurrencySymbol(currency?: string): string {
+  return currencySymbol(currency || 'USD')
+}
+
 // ==================== Groups ====================
 
 const groups = ref<AdminGroup[]>([])
+const paymentConfig = ref<AdminPaymentConfig | null>(null)
 
 async function loadGroups() {
   try {
     groups.value = await adminAPI.groups.getAll()
   } catch { /* ignore */ }
+}
+
+async function loadPaymentConfig() {
+  try {
+    const res = await adminPaymentAPI.getConfig()
+    paymentConfig.value = res.data
+  } catch { /* preview only */ }
 }
 
 function getGroup(id: number): AdminGroup | undefined {
@@ -248,6 +261,7 @@ async function handleSyncPlanLimits() {
 
 onMounted(() => {
   loadGroups()
+  loadPaymentConfig()
   loadPlans()
 })
 </script>

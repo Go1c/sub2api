@@ -6,14 +6,18 @@ import AccountsView from '../AccountsView.vue'
 const {
   listAccounts,
   listWithEtag,
+  getUpstreamBillingRatesWithEtag,
   getBatchTodayStats,
+  getUpstreamBillingProbeSettings,
   getAllProxies,
   getAllGroups,
   probeUpstreamBillingBatch
 } = vi.hoisted(() => ({
   listAccounts: vi.fn(),
   listWithEtag: vi.fn(),
+  getUpstreamBillingRatesWithEtag: vi.fn(),
   getBatchTodayStats: vi.fn(),
+  getUpstreamBillingProbeSettings: vi.fn(),
   getAllProxies: vi.fn(),
   getAllGroups: vi.fn(),
   probeUpstreamBillingBatch: vi.fn()
@@ -24,6 +28,7 @@ vi.mock('@/api/admin', () => ({
     accounts: {
       list: listAccounts,
       listWithEtag,
+      getUpstreamBillingRatesWithEtag,
       getBatchTodayStats,
       getUpstreamBillingProbeSettings: vi.fn().mockResolvedValue({ enabled: true, interval_minutes: 30 }),
       delete: vi.fn(),
@@ -43,8 +48,8 @@ vi.mock('@/api/admin', () => ({
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    showError: vi.fn(),
-    showSuccess: vi.fn(),
+    showError,
+    showSuccess,
     showInfo: vi.fn()
   })
 }))
@@ -105,7 +110,9 @@ describe('admin AccountsView bulk edit scope', () => {
 
     listAccounts.mockReset()
     listWithEtag.mockReset()
+    getUpstreamBillingRatesWithEtag.mockReset()
     getBatchTodayStats.mockReset()
+    getUpstreamBillingProbeSettings.mockReset()
     getAllProxies.mockReset()
     getAllGroups.mockReset()
     probeUpstreamBillingBatch.mockReset()
@@ -122,7 +129,13 @@ describe('admin AccountsView bulk edit scope', () => {
       etag: null,
       data: null
     })
+    getUpstreamBillingRatesWithEtag.mockResolvedValue({
+      notModified: true,
+      etag: null,
+      data: null
+    })
     getBatchTodayStats.mockResolvedValue({ stats: {} })
+    getUpstreamBillingProbeSettings.mockResolvedValue({ enabled: true, interval_minutes: 30 })
     getAllProxies.mockResolvedValue([])
     getAllGroups.mockResolvedValue([])
     probeUpstreamBillingBatch.mockResolvedValue([])

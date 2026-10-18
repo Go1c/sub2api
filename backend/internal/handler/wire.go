@@ -48,6 +48,7 @@ func ProvideAdminHandlers(
 	userAttributeHandler *admin.UserAttributeHandler,
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
 	tlsFingerprintProfileHandler *admin.TLSFingerprintProfileHandler,
+	pluginHandler *admin.PluginHandler,
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
 	channelHandler *admin.ChannelHandler,
@@ -94,6 +95,7 @@ func ProvideAdminHandlers(
 		UserAttribute:          userAttributeHandler,
 		ErrorPassthrough:       errorPassthroughHandler,
 		TLSFingerprintProfile:  tlsFingerprintProfileHandler,
+		Plugin:                 pluginHandler,
 		APIKey:                 apiKeyHandler,
 		ScheduledTest:          scheduledTestHandler,
 		Channel:                channelHandler,
@@ -108,6 +110,68 @@ func ProvideAdminHandlers(
 		AuditLog:               auditLogHandler,
 		BalanceClient:          balanceClientHandler,
 	}
+}
+
+func ProvideGatewayHandler(
+	gatewayService *service.GatewayService,
+	openAIGatewayService *service.OpenAIGatewayService,
+	geminiCompatService *service.GeminiMessagesCompatService,
+	antigravityGatewayService *service.AntigravityGatewayService,
+	userService *service.UserService,
+	concurrencyService *service.ConcurrencyService,
+	billingCacheService *service.BillingCacheService,
+	usageService *service.UsageService,
+	apiKeyService *service.APIKeyService,
+	usageRecordWorkerPool *service.UsageRecordWorkerPool,
+	errorPassthroughService *service.ErrorPassthroughService,
+	contentModerationService *service.ContentModerationService,
+	userMsgQueueService *service.UserMessageQueueService,
+	cfg *config.Config,
+	settingService *service.SettingService,
+	coordinator *securityaudit.Coordinator,
+	geminiCachedContentService *service.GeminiCachedContentService,
+) *GatewayHandler {
+	h := NewGatewayHandler(gatewayService, openAIGatewayService, geminiCompatService, antigravityGatewayService,
+		userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool,
+		errorPassthroughService, contentModerationService, userMsgQueueService, cfg, settingService)
+	h.securityAuditCoordinator = coordinator
+	h.geminiCachedContentService = geminiCachedContentService
+	return h
+}
+
+func ProvideOpenAIGatewayHandler(
+	gatewayService *service.OpenAIGatewayService,
+	pluginManager *service.PluginManager,
+	concurrencyService *service.ConcurrencyService,
+	billingCacheService *service.BillingCacheService,
+	apiKeyService *service.APIKeyService,
+	usageRecordWorkerPool *service.UsageRecordWorkerPool,
+	errorPassthroughService *service.ErrorPassthroughService,
+	contentModerationService *service.ContentModerationService,
+	opsService *service.OpsService,
+	grokQuotaService *service.GrokQuotaService,
+	cfg *config.Config,
+	coordinator *securityaudit.Coordinator,
+	compositeResolver *service.CompositeRouteResolver,
+) *OpenAIGatewayHandler {
+	gatewayService.SetPluginManager(pluginManager)
+	h := NewOpenAIGatewayHandler(gatewayService, concurrencyService, billingCacheService, apiKeyService,
+		usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, cfg)
+	h.compositeResolver = compositeResolver
+	h.securityAuditCoordinator = coordinator
+	h.grokMediaEligibilityProber = grokQuotaService
+	return h
+}
+
+func ProvideBatchImageHandler(
+	batchService *service.BatchImagePublicService,
+	download *service.BatchImageDownloadService,
+	cleanup *service.BatchImageCleanupService,
+	openAI *OpenAIGatewayHandler,
+) *BatchImageHandler {
+	h := NewBatchImageHandler(batchService, download, cleanup)
+	h.openAI = openAI
+	return h
 }
 
 // ProvideSystemHandler creates admin.SystemHandler with UpdateService
@@ -149,6 +213,7 @@ func ProvideHandlers(
 	lotteryHandler *LotteryHandler,
 	invoiceHandler *InvoiceHandler,
 	channelMonitorUserHandler *ChannelMonitorUserHandler,
+	channelMonitorV2Handler *ChannelMonitorV2Handler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
 	openaiGatewayHandler *OpenAIGatewayHandler,
@@ -182,6 +247,7 @@ func ProvideHandlers(
 		Lottery:          lotteryHandler,
 		Invoice:          invoiceHandler,
 		ChannelMonitor:   channelMonitorUserHandler,
+		ChannelMonitorV2: channelMonitorV2Handler,
 		Admin:            adminHandlers,
 		Gateway:          gatewayHandler,
 		OpenAIGateway:    openaiGatewayHandler,
@@ -318,6 +384,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
 	admin.NewTLSFingerprintProfileHandler,
+	admin.NewPluginHandler,
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 	admin.NewChannelHandler,

@@ -115,7 +115,7 @@ const typeLabel = computed(() => {
     case 'bedrock':
       return 'AWS'
     case 'service_account':
-      return 'Vertex'
+      return 'Agent Platform (Vertex)'
     default:
       return props.type
   }
@@ -218,6 +218,42 @@ const typeClass = computed(() => {
 const planBadgeClass = computed(() => {
   if (normalizedPlanType.value === 'abnormal') {
     return 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+  }
+  // Free stays muted gray; paid Grok tiers get distinct colors.
+  if (
+    normalizedPlanType.value === 'free' ||
+    normalizedPlanType.value === 'basic' ||
+    normalizedPlanType.value === 'xbasic'
+  ) {
+    return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+  }
+  if (props.platform === 'grok' && normalizedPlanType.value) {
+    // Heavy / SuperGrok Heavy → purple
+    if (normalizedPlanType.value.includes('heavy')) {
+      return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300'
+    }
+    // SuperGrok → cyan
+    if (normalizedPlanType.value.includes('supergrok')) {
+      return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'
+    }
+    // Any other non-free Grok plan (future tiers) → amber so it still stands out
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+  }
+  // OpenAI / other paid plan labels: keep readable distinction from free gray
+  if (normalizedPlanType.value === 'plus') {
+    return 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+  }
+  if (normalizedPlanType.value === 'team' || normalizedPlanType.value === 'selfservebusinessprolite' ||
+    (props.platform === 'openai' && ['selfservebusinessusagebased', 'business', 'enterprise', 'ent26', 'enterprisecbpautomation', 'enterprisecbpusagebased', 'edu', 'eduplus', 'edupro'].includes(normalizedPlanType.value))) {
+    return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+  }
+  if (
+    normalizedPlanType.value === 'pro' ||
+    normalizedPlanType.value === 'chatgptpro' ||
+    normalizedPlanType.value === 'prolite' ||
+    (props.platform === 'openai' && normalizedPlanType.value === 'promax')
+  ) {
+    return 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
   }
   return typeClass.value
 })

@@ -1,3 +1,4 @@
+import { openAIPlanTypeLabel } from '@/utils/planType'
 import { describe, it, expect } from 'vitest'
 import {
   applyInterceptWarmup,

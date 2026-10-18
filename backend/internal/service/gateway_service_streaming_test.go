@@ -24,10 +24,21 @@ func TestGatewayService_StreamingReusesScannerBufferAndStillParsesUsage(t *testi
 		},
 	}
 
-	svc := &GatewayService{
-		cfg:              cfg,
+func newStreamingResponseTestGatewayService() *GatewayService {
+	return &GatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{
+				StreamDataIntervalTimeout: 0,
+				MaxLineSize:               defaultMaxLineSize,
+			},
+		},
 		rateLimitService: &RateLimitService{},
 	}
+}
+
+func TestGatewayService_StreamingReusesScannerBufferAndStillParsesUsage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := newStreamingResponseTestGatewayService()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

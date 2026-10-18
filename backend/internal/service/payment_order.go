@@ -145,11 +145,16 @@ func resolveExternalOrderAmount(req CreateOrderRequest, plan *dbent.Subscription
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
-	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
-		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
-	}
-	if req.OrderType == payment.OrderTypeSubscription {
+	// 订单类型必须走白名单：未知类型会跳过充值开关与倍率计算，履约时却仍按余额到账。
+	switch req.OrderType {
+	case payment.OrderTypeBalance:
+		if cfg.BalanceDisabled {
+			return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
+		}
+	case payment.OrderTypeSubscription:
 		return s.validateSubOrder(ctx, req)
+	default:
+		return nil, infraerrors.BadRequest("INVALID_ORDER_TYPE", "unsupported order type")
 	}
 	if math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
@@ -599,7 +604,7 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 		if merchantID := strings.TrimSpace(sel.Config["mchId"]); merchantID != "" {
 			snapshot["merchant_id"] = merchantID
 		}
-		snapshot["currency"] = "CNY"
+		snapshot["currency"] = payment.DefaultPaymentCurrency
 	}
 	if providerKey == payment.TypeAlipay {
 		if merchantAppID := strings.TrimSpace(sel.Config["appId"]); merchantAppID != "" {
@@ -768,7 +773,10 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		IsMobile:    req.IsMobile,
 		ReturnURL:   providerReturnURL,
 	}, sel, outTradeNo, payAmountStr, subject)
+	providerReq.AlipayMobilePrecreate = shouldUseAlipayMobilePrecreate(req, cfg, sel)
+	finishProviderCall := servertiming.ObserveDependency(ctx, "payment")
 	pr, err := prov.CreatePayment(ctx, providerReq)
+	finishProviderCall()
 	if err != nil {
 		slog.Error("[PaymentService] CreatePayment failed", "provider", sel.ProviderKey, "instance", sel.InstanceID, "error", err)
 		if appErr := new(infraerrors.ApplicationError); errors.As(err, &appErr) {
@@ -802,6 +810,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	}
 	resp := buildCreateOrderResponse(order, req, actualPayAmount, sel, pr, resultType)
 	resp.ResumeToken = resumeToken
+	resp.AlipayMobilePrecreateDeepLink = providerReq.AlipayMobilePrecreate && strings.TrimSpace(pr.QRCode) != ""
 	return resp, nil
 }
 
@@ -1007,6 +1016,66 @@ func (s *PaymentService) validateSelectedCreateOrderInstance(ctx context.Context
 	return nil
 }
 
+func calculateCreateOrderPayAmount(limitAmount, feeRate float64, currency string) (string, float64, error) {
+	if err := validateCreateOrderAmountCurrency(limitAmount, currency); err != nil {
+		return "", 0, err
+	}
+	payAmountStr := payment.CalculatePayAmountForCurrency(limitAmount, feeRate, currency)
+	if _, err := payment.AmountToMinorUnit(payAmountStr, currency); err != nil {
+		return "", 0, infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
+			WithMetadata(map[string]string{"currency": currency})
+	}
+	payAmount, err := strconv.ParseFloat(payAmountStr, 64)
+	if err != nil {
+		return "", 0, infraerrors.BadRequest("INVALID_AMOUNT", "invalid payment amount").
+			WithMetadata(map[string]string{"currency": currency})
+	}
+	return payAmountStr, payAmount, nil
+}
+
+func calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate float64, currency, orderType string, usdToCnyRate float64) (string, float64, error) {
+	paymentAmount := limitAmount
+	if orderType == payment.OrderTypeSubscription {
+		paymentAmount = calculateSubscriptionGatewayBaseAmount(limitAmount, usdToCnyRate, currency)
+	}
+	return calculateCreateOrderPayAmount(paymentAmount, feeRate, currency)
+}
+
+// calculateSubscriptionGatewayBaseAmount 计算订阅订单的网关扣款基数。
+// 换算是显式 opt-in：仅当管理员配置了订阅汇率（rate > 0，1 USD = rate CNY）
+// 且网关币种为 CNY 时，按 price × rate 换算；未配置时保持 price 直付的存量行为。
+func calculateSubscriptionGatewayBaseAmount(amount, usdToCnyRate float64, currency string) float64 {
+	rate := normalizeSubscriptionUSDToCNYRate(usdToCnyRate)
+	if rate <= 0 || currency != payment.DefaultPaymentCurrency {
+		return amount
+	}
+	return decimal.NewFromFloat(amount).
+		Mul(decimal.NewFromFloat(rate)).
+		Round(int32(payment.CurrencyMaxFractionDigits(currency))).
+		InexactFloat64()
+}
+
+func validateCreateOrderAmountCurrency(amount float64, currency string) error {
+	amountStr := strconv.FormatFloat(amount, 'f', -1, 64)
+	if _, err := payment.AmountToMinorUnit(amountStr, currency); err != nil {
+		return infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
+			WithMetadata(map[string]string{"currency": currency})
+	}
+	return nil
+}
+
+func validateSelectedCreateOrderAmountCurrency(payAmount string, sel *payment.InstanceSelection) error {
+	if sel == nil {
+		return nil
+	}
+	currency := paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
+	if _, err := payment.AmountToMinorUnit(payAmount, currency); err != nil {
+		return infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
+			WithMetadata(map[string]string{"currency": currency})
+	}
+	return nil
+}
+
 func requiresWeChatJSAPICompatibleSelection(req CreateOrderRequest, sel *payment.InstanceSelection) bool {
 	if sel == nil || sel.ProviderKey != payment.TypeWxpay || payment.GetBasePaymentType(req.PaymentType) != payment.TypeWxpay {
 		return false
@@ -1057,6 +1126,7 @@ func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest,
 		Amount:       order.Amount,
 		PayAmount:    payAmount,
 		FeeRate:      order.FeeRate,
+		BonusAmount:  order.BonusAmount,
 		Status:       OrderStatusPending,
 		ResultType:   resultType,
 		PaymentType:  req.PaymentType,
