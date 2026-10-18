@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"golang.org/x/sync/singleflight"
 )
@@ -31,6 +32,171 @@ var versionBoundsSF singleflight.Group
 
 // versionBoundsCacheTTL 缓存有效期
 const versionBoundsCacheTTL = 60 * time.Second
+
+// NormalizeClaudeCodeClientVersion 校验并归一化 Claude Code 客户端版本号，非法值返回空串。
+func NormalizeClaudeCodeClientVersion(version string) string {
+	normalized := strings.TrimSpace(version)
+	normalized = strings.TrimPrefix(normalized, "v")
+	if normalized == "" {
+		return ""
+	}
+	if !claude.IsSupportedCLIVersion(normalized) {
+		return ""
+	}
+	return normalized
+}
+
+type cachedClaudeCodeClientVersion struct {
+	version   string
+	expiresAt int64
+}
+
+const (
+	claudeCodeClientVersionSFKey     = "claude_code_client_version"
+	claudeCodeClientVersionCacheTTL  = 60 * time.Second
+	claudeCodeClientVersionErrorTTL  = 5 * time.Second
+	claudeCodeClientVersionDBTimeout = 5 * time.Second
+)
+
+func (s *SettingService) GetClaudeCodeClientVersion(ctx context.Context) string {
+	fallback := claude.CLIVersion()
+	if s == nil || s.settingRepo == nil {
+		return fallback
+	}
+	if cached, ok := s.claudeCodeVersionCache.Load().(*cachedClaudeCodeClientVersion); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.version
+		}
+	}
+
+	result, _, _ := s.claudeCodeVersionSF.Do(claudeCodeClientVersionSFKey, func() (any, error) {
+		if cached, ok := s.claudeCodeVersionCache.Load().(*cachedClaudeCodeClientVersion); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.version, nil
+			}
+		}
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), claudeCodeClientVersionDBTimeout)
+		defer cancel()
+		values, err := s.settingRepo.GetMultiple(dbCtx, []string{
+			SettingKeyClaudeCodeClientVersion,
+			SettingKeyClaudeCodeClientVersionSynced,
+		})
+		if err != nil {
+			slog.Warn("failed to get claude code client version setting", "error", err)
+			s.claudeCodeVersionCache.Store(&cachedClaudeCodeClientVersion{
+				version:   fallback,
+				expiresAt: time.Now().Add(claudeCodeClientVersionErrorTTL).UnixNano(),
+			})
+			return fallback, nil
+		}
+		version := NormalizeClaudeCodeClientVersion(values[SettingKeyClaudeCodeClientVersion])
+		if version == "" {
+			if raw := values[SettingKeyClaudeCodeClientVersion]; strings.TrimSpace(raw) != "" {
+				slog.Warn("ignoring invalid claude_code_client_version setting; falling back to the next layer", "value", raw)
+			}
+			version = NormalizeClaudeCodeClientVersion(values[SettingKeyClaudeCodeClientVersionSynced])
+			if version == "" && strings.TrimSpace(values[SettingKeyClaudeCodeClientVersionSynced]) != "" {
+				slog.Warn("ignoring invalid claude_code_client_version_synced setting; falling back to the built-in pin",
+					"value", values[SettingKeyClaudeCodeClientVersionSynced])
+			}
+		}
+		if version == "" {
+			version = fallback
+		}
+		s.claudeCodeVersionCache.Store(&cachedClaudeCodeClientVersion{
+			version:   version,
+			expiresAt: time.Now().Add(claudeCodeClientVersionCacheTTL).UnixNano(),
+		})
+		return version, nil
+	})
+	if version, ok := result.(string); ok && version != "" {
+		return version
+	}
+	return fallback
+}
+
+type cachedOpenAICodexClientVersion struct {
+	version   string
+	expiresAt int64
+}
+
+const (
+	openAICodexClientVersionSFKey     = "openai_codex_client_version"
+	openAICodexClientVersionCacheTTL  = 60 * time.Second
+	openAICodexClientVersionErrorTTL  = 5 * time.Second
+	openAICodexClientVersionDBTimeout = 5 * time.Second
+)
+
+func (s *SettingService) GetOpenAICodexClientVersion(ctx context.Context) string {
+	fallback := codexCLIVersion
+	if s == nil || s.settingRepo == nil {
+		return fallback
+	}
+	if cached, ok := s.openAICodexVersionCache.Load().(*cachedOpenAICodexClientVersion); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.version
+		}
+	}
+	result, _, _ := s.openAICodexVersionSF.Do(openAICodexClientVersionSFKey, func() (any, error) {
+		if cached, ok := s.openAICodexVersionCache.Load().(*cachedOpenAICodexClientVersion); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.version, nil
+			}
+		}
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), openAICodexClientVersionDBTimeout)
+		defer cancel()
+		values, err := s.settingRepo.GetMultiple(dbCtx, []string{
+			SettingKeyOpenAICodexClientVersion,
+			SettingKeyOpenAICodexClientVersionSynced,
+		})
+		if err != nil {
+			slog.Warn("failed to get openai codex client version setting", "error", err)
+			s.openAICodexVersionCache.Store(&cachedOpenAICodexClientVersion{
+				version:   fallback,
+				expiresAt: time.Now().Add(openAICodexClientVersionErrorTTL).UnixNano(),
+			})
+			return fallback, nil
+		}
+		version := NormalizeCodexClientVersion(values[SettingKeyOpenAICodexClientVersion])
+		if version == "" {
+			version = NormalizeCodexClientVersion(values[SettingKeyOpenAICodexClientVersionSynced])
+		}
+		if version == "" {
+			version = fallback
+		}
+		s.openAICodexVersionCache.Store(&cachedOpenAICodexClientVersion{
+			version:   version,
+			expiresAt: time.Now().Add(openAICodexClientVersionCacheTTL).UnixNano(),
+		})
+		return version, nil
+	})
+	if version, ok := result.(string); ok && version != "" {
+		return version
+	}
+	return fallback
+}
+
+func (s *SettingService) InvalidateOpenAICodexClientVersionCache() {
+	if s == nil {
+		return
+	}
+	s.openAICodexVersionSF.Forget(openAICodexClientVersionSFKey)
+	s.openAICodexVersionCache.Store((*cachedOpenAICodexClientVersion)(nil))
+}
+
+func (s *SettingService) InvalidateClaudeCodeClientVersionCache() {
+	if s == nil {
+		return
+	}
+	s.claudeCodeVersionSF.Forget(claudeCodeClientVersionSFKey)
+	s.claudeCodeVersionCache.Store((*cachedClaudeCodeClientVersion)(nil))
+}
 
 // versionBoundsErrorTTL DB 错误时的短缓存，快速重试
 const versionBoundsErrorTTL = 5 * time.Second
@@ -115,9 +281,10 @@ type cachedCodexRestrictionPolicy struct {
 // cachedCyberSessionBlockRuntime cyber 会话屏蔽开关+TTL 进程内缓存（60s TTL）。
 // GetCyberSessionBlockRuntime 在网关请求热路径上被调用，避免每次访问 DB。
 type cachedCyberSessionBlockRuntime struct {
-	enabled   bool
-	ttl       time.Duration
-	expiresAt int64 // unix nano
+	enabled          bool
+	ttl              time.Duration
+	allowlistedUsers map[int64]struct{}
+	expiresAt        int64 // unix nano
 }
 
 type cachedBalanceUsageGateSettings struct {

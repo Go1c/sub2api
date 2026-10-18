@@ -105,10 +105,6 @@ func (c *gatewayCache) GetReasoningContent(ctx context.Context, itemID string) (
 	return val, nil
 }
 
-func buildOpenAIResponsesSessionWindowKey(groupID int64, sessionHash string) string {
-	return fmt.Sprintf("%s%d:%s", openAIResponsesSessionWindowPrefix, groupID, sessionHash)
-}
-
 var claimOpenAIResponsesSessionWindowScript = redis.NewScript(`
 local previous = redis.call('GET', KEYS[1])
 redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])

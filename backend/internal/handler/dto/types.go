@@ -121,7 +121,6 @@ type Group struct {
 	DailyLimitUSD             *float64 `json:"daily_limit_usd"`
 	WeeklyLimitUSD            *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD           *float64 `json:"monthly_limit_usd"`
-	LongContextPricingEnabled bool     `json:"long_context_pricing_enabled"`
 
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool    `json:"allow_image_generation"`
@@ -198,8 +197,6 @@ type AdminGroup struct {
 	ProfitControlEnabled bool                          `json:"profit_control_enabled"`
 	ProfitMinMargin      float64                       `json:"profit_min_margin"`
 	ProfitSafetyBuffer   float64                       `json:"profit_safety_buffer"`
-	ModelPricing         []service.ChannelModelPricing `json:"model_pricing"`
-
 	// ModelPricing 分组级逐模型定价，仅管理员可见。
 	ModelPricing []service.ChannelModelPricing `json:"model_pricing"`
 
@@ -237,6 +234,8 @@ type Account struct {
 	Credentials             map[string]any  `json:"credentials"`
 	CredentialsStatus       map[string]bool `json:"credentials_status,omitempty"`
 	Extra                   map[string]any  `json:"extra"`
+	OllamaCloudUsage        *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
+	OpenCodeGoUsage         *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
 	ProxyID                 *int64          `json:"proxy_id"`
 	ProxyIPGroupID          *int64          `json:"proxy_ip_group_id"`
 	ProxyFallbackOriginID   *int64          `json:"proxy_fallback_origin_id"`

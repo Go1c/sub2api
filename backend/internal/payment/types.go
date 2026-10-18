@@ -197,10 +197,11 @@ type RefundRequest struct {
 // RefundQueryRequest contains identifiers needed to query a previously
 // requested refund.
 type RefundQueryRequest struct {
-	TradeNo  string
-	OrderID  string
-	RefundID string
-	Amount   string
+	TradeNo     string
+	OrderID     string
+	RefundID    string
+	Amount      string
+	RequestedAt time.Time
 }
 
 // RefundResponse is returned after a refund request.
@@ -235,6 +236,12 @@ type Provider interface {
 	VerifyNotification(ctx context.Context, rawBody string, headers map[string]string) (*PaymentNotification, error)
 	// Refund requests a refund from the upstream provider.
 	Refund(ctx context.Context, req RefundRequest) (*RefundResponse, error)
+}
+
+// NotificationConfirmer is implemented by providers that can re-check a
+// verified success notification against the upstream order before fulfillment.
+type NotificationConfirmer interface {
+	ConfirmNotification(ctx context.Context, n *PaymentNotification) error
 }
 
 // RefundQueryProvider extends Provider with refund status querying.

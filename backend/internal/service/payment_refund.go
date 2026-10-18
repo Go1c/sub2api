@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,15 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 )
 
 // --- Refund Flow ---
@@ -152,6 +148,14 @@ func psLegacyOrderMatchesInstance(orderPaymentType string, inst *dbent.PaymentPr
 		return true
 	}
 	return payment.InstanceSupportsType(inst.SupportedTypes, baseType)
+}
+
+func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, orderID int64) (*RefundResult, error) {
+	if s == nil || orderID <= 0 {
+		return nil, fmt.Errorf("refund query is not available")
+	}
+	_ = ctx
+	return nil, fmt.Errorf("refund query is not available")
 }
 
 func (s *PaymentService) RequestRefund(ctx context.Context, oid, uid int64, reason string) error {

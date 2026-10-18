@@ -240,6 +240,11 @@ func observedUpstreamResponseServiceTier(c *gin.Context) string {
 	return upstreamResponseModelObserverFromContext(c).ServiceTier()
 }
 
+func resolvedOpenAIUpstreamServiceTier(c *gin.Context, outboundBodyTier *string) *string {
+	_ = c
+	return outboundBodyTier
+}
+
 func observeOpenAISSEBody(observer *upstreamResponseModelObserver, body string) {
 	if observer == nil || strings.TrimSpace(body) == "" {
 		return

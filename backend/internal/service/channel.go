@@ -95,8 +95,10 @@ type ChannelModelPricing struct {
 	BillingMode      BillingMode       // 计费模式
 	InputPrice       *float64          // 每 token 输入价格（USD）— 向后兼容 flat 定价
 	OutputPrice      *float64          // 每 token 输出价格（USD）
-	CacheWritePrice  *float64          // 缓存写入价格
-	CacheReadPrice   *float64          // 缓存读取价格
+	CacheWritePrice            *float64          // 缓存写入价格
+	CacheWrite1hPrice          *float64          // 1 小时缓存写入价格
+	CacheReadPrice             *float64          // 缓存读取价格
+	ReasoningEffortMultipliers map[string]float64
 	FastMultiplier   *float64          // Fast/priority 档位倍率；nil 时沿用模型目录行为
 	FlexMultiplier   *float64          // Flex 档位倍率；nil 时沿用默认行为
 	ImageInputPrice  *float64          // 图片输入 token 价格（如 gpt-image-2 图片编辑）；未配置时回退文本输入价
@@ -110,8 +112,9 @@ type ChannelModelPricing struct {
 
 // ChannelTimePricing 渠道模型定价的分时倍率配置。
 type ChannelTimePricing struct {
-	Timezone string                     `json:"timezone"`
-	Periods  []ChannelTimePricingPeriod `json:"periods"`
+	Timezone     string                     `json:"timezone"`
+	WeekdaysOnly bool                       `json:"weekdays_only,omitempty"`
+	Periods      []ChannelTimePricingPeriod `json:"periods"`
 }
 
 // ChannelTimePricingPeriod 是秒级的左闭右开分时倍率区间，并兼容历史 HH:mm 数据。
@@ -131,6 +134,7 @@ type PricingInterval struct {
 	InputPrice           *float64 // token 模式：每 token 输入价
 	OutputPrice          *float64 // token 模式：每 token 输出价
 	CacheWritePrice      *float64 // token 模式：缓存写入价
+	CacheWrite1hPrice    *float64 // token 模式：1 小时缓存写入价
 	CacheReadPrice       *float64 // token 模式：缓存读取价
 	InputMultiplier      *float64 // token 模式：相对渠道底价的输入倍率（input_price 优先）
 	OutputMultiplier     *float64 // token 模式：相对渠道底价的输出倍率（output_price 优先）

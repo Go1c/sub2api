@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 )
@@ -115,6 +116,23 @@ func upstreamRoutingModel(account *Account, body []byte, defaultMappedModel stri
 		return ""
 	}
 	return resolveMappedUpstreamModel(account, body, defaultMappedModel)
+}
+
+func resolveMappedUpstreamModel(account *Account, body []byte, defaultMappedModel string) string {
+	var payload struct {
+		Model string `json:"model"`
+	}
+	_ = json.Unmarshal(body, &payload)
+	requested := strings.TrimSpace(payload.Model)
+	if account != nil && requested != "" {
+		if mapped, ok := account.ResolveMappedModel(requested); ok && strings.TrimSpace(mapped) != "" {
+			return strings.TrimSpace(mapped)
+		}
+	}
+	if requested != "" {
+		return requested
+	}
+	return strings.TrimSpace(defaultMappedModel)
 }
 
 // convertResponsesShapedChatBody 把发到 /v1/chat/completions 的 Responses 形状

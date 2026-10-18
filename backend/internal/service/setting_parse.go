@@ -1079,6 +1079,15 @@ func isFalseSettingValue(value string) bool {
 	}
 }
 
+func isTrueSettingValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "on", "enabled":
+		return true
+	default:
+		return false
+	}
+}
+
 func normalizeVisibleMethodSettingSource(method, source string, enabled bool) (string, error) {
 	_ = enabled
 	source = strings.TrimSpace(source)

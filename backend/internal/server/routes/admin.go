@@ -17,6 +17,8 @@ func RegisterAdminRoutes(
 	adminAuth middleware.AdminAuthMiddleware,
 	auditLog middleware.AuditLogMiddleware,
 	stepUpAuth middleware.StepUpAuthMiddleware,
+	settingService *service.SettingService,
+	panelRateLimiter *middleware.PanelRateLimiter,
 ) {
 	// 插件 UI 使用短时能力 URL，仅提供经过安装校验的静态资源。
 	v1.GET("/plugin-ui/:token/*path", h.Admin.Plugin.ServeUIAsset)
@@ -25,6 +27,7 @@ func RegisterAdminRoutes(
 	admin.Use(gin.HandlerFunc(adminAuth))
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
 	admin.Use(gin.HandlerFunc(auditLog))
+	admin.Use(panelRateLimiter.Global())
 	{
 		// 部署与运营合规确认
 		registerAdminComplianceRoutes(admin, h)
@@ -924,5 +927,71 @@ func registerPromptAuditRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		promptAudit.POST("/events/batch-delete", h.Admin.PromptAudit.BatchDelete)
 		promptAudit.POST("/events/delete-preview", h.Admin.PromptAudit.DeletePreview)
 		promptAudit.POST("/events/delete-by-filter", h.Admin.PromptAudit.DeleteByFilter)
+	}
+}
+
+func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	compliance := admin.Group("/compliance")
+	{
+		compliance.GET("", h.Admin.Compliance.GetStatus)
+		compliance.POST("/accept", h.Admin.Compliance.Accept)
+	}
+}
+
+func registerChannelMonitorV2Routes(admin *gin.RouterGroup, h *handler.Handlers, settingService *service.SettingService) {
+	featureGuard := channelMonitorAdminFeatureGuard(settingService)
+	modeV2Guard := channelMonitorModeV2Guard(settingService)
+
+	monitor := admin.Group("/channel-monitor-v2")
+	{
+		config := monitor.Group("")
+		config.Use(featureGuard)
+		{
+			config.GET("/config", h.ChannelMonitorV2.GetConfig)
+			config.PUT("/config", h.ChannelMonitorV2.UpdateConfig)
+		}
+		reads := monitor.Group("")
+		reads.Use(modeV2Guard)
+		{
+			reads.GET("/dimensions", h.ChannelMonitorV2.Dimensions)
+			reads.GET("/snapshot", h.ChannelMonitorV2.AdminSnapshot)
+			reads.GET("/models", h.ChannelMonitorV2.AdminModels)
+			reads.GET("/matrix", h.ChannelMonitorV2.AdminMatrix)
+			reads.GET("/errors", h.ChannelMonitorV2.Errors)
+			reads.GET("/users", h.ChannelMonitorV2.AdminUsers)
+		}
+	}
+}
+
+func channelMonitorAdminFeatureGuard(settingService *service.SettingService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if settingService != nil && settingService.GetChannelMonitorRuntime(c.Request.Context()).Enabled {
+			c.Next()
+			return
+		}
+		response.ErrorFrom(c, service.ErrChannelMonitorDisabled)
+		c.Abort()
+	}
+}
+
+func channelMonitorModeV2Guard(settingService *service.SettingService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if settingService == nil {
+			response.ErrorFrom(c, service.ErrChannelMonitorDisabled)
+			c.Abort()
+			return
+		}
+		rt := settingService.GetChannelMonitorRuntime(c.Request.Context())
+		if !rt.Enabled {
+			response.ErrorFrom(c, service.ErrChannelMonitorDisabled)
+			c.Abort()
+			return
+		}
+		if !rt.PassiveAggregationAllowed() {
+			response.ErrorFrom(c, service.ErrChannelMonitorModeMismatch)
+			c.Abort()
+			return
+		}
+		c.Next()
 	}
 }

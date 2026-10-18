@@ -53,7 +53,8 @@ var (
 	ErrBackupNotFound        = infraerrors.NotFound("BACKUP_NOT_FOUND", "backup record not found")
 	ErrBackupInProgress      = infraerrors.Conflict("BACKUP_IN_PROGRESS", "a backup is already in progress")
 	ErrRestoreInProgress     = infraerrors.Conflict("RESTORE_IN_PROGRESS", "a restore is already in progress")
-	ErrBackupRecordsCorrupt  = infraerrors.InternalServer("BACKUP_RECORDS_CORRUPT", "backup records data is corrupted")
+	ErrBackupRecordsCorrupt    = infraerrors.InternalServer("BACKUP_RECORDS_CORRUPT", "backup records data is corrupted")
+	ErrBackupArchiveProtected = infraerrors.Conflict("BACKUP_ARCHIVE_PROTECTED", "explicit confirmation is required to delete an archived backup")
 	ErrBackupS3ConfigCorrupt = infraerrors.InternalServer("BACKUP_S3_CONFIG_CORRUPT", "backup S3 config data is corrupted")
 
 	// ErrSecretEncryptionKeyNotConfigured is returned when an S3 SecretAccessKey

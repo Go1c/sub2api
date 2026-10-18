@@ -252,6 +252,9 @@ type OpenAIWSIngressHooks struct {
 	BeforeTurn           func(turn int) error
 	BeforeRequest        func(turn int, payload []byte, originalModel string) error
 	AfterTurn            func(turn int, result *OpenAIForwardResult, turnErr error)
+	MaxReasoningEffort          string
+	ReasoningEffortMappings     []ReasoningEffortMapping
+	MaxReasoningEffortOverLimit string
 }
 
 func (s *OpenAIGatewayService) getOpenAIWSConnPool() *openAIWSConnPool {

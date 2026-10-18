@@ -80,6 +80,8 @@ type Handlers struct {
 	AsyncImage       *AsyncImageHandler
 	DesktopHandoff   *DesktopPaymentHandoffHandler
 	BalanceWallet    *BalanceWalletHandler
+	Passkey          *PasskeyHandler
+	ModelPlaza       *ModelPlazaHandler
 }
 
 // BuildInfo contains build-time information

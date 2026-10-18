@@ -33,6 +33,7 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 // （允许过期/配额耗尽/零余额的 Key 查询用量或发现可用模型）。
 func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		billingInfoRequest := isGatewayUsagePath(c.Request.URL.Path) || isGatewayModelsListPath(c.Request.Method, c.Request.URL.Path)
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 		if rejectInvalidAuthAbuse(c, apiKeyService) {
 			AbortWithError(c, http.StatusTooManyRequests, "INVALID_AUTH_RATE_LIMITED", "Too many invalid authentication attempts; retry later")

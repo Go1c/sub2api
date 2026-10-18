@@ -30,6 +30,7 @@ type OpenAIRecordUsageInput struct {
 	UserAgent          string // 请求的 User-Agent
 	IPAddress          string // 请求的客户端 IP 地址
 	RequestPayloadHash string
+	SessionID          string
 	APIKeyService      APIKeyQuotaUpdater
 	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
 	// PricingAt 是请求级定价时刻。零值回退记录时刻。
@@ -393,7 +394,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
-			tokens, cost.TotalCost,
+			tokens, cost.TotalCost, pricingAt,
+			accountStatsLongContextPricingEnabled(nil),
 		)
 	}
 

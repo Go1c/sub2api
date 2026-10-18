@@ -28,7 +28,6 @@ type RateLimitService struct {
 	openAIAPIKeyHealth    OpenAIAPIKeyHealthCache
 	timeoutCounterCache   TimeoutCounterCache
 	openAI403CounterCache OpenAI403CounterCache
-	openAIAPIKeyHealth    OpenAIAPIKeyHealthCache
 	settingService        *SettingService
 	tokenCacheInvalidator TokenCacheInvalidator
 	runtimeBlocker        AccountRuntimeBlocker
@@ -38,6 +37,11 @@ type RateLimitService struct {
 	// OpenAI Team 联动熔断的进程内去重：teamID → 去重窗口截止时间
 	openaiTeamLinkedMu     sync.Mutex
 	openaiTeamLinkedRecent map[string]time.Time
+	ollamaCloudUsageProbe  ollamaCloudUsageProbeScheduler
+}
+
+func tempUnschedHitUsesModelScope(_ *Account, _ TempUnschedulableRule, modelKey string, statusCode int, _ []byte) bool {
+	return strings.TrimSpace(modelKey) != "" && statusCode != http.StatusUnauthorized
 }
 
 type AccountRuntimeBlocker interface {
@@ -101,10 +105,6 @@ func NewRateLimitService(accountRepo AccountRepository, usageRepo UsageLogReposi
 // SetTimeoutCounterCache 设置超时计数器缓存（可选依赖）
 func (s *RateLimitService) SetTimeoutCounterCache(cache TimeoutCounterCache) {
 	s.timeoutCounterCache = cache
-}
-
-func (s *RateLimitService) SetOpenAIAPIKeyHealthCache(cache OpenAIAPIKeyHealthCache) {
-	s.openAIAPIKeyHealth = cache
 }
 
 // SetOpenAI403CounterCache 设置 OpenAI 403 连续失败计数器（可选依赖）
@@ -2344,7 +2344,7 @@ func (s *RateLimitService) triggerTempUnschedulable(ctx context.Context, account
 	// Persist known-model failures under the model key so the scheduler excludes
 	// only this (account, model) pair. Authentication and model-unknown failures
 	// retain the legacy account-wide temporary-unschedulable behavior below.
-	modelKey := firstRequestedModel(requestedModel)
+	modelKey = firstRequestedModel(requestedModel)
 	if modelKey != "" && statusCode != http.StatusUnauthorized {
 		if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, modelKey, until, reason); err != nil {
 			slog.Warn("temp_unsched_model_rate_limit_set_failed", "account_id", account.ID, "model", modelKey, "error", err)

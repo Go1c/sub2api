@@ -74,7 +74,7 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 		return nil, false
 	}
 
-	page, pageSize := response.ParsePagination(c)
+	_, pageSize := response.ParsePagination(c)
 	if pageSize > userUsageMaxPageSize {
 		pageSize = userUsageMaxPageSize
 	}
@@ -155,12 +155,14 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 	billingMode := strings.TrimSpace(c.Query("billing_mode"))
 	if billingMode != "" && !service.BillingMode(billingMode).IsValidUsageFilter() {
 		response.BadRequest(c, "Invalid billing_mode")
-		return
+		return nil, false
 	}
 
-	// Parse date range
-	var startTime, endTime *time.Time
-	userTZ := c.Query("timezone") // Get user's timezone from request
+	// Parse date range. end_date is exclusive: the next local midnight.
+	var startTime, endTime time.Time
+	var startPtr, endPtr *time.Time
+	userTZ := c.Query("timezone")
+	now := timezone.NowInUserLocation(userTZ)
 	if startDateStr := c.Query("start_date"); startDateStr != "" {
 		t, err := timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
 		if err != nil {
@@ -170,7 +172,7 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 		startTime = t
 		startPtr = &startTime
 	}
-	if endDateStr != "" {
+	if endDateStr := c.Query("end_date"); endDateStr != "" {
 		t, err := timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
 		if err != nil {
 			response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
@@ -240,7 +242,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		return
 	}
 
-	if errMsg := validateUserUsageTimeRange(startTime, endTime); errMsg != "" {
+	if errMsg := validateUserUsageTimeRange(parsed.Filters.StartTime, parsed.Filters.EndTime); errMsg != "" {
 		response.BadRequest(c, errMsg)
 		return
 	}
@@ -250,17 +252,6 @@ func (h *UsageHandler) List(c *gin.Context) {
 		PageSize:  pageSize,
 		SortBy:    c.DefaultQuery("sort_by", "created_at"),
 		SortOrder: c.DefaultQuery("sort_order", "desc"),
-	}
-	filters := usagestats.UsageLogFilters{
-		UserID:      subject.UserID, // Always filter by current user for security
-		APIKeyID:    apiKeyID,
-		Model:       model,
-		RequestType: requestType,
-		Stream:      stream,
-		BillingType: billingType,
-		BillingMode: billingMode,
-		StartTime:   startTime,
-		EndTime:     endTime,
 	}
 
 	records, result, err := h.usageService.ListWithFilters(c.Request.Context(), params, parsed.Filters)
@@ -428,112 +419,24 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		return
 	}
 
-	var apiKeyID int64
-	if apiKeyIDStr := c.Query("api_key_id"); apiKeyIDStr != "" {
-		id, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
-		if err != nil {
-			response.BadRequest(c, "Invalid api_key_id")
-			return
-		}
-
-		// [Security Fix] Verify API Key ownership to prevent horizontal privilege escalation
-		apiKey, err := h.apiKeyService.GetByID(c.Request.Context(), id)
-		if err != nil {
-			response.NotFound(c, "API key not found")
-			return
-		}
-		if apiKey.UserID != subject.UserID {
-			response.Forbidden(c, "Not authorized to access this API key's statistics")
-			return
-		}
-
-		apiKeyID = id
-	}
-
-	// 获取时间范围参数
-	userTZ := c.Query("timezone") // Get user's timezone from request
-	now := timezone.NowInUserLocation(userTZ)
-	var startTime, endTime time.Time
-
-	// 优先使用 start_date 和 end_date 参数
-	startDateStr := c.Query("start_date")
-	endDateStr := c.Query("end_date")
-
-	if startDateStr != "" && endDateStr != "" {
-		// 使用自定义日期范围
-		var err error
-		startTime, err = timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
-		if err != nil {
-			response.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
-			return
-		}
-		endTime, err = timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
-		if err != nil {
-			response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
-			return
-		}
-		// 与 SQL 条件 created_at < end 对齐，使用次日 00:00 作为上边界（DST-safe）。
-		endTime = endTime.AddDate(0, 0, 1)
-	} else {
-		// 使用 period 参数
-		period := c.DefaultQuery("period", "today")
-		switch period {
-		case "today":
-			startTime = timezone.StartOfDayInUserLocation(now, userTZ)
-		case "week":
-			startTime = now.AddDate(0, 0, -7)
-		case "month":
-			startTime = now.AddDate(0, -1, 0)
-		default:
-			startTime = timezone.StartOfDayInUserLocation(now, userTZ)
-		}
-		endTime = now
-	}
-
-	if errMsg := validateUserUsageConcreteRange(startTime, endTime); errMsg != "" {
+	if errMsg := validateUserUsageConcreteRange(parsed.StartTime, parsed.EndTime); errMsg != "" {
 		response.BadRequest(c, errMsg)
 		return
 	}
 
 	var stats *service.UsageStats
 	var err error
-	if apiKeyID > 0 {
-		stats, err = h.usageService.GetStatsByAPIKey(c.Request.Context(), apiKeyID, startTime, endTime)
+	if parsed.Filters.APIKeyID > 0 {
+		stats, err = h.usageService.GetStatsByAPIKey(c.Request.Context(), parsed.Filters.APIKeyID, parsed.StartTime, parsed.EndTime)
 	} else {
-		stats, err = h.usageService.GetStatsByUser(c.Request.Context(), subject.UserID, startTime, endTime)
+		stats, err = h.usageService.GetStatsByUser(c.Request.Context(), parsed.Filters.UserID, parsed.StartTime, parsed.EndTime)
 	}
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	stats.TotalAccountCost = nil
-	stats.UpstreamEndpoints = nil
-	stats.EndpointPaths = nil
 
 	response.Success(c, stats)
-}
-
-const (
-	defaultAPIKeyDailyUsageDays = 30
-	maxAPIKeyDailyUsageDays     = 90
-)
-
-func parseAPIKeyDailyUsageDays(raw string) (int, bool) {
-	if strings.TrimSpace(raw) == "" {
-		return defaultAPIKeyDailyUsageDays, true
-	}
-	days, err := strconv.Atoi(raw)
-	if err != nil || days <= 0 || days > maxAPIKeyDailyUsageDays {
-		return 0, false
-	}
-	return days, true
-}
-
-func apiKeyDailyUsageRange(days int, userTZ string) (time.Time, time.Time) {
-	now := timezone.NowInUserLocation(userTZ)
-	startTime := timezone.StartOfDayInUserLocation(now.AddDate(0, 0, -(days-1)), userTZ)
-	endTime := timezone.StartOfDayInUserLocation(now.AddDate(0, 0, 1), userTZ)
-	return startTime, endTime
 }
 
 // validateUserUsageTimeRange enforces a hard cap on user-facing usage queries.
@@ -614,8 +517,7 @@ func (h *UsageHandler) DashboardTrend(c *gin.Context) {
 		return
 	}
 
-	startTime, endTime := parseUserTimeRange(c)
-	if errMsg := validateUserUsageConcreteRange(startTime, endTime); errMsg != "" {
+	if errMsg := validateUserUsageConcreteRange(parsed.StartTime, parsed.EndTime); errMsg != "" {
 		response.BadRequest(c, errMsg)
 		return
 	}
@@ -643,8 +545,7 @@ func (h *UsageHandler) DashboardModels(c *gin.Context) {
 		return
 	}
 
-	startTime, endTime := parseUserTimeRange(c)
-	if errMsg := validateUserUsageConcreteRange(startTime, endTime); errMsg != "" {
+	if errMsg := validateUserUsageConcreteRange(parsed.StartTime, parsed.EndTime); errMsg != "" {
 		response.BadRequest(c, errMsg)
 		return
 	}

@@ -71,6 +71,9 @@ type ImageTaskStore interface {
 	Get(ctx context.Context, id string) (*ImageTaskRecord, error)
 }
 
+// ImageStorageResolver reports the currently effective object-storage binding.
+type ImageStorageResolver func() (uploader *ImageResultUploader, enabled bool)
+
 type ImageTaskService struct {
 	store            ImageTaskStore
 	uploader         *ImageResultUploader

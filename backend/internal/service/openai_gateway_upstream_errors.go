@@ -240,7 +240,8 @@ func (s *OpenAIGatewayService) shouldFailoverUpstreamError(statusCode int) bool 
 	}
 }
 
-func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(statusCode int, upstreamMsg string, upstreamBody []byte) bool {
+func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(account *Account, statusCode int, upstreamMsg string, upstreamBody []byte) bool {
+	_ = account
 	if isOpenAIContextWindowError(upstreamMsg, upstreamBody) {
 		return false
 	}
@@ -258,10 +259,13 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(statusCode i
 const OpenAIRequestBodyTooLargeClientMessage = "Request payload is too large"
 
 const (
-	openAIRequestBodyTooLargeReason        = GatewayFailureReason("openai_request_body_too_large")
-	OpenAICapacityShedReason               = GatewayFailureReason("openai_capacity_shed")
-	OpenAIIPGroupRotateReason              = GatewayFailureReason("openai_ip_group_rotate")
-	openAICapacityShedDefaultClientMessage = "Our servers are currently overloaded. Please try again later."
+	openAIRequestBodyTooLargeReason = GatewayFailureReason("openai_request_body_too_large")
+	OpenAICapacityShedReason        = GatewayFailureReason("openai_capacity_shed")
+	OpenAIIPGroupRotateReason       = GatewayFailureReason("openai_ip_group_rotate")
+	// OpenAIHTTPContinuationUnsupportedReason identifies accounts that cannot
+	// preserve an official Responses HTTP continuation without dropping state.
+	OpenAIHTTPContinuationUnsupportedReason = GatewayFailureReason("openai_http_continuation_unsupported")
+	openAICapacityShedDefaultClientMessage  = "Our servers are currently overloaded. Please try again later."
 )
 
 func isOpenAIAccountQuotaExhausted(headers http.Header, body []byte) bool {

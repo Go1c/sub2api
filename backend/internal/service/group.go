@@ -12,6 +12,8 @@ import (
 
 type OpenAIMessagesDispatchModelConfig = domain.OpenAIMessagesDispatchModelConfig
 type GroupModelsListConfig = domain.GroupModelsListConfig
+type GroupCodexModelsManifestConfig = domain.GroupCodexModelsManifestConfig
+type ReasoningEffortMapping = domain.ReasoningEffortMapping
 
 type Group struct {
 	ID             int64
@@ -54,9 +56,17 @@ type Group struct {
 	VideoPrice480P               *float64
 	VideoPrice720P               *float64
 	VideoPrice1080P              *float64
+	// VideoModelPrices 按模型族和分辨率覆盖视频每秒价格。命中时只覆盖该模型的 VideoPrice*。
+	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；
 	// nil 表示使用默认价 defaultWebSearchPricePerCall（官方 $10/1000 次）。
 	WebSearchPricePerCall *float64
+	// 搜索工具显式定价（per 1k calls）。
+	SearchPricePer1k *float64
+	// Grok Voice 显式定价（分组级，不按文本 RateMultiplier）。
+	AudioRealtimePricePerMin     *float64
+	AudioTTSPricePerMillionChars *float64
+	AudioSTTPricePerHour         *float64
 	// 网页搜索独立倍率：false 表示共享分组有效倍率；true 时使用 WebSearchRateMultiplier。
 	WebSearchRateIndependent bool
 	WebSearchRateMultiplier  float64
@@ -100,10 +110,22 @@ type Group struct {
 	DefaultMappedModel          string
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
 	ModelsListConfig            GroupModelsListConfig
+	ModelAllowlist              GroupModelAllowlist
+	CodexModelsManifestConfig   GroupCodexModelsManifestConfig
 
 	// RPMLimit 分组级每分钟请求数上限（0 = 不限制）。
 	// 一旦设置即接管该分组用户的限流（覆盖用户级 rpm_limit），可被 user-group rpm_override 进一步覆盖。
 	RPMLimit int
+	// MaxReasoningEffort 限制 Anthropic/OpenAI 请求的推理强度。空字符串表示不限制。
+	MaxReasoningEffort string
+	// MaxReasoningEffortOverLimit 超过上限时的动作：downgrade 或 deny。
+	MaxReasoningEffortOverLimit string
+	// ReasoningEffortMappings 在套用上限之前改写请求里的推理强度。
+	ReasoningEffortMappings []ReasoningEffortMapping
+	// 分组利润控制。准入条件：账号倍率 U <= D*(1-margin-buffer)。
+	ProfitControlEnabled bool
+	ProfitMinMargin      float64
+	ProfitSafetyBuffer   float64
 
 	// ExposeUpstreamModelToUser 是否允许用户在使用记录页看到上游模型与映射链。
 	// false 时仅管理员接口返回 upstream_model / model_mapping_chain。
@@ -142,6 +164,60 @@ func (g *Group) HasWeeklyLimit() bool {
 
 func (g *Group) HasMonthlyLimit() bool {
 	return g.MonthlyLimitUSD != nil && *g.MonthlyLimitUSD > 0
+}
+
+func NormalizeGroupPlatform(platform string) string {
+	platform = strings.TrimSpace(platform)
+	if platform == "" {
+		return PlatformAnthropic
+	}
+	return platform
+}
+
+func ValidateProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) error {
+	if !enabled {
+		return nil
+	}
+	if !profitControlPlatformSupported(platform) {
+		return fmt.Errorf("profit control is not supported for platform %s", platform)
+	}
+	if minMargin < 0 || minMargin >= 1 || safetyBuffer < 0 || safetyBuffer >= 1 || minMargin+safetyBuffer >= 1 {
+		return fmt.Errorf("invalid profit control thresholds")
+	}
+	return nil
+}
+
+func NormalizeProfitControlConfig(platform string, enabled bool, minMargin, safetyBuffer float64) (bool, float64, float64) {
+	if !profitControlPlatformSupported(platform) {
+		return false, 0, 0
+	}
+	if minMargin < 0 || minMargin >= 1 {
+		minMargin = 0
+	}
+	if safetyBuffer < 0 || safetyBuffer >= 1 {
+		safetyBuffer = 0
+	}
+	if minMargin+safetyBuffer >= 1 {
+		minMargin, safetyBuffer = 0, 0
+	}
+	return enabled, minMargin, safetyBuffer
+}
+
+func profitControlPlatformSupported(platform string) bool {
+	switch platform {
+	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformGrok, PlatformAntigravity:
+		return true
+	default:
+		return false
+	}
+}
+
+// GetSearchPricePer1k returns explicit search/tool price per 1k calls if configured.
+func (g *Group) GetSearchPricePer1k() *float64 {
+	if g == nil {
+		return nil
+	}
+	return g.SearchPricePer1k
 }
 
 // GetImagePrice 根据 image_size 返回对应的图片生成价格

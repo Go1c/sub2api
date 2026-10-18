@@ -39,25 +39,26 @@ var gatewayCompatibilityMetricsLogCounter atomic.Uint64
 
 // GatewayHandler handles API gateway requests
 type GatewayHandler struct {
-	gatewayService            *service.GatewayService
-	openAIGatewayService      *service.OpenAIGatewayService
-	geminiCompatService       *service.GeminiMessagesCompatService
-	antigravityGatewayService *service.AntigravityGatewayService
-	userService               *service.UserService
-	billingCacheService       *service.BillingCacheService
-	usageService              *service.UsageService
-	apiKeyService             *service.APIKeyService
-	usageRecordWorkerPool     *service.UsageRecordWorkerPool
-	errorPassthroughService   *service.ErrorPassthroughService
-	contentModerationService  *service.ContentModerationService
-	securityAuditCoordinator  *securityaudit.Coordinator
-	userRequestMonitorService *service.OpsUserRequestMonitorService
-	concurrencyHelper         *ConcurrencyHelper
-	userMsgQueueHelper        *UserMsgQueueHelper
-	maxAccountSwitches        int
-	maxAccountSwitchesGemini  int
-	cfg                       *config.Config
-	settingService            *service.SettingService
+	gatewayService             *service.GatewayService
+	openAIGatewayService       *service.OpenAIGatewayService
+	geminiCompatService        *service.GeminiMessagesCompatService
+	antigravityGatewayService  *service.AntigravityGatewayService
+	userService                *service.UserService
+	billingCacheService        *service.BillingCacheService
+	usageService               *service.UsageService
+	apiKeyService              *service.APIKeyService
+	usageRecordWorkerPool      *service.UsageRecordWorkerPool
+	errorPassthroughService    *service.ErrorPassthroughService
+	contentModerationService   *service.ContentModerationService
+	securityAuditCoordinator   *securityaudit.Coordinator
+	geminiCachedContentService *service.GeminiCachedContentService
+	userRequestMonitorService  *service.OpsUserRequestMonitorService
+	concurrencyHelper          *ConcurrencyHelper
+	userMsgQueueHelper         *UserMsgQueueHelper
+	maxAccountSwitches         int
+	maxAccountSwitchesGemini   int
+	cfg                        *config.Config
+	settingService             *service.SettingService
 }
 
 // NewGatewayHandler creates a new GatewayHandler
@@ -586,6 +587,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// ForceCacheBilling 提前拍成标量，避免 worker 闭包保活 failover 状态里的响应体。
 			forceCacheBilling := fs.ForceCacheBilling
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+			sessionID := service.ExtractClientSessionID(c)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
@@ -1917,7 +1919,7 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 
 // handleConcurrencyError handles concurrency-related acquire errors.
 func (h *GatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotType string, streamStarted bool) {
-	status, errType, message := concurrencyErrorResponse(err, slotType)
+	status, errType, _, message := concurrencyErrorResponse(err, slotType)
 	h.handleStreamingAwareError(c, status, errType, message, streamStarted)
 }
 
@@ -2589,7 +2591,7 @@ func (h *GatewayHandler) submitMandatoryUsageRecordTask(parent context.Context, 
 	if task == nil {
 		return
 	}
-	task, _ = wrapUsageRecordTaskContext(parent, task)
+	task = wrapUsageRecordTaskContext(parent, task)
 	if h.usageRecordWorkerPool != nil {
 		if mode := h.usageRecordWorkerPool.Submit(task); !mode.Dropped() {
 			return

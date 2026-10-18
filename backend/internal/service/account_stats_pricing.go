@@ -29,6 +29,7 @@ func resolveAccountStatsCost(
 	requestCount int,
 	totalCost float64,
 	serviceTier string,
+	reasoningEfforts ...string,
 ) *float64 {
 	reasoningEffort := ""
 	if len(reasoningEfforts) > 0 {

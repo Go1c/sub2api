@@ -224,6 +224,153 @@ type opsScheduledReportContent struct {
 	overview *OpsDashboardOverview
 }
 
+var notificationEmailOpsSummaryPlaceholders = []string{
+	"report_summary_display",
+	"report_total_requests",
+	"report_success_count",
+	"report_sla_error_count",
+	"report_business_limited_count",
+	"report_sla",
+	"report_error_rate",
+	"report_upstream_error_rate",
+	"report_upstream_error_count_excl_429_529",
+	"report_latency_p50",
+	"report_latency_p99",
+	"report_ttft_p50",
+	"report_ttft_p99",
+	"report_tokens",
+	"report_qps_peak",
+	"report_tps_peak",
+	"report_tps_avg",
+}
+
+func isOpsSummaryReport(report *opsScheduledReport) bool {
+	if report == nil {
+		return false
+	}
+	switch strings.TrimSpace(report.ReportType) {
+	case "daily_summary", "weekly_summary":
+		return true
+	default:
+		return false
+	}
+}
+
+func opsScheduledReportLocalizedName(report *opsScheduledReport, locale string) string {
+	if report == nil {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(locale)), "zh") && strings.TrimSpace(report.Name) != "" {
+		return strings.TrimSpace(report.Name)
+	}
+	switch strings.TrimSpace(report.ReportType) {
+	case "daily_summary":
+		return "Daily summary"
+	case "weekly_summary":
+		return "Weekly summary"
+	case "error_digest":
+		return "Error digest"
+	case "account_health":
+		return "Account health"
+	default:
+		if name := strings.TrimSpace(report.Name); name != "" {
+			return name
+		}
+		return strings.TrimSpace(report.ReportType)
+	}
+}
+
+func opsScheduledReportLocalizedEmailVariables(report *opsScheduledReport, now time.Time, locale string) map[string]string {
+	end := now.UTC()
+	start := end
+	if report != nil && report.TimeRange > 0 {
+		start = end.Add(-report.TimeRange)
+	}
+	variables := map[string]string{
+		"report_name":           opsScheduledReportLocalizedName(report, locale),
+		"report_type":           "",
+		"report_start_time":     start.Format(time.RFC3339),
+		"report_end_time":       end.Format(time.RFC3339),
+		"report_html":           "",
+		"report_detail_display": "block",
+		"report_summary_display": "none",
+	}
+	if report != nil {
+		variables["report_type"] = strings.TrimSpace(report.ReportType)
+	}
+	for _, placeholder := range notificationEmailOpsSummaryPlaceholders {
+		if placeholder == "report_summary_display" {
+			variables[placeholder] = "none"
+			continue
+		}
+		variables[placeholder] = "-"
+	}
+	return variables
+}
+
+func opsSummaryReportEmailVariables(report *opsScheduledReport, now time.Time, overview *OpsDashboardOverview, locale string) map[string]string {
+	variables := opsScheduledReportLocalizedEmailVariables(report, now, locale)
+	variables["report_detail_display"] = "none"
+	variables["report_html"] = ""
+	if overview == nil {
+		variables["report_summary_display"] = "block"
+		return variables
+	}
+	variables["report_summary_display"] = "none"
+	variables["report_total_requests"] = formatOpsReportInt(overview.RequestCountTotal)
+	variables["report_success_count"] = formatOpsReportInt(overview.SuccessCount)
+	variables["report_sla_error_count"] = formatOpsReportInt(overview.ErrorCountSLA)
+	variables["report_business_limited_count"] = formatOpsReportInt(overview.BusinessLimitedCount)
+	variables["report_sla"] = fmt.Sprintf("%.2f%%", overview.SLA*100)
+	variables["report_error_rate"] = fmt.Sprintf("%.2f%%", overview.ErrorRate*100)
+	variables["report_upstream_error_rate"] = fmt.Sprintf("%.2f%%", overview.UpstreamErrorRate*100)
+	variables["report_upstream_error_count_excl_429_529"] = formatOpsReportInt(overview.UpstreamErrorCountExcl429529)
+	variables["report_latency_p50"] = formatOpsReportLatency(overview.Duration.P50)
+	variables["report_latency_p99"] = formatOpsReportLatency(overview.Duration.P99)
+	variables["report_ttft_p50"] = formatOpsReportLatency(overview.TTFT.P50)
+	variables["report_ttft_p99"] = formatOpsReportLatency(overview.TTFT.P99)
+	variables["report_tokens"] = formatOpsReportInt(overview.TokenConsumed)
+	variables["report_qps_peak"] = strconv.FormatFloat(overview.QPS.Peak, 'f', -1, 64)
+	variables["report_tps_peak"] = strconv.FormatFloat(overview.TPS.Peak, 'f', -1, 64)
+	variables["report_tps_avg"] = strconv.FormatFloat(overview.TPS.Avg, 'f', -1, 64)
+	return variables
+}
+
+func formatOpsReportInt(value int64) string {
+	negative := value < 0
+	if negative {
+		value = -value
+	}
+	raw := strconv.FormatInt(value, 10)
+	if len(raw) <= 3 {
+		if negative {
+			return "-" + raw
+		}
+		return raw
+	}
+	var b strings.Builder
+	if negative {
+		b.WriteByte('-')
+	}
+	lead := len(raw) % 3
+	if lead == 0 {
+		lead = 3
+	}
+	b.WriteString(raw[:lead])
+	for i := lead; i < len(raw); i += 3 {
+		b.WriteByte(',')
+		b.WriteString(raw[i : i+3])
+	}
+	return b.String()
+}
+
+func formatOpsReportLatency(value *int) string {
+	if value == nil {
+		return "-"
+	}
+	return formatOpsReportInt(int64(*value)) + " ms"
+}
+
 func (s *OpsScheduledReportService) listScheduledReports(ctx context.Context, now time.Time) []*opsScheduledReport {
 	if s == nil || s.opsService == nil {
 		return nil
@@ -405,7 +552,7 @@ func opsScheduledReportDeliverySourceID(report *opsScheduledReport) string {
 	return joined
 }
 
-func (s *OpsScheduledReportService) generateReportHTML(ctx context.Context, report *opsScheduledReport, now time.Time) (string, error) {
+func (s *OpsScheduledReportService) generateReportContent(ctx context.Context, report *opsScheduledReport, now time.Time) (opsScheduledReportContent, error) {
 	if s == nil || s.opsService == nil || report == nil {
 		return opsScheduledReportContent{}, fmt.Errorf("service not initialized")
 	}

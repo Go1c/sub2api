@@ -1011,6 +1011,10 @@ func (s *OpenAIGatewayService) parseSSEUsage(data string, usage *OpenAIUsage) {
 	s.parseSSEUsageBytes([]byte(data), usage)
 }
 
+func (s *OpenAIGatewayService) parseSSEUsageBytesWithType(data []byte, _ string, usage *OpenAIUsage) {
+	s.parseSSEUsageBytes(data, usage)
+}
+
 func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsage) {
 	if usage == nil || len(data) == 0 || bytes.Equal(data, []byte("[DONE]")) {
 		return
@@ -1800,6 +1804,27 @@ func (s *OpenAIGatewayService) parseSSEUsageFromBody(body string) *OpenAIUsage {
 		s.parseSSEUsageBytes(data, usage)
 	})
 	return usage
+}
+
+func logOpenAISuccessMissingUsage(ctx context.Context, c *gin.Context, account *Account, resp *http.Response, usage *OpenAIUsage, terminalEvent string, clientDisconnected bool) {
+	if resp == nil || resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices || usage == nil {
+		return
+	}
+	if usage.InputTokens > 0 || usage.OutputTokens > 0 || usage.CacheReadInputTokens > 0 || usage.CacheCreationInputTokens > 0 || usage.ImageOutputTokens > 0 {
+		return
+	}
+	accountID := int64(0)
+	if account != nil {
+		accountID = account.ID
+	}
+	path := ""
+	if c != nil && c.Request != nil && c.Request.URL != nil {
+		path = c.Request.URL.Path
+	}
+	logger.LegacyPrintf("service.openai_gateway",
+		"openai_usage.success_missing_usage account=%d path=%s event=%s disconnected=%t status=%d",
+		accountID, path, strings.TrimSpace(terminalEvent), clientDisconnected, resp.StatusCode)
+	_ = ctx
 }
 
 func (s *OpenAIGatewayService) replaceModelInSSEBody(body, fromModel, toModel string) string {

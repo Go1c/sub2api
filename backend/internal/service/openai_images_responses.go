@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1376,17 +1375,6 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 	pendingResults := make([]openAIResponsesImageResult, 0, 1)
 	pendingSeen := make(map[string]struct{})
 	streamMeta := openAIResponsesImageResult{Model: strings.TrimSpace(fallbackModel)}
-	var fallbackText strings.Builder
-	appendFallbackText := func(text string) {
-		if text == "" || fallbackText.Len() >= 600 {
-			return
-		}
-		remaining := 600 - fallbackText.Len()
-		if len(text) > remaining {
-			text = text[:remaining]
-		}
-		_, _ = fallbackText.WriteString(text)
-	}
 	var createdAt int64
 	clientDisconnected := false
 	lastDownstreamWriteAt := time.Now()
@@ -1759,12 +1747,10 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	}
 
 	var responsesBody []byte
-	var targetURL string
 	if direct {
-		responsesBody, targetURL, err = buildOpenAIImagesOAuthPayload(parsed, upstreamModel)
+		responsesBody, _, err = buildOpenAIImagesOAuthPayload(parsed, upstreamModel)
 	} else {
 		responsesBody, err = buildOpenAIImagesResponsesRequest(parsed, upstreamModel)
-		targetURL = chatgptCodexURL
 	}
 	if err != nil {
 		return nil, err

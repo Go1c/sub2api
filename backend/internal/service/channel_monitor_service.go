@@ -96,13 +96,21 @@ func NewChannelMonitorService(repo ChannelMonitorRepository, encryptor SecretEnc
 	return &ChannelMonitorService{repo: repo, encryptor: encryptor}
 }
 
-const maxChannelMonitorNameRunes = 100
+// SetRuntimeReader injects the settings reader used to gate active probes.
+// Optional: when unset, active probes are treated as mode=v2 (retired).
+func (s *ChannelMonitorService) SetRuntimeReader(r channelMonitorRuntimeReader) {
+	if s == nil {
+		return
+	}
+	s.settings = r
+}
 
-// ChannelMonitorDuplicateOperationIDMetadataKey is stored in the existing
-// extra_headers JSON column to avoid a schema migration. The colon makes it an
-// invalid HTTP header name, and repository adapters remove it before exposing
-// ExtraHeaders to the service layer.
-const ChannelMonitorDuplicateOperationIDMetadataKey = "sub2api:duplicate_operation_id"
+func (s *ChannelMonitorService) probeRuntime(ctx context.Context) ChannelMonitorRuntime {
+	if s == nil || s.settings == nil {
+		return ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV2}
+	}
+	return s.settings.GetChannelMonitorRuntime(ctx)
+}
 
 // ---------- CRUD ----------
 

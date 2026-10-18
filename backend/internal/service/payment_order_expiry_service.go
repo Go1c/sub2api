@@ -97,9 +97,6 @@ func (s *PaymentOrderExpiryService) runOnce() {
 	}
 	defer release()
 
-	ctx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
-	defer cancel()
-
 	reconcileCtx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
 	recovered, err := s.paymentSvc.ReconcilePendingPaymentOrders(reconcileCtx)
 	cancel()

@@ -75,15 +75,18 @@ func isAcceptableFingerprintUserAgent(ua string) bool {
 	return major <= currentMajor+maxClaudeCLIMajorVersionSkew
 }
 
-// 默认指纹值（当客户端未提供时使用）
-var defaultFingerprint = Fingerprint{
-	UserAgent:               "claude-cli/" + claude.CLICurrentVersion + " (external, cli)",
-	StainlessLang:           "js",
-	StainlessPackageVersion: "0.94.0",
-	StainlessOS:             "Linux",
-	StainlessArch:           "arm64",
-	StainlessRuntime:        "node",
-	StainlessRuntimeVersion: "v24.3.0",
+// defaultFingerprint 返回默认指纹值（当客户端未提供时使用）。
+// UserAgent 在每次使用时现取，避免包初始化时把 CLI 版本固化成过期身份。
+func defaultFingerprint() Fingerprint {
+	return Fingerprint{
+		UserAgent:               claude.DefaultUserAgent(),
+		StainlessLang:           "js",
+		StainlessPackageVersion: "0.94.0",
+		StainlessOS:             "Linux",
+		StainlessArch:           "arm64",
+		StainlessRuntime:        "node",
+		StainlessRuntimeVersion: "v24.3.0",
+	}
 }
 
 // Fingerprint represents account fingerprint data
@@ -151,7 +154,7 @@ func (s *IdentityService) GetOrCreateFingerprint(ctx context.Context, accountID 
 			if uaAcceptable {
 				mergeHeadersIntoFingerprint(cached, headers)
 			} else {
-				cached.UserAgent = defaultFingerprint.UserAgent
+				cached.UserAgent = defaultFingerprint().UserAgent
 			}
 			needWrite = true
 			logger.LegacyPrintf("service.identity",

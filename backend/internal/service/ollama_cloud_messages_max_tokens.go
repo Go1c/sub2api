@@ -26,3 +26,7 @@ func clampOllamaCloudAnthropicMessagesMaxTokens(account *Account, baseURL string
 	}
 	return clampOllamaCloudMaxTokens(account, body)
 }
+
+func isDeepSeekModel(model string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "deepseek-")
+}

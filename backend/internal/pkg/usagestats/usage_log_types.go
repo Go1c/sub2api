@@ -220,19 +220,6 @@ type APIKeyDailyUsagePoint struct {
 }
 
 // UserDashboardStats 用户仪表盘统计
-// APIKeyDailyUsagePoint represents one day of usage for a single API key.
-type APIKeyDailyUsagePoint struct {
-	Date             string  `json:"date"`
-	Requests         int64   `json:"requests"`
-	InputTokens      int64   `json:"input_tokens"`
-	OutputTokens     int64   `json:"output_tokens"`
-	CacheReadTokens  int64   `json:"cache_read_tokens"`
-	CacheWriteTokens int64   `json:"cache_write_tokens"`
-	TotalTokens      int64   `json:"total_tokens"`
-	Cost             float64 `json:"cost"`        // 标准计费
-	ActualCost       float64 `json:"actual_cost"` // 实际扣除
-}
-
 type UserDashboardStats struct {
 	// API Key 统计
 	TotalAPIKeys  int64 `json:"total_api_keys"`
@@ -282,11 +269,14 @@ type PlatformDashboardStats struct {
 
 // UsageLogFilters represents filters for usage log queries
 type UsageLogFilters struct {
-	UserID    int64
-	APIKeyID  int64
-	AccountID int64
-	GroupID   int64
-	Model     string
+	UserID                int64
+	APIKeyID              int64
+	AccountID             int64
+	GroupID               int64
+	RequestID             string
+	Model                 string
+	NativeCompactionV2    *bool
+	UpstreamModelMismatch *bool
 	// ModelFilterSource controls how Model is matched. Empty preserves raw usage_logs.model semantics.
 	ModelFilterSource string
 	RequestType       *int16
@@ -315,6 +305,13 @@ type UsageStats struct {
 	Endpoints                []EndpointStat `json:"endpoints,omitempty"`
 	UpstreamEndpoints        []EndpointStat `json:"upstream_endpoints,omitempty"`
 	EndpointPaths            []EndpointStat `json:"endpoint_paths,omitempty"`
+}
+
+// PlatformUsage 表示某用户在单个平台维度的用量明细。
+type PlatformUsage struct {
+	Platform        string  `json:"platform"`
+	TodayActualCost float64 `json:"today_actual_cost"`
+	TotalActualCost float64 `json:"total_actual_cost"`
 }
 
 // BatchUserUsageStats represents usage stats for a single user

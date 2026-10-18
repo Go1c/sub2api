@@ -42,17 +42,6 @@ type OpsRuntimeSettingsRefreshHealth struct {
 	FailureTotal uint64 `json:"failure_total"`
 }
 
-type opsRuntimeSettingsSnapshot struct {
-	monitoringEnabled bool
-	advanced          OpsAdvancedSettings
-}
-
-type OpsRuntimeSettingsRefreshHealth struct {
-	Running      bool   `json:"running"`
-	SuccessTotal uint64 `json:"success_total"`
-	FailureTotal uint64 `json:"failure_total"`
-}
-
 // OpsService provides ingestion and query APIs for the Ops monitoring module.
 type OpsService struct {
 	opsRepo     OpsRepository
@@ -577,6 +566,10 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 	}
 
 	sanitized := make([]*OpsUpstreamErrorEvent, 0, len(events))
+	firstEventWithBody := len(events) - opsUpstreamErrorsBodyWindow
+	if firstEventWithBody < 0 {
+		firstEventWithBody = 0
+	}
 	for i, ev := range events {
 		out := *ev
 		normalizeOpsUpstreamProxyAttribution(&out)
@@ -591,7 +584,7 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 		out.Platform = truncateString(strings.TrimSpace(out.Platform), 32)
 		out.AccountName = truncateString(strings.TrimSpace(out.AccountName), 128)
 		out.UpstreamRequestID = truncateString(strings.TrimSpace(out.UpstreamRequestID), 128)
-		out.UpstreamURL = truncateString(strings.TrimSpace(out.UpstreamURL), 2048)
+		out.UpstreamURL = truncateString(strings.TrimSpace(out.UpstreamURL), urlMaxLen)
 		if body := strings.TrimSpace(out.UpstreamResponseBody); body != "" {
 			out.UpstreamResponseBody, _ = sanitizeErrorBodyForStorage(body, OpsErrorLogQueueBodyMaxBytes)
 		} else {
@@ -813,24 +806,12 @@ func (s *OpsService) ListRetryAttemptsByErrorID(ctx context.Context, errorID int
 		return nil, err
 	}
 	if s.opsRepo == nil {
-		return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
+		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
 	}
-	if id <= 0 {
+	if errorID <= 0 {
 		return nil, infraerrors.BadRequest("OPS_ERROR_INVALID_ID", "invalid error id")
 	}
-	detail, err := s.opsRepo.GetErrorLogByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
-		}
-		return nil, infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
-	}
-	// 归属只能由通过鉴权时写入的 user_id 确定。
-	ownedDirectly := detail.UserID != nil && *detail.UserID == userID
-	if !ownedDirectly {
-		return nil, infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
-	}
-	return ToUserErrorRequestDetail(detail), nil
+	return s.opsRepo.ListRetryAttemptsByErrorID(ctx, errorID, limit)
 }
 func (s *OpsService) UpdateErrorResolution(ctx context.Context, errorID int64, resolved bool, resolvedByUserID *int64) error {
 	if err := s.RequireMonitoringEnabled(ctx); err != nil {
@@ -850,80 +831,6 @@ func (s *OpsService) UpdateErrorResolution(ctx context.Context, errorID int64, r
 		return infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
 	}
 	return s.opsRepo.UpdateErrorResolution(ctx, errorID, resolved, resolvedByUserID, nil, nil)
-}
-
-func sanitizeAndTrimJSONPayload(raw []byte, maxBytes int) (jsonString string, truncated bool, bytesLen int) {
-	bytesLen = len(raw)
-	if len(raw) == 0 {
-		return "", false, 0
-	}
-
-	var decoded any
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		// If it is not valid JSON, fall back to the caller's non-JSON handling.
-		return "", false, bytesLen
-	}
-
-	decoded = redactSensitiveJSON(decoded)
-
-	encoded, err := json.Marshal(decoded)
-	if err != nil {
-		return "", false, bytesLen
-	}
-	if len(encoded) <= maxBytes {
-		return string(encoded), false, bytesLen
-	}
-
-	// Trim conversation history to keep the most recent context.
-	if root, ok := decoded.(map[string]any); ok {
-		if trimmed, ok := trimConversationArrays(root, maxBytes); ok {
-			encoded2, err2 := json.Marshal(trimmed)
-			if err2 == nil && len(encoded2) <= maxBytes {
-				return string(encoded2), true, bytesLen
-			}
-			// Fallthrough: keep shrinking.
-			decoded = trimmed
-		}
-
-		essential := shrinkToEssentials(root)
-		encoded3, err3 := json.Marshal(essential)
-		if err3 == nil && len(encoded3) <= maxBytes {
-			return string(encoded3), true, bytesLen
-		}
-	}
-
-	// Last resort: keep JSON shape but drop big fields.
-	// This avoids downstream code that expects certain top-level keys from crashing.
-	if root, ok := decoded.(map[string]any); ok {
-		placeholder := shallowCopyMap(root)
-		placeholder["payload_truncated"] = true
-
-		// Replace potentially huge arrays/strings, but keep the keys present.
-		for _, k := range []string{"messages", "contents", "input", "prompt"} {
-			if _, exists := placeholder[k]; exists {
-				placeholder[k] = []any{}
-			}
-		}
-		for _, k := range []string{"text"} {
-			if _, exists := placeholder[k]; exists {
-				placeholder[k] = ""
-			}
-		}
-
-		encoded4, err4 := json.Marshal(placeholder)
-		if err4 == nil {
-			if len(encoded4) <= maxBytes {
-				return string(encoded4), true, bytesLen
-			}
-		}
-	}
-
-	// Final fallback: minimal valid JSON.
-	encoded4, err4 := json.Marshal(map[string]any{"payload_truncated": true})
-	if err4 != nil {
-		return "", true, bytesLen
-	}
-	return string(encoded4), true, bytesLen
 }
 
 func sanitizeAndTrimJSONPayload(raw []byte, maxBytes int) (jsonString string, truncated bool, bytesLen int) {
@@ -1228,6 +1135,21 @@ func shallowCopyMap(m map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (sanitized string, truncated bool, bytesLen int) {
+	bytesLen = len(raw)
+	rawText := strings.TrimSpace(string(raw))
+	if rawText == "" {
+		return "", false, bytesLen
+	}
+	if out, trunc, n := sanitizeAndTrimJSONPayload([]byte(rawText), maxBytes); out != "" {
+		return out, trunc, n
+	}
+	if maxBytes > 0 && len(rawText) > maxBytes {
+		return truncateString(rawText, maxBytes), true, bytesLen
+	}
+	return rawText, false, bytesLen
 }
 
 func sanitizeErrorBodyForStorage(raw string, maxBytes int) (sanitized string, truncated bool) {

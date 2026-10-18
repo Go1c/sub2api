@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
@@ -309,6 +308,9 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+		sessionID := service.ExtractClientSessionID(c)
+		pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
+		c.Request = c.Request.WithContext(pricingCtx)
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 				Result:             result,

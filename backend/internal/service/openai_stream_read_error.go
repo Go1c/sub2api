@@ -12,7 +12,10 @@ const (
 	// when an upstream HTTP/2 response stream is reset after the request started.
 	OpenAIUpstreamHTTP2StreamErrorCode = "upstream_http2_stream_error"
 	OpenAIUpstreamStreamReadErrorCode  = "upstream_stream_read_error"
+	OpenAIUpstreamStreamTruncatedCode  = "upstream_stream_truncated"
 )
+
+var ErrOpenAIUpstreamStreamTruncated = errors.New("openai upstream stream truncated")
 
 type openAIUpstreamStreamReadError struct {
 	cause         error

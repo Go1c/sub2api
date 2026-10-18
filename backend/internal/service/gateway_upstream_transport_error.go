@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -119,4 +122,43 @@ func tempUnscheduleAccountForTransportError(ctx context.Context, repo AccountRep
 		zap.Time("until", until),
 		zap.String("reason", reason),
 	)
+}
+
+type upstreamTransportErrorClass struct {
+	Persistent bool
+}
+
+var persistentUpstreamTransportErrorMarkers = []string{
+	"authentication failed",
+	"proxy authentication required",
+	"connection refused",
+	"no route to host",
+	"network is unreachable",
+	"no such host",
+}
+
+func classifyUpstreamTransportError(err error) upstreamTransportErrorClass {
+	if err == nil {
+		return upstreamTransportErrorClass{}
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.EHOSTUNREACH) ||
+		errors.Is(err, syscall.ENETUNREACH) {
+		return upstreamTransportErrorClass{Persistent: true}
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+		return upstreamTransportErrorClass{Persistent: true}
+	}
+	msg := strings.ToLower(err.Error())
+	for _, marker := range persistentUpstreamTransportErrorMarkers {
+		if strings.Contains(msg, marker) {
+			return upstreamTransportErrorClass{Persistent: true}
+		}
+	}
+	return upstreamTransportErrorClass{}
+}
+
+func isClientCanceledTransportError(ctx context.Context, err error) bool {
+	return errors.Is(err, context.Canceled) && ctx != nil && errors.Is(ctx.Err(), context.Canceled)
 }

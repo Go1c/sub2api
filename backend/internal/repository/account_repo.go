@@ -2774,6 +2774,11 @@ func upstreamBillingProbeSnapshotClearRequested(extra map[string]any) bool {
 	return ok && value == nil
 }
 
+func ollamaCloudUsageSnapshotClearRequested(extra map[string]any) bool {
+	value, ok := extra[service.OllamaCloudUsageSnapshotExtraKey]
+	return ok && value == nil
+}
+
 func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates service.AccountBulkUpdate) (int64, error) {
 	if len(ids) == 0 {
 		return 0, nil
@@ -2898,7 +2903,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 				" AND COALESCE(btrim("+credentialPlaceholder+"::jsonb ->> 'account_mode') <> 'zen', true) IS NOT TRUE")
 	}
 
-	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed {
+	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" {
 		extraExpression := "COALESCE(extra, '{}'::jsonb)"
 		if len(updates.Extra) > 0 {
 			payload, err := json.Marshal(updates.Extra)
@@ -2915,13 +2920,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 				extraExpression = "(" + extraExpression + ") - 'ollama_cloud_usage_snapshot'"
 			}
 		}
-		extraExpression := "COALESCE(extra, '{}'::jsonb) || $" + itoa(idx) + "::jsonb"
-		if upstreamBillingProbeExplicitlyDisabled(updates.Extra) || upstreamBillingProbeSnapshotClearRequested(updates.Extra) {
-			extraExpression = "(" + extraExpression + ") - 'upstream_billing_probe'"
-		}
 		setClauses = append(setClauses, "extra = "+extraExpression)
-		args = append(args, payload)
-		idx++
 	}
 
 	if len(setClauses) == 0 {
@@ -3721,6 +3720,32 @@ func (r *accountRepository) IncrementQuotaUsed(ctx context.Context, id int64, am
 			logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue quota exceeded failed: account=%d err=%v", id, err)
 		}
 	}
+	return nil
+}
+
+func (r *accountRepository) ResetQuotaUsed(ctx context.Context, id int64) error {
+	result, err := r.sql.ExecContext(ctx,
+		`UPDATE accounts SET extra = (
+			COALESCE(extra, '{}'::jsonb)
+			|| '{"quota_used": 0, "quota_daily_used": 0, "quota_weekly_used": 0}'::jsonb
+		) - 'quota_daily_start' - 'quota_weekly_start',
+		updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL`,
+		id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAccountNotFound
+	}
+	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
+		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue quota reset failed: account=%d err=%v", id, err)
+	}
+	r.syncSchedulerAccountSnapshot(ctx, id)
 	return nil
 }
 

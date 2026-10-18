@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -202,8 +201,7 @@ func RegisterGatewayRoutes(
 				return
 			}
 			h.Gateway.Responses(c)
-		}))
-		gateway.POST("/alpha/search", textBodyLimit, h.OpenAIGateway.AlphaSearch)
+		})
 		gateway.GET("/responses", func(c *gin.Context) {
 			h.OpenAIGateway.ResponsesWebSocket(c)
 		})
@@ -379,7 +377,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(endpointNorm)
 	antigravityV1.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
-	antigravityV1.Use(groupModelAllowlist)
+	antigravityV1.Use(middleware.GroupModelAllowlist())
 	antigravityV1.Use(requireGroupAnthropic)
 	{
 		antigravityV1.POST("/messages", h.Gateway.Messages)
@@ -395,7 +393,7 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(endpointNorm)
 	antigravityV1Beta.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1Beta.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
-	antigravityV1Beta.Use(groupModelAllowlist)
+	antigravityV1Beta.Use(middleware.GroupModelAllowlist())
 	antigravityV1Beta.Use(requireGroupGoogle)
 	{
 		antigravityV1Beta.GET("/models", h.Gateway.GeminiV1BetaListModels)

@@ -154,6 +154,12 @@ func AnthropicStopReasonString(p *string) string {
 	return *p
 }
 
+// AnthropicPromptTokensDetails holds OpenAI-compatible prompt token details
+// occasionally included by Anthropic-compatible providers.
+type AnthropicPromptTokensDetails struct {
+	CachedTokens int `json:"cached_tokens,omitempty"`
+}
+
 // AnthropicUsage holds token counts in Anthropic format.
 type AnthropicUsage struct {
 	InputTokens              int `json:"input_tokens"`
@@ -271,18 +277,46 @@ type ResponsesInputItem struct {
 	ID        string `json:"id,omitempty"`
 
 	// type=function_call_output
-	Output string `json:"output,omitempty"`
+	Output    string `json:"output,omitempty"`
+	outputRaw json.RawMessage
+}
 
-	// type=reasoning
-	EncryptedContent string `json:"encrypted_content,omitempty"`
+func (i *ResponsesInputItem) UnmarshalJSON(data []byte) error {
+	type alias ResponsesInputItem
+	var wire struct {
+		*alias
+		Output json.RawMessage `json:"output"`
+	}
+
+	*i = ResponsesInputItem{}
+	wire.alias = (*alias)(i)
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	output := bytes.TrimSpace(wire.Output)
+	if len(output) == 0 || bytes.Equal(output, []byte("null")) {
+		return nil
+	}
+	if err := json.Unmarshal(output, &i.Output); err == nil {
+		return nil
+	}
+
+	i.outputRaw = append(i.outputRaw[:0], output...)
+	i.Output = string(output)
+	return nil
 }
 
 // ResponsesContentPart is a typed content part in a Responses message.
 type ResponsesContentPart struct {
-	Type                  string          `json:"type"` // "input_text" | "output_text" | "input_image"
-	Text                  string          `json:"text,omitempty"`
-	ImageURL              string          `json:"image_url,omitempty"` // data URI for input_image
 	PromptCacheBreakpoint json.RawMessage `json:"prompt_cache_breakpoint,omitempty"`
+	Type                  string          `json:"type"` // "input_text" | "output_text" | "refusal" | "input_image" | "input_file"
+	Text                  string          `json:"text,omitempty"`
+	Refusal               string          `json:"refusal,omitempty"`
+	ImageURL              string          `json:"image_url,omitempty"` // data URI for input_image
+	Filename              string          `json:"filename,omitempty"`
+	FileData              string          `json:"file_data,omitempty"`
+	FileID                string          `json:"file_id,omitempty"`
 }
 
 // ResponsesTool describes a tool in the Responses API.
@@ -638,8 +672,7 @@ type ChatCompletionsRequest struct {
 	ReasoningEffort     string             `json:"reasoning_effort,omitempty"` // "low" | "medium" | "high" | "xhigh"
 	ServiceTier         string             `json:"service_tier,omitempty"`
 	Stop                json.RawMessage    `json:"stop,omitempty"` // string or []string
-	ResponseFormat      json.RawMessage    `json:"response_format,omitempty"`
-	PromptCacheOptions  json.RawMessage    `json:"prompt_cache_options,omitempty"`
+	ResponseFormat json.RawMessage `json:"response_format,omitempty"`
 
 	// Legacy function calling (deprecated but still supported)
 	Functions    []ChatFunction  `json:"functions,omitempty"`

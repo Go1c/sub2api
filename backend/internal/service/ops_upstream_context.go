@@ -61,6 +61,46 @@ const (
 	ResponseCommittedKey = "response_committed"
 )
 
+const (
+	OpsRequestScopedErrorKey = "ops_request_scoped_error"
+	OpsLocalErrorTypeKey     = "ops_local_error_type"
+	OpsLocalErrorCodeKey     = "ops_local_error_code"
+)
+
+// SetOpsLocalErrorType records an error type that the response body does not carry.
+func SetOpsLocalErrorType(c *gin.Context, errType, code string) {
+	if c == nil {
+		return
+	}
+	c.Set(OpsLocalErrorTypeKey, strings.TrimSpace(errType))
+	c.Set(OpsLocalErrorCodeKey, strings.TrimSpace(code))
+	c.Set(OpsRequestScopedErrorKey, false)
+}
+
+// OpsLocalErrorType returns the type and code recorded by SetOpsLocalErrorType.
+func OpsLocalErrorType(c *gin.Context) (errType, code string) {
+	if c == nil {
+		return "", ""
+	}
+	errType = c.GetString(OpsLocalErrorTypeKey)
+	if errType == "" {
+		return "", ""
+	}
+	return errType, c.GetString(OpsLocalErrorCodeKey)
+}
+
+func MarkOpsRequestScopedError(c *gin.Context, errType string) {
+	if c == nil {
+		return
+	}
+	_ = errType
+	c.Set(OpsRequestScopedErrorKey, true)
+}
+
+func MarkOpsStreamErrorValue(c *gin.Context, streamErr OpsStreamError) {
+	markOpsStreamError(c, streamErr)
+}
+
 func MarkResponseCommitted(c *gin.Context) {
 	if c == nil {
 		return
@@ -84,8 +124,7 @@ func setOpsUpstreamRequestBody(c *gin.Context, body []byte) {
 	if c == nil || len(body) == 0 {
 		return
 	}
-	b, _ := v.(bool)
-	return b
+	c.Set(OpsUpstreamRequestBodyKey, body)
 }
 
 func SetOpsLatencyMs(c *gin.Context, key string, value int64) {
@@ -163,6 +202,8 @@ type OpsStreamError struct {
 	// CountTowardsSLA 表示虽然 wire 状态已固化为 200，请求在应用语义上仍然失败，
 	// Ops 应使用 IntendedStatus 计入错误率/SLA。
 	CountTowardsSLA bool
+	RequestScoped   bool
+	NonStream       bool
 	// Turn identifies a WebSocket turn. HTTP/SSE requests leave it at zero.
 	Turn int
 	// SkipMonitoring snapshots the rule decision for this visible failure.
@@ -394,6 +435,8 @@ type OpsUpstreamErrorEvent struct {
 
 	// Best-effort upstream response capture (sanitized+trimmed).
 	UpstreamResponseBody string `json:"upstream_response_body,omitempty"`
+	// UpstreamRequestBody is the sanitized request sent on this attempt.
+	UpstreamRequestBody string `json:"upstream_request_body,omitempty"`
 
 	// Kind: http_error | request_error | retry_exhausted | failover
 	Kind string `json:"kind,omitempty"`

@@ -16,7 +16,9 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -96,6 +98,7 @@ const (
 	//（Codex 网页搜索）的账号。OAuth/PAT 走 chatgpt.com Codex 端点，APIKey
 	// 走 {base_url}/v1/alpha/search；上游不支持时由转发层 failover。
 	OpenAIEndpointCapabilityAlphaSearch OpenAIEndpointCapability = "alpha_search"
+	OpenAIEndpointCapabilityLive        OpenAIEndpointCapability = "live"
 	// OpenAIEndpointCapabilityGrokMediaGeneration keeps image/video generation
 	// away from Grok accounts that are explicitly disabled or whose billing
 	// entitlement probe was forbidden. Video status lookups intentionally do not
@@ -136,49 +139,6 @@ func isOpenAIPersonalAccessTokenAuthMode(value string) bool {
 	}
 }
 
-type OpenAIEndpointCapability string
-
-const openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
-
-const (
-	OpenAIEndpointCapabilityChatCompletions OpenAIEndpointCapability = "chat_completions"
-	OpenAIEndpointCapabilityEmbeddings      OpenAIEndpointCapability = "embeddings"
-	OpenAIEndpointCapabilityAlphaSearch     OpenAIEndpointCapability = "alpha_search"
-	OpenAIEndpointCapabilityLive            OpenAIEndpointCapability = "live"
-	// OpenAIEndpointCapabilityGrokMediaGeneration keeps image/video generation
-	// away from Grok accounts that are explicitly disabled or whose billing
-	// entitlement probe was forbidden. Video status lookups intentionally do not
-	// require this capability so already-submitted requests remain queryable.
-	OpenAIEndpointCapabilityGrokMediaGeneration OpenAIEndpointCapability = "grok_media_generation"
-	// OpenAIEndpointCapabilityResponses 表示上游确实提供 /v1/responses 端点。
-	// 与其他能力不同：支持状态来自 accounts.extra 的自动探测标记
-	// （openai_responses_supported / openai_responses_mode），而非
-	// credentials["openai_capabilities"] 配置集。仅用于生图意图的 /v1/responses
-	// 调度，避免把请求调度到会在 forward 阶段被降级为 Chat Completions 的账号（#4417）。
-	OpenAIEndpointCapabilityResponses OpenAIEndpointCapability = "responses"
-)
-
-const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
-
-// GrokMediaEligibleExtraKey is an optional per-account override stored in
-// accounts.extra. true forces media routing on, false disables it, and an
-// absent/null value uses provider observations.
-const GrokMediaEligibleExtraKey = "grok_media_eligible"
-
-const (
-	OpenAIAuthModePersonalAccessToken = "personalAccessToken"
-	openAIAuthModeCredentialKey       = "auth_mode"
-	openAIAuthModeLegacyCredentialKey = "openai_auth_mode"
-)
-
-func isOpenAIPersonalAccessTokenAuthMode(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "personalaccesstoken", "personal_access_token":
-		return true
-	default:
-		return false
-	}
-}
 
 // TempUnschedulableRule.Scope 的取值：命中后隔离的粒度。
 const (
@@ -327,6 +287,10 @@ func (a *Account) IsGemini() bool {
 
 func (a *Account) IsGrok() bool {
 	return a.Platform == PlatformGrok
+}
+
+func (a *Account) IsTypeSafe() bool {
+	return a != nil && a.Platform == PlatformTypeSafe
 }
 
 func (a *Account) IsGrokOAuth() bool {
@@ -956,6 +920,13 @@ func resolveRequestedModelInMapping(mapping map[string]string, requestedModel st
 // 会把未知模型原样透传，Codex 上游对这类模型必然返回不可重试的 400，导致
 // 请求卡死在该账号上、无法 failover 到真正支持该模型的 API Key 账号（#3662）。
 // 未知/自定义别名仍保持允许（兼容渠道级映射），见 isOpenAIOAuthServableModel。
+func (a *Account) isModelMappingSupported(requestedModel string) bool {
+	if a == nil {
+		return false
+	}
+	return a.IsModelSupported(requestedModel)
+}
+
 func (a *Account) IsModelSupported(requestedModel string) bool {
 	// 透传模式仅替换认证、模型语义完全交由上游决定，因此放行所有模型。
 	// 必须在 model_mapping 判定之前短路：账号从白名单切到透传后常残留旧映射，
@@ -1445,6 +1416,10 @@ func (a *Account) IsOpenAIOAuthLike() bool {
 	return a != nil && a.IsOpenAI() && (a.Type == AccountTypeOAuth || a.Type == AccountTypeSetupToken)
 }
 
+func (a *Account) UsesOpenAICodexProtocol() bool {
+	return a != nil && (a.Type == AccountTypeOAuth || a.IsOpenAIOAuthLike())
+}
+
 func (a *Account) IsOpenAIChatGPTSubscription() bool {
 	if !a.IsOpenAIOAuth() {
 		return false
@@ -1520,59 +1495,9 @@ func (a *Account) GetAccountMode() string {
 	return ""
 }
 
-// IsCodingPlan 报告账号是否为 Coding Plan 模式（用于滚动用量窗口冷却）。
-func (a *Account) IsCodingPlan() bool {
-	return a.GetAccountMode() == AccountModeCoding
-}
-
-// GetAPIProtocol 返回国产供应商账号的上游 API 协议。存储于
-// credentials["api_protocol"]；缺失或与平台不匹配时回退 chat_completions
-// （与既有行为完全一致）。responses 协议仅 deepseek 支持（官方原生 /responses
-// 端点，适配 Codex）；kimi/zhipu 无此端点。
-func (a *Account) GetAPIProtocol() string {
-	if a == nil || !a.IsCNProvider() {
-		return APIProtocolChatCompletions
-	}
-	switch strings.TrimSpace(a.GetCredential("api_protocol")) {
-	case APIProtocolAdaptive:
-		return APIProtocolAdaptive
-	case APIProtocolAnthropic:
-		return APIProtocolAnthropic
-	case APIProtocolResponses:
-		if a.Platform == PlatformDeepseek {
-			return APIProtocolResponses
-		}
-	case APIProtocolChatCompletions:
-		return APIProtocolChatCompletions
-	}
-	return APIProtocolChatCompletions
-}
-
 // IsAdaptiveAPIProtocol 报告账号是否按入站协议动态选择供应商原生端点。
 func (a *Account) IsAdaptiveAPIProtocol() bool {
 	return a.GetAPIProtocol() == APIProtocolAdaptive
-}
-
-// GetCNProtocolBaseURL 返回国产供应商指定协议的上游 base URL。
-// adaptive 账号优先使用 api_base_urls 中的分协议地址，缺失时按平台和
-// account_mode 使用官方默认端点。base_url 继续作为 Chat Completions 地址兼容旧字段。
-func (a *Account) GetCNProtocolBaseURL(protocol string) string {
-	if a == nil || !a.IsCNProvider() {
-		return ""
-	}
-	if a.IsAdaptiveAPIProtocol() {
-		if baseURLs, ok := a.Credentials["api_base_urls"].(map[string]any); ok {
-			if baseURL, ok := baseURLs[protocol].(string); ok && strings.TrimSpace(baseURL) != "" {
-				return strings.TrimSpace(baseURL)
-			}
-		}
-		if protocol == APIProtocolChatCompletions {
-			if baseURL := strings.TrimSpace(a.GetCredential("base_url")); baseURL != "" {
-				return baseURL
-			}
-		}
-	}
-	return a.defaultCNProtocolBaseURL(protocol)
 }
 
 func (a *Account) defaultCNProtocolBaseURL(protocol string) string {
@@ -1614,119 +1539,8 @@ func (a *Account) IsAnthropicProtocol() bool {
 	return a.GetAPIProtocol() == APIProtocolAnthropic
 }
 
-// GetAnthropicProtocolBaseURL 返回 Anthropic 协议账号的上游 base_url
-// （上游路径为 {base}/v1/messages）。优先取凭证 base_url，缺失时按
-// 供应商 × 接入模式返回默认端点。非 Anthropic 协议账号返回空串。
-func (a *Account) GetAnthropicProtocolBaseURL() string {
-	if a == nil || (!a.IsAnthropicProtocol() && !a.IsAdaptiveAPIProtocol()) {
-		return ""
-	}
-	if a.IsAdaptiveAPIProtocol() {
-		return a.GetCNProtocolBaseURL(APIProtocolAnthropic)
-	}
-	if a.Type == AccountTypeAPIKey || a.Type == AccountTypeUpstream {
-		if baseURL := strings.TrimSpace(a.GetCredential("base_url")); baseURL != "" {
-			return baseURL
-		}
-	}
-	switch a.Platform {
-	case PlatformKimi:
-		if a.GetAccountMode() == AccountModeCoding {
-			return DefaultKimiCodingAnthropicBaseURL
-		}
-		return DefaultKimiPayGAnthropicBaseURL
-	case PlatformZhipu:
-		return DefaultZhipuAnthropicBaseURL
-	case PlatformDeepseek:
-		return DefaultDeepseekAnthropicBaseURL
-	default:
-		return ""
-	}
-}
-
-// GetOpenAIFormatBaseURL 返回供 OpenAI 格式端点（/v1/models、/v1/chat/completions
-// 等）使用的 base。chat_completions / responses 协议下与 GetOpenAIBaseURL
-// 一致（凭证 base_url 或平台默认）；anthropic 协议下凭证 base_url 指向 Anthropic
-// 端点，不能拿来拼 OpenAI 路径，此时返回该供应商 × 模式的 Chat Completions
-// 默认 base（模型同步等协议族共用路径仍可用）。
-func (a *Account) GetOpenAIFormatBaseURL() string {
-	if a == nil || !a.IsAnthropicProtocol() {
-		return a.GetOpenAIBaseURL()
-	}
-	switch a.Platform {
-	case PlatformKimi:
-		if a.GetAccountMode() == AccountModeCoding {
-			return DefaultKimiCodingBaseURL
-		}
-		return DefaultKimiPayGBaseURL
-	case PlatformZhipu:
-		if a.GetAccountMode() == AccountModeCoding {
-			return DefaultZhipuCodingBaseURL
-		}
-		return DefaultZhipuPayGBaseURL
-	case PlatformDeepseek:
-		return DefaultDeepseekBaseURL
-	default:
-		return a.GetOpenAIBaseURL()
-	}
-}
-
-// GetCNAPIKey 返回国产 OpenAI 兼容供应商账号的 api_key 凭据（kimi/zhipu/deepseek）。
-// 与 openai 的 GetOpenAIApiKey 区分：后者仅对 openai 平台返回。
-func (a *Account) GetCNAPIKey() string {
-	if a == nil || !a.IsCNProvider() {
-		return ""
-	}
-	return a.GetCredential("api_key")
-}
-
-// GetOpenAIProtocolAPIKey 返回走 OpenAI 协议族上游时使用的 API Key。
-// CN 供应商用 credentials.api_key；openai 仍走 GetOpenAIApiKey。
-func (a *Account) GetOpenAIProtocolAPIKey() string {
-	if a == nil {
-		return ""
-	}
-	if a.IsCNProvider() {
-		if a.Type != AccountTypeAPIKey {
-			return ""
-		}
-		return a.GetCredential("api_key")
-	}
-	return a.GetOpenAIApiKey()
-}
-
-// GetCodingPlanProvider 根据 base_url 识别 Coding Plan 供应商（kimi / zhipu），
-// 用于路由到对应的额度查询端点。非 coding 模式或无法识别时返回空串。
-// 判定规则与 cc-switch coding_plan.rs::detect_provider 保持一致。
-func (a *Account) GetCodingPlanProvider() string {
-	if a == nil || a.GetAccountMode() != AccountModeCoding {
-		return ""
-	}
-	baseURL := strings.ToLower(a.GetOpenAIBaseURL())
-	switch {
-	case strings.Contains(baseURL, "api.kimi.com/coding"):
-		return PlatformKimi
-	case strings.Contains(baseURL, "bigmodel.cn"), strings.Contains(baseURL, "api.z.ai"):
-		return PlatformZhipu
-	default:
-		return ""
-	}
-}
-
 // GetAccountMode 返回国产供应商账号的接入模式（payg / coding）；非国产供应商或未设置时
 // 返回空串。存储于 credentials["account_mode"]。
-func (a *Account) GetAccountMode() string {
-	if a == nil {
-		return ""
-	}
-	mode := strings.TrimSpace(a.GetCredential("account_mode"))
-	if mode == AccountModePayG || mode == AccountModeCoding {
-		return mode
-	}
-	return ""
-}
-
-// IsCodingPlan 报告账号是否为 Coding Plan 模式（用于滚动用量窗口冷却）。
 func (a *Account) IsCodingPlan() bool {
 	return a.GetAccountMode() == AccountModeCoding
 }
@@ -1780,13 +1594,6 @@ func (a *Account) UsesNativeCNResponses() bool {
 }
 
 // IsAdaptiveAPIProtocol 报告账号是否按入站协议动态选择供应商原生端点。
-func (a *Account) IsAdaptiveAPIProtocol() bool {
-	return a.GetAPIProtocol() == APIProtocolAdaptive
-}
-
-// GetCNProtocolBaseURL 返回国产供应商指定协议的上游 base URL。
-// adaptive 账号优先使用 api_base_urls 中的分协议地址，缺失时按平台和
-// account_mode 使用官方默认端点。base_url 继续作为 Chat Completions 地址兼容旧字段。
 func (a *Account) GetCNProtocolBaseURL(protocol string) string {
 	if a == nil || !a.IsMultiProtocolAPIKey() {
 		return ""
@@ -1808,13 +1615,6 @@ func (a *Account) GetCNProtocolBaseURL(protocol string) string {
 
 // IsAnthropicProtocol 报告账号是否以原生 Anthropic 协议接入上游
 // （/v1/messages 直通，适配 Claude Code 等客户端）。
-func (a *Account) IsAnthropicProtocol() bool {
-	return a.GetAPIProtocol() == APIProtocolAnthropic
-}
-
-// GetAnthropicProtocolBaseURL 返回 Anthropic 协议账号的上游 base_url
-// （上游路径为 {base}/v1/messages）。优先取凭证 base_url，缺失时按
-// 供应商 × 接入模式返回默认端点。非 Anthropic 协议账号返回空串。
 func (a *Account) GetAnthropicProtocolBaseURL() string {
 	if a == nil || (!a.IsAnthropicProtocol() && !a.IsAdaptiveAPIProtocol()) {
 		return ""
@@ -1954,6 +1754,23 @@ func (a *Account) GetGrokBaseURL() string {
 		return baseURL
 	}
 	return xai.DefaultBaseURL
+}
+
+func (a *Account) GetGrokBaseURLOr(fallback string) string {
+	if a == nil || !a.IsGrok() {
+		if fallback = strings.TrimSpace(fallback); fallback != "" {
+			return fallback
+		}
+		return xai.DefaultCLIBaseURL
+	}
+	baseURL := strings.TrimSpace(a.GetCredential("base_url"))
+	if baseURL != "" && xai.IsParseableBaseURL(baseURL) {
+		return baseURL
+	}
+	if fallback = strings.TrimSpace(fallback); fallback != "" {
+		return fallback
+	}
+	return a.GetGrokBaseURL()
 }
 
 // GetGrokMediaBaseURL selects the upstream used by Grok Imagine APIs.

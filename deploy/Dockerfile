@@ -50,6 +50,8 @@ ARG GOSUMDB
 
 ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
+# Go 1.26 里 encoding/json/jsontext 仍在 jsonv2 实验开关后。
+ENV GOEXPERIMENT=jsonv2
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata

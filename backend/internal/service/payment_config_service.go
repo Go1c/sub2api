@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,6 +45,9 @@ const (
 	// 充值满赠：总开关 + 档位列表（JSON 数组，到账余额 >= threshold 时赠 bonus）。
 	SettingRechargeBonusEnabled = "RECHARGE_BONUS_ENABLED"
 	SettingRechargeBonusTiers   = "RECHARGE_BONUS_TIERS"
+	// SettingAlipayMobilePrecreateDeepLink is an env override for returning an
+	// Alipay app deep link after a mobile precreate QR is issued.
+	SettingAlipayMobilePrecreateDeepLink = "ALIPAY_MOBILE_PRECREATE_DEEP_LINK"
 )
 
 // Default values for payment configuration settings.
@@ -55,10 +59,13 @@ const (
 // maxRechargeBonusTiers 充值满赠允许配置的最大档位数。
 const maxRechargeBonusTiers = 20
 
-// RechargeBonusTier 单档充值满赠：到账余额 >= Threshold 时赠送 Bonus。
+// RechargeBonusTier 单档充值优惠。
+// 旧配置用 Threshold/Bonus 表示绝对赠送额；新配置用 MinAmount/BonusPercent。
 type RechargeBonusTier struct {
-	Threshold float64 `json:"threshold"`
-	Bonus     float64 `json:"bonus"`
+	Threshold    float64 `json:"threshold,omitempty"`
+	Bonus        float64 `json:"bonus,omitempty"`
+	MinAmount    float64 `json:"min_amount,omitempty"`
+	BonusPercent float64 `json:"bonus_percent,omitempty"`
 }
 
 // PaymentConfig holds the payment system configuration.
@@ -95,7 +102,10 @@ type PaymentConfig struct {
 
 	// 充值满赠：仅 order_type=balance 订单参与，履约时按订单创建时的快照发放
 	RechargeBonusEnabled bool                `json:"recharge_bonus_enabled"`
+	RechargeBonusMode    string              `json:"recharge_bonus_mode"`
 	RechargeBonusTiers   []RechargeBonusTier `json:"recharge_bonus_tiers"`
+
+	AlipayMobilePrecreateDeepLink bool `json:"alipay_mobile_precreate_deep_link"`
 }
 
 // UpdatePaymentConfigRequest contains fields to update payment configuration.
@@ -130,6 +140,7 @@ type UpdatePaymentConfigRequest struct {
 
 	// 充值满赠（tiers 非 nil 才写，与 EnabledTypes 同语义）
 	RechargeBonusEnabled *bool               `json:"recharge_bonus_enabled"`
+	RechargeBonusMode    *string             `json:"recharge_bonus_mode"`
 	RechargeBonusTiers   []RechargeBonusTier `json:"recharge_bonus_tiers"`
 
 	VisibleMethodAlipaySource  *string `json:"payment_visible_method_alipay_source"`
@@ -460,12 +471,6 @@ func formatPositiveFloatExact(v *float64) string {
 	return strconv.FormatFloat(*v, 'f', -1, 64)
 }
 
-func normalizeSubscriptionUSDToCNYRate(v float64) float64 {
-	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
-		return 0
-	}
-	return v
-}
 
 // parseRechargeBonusTiers 解析充值满赠档位 JSON；空串/解析失败返回空 slice（禁 panic）。
 func parseRechargeBonusTiers(raw string) []RechargeBonusTier {
@@ -475,6 +480,15 @@ func parseRechargeBonusTiers(raw string) []RechargeBonusTier {
 	var tiers []RechargeBonusTier
 	if err := json.Unmarshal([]byte(raw), &tiers); err != nil {
 		return []RechargeBonusTier{}
+	}
+	for _, tier := range tiers {
+		if tier.MinAmount > 0 || tier.BonusPercent > 0 {
+			out, err := NormalizeRechargeBonusTiers(tiers)
+			if err != nil {
+				return []RechargeBonusTier{}
+			}
+			return out
+		}
 	}
 	return normalizeRechargeBonusTiers(tiers)
 }

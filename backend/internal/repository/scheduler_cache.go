@@ -17,8 +17,9 @@ import (
 const (
 	schedulerBucketSetKey       = "sched:buckets"
 	schedulerOutboxWatermarkKey = "sched:outbox:watermark"
-	schedulerAccountPrefix      = "sched:acc:"
-	schedulerAccountMetaPrefix  = "sched:meta:"
+	schedulerAccountPrefix         = "sched:acc:"
+	schedulerAccountLastUsedPrefix = "sched:acc:last:"
+	schedulerAccountMetaPrefix     = "sched:meta:"
 	schedulerActivePrefix       = "sched:active:"
 	schedulerReadyPrefix        = "sched:ready:"
 	schedulerVersionPrefix      = "sched:ver:"
@@ -40,6 +41,22 @@ const (
 	schedulerGroupLifecycleLockPrefix      = "sched:group:lifecycle-lock:"
 	schedulerGroupLifecycleOwnerTokenBytes = 16
 )
+
+var updateSchedulerLastUsedScript = redis.NewScript(`
+	local count = #ARGV
+	for i = 1, count do
+		local accountKey = KEYS[(i - 1) * 2 + 1]
+		local lastUsedKey = KEYS[(i - 1) * 2 + 2]
+		if redis.call('EXISTS', accountKey) == 1 then
+			local current = redis.call('GET', lastUsedKey)
+			local nextValue = ARGV[i]
+			if (not current) or (tonumber(nextValue) > tonumber(current)) then
+				redis.call('SET', lastUsedKey, nextValue)
+			end
+		end
+	end
+	return 1
+`)
 
 var (
 	// epoch 标识 bucket writer 的代际，retired key 是持久退休标记。
@@ -640,18 +657,12 @@ func (c *schedulerCache) UpdateLastUsed(ctx context.Context, updates map[int64]t
 			queued++
 			continue
 		}
-		account.LastUsedAt = ptrTime(updates[ids[i]])
-		updated, metaPayload, err := marshalSchedulerCacheAccount(*account)
-		if err != nil {
-			slog.Warn("scheduler cache removes account with unencodable payload",
-				"account_id", ids[i],
-				"error", err,
-			)
-			pipe.Del(ctx, keys[i], schedulerAccountMetaKey(strconv.FormatInt(ids[i], 10)))
-			continue
+		idText := strconv.FormatInt(id, 10)
+		keys = append(keys, schedulerAccountKey(idText), schedulerLastUsedKey(idText))
+		args = append(args, strconv.FormatInt(millis, 10))
+		if len(args) >= schedulerLastUsedUpdateChunkSize {
+			queueBatch()
 		}
-		pipe.Set(ctx, keys[i], updated, 0)
-		pipe.Set(ctx, schedulerAccountMetaKey(strconv.FormatInt(ids[i], 10)), metaPayload, 0)
 	}
 	queueBatch()
 	if queued == 0 {

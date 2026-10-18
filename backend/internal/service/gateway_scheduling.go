@@ -1422,6 +1422,19 @@ func (s *GatewayService) checkAndRegisterSession(ctx context.Context, account *A
 	return allowed
 }
 
+// ReleaseAccountSession drops a session slot registered for a failed request.
+func (s *GatewayService) ReleaseAccountSession(ctx context.Context, account *Account, sessionID string) {
+	if s == nil || account == nil || strings.TrimSpace(sessionID) == "" || s.sessionLimitCache == nil {
+		return
+	}
+	if !account.IsAnthropicOAuthOrSetupToken() || account.GetMaxSessions() <= 0 {
+		return
+	}
+	if err := s.sessionLimitCache.UnregisterSession(ctx, account.ID, sessionID); err != nil {
+		slog.Warn("gateway.release_account_session_failed", "error", err, "account_id", account.ID)
+	}
+}
+
 func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID int64) (*Account, error) {
 	var (
 		account *Account

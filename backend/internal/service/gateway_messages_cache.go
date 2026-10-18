@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"

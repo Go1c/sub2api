@@ -14,6 +14,7 @@ const (
 
 type httpUpstreamProfileContextKey struct{}
 type httpUpstreamDisableRedirectsContextKey struct{}
+type httpUpstreamPublicHostsOnlyContextKey struct{}
 
 // WithHTTPUpstreamProfile injects an upstream transport profile into ctx.
 func WithHTTPUpstreamProfile(ctx context.Context, profile HTTPUpstreamProfile) context.Context {
@@ -45,6 +46,17 @@ func HTTPUpstreamProfileFromContext(ctx context.Context) HTTPUpstreamProfile {
 
 // WithHTTPUpstreamRedirectsDisabled prevents credential-bearing probes from
 // following redirects through the shared upstream client.
+func WithHTTPUpstreamPublicHostsOnly(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, httpUpstreamPublicHostsOnlyContextKey{}, true)
+}
+
+func HTTPUpstreamPublicHostsOnly(ctx context.Context) bool {
+	return ctx != nil && ctx.Value(httpUpstreamPublicHostsOnlyContextKey{}) == true
+}
+
 func WithHTTPUpstreamRedirectsDisabled(ctx context.Context) context.Context {
 	if ctx == nil {
 		ctx = context.Background()

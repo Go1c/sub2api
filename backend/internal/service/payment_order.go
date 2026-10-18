@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/shopspring/decimal"
 )
 
@@ -829,6 +830,10 @@ func providerRequiredPayAmount(defaultAmount float64, pr *payment.CreatePaymentR
 	return amount
 }
 
+func shouldUseAlipayMobilePrecreate(req CreateOrderRequest, cfg *PaymentConfig, sel *payment.InstanceSelection) bool {
+	return req.IsMobile && cfg != nil && cfg.AlipayMobilePrecreateDeepLink && sel != nil && sel.ProviderKey == payment.TypeAlipay
+}
+
 func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.InstanceSelection, orderID, amount, subject string) payment.CreatePaymentRequest {
 	return payment.CreatePaymentRequest{
 		OrderID:            orderID,
@@ -1012,66 +1017,6 @@ func (s *PaymentService) validateSelectedCreateOrderInstance(ctx context.Context
 	selectedAppID := provider.ResolveWxpayJSAPIAppID(sel.Config)
 	if selectedAppID == "" || selectedAppID != expectedAppID {
 		return infraerrors.TooManyRequests("NO_AVAILABLE_INSTANCE", "selected payment instance is not compatible with the current WeChat OAuth app")
-	}
-	return nil
-}
-
-func calculateCreateOrderPayAmount(limitAmount, feeRate float64, currency string) (string, float64, error) {
-	if err := validateCreateOrderAmountCurrency(limitAmount, currency); err != nil {
-		return "", 0, err
-	}
-	payAmountStr := payment.CalculatePayAmountForCurrency(limitAmount, feeRate, currency)
-	if _, err := payment.AmountToMinorUnit(payAmountStr, currency); err != nil {
-		return "", 0, infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
-			WithMetadata(map[string]string{"currency": currency})
-	}
-	payAmount, err := strconv.ParseFloat(payAmountStr, 64)
-	if err != nil {
-		return "", 0, infraerrors.BadRequest("INVALID_AMOUNT", "invalid payment amount").
-			WithMetadata(map[string]string{"currency": currency})
-	}
-	return payAmountStr, payAmount, nil
-}
-
-func calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate float64, currency, orderType string, usdToCnyRate float64) (string, float64, error) {
-	paymentAmount := limitAmount
-	if orderType == payment.OrderTypeSubscription {
-		paymentAmount = calculateSubscriptionGatewayBaseAmount(limitAmount, usdToCnyRate, currency)
-	}
-	return calculateCreateOrderPayAmount(paymentAmount, feeRate, currency)
-}
-
-// calculateSubscriptionGatewayBaseAmount 计算订阅订单的网关扣款基数。
-// 换算是显式 opt-in：仅当管理员配置了订阅汇率（rate > 0，1 USD = rate CNY）
-// 且网关币种为 CNY 时，按 price × rate 换算；未配置时保持 price 直付的存量行为。
-func calculateSubscriptionGatewayBaseAmount(amount, usdToCnyRate float64, currency string) float64 {
-	rate := normalizeSubscriptionUSDToCNYRate(usdToCnyRate)
-	if rate <= 0 || currency != payment.DefaultPaymentCurrency {
-		return amount
-	}
-	return decimal.NewFromFloat(amount).
-		Mul(decimal.NewFromFloat(rate)).
-		Round(int32(payment.CurrencyMaxFractionDigits(currency))).
-		InexactFloat64()
-}
-
-func validateCreateOrderAmountCurrency(amount float64, currency string) error {
-	amountStr := strconv.FormatFloat(amount, 'f', -1, 64)
-	if _, err := payment.AmountToMinorUnit(amountStr, currency); err != nil {
-		return infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
-			WithMetadata(map[string]string{"currency": currency})
-	}
-	return nil
-}
-
-func validateSelectedCreateOrderAmountCurrency(payAmount string, sel *payment.InstanceSelection) error {
-	if sel == nil {
-		return nil
-	}
-	currency := paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
-	if _, err := payment.AmountToMinorUnit(payAmount, currency); err != nil {
-		return infraerrors.BadRequest("INVALID_AMOUNT", err.Error()).
-			WithMetadata(map[string]string{"currency": currency})
 	}
 	return nil
 }

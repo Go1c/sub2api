@@ -155,17 +155,61 @@ func (h *PaymentHandler) ManualCompleteOrder(c *gin.Context) {
 	response.Success(c, gin.H{"message": "manual completion processed"})
 }
 
-func sanitizeAdminPaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*dbent.PaymentOrder {
+func sanitizeAdminPaymentOrdersForResponse(orders []*dbent.PaymentOrder) []*AdminPaymentOrderResult {
 	if len(orders) == 0 {
-		return orders
+		return nil
 	}
-	out := make([]*dbent.PaymentOrder, 0, len(orders))
+	out := make([]*AdminPaymentOrderResult, 0, len(orders))
 	for _, order := range orders {
 		if item := sanitizeAdminPaymentOrderForResponse(order); item != nil {
 			out = append(out, item)
 		}
 	}
 	return out
+}
+
+type AdminPaymentOrderResult struct {
+	ID                  int64      `json:"id"`
+	UserID              int64      `json:"user_id"`
+	UserEmail           string     `json:"user_email"`
+	UserName            string     `json:"user_name"`
+	UserNotes           *string    `json:"user_notes,omitempty"`
+	Amount              float64    `json:"amount"`
+	PayAmount           float64    `json:"pay_amount"`
+	FeeRate             float64    `json:"fee_rate"`
+	BonusAmount         float64    `json:"bonus_amount"`
+	Currency            string     `json:"currency"`
+	RechargeCode        string     `json:"recharge_code"`
+	OutTradeNo          string     `json:"out_trade_no"`
+	PaymentType         string     `json:"payment_type"`
+	PaymentTradeNo      string     `json:"payment_trade_no"`
+	PayURL              *string    `json:"pay_url,omitempty"`
+	QRCode              *string    `json:"qr_code,omitempty"`
+	QRCodeImg           *string    `json:"qr_code_img,omitempty"`
+	OrderType           string     `json:"order_type"`
+	PlanID              *int64     `json:"plan_id,omitempty"`
+	SubscriptionGroupID *int64     `json:"subscription_group_id,omitempty"`
+	SubscriptionDays    *int       `json:"subscription_days,omitempty"`
+	ProviderInstanceID  *string    `json:"provider_instance_id,omitempty"`
+	ProviderKey         *string    `json:"provider_key,omitempty"`
+	Status              string     `json:"status"`
+	RefundAmount        float64    `json:"refund_amount"`
+	RefundReason        *string    `json:"refund_reason,omitempty"`
+	RefundAt            *time.Time `json:"refund_at,omitempty"`
+	ForceRefund         bool       `json:"force_refund"`
+	RefundRequestedAt   *time.Time `json:"refund_requested_at,omitempty"`
+	RefundRequestReason *string    `json:"refund_request_reason,omitempty"`
+	RefundRequestedBy   *string    `json:"refund_requested_by,omitempty"`
+	ExpiresAt           time.Time  `json:"expires_at"`
+	PaidAt              *time.Time `json:"paid_at,omitempty"`
+	CompletedAt         *time.Time `json:"completed_at,omitempty"`
+	FailedAt            *time.Time `json:"failed_at,omitempty"`
+	FailedReason        *string    `json:"failed_reason,omitempty"`
+	ClientIP            string     `json:"client_ip"`
+	SrcHost             string     `json:"src_host"`
+	SrcURL              *string    `json:"src_url,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 func sanitizeAdminPaymentOrderForResponse(order *dbent.PaymentOrder) *AdminPaymentOrderResult {
@@ -318,10 +362,14 @@ func adminSubscriptionPlansForResponse(plans []*dbent.SubscriptionPlan, groupInf
 		if p == nil {
 			continue
 		}
-		gi := groupInfo[p.GroupID]
+		groupID := int64(0)
+		if p.GroupID != nil {
+			groupID = *p.GroupID
+		}
+		gi := groupInfo[groupID]
 		result = append(result, AdminSubscriptionPlanResult{
 			ID:              int64(p.ID),
-			GroupID:         p.GroupID,
+			GroupID:         groupID,
 			GroupPlatform:   gi.Platform,
 			GroupName:       gi.Name,
 			RateMultiplier:  gi.RateMultiplier,

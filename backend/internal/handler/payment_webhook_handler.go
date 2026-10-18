@@ -193,7 +193,7 @@ func extractAirwallexMerchantOrderID(rawBody string) string {
 	return strings.TrimSpace(payload.Data.Object.MerchantOrderID)
 }
 
-func verifyNotificationWithProviders(ctx context.Context, providers []payment.Provider, rawBody string, headers map[string]string) (string, *payment.PaymentNotification, error) {
+func verifyNotificationWithProviders(ctx context.Context, providers []payment.Provider, rawBody string, headers map[string]string) (payment.Provider, *payment.PaymentNotification, error) {
 	var lastErr error
 	for _, provider := range providers {
 		if provider == nil {

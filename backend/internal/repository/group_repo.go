@@ -120,7 +120,12 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetNillableVideoPrice480p(groupIn.VideoPrice480P).
 		SetNillableVideoPrice720p(groupIn.VideoPrice720P).
 		SetNillableVideoPrice1080p(groupIn.VideoPrice1080P).
+		SetVideoModelPrices(service.NormalizeVideoModelPrices(groupIn.VideoModelPrices)).
 		SetNillableWebSearchPricePerCall(groupIn.WebSearchPricePerCall).
+		SetNillableSearchPricePer1k(groupIn.SearchPricePer1k).
+		SetNillableAudioRealtimePricePerMin(groupIn.AudioRealtimePricePerMin).
+		SetNillableAudioTtsPricePerMillionChars(groupIn.AudioTTSPricePerMillionChars).
+		SetNillableAudioSttPricePerHour(groupIn.AudioSTTPricePerHour).
 		SetWebSearchRateIndependent(groupIn.WebSearchRateIndependent).
 		SetWebSearchRateMultiplier(groupIn.WebSearchRateMultiplier).
 		SetLongContextPricingEnabled(groupIn.LongContextPricingEnabled).
@@ -141,7 +146,15 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetDefaultMappedModel(groupIn.DefaultMappedModel).
 		SetMessagesDispatchModelConfig(groupIn.MessagesDispatchModelConfig).
 		SetModelsListConfig(groupIn.ModelsListConfig).
+		SetModelAllowlist(service.DomainGroupModelAllowlist(groupIn.ModelAllowlist)).
+		SetCodexModelsManifestConfig(groupIn.CodexModelsManifestConfig).
 		SetRpmLimit(groupIn.RPMLimit).
+		SetMaxReasoningEffort(groupIn.MaxReasoningEffort).
+		SetMaxReasoningEffortOverLimit(groupIn.MaxReasoningEffortOverLimit).
+		SetReasoningEffortMappings(groupIn.ReasoningEffortMappings).
+		SetProfitControlEnabled(groupIn.ProfitControlEnabled).
+		SetProfitMinMargin(groupIn.ProfitMinMargin).
+		SetProfitSafetyBuffer(groupIn.ProfitSafetyBuffer).
 		SetExposeUpstreamModelToUser(groupIn.ExposeUpstreamModelToUser).
 		SetPeakRateEnabled(groupIn.PeakRateEnabled).
 		SetPeakStart(groupIn.PeakStart).
@@ -303,6 +316,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetNillableVideoPrice480p(groupIn.VideoPrice480P).
 		SetNillableVideoPrice720p(groupIn.VideoPrice720P).
 		SetNillableVideoPrice1080p(groupIn.VideoPrice1080P).
+		SetVideoModelPrices(service.NormalizeVideoModelPrices(groupIn.VideoModelPrices)).
 		SetWebSearchRateIndependent(groupIn.WebSearchRateIndependent).
 		SetWebSearchRateMultiplier(groupIn.WebSearchRateMultiplier).
 		SetLongContextPricingEnabled(groupIn.LongContextPricingEnabled).
@@ -320,7 +334,15 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetDefaultMappedModel(groupIn.DefaultMappedModel).
 		SetMessagesDispatchModelConfig(groupIn.MessagesDispatchModelConfig).
 		SetModelsListConfig(groupIn.ModelsListConfig).
+		SetModelAllowlist(service.DomainGroupModelAllowlist(groupIn.ModelAllowlist)).
+		SetCodexModelsManifestConfig(groupIn.CodexModelsManifestConfig).
 		SetRpmLimit(groupIn.RPMLimit).
+		SetMaxReasoningEffort(groupIn.MaxReasoningEffort).
+		SetMaxReasoningEffortOverLimit(groupIn.MaxReasoningEffortOverLimit).
+		SetReasoningEffortMappings(groupIn.ReasoningEffortMappings).
+		SetProfitControlEnabled(groupIn.ProfitControlEnabled).
+		SetProfitMinMargin(groupIn.ProfitMinMargin).
+		SetProfitSafetyBuffer(groupIn.ProfitSafetyBuffer).
 		SetPeakRateEnabled(groupIn.PeakRateEnabled).
 		SetPeakStart(groupIn.PeakStart).
 		SetPeakEnd(groupIn.PeakEnd).
@@ -376,6 +398,26 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		builder = builder.SetWebSearchPricePerCall(*groupIn.WebSearchPricePerCall)
 	} else {
 		builder = builder.ClearWebSearchPricePerCall()
+	}
+	if groupIn.SearchPricePer1k != nil {
+		builder = builder.SetSearchPricePer1k(*groupIn.SearchPricePer1k)
+	} else {
+		builder = builder.ClearSearchPricePer1k()
+	}
+	if groupIn.AudioRealtimePricePerMin != nil {
+		builder = builder.SetAudioRealtimePricePerMin(*groupIn.AudioRealtimePricePerMin)
+	} else {
+		builder = builder.ClearAudioRealtimePricePerMin()
+	}
+	if groupIn.AudioTTSPricePerMillionChars != nil {
+		builder = builder.SetAudioTtsPricePerMillionChars(*groupIn.AudioTTSPricePerMillionChars)
+	} else {
+		builder = builder.ClearAudioTtsPricePerMillionChars()
+	}
+	if groupIn.AudioSTTPricePerHour != nil {
+		builder = builder.SetAudioSttPricePerHour(*groupIn.AudioSTTPricePerHour)
+	} else {
+		builder = builder.ClearAudioSttPricePerHour()
 	}
 
 	// 处理 FallbackGroupID：nil 时清除，否则设置

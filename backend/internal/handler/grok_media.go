@@ -279,7 +279,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
 		accountReleaseFunc, accountAcquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, false, &streamStarted, reqLog)
-		if !accountAcquired {
+		if accountAcquired != openAISlotAcquireOK {
 			return
 		}
 

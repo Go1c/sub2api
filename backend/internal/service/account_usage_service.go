@@ -389,6 +389,25 @@ func NewAccountUsageService(
 	}
 }
 
+func (s *AccountUsageService) GetUsageBatch(ctx context.Context, accountIDs []int64, force bool) (map[int64]*UsageInfo, map[string]string, error) {
+	usage := make(map[int64]*UsageInfo, len(accountIDs))
+	errs := make(map[string]string)
+	if s == nil {
+		return usage, errs, nil
+	}
+	for _, id := range accountIDs {
+		info, err := s.GetUsage(ctx, id, force)
+		if err != nil {
+			errs[strconv.FormatInt(id, 10)] = err.Error()
+			continue
+		}
+		if info != nil {
+			usage[id] = info
+		}
+	}
+	return usage, errs, nil
+}
+
 // GetUsage 获取账号使用量
 // OAuth账号: 调用Anthropic API获取真实数据（需要profile scope），API响应缓存10分钟，窗口统计缓存1分钟
 // Setup Token账号: 根据session_window推算5h窗口，7d数据不可用（没有profile scope）
@@ -1246,6 +1265,27 @@ func (s *AccountUsageService) GetPassiveUsage(ctx context.Context, accountID int
 	}
 
 	return s.getPassiveUsageForAccount(ctx, account)
+}
+
+func supportsAnthropicPassiveUsage(account *Account) bool {
+	return account != nil && account.IsAnthropicOAuthOrSetupToken()
+}
+
+func applySyntheticWindowStats(info *UsageInfo, extra map[string]any) {
+	if info == nil || info.FiveHour == nil || len(extra) == 0 {
+		return
+	}
+	raw, ok := extra["synthetic_window_stats"].(map[string]any)
+	if !ok {
+		return
+	}
+	info.FiveHour.WindowStats = &WindowStats{
+		Requests:     int64(parseExtraInt(raw["requests"])),
+		Tokens:       int64(parseExtraInt(raw["tokens"])),
+		Cost:         parseExtraFloat64(raw["cost"]),
+		StandardCost: parseExtraFloat64(raw["standard_cost"]),
+		UserCost:     parseExtraFloat64(raw["user_cost"]),
+	}
 }
 
 func (s *AccountUsageService) getPassiveUsageForAccount(ctx context.Context, account *Account) (*UsageInfo, error) {

@@ -154,7 +154,6 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 		SetNillableLastLoginAt(userIn.LastLoginAt).
 		SetNillableLastActiveAt(userIn.LastActiveAt).
 		SetRpmLimit(userIn.RPMLimit).
-		SetRestrictPublicGroups(userIn.RestrictPublicGroups).
 		Save(txCtx)
 	if err != nil {
 		return translatePersistenceError(err, nil, service.ErrEmailExists)
@@ -173,6 +172,11 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 	}
 	if userIn.SubscriptionPurchaseDisabled {
 		if err := setUserSubscriptionPurchaseDisabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), created.ID, true); err != nil {
+			return err
+		}
+	}
+	if userIn.RestrictPublicGroups {
+		if err := setUserRestrictPublicGroups(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), created.ID, true); err != nil {
 			return err
 		}
 	}
@@ -207,22 +211,8 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
 		return nil, err
 	}
-	return out, nil
-}
-
-func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {
-	ctx = mixins.SkipSoftDelete(ctx)
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
-	if err != nil {
-		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
-	}
-	out := userEntityToService(m)
-	groups, err := r.loadAllowedGroups(ctx, []int64{id})
-	if err != nil {
+	if err := r.hydrateRestrictPublicGroups(ctx, out); err != nil {
 		return nil, err
-	}
-	if v, ok := groups[id]; ok {
-		out.AllowedGroups = v
 	}
 	return out, nil
 }
@@ -272,6 +262,9 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 		return nil, err
 	}
 	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
+		return nil, err
+	}
+	if err := r.hydrateRestrictPublicGroups(ctx, out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -733,6 +726,9 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 			return nil, nil, err
 		}
 		if err := r.hydrateSubscriptionPurchaseDisabled(ctx, u); err != nil {
+			return nil, nil, err
+		}
+		if err := r.hydrateRestrictPublicGroups(ctx, u); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -1613,6 +1609,9 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
 		return nil, err
 	}
+	if err := r.hydrateRestrictPublicGroups(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -1633,6 +1632,36 @@ func (r *userRepository) hydrateInvoiceEnabled(ctx context.Context, user *servic
 		return fmt.Errorf("load user invoice flag: %w", err)
 	}
 	user.InvoiceEnabled = enabled
+	return nil
+}
+
+func (r *userRepository) hydrateRestrictPublicGroups(ctx context.Context, user *service.User) error {
+	if user == nil {
+		return nil
+	}
+	exec := txAwareSQLExecutor(ctx, r.sql, r.client)
+	if exec == nil {
+		return nil
+	}
+	var restricted bool
+	err := scanSingleRow(ctx, exec, "SELECT restrict_public_groups FROM users WHERE id = $1", []any{user.ID}, &restricted)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("load user public group restriction: %w", err)
+	}
+	user.RestrictPublicGroups = restricted
+	return nil
+}
+
+func setUserRestrictPublicGroups(ctx context.Context, exec sqlQueryExecutor, userID int64, restricted bool) error {
+	if exec == nil {
+		return nil
+	}
+	if _, err := exec.ExecContext(ctx, "UPDATE users SET restrict_public_groups = $1 WHERE id = $2", restricted, userID); err != nil {
+		return fmt.Errorf("update user public group restriction: %w", err)
+	}
 	return nil
 }
 

@@ -128,13 +128,18 @@ func (s *OpenAIGatewayService) FetchPinnedCodexModelsManifest(ctx context.Contex
 		if err != nil {
 			return nil, err
 		}
-		if err := s.CompleteAPIKeyCodexModelsManifestForClient(manifest, account); err != nil {
+		response := &OpenAIModelsResponse{
+			Body:        manifest.Body,
+			ETag:        manifest.ETag,
+			NotModified: manifest.NotModified,
+		}
+		if err := s.CompleteAPIKeyCodexModelsManifestForClient(response, account); err != nil {
 			return nil, err
 		}
-		if err := ApplyPinnedCodexModelsMapping(manifest, account, group); err != nil {
+		if err := ApplyPinnedCodexModelsMapping(response, account, group); err != nil {
 			return nil, err
 		}
-		return manifest, nil
+		return response, nil
 	})
 	if err != nil {
 		return nil, nil, err
@@ -151,6 +156,17 @@ func (s *OpenAIGatewayService) FetchPinnedCodexModelsManifest(ctx context.Contex
 		return results[0].response, results[0].account, nil
 	}
 	return &OpenAIModelsResponse{Body: merged, ETag: codexModelsManifestBodyETag(merged)}, results[0].account, nil
+}
+
+// OpenAIModelsResponse carries an OpenAI model list or a Codex manifest
+// together with upstream and client caching metadata.
+type OpenAIModelsResponse struct {
+	Body                         []byte
+	ETag                         string
+	upstreamETag                 string
+	upstreamSourceBody           []byte
+	convertedFromOpenAIModelList bool
+	NotModified                  bool
 }
 
 type pinnedOpenAIModelsResult struct {

@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"golang.org/x/sync/singleflight"
-	"sync"
 )
 
 const (
@@ -141,6 +143,18 @@ type SettingService struct {
 	openAIQuotaAutoPauseSettingsSF    singleflight.Group
 
 	openAIAPIKeyHealthBreakerCache atomic.Value // *cachedOpenAIAPIKeyHealthBreakerSettings
+
+	claudeCodeVersionCache atomic.Value // *cachedClaudeCodeClientVersion
+	claudeCodeVersionSF    singleflight.Group
+
+	openAICodexVersionCache atomic.Value // *cachedOpenAICodexClientVersion
+	openAICodexVersionSF    singleflight.Group
+
+	panelRateLimitCache atomic.Value // *cachedPanelRateLimitSettings
+	panelRateLimitSF    singleflight.Group
+
+	channelMonitorRuntimeListenersMu sync.Mutex
+	channelMonitorRuntimeListeners   []func()
 }
 
 // DefaultPlatformQuotaSetting 单 platform 三档限额（nil = 沿用上层；0 = 显式禁用；>0 = 上限）

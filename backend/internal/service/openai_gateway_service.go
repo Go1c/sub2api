@@ -216,14 +216,17 @@ type OpenAIUsage struct {
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
 	ImageOutputTokens        int `json:"image_output_tokens,omitempty"`
+	ImageCacheReadTokens     int `json:"image_cache_read_input_tokens,omitempty"`
 }
 
 // OpenAIForwardResult represents the result of forwarding
 type OpenAIForwardResult struct {
 	RequestID  string
 	ResponseID string
-	Usage      OpenAIUsage
-	Model      string // 原始模型（用于响应和日志显示）
+	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
+	UpstreamHeaders http.Header
+	Usage           OpenAIUsage
+	Model           string // 原始模型（用于响应和日志显示）
 	// BillingModel is the model used for cost calculation.
 	// When non-empty, CalculateCost uses this instead of Model.
 	// This is set by the Anthropic Messages conversion path where
@@ -271,6 +274,10 @@ type OpenAIForwardResult struct {
 	VideoDurationSeconds int
 	// WebSearchCalls 是 Codex alpha/search 网页搜索调用次数（每次成功请求为 1）。
 	WebSearchCalls int
+	// SearchCount is Grok-native web_search / tool search call count.
+	SearchCount int
+	// AudioUsage carries Voice billing units when present.
+	AudioUsage *AudioUsage
 
 	wsReplayInput                []json.RawMessage
 	wsReplayInputExists          bool
@@ -295,6 +302,17 @@ func (r *OpenAIForwardResult) SucceededForScheduling() bool {
 // SetActualOpenAIUpstreamEndpoint records the endpoint selected by the current
 // forwarding attempt. It covers error paths where no OpenAIForwardResult is
 // available for usage and operations logging.
+func stampOpenAIResponsesUpstreamEndpoint(c *gin.Context, result *OpenAIForwardResult) {
+	const endpoint = "/v1/responses"
+	SetActualOpenAIUpstreamEndpoint(c, endpoint)
+	if result == nil {
+		return
+	}
+	if strings.TrimSpace(result.UpstreamEndpoint) == "" {
+		result.UpstreamEndpoint = endpoint
+	}
+}
+
 func SetActualOpenAIUpstreamEndpoint(c *gin.Context, endpoint string) {
 	if c == nil {
 		return
@@ -418,6 +436,13 @@ type OpenAIGatewayService struct {
 	balanceNotifyService        *BalanceNotifyService
 	webhookBalanceNotifyService *WebhookBalanceNotifyService
 	settingService              *SettingService
+	liveAttestation             liveattestation.Provider
+	liveAttestationCipher       SecretEncryptor
+	pluginManager               *PluginManager
+
+	openaiProxyStreamCircuitOnce   sync.Once
+	openaiProxyStreamCircuit       *openAIProxyStreamCircuit
+	openaiProxyStreamFailOpenLogAt atomic.Int64
 	userPlatformQuotaRepo       UserPlatformQuotaRepository
 	accountErrorHistory         *AccountErrorHistoryService
 	ipGroupResolver             *openAIIPGroupResolver

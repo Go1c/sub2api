@@ -374,6 +374,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		return nil, proxyErr
 	}
 	defer releaseProxy()
+	cancelUpstream := func() {}
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
@@ -801,46 +802,6 @@ func (s *OpenAIGatewayService) newOpenAICompatBufferedReadFailoverError(
 	return failoverErr
 }
 
-func (s *OpenAIGatewayService) newOpenAICompatBufferedReadFailoverError(
-	c *gin.Context,
-	account *Account,
-	resp *http.Response,
-	requestID string,
-	err error,
-) error {
-	var readErr *openAICompatBufferedReadError
-	if !errors.As(err, &readErr) || readErr == nil || errors.Is(readErr.cause, bufio.ErrTooLong) {
-		return err
-	}
-	var requestContext context.Context
-	if c != nil && c.Request != nil {
-		requestContext = c.Request.Context()
-	}
-	if !shouldClassifyOpenAIUpstreamStreamReadError(readErr.cause, requestContext) {
-		return err
-	}
-
-	classifiedErr := newOpenAIUpstreamStreamReadError(readErr.cause)
-	code, message, ok := OpenAIUpstreamStreamReadErrorDetails(classifiedErr)
-	if !ok {
-		return err
-	}
-	payload, _ := json.Marshal(gin.H{
-		"error": gin.H{
-			"type":    "upstream_error",
-			"code":    code,
-			"message": message,
-		},
-	})
-	var responseHeaders http.Header
-	if resp != nil {
-		responseHeaders = resp.Header
-	}
-	failoverErr := s.newOpenAIStreamFailoverError(c, account, false, requestID, payload, message, responseHeaders)
-	// 保留稳定错误码，确保重试耗尽后客户端和错误透传规则仍能识别传输故障。
-	failoverErr.ResponseBody = payload
-	return failoverErr
-}
 
 // handleChatStreamingResponse reads Responses SSE events from upstream,
 // converts each to Chat Completions SSE chunks, and writes them to the client.
@@ -890,8 +851,11 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		intervalCh = intervalTicker.C
 	}
 
+	searchCount := 0
+	countSearch := account != nil && account.IsGrok()
+	streamSearchSeen := map[string]struct{}{}
 	resultWithUsage := func() *OpenAIForwardResult {
-		return &OpenAIForwardResult{
+		out := &OpenAIForwardResult{
 			RequestID:        requestID,
 			Usage:            usage,
 			Model:            originalModel,

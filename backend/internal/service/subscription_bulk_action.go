@@ -104,7 +104,11 @@ func (s *SubscriptionService) BulkSubscriptionAction(ctx context.Context, input 
 			if err == nil && changed != nil {
 				// Invalidate again after commit: concurrent readers could have filled
 				// a cache with the old row while the transaction was still open.
-				if cacheErr := s.invalidateSubscriptionCaches(changed.UserID, changed.GroupID); cacheErr != nil {
+				groupID := int64(0)
+				if changed.GroupID != nil {
+					groupID = *changed.GroupID
+				}
+				if cacheErr := s.invalidateSubscriptionCaches(changed.UserID, groupID); cacheErr != nil {
 					log.Printf("[SubscriptionBulkAction] committed action=%s subscription_id=%d cache_error=%s", input.Action, id, logredact.RedactText(cacheErr.Error()))
 				}
 			}

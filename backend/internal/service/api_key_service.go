@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +31,8 @@ var (
 	ErrAPIKeyTooShort       = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
 	ErrAPIKeyInvalidChars   = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
 	ErrAPIKeyRateLimited    = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrAPIKeyCreateLimited  = infraerrors.TooManyRequests("API_KEY_CREATE_RATE_LIMITED", "too many api keys created recently, please try again later")
+	ErrAPIKeyCountExceeded  = infraerrors.Forbidden("API_KEY_COUNT_EXCEEDED", "api key count limit reached, please delete unused keys first")
 	ErrAPIKeyAuthOverloaded = infraerrors.ServiceUnavailable("API_KEY_AUTH_OVERLOADED", "api key authentication is temporarily overloaded")
 	ErrInvalidIPPattern     = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
 	ErrFallbackKeyInvalid   = infraerrors.BadRequest("FALLBACK_KEY_INVALID", "兜底密钥无效：必须是属于你的另一把已有密钥")
@@ -54,6 +57,7 @@ const (
 	apiKeySortCurrentConcurrency = "current_concurrency"
 	// DB 写失败后的短退避，避免请求路径持续同步重试造成写风暴与高延迟。
 	apiKeyLastUsedFailBackoff = 5 * time.Second
+	apiKeyCreateCountWindow   = time.Hour
 )
 
 // APIKeyUpdateFields 声明 APIKeyRepository.Update 允许写回的列。
@@ -177,6 +181,7 @@ type APIKeyQuotaUsageState struct {
 type APIKeyCache interface {
 	GetCreateAttemptCount(ctx context.Context, userID int64) (int, error)
 	IncrementCreateAttemptCount(ctx context.Context, userID int64) error
+	DeleteCreateAttemptCount(ctx context.Context, userID int64) error
 	IncrementCreateCount(ctx context.Context, userID int64, window time.Duration) (int64, error)
 
 	IncrementDailyUsage(ctx context.Context, apiKey string) error
@@ -1223,7 +1228,9 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 		return nil, false, fmt.Errorf("list active subscriptions: %w", err)
 	}
 	for _, sub := range subscriptions {
-		allowed[sub.GroupID] = struct{}{}
+		if sub.GroupID != nil {
+			allowed[*sub.GroupID] = struct{}{}
+		}
 	}
 	return allowed, user.RestrictPublicGroups, nil
 }

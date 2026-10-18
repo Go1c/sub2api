@@ -84,8 +84,18 @@ const (
 	FieldVideoPrice720p = "video_price_720p"
 	// FieldVideoPrice1080p holds the string denoting the video_price_1080p field in the database.
 	FieldVideoPrice1080p = "video_price_1080p"
+	// FieldVideoModelPrices holds the string denoting the video_model_prices field in the database.
+	FieldVideoModelPrices = "video_model_prices"
 	// FieldWebSearchPricePerCall holds the string denoting the web_search_price_per_call field in the database.
 	FieldWebSearchPricePerCall = "web_search_price_per_call"
+	// FieldSearchPricePer1k holds the string denoting the search_price_per_1k field in the database.
+	FieldSearchPricePer1k = "search_price_per_1k"
+	// FieldAudioRealtimePricePerMin holds the string denoting the audio_realtime_price_per_min field in the database.
+	FieldAudioRealtimePricePerMin = "audio_realtime_price_per_min"
+	// FieldAudioTtsPricePerMillionChars holds the string denoting the audio_tts_price_per_million_chars field in the database.
+	FieldAudioTtsPricePerMillionChars = "audio_tts_price_per_million_chars"
+	// FieldAudioSttPricePerHour holds the string denoting the audio_stt_price_per_hour field in the database.
+	FieldAudioSttPricePerHour = "audio_stt_price_per_hour"
 	// FieldWebSearchRateIndependent holds the string denoting the web_search_rate_independent field in the database.
 	FieldWebSearchRateIndependent = "web_search_rate_independent"
 	// FieldWebSearchRateMultiplier holds the string denoting the web_search_rate_multiplier field in the database.
@@ -130,8 +140,24 @@ const (
 	FieldMessagesDispatchModelConfig = "messages_dispatch_model_config"
 	// FieldModelsListConfig holds the string denoting the models_list_config field in the database.
 	FieldModelsListConfig = "models_list_config"
+	// FieldModelAllowlist holds the string denoting the model_allowlist field in the database.
+	FieldModelAllowlist = "model_allowlist"
+	// FieldCodexModelsManifestConfig holds the string denoting the codex_models_manifest_config field in the database.
+	FieldCodexModelsManifestConfig = "codex_models_manifest_config"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
+	// FieldMaxReasoningEffort holds the string denoting the max_reasoning_effort field in the database.
+	FieldMaxReasoningEffort = "max_reasoning_effort"
+	// FieldMaxReasoningEffortOverLimit holds the string denoting the max_reasoning_effort_over_limit field in the database.
+	FieldMaxReasoningEffortOverLimit = "max_reasoning_effort_over_limit"
+	// FieldReasoningEffortMappings holds the string denoting the reasoning_effort_mappings field in the database.
+	FieldReasoningEffortMappings = "reasoning_effort_mappings"
+	// FieldProfitControlEnabled holds the string denoting the profit_control_enabled field in the database.
+	FieldProfitControlEnabled = "profit_control_enabled"
+	// FieldProfitMinMargin holds the string denoting the profit_min_margin field in the database.
+	FieldProfitMinMargin = "profit_min_margin"
+	// FieldProfitSafetyBuffer holds the string denoting the profit_safety_buffer field in the database.
+	FieldProfitSafetyBuffer = "profit_safety_buffer"
 	// FieldExposeUpstreamModelToUser holds the string denoting the expose_upstream_model_to_user field in the database.
 	FieldExposeUpstreamModelToUser = "expose_upstream_model_to_user"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
@@ -252,7 +278,12 @@ var Columns = []string{
 	FieldVideoPrice480p,
 	FieldVideoPrice720p,
 	FieldVideoPrice1080p,
+	FieldVideoModelPrices,
 	FieldWebSearchPricePerCall,
+	FieldSearchPricePer1k,
+	FieldAudioRealtimePricePerMin,
+	FieldAudioTtsPricePerMillionChars,
+	FieldAudioSttPricePerHour,
 	FieldWebSearchRateIndependent,
 	FieldWebSearchRateMultiplier,
 	FieldLongContextPricingEnabled,
@@ -275,7 +306,15 @@ var Columns = []string{
 	FieldDefaultMappedModel,
 	FieldMessagesDispatchModelConfig,
 	FieldModelsListConfig,
+	FieldModelAllowlist,
+	FieldCodexModelsManifestConfig,
 	FieldRpmLimit,
+	FieldMaxReasoningEffort,
+	FieldMaxReasoningEffortOverLimit,
+	FieldReasoningEffortMappings,
+	FieldProfitControlEnabled,
+	FieldProfitMinMargin,
+	FieldProfitSafetyBuffer,
 	FieldExposeUpstreamModelToUser,
 }
 
@@ -364,6 +403,14 @@ var (
 	DefaultVideoRateIndependent bool
 	// DefaultVideoRateMultiplier holds the default value on creation for the "video_rate_multiplier" field.
 	DefaultVideoRateMultiplier float64
+	// SearchPricePer1kValidator is a validator for the "search_price_per_1k" field. It is called by the builders before save.
+	SearchPricePer1kValidator func(float64) error
+	// AudioRealtimePricePerMinValidator is a validator for the "audio_realtime_price_per_min" field. It is called by the builders before save.
+	AudioRealtimePricePerMinValidator func(float64) error
+	// AudioTtsPricePerMillionCharsValidator is a validator for the "audio_tts_price_per_million_chars" field. It is called by the builders before save.
+	AudioTtsPricePerMillionCharsValidator func(float64) error
+	// AudioSttPricePerHourValidator is a validator for the "audio_stt_price_per_hour" field. It is called by the builders before save.
+	AudioSttPricePerHourValidator func(float64) error
 	// DefaultWebSearchRateIndependent holds the default value on creation for the "web_search_rate_independent" field.
 	DefaultWebSearchRateIndependent bool
 	// DefaultWebSearchRateMultiplier holds the default value on creation for the "web_search_rate_multiplier" field.
@@ -400,8 +447,28 @@ var (
 	DefaultMessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig
 	// DefaultModelsListConfig holds the default value on creation for the "models_list_config" field.
 	DefaultModelsListConfig domain.GroupModelsListConfig
+	// DefaultModelAllowlist holds the default value on creation for the "model_allowlist" field.
+	DefaultModelAllowlist domain.GroupModelAllowlist
+	// DefaultCodexModelsManifestConfig holds the default value on creation for the "codex_models_manifest_config" field.
+	DefaultCodexModelsManifestConfig domain.GroupCodexModelsManifestConfig
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
+	// DefaultMaxReasoningEffort holds the default value on creation for the "max_reasoning_effort" field.
+	DefaultMaxReasoningEffort string
+	// MaxReasoningEffortValidator is a validator for the "max_reasoning_effort" field. It is called by the builders before save.
+	MaxReasoningEffortValidator func(string) error
+	// DefaultMaxReasoningEffortOverLimit holds the default value on creation for the "max_reasoning_effort_over_limit" field.
+	DefaultMaxReasoningEffortOverLimit string
+	// MaxReasoningEffortOverLimitValidator is a validator for the "max_reasoning_effort_over_limit" field. It is called by the builders before save.
+	MaxReasoningEffortOverLimitValidator func(string) error
+	// DefaultReasoningEffortMappings holds the default value on creation for the "reasoning_effort_mappings" field.
+	DefaultReasoningEffortMappings []domain.ReasoningEffortMapping
+	// DefaultProfitControlEnabled holds the default value on creation for the "profit_control_enabled" field.
+	DefaultProfitControlEnabled bool
+	// DefaultProfitMinMargin holds the default value on creation for the "profit_min_margin" field.
+	DefaultProfitMinMargin float64
+	// DefaultProfitSafetyBuffer holds the default value on creation for the "profit_safety_buffer" field.
+	DefaultProfitSafetyBuffer float64
 	// DefaultExposeUpstreamModelToUser holds the default value on creation for the "expose_upstream_model_to_user" field.
 	DefaultExposeUpstreamModelToUser bool
 )
@@ -584,6 +651,26 @@ func ByWebSearchPricePerCall(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebSearchPricePerCall, opts...).ToFunc()
 }
 
+// BySearchPricePer1k orders the results by the search_price_per_1k field.
+func BySearchPricePer1k(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSearchPricePer1k, opts...).ToFunc()
+}
+
+// ByAudioRealtimePricePerMin orders the results by the audio_realtime_price_per_min field.
+func ByAudioRealtimePricePerMin(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudioRealtimePricePerMin, opts...).ToFunc()
+}
+
+// ByAudioTtsPricePerMillionChars orders the results by the audio_tts_price_per_million_chars field.
+func ByAudioTtsPricePerMillionChars(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudioTtsPricePerMillionChars, opts...).ToFunc()
+}
+
+// ByAudioSttPricePerHour orders the results by the audio_stt_price_per_hour field.
+func ByAudioSttPricePerHour(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudioSttPricePerHour, opts...).ToFunc()
+}
+
 // ByWebSearchRateIndependent orders the results by the web_search_rate_independent field.
 func ByWebSearchRateIndependent(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWebSearchRateIndependent, opts...).ToFunc()
@@ -672,6 +759,31 @@ func ByDefaultMappedModel(opts ...sql.OrderTermOption) OrderOption {
 // ByRpmLimit orders the results by the rpm_limit field.
 func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
+}
+
+// ByMaxReasoningEffort orders the results by the max_reasoning_effort field.
+func ByMaxReasoningEffort(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxReasoningEffort, opts...).ToFunc()
+}
+
+// ByMaxReasoningEffortOverLimit orders the results by the max_reasoning_effort_over_limit field.
+func ByMaxReasoningEffortOverLimit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxReasoningEffortOverLimit, opts...).ToFunc()
+}
+
+// ByProfitControlEnabled orders the results by the profit_control_enabled field.
+func ByProfitControlEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProfitControlEnabled, opts...).ToFunc()
+}
+
+// ByProfitMinMargin orders the results by the profit_min_margin field.
+func ByProfitMinMargin(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProfitMinMargin, opts...).ToFunc()
+}
+
+// ByProfitSafetyBuffer orders the results by the profit_safety_buffer field.
+func ByProfitSafetyBuffer(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProfitSafetyBuffer, opts...).ToFunc()
 }
 
 // ByExposeUpstreamModelToUser orders the results by the expose_upstream_model_to_user field.

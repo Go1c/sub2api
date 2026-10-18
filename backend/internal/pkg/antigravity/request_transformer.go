@@ -804,6 +804,20 @@ func isCodeExecutionTool(tool ClaudeTool) bool {
 	return strings.TrimSpace(tool.Type) == "code_execution"
 }
 
+// hasClientFunctionTools 判断是否存在可转发的客户端 function/custom 工具。
+// 内置 web_search / code_execution 不算客户端工具。
+func hasClientFunctionTools(tools []ClaudeTool) bool {
+	for _, tool := range tools {
+		if isWebSearchTool(tool) || isCodeExecutionTool(tool) {
+			continue
+		}
+		if strings.TrimSpace(tool.Name) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // buildTools 构建 tools
 func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 	if len(tools) == 0 {

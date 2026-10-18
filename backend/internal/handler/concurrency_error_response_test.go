@@ -54,7 +54,7 @@ func TestConcurrencyErrorResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status, errType, message := concurrencyErrorResponse(tt.err, tt.slotType)
+			status, errType, _, message := concurrencyErrorResponse(tt.err, tt.slotType)
 			require.Equal(t, tt.wantStatus, status)
 			require.Equal(t, tt.wantType, errType)
 			require.Equal(t, tt.wantMessage, message)

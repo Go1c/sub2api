@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -251,14 +252,34 @@ func (s *EmailService) SendInvoiceAttachment(ctx context.Context, to string, inv
 
 func (s *EmailService) sendRawEmailWithConfig(config *SMTPConfig, to string, msg []byte) error {
 	to = sanitizeEmailHeader(to)
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-
-	if config.UseTLS {
-		return s.sendMailTLS(addr, auth, config.From, to, msg, config.Host)
+	client, err := s.connectSMTP(config)
+	if err != nil {
+		return err
 	}
+	defer func() { _ = client.Close() }()
 
-	return s.sendMailPlain(addr, auth, config.From, to, msg, config.Host)
+	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	if err = client.Mail(sanitizeEmailHeader(config.From)); err != nil {
+		return fmt.Errorf("smtp mail: %w", err)
+	}
+	if err = client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp rcpt: %w", err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err = w.Write(msg); err != nil {
+		return fmt.Errorf("write msg: %w", err)
+	}
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("close writer: %w", err)
+	}
+	_ = client.Quit()
+	return nil
 }
 
 func buildAttachmentEmailMessage(config *SMTPConfig, to, subject, body string, attachment InvoiceEmailAttachment) ([]byte, error) {
@@ -345,46 +366,6 @@ func buildInvoiceEmailBody(invoice *InvoiceRequest) string {
   </div>
 </body>
 </html>`, orderNo, title, amount)
-}
-
-// sendMailPlain sends mail without TLS using a dialer with timeout.
-func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
-	dialer := &net.Dialer{Timeout: smtpDialTimeout}
-	conn, err := dialer.Dial("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	client, err := s.connectSMTP(config)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = client.Close() }()
-
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
-	}
-	if err = client.Mail(message.envelopeFrom); err != nil {
-		return fmt.Errorf("smtp mail: %w", err)
-	}
-	if err = client.Rcpt(message.envelopeTo); err != nil {
-		return fmt.Errorf("smtp rcpt: %w", err)
-	}
-	w, err := client.Data()
-	if err != nil {
-		return fmt.Errorf("smtp data: %w", err)
-	}
-	if _, err = w.Write(message.data); err != nil {
-		return fmt.Errorf("write msg: %w", err)
-	}
-	if err = w.Close(); err != nil {
-		return fmt.Errorf("close writer: %w", err)
-	}
-	// Email is sent successfully after w.Close(), ignore Quit errors
-	// Some SMTP servers return non-standard responses on QUIT
-	_ = client.Quit()
-	return nil
 }
 
 // smtpTestRootCAs 仅供单元测试注入自签 CA，生产环境始终为 nil（走系统信任链）。
@@ -715,21 +696,18 @@ func (s *EmailService) GeneratePasswordResetToken() (string, error) {
 // SendPasswordResetEmail sends a password reset email with a reset link
 func (s *EmailService) SendPasswordResetEmail(ctx context.Context, email, siteName, resetURL string, locale ...string) error {
 	var token string
-	var needSaveToken bool
 
 	// Check if token already exists
 	existing, err := s.cache.GetPasswordResetToken(ctx, email)
 	if err == nil && existing != nil {
 		// Token exists, reuse it (allows resending email without generating new token)
 		token = existing.Token
-		needSaveToken = false
 	} else {
 		// Generate new token
 		token, err = s.GeneratePasswordResetToken()
 		if err != nil {
 			return fmt.Errorf("generate token: %w", err)
 		}
-		needSaveToken = true
 	}
 	data := &PasswordResetTokenData{
 		Token:     hashPasswordResetToken(token),

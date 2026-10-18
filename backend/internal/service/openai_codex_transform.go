@@ -96,6 +96,8 @@ type codexOAuthTransformOptions struct {
 	SkipDefaultInstructions             bool
 	PreserveToolCallIDs                 bool
 	OmitPromotedSystemMessagesFromInput bool
+	// ResponsesLite selects where an injected hosted tool is declared.
+	ResponsesLite bool
 }
 
 const (
@@ -160,6 +162,38 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 		IsCodexCLI: isCodexCLI,
 		IsCompact:  isCompact,
 	})
+}
+
+func normalizeOpenAIOAuthResponsesCompatibilityFields(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+	changed := false
+	if prompt, exists := reqBody["prompt"]; exists {
+		if input, hasInput := reqBody["input"]; !hasInput || input == nil {
+			if prompt != nil {
+				reqBody["input"] = prompt
+			}
+		}
+		delete(reqBody, "prompt")
+		changed = true
+	}
+	if _, exists := reqBody["commands"]; exists {
+		delete(reqBody, "commands")
+		changed = true
+	}
+	input, _ := reqBody["input"].([]any)
+	for _, value := range input {
+		item, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, exists := item["internal_chat_message_metadata_passthrough"]; exists {
+			delete(item, "internal_chat_message_metadata_passthrough")
+			changed = true
+		}
+	}
+	return changed
 }
 
 func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuthTransformOptions) codexTransformResult {
@@ -1697,6 +1731,73 @@ func filterCodexInputWithOptions(input []any, opts codexInputFilterOptions) []an
 		filtered = append(filtered, newItem)
 	}
 	return filtered
+}
+
+func normalizeCodexFilterCallID(itemType, id string, preserve bool) string {
+	if preserve && len(id) <= codexCallIDMaxLength {
+		return id
+	}
+	_ = itemType
+	return normalizeCodexCallID(id)
+}
+
+func codexItemReferenceIDMappings(input []any, preserveCallIDs bool) map[string]string {
+	mappings := make(map[string]string)
+	ambiguous := make(map[string]struct{})
+	for _, rawItem := range input {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			continue
+		}
+		itemType := strings.TrimSpace(firstNonEmptyString(item["type"]))
+		if !isCodexToolCallItemType(itemType) {
+			continue
+		}
+		rawCallID := strings.TrimSpace(firstNonEmptyString(item["call_id"]))
+		if rawCallID == "" {
+			continue
+		}
+		normalized := normalizeCodexFilterCallID(itemType, rawCallID, preserveCallIDs)
+		if existing, exists := mappings[rawCallID]; exists && existing != normalized {
+			delete(mappings, rawCallID)
+			ambiguous[rawCallID] = struct{}{}
+			continue
+		}
+		if _, conflict := ambiguous[rawCallID]; !conflict {
+			mappings[rawCallID] = normalized
+		}
+	}
+	return mappings
+}
+
+func codexInputItemIDs(input []any) map[string]struct{} {
+	itemIDs := make(map[string]struct{})
+	for _, rawItem := range input {
+		item, ok := rawItem.(map[string]any)
+		if !ok || strings.TrimSpace(firstNonEmptyString(item["type"])) == "item_reference" {
+			continue
+		}
+		itemType := strings.TrimSpace(firstNonEmptyString(item["type"]))
+		id := strings.TrimSpace(firstNonEmptyString(item["id"]))
+		if id != "" && !shouldStripOpenAIResponsesInputItemID(itemType, id) {
+			itemIDs[id] = struct{}{}
+		}
+	}
+	return itemIDs
+}
+
+func codexInputCallIDs(input []any) map[string]struct{} {
+	callIDs := make(map[string]struct{})
+	for _, rawItem := range input {
+		item, ok := rawItem.(map[string]any)
+		if !ok || !isCodexToolCallItemType(strings.TrimSpace(firstNonEmptyString(item["type"]))) {
+			continue
+		}
+		if callID := strings.TrimSpace(firstNonEmptyString(item["call_id"])); callID != "" {
+			callIDs[callID] = struct{}{}
+		}
+	}
+	return callIDs
 }
 
 func isCodexToolCallItemType(typ string) bool {

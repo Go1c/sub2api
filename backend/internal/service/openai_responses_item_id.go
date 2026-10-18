@@ -53,14 +53,6 @@ func shouldStripOpenAIResponsesInputItemID(itemType, id string) bool {
 	return id == "" || len(id) > 64 || !strings.HasPrefix(id, prefix)
 }
 
-func shouldStripOpenAIResponsesNonPairCallID(itemType string) bool {
-	switch strings.TrimSpace(itemType) {
-	case "message", "reasoning", "image_generation_call":
-		return true
-	default:
-		return false
-	}
-}
 
 func sanitizeOpenAIResponsesInputItemIDs(body []byte) ([]byte, bool, error) {
 	input := parseRawJSONView(body).Get("input")

@@ -46,6 +46,10 @@ func (s *GatewayService) ForwardAsResponses(
 	}
 
 	// 1. Parse Responses request
+	adaptedBody, clientToolMapping, err := adaptResponsesClientToolsForAnthropic(body)
+	if err != nil {
+		return nil, err
+	}
 	var responsesReq apicompat.ResponsesRequest
 	if err := json.Unmarshal(adaptedBody, &responsesReq); err != nil {
 		return nil, fmt.Errorf("parse responses request: %w", err)
@@ -137,8 +141,8 @@ func (s *GatewayService) ForwardAsResponses(
 	}
 	// Bill the final Anthropic effort after conversion and account normalization.
 	// For example, OpenAI xhigh is forwarded as output_config.effort=max.
-	reasoningEffort := NormalizeClaudeOutputEffort(gjson.GetBytes(forwardedBody, "output_config.effort").String())
-	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, forwardedBody, mappedModel)
+	reasoningEffort = NormalizeClaudeOutputEffort(gjson.GetBytes(anthropicBody, "output_config.effort").String())
+	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, anthropicBody, mappedModel)
 
 	// 11. Send request
 	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
@@ -539,6 +543,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	var usage ClaudeUsage
 	var firstTokenMs *int
 	firstChunk := true
+	clientToolRestorer := apicompat.NewResponsesClientToolStreamRestorer(clientToolMapping)
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize

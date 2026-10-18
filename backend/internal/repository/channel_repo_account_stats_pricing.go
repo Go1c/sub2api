@@ -10,6 +10,24 @@ import (
 	"github.com/lib/pq"
 )
 
+func marshalReasoningEffortMultipliers(values map[string]float64) ([]byte, error) {
+	if values == nil {
+		return []byte("{}"), nil
+	}
+	return json.Marshal(values)
+}
+
+func unmarshalReasoningEffortMultipliers(raw []byte) (map[string]float64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	out := map[string]float64{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal reasoning effort multipliers: %w", err)
+	}
+	return out, nil
+}
+
 // --- 账号统计定价规则 ---
 
 // batchLoadAccountStatsPricingRules 批量加载多个渠道的账号统计定价规则（含模型定价）

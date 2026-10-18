@@ -59,10 +59,15 @@ const (
 	providerGeminiPathTemplate = "/v1beta/models/%s:generateContent"
 
 	// MonitorProviderOpenAI / Anthropic / Gemini / Grok provider 字符串常量（也是 ent enum 的实际值）。
-	MonitorProviderOpenAI    = "openai"
-	MonitorProviderAnthropic = "anthropic"
-	MonitorProviderGemini    = "gemini"
-	MonitorProviderGrok      = "grok"
+	MonitorProviderOpenAI      = "openai"
+	MonitorProviderAnthropic   = "anthropic"
+	MonitorProviderGemini      = "gemini"
+	MonitorProviderGrok        = "grok"
+	MonitorProviderAntigravity = "antigravity"
+	MonitorProviderKimi        = "kimi"
+	MonitorProviderZhipu       = "zhipu"
+	MonitorProviderDeepseek    = "deepseek"
+	MonitorProviderMiniMax     = "minimax"
 
 	// MonitorCheckMode 检测模式（channel_monitors.check_mode）。
 	//   probe       - LLM 探活（默认，原有行为）

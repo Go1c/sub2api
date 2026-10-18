@@ -851,20 +851,6 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 		UPDATE users
 		SET balance = balance - $1,
 			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
-		RETURNING balance
-	`, amount, userID).Scan(&newBalance)
-	if err == nil {
-		return newBalance, true, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
-	}
-
-	err = tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
 		RETURNING balance
 	`, deducted, userID).Scan(&newBalance)
@@ -887,10 +873,10 @@ func lockUserBalanceForUpdate(ctx context.Context, tx *sql.Tx, userID int64) (fl
 		FOR UPDATE
 	`, userID).Scan(&balance)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, service.ErrUserNotFound
+		return 0, service.ErrUserNotFound
 	}
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 	return balance, nil
 }

@@ -15,8 +15,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	coderws "github.com/coder/websocket"
 	"github.com/tidwall/gjson"
-
-	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
 type FrameConn interface {
@@ -99,14 +97,20 @@ type RelayTraceEvent struct {
 }
 
 type relayState struct {
-	usage             Usage
-	requestModel      string
-	pendingTurnStart  atomic.Pointer[time.Time]
-	lastResponseID    string
-	terminalEventType string
-	firstTokenMs      *int
-	turnTimingByID    map[string]*relayTurnTiming
-	activeTurn        *relayTurnTiming
+	usage                   Usage
+	turnUsage               Usage
+	requestModelMu          sync.RWMutex
+	requestModel            string
+	pendingTurnStart        atomic.Pointer[time.Time]
+	lastResponseID          string
+	lastResponseModel       string
+	lastResponseServiceTier string
+	responseConflict        bool
+	terminalEventType       string
+	firstTokenMs            *int
+	turnTimingByID          map[string]*relayTurnTiming
+	activeTurn              *relayTurnTiming
+	pendingBareError        *observedUpstreamEvent
 }
 
 type relayExitSignal struct {
@@ -117,13 +121,16 @@ type relayExitSignal struct {
 }
 
 type observedUpstreamEvent struct {
-	terminal   bool
-	eventType  string
-	responseID string
-	usage      Usage
-	startedAt  time.Time
-	duration   time.Duration
-	firstToken *int
+	terminal            bool
+	eventType           string
+	responseID          string
+	usage               Usage
+	startedAt           time.Time
+	responseModel       string
+	responseConflict    bool
+	responseServiceTier string
+	duration            time.Duration
+	firstToken          *int
 }
 
 type relayTurnTiming struct {
@@ -268,30 +275,34 @@ func Relay(
 	if !options.StartClientAfterFirstDownstream {
 		startClientReader()
 	}
-	go runUpstreamToClient(
-		relayCtx,
-		upstreamConn,
-		writeClient,
-		startAt,
-		nowFn,
-		state,
-		options.OnUsageParseFailure,
-		options.OnTurnComplete,
-		options.BeforeWriteClient,
-		options.BeforeClientWrite,
-		options.AfterClientWrite,
-		func(msgType coderws.MessageType, payload []byte) {
-			if options.StartClientAfterFirstDownstream {
-				startClientReader()
-			}
-		},
-		&dropDownstreamWrites,
-		upstreamToClientFrames,
-		droppedDownstreamFrames,
-		markActivity,
-		onTrace,
-		exitCh,
-	)
+	upstreamDone := make(chan struct{})
+	go func() {
+		defer close(upstreamDone)
+		runUpstreamToClient(
+			relayCtx,
+			upstreamConn,
+			writeClient,
+			startAt,
+			nowFn,
+			state,
+			options.OnUsageParseFailure,
+			options.OnTurnComplete,
+			options.BeforeWriteClient,
+			options.BeforeClientWrite,
+			options.AfterClientWrite,
+			func(msgType coderws.MessageType, payload []byte) {
+				if options.StartClientAfterFirstDownstream {
+					startClientReader()
+				}
+			},
+			&dropDownstreamWrites,
+			upstreamToClientFrames,
+			droppedDownstreamFrames,
+			markActivity,
+			onTrace,
+			exitCh,
+		)
+	}()
 	go runIdleWatchdog(relayCtx, nowFn, options.IdleTimeout, &lastActivity, onTrace, exitCh)
 
 	firstExit := <-exitCh
@@ -1093,15 +1104,6 @@ func parseUsageAndAccumulate(
 		}
 		// 解析失败时不做部分字段累加，避免计费 usage 出现“半有效”状态。
 		return Usage{}
-	}
-	reasoningTokens := usageResult.Get("output_tokens_details.reasoning_tokens").Int()
-	if reasoningTokens == 0 {
-		reasoningTokens = usageResult.Get("completion_tokens_details.reasoning_tokens").Int()
-	}
-	if reasoningTokens > 0 {
-		outputTokens = int(xai.IncludeIndependentReasoningTokens(
-			int64(inputTokens), int64(outputTokens), usageResult.Get("total_tokens").Int(), reasoningTokens,
-		))
 	}
 	parsedUsage := Usage{
 		InputTokens:              inputTokens,

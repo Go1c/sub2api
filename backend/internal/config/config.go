@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
-	"golang.org/x/net/http/httpguts"
 )
 
 const (
@@ -65,46 +64,59 @@ const DefaultUpstreamResponseReadMaxBytes int64 = 128 * 1024 * 1024
 const DefaultModelsListReadMaxBytes int64 = 8 * 1024 * 1024
 
 type Config struct {
-	Server                  ServerConfig                  `mapstructure:"server"`
-	Log                     LogConfig                     `mapstructure:"log"`
-	CORS                    CORSConfig                    `mapstructure:"cors"`
-	Security                SecurityConfig                `mapstructure:"security"`
-	Billing                 BillingConfig                 `mapstructure:"billing"`
-	Turnstile               TurnstileConfig               `mapstructure:"turnstile"`
-	Database                DatabaseConfig                `mapstructure:"database"`
-	Redis                   RedisConfig                   `mapstructure:"redis"`
-	Ops                     OpsConfig                     `mapstructure:"ops"`
-	JWT                     JWTConfig                     `mapstructure:"jwt"`
-	Totp                    TotpConfig                    `mapstructure:"totp"`
-	WebAuthn                WebAuthnConfig                `mapstructure:"webauthn"`
-	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
-	WeChat                  WeChatConnectConfig           `mapstructure:"wechat_connect"`
-	OIDC                    OIDCConnectConfig             `mapstructure:"oidc_connect"`
-	DingTalk                DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
-	GitHubOAuth             EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
-	GoogleOAuth             EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
-	Default                 DefaultConfig                 `mapstructure:"default"`
-	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
-	Pricing                 PricingConfig                 `mapstructure:"pricing"`
-	Gateway                 GatewayConfig                 `mapstructure:"gateway"`
-	APIKeyAuth              APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
-	APIKeyCreate            APIKeyCreateConfig            `mapstructure:"api_key_create"`
-	SubscriptionCache       SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
-	SubscriptionMaintenance SubscriptionMaintenanceConfig `mapstructure:"subscription_maintenance"`
-	Dashboard               DashboardCacheConfig          `mapstructure:"dashboard_cache"`
-	DashboardAgg            DashboardAggregationConfig    `mapstructure:"dashboard_aggregation"`
-	UsageCleanup            UsageCleanupConfig            `mapstructure:"usage_cleanup"`
-	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
-	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
-	SimpleMode              SimpleModeConfig              `mapstructure:"simple_mode" yaml:"simple_mode"`
-	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
-	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
-	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
-	Update                  UpdateConfig                  `mapstructure:"update"`
-	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
-	GeoBlock                GeoBlockConfig                `mapstructure:"geo_block"`
-	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
-	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
+	Server                        ServerConfig                  `mapstructure:"server"`
+	Log                           LogConfig                     `mapstructure:"log"`
+	CORS                          CORSConfig                    `mapstructure:"cors"`
+	Security                      SecurityConfig                `mapstructure:"security"`
+	Billing                       BillingConfig                 `mapstructure:"billing"`
+	Turnstile                     TurnstileConfig               `mapstructure:"turnstile"`
+	Database                      DatabaseConfig                `mapstructure:"database"`
+	Redis                         RedisConfig                   `mapstructure:"redis"`
+	Ops                           OpsConfig                     `mapstructure:"ops"`
+	JWT                           JWTConfig                     `mapstructure:"jwt"`
+	Totp                          TotpConfig                    `mapstructure:"totp"`
+	WebAuthn                      WebAuthnConfig                `mapstructure:"webauthn"`
+	LinuxDo                       LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
+	WeChat                        WeChatConnectConfig           `mapstructure:"wechat_connect"`
+	OIDC                          OIDCConnectConfig             `mapstructure:"oidc_connect"`
+	DingTalk                      DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
+	GitHubOAuth                   EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
+	GoogleOAuth                   EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
+	Default                       DefaultConfig                 `mapstructure:"default"`
+	RateLimit                     RateLimitConfig               `mapstructure:"rate_limit"`
+	Pricing                       PricingConfig                 `mapstructure:"pricing"`
+	Gateway                       GatewayConfig                 `mapstructure:"gateway"`
+	APIKeyAuth                    APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
+	APIKeyCreate                  APIKeyCreateConfig            `mapstructure:"api_key_create"`
+	SubscriptionCache             SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
+	SubscriptionMaintenance       SubscriptionMaintenanceConfig `mapstructure:"subscription_maintenance"`
+	Dashboard                     DashboardCacheConfig          `mapstructure:"dashboard_cache"`
+	DashboardAgg                  DashboardAggregationConfig    `mapstructure:"dashboard_aggregation"`
+	UsageCleanup                  UsageCleanupConfig            `mapstructure:"usage_cleanup"`
+	Concurrency                   ConcurrencyConfig             `mapstructure:"concurrency"`
+	TokenRefresh                  TokenRefreshConfig            `mapstructure:"token_refresh"`
+	SimpleMode                    SimpleModeConfig              `mapstructure:"simple_mode" yaml:"simple_mode"`
+	RunMode                       string                        `mapstructure:"run_mode" yaml:"run_mode"`
+	SimpleModeKeyRateLimitEnabled bool                          `mapstructure:"simple_mode_key_rate_limit_enabled" yaml:"simple_mode_key_rate_limit_enabled"`
+	Timezone                      string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
+	Gemini                        GeminiConfig                  `mapstructure:"gemini"`
+	Update                        UpdateConfig                  `mapstructure:"update"`
+	Idempotency                   IdempotencyConfig             `mapstructure:"idempotency"`
+	GeoBlock                      GeoBlockConfig                `mapstructure:"geo_block"`
+	BatchImage                    BatchImageConfig              `mapstructure:"batch_image"`
+	ImageStorage                  ImageStorageConfig            `mapstructure:"image_storage"`
+	Plugins                       PluginConfig                  `mapstructure:"plugins"`
+}
+
+// PluginConfig 控制管理员手动上传的本地进程插件。
+// 默认不包含插件，也不允许安装未签名插件；TrustedPublishers 用于追加第三方发布者。
+type PluginConfig struct {
+	DataDir              string            `mapstructure:"data_dir"`
+	AllowUnsigned        bool              `mapstructure:"allow_unsigned"`
+	TrustedPublishers    map[string]string `mapstructure:"trusted_publishers"`
+	MaxUploadBytes       int64             `mapstructure:"max_upload_bytes"`
+	MaxUncompressedBytes int64             `mapstructure:"max_uncompressed_bytes"`
+	StartTimeoutSeconds  int               `mapstructure:"start_timeout_seconds"`
 }
 
 // GeoBlockConfig 控制按地区拦截「网页前端」访问的合规开关。
@@ -144,6 +156,23 @@ func (c *ImageStorageConfig) IsConfigured() bool {
 // Active 返回异步图片任务是否可用：开关打开且凭证齐全
 func (c *ImageStorageConfig) Active() bool {
 	return c.Enabled && c.IsConfigured()
+}
+
+func (c *ImageStorageConfig) MissingCredentialKeys() []string {
+	if c == nil {
+		return []string{"image_storage.bucket", "image_storage.access_key_id", "image_storage.secret_access_key"}
+	}
+	var missing []string
+	if c.Bucket == "" {
+		missing = append(missing, "image_storage.bucket")
+	}
+	if c.AccessKeyID == "" {
+		missing = append(missing, "image_storage.access_key_id")
+	}
+	if c.SecretAccessKey == "" {
+		missing = append(missing, "image_storage.secret_access_key")
+	}
+	return missing
 }
 
 type LogConfig struct {
@@ -837,6 +866,28 @@ type BillingConfig struct {
 	// UserPlatformQuotaSentinelTTLSeconds sentinel(无 limit 占位)entry 的 TTL,
 	// 显著短于 quota cache 默认 86400s 以控 Redis 内存;默认 3600=1h。
 	UserPlatformQuotaSentinelTTLSeconds int `mapstructure:"user_platform_quota_sentinel_ttl_seconds"`
+	// InflightReservation 余额模式在途请求预留（Redis），防止并发请求在预检时看到同一份余额而集体透支。
+	InflightReservation InflightReservationConfig `mapstructure:"inflight_reservation"`
+}
+
+// InflightReservationConfig 余额模式在途预留配置。
+// 准入时按输入估算 + 输出单价 × max_tokens 估算单请求费用，在 Redis 中原子地
+// 校验缓存余额减去在途预留合计后登记预留，请求结束释放。
+// 估算失败或 Redis 不可用时 fail-open，退回旧的仅余额阈值检查。
+type InflightReservationConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// TTLSeconds 单条预留的最长存活时间；进程崩溃等泄漏的预留到期自动失效。
+	TTLSeconds int `mapstructure:"ttl_seconds"`
+	// DefaultMaxTokens 请求未携带 max_tokens 时用于估算的输出 token 数。
+	DefaultMaxTokens int `mapstructure:"default_max_tokens"`
+	// MaxOutputTokens 估算输出 token 的上限（max_tokens 超出时截断）。
+	MaxOutputTokens int `mapstructure:"max_output_tokens"`
+	// MaxInputTokens 输入 token 估算（请求体字节数 / 4）的上限。
+	MaxInputTokens int `mapstructure:"max_input_tokens"`
+	// MaxReservationUSD 单请求预留金额上限；0 表示不设上限。
+	MaxReservationUSD float64 `mapstructure:"max_reservation_usd"`
+	// FailClosedOnUnpriced 无法为请求估算费用时是否拒绝请求。默认 false：放行且不预留。
+	FailClosedOnUnpriced bool `mapstructure:"fail_closed_on_unpriced"`
 }
 
 type CircuitBreakerConfig struct {
@@ -906,6 +957,8 @@ type GatewayConfig struct {
 	// ForceCodexCLI: 强制将 OpenAI `/v1/responses` 请求按 Codex CLI 处理。
 	// 用于网关未透传/改写 User-Agent 时的兼容兜底（默认关闭，避免影响其他客户端）。
 	ForceCodexCLI bool `mapstructure:"force_codex_cli"`
+	// DisableCodexIdentityEnforcement 关闭强制统一 Codex 出站身份。零值为开启强制统一。
+	DisableCodexIdentityEnforcement bool `mapstructure:"disable_codex_identity_enforcement"`
 	// DisableCodexOriginatorNormalization: 关闭「把落在上游降载桶的 Codex originator 改写为
 	// 官方 CLI 身份」。上游 /backend-api/codex 按 originator 分桶调度容量，命中降载桶的请求会被回
 	// server_is_overloaded，网关据此冷却账号，表现为账号频繁过载不可用。
@@ -1020,6 +1073,22 @@ type GatewayConfig struct {
 	// CNProviders: 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
 	// 仅作用于 payg（按量付费）账号：周期探测余额，低于阈值则临时停调。
 	CNProviders GatewayCNProvidersConfig `mapstructure:"cn_providers"`
+
+	// Live: ChatGPT Frameless Live 会话配置。
+	Live GatewayLiveConfig `mapstructure:"live"`
+
+	OpenAIProxyStreamCircuit GatewayOpenAIProxyStreamCircuitConfig `mapstructure:"openai_proxy_stream_circuit"`
+}
+
+type GatewayOpenAIProxyStreamCircuitConfig struct {
+	Disabled         bool `mapstructure:"disabled"`
+	FailureThreshold int  `mapstructure:"failure_threshold"`
+	WindowSeconds    int  `mapstructure:"window_seconds"`
+	TTLSeconds       int  `mapstructure:"ttl_seconds"`
+}
+
+type GatewayLiveConfig struct {
+	MaxSessionDurationSeconds int `mapstructure:"max_session_duration_seconds"`
 }
 
 // GatewayGrokConfig holds Grok-specific gateway scheduling knobs.
@@ -1589,6 +1658,17 @@ type InvalidAuthAbuseConfig struct {
 }
 
 // SubscriptionCacheConfig 订阅认证 L1 缓存配置
+// APIKeyCreateConfig 用户创建 API Key 的防滥用限制（0 表示不限制）。
+type APIKeyCreateConfig struct {
+	MaxActivePerUser  int `mapstructure:"max_active_per_user"`
+	MaxPerUserPerHour int `mapstructure:"max_per_user_per_hour"`
+}
+
+// SimpleModeConfig controls startup behavior in simple mode.
+type SimpleModeConfig struct {
+	AutoCreateDefaultGroups bool `mapstructure:"auto_create_default_groups" yaml:"auto_create_default_groups"`
+}
+
 type SubscriptionCacheConfig struct {
 	L1Size        int `mapstructure:"l1_size"`
 	L1TTLSeconds  int `mapstructure:"l1_ttl_seconds"`
@@ -1704,13 +1784,13 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		// 配置文件不存在时使用默认值
 	}
 	trustedProxiesEnv, trustedProxiesEnvConfigured := os.LookupEnv("SERVER_TRUSTED_PROXIES")
-	forwardedClientIPHeadersEnv, forwardedClientIPHeadersEnvConfigured := os.LookupEnv("SECURITY_FORWARDED_CLIENT_IP_HEADERS")
-	trustedProxiesConfigured := viper.InConfig("server.trusted_proxies") ||
-		viper.IsSet("server.trusted_proxies") || trustedProxiesEnvConfigured
 
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config error: %w", err)
+	}
+	if trustedProxiesEnvConfigured {
+		cfg.Server.TrustedProxies = normalizeStringSlice(strings.Split(trustedProxiesEnv, ","))
 	}
 	if cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs == 0 {
 		cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000

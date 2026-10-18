@@ -17,7 +17,12 @@ type OpsRepository interface {
 	DeleteSystemLogs(ctx context.Context, filter *OpsSystemLogCleanupFilter) (int64, error)
 	InsertSystemLogCleanupAudit(ctx context.Context, input *OpsSystemLogCleanupAudit) error
 
-	UpdateErrorResolution(ctx context.Context, errorID int64, resolved bool, resolvedByUserID *int64, resolvedAt *time.Time) error
+	UpdateErrorResolution(ctx context.Context, errorID int64, resolved bool, resolvedByUserID *int64, resolvedRetryID *int64, resolvedAt *time.Time) error
+
+	InsertRetryAttempt(ctx context.Context, input *OpsInsertRetryAttemptInput) (int64, error)
+	UpdateRetryAttempt(ctx context.Context, input *OpsUpdateRetryAttemptInput) error
+	GetLatestRetryAttemptForError(ctx context.Context, sourceErrorID int64) (*OpsRetryAttempt, error)
+	ListRetryAttemptsByErrorID(ctx context.Context, sourceErrorID int64, limit int) ([]*OpsRetryAttempt, error)
 
 	// Lightweight window stats (for realtime WS / quick sampling).
 	GetWindowStats(ctx context.Context, filter *OpsDashboardFilter) (*OpsWindowStats, error)
@@ -266,6 +271,11 @@ type OpsInsertErrorLogInput struct {
 	ErrorMessage string
 	ErrorBody    string
 
+	RequestBodyJSON      *string
+	RequestBodyTruncated bool
+	RequestBodyBytes     int
+	RequestHeadersJSON   *string
+
 	ErrorSource string
 	ErrorOwner  string
 
@@ -296,11 +306,6 @@ type OpsInsertErrorLogInput struct {
 
 	// 有效(未删除)key 报错时快照的 key 脱敏前缀(前 8 位);与 AttemptedKeyPrefix 互斥。
 	// 用于运维侧在错误详情中回显绑定密钥前缀。
-	APIKeyPrefix string
-}
-
-	// 有效(未删除)key 报错时快照的 key 脱敏前缀(前 8 位)。
-	// 落库快照而非读时 JOIN:key 之后被删(key 列被 tombstone 覆盖)仍保留当时前缀。
 	APIKeyPrefix string
 }
 

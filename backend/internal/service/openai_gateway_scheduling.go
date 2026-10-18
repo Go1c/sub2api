@@ -19,6 +19,35 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+const (
+	openCodeSessionAffinityHeader = "X-Session-Affinity"
+	openCodeSessionIDHeader       = "X-Session-Id"
+	openCodeNativeSessionHeader   = "X-OpenCode-Session"
+	codeBuddyConversationHeader   = "X-Conversation-ID"
+)
+
+var explicitOpenAIHeaderSessionNames = []string{
+	"session-id",
+	"session_id",
+	"conversation_id",
+	openCodeSessionAffinityHeader,
+	openCodeSessionIDHeader,
+	openCodeNativeSessionHeader,
+	codeBuddyConversationHeader,
+}
+
+func explicitOpenAIHeaderSessionID(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	for _, header := range explicitOpenAIHeaderSessionNames {
+		if sessionID := strings.TrimSpace(c.GetHeader(header)); sessionID != "" {
+			return sessionID
+		}
+	}
+	return ""
+}
+
 // ExtractSessionID extracts the raw session ID from headers or body without hashing.
 // Used by ForwardAsAnthropic to pass as prompt_cache_key for upstream cache.
 func (s *OpenAIGatewayService) ExtractSessionID(c *gin.Context, body []byte) string {
@@ -44,6 +73,17 @@ func explicitOpenAISessionID(c *gin.Context, body []byte) string {
 // with Grok's native conversation header only for requests authenticated to a
 // Grok group. This keeps an unrelated x-grok-conv-id header from changing
 // scheduling or upstream session behavior for non-Grok groups.
+func openAIRequestPayloadView(body []byte) gjson.Result {
+	root := parseRawJSONView(body)
+	eventType := strings.ToLower(strings.TrimSpace(root.Get("type").String()))
+	if strings.HasPrefix(eventType, "response.") {
+		if response := root.Get("response"); response.Exists() && response.IsObject() {
+			return response
+		}
+	}
+	return root
+}
+
 func explicitOpenAIRequestSessionID(c *gin.Context, body []byte) string {
 	if c == nil {
 		return ""
@@ -514,6 +554,31 @@ func openAIQuotaWindowReset(extra map[string]any, window string, now time.Time) 
 	}
 	resetAt := base.Add(time.Duration(resetAfter) * time.Second)
 	return !now.Before(resetAt)
+}
+
+func openAIQuotaWindowResetPending(extra map[string]any, window string, now time.Time) bool {
+	resetAt, ok := openAICodexWindowResetAt(extra, window)
+	return ok && now.Before(resetAt)
+}
+
+func openAICodexWindowResetAt(extra map[string]any, window string) (time.Time, bool) {
+	if len(extra) == 0 {
+		return time.Time{}, false
+	}
+	if resetAtRaw, ok := extra["codex_"+window+"_reset_at"]; ok {
+		if resetAt, err := parseTime(fmt.Sprint(resetAtRaw)); err == nil {
+			return resetAt, true
+		}
+	}
+	resetAfter := parseExtraInt(extra["codex_"+window+"_reset_after_seconds"])
+	if resetAfter <= 0 {
+		return time.Time{}, false
+	}
+	updatedAt, err := parseTime(fmt.Sprint(extra["codex_usage_updated_at"]))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return updatedAt.Add(time.Duration(resetAfter) * time.Second), true
 }
 
 func readOpenAIQuotaUsedPercent(extra map[string]any, window string) float64 {

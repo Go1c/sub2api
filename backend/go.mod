@@ -5,6 +5,9 @@ go 1.26.4
 require (
 	entgo.io/ent v0.14.5
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/alibabacloud-go/captcha-20230305 v1.1.3
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.4
+	github.com/alibabacloud-go/tea v1.5.3
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/alitto/pond/v2 v2.6.2
 	github.com/andybalholm/brotli v1.2.0
@@ -12,7 +15,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.10
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.10
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.2
-	github.com/aws/smithy-go v1.24.2
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/coder/websocket v1.8.14
 	github.com/dgraph-io/ristretto v0.2.0
@@ -23,6 +25,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/hashicorp/go-hclog v1.6.3
+	github.com/hashicorp/go-plugin v1.8.0
 	github.com/imroc/req/v3 v3.57.0
 	github.com/klauspost/compress v1.18.2
 	github.com/lib/pq v1.10.9
@@ -48,12 +52,14 @@ require (
 	github.com/wechatpay-apiv3/wechatpay-go v0.2.21
 	github.com/zeromicro/go-zero v1.9.4
 	go.uber.org/zap v1.24.0
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/image v0.39.0
 	golang.org/x/mod v0.35.0
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.43.0
+	google.golang.org/grpc v1.75.1
+	google.golang.org/protobuf v1.36.10
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.44.3
@@ -67,7 +73,7 @@ require (
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
-	github.com/alibabacloud-go/tea-utils/v2 v2.0.7 // indirect
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.9 // indirect
 	github.com/aliyun/credentials-go v1.4.5 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
@@ -84,6 +90,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.7 // indirect
+	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/bmatcuk/doublestar v1.3.4 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
@@ -128,7 +135,7 @@ require (
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/icholy/digest v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
@@ -158,7 +165,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.60.0 // indirect
+	github.com/quic-go/quic-go v0.57.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
@@ -175,11 +182,13 @@ require (
 	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tiktoken-go/tokenizer v0.8.0 // indirect
+	github.com/tinylib/msgp v1.6.4 // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zclconf/go-cty v1.14.4 // indirect
@@ -197,8 +206,7 @@ require (
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
-	google.golang.org/grpc v1.75.1 // indirect
-	google.golang.org/protobuf v1.36.10 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250929231259-57b25ae835d4 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

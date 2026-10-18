@@ -66,14 +66,17 @@ type bindPendingOAuthLoginRequest struct {
 }
 
 type createPendingOAuthAccountRequest struct {
-	Email            string `json:"email" binding:"required,email"`
-	VerifyCode       string `json:"verify_code,omitempty"`
-	Password         string `json:"password" binding:"required,min=6"`
-	InvitationCode   string `json:"invitation_code,omitempty"`
-	AffCode          string `json:"aff_code,omitempty"`
-	AffFingerprint   string `json:"aff_fingerprint,omitempty"`
-	AdoptDisplayName *bool  `json:"adopt_display_name,omitempty"`
-	AdoptAvatar      *bool  `json:"adopt_avatar,omitempty"`
+	Email                 string `json:"email" binding:"required,email"`
+	VerifyCode            string `json:"verify_code,omitempty"`
+	Password              string `json:"password" binding:"required,min=6"`
+	InvitationCode        string `json:"invitation_code,omitempty"`
+	AffCode               string `json:"aff_code,omitempty"`
+	AffFingerprint        string `json:"aff_fingerprint,omitempty"`
+	TurnstileToken        string `json:"turnstile_token,omitempty"`
+	TencentCaptchaTicket  string `json:"tencent_captcha_ticket,omitempty"`
+	TencentCaptchaRandstr string `json:"tencent_captcha_randstr,omitempty"`
+	AdoptDisplayName      *bool  `json:"adopt_display_name,omitempty"`
+	AdoptAvatar           *bool  `json:"adopt_avatar,omitempty"`
 }
 
 type sendPendingOAuthVerifyCodeRequest struct {

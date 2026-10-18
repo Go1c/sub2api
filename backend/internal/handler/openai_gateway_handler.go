@@ -41,6 +41,7 @@ type OpenAIGatewayHandler struct {
 	securityAuditCoordinator   *securityaudit.Coordinator
 	userRequestMonitorService  *service.OpsUserRequestMonitorService
 	grokMediaEligibilityProber grokMediaEligibilityProber
+	compositeResolver          *service.CompositeRouteResolver
 	opsService                 *service.OpsService
 	concurrencyHelper          *ConcurrencyHelper
 	imageLimiter               *imageConcurrencyLimiter
@@ -497,6 +498,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	switchCount := 0
 	firstOutputTimeoutSwitchCount := 0
 	failedAccountIDs := make(map[int64]struct{})
+	profitVetoCount := 0
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
@@ -1045,7 +1047,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
-	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(c, apiKey, reqModel)
+	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
@@ -1120,7 +1122,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	effectiveMappedModel := preferredMappedModel
 
 	// 分组利润控制：Messages 文本入口同样请求级装门并固定 pricingAt。
-	msgPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
+	msgPricingCtx, _ := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
 	c.Request = c.Request.WithContext(msgPricingCtx)
 
 	for {
@@ -2089,7 +2091,7 @@ func (h *OpenAIGatewayHandler) acquireOpenAIAccountSlot(
 	if selection == nil || selection.Account == nil {
 		markOpsRoutingCapacityLimited(c)
 		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
-		return nil, false
+		return nil, openAISlotAcquireFailed
 	}
 
 	// 终检与准入后绑定使用选号结果携带的门：composite 等跨分组调度解析出的
@@ -2119,7 +2121,7 @@ func (h *OpenAIGatewayHandler) acquireOpenAIAccountSlot(
 	if selection.WaitPlan == nil {
 		markOpsRoutingCapacityLimited(c)
 		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
-		return nil, false
+		return nil, openAISlotAcquireFailed
 	}
 
 	fastReleaseFunc, fastAcquired, err := h.concurrencyHelper.TryAcquireAccountSlot(
@@ -2286,28 +2288,6 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	}()
 	wsConn.SetReadLimit(service.ResolveOpenAIWSClientReadLimitBytes(h.cfg))
 
-	ctx := c.Request.Context()
-	maxIngressConnections := 0
-	if h.cfg != nil {
-		maxIngressConnections = h.cfg.Gateway.OpenAIWS.MaxIngressConnectionsPerAPIKey
-	}
-	ingressLease, ingressLeaseAcquired, ingressLeaseErr := h.concurrencyHelper.AcquireOpenAIWSIngressLease(ctx, apiKey.ID, maxIngressConnections)
-	if ingressLeaseErr != nil {
-		reqLog.Error("openai.websocket_ingress_lease_acquire_failed", zap.Error(ingressLeaseErr))
-		closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to reserve websocket ingress capacity")
-		return
-	}
-	if !ingressLeaseAcquired {
-		reqLog.Info("openai.websocket_ingress_capacity_rejected", zap.Int("max_ingress_connections_per_api_key", maxIngressConnections))
-		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "too many open websocket connections, please retry later")
-		return
-	}
-	if ingressLease != nil {
-		defer ingressLease.Release()
-		ctx = ingressLease.Context()
-		c.Request = c.Request.WithContext(ctx)
-	}
-
 	firstMessageTimeout := service.ResolveOpenAIWSClientFirstMessageTimeout(h.cfg)
 	msgType, firstMessage, err := service.ReadOpenAIWSClientMessage(
 		ctx,
@@ -2410,8 +2390,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	cyberBlockedThisConn := false
 
 	// 解析渠道级模型映射
-	channelMappingWS, _ := h.gatewayService.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, wsRouteModel)
-	wsForwardModel := openAIChannelForwardModel(channelMappingWS, wsRouteModel)
+	channelMappingWS, _ := h.gatewayService.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, reqModel)
+	wsForwardModel := openAIChannelForwardModel(channelMappingWS, reqModel)
 
 	var currentUserRelease func()
 	var currentAccountRelease func()
@@ -2496,6 +2476,13 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 		return nil
 	}
+	if err := checkSimpleModeTurnBilling(); err != nil {
+		var closeErr *service.OpenAIWSClientCloseError
+		if errors.As(err, &closeErr) {
+			closeOpenAIClientWS(wsConn, closeErr.StatusCode(), closeErr.Reason())
+		}
+		return
+	}
 
 	sessionHash := h.gatewayService.GenerateSessionHashWithFallback(
 		c,
@@ -2565,7 +2552,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			apiKey.GroupID,
 			previousResponseID,
 			sessionHash,
-			reqModel,
+			wsForwardModel,
 			failedAccountIDs,
 			requiredTransport,
 			requiredCapability,
@@ -3083,7 +3070,7 @@ func (h *OpenAIGatewayHandler) acquireImageGenerationSlot(c *gin.Context, stream
 
 // handleConcurrencyError handles concurrency-related acquire errors.
 func (h *OpenAIGatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotType string, streamStarted bool) {
-	status, errType, message := concurrencyErrorResponse(err, slotType)
+	status, errType, _, message := concurrencyErrorResponse(err, slotType)
 	h.handleStreamingAwareError(c, status, errType, message, streamStarted)
 }
 

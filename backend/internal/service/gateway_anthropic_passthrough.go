@@ -613,6 +613,10 @@ func extractAnthropicSSEDataLine(line string) (string, bool) {
 	return line[start:], true
 }
 
+func parseSSEUsagePassthrough(data string, usage *ClaudeUsage) {
+	(&GatewayService{}).parseSSEUsagePassthrough(data, usage)
+}
+
 func (s *GatewayService) parseSSEUsagePassthrough(data string, usage *ClaudeUsage) {
 	if usage == nil || data == "" || data == "[DONE]" {
 		return

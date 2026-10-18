@@ -56,6 +56,7 @@ type GrokMediaRequestInfo struct {
 	Size            string
 	SizeTier        string
 	Resolution      string
+	ImageResolution string
 	DurationSeconds int
 	InputImageURLs  []string
 	MaskImageURL    string

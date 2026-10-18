@@ -584,58 +584,8 @@ func hasNonEmptyBodyValue(v any) bool {
 	}
 }
 
-func checkAPIMode(opts *CheckOptions) string {
-	if opts == nil {
-		return MonitorAPIModeChatCompletions
-	}
-	return defaultAPIMode(opts.APIMode)
-}
 
-func bodyMergeDenyKey(provider, apiMode string) string {
-	if provider == MonitorProviderOpenAI {
-		return provider + ":" + defaultAPIMode(apiMode)
-	}
-	return provider
-}
 
-func validateReplaceRequestBody(provider, apiMode string, body map[string]any) error {
-	if provider != MonitorProviderOpenAI && provider != MonitorProviderGrok {
-		return nil
-	}
-	switch defaultAPIMode(apiMode) {
-	case MonitorAPIModeResponses:
-		if strings.TrimSpace(stringFromAny(body["instructions"])) == "" || !hasNonEmptyBodyValue(body["input"]) {
-			return fmt.Errorf("replace mode responses body: instructions and input are required")
-		}
-	case MonitorAPIModeChatCompletions:
-		if !hasNonEmptyBodyValue(body["messages"]) {
-			return fmt.Errorf("replace mode chat_completions body: messages are required")
-		}
-	}
-	return nil
-}
-
-func stringFromAny(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
-func hasNonEmptyBodyValue(v any) bool {
-	switch val := v.(type) {
-	case nil:
-		return false
-	case string:
-		return strings.TrimSpace(val) != ""
-	case []any:
-		return len(val) > 0
-	case []map[string]any:
-		return len(val) > 0
-	case []map[string]string:
-		return len(val) > 0
-	default:
-		return true
-	}
-}
 
 // postRawJSON 发送 POST + 已序列化好的 JSON 字节，限制响应体大小，返回响应字节、HTTP status、错误。
 // adapter 自行 marshal 是为了精确控制字段顺序与类型，所以这里直接收 []byte 而不是 any。

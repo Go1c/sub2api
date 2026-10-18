@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -198,6 +197,8 @@ type LiteLLMModelPricing struct {
 	CacheCreationInputTokenCostAbove1hr float64 `json:"cache_creation_input_token_cost_above_1hr"`
 	CacheReadInputTokenCost             float64 `json:"cache_read_input_token_cost"`
 	CacheReadInputTokenCostPriority     float64 `json:"cache_read_input_token_cost_priority"`
+	// CacheStorageCostPerTokenPerHour 显式上下文缓存存储单价（每 token 每小时，USD）。
+	CacheStorageCostPerTokenPerHour float64 `json:"cache_storage_cost_per_token_per_hour"`
 	LongContextInputTokenThreshold      int     `json:"long_context_input_token_threshold,omitempty"`
 	LongContextInputCostMultiplier      float64 `json:"long_context_input_cost_multiplier,omitempty"`
 	LongContextOutputCostMultiplier     float64 `json:"long_context_output_cost_multiplier,omitempty"`
@@ -232,6 +233,7 @@ type LiteLLMRawEntry struct {
 	CacheCreationInputTokenCostAbove1hr *float64 `json:"cache_creation_input_token_cost_above_1hr"`
 	CacheReadInputTokenCost             *float64 `json:"cache_read_input_token_cost"`
 	CacheReadInputTokenCostPriority     *float64 `json:"cache_read_input_token_cost_priority"`
+	CacheStorageCostPerTokenPerHour     *float64 `json:"cache_storage_cost_per_token_per_hour"`
 	LongContextInputTokenThreshold      *int     `json:"long_context_input_token_threshold"`
 	LongContextInputCostMultiplier      *float64 `json:"long_context_input_cost_multiplier"`
 	LongContextOutputCostMultiplier     *float64 `json:"long_context_output_cost_multiplier"`
@@ -450,7 +452,7 @@ func (s *PricingService) hasCustomPricingFiles() bool {
 	if s == nil || s.cfg == nil {
 		return false
 	}
-	return strings.TrimSpace(s.cfg.Pricing.FallbackFile) != "" || strings.TrimSpace(s.cfg.Pricing.OverrideFile) != ""
+	return strings.TrimSpace(s.cfg.Pricing.FallbackFile) != "" || strings.TrimSpace(s.cfg.Pricing.OverridesFile) != ""
 }
 
 // customPricingFilesFingerprint 返回 fallback、override 两个文件当前内容的联合 sha256。
@@ -460,7 +462,7 @@ func (s *PricingService) customPricingFilesFingerprint() string {
 		return ""
 	}
 	h := sha256.New()
-	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverrideFile} {
+	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverridesFile} {
 		var body []byte
 		if p := strings.TrimSpace(path); p != "" {
 			body, _ = os.ReadFile(p)
@@ -476,7 +478,7 @@ func (s *PricingService) customPricingFilesFingerprint() string {
 // validateCustomPricingFiles 要求每个已配置且存在的 fallback/override 文件可读且为 JSON
 // 对象，任一不满足即返回带路径的错误；文件不存在视为该层为空，属合法状态。
 func (s *PricingService) validateCustomPricingFiles() error {
-	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverrideFile} {
+	for _, path := range []string{s.cfg.Pricing.FallbackFile, s.cfg.Pricing.OverridesFile} {
 		p := strings.TrimSpace(path)
 		if p == "" {
 			continue
@@ -628,6 +630,22 @@ func (s *PricingService) downloadPricingData() error {
 	return nil
 }
 
+func (s *PricingService) buildPricingData(body []byte) (map[string]*LiteLLMModelPricing, string, error) {
+	data, err := s.parsePricingData(body)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, s.customPricingFilesFingerprint(), nil
+}
+
+func (s *PricingService) applyPricingOverrides(rawData map[string]json.RawMessage) map[string]json.RawMessage {
+	return rawData
+}
+
+func warnOrphanCacheTierFields([]string) {}
+
+func warnLopsidedLongContextLadders([]string) {}
+
 // parsePricingData 解析价格数据（处理各种格式）
 func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModelPricing, error) {
 	// 首先解析为 map[string]json.RawMessage
@@ -694,6 +712,9 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 		if entry.CacheReadInputTokenCostPriority != nil {
 			pricing.CacheReadInputTokenCostPriority = *entry.CacheReadInputTokenCostPriority
+		}
+		if entry.CacheStorageCostPerTokenPerHour != nil {
+			pricing.CacheStorageCostPerTokenPerHour = *entry.CacheStorageCostPerTokenPerHour
 		}
 		if entry.LongContextInputTokenThreshold != nil {
 			pricing.LongContextInputTokenThreshold = *entry.LongContextInputTokenThreshold
@@ -1173,7 +1194,21 @@ func normalizeModelNameForPricing(model string) string {
 		}
 		return canonical
 	}
-	return normalizeGeminiThinkingTierAlias(model)
+	return normalizeAntigravityClaudeTierAlias(normalizeGeminiThinkingTierAlias(model))
+}
+
+// normalizeAntigravityClaudeTierAlias maps Antigravity's Claude 5.5 thinking-tier
+// model IDs (claude-opus-5-5-high, claude-sonnet-5-5-low, ...) to the public base
+// model. The suffix selects reasoning depth rather than a separate token rate.
+func normalizeAntigravityClaudeTierAlias(model string) string {
+	for _, baseModel := range []string{"claude-opus-5-5", "claude-sonnet-5-5"} {
+		for _, tier := range []string{"-high", "-low", "-medium"} {
+			if model == baseModel+tier {
+				return baseModel
+			}
+		}
+	}
+	return model
 }
 
 // normalizeGeminiThinkingTierAlias maps Antigravity's Gemini thinking-tier
@@ -1552,23 +1587,6 @@ func (s *PricingService) ListModelNamesByProvider(provider string) []string {
 
 // isNumeric 检查字符串是否为纯数字
 
-// ListModelNamesByProvider returns all model names in the catalog whose
-// LiteLLMProvider matches the given provider string (case-insensitive).
-// The returned slice is sorted alphabetically.
-func (s *PricingService) ListModelNamesByProvider(provider string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	names := make([]string, 0)
-	for name, pricing := range s.pricingData {
-		if strings.ToLower(pricing.LiteLLMProvider) == provider {
-			names = append(names, name)
-		}
-	}
-	sort.Strings(names)
-	return names
-}
 
 func isNumeric(s string) bool {
 	for _, c := range s {

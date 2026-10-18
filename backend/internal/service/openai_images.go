@@ -729,10 +729,6 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 				ResponseBody:           respBody,
 				RetryableOnSameAccount: !shouldDisable && account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
 			}
-			if isOpenAIHTTPUpstreamAccessStateError(resp.StatusCode, upstreamMsg, respBody) {
-				return nil, newOpenAIUpstreamFailoverError(resp.StatusCode, resp.Header, respBody, upstreamMsg, retryableOnSameAccount)
-			}
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody, RetryableOnSameAccount: retryableOnSameAccount}
 		}
 		return s.handleOpenAIImagesErrorResponse(upstreamCtx, resp, c, account, upstreamModel)
 	}
@@ -781,7 +777,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			ImageOutputSizes: imageOutputSizes,
 		}, nil
 	} else {
-		nonStreamUsage, nonStreamCount, nonStreamSizes, err := s.handleOpenAIImagesNonStreamingResponse(resp, c)
+		nonStreamUsage, nonStreamCount, nonStreamSizes, err := s.handleOpenAIImagesNonStreamingResponse(upstreamCtx, resp, c, account, parsed)
 		if err != nil {
 			return nil, err
 		}
@@ -952,7 +948,7 @@ func cloneMultipartHeader(src textproto.MIMEHeader) textproto.MIMEHeader {
 	return dst
 }
 
-func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http.Response, c *gin.Context) (OpenAIUsage, int, []string, error) {
+func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, parsed *OpenAIImagesRequest) (OpenAIUsage, int, []string, error) {
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return OpenAIUsage{}, 0, nil, err

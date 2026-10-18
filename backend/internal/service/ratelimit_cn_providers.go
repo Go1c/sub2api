@@ -6,7 +6,21 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 )
+
+func cnBalanceCheckCooldown(cfg *config.Config) time.Duration {
+	minutes := 10
+	if cfg != nil && cfg.Gateway.CNProviders.BalanceCheckIntervalMinutes > 0 {
+		minutes = cfg.Gateway.CNProviders.BalanceCheckIntervalMinutes
+	}
+	cooldown := time.Duration(minutes) * time.Minute * 2
+	if cooldown < time.Minute {
+		cooldown = 10 * time.Minute
+	}
+	return cooldown
+}
 
 // 国产供应商（kimi/zhipu/deepseek）的响应式冷却辅助。
 //

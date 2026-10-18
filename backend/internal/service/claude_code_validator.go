@@ -23,6 +23,9 @@ var (
 
 	// System prompt 相似度阈值（默认 0.5，和 claude-relay-service 一致）
 	systemPromptThreshold = 0.5
+
+	claudeCodeSecurityMonitorPromptPrefix = "You are a security monitor for autonomous AI coding agents."
+	claudeCodeSecurityMonitorPromptMinLen = 10_000
 )
 
 // Claude Code 官方 System Prompt 模板
@@ -151,6 +154,24 @@ func (v *ClaudeCodeValidator) Validate(r *http.Request, body map[string]any) boo
 
 func isMessagesCountTokensPath(path string) bool {
 	return strings.HasSuffix(path, "/messages/count_tokens")
+}
+
+// isMaxTokensOneBody 判断请求体是否显式声明 max_tokens=1。
+// 兼容 JSON 反序列化出的 float64 与 ParsedRequest 复用时的 int。
+func isMaxTokensOneBody(body map[string]any) bool {
+	if body == nil {
+		return false
+	}
+	switch v := body["max_tokens"].(type) {
+	case float64:
+		return v == 1
+	case int:
+		return v == 1
+	case int64:
+		return v == 1
+	default:
+		return false
+	}
 }
 
 // hasClaudeCodeSystemPrompt 检查请求是否包含 Claude Code 系统提示词

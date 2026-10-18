@@ -30,6 +30,25 @@ func apiKeyHasConfiguredVideoPrice(apiKey *APIKey, resolution string) bool {
 	return apiKey != nil && apiKey.Group != nil && apiKey.Group.GetVideoPrice(resolution) != nil
 }
 
+func groupSearchPricePer1kFromAPIKey(apiKey *APIKey) *float64 {
+	if apiKey == nil || apiKey.Group == nil {
+		return nil
+	}
+	return apiKey.Group.GetSearchPricePer1k()
+}
+
+func groupAudioPriceConfigFromAPIKey(apiKey *APIKey) *audioPriceConfig {
+	if apiKey == nil || apiKey.Group == nil {
+		return nil
+	}
+	g := apiKey.Group
+	return &audioPriceConfig{
+		RealtimePerMin: g.AudioRealtimePricePerMin,
+		TTSPerMChars:   g.AudioTTSPricePerMillionChars,
+		STTPerHour:     g.AudioSTTPricePerHour,
+	}
+}
+
 func webSearchPricePerCallFromAPIKey(apiKey *APIKey) *float64 {
 	if apiKey == nil || apiKey.Group == nil {
 		return nil

@@ -224,6 +224,63 @@ func (b *balanceGateCacheStub) BatchGetUserPlatformQuotaCache(context.Context, [
 	return nil, nil
 }
 
+func productionBalanceUsageGateSettings(enabled bool) map[string]string {
+	enabledValue := "false"
+	if enabled {
+		enabledValue = "true"
+	}
+	return map[string]string{
+		SettingKeyBalanceUsageGateEnabled:     enabledValue,
+		SettingKeyBalanceUsageGateMinBalance:  "0.01",
+		SettingKeyBalanceUsageGateMinRecharge: "9.99",
+	}
+}
+
+func provideProductionBalanceGateService(t *testing.T, balance float64, settings map[string]string) *BillingCacheService {
+	t.Helper()
+	resetBalanceUsageGateCacheForTest()
+	settingSvc := NewSettingService(&balanceGateSettingRepoStub{values: settings}, nil)
+	svc := ProvideBillingCacheService(
+		&balanceGateCacheStub{balance: balance},
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		&config.Config{},
+		nil,
+		settingSvc,
+	)
+	t.Cleanup(svc.Stop)
+	return svc
+}
+
+func TestProvideBillingCacheService_BalanceUsageGateBlocksGiftBalanceWithoutRecharge(t *testing.T) {
+	svc := provideProductionBalanceGateService(t, 1, productionBalanceUsageGateSettings(true))
+
+	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1866, TotalRecharged: 0}, nil, &Group{}, nil)
+
+	require.ErrorIs(t, err, ErrBalanceUsageGateNotMet)
+	require.Contains(t, err.Error(), "最低充值")
+	require.NotContains(t, err.Error(), "余额需大于")
+}
+
+func TestProvideBillingCacheService_BalanceUsageGateAllowsRechargeAboveMinimum(t *testing.T) {
+	svc := provideProductionBalanceGateService(t, 1, productionBalanceUsageGateSettings(true))
+
+	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1866, TotalRecharged: 10}, nil, &Group{}, nil)
+
+	require.NoError(t, err)
+}
+
+func TestProvideBillingCacheService_BalanceUsageGateDisabledDoesNotBlock(t *testing.T) {
+	svc := provideProductionBalanceGateService(t, 1, productionBalanceUsageGateSettings(false))
+
+	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1866, TotalRecharged: 0}, nil, &Group{}, nil)
+
+	require.NoError(t, err)
+}
+
 func TestBillingCacheServiceCheckBillingEligibility_BalanceUsageGateRequiresRecharge(t *testing.T) {
 	resetBalanceUsageGateCacheForTest()
 	settingSvc := NewSettingService(&balanceGateSettingRepoStub{values: map[string]string{

@@ -149,7 +149,9 @@ type PlanGroupInfo struct {
 	DailyLimitUSD      *float64 `json:"daily_limit_usd"`
 	WeeklyLimitUSD     *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD    *float64 `json:"monthly_limit_usd"`
-	ModelScopes        []string `json:"supported_model_scopes"`
+	ModelScopes        []string  `json:"supported_model_scopes"`
+	I18n               GroupI18n `json:"i18n,omitempty"`
+}
 
 // PlanLimitSyncPreview describes how many existing subscriptions would receive
 // the current daily/weekly limits from a plan.
@@ -229,10 +231,6 @@ func (s *PaymentConfigService) ListPlansForSale(ctx context.Context) ([]*dbent.S
 
 func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanRequest) (*dbent.SubscriptionPlan, error) {
 	if err := validatePlanCreate(req); err != nil {
-		return nil, err
-	}
-	currency, err := normalizePlanCurrency(req.Currency)
-	if err != nil {
 		return nil, err
 	}
 	currency, err := normalizePlanCurrency(req.Currency)

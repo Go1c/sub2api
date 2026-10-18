@@ -34,6 +34,7 @@ func RegisterUserRoutes(
 	redisClient *redis.Client,
 ) {
 	rateLimiter := appmiddleware.NewRateLimiter(redisClient)
+	panelRateLimiter := middleware.NewPanelRateLimiter(redisClient, settingService)
 	userKey := func(c *gin.Context) string {
 		if subject, ok := middleware.GetAuthSubjectFromContext(c); ok && subject.UserID > 0 {
 			return fmt.Sprintf("user:%d", subject.UserID)

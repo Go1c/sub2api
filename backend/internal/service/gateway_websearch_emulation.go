@@ -164,7 +164,14 @@ func (s *GatewayService) handleWebSearchEmulation(
 	return writeEmulatedWebSearch(ctx, c, account, parsed.Body.Bytes(), parsed.Model, parsed.Stream)
 }
 
-	query := extractSearchQueryFromBody(parsed.Body.Bytes())
+// writeEmulatedWebSearch runs the search for the last user message and writes
+// an Anthropic Messages response (SSE when stream is true).
+func writeEmulatedWebSearch(
+	ctx context.Context, c *gin.Context, account *Account, body []byte, model string, stream bool,
+) (*ForwardResult, error) {
+	startTime := time.Now()
+
+	query := extractSearchQueryFromBody(body)
 	if query == "" {
 		return nil, fmt.Errorf("web search emulation: no query found in messages")
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -412,6 +413,7 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 		q = q.Where(usersubscription.StatusEQ(filters.Status))
 	}
 
+	includeSoftDeleted := filters.Status == "" || filters.Status == service.SubscriptionStatusRevoked
 	queryCtx := ctx
 	if includeSoftDeleted {
 		queryCtx = mixins.SkipSoftDelete(ctx)
@@ -498,25 +500,9 @@ func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int
 	client := clientFromContext(ctx, r.client)
 	// 月窗口字段已移除（订阅最长 30 天，月限≡总额度）
 	_, err := client.UserSubscription.UpdateOneID(id).
-		SetDailyWindowStart(start).
-		SetWeeklyWindowStart(start).
+		SetDailyWindowStart(dailyStart).
+		SetWeeklyWindowStart(periodicStart).
 		Save(ctx)
-	return r.translateConditionalWindowReset(ctx, client, id, n, err)
-}
-
-func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly bool, dailyStart, periodicStart time.Time) error {
-	client := clientFromContext(ctx, r.client)
-	update := client.UserSubscription.UpdateOneID(id)
-	if resetDaily {
-		update.SetDailyUsageUsd(0).SetDailyWindowStart(dailyStart)
-	}
-	if resetWeekly {
-		update.SetWeeklyUsageUsd(0).SetWeeklyWindowStart(periodicStart)
-	}
-	if resetMonthly {
-		update.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(periodicStart)
-	}
-	_, err := update.Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
 
@@ -731,7 +717,9 @@ func (r *userSubscriptionRepository) attachUserSubscriptionRelations(ctx context
 	assignedByIDs := make([]int64, 0, len(subs))
 	for i := range subs {
 		userIDs = append(userIDs, subs[i].UserID)
-		groupIDs = append(groupIDs, subs[i].GroupID)
+		if subs[i].GroupID != nil {
+			groupIDs = append(groupIDs, *subs[i].GroupID)
+		}
 		if subs[i].AssignedBy != nil {
 			assignedByIDs = append(assignedByIDs, *subs[i].AssignedBy)
 		}
@@ -770,7 +758,9 @@ func (r *userSubscriptionRepository) attachUserSubscriptionRelations(ctx context
 
 	for i := range subs {
 		subs[i].User = userByID[subs[i].UserID]
-		subs[i].Group = groupByID[subs[i].GroupID]
+		if subs[i].GroupID != nil {
+			subs[i].Group = groupByID[*subs[i].GroupID]
+		}
 		if subs[i].AssignedBy != nil {
 			subs[i].AssignedByUser = assignedByID[*subs[i].AssignedBy]
 		}
@@ -820,7 +810,7 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 		WeeklyLimitUSD:        m.WeeklyLimitUsd,
 		StartsAt:              m.StartsAt,
 		ExpiresAt:             m.ExpiresAt,
-		Status:                m.Status,
+		Status:                status,
 		ExhaustedAt:           m.ExhaustedAt,
 		ExpiredCreditLoggedAt: m.ExpiredCreditLoggedAt,
 		DailyWindowStart:      m.DailyWindowStart,

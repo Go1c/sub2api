@@ -1138,14 +1138,6 @@ func TestOpenAIWSConnPool_EffectiveMaxConnsDisabledFallbackHardCap(t *testing.T)
 	require.Equal(t, 8, pool.effectiveMaxConnsByAccount(account), "关闭动态模式后应保持旧行为")
 }
 
-func TestOpenAIWSConnPool_EffectiveMaxConnsByAccount_ModeRouterV2RespectsHardCap(t *testing.T) {
-	cfg := &config.Config{}
-	cfg.Gateway.OpenAIWS.ModeRouterV2Enabled = true
-	cfg.Gateway.OpenAIWS.MaxConnsPerAccount = 8
-	cfg.Gateway.OpenAIWS.DynamicMaxConnsByAccountConcurrencyEnabled = true
-	cfg.Gateway.OpenAIWS.OAuthMaxConnsFactor = 0.3
-	cfg.Gateway.OpenAIWS.APIKeyMaxConnsFactor = 0.6
-
 func TestOpenAIWSConnPool_AcquireRetainedSessionsUsesScaledCapacity(t *testing.T) {
 	for _, mode := range []struct {
 		name string

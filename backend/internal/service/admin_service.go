@@ -6,6 +6,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -61,11 +62,6 @@ type AdminService interface {
 	UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error)
 	DeleteGroup(ctx context.Context, id int64) error
 	DeleteGroupIfEmpty(ctx context.Context, id int64) error
-	ListCompositeRoutes(ctx context.Context, groupID int64) ([]CompositeModelRoute, error)
-	CreateCompositeRoute(ctx context.Context, groupID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
-	UpdateCompositeRoute(ctx context.Context, groupID, routeID int64, input CompositeRouteInput) (*CompositeModelRoute, error)
-	DeleteCompositeRoute(ctx context.Context, groupID, routeID int64) error
-	PreviewCompositeRoute(ctx context.Context, groupID int64, input CompositeRoutePreviewRequest) (*CompositeRouteDecision, error)
 	GetGroupAPIKeys(ctx context.Context, groupID int64, page, pageSize int) ([]APIKey, int64, error)
 	GetGroupRateMultipliers(ctx context.Context, groupID int64) ([]UserGroupRateEntry, error)
 	ClearGroupRateMultipliers(ctx context.Context, groupID int64) error
@@ -284,13 +280,11 @@ type CreateGroupInput struct {
 	VideoPrice720P     *float64
 	VideoPrice1080P    *float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；nil/负数按默认价 0.01 处理
-	WebSearchPricePerCall     *float64
-	WebSearchRateIndependent  bool
-	WebSearchRateMultiplier   *float64
-	LongContextPricingEnabled bool
-	ModelPricing              []ChannelModelPricing
-	ClaudeCodeOnly            bool   // 仅允许 Claude Code 客户端
-	FallbackGroupID           *int64 // 降级分组 ID
+	WebSearchPricePerCall    *float64
+	WebSearchRateIndependent bool
+	WebSearchRateMultiplier  *float64
+	ClaudeCodeOnly           bool   // 仅允许 Claude Code 客户端
+	FallbackGroupID          *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
 	// 模型路由配置（仅 anthropic 平台使用）
@@ -328,6 +322,7 @@ type CreateGroupInput struct {
 type UpdateGroupInput struct {
 	Name             string
 	Description      *string
+	I18n             GroupI18n
 	Platform         string
 	RateMultiplier   *float64 // 使用指针以支持设置为0
 	IsExclusive      *bool

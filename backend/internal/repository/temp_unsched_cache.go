@@ -35,30 +35,6 @@ end
 return {count, 0}
 `)
 
-const openAIAPIKeyHealthFailurePrefix = "openai_apikey_health:"
-
-var openAIAPIKeyHealthFailureScript = redis.NewScript(`
-	local key = KEYS[1]
-	local sequence_key = key .. ':sequence'
-	local now = redis.call('TIME')
-	local now_ms = (tonumber(now[1]) * 1000) + math.floor(tonumber(now[2]) / 1000)
-	local window_ms = tonumber(ARGV[1]) * 60 * 1000
-	local threshold = tonumber(ARGV[2])
-	local sequence = redis.call('INCR', sequence_key)
-
-	redis.call('ZREMRANGEBYSCORE', key, '-inf', now_ms - window_ms)
-	redis.call('ZADD', key, now_ms, tostring(now_ms) .. ':' .. tostring(sequence))
-	local count = redis.call('ZCARD', key)
-	local ttl = math.max(60, (tonumber(ARGV[1]) + 1) * 60)
-	redis.call('EXPIRE', key, ttl)
-	redis.call('EXPIRE', sequence_key, ttl)
-	if count >= threshold then
-		redis.call('DEL', key, sequence_key)
-		return {count, 1}
-	end
-	return {count, 0}
-`)
-
 var tempUnschedSetScript = redis.NewScript(`
 	local key = KEYS[1]
 	local new_until = tonumber(ARGV[1])
