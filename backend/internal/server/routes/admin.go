@@ -138,12 +138,6 @@ func RegisterAdminRoutes(
 		// 渠道智商检测
 		registerChannelIQRoutes(admin, h)
 
-		// 风控中心
-		registerContentModerationRoutes(admin, h)
-
-		// 独立提示词输入审计
-		registerPromptAuditRoutes(admin, h)
-
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
 
