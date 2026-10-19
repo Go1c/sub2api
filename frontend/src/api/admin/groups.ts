@@ -14,10 +14,6 @@ import type {
   CreateGroupRequest,
   UpdateGroupRequest,
   PaginatedResponse,
-  CompositeModelRoute,
-  CompositeModelRouteInput,
-  CompositeRoutePreviewRequest,
-  CompositeRouteDecision
 } from '@/types'
 
 export interface LiveCapability {
@@ -480,6 +476,7 @@ export const groupsAPI = {
   getAll,
   getByPlatform,
   getAllIncludingInactive,
+  getLiveCapability,
   getById,
   getModelsListCandidates,
   create,

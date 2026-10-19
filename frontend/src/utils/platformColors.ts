@@ -17,6 +17,8 @@ export type Platform =
   | 'deepseek'
   | 'composite'
 
+type CatalogPlatform = Platform | 'minimax' | 'opencode_go' | 'typesafe' | 'command_code' | 'cline'
+
 // ── Badge (bg + text + border, for inline badges with border) ───────
 const BADGE: Record<Platform, string> = {
   anthropic: 'bg-orange-500/10 text-orange-600 border-orange-500/30 dark:text-orange-400',
@@ -59,7 +61,7 @@ const BORDER: Record<Platform, string> = {
 const BORDER_DEFAULT = 'border-gray-200 dark:border-dark-700'
 
 // ── Border strong (higher-contrast platform tint, e.g. plaza group cards) ──
-const BORDER_STRONG: Record<Platform, string> = {
+const BORDER_STRONG: Record<CatalogPlatform, string> = {
   anthropic: 'border-orange-500/35 dark:border-orange-500/30',
   openai: 'border-green-500/35 dark:border-green-500/30',
   antigravity: 'border-purple-500/35 dark:border-purple-500/30',
@@ -79,7 +81,7 @@ const BORDER_STRONG_DEFAULT = 'border-gray-300 dark:border-dark-600'
 
 // ── Accent (single raw color per platform; consumers derive washes/tints
 //    from it via CSS color-mix, e.g. plaza paid-price zone) ──
-const ACCENT: Record<Platform, string> = {
+const ACCENT: Record<CatalogPlatform, string> = {
   anthropic: '#f97316', // orange-500
   openai: '#22c55e', // green-500
   antigravity: '#a855f7', // purple-500

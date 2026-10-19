@@ -1365,25 +1365,6 @@
               />
             </div>
           </div>
-          <p v-if="form.platform !== 'deepseek'" class="input-hint">
-            {{ t('admin.accounts.cnProviders.apiProtocol.responsesFallbackDesc') }}
-          </p>
-        </div>
-        <div v-else>
-          <label class="input-label">{{ t('admin.accounts.cnProviders.apiProtocol.endpoints') }}</label>
-          <div class="mt-2 space-y-3">
-            <div v-for="item in cnAdaptiveProtocolOptions" :key="item.value">
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
-                {{ t(`admin.accounts.cnProviders.apiProtocol.${item.labelKey}`) }}
-              </label>
-              <input
-                v-model="adaptiveBaseUrls[item.value]"
-                type="text"
-                class="input"
-                :data-testid="`cn-adaptive-base-url-${item.value}`"
-              />
-            </div>
-          </div>
           <p v-if="!cnSupportsNativeResponses(form.platform, currentOpenCodeOrCNMode())" class="input-hint">
             {{ t('admin.accounts.cnProviders.apiProtocol.responsesFallbackDesc') }}
           </p>
@@ -3972,7 +3953,7 @@ import type {
   OpenAIResponsesMode,
   OpenAIEndpointCapability,
   ProxyIPGroup
-} from '@/types'
+, TempUnschedulableScope} from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -4000,8 +3981,8 @@ import {
   type CnApiProtocol,
   type CnNativeApiProtocol,
   type HeaderOverrideRow
-} from '@/components/account/credentialsBuilder'
-import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
+, cnSupportsNativeResponses, type OpenCodeGoProtocolRule, type OpenCodeAccountMode, cloneOpenCodeGoProtocolRules, defaultOpenCodeProtocolRules, providerRoutesByModel} from '@/components/account/credentialsBuilder'
+import { formatDateTimeLocalInput, parseDateTimeLocalInput , getBrowserTimeZone} from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
@@ -4015,6 +3996,26 @@ import {
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
+import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
+import { applyExplicitCacheUpstreamCredentials , isOfficialGeminiBaseUrl} from '@/utils/geminiExplicitCache'
+
+const openCodeAccountMode = ref<OpenCodeAccountMode>('zen')
+
+const isOpenCodeGoPlatform = computed(() => form.platform === 'opencode_go')
+
+
+const openCodeGoProtocolRules = ref<OpenCodeGoProtocolRule[]>(
+  cloneOpenCodeGoProtocolRules(defaultOpenCodeProtocolRules('zen'))
+)
+
+const routesByModel = computed(() => providerRoutesByModel(form.platform))
+
+function currentOpenCodeOrCNMode(): string {
+  return isOpenCodeGoPlatform.value ? openCodeAccountMode.value : accountMode.value
+}
+
+const openaiFlattenNamespacesEnabled = ref(false)
+
 
 // Type for exposed OAuthAuthorizationFlow component
 // Note: defineExpose automatically unwraps refs, so we use the unwrapped types

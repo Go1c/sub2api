@@ -98,7 +98,12 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 
 const props = defineProps<{ account: Account }>()
 const { t } = useI18n()
-const eligibility = ref<OpenAIReferralEligibility | null>(props.account.extra?.codex_referral_snapshot ?? null)
+const snapshot = props.account.extra?.codex_referral_snapshot
+const eligibility = ref<OpenAIReferralEligibility | null>(
+  snapshot && typeof snapshot === 'object' && 'should_show' in snapshot
+    ? snapshot as OpenAIReferralEligibility
+    : null
+)
 const show = ref(false)
 const loading = ref(false)
 const sending = ref(false)
@@ -211,7 +216,10 @@ async function sendInvite() {
 watch(email, () => { confirmed.value = false })
 watch(() => props.account.id, () => {
   generation++
-  eligibility.value = props.account.extra?.codex_referral_snapshot ?? null
+  const snapshot = props.account.extra?.codex_referral_snapshot
+  eligibility.value = snapshot && typeof snapshot === 'object' && 'should_show' in snapshot
+    ? snapshot as OpenAIReferralEligibility
+    : null
   show.value = false
   fresh.value = false
   loading.value = false

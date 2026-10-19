@@ -128,7 +128,7 @@ import { useAuthStore } from '@/stores/auth'
 import { paymentAPI } from '@/api/payment'
 import type { PublicOrderVerifyResult } from '@/api/payment'
 import type { OrderStatus, PaymentOrder } from '@/types/payment'
-import { formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
+import { normalizePaymentCurrency } from '@/components/payment/currency'
 import { normalizePaymentMethodForDisplay, paymentMethodI18nKey } from './paymentUx'
 
 const i18n = useI18n()
@@ -178,15 +178,6 @@ const feeAmount = computed(() => {
   return Math.round((order.value.pay_amount - baseAmount.value) * 100) / 100
 })
 
-const localeCode = computed(() => {
-  const raw = i18n.locale as unknown
-  if (typeof raw === 'string') return raw
-  if (raw && typeof raw === 'object' && 'value' in raw) {
-    return String((raw as { value?: string }).value || '')
-  }
-  return undefined
-})
-
 const isSuccess = computed(() => {
   return isSuccessStatus(order.value?.status)
 })
@@ -214,10 +205,6 @@ const statusTitle = computed(() => {
 
 function normalizedOrderPaymentType(paymentType: string): string {
   return normalizePaymentMethodForDisplay(paymentType || '') || paymentType || ''
-}
-
-function formatGatewayAmount(value: number): string {
-  return formatPaymentAmount(value, currency.value, localeCode.value)
 }
 
 function setResolvedOrder(nextOrder: ResolvedOrder | null): void {
@@ -374,12 +361,12 @@ function isPaymentPopupWindow(): boolean {
   return window.name === PAYMENT_POPUP_WINDOW_NAME && !!window.opener && window.opener !== window
 }
 
-function notifyOpenerPaymentComplete(completedOrder: PaymentOrder): void {
+function notifyOpenerPaymentComplete(completedOrder: ResolvedOrder): void {
   if (typeof window === 'undefined' || !window.opener) return
   try {
     window.opener.postMessage({
       type: 'PAYMENT_POPUP_COMPLETED',
-      orderId: completedOrder.id,
+      orderId: 'id' in completedOrder ? completedOrder.id : undefined,
       outTradeNo: completedOrder.out_trade_no,
       status: completedOrder.status,
     }, window.location.origin)
@@ -400,7 +387,7 @@ function closePaymentPopupOnSuccess(): boolean {
   return true
 }
 
-function scheduleStatusRefresh(refreshOrder: (() => Promise<PaymentOrder | null>) | null): void {
+function scheduleStatusRefresh(refreshOrder: (() => Promise<ResolvedOrder | null>) | null): void {
   clearStatusRefreshTimer()
   if (!refreshOrder || (!isPending.value && !isFulfillmentFailed.value) || refreshAttempts.value >= STATUS_REFRESH_MAX_ATTEMPTS) {
     return

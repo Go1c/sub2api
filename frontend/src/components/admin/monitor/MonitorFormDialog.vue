@@ -523,6 +523,7 @@ interface CheckModeOption {
   value: CheckMode
   label: string
   hint: string
+  disabled?: boolean
 }
 
 const checkModeOptions = computed<CheckModeOption[]>(() => [

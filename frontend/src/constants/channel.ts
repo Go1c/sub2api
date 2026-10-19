@@ -24,3 +24,6 @@ export type BillingModelSource =
   | typeof BILLING_MODEL_SOURCE_UPSTREAM
   | typeof BILLING_MODEL_SOURCE_CHANNEL_MAPPED
   | typeof BILLING_MODEL_SOURCE_RESPONSE
+
+export const REASONING_EFFORT_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+export type ReasoningEffortLevel = (typeof REASONING_EFFORT_LEVELS)[number]

@@ -15,6 +15,16 @@ import type {
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
 
+export interface PublicOrderVerifyResult {
+  out_trade_no: string
+  status: string
+  paid: boolean
+  created_at: string
+  expires_at: string
+  bonus_amount?: number
+}
+
+
 export const paymentSubscriptionErrorMessages: Record<string, string> = {
   SUBSCRIPTION_CREDIT_EXHAUSTED: 'Subscription credit has been exhausted. Please renew or buy another plan.',
   SUBSCRIPTION_EXPIRED: 'Subscription has expired. Please renew or buy another plan.',

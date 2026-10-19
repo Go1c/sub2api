@@ -276,11 +276,42 @@ import { useClipboard } from '@/composables/useClipboard'
 import { buildCodexModelCatalogUrl, fetchCodexModelsManifest } from '@/api/codex'
 import type { GroupPlatform } from '@/types'
 import {
-  findCodexCatalogModel,
-  formatCodexReasoningEffortTomlLine,
-  parseCodexCatalogModels,
-  selectCodexConfigReasoningEffort
+  parseCodexCatalogModels
 } from '@/utils/codexCatalogConfig'
+
+type CodexModelManifestState = 'idle' | 'loading' | 'ready' | 'error'
+
+const CODEX_MODEL_CATALOG_CONFIG_PATH = '~/.codex/codex-models.json'
+
+
+const codexModelManifestState = ref<CodexModelManifestState>('idle')
+
+const codexModelManifestContent = ref('')
+
+const codexModelManifestModelCount = ref(0)
+
+const codexModelCatalogMode = ref<'remote' | 'file'>('remote')
+const codexModelCatalogPath = CODEX_MODEL_CATALOG_CONFIG_PATH
+const codexModelCatalogUrl = computed(() => buildCodexModelCatalogUrl(props.baseUrl || window.location.origin))
+
+const codexModelManifestResponseBytes = ref(0)
+
+const codexModelCatalogOversized = computed(() => codexModelManifestResponseBytes.value > 1024 * 1024)
+
+const codexLocalCatalogToml = computed(() => codexModelCatalogMode.value === 'file'
+  ? `model_catalog_json = "${CODEX_MODEL_CATALOG_CONFIG_PATH}"\n`
+  : '')
+
+let codexModelManifestController: AbortController | null = null
+
+let codexModelManifestRequestID = 0
+
+const showCodexModelCatalog = computed(() =>
+  props.show &&
+  (activeClientTab.value === 'codex' ||
+    (props.platform === 'openai' && activeClientTab.value === 'codex-ws'))
+)
+
 
 interface Props {
   show: boolean
@@ -449,13 +480,6 @@ const clientTabs = computed((): TabConfig[] => {
         { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
         { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
       ]
-    case 'grok':
-      return [
-        { id: 'grok', label: t('keys.useKeyModal.cliTabs.grokCli'), icon: TerminalIcon },
-        { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
-      ]
     case 'typesafe':
       return [
         { id: 'systemone', label: t('keys.useKeyModal.cliTabs.systemOne'), icon: TerminalIcon }
@@ -584,16 +608,6 @@ const platformNote = computed(() => {
 
 const showPlatformNote = computed(() => activeClientTab.value !== 'opencode')
 
-function resetCodexModelManifest() {
-  codexModelManifestController?.abort()
-  codexModelManifestController = null
-  codexModelManifestRequestID += 1
-  codexModelManifestState.value = 'idle'
-  codexModelManifestContent.value = ''
-  codexModelManifestModelCount.value = 0
-  codexModelManifestResponseBytes.value = 0
-}
-
 async function loadCodexModelManifest() {
   if (!showCodexModelCatalog.value || !props.apiKey) return
 
@@ -639,12 +653,6 @@ const codexCatalogModelSlugs = computed(() =>
 function selectCodexCatalogModel(preferredModel: string): string {
   if (codexCatalogModelSlugs.value.includes(preferredModel)) return preferredModel
   return codexCatalogModelSlugs.value[0] || preferredModel
-}
-
-function codexReasoningEffortTomlLine(modelSlug: string): string {
-  return formatCodexReasoningEffortTomlLine(
-    selectCodexConfigReasoningEffort(findCodexCatalogModel(codexModelManifestContent.value, modelSlug))
-  )
 }
 
 const escapeHtml = (value: string) => value
@@ -840,62 +848,6 @@ $env:CLAUDE_CODE_ATTRIBUTION_HEADER=0`
   ]
 }
 
-function generateGrokClaudeFiles(baseUrl: string, apiKey: string): FileConfig[] {
-  const environment = {
-    ANTHROPIC_BASE_URL: baseUrl,
-    ANTHROPIC_AUTH_TOKEN: apiKey,
-    ANTHROPIC_MODEL: 'grok-4.5',
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'grok-4.5',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'grok-4.5',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'grok-4.5',
-    ANTHROPIC_DEFAULT_FABLE_MODEL: 'grok-4.5',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'grok-4.5',
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
-  }
-  let path: string
-  let content: string
-
-  switch (activeTab.value) {
-    case 'unix':
-      path = 'Terminal'
-      content = Object.entries(environment)
-        .map(([name, value]) => `export ${name}="${value}"`)
-        .join('\n')
-      break
-    case 'cmd':
-      path = 'Command Prompt'
-      content = Object.entries(environment)
-        .map(([name, value]) => `set ${name}=${value}`)
-        .join('\n')
-      break
-    case 'powershell':
-      path = 'PowerShell'
-      content = Object.entries(environment)
-        .map(([name, value]) => `$env:${name}="${value}"`)
-        .join('\n')
-      break
-    default:
-      path = 'Terminal'
-      content = ''
-  }
-
-  const settingsPath = activeTab.value === 'unix'
-    ? '~/.claude/settings.json'
-    : '%USERPROFILE%\\.claude\\settings.json'
-
-  return [
-    { path, content },
-    {
-      path: settingsPath,
-      content: JSON.stringify({
-        $schema: 'https://json.schemastore.org/claude-code-settings.json',
-        env: environment
-      }, null, 2),
-      hint: t('keys.useKeyModal.claudeSettingsHint')
-    }
-  ]
-}
-
 function generateGeminiCliContent(baseUrl: string, apiKey: string): FileConfig {
   const model = 'gemini-2.0-flash'
   const modelComment = t('keys.useKeyModal.gemini.modelComment')
@@ -945,9 +897,6 @@ function generateOpenAIFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
 
-  const model = selectCodexCatalogModel('gpt-5.5')
-  const reasoningEffortLine = codexReasoningEffortTomlLine(model)
-
   // config.toml content
   const configContent = `model_provider = "OpenAI"
 model = "gpt-5.5"
@@ -961,10 +910,7 @@ windows_wsl_setup_acknowledged = true
 name = "OpenAI"
 base_url = "${baseUrl}"
 wire_api = "responses"
-${generateCodexProviderAuthConfig()}
-
-[features]
-goals = true`
+${generateCodexProviderAuthConfig(apiKey)}
 
 [features]
 ${codexModelCatalogMode.value === 'remote' ? 'api_key_model_discovery = true\n' : ''}goals = true`
@@ -1294,15 +1240,6 @@ supports_websockets = false${codexModelCatalogMode.value === 'remote' ? '\n\n[fe
   ]
 }
 
-function generateCodexProviderAuthConfig(): string {
-  if (codexAuthMode.value === 'api-key') {
-    return `requires_openai_auth = false
-http_headers = { "x-openai-actor-authorization" = "local-image-extension" }`
-  }
-
-  return 'requires_openai_auth = true'
-}
-
 
 function generateGrokClaudeFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const environment = {
@@ -1361,71 +1298,9 @@ function generateGrokClaudeFiles(baseUrl: string, apiKey: string): FileConfig[] 
   ]
 }
 
-function generateGrokFiles(baseUrl: string, apiKey: string): FileConfig[] {
-  const isWindows = activeTab.value === 'windows'
-  const configDir = isWindows ? '%userprofile%\\.grok' : '~/.grok'
-  const configContent = `[models]
-default = "grok"
-web_search = "grok"
-
-[model."grok"]
-model = "grok-4.5"
-base_url = "${baseUrl}"
-name = "Grok 4.5"
-api_key = "${apiKey}"
-api_backend = "responses"
-context_window = 1000000
-supports_backend_search = true`
-
-  return [{
-    path: `${configDir}/config.toml`,
-    content: configContent,
-    hint: t('keys.useKeyModal.grok.configTomlHint')
-  }]
-}
-
-function generateGrokCodexFiles(baseUrl: string, apiKey: string): FileConfig[] {
-  const isWindows = activeTab.value === 'windows'
-  const configPath = isWindows
-    ? '%USERPROFILE%\\.codex\\config.toml'
-    : '~/.codex/config.toml'
-  const configContent = `model_provider = "sub2api_grok"
-model = "grok-4.5"
-review_model = "grok-4.5"
-model_reasoning_effort = "xhigh"
-model_context_window = 1000000
-
-[model_providers.sub2api_grok]
-name = "Sub2API Grok"
-base_url = "${baseUrl}"
-env_key = "SUB2API_API_KEY"
-wire_api = "responses"
-supports_websockets = true
-
-[features]
-responses_websockets_v2 = true`
-  const environmentContent = isWindows
-    ? `$env:SUB2API_API_KEY="${apiKey}"`
-    : `export SUB2API_API_KEY="${apiKey}"`
-
-  return [
-    {
-      path: configPath,
-      content: configContent,
-      hint: t('keys.useKeyModal.grok.codexConfigTomlHint')
-    },
-    {
-      path: isWindows ? 'PowerShell' : 'Terminal',
-      content: environmentContent
-    }
-  ]
-}
-
 function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
-  const model = selectCodexCatalogModel('gpt-5.5')
-  const reasoningEffortLine = codexReasoningEffortTomlLine(model)
 
   // config.toml content with WebSocket v2
   const configContent = `model_provider = "OpenAI"
@@ -1441,7 +1316,7 @@ name = "OpenAI"
 base_url = "${baseUrl}"
 ${codexModelCatalogMode.value === 'remote' ? `model_catalog_url = "${escapeTomlBasicString(buildCodexModelCatalogUrl(baseUrl))}"\n` : ''}wire_api = "responses"
 supports_websockets = true
-${generateCodexProviderAuthConfig()}
+${generateCodexProviderAuthConfig(apiKey)}
 
 [features]
 responses_websockets_v2 = true

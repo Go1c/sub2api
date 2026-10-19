@@ -109,6 +109,9 @@ import {
   type InvitationRegistrationMode
 } from '@/utils/invitationRegistrationMode'
 
+const emailVerifyEnabled = ref(true)
+
+
 export type PendingOAuthCreateAccountPayload = {
   email: string
   password: string

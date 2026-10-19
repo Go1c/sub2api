@@ -77,6 +77,15 @@ export interface AffiliateTransferRecord {
   created_at: string
 }
 
+export interface AffiliateWithdrawResult {
+  ledger_id: number
+  user_id: number
+  amount: number
+  available_quota_after: number
+  frozen_quota_after: number
+  history_quota_after: number
+}
+
 export type AffiliateSignupBonusRecord = AffiliateInviteLog
 
 export interface AffiliateUserOverview {
@@ -265,6 +274,31 @@ export async function getUserOverview(
   return data
 }
 
+export interface WithdrawAffiliateQuotaRequest {
+  amount: number
+}
+
+export interface AffiliateWithdrawResponse {
+  result: AffiliateWithdrawResult
+  replayed: boolean
+}
+
+export async function withdrawUserQuota(
+  userId: number,
+  payload: WithdrawAffiliateQuotaRequest,
+  idempotencyKey: string,
+): Promise<AffiliateWithdrawResponse> {
+  const response = await apiClient.post<AffiliateWithdrawResult>(
+    `/admin/affiliates/users/${userId}/withdraw`,
+    payload,
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
+  return {
+    result: response.data,
+    replayed: response.headers?.['x-idempotency-replayed'] === 'true',
+  }
+}
+
 export const affiliatesAPI = {
   listUsers,
   lookupUsers,
@@ -277,6 +311,7 @@ export const affiliatesAPI = {
   listRebateRecords,
   listTransferRecords,
   getUserOverview,
+  withdrawUserQuota,
 }
 
 export default affiliatesAPI

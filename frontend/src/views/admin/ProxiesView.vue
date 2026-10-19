@@ -1148,7 +1148,11 @@ const editForm = reactive({
   port: 8080,
   username: '',
   password: '',
-  status: 'active' as 'active' | 'inactive' | 'expired'
+  status: 'active' as 'active' | 'inactive' | 'expired',
+  backup_proxy_id: null as number | null,
+  expires_at: '' as string,
+  expiry_warn_days: 7 as number,
+  fallback_mode: 'none' as 'none' | 'proxy' | 'direct',
 })
 
 const allProxiesForBackup = ref<Proxy[]>([])

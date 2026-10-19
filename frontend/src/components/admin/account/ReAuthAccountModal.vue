@@ -208,6 +208,17 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import OAuthAuthorizationFlow from '@/components/account/OAuthAuthorizationFlow.vue'
 
+const grokInitialInputMethod = computed<AuthInputMethod>(() => {
+  if (!isGrok.value) return 'manual'
+  const creds = (props.account?.credentials || {}) as Record<string, unknown>
+  const hasRT =
+    (typeof creds.refresh_token === 'string' && creds.refresh_token.trim() !== '') ||
+    (typeof creds.has_refresh_token === 'boolean' && creds.has_refresh_token)
+  if (hasRT) return 'refresh_token'
+  return 'sso_cookie'
+})
+
+
 // Type for exposed OAuthAuthorizationFlow component
 // Note: defineExpose automatically unwraps refs, so we use the unwrapped types
 interface OAuthFlowExposed {

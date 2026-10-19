@@ -4,8 +4,7 @@
  */
 
 import { apiClient } from '../client'
-import { listPlatformIds } from '@/constants/platformCatalog'
-import type { AccountPlatform, AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey } from '@/types'
+import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey } from '@/types'
 
 export interface AdminBindAuthIdentityChannelRequest {
   channel: string

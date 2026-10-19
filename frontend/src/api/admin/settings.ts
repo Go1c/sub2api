@@ -29,10 +29,10 @@ export interface AffiliateRebateTier {
   rebate_rate_percent: number | null;
 }
 
-/** 充值满赠档位：到账余额 >= threshold 赠送 bonus（PUT 整组替换，[] 清空） */
+/** 充值满赠档位：支付金额 ≥ min_amount 时赠送 bonus_percent%（PUT 整组替换，[] 清空） */
 export interface RechargeBonusTierInput {
-  threshold: number;
-  bonus: number;
+  min_amount: number;
+  bonus_percent: number;
 }
 
 export type FrontendLocaleCode = "en" | "zh" | "zh-Hant";
@@ -522,6 +522,19 @@ contact_channels: ContactChannel[];
   turnstile_enabled: boolean;
   turnstile_site_key: string;
   turnstile_secret_key_configured: boolean;
+  tencent_captcha_enabled: boolean;
+  tencent_captcha_app_id: string;
+  tencent_captcha_app_secret_key_configured: boolean;
+  tencent_captcha_cloud_secret_id_configured: boolean;
+  tencent_captcha_cloud_secret_key_configured: boolean;
+  tencent_captcha_region: string;
+  aliyun_captcha_enabled: boolean;
+  aliyun_captcha_access_key_id: string;
+  aliyun_captcha_access_key_secret_configured: boolean;
+  aliyun_captcha_scene_id: string;
+  aliyun_captcha_prefix: string;
+  aliyun_captcha_region: string;
+  forwarded_client_ip_headers: string[];
   api_key_acl_trust_forwarded_ip: boolean;
 
   // LinuxDo Connect OAuth settings
@@ -639,6 +652,12 @@ contact_channels: ContactChannel[];
   enable_client_dateline_normalization: boolean;
   antigravity_user_agent_version: string;
   openai_codex_user_agent: string;
+  openai_codex_client_version: string;
+  openai_codex_client_version_synced: string;
+  openai_codex_version_auto_sync_enabled: boolean;
+  claude_code_client_version: string;
+  claude_code_client_version_synced: string;
+  claude_code_version_auto_sync_enabled: boolean;
   // codex_cli_only 加固
   min_codex_version: string;
   max_codex_version: string;
@@ -666,7 +685,6 @@ contact_channels: ContactChannel[];
   payment_balance_recharge_multiplier: number;
   payment_subscription_usd_to_cny_rate: number;
   payment_recharge_fee_rate: number;
-  payment_recharge_bonus_tiers?: RechargeBonusTier[];
   payment_recharge_bonus_mode?: string;
   payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy: string;
@@ -680,6 +698,7 @@ contact_channels: ContactChannel[];
   payment_cancel_rate_limit_unit: string;
   payment_cancel_rate_limit_window_mode: string;
   payment_alipay_force_qrcode?: boolean;
+  payment_alipay_mobile_precreate_deep_link?: boolean;
   payment_recharge_bonus_enabled?: boolean;
   payment_recharge_bonus_tiers?: RechargeBonusTierInput[];
   payment_visible_method_alipay_source?: string;
@@ -879,6 +898,19 @@ contact_channels?: ContactChannel[];
   turnstile_enabled?: boolean;
   turnstile_site_key?: string;
   turnstile_secret_key?: string;
+  tencent_captcha_enabled?: boolean;
+  tencent_captcha_app_id?: string;
+  tencent_captcha_app_secret_key?: string;
+  tencent_captcha_cloud_secret_id?: string;
+  tencent_captcha_cloud_secret_key?: string;
+  tencent_captcha_region?: string;
+  aliyun_captcha_enabled?: boolean;
+  aliyun_captcha_access_key_id?: string;
+  aliyun_captcha_access_key_secret?: string;
+  aliyun_captcha_scene_id?: string;
+  aliyun_captcha_prefix?: string;
+  aliyun_captcha_region?: string;
+  forwarded_client_ip_headers?: string[];
   api_key_acl_trust_forwarded_ip?: boolean;
   linuxdo_connect_enabled?: boolean;
   linuxdo_connect_client_id?: string;
@@ -976,6 +1008,12 @@ contact_channels?: ContactChannel[];
   enable_client_dateline_normalization?: boolean;
   antigravity_user_agent_version?: string;
   openai_codex_user_agent?: string;
+  openai_codex_client_version?: string;
+  openai_codex_client_version_synced?: string;
+  openai_codex_version_auto_sync_enabled?: boolean;
+  claude_code_client_version?: string;
+  claude_code_client_version_synced?: string;
+  claude_code_version_auto_sync_enabled?: boolean;
   // codex_cli_only 加固
   min_codex_version?: string;
   max_codex_version?: string;
@@ -1001,7 +1039,6 @@ contact_channels?: ContactChannel[];
   payment_balance_recharge_multiplier?: number;
   payment_subscription_usd_to_cny_rate?: number;
   payment_recharge_fee_rate?: number;
-  payment_recharge_bonus_tiers?: RechargeBonusTier[];
   payment_recharge_bonus_mode?: string;
   payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy?: string;
@@ -1015,6 +1052,7 @@ contact_channels?: ContactChannel[];
   payment_cancel_rate_limit_unit?: string;
   payment_cancel_rate_limit_window_mode?: string;
   payment_alipay_force_qrcode?: boolean;
+  payment_alipay_mobile_precreate_deep_link?: boolean;
   payment_recharge_bonus_enabled?: boolean;
   payment_recharge_bonus_tiers?: RechargeBonusTierInput[];
   payment_visible_method_alipay_source?: string;
@@ -1430,7 +1468,7 @@ export async function updateRectifierSettings(
  * Matches backend dto.OpenAIFastPolicyRule.
  */
 export interface OpenAIFastPolicyRule {
-  service_tier: "all" | "priority" | "flex";
+  service_tier: "all" | "priority" | "flex" | "missing";
   action: "pass" | "filter" | "block" | "force_priority";
   scope: "all" | "oauth" | "apikey" | "bedrock";
   user_ids?: number[];
@@ -1604,6 +1642,31 @@ export async function updateGeoBlockSettings(
   return data;
 }
 
+export interface PanelRateLimitSettings {
+  enabled: boolean;
+  user_rpm: number;
+  heavy_rpm: number;
+  exempt_admin: boolean;
+  public_ip_rpm: number;
+}
+
+export async function getPanelRateLimitSettings(): Promise<PanelRateLimitSettings> {
+  const { data } = await apiClient.get<PanelRateLimitSettings>(
+    "/admin/settings/panel-rate-limit",
+  );
+  return data;
+}
+
+export async function updatePanelRateLimitSettings(
+  settings: PanelRateLimitSettings,
+): Promise<PanelRateLimitSettings> {
+  const { data } = await apiClient.put<PanelRateLimitSettings>(
+    "/admin/settings/panel-rate-limit",
+    settings,
+  );
+  return data;
+}
+
 export const settingsAPI = {
   getModelMarket,
   updateModelMarket,
@@ -1627,6 +1690,8 @@ export const settingsAPI = {
   updateRateLimit429CooldownSettings,
   getStreamTimeoutSettings,
   updateStreamTimeoutSettings,
+  getPanelRateLimitSettings,
+  updatePanelRateLimitSettings,
   getRectifierSettings,
   updateRectifierSettings,
   getBetaPolicySettings,

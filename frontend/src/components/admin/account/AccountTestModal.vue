@@ -377,6 +377,35 @@ import { ADMIN_UI_REQUEST_HEADER } from '@/api/adminUIRequest'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel } from '@/types'
 
+const grokTestMode = ref<'text' | 'image' | 'video' | 'search' | 'tts' | 'stt' | 'realtime'>('text')
+
+const uploadImageDataURL = ref('')
+
+const uploadImagePreview = ref('')
+
+const uploadImageName = ref('')
+
+const uploadAudioDataURL = ref('')
+
+const uploadAudioName = ref('')
+
+const imageFileInput = ref<HTMLInputElement | null>(null)
+
+const audioFileInput = ref<HTMLInputElement | null>(null)
+
+const isGrokAccount = computed(() => props.account?.platform === 'grok')
+
+const grokTestModeOptions = computed(() => [
+  { value: 'text', label: t('admin.accounts.grok.testModeText') },
+  { value: 'image', label: t('admin.accounts.grok.testModeImage') },
+  { value: 'video', label: t('admin.accounts.grok.testModeVideo') },
+  { value: 'search', label: t('admin.accounts.grok.testModeSearch') },
+  { value: 'tts', label: t('admin.accounts.grok.testModeTTS') },
+  { value: 'stt', label: t('admin.accounts.grok.testModeSTT') },
+  { value: 'realtime', label: t('admin.accounts.grok.testModeRealtime') }
+])
+
+
 const { t } = useI18n()
 const { copyToClipboard } = useClipboard()
 

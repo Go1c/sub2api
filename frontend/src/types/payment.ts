@@ -59,10 +59,6 @@ export interface MethodLimit {
   single_max: number
   fee_rate: number
   available: boolean
-  /** Optional operator-facing label (e.g. EasyPay custom method) */
-  display_name?: string
-  /** ISO 4217 currency for this payment method when instances agree */
-  currency?: string
   /** Effective credit multiplier when all instances for this method agree */
   balance_recharge_multiplier?: number
 }
@@ -72,12 +68,6 @@ export interface MethodLimitsResponse {
   methods: Record<string, MethodLimit>
   global_min: number  // widest min across all methods; 0 = no minimum
   global_max: number  // widest max across all methods; 0 = no maximum
-}
-
-/** Recharge bonus tier: credited balance >= threshold grants bonus (backend returns tiers sorted by threshold desc) */
-export interface RechargeBonusTier {
-  threshold: number
-  bonus: number
 }
 
 /** Response from /payment/checkout-info API — single call for the payment page */
@@ -105,8 +95,6 @@ export interface CheckoutInfoResponse {
   alipay_force_qrcode?: boolean
   /** Recharge bonus (充值满赠): highest matched tier bonus is granted on top of credited balance */
   recharge_bonus_enabled?: boolean
-  /** Sorted by threshold desc; empty array = no tiers */
-  recharge_bonus_tiers?: RechargeBonusTier[]
 }
 
 // ==================== Orders ====================
@@ -118,8 +106,6 @@ export interface PaymentOrder {
   pay_amount: number
   currency?: string
   fee_rate: number
-  /** ISO 4217 payment currency (e.g. CNY, USD); omitted for legacy rows */
-  currency?: string
   payment_type: string
   out_trade_no: string
   status: OrderStatus
@@ -166,6 +152,10 @@ export interface SubscriptionPlan {
   original_price?: number
   /** Display-only ISO 4217 currency label (e.g. "NZD"); empty means no label */
   currency?: string
+  peak_rate_enabled?: boolean
+  peak_start?: string
+  peak_end?: string
+  peak_rate_multiplier?: number
   validity_days: number
   validity_unit: string
   /** Stored as JSON string in backend; API layer should parse before use */

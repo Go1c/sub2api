@@ -308,6 +308,12 @@ import { sanitizeUrl } from '@/utils/url'
 import { CODEX_DOWNLOAD_URL } from '@/constants/codexDownload'
 import type { SitePage } from '@/types'
 import { normalizeSitePages, resolveDocsNavItem, resolveSitePageNavItem } from '@/utils/sitePages'
+import { FeatureFlags , isFeatureFlagEnabled} from '@/utils/featureFlags'
+import { resolveRouteMetaKeys } from '@/router/title'
+import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
+
+const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
+
 
 const router = useRouter()
 const route = useRoute()

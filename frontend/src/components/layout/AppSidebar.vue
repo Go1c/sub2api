@@ -209,6 +209,12 @@ import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import Icon from '@/components/icons/Icon.vue'
+
+const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
+
+const flagPluginManagement = makeSidebarFlag(FeatureFlags.pluginManagement)
+
 
 interface NavItem {
   path: string
@@ -267,9 +273,6 @@ const sidebarNavRef = ref<HTMLElement | null>(null)
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
 const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
-
-// Track which parent nav groups are expanded
-const expandedGroups = ref<Set<string>>(new Set())
 
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
@@ -734,19 +737,6 @@ const flagChannelMonitor = makeSidebarFlag(FeatureFlags.channelMonitor)
 const flagPayment = makeSidebarFlag(FeatureFlags.payment)
 const flagUserSubscriptions = makeSidebarFlag(FeatureFlags.userSubscriptions)
 const flagAvailableChannels = makeSidebarFlag(FeatureFlags.availableChannels)
-const flagSubscription = makeSidebarFlag(FeatureFlags.subscription)
-
-// 购买入口文案随站点计费模式切换：仅充值 → 「充值」，仅订阅 → 「订阅」，否则「充值/订阅」。
-const purchaseNavLabel = computed(() => {
-  switch (resolveSiteBillingMode(appStore.cachedPublicSettings)) {
-    case 'recharge_only':
-      return t('nav.recharge')
-    case 'subscription_only':
-      return t('nav.subscribe')
-    default:
-      return t('nav.buySubscription')
-  }
-})
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagCheckin = () => checkinStore.enabled
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)

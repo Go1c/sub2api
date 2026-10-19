@@ -47,6 +47,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       common,
       forkRootGaps,
       checkin,
+      upstreamGaps,
     ] = await Promise.all([
       import('./locales/en/admin/accounts'),
       import('./locales/en/admin/ops'),
@@ -60,6 +61,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       import('./locales/en/common'),
       import('./locales/en/forkRootGaps'),
       import('@/features/checkin/locales/en'),
+      import('./locales/en/upstreamGaps'),
     ])
     return [
       { admin: accounts.default },
@@ -74,6 +76,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       common.default,
       forkRootGaps.default,
       checkin.default,
+      upstreamGaps.default,
     ]
   }
 
@@ -94,6 +97,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       common,
       forkRootGaps,
       checkin,
+      upstreamGaps,
     ] = await Promise.all([
       import('./locales/zh/admin/accounts'),
       import('./locales/zh/admin/ops'),
@@ -108,6 +112,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       import('./locales/zh/common'),
       import('./locales/zh/forkRootGaps'),
       import('@/features/checkin/locales/zh'),
+      import('./locales/zh/upstreamGaps'),
     ])
     return [
       { admin: accounts.default },
@@ -123,6 +128,7 @@ async function loadModularOverlays(locale: LocaleCode): Promise<LocaleMessages[]
       common.default,
       forkRootGaps.default,
       checkin.default,
+      upstreamGaps.default,
     ]
   }
 
@@ -232,21 +238,23 @@ export const i18n = createI18n({
 
 const loadedLocales = new Set<LocaleCode>()
 
+export async function resolveLocaleMessages(locale: LocaleCode): Promise<LocaleMessages> {
+  const loader = localeLoaders[locale]
+  const module = await loader()
+  let messages: LocaleMessages = module.default
+  const overlays = await loadModularOverlays(locale)
+  for (const overlay of overlays) {
+    messages = deepMergeMessages(messages, overlay)
+  }
+  return messages
+}
+
 export async function loadLocaleMessages(locale: LocaleCode): Promise<void> {
   if (loadedLocales.has(locale)) {
     return
   }
 
-  const loader = localeLoaders[locale]
-  const module = await loader()
-  let messages: LocaleMessages = module.default
-
-  const overlays = await loadModularOverlays(locale)
-  for (const overlay of overlays) {
-    messages = deepMergeMessages(messages, overlay)
-  }
-
-  i18n.global.setLocaleMessage(locale, messages)
+  i18n.global.setLocaleMessage(locale, await resolveLocaleMessages(locale))
   loadedLocales.add(locale)
 }
 

@@ -23,7 +23,6 @@
             :payment-type="paymentState.paymentType"
             :pay-url="paymentState.payUrl"
             :order-type="paymentState.orderType"
-            :pay-amount="paymentState.payAmount"
             :provider-key="paymentState.providerKey"
             :payment-mode="paymentState.paymentMode"
             @done="onPaymentDone"
@@ -67,10 +66,10 @@
                     <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">🎁 {{ t('payment.rechargeBonusLabel') }}</span>
                     <span
                       v-for="tier in rechargeBonusTiers"
-                      :key="`${tier.threshold}-${tier.bonus}`"
+                      :key="`${tier.min_amount}-${tier.bonus_percent}`"
                       class="badge badge-success text-[10px]"
                     >
-                      {{ t('payment.rechargeBonusTier', { threshold: formatBonusAmount(tier.threshold), bonus: formatBonusAmount(tier.bonus) }) }}
+                      {{ t('payment.rechargeBonusTier', { threshold: formatBonusAmount(tier.min_amount), bonus: formatBonusAmount(calculateRechargeBonus(tier.min_amount, tier.bonus_percent)) }) }}
                     </span>
                   </div>
                   <AmountInput
@@ -345,13 +344,13 @@ import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
-import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
+import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
-import { METHOD_ORDER, getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
+import { METHOD_ORDER, getPaymentPopupFeatures,} from '@/components/payment/providerConfig'
 import {
   PAYMENT_RECOVERY_STORAGE_KEY,
   buildCreateOrderPayload,
@@ -369,10 +368,77 @@ import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { DEFAULT_PAYMENT_CURRENCY, formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
-import { planValiditySuffix as validitySuffixOf } from '@/components/payment/validity'
 import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSelector.vue'
 import { buildPaymentErrorToastMessage, describePaymentScenarioError } from './paymentUx'
 import { hasWechatResumeQuery, parseWechatResumeRoute, stripWechatResumeQuery } from './paymentWechatResume'
+import { normalizeRechargeBonusMode , quoteRechargeBonus, calculateRechargeBonus} from '@/utils/rechargeBonus'
+
+const selectedMethod = ref('')
+
+const renderedHelpText = computed(() => DOMPurify.sanitize(
+  marked.parse(checkout.value.help_text || '', { async: false, gfm: true, breaks: false }),
+))
+
+
+const selectedLimit = computed(() => visibleMethods.value[selectedMethod.value])
+
+const localeCode = computed(() => {
+  const raw = i18n.locale as unknown
+  if (typeof raw === 'string') return raw
+  if (raw && typeof raw === 'object' && 'value' in raw) {
+    return String((raw as { value?: string }).value || '')
+  }
+  return undefined
+})
+
+function currencyFractionDigits(currency: string): number {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+    }).resolvedOptions().maximumFractionDigits ?? 2
+  } catch {
+    return 2
+  }
+}
+
+const bonusQuote = computed(() => quoteRechargeBonus(rechargeBonusTiers.value, validAmount.value, {
+  multiplier: balanceRechargeMultiplier.value,
+  mode: rechargeBonusMode.value,
+  currencyDigits: currencyFractionDigits(selectedCurrency.value),
+}))
+
+
+const subscriptionEnabled = computed(() => resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.subscription))
+
+const creditedAmount = computed(() => Math.round((validAmount.value * balanceRechargeMultiplier.value) * 100) / 100)
+
+const selectedCurrency = computed(() => normalizePaymentCurrency(selectedLimit.value?.currency))
+
+function roundPaymentAmount(value: number, currency: string): number {
+  if (!Number.isFinite(value)) return 0
+  const factor = 10 ** currencyFractionDigits(currency)
+  return Math.round(value * factor) / factor
+}
+
+function ceilPaymentAmount(value: number, currency: string): number {
+  if (!Number.isFinite(value)) return 0
+  const factor = 10 ** currencyFractionDigits(currency)
+  return Math.ceil(value * factor) / factor
+}
+
+function subscriptionPaymentAmountForCurrency(value: number, currency: string): number {
+  const rate = subscriptionUsdToCnyRate.value
+  if (rate <= 0 || currency !== DEFAULT_PAYMENT_CURRENCY) return roundPaymentAmount(value, currency)
+  return roundPaymentAmount(value * rate, currency)
+}
+
+function formatSelectedPaymentAmount(value: number): string {
+  return formatPaymentAmount(value, selectedCurrency.value, localeCode.value)
+}
+
+const payBaseAmount = computed(() => bonusQuote.value.payBase)
+
 
 const i18n = useI18n()
 const { t } = i18n
@@ -659,19 +725,15 @@ const balanceRechargeMultiplier = computed(() => {
 // 订阅 CNY 换算汇率（1 USD = X CNY）。0 = 未配置，订阅保持 price 直付（与后端 opt-in 条件严格镜像）。
 const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
-  return Number.isFinite(rate) && rate > 0 ? rate : 0
+  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : 0
 })
-const rechargeBonusTiers = computed(() => normalizeRechargeBonusTiers(checkout.value.recharge_bonus_tiers))
 const rechargeBonusMode = computed(() => normalizeRechargeBonusMode(checkout.value.recharge_bonus_mode))
 
 // 充值满赠：tiers 由后端按 threshold 降序返回，取第一个 creditedAmount >= threshold 的档位（即满足的最高档）
 const rechargeBonusTiers = computed(() =>
   checkout.value.recharge_bonus_enabled ? (checkout.value.recharge_bonus_tiers ?? []) : [],
 )
-const rechargeBonus = computed(() => {
-  const hit = rechargeBonusTiers.value.find(tier => creditedAmount.value >= tier.threshold)
-  return hit ? hit.bonus : 0
-})
+const rechargeBonus = computed(() => bonusQuote.value.bonus)
 const creditedTotal = computed(() => Math.round((creditedAmount.value + rechargeBonus.value) * 100) / 100)
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
@@ -740,7 +802,6 @@ const totalAmount = computed(() =>
     ? Math.round((payBaseAmount.value + feeAmount.value) * 100) / 100
     : payBaseAmount.value
 )
-const showActualPay = computed(() => feeRate.value > 0 || discountAmount.value > 0)
 
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
@@ -795,7 +856,7 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
       type,
       display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
-      available: ml?.available !== false && amountFitsMethod(subscriptionTotalAmountForCurrency(price, currency), type),
+      available: ml?.available !== false && amountFitsMethod(subscriptionTotalAmountForCurrency(planPrice, currency), type),
     }
   })
   if (subscriptionBalancePaymentEnabled.value) {
@@ -808,18 +869,6 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   return sortPaymentMethods(options.map(option => option.type)).map((type) =>
     options.find(option => option.type === type)!,
   )
-})
-
-const subFeeAmount = computed(() => {
-  const price = selectedPlan.value?.price ?? 0
-  if (feeRate.value <= 0 || price <= 0) return 0
-  return Math.ceil(((price * feeRate.value) / 100) * 100) / 100
-})
-
-const subTotalAmount = computed(() => {
-  const price = selectedPlan.value?.price ?? 0
-  if (feeRate.value <= 0 || price <= 0) return price
-  return Math.round((price + subFeeAmount.value) * 100) / 100
 })
 
 const subscriptionBalancePaymentEnabled = computed(() => checkout.value.subscription_balance_payment_enabled === true)
@@ -1062,10 +1111,6 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       return
     }
     if (decision.kind === 'stripe_route') {
-      window.location.href = decision.paymentState.payUrl
-      return
-    }
-    if (decision.kind === 'airwallex_route') {
       window.location.href = decision.paymentState.payUrl
       return
     }
