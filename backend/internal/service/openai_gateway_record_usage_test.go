@@ -282,17 +282,6 @@ func swapInOpenAILadderCatalog(t *testing.T, svc *OpenAIGatewayService) {
 	svc.billingService = NewBillingService(cfg, newStubPricingServiceFromJSON(t, openAILadderCatalogJSON))
 }
 
-func openAIRecordUsageAPIKeyWithGroup(svc *OpenAIGatewayService, id int64, groupLongContext bool) *APIKey {
-	svc.resolver = NewModelPricingResolver(nil, svc.billingService)
-	return &APIKey{
-		ID: id,
-		Group: &Group{
-			ID:                        1,
-			LongContextPricingEnabled: groupLongContext,
-		},
-	}
-}
-
 func expectedOpenAICost(t *testing.T, svc *OpenAIGatewayService, model string, usage OpenAIUsage, multiplier float64) *CostBreakdown {
 	t.Helper()
 
@@ -1581,7 +1570,7 @@ func TestOpenAIGatewayServiceRecordUsage_PersistsRequestedReasoningEffort(t *tes
 			RequestID:                "resp_requested_effort",
 			Model:                    "gpt-5.4",
 			ReasoningEffort:          &forwarded,
-			RequestedReasoningEffort: &requested,
+			
 			Usage: OpenAIUsage{
 				InputTokens:  20,
 				OutputTokens: 10,

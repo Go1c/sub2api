@@ -65,7 +65,7 @@ func (r *adminUpdateUserSubRepoStub) UpdateStatus(context.Context, int64, string
 func (r *adminUpdateUserSubRepoStub) UpdateNotes(context.Context, int64, string) error {
 	panic("unexpected UpdateNotes")
 }
-func (r *adminUpdateUserSubRepoStub) ActivateWindows(context.Context, int64, time.Time) error {
+func (r *adminUpdateUserSubRepoStub) ActivateWindows(context.Context, int64, time.Time, time.Time) error {
 	panic("unexpected ActivateWindows")
 }
 func (r *adminUpdateUserSubRepoStub) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time) error {

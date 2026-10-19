@@ -741,20 +741,13 @@ func (s *subscriptionCreditPurchaseFulfillerStub) FulfillOrder(ctx context.Conte
 	return s.err
 }
 
-type paymentFulfillmentAffiliateRepoStub struct {
+type paymentFulfillmentEmbeddedAffiliateRepoStub struct {
 	*affiliateSignupBonusRepoStub
 	accrueCalls []paymentFulfillmentAffiliateAccrueCall
 	accrueErr   error
 }
 
-type paymentFulfillmentAffiliateAccrueCall struct {
-	inviterID     int64
-	inviteeUserID int64
-	amount        float64
-	sourceOrderID *int64
-}
-
-func newPaymentFulfillmentAffiliateRepoStub(inviteeUserID int64) *paymentFulfillmentAffiliateRepoStub {
+func newPaymentFulfillmentAffiliateRepoStub(inviteeUserID int64) *paymentFulfillmentEmbeddedAffiliateRepoStub {
 	inviterID := int64(1)
 	base := newAffiliateSignupBonusRepoStub()
 	now := time.Now()
@@ -771,10 +764,10 @@ func newPaymentFulfillmentAffiliateRepoStub(inviteeUserID int64) *paymentFulfill
 			CreatedAt: now,
 		},
 	}
-	return &paymentFulfillmentAffiliateRepoStub{affiliateSignupBonusRepoStub: base}
+	return &paymentFulfillmentEmbeddedAffiliateRepoStub{affiliateSignupBonusRepoStub: base}
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, _ int, sourceOrderID *int64) (bool, error) {
+func (r *paymentFulfillmentEmbeddedAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, _ int, sourceOrderID *int64) (bool, error) {
 	if r.accrueErr != nil {
 		return false, r.accrueErr
 	}
@@ -792,54 +785,13 @@ func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inv
 	return true, nil
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+func (r *paymentFulfillmentEmbeddedAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
 	return 0, nil
-}
-
-func ensurePaymentAuditOrderActionUniqueIndex(t *testing.T, ctx context.Context, client *dbent.Client) {
-	t.Helper()
-	_, err := client.ExecContext(ctx, `
-CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_audit_logs_order_action_uniq
-ON payment_audit_logs(order_id, action)`)
-	require.NoError(t, err)
 }
 
 // paymentFulfillmentRedeemRepo / paymentFulfillmentRedeemCacheStub /
 // createPaymentFulfillmentSubscriptionOrder 供 payment_easypay_replay_test.go 共用，
 // 移植自上游 v2.0.58；Create/Use 直接复用内嵌 lifecycle stub 的实现。
-
-type paymentFulfillmentRedeemCacheStub struct {
-	count          int
-	getCalls       int
-	incrementCalls int
-	acquireCalls   int
-	releaseCalls   int
-}
-
-type paymentFulfillmentRedeemRepo struct {
-	paymentOrderLifecycleRedeemRepo
-}
-
-func (c *paymentFulfillmentRedeemCacheStub) GetRedeemAttemptCount(context.Context, int64) (int, error) {
-	c.getCalls++
-	return c.count, nil
-}
-
-func (c *paymentFulfillmentRedeemCacheStub) IncrementRedeemAttemptCount(context.Context, int64) error {
-	c.incrementCalls++
-	c.count++
-	return nil
-}
-
-func (c *paymentFulfillmentRedeemCacheStub) AcquireRedeemLock(context.Context, string, time.Duration) (bool, error) {
-	c.acquireCalls++
-	return true, nil
-}
-
-func (c *paymentFulfillmentRedeemCacheStub) ReleaseRedeemLock(context.Context, string) error {
-	c.releaseCalls++
-	return nil
-}
 
 func createPaymentFulfillmentSubscriptionOrder(
 	t *testing.T,

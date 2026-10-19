@@ -199,14 +199,6 @@ func (m *mockAccountRepoForGemini) ListShadowsByParent(ctx context.Context, pare
 	return nil, nil
 }
 
-func (m *mockAccountRepoForGemini) RevertProxyFallback(ctx context.Context, accountID int64) error {
-	return nil
-}
-
-func (m *mockAccountRepoForGemini) ListShadowsByParent(ctx context.Context, parentID int64) ([]*Account, error) {
-	return nil, nil
-}
-
 // Verify interface implementation
 var _ AccountRepository = (*mockAccountRepoForGemini)(nil)
 

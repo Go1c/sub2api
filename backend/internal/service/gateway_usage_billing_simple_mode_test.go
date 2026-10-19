@@ -19,7 +19,7 @@ func TestBuildUsageBillingCommandSimpleModeOnlyChargesAPIKeyWindows(t *testing.T
 		APIKey:                     apiKey,
 		Account:                    account,
 		APIKeyService:              &apiKeyQuotaUpdaterStub{},
-		SimpleModeKeyRateLimitOnly: true,
+		
 	}
 
 	cmd := buildUsageBillingCommand("simple-req", nil, p)
@@ -65,7 +65,7 @@ func TestApplyUsageBillingSimpleModeDeduplicatesWithoutBalanceEffects(t *testing
 		APIKey:                     &APIKey{ID: 13, Quota: 100, RateLimit5h: 10},
 		Account:                    &Account{ID: 9, Type: AccountTypeAPIKey},
 		APIKeyService:              &apiKeyQuotaUpdaterStub{},
-		SimpleModeKeyRateLimitOnly: true,
+		
 	}
 
 	first, err := applyUsageBilling(context.Background(), "simple-req", nil, p, &billingDeps{deferredService: &DeferredService{}}, repo)
@@ -90,7 +90,7 @@ func TestApplyUsageBillingSimpleModeRejectsLegacyFallback(t *testing.T) {
 			p := &postUsageBillingParams{
 				Cost: &CostBreakdown{ActualCost: 1}, User: &User{ID: 7},
 				APIKey: &APIKey{ID: 13, RateLimit5h: 10}, Account: &Account{ID: 9},
-				SimpleModeKeyRateLimitOnly: true,
+				
 			}
 			var repo UsageBillingRepository = &simpleModeUsageBillingRepoStub{}
 			requestID := "simple-req"
@@ -129,7 +129,7 @@ func TestFinalizeSimpleModePreservesLastUsedWithoutFinancialCacheWrites(t *testi
 				Cost: &CostBreakdown{ActualCost: 3}, User: &User{ID: 7},
 				APIKey:  &APIKey{ID: 13, GroupID: &groupID, RateLimit5h: 10},
 				Account: &Account{ID: 9}, IsSubscriptionBill: subscription,
-				SimpleModeKeyRateLimitOnly: true,
+				
 			}
 			finalizePostUsageBilling(context.Background(), p, &billingDeps{
 				billingCacheService: &BillingCacheService{cache: cache, cacheWriteChan: writes},

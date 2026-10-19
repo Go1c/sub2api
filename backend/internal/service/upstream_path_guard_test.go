@@ -146,7 +146,7 @@ func TestOpenAIResponsesRequestPathSuffixRejectsNonConformingSubpaths(t *testing
 	}
 }
 
-func TestIsOpenAIResponsesInputTokensRequestPath(t *testing.T) {
+func TestIsOpenAIResponsesInputTokensRequestPath_MergedDuplicate(t *testing.T) {
 	for _, path := range []string{"/v1/responses/input_tokens", "/responses/input_tokens", "/backend-api/codex/responses/input_tokens"} {
 		c := newResponsesSuffixTestContext(t, path)
 		require.True(t, IsOpenAIResponsesInputTokensRequestPath(c), "path=%s", path)

@@ -130,7 +130,7 @@ func TestOpenAISetupTokenWSCompatibility(t *testing.T) {
 	headers, session, err := svc.buildOpenAIWSHeaders(
 		context.Background(), c, account, "setup-token-value",
 		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
-		true, "", "", "", "gpt-5.1-codex", "",
+		true, "", "", "",
 	)
 	require.NoError(t, err)
 	require.Equal(t, "Bearer setup-token-value", headers.Get("authorization"))

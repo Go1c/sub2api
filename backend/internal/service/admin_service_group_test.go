@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
@@ -23,14 +24,6 @@ type groupRepoStubForAdmin struct {
 	updated  *Group // 记录 Update 调用的参数
 	getByID  *Group // GetByID 返回值
 	getErr   error  // GetByID 返回的错误
-	createID int64
-
-	getByIDByID map[int64]*Group
-
-	deleteAccountGroupsByGroupIDFn func(groupID int64) (int64, error)
-	bindAccountsToGroupFn          func(groupID int64, accountIDs []int64) error
-	getAccountIDsByGroupIDsFn      func(groupIDs []int64) ([]int64, error)
-
 	createID int64
 
 	getByIDByID map[int64]*Group
@@ -1884,7 +1877,7 @@ func TestAdminService_UpdateGroup_InvalidRequestFallbackAllowsAntigravity(t *tes
 	require.Equal(t, fallbackID, *repo.updated.FallbackGroupIDOnInvalidRequest)
 }
 
-func TestAdminService_CreateGroup_WithVideoPricing(t *testing.T) {
+func TestAdminService_CreateGroup_WithVideoPricing_MergedDuplicate(t *testing.T) {
 	repo := &groupRepoStubForAdmin{}
 	svc := &adminServiceImpl{groupRepo: repo}
 	price480P, price720P, price1080P := 0.08, 0.12, 0.18
@@ -1904,7 +1897,7 @@ func TestAdminService_CreateGroup_WithVideoPricing(t *testing.T) {
 	require.InDelta(t, 0.18, *repo.created.VideoPrice1080P, 1e-12)
 }
 
-func TestAdminService_UpdateGroup_WithVideoPricing(t *testing.T) {
+func TestAdminService_UpdateGroup_WithVideoPricing_MergedDuplicate(t *testing.T) {
 	repo := &groupRepoStubForAdmin{getByID: &Group{ID: 1, Name: "existing-grok", Platform: PlatformGrok, Status: StatusActive}}
 	svc := &adminServiceImpl{groupRepo: repo}
 	price480P, price720P, price1080P := 0.09, 0.13, 0.19

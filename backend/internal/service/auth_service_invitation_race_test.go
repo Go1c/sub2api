@@ -71,7 +71,7 @@ func (s *raceSafeUserRepo) GetByID(_ context.Context, id int64) (*User, error) {
 	return &clone, nil
 }
 
-func (s *raceSafeUserRepo) Update(context.Context, *User) error {
+func (s *raceSafeUserRepo) Update(context.Context, *User, UserUpdateFields) error {
 	return nil
 }
 

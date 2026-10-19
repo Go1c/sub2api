@@ -204,7 +204,7 @@ func TestMultiplierOnlyIntervalIsValid(t *testing.T) {
 	require.NoError(t, ValidateIntervals([]PricingInterval{{
 		MinTokens:       199999,
 		InputMultiplier: pricingMultiplier(2),
-	}}))
+	}}, BillingModeToken))
 	require.NoError(t, checkIntervalsHavePrices(ChannelModelPricing{
 		Models: []string{"grok-4.6"},
 		Intervals: []PricingInterval{{
@@ -221,7 +221,7 @@ func TestChannelMultipliersMustBePositive(t *testing.T) {
 	require.Error(t, ValidateIntervals([]PricingInterval{{
 		MinTokens:       100,
 		InputMultiplier: &zero,
-	}}))
+	}}, BillingModeToken))
 }
 
 func TestCalculateTokenCostContextTierEnablement(t *testing.T) {

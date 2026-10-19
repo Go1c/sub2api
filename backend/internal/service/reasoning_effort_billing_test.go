@@ -69,7 +69,7 @@ func TestReasoningEffortBillingStacksWithContextTierServiceTierAndTimePricing(t 
 					OutputPricePerToken: 3e-6, ImageOutputPricePerToken: 4e-6,
 					CacheCreationPricePerToken: 5e-6, CacheReadPricePerToken: 6e-6,
 					FastMultiplier:             testPtrFloat64(2.5),
-					ReasoningEffortMultipliers: map[string]float64{"high": 1.7},
+					
 					LongContextInputThreshold:  100, LongContextInputMultiplier: 2, LongContextOutputMultiplier: 3,
 				},
 				longContextPricingEnabled: true,

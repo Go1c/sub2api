@@ -75,7 +75,7 @@ func TestComputeRechargeBonusAmountUnsortedTiersStillFindsHighestMatch(t *testin
 // normalizeRechargeBonusTiers — 非法项剔除、去重、降序
 // ---------------------------------------------------------------------------
 
-func TestNormalizeRechargeBonusTiers(t *testing.T) {
+func TestNormalizeRechargeBonusTiers_MergedDuplicate(t *testing.T) {
 	t.Parallel()
 
 	t.Run("drops invalid entries", func(t *testing.T) {

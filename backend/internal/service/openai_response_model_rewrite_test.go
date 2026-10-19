@@ -72,7 +72,7 @@ func TestMappedResponseModelForwarding(t *testing.T) {
 						var err error
 						if kind == "json" {
 							if passthrough {
-								_, err = svc.handleNonStreamingResponsePassthrough(context.Background(), resp, c, account, "public", mapped)
+								_, err = svc.handleNonStreamingResponsePassthrough(context.Background(), resp, c, "public", mapped)
 							} else {
 								_, err = svc.handleNonStreamingResponse(context.Background(), resp, c, account, "public", mapped)
 							}

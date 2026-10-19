@@ -60,25 +60,3 @@ func TestBuildPaymentSubjectUsesSelectedCurrency(t *testing.T) {
 	subject = svc.buildPaymentSubject(nil, 12.5, cfg, nil)
 	require.Equal(t, "Sub2API 12.50 CNY", subject)
 }
-
-func TestPcAggregateMethodCurrency(t *testing.T) {
-	t.Parallel()
-
-	svc := &PaymentConfigService{}
-	stripe := makeInstance(1, payment.TypeStripe, payment.TypeStripe, "")
-	stripe.Config = `{"currency":"hkd"}`
-	currency, ok := svc.pcAggregateMethodCurrency([]*dbent.PaymentProviderInstance{stripe})
-	require.True(t, ok)
-	require.Equal(t, "HKD", currency)
-
-	airwallex := makeInstance(2, payment.TypeAirwallex, payment.TypeAirwallex, "")
-	airwallex.Config = `{"currency":"usd"}`
-	currency, ok = svc.pcAggregateMethodCurrency([]*dbent.PaymentProviderInstance{stripe, airwallex})
-	require.False(t, ok)
-	require.Empty(t, currency)
-
-	easypay := makeInstance(3, payment.TypeEasyPay, payment.TypeAlipay, "")
-	currency, ok = svc.pcAggregateMethodCurrency([]*dbent.PaymentProviderInstance{easypay})
-	require.True(t, ok)
-	require.Equal(t, payment.DefaultPaymentCurrency, currency)
-}

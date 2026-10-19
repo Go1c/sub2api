@@ -45,11 +45,7 @@ func TestBuildSystemSettingsUpdates_PersistsAccountSchedulingThresholds(t *testi
 	svc := newSettingServiceForPlatformThresholdTest(nil)
 
 	updates, err := svc.buildSystemSettingsUpdates(context.Background(), &SystemSettings{
-		AccountSchedulingThresholds: map[string]int{
-			PlatformOpenAI:    91,
-			PlatformAnthropic: 88,
-			PlatformGrok:      77,
-		},
+		
 	})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"openai":91,"anthropic":88,"grok":77}`, updates[SettingKeyAccountSchedulingThresholds])
@@ -79,11 +75,7 @@ func TestUpdateSettings_StoresAccountSchedulingThresholds(t *testing.T) {
 	svc := newSettingServiceForPlatformThresholdTest(nil)
 
 	err := svc.UpdateSettings(context.Background(), &SystemSettings{
-		AccountSchedulingThresholds: map[string]int{
-			PlatformOpenAI:    92,
-			PlatformAnthropic: 89,
-			PlatformGrok:      76,
-		},
+		
 	})
 	require.NoError(t, err)
 

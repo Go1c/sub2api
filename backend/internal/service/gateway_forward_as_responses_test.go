@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -344,9 +346,9 @@ func TestOpus55ResponsesSignedThinkingBufferedAndStreamed(t *testing.T) {
 		svc := &GatewayService{}
 		var err error
 		if stream {
-			_, err = svc.handleResponsesStreamingResponse(resp, c, "public-opus", "claude-opus-5-5", nil, time.Now())
+			_, err = svc.handleResponsesStreamingResponse(resp, c, "public-opus", "claude-opus-5-5", nil, time.Now(), apicompat.ResponsesClientToolMapping{})
 		} else {
-			_, err = svc.handleResponsesBufferedStreamingResponse(resp, c, "public-opus", "claude-opus-5-5", nil, time.Now())
+			_, err = svc.handleResponsesBufferedStreamingResponse(resp, c, "public-opus", "claude-opus-5-5", nil, time.Now(), apicompat.ResponsesClientToolMapping{})
 		}
 		require.NoError(t, err)
 		require.Contains(t, rec.Body.String(), "anthropic-thinking-v1:")
