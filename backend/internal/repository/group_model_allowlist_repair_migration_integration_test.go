@@ -32,11 +32,12 @@ RETURNING id
 
 	applyGroupModelAllowlistRepair(ctx, t, tx)
 
-	// 重命名保留原数据，且新列恢复 NOT NULL DEFAULT '{}' 的形状。
-	var allowlist string
+	// 拷贝保留原数据，旧列仍在，新列恢复 NOT NULL DEFAULT '{}' 的形状。
+	var allowlist, legacy string
 	require.NoError(t, tx.QueryRowContext(ctx,
-		"SELECT model_allowlist::text FROM groups WHERE id = $1", groupID).Scan(&allowlist))
+		"SELECT model_allowlist::text, models_list_config::text FROM groups WHERE id = $1", groupID).Scan(&allowlist, &legacy))
 	require.JSONEq(t, `{"enabled":true,"models":["claude-sonnet-5"]}`, allowlist)
+	require.JSONEq(t, `{"enabled":true,"models":["claude-sonnet-5"]}`, legacy)
 	requireModelAllowlistColumnShape(ctx, t, tx)
 
 	// 可重放：重复执行不报错也不改变结果。

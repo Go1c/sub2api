@@ -138,12 +138,6 @@ func RegisterAdminRoutes(
 		// 渠道智商检测
 		registerChannelIQRoutes(admin, h)
 
-		// 风控中心
-		registerContentModerationRoutes(admin, h)
-
-		// 独立提示词输入审计
-		registerPromptAuditRoutes(admin, h)
-
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
 
@@ -857,7 +851,6 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 		monitors.POST("/:id/duplicate", h.Admin.ChannelMonitor.Duplicate)
 		monitors.PUT("/:id", h.Admin.ChannelMonitor.Update)
 		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
-		monitors.POST("/:id/duplicate", h.Admin.ChannelMonitor.Duplicate)
 		monitors.POST("/:id/run", h.Admin.ChannelMonitor.Run)
 		monitors.GET("/:id/history", h.Admin.ChannelMonitor.History)
 	}

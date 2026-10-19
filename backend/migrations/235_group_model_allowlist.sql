@@ -1,19 +1,29 @@
--- 235: groups.models_list_config 更名为 model_allowlist，语义从「仅影响 /v1/models 展示」
--- 升级为分组级模型白名单（同时约束模型列表接口与请求准入）。数据原样保留。
+-- 235: 新增 groups.model_allowlist，并从 models_list_config 拷贝已有配置。
+--
+-- 不重命名、不删除 models_list_config。新程序的 ent 仍同时查询这两列，
+-- 线上旧镜像也仍查询旧列。改名会在新进程听端口之前就让密钥和用量列表 500。
 DO $$
 BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'groups'
-          AND column_name = 'models_list_config'
-    ) AND NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'groups'
-          AND column_name = 'model_allowlist'
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = 'groups'::regclass
+          AND attname = 'model_allowlist'
+          AND NOT attisdropped
     ) THEN
-        ALTER TABLE groups RENAME COLUMN models_list_config TO model_allowlist;
+        ALTER TABLE groups
+            ADD COLUMN model_allowlist JSONB NOT NULL DEFAULT '{}'::jsonb;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = 'groups'::regclass
+          AND attname = 'models_list_config'
+          AND NOT attisdropped
+    ) THEN
+        UPDATE groups
+           SET model_allowlist = models_list_config
+         WHERE COALESCE(model_allowlist, '{}'::jsonb) = '{}'::jsonb
+           AND COALESCE(models_list_config, '{}'::jsonb) <> '{}'::jsonb;
     END IF;
 END
 $$;
