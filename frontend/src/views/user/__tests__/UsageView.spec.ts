@@ -574,6 +574,59 @@ describe('user UsageView', () => {
     expect(text).toContain('claude-opus-4-7')
     expect(text).toContain('↳claude-opus-4-6')
   })
+
+  it('shows api key and group names instead of raw objects', async () => {
+    query.mockResolvedValue({
+      items: [
+        {
+          request_id: 'req-user-key-name',
+          model: 'gemini',
+          api_key: {
+            id: 2832,
+            user_id: 142,
+            key: 'sk-secret-should-not-render',
+            name: 'Gemini',
+          },
+          group: { id: 24, name: 'fallback', rate_multiplier: 1 },
+          actual_cost: 0,
+          total_cost: 0,
+          input_tokens: 1,
+          output_tokens: 1,
+          created_at: '2026-03-08T00:00:00Z',
+          duration_ms: 1,
+        },
+      ],
+      total: 1,
+      pages: 1,
+    })
+    list.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 0 })
+    getStats.mockResolvedValue({ endpoints: [] })
+    getDashboardModels.mockResolvedValue({ models: [] })
+    getDashboardSnapshotV2.mockResolvedValue({ trend: [], groups: [] })
+
+    const wrapper = mount(UsageView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          TablePageLayout: TablePageLayoutStub,
+          Pagination: true,
+          EmptyState: true,
+          Select: true,
+          DateRangePicker: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="usage-api-key"]').text()).toBe('Gemini')
+    expect(wrapper.get('[data-testid="usage-group"]').text()).toBe('fallback')
+    expect(wrapper.text()).not.toContain('sk-secret-should-not-render')
+    expect(wrapper.text()).not.toContain('rate_multiplier')
+    wrapper.unmount()
+  })
 })
 
 describe('UsageView subscription feature flag', () => {
