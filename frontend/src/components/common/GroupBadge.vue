@@ -100,11 +100,6 @@ const peakRateText = computed(() =>
 
 const peakRateTitle = computed(() => peakRateText.value)
 
-const peakRateClass = computed(
-  () =>
-    'px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-200/80 text-amber-800 dark:bg-amber-800/50 dark:text-amber-300'
-)
-
 // 是否显示右侧标签
 const showLabel = computed(() => {
   if (!props.showRate) return false

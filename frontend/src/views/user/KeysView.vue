@@ -1417,6 +1417,28 @@ import {
   buildCcswitchImportUrl as buildCcSwitchImportDeeplink,
   type CcswitchClientType as CcSwitchClientType
 } from '@/utils/ccswitch'
+import { KEY_GROUP_PROVIDERS, KEY_GROUP_PROVIDER_ICONS , type KeyGroupProvider, getKeyGroupProvider} from '@/utils/keyGroupProviders'
+import { platformBadgeLightClass } from '@/utils/platformColors'
+
+const createProvider = ref<KeyGroupProvider>('anthropic')
+
+const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
+  value,
+  label: t(`keys.providers.${value}`),
+  count: groups.value.filter((group) => getKeyGroupProvider(group.platform) === value).length
+})))
+
+const formGroupOptions = computed(() => showEditModal.value
+  ? groupOptions.value
+  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform) === createProvider.value)
+)
+
+const selectCreateProvider = (provider: KeyGroupProvider) => {
+  if (createProvider.value === provider) return
+  createProvider.value = provider
+  formData.value.group_id = null
+}
+
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {

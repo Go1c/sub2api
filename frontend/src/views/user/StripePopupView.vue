@@ -170,7 +170,6 @@ async function initStripe(clientSecret: string, publishableKey: string) {
 
 let pollInFlight = false
 function startPolling() {
-  let inFlight = false
   pollTimer = setInterval(async () => {
     if (pollInFlight) return
     pollInFlight = true

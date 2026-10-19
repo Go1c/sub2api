@@ -70,7 +70,6 @@ export interface ChannelMonitor {
   enabled: boolean
   interval_seconds: number
   jitter_seconds?: number
-  api_mode?: APIMode
   last_checked_at: string | null
   created_by: number
   created_at: string
@@ -142,18 +141,11 @@ export interface CreateParams {
   enabled?: boolean
   interval_seconds: number
   jitter_seconds?: number
-  api_mode?: APIMode
   template_id?: number | null
   extra_headers?: Record<string, string>
   body_override_mode?: BodyOverrideMode
   body_override?: Record<string, unknown> | null
   compatibility_probe_enabled?: boolean
-  /** 缺省 probe */
-  check_mode?: CheckMode
-  /** 配额模式必填：数据源账号（provider 需与账号平台一致）。
-   * update 语义：>0=换绑，0=解绑（切回 probe 模式时前端发 0 清空存量关联）；
-   * create 绝不发 0——后端会把 0 存成 &0 触发外键违约。 */
-  account_id?: number | null
   iq_question?: string
   iq_answer?: string
   iq_fuzzy_match?: boolean

@@ -261,7 +261,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePaymentStore } from '@/stores/payment'
 import { useAppStore } from '@/stores'
@@ -275,10 +275,50 @@ import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
 import paymentIcon from '@/assets/icons/payment.svg'
 import {
-  createAlipayDeepLinkLauncher,
   type AlipayDeepLinkLauncher,
   type AlipayDeepLinkState,
 } from './alipayDeepLink'
+import { formatPaymentAmount , normalizePaymentCurrency} from '@/components/payment/currency'
+
+let alipayLauncher: AlipayDeepLinkLauncher | null = null
+
+
+const deepLinkState = ref<AlipayDeepLinkState>('idle')
+
+function reopenAlipay() {
+  alipayLauncher?.launch()
+}
+
+function saveQRCode() {
+  const canvas = qrCanvas.value
+  if (!canvas) return
+  const link = document.createElement('a')
+  link.href = canvas.toDataURL('image/png')
+  link.download = `alipay-${props.outTradeNo || props.orderId}.png`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
+
+const deepLinkFallbackVisible = ref(false)
+
+const isMobileAlipayDeepLink = computed(() => props.mobileAlipayDeepLink === true && isAlipay.value && !!qrUrl.value)
+
+
+const paymentCurrency = computed(() => normalizePaymentCurrency(props.currency))
+
+const localeCode = computed(() => {
+  const raw = i18n.locale as unknown
+  if (typeof raw === 'string') return raw
+  if (raw && typeof raw === 'object' && 'value' in raw) {
+    return String((raw as { value?: string }).value || '')
+  }
+  return undefined
+})
+
+const showQRCode = computed(() => !!qrUrl.value && (!isMobileAlipayDeepLink.value || deepLinkFallbackVisible.value))
+
 
 const props = defineProps<{
   orderId: number
@@ -289,9 +329,11 @@ const props = defineProps<{
   paymentType: string
   payUrl?: string
   orderType?: string
-  payAmount?: number
   providerKey?: string
   paymentMode?: string
+  outTradeNo?: string
+  mobileAlipayDeepLink?: boolean
+  currency?: string
 }>()
 
 type PaymentOutcome = 'success' | 'cancelled' | 'expired' | 'fulfillment_failed'

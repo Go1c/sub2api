@@ -14,7 +14,6 @@ export interface ChannelMonitorTemplate {
   provider: Provider
   api_mode: APIMode
   description: string
-  api_mode?: APIMode
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
   body_override: Record<string, unknown> | null
@@ -38,7 +37,6 @@ export interface CreateParams {
   provider: Provider
   api_mode?: APIMode
   description?: string
-  api_mode?: APIMode
   extra_headers?: Record<string, string>
   body_override_mode?: BodyOverrideMode
   body_override?: Record<string, unknown> | null
@@ -48,7 +46,6 @@ export interface UpdateParams {
   name?: string
   api_mode?: APIMode
   description?: string
-  api_mode?: APIMode
   extra_headers?: Record<string, string>
   body_override_mode?: BodyOverrideMode
   body_override?: Record<string, unknown> | null

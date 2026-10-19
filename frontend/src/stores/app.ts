@@ -21,7 +21,6 @@ export const useAppStore = defineStore('app', () => {
   /** Persist sidebar nav scroll position across route remounts */
   const sidebarScrollTop = ref<number>(0)
   const mobileOpen = ref<boolean>(false)
-  const sidebarScrollTop = ref<number>(0)
   const loading = ref<boolean>(false)
   const toasts = ref<Toast[]>([])
 
@@ -452,7 +451,6 @@ export const useAppStore = defineStore('app', () => {
     sidebarCollapsed,
     sidebarScrollTop,
     mobileOpen,
-    sidebarScrollTop,
     loading,
     toasts,
 

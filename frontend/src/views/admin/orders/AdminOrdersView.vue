@@ -161,6 +161,13 @@ import OrderStatusBadge from '@/components/payment/OrderStatusBadge.vue'
 import OrderTable from '@/components/payment/OrderTable.vue'
 import { currencySymbol } from '@/components/payment/currency'
 
+const refundRequireForce = ref(false)
+
+const refundWarning = ref('')
+
+const refundQueryingIds = ref(new Set<number>())
+
+
 interface AuditLog {
   id: number
   action: string
@@ -195,11 +202,6 @@ const showManualCompleteDialog = ref(false)
 const manualCompleteReason = ref('')
 const manualCompleteSubmitting = ref(false)
 const orderAuditLogs = ref<AuditLog[]>([])
-const creditedAmountSymbol = currencySymbol('USD')
-
-function paymentAmountSymbol(order: PaymentOrder | null | undefined): string {
-  return currencySymbol(order?.currency)
-}
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 function debounceLoadOrders() {

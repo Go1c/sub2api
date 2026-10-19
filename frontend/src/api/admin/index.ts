@@ -39,6 +39,7 @@ import adminSiteMessagesAPI from './siteMessages'
 import adminInvoicesAPI from './invoices'
 import adminLotteryAPI from './lottery'
 import auditAPI from './audit'
+import pluginsAPI from './plugins'
 
 /**
  * Unified admin API object for convenient access
@@ -79,7 +80,8 @@ export const adminAPI = {
   siteMessages: adminSiteMessagesAPI,
   invoices: adminInvoicesAPI,
   lottery: adminLotteryAPI,
-  audit: auditAPI
+  audit: auditAPI,
+  plugins: pluginsAPI
 }
 
 export {
@@ -118,7 +120,8 @@ export {
   adminSiteMessagesAPI,
   adminInvoicesAPI,
   adminLotteryAPI,
-  auditAPI
+  auditAPI,
+  pluginsAPI
 }
 
 export default adminAPI
@@ -131,3 +134,4 @@ export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
 export type { AdminInvoiceListParams, CompleteInvoiceRequest } from './invoices'
+export type { PluginInstallation, PluginUISession } from './plugins'

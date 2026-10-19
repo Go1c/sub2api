@@ -140,6 +140,32 @@ export function useGrokOAuth() {
     return extra
   }
 
+  const validateSSOToken = async (
+    ssoToken: string,
+    proxyId?: number | null
+  ): Promise<GrokTokenInfo | null> => {
+    if (!ssoToken.trim()) {
+      error.value = t('admin.accounts.oauth.grok.pleaseEnterSSOToken', 'Please enter an SSO token')
+      return null
+    }
+    loading.value = true
+    error.value = ''
+    try {
+      return await adminAPI.grok.validateSSOToken(ssoToken.trim(), proxyId)
+    } catch (err: unknown) {
+      error.value = extractI18nErrorMessage(
+        err,
+        t,
+        'admin.accounts.oauth.grok.errors',
+        t('admin.accounts.oauth.grok.failedToValidateSSO', 'Failed to validate SSO token')
+      )
+      appStore.showError(error.value)
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     authUrl,
     sessionId,
@@ -151,6 +177,7 @@ export function useGrokOAuth() {
     exchangeAuthCode,
     validateRefreshToken,
     buildCredentials,
-    buildExtraInfo
+    buildExtraInfo,
+    validateSSOToken
   }
 }

@@ -8865,7 +8865,7 @@
                           }}</span
                         >
                         <input
-                          v-model.number="tier.threshold"
+                          v-model.number="tier.min_amount"
                           type="number"
                           min="0"
                           step="0.01"
@@ -8880,7 +8880,7 @@
                           }}</span
                         >
                         <input
-                          v-model.number="tier.bonus"
+                          v-model.number="tier.bonus_percent"
                           type="number"
                           min="0"
                           step="0.01"
@@ -10372,7 +10372,6 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from "vue";
-import { listPlatformIds } from "@/constants/platformCatalog";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
 import {
@@ -10429,14 +10428,7 @@ import type {
 import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import Icon from "@/components/icons/Icon.vue";
-import Select, { type SelectOption } from "@/components/common/Select.vue";
-import {
-  SITE_BILLING_MODES,
-  SITE_BILLING_MODE_I18N_KEYS,
-  billingModeToSettings,
-  resolveSiteBillingMode,
-  type SiteBillingMode,
-} from "@/utils/siteBillingMode";
+import Select from "@/components/common/Select.vue";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
@@ -10474,6 +10466,275 @@ import {
   restoreModelMarketCandidateSelection,
   selectionHasDisplayOverride,
 } from "@/utils/modelMarketDisplayOverride";
+import type { FingerprintSignalRow } from './codexFingerprintSignals'
+import { sanitizeRechargeBonusTiersForSubmit } from '@/utils/rechargeBonus'
+
+const settingsTabKeyboardActions = {
+  ArrowLeft: -1,
+  ArrowUp: -1,
+  ArrowRight: 1,
+  ArrowDown: 1,
+  Home: "first",
+  End: "last",
+} as const;
+
+function focusSettingsTab(tab: SettingsTab): void {
+  window.requestAnimationFrame(() => {
+    document.getElementById(`settings-tab-${tab}`)?.focus();
+  });
+}
+
+type CaptchaProviderSelection = "turnstile" | "tencent" | "aliyun";
+
+function applyCaptchaSelection(provider: CaptchaProviderSelection | null): void {
+  form.turnstile_enabled = provider === "turnstile";
+  form.tencent_captcha_enabled = provider === "tencent";
+  form.aliyun_captcha_enabled = provider === "aliyun";
+}
+
+const forwardedClientIpHeaderSeparatorKeys = new Set([
+  " ",
+  ",",
+  "，",
+  "Enter",
+  "Tab",
+]);
+
+const forwardedClientIpHeaderTokenPattern = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+type ForwardedClientIpHeaderResult = "invalid" | "duplicate" | "full" | "added";
+
+function removeForwardedClientIpHeader(header: string) {
+  form.forwarded_client_ip_headers = form.forwarded_client_ip_headers.filter(
+    (item) => item !== header,
+  );
+}
+
+function addForwardedClientIpHeader(raw: string): ForwardedClientIpHeaderResult {
+  const header = normalizeForwardedClientIpHeader(raw);
+  if (!header) {
+    return "invalid";
+  }
+  if (
+    form.forwarded_client_ip_headers.some(
+      (item) => item.toLowerCase() === header.toLowerCase(),
+    )
+  ) {
+    return "duplicate";
+  }
+  if (form.forwarded_client_ip_headers.length >= maxForwardedClientIpHeaders) {
+    return "full";
+  }
+  form.forwarded_client_ip_headers = [
+    ...form.forwarded_client_ip_headers,
+    header,
+  ];
+  return "added";
+}
+
+function showForwardedClientIpHeaderError(result: ForwardedClientIpHeaderResult) {
+  if (result === "invalid") {
+    appStore.showError(t("admin.settings.apiKeyAcl.forwardedClientIpHeaderInvalid"));
+  } else if (result === "full") {
+    appStore.showError(
+      t("admin.settings.apiKeyAcl.forwardedClientIpHeadersLimit", {
+        max: maxForwardedClientIpHeaders,
+      }),
+    );
+  }
+}
+
+function handleForwardedClientIpHeaderPaste(event: ClipboardEvent) {
+  const text = event.clipboardData?.getData("text") || "";
+  if (!text.trim()) {
+    return;
+  }
+  event.preventDefault();
+
+  let error: ForwardedClientIpHeaderResult | undefined;
+  for (const token of text.split(/[,，;\r\n]+/)) {
+    if (!token.trim()) {
+      continue;
+    }
+    const result = addForwardedClientIpHeader(token);
+    if (result === "invalid" || result === "full") {
+      error = result;
+    }
+  }
+  if (error) {
+    showForwardedClientIpHeaderError(error);
+  }
+}
+
+function commitForwardedClientIpHeaderDraft() {
+  const draft = forwardedClientIpHeaderDraft.value;
+  if (!draft) {
+    return;
+  }
+  const result = addForwardedClientIpHeader(draft);
+  showForwardedClientIpHeaderError(result);
+  forwardedClientIpHeaderDraft.value = "";
+}
+
+
+function selectSettingsTab(tab: SettingsTab): void {
+  activeTab.value = tab;
+}
+
+function handleSettingsTabKeydown(event: KeyboardEvent, tab: SettingsTab): void {
+  const action =
+    settingsTabKeyboardActions[
+      event.key as keyof typeof settingsTabKeyboardActions
+    ];
+  if (action === undefined) {
+    return;
+  }
+
+  event.preventDefault();
+  const currentIndex = settingsTabs.findIndex((item) => item.key === tab);
+  let nextIndex = currentIndex < 0 ? 0 : currentIndex;
+
+  if (action === "first") {
+    nextIndex = 0;
+  } else if (action === "last") {
+    nextIndex = settingsTabs.length - 1;
+  } else {
+    nextIndex =
+      (nextIndex + action + settingsTabs.length) % settingsTabs.length;
+  }
+
+  const nextTab = settingsTabs[nextIndex]?.key;
+  if (!nextTab) {
+    return;
+  }
+
+  selectSettingsTab(nextTab);
+  focusSettingsTab(nextTab);
+}
+
+const panelRateLimitLoading = ref(true);
+
+const panelRateLimitSaving = ref(false);
+
+const panelRateLimitForm = reactive({
+  enabled: true,
+  user_rpm: 240,
+  heavy_rpm: 60,
+  exempt_admin: true,
+  public_ip_rpm: 300,
+});
+
+const captchaProviderSelection = ref<CaptchaProviderSelection>("turnstile");
+
+const captchaMasterEnabled = computed({
+  get: () =>
+    form.turnstile_enabled ||
+    form.tencent_captcha_enabled ||
+    form.aliyun_captcha_enabled,
+  set: (enabled: boolean) =>
+    applyCaptchaSelection(enabled ? captchaProviderSelection.value : null),
+});
+
+function selectCaptchaProvider(provider: CaptchaProviderSelection): void {
+  captchaProviderSelection.value = provider;
+  applyCaptchaSelection(provider);
+}
+
+const tencentCaptchaLinks = computed(() =>
+  form.tencent_captcha_region === "intl"
+    ? {
+        console: "https://console.tencentcloud.com/captcha/graphical",
+        cloudKeys: "https://console.tencentcloud.com/cam/capi",
+        webDocs: "https://www.tencentcloud.com/document/product/1159/49680",
+      }
+    : {
+        console: "https://console.cloud.tencent.com/captcha",
+        cloudKeys: "https://console.cloud.tencent.com/cam/capi",
+        webDocs: "https://cloud.tencent.com/document/product/1110/36841",
+      },
+);
+
+function handleForwardedClientIpHeaderKeydown(event: KeyboardEvent) {
+  if (event.isComposing) {
+    return;
+  }
+  if (forwardedClientIpHeaderSeparatorKeys.has(event.key)) {
+    event.preventDefault();
+    commitForwardedClientIpHeaderDraft();
+    return;
+  }
+  if (
+    event.key === "Backspace" &&
+    !forwardedClientIpHeaderDraft.value &&
+    form.forwarded_client_ip_headers.length > 0
+  ) {
+    form.forwarded_client_ip_headers.pop();
+  }
+}
+
+async function savePanelRateLimitSettings() {
+  panelRateLimitSaving.value = true;
+  try {
+    const updated = await adminAPI.settings.updatePanelRateLimitSettings({
+      enabled: panelRateLimitForm.enabled,
+      user_rpm: panelRateLimitForm.user_rpm,
+      heavy_rpm: panelRateLimitForm.heavy_rpm,
+      exempt_admin: panelRateLimitForm.exempt_admin,
+      public_ip_rpm: panelRateLimitForm.public_ip_rpm,
+    });
+    Object.assign(panelRateLimitForm, updated);
+    appStore.showSuccess(t("admin.settings.panelRateLimit.saved"));
+  } catch (error: unknown) {
+    appStore.showError(
+      extractApiErrorMessage(
+        error,
+        t("admin.settings.panelRateLimit.saveFailed"),
+      ),
+    );
+  } finally {
+    panelRateLimitSaving.value = false;
+  }
+}
+
+
+const maxForwardedClientIpHeaders = 16;
+
+function normalizeForwardedClientIpHeader(raw: string): string {
+  const header = raw.trim();
+  if (!forwardedClientIpHeaderTokenPattern.test(header)) {
+    return "";
+  }
+
+  return header
+    .toLowerCase()
+    .split("-")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join("-");
+}
+
+
+function normalizeForwardedClientIpHeaders(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const headers: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (typeof raw !== "string") {
+      continue;
+    }
+    const header = normalizeForwardedClientIpHeader(raw);
+    const key = header.toLowerCase();
+    if (!header || seen.has(key) || headers.length >= maxForwardedClientIpHeaders) {
+      continue;
+    }
+    seen.add(key);
+    headers.push(header);
+  }
+  return headers;
+}
+
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
@@ -10755,54 +11016,11 @@ function addRechargeBonusTier(): void {
   if (form.payment_recharge_bonus_tiers.length >= RECHARGE_BONUS_MAX_TIERS) {
     return;
   }
-  form.payment_recharge_bonus_tiers.push({ threshold: 0, bonus: 0 });
+  form.payment_recharge_bonus_tiers.push({ min_amount: 0, bonus_percent: 0 });
 }
 
 function removeRechargeBonusTier(index: number): void {
   form.payment_recharge_bonus_tiers.splice(index, 1);
-}
-
-/** 保存前序列化：剔除 threshold/bonus 任一为空或 <=0 的行，金额保留 2 位小数 */
-function normalizeRechargeBonusTiersForSave(
-  tiers: RechargeBonusTierInput[],
-): RechargeBonusTierInput[] {
-  return tiers
-    .map((tier) => ({
-      threshold: Math.round(Number(tier.threshold) * 100) / 100,
-      bonus: Math.round(Number(tier.bonus) * 100) / 100,
-    }))
-    .filter(
-      (tier) =>
-        Number.isFinite(tier.threshold) &&
-        Number.isFinite(tier.bonus) &&
-        tier.threshold > 0 &&
-        tier.bonus > 0,
-    );
-}
-
-function defaultLoginAgreementDocuments(): LoginAgreementDocument[] {
-  return [
-    {
-      id: "terms",
-      title: "服务条款",
-      content_md: "",
-    },
-    {
-      id: "usage-policy",
-      title: "使用政策",
-      content_md: "",
-    },
-    {
-      id: "supported-regions",
-      title: "支持的国家和地区",
-      content_md: "",
-    },
-    {
-      id: "service-specific-terms",
-      title: "服务特定条款",
-      content_md: "",
-    },
-  ];
 }
 
 function normalizeLoginAgreementDocumentId(raw: string): string {
@@ -10846,24 +11064,6 @@ function defaultLoginAgreementDocuments(): LoginAgreementDocument[] {
       content_md: "",
     },
   ];
-}
-
-function normalizeLoginAgreementDocumentId(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/[-_]{2,}/g, "-")
-    .replace(/^[-_]+|[-_]+$/g, "");
-}
-
-function loginAgreementRoutePath(
-  doc: LoginAgreementDocument,
-  index: number,
-): string {
-  const id =
-    normalizeLoginAgreementDocumentId(doc.id || doc.title) || `doc-${index + 1}`;
-  return `/legal/${id}`;
 }
 
 type ClaudeOAuthSystemPromptPreset =
@@ -10938,20 +11138,6 @@ function detectClaudeOAuthSystemPromptPreset(
   return "custom";
 }
 
-function normalizeClaudeOAuthSystemPromptBlockText(
-  text: string,
-  expansionPrompt = "",
-): string {
-  const trimmed = text.trim();
-  if (trimmed === "{claude_code_system_prompt}") {
-    return defaultClaudeCodeSystemPrompt;
-  }
-  if (trimmed === "{claude_code_expansion_prompt}") {
-    return expansionPrompt.trim() || defaultClaudeCodeExpansionPrompt;
-  }
-  return text;
-}
-
 function createClaudeOAuthSystemPromptBlock(
   overrides: Partial<ClaudeOAuthSystemPromptBlock> = {},
 ): ClaudeOAuthSystemPromptBlock {
@@ -10994,73 +11180,6 @@ function createDefaultClaudeOAuthSystemPromptBlocks(
       cacheControlTTL: "5m",
     }),
   ];
-}
-
-function parseClaudeOAuthSystemPromptCacheControl(cacheControl: unknown): {
-  enabled: boolean;
-  ttl: string;
-} {
-  if (cacheControl === true) {
-    return { enabled: true, ttl: "5m" };
-  }
-  if (
-    cacheControl &&
-    typeof cacheControl === "object" &&
-    !Array.isArray(cacheControl)
-  ) {
-    return {
-      enabled: true,
-      ttl: normalizeClaudeOAuthSystemPromptCacheTTL(
-        (cacheControl as Record<string, unknown>).ttl,
-      ),
-    };
-  }
-  return { enabled: false, ttl: "5m" };
-}
-
-function parseClaudeOAuthSystemPromptBlocks(
-  raw: string,
-  expansionPrompt = "",
-): ClaudeOAuthSystemPromptBlock[] {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return createDefaultClaudeOAuthSystemPromptBlocks(expansionPrompt);
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed) as
-      | ClaudeOAuthSystemPromptRawBlock[]
-      | { blocks?: ClaudeOAuthSystemPromptRawBlock[] };
-    const rawBlocks = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed.blocks)
-        ? parsed.blocks
-        : [];
-
-    if (rawBlocks.length === 0) {
-      return createDefaultClaudeOAuthSystemPromptBlocks(expansionPrompt);
-    }
-
-    return rawBlocks.map((block) => {
-      const cacheControl = parseClaudeOAuthSystemPromptCacheControl(
-        block.cache_control,
-      );
-      const text = normalizeClaudeOAuthSystemPromptBlockText(
-        typeof block.text === "string" ? block.text : "",
-        expansionPrompt,
-      );
-      return createClaudeOAuthSystemPromptBlock({
-        enabled: block.enabled !== false,
-        type: "text",
-        text,
-        preset: detectClaudeOAuthSystemPromptPreset(text),
-        cacheControlEnabled: cacheControl.enabled,
-        cacheControlTTL: cacheControl.ttl,
-      });
-    });
-  } catch (_error) {
-    return createDefaultClaudeOAuthSystemPromptBlocks(expansionPrompt);
-  }
 }
 
 function serializeClaudeOAuthSystemPromptBlocksToJSON(
@@ -11396,7 +11515,6 @@ const form = reactive<SettingsForm>({
   payment_recharge_bonus_enabled: false,
   payment_recharge_bonus_tiers: [] as RechargeBonusTierInput[],
   payment_recharge_fee_rate: 0,
-  payment_recharge_bonus_tiers: [],
   payment_recharge_bonus_mode: "bonus",
   payment_recharge_bonus_notice: "",
   payment_enabled_types: [],
@@ -11459,7 +11577,6 @@ const form = reactive<SettingsForm>({
   aliyun_captcha_scene_id: "",
   aliyun_captcha_prefix: "",
   aliyun_captcha_region: "cn",
-  api_key_acl_trust_forwarded_ip: true,
   forwarded_client_ip_headers: [],
   // LinuxDo Connect OAuth 登录
   linuxdo_connect_enabled: false,
@@ -11620,8 +11737,15 @@ const form = reactive<SettingsForm>({
   channel_monitor_default_interval_seconds: 60,
   channel_monitor_status_banner: "",
   channel_monitor_show_quota: false,
+  channel_monitor_hide_throughput: false,
+  channel_monitor_hide_user_ranking: false,
   // Available Channels feature switch
   available_channels_enabled: false,
+  subscription_enabled: false,
+  model_plaza_enabled: false,
+  model_plaza_require_auth: false,
+  model_plaza_description: "",
+  plugin_management_enabled: false,
   // Site Messages feature switch
   site_messages_enabled: false,
   site_messages_daily_send_limit: 10,
@@ -11629,43 +11753,12 @@ const form = reactive<SettingsForm>({
   site_messages_default_recipient_email: "",
   // Affiliate (邀请返利) feature switch
   affiliate_enabled: false,
+  affiliate_admin_recharge_enabled: false,
   allow_user_view_error_requests: false,
-  antigravity_user_agent_version: "",
   api_key_acl_trust_forwarded_ip: false,
-  claude_oauth_system_prompt: "",
-  claude_oauth_system_prompt_blocks: "",
-  codex_cli_only_allow_app_server_clients: false,
-  codex_cli_only_blacklist: "",
-  codex_cli_only_engine_fingerprint_signals: "",
-  codex_cli_only_whitelist: "",
   cyber_session_block_enabled: false,
   cyber_session_block_ttl_seconds: 3600,
-  dingtalk_connect_bypass_registration: false,
-  dingtalk_connect_client_id: "",
-  dingtalk_connect_client_secret: "",
-  dingtalk_connect_client_secret_configured: false,
-  dingtalk_connect_corp_restriction_policy: "none",
-  dingtalk_connect_enabled: false,
-  dingtalk_connect_internal_corp_id: "",
-  dingtalk_connect_redirect_url: "",
-  dingtalk_connect_sync_corp_email: false,
-  dingtalk_connect_sync_corp_email_attr_key: "dingtalk_email",
-  dingtalk_connect_sync_corp_email_attr_name: localText("钉钉企业邮箱", "DingTalk Corporate Email"),
-  dingtalk_connect_sync_dept: false,
-  dingtalk_connect_sync_dept_attr_key: "dingtalk_department",
-  dingtalk_connect_sync_dept_attr_name: localText("钉钉部门", "DingTalk Department"),
-  dingtalk_connect_sync_display_name: false,
-  dingtalk_connect_sync_display_name_attr_key: "dingtalk_name",
-  dingtalk_connect_sync_display_name_attr_name: localText("钉钉姓名", "DingTalk Name"),
-  enable_claude_oauth_system_prompt_injection: true,
-  enable_client_dateline_normalization: true,
-  max_codex_version: "",
-  min_codex_version: "",
-  openai_codex_user_agent: "",
-  payment_alipay_force_qrcode: false,
   payment_subscription_usd_to_cny_rate: 0,
-  rewrite_message_cache_control: false,
-  subscription_expiry_notify_enabled: true,
 });
 
 type OpenAIAdvancedSchedulerOverrideKey =
@@ -13253,46 +13346,6 @@ function removeCodexFingerprintRow(i: number): void {
   codexFingerprintRows.value.splice(i, 1);
 }
 
-function parseCodexEntriesToRows(raw: string): CodexClientRow[] {
-  if (!raw || !raw.trim()) return [];
-  try {
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr.map((e) => ({
-      originator: typeof e?.originator === "string" ? e.originator : "",
-      uaContains: Array.isArray(e?.ua_contains)
-        ? e.ua_contains
-            .filter((x: unknown) => typeof x === "string")
-            .join(", ")
-        : "",
-      skipEngineFingerprint: e?.skip_engine_fingerprint === true,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-function serializeCodexRowsToJSON(rows: CodexClientRow[]): string {
-  const entries = rows
-    .map((r) => {
-      const entry: {
-        originator: string;
-        ua_contains: string[];
-        skip_engine_fingerprint?: boolean;
-      } = {
-        originator: r.originator.trim(),
-        ua_contains: r.uaContains
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0),
-      };
-      if (r.skipEngineFingerprint) entry.skip_engine_fingerprint = true;
-      return entry;
-    })
-    .filter((e) => e.originator !== "" || e.ua_contains.length > 0);
-  return entries.length > 0 ? JSON.stringify(entries) : "";
-}
-
 function addCodexBlacklistRow(): void {
   codexBlacklistRows.value.push({ originator: "", uaContains: "" });
 }
@@ -13654,9 +13707,6 @@ async function saveSettings() {
     form.login_agreement_mode =
       form.login_agreement_mode === "checkbox" ? "checkbox" : "modal";
     form.login_agreement_documents = normalizedLoginAgreementDocuments;
-
-    const normalizedLoginAgreementDocuments =
-      normalizeLoginAgreementDocumentsForSave();
     if (form.login_agreement_enabled && normalizedLoginAgreementDocuments.length === 0) {
       appStore.showError(
         localText(
@@ -13666,9 +13716,6 @@ async function saveSettings() {
       );
       return;
     }
-    const emptyTitleDocument = normalizedLoginAgreementDocuments.find(
-      (doc) => !doc.title,
-    );
     if (emptyTitleDocument) {
       appStore.showError(
         localText(
@@ -13678,8 +13725,6 @@ async function saveSettings() {
       );
       return;
     }
-    const duplicateLoginAgreementDocumentId =
-      findDuplicateLoginAgreementDocumentId(normalizedLoginAgreementDocuments);
     if (duplicateLoginAgreementDocumentId) {
       appStore.showError(
         localText(
@@ -13830,7 +13875,6 @@ async function saveSettings() {
 
     const oauthSchedulingRate = form.openai_oauth_scheduling_rate_multiplier;
     if (
-      oauthSchedulingRate !== "" &&
       oauthSchedulingRate !== null &&
       (!Number.isFinite(oauthSchedulingRate) || oauthSchedulingRate < 0)
     ) {
@@ -14085,9 +14129,6 @@ async function saveSettings() {
       payment_balance_recharge_multiplier:
         Number(form.payment_balance_recharge_multiplier) || 1,
       payment_recharge_bonus_enabled: form.payment_recharge_bonus_enabled,
-      payment_recharge_bonus_tiers: normalizeRechargeBonusTiersForSave(
-        form.payment_recharge_bonus_tiers,
-      ),
       payment_subscription_usd_to_cny_rate:
         Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,
@@ -14176,7 +14217,25 @@ async function saveSettings() {
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,
       allow_user_view_error_requests: form.allow_user_view_error_requests,
-    };
+    
+claude_code_client_version: form.claude_code_client_version?.trim() || "",
+
+claude_code_client_version_synced: "",
+
+claude_code_version_auto_sync_enabled:
+        form.claude_code_version_auto_sync_enabled,
+
+openai_codex_client_version:
+        form.openai_codex_client_version?.trim() || "",
+
+openai_codex_client_version_synced: "",
+
+openai_codex_version_auto_sync_enabled:
+        form.openai_codex_version_auto_sync_enabled,
+
+payment_alipay_mobile_precreate_deep_link:
+        form.payment_alipay_mobile_precreate_deep_link,
+};
     if (form.site_logo !== persistedSiteLogo.value) {
       payload.site_logo = form.site_logo;
     }

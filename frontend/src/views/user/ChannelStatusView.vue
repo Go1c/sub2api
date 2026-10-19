@@ -30,10 +30,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { isChannelMonitorV1Mode } from '@/utils/featureFlags'
-import ChannelStatusV1View from './ChannelStatusV1View.vue'
-import ChannelStatusV2View from './ChannelStatusV2View.vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useAppStore } from '@/stores/app'
+import { extractApiErrorMessage } from '@/utils/apiError'
+import {
+  list as listChannelMonitorViews,
+  status as fetchChannelMonitorDetail,
+  type UserMonitorView,
+  type UserMonitorDetail,
+} from '@/api/channelMonitor'
+import AppLayout from '@/components/layout/AppLayout.vue'
+import MonitorHero, {
+  type MonitorWindow,
+  type OverallStatus,
+} from '@/components/user/monitor/MonitorHero.vue'
+import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
+import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
+import { DEFAULT_INTERVAL_SECONDS, STATUS_OPERATIONAL } from '@/constants/channelMonitor'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 
 const { t } = useI18n()
 const appStore = useAppStore()

@@ -1,7 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
-import en from '../locales/en'
-import zh from '../locales/zh'
+import { resolveLocaleMessages } from '../index'
 
 type LocaleValue = Record<string, unknown>
 
@@ -57,13 +56,31 @@ function sourceKeys(): string[] {
 }
 
 function missingKeys(usedKeys: string[], availableKeys: Set<string>): string[] {
-  return usedKeys.filter((key) => !availableKeys.has(key)).sort()
+  return usedKeys.filter((key) => !availableKeys.has(key) && !isNamespaceKey(key, availableKeys)).sort()
+}
+
+function isNamespaceKey(key: string, availableKeys: Set<string>): boolean {
+  const prefix = `${key}.`
+  for (const existing of availableKeys) {
+    if (existing.startsWith(prefix)) return true
+  }
+  return false
 }
 
 describe('locale key completeness', () => {
-  const enKeys = new Set(flattenLeafKeys(en))
-  const zhKeys = new Set(flattenLeafKeys(zh))
-  const usedKeys = [...new Set(sourceKeys())].sort()
+  let en: Record<string, unknown> = {}
+  let zh: Record<string, unknown> = {}
+  let enKeys = new Set<string>()
+  let zhKeys = new Set<string>()
+  let usedKeys: string[] = []
+
+  beforeAll(async () => {
+    en = await resolveLocaleMessages('en')
+    zh = await resolveLocaleMessages('zh')
+    enKeys = new Set(flattenLeafKeys(en))
+    zhKeys = new Set(flattenLeafKeys(zh))
+    usedKeys = [...new Set(sourceKeys())].sort()
+  })
 
   it('keeps English and Chinese locale schemas identical', () => {
     expect([...enKeys].filter((key) => !zhKeys.has(key)).sort()).toEqual([])

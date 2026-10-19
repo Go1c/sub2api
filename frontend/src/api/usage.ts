@@ -14,7 +14,7 @@ import type {
   UserErrorRequest,
   UserErrorRequestDetail,
   UserErrorListParams
-} from '@/types'
+, GroupStat, UsageRequestType} from '@/types'
 
 // ==================== Dashboard Types ====================
 
@@ -389,6 +389,7 @@ export const usageAPI = {
   getDashboardStats,
   getDashboardTrend,
   getDashboardModels,
+  getDashboardSnapshotV2,
   getDashboardApiKeysUsage,
   // Error requests
   listMyErrorRequests,

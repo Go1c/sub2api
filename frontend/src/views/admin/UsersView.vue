@@ -562,30 +562,6 @@
             </div>
           </template>
 
-          <template #cell-usage="{ row }">
-            <PlatformUsageBreakdown
-              :today="usageStats[row.id]?.today_actual_cost ?? 0"
-              :total="usageStats[row.id]?.total_actual_cost ?? 0"
-              :by-platform="usageStats[row.id]?.by_platform"
-            />
-          </template>
-
-          <template #cell-usage_anthropic="{ row }">
-            <PlatformCostCell :usage="getPlatformUsage(row.id, 'anthropic')" />
-          </template>
-
-          <template #cell-usage_openai="{ row }">
-            <PlatformCostCell :usage="getPlatformUsage(row.id, 'openai')" />
-          </template>
-
-          <template #cell-usage_gemini="{ row }">
-            <PlatformCostCell :usage="getPlatformUsage(row.id, 'gemini')" />
-          </template>
-
-          <template #cell-usage_antigravity="{ row }">
-            <PlatformCostCell :usage="getPlatformUsage(row.id, 'antigravity')" />
-          </template>
-
           <template #cell-concurrency="{ row }">
             <UserConcurrencyCell
               :current="row.current_concurrency ?? 0"
@@ -1342,7 +1318,8 @@ const {
   selectedIds,
   selectedCount,
   setSelectedIds,
-  clear: clearSelection
+  clear: clearSelection,
+  removeMany: removeSelectedIds,
 } = useTableSelection<AdminUser>({
   rows: sortedUsers,
   getId: (user) => user.id
@@ -1354,11 +1331,6 @@ const handleSelectedKeysUpdate = (keys: Array<string | number>) => {
 
 const getUserSelectionLabel = (user: AdminUser) =>
   t('admin.users.bulkLimits.selectUser', { email: user.email })
-
-const handleBulkLimitsSuccess = () => {
-  clearSelection()
-  loadUsers()
-}
 
 // User attribute definitions and values
 const attributeDefinitions = ref<UserAttributeDefinition[]>([])

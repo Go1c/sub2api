@@ -152,8 +152,7 @@ import { accountsAPI } from '@/api/admin/accounts'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { allModels, getModelsByPlatform } from '@/composables/useModelWhitelist'
-import { supportsUpstreamModelSync } from '@/constants/platformCatalog'
-import { extractApiErrorMessage } from '@/utils/apiError'
+import { useClipboard } from '@/composables/useClipboard'
 
 const { t } = useI18n()
 

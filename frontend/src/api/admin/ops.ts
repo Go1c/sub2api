@@ -7,6 +7,12 @@
 import { apiClient, buildGatewayUrl } from '../client'
 import type { PaginatedResponse } from '@/types'
 
+export interface OpsOpenAIAccountQuotaAutoPauseSettings {
+  default_threshold_5h: number // 0~1，0 表示不启用全局默认 5h 阈值
+  default_threshold_7d: number // 0~1，0 表示不启用全局默认 7d 阈值
+}
+
+
 export type OpsQueryMode = 'auto' | 'raw' | 'preagg'
 
 export interface OpsRequestOptions {
@@ -962,6 +968,7 @@ export interface OpsErrorLog {
 
 export interface OpsErrorDetail extends OpsErrorLog {
   error_body: string
+  request_body?: string
 
   // Upstream context (optional; enriched by gateway services)
   upstream_status_code?: number | null

@@ -62,13 +62,19 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-defineProps<{ selectedIds: number[] }>()
+defineProps<{
+  selectedIds: number[]
+  totalResults: number
+  selectingAll: boolean
+  allResultsSelected: boolean
+}>()
 defineEmits([
   'delete',
   'edit-selected',
   'edit-filtered',
   'clear',
   'select-page',
+  'select-all-results',
   'toggle-schedulable',
   'reset-status',
   'refresh-token',

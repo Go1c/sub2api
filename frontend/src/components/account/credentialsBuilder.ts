@@ -1,3 +1,10 @@
+import {
+  BUILTIN_PLATFORM_CATALOG,
+  getProviderMode,
+  getProviderProfile,
+  type ProviderProtocolRule,
+} from '@/constants/platformCatalog'
+
 export const HEADER_OVERRIDE_ENABLED_CREDENTIAL_KEY = 'header_override_enabled'
 export const HEADER_OVERRIDES_CREDENTIAL_KEY = 'header_overrides'
 
@@ -392,3 +399,79 @@ export function buildPlanTypeOptions(
   }
   return options
 }
+
+export type OpenCodeAccountMode = 'zen' | 'go'
+
+const NATIVE_API_PROTOCOLS: CnNativeApiProtocol[] = ['chat_completions', 'anthropic', 'responses']
+
+export function providerSupportsProtocol(platform: string, mode: string | undefined, protocol: CnNativeApiProtocol): boolean {
+  return !!getProviderMode(platform, mode)?.base_urls[protocol]
+}
+
+export function cnSupportsNativeResponses(platform: string, mode?: string): boolean {
+  return providerSupportsProtocol(platform, mode, 'responses')
+}
+
+export function providerNativeProtocols(platform: string, mode?: string): CnNativeApiProtocol[] {
+  return NATIVE_API_PROTOCOLS.filter(protocol => providerSupportsProtocol(platform, mode, protocol))
+}
+
+export function providerHasModelCatalog(platform: string): boolean {
+  return getProviderProfile(platform)?.model_catalog === true
+}
+
+export function providerRoutesByModel(platform: string): boolean {
+  return getProviderProfile(platform)?.routing === 'by_model'
+}
+
+export interface OpenCodeGoProtocolRule {
+  pattern: string
+  protocol: CnNativeApiProtocol
+  extraProtocols?: CnNativeApiProtocol[]
+}
+
+function isNativeOpenCodeGoProtocol(value: unknown): value is CnNativeApiProtocol {
+  return value === 'chat_completions' || value === 'anthropic' || value === 'responses'
+}
+
+function extraRuleProtocols(protocol: CnNativeApiProtocol, protocols: unknown): CnNativeApiProtocol[] {
+  if (!Array.isArray(protocols)) return []
+  const extra: CnNativeApiProtocol[] = []
+  for (const item of protocols) {
+    if (isNativeOpenCodeGoProtocol(item) && item !== protocol && !extra.includes(item)) extra.push(item)
+  }
+  return extra
+}
+
+function buildRule(pattern: string, protocol: CnNativeApiProtocol, protocols?: unknown): OpenCodeGoProtocolRule {
+  const extra = extraRuleProtocols(protocol, protocols)
+  return extra.length > 0 ? { pattern, protocol, extraProtocols: extra } : { pattern, protocol }
+}
+
+function normalizeProfileRules(rules: ProviderProtocolRule[] | undefined): OpenCodeGoProtocolRule[] {
+  return (rules ?? [])
+    .filter(rule => rule.pattern && isNativeOpenCodeGoProtocol(rule.protocol))
+    .map(rule => buildRule(rule.pattern, rule.protocol as CnNativeApiProtocol, rule.protocols))
+}
+
+function builtinProtocolRules(platform: string, mode: string): OpenCodeGoProtocolRule[] {
+  const profile = BUILTIN_PLATFORM_CATALOG.platforms.find(spec => spec.id === platform)?.multi_protocol
+  return normalizeProfileRules(profile?.modes.find(item => item.mode === mode)?.protocol_rules)
+}
+
+export const DEFAULT_OPENCODE_GO_PROTOCOL_RULES: OpenCodeGoProtocolRule[] = builtinProtocolRules('opencode_go', 'go')
+
+export function defaultProviderProtocolRules(platform: string, mode?: string): OpenCodeGoProtocolRule[] {
+  return normalizeProfileRules(getProviderMode(platform, mode)?.protocol_rules)
+}
+
+export function defaultOpenCodeProtocolRules(mode: string = 'go'): OpenCodeGoProtocolRule[] {
+  return defaultProviderProtocolRules('opencode_go', mode === 'zen' ? 'zen' : 'go')
+}
+
+export function cloneOpenCodeGoProtocolRules(
+  rules: OpenCodeGoProtocolRule[] = DEFAULT_OPENCODE_GO_PROTOCOL_RULES
+): OpenCodeGoProtocolRule[] {
+  return rules.map(rule => buildRule(rule.pattern, rule.protocol, rule.extraProtocols))
+}
+

@@ -74,8 +74,10 @@ const props = defineProps<{
   resetsAt?: string | null
   color: 'indigo' | 'emerald' | 'purple' | 'amber'
   windowStats?: WindowStats | null
+  estimatedTotalCost?: number | null
   showNowWhenIdle?: boolean
   remainingCapacity?: boolean
+  labelWidth?: 'fixed' | 'auto'
 }>()
 
 const { t } = useI18n()
@@ -192,7 +194,7 @@ const formatResetTime = computed(() => {
     return t('usage.resetNow')
   }
 
-  const date = new Date(props.resetsAt)
+  const date = new Date(props.resetsAt ?? 0)
   const diffMs = date.getTime() - now.value.getTime()
 
   // resetsAt 已过期：utilization>0 说明后端窗口数据还没刷新（active poll 没回写），

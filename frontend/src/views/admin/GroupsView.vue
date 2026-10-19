@@ -4416,6 +4416,8 @@ import type {
   CompositeRouteEndpoint,
   CompositeRouteMatchType,
   CompositeRouteDecision,
+  GroupI18n,
+  CodexModelsManifestConfig,
 } from "@/types";
 import { CONCRETE_PLATFORM_OPTIONS, GROUP_PLATFORM_OPTIONS } from "@/constants/platforms";
 import type { ChannelModelPricing } from "@/api/admin/channels";
@@ -4448,19 +4450,9 @@ import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesMo
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
-import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
-import type { PricingFormEntry } from "@/components/admin/channel/types";
 import {
-  apiIntervalsToForm,
-  createDefaultTimePricingForm,
-  formIntervalsToAPI,
-  formReasoningEffortMultipliersToAPI,
-  mTokToPerToken,
-  perTokenToMTok,
-  toNullableNumber,
   validateReasoningEffortMultipliers,
 } from "@/components/admin/channel/types";
-import type { ChannelModelPricing } from "@/api/admin/channels";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
@@ -4499,6 +4491,78 @@ import {
   resolveWebSearchPreviewMultiplier,
   supportsWebSearchPricingPlatform,
 } from "./groupsWebSearchPricing";
+import type { ReasoningEffortMappingRow } from './groupsReasoningEffort'
+import { isProfitControlPlatform , type ProfitControlFormState, profitPercentToDecimal, validateProfitControlFormState} from './groupsProfitControl'
+import { normalizeReasoningEffortForPlatform , normalizeReasoningEffortOverLimit, reasoningEffortMappingsToAPI, reasoningEffortMappingsToRows, reasoningEffortOverLimitDowngrade, supportsReasoningEffortPolicyPlatform} from './groupsReasoningEffort'
+import { serializeVideoModelPrices, createVideoModelPricesForm } from './groupsVideoModelPricing'
+import { createModelAllowlistState as createInitialModelAllowlistState } from './groupModelAllowlist'
+import { supportsGroupOpenAIFast } from './groupsOpenAIFast'
+
+const editCodexManifestAccountNames = ref<Record<number, string>>({});
+
+
+type ReasoningEffortPolicyFieldsExpose = {
+  validate: () => boolean;
+  resetValidation: () => void;
+};
+
+type CodexManifestAccountsFieldExpose = {
+  validate: () => boolean;
+  resetValidation: () => void;
+};
+
+const createCodexManifestDefaults = (): CodexModelsManifestConfig => ({
+  enabled: false,
+  account_ids: [],
+  fallback_to_scheduler: false,
+});
+
+
+const supportsLivePlatform = (platform: string): boolean =>
+  platform === "openai" || platform === "composite";
+
+const createModelAllowlistState = reactive(createInitialModelAllowlistState());
+
+const editModelAllowlistState = reactive(createInitialModelAllowlistState());
+
+const createReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | null>(null);
+
+const editReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | null>(null);
+
+const editCodexManifestRef = ref<CodexManifestAccountsFieldExpose | null>(null);
+
+const editCodexManifestConfig = ref<CodexModelsManifestConfig>(createCodexManifestDefaults());
+
+const createModelAllowlistSelectedCount = computed(
+  () => createModelAllowlistState.items.filter((item) => item.selected).length,
+);
+
+const editModelAllowlistSelectedCount = computed(
+  () => editModelAllowlistState.items.filter((item) => item.selected).length,
+);
+
+const percentToDecimal = profitPercentToDecimal;
+
+const validateProfitControlForm = (form: ProfitControlFormState): boolean => {
+  const errorKey = validateProfitControlFormState(form);
+  if (errorKey) {
+    appStore.showError(t(`admin.groups.profitControl.${errorKey}`));
+    return false;
+  }
+  return true;
+};
+
+const validateGroupReasoningMultipliers = (pricing: PricingFormEntry[]): boolean => {
+  for (const entry of pricing) {
+    const error = validateReasoningEffortMultipliers(entry.reasoning_effort_multipliers, t);
+    if (error) {
+      appStore.showError(`${entry.models.join(", ") || t("admin.channels.form.unnamed")}: ${error}`);
+      return false;
+    }
+  }
+  return true;
+};
+
 
 const emptyGroupPricing = (): PricingFormEntry => ({
   models: [],
@@ -4974,38 +5038,6 @@ const compositeRouteForm = reactive({
   notes: "",
 });
 const sortableGroups = ref<AdminGroup[]>([]);
-type ConcreteGroupPlatform = Exclude<GroupPlatform, "composite">;
-type CompositeRouteFormState = {
-  public_model: string;
-  match_type: CompositeRouteMatchType;
-  target_platform: ConcreteGroupPlatform;
-  upstream_model: string;
-  endpoint: CompositeRouteEndpoint;
-  priority: number;
-  enabled: boolean;
-  notes: string;
-};
-
-const showCompositeRoutesModal = ref(false);
-const compositeRoutesGroup = ref<AdminGroup | null>(null);
-const compositeRoutes = ref<CompositeModelRoute[]>([]);
-const compositeRoutesLoading = ref(false);
-const compositeRouteSaving = ref(false);
-const compositeRouteEditingId = ref<number | null>(null);
-const compositePreviewModel = ref("");
-const compositePreviewEndpoint = ref<CompositeRouteEndpoint>("any");
-const compositePreviewLoading = ref(false);
-const compositePreviewDecision = ref<CompositeRouteDecision | null>(null);
-const compositeRouteForm = reactive<CompositeRouteFormState>({
-  public_model: "",
-  match_type: "exact",
-  target_platform: "openai",
-  upstream_model: "",
-  endpoint: "any",
-  priority: 100,
-  enabled: true,
-  notes: "",
-});
 const createMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
 const editMessagesDispatchDefaults = createDefaultMessagesDispatchFormState();
 const createModelsListState = reactive(createInitialModelsListState());
@@ -5107,6 +5139,16 @@ const createForm = reactive({
   max_reasoning_effort: "",
   max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
+  audio_realtime_price_per_min: null as number | null,
+  audio_stt_price_per_hour: null as number | null,
+  audio_tts_price_per_million_chars: null as number | null,
+  force_openai_fast: false,
+  free_openai_fast: false,
+  profit_control_enabled: false,
+  profit_min_margin_percent: 0,
+  profit_safety_buffer_percent: 0,
+  search_price_per_1k: null as number | null,
+  video_model_prices: createVideoModelPricesForm(),
 });
 
 // 简单账号类型（用于模型路由选择）
@@ -5465,6 +5507,26 @@ const editForm = reactive({
   max_reasoning_effort: "",
   max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
+
+audio_realtime_price_per_min: null as number | null,
+
+audio_stt_price_per_hour: null as number | null,
+
+audio_tts_price_per_million_chars: null as number | null,
+
+force_openai_fast: false,
+
+free_openai_fast: false,
+
+profit_control_enabled: false,
+
+profit_min_margin_percent: 0,
+
+profit_safety_buffer_percent: 0,
+
+search_price_per_1k: null as number | null,
+
+video_model_prices: createVideoModelPricesForm(),
 });
 
 type ImagePricingFormState = {
@@ -5961,10 +6023,6 @@ const handleCreateGroup = async () => {
   }
   submitting.value = true;
   try {
-    const {
-      video_model_prices: _createFormVideoModelPrices,
-      ...createGroupForm
-    } = createForm;
     const videoModelPrices = serializeVideoModelPrices(
       createForm.video_model_prices,
     );

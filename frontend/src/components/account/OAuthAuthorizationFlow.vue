@@ -805,7 +805,6 @@ import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/icons/Icon.vue'
 import type { AddMethod, AuthInputMethod } from '@/composables/useAccountOAuth'
 import type { AccountPlatform } from '@/types'
-import { adminAPI } from '@/api/admin'
 
 interface Props {
   addMethod: AddMethod
@@ -869,10 +868,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const passwordAuthEnabled = ref(false)
-const emailPasswordOptionEnabled = computed(
-  () => props.showEmailPasswordOption && props.platform === 'grok' && passwordAuthEnabled.value
-)
 
 const showLocalCallbackNotice = computed(() => props.platform === 'openai' || props.platform === 'grok')
 

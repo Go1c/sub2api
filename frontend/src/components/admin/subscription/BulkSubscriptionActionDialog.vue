@@ -142,7 +142,7 @@ const submitting = ref(false)
 const requestError = ref('')
 const result = shallowRef<SubscriptionBulkActionResult | null>(null)
 const pendingOperation = shallowRef<BulkSubscriptionOperation | null>(null)
-const targets = ref<{ id: number; email?: string; group?: string; groupId: number }[]>([])
+const targets = ref<{ id: number; email?: string; group?: string; groupId: number | null }[]>([])
 const submittedAction = ref<SubscriptionBulkAction | null>(null)
 
 const currentAction = computed(() => submittedAction.value ?? props.action)

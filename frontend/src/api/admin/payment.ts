@@ -14,6 +14,15 @@ import type {
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
 
+export interface RefundResult {
+  success: boolean
+  warning?: string
+  require_force?: boolean
+  balance_deducted?: number
+  subscription_days_deducted?: number
+}
+
+
 /** Admin-facing payment config returned by GET /admin/payment/config */
 export interface AdminPaymentConfig {
   enabled: boolean
@@ -27,6 +36,8 @@ export interface AdminPaymentConfig {
   balance_recharge_multiplier: number
   recharge_bonus_enabled?: boolean
   recharge_bonus_tiers?: RechargeBonusTier[]
+  subscription_usd_to_cny_rate: number
+  recharge_fee_rate: number
   load_balance_strategy: string
   product_name_prefix: string
   product_name_suffix: string

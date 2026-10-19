@@ -68,12 +68,26 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted } from 'vue'
-import { useResizeObserver, useWindowSize } from '@vueuse/core'
+import { useWindowSize } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { Icon } from '@/components/icons'
 import type { Account } from '@/types'
 
-const props = defineProps<{ show: boolean; account: Account | null; position: { top: number; left: number } | null }>()
+const viewportPadding = 8
+const { width: viewportWidth, height: viewportHeight } = useWindowSize()
+
+const menuPosition = ref({ top: viewportPadding, left: viewportPadding })
+
+
+const menuStyle = computed(() => ({
+  top: `${menuPosition.value.top}px`,
+  left: `${menuPosition.value.left}px`,
+  maxWidth: `${Math.max(0, viewportWidth.value - viewportPadding * 2)}px`,
+  maxHeight: `${Math.max(0, viewportHeight.value - viewportPadding * 2)}px`
+}))
+
+
+const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
 const emit = defineEmits(['close', 'test', 'iq-test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
 const { t } = useI18n()
 const canDuplicate = computed(() => {

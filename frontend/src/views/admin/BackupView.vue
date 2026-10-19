@@ -376,7 +376,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
 import { useAppStore } from '@/stores'
-import type { BackupS3Config, BackupScheduleConfig, BackupRecord } from '@/api/admin/backup'
+import type { BackupS3Config, BackupScheduleConfig, BackupRecord , BackupMonthlyArchiveConfig, ImageStorageConfig} from '@/api/admin/backup'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 
@@ -480,8 +480,6 @@ const loadingBackups = ref(false)
 const creatingBackup = ref(false)
 const restoringId = ref('')
 const manualExpireDays = ref(14)
-const downloadParts = ref<BackupDownloadPart[]>([])
-const downloadPartsModalOpen = ref(false)
 
 // Polling
 const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null)
@@ -781,7 +779,8 @@ async function downloadBackup(id: string) {
     // 预签名 URL 带 attachment disposition，同页 anchor 导航直接触发下载；
     // 不用 window.open：step-up 弹窗 await 会耗尽瞬态用户激活，新标签页会被浏览器拦截。
     const link = document.createElement('a')
-    link.href = result.url
+    link.href = result?.url || ''
+    if (!link.href) return
     link.rel = 'noopener'
     link.click()
   } catch (error) {
@@ -789,11 +788,6 @@ async function downloadBackup(id: string) {
     if (reportStepUpBlocked(error)) return
     appStore.showError((error as { message?: string })?.message || t('errors.networkError'))
   }
-}
-
-function closeDownloadParts() {
-  downloadPartsModalOpen.value = false
-  downloadParts.value = []
 }
 
 async function restoreBackup(id: string) {

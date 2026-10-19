@@ -95,7 +95,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { adminPaymentAPI, type PlanLimitSyncPreview } from '@/api/admin/payment'
+import { adminPaymentAPI, type PlanLimitSyncPreview , type AdminPaymentConfig} from '@/api/admin/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import adminAPI from '@/api/admin'
 import type { SubscriptionPlan } from '@/types/payment'
@@ -107,15 +107,10 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlanEditDialog from './PlanEditDialog.vue'
-import { currencySymbol } from '@/components/payment/currency'
 import { platformTextClass } from '@/utils/platformColors'
 
 const { t } = useI18n()
 const appStore = useAppStore()
-
-function planCurrencySymbol(currency?: string): string {
-  return currencySymbol(currency || 'USD')
-}
 
 // ==================== Groups ====================
 
