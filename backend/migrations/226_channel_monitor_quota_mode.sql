@@ -51,9 +51,23 @@ END $$;
 ALTER TABLE channel_monitors
     ADD COLUMN IF NOT EXISTS check_mode VARCHAR(32) NOT NULL DEFAULT 'probe';
 
-ALTER TABLE channel_monitors
-    ADD CONSTRAINT channel_monitors_check_mode_check
-    CHECK (check_mode IN ('probe', 'quota', 'quota_probe'));
+-- fork 的 933 已经加过这条约束，946 又把它扩成含 iq。
+-- 这里若无条件 ADD，线上会报 constraint already exists；
+-- 若先 DROP 再按 origin 的三值重建，已有 check_mode=iq 的行会校验失败。
+-- 约束不存在时才创建 origin 名单；已存在则保留（946 的名单是超集）。
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+          FROM pg_constraint
+         WHERE conname = 'channel_monitors_check_mode_check'
+           AND conrelid = 'channel_monitors'::regclass
+    ) THEN
+        ALTER TABLE channel_monitors
+            ADD CONSTRAINT channel_monitors_check_mode_check
+            CHECK (check_mode IN ('probe', 'quota', 'quota_probe'));
+    END IF;
+END $$;
 
 ALTER TABLE channel_monitors
     ADD COLUMN IF NOT EXISTS account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL;

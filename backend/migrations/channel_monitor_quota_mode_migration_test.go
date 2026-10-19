@@ -37,3 +37,13 @@ func TestChannelMonitorQuotaModeMigration(t *testing.T) {
 	require.Contains(t, sql, "VALUES ('channel_monitor_show_quota', 'false')")
 	require.Contains(t, sql, "ON CONFLICT (key) DO NOTHING")
 }
+
+func TestOriginChannelMonitorQuotaModeKeepsExistingCheck(t *testing.T) {
+	content, err := FS.ReadFile("226_channel_monitor_quota_mode.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "conname = 'channel_monitors_check_mode_check'")
+	require.Contains(t, sql, "CHECK (check_mode IN ('probe', 'quota', 'quota_probe'))")
+	require.NotContains(t, sql, "DROP CONSTRAINT IF EXISTS channel_monitors_check_mode_check")
+}
