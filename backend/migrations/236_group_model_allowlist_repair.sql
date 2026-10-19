@@ -9,10 +9,11 @@
 -- 表现为「API 密钥」「我的订阅」「管理端订阅列表」等页面加载失败（issue #6780）。
 --
 -- 本迁移可重放，并且用 regclass 解析表（跟随 search_path），不再假定 schema 为 public：
---   1) 只有旧列              -> 重命名，数据原样保留；
+--   1) 只有旧列              -> 补建新列并拷贝，旧列保留，供仍在运行的旧镜像查询；
 --   2) 两列并存              -> 新列仍是默认空值时，把旧列里的配置回填过来，旧列保留不动；
 --   3) 两列都没有            -> 按默认值补建新列。
 -- 结束后保证 groups.model_allowlist 一定存在，且为 NOT NULL DEFAULT '{}'。
+-- 不重命名 models_list_config。
 DO $$
 BEGIN
     IF EXISTS (
@@ -27,7 +28,13 @@ BEGIN
               AND attname = 'model_allowlist'
               AND NOT attisdropped
         ) THEN
-            ALTER TABLE groups RENAME COLUMN models_list_config TO model_allowlist;
+            ALTER TABLE groups
+                ADD COLUMN model_allowlist JSONB NOT NULL DEFAULT '{}'::jsonb;
+            EXECUTE $copy$
+                UPDATE groups
+                   SET model_allowlist = models_list_config
+                 WHERE COALESCE(models_list_config, '{}'::jsonb) <> '{}'::jsonb
+            $copy$;
         ELSE
             EXECUTE $backfill$
                 UPDATE groups
