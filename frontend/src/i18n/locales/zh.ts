@@ -2255,7 +2255,9 @@ export default {
         invoiceEnabled: '启用发票申请',
         invoiceEnabledHint: '开启后该用户左侧菜单会显示发票申请入口',
         subscriptionPurchaseDisabled: '禁止购买订阅',
-        subscriptionPurchaseDisabledHint: '开启后，该用户无法购买订阅套餐'
+        subscriptionPurchaseDisabledHint: '开启后，该用户无法购买订阅套餐',
+        rechargeBonusDisabled: '禁止返赠',
+        rechargeBonusDisabledHint: '开启后，该用户仍可正常充值，但看不到满赠价签，也不会获得赠送额度'
       },
       adjustBalance: '调整余额',
       adjustConcurrency: '调整并发数',

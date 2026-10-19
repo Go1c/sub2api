@@ -1044,6 +1044,7 @@ export default {
     },
     "rechargeBonus": {
       "creditedShort": "到账 {amount}",
+      "giftTag": "送 {amount}",
       "payShort": "实付 {amount}"
     }
   },

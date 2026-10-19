@@ -59,6 +59,7 @@ const createUser = (overrides: Partial<AdminUser> = {}): AdminUser => ({
   total_recharged: 100,
   invoice_enabled: true,
   subscription_purchase_disabled: false,
+  recharge_bonus_disabled: false,
   concurrency: 1,
   rpm_limit: 0,
   status: 'active',
@@ -173,6 +174,40 @@ describe('UserEditModal invoice access', () => {
       42,
       expect.objectContaining({
         subscription_purchase_disabled: true,
+      }),
+    )
+  })
+
+  it('submits the per-user recharge bonus ban without blocking recharge', async () => {
+    updateUser.mockResolvedValue(createUser({ recharge_bonus_disabled: true }))
+
+    const wrapper = mount(UserEditModal, {
+      props: {
+        show: true,
+        user: createUser({ recharge_bonus_disabled: false }),
+      },
+      global: {
+        stubs: {
+          BaseDialog: BaseDialogStub,
+          UserAttributeForm: true,
+          Icon: true,
+          Select: true,
+        },
+      },
+    })
+
+    const toggle = wrapper.get('[data-test="recharge-bonus-disabled-toggle"]')
+    expect((toggle.element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.text()).toContain('admin.users.form.rechargeBonusDisabledHint')
+
+    await toggle.setValue(true)
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateUser).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({
+        recharge_bonus_disabled: true,
       }),
     )
   })

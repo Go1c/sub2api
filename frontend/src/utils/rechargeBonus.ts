@@ -188,14 +188,14 @@ export function quoteRechargeBonus(
 
 // 区间预览：把升序阈值列表展开为 [from, to) 区间；首档阈值 > 0 时补一段「无优惠」。
 export function describeRechargeBonusIntervals(tiers: RechargeBonusTier[]): RechargeBonusInterval[] {
-  const sorted = [...tiers].sort((a, b) => a.min_amount - b.min_amount)
+  const sorted = [...tiers].sort((a, b) => (a.min_amount ?? 0) - (b.min_amount ?? 0))
   const out: RechargeBonusInterval[] = []
   if (sorted.length === 0) return out
   if (sorted[0]!.min_amount > 0) {
     out.push({ from: 0, to: sorted[0]!.min_amount, percent: 0 })
   }
   sorted.forEach((tier, index) => {
-    out.push({ from: tier.min_amount, to: sorted[index + 1]?.min_amount ?? null, percent: tier.bonus_percent })
+    out.push({ from: tier.min_amount ?? 0, to: sorted[index + 1]?.min_amount ?? null, percent: tier.bonus_percent ?? 0 })
   })
   return out
 }
@@ -204,4 +204,20 @@ export function describeRechargeBonusIntervals(tiers: RechargeBonusTier[]): Rech
 export function formatRechargeBonusNumber(value: number): string {
   if (!Number.isFinite(value)) return '0'
   return String(Number(value.toFixed(2)))
+}
+
+// 线上满赠档位：到账金额 ≥ threshold 时赠送固定 bonus，取满足条件的最高档。
+export function isAbsoluteRechargeBonusTier(tier: RechargeBonusTier): boolean {
+  return typeof tier.threshold === 'number' && tier.threshold > 0 && typeof tier.bonus === 'number' && tier.bonus > 0
+}
+
+export function matchAbsoluteRechargeBonus(tiers: RechargeBonusTier[], creditedAmount: number): number {
+  if (!Number.isFinite(creditedAmount) || creditedAmount <= 0) return 0
+  let best: RechargeBonusTier | null = null
+  for (const tier of tiers) {
+    if (!isAbsoluteRechargeBonusTier(tier)) continue
+    if (creditedAmount + AMOUNT_EPSILON < tier.threshold!) continue
+    if (!best || tier.threshold! > best.threshold!) best = tier
+  }
+  return best?.bonus ?? 0
 }

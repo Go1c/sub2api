@@ -230,6 +230,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	oldRPMLimit := user.RPMLimit
 	oldInvoiceEnabled := user.InvoiceEnabled
 	oldSubscriptionPurchaseDisabled := user.SubscriptionPurchaseDisabled
+	oldRechargeBonusDisabled := user.RechargeBonusDisabled
 	oldAllowedGroups := append([]int64(nil), user.AllowedGroups...)
 
 	if input.Email != "" {
@@ -284,6 +285,10 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		user.SubscriptionPurchaseDisabled = *input.SubscriptionPurchaseDisabled
 	}
 
+	if input.RechargeBonusDisabled != nil {
+		user.RechargeBonusDisabled = *input.RechargeBonusDisabled
+	}
+
 	if input.AllowedGroups != nil {
 		user.AllowedGroups = *input.AllowedGroups
 	}
@@ -299,7 +304,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		RPMLimit:      input.RPMLimit != nil,
 		AllowedGroups: input.AllowedGroups != nil,
 	}
-	if (input.InvoiceEnabled != nil || input.SubscriptionPurchaseDisabled != nil) && fields.IsEmpty() {
+	if (input.InvoiceEnabled != nil || input.SubscriptionPurchaseDisabled != nil || input.RechargeBonusDisabled != nil) && fields.IsEmpty() {
 		fields.Notes = true
 	}
 	if err := s.userRepo.Update(ctx, user, fields); err != nil {
@@ -322,7 +327,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
 		// allowed_groups 参与 API Key 专属分组授权判断；不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.InvoiceEnabled != oldInvoiceEnabled || user.SubscriptionPurchaseDisabled != oldSubscriptionPurchaseDisabled || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.InvoiceEnabled != oldInvoiceEnabled || user.SubscriptionPurchaseDisabled != oldSubscriptionPurchaseDisabled || user.RechargeBonusDisabled != oldRechargeBonusDisabled || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}

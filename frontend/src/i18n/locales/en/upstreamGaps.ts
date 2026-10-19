@@ -1166,6 +1166,7 @@ export default {
     },
     "rechargeBonus": {
       "creditedShort": "Get {amount}",
+      "giftTag": "Bonus {amount}",
       "payShort": "Pay {amount}"
     },
     "status": {

@@ -47,6 +47,26 @@ describe('recharge bonus hints on quick amounts', () => {
     { min_amount: 500, bonus_percent: 30 },
   ]
 
+  it('hides absolute bonus tags when no tiers are passed', () => {
+    const wrapper = mount(AmountInput, { props: { modelValue: null, amounts: [100, 1000] } })
+    expect(wrapper.find('[data-testid="quick-amount-bonus-badge"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="quick-amount-100"]').text()).toContain('100')
+  })
+
+  it('shows an absolute gift tag only on amounts that reach the threshold', () => {
+    const wrapper = mount(AmountInput, {
+      props: {
+        modelValue: null,
+        amounts: [50, 100, 1000],
+        bonusTiers: [{ threshold: 100, bonus: 10 }, { threshold: 1000, bonus: 200 }],
+      },
+    })
+    expect(wrapper.get('[data-testid="quick-amount-50"]').find('[data-testid="quick-amount-bonus-badge"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="quick-amount-100"]').get('[data-testid="quick-amount-bonus-badge"]').text()).toContain('10')
+    expect(wrapper.get('[data-testid="quick-amount-1000"]').get('[data-testid="quick-amount-bonus-badge"]').text()).toContain('200')
+    expect(wrapper.get('[data-testid="quick-amount-1000"]').get('[data-testid="quick-amount-credited"]').text()).toContain('$1200.00')
+  })
+
   it('renders no badge or second line when no tiers are configured', () => {
     const wrapper = mount(AmountInput, { props: { modelValue: null, amounts: [50, 100, 500] } })
     expect(wrapper.find('[data-testid="quick-amount-bonus-badge"]').exists()).toBe(false)

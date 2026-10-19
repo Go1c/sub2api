@@ -2142,7 +2142,9 @@ export default {
         invoiceEnabled: 'Enable invoice requests',
         invoiceEnabledHint: 'When enabled, this user sees the invoice request entry in the left menu',
         subscriptionPurchaseDisabled: 'Ban subscription purchase',
-        subscriptionPurchaseDisabledHint: 'When enabled, this user cannot purchase subscription plans'
+        subscriptionPurchaseDisabledHint: 'When enabled, this user cannot purchase subscription plans',
+        rechargeBonusDisabled: 'Ban recharge bonus',
+        rechargeBonusDisabledHint: 'When enabled, this user can still recharge, but the bonus tags are hidden and no bonus balance is granted'
       },
       columns: {
         user: 'User',

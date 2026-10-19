@@ -92,6 +92,7 @@ export interface User {
   total_recharged?: number // Historical recharge amount available for invoice checks
   invoice_enabled?: boolean // Whether the user can access invoice requests
   subscription_purchase_disabled?: boolean // When true, user cannot purchase subscriptions
+  recharge_bonus_disabled?: boolean // When true, user can recharge but receives no recharge bonus and does not see bonus tags
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status

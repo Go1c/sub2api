@@ -48,9 +48,17 @@ metadata:
 
 - 用户 `RequestRefund` 余额校验改为 `amount + bonus_amount`；`prepDeduct` **全额退款**（refund >= amount）时 `BalanceToDeduct = min(refund + bonus, balance)`，部分退款不回收。否则「充值→退款」循环可白嫖赠送额。
 
+### 按用户禁止返赠
+
+- 字段：`users.recharge_bonus_disabled BOOLEAN NOT NULL DEFAULT FALSE`（迁移 **949**）。默认关闭，存量用户仍参与满赠。
+- 管理端用户编辑开关「禁止返赠」。开启后该用户仍可打开充值页并正常支付。
+- `GET /payment/checkout-info` 对该用户返回 `recharge_bonus_enabled=false` 且档位为空，金额按钮上的满赠价签、档位条和到账赠送行都不出现。
+- 下单快照 `bonus_amount=0`。若封禁前已有带赠送快照的未完成订单，履约时跳过发放并把快照清零，避免退款按未到账的赠送额扣款。
+
 ### 前端
 
-- 用户侧 `GET /payment/checkout-info` 新增 `recharge_bonus_enabled` / `recharge_bonus_tiers`（降序）；充值页金额卡顶部满赠 badge 行 + 到账预览「+ 赠送」badge 与「到账合计」行；结果页/订单表（OrderTable 组件）`bonus_amount > 0` 显示赠送标记。
+- 用户侧 `GET /payment/checkout-info` 新增 `recharge_bonus_enabled` / `recharge_bonus_tiers`（降序）；充值页金额卡顶部满赠 badge 行 + 快捷金额价签 + 到账预览「+ 赠送」badge 与「到账合计」行；结果页/订单表（OrderTable 组件）`bonus_amount > 0` 显示赠送标记。
+- 档位仍是 `threshold` / `bonus`。禁止返赠只清空当前用户看到的档位，不改变站点配置。
 - 管理端 SettingsView 支付设置「充值满赠」块：Toggle + 档位行编辑器（≤20 档，空行保存前剔除）；i18n 中/英/繁已补。
 
 ## 已决策
@@ -68,5 +76,5 @@ metadata:
 ## 相关
 
 - [[payment]]（履约链路）、[[daily-checkin]]（兑换码流水记账同模式）、[[affiliate-signup-bonus]]（余额历史框架）
-- 后端：`payment_config_service.go`、`payment_order.go`（快照）、`payment_fulfillment.go`（`fulfillRechargeBonus`）、`redeem_service.go`、`payment_refund.go`、迁移 `948_recharge_bonus.sql`、测试 `recharge_bonus_test.go`
+- 后端：`payment_config_service.go`、`payment_order.go`（快照）、`payment_fulfillment.go`（`fulfillRechargeBonus`）、`redeem_service.go`、`payment_refund.go`、迁移 `948_recharge_bonus.sql`、`949_add_user_recharge_bonus_disabled.sql`、测试 `recharge_bonus_test.go`
 - 前端：`PaymentView.vue`、`PaymentResultView.vue`、`OrderTable.vue`、`SettingsView.vue`、`RedeemView.vue`、`UserBalanceHistoryModal.vue`

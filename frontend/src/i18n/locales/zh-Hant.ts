@@ -2007,7 +2007,9 @@ export default {
         invoiceEnabled: '啟用發票申請',
         invoiceEnabledHint: '開啟後該用戶左側菜單會顯示發票申請入口',
         subscriptionPurchaseDisabled: '禁止購買訂閱',
-        subscriptionPurchaseDisabledHint: '開啟後，該用戶無法購買訂閱套餐'
+        subscriptionPurchaseDisabledHint: '開啟後，該用戶無法購買訂閱套餐',
+        rechargeBonusDisabled: '禁止返贈',
+        rechargeBonusDisabledHint: '開啟後，該用戶仍可正常充值，但看不到滿贈價簽，也不會獲得贈送額度'
       },
       adjustBalance: '調整餘額',
       adjustConcurrency: '調整併發數',

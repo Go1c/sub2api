@@ -23,6 +23,18 @@ import (
 
 // --- Order Creation ---
 
+// RechargeBonusDisabled reports whether this user is banned from recharge bonus.
+func (s *PaymentService) RechargeBonusDisabled(ctx context.Context, userID int64) (bool, error) {
+	if s == nil || s.userRepo == nil || userID <= 0 {
+		return false, nil
+	}
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return user.RechargeBonusDisabled, nil
+}
+
 func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest) (*CreateOrderResponse, error) {
 	if req.OrderType == "" {
 		req.OrderType = payment.OrderTypeBalance
@@ -478,11 +490,9 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		selectedInstanceID = strings.TrimSpace(sel.InstanceID)
 		selectedProviderKey = strings.TrimSpace(sel.ProviderKey)
 	}
-	// 充值满赠快照：创建订单时按当前配置计算并落库，履约与展示均用此快照而非当前配置
-	bonusAmount := 0.0
-	if req.OrderType == payment.OrderTypeBalance {
-		bonusAmount = computeRechargeBonusAmount(orderAmount, cfg)
-	}
+	// 充值满赠快照：创建订单时按当前配置计算并落库，履约与展示均用此快照而非当前配置。
+	// 禁止返赠的用户快照为 0，充值本身不受影响。
+	bonusAmount := snapshotRechargeBonusAmount(req.OrderType, orderAmount, cfg, user != nil && user.RechargeBonusDisabled)
 	b := tx.PaymentOrder.Create().
 		SetUserID(req.UserID).
 		SetUserEmail(user.Email).
