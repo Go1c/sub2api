@@ -525,6 +525,20 @@ func (_u *UserUpdate) SetNillableSubscriptionPurchaseDisabled(v *bool) *UserUpda
 	return _u
 }
 
+// SetRechargeBonusDisabled sets the "recharge_bonus_disabled" field.
+func (_u *UserUpdate) SetRechargeBonusDisabled(v bool) *UserUpdate {
+	_u.mutation.SetRechargeBonusDisabled(v)
+	return _u
+}
+
+// SetNillableRechargeBonusDisabled sets the "recharge_bonus_disabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRechargeBonusDisabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetRechargeBonusDisabled(*v)
+	}
+	return _u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdate) SetRpmLimit(v int) *UserUpdate {
 	_u.mutation.ResetRpmLimit()
@@ -1377,6 +1391,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.SubscriptionPurchaseDisabled(); ok {
 		_spec.SetField(user.FieldSubscriptionPurchaseDisabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RechargeBonusDisabled(); ok {
+		_spec.SetField(user.FieldRechargeBonusDisabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -2663,6 +2680,20 @@ func (_u *UserUpdateOne) SetNillableSubscriptionPurchaseDisabled(v *bool) *UserU
 	return _u
 }
 
+// SetRechargeBonusDisabled sets the "recharge_bonus_disabled" field.
+func (_u *UserUpdateOne) SetRechargeBonusDisabled(v bool) *UserUpdateOne {
+	_u.mutation.SetRechargeBonusDisabled(v)
+	return _u
+}
+
+// SetNillableRechargeBonusDisabled sets the "recharge_bonus_disabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRechargeBonusDisabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetRechargeBonusDisabled(*v)
+	}
+	return _u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdateOne) SetRpmLimit(v int) *UserUpdateOne {
 	_u.mutation.ResetRpmLimit()
@@ -3545,6 +3576,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.SubscriptionPurchaseDisabled(); ok {
 		_spec.SetField(user.FieldSubscriptionPurchaseDisabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RechargeBonusDisabled(); ok {
+		_spec.SetField(user.FieldRechargeBonusDisabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)

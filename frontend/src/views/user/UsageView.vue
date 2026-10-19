@@ -1,70 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
-
-      <div class="space-y-4">
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
-              <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalTokens') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ formatTokens(usageStats?.total_tokens || 0) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.in') }}: {{ formatTokens(usageStats?.total_input_tokens || 0) }} /
-                {{ t('usage.out') }}: {{ formatTokens(usageStats?.total_output_tokens || 0) }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Total Cost -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-              <Icon name="dollar" size="md" class="text-green-600 dark:text-green-400" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalCost') }}
-              </p>
-              <p class="text-xl font-bold text-green-600 dark:text-green-400">
-                ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.actualCost') }} /
-                <span class="line-through">${{ (usageStats?.total_cost || 0).toFixed(4) }}</span>
-                {{ t('usage.standardCost') }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Average Duration -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
-              <Icon name="clock" size="md" class="text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.avgDuration') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ formatDuration(usageStats?.average_duration_ms || 0) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.perRequest') }}</p>
-            </div>
-          </div>
-        </div>
-        </div>
-    </div>
+    <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
     <TablePageLayout>
       <template #filters>
@@ -111,16 +47,36 @@
               </div>
             </template>
 
-            <!-- Usage tab API key filter -->
-            <div v-else class="min-w-[180px]">
-              <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
-              <Select
-                v-model="filters.api_key_id"
-                :options="apiKeyOptions"
-                :placeholder="t('usage.allApiKeys')"
-                @change="applyFilters"
-              />
-            </div>
+            <!-- Usage tab filters -->
+            <template v-else>
+              <div class="min-w-[180px]">
+                <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
+                <Select
+                  v-model="filters.api_key_id"
+                  :options="apiKeyOptions"
+                  :placeholder="t('usage.allApiKeys')"
+                  @change="applyFilters"
+                />
+              </div>
+              <div class="min-w-[180px]">
+                <label class="input-label">{{ t('usage.model') }}</label>
+                <Select
+                  v-model="filters.model"
+                  :options="modelOptions"
+                  searchable
+                  @change="applyFilters"
+                />
+              </div>
+              <div class="min-w-[180px]">
+                <label class="input-label">{{ t('admin.usage.group') }}</label>
+                <Select
+                  v-model="filters.group_id"
+                  :options="groupOptions"
+                  searchable
+                  @change="applyFilters"
+                />
+              </div>
+            </template>
 
             <!-- Date Range Filter (shared by usage + errors) -->
             <div>
@@ -685,7 +641,7 @@
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { keysAPI, usageAPI } from '@/api'
+import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
@@ -697,7 +653,7 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
-import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse, UserErrorRequest, GroupStat, ModelStat, EndpointStat, TrendDataPoint } from '@/types'
+import type { UsageLog, ApiKey, Group, UsageQueryParams, UsageStatsResponse, UserErrorRequest, GroupStat, ModelStat, EndpointStat, TrendDataPoint } from '@/types'
 import type { Column } from '@/components/common/types'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -934,11 +890,22 @@ const imageUnitPrice = (row: UsageLog | null): number => {
 }
 
 const apiKeys = ref<ApiKey[]>([])
+const groups = ref<Group[]>([])
 const modelOptionValues = ref<string[]>([])
 
 const apiKeyOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('usage.allApiKeys') },
   ...apiKeys.value.map((key) => ({ value: key.id, label: key.name })),
+])
+
+const modelOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('admin.usage.allModels') },
+  ...modelOptionValues.value.map((model) => ({ value: model, label: model })),
+])
+
+const groupOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('admin.usage.allGroups') },
+  ...groups.value.map((group) => ({ value: group.id, label: group.name })),
 ])
 
 const formatUserAgent = (ua: string): string => ua
@@ -1022,17 +989,6 @@ const formatUsageModelForExport = (log: UsageLog): string => {
   }
 
   return log.model
-}
-
-const formatTokens = (value: number): string => {
-  if (value >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(2)}B`
-  } else if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(2)}M`
-  } else if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(2)}K`
-  }
-  return String(value)
 }
 
 const normalizedFilters = computed<UsageQueryParams>(() => {
@@ -1441,10 +1397,23 @@ const loadApiKeys = async () => {
   return keys
 }
 
+const loadFilterOptions = async () => {
+  try {
+    const [keys, availableGroups] = await Promise.all([
+      loadApiKeys(),
+      userGroupsAPI.getAvailable(),
+    ])
+    apiKeys.value = keys
+    groups.value = Array.isArray(availableGroups) ? availableGroups : []
+  } catch (error) {
+    console.error('Failed to load usage filter options:', error)
+  }
+}
+
 onMounted(() => {
   loadSavedErrColumns()
   document.addEventListener('click', handleErrorColumnClickOutside)
-  loadApiKeys()
+  void loadFilterOptions()
   void loadLogs()
   void loadStats()
   void loadModelStats()

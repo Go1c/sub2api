@@ -2789,8 +2789,12 @@ func init() {
 	userDescSubscriptionPurchaseDisabled := userFields[26].Descriptor()
 	// user.DefaultSubscriptionPurchaseDisabled holds the default value on creation for the subscription_purchase_disabled field.
 	user.DefaultSubscriptionPurchaseDisabled = userDescSubscriptionPurchaseDisabled.Default.(bool)
+	// userDescRechargeBonusDisabled is the schema descriptor for recharge_bonus_disabled field.
+	userDescRechargeBonusDisabled := userFields[27].Descriptor()
+	// user.DefaultRechargeBonusDisabled holds the default value on creation for the recharge_bonus_disabled field.
+	user.DefaultRechargeBonusDisabled = userDescRechargeBonusDisabled.Default.(bool)
 	// userDescRpmLimit is the schema descriptor for rpm_limit field.
-	userDescRpmLimit := userFields[27].Descriptor()
+	userDescRpmLimit := userFields[28].Descriptor()
 	// user.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	user.DefaultRpmLimit = userDescRpmLimit.Default.(int)
 	useraccesstokenMixin := schema.UserAccessToken{}.Mixin()
