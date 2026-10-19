@@ -112,10 +112,20 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	bonusTiers := cfg.RechargeBonusTiers
-	if bonusTiers == nil {
-		bonusTiers = []service.RechargeBonusTier{}
+	subject, ok := requireAuth(c)
+	if !ok {
+		return
 	}
+	bonusDisabled := false
+	if h.paymentService != nil {
+		disabled, err := h.paymentService.RechargeBonusDisabled(ctx, subject.UserID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		bonusDisabled = disabled
+	}
+	bonusEnabled, bonusTiers := service.VisibleRechargeBonus(cfg, bonusDisabled)
 
 	// Fetch plans with group info
 	plans, _ := h.configService.ListPlansForSale(ctx)
@@ -144,7 +154,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		HelpImageURL:                      cfg.HelpImageURL,
 		StripePublishableKey:              cfg.StripePublishableKey,
 		AlipayForceQRCode:                 cfg.AlipayForceQRCode,
-		RechargeBonusEnabled:              cfg.RechargeBonusEnabled,
+		RechargeBonusEnabled:              bonusEnabled,
 		RechargeBonusTiers:                bonusTiers,
 	})
 }

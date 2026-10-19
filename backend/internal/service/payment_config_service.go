@@ -471,7 +471,6 @@ func formatPositiveFloatExact(v *float64) string {
 	return strconv.FormatFloat(*v, 'f', -1, 64)
 }
 
-
 // parseRechargeBonusTiers 解析充值满赠档位 JSON；空串/解析失败返回空 slice（禁 panic）。
 func parseRechargeBonusTiers(raw string) []RechargeBonusTier {
 	if raw == "" {
@@ -512,6 +511,25 @@ func normalizeRechargeBonusTiers(tiers []RechargeBonusTier) []RechargeBonusTier 
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Threshold > out[j].Threshold })
 	return out
+}
+
+// snapshotRechargeBonusAmount 是下单时写入的赠送快照。禁止返赠或非余额充值时为 0。
+func snapshotRechargeBonusAmount(orderType string, creditedAmount float64, cfg *PaymentConfig, bonusDisabled bool) float64 {
+	if bonusDisabled || orderType != payment.OrderTypeBalance {
+		return 0
+	}
+	return computeRechargeBonusAmount(creditedAmount, cfg)
+}
+
+// VisibleRechargeBonus 决定充值页是否下发满赠档位。禁止返赠时关闭展示，充值页其余内容不变。
+func VisibleRechargeBonus(cfg *PaymentConfig, bonusDisabled bool) (bool, []RechargeBonusTier) {
+	if cfg == nil || bonusDisabled || !cfg.RechargeBonusEnabled {
+		return false, []RechargeBonusTier{}
+	}
+	if cfg.RechargeBonusTiers == nil {
+		return true, []RechargeBonusTier{}
+	}
+	return true, cfg.RechargeBonusTiers
 }
 
 // computeRechargeBonusAmount 返回到账金额命中的最高档赠送额（未命中返回 0）。

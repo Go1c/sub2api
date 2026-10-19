@@ -175,6 +175,11 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 			return err
 		}
 	}
+	if userIn.RechargeBonusDisabled {
+		if err := setUserRechargeBonusDisabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), created.ID, true); err != nil {
+			return err
+		}
+	}
 	if userIn.RestrictPublicGroups {
 		if err := setUserRestrictPublicGroups(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), created.ID, true); err != nil {
 			return err
@@ -209,6 +214,9 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 		return nil, err
 	}
 	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
+		return nil, err
+	}
+	if err := r.hydrateRechargeBonusDisabled(ctx, out); err != nil {
 		return nil, err
 	}
 	if err := r.hydrateRestrictPublicGroups(ctx, out); err != nil {
@@ -262,6 +270,9 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 		return nil, err
 	}
 	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
+		return nil, err
+	}
+	if err := r.hydrateRechargeBonusDisabled(ctx, out); err != nil {
 		return nil, err
 	}
 	if err := r.hydrateRestrictPublicGroups(ctx, out); err != nil {
@@ -368,6 +379,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 		return err
 	}
 	if err := setUserSubscriptionPurchaseDisabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), updated.ID, userIn.SubscriptionPurchaseDisabled); err != nil {
+		return err
+	}
+	if err := setUserRechargeBonusDisabled(txCtx, txAwareSQLExecutor(txCtx, r.sql, r.client), updated.ID, userIn.RechargeBonusDisabled); err != nil {
 		return err
 	}
 
@@ -726,6 +740,9 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 			return nil, nil, err
 		}
 		if err := r.hydrateSubscriptionPurchaseDisabled(ctx, u); err != nil {
+			return nil, nil, err
+		}
+		if err := r.hydrateRechargeBonusDisabled(ctx, u); err != nil {
 			return nil, nil, err
 		}
 		if err := r.hydrateRestrictPublicGroups(ctx, u); err != nil {
@@ -1609,6 +1626,9 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	if err := r.hydrateSubscriptionPurchaseDisabled(ctx, out); err != nil {
 		return nil, err
 	}
+	if err := r.hydrateRechargeBonusDisabled(ctx, out); err != nil {
+		return nil, err
+	}
 	if err := r.hydrateRestrictPublicGroups(ctx, out); err != nil {
 		return nil, err
 	}
@@ -1701,6 +1721,36 @@ func setUserSubscriptionPurchaseDisabled(ctx context.Context, exec sqlQueryExecu
 	}
 	if _, err := exec.ExecContext(ctx, "UPDATE users SET subscription_purchase_disabled = $1 WHERE id = $2", disabled, userID); err != nil {
 		return fmt.Errorf("update user subscription purchase ban flag: %w", err)
+	}
+	return nil
+}
+
+func (r *userRepository) hydrateRechargeBonusDisabled(ctx context.Context, user *service.User) error {
+	if user == nil {
+		return nil
+	}
+	exec := txAwareSQLExecutor(ctx, r.sql, r.client)
+	if exec == nil {
+		return nil
+	}
+	var disabled bool
+	err := scanSingleRow(ctx, exec, "SELECT recharge_bonus_disabled FROM users WHERE id = $1", []any{user.ID}, &disabled)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("load user recharge bonus ban flag: %w", err)
+	}
+	user.RechargeBonusDisabled = disabled
+	return nil
+}
+
+func setUserRechargeBonusDisabled(ctx context.Context, exec sqlQueryExecutor, userID int64, disabled bool) error {
+	if exec == nil {
+		return nil
+	}
+	if _, err := exec.ExecContext(ctx, "UPDATE users SET recharge_bonus_disabled = $1 WHERE id = $2", disabled, userID); err != nil {
+		return fmt.Errorf("update user recharge bonus ban flag: %w", err)
 	}
 	return nil
 }

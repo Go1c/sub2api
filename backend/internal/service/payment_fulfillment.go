@@ -496,9 +496,15 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 	// 赠送发放放在两个分支的汇合处：主码已入账（SkipCompleted）但赠送上次失败的重试
 	// 也能在此补发，且由 "-B" 锚定码保证不重复。
 	if o.BonusAmount > 0 {
-		if err := s.fulfillRechargeBonus(ctx, o); err != nil {
-			// 失败走 markFailed → 既有重试链路
+		suppressed, err := s.rechargeBonusSuppressed(ctx, o)
+		if err != nil {
 			return fmt.Errorf("recharge bonus: %w", err)
+		}
+		if !suppressed {
+			if err := s.fulfillRechargeBonus(ctx, o); err != nil {
+				// 失败走 markFailed → 既有重试链路
+				return fmt.Errorf("recharge bonus: %w", err)
+			}
 		}
 	}
 	s.applyAffiliateRebateBestEffort(ctx, o)
@@ -508,6 +514,27 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 // fulfillRechargeBonus 发放充值满赠赠送余额。
 // 与主码同构：幂等锚定为 "{recharge_code}-B"（远小于 recharge_code 的 64 上限），
 // GetByCode 不存在则创建 type=recharge_bonus 的兑换码后走可信兑换入账。
+// rechargeBonusSuppressed 在履约时再看一次禁止返赠。封禁后清掉快照，避免退款按未发放的赠送额扣款。
+func (s *PaymentService) rechargeBonusSuppressed(ctx context.Context, o *dbent.PaymentOrder) (bool, error) {
+	if s == nil || s.userRepo == nil || o == nil || o.BonusAmount <= 0 {
+		return false, nil
+	}
+	user, err := s.userRepo.GetByID(ctx, o.UserID)
+	if err != nil {
+		return false, err
+	}
+	if !user.RechargeBonusDisabled {
+		return false, nil
+	}
+	if s.entClient != nil {
+		if _, err := s.entClient.PaymentOrder.UpdateOneID(o.ID).SetBonusAmount(0).Save(ctx); err != nil {
+			return false, err
+		}
+	}
+	o.BonusAmount = 0
+	return true, nil
+}
+
 func (s *PaymentService) fulfillRechargeBonus(ctx context.Context, o *dbent.PaymentOrder) error {
 	bonusCode := o.RechargeCode + "-B"
 	existing, lookupErr := s.redeemService.GetByCode(ctx, bonusCode)

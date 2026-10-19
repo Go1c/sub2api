@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted } from 'vue'
-import { useWindowSize } from '@vueuse/core'
+import { useResizeObserver, useWindowSize } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { Icon } from '@/components/icons'
 import type { Account } from '@/types'
@@ -88,6 +88,30 @@ const menuStyle = computed(() => ({
 
 
 const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
+const menuRef = ref<HTMLElement | null>(null)
+
+const updatePosition = () => {
+  if (!menuRef.value || !props.anchorRect) return
+
+  const { width, height } = menuRef.value.getBoundingClientRect()
+  const anchor = props.anchorRect
+  const gap = 4
+  const maxTop = viewportHeight.value - height - viewportPadding
+  const top = anchor.bottom + gap <= maxTop
+    ? anchor.bottom + gap
+    : anchor.top - height - gap
+  const left = viewportWidth.value < 768
+    ? anchor.left + anchor.width / 2 - width / 2
+    : anchor.right - width
+
+  menuPosition.value.top = Math.max(viewportPadding, Math.min(top, maxTop))
+  menuPosition.value.left = Math.max(viewportPadding, Math.min(left, viewportWidth.value - width - viewportPadding))
+}
+
+// Measure after rendering; menu items and translated labels can change its size.
+watch([menuRef, () => props.anchorRect, viewportWidth, viewportHeight], updatePosition, { flush: 'post' })
+useResizeObserver(menuRef, updatePosition)
+
 const emit = defineEmits(['close', 'test', 'iq-test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
 const { t } = useI18n()
 const canDuplicate = computed(() => {

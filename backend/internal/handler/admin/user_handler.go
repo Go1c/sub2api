@@ -83,6 +83,7 @@ type UpdateUserRequest struct {
 	RPMLimit                     *int     `json:"rpm_limit"`
 	InvoiceEnabled               *bool    `json:"invoice_enabled"`
 	SubscriptionPurchaseDisabled *bool    `json:"subscription_purchase_disabled"`
+	RechargeBonusDisabled        *bool    `json:"recharge_bonus_disabled"`
 	Status                       string   `json:"status" binding:"omitempty,oneof=active disabled"`
 	AllowedGroups                *[]int64 `json:"allowed_groups"`
 	// GroupRates 用户专属分组倍率配置
@@ -379,6 +380,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		RPMLimit:                     req.RPMLimit,
 		InvoiceEnabled:               req.InvoiceEnabled,
 		SubscriptionPurchaseDisabled: req.SubscriptionPurchaseDisabled,
+		RechargeBonusDisabled:        req.RechargeBonusDisabled,
 		Status:                       req.Status,
 		AllowedGroups:                req.AllowedGroups,
 		GroupRates:                   req.GroupRates,

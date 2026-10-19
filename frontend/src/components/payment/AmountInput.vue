@@ -14,7 +14,7 @@
             'relative rounded-lg border-2 px-3 py-3 text-center font-medium transition-colors',
             modelValue === amt
               ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/40 dark:text-primary-300'
-              : quoteFor(amt).percent > 0
+              : showsBonusTag(amt)
                 ? 'border-red-200 bg-white text-gray-700 hover:border-red-300 dark:border-red-500/40 dark:bg-dark-800 dark:text-gray-200 dark:hover:border-red-400/60'
                 : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:border-dark-500',
           ]"
@@ -23,7 +23,7 @@
         >
           <!-- 促销价签（单行）：仅命中档位的金额显示；红底白字、内圈点线、右侧圆孔、整体旋转 -->
           <span
-            v-if="quoteFor(amt).percent > 0"
+            v-if="showsBonusTag(amt)"
             class="pointer-events-none absolute -right-2 -top-3 z-10 rotate-12"
             data-testid="quick-amount-bonus-badge"
           >
@@ -40,7 +40,7 @@
             v-if="showSecondLine"
             :class="[
               'mt-0.5 block text-[11px] font-normal leading-tight',
-              quoteFor(amt).percent > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-400 dark:text-gray-500',
+              showsBonusTag(amt) ? 'text-red-600 dark:text-red-300' : 'text-gray-400 dark:text-gray-500',
             ]"
             data-testid="quick-amount-credited"
           >{{ secondLine(amt) }}</span>
@@ -74,7 +74,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RechargeBonusTier } from '@/types/payment'
-import { formatRechargeBonusNumber, quoteRechargeBonus, type RechargeBonusMode } from '@/utils/rechargeBonus'
+import { formatRechargeBonusNumber, isAbsoluteRechargeBonusTier, matchAbsoluteRechargeBonus, quoteRechargeBonus, roundRechargeAmount, type RechargeBonusMode, type RechargeBonusQuote } from '@/utils/rechargeBonus'
 import { formatPaymentAmount } from './currency'
 
 const props = withDefaults(defineProps<{
@@ -124,23 +124,50 @@ function currencyDigits(): number {
   }
 }
 
-function quoteFor(amt: number) {
-  return quoteRechargeBonus(props.bonusTiers, amt, {
-    multiplier: props.multiplier,
-    mode: props.bonusMode,
-    currencyDigits: currencyDigits(),
-  })
+type AmountQuote = RechargeBonusQuote & { absolute: boolean }
+
+function quoteFor(amt: number): AmountQuote {
+  if (props.bonusTiers.some(isAbsoluteRechargeBonusTier)) {
+    const rate = typeof props.multiplier === 'number' && Number.isFinite(props.multiplier) && props.multiplier > 0 ? props.multiplier : 1
+    const base = roundRechargeAmount(amt * rate)
+    const bonus = matchAbsoluteRechargeBonus(props.bonusTiers, base)
+    return {
+      mode: 'bonus',
+      percent: 0,
+      payBase: amt,
+      base,
+      bonus,
+      credited: roundRechargeAmount(base + bonus),
+      tier: null,
+      absolute: true,
+    }
+  }
+  return {
+    ...quoteRechargeBonus(props.bonusTiers, amt, {
+      multiplier: props.multiplier,
+      mode: props.bonusMode,
+      currencyDigits: currencyDigits(),
+    }),
+    absolute: false,
+  }
 }
 
-// 价签文案：赠金「+20%」，折扣「20% OFF」
+function showsBonusTag(amt: number): boolean {
+  const quote = quoteFor(amt)
+  return quote.absolute ? quote.bonus > 0 : quote.percent > 0
+}
+
+// 价签文案：固定满赠「送 100」，百分比赠金「+20%」，折扣「20% OFF」
 function badgeText(amt: number): string {
-  const percent = formatRechargeBonusNumber(quoteFor(amt).percent)
+  const quote = quoteFor(amt)
+  if (quote.absolute) return t('payment.rechargeBonus.giftTag', { amount: formatRechargeBonusNumber(quote.bonus) })
+  const percent = formatRechargeBonusNumber(quote.percent)
   return props.bonusMode === 'discount' ? `${percent}% OFF` : `+${percent}%`
 }
 
 function secondLine(amt: number): string {
   const quote = quoteFor(amt)
-  if (props.bonusMode === 'discount') {
+  if (!quote.absolute && props.bonusMode === 'discount') {
     return t('payment.rechargeBonus.payShort', { amount: formatPaymentAmount(quote.payBase, props.currency) })
   }
   return t('payment.rechargeBonus.creditedShort', { amount: '$' + quote.credited.toFixed(2) })

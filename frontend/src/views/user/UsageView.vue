@@ -264,6 +264,23 @@
           @ipGeoBatchFailed="handleIpGeoBatchFailed"
         >
 
+          <template #cell-api_key="{ row }">
+            <span data-testid="usage-api-key" class="text-sm text-gray-900 dark:text-white">
+              {{ row.api_key?.name || '-' }}
+            </span>
+          </template>
+
+          <template #cell-group="{ row }">
+            <span
+              v-if="row.group"
+              data-testid="usage-group"
+              class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
+            >
+              {{ row.group.name }}
+            </span>
+            <span v-else data-testid="usage-group" class="text-sm text-gray-400 dark:text-gray-500">-</span>
+          </template>
+
           <template #cell-model="{ row, value }">
             <div
               v-if="row.model_mapping_chain && row.model_mapping_chain.includes('→')"

@@ -64,19 +64,21 @@
                 <div class="card p-5">
                   <div v-if="rechargeBonusTiers.length > 0" class="mb-3 flex flex-wrap items-center gap-1.5">
                     <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">🎁 {{ t('payment.rechargeBonusLabel') }}</span>
-                    <span
-                      v-for="tier in rechargeBonusTiers"
-                      :key="`${tier.min_amount}-${tier.bonus_percent}`"
-                      class="badge badge-success text-[10px]"
-                    >
-                      {{ t('payment.rechargeBonusTier', { threshold: formatBonusAmount(tier.min_amount), bonus: formatBonusAmount(calculateRechargeBonus(tier.min_amount, tier.bonus_percent)) }) }}
-                    </span>
+                    <template v-for="tier in rechargeBonusTiers" :key="bonusTierKey(tier)">
+                      <span v-if="bonusTierText(tier)" class="badge badge-success text-[10px]">
+                        {{ bonusTierText(tier) }}
+                      </span>
+                    </template>
                   </div>
                   <AmountInput
                     v-model="amount"
                     :amounts="[10, 20, 50, 100, 200, 500, 1000, 2000, 5000]"
                     :min="globalMinAmount"
                     :max="globalMaxAmount"
+                    :bonus-tiers="rechargeBonusTiers"
+                    :bonus-mode="rechargeBonusMode"
+                    :multiplier="balanceRechargeMultiplier"
+                    :currency="selectedCurrency"
                   />
                   <p v-if="amountError" class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ amountError }}</p>
                 </div>
@@ -345,7 +347,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
-import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType, RechargeBonusTier } from '@/types/payment'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
@@ -371,7 +373,7 @@ import { DEFAULT_PAYMENT_CURRENCY, formatPaymentAmount, normalizePaymentCurrency
 import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSelector.vue'
 import { buildPaymentErrorToastMessage, describePaymentScenarioError } from './paymentUx'
 import { hasWechatResumeQuery, parseWechatResumeRoute, stripWechatResumeQuery } from './paymentWechatResume'
-import { normalizeRechargeBonusMode , quoteRechargeBonus, calculateRechargeBonus} from '@/utils/rechargeBonus'
+import { normalizeRechargeBonusMode, quoteRechargeBonus, calculateRechargeBonus, isAbsoluteRechargeBonusTier, matchAbsoluteRechargeBonus } from '@/utils/rechargeBonus'
 
 const selectedMethod = ref('')
 
@@ -465,6 +467,27 @@ function formatUsd(value: number): string {
 /** 满赠档位金额展示：去掉多余小数（1000.00 → 1000，99.50 → 99.5） */
 function formatBonusAmount(value: number): string {
   return Number(value.toFixed(2)).toString()
+}
+
+function bonusTierKey(tier: RechargeBonusTier): string {
+  if (isAbsoluteRechargeBonusTier(tier)) return `abs-${tier.threshold}-${tier.bonus}`
+  return `pct-${tier.min_amount}-${tier.bonus_percent}`
+}
+
+function bonusTierText(tier: RechargeBonusTier): string {
+  if (isAbsoluteRechargeBonusTier(tier)) {
+    return t('payment.rechargeBonusTier', {
+      threshold: formatBonusAmount(tier.threshold!),
+      bonus: formatBonusAmount(tier.bonus!),
+    })
+  }
+  if (typeof tier.min_amount === 'number' && typeof tier.bonus_percent === 'number') {
+    return t('payment.rechargeBonusTier', {
+      threshold: formatBonusAmount(tier.min_amount),
+      bonus: formatBonusAmount(calculateRechargeBonus(tier.min_amount, tier.bonus_percent)),
+    })
+  }
+  return ''
 }
 
 function planCreditDisplay(plan: SubscriptionPlan): string {
@@ -733,7 +756,12 @@ const rechargeBonusMode = computed(() => normalizeRechargeBonusMode(checkout.val
 const rechargeBonusTiers = computed(() =>
   checkout.value.recharge_bonus_enabled ? (checkout.value.recharge_bonus_tiers ?? []) : [],
 )
-const rechargeBonus = computed(() => bonusQuote.value.bonus)
+const rechargeBonus = computed(() => {
+  if (rechargeBonusTiers.value.some(isAbsoluteRechargeBonusTier)) {
+    return matchAbsoluteRechargeBonus(rechargeBonusTiers.value, creditedAmount.value)
+  }
+  return bonusQuote.value.bonus
+})
 const creditedTotal = computed(() => Math.round((creditedAmount.value + rechargeBonus.value) * 100) / 100)
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+

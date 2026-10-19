@@ -74,6 +74,7 @@ func TestAPIContracts(t *testing.T) {
 					"total_recharged": 0,
 					"invoice_enabled": false,
 				"subscription_purchase_disabled": false,
+				"recharge_bonus_disabled": false,
 					"linuxdo_bound": false,
 					"oidc_bound": false,
 					"wechat_bound": false,

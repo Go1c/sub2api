@@ -53,6 +53,16 @@ func TestMigration920AddsUserFrozenBalanceIdempotently(t *testing.T) {
 	require.NotContains(t, sql, "DROP COLUMN")
 }
 
+func TestMigration949AddsRechargeBonusDisabledIdempotently(t *testing.T) {
+	content, err := FS.ReadFile("949_add_user_recharge_bonus_disabled.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS recharge_bonus_disabled BOOLEAN NOT NULL DEFAULT FALSE")
+	require.Contains(t, string(content), "IF NOT EXISTS")
+	require.NotContains(t, sql, "DROP COLUMN")
+}
+
 func TestMigration921AddsSubscriptionPurchaseDisabledIdempotently(t *testing.T) {
 	content, err := FS.ReadFile("921_add_user_subscription_purchase_disabled.sql")
 	require.NoError(t, err)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,32 @@ import (
 // ---------------------------------------------------------------------------
 // computeRechargeBonusAmount — 单档满赠、取满足条件的最高档
 // ---------------------------------------------------------------------------
+
+func TestSnapshotRechargeBonusAmountSkipsBannedUsers(t *testing.T) {
+	t.Parallel()
+	cfg := &PaymentConfig{
+		RechargeBonusEnabled: true,
+		RechargeBonusTiers:   []RechargeBonusTier{{Threshold: 100, Bonus: 10}},
+	}
+	assert.InDelta(t, 10.0, snapshotRechargeBonusAmount(payment.OrderTypeBalance, 100, cfg, false), 1e-9)
+	assert.Zero(t, snapshotRechargeBonusAmount(payment.OrderTypeBalance, 100, cfg, true))
+	assert.Zero(t, snapshotRechargeBonusAmount(payment.OrderTypeSubscription, 100, cfg, false))
+}
+
+func TestVisibleRechargeBonusHidesTagsWhenBanned(t *testing.T) {
+	t.Parallel()
+	cfg := &PaymentConfig{
+		RechargeBonusEnabled: true,
+		RechargeBonusTiers:   []RechargeBonusTier{{Threshold: 100, Bonus: 10}},
+	}
+	enabled, tiers := VisibleRechargeBonus(cfg, false)
+	assert.True(t, enabled)
+	require.Len(t, tiers, 1)
+
+	enabled, tiers = VisibleRechargeBonus(cfg, true)
+	assert.False(t, enabled)
+	assert.Empty(t, tiers)
+}
 
 func TestComputeRechargeBonusAmount(t *testing.T) {
 	t.Parallel()

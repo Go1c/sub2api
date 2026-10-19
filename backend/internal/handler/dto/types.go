@@ -45,6 +45,8 @@ type User struct {
 
 	// SubscriptionPurchaseDisabled 为 true 时禁止该用户购买订阅。
 	SubscriptionPurchaseDisabled bool `json:"subscription_purchase_disabled"`
+	// RechargeBonusDisabled 为 true 时该用户仍可充值，但没有满赠价签和赠送额度。
+	RechargeBonusDisabled bool `json:"recharge_bonus_disabled"`
 
 	APIKeys       []APIKey           `json:"api_keys,omitempty"`
 	Subscriptions []UserSubscription `json:"subscriptions,omitempty"`
@@ -117,10 +119,10 @@ type Group struct {
 	// name/description 换成请求语言的版本后清空本字段。
 	I18n domain.GroupI18n `json:"i18n,omitempty"`
 
-	SubscriptionType          string   `json:"subscription_type"`
-	DailyLimitUSD             *float64 `json:"daily_limit_usd"`
-	WeeklyLimitUSD            *float64 `json:"weekly_limit_usd"`
-	MonthlyLimitUSD           *float64 `json:"monthly_limit_usd"`
+	SubscriptionType string   `json:"subscription_type"`
+	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
+	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd"`
+	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd"`
 
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool    `json:"allow_image_generation"`
@@ -194,9 +196,9 @@ type AdminGroup struct {
 	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数存储）。
 	// 仅管理员可见：这三个字段与同响应中的 rate_multiplier 相乘即可反推出
 	// 运营方的上游成本上限，属于内部经营信息，不得下放到 dto.Group。
-	ProfitControlEnabled bool                          `json:"profit_control_enabled"`
-	ProfitMinMargin      float64                       `json:"profit_min_margin"`
-	ProfitSafetyBuffer   float64                       `json:"profit_safety_buffer"`
+	ProfitControlEnabled bool    `json:"profit_control_enabled"`
+	ProfitMinMargin      float64 `json:"profit_min_margin"`
+	ProfitSafetyBuffer   float64 `json:"profit_safety_buffer"`
 	// ModelPricing 分组级逐模型定价，仅管理员可见。
 	ModelPricing []service.ChannelModelPricing `json:"model_pricing"`
 
@@ -231,26 +233,26 @@ type Account struct {
 	Type     string  `json:"type"`
 	// Credentials 经 RedactCredentials 处理后只含非敏感子键；敏感 token / api_key / 私钥
 	// 的存在性通过 CredentialsStatus（has_<key>）暴露，原始值不返回前端。
-	Credentials             map[string]any  `json:"credentials"`
-	CredentialsStatus       map[string]bool `json:"credentials_status,omitempty"`
-	Extra                   map[string]any  `json:"extra"`
+	Credentials             map[string]any                 `json:"credentials"`
+	CredentialsStatus       map[string]bool                `json:"credentials_status,omitempty"`
+	Extra                   map[string]any                 `json:"extra"`
 	OllamaCloudUsage        *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
 	OpenCodeGoUsage         *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
-	ProxyID                 *int64          `json:"proxy_id"`
-	ProxyIPGroupID          *int64          `json:"proxy_ip_group_id"`
-	ProxyFallbackOriginID   *int64          `json:"proxy_fallback_origin_id"`
-	ProxyFallbackOriginName *string         `json:"proxy_fallback_origin_name,omitempty"`
-	Concurrency             int             `json:"concurrency"`
-	LoadFactor              *int            `json:"load_factor,omitempty"`
-	Priority                int             `json:"priority"`
-	RateMultiplier          float64         `json:"rate_multiplier"`
-	Status                  string          `json:"status"`
-	ErrorMessage            string          `json:"error_message"`
-	LastUsedAt              *time.Time      `json:"last_used_at"`
-	ExpiresAt               *int64          `json:"expires_at"`
-	AutoPauseOnExpired      bool            `json:"auto_pause_on_expired"`
-	CreatedAt               time.Time       `json:"created_at"`
-	UpdatedAt               time.Time       `json:"updated_at"`
+	ProxyID                 *int64                         `json:"proxy_id"`
+	ProxyIPGroupID          *int64                         `json:"proxy_ip_group_id"`
+	ProxyFallbackOriginID   *int64                         `json:"proxy_fallback_origin_id"`
+	ProxyFallbackOriginName *string                        `json:"proxy_fallback_origin_name,omitempty"`
+	Concurrency             int                            `json:"concurrency"`
+	LoadFactor              *int                           `json:"load_factor,omitempty"`
+	Priority                int                            `json:"priority"`
+	RateMultiplier          float64                        `json:"rate_multiplier"`
+	Status                  string                         `json:"status"`
+	ErrorMessage            string                         `json:"error_message"`
+	LastUsedAt              *time.Time                     `json:"last_used_at"`
+	ExpiresAt               *int64                         `json:"expires_at"`
+	AutoPauseOnExpired      bool                           `json:"auto_pause_on_expired"`
+	CreatedAt               time.Time                      `json:"created_at"`
+	UpdatedAt               time.Time                      `json:"updated_at"`
 
 	Schedulable bool `json:"schedulable"`
 
