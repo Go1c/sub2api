@@ -205,6 +205,11 @@ func SubscriptionPurchaseDisabled(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldSubscriptionPurchaseDisabled, v))
 }
 
+// RechargeBonusDisabled applies equality check predicate on the "recharge_bonus_disabled" field. It's identical to RechargeBonusDisabledEQ.
+func RechargeBonusDisabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRechargeBonusDisabled, v))
+}
+
 // RpmLimit applies equality check predicate on the "rpm_limit" field. It's identical to RpmLimitEQ.
 func RpmLimit(v int) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
@@ -1543,6 +1548,16 @@ func SubscriptionPurchaseDisabledEQ(v bool) predicate.User {
 // SubscriptionPurchaseDisabledNEQ applies the NEQ predicate on the "subscription_purchase_disabled" field.
 func SubscriptionPurchaseDisabledNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldSubscriptionPurchaseDisabled, v))
+}
+
+// RechargeBonusDisabledEQ applies the EQ predicate on the "recharge_bonus_disabled" field.
+func RechargeBonusDisabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRechargeBonusDisabled, v))
+}
+
+// RechargeBonusDisabledNEQ applies the NEQ predicate on the "recharge_bonus_disabled" field.
+func RechargeBonusDisabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRechargeBonusDisabled, v))
 }
 
 // RpmLimitEQ applies the EQ predicate on the "rpm_limit" field.

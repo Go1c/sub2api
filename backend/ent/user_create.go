@@ -441,6 +441,20 @@ func (_c *UserCreate) SetNillableSubscriptionPurchaseDisabled(v *bool) *UserCrea
 	return _c
 }
 
+// SetRechargeBonusDisabled sets the "recharge_bonus_disabled" field.
+func (_c *UserCreate) SetRechargeBonusDisabled(v bool) *UserCreate {
+	_c.mutation.SetRechargeBonusDisabled(v)
+	return _c
+}
+
+// SetNillableRechargeBonusDisabled sets the "recharge_bonus_disabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableRechargeBonusDisabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetRechargeBonusDisabled(*v)
+	}
+	return _c
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_c *UserCreate) SetRpmLimit(v int) *UserCreate {
 	_c.mutation.SetRpmLimit(v)
@@ -837,6 +851,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultSubscriptionPurchaseDisabled
 		_c.mutation.SetSubscriptionPurchaseDisabled(v)
 	}
+	if _, ok := _c.mutation.RechargeBonusDisabled(); !ok {
+		v := user.DefaultRechargeBonusDisabled
+		_c.mutation.SetRechargeBonusDisabled(v)
+	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		v := user.DefaultRpmLimit
 		_c.mutation.SetRpmLimit(v)
@@ -944,6 +962,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.SubscriptionPurchaseDisabled(); !ok {
 		return &ValidationError{Name: "subscription_purchase_disabled", err: errors.New(`ent: missing required field "User.subscription_purchase_disabled"`)}
+	}
+	if _, ok := _c.mutation.RechargeBonusDisabled(); !ok {
+		return &ValidationError{Name: "recharge_bonus_disabled", err: errors.New(`ent: missing required field "User.recharge_bonus_disabled"`)}
 	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		return &ValidationError{Name: "rpm_limit", err: errors.New(`ent: missing required field "User.rpm_limit"`)}
@@ -1094,6 +1115,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SubscriptionPurchaseDisabled(); ok {
 		_spec.SetField(user.FieldSubscriptionPurchaseDisabled, field.TypeBool, value)
 		_node.SubscriptionPurchaseDisabled = value
+	}
+	if value, ok := _c.mutation.RechargeBonusDisabled(); ok {
+		_spec.SetField(user.FieldRechargeBonusDisabled, field.TypeBool, value)
+		_node.RechargeBonusDisabled = value
 	}
 	if value, ok := _c.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -1853,6 +1878,18 @@ func (u *UserUpsert) UpdateSubscriptionPurchaseDisabled() *UserUpsert {
 	return u
 }
 
+// SetRechargeBonusDisabled sets the "recharge_bonus_disabled" field.
+func (u *UserUpsert) SetRechargeBonusDisabled(v bool) *UserUpsert {
+	u.Set(user.FieldRechargeBonusDisabled, v)
+	return u
+}
+
+// UpdateRechargeBonusDisabled sets the "recharge_bonus_disabled" field to the value that was provided on create.
+func (u *UserUpsert) UpdateRechargeBonusDisabled() *UserUpsert {
+	u.SetExcluded(user.FieldRechargeBonusDisabled)
+	return u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (u *UserUpsert) SetRpmLimit(v int) *UserUpsert {
 	u.Set(user.FieldRpmLimit, v)
@@ -2410,6 +2447,20 @@ func (u *UserUpsertOne) SetSubscriptionPurchaseDisabled(v bool) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateSubscriptionPurchaseDisabled() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateSubscriptionPurchaseDisabled()
+	})
+}
+
+// SetRechargeBonusDisabled sets the "recharge_bonus_disabled" field.
+func (u *UserUpsertOne) SetRechargeBonusDisabled(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetRechargeBonusDisabled(v)
+	})
+}
+
+// UpdateRechargeBonusDisabled sets the "recharge_bonus_disabled" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateRechargeBonusDisabled() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateRechargeBonusDisabled()
 	})
 }
 
@@ -3139,6 +3190,20 @@ func (u *UserUpsertBulk) SetSubscriptionPurchaseDisabled(v bool) *UserUpsertBulk
 func (u *UserUpsertBulk) UpdateSubscriptionPurchaseDisabled() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateSubscriptionPurchaseDisabled()
+	})
+}
+
+// SetRechargeBonusDisabled sets the "recharge_bonus_disabled" field.
+func (u *UserUpsertBulk) SetRechargeBonusDisabled(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetRechargeBonusDisabled(v)
+	})
+}
+
+// UpdateRechargeBonusDisabled sets the "recharge_bonus_disabled" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateRechargeBonusDisabled() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateRechargeBonusDisabled()
 	})
 }
 

@@ -61576,6 +61576,7 @@ type UserMutation struct {
 	addtotal_recharged                  *float64
 	invoice_enabled                     *bool
 	subscription_purchase_disabled      *bool
+	recharge_bonus_disabled             *bool
 	rpm_limit                           *int
 	addrpm_limit                        *int
 	clearedFields                       map[string]struct{}
@@ -63026,6 +63027,42 @@ func (m *UserMutation) ResetSubscriptionPurchaseDisabled() {
 	m.subscription_purchase_disabled = nil
 }
 
+// SetRechargeBonusDisabled sets the "recharge_bonus_disabled" field.
+func (m *UserMutation) SetRechargeBonusDisabled(b bool) {
+	m.recharge_bonus_disabled = &b
+}
+
+// RechargeBonusDisabled returns the value of the "recharge_bonus_disabled" field in the mutation.
+func (m *UserMutation) RechargeBonusDisabled() (r bool, exists bool) {
+	v := m.recharge_bonus_disabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRechargeBonusDisabled returns the old "recharge_bonus_disabled" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldRechargeBonusDisabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRechargeBonusDisabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRechargeBonusDisabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRechargeBonusDisabled: %w", err)
+	}
+	return oldValue.RechargeBonusDisabled, nil
+}
+
+// ResetRechargeBonusDisabled resets all changes to the "recharge_bonus_disabled" field.
+func (m *UserMutation) ResetRechargeBonusDisabled() {
+	m.recharge_bonus_disabled = nil
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (m *UserMutation) SetRpmLimit(i int) {
 	m.rpm_limit = &i
@@ -64034,7 +64071,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 32)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -64125,6 +64162,9 @@ func (m *UserMutation) Fields() []string {
 	if m.subscription_purchase_disabled != nil {
 		fields = append(fields, user.FieldSubscriptionPurchaseDisabled)
 	}
+	if m.recharge_bonus_disabled != nil {
+		fields = append(fields, user.FieldRechargeBonusDisabled)
+	}
 	if m.rpm_limit != nil {
 		fields = append(fields, user.FieldRpmLimit)
 	}
@@ -64196,6 +64236,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceEnabled()
 	case user.FieldSubscriptionPurchaseDisabled:
 		return m.SubscriptionPurchaseDisabled()
+	case user.FieldRechargeBonusDisabled:
+		return m.RechargeBonusDisabled()
 	case user.FieldRpmLimit:
 		return m.RpmLimit()
 	}
@@ -64267,6 +64309,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldInvoiceEnabled(ctx)
 	case user.FieldSubscriptionPurchaseDisabled:
 		return m.OldSubscriptionPurchaseDisabled(ctx)
+	case user.FieldRechargeBonusDisabled:
+		return m.OldRechargeBonusDisabled(ctx)
 	case user.FieldRpmLimit:
 		return m.OldRpmLimit(ctx)
 	}
@@ -64487,6 +64531,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSubscriptionPurchaseDisabled(v)
+		return nil
+	case user.FieldRechargeBonusDisabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRechargeBonusDisabled(v)
 		return nil
 	case user.FieldRpmLimit:
 		v, ok := value.(int)
@@ -64765,6 +64816,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldSubscriptionPurchaseDisabled:
 		m.ResetSubscriptionPurchaseDisabled()
+		return nil
+	case user.FieldRechargeBonusDisabled:
+		m.ResetRechargeBonusDisabled()
 		return nil
 	case user.FieldRpmLimit:
 		m.ResetRpmLimit()
