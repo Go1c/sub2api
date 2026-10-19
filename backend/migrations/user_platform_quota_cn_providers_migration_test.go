@@ -20,3 +20,15 @@ func TestUserPlatformQuotasCNProvidersMigration(t *testing.T) {
 	require.Contains(t, sql,
 		"CHECK (platform IN ('anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek'))")
 }
+
+// TestUserPlatformQuotasGrokMigrationKeepsCNProviders 锁定 157：fork 的 934 已把
+// kimi/zhipu/deepseek 写入约束并落了配额行。157 若收窄回 5 平台，线上 ADD CONSTRAINT 失败。
+func TestUserPlatformQuotasGrokMigrationKeepsCNProviders(t *testing.T) {
+	content, err := FS.ReadFile("157_user_platform_quotas_add_grok.sql")
+	require.NoError(t, err)
+
+	sql := strings.Join(strings.Fields(string(content)), " ")
+	require.Contains(t, sql, "DROP CONSTRAINT IF EXISTS user_platform_quotas_platform_check")
+	require.Contains(t, sql,
+		"CHECK (platform IN ('anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek'))")
+}
