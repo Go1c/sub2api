@@ -16,7 +16,7 @@ const groupModelAllowlistRepairMigration = "236_group_model_allowlist_repair.sql
 // 236 是可重放的修复迁移：235 的重命名一旦被记账就不会重跑，数据库若回到旧结构
 // （手工改回列名、按旧结构部分恢复）应用仍能启动，但所有关联 groups 的查询都会
 // 报 column groups.model_allowlist does not exist（issue #6780）。
-func TestMigration236RenamesLegacyModelsListConfigColumn(t *testing.T) {
+func TestMigration236CopiesLegacyModelsListConfigColumn(t *testing.T) {
 	tx := testTx(t)
 	ctx := context.Background()
 
