@@ -45,6 +45,10 @@ describe('PaymentMethodSelector', () => {
 
     const button = wrapper.get('button')
     expect(button.classes()).toContain('border-[#02A9F1]')
+    expect(button.classes()).toContain('shrink-0')
+    expect(wrapper.html()).toContain('whitespace-nowrap')
+    expect(wrapper.get('[data-testid="payment-method-grid"]').classes()).toContain('flex-wrap')
+    expect(wrapper.get('[data-testid="payment-method-grid"]').classes()).not.toContain('lg:grid-cols-4')
   })
 
   it('keeps balance method selected styling', () => {
