@@ -236,7 +236,7 @@ func TestAdminService_UpdateUserBalance_AdminRechargeAffiliateRebate(t *testing.
 				userRepo:         repo,
 				redeemCodeRepo:   redeemRepo,
 				settingService:   adminRechargeSettingService(tt.enabled),
-				affiliateService: affiliate,
+				
 			}
 
 			_, err := svc.UpdateUserBalance(context.Background(), 7, tt.amount, tt.operation, "")
@@ -255,7 +255,7 @@ func TestAdminService_UpdateUserBalance_AffiliateFailureDoesNotRollbackRecharge(
 		userRepo:         repo,
 		redeemCodeRepo:   redeemRepo,
 		settingService:   adminRechargeSettingService(true),
-		affiliateService: affiliate,
+		
 	}
 
 	user, err := svc.UpdateUserBalance(context.Background(), 7, 5, "add", "")

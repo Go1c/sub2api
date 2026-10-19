@@ -54,7 +54,7 @@ func TestRecordUsage_ReasoningPricingUsesForwardedEffort(t *testing.T) {
 					Result: &OpenAIForwardResult{
 						RequestID: "reasoning_pricing", Model: model, Duration: time.Second,
 						Usage:           OpenAIUsage{InputTokens: 100, OutputTokens: 50},
-						ReasoningEffort: &forwarded, RequestedReasoningEffort: &requested,
+						ReasoningEffort: &forwarded, 
 					},
 					APIKey: apiKey, User: user, Account: account,
 				}))

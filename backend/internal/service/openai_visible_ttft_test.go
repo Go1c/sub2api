@@ -128,9 +128,9 @@ func runSyntheticVisibleTTFTStream(t *testing.T, passthrough bool, visibleDelay 
 	if mode == "" {
 		mode = OpenAITTFTModeSemantic
 	}
-	gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{openAITTFTMode: mode, expiresAt: time.Now().Add(time.Minute).UnixNano()})
+	gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{ expiresAt: time.Now().Add(time.Minute).UnixNano()})
 	t.Cleanup(func() {
-		gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{openAITTFTMode: OpenAITTFTModeSemantic, expiresAt: time.Now().Add(time.Minute).UnixNano()})
+		gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{ expiresAt: time.Now().Add(time.Minute).UnixNano()})
 	})
 	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
 		MaxLineSize:                     defaultMaxLineSize,

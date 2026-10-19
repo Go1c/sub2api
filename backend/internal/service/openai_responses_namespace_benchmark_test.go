@@ -28,7 +28,7 @@ func BenchmarkStripOpenAIResponsesInputNamespaces(b *testing.B) {
 		} {
 			b.Run(fmt.Sprintf("%s/%dMiB", tc.name, size>>20), func(b *testing.B) {
 				body := []byte(`{"tools":[{"type":"namespace","name":"files","tools":[]}],"input":[` + tc.input + `]}`)
-				out, err := stripOpenAIResponsesInputNamespaces(body, tc.keep)
+				out, err := stripOpenAIResponsesInputNamespaces(body)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -43,7 +43,7 @@ func BenchmarkStripOpenAIResponsesInputNamespaces(b *testing.B) {
 				b.SetBytes(int64(len(body)))
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					out, err = stripOpenAIResponsesInputNamespaces(body, tc.keep)
+					out, err = stripOpenAIResponsesInputNamespaces(body)
 					if err != nil {
 						b.Fatal(err)
 					}

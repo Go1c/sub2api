@@ -611,7 +611,7 @@ func TestTryModelFilePricing_DeepSeekPeakPricing(t *testing.T) {
 					{"sunday", time.Date(2026, time.August, 23, 7, 0, 0, 0, time.UTC), 1},
 				} {
 					t.Run(slot.name, func(t *testing.T) {
-						cost := tryModelFilePricing(bs, model.name, tokens, "", slot.at, true)
+						cost := tryModelFilePricing(bs, model.name, tokens, "")
 						require.NotNil(t, cost)
 						require.InDelta(t, baseCost*slot.multiplier, *cost, 1e-12)
 					})

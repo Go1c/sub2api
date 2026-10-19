@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAccountGrokNeedsReauth(t *testing.T) {
+func TestAccountGrokNeedsReauth_MergedDuplicate(t *testing.T) {
 	require.False(t, accountGrokNeedsReauth(nil))
 	require.True(t, accountGrokNeedsReauth(&Account{
 		Status:       StatusError,

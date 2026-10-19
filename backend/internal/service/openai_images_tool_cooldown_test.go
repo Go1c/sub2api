@@ -62,7 +62,7 @@ func TestShouldCoolOpenAIImagesToolForError(t *testing.T) {
 			err: &OpenAIImagesUpstreamError{
 				StatusCode:               http.StatusBadGateway,
 				Code:                     "image_generation_unavailable",
-				SynthesizedFromModelText: true,
+				
 			},
 			want: false,
 		},

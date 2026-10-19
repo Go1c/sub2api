@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -1821,7 +1822,7 @@ func TestGetModelPricingWithChannel_CacheWriteTTLPricesCanDiffer(t *testing.T) {
 	require.InDelta(t, 21e-6, pricing.CacheCreation1hPrice, 1e-12)
 }
 
-func TestGetModelPricing_Fable51FallbackPricing(t *testing.T) {
+func TestGetModelPricing_Fable51FallbackPricing_MergedDuplicate(t *testing.T) {
 	svc := newTestBillingService()
 
 	pricing, err := svc.GetModelPricing("claude-fable-5-1")

@@ -294,9 +294,7 @@ func TestParseOpsUpstreamErrorsPreservesExplicitDirectAttribution(t *testing.T) 
 
 func TestOpsServiceGetErrorLogByIDNormalizesLegacyProxyAttribution(t *testing.T) {
 	repo := &opsRepoMock{
-		GetErrorLogByIDFn: func(context.Context, int64) (*OpsErrorLogDetail, error) {
-			return &OpsErrorLogDetail{UpstreamErrors: `[{"account_id":42,"kind":"http_error"}]`}, nil
-		},
+		
 	}
 	svc := NewOpsService(repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 

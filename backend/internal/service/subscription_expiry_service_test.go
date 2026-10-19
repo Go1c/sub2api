@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"log"
 	"testing"
@@ -64,7 +65,7 @@ func (r *subscriptionExpiryRepoStub) ListByGroupID(context.Context, int64, pagin
 	return nil, nil, nil
 }
 
-func (r *subscriptionExpiryRepoStub) List(context.Context, pagination.PaginationParams, *int64, *int64, string, string, string, string) ([]UserSubscription, *pagination.PaginationResult, error) {
+func (r *subscriptionExpiryRepoStub) List(context.Context, pagination.PaginationParams, UserSubscriptionListFilters) ([]UserSubscription, *pagination.PaginationResult, error) {
 	r.listCalls++
 	return nil, &pagination.PaginationResult{Page: 1, Pages: 1}, nil
 }
@@ -93,7 +94,7 @@ func (r *subscriptionExpiryRepoStub) ActivateWindows(context.Context, int64, tim
 	return nil
 }
 
-func (r *subscriptionExpiryRepoStub) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time, time.Time) error {
+func (r *subscriptionExpiryRepoStub) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time) error {
 	return nil
 }
 
@@ -113,6 +114,33 @@ func (r *subscriptionExpiryRepoStub) IncrementUsage(context.Context, int64, floa
 	return nil
 }
 
+func (r *subscriptionExpiryRepoStub) GetUsableCreditSubscription(context.Context, int64) (*UserSubscription, error) {
+	return nil, nil
+}
+func (r *subscriptionExpiryRepoStub) ListUsableCreditSubscriptions(context.Context, int64) ([]UserSubscription, error) {
+	return nil, nil
+}
+func (r *subscriptionExpiryRepoStub) HasUsableCreditSubscription(context.Context, int64) (bool, error) {
+	return false, nil
+}
+func (r *subscriptionExpiryRepoStub) GetRenewalEligibility(context.Context, int64) (RenewalEligibility, error) {
+	return RenewalEligibility{}, nil
+}
+func (r *subscriptionExpiryRepoStub) LockUserForSubscriptionWrite(context.Context, *sql.Tx, int64) error {
+	return nil
+}
+func (r *subscriptionExpiryRepoStub) InsertCreditSubscription(context.Context, *sql.Tx, *UserSubscription) (*UserSubscription, error) {
+	return nil, nil
+}
+func (r *subscriptionExpiryRepoStub) ExpireCreditSubscriptions(context.Context) (int64, error) {
+	return 0, nil
+}
+func (r *subscriptionExpiryRepoStub) MarkExpiredCreditLogged(context.Context, int64, time.Time) error {
+	return nil
+}
+func (r *subscriptionExpiryRepoStub) UserResetWeeklyLimit(context.Context, int64, int64, time.Time, time.Time) (int, error) {
+	return 0, nil
+}
 func (r *subscriptionExpiryRepoStub) BatchUpdateExpiredStatus(context.Context) (int64, error) {
 	return 0, nil
 }

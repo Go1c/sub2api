@@ -483,7 +483,7 @@ func TestAnthropicFailoverEntries_ExplicitModelScopeOnlyCoolsModel(t *testing.T)
 		account.Platform = PlatformAnthropic
 		account.Type = AccountTypeOAuth
 
-		svc.handleRetryExhaustedSideEffects(context.Background(), newResponse(http.StatusForbidden, `{"error":{"message":"forbidden"}}`), account, "claude-sonnet-4-5")
+		svc.handleRetryExhaustedSideEffects(context.Background(), newResponse(http.StatusForbidden, `{"error":{"message":"forbidden"}}`), account)
 
 		require.Zero(t, repo.errorCalls)
 		require.Zero(t, repo.tempCalls)

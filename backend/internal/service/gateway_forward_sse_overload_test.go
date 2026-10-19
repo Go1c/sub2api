@@ -14,30 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type gatewayForwardErrorPolicyRepoStub struct {
-	AccountRepository
-	tempCalls           int
-	modelRateLimitCalls []gatewayForwardModelRateLimitCall
-}
-
-type gatewayForwardModelRateLimitCall struct {
-	accountID int64
-	scope     string
-}
-
-func (r *gatewayForwardErrorPolicyRepoStub) SetTempUnschedulable(context.Context, int64, time.Time, string) error {
-	r.tempCalls++
-	return nil
-}
-
-func (r *gatewayForwardErrorPolicyRepoStub) SetModelRateLimit(_ context.Context, id int64, scope string, _ time.Time, _ ...string) error {
-	r.modelRateLimitCalls = append(r.modelRateLimitCalls, gatewayForwardModelRateLimitCall{
-		accountID: id,
-		scope:     scope,
-	})
-	return nil
-}
-
 func newAnthropicOAuthAccountForSSEOverloadTest() *Account {
 	return &Account{
 		ID:          501,
@@ -53,7 +29,7 @@ func newAnthropicOAuthAccountForSSEOverloadTest() *Account {
 	}
 }
 
-func TestGatewayService_Forward_PreOutputSSEOverloadedErrorUsesSemantic529(t *testing.T) {
+func TestGatewayService_Forward_PreOutputSSEOverloadedErrorUsesSemantic529_MergedDuplicate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -101,7 +77,7 @@ func TestGatewayService_Forward_PreOutputSSEOverloadedErrorUsesSemantic529(t *te
 	require.Empty(t, rec.Body.String(), "pre-output overload must remain eligible for account failover")
 }
 
-func TestGatewayService_Forward_PostOutputSSEOverloadedErrorKeepsExistingStatus(t *testing.T) {
+func TestGatewayService_Forward_PostOutputSSEOverloadedErrorKeepsExistingStatus_MergedDuplicate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()

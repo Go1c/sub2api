@@ -46,8 +46,8 @@ func TestSelectGrokMediaVideoRequestAccountPreservesOwner(t *testing.T) {
 				}),
 			}
 			ctx := context.Background()
-			require.NoError(t, svc.BindGrokMediaVideoRequestAccount(ctx, &groupID, "task", 10, 20, 1))
-			sessionHash := GrokMediaVideoRequestSessionHash("task", 10, 20)
+			require.NoError(t, svc.BindGrokMediaVideoRequestAccount(ctx, &groupID, "task", 1))
+			sessionHash := GrokMediaVideoRequestSessionHash("task")
 			for range 20 {
 				selection, decision, err := svc.SelectGrokMediaVideoRequestAccount(ctx, &groupID, sessionHash, ownerID, "")
 				switch state {

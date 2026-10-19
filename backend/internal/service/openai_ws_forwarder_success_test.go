@@ -332,8 +332,6 @@ func TestOpenAIGatewayService_BuildOpenAIWSHeadersPreservesCodexIdentity(t *test
 		"",
 		"",
 		"",
-		"",
-		"",
 	)
 
 	require.NoError(t, err)
@@ -370,8 +368,6 @@ func TestOpenAIGatewayService_BuildOpenAIWSHeadersDeviceModePreservesNamespacedC
 		"token",
 		OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2},
 		true,
-		"",
-		"",
 		"",
 		"",
 		"",
@@ -1009,7 +1005,7 @@ func TestOpenAIGatewayService_Forward_WSv2_CodexFingerprintHandshakeBodyParityAn
 
 	seed, ok := codexFingerprintSeed(account.Extra)
 	require.True(t, ok)
-	wantInstall := resolveConvergedInstallationID(account, seed)
+	wantInstall := resolveConvergedInstallationID(account)
 	wantSession := resolveConvergedSessionID(seed)
 	wantThread := resolveConvergedThreadID(seed, "header-session")
 	payloadJSON := requestToJSONString(captureConn.lastWrite)

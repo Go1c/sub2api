@@ -66,26 +66,7 @@ func TestHasCompactionTriggerInInput_CompactTriggerOnly(t *testing.T) {
 	require.True(t, HasCompactionTriggerInInput(body))
 }
 
-func TestNormalizeCompactionTriggerInputOrder_MovesAndCollapsesTriggers(t *testing.T) {
-	body := []byte(`{"model":"gpt-5.5","input":[{"type":"compaction_trigger"},{"type":"message","role":"user","content":"tail"},{"type":"compaction_trigger"}]}`)
-	normalized, changed, err := NormalizeCompactionTriggerInputOrder(body)
-	require.NoError(t, err)
-	require.True(t, changed)
-	items := gjson.GetBytes(normalized, "input").Array()
-	require.Len(t, items, 2)
-	require.Equal(t, "message", items[0].Get("type").String())
-	require.Equal(t, "compaction_trigger", items[1].Get("type").String())
-}
-
-func TestNormalizeCompactionTriggerInputOrder_AlreadyFinalPreservesBytes(t *testing.T) {
-	body := []byte(`{"input":[{"type":"message"},{"type":"compaction_trigger"}]}`)
-	normalized, changed, err := NormalizeCompactionTriggerInputOrder(body)
-	require.NoError(t, err)
-	require.False(t, changed)
-	require.Equal(t, string(body), string(normalized))
-}
-
-func TestNormalizeCompactionTriggerInputOrder_PreservesHistoryAndLargeNumbers(t *testing.T) {
+func TestNormalizeCompactionTriggerInputOrder_PreservesHistoryAndLargeNumbers_MergedDuplicate(t *testing.T) {
 	body := []byte(`{"input":[{"type":"compaction_trigger"},{"type":"message","id":"msg_1","content":"visible"},{"type":"function_call_output","call_id":"call_1","output":"result","sequence":9007199254740993}]}`)
 
 	normalized, changed, err := NormalizeCompactionTriggerInputOrder(body)

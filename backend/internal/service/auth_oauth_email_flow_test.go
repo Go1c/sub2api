@@ -105,9 +105,6 @@ func (s *redeemCodeRepoStub) ListByUserPaginated(context.Context, int64, paginat
 func (s *redeemCodeRepoStub) SumPositiveBalanceByUser(context.Context, int64) (float64, error) {
 	panic("unexpected SumPositiveBalanceByUser call")
 }
-func (s *redeemCodeRepoStub) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) {
-	return 0, nil
-}
 
 func newOAuthEmailFlowAuthService(
 	userRepo UserRepository,
@@ -228,6 +225,7 @@ func TestRegisterOAuthEmailAccount_NonWhitelistDomainLimit(t *testing.T) {
 		"secret-123",
 		"246810",
 		"",
+		"",
 		"oidc",
 	)
 
@@ -253,6 +251,7 @@ func TestRegisterVerifiedOAuthEmailAccount_NonWhitelistDomainLimit(t *testing.T)
 		context.Background(),
 		"second@custom.example",
 		"secret-123",
+		"",
 		"",
 		"oidc",
 	)

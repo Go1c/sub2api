@@ -184,7 +184,7 @@ func (r *contentModerationTestUserRepo) GetFirstAdmin(ctx context.Context) (*Use
 	panic("unexpected GetFirstAdmin call")
 }
 
-func (r *contentModerationTestUserRepo) Update(ctx context.Context, user *User) error {
+func (r *contentModerationTestUserRepo) Update(ctx context.Context, user *User, _ UserUpdateFields) error {
 	if user == nil {
 		return nil
 	}

@@ -488,9 +488,6 @@ func (s *redeemRepoStub) ListByUserPaginated(ctx context.Context, userID int64, 
 func (s *redeemRepoStub) SumPositiveBalanceByUser(ctx context.Context, userID int64) (float64, error) {
 	panic("unexpected SumPositiveBalanceByUser call")
 }
-func (s *redeemRepoStub) BatchUpdate(context.Context, []int64, RedeemCodeBatchUpdateFields) (int64, error) {
-	return 0, nil
-}
 
 type subscriptionInvalidateCall struct {
 	userID  int64

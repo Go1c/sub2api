@@ -31,12 +31,13 @@ type openAIResponsesImageResult struct {
 }
 
 type OpenAIImagesUpstreamError struct {
-	StatusCode        int
-	ErrorType         string
-	Code              string
-	Message           string
-	Param             string
-	UpstreamRequestID string
+	StatusCode               int
+	ErrorType                string
+	Code                     string
+	Message                  string
+	Param                    string
+	UpstreamRequestID        string
+	SynthesizedFromModelText bool
 }
 
 func (e *OpenAIImagesUpstreamError) Error() string {
