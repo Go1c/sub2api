@@ -942,6 +942,18 @@ export default {
       "title": "批量编辑"
     },
     "providerLabel": "厂商",
+    "providers": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI",
+      "domestic": "国产模型",
+      "other": "其他"
+    },
+    "providerHints": {
+      "anthropic": "选择 Anthropic / Claude 的可用分组",
+      "openai": "选择 OpenAI / GPT 的可用分组",
+      "domestic": "包含 DeepSeek、Kimi、智谱 GLM、MiniMax",
+      "other": "包含 Gemini、Grok、Antigravity、OpenCode 和混合分组"
+    },
     "useKeyModal": {
       "claudeSettingsHint": "用户级持久配置。此文件包含 API 密钥，请勿提交到项目仓库。",
       "cliTabs": {

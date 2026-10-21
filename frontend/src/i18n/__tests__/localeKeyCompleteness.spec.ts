@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import { KEY_GROUP_PROVIDERS } from '@/utils/keyGroupProviders'
 import { resolveLocaleMessages } from '../index'
 
 type LocaleValue = Record<string, unknown>
@@ -97,6 +98,16 @@ describe('locale key completeness', () => {
         return typeof current !== 'string' || current.trim() === ''
       })
       expect(emptyKeys, `${locale} has empty or non-string messages`).toEqual([])
+    }
+  })
+
+  it('translates the API key provider filter', () => {
+    for (const [locale, keys] of Object.entries({ en: enKeys, zh: zhKeys })) {
+      expect(keys.has('keys.providerLabel'), locale).toBe(true)
+      for (const provider of KEY_GROUP_PROVIDERS) {
+        expect(keys.has(`keys.providers.${provider}`), `${locale} keys.providers.${provider}`).toBe(true)
+        expect(keys.has(`keys.providerHints.${provider}`), `${locale} keys.providerHints.${provider}`).toBe(true)
+      }
     }
   })
 
