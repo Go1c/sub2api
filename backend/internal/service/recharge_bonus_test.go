@@ -364,7 +364,9 @@ func TestExecuteBalanceFulfillmentBackfillsBonusWhenMainCodeAlreadyUsed(t *testi
 		userRepo.getByIDUser.Balance += amount
 		return nil
 	}
-	// 主码已使用（上次履约成功入账但 bonus 发放失败），bonus 码缺失
+	// 主码已使用（上次履约成功入账但 bonus 发放失败），bonus 码缺失。
+	// 已用主码必须带上本单用户，否则会被兑换码归属校验拒绝。
+	usedBy := order.UserID
 	redeemRepo := &paymentOrderLifecycleRedeemRepo{codesByCode: map[string]*RedeemCode{
 		order.RechargeCode: {
 			ID:     1,
@@ -372,6 +374,7 @@ func TestExecuteBalanceFulfillmentBackfillsBonusWhenMainCodeAlreadyUsed(t *testi
 			Type:   RedeemTypeBalance,
 			Value:  order.Amount,
 			Status: StatusUsed,
+			UsedBy: &usedBy,
 		},
 	}}
 	redeemService := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
