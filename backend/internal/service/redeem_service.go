@@ -455,8 +455,9 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, e
 	}
 
 	// 验证兑换码类型的前置条件。邀请码属于注册流程，不能通过普通兑换接口使用。
+	// recharge_bonus 由支付履约发放，必须放行到下方入账分支（只加余额，不计 total_recharged）。
 	switch redeemCode.Type {
-	case RedeemTypeBalance, RedeemTypeConcurrency:
+	case RedeemTypeBalance, RedeemTypeConcurrency, RedeemTypeRechargeBonus:
 	case RedeemTypeSubscription:
 		if redeemCode.GroupID == nil {
 			return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")

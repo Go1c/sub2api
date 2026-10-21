@@ -41,7 +41,8 @@ metadata:
 
 ### 入账与流水
 
-- `redeem()` 新 case `recharge_bonus` → `userRepo.UpdateBalanceNoStat`：**只加 balance，不计 total_recharged**（不污染累计充值统计/签到门槛）。
+- `redeem()` 前置类型检查必须放行 `recharge_bonus`（与 balance、concurrency 同列），否则支付履约会在入账前被 `unsupported redeem type` 拒绝，订单停在 `FULFILLMENT_FAILED`。邀请码和其他未知类型仍拒绝。
+- 放行后的入账 case `recharge_bonus` → `userRepo.UpdateBalanceNoStat`：**只加 balance，不计 total_recharged**（不污染累计充值统计/签到门槛）。
 - 流水即 `redeem_codes` 一条 status=used 记录：用户侧 `GET /redeem/history` 与管理端用户余额历史天然可见（notes 暴露条件、`SumPositiveBalanceByUser` 白名单均已加 `recharge_bonus`）。
 
 ### 退款回收（防套利）
