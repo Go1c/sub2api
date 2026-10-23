@@ -443,9 +443,9 @@ type OpenAIGatewayService struct {
 	openaiProxyStreamCircuitOnce   sync.Once
 	openaiProxyStreamCircuit       *openAIProxyStreamCircuit
 	openaiProxyStreamFailOpenLogAt atomic.Int64
-	userPlatformQuotaRepo       UserPlatformQuotaRepository
-	accountErrorHistory         *AccountErrorHistoryService
-	ipGroupResolver             *openAIIPGroupResolver
+	userPlatformQuotaRepo          UserPlatformQuotaRepository
+	accountErrorHistory            *AccountErrorHistoryService
+	ipGroupResolver                *openAIIPGroupResolver
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
