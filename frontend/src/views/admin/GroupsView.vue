@@ -4477,6 +4477,22 @@ import {
 import { createModelsListCandidatesTracker } from "./groupsModelsListCandidates";
 import { normalizeSupportedModelScopesForPlatform } from "./groupsSupportedModelScopes";
 import {
+  isProfitControlPlatform,
+  profitPercentToDecimal,
+  validateProfitControlFormState,
+  type ProfitControlFormState,
+} from "./groupsProfitControl";
+import {
+  normalizeReasoningEffortForPlatform,
+  normalizeReasoningEffortOverLimit,
+  reasoningEffortMappingsToAPI,
+  reasoningEffortMappingsToRows,
+  reasoningEffortOverLimitDowngrade,
+  supportsReasoningEffortPolicyPlatform,
+  type ReasoningEffortMappingRow,
+} from "./groupsReasoningEffort";
+import {
+  defaultAllowImageGenerationForPlatform,
   getDefaultImagePreviewPrice,
   getDefaultVideoPreviewPrice,
   getImagePricePlaceholder,
@@ -4491,9 +4507,6 @@ import {
   resolveWebSearchPreviewMultiplier,
   supportsWebSearchPricingPlatform,
 } from "./groupsWebSearchPricing";
-import type { ReasoningEffortMappingRow } from './groupsReasoningEffort'
-import { isProfitControlPlatform , type ProfitControlFormState, profitPercentToDecimal, validateProfitControlFormState} from './groupsProfitControl'
-import { normalizeReasoningEffortForPlatform , normalizeReasoningEffortOverLimit, reasoningEffortMappingsToAPI, reasoningEffortMappingsToRows, reasoningEffortOverLimitDowngrade, supportsReasoningEffortPolicyPlatform} from './groupsReasoningEffort'
 import { serializeVideoModelPrices, createVideoModelPricesForm } from './groupsVideoModelPricing'
 import { createModelAllowlistState as createInitialModelAllowlistState } from './groupModelAllowlist'
 import { supportsGroupOpenAIFast } from './groupsOpenAIFast'
@@ -6706,6 +6719,7 @@ watch(
       createForm.require_oauth_only = false;
       createForm.require_privacy_set = false;
     }
+    createForm.allow_image_generation = defaultAllowImageGenerationForPlatform(newVal);
     resetDisabledBatchImagePricing(createForm);
     resetModelsListState(createModelsListState);
     loadModelsListCandidates("create", 0, newVal);

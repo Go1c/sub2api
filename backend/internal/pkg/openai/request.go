@@ -47,7 +47,7 @@ const codexOfficialClientFamilyPrefix = "codex "
 // 或在 bump context/codex 时同步补入本集合。
 var codexOfficialClientOriginators = map[string]bool{
 	"codex_cli_rs":          true, // CLI 默认 DEFAULT_ORIGINATOR
-	"codex-tui":             true, // 交互式 TUI（连字符，真实流量占比最高）
+	CodexTUIOriginator:      true, // 交互式 TUI（连字符，真实流量占比最高）
 	"codex_vscode":          true, // VSCode/Cursor 扩展
 	"codex_vscode_copilot":  true, // 扩展 GitHub Copilot 集成模式
 	"codex_app":             true, // 历史保留
@@ -255,9 +255,74 @@ func canonicalizeCodexOriginator(name string) string {
 	return name
 }
 
-// CodexCLIOriginator 官方 Codex CLI 默认 originator（codex-rs DEFAULT_ORIGINATOR），
-// 也是身份归一化的目标身份。
 const CodexCLIOriginator = "codex_cli_rs"
+
+// CodexTUIOriginator 是交互式 Codex TUI 使用的 originator。
+const CodexTUIOriginator = "codex-tui"
+
+// CodexDefaultOriginator 是网关默认发送的 Codex originator。
+const CodexDefaultOriginator = CodexCLIOriginator
+
+// CodexUserAgentVersion 提取 Codex UA 的完整版本段，即 `{client}/{version} (...` 中的 version。
+func CodexUserAgentVersion(userAgent string) string {
+	ua := strings.TrimSpace(userAgent)
+	slash := strings.IndexByte(ua, '/')
+	if slash <= 0 {
+		return ""
+	}
+	rest := ua[slash+1:]
+	if space := strings.IndexByte(rest, ' '); space >= 0 {
+		rest = rest[:space]
+	}
+	return strings.TrimSpace(rest)
+}
+
+// SetCodexUserAgentVersion 用 version 重建 Codex 形态 UA 中的版本声明，其余部分原样保留。
+// 尾部官方客户端标识组 `(name; version)` 与首段是同一个版本声明，必须一并更新。
+func SetCodexUserAgentVersion(userAgent, version string) string {
+	ua := strings.TrimSpace(userAgent)
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return ""
+	}
+	slash := strings.IndexByte(ua, '/')
+	if slash <= 0 {
+		return ""
+	}
+	client := strings.TrimSpace(ua[:slash])
+	if client == "" {
+		return ""
+	}
+	rest := ua[slash+1:]
+	tail := ""
+	if space := strings.IndexByte(rest, ' '); space >= 0 {
+		tail = rest[space:]
+	} else if strings.TrimSpace(rest) == "" {
+		return ""
+	}
+	return rewriteCodexUATrailerVersion(client+"/"+version+tail, version)
+}
+
+func rewriteCodexUATrailerVersion(ua, version string) string {
+	open := strings.LastIndex(ua, "(")
+	if open < 0 {
+		return ua
+	}
+	closeIdx := strings.Index(ua[open+1:], ")")
+	if closeIdx < 0 {
+		return ua
+	}
+	inner := ua[open+1 : open+1+closeIdx]
+	semi := strings.Index(inner, ";")
+	if semi < 0 {
+		return ua
+	}
+	name := strings.TrimSpace(inner[:semi])
+	if name == "" || !IsCodexOfficialClientOriginator(name) {
+		return ua
+	}
+	return ua[:open+1] + name + "; " + version + ua[open+1+closeIdx:]
+}
 
 // codexLoadShedOriginators：上游 /backend-api/codex 按 originator 分桶调度容量，命中降载桶的
 // 请求即使 HTTP 200 也会立刻推 SSE `event: error`（code=server_is_overloaded）并以
