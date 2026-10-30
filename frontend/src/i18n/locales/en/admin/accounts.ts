@@ -163,6 +163,7 @@ export default {
         balanceProbeTooltip: 'Query the provider balance endpoint for the account balance',
         balanceLow: 'Insufficient balance',
         noBalanceEndpoint: 'This platform has no balance query endpoint',
+        resetSoon: 'reset soon',
       },
       opencodeGo: {
         accountMode: {
@@ -339,6 +340,10 @@ export default {
         trustWarning: 'This rate is declared by the upstream site for the current API key. Sub2API cannot verify that it matches actual charges. The upstream site or an intermediary may return forged, stale, or modified data. Verify it against bills, balance changes, and actual usage.',
         autoProbe: 'Automatically probe upstream declared rate',
         autoProbeHint: 'Refresh the upstream declared rate on the global interval. This switch alone does not change the account rate.',
+        autoProbeSettings: 'Upstream rate auto probe',
+        intervalMinutes: 'Probe interval (minutes)',
+        settingsSaved: 'Upstream rate probe settings saved',
+        settingsFailed: 'Failed to save upstream rate probe settings',
         syncRate: 'Sync upstream declared rate',
         syncRateHint: 'Update the account rate after each successful probe, using the base rate excluding peak hours. Failed probes or declarations outside the allowed range leave it unchanged. Enabling this also turns on "Automatically probe upstream declared rate".',
         syncRateManagedHint: 'The current rate is maintained automatically from the upstream declared base rate (excluding peak hours).',
@@ -754,6 +759,9 @@ export default {
       grok: {
         baseUrlHint: 'Grok OAuth accounts forward to the official xAI API base URL.',
         apiKeyHint: 'Grok subscription support uses OAuth refresh tokens; API keys are out of scope for this account type.',
+        videoCompatMode: 'Video compatibility mode',
+        videoCompatModeHint:
+          'When enabled, video generation is forwarded with OpenAI Videos-compatible outbound shaping (POST /videos, seconds/size/image_url) for providers such as 2KEN. When disabled, the native xAI Grok media protocol is used.',
         // Account connectivity test modal
         testMode: 'Test mode',
         testModeHint:
@@ -887,8 +895,22 @@ export default {
       interceptWarmupRequests: 'Intercept Warmup Requests',
       interceptWarmupRequestsDesc:
         'When enabled, warmup requests like title generation will return mock responses without consuming upstream tokens',
+      iqTest: 'IQ Test',
+      iqTestTitle: 'IQ Test',
+      iqPromptLabel: 'Test prompt',
+      iqPromptPlaceholder: 'Example: Generate an SVG of a pelican riding a bicycle',
+      iqPromptDefault: 'Generate an SVG of a pelican riding a bicycle',
+      iqPromptHint: 'A complete <svg>...</svg> in the reply is rendered as an image. Thinking text stays in the terminal.',
+      iqPreview: 'SVG preview',
+      iqExtractFailed: 'Could not extract an SVG from the reply',
+      readyToIqTest: 'Ready to test. Click "Start IQ Test" to begin...',
+      startIqTest: 'Start IQ Test',
+      iqTesting: 'Testing...',
+      startingIqTestForAccount: 'Starting IQ test for account: {name}',
+      sendingIqPrompt: 'Sending prompt...',
       headerOverride: {
         title: 'Header Override',
+        fillTemplate: 'Fill Template',
         hint: 'Override same-named request headers on forwarding (case-insensitive)',
         info: 'Applies to outbound requests of this account only: configured headers override client/gateway-generated headers of the same name before forwarding. Auth headers (authorization, x-api-key) and connection-control headers cannot be overridden.',
         namePlaceholder: 'Header name (e.g. user-agent)',
