@@ -185,6 +185,10 @@ export default {
         trustWarning: '此倍率由上游站点针对当前 API Key 自行声明。Sub2API 无法验证该值是否与实际扣费一致；上游站点或中间代理可能返回伪造、过期或被篡改的数据。请结合账单、余额变化和实际用量自行核验。',
         autoProbe: '自动探测上游声明倍率',
         autoProbeHint: '启用后按全局周期刷新上游声明倍率；此开关本身不会修改账号倍率。',
+        autoProbeSettings: '上游倍率自动探测',
+        intervalMinutes: '探测周期（分钟）',
+        settingsSaved: '上游倍率探测设置已保存',
+        settingsFailed: '保存上游倍率探测设置失败',
         syncRate: '同步上游声明倍率',
         syncRateHint: '成功探测后自动更新账号倍率，同步的是不含高峰的基准倍率；探测失败或声明超出允许范围时保持不变。开启本项会同时打开“自动探测上游声明倍率”。',
         syncRateManagedHint: '当前倍率由上游声明的基准倍率（不含高峰）自动维护。',
@@ -366,6 +370,7 @@ export default {
         balanceProbeTooltip: '请求供应商余额端点，查询账户余额',
         balanceLow: '余额不足',
         noBalanceEndpoint: '该平台暂无余额查询接口',
+        resetSoon: '即将重置',
       },
       opencodeGo: {
         accountMode: {
@@ -863,6 +868,9 @@ export default {
       grok: {
         baseUrlHint: 'Grok OAuth 账号会转发到官方 xAI API Base URL。',
         apiKeyHint: 'Grok 订阅支持使用 OAuth refresh token；API Key 账号不在本次范围内。',
+        videoCompatMode: '视频兼容模式',
+        videoCompatModeHint:
+          '开启后，视频生成按 OpenAI Videos 兼容协议出站（POST /videos，seconds/size/image_url），用于 2KEN 等上游；关闭则保持原生 xAI Grok 媒体协议。',
         // 账号连通性测试弹窗
         testMode: '测试模式',
         testModeHint:
@@ -989,8 +997,22 @@ export default {
       errorCodeExists: '该错误码已被选中',
       interceptWarmupRequests: '拦截预热请求',
       interceptWarmupRequestsDesc: '启用后，标题生成等预热请求将返回 mock 响应，不消耗上游 token',
+      iqTest: '智商检测',
+      iqTestTitle: '智商检测',
+      iqPromptLabel: '测试提示词',
+      iqPromptPlaceholder: '例如：Generate an SVG of a pelican riding a bicycle',
+      iqPromptDefault: 'Generate an SVG of a pelican riding a bicycle',
+      iqPromptHint: '回复里出现完整 <svg>...</svg> 就会渲染成图片；思考过程会显示在终端里。',
+      iqPreview: 'SVG 成图',
+      iqExtractFailed: '未能从回复中提取 SVG',
+      readyToIqTest: '准备检测。点击「开始检测」开始...',
+      startIqTest: '开始检测',
+      iqTesting: '检测中...',
+      startingIqTestForAccount: '开始智商检测：{name}',
+      sendingIqPrompt: '发送提示词...',
       headerOverride: {
         title: '请求头覆写',
+        fillTemplate: '填入模板',
         hint: '转发时用配置值覆盖同名请求头（不区分大小写）',
         info: '仅对本账号的出站请求生效：配置的请求头会在转发前覆盖客户端/网关生成的同名头。认证头（authorization、x-api-key）与连接控制头不允许覆写。',
         namePlaceholder: '请求头名称（如 user-agent）',

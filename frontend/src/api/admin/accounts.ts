@@ -26,7 +26,8 @@ import type {
   GrokMediaEligibilityMode,
   GrokMediaEligibilityState,
   OllamaCloudUsageSettings,
-  OllamaCloudUsageState,	GrokModelDiagnostics,
+  OllamaCloudUsageState,
+  GrokModelDiagnostics,
   OpenCodeGoUsageSettings,
   OpenCodeGoUsageState,
 } from '@/types'
@@ -692,7 +693,8 @@ export interface UpstreamModelMetadata {
   input_modalities?: string[]
   context_window?: number
   max_context_window?: number
-  max_output_tokens?: number}
+  max_output_tokens?: number
+}
 
 /**
  * Sync live supported models from the account's upstream model-list endpoint
@@ -701,6 +703,19 @@ export interface UpstreamModelMetadata {
  */
 export async function syncUpstreamModels(id: number): Promise<SyncUpstreamModelsResult> {
   const { data } = await apiClient.post<SyncUpstreamModelsResult>(`/admin/accounts/${id}/models/sync-upstream`)
+  return data
+}
+
+export interface SyncUpstreamPreviewParams {
+  platform: string
+  type: string
+  base_url?: string
+  api_key: string
+  model_mapping?: Record<string, string>
+}
+
+export async function syncUpstreamModelsPreview(params: SyncUpstreamPreviewParams): Promise<SyncUpstreamModelsResult> {
+  const { data } = await apiClient.post<SyncUpstreamModelsResult>('/admin/accounts/models/sync-upstream-preview', params)
   return data
 }
 
@@ -1266,6 +1281,7 @@ export const accountsAPI = {
   setSchedulable,
   getAvailableModels,
   syncUpstreamModels,
+  syncUpstreamModelsPreview,
   generateAuthUrl,
   exchangeCode,
   refreshOpenAIToken,

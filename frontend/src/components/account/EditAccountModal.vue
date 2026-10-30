@@ -3068,7 +3068,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'import { useI18n } from 'vue-i18n'
+import { ref, reactive, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 
 import { adminAPI } from '@/api/admin'
@@ -3081,15 +3082,13 @@ import type {
   OpenAICompactMode,
   OpenAIResponsesMode,
   OpenAIEndpointCapability,
-  OllamaCloudUsageState,
   GrokMediaEligibilityMode,
   GrokMediaEligibilityState,
   GrokModelDiagnostics,
-  OpenCodeGoUsageState,
-  OpenCodeGoUsageWindow,
   ProxyIPGroup,
   TempUnschedulableScope,
   Group
+} from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -3127,6 +3126,7 @@ import {
   type HeaderOverrideRow
 } from '@/components/account/credentialsBuilder'
 import { formatDateTime, formatDateTimeLocalInput, parseDateTimeLocalInput , getBrowserTimeZone} from '@/utils/format'
+import { extractApiErrorMessage } from '@/utils/apiError'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { supportsAccountQuota } from '@/utils/accountQuota'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
@@ -3465,6 +3465,7 @@ const grokOAuthCustomBaseUrlEnabled = ref(false)
 const grokOAuthBaseUrl = ref('')
 const headerOverrideCapable = computed(() =>
   isHeaderOverrideCapable(props.account?.platform || '', props.account?.type || '')
+)
 const grokDiagnostics = ref<GrokModelDiagnostics | null>(null)
 const diagnosticsLoading = ref(false)
 const diagnosticsRefreshFailed = ref(false)
@@ -3613,9 +3614,6 @@ onBeforeUnmount(() => {
 
 // Grok Free OAuth accounts use client-tool prompt caching by default. Keep an
 // explicit false in the account extra as the opt-out signal.
-const grokClientToolCacheEnabled = ref(true)
-const isGrokOAuthAccount = computed(
-  () => props.account?.platform === 'grok' && props.account?.type === 'oauth')
 const grokClientToolCacheEnabled = ref(false)
 
 // 模板按钮：填入标准客户端请求头名称（值留空），跳过已存在的同名行
